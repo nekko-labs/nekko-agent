@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ConsolidateReport, LegacyEnv, LegacyItem } from '@nekko-agent/host/legacy-profiles';
+import type { ConsolidateReport, LegacyEnv, LegacyItem } from '@nekko-agent/profile/legacy-profiles';
 import { describeOffer, offerLegacyCleanup, type LegacyChoice } from './legacyPrompt.js';
 
 const env = { target: '/home/u/.nekko-agent' } as LegacyEnv;

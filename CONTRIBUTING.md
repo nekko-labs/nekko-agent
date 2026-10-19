@@ -19,13 +19,15 @@ To stop a dev run, press **Enter** or **q** (or Ctrl+C) in its terminal. The app
 
 | Path | What |
 | --- | --- |
+| `crates/` | The engine, in Rust: `nekkod` (the daemon every edition starts) and the crates it is built from (providers, the agent loop, tools, context, chats, automation, the model server, the phone relay agent). Tested with `cargo test`. |
 | `packages/shared` | Types + IPC contracts (pure, no runtime deps) |
-| `packages/core` | Engine: providers, agent loop, guardrails, context, indexer, memory, connectors. **No Electron imports**, unit-tested with Vitest. |
+| `packages/profile` | The user's data folder on this machine: where it lives, moving it, older installs' profiles |
 | `apps/desktop` | Electron app: `src/main` (Node), `src/preload` (bridge), `src/renderer` (React) |
+| `apps/cli` | The `nekko-agent` CLI and MCP server, on a private nekkod or a running app |
+| `apps/local-web-ui` | The Local Web UI server: the same React UI over HTTP, in front of nekkod |
 | `apps/website` | Static marketing site |
-| `scripts/itest-local.mjs` | Manual end-to-end test against a real model server |
 
-**Rule of thumb:** business logic goes in `packages/core` (so it's testable without Electron); the desktop app wires it to the filesystem, shell, and UI.
+**Rule of thumb:** engine behaviour goes in `crates/` (testable with no app at all); the apps are the UI and the transport in front of nekkod.
 
 ## Publishing the `npx nekko-agent` package
 
@@ -44,21 +46,20 @@ After that, anyone can run the Local Web UI with `npx nekko-agent`.
 Keep the build green and the suite passing:
 
 ```bash
-npm run build       # Rust daemon (nekkod), then shared → core → host → cli → desktop
+npm run build       # Rust daemon (nekkod), then shared → profile → cli → desktop
 npm test            # tests in every workspace (one Vitest run over all of them)
 npm run typecheck   # every TypeScript workspace
 ```
 
 `npm test` runs the root `node --test` scripts, desktop's `test:node`, then a single
-`vitest run` whose projects (root `vitest.config.ts`) are the eight workspaces. Narrow it
-with `npx vitest run --project packages/core`, or run one package as before with
-`npm test -w @nekko-agent/core`.
+`vitest run` whose projects (root `vitest.config.ts`) are the six workspaces. Narrow it
+with `npx vitest run --project apps/desktop`, or run one package as before with
+`npm test -w @nekko-agent/desktop`. The engine's tests are `cargo test --workspace`.
 
-- Add tests in `packages/core` for new engine behavior (providers, guardrails, agent loop, context).
+- Add tests in `crates/` for new engine behavior (providers, guardrails, agent loop, context); real-binary tests of the daemon go in `crates/nekkod/tests/daemon`.
 - Desktop UI flows: add a step to a journey in `apps/desktop/e2e/` (`npm run test:e2e -w @nekko-agent/desktop`, hidden windows only; see its README) rather than a new one-off script.
 - Match the surrounding code style; keep changes focused.
-- For provider changes, you can verify against a real local server:
-  `node scripts/itest-local.mjs http://your-host:port your-model-id`
+- For provider changes, verify against a real local server: point a provider at it and run a chat through the CLI on this checkout's nekkod (`NEKKOD_PATH=target/debug/nekkod node apps/cli/dist/index.js chat "hi" --new`).
 
 ## Documentation
 

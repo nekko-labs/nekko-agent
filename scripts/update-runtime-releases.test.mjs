@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chooseRelease, shouldUpdate, usableRelease } from './update-runtime-releases.mjs';
+import { chooseRelease, currentPin, shouldUpdate, usableRelease } from './update-runtime-releases.mjs';
 const names=['sd-master-abc-bin-win-cpu-x64.zip','sd-master-abc-bin-Darwin-macOS-26-arm64.zip','sd-master-abc-bin-Linux-Ubuntu-24.04-x86_64.zip'];
 test('never downgrades a pin or creates duplicate updates',()=>{
   assert.equal(shouldUpdate('llama','b11011','b11123'),true);
@@ -15,4 +15,14 @@ test('ignores incomplete releases and draft uploads',()=>{
 test('selects the newest eligible binary release, not an upload in progress',()=>{
   const old=release('master-1-abc','2026-09-01'), eligible=release('master-2-def','2026-09-15'), fresh=release('master-3-fff','2026-09-29');
   assert.equal(chooseRelease('diffusion',[fresh,old,eligible],Date.parse('2026-09-30')).tag_name,eligible.tag_name);
+});
+
+test('reads the pinned tag from the engine crate', () => {
+  const source = `match runtime {
+        "diffusion" => ("leejet/stable-diffusion.cpp", "master-929-3f8527a"),
+        _ => ("ggml-org/llama.cpp", "b11224"),
+    }`;
+  assert.equal(currentPin(source, 'ggml-org/llama.cpp'), 'b11224');
+  assert.equal(currentPin(source, 'leejet/stable-diffusion.cpp'), 'master-929-3f8527a');
+  assert.equal(currentPin(source, 'someone/else'), undefined);
 });

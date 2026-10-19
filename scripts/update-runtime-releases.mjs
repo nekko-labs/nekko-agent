@@ -19,6 +19,15 @@ export function shouldUpdate(runtime, current, candidate) {
   return !!before && !!after && Number(after[1]) > Number(before[1]);
 }
 
+/** The tag `release_pin` gives `repo`: `("ggml-org/llama.cpp", "b11224")`. */
+export function currentPin(source, repo) {
+  const at = source.indexOf(`("${repo}", "`);
+  if (at < 0) return undefined;
+  const start = at + repo.length + 6;
+  const end = source.indexOf('")', start);
+  return end > start ? source.slice(start, end) : undefined;
+}
+
 function run() {
   const runtime = process.argv[2];
   if (!['llama', 'diffusion'].includes(runtime)) throw new Error('Expected llama or diffusion');
@@ -35,7 +44,10 @@ function run() {
   if (!release) { console.log('No eligible binary release.'); return; }
   if (process.argv.includes('--dry-run')) { console.log(JSON.stringify({ runtime, repo, tag: release.tag_name, assets: release.assets.length })); return; }
   const branch = `runtime-update/${runtime}`;
-  const file = 'packages/host/src/engine/runtime-releases.ts';
+  // The pin (nekko-engine's `release_pin`), and the recorded installs and the
+  // daemon test that name the same tag.
+  const file = 'crates/nekko-engine/src/builds.rs';
+  const alsoNamingIt = ['crates/nekko-engine/tests/golden/install.json', 'crates/nekkod/tests/daemon/engine.rs'];
   const repoName = process.env.GITHUB_REPOSITORY;
   const existing = JSON.parse(gh('pr', 'list', '--repo', repoName, '--head', branch, '--state', 'open', '--json', 'number'))[0];
   if (git('ls-remote', '--heads', 'origin', branch)) {
@@ -43,14 +55,11 @@ function run() {
     git('switch', '--track', `origin/${branch}`);
     git('-c', 'user.name=runtime-update-bot', '-c', 'user.email=41898282+github-actions[bot]@users.noreply.github.com', 'merge', 'origin/main', '--no-edit');
   } else git('switch', '-c', branch);
-  const source = readFileSync(file, 'utf8');
-  const pattern = new RegExp(`(${runtime}: \\{ repo: '[^']+', tag: ')([^']+)(' \\})`);
-  const current = source.match(pattern)?.[2];
-  if (!current) throw new Error('The runtime manifest has an unexpected shape.');
+  const current = currentPin(readFileSync(file, 'utf8'), repo);
+  if (!current) throw new Error('The runtime pin has an unexpected shape.');
   if (!shouldUpdate(runtime, current, release.tag_name)) { console.log('No newer eligible release.'); return; }
-  const updated = source.replace(pattern, (_match, prefix, _tag, suffix) => `${prefix}${release.tag_name}${suffix}`);
-  writeFileSync(file, updated);
-  git('add', file);
+  for (const f of [file, ...alsoNamingIt]) writeFileSync(f, readFileSync(f, 'utf8').split(current).join(release.tag_name));
+  git('add', file, ...alsoNamingIt);
   git('-c', 'user.name=runtime-update-bot', '-c', 'user.email=41898282+github-actions[bot]@users.noreply.github.com', 'commit', '-m', `Update ${repo} to ${release.tag_name}`);
   git('push', 'origin', branch);
   if (!existing) gh('pr', 'create', '--repo', repoName, '--head', branch, '--base', 'main', '--title', `Update ${repo} to ${release.tag_name}`, '--body', `## Summary\nUpdate the recommended runtime to upstream ${release.tag_name}. Release assets exist for the supported baseline platforms and the release is at least seven days old.\n\n## Test plan\nRuntime matching tests, typecheck and build run through CI.\n\nNo visual change.`);

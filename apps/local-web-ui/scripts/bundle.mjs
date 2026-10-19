@@ -1,5 +1,5 @@
 // Produce a self-contained, publishable `nekko-agent` package under cli-dist/:
-//   - index.mjs : the server + @nekko-agent/host/core/shared bundled by esbuild
+//   - index.mjs : the server + @nekko-agent/profile/shared bundled by esbuild
 //   - web/      : the built renderer (the UI)
 //   - package.json : name "nekko-agent", bin aliases, and the few runtime deps
 // Run after building the renderer (npm run build -w @nekko-agent/desktop).
@@ -24,12 +24,7 @@ rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 
 // Runtime deps stay external (installed by the consumer); everything else inlines.
-// node-pty picks its native prebuild with a dynamic require, which an ESM bundle
-// cannot do, so it installs as a dependency (the in-process engine's terminals,
-// used when nekkod is unavailable; the host loads it either way).
-const nodePty = '@lydell/node-pty';
-const nodePtyVersion = JSON.parse(readFileSync(join(repoRoot, 'packages/host/package.json'), 'utf8')).dependencies[nodePty];
-const external = ['fastify', '@fastify/static', '@fastify/websocket', nodePty];
+const external = ['fastify', '@fastify/static', '@fastify/websocket'];
 
 // The embedded CLI reads its version from `../package.json` beside its own
 // module, which inside this single-file bundle would be the consumer's
@@ -98,7 +93,6 @@ const pkg = {
     '@fastify/static': '^8.0.3',
     '@fastify/websocket': '^11.0.1',
     fastify: '^5.1.0',
-    [nodePty]: nodePtyVersion,
   },
   optionalDependencies: Object.fromEntries(Object.keys(PLATFORMS).map((key) => [packageName(key), version])),
 };

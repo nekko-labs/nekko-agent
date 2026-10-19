@@ -7,8 +7,8 @@ import {
   legacyEnv,
   summarize as summarizeLegacy,
   type LegacyItem,
-} from '@nekko-agent/host/legacy-profiles';
-import { findRunningApp, startApp, stopApp } from '@nekko-agent/host/app-control';
+} from '@nekko-agent/profile/legacy-profiles';
+import { findRunningApp, startApp, stopApp } from '@nekko-agent/profile/app-control';
 
 export const MIGRATE_HELP = `nekko-agent migrate, bring data from earlier installs into the current data folder.
 

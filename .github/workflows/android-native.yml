@@ -13,7 +13,6 @@ on:
       - 'packages/shared/src/e2e.ts'
       - 'packages/shared/src/remote.ts'
       - 'packages/shared/src/ipc.ts'
-      - 'packages/host/src/relay.ts'
       - '.github/workflows/android-native.yml'
   push:
     branches: [main]
@@ -49,7 +48,6 @@ jobs:
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
           npm run build:core
-          npm run build -w @nekko-agent/host
           npm run build --workspace=apps/cli
           npm run build -w @nekko-agent/local-web-ui
           npm run build -w @nekko-agent/relay-server
@@ -113,7 +111,6 @@ jobs:
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
           npm run build:core
-          npm run build -w @nekko-agent/host
           npm run build --workspace=apps/cli
           npm run build -w @nekko-agent/local-web-ui
           npm run build -w @nekko-agent/relay-server

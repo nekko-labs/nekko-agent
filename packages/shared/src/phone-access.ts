@@ -1,13 +1,12 @@
 /**
  * What a paired phone may do on this computer, enforced by the computer.
  *
- * This is the single source of truth for both relay agents: the TS one
- * (packages/host/src/relay.ts) applies it directly, and the engine daemon's
- * (crates/nekko-remote/src/phone.rs) reads the same lists from
- * `crates/nekko-remote/src/phone-access.json`, which
- * packages/host/src/remote.golden.test.ts writes from this file and fails on
- * when stale (UPDATE_GOLDEN=1 rewrites it). The same test records decisions
- * the Rust gate must reproduce exactly (`tests/golden/phone.json`).
+ * This is the single source of truth for the computer's relay agent: the
+ * engine daemon's gate (crates/nekko-remote/src/phone.rs) reads these lists
+ * from `crates/nekko-remote/src/phone-access.json`, which
+ * phone-access.golden.test.ts writes from this file and fails on when stale
+ * (UPDATE_GOLDEN=1 rewrites it). `tests/golden/phone.json` there records the
+ * decisions the gate must make.
  *
  * The policy is an allowlist: a channel that is not listed is refused. A
  * phone's own app lock is not a boundary; this is.

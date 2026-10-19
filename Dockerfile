@@ -30,8 +30,7 @@ ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
 
 COPY package.json package-lock.json ./
 COPY packages/shared/package.json packages/shared/
-COPY packages/core/package.json packages/core/
-COPY packages/host/package.json packages/host/
+COPY packages/profile/package.json packages/profile/
 COPY apps/desktop/package.json apps/desktop/
 COPY apps/local-web-ui/package.json apps/local-web-ui/
 COPY apps/cli/package.json apps/cli/
