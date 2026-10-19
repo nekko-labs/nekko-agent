@@ -136,8 +136,10 @@ pub fn create_provider(config: ProviderConfig) -> AnyProvider {
 /// Build a provider from its stored config, on the given wire and clock.
 pub fn create_provider_with(config: ProviderConfig, io: Io) -> AnyProvider {
     match config.kind {
-        // Bedrock serves the same Messages API shape, so it is the same provider.
-        ProviderKind::Anthropic | ProviderKind::Bedrock => AnyProvider::Anthropic(AnthropicProvider::new(config, io)),
+        // The cloud platforms serve the same Messages API shape, so they are the same provider.
+        ProviderKind::Anthropic | ProviderKind::Bedrock | ProviderKind::Vertex | ProviderKind::Foundry => {
+            AnyProvider::Anthropic(AnthropicProvider::new(config, io))
+        }
         ProviderKind::Ollama => AnyProvider::Ollama(OllamaProvider::new(config, io)),
         ProviderKind::Chatgpt => AnyProvider::ChatGpt(ChatGptProvider::new(config, io)),
         ProviderKind::ClaudeCode => AnyProvider::ClaudeCode(ClaudeCodeProvider::new(config)),

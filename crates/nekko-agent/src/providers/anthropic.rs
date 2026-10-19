@@ -51,6 +51,36 @@ const BEDROCK_MODELS: &[(&str, &str)] = &[
     ("anthropic.claude-haiku-4-5", "Claude Haiku 4.5"),
 ];
 
+/// What Vertex AI serves. Current models use the bare Claude id there; older
+/// dated snapshots take an `@` before the date.
+const VERTEX_MODELS: &[(&str, &str)] = &[
+    ("claude-opus-5-5", "Claude Opus 5.5"),
+    ("claude-opus-5", "Claude Opus 5"),
+    ("claude-opus-4-8", "Claude Opus 4.8"),
+    ("claude-sonnet-5-5", "Claude Sonnet 5.5"),
+    ("claude-sonnet-5", "Claude Sonnet 5"),
+    ("claude-sonnet-4-6", "Claude Sonnet 4.6"),
+    ("claude-fable-5-1", "Claude Fable 5.1"),
+    ("claude-haiku-5-5", "Claude Haiku 5.5"),
+    ("claude-haiku-4-5@20251001", "Claude Haiku 4.5"),
+];
+
+/// Foundry's default deployment names, which are the model ids. A custom
+/// deployment name is typed into the picker like any unlisted model.
+const FOUNDRY_MODELS: &[(&str, &str)] = &[
+    ("claude-opus-5-5", "Claude Opus 5.5"),
+    ("claude-opus-5", "Claude Opus 5"),
+    ("claude-opus-4-8", "Claude Opus 4.8"),
+    ("claude-sonnet-5-5", "Claude Sonnet 5.5"),
+    ("claude-sonnet-5", "Claude Sonnet 5"),
+    ("claude-fable-5-1", "Claude Fable 5.1"),
+    ("claude-haiku-5-5", "Claude Haiku 5.5"),
+    ("claude-haiku-4-5", "Claude Haiku 4.5"),
+];
+
+/// Vertex AI takes the API version in the body rather than as a header.
+const VERTEX_VERSION: &str = "vertex-2023-10-16";
+
 /// How long the catalog may take, body included, before the shipped list is
 /// served instead. Opening a chat waits on this list, so a stalled connection
 /// must not hold it for the transport's minutes-long idle limit.
@@ -100,6 +130,11 @@ impl AnthropicProvider {
 
     fn headers(&self) -> Vec<(String, String)> {
         let key = self.config.api_key.as_deref().unwrap_or("");
+        if self.config.vertex() {
+            // A Google access token; the version rides in the body.
+            let bearer = format!("Bearer {key}");
+            return headers(&[("Content-Type", "application/json"), ("Authorization", &bearer)]);
+        }
         if self.config.subscription() {
             let bearer = format!("Bearer {key}");
             return headers(&[
@@ -157,6 +192,13 @@ impl AnthropicProvider {
         }
         if req.prompt_caching != Some(false) {
             super::prompt_caching::anthropic_prefix(&mut body);
+        }
+        if self.config.vertex() {
+            // The model is in the URL on Vertex AI, and the version in the body.
+            body.shift_remove("model");
+            body.insert("anthropic_version".into(), json!(VERTEX_VERSION));
+            let url = format!("{}/publishers/anthropic/models/{}:streamRawPredict", self.config.base_url, req.model);
+            return HttpRequest::post(url, self.headers(), Value::Object(body));
         }
         HttpRequest::post(format!("{}/v1/messages", self.config.base_url), self.headers(), Value::Object(body))
     }
@@ -242,7 +284,7 @@ impl AnthropicProvider {
     /// `CATALOG_TIMEOUT`, so the caller falls back to the shipped list.
     async fn fetch_catalog(&self) -> Option<Vec<ModelInfo>> {
         self.config.api_key.as_deref().filter(|k| !k.is_empty())?;
-        if self.config.bedrock() {
+        if self.config.cloud_platform() {
             return None;
         }
         let req = HttpRequest::get(format!("{}/v1/models?limit=1000", self.config.base_url), self.headers());
@@ -293,6 +335,14 @@ impl AnthropicProvider {
                 TestResult::fail("Missing Bedrock bearer token")
             };
         }
+        if self.config.vertex() {
+            // The token is fetched from the user's Google credentials before this runs.
+            return if has_key {
+                TestResult::ok("Google Cloud credentials found")
+            } else {
+                TestResult::fail("No Google Cloud credentials. Run `gcloud auth application-default login`.")
+            };
+        }
         if !has_key {
             return TestResult::fail("Missing API key");
         }
@@ -304,7 +354,12 @@ impl AnthropicProvider {
             return Ok(models);
         }
 
-        let shipped = if self.config.bedrock() { BEDROCK_MODELS } else { CLAUDE_MODELS };
+        let shipped = match self.config.kind {
+            ProviderKind::Bedrock => BEDROCK_MODELS,
+            ProviderKind::Vertex => VERTEX_MODELS,
+            ProviderKind::Foundry => FOUNDRY_MODELS,
+            _ => CLAUDE_MODELS,
+        };
         Ok(shipped
             .iter()
             .map(|(id, name)| ModelInfo {
@@ -543,5 +598,59 @@ impl EventParser {
             _ => {}
         }
         (out, None)
+    }
+}
+
+#[cfg(test)]
+mod platform_tests {
+    use super::*;
+
+    fn provider(kind: &str, base: &str) -> AnthropicProvider {
+        let config: ProviderConfig = serde_json::from_value(json!({
+            "id": "p", "kind": kind, "label": "p", "baseUrl": base, "apiKey": "secret", "enabled": true
+        }))
+        .unwrap();
+        AnthropicProvider::with_memory(config, Io::default(), Arc::new(SamplingMemory::default()))
+    }
+
+    fn request(model: &str) -> ChatRequest {
+        ChatRequest { model: model.into(), ..Default::default() }
+    }
+
+    #[test]
+    fn vertex_puts_the_model_in_the_url_and_the_version_in_the_body() {
+        let base = "https://aiplatform.googleapis.com/v1/projects/proj/locations/global";
+        let req = provider("vertex", base).chat_request(&request("claude-opus-5-5"), SamplingShape::Effort);
+        assert_eq!(req.url, format!("{base}/publishers/anthropic/models/claude-opus-5-5:streamRawPredict"));
+        let body = req.body.unwrap();
+        assert_eq!(body.get("model"), None);
+        assert_eq!(body["anthropic_version"], VERTEX_VERSION);
+        assert_eq!(body["stream"], true);
+        assert!(req.headers.contains(&("Authorization".into(), "Bearer secret".into())));
+        assert!(!req.headers.iter().any(|(k, _)| k == "x-api-key" || k == "anthropic-version"));
+    }
+
+    #[test]
+    fn bedrock_and_foundry_send_the_first_party_shape_to_their_own_host() {
+        for (kind, base) in [
+            ("bedrock", "https://bedrock-mantle.us-east-1.api.aws/anthropic"),
+            ("foundry", "https://res.services.ai.azure.com/anthropic"),
+        ] {
+            let req = provider(kind, base).chat_request(&request("claude-opus-5-5"), SamplingShape::Effort);
+            assert_eq!(req.url, format!("{base}/v1/messages"), "{kind}");
+            assert_eq!(req.body.unwrap()["model"], "claude-opus-5-5", "{kind}");
+            assert!(req.headers.contains(&("x-api-key".into(), "secret".into())), "{kind}");
+            assert!(req.headers.contains(&("anthropic-version".into(), "2023-06-01".into())), "{kind}");
+        }
+    }
+
+    #[tokio::test]
+    async fn cloud_platforms_list_their_own_models_without_a_catalog_call() {
+        async fn ids(kind: &str) -> Vec<String> {
+            provider(kind, "https://unused.invalid").list_models().await.unwrap().into_iter().map(|m| m.id).collect()
+        }
+        assert!(ids("bedrock").await.iter().all(|id| id.starts_with("anthropic.claude-")));
+        assert!(ids("vertex").await.contains(&"claude-haiku-4-5@20251001".to_string()));
+        assert!(ids("foundry").await.contains(&"claude-haiku-4-5".to_string()));
     }
 }

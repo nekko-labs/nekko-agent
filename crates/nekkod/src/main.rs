@@ -23,6 +23,7 @@ mod decisions;
 mod desktop;
 mod downloads;
 mod engine;
+mod gcp;
 mod harness;
 mod hub;
 mod hypergate;
