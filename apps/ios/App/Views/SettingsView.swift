@@ -70,6 +70,8 @@ struct SettingsView: View {
     @Environment(\.palette) private var palette
     @State private var confirmWipe = false
     @State private var error: String?
+    @State private var testing = false
+    @State private var testResult: (text: String, ok: Bool)?
 
     var body: some View {
         @Bindable var prefs = app.prefs
@@ -95,15 +97,53 @@ struct SettingsView: View {
                 Text("Shows each computer’s chat titles and folders, as last seen, while it can’t be reached. Only the list is kept on this iPhone, never what the chats say, and it isn’t backed up. Turning this off deletes it.")
             }
             Section {
-                Toggle("Notify when away", isOn: $prefs.notify)
+                Toggle("Approvals and questions", isOn: Binding(get: { prefs.notifyNeedsYou }, set: { app.setNotify(.needsYou, $0) }))
+                    .accessibilityIdentifier("settings.notify.needsYou")
+                Toggle("Finished replies", isOn: Binding(get: { prefs.notifyFinished }, set: { app.setNotify(.finished, $0) }))
+                    .accessibilityIdentifier("settings.notify.finished")
+                Toggle("Failed replies", isOn: Binding(get: { prefs.notifyFailed }, set: { app.setNotify(.failed, $0) }))
+                    .accessibilityIdentifier("settings.notify.failed")
+                Button {
+                    testing = true
+                    Task {
+                        testResult = await app.sendTestNotification()
+                        testing = false
+                    }
+                } label: {
+                    HStack {
+                        Label("Send a test notification", systemImage: "bell.badge")
+                        if testing { Spacer(); ProgressView() }
+                    }
+                }
+                .disabled(testing || store.conn != .online)
+                .accessibilityIdentifier("settings.notify.test")
+                if let r = testResult {
+                    Text(r.text).font(.footnote).foregroundStyle(r.ok ? palette.inkSoft : palette.danger)
+                        .accessibilityIdentifier("settings.notify.testResult")
+                }
+            } header: { Text("Notify me about") } footer: {
+                Text(store.conn == .online
+                     ? "The test goes from \(store.active?.name ?? "your computer") through its relay. Pushes from the relay say only what happened, never your messages. When an approval or a question is answered on the computer, its notification goes away here too."
+                     : "Connect to \(store.active?.name ?? "a computer") to send a test.")
+            }
+            Section {
                 Toggle("Live Activities", isOn: $prefs.liveActivities)
                 Toggle("Vibrate for approvals and questions", isOn: $prefs.hapticNeedsYou)
                 Toggle("Vibrate when a reply finishes", isOn: $prefs.hapticDone)
-            } header: { Text("Notifications") } footer: {
-                Text("Running chats show on the Lock Screen and in the Dynamic Island, with Allow / Deny for approvals. Remote pushes from the relay never contain your messages.")
+            } header: { Text("While a chat runs") } footer: {
+                Text("Running chats show on the Lock Screen and in the Dynamic Island, with Allow / Deny for approvals.")
             }
-            Section("Dictation") {
+            Section {
+                Picker("Microphone", selection: $prefs.dictationHold) {
+                    Text("Tap to start and stop").tag(false)
+                    Text("Hold to talk").tag(true)
+                }
+                .accessibilityIdentifier("settings.dictationHold")
                 Toggle("Use Whisper on the computer when available", isOn: $prefs.dictationOnComputer)
+            } header: { Text("Dictation") } footer: {
+                Text(prefs.dictationHold
+                     ? "Hold the microphone while you speak and let go to stop. With VoiceOver, double-tap starts and double-tap again stops."
+                     : "Tap the microphone to start and tap stop when you’re done.")
             }
             if store.active != nil {
                 Section {
@@ -138,6 +178,8 @@ struct SettingsView: View {
             Section("About") {
                 LabeledContent("App", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?")
                 if let v = store.hostVersion { LabeledContent("Nekko Agent on \(store.active?.name ?? "computer")", value: v) }
+                LabeledContent("Phone protocol", value: store.hostProtocol.map { "\(PhoneProtocol.version) here, \($0) on the computer" } ?? "\(PhoneProtocol.version)")
+                ProtocolBanner()
                 LabeledContent("Transport", value: store.active.map { "\(routeName($0.route)), end-to-end encrypted" } ?? "–")
                 Link("Remote access guide", destination: URL(string: "https://nekkoagent.com/docs/remote")!)
             }

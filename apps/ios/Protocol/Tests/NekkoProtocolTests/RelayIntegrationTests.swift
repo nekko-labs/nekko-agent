@@ -74,6 +74,17 @@ final class RelayIntegrationTests: XCTestCase {
         let rawInfo = try await c.call(Channels.appInfo)
         let info = AppInfo.from(rawInfo)
         XCTAssertFalse((info.version ?? "").isEmpty)
+        // IO-32: this computer speaks the phone's protocol version.
+        XCTAssertEqual(r.lock.sync { r.welcomes.last?.protocolVersion }, PhoneProtocol.version)
+        // IO-30: the test stack's relay has no Apple push key and says so; the
+        // computer answers push:test itself.
+        let control = RelayClientTests.Seen()
+        c.setControlHandler { control.add($0) }
+        try await c.registerPush(token: String(repeating: "ab", count: 32), kinds: ["needs-you"])
+        await waitFor(5, "push-registered") { !control.all.isEmpty }
+        XCTAssertEqual(control.all.first, .pushRegistered(delivers: false))
+        let tested = try await c.call(Channels.pushTest)
+        XCTAssertEqual(tested["ok"], .bool(true))
         let rawProviders = try await c.call(Channels.providersList)
         XCTAssertTrue(PublicProvider.list(rawProviders).contains(PublicProvider(id: "fake", kind: "openai-compat", label: "Fake", enabled: true)))
         XCTAssertFalse(rawProviders.serialized().contains("sk-should-never"), "the computer strips provider keys")

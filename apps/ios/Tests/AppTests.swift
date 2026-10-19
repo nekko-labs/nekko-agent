@@ -246,3 +246,35 @@ final class OpenTailscaleTests: XCTestCase {
         XCTAssertEqual(AppModel.openTailscale(canOpen: { _ in true }, open: { _ in }).absoluteString, "tailscale://")
     }
 }
+
+@MainActor
+final class NotificationPrefsTests: XCTestCase {
+    private func defaults() -> UserDefaults {
+        let name = "nekko.tests.\(UUID().uuidString)"
+        let d = UserDefaults(suiteName: name)!
+        d.removePersistentDomain(forName: name)
+        return d
+    }
+
+    /// IO-30: one switch per kind, and the relay is asked only for those.
+    func testEachKindHasItsSwitchAndTheRelayGetsOnlyThoseOn() {
+        let d = defaults()
+        let p = Prefs(defaults: d)
+        XCTAssertEqual(p.pushKinds, [.needsYou, .finished, .failed])
+        p.notifyFinished = false
+        XCTAssertEqual(p.pushKinds, [.needsYou, .failed])
+        XCTAssertFalse(p.wants(.finished))
+        XCTAssertTrue(p.wants(.test), "a test always shows")
+        XCTAssertEqual(Prefs(defaults: d).pushKinds, [.needsYou, .failed], "saved")
+        XCTAssertFalse(p.dictationHold, "tap to start and stop stays the default (IO-28)")
+        XCTAssertFalse(p.onboarded)
+    }
+
+    /// Someone who had turned the old single switch off keeps every kind off.
+    func testTheOldSingleSwitchSeedsEachKind() {
+        let d = defaults()
+        d.set(false, forKey: "notify")
+        let p = Prefs(defaults: d)
+        XCTAssertEqual(p.pushKinds, [])
+    }
+}

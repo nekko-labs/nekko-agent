@@ -5,11 +5,14 @@ import SwiftUI
 
 /// First run: what the app is, and how to connect (Tailscale first).
 struct WelcomeView: View {
+    @Environment(AppModel.self) private var app
     @Environment(\.palette) private var palette
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
+                // First run, step 2 of 3 (IO-31).
+                if !app.prefs.onboarded { StepLabel(step: 2).padding(.top, 8) }
                 CatMark().frame(width: 56, height: 56).foregroundStyle(palette.accent).padding(.top, 24)
                 Text("Your agent, in your pocket").font(.largeTitle.weight(.bold)).foregroundStyle(palette.ink)
                 Text("Drive Nekko Agent on your computer from this iPhone: follow chats as they stream, approve tools, answer questions and start new work. Everything is end-to-end encrypted between this phone and your computer.")
@@ -31,6 +34,13 @@ struct WelcomeView: View {
         }
         .navigationDestination(for: Route.self) { r in
             if case .pair = r { PairView {} }
+        }
+        .toolbar {
+            if !app.prefs.onboarded {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Skip") { app.prefs.onboarded = true }.accessibilityIdentifier("firstRun.skip")
+                }
+            }
         }
         .background(palette.paper)
     }

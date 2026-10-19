@@ -1,4 +1,5 @@
 import Foundation
+import NekkoProtocol
 import Observation
 
 /// Phone-only, non-secret preferences (UserDefaults). Each is a plain stored
@@ -28,14 +29,22 @@ final class Prefs {
     /// Haptics for approvals and questions (on), and for finished turns (off).
     var hapticNeedsYou: Bool { didSet { d.set(hapticNeedsYou, forKey: "hapticNeedsYou") } }
     var hapticDone: Bool { didSet { d.set(hapticDone, forKey: "hapticDone") } }
-    /// Local notifications while the app is in the background but still connected.
-    var notify: Bool { didSet { d.set(notify, forKey: "notify") } }
+    /// Notifications per kind (IO-30): an approval or a question, a finished
+    /// reply, a failed one. Local ones while the app is in the background but
+    /// still connected, and the relay pushes only these kinds.
+    var notifyNeedsYou: Bool { didSet { d.set(notifyNeedsYou, forKey: "notifyNeedsYou") } }
+    var notifyFinished: Bool { didSet { d.set(notifyFinished, forKey: "notifyFinished") } }
+    var notifyFailed: Bool { didSet { d.set(notifyFailed, forKey: "notifyFailed") } }
     /// Show running turns on the Lock Screen and in the Dynamic Island.
     var liveActivities: Bool { didSet { d.set(liveActivities, forKey: "liveActivities") } }
     /// The computer to connect to at launch; nil = the one used last.
     var defaultComputer: String? { didSet { d.set(defaultComputer, forKey: "defaultComputer") } }
     /// Dictation: the computer's Whisper when installed, else this iPhone's recognizer.
     var dictationOnComputer: Bool { didSet { d.set(dictationOnComputer, forKey: "dictationOnComputer") } }
+    /// Dictation: hold the microphone to talk and let go to stop (IO-28), instead of tap to start and tap to stop.
+    var dictationHold: Bool { didSet { d.set(dictationHold, forKey: "dictationHold") } }
+    /// The first run (IO-31) was finished or skipped; it never shows again.
+    var onboarded: Bool { didSet { d.set(onboarded, forKey: "onboarded") } }
     /// Keep each computer's chat list (titles, times, folders) on this iPhone to show
     /// while the computer is unreachable. Off by default: nothing about chats is stored.
     var keepChatList: Bool { didSet { d.set(keepChatList, forKey: "keepChatList") } }
@@ -50,11 +59,29 @@ final class Prefs {
         appLock = flag("appLock", true)
         hapticNeedsYou = flag("hapticNeedsYou", true)
         hapticDone = flag("hapticDone", false)
-        notify = flag("notify", true)
+        // Before per-kind switches there was one, `notify`: its value is each one's default.
+        let notify = flag("notify", true)
+        notifyNeedsYou = flag("notifyNeedsYou", notify)
+        notifyFinished = flag("notifyFinished", notify)
+        notifyFailed = flag("notifyFailed", notify)
         liveActivities = flag("liveActivities", true)
         defaultComputer = d.string(forKey: "defaultComputer")
         dictationOnComputer = flag("dictationOnComputer", true)
+        dictationHold = flag("dictationHold", false)
+        onboarded = flag("onboarded", false)
         lastModel = d.dictionary(forKey: "lastModel") as? [String: String] ?? [:]
         keepChatList = flag("keepChatList", false)
     }
+
+    func wants(_ kind: PushKind) -> Bool {
+        switch kind {
+        case .needsYou: return notifyNeedsYou
+        case .finished: return notifyFinished
+        case .failed: return notifyFailed
+        case .test: return true
+        }
+    }
+
+    /// What the relay is asked to push.
+    var pushKinds: [PushKind] { PushKind.choosable.filter(wants) }
 }

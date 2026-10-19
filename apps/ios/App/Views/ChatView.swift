@@ -448,6 +448,45 @@ struct FlowOptions: View {
     }
 }
 
+/// The microphone in hold-to-talk mode (IO-28): records while pressed, stops
+/// on release. VoiceOver can't hold, so its double-tap starts and the next one stops.
+struct HoldToTalkButton: View {
+    let dictation: Dictation
+    @Environment(ComputersStore.self) private var store
+    @Environment(\.palette) private var palette
+    @State private var down = false
+
+    var body: some View {
+        Image(systemName: dictation.recording ? "waveform.circle.fill" : "mic.fill")
+            .font(dictation.recording ? .title2 : .title3)
+            .foregroundStyle(dictation.recording ? palette.danger : palette.inkSoft)
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
+            .scaleEffect(down ? 1.15 : 1)
+            .animation(.easeOut(duration: 0.12), value: down)
+            .gesture(DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    guard !down else { return }
+                    down = true
+                    Task { await dictation.press(store: store) }
+                }
+                .onEnded { _ in
+                    down = false
+                    Task { await dictation.letGo(store: store) }
+                })
+            .accessibilityElement()
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel(dictation.recording ? "Stop dictation" : "Dictate")
+            .accessibilityHint(dictation.recording ? "" : "Hold to talk, let go to stop")
+            .accessibilityIdentifier("composer.holdToTalk")
+            .accessibilityAction {
+                Task {
+                    if dictation.recording { await dictation.finish(store: store) } else { await dictation.start(store: store) }
+                }
+            }
+    }
+}
+
 /// Text, the computer's skills (`/`), photos, dictation, Send / Stop.
 struct Composer: View {
     let chat: ChatModel
@@ -460,6 +499,7 @@ struct Composer: View {
     @State private var loadingPhotos = false
     @State private var error: String?
     @State private var dictation = Dictation()
+    @Environment(Prefs.self) private var prefs
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -528,6 +568,8 @@ struct Composer: View {
                     .overlay(RoundedRectangle(cornerRadius: 20).stroke(palette.line))
                 if dictation.transcribing {
                     ProgressView().frame(width: 44, height: 44).accessibilityLabel("Transcribing")
+                } else if prefs.dictationHold && dictation.available && (text.isEmpty || dictation.recording) {
+                    HoldToTalkButton(dictation: dictation)
                 } else if dictation.available && text.isEmpty && !dictation.recording {
                     Button { Task { await dictation.start(store: store) } } label: {
                         Image(systemName: "mic.fill").font(.title3).foregroundStyle(palette.inkSoft)
@@ -558,6 +600,7 @@ struct Composer: View {
                 }
             }
             if dictation.recording || dictation.transcribing { Text(dictation.status).font(.caption2).foregroundStyle(palette.inkFaint) }
+            else if let n = dictation.notice { Text(n).font(.caption2).foregroundStyle(palette.inkSoft) }
         }
         // Send waits for the photos (it used to send without them, and they came back later).
         .task(id: photos) {
