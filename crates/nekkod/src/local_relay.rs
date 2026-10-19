@@ -88,10 +88,7 @@ pub fn ready_line(out: &str) -> Option<(Option<u16>, Vec<String>)> {
     let at = out.find("NEKKO_RELAY_READY")?;
     let rest = &out[at..];
     let re = regress::Regex::new(r"^NEKKO_RELAY_READY (\{.*\})").expect("valid pattern");
-    let v = re
-        .find(rest)
-        .and_then(|m| m.group(1))
-        .and_then(|g| serde_json::from_str::<Value>(&rest[g]).ok());
+    let v = re.find(rest).and_then(|m| m.group(1)).and_then(|g| serde_json::from_str::<Value>(&rest[g]).ok());
     let Some(v) = v else { return Some((None, Vec::new())) };
     let port = v.get("port").and_then(Value::as_u64).filter(|p| *p <= u16::MAX as u64).map(|p| p as u16);
     let lan = v
@@ -256,8 +253,11 @@ impl LocalRelay {
             }
         }
         out.insert("lan".into(), json!(s.lan));
-        let lan_urls: Vec<String> =
-            s.running.as_ref().map(|r| r.lan.iter().map(|a| format!("ws://{a}:{}", r.port)).collect()).unwrap_or_default();
+        let lan_urls: Vec<String> = s
+            .running
+            .as_ref()
+            .map(|r| r.lan.iter().map(|a| format!("ws://{a}:{}", r.port)).collect())
+            .unwrap_or_default();
         out.insert("lanUrls".into(), json!(lan_urls));
         Value::Object(out)
     }
