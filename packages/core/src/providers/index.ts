@@ -19,6 +19,10 @@ export { ClaudeCodeProvider } from './claude-code.js';
 export function createProvider(config: ProviderConfig): Provider {
   switch (config.kind) {
     case 'anthropic':
+    // Bedrock serves the same Messages API shape, so it is the same provider.
+    case 'bedrock':
+    case 'vertex':
+    case 'foundry':
       return new AnthropicProvider(config);
     case 'ollama':
       return new OllamaProvider(config);

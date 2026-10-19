@@ -16,7 +16,7 @@
 use nekko_harness::{ClaudeBin, LaunchSpec, PermissionMode, Session, SessionStart};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 /// A chat's Claude Code child is ended after this long without a turn.
@@ -44,6 +44,25 @@ pub struct Harness {
     /// By Nekko chat id. The async lock is held for a whole turn, so one chat
     /// never has two turns writing to the same child.
     slots: Mutex<HashMap<String, Arc<tokio::sync::Mutex<Slot>>>>,
+    /// Bridge tokens: which chat (and its folders) each one answers for.
+    bridges: Mutex<HashMap<String, BridgeEntry>>,
+    /// Set once at startup: the daemon's loopback URL, how to start the
+    /// bridge (`None`: no CLI to run it, so every launch fails closed), and
+    /// where the per-chat MCP configs are written.
+    bridge: OnceLock<BridgeSetup>,
+}
+
+#[derive(Debug, Clone)]
+pub struct BridgeEntry {
+    pub session_id: String,
+    pub roots: Vec<PathBuf>,
+}
+
+#[derive(Debug, Clone)]
+pub struct BridgeSetup {
+    pub wire_url: String,
+    pub command: Option<BridgeCommand>,
+    pub dir: PathBuf,
 }
 
 /// The permission mode for a chat's Nekko mode: Ask and Guardrails keep
@@ -110,6 +129,45 @@ impl Harness {
         if let Some(slot) = slot {
             slot.lock().await.session = None;
         }
+        self.forget(session_id);
+    }
+
+    /// Where the bridge comes from (startup).
+    pub fn configure(&self, setup: BridgeSetup) {
+        let _ = self.bridge.set(setup);
+    }
+
+    /// A fresh bridge for the chat's next launch: its token, and the
+    /// `--mcp-config` file that starts `nekko-agent mcp --bridge` with it.
+    /// An error means Claude Code must not start: nothing could answer its
+    /// permission prompts.
+    pub fn prepare_bridge(&self, session_id: &str, roots: &[PathBuf]) -> Result<PathBuf, String> {
+        const UNAVAILABLE: &str = "Nekko's approval bridge is not available (the nekko-agent CLI was not found), so Claude Code was not started.";
+        let setup = self.bridge.get().ok_or(UNAVAILABLE)?;
+        let command = setup.command.as_ref().ok_or(UNAVAILABLE)?;
+        self.forget(session_id);
+        let token = new_token();
+        let file = setup.dir.join(format!("{session_id}.mcp.json"));
+        let body =
+            serde_json::to_vec_pretty(&command.mcp_config(&setup.wire_url, &token)).map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(&setup.dir)
+            .and_then(|()| std::fs::write(&file, body))
+            .map_err(|e| format!("Could not write the approval bridge's config: {e}"))?;
+        lock(&self.bridges).insert(token, BridgeEntry { session_id: session_id.into(), roots: roots.to_vec() });
+        Ok(file)
+    }
+
+    /// Which chat a bridge token answers for.
+    pub fn bridge_session(&self, token: &str) -> Option<BridgeEntry> {
+        lock(&self.bridges).iter().find(|(t, _)| crate::wire::token_eq(t, token)).map(|(_, e)| e.clone())
+    }
+
+    /// Drop a chat's bridge tokens and config file.
+    fn forget(&self, session_id: &str) {
+        lock(&self.bridges).retain(|_, e| e.session_id != session_id);
+        if let Some(setup) = self.bridge.get() {
+            let _ = std::fs::remove_file(setup.dir.join(format!("{session_id}.mcp.json")));
+        }
     }
 
     /// End every child idle longer than `max_idle`. A slot in a turn is
@@ -129,6 +187,7 @@ impl Harness {
             if s.session.is_none() {
                 drop(s);
                 lock(&self.slots).remove(&id);
+                self.forget(&id);
             }
         }
         reaped
@@ -149,6 +208,176 @@ impl Harness {
     }
 }
 
+// ---- The approval bridge (H3) ----
+//
+// Claude Code asks for permission through `--permission-prompt-tool
+// mcp__nekko_bridge__approve`: an MCP stdio server (`nekko-agent mcp
+// --bridge <token>`) that nekkod lists in a per-chat `--mcp-config`. Each
+// call comes back here over the loopback wire (`POST /harness/approve`,
+// authenticated by that chat's bridge token, never the daemon's own), is
+// decided by the chat's mode ([`decide`]) and, when it needs a person, waits
+// in Nekko's approvals like any other tool call.
+
+/// The MCP server name and the tool Claude Code is told to ask.
+pub const BRIDGE_SERVER: &str = "nekko_bridge";
+pub const BRIDGE_TOOL: &str = "mcp__nekko_bridge__approve";
+
+/// How the daemon starts `nekko-agent mcp --bridge`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BridgeCommand {
+    pub command: String,
+    pub args: Vec<String>,
+    pub env: Vec<(String, String)>,
+}
+
+impl BridgeCommand {
+    /// The app's own CLI, run by its Electron binary as Node (no Node install needed).
+    pub fn electron(exe: &str, cli: &str) -> Self {
+        Self { command: exe.into(), args: vec![cli.into()], env: vec![("ELECTRON_RUN_AS_NODE".into(), "1".into())] }
+    }
+
+    /// A `nekko-agent` launcher on PATH. A Windows `.cmd` needs `cmd /c`.
+    pub fn launcher(path: &str) -> Self {
+        if cfg!(windows) && path.to_ascii_lowercase().ends_with(".cmd") {
+            return Self { command: "cmd".into(), args: vec!["/c".into(), path.into()], env: Vec::new() };
+        }
+        Self { command: path.into(), args: Vec::new(), env: Vec::new() }
+    }
+
+    /// The chat's `--mcp-config` document.
+    pub fn mcp_config(&self, wire_url: &str, token: &str) -> serde_json::Value {
+        let mut args = self.args.clone();
+        args.extend(["mcp".into(), "--bridge".into(), token.into(), "--url".into(), wire_url.into()]);
+        let env: serde_json::Map<String, serde_json::Value> =
+            self.env.iter().map(|(k, v)| (k.clone(), serde_json::json!(v))).collect();
+        serde_json::json!({
+            "mcpServers": {
+                BRIDGE_SERVER: { "type": "stdio", "command": self.command, "args": args, "env": env }
+            }
+        })
+    }
+}
+
+/// What the bridge does with one permission prompt.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Decision {
+    Allow,
+    /// Put it in front of the user.
+    Ask {
+        reason: String,
+        severity: &'static str,
+    },
+    Deny(String),
+}
+
+fn severity(s: nekko_tools::Severity) -> &'static str {
+    match s {
+        nekko_tools::Severity::Low => "low",
+        nekko_tools::Severity::Medium => "medium",
+        nekko_tools::Severity::High => "high",
+    }
+}
+
+const SHELL_TOOLS: &[&str] = &["Bash", "PowerShell"];
+const EDIT_TOOLS: &[&str] = &["Edit", "MultiEdit", "Write", "NotebookEdit"];
+
+/// Whether `path` is inside one of the chat's folders (relative paths are
+/// the first folder's). Case-insensitive on Windows, as its paths are.
+pub fn inside(path: &str, roots: &[PathBuf]) -> bool {
+    let Some(first) = roots.first() else { return false };
+    let p = std::path::Path::new(path);
+    let full = if p.is_absolute() { p.to_path_buf() } else { first.join(p) };
+    let norm = |p: &std::path::Path| -> Vec<String> {
+        let mut out: Vec<String> = Vec::new();
+        for c in p.components() {
+            match c {
+                std::path::Component::CurDir => {}
+                std::path::Component::ParentDir => {
+                    out.pop();
+                }
+                c => {
+                    let s = c.as_os_str().to_string_lossy().replace('\\', "/");
+                    out.push(if cfg!(windows) { s.to_lowercase() } else { s });
+                }
+            }
+        }
+        out
+    };
+    let full = norm(&full);
+    roots.iter().any(|r| {
+        let r = norm(r);
+        full.len() >= r.len() && full[..r.len()] == r[..]
+    })
+}
+
+/// Decide a permission prompt by the chat's Nekko mode:
+///
+/// - **ask**: every prompt goes to the user.
+/// - **guardrails**: shell commands the guardrail rules allow run; edits
+///   inside the chat's folders run; everything else asks.
+/// - **yolo**: everything runs except shell commands the rules mark
+///   high-severity (destructive) and edits outside the chat's folders, which ask.
+/// - **plan**: everything asks.
+///
+/// A rule whose action is `deny` blocks in every mode.
+pub fn decide(
+    mode: &str,
+    tool: &str,
+    input: &serde_json::Value,
+    rules: &[nekko_tools::GuardrailRule],
+    roots: &[PathBuf],
+) -> Decision {
+    use nekko_tools::Action;
+    let ask = |reason: String, sev: &'static str| Decision::Ask { reason, severity: sev };
+    if SHELL_TOOLS.contains(&tool) {
+        let command = input.get("command").and_then(serde_json::Value::as_str).unwrap_or_default();
+        let d = nekko_tools::classify_command(command, rules);
+        let why = d.matches.first().map(|m| m.label.clone());
+        if d.action == Action::Deny {
+            return Decision::Deny(format!("Blocked by a guardrail rule ({}).", why.unwrap_or_else(|| "deny".into())));
+        }
+        let reason = why.unwrap_or_else(|| "Claude Code wants to run a command.".into());
+        let sev = severity(d.severity);
+        return match mode {
+            "guardrails" if d.action == Action::Allow => Decision::Allow,
+            "yolo" if !(d.action == Action::Ask && d.severity == nekko_tools::Severity::High) => Decision::Allow,
+            _ => ask(reason, if d.action == Action::Allow { "medium" } else { sev }),
+        };
+    }
+    if EDIT_TOOLS.contains(&tool) {
+        let path = ["file_path", "notebook_path", "path"]
+            .iter()
+            .find_map(|k| input.get(*k).and_then(serde_json::Value::as_str))
+            .unwrap_or_default();
+        let ours = !path.is_empty() && inside(path, roots);
+        return match mode {
+            "guardrails" | "yolo" if ours => Decision::Allow,
+            _ if !ours => {
+                ask(format!("Claude Code wants to change a file outside this chat's folders: {path}"), "high")
+            }
+            _ => ask(format!("Claude Code wants to change {path}."), "medium"),
+        };
+    }
+    match mode {
+        "yolo" => Decision::Allow,
+        _ => ask(format!("Claude Code wants to use {tool}."), "medium"),
+    }
+}
+
+/// `nekko-agent` on PATH: the launcher the app installs, or the npm package.
+pub fn cli_on_path() -> Option<PathBuf> {
+    let names: &[&str] = if cfg!(windows) { &["nekko-agent.cmd", "nekko-agent.exe"] } else { &["nekko-agent"] };
+    let path = std::env::var_os("PATH")?;
+    std::env::split_paths(&path).flat_map(|d| names.iter().map(move |n| d.join(n))).find(|p| p.is_file())
+}
+
+/// A fresh bridge token: 32 random bytes, hex.
+pub fn new_token() -> String {
+    let mut b = [0u8; 32];
+    let _ = getrandom::fill(&mut b);
+    b.iter().map(|x| format!("{x:02x}")).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -164,6 +393,120 @@ mod tests {
 
     fn bin() -> ClaudeBin {
         ClaudeBin { path: "claude".into(), version: "2.1.284".into() }
+    }
+
+    fn roots() -> Vec<PathBuf> {
+        vec![PathBuf::from(if cfg!(windows) { r"C:\work\repo" } else { "/work/repo" })]
+    }
+
+    fn abs(rel: &str) -> String {
+        roots()[0].join(rel).to_string_lossy().into_owned()
+    }
+
+    fn d(mode: &str, tool: &str, input: serde_json::Value) -> Decision {
+        decide(mode, tool, &input, &nekko_tools::default_guardrails(), &roots())
+    }
+
+    fn asks(x: &Decision) -> bool {
+        matches!(x, Decision::Ask { .. })
+    }
+
+    #[test]
+    fn ask_mode_asks_for_everything() {
+        assert!(asks(&d("ask", "Bash", serde_json::json!({ "command": "npm test" }))));
+        assert!(asks(&d("ask", "Edit", serde_json::json!({ "file_path": abs("a.rs") }))));
+        assert!(asks(&d("ask", "WebFetch", serde_json::json!({ "url": "https://x" }))));
+    }
+
+    #[test]
+    fn guardrails_allow_safe_commands_and_edits_in_the_workspace() {
+        assert_eq!(d("guardrails", "Bash", serde_json::json!({ "command": "npm run build" })), Decision::Allow);
+        let rm = d("guardrails", "Bash", serde_json::json!({ "command": "rm -rf ./dist" }));
+        assert!(matches!(rm, Decision::Ask { severity: "high", .. }), "{rm:?}");
+        assert_eq!(d("guardrails", "Write", serde_json::json!({ "file_path": abs("src/a.rs") })), Decision::Allow);
+        assert_eq!(d("guardrails", "Edit", serde_json::json!({ "file_path": "src/a.rs" })), Decision::Allow);
+        let outside = d("guardrails", "Edit", serde_json::json!({ "file_path": abs("../other/a.rs") }));
+        assert!(matches!(outside, Decision::Ask { severity: "high", .. }), "{outside:?}");
+        assert!(asks(&d("guardrails", "WebFetch", serde_json::json!({}))));
+    }
+
+    #[test]
+    fn yolo_asks_only_for_destructive_commands_and_outside_edits() {
+        assert_eq!(d("yolo", "Bash", serde_json::json!({ "command": "git push origin main" })), Decision::Allow);
+        assert_eq!(d("yolo", "WebFetch", serde_json::json!({})), Decision::Allow);
+        assert!(asks(&d("yolo", "Bash", serde_json::json!({ "command": "rm -rf /" }))));
+        assert!(asks(&d("yolo", "Write", serde_json::json!({ "file_path": abs("../../etc/x") }))));
+    }
+
+    #[test]
+    fn deny_rules_block_in_every_mode() {
+        for mode in ["ask", "guardrails", "yolo", "plan"] {
+            let x = d(mode, "Bash", serde_json::json!({ "command": "dd if=/dev/zero of=/dev/sda" }));
+            assert!(matches!(x, Decision::Deny(_)), "{mode}: {x:?}");
+        }
+    }
+
+    #[test]
+    fn paths_inside_the_chat_folders() {
+        assert!(inside(&abs("a/b.txt"), &roots()));
+        assert!(inside("a/./b.txt", &roots()));
+        assert!(!inside(&abs("../repo2/x"), &roots()));
+        assert!(!inside("x", &[]));
+        if cfg!(windows) {
+            assert!(inside(r"c:\WORK\Repo\x", &roots()));
+        }
+    }
+
+    #[test]
+    fn the_mcp_config_starts_the_bridge_with_its_token() {
+        let cmd = BridgeCommand::electron("C:/app/Nekko.exe", "C:/app/resources/cli/nekko-agent-cli.cjs");
+        let c = cmd.mcp_config("http://127.0.0.1:5000", "tok");
+        let s = &c["mcpServers"][BRIDGE_SERVER];
+        assert_eq!(s["command"], "C:/app/Nekko.exe");
+        assert_eq!(
+            s["args"],
+            serde_json::json!([
+                "C:/app/resources/cli/nekko-agent-cli.cjs",
+                "mcp",
+                "--bridge",
+                "tok",
+                "--url",
+                "http://127.0.0.1:5000"
+            ])
+        );
+        assert_eq!(s["env"]["ELECTRON_RUN_AS_NODE"], "1");
+        let l = BridgeCommand::launcher("C:/bin/nekko-agent.cmd");
+        if cfg!(windows) {
+            assert_eq!((l.command.as_str(), l.args[0].as_str()), ("cmd", "/c"));
+        }
+    }
+
+    #[test]
+    fn bridges_fail_closed_and_answer_only_their_chat() {
+        let h = Harness::new();
+        let err = h.prepare_bridge("s1", &roots()).unwrap_err();
+        assert!(err.contains("approval bridge"), "{err}");
+        let dir = std::env::temp_dir().join(format!("nekko-harness-test-{}", new_token()));
+        h.configure(BridgeSetup { wire_url: "http://127.0.0.1:1".into(), command: None, dir: dir.clone() });
+        assert!(h.prepare_bridge("s1", &roots()).is_err(), "no CLI, no launch");
+
+        let h = Harness::new();
+        h.configure(BridgeSetup {
+            wire_url: "http://127.0.0.1:1".into(),
+            command: Some(BridgeCommand::launcher("/bin/nekko-agent")),
+            dir: dir.clone(),
+        });
+        let file = h.prepare_bridge("s1", &roots()).unwrap();
+        let config: serde_json::Value = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+        let token = config["mcpServers"][BRIDGE_SERVER]["args"][2].as_str().unwrap().to_string();
+        assert_eq!(h.bridge_session(&token).unwrap().session_id, "s1");
+        assert!(h.bridge_session("not-a-token").is_none());
+        // A relaunch replaces the token; the old one answers nothing.
+        let _ = h.prepare_bridge("s1", &roots()).unwrap();
+        assert!(h.bridge_session(&token).is_none());
+        h.forget("s1");
+        assert!(!file.exists());
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

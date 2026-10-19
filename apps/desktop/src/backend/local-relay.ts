@@ -86,6 +86,7 @@ export class LocalRelay {
   private name: string | undefined;
   private error: string | undefined;
   private starting: Promise<void> | null = null;
+  private naming: Promise<void> | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
   private readonly interfaces: () => NodeJS.Dict<NetworkInterfaceInfo[]>;
   private readonly tailnetName: () => Promise<string | undefined>;
@@ -111,6 +112,15 @@ export class LocalRelay {
 
   status(): LocalRelayStatus {
     const ip = tailnetAddress(this.interfaces());
+    // The MagicDNS name before the relay ever starts, so the address Remote
+    // access offers as its default is the one Android can dial (TS-1).
+    if (ip && !this.name && !this.naming) {
+      this.naming = this.tailnetName()
+        .then((n) => {
+          this.name ??= n;
+        })
+        .catch(() => {});
+    }
     const running = !!this.child && !!this.boundIp;
     const at = running ? this.boundIp : ip;
     return {

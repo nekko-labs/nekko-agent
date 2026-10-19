@@ -290,8 +290,14 @@ async fn updates_from_a_release_feed_with_checksums_and_events() {
     }
     drop(d);
 
-    // A corrupted download is refused and not kept.
-    let _ = std::fs::remove_dir_all(&cache);
+    // A corrupted download is refused and not kept. On Windows the stand-in
+    // can still be exiting, its image locked, so retry until the good copy is
+    // really gone; left behind, it would be reused as a verified download.
+    wait_for("the first download to be cleared", || {
+        let _ = std::fs::remove_dir_all(&cache);
+        !cache.exists()
+    })
+    .await;
     let (bad_feed, _) = fake_feed("0.9.0", &name, b"not the installer".to_vec(), sha.clone()).await;
     let d = native_daemon(
         &data,

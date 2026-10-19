@@ -6,6 +6,7 @@ import SwiftUI
 /// what has happened since the app started. The log is memory only and holds
 /// no rooms, keys or chat content, so it can be copied into a bug report.
 struct ConnectionView: View {
+    @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
     @Environment(\.palette) private var palette
     @Environment(\.scenePhase) private var phase
@@ -34,6 +35,11 @@ struct ConnectionView: View {
                 if !advice.isEmpty {
                     Section {
                         ForEach(advice, id: \.self) { Label($0, systemImage: "lightbulb").foregroundStyle(palette.ink) }
+                        if TailscaleApp.shouldOffer(route: c.route, tailscaleOn: tailnet, state: store.conn) {
+                            Button { app.openTailscale() } label: { Label("Open Tailscale", systemImage: "network") }
+                                .accessibilityIdentifier("open-tailscale")
+                                .accessibilityHint("Opens the Tailscale app, or the App Store if it isn’t installed.")
+                        }
                         if store.conn != .denied {
                             Button { store.connect(c.id) } label: { Label("Try again now", systemImage: "arrow.clockwise") }
                         }
