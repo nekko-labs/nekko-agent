@@ -473,6 +473,12 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             None => ctx.backend.call(channel, Value::Array(args)).await,
         },
         c if SESSION_CHANNELS.contains(&c) && ctx.sessions.is_some() => {
+            // A deleted Claude Agent chat's Claude Code child goes with it.
+            if c == "session:delete"
+                && let Some(id) = args.first().and_then(Value::as_str)
+            {
+                ctx.turns.harness.close(id).await;
+            }
             session_op(
                 ctx.sessions.clone().expect("checked"),
                 ctx.backend.clone(),
