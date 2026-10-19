@@ -96,6 +96,9 @@ struct Fake {
     notices: Mutex<Vec<Value>>,
     now: Mutex<f64>,
     engine: Mutex<Option<std::sync::Weak<Workflows>>>,
+    /// The settings each poll got, and what the next polls return (none: no poll).
+    polls: Mutex<Vec<Value>>,
+    poll_results: Mutex<VecDeque<Value>>,
 }
 
 impl WorkflowHost for Fake {
@@ -192,8 +195,12 @@ impl WorkflowHost for Fake {
         };
         Box::pin(async move { res })
     }
-    fn poll(&self, _: &str, _: &str, _: Value, _: f64) -> BoxFut<'_, Option<Result<Value, String>>> {
-        Box::pin(async { None })
+    fn poll(&self, _: &str, _: &str, settings: Value, cursor: f64) -> BoxFut<'_, Option<Result<Value, String>>> {
+        let next = self.poll_results.lock().unwrap().pop_front();
+        if next.is_some() {
+            self.polls.lock().unwrap().push(json!({ "settings": settings, "cursor": cursor }));
+        }
+        Box::pin(async move { next.map(Ok) })
     }
     fn notify(&self, snapshot: &Value) {
         self.notices.lock().unwrap().push(snapshot.clone());
@@ -309,5 +316,59 @@ async fn the_engine_leaves_the_same_files_and_side_effects() {
     for d in g["described"].as_array().unwrap() {
         assert_eq!(rules::describe_event(&d["event"]), d["label"].as_str().unwrap(), "{}", d["event"]);
     }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test]
+async fn a_poll_state_is_kept_in_the_cursor_record_across_restarts() {
+    let dir = std::env::temp_dir().join(format!("nekko-automation-poll-state-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let fake = Arc::new(Fake::default());
+    *fake.settings.lock().unwrap() = json!({ "connectors": [{ "kind": "github", "connected": true, "token": "t" }] });
+    *fake.now.lock().unwrap() = 1_000_000.0;
+    let start = |fake: &Arc<Fake>| {
+        let clock = fake.clone();
+        Workflows::new(
+            &dir,
+            fake.clone(),
+            Arc::new(move || *clock.now.lock().unwrap()),
+            Arc::new(|| "id-1".to_string()),
+        )
+    };
+    let engine = start(&fake);
+    engine
+        .create(&json!({
+            "name": "Review PRs",
+            "steps": [{ "id": "s", "name": "S", "kind": "prompt", "run": "Review {{trigger.number}}" }],
+            "triggers": [{ "id": "t1", "kind": "connector", "connector": "github", "repo": "o/r", "event": "pr_opened", "includeDrafts": true }],
+        }))
+        .await
+        .unwrap();
+    // Arming: the poll returns its state and no events.
+    fake.poll_results
+        .lock()
+        .unwrap()
+        .push_back(json!({ "events": [], "nextCursor": 1_000_000, "pollState": { "prHeads": { "1": "a" } } }));
+    engine.tick_listeners().await;
+    let first = fake.polls.lock().unwrap()[0].clone();
+    assert_eq!(first["settings"]["includeDrafts"], true);
+    assert!(first["settings"].get("pollState").is_none());
+    let file: Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.join("workflow-cursors.json")).unwrap()).unwrap();
+    assert_eq!(file["version"], 1);
+    assert_eq!(file["cursors"]["t1"]["lastCursor"], 1_000_000);
+    assert_eq!(file["cursors"]["t1"]["pollState"], json!({ "prHeads": { "1": "a" } }));
+
+    // A restart reads the state back and hands it to the next poll.
+    drop(engine);
+    let engine = start(&fake);
+    *fake.now.lock().unwrap() = 2_000_000.0;
+    fake.poll_results
+        .lock()
+        .unwrap()
+        .push_back(json!({ "events": [], "nextCursor": 1_000_000, "pollState": { "prHeads": { "1": "a" } } }));
+    engine.tick_listeners().await;
+    assert_eq!(fake.polls.lock().unwrap()[1]["settings"]["pollState"], json!({ "prHeads": { "1": "a" } }));
     let _ = std::fs::remove_dir_all(&dir);
 }

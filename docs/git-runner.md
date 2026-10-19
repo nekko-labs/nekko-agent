@@ -66,12 +66,42 @@ The template ships a disarmed **Connector** trigger as the starter:
 2. On the workflow's Connector trigger: set **Repo** to `owner/name`, set the event name, arm it.
    - GitHub event names are the API's `type` strings: `PushEvent`, `PullRequestEvent`,
      `PullRequestReviewEvent`, … One trigger matches one name, so add a second trigger for PRs.
+   - Three GitHub event names read their own endpoints instead of the shallow events feed
+     (the editor suggests them; each needs **Repo**). See [Reacting to GitHub CI and PRs](#reacting-to-github-ci-and-prs).
    - GitLab polls the project events feed; filter with the **Filter** substring field.
 3. **Poll every N minutes** defaults to 1. Each new matching event starts a run; a late or
    duplicated page can't refire (events are deduped by id, and the cursor survives restarts).
 
 Polling is eventually-consistent by design: expect up to a poll interval of latency, and note
 that repo events APIs are shallow (recent events only).
+
+### Reacting to GitHub CI and PRs
+
+These GitHub connector trigger events are polled from their own endpoints:
+
+| Event | Fires when | Payload (`{{trigger.*}}`) |
+| --- | --- | --- |
+| `workflow_run_failed` | An Actions run in the repo completes with `failure` or `timed_out`. Each attempt fires once, so a re-run that fails again fires again. | `run_id`, `run_attempt`, `workflow`, `branch`, `sha`, `html_url`, `conclusion`, `trigger_event`, and `number` when the run belongs to a PR (fork PRs included, looked up from the commit). |
+| `pr_opened` | An open PR is seen for the first time. | `number`, `title`, `branch`, `base`, `sha`, `author`, `author_association`, `head_repo`, `is_fork`, `draft`, `html_url` |
+| `pr_updated` | An open PR's head commit changes (a new push). | Same as `pr_opened`. |
+
+Arming a PR trigger records the PRs already open without firing, so it does not work through the
+backlog. Draft PRs are skipped unless **Include draft PRs** is ticked; a draft marked ready
+then fires `pr_opened`. The token needs **Actions: read** and **Pull requests: read**
+(fine-grained) or the `repo` scope (classic); a 403 or 404 shows up as the trigger's error,
+naming the permission.
+
+Two action steps pair with them:
+
+- **`github.runFailureLogs`** (*Read failed job logs*) returns the run's failed jobs as plain
+  text, one `### <job> / <failed step>` section each, holding the log lines around every
+  `##[error]` line (or the end of the log). `repo` and `run_id` default to the trigger's;
+  `max_bytes_per_job` (12000) and `max_jobs` (3) cap the output. The log download follows
+  GitHub's redirect to its storage host without the token.
+- **`github.upsertPRComment`** (*Keep one PR comment up to date*) edits the comment it left
+  before on the PR, found by a hidden `<!-- nekko-agent:<workflow> -->` marker (set **Marker**
+  to change it), or adds one. With no PR number (a failed push) it outputs "No PR, skipped."
+  and the run carries on.
 
 ### Webhook mode - server / Docker edition
 

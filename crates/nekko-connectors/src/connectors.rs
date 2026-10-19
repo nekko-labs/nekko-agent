@@ -218,6 +218,10 @@ async fn github_fetch(http: &dyn Http, token: &str, query: Option<&str>) -> Resu
 }
 
 async fn github_poll(http: &dyn Http, token: &str, settings: &Value, cursor: f64) -> Result<Value, String> {
+    let event = setting(Some(settings), "event");
+    if crate::github::handles(&event) {
+        return crate::github::poll(http, token, settings, cursor, &event).await;
+    }
     let repo = setting(Some(settings), "repo");
     iso_string(cursor).ok_or("Invalid time value")?;
     let url = if repo.is_empty() {

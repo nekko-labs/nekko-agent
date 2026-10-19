@@ -247,6 +247,32 @@ export const WORKFLOW_ACTIONS: WorkflowActionSpec[] = [
     ],
   },
   {
+    op: 'github.runFailureLogs',
+    connector: 'github',
+    group: 'GitHub',
+    label: 'Read failed job logs',
+    hint: "The failed jobs of an Actions run, each with its failed steps and the log lines around the errors.",
+    params: [
+      { key: 'repo', label: 'Repo', placeholder: 'owner/name (defaults to the trigger)' },
+      { key: 'run_id', label: 'Run id', placeholder: '{{trigger.run_id}}' },
+      { key: 'max_bytes_per_job', label: 'Max bytes per job', placeholder: '12000' },
+      { key: 'max_jobs', label: 'Max jobs', placeholder: '3' },
+    ],
+  },
+  {
+    op: 'github.upsertPRComment',
+    connector: 'github',
+    group: 'GitHub',
+    label: 'Keep one PR comment up to date',
+    hint: 'Updates the comment this workflow left on the PR, or adds it. With no PR number it skips.',
+    params: [
+      { key: 'repo', label: 'Repo', placeholder: 'owner/name (defaults to the trigger)' },
+      { key: 'number', label: 'PR number', placeholder: '{{trigger.number}}' },
+      { key: 'body', label: 'Comment', required: true, multiline: true },
+      { key: 'marker', label: 'Marker', placeholder: 'nekko-agent:<workflow>', hint: 'Hidden in the comment to find it again.' },
+    ],
+  },
+  {
     op: 'gitlab.setCommitStatus',
     connector: 'gitlab',
     group: 'GitLab',
@@ -301,6 +327,16 @@ export const WORKFLOW_ACTIONS: WorkflowActionSpec[] = [
       { key: 'contentType', label: 'Content-Type', placeholder: 'application/json' },
     ],
   },
+];
+
+/**
+ * GitHub connector trigger events read from their own endpoints rather than
+ * the Events API. Each needs the trigger's repo.
+ */
+export const GITHUB_POLL_EVENTS: Array<{ id: string; label: string }> = [
+  { id: 'workflow_run_failed', label: 'An Actions run failed' },
+  { id: 'pr_opened', label: 'A PR opened' },
+  { id: 'pr_updated', label: 'A PR got new commits' },
 ];
 
 /** What can start a workflow. */
@@ -397,6 +433,8 @@ export interface WorkflowTrigger {
   connector?: ConnectorKind;
   /** connector: the event type to react to, e.g. 'message' or 'issue'. */
   event?: string;
+  /** connector (GitHub pr_opened / pr_updated): also fire for draft PRs. */
+  includeDrafts?: boolean;
   /** connector: how often to poll, in ms. Defaults to 60 seconds. */
   pollIntervalMs?: number;
   /** connector: the payload's `action`, matched exactly ('opened' never takes 'reopened'). */
