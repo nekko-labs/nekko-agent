@@ -259,12 +259,15 @@ final class LiveRelayTests: XCTestCase {
         // IO-22: a slow reply runs; a follow-up waits in the queue and is edited before it runs.
         let message = app.input("chat.message")
         message.tap()
-        message.typeText("a slow one please")
+        // "long run" streams for 90 s on the fake model: time for a slow simulator to type and edit.
+        message.typeText("a long run please")
         app.buttons["Send"].tap()
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "word2")).firstMatch.waitForExistence(timeout: 45))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "word1")).firstMatch.waitForExistence(timeout: 45))
         message.tap()
-        message.typeText("queued from the phone")
-        app.buttons["Queue"].tap()
+        message.typeText("next one")
+        let queue = app.buttons["Queue"]
+        XCTAssertTrue(queue.waitForExistence(timeout: 10), "mid-run, Send queues")
+        queue.tap()
         let edit = app.buttons["chat.queue.edit"].firstMatch
         XCTAssertTrue(edit.waitForExistence(timeout: 10), "the queued prompt shows with Edit")
         attach(app, "beyond-1-queued")
@@ -275,13 +278,13 @@ final class LiveRelayTests: XCTestCase {
         editor.typeText(", edited")
         attach(app, "beyond-2-queue-editor")
         app.buttons["queue.editor.save"].tap()
-        let edited = app.staticTexts["queued from the phone, edited"]
+        let edited = app.staticTexts["next one, edited"]
         XCTAssertTrue(edited.waitForExistence(timeout: 10), "the edit reached the computer's queue")
         attach(app, "beyond-3-queue-edited")
         auditAccessibility(app, "beyond-queue")
         // The edited prompt runs after the slow reply, as edited.
-        let ranEdited = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "You: queued from the phone, edited"))
-        XCTAssertTrue(ranEdited.firstMatch.waitForExistence(timeout: 90), "the edited prompt ran")
+        let ranEdited = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "You: next one, edited"))
+        XCTAssertTrue(ranEdited.firstMatch.waitForExistence(timeout: 150), "the edited prompt ran")
 
         // IO-23: fork from the first prompt; the new chat has it in its message box.
         let first = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "You: Say hello")).firstMatch
