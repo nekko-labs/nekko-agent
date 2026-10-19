@@ -95,10 +95,19 @@
   },
   {
    "input": {
-    "relay": "{\"type\":\"c\",\"cid\":\"c1\",\"data\":\"{\\\"enc\\\":\\\"QUhPVl1ka3J5gIeOXprGcqwtp0TX5BoGIlSYo4YuwFCF7mPW6LwLRAy4LJSfu2N/KbNBkPPlttzRWEvzUyp7QDmh\\\"}\"}"
+    "relay": "{\"type\":\"c\",\"cid\":\"c1\",\"data\":\"{\\\"enc\\\":\\\"QUhPVl1ka3J5gIeOXprGcqwtp0TX/hobbBeY5sBonx7Ar2X37fBfAxPuZNeBqXVlMbqAZIvpIXQ7rd66lbIy52SatEUhSqRnIfX64lHdub7N\\\"}\"}"
    },
    "sent": [
-    "{\"type\":\"d\",\"cid\":\"c1\",\"data\":\"{\\\"enc\\\":\\\"YGdudXyDipGYn6atADH8lPla7La0piYST9z4h24BzxeQWZXW2OknqcYt5DjtT2ze5AQd7LGJv+Q3itOKSxQ1+ptKVTut0gI=\\\"}\"}",
+    "{\"type\":\"d\",\"cid\":\"c1\",\"data\":\"{\\\"enc\\\":\\\"YGdudXyDipGYn6atADH8lPla7La0sCYPBJW+zCYBh0rdCJ/KiLx3/pJk5DjuATHb6AAR6/SDsThVK1l+cDw3oTa84a9ENwOr8/SN8jL33kLyK6J2ufRrHrg=\\\"}\"}"
+   ],
+   "connected": []
+  },
+  {
+   "input": {
+    "relay": "{\"type\":\"c\",\"cid\":\"c1\",\"data\":\"{\\\"enc\\\":\\\"f4aNlJuiqbC3vsXMuJyv4t/iW+h7v8zZO4WdzYVoSjT1Bvqa7s8tCfqQjb9NKmLmL58hH1y+/SSL/DV22vr3uDuB\\\"}\"}"
+   },
+   "sent": [
+    "{\"type\":\"d\",\"cid\":\"c1\",\"data\":\"{\\\"enc\\\":\\\"nqWss7rByM/W3eTrmOpSWsBpe+c2pO1ob7TujYMkpP5Lm8k+lUfamwOeTbisdTnu4qchwwI1FjrWH5gMisCLh6DcPQhh4M0=\\\"}\"}",
     "{\"type\":\"kick\",\"cid\":\"c1\"}"
    ],
    "connected": []
@@ -112,10 +121,10 @@
   },
   {
    "input": {
-    "relay": "{\"type\":\"c\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"f4aNlJuiqbC3vsXMuJyv4t/iW+h7v8zZO4WdzYVoSjT1Bvqa7s8tCfmMkLBGYDa2IcD9r7AFUqYf6hZXw9J6k+JP2DYF9Gev2T5BfA==\\\"}\"}"
+    "relay": "{\"type\":\"c\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"vcTL0tng5+71/AMKEh04kaBHdRX6OYUqAwD0F2R9tkLLNBa/wJjusb/QNwGs2nvAa6I5lkqSGUpaSabO/S6VJkueqVgn1jKz7Pdmc8rLFcr5MAwN+q6JiiA=\\\"}\"}"
    },
    "sent": [
-    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"nqWss7rByM/W3eTrmOpSWsBpe+c2t+1qZb7nyo0q9P9Pns8z0l/ClU+cR/XhOWTi6L8tjVY1R6g6VPC4uOxysZWjOjaC9Qt/AB2emOtwIuUV9wWXOULHjV2r+ZIKcPS4LeEWjkkoXzP3/eIZhP7CaNHz9YA5zglduaevic+umgMjXUzjrG4uvf0=\\\"}\"}"
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"3OPq8fj/Bg0UGyIpXHPF05Gn1aqoFE9Q6ojnUFLzgrEYmSW5Qr49b+fQMhyoGkvj6nXnlSzy9jd6CZslGDfHozhCmiehWpqli5PmM0SZW4xs/mRYh5VzQC+GHdVgqIniIoOfnBtCm/r0XnXi0k6VSL1sEEboIRe2k0LEbEOicsBWIihrbOKtZHBMp0nIr/TObn+YbtYs\\\"}\"}"
    ],
    "connected": [
     "phone-1"
@@ -123,10 +132,11 @@
   },
   {
    "input": {
-    "relay": "{\"type\":\"c\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"vcTL0tng5+71/AMKEh04kaBHdRX6I4U3TUP0UiI76QaOdRCexdS69qOaYk26kjmRLu85hB2ETh0VePaLui3FZR2QuFA41jLazFpddk4Bzql4/yqLxCtT5UPH\\\"}\"}"
+    "relay": "{\"type\":\"c\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"+wIJEBceJSwzOkFI9TnX91ekU6exSuCHiaduxCQKRt5QRFoq7t21yqljY5SKxjdULSk20zaYosQQgjRX2wHRU4287bs54T7tzvs6+sGK7aV6cA==\\\"}\"}"
    },
    "sent": [
-    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"3OPq8fj/Bg0UGyIpXHPF05Gn1aqoEU9Pq8uoXBT9mudRzT6/VOlrYOeDDUWwUV+pvznxiT/8+GF9HJolGDfHvTlKnDbvD5r5xYfiMUqfU8oXqCcM0skpVBbZLEq01435cJy90rRP2l3pAA==\\\"}\"}"
+    "{\"type\":\"notify\",\"kind\":\"test\",\"deviceId\":\"phone-1\",\"title\":\"Nekko Agent\",\"body\":\"Test notification: your computer can reach this phone.\"}",
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"GiEoLzY9REtSWWBn9DOYMBMVHuGo4nu4slf30kNBy+8WXzldFVlW2/DKCr+zWDpbJm11bfEmtLnNBOrhKO45ONde1pacWZ4=\\\"}\"}"
    ],
    "connected": [
     "phone-1"
@@ -134,10 +144,10 @@
   },
   {
    "input": {
-    "relay": "{\"type\":\"c\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"+wIJEBceJSwzOkFI9TnX91ekU6exSuCHiaduxCQKRttIShsh59K1waAte4zb0zZTLH0lxX+L5ZwQnnj8qQrzUiTY2gePSQFI+a0=\\\"}\"}"
+    "relay": "{\"type\":\"c\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"OUBHTlVcY2pxeH+Gsf32YOWSvm/lGZ2C0g9D5NwSnaW1QdlqhkETTPx+1hkPJLPaHr5zEdDGk0edgAopFzQIkCKkyNajIY4+Tdy/orQq2Mt2vgiN86OkclQc\\\"}\"}"
    },
    "sent": [
-    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"GiEoLzY9REtSWWBn9DOYMBMVHuGo4nu4slf30kNBy+oOUX5dAkVRlb7KQ6HlQzgXe2oneeY+6WZDgSds8+GiGmRtRPrjh9H9T+RXYJn3tw==\\\"}\"}"
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"WF9mbXR7gomQl56lqG6zOt2h6x9MxheeYEXxrJ/TpcKvHQjxouOHZjfvOJi9et/1EVwvXCpiSXkvbCBmLhvtRFky+iD4KMo0qmc4JL2LtVYkzycEqys8d1dQ0nzExXp5y+0NpNoe1kpo6w==\\\"}\"}"
    ],
    "connected": [
     "phone-1"
@@ -145,10 +155,10 @@
   },
   {
    "input": {
-    "relay": "{\"type\":\"c\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"OUBHTlVcY2pxeH+Gsf32YOWSvm/lGZ2C0g9D5NwSnaO1QdlqhkETTPx+1hkfKaHdTbB/DZjBxAbSgAonAWUQ5yK2i5ONfobyGQvxXMbCG3mcsgJGyPc=\\\"}\"}"
+    "relay": "{\"type\":\"c\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"d36FjJOaoaivtr3EWNJ0S6es83yIrxEz8vTW2JjC+obvQOuZBHl86nflCL0ekHH7MTBa2nVLAXAmnnqvqPtCN/GckBVCRtts2Do=\\\"}\"}"
    },
    "sent": [
-    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"WF9mbXR7gomQl56lqG6zOt2h6x9MxheeYEXxrJ/TpcSvHQjxouOHZjfvDZbzf8a28TyVPXYOsPNdHy37cAzW\\\"}\"}"
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"lp2kq7K5wMfO1dzjcHJeavE60TFc6qmnjPHU2WY6C4mN8B3qYB7WOI0F4i4ueLOtoAdPJ+Xf0bKykrKKYMTPxsgvPXoO536/TbZrVXFajg==\\\"}\"}"
    ],
    "connected": [
     "phone-1"
@@ -156,10 +166,10 @@
   },
   {
    "input": {
-    "relay": "{\"type\":\"c\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"d36FjJOaoaivtr3EWNJ0S6es83yIrxEz8vTW2JjC+pelC/6URzsw7HOmXPEImSe1ei1Y2jxFC2o+hJk9xssWiKU13qvHKMll2g6kRgelZcUC/XeFdsnWFFfg/7vPgJEyCsvvmkDsk3xu+HM=\\\"}\"}"
+    "relay": "{\"type\":\"c\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"tbzDytHY3+bt9PsCdOudEs7mqUpVY6lS7+a/nTqoHN0slSrS0+RrRuBhvL3RmSoDedUiJaumKXiCigQ2OcC6RdaQHpjKMtBTiIMN3mq0nt9hOVFjOCw=\\\"}\"}"
    },
    "sent": [
-    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"lp2kq7K5wMfO1dzjcHJeavE60TFc6qmnjPHU2WY6C5jHuw79MF2GaNJU5CcuLuC45R0LZK2YguHi0fubZ5Le7TyJQIEq6mVoVPaYIKqbrKCmupXuoE7y/6KxFBgtRvOjeIx8JVb6QH43aUkF1l6qGNJ94xQtiuxBnogWApST8psBebgTKfGKt4V4/qj5sq8=\\\"}\"}"
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"1Nvi6fD3/gUMExohlEMFjOUztKAW6lyMvbjZEY9SDVa9SfLMVbpKbwju6lBZZyj0T1YFzaBwccFO5RFrow4X\\\"}\"}"
    ],
    "connected": [
     "phone-1"
@@ -167,10 +177,10 @@
   },
   {
    "input": {
-    "relay": "{\"type\":\"c\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"tbzDytHY3+bt9PsCdOudEs7mqUpVY6lS7+a/nTqoHN8slSrS0+RrRuBhvL3cnnEENtcoaPXwaibHmFRrEb/9W12rVruct4eLW4IuGut2DQ==\\\"}\"}"
+    "relay": "{\"type\":\"c\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"8/oBCA8WHSQrMjlAcDsnQhWe73Q2E8bRO0+FaW4xiEwleWHkaj3tsuqqK8VCW3yttsbTmL0DEHhlnBgZ3sqbfkgVAuuX1QRFnUuvNhTT4/r/Pd4c5TeEOKafmPqemmFRgIW2DKdkg4DulYs=\\\"}\"}"
    },
    "sent": [
-    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"1Nvi6fD3/gUMExohlEMFjOUztKAW6lyMvbjZEY9SDVS9SeXbVKBUORD2ykpBKzTSj6tvF7A3qwGeyHurDypOo0Rp+c3EbzOh8OZuLsubgyuRrngry0iUoai9H1zC11ebqjQ0VJJo9zztmnkjjejq3XYygBwh\\\"}\"}"
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"EhkgJy41PENKUVhf8HL4JzewtrzihAKjcRzshfCIm01VeaCmhY5QEmA4dL+11KHLXvcRClYf/+HRCZbl+49HpZWNW64csKAIKfyGrQjrEudYbtMip5sOwZ8P7IIW6v4whSy0mlc0JVvJeNAW+0V2DQF6hoxpXiBnU8XKB3Y0/7rabkVewBEKv7pxVJeKqgQ=\\\"}\"}"
    ],
    "connected": [
     "phone-1"
@@ -178,10 +188,10 @@
   },
   {
    "input": {
-    "relay": "{\"type\":\"c\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"8/oBCA8WHSQrMjlAcDsnQhWe73Q2E8bRO0+FaW4xiFhyPDXiIHChv+enZ5EFQz/k/8aMh6cZCzRz2Rwfm5WbJWEvDMLUsFn0Fnvhngd3DpymYyQ=\\\"}\"}"
+    "relay": "{\"type\":\"c\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"MTg/Rk1UW2JpcHd+Sj0+J0yG3Y5PVPYwrF5z0s+13yNnrArTjjQ9wqFK0rUJCHsRSM46mV0dJ/kD0lETfdW3Ww/kE9DmWewXUmyraBDrGQ==\\\"}\"}"
    },
    "sent": [
-    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"EhkgJy41PENKUVhf8HL4JzewtrzihAKjcRzshfCIm1kCPPSm1dAdEidxI52ugrvREPIaXwlZrLaBStmx89tbod7FHAmArgvIZ2k5FdqhX6tbbsx8opkF29hRnsMU7PAvi3201Es0NAuWTjKYW8n9PB8CQp92LL1IxA==\\\"}\"}"
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"UFdeZWxzeoGIj5ad4pVZprBGb+mnROyeNRb619ViFHO1UITK3EmDHbu6Mv6nDaRrmfbMDwRbMXMI3et+d1Zaj7AMPoKL09oyqZJfX5VXc08AUk8K+L2wD8O1WLYy4+Sd4eQubYvffFCsRHoWqjjAlQWq+g6p\\\"}\"}"
    ],
    "connected": [
     "phone-1"
@@ -189,10 +199,10 @@
   },
   {
    "input": {
-    "relay": "{\"type\":\"c\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"MTg/Rk1UW2JpcHd+Sj0+J0yG3Y5PVPYwrF5z0s+13yN5okvYhzs9yagEyq1FAyAWXJcl0gFaZKdGwAFOVarwVxywyCjAMCk/3I3Kv8yXjF+bQw==\\\"}\"}"
+    "relay": "{\"type\":\"c\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"b3Z9hIuSmaCnrrW89rbQFsJXH3SmWwE07bjYJAPb1IXcFn6wzkXxCBJMe1Hg8ND5TfaYU/Tzcj4i/DDRNyH+w7YwbLJopYH5WqvdwxEHcvzY3ts=\\\"}\"}"
    },
    "sent": [
-    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"UFdeZWxzeoGIj5ad4pVZprBGb+mnROyeNRb619ViFHOrXsPd3FSeTaOiXt+8WeVmmfXUHQUfd2cV36Y/NgZLh6sbP8bby90zotdXFJ5efE8LWw5D+ba3A8L4S6x86L+a9b0xJoYgnTCwHUu5BFYquzMnFysR8/ru\\\"}\"}"
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"jpWco6qxuL/GzdTb+gbr6h5niYxiZa0s3kUuGPz4Xo5+7k/W4Rq8hhvV8rTwyedEZm0l2tIzNyu6BXJgSEIVyNuLEvciNm9/X56M4LYJbMXa8+hicwj9lKteVkC5woLJgu3jRNEt3pmXU9oMMZJimH83yQbUlD2F7A==\\\"}\"}"
    ],
    "connected": [
     "phone-1"
@@ -200,10 +210,10 @@
   },
   {
    "input": {
-    "relay": "{\"type\":\"c\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"b3Z9hIuSmaCnrrW89rbQFsJXH3SmWwE07bjYJAPb1IXeFn6wzkXxCBJMe1Hg9MPlUOzGWu/zPHBnrSWBfHC9i4oeM5W0EbulCSCl+CX2m5TDHVFafe4XmtgM7gMct7CO5Q==\\\"}\"}"
+    "relay": "{\"type\":\"c\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"rbS7wsnQ197l7PP6nu81rK0Th3XFcZd5LLIe4ak4S/pjFzdGV6RPK2Gu1zSZWpshltCh8qRMkrvqk+xBXX4J2vHiseRZWp5s4HaumjRjSe1Zsg==\\\"}\"}"
    },
    "sent": [
-    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"jpWco6qxuL/GzdTb+gbr6h5niYxiZa0s3kUuGPz4Xo587k/B9hummE3N6qHkn6JLa2MmyNN1LTm6H3psCwsBi4jbB6IgaiV7WJXI6u9DYtvR+OUmNUGxka9YGha7jMH9ucr7VeUjpldGvJGnhM67Na47n9qUUg==\\\"}\"}"
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"zNPa4ejv9v0ECxIZvJrXGXd9QUCcCuq+vWBY1ZwaNKJ61lhot3UUK3sdMkdQ6dNVW2TKhat+xEJmPC4Y8u0JFJxOEc7CmEbAMTMPkR1bSFNoXx2Gavo1girMb6XhL4G24PUwABQZPQnVttatKz+DHa1umG5qY4m6\\\"}\"}"
    ],
    "connected": [
     "phone-1"
@@ -211,7 +221,18 @@
   },
   {
    "input": {
-    "relay": "{\"type\":\"c\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"rbS7wsnQ197l7PP6nu81rK0Th3XFc51mabxB0c1FK1d6TqSeohjGibnguw==\\\"}\"}"
+    "relay": "{\"type\":\"c\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"6/L5AAcOFRwjKjE4DFW2LBK057QRDO2WYn8jNqMAnt5qwfCJyDat7xA+1BFaLAzvyT980iR/hM5NaO/DolaPiYuj2b8kkAF1p/7J0d72Nk0lxitDg4SPCd3yt4d7hLEjOw==\\\"}\"}"
+   },
+   "sent": [
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"ChEYHyYtNDtCSVBXzqbpAkTlqVQofeS+7G19sWVEUyFss+eL1rNKcfjPJV5BnG7dUsOFoxARQlOs+cp1Ve1G/TNlgCQvMgxL9xabRaieW13j9O2tn+lLKrTNBq9yWfssq5eW7emEKHb6B9d6deyVer4ut41ymg==\\\"}\"}"
+   ],
+   "connected": [
+    "phone-1"
+   ]
+  },
+  {
+   "input": {
+    "relay": "{\"type\":\"c\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"KTA3PkVMU1phaG92x4ZaqNql25R0eSoCnHJLLAwZsJ1SSSDtVZ6f8VmrJA==\\\"}\"}"
    },
    "sent": [],
    "connected": [
@@ -274,10 +295,10 @@
   },
   {
    "input": {
-    "relay": "{\"type\":\"c\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"zNPa4ejv9v0ECxIZvJrXGXd9QUCcEOqh8yNYkNpca+IhmR9EoSVBeylPf2dasMEWShHw85vTYe5M3a3EH60e9Hs=\\\"}\"}"
+    "relay": "{\"type\":\"c\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"SE9WXWRrcnmAh46VFSEaZlGA5JuC7qphYBde5pCiQxStLVtmB4SNlCBgAoIOLNpJu5fTFjErBUehBlikr7RjTMI=\\\"}\"}"
    },
    "sent": [
-    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"6/L5AAcOFRwjKjE4DFW2LBK057QRCe2LIzxsOuUOhow8m7uJxXX5+lc7kglCfg7o0Dh9mmQukoBKevaErE7Mq4S/leAk0kxx6/6d29j3L01iz+/3knE5O706P5zGmvFqbGMFtupnnG/YbFVMxkdpYB2zMiErk13oU0/c+2Nv0L43CNTJQktSV/0=\\\"}\"}"
+    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"Z251fIOKkZifpq20aSUVseFRpIycriCRv8u5x1jHXeCplwAMPM6BXdByiZtBnbve/0ZvVTGqS2rHm5p5sgi7d08v1xGdWF3huYP6frB89TCadUL6kD0CsNLNydHFMrtSL7wkAXDxxjp5H6FIyevoWcrFAXCfVmHA8hE0bnWCL0O9F1mvNdL4GyddcKyhjE6H/3VXrd3O\\\"}\"}"
    ],
    "connected": [
     "phone-1",
@@ -297,8 +318,8 @@
    },
    "sent": [
     "{\"type\":\"activity\",\"tag\":\"7536af24f84b356f893a72f0def58cce\",\"phase\":\"running\"}",
-    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"ChEYHyYtNDtCSVBXzqbpAkTlqVQoaveooDV99CMFAXYx8aCVkfodfOuIcXEA233WXdXL6lZDGV6y4849Vb5Z/X0+gHAvJAxU+wCLRb6eR0j16eWr04wNZO+NEPJyT/sPnq/A8ZbDIBycB3LwPrqLtnnQ6rIUbEWiXbShFrVDRDYM\\\"}\"}",
-    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"ChEYHyYtNDtCSVBXzqbpAkTlqVQoaveooDV99CMFAXYx8aCVkfodfOuIcXEA233WXdXL6lZDGV6y4849Vb5Z/X0+gHAvJAxU+wCLRb6eR0j16eWr04wNZO+NEPJyT/sPnq/A8ZbDIBycB3LwPrqLtnnQ6rIUbEWiXbShFrVDRDYM\\\"}\"}"
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"ho2Um6KpsLe+xczTxehzXpowZTNDg1icQnqJoXrTSt1lxP8ECrJ+8JfVskiJ83jI8AKuNVzM9T1mLwczV1fuF1bMQzKobyFrMXXdmrteXRwq8kyWIVNrw4AtUaKkWLYxne/HVWi0E0BBYKV047brjrzOGOUF5ahS080QhzZXatsf\\\"}\"}",
+    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"ho2Um6KpsLe+xczTxehzXpowZTNDg1icQnqJoXrTSt1lxP8ECrJ+8JfVskiJ83jI8AKuNVzM9T1mLwczV1fuF1bMQzKobyFrMXXdmrteXRwq8kyWIVNrw4AtUaKkWLYxne/HVWi0E0BBYKV047brjrzOGOUF5ahS080QhzZXatsf\\\"}\"}"
    ],
    "connected": [
     "phone-1",
@@ -323,8 +344,8 @@
     }
    },
    "sent": [
-    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"KTA3PkVMU1phaG92x4ZaqNql25R0bDMJlSQURRaTo1uRkgEAkRxM1o2/+egwIxLlRDbaF4fcnABgOVTqXAEJyZs/Q0J9ICN5bFSjklSOttCK3KztIwHcbA7ERoT8m1j585gNHzkqd5f1Gm2tz68uTE7pribcjtyRhEeq8//6wumZBY1jxyyABSnfNWLw+6Ne2yCBEROXDGY63ATgyUMS/HufuVHZO5F++etGu+14cQ==\\\"}\"}",
-    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"KTA3PkVMU1phaG92x4ZaqNql25R0bDMJlSQURRaTo1uRkgEAkRxM1o2/+egwIxLlRDbaF4fcnABgOVTqXAEJyZs/Q0J9ICN5bFSjklSOttCK3KztIwHcbA7ERoT8m1j585gNHzkqd5f1Gm2tz68uTE7pribcjtyRhEeq8//6wumZBY1jxyyABSnfNWLw+6Ne2yCBEROXDGY63ATgyUMS/HufuVHZO5F++etGu+14cQ==\\\"}\"}"
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"payzusHIz9bd5OvyU6i1tIhGvz9bfHEQJJbDbc+4rhJhEoUtSI+pIPK7d3ZGaD6n+IcYlj07fJXDXqFBbbzi7MS/lsRRyexyrWiDHe9T1wIMfZvclzcxe1TvRngNzVJcgmCFcBcplWSX9bAPSwxusiXpS5MAUQ0WZ2uQIfK4n7W5YoOoOmuIrZ5jUvz0Zwwak064sOrHyTT6TQwa2HZIJ3xz1B2FKAOe0WlSYk+TCg==\\\"}\"}",
+    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"payzusHIz9bd5OvyU6i1tIhGvz9bfHEQJJbDbc+4rhJhEoUtSI+pIPK7d3ZGaD6n+IcYlj07fJXDXqFBbbzi7MS/lsRRyexyrWiDHe9T1wIMfZvclzcxe1TvRngNzVJcgmCFcBcplWSX9bAPSwxusiXpS5MAUQ0WZ2uQIfK4n7W5YoOoOmuIrZ5jUvz0Zwwak064sOrHyTT6TQwa2HZIJ3xz1B2FKAOe0WlSYk+TCg==\\\"}\"}"
    ],
    "connected": [
     "phone-1",
@@ -352,8 +373,9 @@
    },
    "sent": [
     "{\"type\":\"activity\",\"tag\":\"7536af24f84b356f893a72f0def58cce\",\"phase\":\"approval\",\"callId\":\"tc1\",\"severity\":\"high\"}",
-    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"SE9WXWRrcnmAh46VFSEaZlGA5JuC47loYgxe5pClTgOqIFtDQZyV1zdtA5hRZJ4OqHw+pxKjolL5tJLD58GM4w1DpH2S3EdYaAgxu4Y6huL84UzFw4GC+mzuQbG+UZe/gHsDWHGuRjk+jtJ8omJKnZwpmvbbEi2DpYJgH9K1/rkCIV3Tc2xqHTZ+cUPOKyvoILbInfClbboAVP8LSJhpzKPvbiXYtngW+XdJ0xFDq/ly4cnHd+8Zr5p6QB0S8z3bZ5//+LVemFUUeFbHSxBu7smhQDj79OYIBcHenF2kYPL+QlsAlnqatyh8Ow0R\\\"}\"}",
-    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"SE9WXWRrcnmAh46VFSEaZlGA5JuC47loYgxe5pClTgOqIFtDQZyV1zdtA5hRZJ4OqHw+pxKjolL5tJLD58GM4w1DpH2S3EdYaAgxu4Y6huL84UzFw4GC+mzuQbG+UZe/gHsDWHGuRjk+jtJ8omJKnZwpmvbbEi2DpYJgH9K1/rkCIV3Tc2xqHTZ+cUPOKyvoILbInfClbboAVP8LSJhpzKPvbiXYtngW+XdJ0xFDq/ly4cnHd+8Zr5p6QB0S8z3bZ5//+LVemFUUeFbHSxBu7smhQDj79OYIBcHenF2kYPL+QlsAlnqatyh8Ow0R\\\"}\"}"
+    "{\"type\":\"notify\",\"kind\":\"needs-you\",\"tag\":\"7536af24f84b356f893a72f0def58cce\",\"title\":\"Nekko needs you\",\"body\":\"A tool needs your approval.\"}",
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"xMvS2eDn7vX8AwoRy/JsAjSVL3sIbNIZbb1bbRlI8H7rYD3+YauFGa8vKQUviVJpJPah3+DWY4JQnW7cK/H00vqGfaW91vGbLmPB80cQVoG1ToN5+9Z8mSIEC7hkw7wadAL9a10ii5NLYZSmYgQIjn5FBN54hKlzf5V7bo+EmaSYgChoXYIPFIl/nBWuy9GxjWnc6ReCknvRUfwQeIkvYvRw3JL0888BR89Qia7BnafOSGQMeQ3lwEq4HbuODeZYKpsaHCBD9q8aeJCeUV4pOxeVFR4ARRtdMeiqV9SkDvIWhB/EAYtuZzXwM23N\\\"}\"}",
+    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"xMvS2eDn7vX8AwoRy/JsAjSVL3sIbNIZbb1bbRlI8H7rYD3+YauFGa8vKQUviVJpJPah3+DWY4JQnW7cK/H00vqGfaW91vGbLmPB80cQVoG1ToN5+9Z8mSIEC7hkw7wadAL9a10ii5NLYZSmYgQIjn5FBN54hKlzf5V7bo+EmaSYgChoXYIPFIl/nBWuy9GxjWnc6ReCknvRUfwQeIkvYvRw3JL0888BR89Qia7BnafOSGQMeQ3lwEq4HbuODeZYKpsaHCBD9q8aeJCeUV4pOxeVFR4ARRtdMeiqV9SkDvIWhB/EAYtuZzXwM23N\\\"}\"}"
    ],
    "connected": [
     "phone-1",
@@ -376,8 +398,9 @@
    },
    "sent": [
     "{\"type\":\"activity\",\"tag\":\"7536af24f84b356f893a72f0def58cce\",\"phase\":\"running\"}",
-    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"Z251fIOKkZifpq20aSUVseFRpIycvDOYstD2jliIF+WijwwDe9aZR5V+g81B2r3T/lwoVCH4BjHFlZZ4sgjiBVM5yRGdTl3luo3iR61r62fMIwG41jwIqsWGip3vJPwJeapxYijxjm4mSKFdmKXAHtvEL2j+DT/Rl1dmJjiCIxHwV1n6cts0AFibWcmB18/Yt/VCzxCGjuHA+nymdGX1mKDr4Byddw==\\\"}\"}",
-    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"Z251fIOKkZifpq20aSUVseFRpIycvDOYstD2jliIF+WijwwDe9aZR5V+g81B2r3T/lwoVCH4BjHFlZZ4sgjiBVM5yRGdTl3luo3iR61r62fMIwG41jwIqsWGip3vJPwJeapxYijxjm4mSKFdmKXAHtvEL2j+DT/Rl1dmJjiCIxHwV1n6cts0AFibWcmB18/Yt/VCzxCGjuHA+nymdGX1mKDr4Byddw==\\\"}\"}"
+    "{\"type\":\"dismiss\",\"tag\":\"7536af24f84b356f893a72f0def58cce\"}",
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"4+rx+P8GDRQbIikwywAQY1Y6beZlherK7i/gT4EKzNS4R/KM3nUlnh2VyVlU2+rU9sgdMAyD2roA6nt7UJHDay2qvuf+F1XqLyS1QmMdK0VjvasMznmEA/C6+hrD0LBSXEC+zpu4Kbm6dwyac52tLOURfGU4Xv6afny6fC1CBZHDyCyakG6dfZfmPLqwIV2rxLaHFuf2nfn0pOtVhfWQwXUABKUDdw==\\\"}\"}",
+    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"4+rx+P8GDRQbIikwywAQY1Y6beZlherK7i/gT4EKzNS4R/KM3nUlnh2VyVlU2+rU9sgdMAyD2roA6nt7UJHDay2qvuf+F1XqLyS1QmMdK0VjvasMznmEA/C6+hrD0LBSXEC+zpu4Kbm6dwyac52tLOURfGU4Xv6afny6fC1CBZHDyCyakG6dfZfmPLqwIV2rxLaHFuf2nfn0pOtVhfWQwXUABKUDdw==\\\"}\"}"
    ],
    "connected": [
     "phone-1",
@@ -400,8 +423,9 @@
    },
    "sent": [
     "{\"type\":\"activity\",\"tag\":\"7536af24f84b356f893a72f0def58cce\",\"phase\":\"question\"}",
-    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"ho2Um6KpsLe+xczTxehzXpowZTNDg1icQnqJoXrTSt1lxP8ECrJ+8JfVskiJ83jI8AKuNVzM9T1mLwczV1fuF1bMQzKobyFuIWjazP4TQFt1o1acPGlmjtRGRrG8Vudk2q+RRi//RE1bNHfRCCWqkq0Pu1EFosOR8UnPnh14/K9y5q3S1iwpGf5qwdn88aA1l3gPEbxJ7hio19WR\\\"}\"}",
-    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"ho2Um6KpsLe+xczTxehzXpowZTNDg1icQnqJoXrTSt1lxP8ECrJ+8JfVskiJ83jI8AKuNVzM9T1mLwczV1fuF1bMQzKobyFuIWjazP4TQFt1o1acPGlmjtRGRrG8Vudk2q+RRi//RE1bNHfRCCWqkq0Pu1EFosOR8UnPnh14/K9y5q3S1iwpGf5qwdn88aA1l3gPEbxJ7hio19WR\\\"}\"}"
+    "{\"type\":\"notify\",\"kind\":\"needs-you\",\"tag\":\"7536af24f84b356f893a72f0def58cce\",\"title\":\"Nekko needs you\",\"body\":\"Your computer has a question.\"}",
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"AgkQFx4lLDM6QUhP9Fx8OH0Bzb7ZOa8XarviaWY2A1OA7EsrHNAWACnHDQgTJX9QbjlM5b/tWTRh/w1EsHIEkTLjNv3UmKrAMJ+KyKgqvMKYyO9uOgmaBYLEw/zJJWD8TYPwa6NUh2y0qBOydcVuMbWx61b47ta27c0UeOXyB0AomBmfUD+d7Isa5iX/TPncSsMfAVh2YSwGeEQB\\\"}\"}",
+    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"AgkQFx4lLDM6QUhP9Fx8OH0Bzb7ZOa8XarviaWY2A1OA7EsrHNAWACnHDQgTJX9QbjlM5b/tWTRh/w1EsHIEkTLjNv3UmKrAMJ+KyKgqvMKYyO9uOgmaBYLEw/zJJWD8TYPwa6NUh2y0qBOydcVuMbWx61b47ta27c0UeOXyB0AomBmfUD+d7Isa5iX/TPncSsMfAVh2YSwGeEQB\\\"}\"}"
    ],
    "connected": [
     "phone-1",
@@ -421,8 +445,9 @@
    },
    "sent": [
     "{\"type\":\"activity\",\"tag\":\"7536af24f84b356f893a72f0def58cce\",\"phase\":\"running\"}",
-    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"payzusHIz9bd5OvyU6i1tIhGvz9bfHEQJJbDbc+4rhJhEoUtSI+pIPK7d3ZGaD6n+IcYlj07fJXDXqFBbbzi7MS/lsRRyex3t2KcNuVd1TFcNMrAnjIndhmtLW9KhANG3CzgNlZy23uE7ecPQQkg5E75CpgADB5ae3vk6VJxnUBXMOyFb8am42X6\\\"}\"}",
-    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"payzusHIz9bd5OvyU6i1tIhGvz9bfHEQJJbDbc+4rhJhEoUtSI+pIPK7d3ZGaD6n+IcYlj07fJXDXqFBbbzi7MS/lsRRyex3t2KcNuVd1TFcNMrAnjIndhmtLW9KhANG3CzgNlZy23uE7ecPQQkg5E75CpgADB5ae3vk6VJxnUBXMOyFb8am42X6\\\"}\"}"
+    "{\"type\":\"dismiss\",\"tag\":\"7536af24f84b356f893a72f0def58cce\"}",
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"ISgvNj1ES1JZYGduOh+H/VAhTHIg84LbEBDu8cWvITtGtp6XEb68mf2KnerV+JrxDQcdjEaOVZ3S1byypIjP8ol9Lgn/YacaAovTthH4IARdSHQks1bvWJCGRPM69MccrLXJ1fOl/OakoYXbkN0IJn+zWiXBQZBHJeQF2P6CUc+FNzPeVb6468ku\\\"}\"}",
+    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"ISgvNj1ES1JZYGduOh+H/VAhTHIg84LbEBDu8cWvITtGtp6XEb68mf2KnerV+JrxDQcdjEaOVZ3S1byypIjP8ol9Lgn/YacaAovTthH4IARdSHQks1bvWJCGRPM69MccrLXJ1fOl/OakoYXbkN0IJn+zWiXBQZBHJeQF2P6CUc+FNzPeVb6468ku\\\"}\"}"
    ],
    "connected": [
     "phone-1",
@@ -444,10 +469,10 @@
     }
    },
    "sent": [
-    "{\"type\":\"notify\",\"title\":\"Nekko finished\",\"body\":\"Your task is ready.\"}",
+    "{\"type\":\"notify\",\"kind\":\"finished\",\"tag\":\"7536af24f84b356f893a72f0def58cce\",\"title\":\"Nekko finished\",\"body\":\"Your task is ready.\"}",
     "{\"type\":\"activity\",\"tag\":\"7536af24f84b356f893a72f0def58cce\",\"phase\":\"done\"}",
-    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"xMvS2eDn7vX8AwoRy/JsAjSVL3sIbNIZbb1bbRlI8H7rYD3+YauFGa8vKQUviVJpJPah3+DWY4JQnW7cK/H00vqGfaW91vGLLmLIjgpCVZapS4t6yu19ym1PCuwizbJNdAbpfRZ3nvhGLd7xZWFFyTlIFpAulb8qMolrPMDSuajCx2o5EdlSX544wwo8XdBbmB6AWd3RfJj1xlRS\\\"}\"}",
-    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"xMvS2eDn7vX8AwoRy/JsAjSVL3sIbNIZbb1bbRlI8H7rYD3+YauFGa8vKQUviVJpJPah3+DWY4JQnW7cK/H00vqGfaW91vGLLmLIjgpCVZapS4t6yu19ym1PCuwizbJNdAbpfRZ3nvhGLd7xZWFFyTlIFpAulb8qMolrPMDSuajCx2o5EdlSX544wwo8XdBbmB6AWd3RfJj1xlRS\\\"}\"}"
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"QEdOVVxjanF4f4aN5IktE8100A5zZXHKUc43JNPWqhgVdyJ/XyCucMMjX6dKerHVdSw7WTj7RHQ5RaS0TZZex0ToTANcCoZCCEisByFA05IE21zdwctawRPJO0ySdeAskPIwOShxRgvf2tshUGJluI0YjYEPmR/VXGqaS2RhjHNXLgp7WfSecTbU6Bx1SIIpQZbsooanhKfTanBY\\\"}\"}",
+    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"QEdOVVxjanF4f4aN5IktE8100A5zZXHKUc43JNPWqhgVdyJ/XyCucMMjX6dKerHVdSw7WTj7RHQ5RaS0TZZex0ToTANcCoZCCEisByFA05IE21zdwctawRPJO0ySdeAskPIwOShxRgvf2tshUGJluI0YjYEPmR/VXGqaS2RhjHNXLgp7WfSecTbU6Bx1SIIpQZbsooanhKfTanBY\\\"}\"}"
    ],
    "connected": [
     "phone-1",
@@ -467,8 +492,8 @@
    },
    "sent": [
     "{\"type\":\"activity\",\"tag\":\"c999df987ff9835d74f4acf7bae0b592\",\"phase\":\"running\"}",
-    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"4+rx+P8GDRQbIikwywAQY1Y6beZlherK7i/gT4EKzNS4R/KM3nUlnh2VyVlU2+rU9sgdMAyD2roA6nt7UJHDay2qvuf+F1XsJSqqcn8RNlct5atTiXmSGey93BCojrAbTBGjztP/N6ioIFrMOcr0c+yCXnyuJhDozp9O2k+Nz/ZR\\\"}\"}",
-    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"4+rx+P8GDRQbIikwywAQY1Y6beZlherK7i/gT4EKzNS4R/KM3nUlnh2VyVlU2+rU9sgdMAyD2roA6nt7UJHDay2qvuf+F1XsJSqqcn8RNlct5atTiXmSGey93BCojrAbTBGjztP/N6ioIFrMOcr0c+yCXnyuJhDozp9O2k+Nz/ZR\\\"}\"}"
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"X2ZtdHuCiZCXnqWsns0L+cQcF/2LMsPhvPvEuvMozKpaD76UFvpTecjwIG8Wl2CB87livHFb8TFzJQLLWh8nn5eAzU/PlgccmIij9ovmLNV3H7/bXkXTp4QCF0yinHt3QVi47XxKg9Cnqo6kxDA9BgsSrWpYnS72z47mKMqoUwEd\\\"}\"}",
+    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"X2ZtdHuCiZCXnqWsns0L+cQcF/2LMsPhvPvEuvMozKpaD76UFvpTecjwIG8Wl2CB87livHFb8TFzJQLLWh8nn5eAzU/PlgccmIij9ovmLNV3H7/bXkXTp4QCF0yinHt3QVi47XxKg9Cnqo6kxDA9BgsSrWpYnS72z47mKMqoUwEd\\\"}\"}"
    ],
    "connected": [
     "phone-1",
@@ -493,8 +518,9 @@
    },
    "sent": [
     "{\"type\":\"activity\",\"tag\":\"c999df987ff9835d74f4acf7bae0b592\",\"phase\":\"approval\",\"callId\":\"tc2\",\"severity\":\"low\"}",
-    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"AgkQFx4lLDM6QUhP9Fx8OH0Bzb7ZOa8XarviaWY2A1OA7EsrHNAWACnHDQgTJX9QbjlM5b/tWTRh/w1EsHIEkTLjNv3UmKrFKpWV46A1opLbnP1nFgiWG5nk1buXJT/vHMqhaq9KnECj/guqfdUvfPu+w1629s68/oZceK6lFlBu01rTTXzK0vRduS/fYExZYc9PwioYDOAzwvewvVnPbIfGd3yVIxHFjMCiQVyX2qu8qPH3TR1GL1WJZYEPBULiiPVg3vU=\\\"}\"}",
-    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"AgkQFx4lLDM6QUhP9Fx8OH0Bzb7ZOa8XarviaWY2A1OA7EsrHNAWACnHDQgTJX9QbjlM5b/tWTRh/w1EsHIEkTLjNv3UmKrFKpWV46A1opLbnP1nFgiWG5nk1buXJT/vHMqhaq9KnECj/guqfdUvfPu+w1629s68/oZceK6lFlBu01rTTXzK0vRduS/fYExZYc9PwioYDOAzwvewvVnPbIfGd3yVIxHFjMCiQVyX2qu8qPH3TR1GL1WJZYEPBULiiPVg3vU=\\\"}\"}"
+    "{\"type\":\"notify\",\"kind\":\"needs-you\",\"tag\":\"c999df987ff9835d74f4acf7bae0b592\",\"title\":\"Nekko needs you\",\"body\":\"A tool needs your approval.\"}",
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"foWMk5qhqK+2vcTLDWWudCkz8NV6Q6ng2ThlSQEXF1PRN4gcEtauXTIFzSpKpMeBZipbCeLKrcKG+53GoBF1t1onlxvpWHLOC1jskHjMCgpa87P9N9R2KPaSoZ96WCA+7rxxDbs6+BzzL+SB5k80/Z365rKDG8aBISkf6HG4Jk+t+y+ERZ49cn9Btt/eZSGRihCGHinqPfD/bEoVC3hHtMotYXNmZbcuPlCoh3u9xNX5AHQxZt1zqKBAqDNnb2dpNbV46Is=\\\"}\"}",
+    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"foWMk5qhqK+2vcTLDWWudCkz8NV6Q6ng2ThlSQEXF1PRN4gcEtauXTIFzSpKpMeBZipbCeLKrcKG+53GoBF1t1onlxvpWHLOC1jskHjMCgpa87P9N9R2KPaSoZ96WCA+7rxxDbs6+BzzL+SB5k80/Z365rKDG8aBISkf6HG4Jk+t+y+ERZ49cn9Btt/eZSGRihCGHinqPfD/bEoVC3hHtMotYXNmZbcuPlCoh3u9xNX5AHQxZt1zqKBAqDNnb2dpNbV46Is=\\\"}\"}"
    ],
    "connected": [
     "phone-1",
@@ -513,9 +539,11 @@
     }
    },
    "sent": [
+    "{\"type\":\"notify\",\"kind\":\"failed\",\"tag\":\"c999df987ff9835d74f4acf7bae0b592\",\"title\":\"Nekko stopped\",\"body\":\"A task stopped with an error.\"}",
     "{\"type\":\"activity\",\"tag\":\"c999df987ff9835d74f4acf7bae0b592\",\"phase\":\"failed\"}",
-    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"ISgvNj1ES1JZYGduOh+H/VAhTHIg84LbEBDu8cWvITtGtp6XEb68mf2KnerV+JrxDQcdjEaOVZ3S1byypIjP8ol9Lgn/YacOBZzPsFq7bChKXnQisE7DWJCQRPNtpZhXrr7zwrD4u7evoduYh9lEJl+6EWuGVIMYJbIPecxh1yRcvX4gWx6pipM=\\\"}\"}",
-    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"ISgvNj1ES1JZYGduOh+H/VAhTHIg84LbEBDu8cWvITtGtp6XEb68mf2KnerV+JrxDQcdjEaOVZ3S1byypIjP8ol9Lgn/YacOBZzPsFq7bChKXnQisE7DWJCQRPNtpZhXrr7zwrD4u7evoduYh9lEJl+6EWuGVIMYJbIPecxh1yRcvX4gWx6pipM=\\\"}\"}"
+    "{\"type\":\"dismiss\",\"tag\":\"c999df987ff9835d74f4acf7bae0b592\"}",
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"naSrsrnAx87V3OPqc7vuigf6NDx+B50Nz/1w4A6sVCrKbHAvdp5/CmjlCFrMQNeFpXJVwoUuqDJ+z1pvAdlVsSMwCdsk4ZaHEAdFUzVdUCHQbNWnoPl0nF5kKUm7ZYKzq6C03O62xkMJdDj80M+5IPBaQScc4nsFs5jNcrtYlFjO3QXpMJQxWd8=\\\"}\"}",
+    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"naSrsrnAx87V3OPqc7vuigf6NDx+B50Nz/1w4A6sVCrKbHAvdp5/CmjlCFrMQNeFpXJVwoUuqDJ+z1pvAdlVsSMwCdsk4ZaHEAdFUzVdUCHQbNWnoPl0nF5kKUm7ZYKzq6C03O62xkMJdDj80M+5IPBaQScc4nsFs5jNcrtYlFjO3QXpMJQxWd8=\\\"}\"}"
    ],
    "connected": [
     "phone-1",
@@ -535,8 +563,8 @@
    },
    "sent": [
     "{\"type\":\"activity\",\"tag\":\"77c4526fb2a900d79252fdf56e2ef5e6\",\"phase\":\"running\"}",
-    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"QEdOVVxjanF4f4aN5IktE8100A5zZXHKUc43JNPWqhgVdyJ/XyCucMMjX6dKerHVdSw7WTj7RHQ5RaS0TZZex0ToTANcCoZSAl69ByFA05IE21zdwctawRPJO06SdeA9hv8jPShxH1GUydZsq6ekCJ2qXQFHR5HsZebX\\\"}\"}",
-    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"QEdOVVxjanF4f4aN5IktE8100A5zZXHKUc43JNPWqhgVdyJ/XyCucMMjX6dKerHVdSw7WTj7RHQ5RaS0TZZex0ToTANcCoZSAl69ByFA05IE21zdwctawRPJO06SdeA9hv8jPShxH1GUydZsq6ekCJ2qXQFHR5HsZebX\\\"}\"}"
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"vMPK0djf5u30+wIJVo+gr+pkmQVpoX4r4G8xdy3olwq8pk3W+YMiOPxNNMUqgi75c9BsLacqlTMf6ywmaKKkTW79L4bLh7lZ7bRo4EnrtNS9LN9X7hRw90xuIkRZjW0EzYlts5O4WjG9OCJyjjgn45N0Grhrhj2xS13C\\\"}\"}",
+    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"vMPK0djf5u30+wIJVo+gr+pkmQVpoX4r4G8xdy3olwq8pk3W+YMiOPxNNMUqgi75c9BsLacqlTMf6ywmaKKkTW79L4bLh7lZ7bRo4EnrtNS9LN9X7hRw90xuIkRZjW0EzYlts5O4WjG9OCJyjjgn45N0Grhrhj2xS13C\\\"}\"}"
    ],
    "connected": [
     "phone-1",
@@ -556,8 +584,8 @@
    },
    "sent": [
     "{\"type\":\"activity\",\"tag\":\"77c4526fb2a900d79252fdf56e2ef5e6\",\"phase\":\"done\"}",
-    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"X2ZtdHuCiZCXnqWsns0L+cQcF/2LMsPhvPvEuvMozKpaD76UFvpTecjwIG8Wl2CB87livHFb8TFzJQLLWh8nn5eAzU/PlgcLj5u/68ejYMEwQO7BVFjpqslWfFuzhHUmHh/nvHlIiob8qufywy1vHhIJPCH7tqEo61p82IJTm0CbFjGD\\\"}\"}",
-    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"X2ZtdHuCiZCXnqWsns0L+cQcF/2LMsPhvPvEuvMozKpaD76UFvpTecjwIG8Wl2CB87livHFb8TFzJQLLWh8nn5eAzU/PlgcLj5u/68ejYMEwQO7BVFjpqslWfFuzhHUmHh/nvHlIiob8qufywy1vHhIJPCH7tqEo61p82IJTm0CbFjGD\\\"}\"}"
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"2+Lp8Pf+BQwTGiEoTYB2TC/y7dCbOz8JpEjJ+jstjcmpQKVaIsPArOPpRVod1Ody6sz1GCRzdtMTiZjeMAfStx7RAjrHRLedOMg2/uVI3wtFRqTF3exLRFZ2kdrvvyUv3euol2ZMCkhnEP6277+zrhyyJISrlfNRjlZX9q/HmgFRVXwN\\\"}\"}",
+    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"2+Lp8Pf+BQwTGiEoTYB2TC/y7dCbOz8JpEjJ+jstjcmpQKVaIsPArOPpRVod1Ody6sz1GCRzdtMTiZjeMAfStx7RAjrHRLedOMg2/uVI3wtFRqTF3exLRFZ2kdrvvyUv3euol2ZMCkhnEP6277+zrhyyJISrlfNRjlZX9q/HmgFRVXwN\\\"}\"}"
    ],
    "connected": [
     "phone-1",
@@ -575,9 +603,104 @@
     }
    },
    "sent": [
-    "{\"type\":\"notify\",\"title\":\"Nekko finished\",\"body\":\"Your task is ready.\"}",
-    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"foWMk5qhqK+2vcTLDWWudCkz8NV6Q6ng2ThlSQEXF1PRN4gcEtauXTIFzSpKpMeBZipbCeLKrcKG+53GoBF1t1onlxvpWHLeC1nl7TWeCR1G9rv+Bu93e7nZoM48B3EGEB9/gv7xShZi+v4jqy6z\\\"}\"}",
-    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"foWMk5qhqK+2vcTLDWWudCkz8NV6Q6ng2ThlSQEXF1PRN4gcEtauXTIFzSpKpMeBZipbCeLKrcKG+53GoBF1t1onlxvpWHLeC1nl7TWeCR1G9rv+Bu93e7nZoM48B3EGEB9/gv7xShZi+v4jqy6z\\\"}\"}"
+    "{\"type\":\"notify\",\"kind\":\"finished\",\"tag\":\"d0a90ef79ede424f6c7018367e3c25e2\",\"title\":\"Nekko finished\",\"body\":\"Your task is ready.\"}",
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"+gEIDxYdJCsyOUBHsMPFkKWUDyOehO8GUlTC+AXeVKDgMSar9I/SKoe3w6GS8I9SKk4VgBa34Q7KHpeQPliRZoqkcx5+Pt628rbjxKcOkhgl7K5fZBd6nes+fVYkITa6BdJUcufsb+UFsTQXP37W\\\"}\"}",
+    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"+gEIDxYdJCsyOUBHsMPFkKWUDyOehO8GUlTC+AXeVKDgMSar9I/SKoe3w6GS8I9SKk4VgBa34Q7KHpeQPliRZoqkcx5+Pt628rbjxKcOkhgl7K5fZBd6nes+fVYkITa6BdJUcufsb+UFsTQXP37W\\\"}\"}"
+   ],
+   "connected": [
+    "phone-1",
+    "phone-2"
+   ]
+  },
+  {
+   "input": {
+    "event": {
+     "channel": "agent:event",
+     "payload": {
+      "type": "tool_approval_required",
+      "sessionId": "s5",
+      "call": {
+       "id": "tc5",
+       "name": "bash",
+       "input": {}
+      },
+      "severity": "medium"
+     }
+    }
+   },
+   "sent": [
+    "{\"type\":\"activity\",\"tag\":\"0e24444bbea09b9e4b53a0132cc01a56\",\"phase\":\"approval\",\"callId\":\"tc5\",\"severity\":\"medium\"}",
+    "{\"type\":\"notify\",\"kind\":\"needs-you\",\"tag\":\"0e24444bbea09b9e4b53a0132cc01a56\",\"title\":\"Nekko needs you\",\"body\":\"A tool needs your approval.\"}",
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"GSAnLjU8Q0pRWF9mh2MmL/io/1Ck9qDpAZ5Jc4kpzgAYnDGHnkv1hgt/ggWDyxi62Oik+sVO9Ml9xvBLvdxgdaJ5Ps8+erEnyYXp6fqfgWPUa6d2Fb4q+buwM8zbe/JX84lPHynP8TXWLDx07hcYtegqLx549bxAG1OXV4HExz1Yz1rqtfRRupJTAuT9CqrEEN0Fkab4DSip7RHDtOiz49XctaDVkG/9nNKXatY07G0sL/uCEdageInQuD47Q4WVNHk=\\\"}\"}",
+    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"GSAnLjU8Q0pRWF9mh2MmL/io/1Ck9qDpAZ5Jc4kpzgAYnDGHnkv1hgt/ggWDyxi62Oik+sVO9Ml9xvBLvdxgdaJ5Ps8+erEnyYXp6fqfgWPUa6d2Fb4q+buwM8zbe/JX84lPHynP8TXWLDx07hcYtegqLx549bxAG1OXV4HExz1Yz1rqtfRRupJTAuT9CqrEEN0Fkab4DSip7RHDtOiz49XctaDVkG/9nNKXatY07G0sL/uCEdageInQuD47Q4WVNHk=\\\"}\"}"
+   ],
+   "connected": [
+    "phone-1",
+    "phone-2"
+   ]
+  },
+  {
+   "input": {
+    "event": {
+     "channel": "agent:event",
+     "payload": {
+      "type": "tool_approval_required",
+      "sessionId": "s5",
+      "call": {
+       "id": "tc6",
+       "name": "bash",
+       "input": {}
+      }
+     }
+    }
+   },
+   "sent": [
+    "{\"type\":\"activity\",\"tag\":\"0e24444bbea09b9e4b53a0132cc01a56\",\"phase\":\"approval\",\"callId\":\"tc6\",\"severity\":\"low\"}",
+    "{\"type\":\"notify\",\"kind\":\"needs-you\",\"tag\":\"0e24444bbea09b9e4b53a0132cc01a56\",\"title\":\"Nekko needs you\",\"body\":\"A tool needs your approval.\"}",
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"OD9GTVRbYmlwd36FMJ5dHsNmVAfljy1Smd04dW1kqxjc4xPU8raT2srh7Waby208qo/zSN5nJ/OTmdpDKFc9aXAN6+RV1KcfyPMkBqm31ZapeKznVClHXAoUvSxMmyelW+35mUXcsWv3Rgm9tc45eC35idkZ9sMkd2o2cceerZm8iaOLe3xLMCeLBm5jUgtH4fhNvXAXnZGkkuQerQzf7Sm1iLknaMKTPu/OANKy\\\"}\"}",
+    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"OD9GTVRbYmlwd36FMJ5dHsNmVAfljy1Smd04dW1kqxjc4xPU8raT2srh7Waby208qo/zSN5nJ/OTmdpDKFc9aXAN6+RV1KcfyPMkBqm31ZapeKznVClHXAoUvSxMmyelW+35mUXcsWv3Rgm9tc45eC35idkZ9sMkd2o2cceerZm8iaOLe3xLMCeLBm5jUgtH4fhNvXAXnZGkkuQerQzf7Sm1iLknaMKTPu/OANKy\\\"}\"}"
+   ],
+   "connected": [
+    "phone-1",
+    "phone-2"
+   ]
+  },
+  {
+   "input": {
+    "event": {
+     "channel": "agent:event",
+     "payload": {
+      "type": "done",
+      "sessionId": "s5"
+     }
+    }
+   },
+   "sent": [
+    "{\"type\":\"notify\",\"kind\":\"finished\",\"tag\":\"0e24444bbea09b9e4b53a0132cc01a56\",\"title\":\"Nekko finished\",\"body\":\"Your task is ready.\"}",
+    "{\"type\":\"activity\",\"tag\":\"0e24444bbea09b9e4b53a0132cc01a56\",\"phase\":\"done\"}",
+    "{\"type\":\"dismiss\",\"tag\":\"0e24444bbea09b9e4b53a0132cc01a56\"}",
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"V15lbHN6gYiPlp2kXVw4f+YyEMGcRqtOS92dPIaIndWkLOOdPFGsnbL40xiChHLX3EMp2SsoayltQnbZUrBFsxeJmYaKOguLxfqkcNgCCJopiIrziuNgE+451LtsJ7qQoOZ05YcJM+PEkDHdvxwt\\\"}\"}",
+    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"V15lbHN6gYiPlp2kXVw4f+YyEMGcRqtOS92dPIaIndWkLOOdPFGsnbL40xiChHLX3EMp2SsoayltQnbZUrBFsxeJmYaKOguLxfqkcNgCCJopiIrziuNgE+451LtsJ7qQoOZ05YcJM+PEkDHdvxwt\\\"}\"}"
+   ],
+   "connected": [
+    "phone-1",
+    "phone-2"
+   ]
+  },
+  {
+   "input": {
+    "event": {
+     "channel": "agent:event",
+     "payload": {
+      "type": "error",
+      "message": "no session"
+     }
+    }
+   },
+   "sent": [
+    "{\"type\":\"notify\",\"kind\":\"failed\",\"title\":\"Nekko stopped\",\"body\":\"A task stopped with an error.\"}",
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"dn2Ei5KZoKeutbzD0vQG5LOIeX3nZCHNTpqtwY4z800vCMQjgivO7XwMuEXVcFpL2dnhNQ4nnoQCNdOleQ+fgw890E9NQ2PkE52lHIx1g8Ud5qe3YYp01NKzEb+jPjyFVcJ5xK/+san5d1kiTpta27ur/WrR7g==\\\"}\"}",
+    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"dn2Ei5KZoKeutbzD0vQG5LOIeX3nZCHNTpqtwY4z800vCMQjgivO7XwMuEXVcFpL2dnhNQ4nnoQCNdOleQ+fgw890E9NQ2PkE52lHIx1g8Ud5qe3YYp01NKzEb+jPjyFVcJ5xK/+san5d1kiTpta27ur/WrR7g==\\\"}\"}"
    ],
    "connected": [
     "phone-1",
@@ -596,8 +719,8 @@
     }
    },
    "sent": [
-    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"naSrsrnAx87V3OPqc7vuigf6NDx+B50Nz/1w4A6sVCrKbHAvdp5/H2ryC0eYRM3arnASgNN85WliwUJnTIJKsW0yW8p/q9HAWFdOQGMQUH6Xa8O8ov5TmRAXbxizZdr0tKiYnq39gQVSIiu/nojFOakHGTEitWgVvL6ihYfLJduCd33fktHhBsxd4RYJtb8oUTEotA4msA==\\\"}\"}",
-    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"naSrsrnAx87V3OPqc7vuigf6NDx+B50Nz/1w4A6sVCrKbHAvdp5/H2ryC0eYRM3arnASgNN85WliwUJnTIJKsW0yW8p/q9HAWFdOQGMQUH6Xa8O8ov5TmRAXbxizZdr0tKiYnq39gQVSIiu/nojFOakHGTEitWgVvL6ihYfLJduCd33fktHhBsxd4RYJtb8oUTEotA4msA==\\\"}\"}"
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"lZyjqrG4v8bN1NviEMjxdMrv7Bj1qQatZNY+xiS9MplWXpQFYlNhCJtlYQ+visp3NHr7fq3bDLXwX4CW2y4Ve2/Ms8o0XW2C0emBd9LTwJ4lT/l1nFaZ0gTphAL0ai1nGF9i8WOMQ3PcVMpOOm9uF/ZmUDKUVvfjU8g3fzYPs6SuduJSioqbJWbddP3TouzSExRIl7wp1w==\\\"}\"}",
+    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"lZyjqrG4v8bN1NviEMjxdMrv7Bj1qQatZNY+xiS9MplWXpQFYlNhCJtlYQ+visp3NHr7fq3bDLXwX4CW2y4Ve2/Ms8o0XW2C0emBd9LTwJ4lT/l1nFaZ0gTphAL0ai1nGF9i8WOMQ3PcVMpOOm9uF/ZmUDKUVvfjU8g3fzYPs6SuduJSioqbJWbddP3TouzSExRIl7wp1w==\\\"}\"}"
    ],
    "connected": [
     "phone-1",
@@ -614,8 +737,8 @@
     }
    },
    "sent": [
-    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"vMPK0djf5u30+wIJVo+gr+pkmQVpoX4r4G8xdy3olwq8pk3W+YMiOvNJNNZ1lGLpbcAvdeA+1mZR9Cw7Jve+Czi+JMGa2Ohe4aNyiwHr/ZO9bpRF/VkBN/O5bwjqNKGax2Xv0P4=\\\"}\"}",
-    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"vMPK0djf5u30+wIJVo+gr+pkmQVpoX4r4G8xdy3olwq8pk3W+YMiOvNJNNZ1lGLpbcAvdeA+1mZR9Cw7Jve+Czi+JMGa2Ohe4aNyiwHr/ZO9bpRF/VkBN/O5bwjqNKGax2Xv0P4=\\\"}\"}"
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"tLvCydDX3uXs8/oB+uDp7tzIiD2fWtgOx+C9jht92ouNNd8Tq4H5ySJ+ecErF8pYtRxPkmYet6xsO3x7xVA8LmtAlGkrFNQNJQXzchGzvnpCGp8QxCsoHHFi5I27+gp5hRhTH38=\\\"}\"}",
+    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"tLvCydDX3uXs8/oB+uDp7tzIiD2fWtgOx+C9jht92ouNNd8Tq4H5ySJ+ecErF8pYtRxPkmYet6xsO3x7xVA8LmtAlGkrFNQNJQXzchGzvnpCGp8QxCsoHHFi5I27+gp5hRhTH38=\\\"}\"}"
    ],
    "connected": [
     "phone-1",
@@ -634,8 +757,8 @@
     }
    },
    "sent": [
-    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"2+Lp8Pf+BQwTGiEoTYB2TC/y7dCbOz8JpEjJ+jstjcmpQKVaIsPAueX/QF0dxOFz5cyyUCQvNdoen5XVc1mLrzHTUDaBXK/aPot78ZoZuE63pSnhM2PEyOrjkjIhyA==\\\"}\"}",
-    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"2+Lp8Pf+BQwTGiEoTYB2TC/y7dCbOz8JpEjJ+jstjcmpQKVaIsPAueX/QF0dxOFz5cyyUCQvNdoen5XVc1mLrzHTUDaBXK/aPot78ZoZuE63pSnhM2PEyOrjkjIhyA==\\\"}\"}"
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"09rh6O/2/QQLEhkg491ShMI3VvtVarNPl+PG78T046MGybWb8ugWrupJQZzUXJ9yNykGWafowmSqQwBKkAy2i1qLhzbiYw/BtHjdPjexawpGCCQLtW+0xMNDRr2lbw==\\\"}\"}",
+    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"09rh6O/2/QQLEhkg491ShMI3VvtVarNPl+PG78T046MGybWb8ugWrupJQZzUXJ9yNykGWafowmSqQwBKkAy2i1qLhzbiYw/BtHjdPjexawpGCCQLtW+0xMNDRr2lbw==\\\"}\"}"
    ],
    "connected": [
     "phone-1",
@@ -650,8 +773,8 @@
     }
    },
    "sent": [
-    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"+gEIDxYdJCsyOUBHsMPFkKWUDyOehO8GUlTC+AXeVKDgMSar9I/SP5KzxLvB+54NMUpTzUCi5FWKU4aVZQ6FJZr/OSABeW2kTmdsbtKuPjsfNvhzm3o=\\\"}\"}",
-    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"+gEIDxYdJCsyOUBHsMPFkKWUDyOehO8GUlTC+AXeVKDgMSar9I/SP5KzxLvB+54NMUpTzUCi5FWKU4aVZQ6FJZr/OSABeW2kTmdsbtKuPjsfNvhzm3o=\\\"}\"}"
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"8vkABw4VHCMqMTg/fdyZPZZoxsbVZX9No3hrBATIqrgUVXDv+sKI5OxbMlqBroS4A8fJMlFPkJYsQE0BdwRZzbyt/+MnRQIyATtVhIg3fvpxSzMOp7Y=\\\"}\"}",
+    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"8vkABw4VHCMqMTg/fdyZPZZoxsbVZX9No3hrBATIqrgUVXDv+sKI5OxbMlqBroS4A8fJMlFPkJYsQE0BdwRZzbyt/+MnRQIyATtVhIg3fvpxSzMOp7Y=\\\"}\"}"
    ],
    "connected": [
     "phone-1",
@@ -669,8 +792,8 @@
     }
    },
    "sent": [
-    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"GSAnLjU8Q0pRWF9mh2MmL/io/1Ck9qDpAZ5Jc4kpzgAYnDGHnkv1kANohxfVwRmsjOn2soZK8NQzhbNf/p93OLdkbJBnYuQ81IHj2vSYgjOBRps2aL465r37e/LiJKPYHrhFwBF/7L4VTt0tYVtO\\\"}\"}",
-    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"GSAnLjU8Q0pRWF9mh2MmL/io/1Ck9qDpAZ5Jc4kpzgAYnDGHnkv1kANohxfVwRmsjOn2soZK8NQzhbNf/p93OLdkbJBnYuQ81IHj2vSYgjOBRps2aL465r37e/LiJKPYHrhFwBF/7L4VTt0tYVtO\\\"}\"}"
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"ERgfJi00O0JJUFdeGZ7GM0l0srj6C/uNdKP9OsvtMfHc2ZF0DkVQeCNHhrJRUP5KAAS2TUOwX1y98wITuac4YLPLwc7r3x5LYE1FUVYpK9pbz0DsKHRseUYHjxCljJEVBowZ/URyiuj74iWVQF8Q\\\"}\"}",
+    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"ERgfJi00O0JJUFdeGZ7GM0l0srj6C/uNdKP9OsvtMfHc2ZF0DkVQeCNHhrJRUP5KAAS2TUOwX1y98wITuac4YLPLwc7r3x5LYE1FUVYpK9pbz0DsKHRseUYHjxCljJEVBowZ/URyiuj74iWVQF8Q\\\"}\"}"
    ],
    "connected": [
     "phone-1",
@@ -690,8 +813,8 @@
     }
    },
    "sent": [
-    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"OD9GTVRbYmlwd36FMJ5dHsNmVAfljy1Smd04dW1kqxjc4xPU8raT18Tp6mbSlG4poJqlAZg1aqiPl8JLZQwiaT4PufUYheAF7Pkxe/Llxoine6nuMToAAV0RpiRBzXilEvOonUXdu03kFxGlnaZmKXIDXwkQmZMXocWdwpxo5N1w\\\"}\"}",
-    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"OD9GTVRbYmlwd36FMJ5dHsNmVAfljy1Smd04dW1kqxjc4xPU8raT18Tp6mbSlG4poJqlAZg1aqiPl8JLZQwiaT4PufUYheAF7Pkxe/Llxoine6nuMToAAV0RpiRBzXilEvOonUXdu03kFxGlnaZmKXIDXwkQmZMXocWdwpxo5N1w\\\"}\"}"
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"MDc+RUxTWmFob3Z96u0khJaiKRVRcw9nCTyAzf8OlN+H97MbrLSuStMmrn+Jj60NJMNxrqy122XASGDxo04mkzynylgNcKw9X1tQJJnRwK4/qZu/QTMjdov+93cxB4yBUZ67dSFx5dGiWUir+GN1s9Gw9DlUeTj53JCGC/g799Qp\\\"}\"}",
+    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"MDc+RUxTWmFob3Z96u0khJaiKRVRcw9nCTyAzf8OlN+H97MbrLSuStMmrn+Jj60NJMNxrqy122XASGDxo04mkzynylgNcKw9X1tQJJnRwK4/qZu/QTMjdov+93cxB4yBUZ67dSFx5dGiWUir+GN1s9Gw9DlUeTj53JCGC/g799Qp\\\"}\"}"
    ],
    "connected": [
     "phone-1",
@@ -709,8 +832,8 @@
     }
    },
    "sent": [
-    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"V15lbHN6gYiPlp2kXVw4f+YyEMGcRqtOS92dPIaIndWkLOOdPFGsnaXt2A3KgGrR1w1+hW05fjVlDzufAOtH/QyRjcGSewubwvGsN9YaWZs7iYi+yIhlUrd+yfpsYOVY/mgDq3VEnSxJDksYrrdsq/1CEd/1f0sI4Q==\\\"}\"}",
-    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"V15lbHN6gYiPlp2kXVw4f+YyEMGcRqtOS92dPIaIndWkLOOdPFGsnaXt2A3KgGrR1w1+hW05fjVlDzufAOtH/QyRjcGSewubwvGsN9YaWZs7iYi+yIhlUrd+yfpsYOVY/mgDq3VEnSxJDksYrrdsq/1CEd/1f0sI4Q==\\\"}\"}"
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"T1ZdZGtyeYCHjpWcLiHiA1j00+N2T/FNTdh0Yl9rym0awDYs80SCrI7EZdKq5kQmmICwJPR/obztowhrNb0HPakFr6kKKh8BPNvNpFbQZLu/Tto/1uCiR08uOfUTJZYQmWBAYRUenqXCB/H1wdKGulwLkKhaw1mT1w==\\\"}\"}",
+    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"T1ZdZGtyeYCHjpWcLiHiA1j00+N2T/FNTdh0Yl9rym0awDYs80SCrI7EZdKq5kQmmICwJPR/obztowhrNb0HPakFr6kKKh8BPNvNpFbQZLu/Tto/1uCiR08uOfUTJZYQmWBAYRUenqXCB/H1wdKGulwLkKhaw1mT1w==\\\"}\"}"
    ],
    "connected": [
     "phone-1",
@@ -729,8 +852,8 @@
     }
    },
    "sent": [
-    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"dn2Ei5KZoKeutbzD0vQG5LOIeX3nZCHNTpqtwY4z800vCMQjgivO5XUNs0nVZV5B0N+mal91098eO8utNFSAg0E/gl0ACyryEY6pC+c9g5Ja4uX0Ks0ygZ64XKXjd22CU9l2ivC5Ud+NGKIDSu5rjdsK1o63obCVkQ==\\\"}\"}",
-    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"dn2Ei5KZoKeutbzD0vQG5LOIeX3nZCHNTpqtwY4z800vCMQjgivO5XUNs0nVZV5B0N+mal91098eO8utNFSAg0E/gl0ACyryEY6pC+c9g5Ja4uX0Ks0ygZ64XKXjd22CU9l2ivC5Ud+NGKIDSu5rjdsK1o63obCVkQ==\\\"}\"}"
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"bnV8g4qRmJ+mrbS7NOeOy1zGrPvo66nXe11POwmL9w9qzsE/9PBviW9gHULKhBKNf37creoY2BLqGm40a3jeQm7eHv3y3LCDoOmXa6rNBrwX+Qmno/M7Jz0+oxZA2oTNxCC4kyJj+8qfYI3DuaVhGXq4LZL4+vDUBA==\\\"}\"}",
+    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"bnV8g4qRmJ+mrbS7NOeOy1zGrPvo66nXe11POwmL9w9qzsE/9PBviW9gHULKhBKNf37creoY2BLqGm40a3jeQm7eHv3y3LCDoOmXa6rNBrwX+Qmno/M7Jz0+oxZA2oTNxCC4kyJj+8qfYI3DuaVhGXq4LZL4+vDUBA==\\\"}\"}"
    ],
    "connected": [
     "phone-1",
@@ -772,7 +895,7 @@
    },
    "sent": [
     "{\"type\":\"activity\",\"tag\":\"7536af24f84b356f893a72f0def58cce\",\"phase\":\"running\"}",
-    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"lZyjqrG4v8bN1NviEMjxdMrv7Bj1qQatZNY+xiS9MplWXpQFYlNhHZlyYhL7jtAoP3i8PPuJQe7sUZielnUKeyHO4dtvFyrUjrORNIqQkdd0SPVon3aTkVKCkxHsZHtmD15JoWOaQ3bbVM4eIC5eDbUzQy2ycp+o/wRqIfQ1ZmVn7auRzg==\\\"}\"}"
+    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"jZSboqmwt77FzNPagHUXbb1FL4TNlFdtcaCj2MQec5a+8d0q2DpqCBF81HZSBRhpjZZm35sPKdmKO+efUWm01bYbKuZrttC6popNM6C2La3+wZc7bzDL6+gE5b+mwMaztbJ4/3aruPGhZfkI/fduw3R0H3dtVI2fuN2qbJpJ0S1XgUZdyg==\\\"}\"}"
    ],
    "connected": [
     "phone-2"
@@ -780,10 +903,10 @@
   },
   {
    "input": {
-    "relay": "{\"type\":\"c\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"tLvCydDX3uXs8/oB+uDp7tzIiD2fTcsai7i9y108iN3PedkX6NW1zyY9LYQ9AYNerBdAlTkJ4O0jKm9rzEx/ZmsbnSwrU50lERf/QRjPkkrmyB4kYE0TodGF\\\"}\"}"
+    "relay": "{\"type\":\"c\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"rLO6wcjP1t3k6/L5tBZ2zON17uBBXZUZQ8NYM83iGL2Swy8pPhCRkj8PMRbqJSfuk5XYqC5aIY3nGyPhqhHBt/pIoc8iCDidgFZegvw964+rCPHZGkkt2rru\\\"}\"}"
    },
    "sent": [
-    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"09rh6O/2/QQLEhkg491ShMI3VvtVfaBZ27vGqoK1sfVEhbWFor1G+LEYRICaCZ93Py8GWaXsk3GlXkxNlAT43iGWzC31NRzBvQ6lDigVgzZ8utdbDGxRrME=\\\"}\"}"
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"y9LZ4Ofu9fwDChEYH6V8G4wQBVYjIhhzMXC3fMCQF/wqPx7wfuVVJ+OjSwtO9jZ5RhbAsE6h8h+XifwiItPE1ejHOb+Imc41zV1vXnfa8yJnR7FBJXLU6zQ=\\\"}\"}"
    ],
    "connected": [
     "phone-2"

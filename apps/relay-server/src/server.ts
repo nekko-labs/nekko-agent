@@ -16,9 +16,15 @@ import { createPushSender, type ActivityPush, type PushSender } from './push.js'
  *     No client ever receives another client's traffic.
  *   - the agent may { type:'kick', cid } to force-close a client (revocation).
  *   - { type:'client-open'|'client-close', cid } keep the agent's view current.
- *   - push: clients register tokens per device; the agent's content-free
- *     { type:'notify' } fans out to registered phones when none are connected,
- *     and { type:'push-remove', deviceId } drops a revoked device's token.
+ *   - push: clients register tokens per device, optionally with the `kinds`
+ *     they want ('needs-you' | 'finished' | 'failed'), and the relay answers
+ *     { type:'push-registered', delivers } (whether it holds the credentials).
+ *     The agent's content-free { type:'notify', kind, tag? } fans out to the
+ *     phones that asked for that kind when none are connected; kind 'test'
+ *     goes to one `deviceId` whether or not it is connected. { type:'dismiss',
+ *     tag } (an approval or question was handled) goes to connected clients as
+ *     is and to iPhones as a silent push. { type:'push-remove', deviceId }
+ *     drops a revoked device's token.
  *   - Live Activities: an iPhone registers an ActivityKit push token per chat
  *     under an opaque tag (a hash of the session id; { type:'register-activity' }),
  *     and the agent's content-free { type:'activity', tag, phase } updates or
@@ -70,7 +76,7 @@ interface Room {
   /** sha256 of the pairing key, claimed by the agent; clients must match. */
   keyHash: Buffer | null;
   /** Push tokens registered by paired devices, keyed by deviceId. */
-  pushTokens: Map<string, { token: string; platform: 'ios' | 'android'; app?: string }>;
+  pushTokens: Map<string, { token: string; platform: 'ios' | 'android'; app?: string; kinds?: string[] }>;
   pushOwners: Map<string, string>;
   /** Live Activity push tokens: tag → deviceId → token. */
   activities: Map<string, Map<string, { token: string; app?: string; at: number }>>;
@@ -81,6 +87,9 @@ const MAX_ACTIVITIES = 64;
 const ACTIVITY_TTL_MS = 12 * 60 * 60 * 1000;
 const PHASES = new Set(['approval', 'question', 'running', 'done', 'failed']);
 const APP_ID = /^[A-Za-z0-9.-]{3,155}$/;
+/** What a phone can ask to be pushed about; a `notify` without a kind is a finished run (older agents). */
+const PUSH_KINDS = new Set(['needs-you', 'finished', 'failed']);
+const TAG = /^[0-9a-f]{32}$/;
 
 interface Bucket {
   tokens: number;
@@ -220,13 +229,32 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
               return;
             }
             case 'notify': {
-              // Content-free push when no device has a live connection.
-              if (r.clients.size === 0 && r.pushTokens.size > 0) {
-                const payload = {
-                  title: String(ctrl.title || 'Nekko Agent'),
-                  body: String(ctrl.body || 'Your task finished.'),
-                };
-                for (const { token, platform, app } of r.pushTokens.values()) void pushSender.send(token, platform, payload, app);
+              const kind = ctrl.kind === 'test' || PUSH_KINDS.has(ctrl.kind) ? String(ctrl.kind) : 'finished';
+              const payload = {
+                title: String(ctrl.title || 'Nekko Agent'),
+                body: String(ctrl.body || 'Your task finished.'),
+                kind,
+                ...(typeof ctrl.tag === 'string' && TAG.test(ctrl.tag) ? { tag: ctrl.tag } : {}),
+              };
+              if (kind === 'test') {
+                // The phone asked for it, so it goes to that phone even while it is connected.
+                const t = typeof ctrl.deviceId === 'string' ? r.pushTokens.get(ctrl.deviceId) : undefined;
+                if (t) void pushSender.send(t.token, t.platform, payload, t.app);
+                return;
+              }
+              // Content-free push when no device has a live connection, to the phones that want this kind.
+              if (r.clients.size === 0) {
+                for (const { token, platform, app, kinds } of r.pushTokens.values()) {
+                  if (!kinds || kinds.includes(kind)) void pushSender.send(token, platform, payload, app);
+                }
+              }
+              return;
+            }
+            case 'dismiss': {
+              if (typeof ctrl.tag !== 'string' || !TAG.test(ctrl.tag)) return;
+              for (const c of r.clients.values()) safeSend(c, { type: 'dismiss', tag: ctrl.tag });
+              for (const { token, platform, app, kinds } of r.pushTokens.values()) {
+                if (platform === 'ios' && (!kinds || kinds.includes('needs-you'))) void pushSender.sendDismiss?.(token, ctrl.tag, app);
               }
               return;
             }
@@ -293,13 +321,20 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
             const validToken = /^[A-Za-z0-9_:-]{20,4096}$/.test(token);
             const owner = r.pushOwners.get(deviceId);
             const app = typeof ctrl.app === 'string' && APP_ID.test(ctrl.app) ? ctrl.app : undefined;
+            // Absent means every kind (phones from before per-type settings).
+            const kinds: string[] | undefined = Array.isArray(ctrl.kinds)
+              ? [...new Set<string>(ctrl.kinds.filter((k: unknown) => typeof k === 'string' && PUSH_KINDS.has(k)))]
+              : undefined;
             if (validDevice && validToken && platform && (!owner || owner === cid)) {
               r.pushOwners.set(deviceId, cid);
               r.pushTokens.set(deviceId, {
                 token,
                 platform,
                 ...(app ? { app } : {}),
+                ...(kinds ? { kinds } : {}),
               });
+              // So the phone's *Send a test notification* can say which path it took.
+              safeSend(socket, { type: 'push-registered', delivers: pushSender.delivers ? pushSender.delivers(platform) : pushSender.enabled });
             }
             return;
           }

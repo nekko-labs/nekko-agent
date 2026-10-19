@@ -210,6 +210,70 @@ describe('relay v2 routing', () => {
     expect(rooms.get('r5')!.pushTokens.size).toBe(0);
   });
 
+  it('pushes only the kinds a phone asked for, a test to that phone, and dismissals', async () => {
+    const sent: Array<{ token: string; kind?: string; tag?: string }> = [];
+    const dismissed: Array<{ token: string; tag: string }> = [];
+    const pushSender: PushSender = {
+      enabled: true,
+      delivers: (p) => p === 'ios',
+      send: async (token, _platform, payload) => void sent.push({ token, kind: payload.kind, tag: payload.tag }),
+      sendDismiss: async (token, tag) => void dismissed.push({ token, tag }),
+    };
+    const { url, rooms } = await startRelay({ pushSender });
+    const agent = await connect(url, { room: 'r8', role: 'agent', key: 'k' });
+    const a = await connect(url, { room: 'r8', role: 'client', key: 'k' });
+    await a.next();
+    await agent.next();
+    const b = await connect(url, { room: 'r8', role: 'client', key: 'k' });
+    await b.next();
+    await agent.next();
+    const devA = '00000000-0000-4000-8000-00000000000a';
+    const devB = '00000000-0000-4000-8000-00000000000b';
+    // A wants only needs-you (an unknown kind is dropped); B, an older phone, sends no kinds.
+    a.send({ type: 'register-push', token: 'a'.repeat(64), platform: 'ios', deviceId: devA, kinds: ['needs-you', 'bogus', 'needs-you'] });
+    expect(await a.next()).toEqual({ type: 'push-registered', delivers: true });
+    b.send({ type: 'register-push', token: 'b'.repeat(40), platform: 'android', deviceId: devB });
+    expect(await b.next()).toEqual({ type: 'push-registered', delivers: false });
+    expect(rooms.get('r8')!.pushTokens.get(devA)!.kinds).toEqual(['needs-you']);
+    expect(rooms.get('r8')!.pushTokens.get(devB)!.kinds).toBeUndefined();
+
+    // A test goes to the asking phone even while it is connected, and to no one else.
+    agent.send({ type: 'notify', kind: 'test', deviceId: devA, title: 'Nekko Agent', body: 'Test' });
+    agent.send({ type: 'notify', kind: 'test', deviceId: 'nobody', title: 'x', body: 'y' });
+    // Connected phones get no other push.
+    agent.send({ type: 'notify', kind: 'needs-you', tag: 'c'.repeat(32), title: 't', body: 'b' });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(sent).toEqual([{ token: 'a'.repeat(64), kind: 'test', tag: undefined }]);
+
+    // A dismissal reaches connected phones as is, and iPhones that want needs-you as a silent push.
+    const tag = 'd'.repeat(32);
+    agent.send({ type: 'dismiss', tag });
+    agent.send({ type: 'dismiss', tag: 'not a tag' });
+    expect(await a.next()).toEqual({ type: 'dismiss', tag });
+    expect(await b.next()).toEqual({ type: 'dismiss', tag });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(dismissed).toEqual([{ token: 'a'.repeat(64), tag }]);
+
+    a.ws.close();
+    b.ws.close();
+    await agent.next();
+    await agent.next();
+    sent.length = 0;
+    agent.send({ type: 'notify', kind: 'needs-you', tag: 'e'.repeat(32), title: 't', body: 'b' });
+    agent.send({ type: 'notify', kind: 'finished', title: 't', body: 'b' });
+    // An older agent's notify has no kind: a finished run.
+    agent.send({ type: 'notify', title: 't', body: 'b' });
+    agent.send({ type: 'notify', kind: 'failed', tag: 'short', title: 't', body: 'b' });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(sent).toEqual([
+      { token: 'a'.repeat(64), kind: 'needs-you', tag: 'e'.repeat(32) },
+      { token: 'b'.repeat(40), kind: 'needs-you', tag: 'e'.repeat(32) },
+      { token: 'b'.repeat(40), kind: 'finished', tag: undefined },
+      { token: 'b'.repeat(40), kind: 'finished', tag: undefined },
+      { token: 'b'.repeat(40), kind: 'failed', tag: undefined },
+    ]);
+  });
+
   it('accepts FCM-shaped push tokens (with a colon) from Android phones', async () => {
     const { url, rooms } = await startRelay({ pushSender: { enabled: true, send: async () => {} } });
     const agent = await connect(url, { room: 'r6', role: 'agent', key: 'k' });

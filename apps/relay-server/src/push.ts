@@ -15,6 +15,22 @@ import { createPrivateKey, sign as cryptoSign, createSign, type KeyObject } from
 export interface PushPayload {
   title: string;
   body: string;
+  /** What it is about ('needs-you' | 'finished' | 'failed' | 'test'); the phone groups and dismisses by it. */
+  kind?: string;
+  /** The chat's opaque tag (a hash of the session id), so a later `dismiss` can find it. */
+  tag?: string;
+}
+
+/** The APNs body of an alert push: content-free, plus the kind and the chat's opaque tag (exported for tests). */
+export function alertPayload(payload: PushPayload) {
+  const aps: Record<string, unknown> = { alert: { title: payload.title, body: payload.body }, sound: 'default' };
+  if (payload.tag) aps['thread-id'] = payload.tag;
+  return { aps, ...(payload.kind ? { kind: payload.kind } : {}), ...(payload.tag ? { tag: payload.tag } : {}) };
+}
+
+/** A silent push that tells an iPhone to remove the delivered notification for a chat (exported for tests). */
+export function dismissPayload(tag: string) {
+  return { aps: { 'content-available': 1 }, dismiss: tag };
 }
 
 /**
@@ -32,9 +48,13 @@ export interface ActivityPush {
 
 export interface PushSender {
   enabled: boolean;
+  /** Whether this relay holds the credentials to push to that platform (told to the phone). */
+  delivers?(platform: 'ios' | 'android'): boolean;
   /** `app` is the iPhone app's bundle id when the phone named one the relay allows. */
   send(token: string, platform: 'ios' | 'android', payload: PushPayload, app?: string): Promise<void>;
   sendActivity?(token: string, push: ActivityPush, app?: string): Promise<void>;
+  /** A silent push removing a chat's delivered notification (iPhone only). */
+  sendDismiss?(token: string, tag: string, app?: string): Promise<void>;
 }
 
 /** The APNs body of a Live Activity push (exported for tests). */
@@ -78,7 +98,7 @@ async function sendApns(
   topic: string,
   token: string,
   body: unknown,
-  pushType: 'alert' | 'liveactivity' = 'alert',
+  pushType: 'alert' | 'liveactivity' | 'background' = 'alert',
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const client = http2.connect(`https://${host}`);
@@ -89,7 +109,8 @@ async function sendApns(
       authorization: `bearer ${jwt}`,
       'apns-topic': topic,
       'apns-push-type': pushType,
-      'apns-priority': '10',
+      // Apple requires priority 5 for a background (silent) push.
+      'apns-priority': pushType === 'background' ? '5' : '10',
       'content-type': 'application/json',
     });
     let status = 0;
@@ -191,6 +212,16 @@ export function createPushSender(env: NodeJS.ProcessEnv = process.env): PushSend
 
   return {
     enabled: apnsReady || fcmReady,
+    delivers: (platform) => (platform === 'ios' ? apnsReady : fcmReady),
+    async sendDismiss(token, tag, app) {
+      try {
+        if (!apnsJwt) return;
+        await sendApns(apnsHost, apnsJwt(), topicFor(app), token, dismissPayload(tag), 'background');
+        console.log('[push] dismissal sent');
+      } catch (e) {
+        console.warn(`[push] dismissal failed: ${(e as Error).message}`);
+      }
+    },
     async sendActivity(token, push, app) {
       try {
         if (!apnsJwt) return void console.log('[push] APNs not configured (set APNS_KEY_P8/APNS_KEY_ID/APNS_TEAM_ID)');
@@ -204,8 +235,7 @@ export function createPushSender(env: NodeJS.ProcessEnv = process.env): PushSend
       try {
         if (platform === 'ios') {
           if (!apnsJwt) return void console.log('[push] APNs not configured (set APNS_KEY_P8/APNS_KEY_ID/APNS_TEAM_ID)');
-          const body = { aps: { alert: { title: payload.title, body: payload.body }, sound: 'default' } };
-          await sendApns(apnsHost, apnsJwt(), topicFor(app), token, body);
+          await sendApns(apnsHost, apnsJwt(), topicFor(app), token, alertPayload(payload));
           console.log('[push] APNs sent');
         } else {
           if (!fcmToken || !serviceAccount) return void console.log('[push] FCM not configured (set FCM_SERVICE_ACCOUNT)');
