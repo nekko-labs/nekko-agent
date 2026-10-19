@@ -5,6 +5,7 @@ import { useStore } from '../../store.js';
 import { SubscriptionSignIn } from '../SubscriptionSignIn.js';
 import { ProviderChoices } from './ProviderChoices.js';
 import { CheckIcon } from '../../icons.js';
+import { ClaudeAgentSetup } from '../claude/ClaudeAgent.js';
 
 /** Provider kinds offered by the generic add form, local servers first. */
 export const ADD_PROVIDER_KINDS: ProviderKind[] = [
@@ -12,6 +13,7 @@ export const ADD_PROVIDER_KINDS: ProviderKind[] = [
   'lmstudio',
   'vllm',
   'anthropic',
+  'claude-code',
   'bedrock',
   'vertex',
   'foundry',
@@ -188,6 +190,19 @@ export function AddProvider({
     } finally { setTesting(false); }
   };
 
+  // Claude Agent has nothing to test from here: its setup panel reads Claude
+  // Code's own status, and Nekko never holds a credential for it.
+  const saveClaudeAgent = async () => {
+    setTesting(true);
+    try {
+      await window.nekko.saveProvider({ id: `claude-code-${Date.now().toString(36)}`, kind: 'claude-code', label: label || PROVIDER_DEFAULTS['claude-code'].label, baseUrl: '', enabled: true });
+      pushToast('success', 'Claude Agent added.');
+      onDone();
+    } catch (error) {
+      setResult({ ok: false, message: `Could not save connection: ${String(error)}` });
+    } finally { setTesting(false); }
+  };
+
   const save = async () => {
     setTesting(true);
     try {
@@ -208,6 +223,7 @@ export function AddProvider({
         {!fixedKind && (
           <div className="col-span-2"><ProviderChoices value={kind} onPick={pick} /></div>
         )}
+        {kind === 'claude-code' ? <ClaudeAgentSetup onSave={() => void saveClaudeAgent()} saving={testing} /> : <>
         <details className="col-span-2">
           <summary className="cursor-pointer text-[12px] text-ink-soft">Connection settings{ oauthProvider ? ' (optional)' : ' — server address and name'}</summary>
           <div className="mt-3 grid grid-cols-2 gap-3">
@@ -265,6 +281,7 @@ export function AddProvider({
             {useApiKey ? 'Back to subscription sign-in' : 'Use an API key instead (billed per token)'}
           </button>
         )}
+        </>}
       </div>
       <div className="mt-4 flex items-center justify-between gap-2">
         <div className="min-w-0 text-[12px]">
@@ -281,7 +298,7 @@ export function AddProvider({
               test/save only make sense once the API-key path is revealed.
               ChatGPT has no API-key path, so its sign-in always completes.
               OpenRouter keeps both paths: sign in, or paste a key and save. */}
-          {(oauthProvider === undefined || kind === 'openrouter' || (kind === 'anthropic' && useApiKey)) && (
+          {kind !== 'claude-code' && (oauthProvider === undefined || kind === 'openrouter' || (kind === 'anthropic' && useApiKey)) && (
             <>
               <button className="btn btn-outline" onClick={test} disabled={testing}>
                 {testing ? 'Testing…' : 'Test connection'}
