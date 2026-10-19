@@ -4,12 +4,12 @@ import { defineConfig } from 'vitest/config';
 // Root `npm test` runs every workspace's Vitest suite in one process and one
 // worker pool instead of six sequential `vitest run`s. Each project keeps its
 // package as root, so include/exclude, tsconfig (desktop's JSX) and the
-// package's own vitest.config.ts (shared and cli exclude dist/) apply exactly
+// package's own vitest.config.ts (shared, cli and local-web-ui exclude dist/) apply exactly
 // as under `npm test -w <pkg>`, which still works on its own.
 // apps/mobile and apps/nekko-agent-api keep their own runners and are not part of root
 // `npm test`.
 const packages = ['packages/shared', 'packages/profile', 'apps/desktop', 'apps/local-web-ui', 'apps/relay-server', 'apps/cli'];
-const withConfig = new Set(['packages/shared', 'apps/cli']);
+const withConfig = new Set(['packages/shared', 'apps/cli', 'apps/local-web-ui']);
 const cwdSetup = fileURLToPath(new URL('./scripts/vitest-project-cwd.ts', import.meta.url));
 
 export default defineConfig({
