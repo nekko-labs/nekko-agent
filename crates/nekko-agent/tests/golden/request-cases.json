@@ -9,7 +9,6 @@
     "openai-compat",
     "ollama",
     "anthropic",
-    "anthropic-sub",
     "chatgpt"
   ],
   "requests": {

@@ -492,6 +492,51 @@ impl Turns {
         rx.await.unwrap_or(false)
     }
 
+    /// `POST /harness/approve`: one of Claude Code's permission prompts, from
+    /// a chat's approval bridge. `None` when the token is not a live bridge's.
+    /// Decided by the chat's live mode (harness::decide); a prompt that needs
+    /// a person waits in the chat's approvals like any tool call. Anything
+    /// that cannot be decided is denied: permissions fail closed.
+    pub async fn claude_code_approve(&self, token: &str, prompt: &Value) -> Option<Value> {
+        let entry = self.harness.bridge_session(token)?;
+        let deny = |message: &str| json!({ "behavior": "deny", "message": message });
+        let Some(shared) = self.by_session(&entry.session_id) else {
+            return Some(deny("No Nekko Agent turn is running for this chat, so nothing can approve this."));
+        };
+        let tool = str_at(prompt, "tool_name").or_else(|| str_at(prompt, "toolName")).unwrap_or_default().to_string();
+        let input = prompt.get("input").filter(|i| i.is_object()).cloned().unwrap_or_else(|| json!({}));
+        let mode = self.live_mode(&shared).await;
+        let rules: Vec<nekko_tools::GuardrailRule> = self
+            .settings
+            .as_ref()
+            .map(|s| s.get())
+            .and_then(|s| s.get("guardrails").cloned())
+            .and_then(|g| serde_json::from_value(g).ok())
+            .unwrap_or_else(nekko_tools::default_guardrails);
+        let allow = || json!({ "behavior": "allow", "updatedInput": input });
+        match crate::harness::decide(&mode, &tool, &input, &rules, &entry.roots) {
+            crate::harness::Decision::Allow => Some(allow()),
+            crate::harness::Decision::Deny(message) => Some(deny(&message)),
+            crate::harness::Decision::Ask { reason, severity } => {
+                let id = str_at(prompt, "tool_use_id")
+                    .or_else(|| str_at(prompt, "toolUseID"))
+                    .map(str::to_string)
+                    .unwrap_or_else(|| format!("claude_code_{}", crate::harness::new_token()));
+                let call = json!({ "id": id, "name": tool, "input": input, "executedBy": "claude-code" });
+                let severity = json!(severity);
+                let rx = self.pending.park_approval(&shared.session_id, &call, &reason, &severity);
+                shared.emit(json!({
+                    "type": "tool_approval_required",
+                    "sessionId": shared.session_id,
+                    "call": call,
+                    "reason": reason,
+                    "severity": severity,
+                }));
+                Some(if rx.await.unwrap_or(false) { allow() } else { deny("The user denied this action.") })
+            }
+        }
+    }
+
     /// `getSession(id)?.mode ?? settings.defaultChatMode ?? 'guardrails'`.
     async fn live_mode(&self, shared: &Shared) -> String {
         let store = self.store.clone();
@@ -848,19 +893,8 @@ impl Turns {
         }
 
         let provider = create_provider(config);
-        let headers_key = account.as_ref().and_then(|a| a.token_key.clone());
-        let client = if facts.get("headers") == Some(&Value::Bool(true))
-            && let Some(key) = headers_key
-        {
-            // Anthropic subscription rate limits, kept here.
-            let accounts = self.accounts.clone();
-            ProviderClient::with_headers(
-                provider,
-                Arc::new(move |headers: &Vec<(String, String)>| {
-                    accounts.record_from_headers(&key, "anthropic", headers);
-                }),
-            )
-        } else if let Some(key) = str_at(facts, "apiLimitsKey").map(str::to_string) {
+        // An Anthropic API key's own rate limits, read off each response.
+        let client = if let Some(key) = str_at(facts, "apiLimitsKey").map(str::to_string) {
             let accounts = self.accounts.clone();
             ProviderClient::with_headers(
                 provider,
@@ -956,7 +990,7 @@ impl Turns {
         opts: &Value,
         mode: &str,
     ) {
-        use crate::harness::{INTERRUPT_GRACE, Wanted, permission_mode};
+        use crate::harness::{BRIDGE_SERVER, BRIDGE_TOOL, INTERRUPT_GRACE, Wanted, permission_mode};
         use nekko_harness::{Mapped, Mapper, SessionStart, TurnExit, TurnInput};
 
         let session_id = shared.session_id.clone();
@@ -996,7 +1030,14 @@ impl Turns {
                 Err(e) => return fail(&e, &history),
             };
             let stored = str_at(&lock(session), "claudeCodeSessionId").map(str::to_string);
-            let spec = wanted.launch(bin, stored.as_deref());
+            let mut spec = wanted.launch(bin, stored.as_deref());
+            // Every permission prompt goes to Nekko through the bridge; with
+            // no bridge Claude Code does not start (fail closed).
+            match self.harness.prepare_bridge(&session_id, &paths) {
+                Ok(config) => spec.mcp_config = Some(config),
+                Err(e) => return fail(&e, &history),
+            }
+            spec.permission_prompt_tool = Some(BRIDGE_TOOL.into());
             if let SessionStart::New(id) = &spec.session {
                 // Saved before the launch, so a crash mid-turn still resumes.
                 if let Some(obj) = lock(session).as_object_mut() {
@@ -1017,7 +1058,7 @@ impl Turns {
             cancel: &shared.cancel,
             steering: &shared.steering,
             interrupt_grace: INTERRUPT_GRACE,
-            require_mcp: None,
+            require_mcp: Some(BRIDGE_SERVER),
         };
         let mut seen: Option<String> = None;
         let exit = nekko_harness::run_turn(child, &mut mapper, input, &mut |m| match m {

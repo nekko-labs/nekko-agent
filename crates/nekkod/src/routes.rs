@@ -163,6 +163,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         "claude:policy" => Ok(ctx.claude_policy.status()),
         "claude:capability" => crate::claude_policy::capability_route(ctx, &args).await,
         "claude:planUsage" => crate::claude_policy::plan_usage_route(ctx, &args).await,
+        "claude:codeStatus" => crate::claude_policy::code_status_route(ctx, &args).await,
         "daemon:info" => Ok(json!({
             "app": "nekkod",
             "version": env!("CARGO_PKG_VERSION"),
@@ -600,6 +601,7 @@ pub const OWNED: &[&str] = &[
     "claude:policy",
     "claude:capability",
     "claude:planUsage",
+    "claude:codeStatus",
     // Whole chat turns and the input they wait on (turns.rs).
     "chat:turn",
     "turn:abort",

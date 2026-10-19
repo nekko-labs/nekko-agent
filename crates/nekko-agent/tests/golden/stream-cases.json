@@ -423,7 +423,7 @@
   },
   {
     "name": "an-thinking-ignored-but-timed",
-    "provider": "anthropic-sub",
+    "provider": "anthropic",
     "request": "opus-5-normal",
     "responses": [
       {
@@ -591,8 +591,13 @@
     ]
   },
   {
-    "name": "an-401",
+    "name": "an-plan-sign-in-refused",
     "provider": "anthropic-sub",
+    "responses": []
+  },
+  {
+    "name": "an-401",
+    "provider": "anthropic",
     "responses": [
       {
         "status": 401,

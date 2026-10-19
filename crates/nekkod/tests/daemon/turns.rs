@@ -579,9 +579,9 @@ async fn a_daemon_turn_writes_its_own_usage_and_reply_lines() {
         "id": "s_turn_u", "title": "Named", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
     });
     let rig = turn_rig("usage", session);
-    write_settings(&rig, json!({ "providers": [{ "id": "p1", "kind": "openai-compat" }, { "id": "c1", "kind": "anthropic", "auth": "subscription", "tokenKey": "claude:t" }] })).await;
+    write_settings(&rig, json!({ "providers": [{ "id": "p1", "kind": "openai-compat" }, { "id": "c1", "kind": "chatgpt", "auth": "subscription", "tokenKey": "chatgpt:t" }] })).await;
     let (_, info) = post(rig.d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    for c in ["turn:account", "usage:summary", "limits:get", "limits:headers"] {
+    for c in ["turn:account", "usage:summary", "limits:get", "limits:poll"] {
         assert!(info["owned"].as_array().unwrap().iter().any(|o| o == c), "{c} not owned: {info}");
     }
 
@@ -617,21 +617,10 @@ async fn a_daemon_turn_writes_its_own_usage_and_reply_lines() {
     assert_eq!(summary["bySession"]["s_turn_u"]["output"], 3);
     assert_eq!(summary["replies"]["total"], 1);
 
-    // Limits: headers recorded here, read back here, history written.
-    let pairs = json!([
-        ["anthropic-ratelimit-unified-5h-utilization", "0.25"],
-        ["anthropic-ratelimit-unified-5h-reset", "1760003600"]
-    ]);
-    let (_, recorded) = post(rig.d.port, "limits:headers", json!(["claude:t", "anthropic", pairs]), Some(TOKEN)).await;
-    assert_eq!(recorded["windows"][0]["usedPercent"], 25);
-    let (_, got) = post(rig.d.port, "limits:get", json!(["claude:t"]), Some(TOKEN)).await;
-    assert_eq!(got, recorded, "a fresh header snapshot is served without a poll");
-    let history = std::fs::read_to_string(rig.data.join("quota-history.jsonl")).unwrap();
-    assert!(history.contains(r#""providerId":"c1","source":"headers""#), "{history}");
-    // No sign-in stored: a poll says so rather than guessing.
-    let (_, polled) = post(rig.d.port, "limits:get", json!(["claude:none"]), Some(TOKEN)).await;
+    // Limits are read here. No sign-in stored: a poll says so rather than guessing.
+    let (_, polled) = post(rig.d.port, "limits:get", json!(["chatgpt:none"]), Some(TOKEN)).await;
     assert_eq!(polled, Value::Null);
-    let (_, problem) = post(rig.d.port, "limits:problem", json!(["claude:none"]), Some(TOKEN)).await;
+    let (_, problem) = post(rig.d.port, "limits:problem", json!(["chatgpt:none"]), Some(TOKEN)).await;
     assert_eq!(problem["kind"], "signed_out");
 }
 

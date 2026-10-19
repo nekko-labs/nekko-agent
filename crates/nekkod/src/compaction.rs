@@ -8,8 +8,8 @@
 //! prompt, the passes and the edit are `nekko_turn::variants`, held to the TS
 //! by the golden set; here are the job per chat, its progress (`compaction`
 //! events, to the UI), the summary calls on the Rust providers (four-minute limit each,
-//! usage written to the usage log, Anthropic subscription headers recorded,
-//! a subscription's limits polled after each), Stop, and the write.
+//! usage written to the usage log, a subscription's limits polled after
+//! each), Stop, and the write.
 //!
 //! The daemon is the owner of compaction state: admission reads
 //! [`Compactions::is_compacting`].
@@ -325,11 +325,10 @@ impl SummaryCalls {
         let provider = create_provider(self.config.clone());
         let token_key = self.resolved.get("tokenKey").and_then(Value::as_str).map(str::to_string);
         let subscription = self.resolved.get("auth").and_then(Value::as_str) == Some("subscription");
-        let kind = self.resolved.get("kind").and_then(Value::as_str).unwrap_or_default().to_string();
         let mut user = ChatMessage::new(Role::User, v::summary_prompt(&chunk));
         user.id = uuid();
         user.extra.insert("createdAt".into(), json!(now_ms()));
-        let mut request = ChatRequest {
+        let request = ChatRequest {
             model: self.model.clone(),
             messages: vec![user],
             system: Some(v::SUMMARY_SYSTEM.into()),
@@ -342,16 +341,6 @@ impl SummaryCalls {
             signal: Some(self.job.abort.signal()),
             ..Default::default()
         };
-        if kind == "anthropic"
-            && subscription
-            && let Some(key) = token_key.clone()
-            && self.ctx.accounts.enabled()
-        {
-            let accounts = self.ctx.accounts.clone();
-            request.on_headers = Some(Arc::new(move |headers: &Vec<(String, String)>| {
-                accounts.record_from_headers(&key, "anthropic", headers);
-            }));
-        }
         let mut stream = nekko_agent::Provider::chat(&provider, request);
         let mut answer = String::new();
         let read = async {

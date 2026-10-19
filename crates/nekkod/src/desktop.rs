@@ -222,7 +222,7 @@ impl Desktop {
                 Ok(status)
             }
             "integrations:target" => Ok(self.target(ctx).await),
-            "localRelay:status" => Ok(self.relay.status()),
+            "localRelay:status" => Ok(self.relay.status_learning_name()),
             "localRelay:start" => Ok(self.relay.start().await),
             "localRelay:stop" => Ok(self.relay.stop().await),
             "networkVisibility:status" => Ok(self.visibility.status()),

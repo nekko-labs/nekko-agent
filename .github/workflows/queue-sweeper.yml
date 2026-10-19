@@ -1,0 +1,124 @@
+name: Queue sweeper
+
+# auto-merge.yml queues a PR when it opens, leaves draft or gets a push. Three
+# things still left ready PRs sitting open with nobody watching:
+#
+#   - The merge queue ejects a PR on a flaky queue-tier job and nothing puts it
+#     back. #787 went green, was queued, was ejected by a Windows daemon test
+#     that passes on main (a BrokenPipe while listing tests), and sat.
+#   - `gate` goes green after the auto-merge job has given up waiting, and the
+#     armed auto-merge request never turns into a queue entry (see #756).
+#   - A PR-tier job flakes once (a 30 s Playwright timeout on the Windows
+#     capture runner) and the PR stays red until someone re-runs it by hand.
+#
+# Every 15 minutes this looks at every ready PR into main and:
+#
+#   - enqueues it when its head's `gate` is green, it has no conflicts and it
+#     is not already queued. Once per head commit: if the queue ejects it
+#     again, that is a real failure, and the PR waits for a new push;
+#   - re-runs the failed jobs of a red `gate` once (attempt 1 only), so a
+#     flake heals itself and a real failure stays red for the author.
+#
+# Drafts, stacked layers (base is not main), conflicting PRs and PRs labelled
+# `hold` are left alone. Version-release's own schedule releases whatever this
+# lands.
+
+on:
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+  # Re-running a PR's failed CI jobs.
+  actions: write
+
+concurrency:
+  group: queue-sweeper
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Enqueueing uses the repo's GitHub App, not GITHUB_TOKEN: a merge group
+      # created by GITHUB_TOKEN starts no `merge_group` runs, so `gate` never
+      # reports and the entry times out (same reason as auto-merge.yml).
+      - name: Create repository-scoped App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ vars.RUNTIME_UPDATE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RUNTIME_UPDATE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+      - name: Sweep ready PRs
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          ACTIONS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
+          NAME: ${{ github.event.repository.name }}
+        run: |
+          prs=$(gh api graphql -F owner="$OWNER" -F name="$NAME" -f query='
+            query($owner:String!,$name:String!){repository(owner:$owner,name:$name){
+              pullRequests(states:OPEN,baseRefName:"main",first:100){nodes{
+                id number isDraft headRefOid mergeable
+                labels(first:20){nodes{name}}
+                mergeQueueEntry{state}
+                commits(last:1){nodes{commit{statusCheckRollup{contexts(first:100){nodes{
+                  ... on CheckRun{name status conclusion checkSuite{workflowRun{databaseId}}}
+                }}}}}}
+              }}}}' --jq '.data.repository.pullRequests.nodes[]
+                | select(.isDraft | not)
+                | select([.labels.nodes[].name] | index("hold") | not)
+                | {id, number, head: .headRefOid, mergeable, queued: (.mergeQueueEntry != null),
+                   gate: ([.commits.nodes[0].commit.statusCheckRollup.contexts.nodes[]? | select(.name == "gate")] | last)}
+                | @json')
+
+          while IFS= read -r pr; do
+            [ -n "$pr" ] || continue
+            n=$(jq -r .number <<<"$pr")
+            head=$(jq -r .head <<<"$pr")
+            gate=$(jq -r '.gate.conclusion // ""' <<<"$pr")
+            run=$(jq -r '.gate.checkSuite.workflowRun.databaseId // ""' <<<"$pr")
+
+            if [ "$(jq -r .queued <<<"$pr")" = true ]; then echo "#$n: in the queue."; continue; fi
+            if [ "$(jq -r .mergeable <<<"$pr")" = CONFLICTING ]; then echo "#$n: has conflicts; left for the author."; continue; fi
+
+            case "$gate" in
+              SUCCESS)
+                marker="<!-- queue-sweeper:enqueued:$head -->"
+                if gh pr view "$n" --json comments -q '.comments[].body' | grep -qF "$marker"; then
+                  echo "#$n: already re-queued once at ${head:0:8} and dropped out again; waiting for a new push."
+                  continue
+                fi
+                if gh api graphql -f query='mutation($id:ID!,$head:GitObjectID){enqueuePullRequest(input:{pullRequestId:$id,expectedHeadOid:$head}){mergeQueueEntry{position}}}' \
+                     -f id="$(jq -r .id <<<"$pr")" -f head="$head" >/dev/null; then
+                  echo "#$n: gate is green and it was not queued; enqueued."
+                  gh pr comment "$n" --body "Queue sweeper: \`gate\` is green at ${head:0:8} but the PR was not in the merge queue (ejected by a flaky job, or never picked up), so it is queued again. If the queue drops it once more, that is a real failure: push a fix and it re-queues. $marker" \
+                    || echo "::warning::Could not comment on #$n."
+                else
+                  echo "::warning::Could not enqueue #$n."
+                fi
+                ;;
+              FAILURE|CANCELLED|TIMED_OUT)
+                [ -n "$run" ] || { echo "#$n: gate is $gate with no run to re-run."; continue; }
+                info=$(GH_TOKEN="$ACTIONS_TOKEN" gh run view "$run" --json attempt,status,headSha) || continue
+                if [ "$(jq -r .headSha <<<"$info")" != "$head" ] || [ "$(jq -r .status <<<"$info")" != completed ]; then continue; fi
+                if [ "$(jq -r .attempt <<<"$info")" = 1 ]; then
+                  echo "#$n: gate is $gate on the first attempt; re-running the failed jobs once."
+                  GH_TOKEN="$ACTIONS_TOKEN" gh run rerun "$run" --failed || echo "::warning::Could not re-run $run for #$n."
+                else
+                  echo "#$n: gate is $gate after a re-run; left for the author."
+                fi
+                ;;
+              *)
+                echo "#$n: gate is ${gate:-pending}."
+                ;;
+            esac
+          done <<<"$prs"

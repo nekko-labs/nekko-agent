@@ -3,7 +3,7 @@ import { withToolImages } from './tool-images.js';
 import { withVideoNote } from './media.js';
 import { normalizeAnthropicImages } from './anthropic-images.js';
 import type { ModelAvailability, ModelInfo, ProviderConfig, ToolCall } from '@nekko-agent/shared';
-import { claudeContextWindow, claudeMaxOutputTokens, effectiveEffort, modelEffortLevels, parseClaudeModel } from '@nekko-agent/shared';
+import { claudeContextWindow, claudeMaxOutputTokens, effectiveEffort, modelEffortLevels, parseClaudeModel, withoutBedrockPrefix } from '@nekko-agent/shared';
 import type { Provider, ChatRequest, ProviderChunk } from './types.js';
 import { parseSSE } from './sse.js';
 import { httpError } from './errors.js';
@@ -31,6 +31,64 @@ const CLAUDE_MODELS: Array<{ id: string; name: string; availability?: ModelAvail
 ];
 
 /**
+ * What Claude in Amazon Bedrock serves on its Messages endpoint. It has no
+ * Models API, so this list is the catalog; ids carry Bedrock's provider prefix.
+ */
+const BEDROCK_MODELS: Array<{ id: string; name: string; availability?: ModelAvailability }> = [
+  { id: 'anthropic.claude-opus-5-5', name: 'Claude Opus 5.5' },
+  { id: 'anthropic.claude-opus-5', name: 'Claude Opus 5' },
+  { id: 'anthropic.claude-opus-4-8', name: 'Claude Opus 4.8' },
+  { id: 'anthropic.claude-opus-4-7', name: 'Claude Opus 4.7' },
+  { id: 'anthropic.claude-sonnet-5-5', name: 'Claude Sonnet 5.5' },
+  { id: 'anthropic.claude-sonnet-5', name: 'Claude Sonnet 5' },
+  { id: 'anthropic.claude-fable-5-1', name: 'Claude Fable 5.1' },
+  { id: 'anthropic.claude-fable-5', name: 'Claude Fable 5' },
+  { id: 'anthropic.claude-haiku-5-5', name: 'Claude Haiku 5.5' },
+  { id: 'anthropic.claude-haiku-4-5', name: 'Claude Haiku 4.5' },
+];
+
+/**
+ * What Vertex AI serves. Current models use the bare Claude id there; older
+ * dated snapshots take an `@` before the date.
+ */
+const VERTEX_MODELS: Array<{ id: string; name: string; availability?: ModelAvailability }> = [
+  { id: 'claude-opus-5-5', name: 'Claude Opus 5.5' },
+  { id: 'claude-opus-5', name: 'Claude Opus 5' },
+  { id: 'claude-opus-4-8', name: 'Claude Opus 4.8' },
+  { id: 'claude-sonnet-5-5', name: 'Claude Sonnet 5.5' },
+  { id: 'claude-sonnet-5', name: 'Claude Sonnet 5' },
+  { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6' },
+  { id: 'claude-fable-5-1', name: 'Claude Fable 5.1' },
+  { id: 'claude-haiku-5-5', name: 'Claude Haiku 5.5' },
+  { id: 'claude-haiku-4-5@20251001', name: 'Claude Haiku 4.5' },
+];
+
+/**
+ * Foundry's default deployment names, which are the model ids. A custom
+ * deployment name is typed into the picker like any unlisted model.
+ */
+const FOUNDRY_MODELS: Array<{ id: string; name: string; availability?: ModelAvailability }> = [
+  { id: 'claude-opus-5-5', name: 'Claude Opus 5.5' },
+  { id: 'claude-opus-5', name: 'Claude Opus 5' },
+  { id: 'claude-opus-4-8', name: 'Claude Opus 4.8' },
+  { id: 'claude-sonnet-5-5', name: 'Claude Sonnet 5.5' },
+  { id: 'claude-sonnet-5', name: 'Claude Sonnet 5' },
+  { id: 'claude-fable-5-1', name: 'Claude Fable 5.1' },
+  { id: 'claude-haiku-5-5', name: 'Claude Haiku 5.5' },
+  { id: 'claude-haiku-4-5', name: 'Claude Haiku 4.5' },
+];
+
+/** Vertex AI takes the API version in the body rather than as a header. */
+const VERTEX_VERSION = 'vertex-2023-10-16';
+
+/** Shipped list per platform; none of the cloud platforms serves the Models API. */
+const SHIPPED_MODELS: Partial<Record<ProviderConfig['kind'], typeof CLAUDE_MODELS>> = {
+  bedrock: BEDROCK_MODELS,
+  vertex: VERTEX_MODELS,
+  foundry: FOUNDRY_MODELS,
+};
+
+/**
  * Picker order by family, as the shipped list has it. The API lists newest
  * release first, which would put a new Haiku above Opus; the sort is stable,
  * so newest-first holds within each family. Ids that aren't a known family go
@@ -51,12 +109,13 @@ function familyRank(id: string): number {
 }
 
 /**
- * Subscription (OAuth) requests ride the Claude Code public client. The
- * endpoint requires this beta flag and validates that the first system block
- * is the Claude Code identity line, per the token's terms of use.
+ * What a provider saved with `auth: 'subscription'` (a Claude plan sign-in
+ * from an older build) answers with. Anthropic does not let third-party apps
+ * send requests on Claude plan credentials, so this provider only ever sends
+ * an API key.
  */
-const OAUTH_BETA = 'oauth-2025-04-20';
-const CLAUDE_CODE_SYSTEM_PREFIX = "You are Claude Code, Anthropic's official CLI for Claude.";
+export const CLAUDE_PLAN_REMOVED =
+  'Claude plan sign-in is no longer available in Nekko Agent. Add an Anthropic API key to this provider, or connect Claude Agent to use your plan through Claude Code.';
 
 /**
  * Does this model reject the sampling parameters?
@@ -96,7 +155,7 @@ export function rejectsSampling(model: string): boolean {
  * most common way the rule gets fooled.
  */
 function normalizeModelId(model: string): string {
-  return model.toLowerCase().trim().replace(/^.*\//, '');
+  return withoutBedrockPrefix(model.toLowerCase().trim().replace(/^.*\//, ''));
 }
 
 /**
@@ -224,15 +283,9 @@ export class AnthropicProvider implements Provider {
   constructor(public readonly config: ProviderConfig) {}
 
   private headers(): Record<string, string> {
-    // Subscription mode: the host injects a fresh OAuth access token into
-    // config.apiKey, which goes out as a Bearer token, not an x-api-key.
-    if (this.config.auth === 'subscription') {
-      return {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.config.apiKey ?? ''}`,
-        'anthropic-version': '2023-06-01',
-        'anthropic-beta': OAUTH_BETA,
-      };
+    // A Google access token on Vertex AI; the version rides in the body.
+    if (this.config.kind === 'vertex') {
+      return { 'Content-Type': 'application/json', Authorization: `Bearer ${this.config.apiKey ?? ''}` };
     }
     return {
       'Content-Type': 'application/json',
@@ -241,26 +294,19 @@ export class AnthropicProvider implements Provider {
     };
   }
 
-  /**
-   * Subscription tokens are only valid for requests that identify as Claude
-   * Code, so the system prompt goes out as a block array with the required
-   * prefix first; the app's real system prompt follows as a second block.
-   */
-  private systemParam(system: string | undefined) {
-    if (this.config.auth !== 'subscription') return system;
-    const blocks: Array<{ type: 'text'; text: string }> = [{ type: 'text', text: CLAUDE_CODE_SYSTEM_PREFIX }];
-    if (system) blocks.push({ type: 'text', text: system });
-    return blocks;
+  /** A Claude plan sign-in saved by an older build: nothing is sent with it. */
+  private planSignIn(): boolean {
+    return this.config.auth === 'subscription';
   }
 
   /**
-   * The live catalog: `GET {base}/v1/models`, every model this key or
-   * subscription can call, including ones released after this build. One page
-   * of up to 1000 holds the whole list. Returns null on any failure, or after
-   * CATALOG_TIMEOUT_MS, so the caller can fall back to the shipped list.
+   * The live catalog: `GET {base}/v1/models`, every model this key can call,
+   * including ones released after this build. One page of up to 1000 holds
+   * the whole list. Returns null on any failure, or after CATALOG_TIMEOUT_MS,
+   * so the caller can fall back to the shipped list.
    */
   private async fetchCatalog(): Promise<ModelInfo[] | null> {
-    if (!this.config.apiKey) return null;
+    if (!this.config.apiKey || this.planSignIn() || SHIPPED_MODELS[this.config.kind]) return null;
     const abort = new AbortController();
     const timer = setTimeout(() => abort.abort(), CATALOG_TIMEOUT_MS);
     let json: any;
@@ -289,7 +335,7 @@ export class AnthropicProvider implements Provider {
   async listModels(): Promise<ModelInfo[]> {
     return (
       (await this.fetchCatalog()) ??
-      CLAUDE_MODELS.map((m) => ({
+      (SHIPPED_MODELS[this.config.kind] ?? CLAUDE_MODELS).map((m) => ({
         id: m.id,
         providerId: this.config.id,
         name: m.name,
@@ -301,16 +347,21 @@ export class AnthropicProvider implements Provider {
   }
 
   async test(): Promise<{ ok: boolean; message: string }> {
-    if (this.config.auth === 'subscription') {
+    if (this.planSignIn()) return { ok: false, message: CLAUDE_PLAN_REMOVED };
+    if (this.config.kind === 'bedrock') {
+      return this.config.apiKey ? { ok: true, message: 'Bedrock token set' } : { ok: false, message: 'Missing Bedrock bearer token' };
+    }
+    if (this.config.kind === 'vertex') {
       return this.config.apiKey
-        ? { ok: true, message: 'Signed in with a Claude subscription' }
-        : { ok: false, message: 'Not signed in. Sign in with Claude in the provider settings.' };
+        ? { ok: true, message: 'Google Cloud credentials found' }
+        : { ok: false, message: 'No Google Cloud credentials. Run `gcloud auth application-default login`.' };
     }
     if (!this.config.apiKey) return { ok: false, message: 'Missing API key' };
     return { ok: true, message: 'API key set' };
   }
 
   async *chat(req: ChatRequest): AsyncIterable<ProviderChunk> {
+    if (this.planSignIn()) throw new Error(CLAUDE_PLAN_REMOVED);
     const effort = anthropicEffort(req.model, req.effort);
     const knob = (shape: SamplingShape) =>
       shape === 'effort'
@@ -319,19 +370,24 @@ export class AnthropicProvider implements Provider {
           ? { temperature: req.temperature ?? 0.7 }
           : {};
     const messages = await normalizeAnthropicImages(this.toAnthropicMessages(req));
+    // Vertex AI names the model in the URL and the version in the body.
+    const vertex = this.config.kind === 'vertex';
+    const url = vertex
+      ? `${this.config.baseUrl}/publishers/anthropic/models/${req.model}:streamRawPredict`
+      : `${this.config.baseUrl}/v1/messages`;
     const send = (shape: SamplingShape) =>
-      fetch(`${this.config.baseUrl}/v1/messages`, {
+      fetch(url, {
         method: 'POST',
         headers: this.headers(),
         body: JSON.stringify(anthropicCachePrefix({
-          model: req.model,
+          ...(vertex ? { anthropic_version: VERTEX_VERSION } : { model: req.model }),
           // Required here, so a chat with no cap of its own runs to the
           // model's ceiling (see outputCapFor); a 400 naming a lower one is
           // learned below and the request goes again.
           max_tokens: outputCapFor(req.model, req.maxOutputTokens),
           stream: true,
           ...knob(shape),
-          system: this.systemParam(req.system),
+          system: req.system,
           messages,
           tools: req.tools?.map((t) => ({ name: t.name, description: t.description, input_schema: t.parameters })),
         }, req.promptCaching)),

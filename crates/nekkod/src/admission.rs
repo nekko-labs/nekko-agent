@@ -161,7 +161,10 @@ fn is_local(kind: &str) -> bool {
 /// `providerEndpoint`: a provider's URL when it is one a turn may call.
 pub(crate) fn provider_endpoint(provider: &Value) -> Option<url::Url> {
     let kind = s(provider, "kind");
-    if !is_local(kind) && !["anthropic", "openai", "openrouter", "chatgpt", "openai-compat"].contains(&kind) {
+    if !is_local(kind)
+        && !["anthropic", "bedrock", "vertex", "foundry", "openai", "openrouter", "chatgpt", "openai-compat"]
+            .contains(&kind)
+    {
         return None;
     }
     let url = url::Url::parse(provider.get("baseUrl").and_then(Value::as_str)?).ok()?;
@@ -432,7 +435,9 @@ async fn admit(
         return ended(ctx, &session_id, "Provider not configured or disabled.").await;
     };
     // A scheduled task, workflow, goal step, watch or auto-continue on Claude
-    // Code needs `unattended_runs` for its auth (claude_policy.rs).
+    // Code needs `unattended_runs` for its auth (claude_policy.rs). Its auth
+    // comes from `claude auth status`, read once if nothing has read it yet.
+    crate::claude_policy::ensure_auth_status(ctx, &provider).await;
     if let Err(refusal) = ctx.claude_policy.gate_turn(&provider, &opts) {
         return ended(ctx, &session_id, refusal.message).await;
     }
@@ -572,12 +577,6 @@ async fn admit(
     if let Some(e) = &provider_error {
         facts.insert("providerError".into(), json!(e));
     }
-    facts.insert(
-        "headers".into(),
-        json!(
-            kind == "anthropic" && s(&provider, "auth") == "subscription" && nekko_js::truthy(provider.get("tokenKey"))
-        ),
-    );
     // An API key's own rate limits, read off each response (`limitsKeyFor`).
     if kind == "anthropic" && s(&provider, "auth") != "subscription" && nekko_js::truthy(provider.get("apiKey")) {
         facts.insert("apiLimitsKey".into(), json!(format!("provider:{}", s(&provider, "id"))));

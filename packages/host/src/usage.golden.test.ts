@@ -12,11 +12,7 @@ import { quotaHistoryRecord } from './quota-history.js';
 import {
   LimitsReadError,
   classifyLimitsError,
-  describeAnthropicWindow,
   limitsBackoffMs,
-  mergeWindows,
-  parseAnthropicHeaders,
-  parseAnthropicUsageJson,
   parseChatGptUsage,
   parseOpenRouterKey,
   parseRetryAfter,
@@ -26,8 +22,8 @@ import {
  * What the usage and limits services produce, which the engine daemon's port
  * (crates/nekko-usage) must reproduce exactly: cost estimates, `usage:summary`
  * over real log files, the usage, reply and quota-history lines a turn writes,
- * and the limit parsers (Anthropic headers and usage JSON, ChatGPT, OpenRouter,
- * window merging, Retry-After, error classes and backoff). Also writes the price
+ * and the limit parsers (ChatGPT, OpenRouter, Retry-After, error classes and
+ * backoff). Also writes the price
  * tables the daemon embeds (crates/nekko-usage/src/pricing.json). Fails if
  * either file is stale; rewrite them with UPDATE_GOLDEN=1.
  */
@@ -227,23 +223,6 @@ function quotaCases() {
 function limitCases() {
   vi.useFakeTimers();
   vi.setSystemTime(NOW);
-  const P = 'anthropic-ratelimit-unified-';
-  const headers: Array<Array<[string, string]>> = [
-    [[`${P}5h-utilization`, '0.62'], [`${P}5h-reset`, '1760003600'], [`${P}5h-status`, 'allowed'], [`${P}7d-utilization`, '0.95'], [`${P}7d-status`, 'allowed_warning']],
-    [[`${P}7d_opus-utilization`, '0.4'], [`${P}7d_fable-utilization`, '1.7'], [`${P}7d_fable-status`, 'rejected'], [`${P}5h-utilization`, '0.1']],
-    [[`${P}weird-utilization`, '0.3'], [`${P}7d_claude_next-utilization`, '0.2abc'], [`${P}5h-utilization`, 'nope'], ['content-type', 'application/json']],
-    [[`${P.toUpperCase()}5H-UTILIZATION`, '0.5'], [`${P}5h-reset`, 'x'], [`${P}-utilization`, '0.5'], [`${P}seven_day_sonnet-utilization`, '-0.2']],
-    [[`${P}5h-utilization`, '0.123456'], [`${P}5h-utilization`, '0.5'], [`${P}5h-status`, 'RATE_LIMITED']],
-    [],
-  ];
-  const usageJson: Array<Record<string, unknown>> = [
-    { five_hour: { utilization: 62, resets_at: '2026-10-09T10:00:00.123456+00:00' }, seven_day: { utilization: '85', resets_at: '2026-10-12T00:00:00Z' }, seven_day_opus: { utilization: 100 }, extra_usage: { is_enabled: true, monthly_limit: 50, used_credits: 12.5 } },
-    { seven_day_fable: { utilization: 4.567, status: 'warning' }, five_hour: null, extra_usage: { is_enabled: false } },
-    { five_hour: { utilization: 'x' }, seven_day: { utilization: null, resets_at: 5 }, '7d_sonnet': { utilization: 79.999 }, extra_usage: { monthly_limit: '20' }, iguana_necktie: { utilization: 3 }, extra: 5 },
-    { five_hour: { utilization: 200, status: 'rejected' }, extra_usage: { monthly_limit: 'x' } },
-    { seven_day: { utilization: [7] }, five_hour: { utilization: true }, extra_usage: 'no' },
-    {},
-  ];
   const chatgpt: Array<Record<string, unknown>> = [
     { plan_type: 'plus', rate_limit: { allowed: true, limit_reached: false, primary_window: { used_percent: 42, reset_at: 1_760_003_600, limit_window_seconds: 18_000 }, secondary_window: { used_percent: '81.5', reset_at: 1_760_500_000, limit_window_seconds: 604_800 } }, credits: { balance: '12.50' } },
     { rate_limit: { allowed: false, primary_window: { used_percent: 10, limit_window_seconds: 86_400 }, secondary_window: { used_percent: 'x' } }, credits: { unlimited: true } },
@@ -260,10 +239,6 @@ function limitCases() {
     {},
     undefined,
   ];
-  const merge: Array<[LimitWindow[], LimitWindow[]]> = [
-    [[W('7d_fable', '7-day Fable', 'model'), W('5h', '5-hour', 'session'), W('7d', '7-day', 'weekly')], [W('5h', '5-hour', 'session', { usedPercent: 50 })]],
-    [[], [W('7d_opus', '7-day Opus', 'model'), W('7d_fable', '7-day Fable', 'model'), W('7d_Zed', '7-day Zed', 'model'), W('7d_alpha', '7-day alpha', 'model'), W('weird', 'weird', 'weekly'), W('5h', '5-hour', 'session')]],
-  ];
   const retryAfter: Array<string | null | undefined> = ['120', '0', '1.5', '-0', 'Fri, 10 Oct 2025 12:00:00 GMT', 'Sat, 10 Oct 2026 08:53:30 GMT', 'soon', '', null, undefined, ' 30 '];
   const errors = [
     new LimitsReadError('rate_limited', 429, 5000), new LimitsReadError('http', 500), new LimitsReadError('auth_expired', 401),
@@ -272,15 +247,11 @@ function limitCases() {
     new Error('Token was REVOKED'),
   ];
   return {
-    headers: headers.map((input) => ({ input, output: parseAnthropicHeaders(input) })),
-    usageJson: usageJson.map((input) => ({ input, output: parseAnthropicUsageJson(input) })),
     chatgpt: chatgpt.map((input) => ({ input, output: parseChatGptUsage(input) })),
     openrouter: openrouter.map((input) => ({ input: input ?? null, output: outcome(() => parseOpenRouterKey(input, 200)) })),
-    merge: merge.map(([previous, fresh]) => ({ input: { previous, fresh }, output: mergeWindows(previous, fresh) })),
     retryAfter: retryAfter.map((input) => ({ input: input ?? null, output: parseRetryAfter(input, NOW) ?? null })),
     classify: errors.map((e) => ({ input: e instanceof LimitsReadError ? { limits: e.kind, status: e.status ?? null, retryAfterMs: e.retryAfterMs ?? null } : { message: e instanceof Error ? e.message : String(e) }, output: classifyLimitsError(e) })),
     backoff: [[1], [2], [3], [6], [7], [20], [0], [1, 5_000_000], [2, 10]].map(([failures, retry]) => ({ input: { failures, retryAfterMs: retry ?? null }, output: limitsBackoffMs(failures, retry) })),
-    describe: [['5h', undefined], ['7d', 'opus'], ['7d', 'claude_next'], ['weird', undefined], ['weird', 'x-y'], ['5h', 'fable']].map(([period, family]) => ({ input: { period, family: family ?? null }, output: describeAnthropicWindow(period!, family) })),
   };
 }
 

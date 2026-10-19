@@ -10,6 +10,7 @@ import {
   type ChatOutputEvent,
 } from './lib.js';
 import { runMcpServer } from './mcp.js';
+import { runBridgeServer } from './bridge.js';
 import { migrateCommand } from './migrate.js';
 import { resolveInstall } from './skills.js';
 import { VERSION } from './version.js';
@@ -203,6 +204,8 @@ export async function runCli(argv: string[]): Promise<void> {
   const cmd = _[0];
   if (flags.version || cmd === 'version') return void print(VERSION, !!flags.json);
   if (!cmd || flags.help || cmd === 'help') return void console.log(HELP);
+  // Claude Agent's approval bridge: started by nekkod in a chat's --mcp-config, not by hand.
+  if (cmd === 'mcp' && value(flags, 'bridge')) return runBridgeServer({ token: value(flags, 'bridge'), url: value(flags, 'url') });
   if (cmd === 'mcp') return runMcpServer({ url: value(flags, 'url'), token: value(flags, 'token') });
   // Before getClient: building a client opens the data root, which refuses to start while an earlier profile is unmerged.
   if (cmd === 'migrate') { process.exitCode = await migrateCommand(flags); return; }

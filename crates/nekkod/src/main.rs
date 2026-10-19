@@ -13,6 +13,7 @@ mod automation;
 
 mod boot;
 mod catalog;
+mod claude_plan;
 mod claude_policy;
 mod cli_install;
 mod compaction;
@@ -24,6 +25,7 @@ mod decisions;
 mod desktop;
 mod downloads;
 mod engine;
+mod gcp;
 mod harness;
 mod hub;
 mod hypergate;
@@ -117,6 +119,18 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     }
     let accounts = Arc::new(accounts::Accounts::new(cfg.data_dir.clone().map(std::path::PathBuf::from), hub.clone()));
     let settings = cfg.data_dir.clone().map(|d| settings::Settings::new(d.into(), hub.clone()));
+    // Older builds signed in to Claude plans; delete what they left (claude_plan.rs).
+    if let (Some(d), Some(s)) = (&cfg.data_dir, &settings) {
+        match claude_plan::migrate(std::path::Path::new(d), &s.store, nekko_oauth::now_ms()) {
+            Ok(done) if !done.is_empty() => eprintln!(
+                "nekkod: removed {} Claude sign-in token(s) and turned off {} Claude plan provider(s)",
+                done.tokens.len(),
+                done.providers.len()
+            ),
+            Ok(_) => {}
+            Err(e) => eprintln!("nekkod: Claude sign-in cleanup failed: {e}"),
+        }
+    }
     // Voice reads its settings from the daemon's store.
     let voice = cfg.data_dir.clone().zip(settings.clone()).map(|(d, s)| {
         let store = s.store.clone();
@@ -350,6 +364,20 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     }
     // Claude Agent chats' idle Claude Code children are ended after 15 minutes.
     ctx.turns.harness.start_reaper();
+    // Claude Agent's approval bridge: the app's own CLI, else `nekko-agent` on PATH.
+    ctx.turns.harness.configure(harness::BridgeSetup {
+        wire_url: format!("http://127.0.0.1:{port}"),
+        command: cfg
+            .native
+            .as_ref()
+            .and_then(cli_install::bundled_cli)
+            .map(|(exe, cli)| harness::BridgeCommand::electron(&exe, &cli))
+            .or_else(|| harness::cli_on_path().map(|p| harness::BridgeCommand::launcher(&p.to_string_lossy()))),
+        dir: cfg
+            .data_dir
+            .as_ref()
+            .map_or_else(|| std::env::temp_dir().join("nekko-harness"), |d| std::path::Path::new(d).join("harness")),
+    });
     let after = ctx.clone();
     let app = wire::App { ctx, token: cfg.token.clone().into(), origins: Arc::new(cfg.allowed_origins.clone()) };
     let router = wire::router(app);

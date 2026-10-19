@@ -4,8 +4,8 @@
 //! for the UI, and `oauth:fresh` for the TS host, which asks here for a
 //! usable token instead of renewing one itself: a renewal rotates the refresh
 //! token, so the file needs one writer. The loopback listeners that receive a
-//! sign-in's redirect (8765-8795 for Claude, 1455 for ChatGPT, any port for
-//! OpenRouter) live here too. The requests, the responses' meaning and the
+//! sign-in's redirect (1455 for ChatGPT, any port for the others) live here
+//! too. Claude sign-in is refused while its approved-client slot is empty. The requests, the responses' meaning and the
 //! file format are `nekko-oauth`'s (held to oauth.ts by a golden set); this is
 //! the stateful half of oauth.ts: pending sessions and their expiry, the
 //! listeners, one renewal at a time per token. Owned while the daemon knows
@@ -33,24 +33,16 @@ pub const CHANNELS: &[&str] = &[
 /// The Local Web UI's answer to the sign-in channels (web-channels.ts).
 const UNSUPPORTED: &str = "OAuth sign-in is only available in the desktop app.";
 
-/// Reads one CLI's credential file into a token set.
-type CliParser = fn(&str, f64) -> Result<Option<Value>, String>;
-
 /// Where the token requests go; tests point them at a local server.
 #[derive(Clone)]
 pub struct Endpoints {
-    pub claude_token: String,
     pub chatgpt_token: String,
     pub openrouter_key: String,
 }
 
 impl Default for Endpoints {
     fn default() -> Self {
-        Endpoints {
-            claude_token: o::CLAUDE_TOKEN_URL.into(),
-            chatgpt_token: o::CHATGPT_TOKEN_URL.into(),
-            openrouter_key: o::OPENROUTER_KEY_URL.into(),
-        }
+        Endpoints { chatgpt_token: o::CHATGPT_TOKEN_URL.into(), openrouter_key: o::OPENROUTER_KEY_URL.into() }
     }
 }
 
@@ -188,13 +180,15 @@ impl OAuth {
     }
 
     async fn begin(self: &Arc<Self>, provider: &str) -> Result<Value, String> {
+        if !o::provider_offered(provider) {
+            return Err(o::CLAUDE_SIGN_IN_UNAVAILABLE.into());
+        }
         let (verifier, challenge) = o::pkce_pair();
-        let state = if provider == "claude" { verifier.clone() } else { o::generate_state() };
+        let state = o::generate_state();
         let id = o::random_uuid();
         let redirect_uri = match provider {
-            "claude" => o::CLAUDE_MANUAL_REDIRECT_URI.to_string(),
-            "openrouter" => "http://localhost/callback".to_string(),
-            _ => o::CHATGPT_REDIRECT_URI.to_string(),
+            "chatgpt" => o::CHATGPT_REDIRECT_URI.to_string(),
+            _ => "http://localhost/callback".to_string(),
         };
         let expires_at = o::now_ms() + o::SESSION_TTL_MS;
         lock(&self.sessions).insert(
@@ -217,27 +211,32 @@ impl OAuth {
         }
         let listening = self.start_loopback(&id, provider).await?;
         let mode = if listening { "loopback" } else { "manual" };
-        if !listening && provider == "openrouter" {
-            // OpenRouter has no paste-a-code page: without a listener it cannot finish.
+        if !listening && provider != "chatgpt" {
+            // Only ChatGPT has a paste-the-redirect fallback: without a listener the others cannot finish.
             self.close(&id).await;
             return Err("Could not open a local listener for the sign-in callback. Check nothing else is saturating the port range, then try again.".into());
         }
         let redirect = lock(&self.sessions).get(&id).map(|s| s.redirect_uri.clone()).unwrap_or_default();
-        let auth_url = o::authorize_url(provider, &redirect, &challenge, &state);
+        let auth_url = match o::authorize_url(provider, &redirect, &challenge, &state) {
+            Ok(url) => url,
+            Err(e) => {
+                self.close(&id).await;
+                return Err(e);
+            }
+        };
         self.emit(json!({ "tokenKey": "", "provider": provider, "connected": false, "state": "pending" }));
         Ok(
             json!({ "id": id, "provider": provider, "authUrl": auth_url, "mode": mode, "expiresAt": o::num(expires_at) }),
         )
     }
 
-    /// Listen for the redirect: any port for OpenRouter, the first free one of
-    /// 8765-8795 for Claude, exactly 1455 for ChatGPT (taking it back from an
-    /// earlier unfinished ChatGPT sign-in of ours). False: the flow is manual.
+    /// Listen for the redirect: exactly 1455 for ChatGPT (taking it back from
+    /// an earlier unfinished ChatGPT sign-in of ours), any port for the others.
+    /// False: the flow is manual.
     async fn start_loopback(self: &Arc<Self>, id: &str, provider: &str) -> Result<bool, String> {
         let ports: Vec<u16> = match provider {
-            "openrouter" => vec![0],
-            "claude" => o::CLAUDE_LOOPBACK_PORTS.collect(),
-            _ => vec![o::CHATGPT_LOOPBACK_PORT],
+            "chatgpt" => vec![o::CHATGPT_LOOPBACK_PORT],
+            _ => vec![0],
         };
         for port in &ports {
             if let Some(bound) = self.listen(id, *port).await {
@@ -394,12 +393,12 @@ impl OAuth {
     }
 
     async fn post(&self, req: &o::TokenRequest) -> Result<(bool, u16, String), String> {
-        let url = if req.url == o::CLAUDE_TOKEN_URL {
-            &self.endpoints.claude_token
-        } else if req.url == o::CHATGPT_TOKEN_URL {
+        let url = if req.url == o::CHATGPT_TOKEN_URL {
             &self.endpoints.chatgpt_token
-        } else {
+        } else if req.url == o::OPENROUTER_KEY_URL {
             &self.endpoints.openrouter_key
+        } else {
+            &req.url
         };
         // A token or code only ever goes out over HTTPS (or to this machine, in tests).
         let url = reqwest::Url::parse(url).map_err(|e| e.to_string())?;
@@ -426,7 +425,7 @@ impl OAuth {
         state: &str,
     ) -> Result<Value, String> {
         let obtained_at = o::now_ms();
-        let req = o::exchange_request(provider, code, redirect, verifier, state);
+        let req = o::exchange_request(provider, code, redirect, verifier, state)?;
         let (ok, status, text) = self.post(&req).await?;
         o::exchange_result(provider, ok, status, &text, obtained_at, o::now_ms()).map(o::Obj::into_value)
     }
@@ -479,29 +478,25 @@ impl OAuth {
             return Err(format!("Subscription session expired for {key}. Sign in again."));
         }
         let obtained_at = o::now_ms();
-        let (ok, status, text) = self.post(&o::refresh_request(&token)).await?;
+        let (ok, status, text) = self.post(&o::refresh_request(&token)?).await?;
         let next = o::refresh_result(&token, ok, status, &text, obtained_at, o::now_ms())?.into_value();
         self.tokens.set(key, next.clone())?;
         self.emit(o::status(key, Some(&next), "success", None, o::now_ms()));
         Ok(next.get("accessToken").cloned().unwrap_or(Value::Null))
     }
 
-    /// `importCliAuth`: the Claude and Codex CLIs' own sign-ins, copied in.
+    /// `importCliAuth`: the Codex CLI's own sign-in, copied in. Claude Code's
+    /// credentials are never read: Anthropic does not let other apps collect
+    /// or reuse them.
     fn import_cli_auth(&self) -> Value {
         let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from);
         let mut result = json!({ "claude": false, "chatgpt": false, "openrouter": false });
         let Some(home) = home else { return result };
-        let sources: [(&str, PathBuf, CliParser); 2] = [
-            ("claude", home.join(".claude").join(".credentials.json"), o::claude_cli_token),
-            ("chatgpt", home.join(".codex").join("auth.json"), o::codex_cli_token),
-        ];
-        for (key, path, parse) in sources {
-            let Ok(bytes) = std::fs::read(&path) else { continue };
-            if let Ok(Some(token)) = parse(&String::from_utf8_lossy(&bytes), o::now_ms())
-                && self.tokens.set(key, token).is_ok()
-            {
-                result[key] = json!(true);
-            }
+        let Ok(bytes) = std::fs::read(home.join(".codex").join("auth.json")) else { return result };
+        if let Ok(Some(token)) = o::codex_cli_token(&String::from_utf8_lossy(&bytes), o::now_ms())
+            && self.tokens.set("chatgpt", token).is_ok()
+        {
+            result["chatgpt"] = json!(true);
         }
         result
     }
@@ -539,51 +534,58 @@ mod tests {
 
     #[tokio::test]
     async fn a_loopback_sign_in_lands_in_tokens_json() {
-        let (url, seen) =
-            token_server(json!({ "access_token": "at", "refresh_token": "rt", "expires_in": 3600 })).await;
-        let (oauth, dir) = rig("loopback", Endpoints { claude_token: url, ..Endpoints::default() });
-        let begun = oauth.route("oauth:begin", &[json!("claude")]).await.unwrap();
+        let (url, seen) = token_server(json!({ "key": "sk-or-minted" })).await;
+        let (oauth, dir) = rig("loopback", Endpoints { openrouter_key: url, ..Endpoints::default() });
+        let begun = oauth.route("oauth:begin", &[json!("openrouter")]).await.unwrap();
         assert_eq!(begun["mode"], "loopback");
         let auth = url::Url::parse(begun["authUrl"].as_str().unwrap()).unwrap();
         let q = |k: &str| auth.query_pairs().find(|(n, _)| n == k).map(|(_, v)| v.into_owned()).unwrap();
-        let redirect = q("redirect_uri");
-        let state = q("state");
-        assert!(redirect.starts_with("http://localhost:87"), "{redirect}");
+        let redirect = q("callback_url");
+        assert!(redirect.starts_with("http://localhost:"), "{redirect}");
         let callback = redirect.replace("localhost", "127.0.0.1");
-        let bad = reqwest::get(format!("{callback}?code=c&state=wrong")).await.unwrap();
-        assert_eq!(bad.status(), 400);
-        let ok = reqwest::get(format!(
-            "{callback}?code=c&state={}",
-            url::form_urlencoded::byte_serialize(state.as_bytes()).collect::<String>()
-        ))
-        .await
-        .unwrap();
+        let missing = reqwest::get(callback.clone()).await.unwrap();
+        assert_eq!(missing.status(), 400);
+        let ok = reqwest::get(format!("{callback}?code=c")).await.unwrap();
         assert_eq!(ok.status(), 200);
         let body: Value = serde_json::from_str(&lock(&seen)[0]).unwrap();
-        assert_eq!((body["grant_type"].clone(), body["code"].clone()), (json!("authorization_code"), json!("c")));
+        assert_eq!((body["code"].clone(), body["code_challenge_method"].clone()), (json!("c"), json!("S256")));
         let id = begun["id"].as_str().unwrap();
         let tokens = o::TokenStore::new(&dir).load();
-        let key = format!("claude:{}", &id[..8]);
-        assert_eq!(tokens[&key]["accessToken"], "at");
+        let key = format!("openrouter:{}", &id[..8]);
+        assert_eq!(tokens[&key]["accessToken"], "sk-or-minted");
         // The session is gone and its port free again.
         assert!(oauth.finish(id, "x").await.is_err());
         let _ = std::fs::remove_dir_all(dir);
     }
 
     #[tokio::test]
-    async fn a_token_near_expiry_is_renewed_once_and_saved() {
-        let (url, seen) = token_server(json!({ "access_token": "new", "expires_in": 3600 })).await;
-        let (oauth, dir) = rig("renew", Endpoints { claude_token: url, ..Endpoints::default() });
+    async fn claude_sign_in_is_not_offered() {
+        let (oauth, dir) = rig("claude", Endpoints::default());
+        assert_eq!(oauth.route("oauth:begin", &[json!("claude")]).await.unwrap_err(), o::CLAUDE_SIGN_IN_UNAVAILABLE);
+        assert!(lock(&oauth.sessions).is_empty(), "no pending session or listener is left behind");
+        // A Claude token left over from an older build is never renewed.
         let store = o::TokenStore::new(&dir);
         store
-            .set("claude:a", json!({ "provider": "claude", "accessToken": "old", "refreshToken": "r", "expiresAt": o::now_ms() + 1000.0, "obtainedAt": 1 }))
+            .set("claude:a", json!({ "provider": "claude", "accessToken": "old", "refreshToken": "r", "expiresAt": 1, "obtainedAt": 1 }))
             .unwrap();
-        let (a, b) = tokio::join!(oauth.ensure_fresh("claude:a", false), oauth.ensure_fresh("claude:a", false));
+        assert_eq!(oauth.ensure_fresh("claude:a", false).await.unwrap_err(), o::CLAUDE_SIGN_IN_UNAVAILABLE);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[tokio::test]
+    async fn a_token_near_expiry_is_renewed_once_and_saved() {
+        let (url, seen) = token_server(json!({ "access_token": "new", "expires_in": 3600 })).await;
+        let (oauth, dir) = rig("renew", Endpoints { chatgpt_token: url, ..Endpoints::default() });
+        let store = o::TokenStore::new(&dir);
+        store
+            .set("chatgpt:a", json!({ "provider": "chatgpt", "accessToken": "old", "refreshToken": "r", "accountId": "a", "expiresAt": o::now_ms() + 1000.0, "obtainedAt": 1 }))
+            .unwrap();
+        let (a, b) = tokio::join!(oauth.ensure_fresh("chatgpt:a", false), oauth.ensure_fresh("chatgpt:a", false));
         assert_eq!((a.unwrap(), b.unwrap()), (json!("new"), json!("new")));
         assert_eq!(lock(&seen).len(), 1, "one renewal for two callers");
-        let saved = store.get("claude:a").unwrap();
+        let saved = store.get("chatgpt:a").unwrap();
         assert_eq!((saved["accessToken"].clone(), saved["refreshToken"].clone()), (json!("new"), json!("r")));
-        assert_eq!(oauth.ensure_fresh("claude:a", false).await.unwrap(), json!("new"));
+        assert_eq!(oauth.ensure_fresh("chatgpt:a", false).await.unwrap(), json!("new"));
         assert!(oauth.ensure_fresh("missing", false).await.unwrap_err().contains("Sign in again"));
         let _ = std::fs::remove_dir_all(dir);
     }
@@ -592,7 +594,7 @@ mod tests {
     async fn the_web_edition_refuses_sign_in() {
         let (oauth, dir) = rig("web", Endpoints::default());
         let oauth = Arc::new(OAuth { sign_in: false, ..Arc::try_unwrap(oauth).ok().unwrap() });
-        assert_eq!(oauth.route("oauth:begin", &[json!("claude")]).await.unwrap_err(), UNSUPPORTED);
+        assert_eq!(oauth.route("oauth:begin", &[json!("chatgpt")]).await.unwrap_err(), UNSUPPORTED);
         assert_eq!(oauth.route("oauth:status", &[json!("p")]).await.unwrap()["message"], UNSUPPORTED);
         let _ = std::fs::remove_dir_all(dir);
     }

@@ -84,12 +84,20 @@ jobs:
     needs: scope
     if: needs.scope.outputs.run == 'true'
     runs-on: ubuntu-latest
+    # Each job's timeout is about 3x its slowest green run, so a hung test fails
+    # `gate` instead of holding it pending for GitHub's 6-hour default (#796's
+    # `cargo test` hung for hours with nothing to stop it).
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
+      # First, and before anything is installed: Claude sign-in, Claude credential
+      # reads and Claude plan limits must not come back (Anthropic's third-party rules).
+      - name: Claude compliance check
+        run: node scripts/check-claude-compliance.mjs
       - run: npm ci
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
@@ -133,6 +141,7 @@ jobs:
       matrix:
         os: ${{ fromJSON(needs.scope.outputs.daemon_os) }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -165,6 +174,7 @@ jobs:
       matrix:
         os: ${{ fromJSON(needs.scope.outputs.capture_os) }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -223,6 +233,7 @@ jobs:
     needs: scope
     if: needs.scope.outputs.run == 'true' && needs.scope.outputs.perf == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7

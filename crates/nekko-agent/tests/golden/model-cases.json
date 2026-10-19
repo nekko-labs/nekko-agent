@@ -186,7 +186,7 @@
     }
   },
   {
-    "name": "anthropic-sub-live",
+    "name": "anthropic-sub-no-catalog",
     "provider": "anthropic-sub",
     "responses": {
       "https://api.anthropic.com/v1/models?limit=1000": {
@@ -202,7 +202,7 @@
   },
   {
     "name": "anthropic-401-falls-back",
-    "provider": "anthropic-sub",
+    "provider": "anthropic",
     "responses": {
       "https://api.anthropic.com/v1/models?limit=1000": {
         "status": 401,

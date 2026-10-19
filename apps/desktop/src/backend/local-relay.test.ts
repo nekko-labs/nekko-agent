@@ -95,6 +95,14 @@ describe('LocalRelay', () => {
     expect(JSON.parse(readFileSync(stateFile, 'utf8'))).toEqual({ enabled: false, port: 4400 });
   });
 
+  it('learns the MagicDNS name before it starts, so the default address is the name (TS-1)', async () => {
+    const { relay, spawned } = setup();
+    expect(relay.status().url).toBe('ws://100.101.102.103:4400');
+    await expect.poll(() => relay.status().url, { timeout: 2000 }).toBe('ws://mac.tail1234.ts.net:4400');
+    expect(relay.status()).toMatchObject({ running: false, enabled: false, tailnetName: 'mac.tail1234.ts.net' });
+    expect(spawned).toEqual([]);
+  });
+
   it('says Tailscale is off instead of binding anywhere else, and starts when it comes up', async () => {
     const { relay, spawned, setIfaces } = setup({ ip: '' });
     const s = await relay.start();

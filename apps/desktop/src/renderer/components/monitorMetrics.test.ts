@@ -39,16 +39,11 @@ it('ranges every budget detail, excludes future days and never falls back to lif
   });
   expect(budgetRange({ daily: [{ date: '2026-10-08', input: 1, output: 1, cost: 1 }], avoidedCosts: { local: 999 } } as UsageSummary, 'today', now)).toMatchObject({ localTokens: null, avoidedCosts: null, bySessionCost: null });
 });
-it('prefers anthropic Claude subscription entries regardless of order without modifying configs', () => {
-  const native = { id: 'native', enabled: true, kind: 'anthropic', auth: 'subscription', tokenKey: 'claude:a' } as ProviderConfig;
-  const harness = { ...native, id: 'harness', kind: 'openai-compat' } as ProviderConfig;
-  const other = { ...harness, id: 'other', tokenKey: 'claude:b' };
-  const api = { ...native, id: 'api', auth: 'apikey' } as ProviderConfig;
-  for (const pair of [[native, harness], [harness, native]]) {
-    const providers = [...pair, other, api];
-    expect(utilizationProviders(providers)).toEqual([native, other, api]);
-    expect(providers).toHaveLength(4);
-  }
-  expect(utilizationProviders([{ ...native, enabled: false }, harness])).toEqual([harness]);
-  expect(utilizationProviders([{ ...harness, tokenKey: undefined }, { ...native, tokenKey: undefined }])).toHaveLength(2);
+it('lists every enabled cloud provider once, in order, without modifying configs', () => {
+  const chatgpt = { id: 'chatgpt', enabled: true, kind: 'chatgpt', auth: 'subscription', tokenKey: 'chatgpt:a' } as ProviderConfig;
+  const api = { id: 'api', enabled: true, kind: 'anthropic', auth: 'apikey', apiKey: 'k' } as ProviderConfig;
+  const local = { id: 'ollama', enabled: true, kind: 'ollama' } as ProviderConfig;
+  const providers = [chatgpt, local, api, { ...api, id: 'off', enabled: false }];
+  expect(utilizationProviders(providers)).toEqual([chatgpt, api]);
+  expect(providers).toHaveLength(4);
 });

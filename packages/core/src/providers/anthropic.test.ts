@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import {
   AnthropicProvider,
+  CLAUDE_PLAN_REMOVED,
   learnOutputLimit,
   outputCapFor,
   outputLimitError,
@@ -65,7 +66,7 @@ async function runChat(
 
 afterEach(() => vi.restoreAllMocks());
 
-describe('AnthropicProvider subscription auth', () => {
+describe('AnthropicProvider auth', () => {
   it('sends x-api-key in API-key mode, unchanged', async () => {
     const { headers, body } = await runChat(apiKeyCfg, 'be terse');
     expect(headers['x-api-key']).toBe('sk-ant-test');
@@ -74,24 +75,11 @@ describe('AnthropicProvider subscription auth', () => {
     expect(body.system).toEqual([{ type: 'text', text: 'be terse', cache_control: { type: 'ephemeral' } }]);
   });
 
-  it('sends a Bearer token plus the oauth beta header in subscription mode', async () => {
-    const { headers } = await runChat(subCfg, 'be terse');
-    expect(headers.Authorization).toBe('Bearer oauth-access-token');
-    expect(headers['anthropic-beta']).toBe('oauth-2025-04-20');
-    expect(headers['x-api-key']).toBeUndefined();
-  });
-
-  it('prepends the Claude Code identity block ahead of the real system prompt', async () => {
-    const { body } = await runChat(subCfg, 'You are a coding agent.');
-    expect(Array.isArray(body.system)).toBe(true);
-    expect(body.system[0].text).toContain('Claude Code');
-    expect(body.system[1].text).toBe('You are a coding agent.');
-  });
-
-  it('still sends the required prefix when the request has no system prompt', async () => {
-    const { body } = await runChat(subCfg);
-    expect(body.system).toHaveLength(1);
-    expect(body.system[0].text).toContain('Claude Code');
+  it('refuses a Claude plan sign-in saved by an older build, sending nothing', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch');
+    const chat = new AnthropicProvider(subCfg).chat({ model: 'claude-sonnet-4-6', messages: [], system: 'be terse' });
+    await expect(chat[Symbol.asyncIterator]().next()).rejects.toThrow(CLAUDE_PLAN_REMOVED);
+    expect(spy).not.toHaveBeenCalled();
   });
 
   it('sends an effort level instead of a temperature on models that dropped sampling', async () => {
@@ -118,14 +106,8 @@ describe('AnthropicProvider subscription auth', () => {
     expect(body.output_config).toBeUndefined();
   });
 
-  it('test() reports subscription sign-in state', async () => {
-    expect(await new AnthropicProvider(subCfg).test()).toEqual({
-      ok: true,
-      message: 'Signed in with a Claude subscription',
-    });
-    const signedOut = await new AnthropicProvider({ ...subCfg, apiKey: undefined }).test();
-    expect(signedOut.ok).toBe(false);
-    expect(signedOut.message).toMatch(/sign in/i);
+  it('test() says a Claude plan sign-in no longer works', async () => {
+    expect(await new AnthropicProvider(subCfg).test()).toEqual({ ok: false, message: CLAUDE_PLAN_REMOVED });
   });
 });
 
@@ -133,6 +115,78 @@ describe('AnthropicProvider subscription auth', () => {
 function modelsResponse(data: unknown[], status = 200): Response {
   return new Response(JSON.stringify({ data, has_more: false }), { status });
 }
+
+describe('Claude in Amazon Bedrock', () => {
+  const bedrockCfg: ProviderConfig = {
+    id: 'b1',
+    kind: 'bedrock',
+    label: 'Bedrock',
+    baseUrl: 'https://bedrock-mantle.us-east-1.api.aws/anthropic',
+    apiKey: 'bedrock-token',
+    enabled: true,
+  };
+
+  it('serves the Bedrock list without asking for a Models API Bedrock does not have', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch');
+    const models = await new AnthropicProvider(bedrockCfg).listModels();
+    expect(spy).not.toHaveBeenCalled();
+    expect(models[0]).toMatchObject({ id: 'anthropic.claude-opus-5-5', providerId: 'b1', contextLength: 1_000_000 });
+    expect(models.every((m) => m.id.startsWith('anthropic.claude-'))).toBe(true);
+    expect(models.find((m) => m.id === 'anthropic.claude-haiku-4-5')?.contextLength).toBe(200_000);
+  });
+
+  it('says whether a Bedrock token is set', async () => {
+    expect(await new AnthropicProvider(bedrockCfg).test()).toEqual({ ok: true, message: 'Bedrock token set' });
+    expect((await new AnthropicProvider({ ...bedrockCfg, apiKey: undefined }).test()).ok).toBe(false);
+  });
+});
+
+describe('Claude on Vertex AI and in Foundry', () => {
+  const sse = () =>
+    new Response('event: message_stop\ndata: {"type":"message_stop"}\n\n', { status: 200, headers: { 'content-type': 'text/event-stream' } });
+  const cfg = (kind: ProviderConfig['kind'], baseUrl: string): ProviderConfig => ({
+    id: 'c1',
+    kind,
+    label: kind,
+    baseUrl,
+    apiKey: 'secret',
+    enabled: true,
+  });
+  const drain = async (it: AsyncIterable<unknown>) => {
+    for await (const _ of it) void _;
+  };
+
+  it('sends Vertex the model in the URL and the version in the body, on a Bearer token', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(sse());
+    const base = 'https://aiplatform.googleapis.com/v1/projects/p/locations/global';
+    await drain(new AnthropicProvider(cfg('vertex', base)).chat({ model: 'claude-opus-5-5', messages: [{ role: 'user', content: 'hi' }] } as never));
+    const [url, init] = spy.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe(`${base}/publishers/anthropic/models/claude-opus-5-5:streamRawPredict`);
+    const body = JSON.parse(String(init.body));
+    expect(body.model).toBeUndefined();
+    expect(body.anthropic_version).toBe('vertex-2023-10-16');
+    expect(init.headers).toEqual({ 'Content-Type': 'application/json', Authorization: 'Bearer secret' });
+  });
+
+  it('sends Foundry the first-party shape on its own host', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(sse());
+    const base = 'https://res.services.ai.azure.com/anthropic';
+    await drain(new AnthropicProvider(cfg('foundry', base)).chat({ model: 'claude-opus-5-5', messages: [{ role: 'user', content: 'hi' }] } as never));
+    const [url, init] = spy.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe(`${base}/v1/messages`);
+    expect(JSON.parse(String(init.body)).model).toBe('claude-opus-5-5');
+    expect((init.headers as Record<string, string>)['x-api-key']).toBe('secret');
+  });
+
+  it('lists each platform\'s own models without a catalog call', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch');
+    const vertex = (await new AnthropicProvider(cfg('vertex', 'https://x')).listModels()).map((m) => m.id);
+    const foundry = (await new AnthropicProvider(cfg('foundry', 'https://x')).listModels()).map((m) => m.id);
+    expect(spy).not.toHaveBeenCalled();
+    expect(vertex).toContain('claude-haiku-4-5@20251001');
+    expect(foundry).toContain('claude-haiku-4-5');
+  });
+});
 
 describe('the live Claude catalog', () => {
   const live = [
@@ -187,14 +241,11 @@ describe('the live Claude catalog', () => {
     ]);
   });
 
-  it('asks with the subscription token in subscription mode', async () => {
+  it('never asks with a Claude plan sign-in, serving the shipped list', async () => {
     const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(modelsResponse(live));
     const models = await new AnthropicProvider(subCfg).listModels();
-    expect(models[0].id).toBe('claude-opus-6');
-    const headers = (spy.mock.calls[0] as unknown as [string, RequestInit])[1].headers as Record<string, string>;
-    expect(headers.Authorization).toBe('Bearer oauth-access-token');
-    expect(headers['anthropic-beta']).toBe('oauth-2025-04-20');
-    expect(headers['x-api-key']).toBeUndefined();
+    expect(spy).not.toHaveBeenCalled();
+    expect(models.map((m) => m.id)).toContain('claude-opus-5-5');
   });
 
   it('gives up after 5 seconds and serves the shipped list', async () => {
