@@ -183,7 +183,7 @@ jobs:
           cache: npm
       - run: npm ci
       - uses: dtolnay/rust-toolchain@stable
-      - name: Cache pinned native browser dependencies and release build
+      - name: Cache pinned native browser dependencies and build
         uses: actions/cache@v5
         with:
           path: |
@@ -191,9 +191,15 @@ jobs:
             ~/.cargo/git
             .scratch/agent-browser-native/cli/target
           key: native-browser-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('vendor/agent-browser/pin.json', 'vendor/agent-browser/stdio.patch', 'vendor/agent-browser/main.rs', 'scripts/build-agent-browser.mjs') }}
-      # Always verify the source pin/patch and run Cargo --locked, even on cache hits.
+      # Always verify the source pin/patch and run Cargo --locked, even on cache hits
+      # (a fresh checkout has no shared binary cache). `--dev` skips fat LTO, which
+      # tests do not need; -Dwarnings keeps the maintained patch warning-free on
+      # Windows, the platform it is verified on (dependencies are capped by Cargo,
+      # so it only checks agent-browser itself).
       - name: Build and stage pinned native browser
-        run: node scripts/build-agent-browser.mjs
+        run: node scripts/build-agent-browser.mjs --dev
+        env:
+          RUSTFLAGS: ${{ runner.os == 'Windows' && '-Dwarnings' || '' }}
       # shared + core + host take 2-4 s here; waiting on another job's artifact would cost more.
       - run: npm run build:core
       - run: npm run build -w @nekko-agent/host
