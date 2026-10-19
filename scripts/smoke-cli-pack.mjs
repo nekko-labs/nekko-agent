@@ -72,7 +72,7 @@ try {
     throw new Error('Published package identity must be nekko-agent.');
   }
   const packedDist = readdirSync(join(unpacked, 'dist')).sort();
-  const expectedDist = ['backend.js', 'engine.js', 'index.d.ts', 'index.js', 'run.d.ts', 'run.js'];
+  const expectedDist = ['engine.js', 'index.d.ts', 'index.js', 'run.d.ts', 'run.js'];
   if (JSON.stringify(packedDist) !== JSON.stringify(expectedDist)) {
     throw new Error(`Packed package contains unexpected dist files: ${packedDist.join(', ')}`);
   }

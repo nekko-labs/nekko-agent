@@ -249,3 +249,83 @@ async fn spawn_agent_refuses_what_prepare_sub_agent_refuses() {
     drop(d);
     let _ = std::fs::remove_dir_all(&data);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_chat_that_runs_out_of_context_is_compacted_and_carried_on() {
+    let data = std::env::temp_dir().join(format!("nekkod-backendless-ac-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    let workspace = data.join("project");
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    std::fs::create_dir_all(&workspace).unwrap();
+    let chat = json!({
+        "id": "s_full", "title": "Full", "workspaceId": "w1", "providerId": "p1", "modelId": "synthetic",
+        "messages": [
+            { "id": "m1", "role": "user", "content": "start the long task", "createdAt": 1 },
+            { "id": "m2", "role": "assistant", "content": "working on it", "createdAt": 2 },
+        ],
+        "createdAt": 1, "updatedAt": 2,
+    });
+    std::fs::write(data.join("sessions/s_full.json"), chat.to_string()).unwrap();
+    // The reply overflows; the compaction's summary; then the continued reply.
+    let model = scripted_model(vec![
+        http_error(400, "This model's maximum context length is 8192 tokens"),
+        say_text("Summary: the long task is half done."),
+        say_text("carried on"),
+    ])
+    .await;
+    let settings = json!({
+        "providers": [{ "id": "p1", "kind": "openai-compat", "label": "Scripted", "enabled": true, "baseUrl": format!("http://127.0.0.1:{}/v1", model.port) }],
+        "workspaces": [{ "id": "w1", "name": "project", "path": workspace.to_string_lossy() }],
+        "defaultChatMode": "yolo", "defaultProviderId": "p1", "defaultModelId": "synthetic",
+    });
+    std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
+    let d = start_with(false, Some(&data));
+
+    let opts = json!({ "sessionId": "s_full", "providerId": "p1", "modelId": "synthetic", "text": "keep going" });
+    post(d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
+    let saved = until("the chat to be compacted and carried on", Duration::from_secs(30), || async {
+        let text = std::fs::read_to_string(data.join("sessions/s_full.json")).ok()?;
+        let s: Value = serde_json::from_str(&text).ok()?;
+        let last = s["messages"].as_array()?.last()?.clone();
+        (last["role"] == "assistant" && last["content"] == "carried on").then_some(s)
+    })
+    .await;
+    let messages = saved["messages"].as_array().unwrap();
+    assert!(messages.iter().any(|m| !m["compaction"].is_null()), "{saved}");
+    let nudge = &messages[messages.len() - 2];
+    assert_eq!(nudge["role"], "user");
+    assert!(nudge["content"].as_str().unwrap().starts_with("The conversation was compacted automatically"), "{nudge}");
+    drop(d);
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn reviews_a_repository_change_on_the_default_model_without_tools() {
+    let data = std::env::temp_dir().join(format!("nekkod-backendless-rr-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    let verdict = json!({ "verdict": "COMMENT", "reviewedHead": "abc123", "complete": true, "summary": "One nit." });
+    let model =
+        scripted_model(vec![say_text(&verdict.to_string()), call_tool("c1", "bash", json!({ "command": "rm -rf /" }))])
+            .await;
+    let settings = json!({
+        "providers": [{ "id": "p1", "kind": "openai-compat", "label": "Scripted", "enabled": true, "baseUrl": format!("http://127.0.0.1:{}/v1", model.port) }],
+        "defaultProviderId": "p1", "defaultModelId": "synthetic",
+    });
+    std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
+    let d = start_with(false, Some(&data));
+    let input = json!({ "head": "abc123", "prompt": "focus on safety", "title": "t", "description": "d", "files": [{ "filename": "a.rs", "status": "modified", "patch": "+x" }] });
+    let (status, body) = post(d.port, "repository:review", json!([input.clone()]), Some(TOKEN)).await;
+    assert_eq!((status, body), (200, verdict));
+    // The model saw the policy and the review data, and no tools.
+    let sent = model.requests.lock().unwrap()[0].clone();
+    assert!(
+        sent["messages"][0]["content"].as_str().unwrap().starts_with("You are performing a read-only code review"),
+        "{sent}"
+    );
+    assert!(sent.get("tools").is_none(), "{sent}");
+    let (status, body) = post(d.port, "repository:review", json!([input]), Some(TOKEN)).await;
+    assert_eq!((status >= 400, body["error"].clone()), (true, json!("Review attempted tool use")));
+    drop(d);
+    let _ = std::fs::remove_dir_all(&data);
+}

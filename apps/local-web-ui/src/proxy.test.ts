@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -52,40 +52,22 @@ const here = dirname(fileURLToPath(import.meta.url));
 const real = findNekkod({ here: resolve(here, '../dist') });
 
 describe.skipIf(!real)('DaemonProcess against the real nekkod', () => {
-  /** A stand-in TS backend: answers every channel with its name and pid. */
-  const fakeBackend = (dir: string) => {
-    const script = join(dir, 'backend.mjs');
-    writeFileSync(
-      script,
-      `import { createServer } from 'node:http';
-const token = process.env.NEKKO_BACKEND_TOKEN;
-const server = createServer((req, res) => {
-  if (req.headers.authorization !== 'Bearer ' + token) { res.writeHead(401); return res.end('{}'); }
-  let body = ''; req.on('data', (c) => (body += c)); req.on('end', () => {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ channel: req.url.slice(5), pid: process.pid, args: JSON.parse(body || '{}').args ?? [] }));
-  });
-});
-server.on('upgrade', (req, socket) => socket.destroy());
-server.listen(0, '127.0.0.1', () => process.stdout.write('NEKKO_BACKEND_READY ' + JSON.stringify({ port: server.address().port }) + '\\n'));
-process.stdin.on('end', () => process.exit(0)); process.stdin.resume();
-`,
-    );
-    return { exe: process.execPath, args: [script], env: {} };
-  };
-
-  it('forwards calls to its backend, comes back after a crash, and stops cleanly', async () => {
+  it('answers calls itself, comes back after a crash, and stops cleanly', async () => {
     const dir = scratch();
-    const daemon = new DaemonProcess({ exe: real!.path, dataDir: dir, backend: fakeBackend(dir), log: () => {} });
+    const daemon = new DaemonProcess({ exe: real!.path, dataDir: dir, autoStartEngine: false, log: () => {} });
     daemon.start();
     try {
       const up = await daemon.endpoint(20_000);
-      const res = await forwardCall(up, 'x:echo', JSON.stringify({ args: [1, 'two'] }));
+      const res = await forwardCall(up, 'workspace:list', JSON.stringify({ args: [] }));
       expect(res.status).toBe(200);
-      expect(JSON.parse(res.body)).toMatchObject({ channel: 'x:echo', args: [1, 'two'] });
+      expect(JSON.parse(res.body)).toEqual([]);
+      // No TS backend behind it: a channel nothing serves is unknown.
+      const unknown = await forwardCall(up, 'x:echo', JSON.stringify({ args: [1, 'two'] }));
+      expect(unknown.status).toBeGreaterThanOrEqual(400);
+      expect(JSON.parse(unknown.body)).toEqual({ error: 'unknown channel x:echo' });
 
-      // A wrong token never reaches the backend.
-      const refused = await forwardCall({ port: up.port, token: 'not-the-token-0123456789' }, 'x:echo', '{}');
+      // A wrong token is refused.
+      const refused = await forwardCall({ port: up.port, token: 'not-the-token-0123456789' }, 'workspace:list', '{}');
       expect(refused.status).toBe(401);
 
       const firstPid = daemon.pid!;
@@ -94,7 +76,7 @@ process.stdin.on('end', () => process.exit(0)); process.stdin.resume();
       const again = await daemon.endpoint(20_000);
       expect(daemon.pid).not.toBe(firstPid);
       expect(daemon.restarts).toBe(1);
-      expect((await forwardCall(again, 'x:echo', '{}')).status).toBe(200);
+      expect((await forwardCall(again, 'workspace:list', '{}')).status).toBe(200);
     } finally {
       await daemon.stop();
     }

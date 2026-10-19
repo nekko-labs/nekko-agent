@@ -8,6 +8,7 @@ mod accounts;
 mod admission;
 mod agent_logs;
 mod api_server;
+mod auto_continue;
 mod automation;
 mod backend;
 mod boot;
@@ -43,6 +44,7 @@ mod procgroup;
 mod providers;
 mod remote;
 mod remote_image;
+mod repository_review;
 mod resource_queue;
 mod routes;
 mod runtimes;
@@ -353,7 +355,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     // What a host used to do when it started, with no host to do it (boot.rs):
     // first, so no turn starts before the last run's leftovers are written off.
     if backend.is_none() {
-        boot::start(&ctx);
+        boot::start(&ctx, cfg.auto_start_engine);
     }
     automation.start();
     if let Some(n) = &ctx.native {

@@ -499,6 +499,10 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             if let Some(r) = crate::skill_sources::route(ctx, channel, &args).await {
                 return r;
             }
+            // The Local Web UI's GitHub review (repository_review.rs).
+            if channel == "repository:review" && ctx.settings.is_some() {
+                return crate::repository_review::review(ctx, arg(&args, 0)).await;
+            }
             // With no host, a channel nothing here serves does not exist.
             if ctx.backend.is_none() {
                 return Err(format!("unknown channel {channel}"));
@@ -648,6 +652,7 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
     }
     if ctx.settings.is_some() {
         all.extend_from_slice(crate::skill_sources::CHANNELS);
+        all.push("repository:review");
     }
     if ctx.resource_queue.is_some() {
         all.extend_from_slice(crate::resource_queue::CHANNELS);
