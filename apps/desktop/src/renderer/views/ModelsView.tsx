@@ -9,6 +9,7 @@ import { useStore } from '../store.js';
 import { Badge, Toggle } from '../components/primitives/index.js';
 import { SubscriptionSignIn } from '../components/SubscriptionSignIn.js';
 import { AddProvider, SUBSCRIPTION_KINDS, reconnectProviderConfig } from '../components/providers/AddProvider.js';
+import { ClaudeWhyLink } from '../components/claude/ClaudeAgent.js';
 import { PlusIcon, TrashIcon, CheckIcon, StarIcon } from '../icons.js';
 import { ContextMenu, ContextAction } from '../components/ContextMenu.js';
 import { RuntimeCard } from '../components/runtimes/RuntimeCard.js';
@@ -60,6 +61,15 @@ export function ModelsView() {
   // Keep this flow mounted through saving so its completion step does not disappear.
   const [firstSetup] = useState(() => needsProviderSetup(providers, useStore.getState().activeModelId ?? useStore.getState().models[0]?.id));
   const [adding, setAdding] = useState(false);
+  // A notice action ("Connect Claude Agent", "Add API key") opens the form on a kind.
+  const [addKind, setAddKind] = useState<ProviderKind | undefined>();
+  const requestedKind = useStore((s) => s.addProviderKind);
+  useEffect(() => {
+    if (!requestedKind) return;
+    setAddKind(requestedKind);
+    setAdding(true);
+    useStore.setState({ addProviderKind: null });
+  }, [requestedKind]);
   const [discovering, setDiscovering] = useState(false);
 
   useEffect(() => {
@@ -101,13 +111,13 @@ export function ModelsView() {
             <button className="btn btn-outline" onClick={discover} disabled={discovering}>
               {discovering ? 'Scanning…' : 'Auto-discover local'}
             </button>
-            <button className="btn btn-primary" onClick={() => setAdding((v) => !v)}>
+            <button className="btn btn-primary" onClick={() => { setAddKind(undefined); setAdding((v) => !v); }}>
               <PlusIcon /> Add provider
             </button>
           </div>
         </div>
 
-        {adding && <AddProvider onDone={() => { setAdding(false); refreshProviders(); }} />}
+        {adding && <AddProvider key={addKind ?? 'any'} initialKind={addKind} onDone={() => { setAdding(false); setAddKind(undefined); refreshProviders(); }} />}
 
         <ProviderSections
           groups={[
@@ -333,7 +343,7 @@ function RetiredClaudePlan({ provider, onChanged }: { provider: ProviderConfig; 
     <div className="mt-3 space-y-2 rounded-xl border p-3 text-[12px]" style={{ borderColor: 'var(--line)' }}>
       <p className="text-ink-soft">
         Nekko Agent no longer signs in to Claude plans, so this card is turned off and its saved Claude sign-in was deleted.
-        Add an Anthropic API key to keep using it, billed per token to your Anthropic account.
+        Add an Anthropic API key to keep using it, billed per token to your Anthropic account, or keep using your plan through Claude Agent, which runs your installed Claude Code.
       </p>
       <div className="flex gap-2">
         <input
@@ -349,6 +359,10 @@ function RetiredClaudePlan({ provider, onChanged }: { provider: ProviderConfig; 
         </button>
       </div>
       {error && <p style={{ color: 'var(--danger)' }}>{error}</p>}
+      <div className="flex flex-wrap items-center gap-2">
+        <button className="btn btn-outline py-1.5 text-[12px]" onClick={() => useStore.getState().openAddProvider('claude-code')}>Use Claude Agent instead</button>
+        <ClaudeWhyLink label="What works with a Claude plan?" />
+      </div>
     </div>
   );
 }

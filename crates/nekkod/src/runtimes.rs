@@ -1,10 +1,9 @@
 //! The runtime control plane and the Models page's server calls, served from
 //! the daemon (`nekko-engine::runtimes`): `runtime:*`, `model:pull/load/unload`,
-//! `lms:probe` and `server:stop`. The engine itself still runs in the TS host,
-//! so its adapter asks the host (`engine:runtime`); the daemon is the only
-//! writer of `runtime-calibration.json` and owns the servers it starts.
+//! `lms:probe` and `server:stop`, over the daemon's own library, installers
+//! and model server. The daemon is the only writer of
+//! `runtime-calibration.json` and owns the servers it starts.
 
-use crate::backend::Backend;
 use nekko_engine::BoxFuture;
 use nekko_engine::runtimes::{HostEngine, Probes, Runtimes, SystemIo};
 use serde_json::{Value, json};
@@ -25,28 +24,27 @@ pub const CHANNELS: &[&str] = &[
     "server:stop",
 ];
 
-/// The engine's host side, except the model list (the daemon's library) and
-/// the install state (the daemon's installers).
-struct BackendEngine(
-    Arc<Backend>,
+/// The engine's side: the model list (the daemon's library), the install
+/// state (its installers) and the model server.
+struct DaemonEngine(
     Option<Arc<crate::library::Library>>,
     Option<Arc<crate::installs::Installs>>,
     Option<Arc<crate::model_server::Server>>,
 );
 
-impl HostEngine for BackendEngine {
+impl HostEngine for DaemonEngine {
     fn call(&self, method: &'static str, args: Vec<Value>) -> BoxFuture<Result<Value, String>> {
         if method == "models"
-            && let Some(library) = self.1.clone()
+            && let Some(library) = self.0.clone()
         {
             return Box::pin(async move { library.models().await });
         }
         if method == "detectEngine"
-            && let Some(installs) = self.2.clone()
+            && let Some(installs) = self.1.clone()
         {
             return Box::pin(async move { Ok(installs.detect("llama").await) });
         }
-        if let Some(server) = self.3.clone() {
+        if let Some(server) = self.2.clone() {
             let arg = |i: usize| args.get(i).cloned().unwrap_or(Value::Null);
             let (first, second) = (arg(0), arg(1));
             match method {
@@ -65,10 +63,7 @@ impl HostEngine for BackendEngine {
                 _ => {}
             }
         }
-        let backend = self.0.clone();
-        let mut all = vec![json!(method)];
-        all.extend(args);
-        Box::pin(async move { backend.call("engine:runtime", Value::Array(all)).await })
+        Box::pin(async move { Err(format!("engine:{method}: no model server runs here")) })
     }
 }
 
@@ -88,7 +83,6 @@ impl Probes for MachineProbes {
 /// The control plane over the daemon's settings store (the providers list).
 pub fn new(
     settings: &crate::settings::Settings,
-    backend: Arc<Backend>,
     machine: Arc<nekko_machine::Machine>,
     library: Option<Arc<crate::library::Library>>,
     installs: Option<Arc<crate::installs::Installs>>,
@@ -99,7 +93,7 @@ pub fn new(
     let providers = move || store.get().get("providers").cloned().unwrap_or(Value::Null);
     Arc::new(Runtimes::new(
         Arc::new(SystemIo(reqwest::Client::new())),
-        Arc::new(BackendEngine(backend, library, installs, server)),
+        Arc::new(DaemonEngine(library, installs, server)),
         Arc::new(MachineProbes(machine)),
         Box::new(providers),
         data_dir,

@@ -7,15 +7,12 @@
 //! is sent only the summary and what follows it. What is summarized, the
 //! prompt, the passes and the edit are `nekko_turn::variants`, held to the TS
 //! by the golden set; here are the job per chat, its progress (`compaction`
-//! events, to the UI and through `turn:notify` to the host, which follows
-//! them), the summary calls on the Rust providers (four-minute limit each,
+//! events, to the UI), the summary calls on the Rust providers (four-minute limit each,
 //! usage written to the usage log, a subscription's limits polled after
 //! each), Stop, and the write.
 //!
 //! The daemon is the owner of compaction state: admission reads
-//! [`Compactions::is_compacting`], and the host is told through
-//! `NEKKOD_OWNS=compaction` to send its own calls (the auto-continue after a
-//! context overflow, the local API) here.
+//! [`Compactions::is_compacting`].
 
 use crate::routes::Ctx;
 use nekko_agent::http::AbortController;
@@ -29,8 +26,6 @@ use std::time::Duration;
 use tokio::sync::watch;
 
 pub const CHANNELS: &[&str] = &["chat:compact", "chat:cancelCompaction"];
-/// What the backend is told the daemon owns (`NEKKOD_OWNS`).
-pub const OWNS: &str = "compaction";
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
@@ -57,9 +52,6 @@ struct Job {
     progress: Mutex<serde_json::Map<String, Value>>,
     /// How it ended: the chat the summary landed in, or the error.
     done: watch::Receiver<Option<Result<Value, String>>>,
-    /// The last `turn:notify` sent: each waits for the one before, so the
-    /// host hears the progress in the order it happened.
-    notified: Mutex<Option<tokio::task::JoinHandle<()>>>,
 }
 
 #[derive(Default)]
@@ -126,7 +118,7 @@ impl Compactions {
             }
             return Ok(Started::Running(running));
         }
-        if crate::routes::running_chats(ctx).await.iter().any(|s| s == session_id)
+        if crate::routes::running_chats(ctx).iter().any(|s| s == session_id)
             || ctx.admission.as_ref().is_some_and(|a| a.is_admitting(session_id))
         {
             return Err("Wait for the current reply to finish before compacting.".into());
@@ -160,7 +152,6 @@ impl Compactions {
             cancelled: Arc::default(),
             progress: Mutex::new(progress),
             done: rx,
-            notified: Mutex::new(None),
         });
         {
             let mut jobs = lock(&self.jobs);
@@ -206,27 +197,15 @@ enum Started {
     New(Arc<Job>),
 }
 
-/// `report(sessionId, job, patch)`: update the progress and tell the UI and the host.
+/// `report(sessionId, job, patch)`: update the progress and tell the UI.
 fn report(ctx: &Ctx, session_id: &str, job: &Job, patch: &[(&str, Value)]) {
-    // Held throughout, so two reports reach the UI and the host in one order.
-    let mut notified = lock(&job.notified);
-    let progress = {
-        let mut p = lock(&job.progress);
-        for (k, val) in patch {
-            p.insert((*k).to_string(), val.clone());
-        }
-        Value::Object(p.clone())
-    };
-    let event = json!({ "type": "compaction", "sessionId": session_id, "progress": progress });
-    ctx.hub.publish("agent:event", event.clone(), false);
-    let backend = ctx.backend.clone();
-    let before = notified.take();
-    *notified = Some(tokio::spawn(async move {
-        if let Some(before) = before {
-            let _ = before.await;
-        }
-        let _ = backend.call("turn:notify", json!([event])).await;
-    }));
+    // Held throughout, so two reports reach the UI in one order.
+    let mut p = lock(&job.progress);
+    for (k, val) in patch {
+        p.insert((*k).to_string(), val.clone());
+    }
+    let event = json!({ "type": "compaction", "sessionId": session_id, "progress": Value::Object(p.clone()) });
+    ctx.hub.publish("agent:event", event, false);
 }
 
 /// `run(session, job)`: summarize, then land the summary.

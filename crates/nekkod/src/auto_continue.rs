@@ -205,7 +205,7 @@ impl Deps for Daemon {
             let ctx = &self.0;
             ctx.compactions.is_compacting(&id)
                 || ctx.admission.as_ref().is_some_and(|a| a.is_admitting(&id))
-                || crate::routes::running_chats(ctx).await.contains(&id)
+                || crate::routes::running_chats(ctx).contains(&id)
         })
     }
     fn context_window(&self, provider_id: &str, model_id: &str) -> u64 {

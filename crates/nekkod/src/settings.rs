@@ -1,50 +1,28 @@
 //! `settings.json`: the daemon is its single writer (`nekko-settings`).
 //!
-//! The UI's `settings:get/update/reset` are served here. The TS host keeps a
-//! cached copy for its own services and sends its writes here
-//! (`settings:save`, `settings:resetHost`) instead of touching the file; the
-//! backend learns that it must from `NEKKOD_OWNS=settings` in its
-//! environment. After a write the UI asked for, the host hears it
-//! (`settings:changed` with the new settings and the patch) so its cache
-//! follows and it runs what `updateSettings` used to (stopping voice when the
-//! voice settings change, re-reading the messaging config). Daemon services
+//! The UI's `settings:get/update/reset` are served here. Daemon services
 //! read with [`current`] and write with [`update`].
 
 use crate::routes::Ctx;
 use nekko_settings::SettingsStore;
 use serde_json::{Value, json};
 use std::sync::Arc;
-use tokio::sync::mpsc;
 
 /// The channels served here while the daemon knows the data directory.
-pub const CHANNELS: &[&str] =
-    &["settings:get", "settings:update", "settings:reset", "settings:save", "settings:resetHost"];
+pub const CHANNELS: &[&str] = &["settings:get", "settings:update", "settings:reset"];
 
-/// What the backend is told the daemon owns (`NEKKOD_OWNS`).
-pub const OWNS: &str = "settings";
-
-/// The settings store and the queue that tells the host about changes, in
-/// the order they were saved.
+/// The settings store, and the hub a change is announced on.
 pub struct Settings {
     pub store: Arc<SettingsStore>,
-    notify: mpsc::UnboundedSender<Value>,
     hub: crate::hub::Hub,
 }
 
 impl Settings {
-    pub fn new(dir: std::path::PathBuf, backend: Arc<crate::backend::Backend>, hub: crate::hub::Hub) -> Arc<Self> {
-        let (notify, mut rx) = mpsc::unbounded_channel::<Value>();
-        tokio::spawn(async move {
-            while let Some(args) = rx.recv().await {
-                // A backend that is down catches up from the file when it starts.
-                let _ = backend.call("settings:changed", args).await;
-            }
-        });
-        Arc::new(Settings { store: Arc::new(SettingsStore::new(dir)), notify, hub })
+    pub fn new(dir: std::path::PathBuf, hub: crate::hub::Hub) -> Arc<Self> {
+        Arc::new(Settings { store: Arc::new(SettingsStore::new(dir)), hub })
     }
 
     fn changed(&self, settings: &Value, patch: &Value) {
-        let _ = self.notify.send(json!([settings, patch]));
         // A paired phone mirrors the desktop's look; it hears the public part only.
         if touches_appearance(patch) {
             self.hub.publish(APPEARANCE_UPDATED, appearance_of(settings), false);
@@ -113,34 +91,21 @@ pub async fn route(s: &Arc<Settings>, channel: &str, args: &[Value]) -> Result<V
             s.changed(&next, &Value::Null);
             Ok(next)
         }
-        // The host's own writes: it already applied them to its copy.
-        "settings:save" => blocking(move || store.update(&patch)).await?,
-        "settings:resetHost" => blocking(move || store.reset()).await?,
         _ => Err(format!("unknown channel {channel}")),
     }
 }
 
-/// The current settings: the daemon's when it owns them, else the host's
-/// (`settings:get`), else `null` when the host does not answer in time.
+/// The current settings, or `null` without a data directory.
 pub async fn current(ctx: &Ctx) -> Value {
-    if let Some(s) = &ctx.settings {
-        let store = s.store.clone();
-        return blocking(move || store.get()).await.unwrap_or(Value::Null);
-    }
-    match tokio::time::timeout(crate::routes::AUX_WAIT, ctx.backend.call("settings:get", json!([]))).await {
-        Ok(Ok(v)) => v,
-        _ => Value::Null,
-    }
+    let Some(s) = &ctx.settings else { return Value::Null };
+    let store = s.store.clone();
+    blocking(move || store.get()).await.unwrap_or(Value::Null)
 }
 
-/// Save a patch as `saveSettings` would, from a daemon service, and tell the
-/// host. Without a data directory the host saves it.
-#[allow(dead_code)]
+/// Save a patch as `saveSettings` would, from a daemon service.
 pub async fn update(ctx: &Ctx, patch: Value) -> Result<Value, String> {
-    match &ctx.settings {
-        Some(s) => route(s, "settings:update", &[patch]).await,
-        None => ctx.backend.call("settings:update", json!([patch])).await,
-    }
+    let s = ctx.settings.as_ref().ok_or("settings need the daemon to know the data directory")?;
+    route(s, "settings:update", &[patch]).await
 }
 
 #[cfg(test)]
@@ -174,9 +139,8 @@ mod tests {
     async fn a_theme_change_reaches_the_hub_with_the_public_look_only() {
         let hub = crate::hub::Hub::new();
         let mut rx = hub.subscribe();
-        let (notify, _keep) = mpsc::unbounded_channel();
         let dir = std::env::temp_dir().join(format!("nekkod-appearance-{}", std::process::id()));
-        let s = Arc::new(Settings { store: Arc::new(SettingsStore::new(dir.clone())), notify, hub });
+        let s = Settings::new(dir.clone(), hub);
         route(&s, "settings:update", &[json!({ "theme": "dark", "accent": "#FB923C" })]).await.unwrap();
         let ev = rx.recv().await.unwrap();
         let v: Value = serde_json::from_str(&ev.text).unwrap();

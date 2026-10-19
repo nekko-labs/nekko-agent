@@ -30,9 +30,6 @@ pub const CHANNELS: &[&str] = &[
     "oauth:fresh",
 ];
 
-/// What the backend is told the daemon owns (`NEKKOD_OWNS`).
-pub const OWNS: &str = "tokens";
-
 /// The Local Web UI's answer to the sign-in channels (web-channels.ts).
 const UNSUPPORTED: &str = "OAuth sign-in is only available in the desktop app.";
 
@@ -529,9 +526,8 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("nekkod-oauth-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let backend = crate::backend::Backend::disabled();
         let hub = Hub::new();
-        let accounts = Arc::new(crate::accounts::Accounts::new(Some(dir.clone()), backend, hub.clone()));
+        let accounts = Arc::new(crate::accounts::Accounts::new(Some(dir.clone()), hub.clone()));
         let settings = Arc::new(nekko_settings::SettingsStore::new(&dir));
         (OAuth::new(dir.clone(), settings, accounts, hub, true, endpoints), dir)
     }

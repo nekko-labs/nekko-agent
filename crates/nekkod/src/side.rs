@@ -104,9 +104,6 @@ async fn complete(
         let who = json!({ "id": resolved.get("id"), "kind": resolved.get("kind"), "auth": resolved.get("auth") });
         if ctx.accounts.enabled() {
             ctx.accounts.side_usage(&who, model_id.as_ref(), session_id, usage);
-        } else {
-            let record = json!({ "provider": who, "modelId": model_id, "sessionId": session_id, "usage": usage });
-            let _ = ctx.backend.call("turn:usage", json!([record])).await;
         }
     }
     if out.get("error").is_some() {

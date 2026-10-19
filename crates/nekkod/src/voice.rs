@@ -12,9 +12,6 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::Notify;
 
-/// What the backend is told the daemon owns (`NEKKOD_OWNS`): `<data>/voice` and its speech server.
-pub const OWNS: &str = "voice";
-
 pub const CHANNELS: &[&str] =
     &["voice:status", "voice:install", "voice:cancel", "voice:uninstall", "voice:transcribe", "voice:stop"];
 

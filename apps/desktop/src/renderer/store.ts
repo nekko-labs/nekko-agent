@@ -1,7 +1,7 @@
 import { confirmDeletion } from './components/DeleteConfirmation.js';
 import { needsProviderSetup } from './components/providers/providerSetup.js';
 import { create } from 'zustand';
-import type { AppSettings, Session, SessionSummary, ProviderConfig, ModelInfo, TerminalInfo, InstalledSkillRecord, SkillDef, PrInfo, HypergateInfo } from '@nekko-agent/shared';
+import type { AppSettings, Session, SessionSummary, ProviderConfig, ProviderKind, ModelInfo, TerminalInfo, InstalledSkillRecord, SkillDef, PrInfo, HypergateInfo } from '@nekko-agent/shared';
 import { AUTO_COMPLETE_CHOICES, agentsToAutoComplete, autoCompleteDays, DEFAULT_IMAGE_CHAT_PARAMS, isArchived, getMarketSkill, marketToSkillDef, normalizeInstallTarget, summarizeSession, THEME_PRESETS, currentPresetAccent } from '@nekko-agent/shared';
 import type { MascotMood } from './components/Mascot.js';
 import { syncTitleBarOverlay } from './chrome.js';
@@ -308,6 +308,9 @@ interface UiState {
   /** The "What works with a Claude plan?" sheet (components/claude/ClaudeAgent.tsx). */
   claudePlanSheet: boolean;
   setClaudePlanSheet: (open: boolean) => void;
+  /** A provider kind the Models page should open Add provider on (a notice's action), consumed once. */
+  addProviderKind: ProviderKind | null;
+  openAddProvider: (kind: ProviderKind) => void;
   /** Open a Nekko terminal running the user's `claude`, where they sign in with /login. */
   openClaudeCodeSignIn: () => Promise<void>;
   openChatPane: (sessionId: string) => void;
@@ -614,6 +617,7 @@ export const useStore = create<UiState>((set, get) => ({
   mascotMood: 'waving',
   toasts: [],
   claudePlanSheet: false,
+  addProviderKind: null,
   paletteOpen: false,
   activeProjectId: readLastFolder(),
   terminals: [],
@@ -911,6 +915,10 @@ export const useStore = create<UiState>((set, get) => ({
   },
 
   setClaudePlanSheet: (open) => set({ claudePlanSheet: open }),
+  openAddProvider: (kind) => {
+    get().setView('models');
+    set({ addProviderKind: kind });
+  },
 
   // Sign-in stays inside Claude Code: this only starts `claude` in a terminal
   // the user can see and type into; Nekko never touches the login itself.

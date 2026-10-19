@@ -23,6 +23,7 @@ import { ResourceHud } from './components/ResourceMonitor.js';
 import { Toasts } from './components/Toasts.js';
 import { CommandPalette } from './components/CommandPalette.js';
 import { UpdateBanner } from './components/UpdateBanner.js';
+import { AppNotices } from './components/AppNotices.js';
 import { RelayPairing } from './components/RelayPairing.js';
 import { DeepLinkListener } from './components/DeepLink.js';
 import { WorkspacesView } from './views/WorkspacesView.js';
@@ -383,6 +384,7 @@ export function App() {
       {settings?.themePreset === 'autumn' && <AutumnBackground />}
       {(settings?.themePreset === 'lilac' || settings?.themePreset === 'lavender') && <PixelWaveBackground variant={settings?.themePreset === 'lavender' ? 'lavender' : 'lilac'} />}
       <ErrorBoundary label="Updates"><UpdateBanner /></ErrorBoundary>
+      <ErrorBoundary label="Notices"><AppNotices /></ErrorBoundary>
       <ErrorBoundary label="Pairing"><RelayPairing /></ErrorBoundary>
       {view !== 'command' && <ErrorBoundary label="Resource monitor"><ResourceHud /></ErrorBoundary>}
       <ErrorBoundary label="Nekko"><Mascot mood={mascotMood} enabled={settings?.mascotEnabled ?? true} wizardHat={settings?.themePreset === 'autumn'} /></ErrorBoundary>

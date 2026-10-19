@@ -6,7 +6,6 @@
 //! on the machine.
 
 use serde::Deserialize;
-use std::collections::BTreeMap;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -21,11 +20,8 @@ pub struct Config {
     /// handshake as `file://`.
     #[serde(default = "default_origins")]
     pub allowed_origins: Vec<String>,
-    /// The TS host that serves every channel not ported yet. Absent in tests
-    /// and in a daemon run on its own.
-    pub backend: Option<BackendCommand>,
     /// The user data directory, whose `sessions/` the daemon reads. Absent,
-    /// the session channels stay with the backend.
+    /// the channels that need it are not served.
     pub data_dir: Option<String>,
     /// Exit when stdin closes, so the daemon never outlives the app that
     /// started it (the parent holds our stdin open for its whole life).
@@ -113,17 +109,6 @@ pub struct BrowserBridge {
     pub token: String,
 }
 
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct BackendCommand {
-    pub exe: String,
-    #[serde(default)]
-    pub args: Vec<String>,
-    #[serde(default)]
-    pub env: BTreeMap<String, String>,
-    pub cwd: Option<String>,
-}
-
 fn default_listen() -> String {
     "127.0.0.1:0".into()
 }
@@ -173,6 +158,6 @@ mod tests {
         assert_eq!(cfg.listen, "127.0.0.1:0");
         assert_eq!(cfg.allowed_origins, vec!["null".to_string(), "file://".to_string()]);
         assert!(cfg.exit_on_stdin_close);
-        assert!(cfg.backend.is_none());
+        assert!(cfg.data_dir.is_none());
     }
 }
