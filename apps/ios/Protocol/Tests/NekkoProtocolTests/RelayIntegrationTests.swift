@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 import XCTest
 @testable import NekkoProtocol
 
@@ -17,6 +20,9 @@ final class RelayIntegrationTests: XCTestCase {
         let relay, room, key, pair: String
         let keyBytes: Data
     }
+
+    /// The phone testB enrolled, so later tests reconnect without a (single-use) code.
+    static var enrolled: String?
 
     static let env: Env? = {
         let e = ProcessInfo.processInfo.environment
@@ -70,6 +76,7 @@ final class RelayIntegrationTests: XCTestCase {
         let (c, r) = client(env, pair: env.pair, deviceId: deviceId)
         c.connect()
         await r.await(.online)
+        Self.enrolled = deviceId
 
         let rawInfo = try await c.call(Channels.appInfo)
         let info = AppInfo.from(rawInfo)
@@ -218,5 +225,66 @@ final class RelayIntegrationTests: XCTestCase {
         let s = await rr.await(.denied)
         XCTAssertTrue([.badCode, .kicked].contains(s?.denied))
         print("itest: spent code refused (\(s?.denied?.rawValue ?? "?"))")
+    }
+
+    /// IO-20: a pairing with two routes to one relay (the stack's route proxy
+    /// first, the relay itself second). Taking the first down moves the phone
+    /// to the second at once; bringing it back moves the phone back after the
+    /// probes and the dwell, with requests answered on each route.
+    func testD_FailsOverBetweenTwoRoutesAndComesBack() async throws {
+        guard let env = Self.env else { throw XCTSkip("set NEKKO_ITEST_* (apps/ios/scripts/itest.sh)") }
+        let e = ProcessInfo.processInfo.environment
+        guard let route = e["NEKKO_ITEST_ROUTE"], let ctl = e["NEKKO_ITEST_ROUTE_CTL"] else { throw XCTSkip("set NEKKO_ITEST_ROUTE(_CTL)") }
+        guard let device = Self.enrolled else { throw XCTSkip("needs testB's enrolled phone") }
+        let link = try XCTUnwrap(Pairing.parse("nekko-agent-pair:?relay=\(route)&room=\(env.room)&key=\(env.key)&alt=\(env.relay)"))
+        XCTAssertEqual(link.alts, [env.relay])
+        var cfg = RelayConfig(relayUrl: link.relayUrl, room: env.room, key: env.key, keyBytes: env.keyBytes, deviceId: device,
+                              deviceName: "iOS itest")
+        cfg.alternates = link.alts
+        cfg.requestTimeout = 30
+        var rules = RouteRules()
+        rules.openTimeout = 3
+        rules.probeInterval = 0.3
+        rules.failureCooldown = 1
+        rules.minDwell = 1
+        cfg.routeRules = rules
+        #if os(Linux)
+        let transport: WsTransport = SocketTransport()
+        #else
+        let transport: WsTransport = URLSessionTransport()
+        #endif
+        let c = RelayClient(config: cfg, transport: transport, prober: HealthProber())
+        let r = RelayClientTests.Recorder()
+        r.attach(c)
+        c.connect()
+        await r.await({ $0.state == .online && $0.route == route }, timeout: 15)
+        try await assertAnswers(c)
+
+        try await control(ctl, "down")
+        await r.await({ $0.state == .online && $0.route == env.relay }, timeout: 15)
+        try await assertAnswers(c)
+        print("itest: route down, the phone moved to \(Pairing.relayHost(env.relay))")
+
+        try await control(ctl, "up")
+        await r.await({ $0.state == .online && $0.route == route }, timeout: 20)
+        try await assertAnswers(c)
+        print("itest: route back, the phone moved back to \(Pairing.relayHost(route))")
+        c.close()
+    }
+
+    func assertAnswers(_ c: RelayClient) async throws {
+        let info = AppInfo.from(try await c.call(Channels.appInfo))
+        XCTAssertFalse((info.version ?? "").isEmpty)
+    }
+
+    /// `GET <ctl>/down` or `/up` on the stack's route proxy (scripts/route-proxy.mjs).
+    func control(_ ctl: String, _ action: String) async throws {
+        let url = try XCTUnwrap(URL(string: "\(ctl)/\(action)"))
+        let ok: Bool = await withCheckedContinuation { cont in
+            URLSession.shared.dataTask(with: url) { _, res, err in
+                cont.resume(returning: err == nil && (res as? HTTPURLResponse)?.statusCode == 200)
+            }.resume()
+        }
+        XCTAssertTrue(ok, "route proxy \(action)")
     }
 }

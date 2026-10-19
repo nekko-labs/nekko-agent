@@ -100,6 +100,95 @@
           "IPv6"
         ]
       ]
+    },
+    "lanEdges": {
+      "en0": [
+        [
+          "169.254.1.1",
+          false
+        ],
+        [
+          "172.32.0.1",
+          false
+        ],
+        [
+          "8.8.8.8",
+          false
+        ],
+        [
+          "10.255.255.255",
+          false
+        ],
+        [
+          "192.168.1.20",
+          false
+        ]
+      ],
+      "en1": [
+        [
+          "192.168.1.20",
+          false
+        ],
+        [
+          "10.0.0.1",
+          true
+        ],
+        [
+          "172.31.0.1",
+          false
+        ],
+        [
+          "fd12::5",
+          false,
+          "IPv6"
+        ]
+      ]
+    },
+    "winVirtual": {
+      "vEthernet (WSL (Hyper-V firewall))": [
+        [
+          "192.168.0.1",
+          false
+        ]
+      ],
+      "Ethernet": [
+        [
+          "192.168.50.100",
+          false
+        ]
+      ],
+      "Tailscale": [
+        [
+          "100.114.173.86",
+          false
+        ]
+      ]
+    },
+    "linuxBridges": {
+      "docker0": [
+        [
+          "172.17.0.1",
+          false
+        ]
+      ],
+      "br-1a2b3c": [
+        [
+          "172.18.0.1",
+          false
+        ]
+      ],
+      "eth0": [
+        [
+          "10.0.0.7",
+          false
+        ]
+      ],
+      "virbr0": [
+        [
+          "192.168.122.1",
+          false
+        ]
+      ]
     }
   },
   "apiServer": [
@@ -685,6 +774,18 @@
       {
         "ifaces": "internalTailnet",
         "address": null
+      },
+      {
+        "ifaces": "lanEdges",
+        "address": null
+      },
+      {
+        "ifaces": "winVirtual",
+        "address": "100.114.173.86"
+      },
+      {
+        "ifaces": "linuxBridges",
+        "address": null
       }
     ],
     "urls": [
@@ -705,6 +806,190 @@
         "ip": "100.64.0.1",
         "port": 9000,
         "url": "ws://100.64.0.1:9000"
+      }
+    ],
+    "lan": [
+      {
+        "ifaces": "none",
+        "addresses": []
+      },
+      {
+        "ifaces": "loopbackOnly",
+        "addresses": []
+      },
+      {
+        "ifaces": "lan",
+        "addresses": [
+          "192.168.1.20"
+        ]
+      },
+      {
+        "ifaces": "tailnetFirst",
+        "addresses": [
+          "10.0.0.5"
+        ]
+      },
+      {
+        "ifaces": "tailnetEdges",
+        "addresses": []
+      },
+      {
+        "ifaces": "twoLans",
+        "addresses": [
+          "192.168.1.20",
+          "172.16.4.2"
+        ]
+      },
+      {
+        "ifaces": "internalTailnet",
+        "addresses": []
+      },
+      {
+        "ifaces": "lanEdges",
+        "addresses": [
+          "10.255.255.255",
+          "192.168.1.20",
+          "172.31.0.1"
+        ]
+      },
+      {
+        "ifaces": "winVirtual",
+        "addresses": [
+          "192.168.50.100"
+        ]
+      },
+      {
+        "ifaces": "linuxBridges",
+        "addresses": [
+          "10.0.0.7"
+        ]
+      }
+    ],
+    "adapters": [
+      {
+        "name": "en0",
+        "virtual": false
+      },
+      {
+        "name": "Ethernet",
+        "virtual": false
+      },
+      {
+        "name": "Wi-Fi",
+        "virtual": false
+      },
+      {
+        "name": "wlan0",
+        "virtual": false
+      },
+      {
+        "name": "eth0",
+        "virtual": false
+      },
+      {
+        "name": "vEthernet (Default Switch)",
+        "virtual": true
+      },
+      {
+        "name": "docker0",
+        "virtual": true
+      },
+      {
+        "name": "br-1a2b3c",
+        "virtual": true
+      },
+      {
+        "name": "veth12ab",
+        "virtual": true
+      },
+      {
+        "name": "virbr0",
+        "virtual": true
+      },
+      {
+        "name": "vmnet8",
+        "virtual": true
+      },
+      {
+        "name": "vboxnet0",
+        "virtual": true
+      },
+      {
+        "name": "VirtualBox Host-Only Network",
+        "virtual": true
+      },
+      {
+        "name": "VMware Network Adapter VMnet1",
+        "virtual": true
+      },
+      {
+        "name": "utun3",
+        "virtual": true
+      },
+      {
+        "name": "Tailscale",
+        "virtual": true
+      },
+      {
+        "name": "zt7nnig26",
+        "virtual": true
+      },
+      {
+        "name": "bridge0",
+        "virtual": false
+      }
+    ],
+    "ready": [
+      {
+        "out": "NEKKO_RELAY_READY {\"port\":4400}",
+        "ready": {
+          "port": 4400,
+          "lan": []
+        }
+      },
+      {
+        "out": "NEKKO_RELAY_READY {\"port\":4400,\"lan\":[\"192.168.1.20\",\"10.0.0.5\"]}",
+        "ready": {
+          "port": 4400,
+          "lan": [
+            "192.168.1.20",
+            "10.0.0.5"
+          ]
+        }
+      },
+      {
+        "out": "noise NEKKO_RELAY_READY {\"port\":0,\"lan\":[\"192.168.1.20\",7,null]}",
+        "ready": {
+          "port": 0,
+          "lan": [
+            "192.168.1.20"
+          ]
+        }
+      },
+      {
+        "out": "NEKKO_RELAY_READY {\"port\":70000,\"lan\":\"192.168.1.20\"}",
+        "ready": {
+          "port": null,
+          "lan": []
+        }
+      },
+      {
+        "out": "NEKKO_RELAY_READY",
+        "ready": {
+          "port": null,
+          "lan": []
+        }
+      },
+      {
+        "out": "NEKKO_RELAY_READY {not json}",
+        "ready": {
+          "port": null,
+          "lan": []
+        }
+      },
+      {
+        "out": "nothing here",
+        "ready": null
       }
     ],
     "failures": [
@@ -886,6 +1171,34 @@
       {
         "ifaces": "internalTailnet",
         "addresses": []
+      },
+      {
+        "ifaces": "lanEdges",
+        "addresses": [
+          "169.254.1.1",
+          "172.32.0.1",
+          "8.8.8.8",
+          "10.255.255.255",
+          "192.168.1.20",
+          "192.168.1.20",
+          "172.31.0.1"
+        ]
+      },
+      {
+        "ifaces": "winVirtual",
+        "addresses": [
+          "192.168.0.1",
+          "192.168.50.100"
+        ]
+      },
+      {
+        "ifaces": "linuxBridges",
+        "addresses": [
+          "172.17.0.1",
+          "172.18.0.1",
+          "10.0.0.7",
+          "192.168.122.1"
+        ]
       }
     ],
     "txt": [

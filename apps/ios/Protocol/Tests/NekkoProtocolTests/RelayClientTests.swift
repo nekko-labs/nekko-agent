@@ -20,6 +20,9 @@ final class RelayClientTests: XCTestCase {
         var registrations: [JSONValue] = []
         var current: Conn?
         var refuseNext: (Int, String)?
+        /// Hosts (host:port) that don't answer: true hangs (a LAN address on
+        /// another Wi-Fi), false refuses at once.
+        var unreachable: [String: Bool] = [:]
         /// The computer's phone protocol version in its welcome; nil sends none (an older computer).
         var welcomeProtocol: Int?
         var answer: (JSONValue) -> JSONValue? = { req in
@@ -42,6 +45,7 @@ final class RelayClientTests: XCTestCase {
             let relay: FakeRelay
             let handlers: WsHandlers
             let refuse: (Int, String)?
+            var hang = false
             private let lock = NSLock()
             private var _open = false
             var isOpen: Bool { lock.lock(); defer { lock.unlock() }; return _open }
@@ -53,6 +57,7 @@ final class RelayClientTests: XCTestCase {
             }
 
             func start() {
+                if hang { return }
                 DispatchQueue.global().asyncAfter(deadline: .now() + 0.005) {
                     if let (code, reason) = self.refuse {
                         self.handlers.onClosed(code, reason)
@@ -127,8 +132,11 @@ final class RelayClientTests: XCTestCase {
         func open(url: URL, handlers: WsHandlers) throws -> WsConnection {
             sync {
                 urls.append(url.absoluteString)
-                let c = Conn(relay: self, handlers: handlers, refuse: refuseNext)
-                refuseNext = nil
+                let hostPort = url.host.map { h in url.port.map { "\(h):\($0)" } ?? h } ?? ""
+                let down = unreachable[hostPort]
+                let c = Conn(relay: self, handlers: handlers, refuse: down == false ? (1006, "connection refused") : refuseNext)
+                c.hang = down == true
+                if down == nil { refuseNext = nil }
                 current = c
                 return c
             }

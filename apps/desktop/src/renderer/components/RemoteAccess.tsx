@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
-import { relayUrlProblem, type LocalRelayStatus, type NetworkVisibilityStatus, type PairingGrant, type RemoteDevice, type RemoteStatus } from '@nekko-agent/shared';
+import { pairingLink, relayHost, relayUrlProblem, type LocalRelayStatus, type NetworkVisibilityStatus, type PairingGrant, type RemoteDevice, type RemoteStatus } from '@nekko-agent/shared';
 import { Badge } from './primitives/index.js';
 import { Toggle } from './primitives/Toggle.js';
 import { useStore } from '../store.js';
@@ -45,6 +45,20 @@ export async function relayToEnable(
   const started = await start();
   if (!started.running || !started.url) return { started, problem: started.error ?? 'The relay on this computer did not start.' };
   return { url: started.url, started };
+}
+
+/**
+ * The extra routes a pairing link carries (TASKS.md IO-20): when remote access
+ * uses the relay on this computer (by MagicDNS name or tailnet address, same
+ * port) and that relay also listens on the LAN, its LAN addresses. A phone on
+ * the same Wi-Fi then skips the tailnet. Any other relay: none.
+ */
+export function pairingAlts(relayUrl: string, local: LocalRelayStatus | null): string[] {
+  if (!local?.running || !local.lanUrls?.length) return [];
+  const port = (u: string) => u.trim().match(/^wss?:\/\/(?:\[[^\]]*\]|[^/:?#]*)(?::(\d+))?/i)?.[1] ?? '';
+  const here = [local.tailnetName, local.tailnetIp].filter(Boolean).map((h) => h!.toLowerCase());
+  if (!/^ws:\/\//i.test(relayUrl.trim()) || !here.includes(relayHost(relayUrl)) || port(relayUrl) !== String(local.port)) return [];
+  return local.lanUrls;
 }
 
 export function RemoteAccess() {
@@ -96,7 +110,9 @@ export function RemoteAccess() {
 
   // Pairing link: on an http origin (Local Web UI) the link opens this same UI;
   // the desktop app has no web origin, so the QR carries the raw pairing params
-  // (the Nekko Agent phone app parses those directly).
+  // (the Nekko Agent phone app parses those directly). The relay on this
+  // computer's LAN addresses ride along as `alt` routes.
+  const alts = pairingAlts(status.relayUrl ?? '', localRelay).join(' ');
   useEffect(() => {
     if (!status.enabled || !liveGrant) {
       setLink('');
@@ -104,11 +120,10 @@ export function RemoteAccess() {
     }
     void window.nekko.getRemotePairing().then((p) => {
       if (!p) return setLink('');
-      setLink(`${location.protocol.startsWith('http') ? location.origin + '/' : 'nekko-agent-pair:'}?relay=${encodeURIComponent(
-        p.relayUrl,
-      )}&room=${p.room}&key=${p.key}&pair=${liveGrant.code}`);
+      const base = location.protocol.startsWith('http') ? location.origin + '/' : 'nekko-agent-pair:';
+      setLink(pairingLink(base, { ...p, pair: liveGrant.code, alts: pairingAlts(p.relayUrl, localRelay) }));
     });
-  }, [status.enabled, liveGrant?.code]);
+  }, [status.enabled, liveGrant?.code, alts]);
 
   useEffect(() => {
     if (link) QRCode.toDataURL(link, { margin: 1, width: 220 }).then(setQr).catch(() => setQr(''));
@@ -378,19 +393,30 @@ export function LocalRelayCard({
       setBusy(false);
     }
   };
-  return <LocalRelayView relay={relay} busy={busy} onToggle={toggle} onUse={onUse} inUse={inUse} />;
+  const setLan = async (on: boolean) => {
+    setBusy(true);
+    try {
+      setRelay(await window.nekko.localRelaySetLan(on));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return <LocalRelayView relay={relay} busy={busy} onToggle={toggle} onLan={setLan} onUse={onUse} inUse={inUse} />;
 }
 
 export function LocalRelayView({
   relay,
   busy,
   onToggle,
+  onLan,
   onUse,
   inUse,
 }: {
   relay: LocalRelayStatus;
   busy?: boolean;
   onToggle: () => void;
+  /** The LAN switch; hidden when absent. */
+  onLan?: (on: boolean) => void;
   onUse?: (url: string) => void;
   inUse?: string;
 }) {
@@ -410,7 +436,7 @@ export function LocalRelayView({
       </div>
       <p className="mt-1 text-[12px] text-ink-faint">
         Phones on your Tailscale network connect straight to this computer over WireGuard, with no hosted relay in
-        between. Listens on the tailnet address only.
+        between. {relay.lan === false ? 'Listens on the tailnet address only.' : 'Listens on the tailnet address and on this computer’s private network addresses.'}
       </p>
       {relay.tailnetIp ? (
         <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px]">
@@ -442,6 +468,27 @@ export function LocalRelayView({
               Use this relay
             </button>
           ) : null}
+        </div>
+      )}
+      {onLan && (
+        <div className="mt-3 flex items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="text-[12.5px] font-medium">Also on this Wi-Fi</div>
+            <p className="text-[12px] text-ink-faint">
+              A phone on the same network connects over the LAN and moves to Tailscale by itself when it leaves. Only
+              private addresses (192.168.x.x, 10.x.x.x, 172.16.x.x to 172.31.x.x), never the internet. Pair again after changing this.
+            </p>
+            {relay.running && !!relay.lanUrls?.length && (
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {relay.lanUrls.map((u) => (
+                  <code key={u} className="rounded px-1.5 py-0.5 font-mono text-[11px]" style={{ background: 'var(--surface-2)' }}>
+                    {u}
+                  </code>
+                ))}
+              </div>
+            )}
+          </div>
+          <Toggle value={relay.lan !== false} onChange={onLan} disabled={busy} label="Also on this Wi-Fi" />
         </div>
       )}
       {relay.error && relay.tailnetIp && (

@@ -11,6 +11,7 @@ describe('parsePairingLink', () => {
       room: 'a1b2c3d4e5f60718',
       key: '0123456789abcdef0123456789abcdef',
       pair: 'ABCD2345',
+      alts: [],
     });
   });
 
@@ -33,5 +34,27 @@ describe('parsePairingLink', () => {
   it('shows the relay host', () => {
     expect(relayHost(RELAY)).toBe('nekko-agent-relay.fly.dev');
     expect(relayHost('ws://127.0.0.1:4455/')).toBe('127.0.0.1:4455');
+  });
+});
+
+describe('alt routes (IO-20)', () => {
+  it('parses the shared fixture exactly as the computer does', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const path = join(__dirname, '..', '..', '..', 'ios', 'Protocol', 'Tests', 'NekkoProtocolTests', 'Fixtures', 'pairing-links.json');
+    const cases = JSON.parse(readFileSync(path, 'utf8')) as { input: string; link: unknown }[];
+    expect(cases.length).toBeGreaterThan(5);
+    for (const c of cases) expect([c.input, parsePairingLink(c.input)]).toEqual([c.input, c.link]);
+  });
+});
+
+describe('long runs of slashes', () => {
+  it('trims them in linear time', () => {
+    const slashes = '/'.repeat(100_000);
+    const start = Date.now();
+    const link = parsePairingLink(`relay=ws://10.0.0.5:4400${slashes}x${slashes}&room=a1b2c3d4e5f60718&key=0123456789abcdef0123456789abcdef&alt=ws://10.0.0.6:4400${slashes}`);
+    expect(Date.now() - start).toBeLessThan(500);
+    expect(link?.relayUrl).toBe(`ws://10.0.0.5:4400${slashes}x`);
+    expect(link?.alts).toEqual(['ws://10.0.0.6:4400']);
   });
 });

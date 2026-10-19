@@ -232,6 +232,17 @@ relay, this relay is already the default in the relay field, and **Enable** star
   Tailscale connects.
 - **It follows address changes:** it moves when the tailnet address changes.
 - **It says why it isn't running:** for example Tailscale off, or the port (4400) already in use.
+- **It is on your Wi-Fi too:** next to the tailnet address it listens on this computer's private
+  LAN addresses (192.168.x.x, 10.x.x.x, 172.16.x.x to 172.31.x.x; never the internet, and not the
+  virtual adapters of WSL, Hyper-V, Docker or VMs). Pairing
+  codes then carry both routes, and the iPhone app uses the LAN when it is on the same Wi-Fi and
+  moves to Tailscale by itself when it leaves, coming back once the LAN answers steadily again.
+  Switch **Also on this Wi-Fi** off to keep the relay on the tailnet only; pair the phone again
+  after changing it. Phones paired before this keep the one route until they scan a new code.
+
+On the iPhone, **Settings → Connection** shows the route in use. **Check routes** looks up,
+connects to and says hello on each route with timings, and **Share diagnostics** shares those
+results and the connection log as text, without rooms, keys, codes or messages.
 
 It runs as its own process (`out/main/relay.js`, under the app's own runtime) and exits with the
 app. It has no push keys, so phones get no "finished" notifications through it; the in-app

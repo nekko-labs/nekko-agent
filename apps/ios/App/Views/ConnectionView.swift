@@ -5,6 +5,9 @@ import SwiftUI
 /// How this iPhone reaches the active computer, what to try when it can't, and
 /// what has happened since the app started. The log is memory only and holds
 /// no rooms, keys or chat content, so it can be copied into a bug report.
+/// A computer with several routes (LAN and tailnet, TASKS.md IO-20) shows the
+/// one in use; *Check routes* times DNS, TCP and a relay hello on each, and
+/// *Share diagnostics* sends the checks and the log as text (IO-21).
 struct ConnectionView: View {
     @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
@@ -18,8 +21,14 @@ struct ConnectionView: View {
             if let c = store.active {
                 Section {
                     LabeledContent("Computer", value: c.name)
-                    LabeledContent("Route", value: routeName(c.route))
-                    LabeledContent("Relay", value: c.relayHost)
+                    let inUse = store.route ?? c.relayUrl
+                    LabeledContent("Route", value: routeName(RelayRoute.of(inUse)))
+                        .accessibilityIdentifier("connection-route")
+                    LabeledContent("Relay", value: Pairing.relayHost(inUse))
+                    if c.routes.count > 1 {
+                        LabeledContent("Other routes", value: c.routes.filter { $0 != inUse }
+                            .map { "\(routeName(RelayRoute.of($0))) (\(Pairing.relayHost($0)))" }.joined(separator: ", "))
+                    }
                     LabeledContent("Status", value: stateName(store.conn))
                     LabeledContent("Tailscale on this iPhone", value: tailnet ? "Connected" : "Off")
                     if let at = store.connectionLog.lastOnline, store.conn != .online {
@@ -30,12 +39,14 @@ struct ConnectionView: View {
                         .foregroundStyle(palette.inkSoft)
                 }
 
-                let advice = ConnectionAdvice.advise(route: c.route, relayHost: c.relayHost, computer: c.name, state: store.conn,
+                let dialing = store.route ?? c.relayUrl
+                let advice = ConnectionAdvice.advise(route: RelayRoute.of(dialing), relayHost: Pairing.relayHost(dialing),
+                                                     computer: c.name, state: store.conn,
                                                      denied: store.denied, detail: store.connDetail, tailscaleOn: tailnet)
                 if !advice.isEmpty {
                     Section {
                         ForEach(advice, id: \.self) { Label($0, systemImage: "lightbulb").foregroundStyle(palette.ink) }
-                        if TailscaleApp.shouldOffer(route: c.route, tailscaleOn: tailnet, state: store.conn) {
+                        if TailscaleApp.shouldOffer(route: RelayRoute.of(dialing), tailscaleOn: tailnet, state: store.conn) {
                             Button { app.openTailscale() } label: { Label("Open Tailscale", systemImage: "network") }
                                 .accessibilityIdentifier("open-tailscale")
                                 .accessibilityHint("Opens the Tailscale app, or the App Store if it isn’t installed.")
@@ -46,6 +57,30 @@ struct ConnectionView: View {
                     } header: {
                         header("What to try")
                     }
+                }
+
+                Section {
+                    ForEach(store.checks) { r in RouteCheckRow(report: r) }
+                    Button {
+                        Task { await store.runChecks() }
+                    } label: {
+                        if store.checking {
+                            Label("Checking…", systemImage: "hourglass")
+                        } else {
+                            Label(store.checks.isEmpty ? "Check routes" : "Check again", systemImage: "stethoscope")
+                        }
+                    }
+                    .disabled(store.checking)
+                    .accessibilityIdentifier("check-routes")
+                    .accessibilityHint("Looks up, connects to and says hello on each of the computer's relay addresses.")
+                } header: {
+                    header("Checks")
+                } footer: {
+                    ShareLink(item: store.diagnosticsText(app: appVersion)) {
+                        Label("Share diagnostics", systemImage: "square.and.arrow.up")
+                    }
+                    .accessibilityIdentifier("share-diagnostics")
+                    .accessibilityHint("The checks and the log as text: hosts, states and timings, never keys, codes or messages.")
                 }
 
                 Section {
@@ -73,6 +108,43 @@ struct ConnectionView: View {
         .onAppear { tailnet = Tailnet.isConnected }
         .onChange(of: phase) { _, p in if p == .active { tailnet = Tailnet.isConnected } }
         .onChange(of: store.conn) { _, _ in tailnet = Tailnet.isConnected }
+    }
+}
+
+private var appVersion: String {
+    let info = Bundle.main.infoDictionary
+    let v = info?["CFBundleShortVersionString"] as? String ?? "?"
+    let b = info?["CFBundleVersion"] as? String ?? "?"
+    return "\(v) (\(b)), iOS \(UIDevice.current.systemVersion)"
+}
+
+/// One route's checks: what kind of route, then each step with its time.
+private struct RouteCheckRow: View {
+    let report: RouteReport
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("\(routeName(report.kind)) · \(report.host)").foregroundStyle(palette.ink)
+            step("Name lookup", report.dns)
+            step("Connect", report.tcp)
+            step("Relay hello", report.hello)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private func step(_ name: String, _ s: ProbeStep?) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: s == nil ? "minus.circle" : s!.ok ? "checkmark.circle.fill" : "xmark.octagon.fill")
+                .foregroundStyle(s == nil ? palette.inkSoft : s!.ok ? palette.success : palette.danger)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(name + (s?.ms.map { " · \($0) ms" } ?? "")).font(.footnote).foregroundStyle(palette.ink)
+                if let d = s?.detail { Text(d).font(.caption).foregroundStyle(palette.inkSoft) }
+                if s == nil { Text("Not run").font(.caption).foregroundStyle(palette.inkSoft) }
+            }
+        }
     }
 }
 

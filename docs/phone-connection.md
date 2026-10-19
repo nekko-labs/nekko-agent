@@ -27,11 +27,14 @@ Both native apps reach the computer the same way: relay v2 over a WebSocket, end
 | **QR scanning** | Google code scanner in Play services: no camera permission | AVFoundation: asks for the camera, with an Open Settings link if it's off |
 | **Paste a link** | Paste button and text field | Text field, plus the system Paste button (no paste prompt) |
 | **Push** | Not built yet (FCM needs the service account on the relay) | APNs token registered on every connect (`register-push`), plus ActivityKit tokens per running chat (`register-activity`) for Live Activities while suspended |
+| **More than one route** (a pairing link with `alt=` addresses, IO-20) | Parsed (`Pairing.kt`, same fixture as the computer) but not dialed: one route (AN-28) | Every route kept; LAN on Wi-Fi first, else the tailnet; immediate fallback, back after 3 `/healthz` probes and a 30 s dwell, never mid-request (`RouteSupervisor.swift`) |
+| **Route checks** (IO-21) | No | *Check routes*: DNS, TCP and relay hello per route, timed; *Share diagnostics* as redacted text (`Diagnostics.swift`) |
 | **Finding a computer on this Wi-Fi** | *On this network* on the Pair screen: the system NSD service (`NsdManager`), no permission or multicast lock, one resolve at a time (`NearbyBrowser.kt`) | *On this network* on the Pair screen: `NWBrowser`, which shows iOS's local network prompt on the first tap (`NearbyBrowser.swift`, `NSBonjourServices`) |
-| **While in the background** | A foreground service (type remoteMessaging) keeps the connection while a chat is running, with the setting on, for up to 30 minutes after the last event (`KeepAlive.kt`) | A short background task. After that, Live Activity pushes and notifications. iOS doesn't allow a long-lived socket. |
+| **While in the background** | A foreground service (type remoteMessaging) keeps the connection while a chat is running, with the setting on, for up to 30 minutes after the last event (`KeepAlive.kt`) | A healthy socket is kept 30 s after an app switch, inside the short background task, then closed and reopened on return. After that, Live Activity pushes and notifications. iOS doesn't allow a long-lived socket. |
 
 ## Next steps
 
+- **Android: route failover** (AN-28): keep the `alt` routes, port `RouteSupervisor`, and allow plain `ws://` to private LAN ranges in the network config.
 - **Android: FCM push** (PH6), once the FCM service account is on the relay. The relay already sends FCM.
 - **Android: tailnet IPs.** Either keep requiring the MagicDNS name (the desktop shows it when the Tailscale CLI is present), or route `ws://100.x` through a small cleartext-permitted proxy. Today the network config can't allow an IP range, so the name stays the recommended route.
 - **Both: pair from a listing.** Both apps already list computers whose desktop has *Visible on this network* on (`_nekko-agent._tcp`, parsed by `NearbyComputer` with the same rules), for 30 seconds per tap. A listing carries no secrets, so pairing still takes the QR code or link. Tap-to-pair waits on the owner's choice in [reports/phone-discovery-pairing-proposal.md](../reports/phone-discovery-pairing-proposal.md).

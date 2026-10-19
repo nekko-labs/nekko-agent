@@ -33,10 +33,19 @@ final class FakeConnection: RemoteConnection, @unchecked Sendable {
         self.onWelcome = onWelcome
     }
 
-    func connect() { connected = true }
-    func close() { closed = true }
+    var connects = 0
+    var paths: [NetworkPath] = []
+    /// Called on every connect (a hello probe answers from here).
+    var onConnect: ((FakeConnection) -> Void)?
+    func connect() {
+        lock.lock(); connected = true; closed = false; connects += 1; lock.unlock()
+        onConnect?(self)
+    }
+    func close() { lock.lock(); closed = true; lock.unlock() }
     func nudge() {}
     func reconnect() {}
+    func networkChanged(_ path: NetworkPath) { lock.lock(); paths.append(path); lock.unlock() }
+    func setNetworkPath(_ path: NetworkPath) { lock.lock(); paths.append(path); lock.unlock() }
     func registerPush(token: String) async throws { try await registerPush(token: token, kinds: nil) }
     var pushKinds: [[String]?] = []
     func registerPush(token: String, kinds: [String]?) async throws {
