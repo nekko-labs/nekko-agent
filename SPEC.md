@@ -1792,7 +1792,7 @@ Not verified: packaged app, native window chrome, and a real engine (the fixture
 
 ### Task systems, Agent Monitor Tasks and focus-mode clean start (2026-10-16)
 
-- **Implemented — source priority.** The system prompt (`crates/nekko-context/src/prompt.rs`) tells the agent to use workspace folders first, then connected connectors, and only then CLI tools, unless the task is to run something.
+- **Implemented: source priority.** The system prompt (`crates/nekko-context/src/prompt.rs`) tells the agent to use workspace folders first, then connected connectors, and only then CLI tools, unless the task is to run something.
 - **Implemented — task connectors.** Linear and Jira are now tagged `category: 'tasks'`, and five new connectors are added: Trello (API key + token), Asana (PAT, workspace optional), Todoist (API token, API v1), ClickUp (personal token, workspace optional) and **Tasks file**, a local Markdown checklist (`- [ ]` lines are open tasks, grouped under the nearest heading; no token). Every one is ported to `crates/nekko-connectors` and covered by the shared golden set. All of them read only; none writes back yet.
 - **Implemented — Agent Monitor Tasks.** The Tasks section only appears once at least one task connector is connected, with one tab per connected source. It lists open items, has Refresh, and clicking an item drops a prompt (title, link and details) into that chat's composer; nothing is sent until the user sends it.
 - **Implemented — focus-mode clean start.** In Focused layout, an empty chat shows only a centered greeting and composer: no header, transcript, footer controls or monitor. The first send (or a question, approval or model choice) ends it, and the window becomes the full chat.
