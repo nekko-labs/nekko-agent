@@ -155,7 +155,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         tokio::task::spawn_blocking(move || st.get(&id)).await.map_err(|e| e.to_string())?
     };
     if session.as_ref().is_some_and(|s| crate::worktrees::execution_mode(s) == "sandbox") {
-        return ctx.backend.call(channel, Value::Array(args)).await;
+        return Err(format!("{channel} is unsupported for sandbox sessions"));
     }
     let settings = crate::settings::current(ctx).await;
     let connected = settings

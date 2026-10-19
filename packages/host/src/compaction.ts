@@ -101,10 +101,6 @@ async function summarize(
 ): Promise<string> {
   const provider = createProvider(config);
   const { maxOutputTokens } = compactionSizes(contextWindow);
-  const onHeaders =
-    config.kind === 'anthropic' && config.auth === 'subscription' && config.tokenKey
-      ? (headers: Headers) => LimitsService.recordFromHeaders(config.tokenKey!, config.kind, headers)
-      : undefined;
 
   const call = async (chunk: string): Promise<string> => {
     if (signal.aborted) throw new Error('Compaction cancelled.');
@@ -121,7 +117,6 @@ async function summarize(
         effort: 'low',
         think: false,
         signal: AbortSignal.any([signal, timeout]),
-        onHeaders,
       })) {
         if (item.type === 'text') answer += item.delta;
         if (item.type === 'usage') recordUsage(compactionUsageRecord(config, model, sessionId, item, Date.now()));

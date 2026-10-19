@@ -37,7 +37,7 @@
           "slug": "subscriptions",
           "title": "Subscription sign-in",
           "source": "docs/SUBSCRIPTIONS.md",
-          "description": "Use your Claude or ChatGPT subscription instead of a metered API key."
+          "description": "Use your ChatGPT subscription instead of a metered API key, and how Claude works in Nekko Agent."
         },
         {
           "slug": "usage-limits",

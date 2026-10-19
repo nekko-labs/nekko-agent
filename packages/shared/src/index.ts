@@ -69,6 +69,7 @@ export * from './model-select.js';
 export * from './prompt-plan.js';
 export * from './agent-steps.js';
 export * from './oauth.js';
+export * from './oauth-providers.js';
 export * from './monitor.js';
 export * from './themes.js';
 export * from './turn-stats.js';

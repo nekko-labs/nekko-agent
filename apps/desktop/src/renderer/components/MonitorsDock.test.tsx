@@ -80,32 +80,40 @@ describe('wall dock presentation', () => {
   });
   it.each(['auth_expired', 'signed_out'] as const)('offers Sign in again right in the panel for %s', (kind) => {
     quota.byToken = {};
-    (quota as any).problems = { claude: { kind, at: 0 } };
+    (quota as any).problems = { chatgpt: { kind, at: 0 } };
     const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: true, budget: false, insights: false, hardware: false, localModels: false } } };
-    const html = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[{ id: 'claude-sub', kind: 'anthropic', label: 'Claude', baseUrl: '', enabled: true, auth: 'subscription', tokenKey: 'claude' }]} usage={null} vitals={{ working: 0, waiting: 0, automations: 0, terminals: 0, tokensToday: 0, spend: '$0', fleet: [] }} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
+    const html = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[{ id: 'chatgpt-sub', kind: 'chatgpt', label: 'ChatGPT', baseUrl: '', enabled: true, auth: 'subscription', tokenKey: 'chatgpt' }]} usage={null} vitals={{ working: 0, waiting: 0, automations: 0, terminals: 0, tokensToday: 0, spend: '$0', fleet: [] }} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
     expect(html).toContain('data-dock-signin');
     expect(html).toContain('>Sign in again</button>');
     expect(html).not.toContain('in Settings');
     expect(html).toContain(kind === 'signed_out' ? 'Not signed in.' : 'Sign-in expired.');
     (quota as any).problems = {};
   });
-  it('tells two Claude plans apart by the email each is signed in as', () => {
+  it('tells two ChatGPT plans apart by the email each is signed in as', () => {
     quota.byToken = {};
     (quota as any).problems = {};
-    emails.byToken = { 'claude:a': 'davide@example.com', 'claude:b': 'davide@work.example' };
+    emails.byToken = { 'chatgpt:a': 'davide@example.com', 'chatgpt:b': 'davide@work.example' };
     try {
       const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: true, budget: false, insights: false, hardware: false, localModels: false } } };
       const providers = [
-        { id: 'p1', kind: 'anthropic' as const, label: 'Anthropic (Claude)', baseUrl: '', enabled: true, auth: 'subscription' as const, tokenKey: 'claude:a' },
-        { id: 'p2', kind: 'anthropic' as const, label: 'Anthropic (Claude)', baseUrl: '', enabled: true, auth: 'subscription' as const, tokenKey: 'claude:b' },
-        { id: 'p3', kind: 'anthropic' as const, label: 'Anthropic (Claude)', baseUrl: '', enabled: true, auth: 'subscription' as const, tokenKey: 'claude:c' },
+        { id: 'p1', kind: 'chatgpt' as const, label: 'ChatGPT', baseUrl: '', enabled: true, auth: 'subscription' as const, tokenKey: 'chatgpt:a' },
+        { id: 'p2', kind: 'chatgpt' as const, label: 'ChatGPT', baseUrl: '', enabled: true, auth: 'subscription' as const, tokenKey: 'chatgpt:b' },
+        { id: 'p3', kind: 'chatgpt' as const, label: 'ChatGPT', baseUrl: '', enabled: true, auth: 'subscription' as const, tokenKey: 'chatgpt:c' },
       ];
       const html = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={providers} usage={null} vitals={{ working: 0, waiting: 0, automations: 0, terminals: 0, tokensToday: 0, spend: '$0', fleet: [] }} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
-      expect(html).toContain('Anthropic (Claude)<span class="monitors-dock__account" data-account-email="true"> · davide@example.com</span>');
+      expect(html).toContain('ChatGPT<span class="monitors-dock__account" data-account-email="true"> · davide@example.com</span>');
       expect(html).toContain('davide@work.example');
       // A plan signed in before emails were recorded keeps the bare label.
       expect(html.match(/data-account-email/g)).toHaveLength(2);
     } finally { emails.byToken = {}; }
+  });
+  it('tells a Claude plan card from an older build to use an API key, with no sign-in', () => {
+    quota.byToken = {};
+    (quota as any).problems = {};
+    const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: true, budget: false, insights: false, hardware: false, localModels: false } } };
+    const html = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[{ id: 'old', kind: 'anthropic', label: 'Claude', baseUrl: '', enabled: true, auth: 'subscription' }]} usage={null} vitals={{ working: 0, waiting: 0, automations: 0, terminals: 0, tokensToday: 0, spend: '$0', fleet: [] }} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
+    expect(html).toContain('Claude plan sign-in is no longer available');
+    expect(html).not.toContain('data-dock-signin');
   });
   it('exposes both savings separately and never asks for a monthly budget', () => {
     const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: false, budget: true, insights: false, hardware: false, localModels: false } } };

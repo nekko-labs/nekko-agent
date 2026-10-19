@@ -209,10 +209,10 @@ final class LiveRelayTests: XCTestCase {
         attach(app, "offline-1-waiting")
         auditAccessibility(app, "offline-waiting")
 
-        // Back: it goes on its own (Try now only skips the reconnect backoff), once.
+        // Back: it goes on its own, once. (Not tapping Try now: the app often
+        // reconnects and delivers first, and the row vanishes mid-tap.)
+        XCTAssertTrue(app.buttons["Try now"].exists, "the waiting row offers Try now while offline")
         relay(ctl, "start")
-        let tryNow = app.buttons["Try now"]
-        if tryNow.waitForExistence(timeout: 5) { tryNow.tap() }
         XCTAssertTrue(waitGone(waiting, 90), "the waiting prompt was delivered")
         // A user bubble reads as one element, "You: …".
         let sent = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "You: written while offline"))

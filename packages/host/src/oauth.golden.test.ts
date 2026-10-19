@@ -5,7 +5,6 @@ import type { OAuthProvider, OAuthStatus, OAuthTokenSet } from '@nekko-agent/sha
 import {
   buildAuthorizeUrl,
   buildStatus,
-  claudeCliToken,
   codexCliToken,
   exchangeRequest,
   exchangeResult,
@@ -18,7 +17,7 @@ import {
 /**
  * What the engine daemon's OAuth port (crates/nekko-oauth) must reproduce
  * exactly: authorize URLs, pasted-code parsing, token requests, what their
- * responses become (token sets or errors), statuses and the CLI imports, for
+ * responses become (token sets or errors), statuses and the Codex CLI import, for
  * every case in `golden/cases.json`. Fails when `golden/expected.json` is
  * stale; rewrite it with `UPDATE_GOLDEN=1`.
  */
@@ -54,7 +53,7 @@ interface Cases {
   refreshRequests: OAuthTokenSet[];
   refreshResults: Array<{ tokenSet: OAuthTokenSet; ok: boolean; status: number; text: string; obtainedAt: number; now: number }>;
   statuses: Array<{ tokenKey: string; tokenSet?: OAuthTokenSet; state: OAuthStatus['state']; message?: string; now: number }>;
-  cli: Array<{ kind: 'claude' | 'codex'; raw: string; now: number }>;
+  cli: Array<{ kind: 'codex'; raw: string; now: number }>;
   tokenKeys: Array<{ provider: OAuthProvider; accountId?: string; sessionId: string }>;
 }
 
@@ -71,7 +70,7 @@ describe('oauth golden set', () => {
       statuses: c.statuses.map((x) => at(x.now, () => outcome(() => buildStatus(x.tokenKey, x.tokenSet, x.state, x.message)))),
       // A JSON.parse error's wording is V8's own; only the fact of it is held.
       cli: c.cli.map((x) => {
-        const o = outcome(() => (x.kind === 'claude' ? claudeCliToken(x.raw, x.now) : codexCliToken(x.raw, x.now)));
+        const o = outcome(() => codexCliToken(x.raw, x.now));
         return 'error' in o ? { error: true } : o;
       }),
       tokenKeys: c.tokenKeys.map((x) => outcome(() => makeTokenKey(x.provider, x.accountId, x.sessionId))),

@@ -10,15 +10,11 @@
 //! `sendChat` did.
 //!
 //! Connector and workspace-index snippets, a setup command's output (the
-//! chat's agent terminal, agent_logs.rs) and tool hooks are all this
-//! daemon's. When a host runs beside it, the turn is handed to it as well
-//! (`turn:adopt`, not waited on) so it runs what follows a turn (TurnEnd
-//! hooks, the linked spec) and the turn's few host-side tools; with no host,
-//! turns.rs runs that after-work itself. A sandbox chat is admitted here too (its setup checked, ask mode,
-//! only its copied folders, no host context, MCP, decision runner, hooks or
-//! sub-agents) and its turn runs every tool in the daemon's container for it
-//! (sandbox.rs). Only a sandbox chat on a daemon with no containers (no data
-//! directory) goes to the host whole.
+//! chat's agent terminal, agent_logs.rs), tool hooks and what follows a turn
+//! (turns.rs) are all this daemon's. A sandbox chat is admitted here too (its
+//! setup checked, ask mode, only its copied folders, no host context, MCP,
+//! decision runner, hooks or sub-agents) and its turn runs every tool in the
+//! daemon's container for it (sandbox.rs).
 
 use crate::routes::Ctx;
 use nekko_loop::Cancel;
@@ -134,13 +130,9 @@ async fn stopped(ctx: &Ctx, session_id: &str) -> Result<Admit, String> {
     Ok(Admit::Ended)
 }
 
-/// Tell the UI (and, through the host, the phone relay) what happened.
+/// Tell the UI (and the phone relay) what happened.
 async fn emit(ctx: &Ctx, event: Value) {
-    ctx.hub.publish("agent:event", event.clone(), false);
-    let backend = ctx.backend.clone();
-    tokio::spawn(async move {
-        let _ = backend.call("turn:notify", json!([event])).await;
-    });
+    ctx.hub.publish("agent:event", event, false);
 }
 
 async fn fail(ctx: &Ctx, session_id: &str, message: &str) -> Result<Value, String> {
@@ -148,7 +140,7 @@ async fn fail(ctx: &Ctx, session_id: &str, message: &str) -> Result<Value, Strin
     Ok(Value::Null)
 }
 
-/// `newTurnId()`, marked `turn_d` so the host knows to wait for its `turn:adopt`.
+/// `newTurnId()`, marked `turn_d`: a turn this daemon admitted, whose queue it runs on.
 fn daemon_turn_id() -> String {
     let mut b = [0u8; 4];
     let _ = getrandom::fill(&mut b);
@@ -293,11 +285,9 @@ fn has_index_words(text: &str) -> bool {
 
 /// What admitting a turn came to.
 enum Admit {
-    /// The host runs it (a sandbox chat, or the kill switch).
-    Host,
     /// It cannot run; the chat was told why.
     Ended,
-    /// The `chat:turn` spec to drive; the host has been handed the turn.
+    /// The `chat:turn` spec to drive.
     Spec(Value),
 }
 
@@ -317,7 +307,7 @@ pub async fn admit_child(ctx: &Ctx, opts: Value) -> Result<Option<Value>, String
             spec["allowBrowserControl"] = json!(false);
             Ok(Some(spec))
         }
-        Admit::Host | Admit::Ended => Ok(None),
+        Admit::Ended => Ok(None),
     }
 }
 
@@ -360,10 +350,6 @@ async fn send_with(ctx: &Ctx, adm: &Arc<Admission>, opts: Value, queued: Option<
         return Ok(Value::Null);
     }
     let spec = match result {
-        Admit::Host => {
-            drop(pending);
-            return ctx.backend.call("chat:send", json!([opts])).await;
-        }
         Admit::Ended => return Ok(Value::Null),
         Admit::Spec(spec) => spec,
     };
@@ -392,9 +378,8 @@ pub async fn interrupt_queued(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>)
     let (st, id) = (store.clone(), session_id.clone());
     let session = tokio::task::spawn_blocking(move || st.get(&id)).await.map_err(|e| e.to_string())?;
     let session = session.ok_or("Session not found.")?;
-    // A sandbox chat without containers here stays in the host whole.
     if crate::worktrees::execution_mode(&session) == "sandbox" && ctx.sandboxes.is_none() {
-        return ctx.backend.call("chat:interruptQueued", Value::Array(args)).await;
+        return Err(NO_SANDBOXES.into());
     }
     let index = nekko_turn::variants::queued_index_valid(&session, &index).ok_or("Queued prompt not found.")?;
     if adm.interrupting(&session_id) {
@@ -412,7 +397,7 @@ pub async fn interrupt_queued(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>)
         async move {
             adm.is_admitting(&id)
                 || ctx.turns.running_sessions().contains(&id)
-                || crate::routes::running_chats(&ctx).await.contains(&id)
+                || crate::routes::running_chats(&ctx).contains(&id)
         }
     };
     if busy(ctx, adm, session_id.clone()).await {
@@ -434,22 +419,21 @@ pub async fn interrupt_queued(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>)
     send_with(ctx, adm, opts, Some(json!({ "index": index, "item": item }))).await
 }
 
-/// The next queued prompt of a chain the daemon admitted (`turn:prepare`,
-/// answered here): `{ spec }`, `{ ended: true }` (it could not start and the
-/// chat was told why), or `{ inProcess: true }` (the host must run it).
-/// `None` (a sandbox chat, or the kill switch) leaves it to the host's `turn:prepare`.
+/// The next queued prompt of a chain the daemon admitted: `{ spec }`, or
+/// `{ ended: true }` (it could not start and the chat was told why).
 pub async fn admit_queued(ctx: &Ctx, adm: &Arc<Admission>, payload: &Value) -> Option<Value> {
     let opts = payload.get("opts").cloned().unwrap_or(Value::Null);
     let cancel = adm.cancellation(s(&opts, "sessionId")).unwrap_or_default();
     match admit(ctx, adm, opts, payload.get("queued").cloned(), true, &cancel).await {
         Ok(Admit::Spec(spec)) => Some(json!({ "spec": spec })),
-        Ok(Admit::Host) => None,
         Ok(Admit::Ended) | Err(_) => Some(json!({ "ended": true })),
     }
 }
 
-/// `admitTurn` and `buildDaemonTurn`: check, provision and describe a turn,
-/// and hand it to the host for its callbacks.
+/// A sandbox chat on a daemon with no containers (no data directory).
+const NO_SANDBOXES: &str = "Sandbox chats need the daemon to know the data directory.";
+
+/// `admitTurn` and `buildDaemonTurn`: check, provision and describe a turn.
 async fn admit(
     ctx: &Ctx,
     adm: &Arc<Admission>,
@@ -464,11 +448,9 @@ async fn admit(
         let (st, id) = (store.clone(), session_id.clone());
         tokio::task::spawn_blocking(move || st.get(&id)).await.map_err(|e| e.to_string())?
     };
-    // A sandbox chat stays in the host when this daemon has no containers
-    // (no data directory).
     let sandbox = session.as_ref().is_some_and(|s| crate::worktrees::execution_mode(s) == "sandbox");
     if sandbox && ctx.sandboxes.is_none() {
-        return Ok(Admit::Host);
+        return Err(NO_SANDBOXES.into());
     }
     // A chained queued prompt was admitted by the host without this check; so it stays.
     if !chained && adm.is_compacting(&session_id) {
@@ -483,7 +465,9 @@ async fn admit(
         return ended(ctx, &session_id, "Provider not configured or disabled.").await;
     };
     // A scheduled task, workflow, goal step, watch or auto-continue on Claude
-    // Code needs `unattended_runs` for its auth (claude_policy.rs).
+    // Code needs `unattended_runs` for its auth (claude_policy.rs). Its auth
+    // comes from `claude auth status`, read once if nothing has read it yet.
+    crate::claude_policy::ensure_auth_status(ctx, &provider).await;
     if let Err(refusal) = ctx.claude_policy.gate_turn(&provider, &opts) {
         return ended(ctx, &session_id, refusal.message).await;
     }
@@ -514,12 +498,6 @@ async fn admit(
         crate::worktrees::chat_workspaces(Some(&chat), &settings)
     };
 
-    // A sandbox chat always asks.
-    let mode = match session.get("mode").filter(|m| !m.is_null()) {
-        _ if sandbox => json!("ask"),
-        Some(m) => m.clone(),
-        None => settings.get("defaultChatMode").filter(|m| !m.is_null()).cloned().unwrap_or(json!("guardrails")),
-    };
     if offline && !offline_provider_allowed(&provider) {
         return ended(
             ctx,
@@ -600,9 +578,7 @@ async fn admit(
     );
     facts.insert("decide".into(), json!(!decide_with.is_null()));
     facts.insert("decideWith".into(), decide_with.clone());
-    // Tool hooks run here (turns.rs, nekko-tools `hooks`), never through the host;
-    // a sandbox chat runs none.
-    facts.insert("hooks".into(), json!(false));
+    // Tool hooks run here (turns.rs, nekko-tools `hooks`); a sandbox chat runs none.
     if !sandbox {
         facts.insert("hookRules".into(), settings.get("hooks").filter(|h| h.is_array()).cloned().unwrap_or(json!([])));
     }
@@ -631,12 +607,6 @@ async fn admit(
     if let Some(e) = &provider_error {
         facts.insert("providerError".into(), json!(e));
     }
-    facts.insert(
-        "headers".into(),
-        json!(
-            kind == "anthropic" && s(&provider, "auth") == "subscription" && nekko_js::truthy(provider.get("tokenKey"))
-        ),
-    );
     // An API key's own rate limits, read off each response (`limitsKeyFor`).
     if kind == "anthropic" && s(&provider, "auth") != "subscription" && nekko_js::truthy(provider.get("apiKey")) {
         facts.insert("apiLimitsKey".into(), json!(format!("provider:{}", s(&provider, "id"))));
@@ -645,10 +615,6 @@ async fn admit(
     let mut account = pick(&provider, &["auth", "kind", "tokenKey"]);
     account["incognito"] = json!(incognito);
     facts.insert("account".into(), account);
-    // The phone relay, messaging and accounting are this daemon's wherever it
-    // admits turns, so the host is sent only how a turn ends (an agent watch's
-    // resume reads the error; turns.rs `host_events`).
-    facts.insert("hostEvents".into(), json!(crate::turns::HOST_END_EVENTS));
 
     let providers: Vec<Value> = settings
         .get("providers")
@@ -683,39 +649,12 @@ async fn admit(
     if cancel.is_cancelled() {
         return stopped(ctx, &session_id).await;
     }
-    // The host registers the turn for its callbacks; nothing here waits on it
-    // (a queued turn's previous turn stays registered there until it lands).
-    // With no host, nothing adopts it.
-    if !ctx.backend.is_none() {
-        let backend = ctx.backend.clone();
-        let cancel = cancel.clone();
-        let payload = json!([{
-            "turnId": turn_id,
-            "opts": opts,
-            "workspaces": workspaces,
-            "mode": mode,
-            "decideWith": decide_with,
-            "allowBrowserControl": adm.allow_browser_control,
-            "provider": resolved,
-            // A queued turn joins the chain the host already follows.
-            "chained": chained,
-        }]);
-        tokio::spawn(async move {
-            if cancel.is_cancelled() {
-                return;
-            }
-            if let Err(e) = backend.call("turn:adopt", payload).await {
-                eprintln!("nekkod: the host could not adopt a turn: {e}");
-            }
-        });
-    }
-
     Ok(Admit::Spec(spec))
 }
 
 /// Start the turn and wait for it and every queued turn the daemon chains after it.
 async fn drive_chain(ctx: &Ctx, spec: Value) -> Result<(), String> {
-    let (_, mut ended) = ctx.turns.launch(ctx.backend.clone(), ctx.hub.clone(), spec)?;
+    let (_, mut ended) = ctx.turns.launch(ctx.hub.clone(), spec)?;
     loop {
         let Ok((summary, _)) = ended.await else { return Ok(()) };
         let Some(next) = summary.get("next").and_then(Value::as_str) else { return Ok(()) };
@@ -783,15 +722,13 @@ async fn provision(
         announce(session).await;
         emit(ctx, json!({ "type": "session_meta", "sessionId": id })).await;
         let folder = json!(folder_id);
-        ctx.turns
-            .command_output(&ctx.backend, &id, &folder, &format!("\r\n$ {command}  (worktree setup in {path})\r\n"))
-            .await;
+        ctx.turns.command_output(&id, &folder, &format!("\r\n$ {command}  (worktree setup in {path})\r\n"));
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
         let writer = {
-            let (turns, backend, id, folder) = (ctx.turns.clone(), ctx.backend.clone(), id.clone(), folder.clone());
+            let (turns, id, folder) = (ctx.turns.clone(), id.clone(), folder.clone());
             tokio::spawn(async move {
                 while let Some(text) = rx.recv().await {
-                    turns.command_output(&backend, &id, &folder, &text).await;
+                    turns.command_output(&id, &folder, &text);
                 }
             })
         };

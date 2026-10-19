@@ -5,25 +5,40 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { EventEmitter } from 'node:events';
 import type { OAuthProvider, OAuthSessionInfo, OAuthStatus, OAuthTokenSet, ProviderConfig } from '@nekko-agent/shared';
+import { CLAUDE_APPROVED_CLIENT, CLAUDE_SIGN_IN_UNAVAILABLE, oauthProviderOffered } from '@nekko-agent/shared';
 import { dataDir } from './paths.js';
 import { ensurePrivateFile, writeJsonAtomic } from './secure-file.js';
 
-const CLAUDE_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
-const CLAUDE_AUTHORIZE_URL = 'https://claude.com/cai/oauth/authorize';
-const CLAUDE_TOKEN_URL = 'https://platform.claude.com/v1/oauth/token';
-const CLAUDE_SCOPES = 'org:create_api_key user:profile user:inference';
-const CLAUDE_MANUAL_REDIRECT_URI = 'https://platform.claude.com/oauth/code/callback';
-const CLAUDE_LOOPBACK_PORT_START = 8765;
-const CLAUDE_LOOPBACK_PORT_END = 8795;
+/** A PKCE client: who we sign in as, where, and for what. */
+interface SignInClient {
+  clientId: string;
+  authorizeUrl: string;
+  tokenUrl: string;
+  scopes: string;
+}
 
-/** Bind failures that mean "this port is not ours to take", not a fatal error. */
-const UNAVAILABLE_PORT_CODES = new Set(['EADDRINUSE', 'EACCES', 'EADDRNOTAVAIL']);
-
-const CHATGPT_CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann';
-const CHATGPT_AUTHORIZE_URL = 'https://auth.openai.com/oauth/authorize';
-const CHATGPT_TOKEN_URL = 'https://auth.openai.com/oauth/token';
-const CHATGPT_SCOPES = 'openid profile email offline_access';
+const CHATGPT_CLIENT: SignInClient = {
+  clientId: 'app_EMoamEEZ73f0CkXaXp7hrann',
+  authorizeUrl: 'https://auth.openai.com/oauth/authorize',
+  tokenUrl: 'https://auth.openai.com/oauth/token',
+  scopes: 'openid profile email offline_access',
+};
 const CHATGPT_REDIRECT_URI = 'http://localhost:1455/auth/callback';
+
+/**
+ * The client a PKCE sign-in through `provider` uses. Claude has none: its
+ * slot (CLAUDE_APPROVED_CLIENT) stays empty unless Anthropic issues Nekko
+ * Agent a client of its own, so a Claude sign-in fails here.
+ */
+function signInClient(provider: OAuthProvider): SignInClient {
+  if (provider === 'chatgpt') return CHATGPT_CLIENT;
+  if (provider !== 'claude') throw new Error(`No sign-in client for ${provider}.`);
+  const c = CLAUDE_APPROVED_CLIENT;
+  if (oauthProviderOffered('claude') && c.clientId && c.authorizeUrl && c.tokenUrl) {
+    return { clientId: c.clientId, authorizeUrl: c.authorizeUrl, tokenUrl: c.tokenUrl, scopes: c.scopes ?? '' };
+  }
+  throw new Error(CLAUDE_SIGN_IN_UNAVAILABLE);
+}
 
 /**
  * OpenRouter's sign-in is the same PKCE shape minus the parts it does not use:
@@ -166,18 +181,12 @@ export function buildAuthorizeUrl(
     url.searchParams.set('code_challenge_method', 'S256');
     return url.toString();
   }
-  const url = new URL(provider === 'claude' ? CLAUDE_AUTHORIZE_URL : CHATGPT_AUTHORIZE_URL);
-  // Claude's console callback only renders the `code#state` string to copy when
-  // `code=true` is set; without it the page has nothing for the manual fallback
-  // to paste. Loopback redirects must not set it, or the browser lands on that
-  // page instead of coming back to us.
-  if (provider === 'claude' && redirectUri === CLAUDE_MANUAL_REDIRECT_URI) {
-    url.searchParams.set('code', 'true');
-  }
+  const client = signInClient(provider);
+  const url = new URL(client.authorizeUrl);
   url.searchParams.set('response_type', 'code');
-  url.searchParams.set('client_id', provider === 'claude' ? CLAUDE_CLIENT_ID : CHATGPT_CLIENT_ID);
+  url.searchParams.set('client_id', client.clientId);
   url.searchParams.set('redirect_uri', redirectUri);
-  url.searchParams.set('scope', provider === 'claude' ? CLAUDE_SCOPES : CHATGPT_SCOPES);
+  url.searchParams.set('scope', client.scopes);
   url.searchParams.set('code_challenge', challenge);
   url.searchParams.set('code_challenge_method', 'S256');
   url.searchParams.set('state', state);
@@ -194,42 +203,14 @@ function listenOnce(server: ReturnType<typeof createServer>, port: number): Prom
   });
 }
 
-async function findClaudeLoopbackPort(
-  session: OAuthSession,
-  handler: (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) => void,
-): Promise<number | undefined> {
-  for (let port = CLAUDE_LOOPBACK_PORT_START; port <= CLAUDE_LOOPBACK_PORT_END; port++) {
-    const server = createServer(handler);
-    session.server = server;
-    try {
-      await listenOnce(server, port);
-      return port;
-    } catch (e: any) {
-      try {
-        server.close();
-      } catch {
-        /* best effort */
-      }
-      // A port can be unavailable without being in use: Windows reserves
-      // ranges for Hyper-V/WinNAT and refuses the bind with EACCES. Those are
-      // "try the next one" too, not a reason to fail the whole sign-in.
-      if (!UNAVAILABLE_PORT_CODES.has(e?.code)) {
-        session.server = undefined;
-        throw e;
-      }
-    }
-  }
-  session.server = undefined;
-  return undefined;
-}
-
 async function startLoopback(
   session: OAuthSession,
   handler: (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) => void,
 ): Promise<boolean> {
-  if (session.provider === 'openrouter') {
-    // OpenRouter accepts any callback URL, so the port can be whatever the OS
-    // hands out rather than a fixed one the provider registered.
+  if (session.provider !== 'chatgpt') {
+    // OpenRouter (and an approved Claude client) accept any loopback callback
+    // URL, so the port can be whatever the OS hands out rather than a fixed
+    // one the provider registered.
     const server = createServer(handler);
     session.server = server;
     try {
@@ -254,12 +235,6 @@ async function startLoopback(
       session.server = undefined;
       return false;
     }
-  }
-  if (session.provider === 'claude') {
-    const port = await findClaudeLoopbackPort(session, handler);
-    if (!port) return false;
-    session.redirectUri = `http://localhost:${port}/callback`;
-    return true;
   }
   // ChatGPT registered exactly one redirect URI, so the listener has to take
   // port 1455.
@@ -385,20 +360,16 @@ async function callbackHandler(
 }
 
 export async function beginOAuth(provider: OAuthProvider): Promise<OAuthSessionInfo> {
+  if (!oauthProviderOffered(provider)) throw new Error(CLAUDE_SIGN_IN_UNAVAILABLE);
   const { verifier, challenge } = pkcePair();
-  const state = provider === 'claude' ? verifier : generateState();
+  const state = generateState();
   const session: OAuthSession = {
     id: randomUUID(),
     provider,
     verifier,
     state,
     challenge,
-    redirectUri:
-      provider === 'claude'
-        ? CLAUDE_MANUAL_REDIRECT_URI
-        : provider === 'openrouter'
-          ? 'http://localhost/callback'
-          : CHATGPT_REDIRECT_URI,
+    redirectUri: provider === 'chatgpt' ? CHATGPT_REDIRECT_URI : 'http://localhost/callback',
     mode: 'manual',
     expiresAt: Date.now() + SESSION_TTL_MS,
   };
@@ -413,9 +384,10 @@ export async function beginOAuth(provider: OAuthProvider): Promise<OAuthSessionI
   const listening = await startLoopback(session, handler);
   if (listening) {
     session.mode = 'loopback';
-  } else if (provider === 'openrouter') {
-    // OpenRouter's flow has no paste-a-code page; without a local listener it
-    // cannot complete at all, so fail now rather than at the callback.
+  } else if (provider !== 'chatgpt') {
+    // Only ChatGPT's flow has a paste-the-redirect fallback; without a local
+    // listener the others cannot complete at all, so fail now rather than at
+    // the callback.
     closeSession(session);
     throw new Error('Could not open a local listener for the sign-in callback. Check nothing else is saturating the port range, then try again.');
   }
@@ -558,12 +530,9 @@ export function tokenFromResponse(provider: OAuthProvider, json: Record<string, 
 
   const idToken = json.id_token as string | undefined;
   const accountId = provider === 'chatgpt' ? (idToken ? extractAccountId(idToken) : undefined) : undefined;
-  // Claude's token response names the account it signed in; ChatGPT's id_token
-  // carries an `email` claim (the sign-in asks for the `email` scope).
-  const account = json.account as Record<string, unknown> | undefined;
-  const accountEmail = provider === 'claude'
-    ? cleanEmail(account?.email_address)
-    : idToken ? extractEmail(idToken) : undefined;
+  // ChatGPT's id_token carries an `email` claim (the sign-in asks for the
+  // `email` scope).
+  const accountEmail = idToken ? extractEmail(idToken) : undefined;
 
   const expiresIn = typeof json.expires_in === 'number' ? json.expires_in : 3600;
   const scopes = json.scope as string | undefined;
@@ -607,32 +576,16 @@ export function exchangeRequest(
       body: JSON.stringify({ code, code_verifier: verifier, code_challenge_method: 'S256' }),
     };
   }
-  if (provider === 'claude') {
-    // Anthropic's token endpoint validates the whole body against a schema and
-    // rejects it with "Invalid request format" when `state` is absent, even
-    // though the code alone would identify the grant.
-    return {
-      url: CLAUDE_TOKEN_URL,
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({
-        client_id: CLAUDE_CLIENT_ID,
-        grant_type: 'authorization_code',
-        code,
-        state,
-        redirect_uri: redirectUri,
-        code_verifier: verifier,
-      }),
-    };
-  }
+  const client = signInClient(provider);
   const params = new URLSearchParams({
     grant_type: 'authorization_code',
-    client_id: CHATGPT_CLIENT_ID,
+    client_id: client.clientId,
     code,
     redirect_uri: redirectUri,
     code_verifier: verifier,
   });
   return {
-    url: CHATGPT_TOKEN_URL,
+    url: client.tokenUrl,
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
     body: params.toString(),
   };
@@ -680,27 +633,14 @@ async function exchangeCode(
 
 /** The request that renews a token set that has a refresh token. */
 export function refreshRequest(tokenSet: OAuthTokenSet): TokenRequest {
-  if (tokenSet.provider === 'claude') {
-    return {
-      url: CLAUDE_TOKEN_URL,
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({
-        client_id: CLAUDE_CLIENT_ID,
-        grant_type: 'refresh_token',
-        refresh_token: tokenSet.refreshToken,
-        // The first-party client echoes the granted scope set on refresh; the
-        // endpoint's strict body validation rejects a grant missing it.
-        scope: tokenSet.scopes ?? CLAUDE_SCOPES,
-      }),
-    };
-  }
+  const client = signInClient(tokenSet.provider);
   const params = new URLSearchParams({
     grant_type: 'refresh_token',
-    client_id: CHATGPT_CLIENT_ID,
+    client_id: client.clientId,
     refresh_token: tokenSet.refreshToken ?? '',
   });
   return {
-    url: CHATGPT_TOKEN_URL,
+    url: client.tokenUrl,
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
     body: params.toString(),
   };
@@ -827,24 +767,6 @@ function parseCliTimestamp(raw: unknown, now: number): number {
   return now;
 }
 
-/** The Claude CLI's credential file (`~/.claude/.credentials.json`) as a token set, if it holds one. Throws on bad JSON. */
-export function claudeCliToken(raw: string, now: number): OAuthTokenSet | undefined {
-  const parsed = JSON.parse(raw) as Record<string, unknown>;
-  const block = (parsed.claudeAiOauth as Record<string, unknown> | undefined) ?? parsed;
-  const accessToken = (block.accessToken as string) ?? (block.access_token as string);
-  if (!accessToken) return undefined;
-  const scopesRaw = block.scopes;
-  const scopes = Array.isArray(scopesRaw) ? scopesRaw.join(' ') : (scopesRaw as string | undefined);
-  return {
-    provider: 'claude',
-    accessToken,
-    refreshToken: (block.refreshToken as string) ?? (block.refresh_token as string),
-    expiresAt: (block.expiresAt as number) ?? (block.expires_at as number),
-    scopes,
-    obtainedAt: now,
-  };
-}
-
 /** The Codex CLI's auth file (`~/.codex/auth.json`) as a token set, if it holds one. Throws on bad JSON. */
 export function codexCliToken(raw: string, now: number): OAuthTokenSet | undefined {
   const parsed = JSON.parse(raw) as Record<string, unknown>;
@@ -863,21 +785,10 @@ export function codexCliToken(raw: string, now: number): OAuthTokenSet | undefin
 }
 
 export function importCliAuth(): Record<OAuthProvider, boolean> {
-  // OpenRouter has no first-party CLI with a credential file to import.
+  // Only the Codex CLI's sign-in is imported. OpenRouter has no CLI credential
+  // file, and Claude Code's is never read: Anthropic does not let other apps
+  // collect or reuse Claude credentials.
   const result: Record<OAuthProvider, boolean> = { claude: false, chatgpt: false, openrouter: false };
-
-  const claudePath = join(homedir(), '.claude', '.credentials.json');
-  if (existsSync(claudePath)) {
-    try {
-      const token = claudeCliToken(readFileSync(claudePath, 'utf8'), Date.now());
-      if (token) {
-        setToken('claude', token);
-        result.claude = true;
-      }
-    } catch {
-      /* malformed or unreadable credential file */
-    }
-  }
 
   const chatgptPath = join(homedir(), '.codex', 'auth.json');
   if (existsSync(chatgptPath)) {

@@ -19,9 +19,8 @@ use std::cmp::Ordering;
 use std::sync::OnceLock;
 
 pub use limits::{
-    LimitsError, Problem, classify_limits_error, describe_anthropic_window, limits_backoff_ms, merge_windows,
-    parse_anthropic_api_headers, parse_anthropic_headers, parse_anthropic_usage_json, parse_chatgpt_usage,
-    parse_openrouter_key, parse_retry_after, sort_windows,
+    LimitsError, Problem, classify_limits_error, limits_backoff_ms, parse_anthropic_api_headers, parse_chatgpt_usage,
+    parse_openrouter_key, parse_retry_after,
 };
 pub use pricing::{Tokens, estimate_cost, model_price};
 pub use records::{quota_history_record, side_usage_record, turn_reply_record, turn_usage_record};

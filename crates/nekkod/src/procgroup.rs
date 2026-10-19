@@ -1,8 +1,7 @@
 //! Make sure nothing the daemon starts outlives it.
 //!
-//! The graceful path is stdin: the app holds the daemon's stdin open and the
-//! daemon holds the backend's, so closing one end walks down the tree. This
-//! module covers the ungraceful one, a crash or a hard kill, where no cleanup
+//! The graceful path is stdin: the app holds the daemon's stdin open, so
+//! closing it stops the daemon, which stops what it started. This module covers the ungraceful one, a crash or a hard kill, where no cleanup
 //! code runs at all.
 
 /// Windows: put this process in a job object that kills every member when its
@@ -47,8 +46,7 @@ pub fn init() {
     }
 }
 
-/// macOS has no parent-death signal; the stdin rule covers the graceful path
-/// and the backend watches its own stdin the same way.
+/// macOS has no parent-death signal; the stdin rule covers the graceful path.
 #[cfg(all(unix, not(target_os = "linux")))]
 pub fn init() {}
 

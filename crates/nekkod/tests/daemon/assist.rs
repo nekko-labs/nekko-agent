@@ -7,7 +7,7 @@ async fn generates_a_design_on_the_default_provider() {
     let data = std::env::temp_dir().join(format!("nekkod-design-{}", std::process::id()));
     std::fs::create_dir_all(&data).unwrap();
     let model = scripted_model(vec![say_text("```html\n<!DOCTYPE html><p>Pricing</p>\n```")]).await;
-    let d = start_with(true, Some(&data));
+    let d = start_with(Some(&data));
     // No default provider yet: the refusal names what is missing.
     let (status, refused) =
         post(d.port, "design:generate", json!(["w1", { "prompt": "A pricing page" }]), Some(TOKEN)).await;
@@ -80,7 +80,7 @@ async fn suggests_replies_and_fills_prompt_parts_on_the_chats_model() {
         }
         std::fs::write(sessions.join(format!("{id}.json")), serde_json::to_vec_pretty(&s).unwrap()).unwrap();
     }
-    let d = start_with(true, Some(&data));
+    let d = start_with(Some(&data));
     let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
     for channel in ["chat:suggest", "chat:fillPrompt"] {
         assert!(info["owned"].as_array().unwrap().contains(&json!(channel)), "{channel} is not owned");
@@ -145,11 +145,10 @@ async fn builds_a_linked_spec_on_the_chats_provider() {
 ```",
     )])
     .await;
-    let d = start_with(true, Some(&data));
+    let d = start_with(Some(&data));
     let provider = json!({ "id": "p1", "kind": "openai-compat", "label": "Scripted", "enabled": true, "baseUrl": format!("http://127.0.0.1:{}/v1", model.port) });
     let folder = json!([{ "workspaces": [{ "id": "w1", "name": "project", "path": project.to_string_lossy(), "addedAt": 1 }], "providers": [provider] }]);
     post(d.port, "settings:update", folder, Some(TOKEN)).await;
-    post(d.port, "test:designProvider", json!([{ "provider": provider, "promptCaching": true }]), Some(TOKEN)).await;
     let (status, built) = post(d.port, "spec:build", json!(["s_spec"]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{built}");
     assert_eq!(built["ok"], json!(true), "{built}");

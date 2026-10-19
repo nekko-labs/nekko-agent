@@ -1821,9 +1821,8 @@
         "url": "https://api.anthropic.com/v1/messages",
         "headers": {
           "Content-Type": "application/json",
-          "Authorization": "Bearer oauth-access-token",
-          "anthropic-version": "2023-06-01",
-          "anthropic-beta": "oauth-2025-04-20"
+          "x-api-key": "sk-ant-test",
+          "anthropic-version": "2023-06-01"
         },
         "body": {
           "model": "claude-opus-5",
@@ -1832,15 +1831,6 @@
           "output_config": {
             "effort": "high"
           },
-          "system": [
-            {
-              "type": "text",
-              "text": "You are Claude Code, Anthropic's official CLI for Claude.",
-              "cache_control": {
-                "type": "ephemeral"
-              }
-            }
-          ],
           "messages": [
             {
               "role": "user",
@@ -2403,6 +2393,18 @@
     ],
     "onHeaders": []
   },
+  "an-plan-sign-in-refused": {
+    "requests": [],
+    "chunks": [
+      [
+        {
+          "type": "error",
+          "message": "Claude plan sign-in is no longer available in Nekko Agent. Add an Anthropic API key to this provider, or connect Claude Agent to use your plan through Claude Code."
+        }
+      ]
+    ],
+    "onHeaders": []
+  },
   "an-401": {
     "requests": [
       {
@@ -2410,24 +2412,14 @@
         "url": "https://api.anthropic.com/v1/messages",
         "headers": {
           "Content-Type": "application/json",
-          "Authorization": "Bearer oauth-access-token",
-          "anthropic-version": "2023-06-01",
-          "anthropic-beta": "oauth-2025-04-20"
+          "x-api-key": "sk-ant-test",
+          "anthropic-version": "2023-06-01"
         },
         "body": {
           "model": "m",
           "max_tokens": 32000,
           "stream": true,
           "temperature": 0.7,
-          "system": [
-            {
-              "type": "text",
-              "text": "You are Claude Code, Anthropic's official CLI for Claude.",
-              "cache_control": {
-                "type": "ephemeral"
-              }
-            }
-          ],
           "messages": [
             {
               "role": "user",

@@ -59,7 +59,7 @@ async fn large_image_reply_completes_and_followup_starts_with_local_provider() {
         post(rig.d.port, "chat:turn", json!([spec_for("t_large", "image", json!([image.clone()]))]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{started}");
     assert_eq!(started["started"], true);
-    let (_, end) = turn_record(rig.d.port, "t_large").await;
+    let (_, end) = turn_record(&rig, "t_large", "s_large").await;
     assert_eq!(end["stop"], "complete", "{end}");
     let saved = saved_session(&rig, "s_large");
     let messages = saved["messages"].as_array().unwrap();
@@ -70,7 +70,7 @@ async fn large_image_reply_completes_and_followup_starts_with_local_provider() {
     let (status, started) =
         post(rig.d.port, "chat:turn", json!([spec_for("t_next", "followup", json!([]))]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{started}");
-    let (_, end) = turn_record(rig.d.port, "t_next").await;
+    let (_, end) = turn_record(&rig, "t_next", "s_large").await;
     assert_eq!(end["stop"], "complete", "{end}");
     let saved = saved_session(&rig, "s_large");
     let last = saved["messages"].as_array().unwrap().last().unwrap().clone();
@@ -89,11 +89,7 @@ async fn wait_for_title_requests(model: &ScriptedModel, count: usize) {
 }
 
 fn event_types(events: &[Value]) -> Vec<String> {
-    events
-        .iter()
-        .flat_map(|p| p["events"].as_array().cloned().unwrap_or_default())
-        .map(|e| e["type"].as_str().unwrap_or_default().to_string())
-        .collect()
+    events.iter().map(|e| e["type"].as_str().unwrap_or_default().to_string()).collect()
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -112,7 +108,7 @@ async fn chat_send_is_admitted_and_driven_by_the_daemon() {
         "workspaces": [{ "id": "w1", "name": "project", "path": rig.workspace.to_string_lossy() }],
         "defaultChatMode": "yolo",
     });
-    std::fs::write(rig.data.join("settings.json"), settings.to_string()).unwrap();
+    write_settings(&rig, settings).await;
 
     let (_, info) = post(rig.d.port, "daemon:info", json!([]), Some(TOKEN)).await;
     assert!(info["owned"].as_array().unwrap().contains(&json!("chat:send")));
@@ -135,16 +131,11 @@ async fn chat_send_is_admitted_and_driven_by_the_daemon() {
     let messages = saved["messages"].as_array().unwrap();
     assert_eq!(messages.first().unwrap()["content"], "Explain the pineapple");
     assert_eq!(messages.last().unwrap()["content"], "the answer");
-
-    let calls = until_adopted(rig.d.port, 1).await;
-    let adopt = calls.iter().find(|c| c[0] == "turn:adopt").expect("the host was handed the turn");
-    let turn_id = adopt[1][0]["turnId"].as_str().unwrap().to_string();
-    assert!(turn_id.starts_with("turn_d"), "{turn_id}");
-    assert_eq!(adopt[1][0]["workspaces"][0]["id"], "w1");
-    assert!(calls.iter().any(|c| c[0] == "turn:end" && c[1][0] == turn_id.as_str()));
-    assert!(!calls.iter().any(|c| c[0] == "chat:indexSnippets"), "the daemon gathers its own index snippets");
-    assert!(!calls.iter().any(|c| c[0] == "chat:connectorSnippets"), "no connector is connected");
-    // The snippets and the guidelines reached the model.
+    // The disabled provider's turn was refused; this one ran and ended.
+    let events = rig.events.lock().unwrap().clone();
+    assert!(events.iter().any(|e| e["sessionId"] == "s_admit" && e["type"] == "error"), "{events:?}");
+    assert!(events.iter().any(|e| e["sessionId"] == "s_admit" && e["type"] == "done"), "{events:?}");
+    // The daemon's own index snippets and the guidelines reached the model.
     let requests = model.requests.lock().unwrap().clone();
     let system = requests[0]["messages"][0]["content"].as_str().unwrap().to_string();
     assert!(system.contains("Always run the tests."), "{system}");
@@ -179,21 +170,9 @@ async fn collect_until_done(socket: &mut Socket, sessions: &[&str]) -> Vec<(Stri
     seen
 }
 
-/// The next frame about a chat or a request, past the backend's own chatter:
-/// the fake backend greets every socket every 100 ms with a session-less
-/// `hello-from-backend`, and a socket may hear `daemon:backend` when the
-/// backend comes up. Either can land between any two frames a test expects.
+/// The next frame about a chat or a request.
 async fn next_chat_frame(socket: &mut Socket) -> Value {
-    let deadline = Instant::now() + Duration::from_secs(5);
-    loop {
-        let f = next_json(socket, deadline.saturating_duration_since(Instant::now())).await.expect("a frame");
-        let hello = f["channel"] == "agent:event"
-            && f["payload"]["type"] == "hello-from-backend"
-            && f["payload"]["sessionId"].is_null();
-        if !hello && f["channel"] != "daemon:backend" {
-            return f;
-        }
-    }
+    next_json(socket, Duration::from_secs(5)).await.expect("a frame")
 }
 
 fn streamed_text(frames: &[(String, Value)], session: &str) -> String {
@@ -213,7 +192,7 @@ fn streamed_text(frames: &[(String, Value)], session: &str) -> String {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn sockets_take_only_the_chats_they_subscribe_to_and_the_host_only_how_turns_end() {
+async fn sockets_take_only_the_chats_they_subscribe_to() {
     let chat = |id: &str| json!({ "id": id, "title": "Named", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1 });
     let rig = turn_rig("subscribe", chat("s_one"));
     std::fs::write(rig.data.join("sessions").join("s_two.json"), chat("s_two").to_string()).unwrap();
@@ -227,7 +206,7 @@ async fn sockets_take_only_the_chats_they_subscribe_to_and_the_host_only_how_tur
     a.send(Message::Text(json!({ "id": 1, "channel": "daemon:subscribe", "args": [["s_one"]] }).to_string().into()))
         .await
         .unwrap();
-    // The backend's own chatter may land first (`next_chat_frame`). No chat's event may.
+    // No chat's event may land first.
     let ack = next_chat_frame(&mut a).await;
     assert_eq!(
         ack,
@@ -237,11 +216,8 @@ async fn sockets_take_only_the_chats_they_subscribe_to_and_the_host_only_how_tur
     let mut b = ws(port, &format!("/api/ws?sessions=s_two&token={TOKEN}"), None).await.unwrap();
     let mut c = ws(port, &format!("/api/events?token={TOKEN}"), None).await.unwrap();
 
-    let mut one = turn_spec(&rig, &model, "turn_one", "s_one", json!({}));
-    let mut two = turn_spec(&rig, &model, "turn_two", "s_two", json!({}));
-    // As a host whose relay, messaging and accounting are the daemon's asks.
-    one["facts"]["hostEvents"] = json!(["done", "error"]);
-    two["facts"]["hostEvents"] = json!(["done", "error"]);
+    let one = turn_spec(&rig, &model, "turn_one", "s_one", json!({}));
+    let two = turn_spec(&rig, &model, "turn_two", "s_two", json!({}));
     let (s1, _) = post(port, "chat:turn", json!([one]), Some(TOKEN)).await;
     let (s2, _) = post(port, "chat:turn", json!([two]), Some(TOKEN)).await;
     assert_eq!((s1, s2), (200, 200));
@@ -279,20 +255,13 @@ async fn sockets_take_only_the_chats_they_subscribe_to_and_the_host_only_how_tur
     assert!(frames(&fa) * 3 < frames(&fc) * 2, "a {} frames vs c {}", frames(&fa), frames(&fc));
     println!("agent frames per socket: subscribed a={} b={}, unsubscribed c={}", frames(&fa), frames(&fb), frames(&fc));
 
-    // The host asked only for how the turns end.
-    for turn in ["turn_one", "turn_two"] {
-        let (events, _) = turn_record(port, turn).await;
-        assert_eq!(event_types(&events), ["done"], "{turn}");
-    }
-
     // A socket that starts showing a chat mid-turn is sent the turn so far.
     let model2 = scripted_model(vec![
         call_tool("c_wait", "ask_user", json!({ "questions": [{ "question": "Go?", "options": ["yes", "no"] }] })),
         say_text("went"),
     ])
     .await;
-    let mut three = turn_spec(&rig, &model2, "turn_three", "s_one", json!({}));
-    three["facts"]["hostEvents"] = json!(["done", "error"]);
+    let three = turn_spec(&rig, &model2, "turn_three", "s_one", json!({}));
     post(port, "chat:turn", json!([three]), Some(TOKEN)).await;
     wait_pending(port, "s_one", "question", "c_wait").await;
     // The question is pending before its event is published: wait until a
@@ -368,18 +337,15 @@ async fn a_daemon_turn_asks_runs_tools_and_saves_every_step() {
     assert_eq!(alive, json!(true));
     let answers = json!([{ "questionId": "q1", "labels": ["Login"] }]);
     let (status, body) = post(rig.d.port, "chat:answer", json!(["s_turn_q", "c_ask", answers]), Some(TOKEN)).await;
-    assert_eq!((status, body), (200, Value::Null), "answered by the daemon, not forwarded to the host");
+    assert_eq!((status, body), (200, Value::Null), "answered by the daemon");
 
-    let (events, end) = turn_record(rig.d.port, "turn_q").await;
+    let (events, end) = turn_record(&rig, "turn_q", "s_turn_q").await;
     assert_eq!(end["aborted"], false, "{end}");
     assert_eq!(end["stop"], "complete", "{end}");
     let types = event_types(&events);
     for t in ["session_meta", "question", "question_resolved", "tool_call", "tool_result", "done"] {
         assert!(types.iter().any(|x| x == t), "no {t} event in {types:?}");
     }
-    let done = events.iter().find(|p| p["events"][0]["type"] == "done").unwrap();
-    assert_eq!(done["stats"]["calls"], 1, "only the last reply reported usage: {done}");
-    assert!(done["startedAt"].is_u64());
     let (_, pending) = post(rig.d.port, "chat:pending", json!([]), Some(TOKEN)).await;
     assert_eq!(pending, json!({}), "nothing may stay pending after the turn");
 
@@ -401,10 +367,9 @@ async fn a_daemon_turn_asks_runs_tools_and_saves_every_step() {
     };
     assert!(tool_out("c_ask").contains("Q: Which bug?\nA: Login"), "{}", tool_out("c_ask"));
     assert!(tool_out("c_read").contains("pineapple"));
-    // delegation_targets runs here now, never through the host: a coded answer, never a guess.
+    // delegation_targets runs here: a coded answer, never a guess.
     let delegation: Value = serde_json::from_str(&tool_out("c_host")).unwrap();
     assert_eq!(delegation["fallbackUsed"], false, "{delegation}");
-    assert!(!host_calls(rig.d.port).await.iter().any(|c| c[0] == "turn:tool"), "no tool went through the host");
     let last = messages.last().unwrap();
     assert_eq!(last["content"], "all done");
     assert_eq!(last["turnStats"]["calls"], 1);
@@ -447,35 +412,20 @@ async fn a_daemon_turn_parks_approvals_and_answers_them_itself() {
     assert_eq!(approval["call"]["name"], "write_file");
     assert!(!rig.workspace.join("new.txt").exists(), "nothing is written before the approval");
     let (status, body) = post(rig.d.port, "tool:approve", json!(["s_turn_a", "c_w", true]), Some(TOKEN)).await;
-    assert_eq!((status, body), (200, Value::Null), "answered by the daemon, not forwarded to the host");
+    assert_eq!((status, body), (200, Value::Null), "answered by the daemon");
 
-    // While the turn waits on its question, a host-run tool's approval parks
-    // here too, and the host hears the answer.
     wait_pending(rig.d.port, "s_turn_a", "question", "c_slow").await;
-    let (status, ok) = post(
-        rig.d.port,
-        "turn:approval",
-        json!(["turn_a", { "id": "c_host_ok", "name": "start_process", "input": {} }, "Start a background process", "medium"]),
-        Some(TOKEN),
-    )
-    .await;
-    assert_eq!((status, ok), (200, json!(true)));
-    let parked = wait_pending(rig.d.port, "s_turn_a", "approval", "c_host_ok").await;
-    assert_eq!(parked["reason"], "Start a background process");
-    let (_, body) = post(rig.d.port, "tool:approve", json!(["s_turn_a", "c_host_ok", false]), Some(TOKEN)).await;
-    assert_eq!(body, Value::Null);
     let answers = json!([{ "questionId": "q1", "labels": ["Yes"] }]);
     post(rig.d.port, "chat:answer", json!(["s_turn_a", "c_slow", answers]), Some(TOKEN)).await;
 
-    let (events, end) = turn_record(rig.d.port, "turn_a").await;
+    let (events, end) = turn_record(&rig, "turn_a", "s_turn_a").await;
     assert_eq!(end["stop"], "complete", "{end}");
     assert_eq!(std::fs::read_to_string(rig.workspace.join("new.txt")).unwrap(), "hi");
     let types = event_types(&events);
-    assert_eq!(types.iter().filter(|t| *t == "tool_approval_required").count(), 2, "{types:?}");
-    let (_, all) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    let answered =
-        all.as_array().unwrap().iter().any(|e| e[0] == "turn:approved" && e[1] == json!(["c_host_ok", false]));
-    assert!(answered, "the host heard its approval was refused");
+    assert_eq!(types.iter().filter(|t| *t == "tool_approval_required").count(), 1, "{types:?}");
+    // The host's own approval channel is gone with the host.
+    let (status, _) = post(rig.d.port, "turn:approval", json!(["turn_a", {}, "x", "medium"]), Some(TOKEN)).await;
+    assert_ne!(status, 200);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -496,7 +446,7 @@ async fn stopping_a_daemon_turn_ends_it_and_clears_the_run_marker() {
 
     let (status, _) = post(rig.d.port, "chat:abort", json!(["s_turn_s"]), Some(TOKEN)).await;
     assert_eq!(status, 200);
-    let (events, end) = turn_record(rig.d.port, "turn_s").await;
+    let (events, end) = turn_record(&rig, "turn_s", "s_turn_s").await;
     assert_eq!(end["aborted"], true);
     assert!(event_types(&events).contains(&"error".to_string()));
     assert!(saved_session(&rig, "s_turn_s").get("activeRun").is_none());
@@ -516,9 +466,9 @@ async fn a_queued_turn_whose_prompt_changed_ends_before_it_starts() {
     spec["queued"] = json!({ "index": 0, "item": "mine" });
     let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
     assert_eq!(status, 200);
-    let (events, end) = turn_record(rig.d.port, "turn_e").await;
-    assert_eq!(end["early"], true);
-    assert_eq!(events[0]["events"][0]["message"], "Queued prompt changed before it could start.");
+    let (events, end) = turn_record(&rig, "turn_e", "s_turn_e").await;
+    assert_eq!(end["stop"], Value::Null, "it never ran: {end}");
+    assert_eq!(events[0]["message"], "Queued prompt changed before it could start.");
     assert!(model.requests.lock().unwrap().is_empty(), "no model call for a turn that never started");
 }
 
@@ -539,7 +489,7 @@ async fn a_chain_the_daemon_admitted_admits_its_queued_prompts_too() {
         "workspaces": [{ "id": "w1", "name": "project", "path": rig.workspace.to_string_lossy() }],
         "defaultChatMode": "yolo",
     });
-    std::fs::write(rig.data.join("settings.json"), settings.to_string()).unwrap();
+    write_settings(&rig, settings).await;
 
     let opts = json!({ "sessionId": "s_chain", "providerId": "p1", "modelId": "synthetic", "text": "first" });
     let (status, body) = post(rig.d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
@@ -549,19 +499,10 @@ async fn a_chain_the_daemon_admitted_admits_its_queued_prompts_too() {
         saved["messages"].as_array().unwrap().iter().filter_map(|m| m["content"].as_str()).collect();
     assert_eq!(contents, ["first", "first answer", "and then this", "second answer"]);
     assert_eq!(saved["queue"], json!([]));
-
-    let calls = until_adopted(rig.d.port, 2).await;
-    assert!(!calls.iter().any(|c| c[0] == "turn:prepare"), "the daemon admitted the follow-up itself");
-    let adopts: Vec<&Value> = calls.iter().filter(|c| c[0] == "turn:adopt").collect();
-    assert_eq!(adopts.len(), 2, "{adopts:?}");
-    assert_eq!(adopts[0][1][0]["chained"], false);
-    assert_eq!(adopts[1][1][0]["chained"], true);
-    assert_eq!(adopts[1][1][0]["opts"]["text"], "and then this");
-    let (first, second) = (adopts[0][1][0]["turnId"].as_str().unwrap(), adopts[1][1][0]["turnId"].as_str().unwrap());
-    assert!(second.starts_with("turn_d"), "{second}");
-    let ends: Vec<&Value> = calls.iter().filter(|c| c[0] == "turn:end").collect();
-    let first_end = ends.iter().find(|c| c[1][0] == first).expect("the first turn ended");
-    assert_eq!(first_end[1][1]["next"], second);
+    // Two turns of one chain, each told to the UI as it ended.
+    let dones =
+        rig.events.lock().unwrap().iter().filter(|e| e["sessionId"] == "s_chain" && e["type"] == "done").count();
+    assert_eq!(dones, 2);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -576,20 +517,30 @@ async fn after_a_daemon_turn_the_title_lands_and_the_queue_drains() {
         Some(std::sync::Arc::new(tokio::sync::Mutex::new(responses))),
     )
     .await;
-    let spec = turn_spec(&rig, &model, "turn_t", "s_turn_t", json!({}));
-    let (status, _) = post(rig.d.port, "test:prepareTemplate", json!([spec.clone()]), Some(TOKEN)).await;
-    assert_eq!(status, 200);
+    // The follow-up is admitted here, from these settings.
+    write_settings(&rig, scripted_settings(&rig, &model)).await;
+    // A turn the daemon admitted (`turn_d...`) runs its chat's queue on.
+    let spec = turn_spec(&rig, &model, "turn_d_after", "s_turn_t", json!({}));
     // A follow-up queued while the turn runs: it is the daemon's to run next.
     let (status, _) = post(rig.d.port, "chat:queue", json!(["s_turn_t", "and then this"]), Some(TOKEN)).await;
     assert_eq!(status, 200);
     let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
     assert_eq!(status, 200);
 
-    let (_, first) = turn_record(rig.d.port, "turn_t").await;
-    assert_eq!(first["next"], "turn_next_1", "{first}");
-    let (_, second) = turn_record(rig.d.port, "turn_next_1").await;
-    assert_eq!(second["stop"], "complete", "{second}");
-    assert!(second.get("next").is_none(), "the queue is empty after one follow-up");
+    let (_, first) = turn_record(&rig, "turn_d_after", "s_turn_t").await;
+    assert_eq!(first["stop"], "complete", "{first}");
+    // The next turn of the chain: the queued prompt, answered.
+    until("the follow-up's reply", Duration::from_secs(20), || async {
+        let saved = saved_session(&rig, "s_turn_t");
+        let last = saved["messages"].as_array()?.last()?.clone();
+        (last["content"] == "second answer").then_some(())
+    })
+    .await;
+    until("the follow-up to end", Duration::from_secs(20), || async {
+        let (_, running) = post(rig.d.port, "chat:running", json!([]), Some(TOKEN)).await;
+        (!running.as_array()?.iter().any(|r| r == "s_turn_t")).then_some(())
+    })
+    .await;
 
     wait_for_title_requests(&model, 1).await;
     let pending = saved_session(&rig, "s_turn_t");
@@ -610,20 +561,13 @@ async fn after_a_daemon_turn_the_title_lands_and_the_queue_drains() {
     assert_eq!(contents, ["Fix the bug", "first answer", "and then this", "second answer"]);
     assert_eq!(saved["queue"], json!([]), "the queued prompt was claimed by its turn");
 
-    let (_, all) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    let all = all.as_array().unwrap();
-    let prepare = all.iter().find(|e| e[0] == "turn:prepare").expect("the host admitted the follow-up");
-    assert_eq!(prepare[1][0], "turn_t");
-    assert_eq!(prepare[1][1]["queued"], json!({ "index": 0, "item": "and then this" }));
-    assert_eq!(prepare[1][1]["opts"]["text"], "and then this");
-    // The title call's usage is in the log, written by the daemon, which keeps it.
-    assert!(!all.iter().any(|e| e[0] == "turn:usage"), "no usage callback when the daemon keeps the log");
+    // The title call's usage is in the log, written by the daemon.
     let log = std::fs::read_to_string(rig.data.join("usage.jsonl")).unwrap_or_default();
     assert!(
         log.lines().filter(|l| l.contains(r#""sessionId":"s_turn_t""#)).any(|l| l.contains(r#""providerId":"p1""#)),
         "{log}"
     );
-    assert!(all.iter().any(|e| e[0] == "turn:notify" && e[1][0]["type"] == "session_meta"));
+    assert!(rig.events.lock().unwrap().iter().any(|e| e["sessionId"] == "s_turn_t" && e["type"] == "session_meta"));
     let titles =
         model.requests.lock().unwrap().iter().filter(|r| r["messages"].to_string().contains("short title")).count();
     assert_eq!(titles, 1, "one title, for the first turn only");
@@ -635,13 +579,9 @@ async fn a_daemon_turn_writes_its_own_usage_and_reply_lines() {
         "id": "s_turn_u", "title": "Named", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
     });
     let rig = turn_rig("usage", session);
-    std::fs::write(
-        rig.data.join("settings.json"),
-        json!({ "providers": [{ "id": "p1", "kind": "openai-compat" }, { "id": "c1", "kind": "anthropic", "auth": "subscription", "tokenKey": "claude:t" }] }).to_string(),
-    )
-    .unwrap();
+    write_settings(&rig, json!({ "providers": [{ "id": "p1", "kind": "openai-compat" }, { "id": "c1", "kind": "chatgpt", "auth": "subscription", "tokenKey": "chatgpt:t" }] })).await;
     let (_, info) = post(rig.d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    for c in ["turn:account", "usage:summary", "limits:get", "limits:headers"] {
+    for c in ["turn:account", "usage:summary", "limits:get", "limits:poll"] {
         assert!(info["owned"].as_array().unwrap().iter().any(|o| o == c), "{c} not owned: {info}");
     }
 
@@ -650,7 +590,7 @@ async fn a_daemon_turn_writes_its_own_usage_and_reply_lines() {
     spec["facts"]["account"] = json!({ "auth": "apikey", "kind": "openai-compat", "incognito": false });
     let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
     assert_eq!(status, 200);
-    let (_, end) = turn_record(rig.d.port, "turn_u").await;
+    let (_, end) = turn_record(&rig, "turn_u", "s_turn_u").await;
     assert_eq!(end["stop"], "complete", "{end}");
 
     // The lines the host would have written, written by the daemon.
@@ -677,38 +617,22 @@ async fn a_daemon_turn_writes_its_own_usage_and_reply_lines() {
     assert_eq!(summary["bySession"]["s_turn_u"]["output"], 3);
     assert_eq!(summary["replies"]["total"], 1);
 
-    // Limits: headers recorded here, read back here, history written, the host told for the relay.
-    let pairs = json!([
-        ["anthropic-ratelimit-unified-5h-utilization", "0.25"],
-        ["anthropic-ratelimit-unified-5h-reset", "1760003600"]
-    ]);
-    let (_, recorded) = post(rig.d.port, "limits:headers", json!(["claude:t", "anthropic", pairs]), Some(TOKEN)).await;
-    assert_eq!(recorded["windows"][0]["usedPercent"], 25);
-    let (_, got) = post(rig.d.port, "limits:get", json!(["claude:t"]), Some(TOKEN)).await;
-    assert_eq!(got, recorded, "a fresh header snapshot is served without a poll");
-    let history = std::fs::read_to_string(rig.data.join("quota-history.jsonl")).unwrap();
-    assert!(history.contains(r#""providerId":"c1","source":"headers""#), "{history}");
-    let notified = until("the host to hear limits:notify", Duration::from_secs(10), || async {
-        host_calls(rig.d.port).await.into_iter().find(|e| e[0] == "limits:notify")
-    })
-    .await;
-    assert_eq!(notified[1][0]["tokenKey"], "claude:t");
-    // No sign-in stored: a poll says so rather than guessing.
-    let (_, polled) = post(rig.d.port, "limits:get", json!(["claude:none"]), Some(TOKEN)).await;
+    // Limits are read here. No sign-in stored: a poll says so rather than guessing.
+    let (_, polled) = post(rig.d.port, "limits:get", json!(["chatgpt:none"]), Some(TOKEN)).await;
     assert_eq!(polled, Value::Null);
-    let (_, problem) = post(rig.d.port, "limits:problem", json!(["claude:none"]), Some(TOKEN)).await;
+    let (_, problem) = post(rig.d.port, "limits:problem", json!(["chatgpt:none"]), Some(TOKEN)).await;
     assert_eq!(problem["kind"], "signed_out");
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn without_a_data_dir_accounting_stays_with_the_host() {
-    let d = start(true);
+async fn without_a_data_dir_accounting_is_not_served() {
+    let d = start();
     let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
     let owned = info["owned"].as_array().unwrap();
     assert!(!owned.iter().any(|o| o == "limits:get" || o == "turn:account"), "{info}");
     let (status, body) = post(d.port, "limits:get", json!(["k"]), Some(TOKEN)).await;
-    assert_eq!(status, 200);
-    assert_eq!(body["echo"], "limits:get", "forwarded to the host: {body}");
+    assert_eq!(status, 400);
+    assert_eq!(body["error"], "unknown channel limits:get");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -734,7 +658,7 @@ async fn stop_during_admission_cancels_setup_and_refuses_duplicate_send() {
     let setup =
         if cfg!(windows) { "echo setup-begun & ping -n 30 127.0.0.1 >nul" } else { "echo setup-begun; sleep 30" };
     let settings = json!({ "providers": [{ "id": "p1", "kind": "openai-compat", "enabled": true, "baseUrl": format!("http://127.0.0.1:{}/v1", model.port) }], "workspaces": [{ "id": "w1", "name": "project", "path": rig.workspace.to_string_lossy(), "worktreeSetup": setup }], "defaultChatMode": "yolo" });
-    std::fs::write(rig.data.join("settings.json"), settings.to_string()).unwrap();
+    write_settings(&rig, settings).await;
     let opts =
         json!({ "sessionId": "s_prepare_stop", "providerId": "p1", "modelId": "synthetic", "text": "prepare this" });
     let send_opts = opts.clone();
@@ -776,22 +700,21 @@ fn compaction_chat(id: &str) -> Value {
     })
 }
 
-/// The `compaction` progress the host heard (`turn:notify`), in order.
-async fn compaction_progress(port: u16, session_id: &str) -> Vec<Value> {
-    let (_, calls) = post(port, "test:completions", json!([]), Some(TOKEN)).await;
-    calls
-        .as_array()
+/// The `compaction` progress the UI heard, in order.
+fn compaction_progress(rig: &TurnRig, session_id: &str) -> Vec<Value> {
+    rig.events
+        .lock()
         .unwrap()
         .iter()
-        .filter(|c| c[0] == "turn:notify" && c[1][0]["type"] == "compaction" && c[1][0]["sessionId"] == session_id)
-        .map(|c| c[1][0]["progress"].clone())
+        .filter(|e| e["type"] == "compaction" && e["sessionId"] == session_id)
+        .map(|e| e["progress"].clone())
         .collect()
 }
 
-async fn wait_progress(port: u16, session_id: &str, state: &str) -> Vec<Value> {
+async fn wait_progress(rig: &TurnRig, session_id: &str, state: &str) -> Vec<Value> {
     let deadline = Instant::now() + Duration::from_secs(20);
     loop {
-        let all = compaction_progress(port, session_id).await;
+        let all = compaction_progress(rig, session_id);
         if all.last().is_some_and(|p| p["state"] == state) {
             return all;
         }
@@ -815,7 +738,7 @@ async fn the_daemon_compacts_a_chat_and_owns_its_state() {
         "id": "p2", "kind": "openai-compat", "label": "Second", "enabled": true,
         "baseUrl": format!("http://127.0.0.1:{}/v1", model2.port),
     }));
-    std::fs::write(rig.data.join("settings.json"), settings.to_string()).unwrap();
+    write_settings(&rig, settings).await;
     let (_, info) = post(rig.d.port, "daemon:info", json!([]), Some(TOKEN)).await;
     for c in ["chat:compact", "chat:cancelCompaction", "chat:interruptQueued"] {
         assert!(info["owned"].as_array().unwrap().contains(&json!(c)), "{c} is not owned");
@@ -844,8 +767,8 @@ async fn the_daemon_compacts_a_chat_and_owns_its_state() {
     assert!(sent.contains("Summarize this transcript segment:\\n\\nUSER: First request:"), "{sent}");
     assert!(!sent.contains("Third request"), "the recent turns stay verbatim: {sent}");
 
-    // Progress from start to done, told to the host, and its usage in the log.
-    let progress = wait_progress(rig.d.port, "s_compact", "done").await;
+    // Progress from start to done, told to the UI, and its usage in the log.
+    let progress = wait_progress(&rig, "s_compact", "done").await;
     assert_eq!(progress[0], json!({ "state": "running", "done": 0, "total": 0, "target": "here" }));
     assert_eq!(progress.last().unwrap(), &json!({ "state": "done", "done": 1, "total": 1, "target": "here" }));
     let usage = std::fs::read_to_string(rig.data.join("usage.jsonl")).unwrap();
@@ -872,7 +795,7 @@ async fn the_daemon_compacts_a_chat_and_owns_its_state() {
     assert_eq!(next["messages"][0]["compaction"], json!({ "summarized": 2 }));
     assert_eq!(saved_session(&rig, &new_id)["messages"], next["messages"]);
     assert_eq!(saved_session(&rig, "s_fresh")["messages"], before);
-    let progress = wait_progress(rig.d.port, "s_fresh", "done").await;
+    let progress = wait_progress(&rig, "s_fresh", "done").await;
     assert_eq!(progress.last().unwrap()["newSessionId"], json!(new_id));
     assert_eq!(progress.last().unwrap()["target"], "new");
 
@@ -884,15 +807,13 @@ async fn the_daemon_compacts_a_chat_and_owns_its_state() {
     .unwrap();
     let (_, refused) = post(rig.d.port, "chat:compact", json!(["s_secret"]), Some(TOKEN)).await;
     assert_eq!(refused["error"], "Incognito conversations cannot be compacted.");
-    let (_, calls) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    assert!(!calls.as_array().unwrap().iter().any(|c| c[0] == "chat:compact"), "the host compacted nothing");
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn cancelling_a_compaction_keeps_the_history_and_refuses_turns_meanwhile() {
     let rig = turn_rig("compact-cancel", compaction_chat("s_cancel"));
     let model = scripted_model(vec![HANG.into()]).await;
-    std::fs::write(rig.data.join("settings.json"), scripted_settings(&rig, &model).to_string()).unwrap();
+    write_settings(&rig, scripted_settings(&rig, &model)).await;
     let original = saved_session(&rig, "s_cancel")["messages"].clone();
     let port = rig.d.port;
     let compacting = tokio::spawn(async move { post(port, "chat:compact", json!(["s_cancel"]), Some(TOKEN)).await });
@@ -902,14 +823,13 @@ async fn cancelling_a_compaction_keeps_the_history_and_refuses_turns_meanwhile()
     let opts = json!({ "sessionId": "s_cancel", "providerId": "p1", "modelId": "synthetic", "text": "hello" });
     let (status, _) = post(rig.d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
     assert_eq!(status, 200);
-    let (_, calls) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    assert!(
-        calls.as_array().unwrap().iter().any(|c| c[0] == "turn:notify"
-            && c[1][0]["type"] == "error"
-            && c[1][0]["message"] == "This chat is being compacted. Wait or move to a new chat."),
-        "{calls}"
-    );
-    let progress = compaction_progress(rig.d.port, "s_cancel").await;
+    let refused = |e: &Value| {
+        e["type"] == "error"
+            && e["sessionId"] == "s_cancel"
+            && e["message"] == "This chat is being compacted. Wait or move to a new chat."
+    };
+    wait_for("the refusal to reach the chat", || rig.events.lock().unwrap().iter().any(refused)).await;
+    let progress = compaction_progress(&rig, "s_cancel");
     assert_eq!(progress.last().unwrap()["state"], "running", "{progress:?}");
 
     let started = Instant::now();
@@ -919,7 +839,7 @@ async fn cancelling_a_compaction_keeps_the_history_and_refuses_turns_meanwhile()
     assert_eq!(status, 400, "{body}");
     assert_eq!(body["error"], "Compaction cancelled.");
     assert!(started.elapsed() < Duration::from_secs(5), "the held call was cut, not waited out");
-    let progress = wait_progress(rig.d.port, "s_cancel", "cancelled").await;
+    let progress = wait_progress(&rig, "s_cancel", "cancelled").await;
     assert_eq!(progress.last().unwrap()["state"], "cancelled");
     assert_eq!(saved_session(&rig, "s_cancel")["messages"], original);
 }
@@ -939,7 +859,7 @@ async fn interrupting_starts_the_chosen_queued_prompt_and_keeps_the_others() {
         say_text("last answer"),
     ])
     .await;
-    std::fs::write(rig.data.join("settings.json"), scripted_settings(&rig, &model).to_string()).unwrap();
+    write_settings(&rig, scripted_settings(&rig, &model)).await;
 
     // Validation, before anything is stopped.
     for bad in [json!(-1), json!(0), json!(1.5), json!("0")] {
@@ -978,12 +898,6 @@ async fn interrupting_starts_the_chosen_queued_prompt_and_keeps_the_others() {
     // The stopped reply, then the selected prompt, then the rest of the queue in order.
     assert_eq!(users, ["old", "selected", "first", "last"], "{saved}");
     assert_eq!(saved["queue"], json!([]));
-    let calls = until_adopted(rig.d.port, 4).await;
-    assert!(!calls.iter().any(|c| c[0] == "chat:interruptQueued"), "the host started nothing");
-    let adopts: Vec<&Value> = calls.iter().filter(|c| c[0] == "turn:adopt").collect();
-    assert_eq!(adopts.len(), 4, "{adopts:?}");
-    assert_eq!(adopts[1][1][0]["opts"]["text"], "selected");
-    assert_eq!(adopts[1][1][0]["chained"], false, "a new chain, which the host adopts as its own");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -992,7 +906,7 @@ async fn a_resent_client_message_id_runs_one_turn_and_queues_once() {
     let rig = turn_rig("once", session);
     let model = scripted_model(vec![HANG.to_string(), say_text("second")]).await;
     let settings = json!({ "providers": [{ "id": "p1", "kind": "openai-compat", "enabled": true, "baseUrl": format!("http://127.0.0.1:{}/v1", model.port) }], "workspaces": [{ "id": "w1", "name": "project", "path": rig.workspace.to_string_lossy() }], "defaultChatMode": "yolo" });
-    std::fs::write(rig.data.join("settings.json"), settings.to_string()).unwrap();
+    write_settings(&rig, settings).await;
     let opts = json!({ "sessionId": "s_once", "providerId": "p1", "modelId": "synthetic", "text": "from the phone", "clientMessageId": "6f1c2a9e-7b1d-4c35-9a52-2b8f0f6f8d11" });
     let port = rig.d.port;
     let first_opts = opts.clone();

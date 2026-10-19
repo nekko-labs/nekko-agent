@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { defaultUserDataDir, prepareUserDataRoot } from '@nekko-agent/host';
+import { defaultUserDataDir, prepareUserDataRoot } from '@nekko-agent/host/user-data';
 import { startNekkod, type DaemonProcess } from './engine.js';
 import { brandEnv, CLI_LINK_FILE, isCliLink, IpcChannels, IpcEvents, unsupportedPlatformReason, type CliLink } from '@nekko-agent/shared';
 import type {
@@ -162,9 +162,8 @@ export interface Client {
 }
 
 /**
- * The local engine: a private nekkod on the data dir, with this same script as
- * its TS backend (`--nekko-backend`), driven over the same HTTP wire as a
- * running app (`httpClient`). Started on first use and stopped by `close()`
+ * The local engine: a private nekkod on the data dir, with no TS backend,
+ * driven over the same HTTP wire as a running app (`httpClient`). Started on first use and stopped by `close()`
  * (or when this process exits: nekkod reads our end of its stdin closing as
  * its shutdown signal). `longLived` is the MCP server, which may bring the
  * model server up as the app would; a one-shot command must not.
@@ -179,9 +178,8 @@ function engineClient(longLived = false): Client {
   const start = () =>
     (started ??= startNekkod({
       here: dirname(script),
-      script,
       dataDir: dir,
-      backendEnv: longLived ? {} : { NEKKO_BACKEND_AUTOSTART: '0' },
+      autoStartEngine: longLived,
       signIn: true,
       // A one-shot command fails rather than waiting on a restart loop; the MCP server keeps its engine.
       restart: longLived,

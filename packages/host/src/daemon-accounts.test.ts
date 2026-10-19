@@ -68,31 +68,17 @@ beforeEach(() => {
   Limits.initLimits(new EventEmitter());
 });
 
-const P = 'anthropic-ratelimit-unified-';
-
-describe('limits without a daemon', () => {
-  it('records the header pairs a daemon-driven turn relays (an array, which used to throw)', () => {
-    const got = Limits.recordFromHeaders('claude:a', 'anthropic', [[`${P}5h-utilization`, '0.5'], [`${P.toUpperCase()}7D-UTILIZATION`, '0.25']]);
-    expect(got?.windows.map((w) => [w.id, w.usedPercent])).toEqual([['5h', 50], ['7d', 25]]);
-  });
-});
-
 describe('limits with a daemon that owns them', () => {
-  it('sends headers, reads, polls and clears through the daemon and keeps nothing here', async () => {
+  it('reads, polls and clears through the daemon and keeps nothing here', async () => {
     useFakeDaemon();
     const snapshot = { windows: [], updatedAt: Date.now(), staleAfterMs: 60_000 };
     answers['limits:get'] = snapshot;
     answers['limits:poll'] = snapshot;
-    const headers = new Headers({ [`${P}5h-utilization`]: '0.5', 'content-type': 'text/plain' });
-    expect(Limits.recordFromHeaders('claude:a', 'anthropic', headers)).toBeUndefined();
-    await vi.waitFor(() => expect(calls.find(([c]) => c === 'limits:headers')).toBeDefined());
-    const [, args] = calls.find(([c]) => c === 'limits:headers')!;
-    expect(args).toEqual(['claude:a', 'anthropic', [['anthropic-ratelimit-unified-5h-utilization', '0.5'], ['content-type', 'text/plain']]]);
-    expect(Limits.get('claude:a')).toBeUndefined();
-    expect(await Limits.readLimits('claude:a', true)).toEqual(snapshot);
-    expect(await Limits.poll('claude:a')).toEqual(snapshot);
-    Limits.clearLimits('claude:a');
-    await vi.waitFor(() => expect(calls.some(([c, a]) => c === 'limits:clear' && a[0] === 'claude:a')).toBe(true));
+    expect(Limits.get('chatgpt:a')).toBeUndefined();
+    expect(await Limits.readLimits('chatgpt:a', true)).toEqual(snapshot);
+    expect(await Limits.poll('chatgpt:a')).toEqual(snapshot);
+    Limits.clearLimits('chatgpt:a');
+    await vi.waitFor(() => expect(calls.some(([c, a]) => c === 'limits:clear' && a[0] === 'chatgpt:a')).toBe(true));
     expect(calls.map(([c]) => c)).toEqual(expect.arrayContaining(['limits:get', 'limits:poll']));
   });
 

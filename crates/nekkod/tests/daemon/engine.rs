@@ -59,7 +59,6 @@ async fn serves_the_model_library_and_its_folders_itself() {
     let local = home.join("local").to_string_lossy().to_string();
     let roaming = home.join("roaming").to_string_lossy().to_string();
     let d = start_with_env(
-        true,
         Some(&data),
         json!({}),
         &[
@@ -155,16 +154,6 @@ async fn serves_the_model_library_and_its_folders_itself() {
     assert_eq!(report["suggestions"][0]["provider"], "ollama", "removed, so suggested");
     let settings: Value = serde_json::from_str(&std::fs::read_to_string(data.join("settings.json")).unwrap()).unwrap();
     assert_eq!(settings["engine"]["modelFolders"], json!([]));
-
-    // The host hears changes in the order they were saved; the folder save is the last.
-    let calls = until("the folder save's settings:changed", Duration::from_secs(10), || async {
-        let calls = host_calls(d.port).await;
-        (calls.iter().filter(|c| c[0] == "settings:changed").count() >= 5).then_some(calls)
-    })
-    .await;
-    let changed = calls.iter().filter(|c| c[0] == "settings:changed").count();
-    assert_eq!(changed, 5, "the seed, three autoload saves and the folder save reach the host: {calls:?}");
-    assert!(!calls.iter().any(|c| c[0] == "engine:runtime"), "the daemon runs the server: {calls:?}");
     drop(d);
     std::fs::remove_dir_all(root).ok();
 }
@@ -240,7 +229,6 @@ async fn downloads_models_itself_and_merges_the_hosts_jobs() {
     let hf = fake_hugging_face(tiny_gguf("llama", "Tiny")).await;
     let h = home.to_string_lossy().to_string();
     let d = start_with_env(
-        true,
         Some(&data),
         json!({ "huggingFaceUrl": format!("http://127.0.0.1:{hf}") }),
         &[("HOME", Some(&h)), ("USERPROFILE", Some(&h)), ("OLLAMA_MODELS", None), ("HF_HOME", None)],
@@ -340,17 +328,6 @@ async fn downloads_models_itself_and_merges_the_hosts_jobs() {
     assert!(ids.contains(&id.as_str()));
     post(d.port, "engine:cancelDownload", json!(["engine:llama:b9999-cuda"]), Some(TOKEN)).await;
     post(d.port, "engine:dismissDownload", json!(["engine:llama:b9999-cuda"]), Some(TOKEN)).await;
-    let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    let asked: Vec<&Value> = calls
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter(|c| {
-            c[0] == "engine:runtime"
-                && ["downloads", "cancelDownload", "dismissDownload"].contains(&c[1][0].as_str().unwrap_or(""))
-        })
-        .collect();
-    assert!(asked.is_empty(), "nothing about downloads asked of the host: {calls}");
     drop(events);
     drop(d);
     std::fs::remove_dir_all(root).ok();
@@ -424,7 +401,7 @@ async fn installs_and_removes_the_engine_itself() {
     std::fs::write(data.join("settings.json"), r#"{"engine":{"modelFolders":[]}}"#).unwrap();
     let (build, name, archive) = engine_archive(&root);
     let gh = fake_github(name, archive).await;
-    let d = start_with_env(true, Some(&data), json!({ "githubApiUrl": format!("http://127.0.0.1:{gh}") }), &[]);
+    let d = start_with_env(Some(&data), json!({ "githubApiUrl": format!("http://127.0.0.1:{gh}") }), &[]);
     let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
     for channel in
         ["engine:install", "engine:uninstall", "engine:installPreview", "engine:detect", "engine:installedBin"]
@@ -476,15 +453,12 @@ async fn installs_and_removes_the_engine_itself() {
         assert_eq!(mlx["reason"], "MLX runs on Apple Silicon Macs only.");
     }
 
-    // The server is the host's: it is asked whether one runs before files go.
+    // The model server is asked whether it runs before files go.
     let (_, removed) = post(d.port, "engine:uninstall", json!(["llama"]), Some(TOKEN)).await;
     assert_eq!(removed, json!({ "ok": true, "message": "Removed the engine." }));
     assert!(!data.join("engine").join(&build).exists() && !data.join("engine/engine.json").exists());
     let (_, again) = post(d.port, "engine:uninstall", json!(["llama"]), Some(TOKEN)).await;
     assert_eq!(again["message"], "No managed engine is installed.");
-    let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    let asked = calls.as_array().unwrap().iter().filter(|c| c[0] == "engine:runtime" && c[1][0] == "isRunning").count();
-    assert_eq!(asked, 0, "the daemon's own model server answers whether one runs: {calls}");
     drop(d);
     std::fs::remove_dir_all(root).ok();
 }
@@ -524,7 +498,7 @@ async fn runs_the_model_server_itself() {
         "engine": { "port": port, "modelFolders": [], "maxLoaded": 1 },
     });
     std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
-    let d = start_with_env(true, Some(&data), json!({}), &[]);
+    let d = start_with_env(Some(&data), json!({}), &[]);
     let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
     for channel in [
         "engine:status",
@@ -703,7 +677,7 @@ async fn the_daemon_runs_an_image_turn_on_its_model_server() {
     .unwrap();
     let session = json!({ "id": "s_img", "title": "New chat", "messages": [], "createdAt": 1, "updatedAt": 1 });
     std::fs::write(data.join("sessions/s_img.json"), session.to_string()).unwrap();
-    let d = start_with_env(true, Some(&data), json!({}), &[]);
+    let d = start_with_env(Some(&data), json!({}), &[]);
     let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
     assert!(info["owned"].as_array().unwrap().contains(&json!("chat:generateImage")), "{info}");
     let (_, models) = post(d.port, "engine:models", json!([]), Some(TOKEN)).await;
@@ -779,7 +753,7 @@ async fn the_daemon_runs_an_image_turn_on_its_model_server() {
     let seed = saved["imageParams"]["seed"].clone();
     assert_eq!(seed, -1, "the chat keeps asking for a fresh seed");
 
-    // A missing prompt is refused with the host's words; the host ran none of it.
+    // A missing prompt is refused with the host's words, told to the chat.
     let (_, _) = post(
         d.port,
         "chat:generateImage",
@@ -787,13 +761,14 @@ async fn the_daemon_runs_an_image_turn_on_its_model_server() {
         Some(TOKEN),
     )
     .await;
-    let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    let calls = calls.as_array().unwrap();
-    assert!(
-        calls.iter().any(|c| c[0] == "turn:notify" && c[1][0]["message"] == "Describe the image you want first."),
-        "{calls:?}"
-    );
-    assert!(!calls.iter().any(|c| c[0] == "chat:generateImage"), "the host generated nothing");
+    let mut refused = false;
+    while let Some(frame) = next_json(&mut events, Duration::from_secs(5)).await {
+        if frame["channel"] == "agent:event" && frame["payload"]["message"] == "Describe the image you want first." {
+            refused = true;
+            break;
+        }
+    }
+    assert!(refused, "the chat was told why");
     post(d.port, "engine:stop", json!([]), Some(TOKEN)).await;
     drop(d);
     std::fs::remove_dir_all(root).ok();
@@ -864,7 +839,6 @@ async fn downloads_a_decision_model_from_its_release_through_the_queue_and_check
 
     let (release, seen) = fake_decision_release(false).await;
     let d = start_with_env(
-        true,
         Some(&data),
         json!({ "decisionModelsUrl": release }),
         &[("HOME", Some(&h)), ("USERPROFILE", Some(&h)), ("OLLAMA_MODELS", None), ("HF_HOME", None)],
@@ -929,7 +903,6 @@ async fn downloads_a_decision_model_from_its_release_through_the_queue_and_check
     let _ = std::fs::remove_dir_all(&dir);
     let (tampered, _) = fake_decision_release(true).await;
     let d = start_with_env(
-        true,
         Some(&data),
         json!({ "decisionModelsUrl": tampered }),
         &[("HOME", Some(&h)), ("USERPROFILE", Some(&h)), ("OLLAMA_MODELS", None), ("HF_HOME", None)],

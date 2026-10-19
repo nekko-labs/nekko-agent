@@ -302,6 +302,7 @@ export const IpcChannels = {
   claudePolicy: 'claude:policy',
   claudeCapability: 'claude:capability',
   claudePlanUsage: 'claude:planUsage',
+  claudeCodeStatus: 'claude:codeStatus',
   mcpStatus: 'mcp:status',
   mcpHypergate: 'mcp:hypergate',
   mcpHypergateConnect: 'mcp:hypergate:connect',
@@ -888,6 +889,8 @@ export interface NekkoApi {
   getClaudeCapability(providerId: string, capability: import('./claude-policy.js').ClaudeCapability): Promise<import('./claude-policy.js').ClaudeCapabilityStatus>;
   /** Plan usage for a Claude provider: none today; example data in the dev-only preview. */
   getClaudePlanUsage(providerId: string): Promise<import('./claude-policy.js').ClaudePlanUsageStatus>;
+  /** Whether the user's Claude Code is installed and signed in; records it for `providerId`'s policy rows. */
+  getClaudeCodeStatus(providerId?: string): Promise<import('./claude-policy.js').ClaudeCodeStatus>;
   /** Connect configured MCP servers and return their status + tools. */
   getMcpStatus(): Promise<import('./mcp.js').McpServerStatus[]>;
   /** Probe for a local Hypergate daemon (`hypergated`) and return its gateway info. */

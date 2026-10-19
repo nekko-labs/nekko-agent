@@ -1,13 +1,11 @@
 //! The model server's runtimes, installed from the daemon
 //! (`nekko-engine::install` and `mlx`): `engine:install`,
-//! `engine:uninstall`, `engine:installPreview`, and for the TS engine that
-//! still runs the model server, `engine:detect` and `engine:installedBin`.
-//! The daemon writes `<data>/engine` (`NEKKOD_OWNS=runtimes`); the install
-//! jobs run in the same queue as the model downloads. The server itself is
-//! still the host's, so stopping it before files are replaced, and refusing
-//! to uninstall under it, ask the host (`engine:runtime`).
+//! `engine:uninstall`, `engine:installPreview`, `engine:detect` and
+//! `engine:installedBin`. The daemon writes `<data>/engine`; the install
+//! jobs run in the same queue as the model downloads. The model server is
+//! stopped before its files are replaced, and a runtime is not uninstalled
+//! under it.
 
-use crate::backend::Backend;
 use nekko_engine::download::Downloads;
 use nekko_engine::install::{InstallIo, Installer, SystemIo, VcOptions};
 use nekko_engine::mlx::MlxRuntime;
@@ -18,15 +16,11 @@ use std::sync::Arc;
 pub const CHANNELS: &[&str] =
     &["engine:install", "engine:uninstall", "engine:installPreview", "engine:detect", "engine:installedBin"];
 
-/// What the backend is told the daemon owns (`NEKKOD_OWNS`): `<data>/engine`.
-pub const OWNS: &str = "runtimes";
-
 pub struct Installs {
     pub llama: Arc<Installer>,
     diffusion: Arc<Installer>,
     mlx: Arc<MlxRuntime>,
     queue: Downloads,
-    backend: Arc<Backend>,
     engine: Arc<crate::engine::Engine>,
 }
 
@@ -48,15 +42,12 @@ fn now() -> f64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0.0, |d| d.as_millis() as f64)
 }
 
-/// Whether the host's model server is running. When the host does not
-/// answer, the daemon serving the engine's port says so instead.
-async fn server_running(backend: &Backend, engine: &crate::engine::Engine) -> bool {
-    if let Some(server) = engine.server.get() {
-        return server.is_running();
-    }
-    match tokio::time::timeout(crate::routes::AUX_WAIT, backend.call("engine:runtime", json!(["isRunning"]))).await {
-        Ok(Ok(v)) => nekko_js::truthy(Some(&v)),
-        _ => engine.router.serving().is_some(),
+/// Whether the model server is running. Before the server is set, the
+/// daemon serving the engine's port says so instead.
+fn server_running(engine: &crate::engine::Engine) -> bool {
+    match engine.server.get() {
+        Some(server) => server.is_running(),
+        None => engine.router.serving().is_some(),
     }
 }
 
@@ -67,7 +58,6 @@ impl Installs {
         queue: Downloads,
         settings: Arc<nekko_settings::SettingsStore>,
         machine: Arc<nekko_machine::Machine>,
-        backend: Arc<Backend>,
         engine: Arc<crate::engine::Engine>,
         github_api: Option<String>,
     ) -> Arc<Self> {
@@ -91,20 +81,15 @@ impl Installs {
             Arc::new(move || nekko_js::truthy_str(settings.get().get("engineBinPath")).map(str::to_string))
         };
         let before_replace = {
-            let (backend, engine) = (backend.clone(), engine.clone());
+            let engine = engine.clone();
             Arc::new(move || {
-                let (backend, engine) = (backend.clone(), engine.clone());
+                let engine = engine.clone();
                 // Windows will not replace a running server's files.
                 Box::pin(async move {
-                    if server_running(&backend, &engine).await {
-                        match engine.server.get() {
-                            Some(server) => {
-                                server.stop().await;
-                            }
-                            None => {
-                                let _ = backend.call("engine:runtime", json!(["stop"])).await;
-                            }
-                        }
+                    if server_running(&engine)
+                        && let Some(server) = engine.server.get()
+                    {
+                        server.stop().await;
                     }
                 }) as nekko_engine::BoxFuture<()>
             })
@@ -136,7 +121,7 @@ impl Installs {
         let diffusion = installer("diffusion", path::join(&[&engine_dir, "diffusion"]), Arc::new(|| None));
         let mlx =
             MlxRuntime::new(path::join(&[&engine_dir, "mlx"]), platform().into(), arch().into(), io, queue.clone());
-        Arc::new(Self { llama, diffusion, mlx, queue, backend, engine })
+        Arc::new(Self { llama, diffusion, mlx, queue, engine })
     }
 
     fn installer(&self, runtime: &str) -> &Arc<Installer> {
@@ -162,7 +147,7 @@ impl Installs {
             }
             "engine:uninstall" => {
                 let runtime = text(0).unwrap_or("llama");
-                if server_running(&self.backend, &self.engine).await {
+                if server_running(&self.engine) {
                     return Ok(
                         json!({ "ok": false, "message": "Stop the model server before uninstalling a runtime." }),
                     );

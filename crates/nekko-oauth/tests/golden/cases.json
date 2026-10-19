@@ -2,21 +2,15 @@
   "authorizeUrls": [
     {
       "provider": "claude",
-      "redirectUri": "https://platform.claude.com/oauth/code/callback",
+      "redirectUri": "http://localhost:51234/callback",
       "challenge": "ch-_x",
       "state": "st/+= "
-    },
-    {
-      "provider": "claude",
-      "redirectUri": "http://localhost:8765/callback",
-      "challenge": "ch",
-      "state": "st"
     },
     {
       "provider": "chatgpt",
       "redirectUri": "http://localhost:1455/auth/callback",
       "challenge": "c!*'()~",
-      "state": "\u00e9 \u00fc&"
+      "state": "é ü&"
     },
     {
       "provider": "openrouter",
@@ -32,11 +26,11 @@
     },
     {
       "pasted": "code#state#more",
-      "redirectUri": "https://platform.claude.com/oauth/code/callback"
+      "redirectUri": "http://localhost:51234/callback"
     },
     {
       "pasted": "#",
-      "redirectUri": "https://platform.claude.com/oauth/code/callback"
+      "redirectUri": "http://localhost:51234/callback"
     },
     {
       "pasted": "http://LOCALHOST:1455/auth/callback?code=a+b%20c&state=s1",
@@ -75,7 +69,7 @@
     {
       "provider": "claude",
       "code": "c",
-      "redirectUri": "https://platform.claude.com/oauth/code/callback",
+      "redirectUri": "http://localhost:51234/callback",
       "verifier": "v",
       "state": "s"
     },
@@ -208,30 +202,6 @@
       "now": 1760000000000
     },
     {
-      "provider": "claude",
-      "text": "{\"access_token\": \"at\", \"refresh_token\": \"rt\", \"expires_in\": 28800, \"scope\": \"user:inference\", \"account\": {\"uuid\": \"u1\", \"email_address\": \"davide@example.com\"}, \"organization\": {\"uuid\": \"o1\", \"name\": \"Org\"}}",
-      "ok": true,
-      "status": 200,
-      "obtainedAt": 1760000000000,
-      "now": 1760000000000
-    },
-    {
-      "provider": "claude",
-      "text": "{\"access_token\": \"at\", \"account\": {\"email_address\": \"two@@example.com\"}}",
-      "ok": true,
-      "status": 200,
-      "obtainedAt": 1760000000000,
-      "now": 1760000000000
-    },
-    {
-      "provider": "claude",
-      "text": "{\"access_token\": \"at\", \"account\": \"davide@example.com\"}",
-      "ok": true,
-      "status": 200,
-      "obtainedAt": 1760000000000,
-      "now": 1760000000000
-    },
-    {
       "provider": "chatgpt",
       "text": "{\"access_token\": \"at\", \"refresh_token\": \"rt\", \"id_token\": \"eyJhbGciOiJub25lIn0.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdF85In0sImVtYWlsIjoiIHdvcmtAZXhhbXBsZS5jb20gIiwiZXhwIjoxNzYwMDAzNjAwfQ.sig\", \"expires_in\": 10}",
       "ok": true,
@@ -249,12 +219,6 @@
     }
   ],
   "refreshRequests": [
-    {
-      "provider": "claude",
-      "accessToken": "a",
-      "refreshToken": "r",
-      "scopes": "user:inference user:profile"
-    },
     {
       "provider": "claude",
       "accessToken": "a",
@@ -360,20 +324,6 @@
       "status": 200,
       "obtainedAt": 1760000000000,
       "now": 1760000000000
-    },
-    {
-      "tokenSet": {
-        "provider": "claude",
-        "accessToken": "old",
-        "refreshToken": "rt",
-        "accountEmail": "old@example.com",
-        "obtainedAt": 1
-      },
-      "text": "{\"access_token\": \"new\", \"account\": {\"email_address\": \"new@example.com\"}}",
-      "ok": true,
-      "status": 200,
-      "obtainedAt": 1760000000000,
-      "now": 1760000000000
     }
   ],
   "statuses": [
@@ -441,26 +391,6 @@
     }
   ],
   "cli": [
-    {
-      "kind": "claude",
-      "raw": "{\"claudeAiOauth\":{\"accessToken\":\"a\",\"refreshToken\":\"r\",\"expiresAt\":1760000000010,\"scopes\":[\"user:inference\",\"user:profile\"],\"subscriptionType\":\"max\"}}",
-      "now": 1760000000000
-    },
-    {
-      "kind": "claude",
-      "raw": "{\"access_token\":\"a\",\"refresh_token\":\"r\",\"expires_at\":5,\"scopes\":\"one two\"}",
-      "now": 1760000000000
-    },
-    {
-      "kind": "claude",
-      "raw": "{\"claudeAiOauth\":{}}",
-      "now": 1760000000000
-    },
-    {
-      "kind": "claude",
-      "raw": "{bad",
-      "now": 1760000000000
-    },
     {
       "kind": "codex",
       "raw": "{\"tokens\":{\"access_token\":\"eyJhbGciOiJub25lIn0.eyJleHAiOjE3NjAwMDcyMDAuNX0.sig\",\"refresh_token\":\"r\",\"account_id\":\"acct\",\"id_token\":\"eyJhbGciOiJub25lIn0.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdF8xMjMifSwiZXhwIjoxNzYwMDAzNjAwfQ.sig\"},\"last_refresh\":\"2025-10-01T00:00:00.000Z\"}",

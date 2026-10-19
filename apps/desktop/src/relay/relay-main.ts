@@ -1,7 +1,7 @@
 /**
  * The relay this computer runs for its own phones (Settings → Remote access →
  * Relay on this computer): `apps/relay-server`, bundled into the app as
- * `out/main/relay.js` and started by `local-relay.ts` with the app's Electron
+ * `out/main/relay.js` and started by nekkod (`local_relay.rs`) with the app's Electron
  * binary under `ELECTRON_RUN_AS_NODE=1`.
  *
  * It listens only on the address it is given (this computer's Tailscale
@@ -12,7 +12,7 @@
  *
  * Environment: `NEKKO_RELAY_HOST`, `NEKKO_RELAY_PORT`. Prints
  * `NEKKO_RELAY_READY {"port":N}` once listening; exits when stdin closes, so it
- * never outlives the backend that started it.
+ * never outlives the daemon that started it.
  */
 import { createPushSender } from '../../../relay-server/src/push.js';
 import { buildRelay } from '../../../relay-server/src/server.js';
