@@ -61,6 +61,47 @@ describe('session options', () => {
   });
 });
 
+describe('clientMessageId (a phone outbox resending)', () => {
+  it('answers a repeat without a second turn, while running and after, and queues once', async () => {
+    const host = createHost({ dataDir: mkdtempSync(join(tmpdir(), 'nekko-once-')) });
+    host.saveProvider({ id: 'p', kind: 'openai-compat', label: 'Test', baseUrl: 'http://localhost:1/v1', enabled: true });
+    const s = host.createSession();
+    // Named, so no title request reaches the model.
+    host.setSessionOptions(s.id, { providerId: 'p', modelId: 'm', title: 'Named' });
+    let ready!: () => void;
+    const entered = new Promise<void>((resolve) => { ready = resolve; });
+    started = ready;
+    const options = { sessionId: s.id, providerId: 'p', modelId: 'm', text: 'from the phone', clientMessageId: 'c-1' };
+    const running = host.sendChat(options);
+    // A resend during admission or the reply resolves at once instead of "already running".
+    await expect(host.sendChat(options)).resolves.toBeUndefined();
+    await entered;
+    await expect(host.sendChat(options)).resolves.toBeUndefined();
+    host.abortChat(s.id);
+    await running;
+    await host.sendChat(options);
+    expect(calls).toBe(1);
+    expect(getSession(s.id)?.messages.filter((m) => m.role === 'user').map((m) => m.content)).toEqual(['from the phone']);
+    expect(getSession(s.id)?.clientMessageIds).toEqual(['c-1']);
+    // A different id is a new prompt.
+    await host.sendChat({ ...options, text: 'another', clientMessageId: 'c-2' });
+    expect(calls).toBe(2);
+    // chat:queue: the same id twice queues one prompt.
+    host.queuePrompt(s.id, { text: 'later', clientMessageId: 'q-1' });
+    host.queuePrompt(s.id, { text: 'later', clientMessageId: 'q-1' });
+    expect(getSession(s.id)?.queue).toEqual(['later']);
+    expect(getSession(s.id)?.clientMessageIds).toEqual(['c-1', 'c-2', 'q-1']);
+  });
+
+  it('remembers no id when the send was refused before its user turn, so a retry runs', async () => {
+    const host = createHost({ dataDir: mkdtempSync(join(tmpdir(), 'nekko-once-')) });
+    const s = host.createSession();
+    await host.sendChat({ sessionId: s.id, providerId: 'missing', modelId: 'm', text: 'x', clientMessageId: 'r-1' }).catch(() => {});
+    expect(getSession(s.id)?.clientMessageIds).toBeUndefined();
+    expect(getSession(s.id)?.messages).toEqual([]);
+  });
+});
+
 describe('interrupt queued prompt', () => {
   it('rejects overlapping sends even during admission, without losing queued follow-ups', async () => {
     const host = createHost({ dataDir: mkdtempSync(join(tmpdir(), 'nekko-busy-')) });

@@ -66,6 +66,14 @@ struct ChatView: View {
                     }
                     if !chat.ready { ProgressView().frame(maxWidth: .infinity).padding(.top, 40) }
                     ForEach(chat.blocks) { b in BlockView(block: b).id(b.id) }
+                    // Prompts written here that the computer doesn't have yet.
+                    ForEach(chat.waiting) { item in
+                        WaitingRow(item: item, sending: store.outbox.sendingId == item.id, online: store.conn == .online,
+                                   edit: { _ = store.outbox.takeBack(item.id) },
+                                   delete: { _ = store.outbox.remove(item.id) },
+                                   sendNow: { sendNow() })
+                            .id("waiting-\(item.id)")
+                    }
                     if chat.turn.running && chat.turn.approval == nil && chat.turn.question == nil {
                         HStack(spacing: 8) {
                             ProgressView().controlSize(.small)
@@ -186,6 +194,69 @@ struct ChatView: View {
         Task {
             do { try await body() } catch { actionError = error.localizedDescription }
         }
+    }
+
+    /// Send now on a waiting prompt: deliver at once, or dial the computer now rather than after the backoff.
+    private func sendNow() {
+        if store.conn == .online { store.flushOutbox() } else { store.reconnect() }
+    }
+}
+
+/// A prompt in the outbox, shown where it will land in the transcript: it
+/// goes when the computer is back. Edit puts it back in the message box.
+struct WaitingRow: View {
+    let item: OutboxItem
+    let sending: Bool
+    let online: Bool
+    var edit: () -> Void
+    var delete: () -> Void
+    var sendNow: () -> Void
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        HStack {
+            Spacer(minLength: 48)
+            VStack(alignment: .trailing, spacing: 6) {
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text(item.preview).foregroundStyle(palette.ink).textSelection(.enabled)
+                    if !item.images.isEmpty {
+                        Label(item.images.count == 1 ? "1 photo" : "\(item.images.count) photos", systemImage: "photo")
+                            .font(.caption2).foregroundStyle(palette.inkSoft)
+                    }
+                }
+                .padding(.horizontal, 14).padding(.vertical, 10)
+                .background(palette.surface, in: RoundedRectangle(cornerRadius: 18))
+                .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(palette.line, style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
+                HStack(spacing: 6) {
+                    if sending {
+                        ProgressView().controlSize(.mini)
+                        Text("Sending…")
+                    } else {
+                        Image(systemName: "clock").accessibilityHidden(true)
+                        Text("Waiting to send")
+                    }
+                }
+                .font(.caption2).foregroundStyle(palette.inkSoft)
+                if let e = item.lastError, !sending {
+                    Text(e).font(.caption2).foregroundStyle(palette.inkFaint).multilineTextAlignment(.trailing)
+                }
+                if !sending {
+                    HStack(spacing: 4) {
+                        Button("Edit", action: edit)
+                        Button("Delete", role: .destructive, action: delete)
+                        Button(online ? "Send now" : "Try now", action: sendNow)
+                    }
+                    .font(.caption.weight(.semibold))
+                    .buttonStyle(.borderless)
+                    .controlSize(.small)
+                    .tint(palette.accent)
+                    .frame(minHeight: 44)
+                }
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Waiting to send: \(item.preview)")
+        .accessibilityIdentifier("chat.waiting")
     }
 }
 
@@ -461,11 +532,28 @@ struct Composer: View {
     @State private var error: String?
     @State private var dictation = Dictation()
     @FocusState private var focused: Bool
+    /// Why the computer turned down the prompt now in the box (it came back from the outbox).
+    @State private var refusal: String?
+    /// The draft as last saved from here: a different one in the store was handed back (Edit, a refusal).
+    @State private var lastSaved: Draft?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if let blocked = chat.blocked {
                 Text(blocked).font(.caption).foregroundStyle(palette.warning)
+            } else if let note = chat.offlineNote {
+                Label(note, systemImage: "tray.and.arrow.up").font(.caption).foregroundStyle(palette.inkSoft)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("chat.offlineNote")
+            }
+            if let refusal {
+                HStack(alignment: .top, spacing: 6) {
+                    Label(refusal, systemImage: "exclamationmark.bubble").font(.caption).foregroundStyle(palette.danger)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    Button { self.refusal = nil } label: { Image(systemName: "xmark.circle.fill") }
+                        .foregroundStyle(palette.inkSoft).accessibilityLabel("Dismiss")
+                }
             }
             if let error { Text(error).font(.caption).foregroundStyle(palette.danger) }
             if let skill {
@@ -546,6 +634,18 @@ struct Composer: View {
                             .background(palette.danger, in: Circle()).foregroundStyle(.white)
                             .frame(width: 44, height: 44).contentShape(Rectangle())
                     }.accessibilityLabel("Stop")
+                } else if chat.sendsLater {
+                    // Offline: the prompt waits on this iPhone (the outbox) and goes when the computer is back.
+                    Button(action: send) {
+                        Text("Send when online").font(.footnote.weight(.semibold)).lineLimit(1)
+                            .padding(.horizontal, 12).frame(minHeight: 36)
+                            .background(canSend ? palette.accent : palette.surface2, in: Capsule())
+                            .foregroundStyle(canSend ? palette.onAccent : palette.inkFaint)
+                            .frame(minHeight: 44).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!canSend)
+                    .accessibilityIdentifier("chat.sendLater")
                 } else {
                     Button(action: send) {
                         Image(systemName: "arrow.up").font(.body.weight(.bold)).frame(width: 36, height: 36)
@@ -568,6 +668,14 @@ struct Composer: View {
             loadingPhotos = false
         }
         .onChange(of: dictation.error) { _, e in if let e { error = e } }
+        // What is typed is kept on the phone (drafts survive leaving the chat and iOS ending the app).
+        .onAppear(perform: restoreDraft)
+        .onChange(of: text) { _, _ in saveDraft() }
+        .onChange(of: skill) { _, _ in saveDraft() }
+        .onChange(of: images) { _, _ in saveDraft() }
+        .onChange(of: refusal) { _, _ in saveDraft() }
+        // Edit on a waiting prompt, or a refusal: the prompt comes back into the box.
+        .onChange(of: store.drafts.drafts[chat.sessionId]) { _, d in adopt(d) }
         // Tapped stop or hit the 30-second limit: the words go into the message, never sent.
         .onChange(of: dictation.result) { _, r in if let r { text += (text.isEmpty ? "" : " ") + r.text } }
         // "Ask about this" in Changes: the quote goes after what's typed, never sent.
@@ -589,6 +697,36 @@ struct Composer: View {
     }
 
     private var canSend: Bool { chat.blocked == nil && !loadingPhotos && hasContent }
+
+    private var current: Draft { Draft(text: text, skill: skill, images: images, refusal: refusal) }
+
+    private func restoreDraft() {
+        let d = store.drafts.draft(chat.sessionId)
+        lastSaved = d
+        guard !d.isEmpty else { return }
+        text = d.text
+        skill = d.skill
+        images = d.images
+        refusal = d.refusal
+    }
+
+    private func saveDraft() {
+        let d = current
+        guard d != lastSaved else { return }
+        lastSaved = d
+        store.drafts.set(chat.sessionId, d)
+    }
+
+    /// A draft changed in the store, not from here: a waiting prompt taken back, or one refused.
+    private func adopt(_ stored: Draft?) {
+        let d = stored ?? Draft()
+        guard d != lastSaved, !d.isEmpty else { return }
+        lastSaved = d
+        text = d.text
+        skill = d.skill
+        images = d.images
+        refusal = d.refusal
+    }
 
     /// `/re` → the computer's skills starting with "re".
     private var skillMatches: [SkillSummary] {
@@ -617,6 +755,10 @@ struct Composer: View {
         images = []
         photos = []
         error = nil
+        refusal = nil
+        // The prompt is on disk in the outbox from here until the computer lists it.
+        store.drafts.clear(chat.sessionId)
+        lastSaved = nil
         Task {
             do {
                 try await chat.send(sentBody, skill: sentSkill, images: sentImages)

@@ -33,7 +33,8 @@
         </dict>
     </array>
     <key>NSSupportsLiveActivities</key><true/>
-    <key>UIBackgroundModes</key><array><string>remote-notification</string></array>
+    <key>UIBackgroundModes</key><array><string>remote-notification</string><string>fetch</string></array>
+    <key>BGTaskSchedulerPermittedIdentifiers</key><array><string>com.nekko.native.ios.outbox</string></array>
     <key>NSCameraUsageDescription</key><string>Scan the pairing code your computer shows in Settings → Remote access.</string>
     <key>NSFaceIDUsageDescription</key><string>Unlock Nekko Agent, which can run tools on your computer.</string>
     <key>NSMicrophoneUsageDescription</key><string>Dictate a message. The recording is turned into text and then deleted.</string>

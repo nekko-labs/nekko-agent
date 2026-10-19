@@ -42,6 +42,8 @@ const CASES: Case[] = [
   { name: 'queued string claim', fixture: 's_extra', disk: [['queue', 'only']], turn: {}, queued: { index: 1, item: { text: 'only' } } },
   { name: 'queued changed', fixture: 's_extra', disk: [['queue', 'first']], turn: {}, queued: { index: 0, item: 'other' } },
   { name: 'queued gone', fixture: 's_extra', disk: [], turn: {}, queued: { index: 5, item: 'x' } },
+  { name: 'phone queued meanwhile', fixture: 's_tools', disk: [['queue', { text: 'later', clientMessageId: 'q1' }]], turn: { messagesAppend: [reply], clientMessageIds: ['t1'] } },
+  { name: 'phone queued, turn has no ids', fixture: 's_plain', disk: [['queue', { text: 'later', clientMessageId: 'q1' }]], turn: { messagesAppend: [reply] } },
   { name: 'deleted mid-turn', fixture: 's_plain', disk: [], turn: { messagesAppend: [reply] }, deleted: true },
   { name: 'deleted mid-turn queued', fixture: 's_plain', disk: [], turn: {}, queued: { index: 0, item: 'x' }, deleted: true },
 ];
@@ -50,7 +52,7 @@ function applyDisk(id: string, [name, ...args]: Op): void {
   switch (name) {
     case 'setOptions': sessions.setSessionOptions(id, args[0] as never); return;
     case 'setSpecLinked': sessions.setSpecLinked(id, args[0] as boolean); return;
-    case 'queue': sessions.queuePrompt(id, args[0] as string); return;
+    case 'queue': sessions.queuePrompt(id, args[0] as never); return;
     default: throw new Error(`unknown op ${name}`);
   }
 }

@@ -18,9 +18,26 @@ struct NewChatView: View {
     @State private var busy = false
     @State private var error: String?
     @State private var showModels = false
+    @State private var restored = false
+    /// Why the computer turned down a chat started offline (it came back here).
+    @State private var refusal: String?
+    @Environment(\.dismiss) private var dismiss
+
+    private var offline: Bool { store.conn != .online }
 
     var body: some View {
         Form {
+            if offline {
+                Section {
+                    Label("\(store.active?.name ?? "Your computer") is \(store.conn == .offline ? "offline" : "reconnecting"). Start now and the chat begins when it’s back; it waits on this iPhone until then.",
+                          systemImage: "tray.and.arrow.up")
+                        .font(.footnote).foregroundStyle(palette.inkSoft)
+                        .accessibilityIdentifier("newChat.offlineNote")
+                }
+            }
+            if let refusal {
+                Section { Label(refusal, systemImage: "exclamationmark.bubble").font(.footnote).foregroundStyle(palette.danger) }
+            }
             Section {
                 TextField("What should your computer do?", text: $text, axis: .vertical).lineLimit(3...10)
                     .accessibilityIdentifier("newChat.prompt")
@@ -67,7 +84,9 @@ struct NewChatView: View {
         .keyboardDoneButton()
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button("Start", action: start).disabled(busy || model == nil || store.conn != .online)
+                Button(offline ? "Start when online" : "Start", action: start)
+                    .disabled(busy || model == nil || (offline && text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
+                    .accessibilityIdentifier("newChat.start")
             }
         }
         .sheet(isPresented: $showModels) {
@@ -76,8 +95,17 @@ struct NewChatView: View {
                 if let id = store.activeId { app.prefs.lastModel[id] = "\(p)::\(m)" }
             }
         }
+        .onAppear(perform: restoreDraft)
         .onAppear(perform: pickDefault)
         .onAppear(perform: takeShared)
+        // Kept on the phone like a chat's composer: text, model, folder and tool policy.
+        .onChange(of: text) { _, _ in saveDraft() }
+        .onChange(of: model?.0) { _, _ in saveDraft() }
+        .onChange(of: model?.1) { _, _ in saveDraft() }
+        .onChange(of: folder) { _, _ in saveDraft() }
+        .onChange(of: mode) { _, _ in saveDraft() }
+        // A chat started offline that the computer turned down comes back here.
+        .onChange(of: store.drafts.drafts[DraftStore.newChat]) { _, d in adopt(d) }
         .onChange(of: app.sharedText) { _, _ in takeShared() }
         // The computer's defaults may arrive after this screen opened.
         .onChange(of: store.defaults) { _, _ in pickDefault() }
@@ -97,11 +125,12 @@ struct NewChatView: View {
     }
 
     /// The last model used for a new chat on this computer, else the computer's default.
+    /// Offline (the providers aren't known yet) the last one is taken as it is.
     private func pickDefault() {
         guard model == nil else { return }
         if let id = store.activeId, let last = app.prefs.lastModel[id], let r = last.range(of: "::") {
             let p = String(last[..<r.lowerBound])
-            if store.providers.contains(where: { $0.id == p && $0.enabled }) {
+            if store.providers.isEmpty || store.providers.contains(where: { $0.id == p && $0.enabled }) {
                 model = (p, String(last[r.upperBound...]))
                 return
             }
@@ -109,24 +138,72 @@ struct NewChatView: View {
         if let p = store.defaults.defaultProviderId, let m = store.defaults.defaultModelId, m != autoModelId { model = (p, m) }
     }
 
+    private var current: Draft {
+        Draft(text: text, providerId: model?.0, modelId: model?.1, workspaceId: folder, mode: mode?.rawValue, refusal: refusal)
+    }
+
+    private func restoreDraft() {
+        guard !restored else { return }
+        restored = true
+        apply(store.drafts.draft(DraftStore.newChat))
+    }
+
+    private func apply(_ d: Draft) {
+        if !d.text.isEmpty { text = d.text }
+        if let p = d.providerId, let m = d.modelId { model = (p, m) }
+        if d.workspaceId != nil { folder = d.workspaceId }
+        if let m = d.mode.flatMap(PcSettings.ChatMode.init(rawValue:)) { mode = m }
+        refusal = d.refusal
+    }
+
+    private func saveDraft() {
+        guard restored else { return }
+        store.drafts.set(DraftStore.newChat, current)
+    }
+
+    private func adopt(_ stored: Draft?) {
+        guard let d = stored, d != current, !d.isEmpty else { return }
+        apply(d)
+    }
+
     private func start() {
         guard let model else { return }
         let (p, m) = model
+        let first = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if offline {
+            startLater(p, m, first)
+            return
+        }
         busy = true
         error = nil
         Task {
             do {
                 let id = try await store.createChat(providerId: p, modelId: m, workspaceId: folder, mode: mode)
+                store.drafts.clear(DraftStore.newChat)
                 // The chat's own model sends the first message, so a failure shows
                 // there and the text comes back in its composer.
-                let first = text.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !first.isEmpty { app.firstMessages[id] = first }
                 opened(id)
+            } catch let e as RelayError where !e.fromComputer && !first.isEmpty {
+                // No answer: the chat starts from the outbox when the computer is back.
+                startLater(p, m, first)
             } catch {
                 self.error = error.localizedDescription
             }
             busy = false
         }
+    }
+
+    /// Offline: the chat and its first prompt wait in the outbox, listed under
+    /// Waiting to send, and start when the computer is back.
+    private func startLater(_ p: String, _ m: String, _ first: String) {
+        guard !first.isEmpty else { return }
+        store.outbox.add(chatId: nil, text: first, newChat: NewChatSpec(providerId: p, modelId: m, workspaceId: folder, mode: mode?.rawValue))
+        store.drafts.clear(DraftStore.newChat)
+        text = ""
+        refusal = nil
+        store.flushOutbox()
+        dismiss()
     }
 }
 

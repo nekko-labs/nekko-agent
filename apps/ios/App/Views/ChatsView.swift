@@ -36,9 +36,9 @@ struct ChatsView: View {
         .toolbar {
             ToolbarItem(placement: .topBarLeading) { ComputerMenu(path: $path) }
             ToolbarItem(placement: .topBarTrailing) {
+                // Offline too: a chat started now begins when the computer is back.
                 Button { open(.newChat) } label: { Image(systemName: "square.and.pencil") }
                     .accessibilityLabel("New chat")
-                    .disabled(store.conn != .online)
             }
         }
         .overlay(alignment: .top) { if store.summariesLoading && store.summaries.isEmpty { ProgressView().padding(.top, 80) } }
@@ -98,6 +98,13 @@ struct ChatsView: View {
                 Text("No chats match “\(query)”.").font(.subheadline).foregroundStyle(palette.inkSoft)
                     .frame(maxWidth: .infinity).padding(.vertical, 24).listRowBackground(Color.clear)
             }
+            if !store.outbox.pendingNewChats.isEmpty && query.isEmpty {
+                Section {
+                    ForEach(store.outbox.pendingNewChats) { item in PendingChatRow(item: item, path: $path) }
+                } header: {
+                    Text("Waiting to send")
+                }
+            }
             if !needsYou.isEmpty && query.isEmpty {
                 Section("Needs you") { ForEach(needsYou) { row($0) } }
             }
@@ -135,7 +142,7 @@ struct ChatsView: View {
 
     private func row(_ s: SessionSummary) -> some View {
         NavigationLink(value: Route.chat(s.id)) {
-            ChatRow(summary: s, activity: store.activity[s.id])
+            ChatRow(summary: s, activity: store.activity[s.id], waiting: store.outbox.count(for: s.id))
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             if s.archived {
@@ -179,6 +186,8 @@ struct ChatsView: View {
 struct ChatRow: View {
     let summary: SessionSummary
     let activity: Activity?
+    /// Prompts for this chat waiting on the phone (the outbox).
+    var waiting = 0
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -198,6 +207,11 @@ struct ChatRow: View {
                         .font(.caption2).foregroundStyle(palette.inkFaint)
                 }
                 badge
+                if waiting > 0 {
+                    Label("\(waiting) waiting", systemImage: "tray.and.arrow.up")
+                        .font(.caption2).foregroundStyle(palette.inkSoft)
+                        .accessibilityLabel(waiting == 1 ? "1 prompt waiting to send" : "\(waiting) prompts waiting to send")
+                }
             }
         }
         .padding(.vertical, 2)
@@ -224,6 +238,55 @@ struct ChatRow: View {
         case nil:
             EmptyView()
         }
+    }
+}
+
+/// A chat started while the computer was out of reach: its first prompt, and
+/// Edit (back to New chat), Delete and Send now. It becomes a normal row once
+/// the computer has created it.
+struct PendingChatRow: View {
+    let item: OutboxItem
+    @Binding var path: [Route]
+    @Environment(ComputersStore.self) private var store
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let sending = store.outbox.sendingId == item.id
+        VStack(alignment: .leading, spacing: 4) {
+            Text(item.preview).font(.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(2)
+            HStack(spacing: 6) {
+                if sending { ProgressView().controlSize(.mini) } else { Image(systemName: "clock").accessibilityHidden(true) }
+                Text(sending ? "Starting…" : "New chat · waiting to send")
+            }
+            .font(.caption2).foregroundStyle(palette.inkSoft)
+            if let e = item.lastError, !sending { Text(e).font(.caption2).foregroundStyle(palette.inkFaint) }
+        }
+        .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("chats.pending")
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            if !sending {
+                Button(role: .destructive) { _ = store.outbox.remove(item.id) } label: { Label("Delete", systemImage: "trash") }
+            }
+        }
+        .contextMenu {
+            if !sending {
+                Button { edit() } label: { Label("Edit", systemImage: "pencil") }
+                Button { sendNow() } label: { Label("Send now", systemImage: "paperplane") }
+                Button(role: .destructive) { _ = store.outbox.remove(item.id) } label: { Label("Delete", systemImage: "trash") }
+            }
+        }
+        .onTapGesture { if !sending { edit() } }
+    }
+
+    /// Back to New chat with its text, model, folder and tool policy.
+    private func edit() {
+        guard store.outbox.takeBack(item.id) != nil else { return }
+        path.append(.newChat)
+    }
+
+    private func sendNow() {
+        if store.conn == .online { store.flushOutbox() } else { store.reconnect() }
     }
 }
 

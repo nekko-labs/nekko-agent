@@ -39,8 +39,16 @@ public struct RelayStatus: Equatable, Sendable {
 
 public struct RelayError: Error, Equatable, LocalizedError, Sendable {
     public let message: String
-    public init(_ message: String) { self.message = message }
+    /// The computer answered with this error (it refused the call). False when
+    /// the call never got an answer (offline, timed out, connection lost), so
+    /// it may or may not have arrived.
+    public let fromComputer: Bool
+    public init(_ message: String, fromComputer: Bool = false) {
+        self.message = message
+        self.fromComputer = fromComputer
+    }
     public var errorDescription: String? { message }
+    public static func == (a: RelayError, b: RelayError) -> Bool { a.message == b.message }
 }
 
 /// One WebSocket. Created idle by `WsTransport.open`; `start()` dials, and no
@@ -433,7 +441,7 @@ public final class RelayClient: @unchecked Sendable {
         case "res":
             guard let id = frame.long("id"), let p = takePending(id) else { return }
             if let err = frame["error"], !err.isNull {
-                p.resume(throwing: RelayError(err.string ?? err.serialized()))
+                p.resume(throwing: RelayError(err.string ?? err.serialized(), fromComputer: true))
             } else {
                 p.resume(returning: frame["result"] ?? .null)
             }

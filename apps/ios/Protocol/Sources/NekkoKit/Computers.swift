@@ -128,6 +128,11 @@ public final class ComputersStore {
         didSet { if chatListCache == nil { savedListAt = nil } else { saveList() } }
     }
     private var loggedComputer: String?
+    /// The active computer's drafts (every chat's composer and New chat's), kept on disk.
+    public let drafts: DraftStore
+    /// The active computer's prompts waiting to be delivered, kept on disk.
+    public let outbox: Outbox
+    private let offlineFiles: OfflineFiles?
 
     public var active: Computer? { computers.first { $0.id == activeId } }
     public var groups: [ChatGroup] { ChatGroup.of(summaries, folders: workspaces) }
@@ -156,6 +161,8 @@ public final class ComputersStore {
     private var summariesTask: Task<Void, Never>?
     private var listeners: [UUID: (AgentEvent) -> Void] = [:]
     private var pushToken: String?
+    /// Whose drafts and outbox are loaded.
+    private var offlineComputer: String?
 
     public init(store: SecureStore,
                 makeConnection: @escaping (RelayConfig) -> RemoteConnection,
@@ -168,7 +175,11 @@ public final class ComputersStore {
                 newId: @escaping () -> String = { UUID().uuidString.lowercased() },
                 now: @escaping () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) },
                 summariesDebounce: TimeInterval = 0.6,
-                modelListTimeout: TimeInterval = 6) {
+                modelListTimeout: TimeInterval = 6,
+                offlineFiles: OfflineFiles? = nil,
+                draftDebounce: TimeInterval = 0.5,
+                outboxPoll: TimeInterval = 0.5,
+                outboxConfirmTimeout: TimeInterval = 45) {
         self.store = store
         self.makeConnection = makeConnection
         self.deviceName = deviceName
@@ -179,6 +190,25 @@ public final class ComputersStore {
         self.now = now
         self.summariesDebounce = summariesDebounce
         self.modelListTimeout = modelListTimeout
+        self.offlineFiles = offlineFiles
+        let drafts = DraftStore(files: offlineFiles, debounce: draftDebounce)
+        self.drafts = drafts
+        var reach: () -> Caller? = { nil }
+        var defaultsNow: () -> RemoteDefaults = { RemoteDefaults() }
+        outbox = Outbox(files: offlineFiles, drafts: drafts, caller: { reach() }, defaults: { defaultsNow() },
+                        newId: newId, now: now, pollInterval: outboxPoll, confirmTimeout: outboxConfirmTimeout)
+        reach = { [weak self] in
+            guard let self, self.conn == .online else { return nil }
+            return self.client
+        }
+        defaultsNow = { [weak self] in self?.defaults ?? RemoteDefaults() }
+        outbox.onDelivered = { [weak self] _, _ in self?.scheduleSummaries() }
+    }
+
+    /// Deliver the outbox now (connected, back in the foreground, Send now).
+    public func flushOutbox() {
+        guard conn == .online, !outbox.items.isEmpty else { return }
+        Task { await outbox.flush() }
     }
 
     /// Calls the active computer at call time; throws when none is connected.
@@ -237,6 +267,12 @@ public final class ComputersStore {
         if wasActive { disconnect() }
         store.set(Self.secretKey(id), nil)
         chatListCache?.remove(id)
+        if wasActive {
+            drafts.load(nil)
+            outbox.load(nil)
+            offlineComputer = nil
+        }
+        offlineFiles?.remove(id)
         computers.removeAll { $0.id == id }
         saveIndex()
         if wasActive {
@@ -257,6 +293,11 @@ public final class ComputersStore {
         guard let computer = computers.first(where: { $0.id == id }), let secret = secret(id),
               let keyBytes = E2E.fromHex(secret.keyHex) else { return }
         store.set(Self.activeKey, id)
+        if offlineComputer != id {
+            drafts.load(id)
+            outbox.load(id)
+            offlineComputer = id
+        }
         activeId = id
         conn = .connecting
         denied = nil
@@ -308,9 +349,16 @@ public final class ComputersStore {
             conn = s.state
             connDetail = s.detail
             connectionLog.record(s.state, detail: s.detail, denied: s.denied)
-            if let d = s.denied { denied = d }
+            if let d = s.denied {
+                denied = d
+                // Never delivered now: each prompt goes back to its composer, saying why.
+                outbox.handBackAll(reason: "This phone is no longer paired with \(active?.name ?? "your computer").")
+            }
             if s.state == .online {
-                Task { await refresh() }
+                Task {
+                    await refresh()
+                    await outbox.flush()
+                }
                 if let pushToken { Task { try? await client?.registerPush(token: pushToken) } }
             }
         case .welcome:
@@ -322,6 +370,7 @@ public final class ComputersStore {
                 return
             }
             guard channel == Events.agentEvent, let e = AgentEvent.from(payload) else { return }
+            outbox.onEvent(e)
             for f in listeners.values { f(e) }
             let next = ActivityTracker.next(activity, e)
             if next != activity { activity = next }
@@ -349,7 +398,10 @@ public final class ComputersStore {
     /// and re-read the list (chats completed or started meanwhile send no event).
     public func nudge() {
         client?.nudge()
-        if conn == .online { scheduleSummaries() }
+        if conn == .online {
+            scheduleSummaries()
+            flushOutbox()
+        }
     }
 
     /// The phone changed network: dial a fresh socket now.

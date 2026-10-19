@@ -91,7 +91,7 @@ import type {
   ModelFolderReport,
   SkillDef,
 } from '@nekko-agent/shared';
-import { appearanceOf, touchesAppearance, brandEnv, DEFAULT_ENGINE_SETTINGS, engineBaseUrl, IpcChannels, isLocalProvider, isRuntimeKind, runnableSkills, SKILLS, sameFolderPath } from '@nekko-agent/shared';
+import { appearanceOf, clientMessageIdOf, hasClientMessageId, touchesAppearance, brandEnv, DEFAULT_ENGINE_SETTINGS, engineBaseUrl, IpcChannels, isLocalProvider, isRuntimeKind, runnableSkills, SKILLS, sameFolderPath } from '@nekko-agent/shared';
 import { gatherMachineFacts } from './readiness.js';
 import { createRuntimes } from './runtimes/index.js';
 import { createEngine } from './engine/index.js';
@@ -656,6 +656,8 @@ export function createHost(opts: {
   const events = new EventEmitter();
   const activeChats = new Map<string, Promise<void>>();
   const interrupting = new Set<string>();
+  /** `sessionId` and `clientMessageId` of each `chat:send` still running, so a resend meanwhile is a repeat too. */
+  const sendingIds = new Set<string>();
   initOAuth(events);
   initLimits(events);
   const onIndexProgress = (s: IndexStatus) => events.emit('indexProgress', s);
@@ -1143,6 +1145,12 @@ export function createHost(opts: {
     },
     listTools: () => [...BUILTIN_TOOLS.map((t) => ({ name: t.name, description: t.description })), ...mcpToolList()],
     sendChat: (o) => {
+      // A resend of a prompt this chat already took (a phone's outbox after a
+      // dropped connection) starts no second turn. The first send resolves when
+      // its turn ends; the repeat resolves at once.
+      const clientId = clientMessageIdOf(o.clientMessageId);
+      const sendingKey = `${o.sessionId}\n${clientId}`;
+      if (clientId && (sendingIds.has(sendingKey) || hasClientMessageId(sessions.getSession(o.sessionId), clientId))) return Promise.resolve();
       if (interrupting.has(o.sessionId)) throw new Error('A queued prompt is already starting.');
       if (activeChats.has(o.sessionId) || isChatRunning(o.sessionId)) {
         throw new Error('This chat is already running. Queue the follow-up or interrupt the current reply first.');
@@ -1153,7 +1161,11 @@ export function createHost(opts: {
       }
       const run = sendChat(o, (e) => events.emit('agentEvent', e), !!opts.allowBrowserControl);
       activeChats.set(o.sessionId, run);
-      void run.finally(() => { if (activeChats.get(o.sessionId) === run) activeChats.delete(o.sessionId); }).catch(() => {});
+      if (clientId) sendingIds.add(sendingKey);
+      void run.finally(() => {
+        if (activeChats.get(o.sessionId) === run) activeChats.delete(o.sessionId);
+        if (clientId) sendingIds.delete(sendingKey);
+      }).catch(() => {});
       return run;
     },
     abortChat: (sessionId) => {

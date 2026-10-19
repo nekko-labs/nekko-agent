@@ -985,3 +985,46 @@ async fn interrupting_starts_the_chosen_queued_prompt_and_keeps_the_others() {
     assert_eq!(adopts[1][1][0]["opts"]["text"], "selected");
     assert_eq!(adopts[1][1][0]["chained"], false, "a new chain, which the host adopts as its own");
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_resent_client_message_id_runs_one_turn_and_queues_once() {
+    let session = json!({ "id": "s_once", "title": "Named", "titleAuto": false, "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    let rig = turn_rig("once", session);
+    let model = scripted_model(vec![HANG.to_string(), say_text("second")]).await;
+    let settings = json!({ "providers": [{ "id": "p1", "kind": "openai-compat", "enabled": true, "baseUrl": format!("http://127.0.0.1:{}/v1", model.port) }], "workspaces": [{ "id": "w1", "name": "project", "path": rig.workspace.to_string_lossy() }], "defaultChatMode": "yolo" });
+    std::fs::write(rig.data.join("settings.json"), settings.to_string()).unwrap();
+    let opts = json!({ "sessionId": "s_once", "providerId": "p1", "modelId": "synthetic", "text": "from the phone", "clientMessageId": "6f1c2a9e-7b1d-4c35-9a52-2b8f0f6f8d11" });
+    let port = rig.d.port;
+    let first_opts = opts.clone();
+    let first = tokio::spawn(async move { post(port, "chat:send", json!([first_opts]), Some(TOKEN)).await });
+    let until = std::time::Instant::now() + Duration::from_secs(20);
+    while model.requests.lock().unwrap().is_empty() {
+        assert!(std::time::Instant::now() < until, "the first send never reached the model");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    // The phone resends while the first is still running (its connection dropped): answered at once, not refused.
+    let (status, reply) = post(port, "chat:send", json!([opts.clone()]), Some(TOKEN)).await;
+    assert_eq!((status, reply), (200, Value::Null));
+    post(port, "chat:abort", json!(["s_once"]), Some(TOKEN)).await;
+    let (status, _) = tokio::time::timeout(Duration::from_secs(10), first).await.expect("Stop ends the turn").unwrap();
+    assert_eq!(status, 200);
+    // After the turn ended, saved with the chat: a repeat still starts nothing.
+    let (status, reply) = post(port, "chat:send", json!([opts]), Some(TOKEN)).await;
+    assert_eq!((status, reply), (200, Value::Null));
+    let saved = saved_session(&rig, "s_once");
+    let users = saved["messages"].as_array().unwrap().iter().filter(|m| m["role"] == "user").count();
+    assert_eq!(users, 1, "{saved}");
+    assert_eq!(saved["clientMessageIds"], json!(["6f1c2a9e-7b1d-4c35-9a52-2b8f0f6f8d11"]));
+    assert_eq!(model.requests.lock().unwrap().len(), 1);
+
+    // chat:queue: the same id twice queues one prompt.
+    for _ in 0..2 {
+        let (status, _) =
+            post(port, "chat:queue", json!(["s_once", { "text": "later", "clientMessageId": "q-1" }]), Some(TOKEN))
+                .await;
+        assert_eq!(status, 200);
+    }
+    let saved = saved_session(&rig, "s_once");
+    assert_eq!(saved["queue"], json!(["later"]));
+    assert_eq!(saved["clientMessageIds"], json!(["6f1c2a9e-7b1d-4c35-9a52-2b8f0f6f8d11", "q-1"]));
+}

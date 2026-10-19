@@ -3,7 +3,7 @@ import { readFile, readdir, stat } from 'fs/promises';
 import { randomBytes } from 'crypto';
 import { join } from 'path';
 import type { QueuePayload, QueuedPrompt, Session, SessionSummary } from '@nekko-agent/shared';
-import { archiveExpired, queueItemsEqual, summarizeSession, getExecutionMode, defaultSavedMode, sessionPatchForMode } from '@nekko-agent/shared';
+import { archiveExpired, clientMessageIdOf, hasClientMessageId, queueItemsEqual, rememberClientMessageIds, summarizeSession, getExecutionMode, defaultSavedMode, sessionPatchForMode } from '@nekko-agent/shared';
 import { dataDir, getSettings } from './store.js';
 import { deleteAgentLog } from './agent-log.js';
 
@@ -140,6 +140,8 @@ export function saveTurnSession(s: Session, queued?: { index: number; item: Queu
       s.title = disk.title;
       s.titleAuto = false;
     }
+    // Ids a phone queued with meanwhile stay remembered beside this turn's own.
+    if (disk.clientMessageIds?.length) s.clientMessageIds = rememberClientMessageIds(disk.clientMessageIds, s.clientMessageIds ?? []);
     // Claim the selected queue entry in the same atomic write as its user
     // message. If the queue changed while startup was awaiting IO, leave it
     // intact rather than removing a different prompt.
@@ -326,6 +328,9 @@ export function setSessionOptions(
 export function queuePrompt(id: string, input: string | QueuePayload): Session | null {
   const s = getSession(id);
   const payload: QueuePayload = typeof input === 'string' ? { text: input } : input;
+  // A resend of a prompt this chat already took (a phone's outbox) changes nothing.
+  const clientId = clientMessageIdOf(payload.clientMessageId);
+  if (hasClientMessageId(s, clientId)) return s;
   const text = payload.text.trim();
   const images = payload.images?.filter(Boolean) ?? [];
   const videos = payload.videos?.filter(Boolean) ?? [];
@@ -335,6 +340,7 @@ export function queuePrompt(id: string, input: string | QueuePayload): Session |
     ? { text, ...(images.length ? { images } : {}), ...(videos.length ? { videos } : {}), ...(skill ? { skill } : {}) }
     : text;
   s.queue = [...(s.queue ?? []), item];
+  if (clientId) s.clientMessageIds = rememberClientMessageIds(s.clientMessageIds, [clientId]);
   saveSession(s);
   return s;
 }

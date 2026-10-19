@@ -188,6 +188,12 @@ function inputCases() {
     { session: { title: 'Named', messages: [...history(), { id: 'a2', role: 'assistant', content: 'done', createdAt: 5 }] }, opts: { text: 'x', regenerate: true } },
     { session: { title: 'Named', messages: compacted() }, opts: { text: '', regenerate: true } },
     { session: { title: 'Named', messages: history() }, opts: { text: '', regenerate: true, resume: true } },
+    // A phone outbox's id is remembered with the turn; a bad one is not, and the list keeps the newest 200.
+    { session: { title: 'New chat', messages: [] }, opts: { text: 'from the phone', clientMessageId: '6f1c2a9e-7b1d-4c35-9a52-2b8f0f6f8d11' } },
+    { session: { title: 'Named', messages: history(), clientMessageIds: ['a', 'b'] }, opts: { text: 'again', clientMessageId: 'b' } },
+    { session: { title: 'Named', messages: history(), clientMessageIds: ['a'] }, opts: { text: 'next', clientMessageId: 'c_2' } },
+    { session: { title: 'Named', messages: history() }, opts: { text: 'bad id', clientMessageId: 'no spaces' } },
+    { session: { title: 'Named', messages: history(), clientMessageIds: Array.from({ length: 200 }, (_, i) => `id${i}`) }, opts: { text: 'full', clientMessageId: 'newest' } },
   ];
   return cases.map(({ session, opts }) => {
     const s = { id: 's_x', createdAt: 0, updatedAt: 0, ...structuredClone(session) } as Session;

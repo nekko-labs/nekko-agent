@@ -23,7 +23,11 @@ struct StatusWidgetView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Nekko Agent").font(.caption2.weight(.semibold)).widgetAccentable()
                 Text(snapshot.headline).font(.headline)
-                if let computer = snapshot.computer { Text(computer).font(.caption2).foregroundStyle(.secondary) }
+                if let w = snapshot.waitingBesideHeadline {
+                    Text(w).font(.caption2).foregroundStyle(.secondary)
+                } else if let computer = snapshot.computer {
+                    Text(computer).font(.caption2).foregroundStyle(.secondary)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         default:
@@ -41,6 +45,9 @@ struct StatusWidgetView: View {
                 }
                 if snapshot.running > 0 && snapshot.needsYou > 0 {
                     Text("\(snapshot.running) working").font(.caption).foregroundStyle(.secondary)
+                }
+                if let w = snapshot.waitingBesideHeadline {
+                    Label(w, systemImage: "tray.and.arrow.up").font(.caption).foregroundStyle(.secondary)
                 }
                 if snapshot.at > .distantPast {
                     // The app is suspended most of the time: say how old this is.

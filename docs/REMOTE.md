@@ -63,6 +63,19 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > Delete), and whether deleting asks first. They are saved on the computer, the same settings as in
 > its Settings. A long-press on a chat in the list then completes or deletes it on the computer.
 >
+> **Write offline** (iPhone): with no connection to your computer you can still write. What you
+> type in a chat's message box, and in New chat, is kept on the phone, so leaving the screen or
+> the phone closing the app loses nothing. **Send when online** puts a prompt in a queue on the
+> phone, shown in the chat as **Waiting to send** (Edit, Delete, Send now); a new chat started
+> offline waits under **Waiting to send** in the list. When the computer is back they go in order,
+> and each prompt runs once even if the connection dropped mid-send: the computer recognises a
+> prompt it already has by its id. If the computer refuses one (the chat was deleted, say), it comes
+> back to the message box with the reason. Approvals and answers to questions are never queued;
+> they need the computer to be reachable. The widget and the Watch show how many prompts are waiting.
+> The drafts and the queue are encrypted on the phone until it is first unlocked, aren't backed up,
+> and are deleted when you forget the computer. Sending prompts written offline needs this version
+> of Nekko Agent on the computer.
+>
 > **All your chats, grouped like the desktop** (Android): the chat list shows every chat on the
 > computer, completed ones included, in the same groups as the desktop's agent sidebar: **General**
 > first, then one group per project folder. Tap a group's name to fold it. Each group lists its

@@ -1,5 +1,5 @@
 import type { ChatMessage, ExecutionMode, OrchestrationSettings, ProviderConfig, QueuedPrompt, SendOptions, Session, WorkspaceFolder } from '@nekko-agent/shared';
-import { DEFAULT_ORCHESTRATION, DEFAULT_TURN_WRAPPER, chatMcpTools, getStrategy, orchestrationPromptHint, queueItemPayload, toolAllowedOffline, workModePrompt, workModePrompts } from '@nekko-agent/shared';
+import { DEFAULT_ORCHESTRATION, DEFAULT_TURN_WRAPPER, chatMcpTools, clientMessageIdOf, rememberClientMessageIds, getStrategy, orchestrationPromptHint, queueItemPayload, toolAllowedOffline, workModePrompt, workModePrompts } from '@nekko-agent/shared';
 import {
   ASK_USER_TOOL,
   BUILTIN_TOOLS,
@@ -202,6 +202,9 @@ export function applyTurnInput(session: Session, opts: SendOptions, now = Date.n
   }
   session.providerId = opts.providerId;
   session.modelId = opts.modelId;
+  // Saved in the same write as the user turn, so a resend of it is answered without a second turn.
+  const clientId = clientMessageIdOf(opts.clientMessageId);
+  if (clientId) session.clientMessageIds = rememberClientMessageIds(session.clientMessageIds, [clientId]);
 }
 
 /** The title request for a chat whose first turn has content, or null when there is nothing to name it from. */

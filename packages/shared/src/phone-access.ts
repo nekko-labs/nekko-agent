@@ -13,6 +13,7 @@
  * phone's own app lock is not a boundary; this is.
  */
 
+import { clientMessageIdOf } from './chat.js';
 import { skillTurnText } from './skills.js';
 import { phoneChangesView, PHONE_CHANGES_VIEW } from './phone-changes.js';
 
@@ -142,6 +143,7 @@ export const PHONE_SESSION_OPTION_KEYS = [
 
 /** `chat:send` fields a phone may set: no `attachedPaths` (files on this computer) or history limits. */
 export const PHONE_CHAT_SEND_KEYS = [
+  'clientMessageId',
   'images',
   'modelId',
   'providerId',
@@ -160,7 +162,7 @@ export const PHONE_CHAT_SEND_KEYS = [
 export const PHONE_SKILL_VIEW = ['category', 'description', 'name', 'source'] as const;
 
 /** `chat:queue` payload fields a phone may set (a plain string is text). */
-export const PHONE_QUEUE_KEYS = ['images', 'skill', 'text'] as const;
+export const PHONE_QUEUE_KEYS = ['clientMessageId', 'images', 'skill', 'text'] as const;
 
 /**
  * Chat modes a phone may choose, for new chats or for one chat. YOLO is
@@ -324,6 +326,7 @@ export function screenPhoneCall(
       for (const key of Object.keys(opts)) {
         if (!(PHONE_CHAT_SEND_KEYS as readonly string[]).includes(key)) throw new PhoneAccessError('option-denied', key);
       }
+      phoneClientMessageId(opts);
       return own(opts, 'skill') ? { skill: phoneSkill(opts.skill) } : {};
     }
     case 'chat:queue': {
@@ -333,11 +336,17 @@ export function screenPhoneCall(
       for (const key of Object.keys(item)) {
         if (!(PHONE_QUEUE_KEYS as readonly string[]).includes(key)) throw new PhoneAccessError('option-denied', key);
       }
+      phoneClientMessageId(item);
       return own(item, 'skill') ? { skill: phoneSkill(item.skill) } : {};
     }
     default:
       return {};
   }
+}
+
+/** A phone's `clientMessageId`, when it sent one, must be a short id (a UUID). */
+function phoneClientMessageId(o: Obj): void {
+  if (own(o, 'clientMessageId') && !clientMessageIdOf(o.clientMessageId)) throw new PhoneAccessError('value-invalid', 'clientMessageId');
 }
 
 /** A `{ name, input }` skill invocation from a phone, or why not. */

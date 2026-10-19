@@ -1854,6 +1854,7 @@ dependencies = [
  "nekko-context",
  "nekko-js",
  "nekko-loop",
+ "nekko-store",
  "nekko-tools",
  "serde_json",
  "tokio",

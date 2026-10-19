@@ -256,6 +256,14 @@ it('decides phone requests the way the daemon must', async () => {
     ['chat:queue', ['s1', { text: '', skill: { name: 'review', input: 'later' } }]],
     ['chat:queue', ['s1', { text: 'x', attachedPaths: ['/etc'] }]],
     ['chat:queue', ['s1', 7]],
+    // A phone outbox's id rides along, through a skill expansion too; only a short id passes.
+    ['chat:send', [{ sessionId: 's1', providerId: 'p1', modelId: 'm1', text: 'hi', clientMessageId: '6f1c2a9e-7b1d-4c35-9a52-2b8f0f6f8d11' }]],
+    ['chat:send', [{ sessionId: 's1', text: 'x', skill: { name: 'review', input: 'x' }, clientMessageId: 'abc_1' }]],
+    ['chat:send', [{ sessionId: 's1', text: 'hi', clientMessageId: '' }]],
+    ['chat:send', [{ sessionId: 's1', text: 'hi', clientMessageId: 'a/b' }]],
+    ['chat:send', [{ sessionId: 's1', text: 'hi', clientMessageId: 'x'.repeat(65) }]],
+    ['chat:queue', ['s1', { text: 'later', clientMessageId: 'q-1' }]],
+    ['chat:queue', ['s1', { text: 'later', clientMessageId: 9 }]],
   ];
   // What the computer can run: the phone sees names, never templates or folders.
   const skills = [

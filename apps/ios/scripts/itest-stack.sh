@@ -16,6 +16,7 @@ done
 free_port() { node -e 'const s=require("net").createServer();s.listen(0,"127.0.0.1",()=>{console.log(s.address().port);s.close()})'; }
 relay_port="$(free_port)"
 model_port="$(free_port)"
+ctl_port="$(free_port)"
 room="$(node -e 'console.log(require("crypto").randomBytes(8).toString("hex"))')"
 key="$(node -e 'console.log(require("crypto").randomBytes(16).toString("hex"))')"
 data="$(mktemp -d)"
@@ -24,8 +25,9 @@ mkdir -p "$logs"
 
 nohup node apps/android/scripts/fake-model.mjs "$model_port" >"$logs/model.log" 2>&1 &
 model_pid=$!
+# Under relay-ctl.mjs, so a test can kill the relay mid-send and start it again (NEKKO_ITEST_RELAY_CTL).
 NEKKO_RELAY_PORT="$relay_port" NEKKO_RELAY_HOST=127.0.0.1 NEKKO_RELAY_ALLOW_UNAUTHENTICATED=1 \
-  nohup node apps/relay-server/dist/index.js >"$logs/relay.log" 2>&1 &
+  nohup node apps/ios/scripts/relay-ctl.mjs "$ctl_port" >"$logs/relay.log" 2>&1 &
 relay_pid=$!
 sleep 1
 cat >"$data/settings.json" <<JSON
@@ -54,6 +56,7 @@ export NEKKO_ITEST_ROOM="$room"
 export NEKKO_ITEST_KEY="$key"
 export NEKKO_ITEST_PAIR="$pair"
 export NEKKO_ITEST_LINK="nekko-agent-pair:?relay=ws%3A%2F%2Flocalhost%3A$relay_port&room=$room&key=$key&pair=$pair"
+export NEKKO_ITEST_RELAY_CTL="http://127.0.0.1:$ctl_port"
 export NEKKO_ITEST_PIDS="$model_pid $relay_pid $agent_pid"
 export NEKKO_ITEST_LOGDIR="$logs"
 ENV
