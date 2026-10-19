@@ -17,14 +17,11 @@ export default defineConfig({
       // Keep ws bundled as before; native optional helpers remain external below.
       externalizeDeps: { exclude: [...workspacePackages, 'ws'] },
       rollupOptions: {
-        // @lydell/node-pty ships a native .node binary, required at runtime from
-        // node_modules (electron-builder packs production deps + auto-unpacks
-        // .node from asar) instead of bundled.
         // bufferutil and utf-8-validate are `ws`'s optional native helpers, which it
         // loads in a try/catch. Bundled, the missing module became an empty stub
         // and the relay (out/main/relay.js) crashed on the first masked frame;
         // left external, the require throws and ws uses its JS fallback.
-        external: ['@lydell/node-pty', 'bufferutil', 'utf-8-validate'],
+        external: ['bufferutil', 'utf-8-validate'],
         // `relay` is apps/relay-server, bundled for "Relay on this computer";
         // nekkod runs it with the app's Electron as Node (local_relay.rs), so
         // it must never import `electron`.
