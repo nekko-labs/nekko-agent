@@ -70,7 +70,7 @@ apps/android/
 | Piece | Kotlin | Mirrors |
 |---|---|---|
 | Crypto | `protocol/.../E2E.kt` | `packages/shared/src/e2e.ts`, `apps/mobile/src/lib/e2e.ts` |
-| Relay client | `protocol/.../RelayClient.kt` | `apps/mobile/src/lib/relayClient.ts` ↔ `packages/host/src/relay.ts` |
+| Relay client | `protocol/.../RelayClient.kt` | `apps/mobile/src/lib/relayClient.ts` ↔ the computer's side in `crates/nekko-remote` |
 | Pairing links | `protocol/.../Pairing.kt` | `apps/mobile/src/lib/pairing.ts` |
 | Transcript | `protocol/.../Transcript.kt` | `apps/mobile/src/lib/transcript.ts` |
 | Chat logic | `app/.../chat/ChatController.kt` | `apps/mobile/src/chat/useRemoteChat.ts` |
@@ -118,7 +118,7 @@ Live integration test against the real relay and a headless agent with a fake
 model (build the TS side first, from the repo root):
 
 ```sh
-npm ci && npm run build:core && npm run build -w @nekko-agent/host \
+npm ci && npm run build:core \
   && npm run build --workspace=apps/cli && npm run build -w @nekko-agent/local-web-ui \
   && npm run build -w @nekko-agent/relay-server
 cd apps/android && NEKKO_ITEST=1 ./gradlew :protocol:test --tests '*RelayIntegrationTest*'

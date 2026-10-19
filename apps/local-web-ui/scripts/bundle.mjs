@@ -1,5 +1,5 @@
 // Produce a self-contained, publishable `nekko-agent` package under cli-dist/:
-//   - index.mjs : the server + @nekko-agent/host/core/shared bundled by esbuild
+//   - index.mjs : the server + @nekko-agent/profile/shared bundled by esbuild
 //   - web/      : the built renderer (the UI)
 //   - package.json : name "nekko-agent", bin aliases, and the few runtime deps
 // Run after building the renderer (npm run build -w @nekko-agent/desktop).

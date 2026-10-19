@@ -5,9 +5,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, screen, shell 
 import { fileURLToPath } from 'url';
 import { join, resolve, sep } from 'path';
 import { existsSync, readFileSync } from 'fs';
-// Only the data-root helpers: the host itself runs in the engine process, and
-// importing the package root would load all of it (node-pty included) here.
-import { defaultUserDataDir, legacyUserDataDirs, migrateUserData, prepareUserDataRoot } from '@nekko-agent/host/user-data';
+import { defaultUserDataDir, legacyUserDataDirs, migrateUserData, prepareUserDataRoot } from '@nekko-agent/profile/user-data';
 import { brandEnv, IpcChannels, IpcEvents, type ApiServerStatus, type AppSettings } from '@nekko-agent/shared';
 import { pickFolderDialog, registerIpc, shellBridge } from './ipc.js';
 import { initialWindowBounds, loadWindowBounds, MIN_WINDOW, saveWindowBounds, setWindowStateDir } from './windowState.js';

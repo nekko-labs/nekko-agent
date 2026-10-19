@@ -9,7 +9,7 @@ import react from '@vitejs/plugin-react';
 // dies on launch with ERR_PACKAGE_PATH_NOT_EXPORTED. electron-vite 5 externalizes
 // every `dependencies` entry by default (`build.externalizeDeps` defaults to
 // true, which electron-vite 2 did not do), so each one has to be excluded here.
-const workspacePackages = ['@nekko-agent/core', '@nekko-agent/host', '@nekko-agent/shared'];
+const workspacePackages = ['@nekko-agent/profile', '@nekko-agent/shared'];
 
 export default defineConfig({
   main: {

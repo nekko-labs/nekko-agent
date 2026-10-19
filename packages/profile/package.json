@@ -1,0 +1,29 @@
+{
+  "name": "@nekko-agent/profile",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The user's data folder on this machine: where it lives, moving it, older installs' profiles, and the running app.",
+  "exports": {
+    "./user-data": {
+      "types": "./dist/user-data.d.ts",
+      "import": "./dist/user-data.js"
+    },
+    "./legacy-profiles": {
+      "types": "./dist/legacy-profiles.d.ts",
+      "import": "./dist/legacy-profiles.js"
+    },
+    "./app-control": {
+      "types": "./dist/app-control.d.ts",
+      "import": "./dist/app-control.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@nekko-agent/shared": "*"
+  }
+}

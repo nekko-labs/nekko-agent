@@ -171,7 +171,7 @@ Same engine, same UI, multiple runtimes (see the design in the project spec):
 | **Phone remote control** | pair your phone (QR, one-time code) and run chats/training/goals on your home machine from anywhere, end-to-end encrypted; the iOS/Android app also runs small models on the phone itself; managed relay free in beta, or [self-host it](docs/REMOTE.md) with one Docker command | ✅ available |
 | **Nekko Cloud** (paid) | managed hosting: subscriptions, always-available **Zero-Data-Retention** mode, cloud chat-history + file management | 🔜 planned |
 
-The desktop, web, and (coming) Docker editions all run the **same engine + same React UI**, only the transport differs (Electron IPC vs HTTP/WebSocket), via the shared `@nekko-agent/host`.
+The desktop, web, and Docker editions all run the **same engine + same React UI**, only the transport differs (Electron IPC vs HTTP/WebSocket): the engine is `nekkod`, a Rust daemon each edition starts.
 
 ### Run the Local Web UI
 
@@ -225,20 +225,19 @@ private by design.
 
 ## Architecture
 
-npm-workspaces monorepo:
+A Cargo workspace (the engine) beside an npm-workspaces monorepo (the apps):
 
 | Package | What |
 | --- | --- |
+| [`crates/nekkod`](crates/nekkod) | The engine daemon every edition starts: chats, tools, providers, automation, the model server, the phone relay agent. Built from the other crates in [`crates/`](crates). |
 | [`packages/shared`](packages/shared) | Types + IPC contracts (pure, no deps) |
-| [`packages/core`](packages/core) | Engine: providers, agent loop, guardrails, context assembler, indexer, memory, connectors. Pure TS, unit-tested. |
-| [`packages/host`](packages/host) | Transport-agnostic host facade and persistence |
+| [`packages/profile`](packages/profile) | The user's data folder: where it lives, moving it, older installs' profiles |
 | [`apps/desktop`](apps/desktop) | Electron app (main / preload / React renderer) |
 | [`apps/local-web-ui`](apps/local-web-ui) | Self-hosted Fastify Local Web UI |
 | [`apps/relay-server`](apps/relay-server) | End-to-end encrypted remote relay |
 | [`apps/cli`](apps/cli) | CLI and MCP stdio subagent surface |
-| [`apps/nekko-agent-api/cloud`](apps/nekko-agent-api/cloud) | Cloud edition |
 
-The core engine is Electron-free so it can be tested in isolation and reused.
+The engine has no Electron in it, so it is tested on its own (`cargo test --workspace`) and every edition reuses it.
 
 ## CLI and MCP subagent
 
