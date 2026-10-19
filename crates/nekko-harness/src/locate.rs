@@ -53,17 +53,48 @@ pub fn pick_windows_candidate(where_output: &str) -> Option<PathBuf> {
     with(".exe").or_else(|| with(".cmd"))
 }
 
+/// Whether `path` is a regular file its owner, group or others may execute
+/// (non-Windows).
+#[cfg(not(windows))]
+fn is_executable(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    path.metadata().is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+}
+
 /// Every `claude` on PATH, in PATH order (non-Windows).
 #[cfg(not(windows))]
 fn path_candidates() -> Vec<PathBuf> {
-    use std::os::unix::fs::PermissionsExt;
     let Some(path) = std::env::var_os("PATH") else { return Vec::new() };
-    std::env::split_paths(&path)
-        .map(|dir| dir.join("claude"))
-        .filter(|p| p.metadata().is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0))
-        .collect()
+    std::env::split_paths(&path).map(|dir| dir.join("claude")).filter(|p| is_executable(p)).collect()
 }
 
+/// Where Claude Code is usually installed, in the order they are tried, for
+/// when PATH does not lead to it. On macOS an app started from the Dock or
+/// Finder gets a minimal PATH that leaves out `~/.local/bin`, which is where
+/// Anthropic's official installer puts `claude`, so a working install would
+/// otherwise read as "not installed".
+#[cfg(not(windows))]
+fn install_candidates(home: &Path) -> Vec<PathBuf> {
+    vec![
+        // The official installer (`curl -fsSL https://claude.ai/install.sh | bash`).
+        home.join(".local/bin/claude"),
+        // Older local installs made by Claude Code itself.
+        home.join(".claude/local/claude"),
+        // Homebrew on Apple silicon, then Homebrew on Intel and manual installs.
+        PathBuf::from("/opt/homebrew/bin/claude"),
+        PathBuf::from("/usr/local/bin/claude"),
+    ]
+}
+
+/// The first executable `claude` in the usual install folders (non-Windows).
+#[cfg(not(windows))]
+fn install_folder_candidate() -> Option<PathBuf> {
+    let home = std::env::var_os("HOME")?;
+    install_candidates(Path::new(&home)).into_iter().find(|p| is_executable(p))
+}
+
+/// The user's `claude`: from PATH first, and on macOS and Linux from the usual
+/// install folders when PATH does not lead to one.
 async fn find_on_path() -> Option<PathBuf> {
     #[cfg(windows)]
     {
@@ -74,13 +105,13 @@ async fn find_on_path() -> Option<PathBuf> {
     }
     #[cfg(not(windows))]
     {
-        path_candidates().into_iter().next()
+        path_candidates().into_iter().next().or_else(install_folder_candidate)
     }
 }
 
-/// Find the user's `claude` (`bin_path` when the user set one, else PATH),
-/// read its version and check it is new enough. The error is the sentence
-/// the setup screen shows.
+/// Find the user's `claude` (`bin_path` when the user set one, else PATH, then
+/// the usual install folders), read its version and check it is new enough.
+/// The error is the sentence the setup screen shows.
 pub async fn locate(bin_path: Option<&Path>) -> Result<ClaudeBin, String> {
     let path = match bin_path {
         Some(p) if p.is_file() => p.to_path_buf(),
@@ -129,5 +160,36 @@ mod tests {
         assert_eq!(pick_windows_candidate(both), Some(PathBuf::from("C:\\b\\claude.exe")));
         assert_eq!(pick_windows_candidate("C:\\a\\claude\n"), None);
         assert_eq!(pick_windows_candidate(""), None);
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn tries_the_official_installer_folder_first() {
+        let c = install_candidates(Path::new("/Users/me"));
+        assert_eq!(c[0], PathBuf::from("/Users/me/.local/bin/claude"));
+        assert!(c.contains(&PathBuf::from("/Users/me/.claude/local/claude")));
+        assert!(c.contains(&PathBuf::from("/opt/homebrew/bin/claude")));
+        assert!(c.contains(&PathBuf::from("/usr/local/bin/claude")));
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn only_an_executable_file_counts() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("nekko-locate-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("claude");
+        std::fs::write(&file, "#!/bin/sh\n").unwrap();
+
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o644)).unwrap();
+        assert!(!is_executable(&file), "a file without an execute bit is not a candidate");
+
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(is_executable(&file));
+
+        assert!(!is_executable(&dir), "a directory is not a candidate");
+        assert!(!is_executable(&dir.join("missing")));
+
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }
