@@ -47,6 +47,7 @@ pub const WINDOW_ONLY: &[&str] = &[
     "localRelay:status",
     "localRelay:start",
     "localRelay:stop",
+    "localRelay:setLan",
     "networkVisibility:status",
     "networkVisibility:start",
     "networkVisibility:stop",

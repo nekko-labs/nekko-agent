@@ -11,6 +11,8 @@ public struct ConnectionLog: Equatable, Sendable {
         public let state: RelayState
         public let detail: String?
         public let denied: DenyReason?
+        /// The relay host, when the computer has several routes (IO-20).
+        public var via: String? = nil
         /// How many times in a row this same state and detail came in (retries).
         public var repeats: Int
     }
@@ -23,13 +25,15 @@ public struct ConnectionLog: Equatable, Sendable {
     public init() {}
 
     /// Adds a status; the same state and detail again only bumps the last entry's count.
-    public mutating func record(_ state: RelayState, detail: String? = nil, denied: DenyReason? = nil, at: Date = Date()) {
-        if var last = entries.last, last.state == state, last.detail == detail, last.denied == denied {
+    /// `via`: the relay host the state is about, when the computer has more than one route.
+    public mutating func record(_ state: RelayState, detail: String? = nil, denied: DenyReason? = nil, via: String? = nil,
+                                at: Date = Date()) {
+        if var last = entries.last, last.state == state, last.detail == detail, last.denied == denied, last.via == via {
             last.repeats += 1
             entries[entries.count - 1] = last
             return
         }
-        entries.append(Entry(id: nextId, at: at, state: state, detail: detail, denied: denied, repeats: 1))
+        entries.append(Entry(id: nextId, at: at, state: state, detail: detail, denied: denied, via: via, repeats: 1))
         nextId += 1
         if entries.count > Self.capacity { entries.removeFirst(entries.count - Self.capacity) }
     }
@@ -46,7 +50,8 @@ public struct ConnectionLog: Equatable, Sendable {
         for e in entries {
             var line = "\(f.string(from: e.at)) \(e.state.rawValue)"
             if let d = e.denied { line += " [\(d.rawValue)]" }
-            if let d = e.detail, e.denied == nil { line += " – \(d)" }
+            if let v = e.via { line += " via \(v)" }
+            if let d = e.detail, e.denied == nil { line += " – \(Diagnostics.redact(d))" }
             if e.repeats > 1 { line += " ×\(e.repeats)" }
             lines.append(line)
         }

@@ -35,6 +35,30 @@ class PairingTest {
         assertNull(Pairing.parse("nekko-agent-pair:?relay=wss://r&room=$room&key=$key%ZZ"))
     }
 
+    /** The shared fixture (packages/host/src/pairing-link.golden.test.ts writes it): every phone parses alike. */
+    @Test fun `parses the shared fixture like the computer, alt routes included`() {
+        val cases = kotlinx.serialization.json.Json.parseToJsonElement(javaClass.getResource("/pairing-links.json")!!.readText())
+            as kotlinx.serialization.json.JsonArray
+        for (c in cases) {
+            val o = c as kotlinx.serialization.json.JsonObject
+            val input = (o["input"] as kotlinx.serialization.json.JsonPrimitive).content
+            val want = o["link"]
+            val got = Pairing.parse(input)
+            if (want is kotlinx.serialization.json.JsonNull) {
+                assertNull(input, got)
+                continue
+            }
+            val w = want as kotlinx.serialization.json.JsonObject
+            fun s(k: String) = (w[k] as? kotlinx.serialization.json.JsonPrimitive)?.content
+            assertEquals(input, s("relayUrl"), got?.relayUrl)
+            assertEquals(input, s("room"), got?.room)
+            assertEquals(input, s("key"), got?.key)
+            assertEquals(input, s("pair"), got?.pair)
+            val alts = (w["alts"] as kotlinx.serialization.json.JsonArray).map { (it as kotlinx.serialization.json.JsonPrimitive).content }
+            assertEquals(input, alts, got?.alts)
+        }
+    }
+
     @Test fun `never prints the secret`() {
         val l = Pairing.parse("relay=wss://r&room=$room&key=$key")!!
         assertFalse(l.toString().contains(key))
