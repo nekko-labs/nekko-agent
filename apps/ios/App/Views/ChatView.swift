@@ -16,6 +16,9 @@ struct ChatView: View {
     @State private var renaming = false
     @State private var renameText = ""
     @State private var actionError: String?
+    @State private var showGit = false
+    /// The photos open full screen.
+    @State private var viewing: PhotoSet?
     /// Whether the end of the transcript is on screen: only then does it follow new output.
     @State private var atBottom = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -65,7 +68,13 @@ struct ChatView: View {
                             .font(.footnote).foregroundStyle(palette.inkFaint).frame(maxWidth: .infinity)
                     }
                     if !chat.ready { ProgressView().frame(maxWidth: .infinity).padding(.top, 40) }
-                    ForEach(chat.blocks) { b in BlockView(block: b).id(b.id) }
+                    ForEach(chat.blocks) { b in
+                        BlockView(block: b, photos: b.isPrompt ? chat.photos(b.id) : []) { i in
+                            viewing = PhotoSet(photos: chat.photos(b.id), index: i)
+                        }
+                        .id(b.id)
+                        .contextMenu { blockMenu(chat, b) }
+                    }
                     // Prompts written here that the computer doesn't have yet.
                     ForEach(chat.waiting) { item in
                         WaitingRow(item: item, sending: store.outbox.sendingId == item.id, online: store.conn == .online,
@@ -121,13 +130,8 @@ struct ChatView: View {
                         // A new question starts with nothing picked.
                         QuestionCard(request: q) { answers in try await chat.answer(answers) }.id(q.callId)
                     }
-                    if !chat.queued.isEmpty {
-                        VStack(alignment: .leading, spacing: 4) {
-                            ForEach(Array(chat.queued.enumerated()), id: \.offset) { _, q in
-                                Label(q, systemImage: "clock").font(.footnote).foregroundStyle(palette.inkSoft).lineLimit(1)
-                            }
-                        }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4)
-                    }
+                    if !chat.queuedPrompts.isEmpty { QueueList(chat: chat) }
+                    PrChip(chat: chat).frame(maxWidth: .infinity, alignment: .leading)
                     Composer(chat: chat)
                 }
                 .padding(.horizontal, 12).padding(.bottom, 8).padding(.top, 6)
@@ -157,6 +161,7 @@ struct ChatView: View {
                     if store.pcSettings.phoneChanges {
                         Button { showChanges = true } label: { Label("Changes", systemImage: "plusminus") }
                     }
+                    Button { showGit = true } label: { Label("Commit or open a PR", systemImage: "arrow.triangle.pull") }
                     Button { renameText = chat.title; renaming = true } label: { Label("Rename", systemImage: "pencil") }
                     Button { act { try await store.completeChat(sessionId) } } label: { Label("Complete", systemImage: "checkmark.circle") }
                     Button { Task { await chat.reload() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
@@ -169,6 +174,8 @@ struct ChatView: View {
             }
         }
         .sheet(isPresented: $showChanges) { ChangesView(chat: chat) }
+        .sheet(isPresented: $showGit) { PrSheet(chat: chat, initial: []) }
+        .fullScreenCover(item: $viewing) { set in ImageViewer(photos: set.photos, index: set.index) }
         .alert("Rename chat", isPresented: $renaming) {
             TextField("Title", text: $renameText)
             Button("Cancel", role: .cancel) {}
@@ -177,6 +184,24 @@ struct ChatView: View {
         .alert("Couldn’t do that", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(actionError ?? "") }
+    }
+
+    /// Copy, and fork: a prompt comes back in a new chat to edit and send; a reply keeps the chat up to there.
+    @ViewBuilder private func blockMenu(_ chat: ChatModel, _ b: Block) -> some View {
+        if let text = b.copyText, !text.isEmpty {
+            Button { UIPasteboard.general.string = text } label: { Label("Copy", systemImage: "doc.on.doc") }
+        }
+        if chat.forkPoint(b) != nil {
+            Button {
+                act {
+                    let id = try await chat.fork(from: b)
+                    app.openChat = id
+                }
+            } label: {
+                Label(b.isPrompt ? "Edit in a new chat" : "Fork from here", systemImage: "arrow.triangle.branch")
+            }
+            .accessibilityIdentifier("chat.fork")
+        }
     }
 
     private func scrollToEnd(_ proxy: ScrollViewProxy) {
@@ -276,6 +301,9 @@ func modeName(_ m: PcSettings.ChatMode) -> String {
 
 struct BlockView: View {
     let block: Block
+    /// A prompt's photos as the computer sent them (small copies; `""` for one it kept back).
+    var photos: [String] = []
+    var openPhoto: (Int) -> Void = { _ in }
     @Environment(\.palette) private var palette
     @State private var expanded = false
     @State private var showReasoning = false
@@ -287,7 +315,9 @@ struct BlockView: View {
                 Spacer(minLength: 48)
                 VStack(alignment: .trailing, spacing: 4) {
                     Text(text).foregroundStyle(palette.userInk).textSelection(.enabled)
-                    if images > 0 {
+                    if photos.contains(where: { !$0.isEmpty }) {
+                        PhotoStrip(photos: photos, open: openPhoto)
+                    } else if images > 0 {
                         Label(images == 1 ? "1 image" : "\(images) images", systemImage: "photo").font(.caption2).foregroundStyle(palette.userInk.opacity(0.8))
                     }
                 }
@@ -532,6 +562,8 @@ struct Composer: View {
     @Environment(\.palette) private var palette
     @State private var text = ""
     @State private var skill: SkillSummary?
+    /// A saved prompt from the computer, run with what's typed after it.
+    @State private var prompt: SavedPrompt?
     @State private var photos: [PhotosPickerItem] = []
     @State private var images: [String] = []
     @State private var loadingPhotos = false
@@ -569,6 +601,14 @@ struct Composer: View {
                 }
                 .padding(.horizontal, 10).padding(.vertical, 4).background(palette.accent.opacity(0.15), in: Capsule()).foregroundStyle(palette.accent)
             }
+            if let prompt {
+                HStack(spacing: 6) {
+                    Label("/\(prompt.name)", systemImage: "text.badge.star").font(.caption.weight(.semibold))
+                    Button { self.prompt = nil } label: { Image(systemName: "xmark.circle.fill") }.accessibilityLabel("Remove saved prompt")
+                }
+                .padding(.horizontal, 10).padding(.vertical, 4).background(palette.accent.opacity(0.15), in: Capsule()).foregroundStyle(palette.accent)
+                .accessibilityIdentifier("chat.savedPrompt")
+            }
             if loadingPhotos {
                 HStack(spacing: 6) {
                     ProgressView().controlSize(.small)
@@ -580,19 +620,25 @@ struct Composer: View {
                     Button { images = []; photos = [] } label: { Image(systemName: "xmark.circle.fill") }.accessibilityLabel("Remove photos")
                 }.foregroundStyle(palette.inkSoft)
             }
-            if !skillMatches.isEmpty {
+            if !skillMatches.isEmpty || !promptMatches.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack {
+                        ForEach(promptMatches) { p in
+                            Button {
+                                prompt = p
+                                skill = nil
+                                text = ""
+                            } label: {
+                                slashChip("/\(p.name)", p.body, saved: true)
+                            }.buttonStyle(.plain)
+                        }
                         ForEach(skillMatches) { s in
                             Button {
                                 skill = s
+                                prompt = nil
                                 text = ""
                             } label: {
-                                VStack(alignment: .leading) {
-                                    Text("/\(s.name)").font(.caption.weight(.semibold))
-                                    if !s.description.isEmpty { Text(s.description).font(.caption2).lineLimit(1).foregroundStyle(palette.inkSoft) }
-                                }.padding(8).frame(maxWidth: 200, alignment: .leading)
-                                    .background(palette.surface2, in: RoundedRectangle(cornerRadius: 10))
+                                slashChip("/\(s.name)", s.description, saved: false)
                             }.buttonStyle(.plain)
                         }
                     }
@@ -600,14 +646,22 @@ struct Composer: View {
             }
             HStack(alignment: .bottom, spacing: 8) {
                 Menu {
+                    if !store.pcSettings.prompts.isEmpty {
+                        Menu {
+                            ForEach(store.pcSettings.prompts) { p in Button("/\(p.name)") { prompt = p; skill = nil } }
+                        } label: { Label("Saved prompts", systemImage: "text.badge.star") }
+                    }
                     if !chat.skills.isEmpty {
                         Menu {
-                            ForEach(chat.skills) { s in Button("/\(s.name)") { skill = s } }
+                            ForEach(chat.skills) { s in Button("/\(s.name)") { skill = s; prompt = nil } }
                         } label: { Label("Skills on \(store.active?.name ?? "computer")", systemImage: "wand.and.stars") }
                     }
                     PhotosPicker(selection: $photos, maxSelectionCount: 4, matching: .images) {
                         Label("Photos", systemImage: "photo.on.rectangle")
                     }
+                    // Asked for by the user, so iOS shows its paste prompt only then.
+                    Button { pasteImages() } label: { Label("Paste image", systemImage: "doc.on.clipboard") }
+                        .disabled(!UIPasteboard.general.hasImages)
                 } label: {
                     Image(systemName: "plus.circle.fill").font(.title2).foregroundStyle(palette.inkSoft)
                         .frame(width: 44, height: 44).contentShape(Rectangle())
@@ -699,7 +753,37 @@ struct Composer: View {
     }
 
     private var hasContent: Bool {
-        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || skill != nil || !images.isEmpty
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || skill != nil || prompt != nil || !images.isEmpty
+    }
+
+    private func slashChip(_ name: String, _ detail: String, saved: Bool) -> some View {
+        VStack(alignment: .leading) {
+            Label(name, systemImage: saved ? "text.badge.star" : "wand.and.stars").font(.caption.weight(.semibold))
+            if !detail.isEmpty { Text(detail).font(.caption2).lineLimit(1).foregroundStyle(palette.inkSoft) }
+        }
+        .padding(8).frame(minHeight: 44).frame(maxWidth: 200, alignment: .leading)
+        .background(palette.surface2, in: RoundedRectangle(cornerRadius: 10))
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(saved ? "A saved prompt from your computer" : "A skill on your computer")
+    }
+
+    /// `/fi` → the computer's saved prompts starting with "fi".
+    private var promptMatches: [SavedPrompt] {
+        guard skill == nil, prompt == nil, text.hasPrefix("/"), !text.contains(" ") else { return [] }
+        let q = text.dropFirst().lowercased()
+        return store.pcSettings.prompts.filter { q.isEmpty || $0.name.lowercased().hasPrefix(q) }.prefix(6).map { $0 }
+    }
+
+    /// Images on the clipboard, scaled like picked photos (at most four in the message).
+    private func pasteImages() {
+        let pasted = UIPasteboard.general.images ?? []
+        let room = max(0, 4 - images.count)
+        let added = pasted.prefix(room).compactMap(ImageAttachments.encode)
+        if added.isEmpty {
+            error = "There’s no image on the clipboard."
+            return
+        }
+        images += added
     }
 
     private var canSend: Bool { chat.blocked == nil && !loadingPhotos && hasContent }
@@ -736,7 +820,7 @@ struct Composer: View {
 
     /// `/re` → the computer's skills starting with "re".
     private var skillMatches: [SkillSummary] {
-        guard skill == nil, text.hasPrefix("/"), !text.contains(" ") else { return [] }
+        guard skill == nil, prompt == nil, text.hasPrefix("/"), !text.contains(" ") else { return [] }
         let q = text.dropFirst().lowercased()
         return chat.skills.filter { q.isEmpty || $0.name.lowercased().hasPrefix(q) }.prefix(8).map { $0 }
     }
@@ -750,14 +834,20 @@ struct Composer: View {
             if let match = chat.skills.first(where: { $0.name == name }) {
                 s = match
                 body = String(body[space...]).trimmingCharacters(in: .whitespaces)
+            } else if prompt == nil, let saved = store.pcSettings.prompts.first(where: { $0.name == name }) {
+                body = saved.text(input: String(body[space...]))
             }
         }
+        // A saved prompt sends its text, then what was typed: an ordinary prompt the computer runs.
+        if s == nil, let prompt { body = prompt.text(input: body) }
+        let sentPrompt = prompt
         let sentImages = images
         let sentBody = body
         let sentSkill = s
         let saved = text
         text = ""
         skill = nil
+        prompt = nil
         images = []
         photos = []
         error = nil
@@ -773,6 +863,7 @@ struct Composer: View {
                 self.error = error.localizedDescription
                 text = saved
                 skill = sentSkill
+                prompt = sentPrompt
                 images = sentImages
             }
         }
@@ -785,17 +876,23 @@ enum ImageAttachments {
     static func load(_ items: [PhotosPickerItem]) async -> [String] {
         var out: [String] = []
         for item in items.prefix(4) {
-            guard let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) else { continue }
-            let maxSide: CGFloat = 1600
-            let scale = min(1, maxSide / max(image.size.width, image.size.height))
-            let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
-            // Scale 1: `size` is in pixels. The default (the screen's 3x) made 4,800 px JPEGs.
-            let format = UIGraphicsImageRendererFormat.default()
-            format.scale = 1
-            let resized = UIGraphicsImageRenderer(size: size, format: format).image { _ in image.draw(in: CGRect(origin: .zero, size: size)) }
-            guard let jpeg = resized.jpegData(compressionQuality: 0.8) else { continue }
-            out.append("data:image/jpeg;base64," + jpeg.base64EncodedString())
+            guard let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data),
+                  let url = encode(image) else { continue }
+            out.append(url)
         }
         return out
+    }
+
+    /// One image as a JPEG data URL, at most 1,600 px on its long side.
+    static func encode(_ image: UIImage) -> String? {
+        let maxSide: CGFloat = 1600
+        let scale = min(1, maxSide / max(image.size.width, image.size.height))
+        let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        // Scale 1: `size` is in pixels. The default (the screen's 3x) made 4,800 px JPEGs.
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let resized = UIGraphicsImageRenderer(size: size, format: format).image { _ in image.draw(in: CGRect(origin: .zero, size: size)) }
+        guard let jpeg = resized.jpegData(compressionQuality: 0.8) else { return nil }
+        return "data:image/jpeg;base64," + jpeg.base64EncodedString()
     }
 }
