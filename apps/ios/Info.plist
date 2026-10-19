@@ -40,6 +40,8 @@
     <key>NSSpeechRecognitionUsageDescription</key><string>Turn your dictation into text when your computer can’t.</string>
     <key>NSLocalNetworkUsageDescription</key><string>Reach the relay on your computer over your local network or Tailscale, and list computers on this Wi-Fi when you tap Look on this network.</string>
     <key>NSBonjourServices</key><array><string>_nekko-agent._tcp</string></array>
+    <!-- canOpenURL(tailscale://) for Open Tailscale (TS-4); without it iOS always answers no. -->
+    <key>LSApplicationQueriesSchemes</key><array><string>tailscale</string></array>
     <!-- ATS: TLS everywhere except toward private networks, where plain ws:// to a
          relay is allowed because the hop is already private (Tailscale's WireGuard
          or the LAN) and every frame is end-to-end encrypted anyway. Public ws:// is

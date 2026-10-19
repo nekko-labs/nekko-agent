@@ -227,3 +227,22 @@ final class SavedListNoteTests: XCTestCase {
         XCTAssertGreaterThan(old.count, today.count, "an older list also names the day")
     }
 }
+
+/// TS-4: Open Tailscale. Without `tailscale` in LSApplicationQueriesSchemes,
+/// canOpenURL always answers no and the action would only ever reach the App Store.
+final class OpenTailscaleTests: XCTestCase {
+    func testTheAppMayAskWhetherTailscaleIsInstalled() {
+        let schemes = Bundle.main.object(forInfoDictionaryKey: "LSApplicationQueriesSchemes") as? [String]
+        XCTAssertEqual(schemes?.contains("tailscale"), true)
+    }
+
+    @MainActor
+    func testWithoutTailscaleInstalledItOpensTheAppStorePage() {
+        // The simulator has no Tailscale app.
+        var opened: URL?
+        let url = AppModel.openTailscale(canOpen: { UIApplication.shared.canOpenURL($0) }, open: { opened = $0 })
+        XCTAssertEqual(url.host, "apps.apple.com")
+        XCTAssertEqual(opened, url)
+        XCTAssertEqual(AppModel.openTailscale(canOpen: { _ in true }, open: { _ in }).absoluteString, "tailscale://")
+    }
+}
