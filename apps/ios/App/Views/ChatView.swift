@@ -89,10 +89,12 @@ struct ChatView: View {
                             ProgressView().controlSize(.small)
                             Text(working).font(.footnote).foregroundStyle(palette.inkSoft)
                         }
-                        // A status line, not a spinner control: the audit took the spinner for a tiny target.
+                        // A status line a full row tall: the audit measures it as a target.
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel(working)
-                        .accessibilityAddTraits(.updatesFrequently)
+                        .accessibilityAddTraits(.isStaticText)
                         .id("working")
                     }
                     if let e = chat.error {
