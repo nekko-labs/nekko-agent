@@ -241,22 +241,28 @@ struct WaitingRow: View {
                     Text(e).font(.caption2).foregroundStyle(palette.inkFaint).multilineTextAlignment(.trailing)
                 }
                 if !sending {
-                    HStack(spacing: 4) {
-                        Button("Edit", action: edit)
-                        Button("Delete", role: .destructive, action: delete)
-                        Button(online ? "Send now" : "Try now", action: sendNow)
+                    HStack(spacing: 2) {
+                        action("Edit", palette.accent, edit)
+                        action("Delete", palette.danger, delete)
+                        action(online ? "Send now" : "Try now", palette.accent, sendNow)
                     }
-                    .font(.caption.weight(.semibold))
-                    .buttonStyle(.borderless)
-                    .controlSize(.small)
-                    .tint(palette.accent)
-                    .frame(minHeight: 44)
                 }
             }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Waiting to send: \(item.preview)")
         .accessibilityIdentifier("chat.waiting")
+    }
+
+    /// A text button with a full 44 pt target, in a colour that reads on the transcript.
+    private func action(_ title: String, _ color: Color, _ run: @escaping () -> Void) -> some View {
+        Button(action: run) {
+            Text(title).font(.footnote.weight(.semibold)).foregroundStyle(color)
+                .padding(.horizontal, 8)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -542,7 +548,7 @@ struct Composer: View {
             if let blocked = chat.blocked {
                 Text(blocked).font(.caption).foregroundStyle(palette.warning)
             } else if let note = chat.offlineNote {
-                Label(note, systemImage: "tray.and.arrow.up").font(.caption).foregroundStyle(palette.inkSoft)
+                Label(note, systemImage: "tray.and.arrow.up").font(.caption).foregroundStyle(palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("chat.offlineNote")
             }
