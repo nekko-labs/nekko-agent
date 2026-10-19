@@ -130,7 +130,7 @@ final class DiagnosticsTests: XCTestCase {
         addr.sin_port = 0
         var len = socklen_t(MemoryLayout<sockaddr_in>.size)
         let ok = withUnsafePointer(to: &addr) { p in
-            p.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(fd, $0, len) == 0 }
+            p.withMemoryRebound(to: sockaddr.self, capacity: 1) { Glibc_or_Darwin_bind(fd, $0, len) == 0 }
         }
         guard ok, Glibc_or_Darwin_listen(fd) == 0 else { throw RelayError("bind/listen") }
         _ = withUnsafeMutablePointer(to: &addr) { p in
@@ -145,5 +145,14 @@ private func Glibc_or_Darwin_listen(_ fd: Int32) -> Int32 {
     return Glibc.listen(fd, 4)
     #else
     return Darwin.listen(fd, 4)
+    #endif
+}
+
+/// `bind(2)`: inside an XCTestCase on Darwin, a bare `bind` is NSObject's KVO method.
+private func Glibc_or_Darwin_bind(_ fd: Int32, _ addr: UnsafePointer<sockaddr>, _ len: socklen_t) -> Int32 {
+    #if canImport(Glibc)
+    return Glibc.bind(fd, addr, len)
+    #else
+    return Darwin.bind(fd, addr, len)
     #endif
 }
