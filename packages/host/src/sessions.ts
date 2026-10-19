@@ -354,6 +354,35 @@ export function dequeuePrompt(id: string, index: number): Session | null {
   return s;
 }
 
+/**
+ * Change or remove a queued prompt before it runs (a phone's queue editor).
+ * `expect` is the text the editor showed: when the prompt at `index` no longer
+ * has it (it started, or the queue moved), nothing changes and this throws, so
+ * an edit never lands on a different prompt. A `text` that is missing, or blank
+ * on a prompt with no photos, removes it. A skill's prompt can only be removed:
+ * its text is the skill's instructions, which the editor never sees.
+ */
+export function editQueuedPrompt(id: string, index: number, edit: { expect?: unknown; text?: unknown }): Session | null {
+  const s = getSession(id);
+  if (!s) return null;
+  const item = Number.isInteger(index) ? s.queue?.[index] : undefined;
+  const shown = typeof item === 'string' ? item : item?.text;
+  if (item === undefined || typeof edit?.expect !== 'string' || shown !== edit.expect) {
+    throw new Error('That queued prompt already started or changed.');
+  }
+  const text = typeof edit.text === 'string' ? edit.text.trim() : undefined;
+  const photos = typeof item === 'string' ? 0 : (item.images?.length ?? 0) + (item.videos?.length ?? 0);
+  if (text !== undefined && typeof item !== 'string' && item.skill) throw new Error('A skill’s queued prompt can only be removed.');
+  const queue = s.queue ?? [];
+  if (text === undefined || (!text && !photos)) {
+    s.queue = queue.filter((_, i) => i !== index);
+  } else {
+    s.queue = queue.map((q, i) => (i !== index ? q : typeof q === 'string' ? text : { ...q, text }));
+  }
+  saveSession(s);
+  return s;
+}
+
 export function createSession(workspaceId?: string, parentSessionId?: string, supportingWorkspaceIds?: string[]): Session {
   const now = Date.now();
   const s: Session = {

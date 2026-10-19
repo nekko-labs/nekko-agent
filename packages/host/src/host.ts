@@ -389,6 +389,7 @@ export interface Host {
   cancelSessionCompaction(sessionId: string): void;
   queuePrompt(sessionId: string, input: string | QueuePayload): Session | null;
   dequeuePrompt(sessionId: string, index: number): Session | null;
+  editQueuedPrompt(sessionId: string, index: number, edit: { expect?: unknown; text?: unknown }): Session | null;
   steerChat(sessionId: string, text: string): Promise<Session | null>;
   interruptQueuedPrompt(sessionId: string, index: number, brain?: { providerId: string; modelId: string }): Promise<void>;
   /**
@@ -1183,6 +1184,7 @@ export function createHost(opts: {
     cancelSessionCompaction,
     queuePrompt: sessions.queuePrompt,
     dequeuePrompt: sessions.dequeuePrompt,
+    editQueuedPrompt: sessions.editQueuedPrompt,
     steerChat,
     interruptQueuedPrompt: async (sessionId, index, brain) => {
       const session = sessions.getSession(sessionId);

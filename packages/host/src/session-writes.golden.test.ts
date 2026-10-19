@@ -25,6 +25,7 @@ function apply(id: string, [name, ...args]: Op): unknown {
     case 'truncate': return sessions.truncateSession(id, args[0] as string);
     case 'queue': return sessions.queuePrompt(id, args[0] as string);
     case 'dequeue': return sessions.dequeuePrompt(id, args[0] as number);
+    case 'editQueued': return sessions.editQueuedPrompt(id, args[0] as number, args[1] as never);
     case 'autoTitle': return sessions.applyAutoTitle(id, args[0] as string);
     case 'configureSandbox': {
       const s = sessions.getSession(id)!;

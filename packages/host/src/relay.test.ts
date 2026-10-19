@@ -124,7 +124,7 @@ describe('relay agent: what a phone may do', () => {
 
   it('refuses channels off the allowlist before the host runs them', async () => {
     const { call, wipe, handle } = await phone();
-    for (const channel of ['data:wipe', 'settings:reset', 'remote:rotate', 'terminal:create', 'file:write', 'tasks:list']) {
+    for (const channel of ['data:wipe', 'settings:reset', 'remote:rotate', 'terminal:create', 'file:write', 'task:create', 'pr:action']) {
       expect((await call(channel)).error).toBe(`Not allowed from a paired phone (channel-denied): ${channel}`);
     }
     expect(wipe).not.toHaveBeenCalled();

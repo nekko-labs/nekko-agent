@@ -271,6 +271,7 @@ export function createDispatcher(host: Host): (channel: string, args: any[]) => 
     [C.chatCancelCompaction]: ([id]) => host.cancelSessionCompaction(id),
     [C.chatQueue]: ([id, text]) => host.queuePrompt(id, text),
     [C.chatDequeue]: ([id, idx]) => host.dequeuePrompt(id, idx),
+    [C.chatEditQueued]: ([id, idx, edit]) => host.editQueuedPrompt(id, idx, edit),
     [C.chatSteer]: ([id, text]) => host.steerChat(id, text),
     [C.chatInterruptQueued]: ([id, idx, brain]) => host.interruptQueuedPrompt(id, idx, brain),
     [C.resourceQueue]: ([action, input]) => host.resourceQueue(action, input),

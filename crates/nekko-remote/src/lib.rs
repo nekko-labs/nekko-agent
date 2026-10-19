@@ -16,6 +16,7 @@ pub mod jsobj;
 pub mod phone;
 pub mod phone_changes;
 pub mod phone_thumbs;
+pub mod phone_views;
 pub mod route;
 pub mod service;
 pub mod socket;

@@ -202,7 +202,19 @@ it('decides phone requests the way the daemon must', async () => {
   const settings = {
     theme: 'dark', accent: '#6d5efc', themePreset: 'nebula', defaultProviderId: 'p1', defaultModelId: 'm1',
     favoriteModels: ['p1::m1'], defaultChatMode: 'ask', chatPaneAction: 'complete', sandboxMode: 'workspace',
-    providers: [{ id: 'p1', kind: 'openai', label: 'GPT', baseUrl: 'https://x', apiKey: 'sk-secret', tokenKey: 'tk', enabled: true }],
+    providers: [
+      { id: 'p1', kind: 'openai', label: 'GPT', baseUrl: 'https://x', apiKey: 'sk-secret', tokenKey: 'tk', enabled: true },
+      // Providers whose limits a phone may read: by their id, never their key.
+      { id: 'claude', kind: 'anthropic', label: 'Claude', auth: 'subscription', tokenKey: 'tok:claude', enabled: true },
+      { id: 'or', kind: 'openrouter', label: 'OpenRouter', apiKey: 'sk-or-secret', enabled: true },
+    ],
+    // Saved prompts: a phone gets names and text, nothing else.
+    prompts: [
+      { id: 'review', name: 'review', body: 'Review this.', createdBy: '/Users/me' },
+      { id: 'bad', name: 7, body: 'x' },
+      'not a prompt',
+    ],
+    automationsPaused: true,
     guardrails: [{ id: 'g' }], hooks: [{ id: 'h', command: 'curl' }], hfToken: 'hf_secret', aboutUser: 'me',
     voice: { enabled: true, language: 'en', modelPath: '/m.bin', sensitivity: 50 },
     // The computer lets phones see changes (the refusal when off is in phone-changes.test.ts).
@@ -264,7 +276,89 @@ it('decides phone requests the way the daemon must', async () => {
     ['chat:send', [{ sessionId: 's1', text: 'hi', clientMessageId: 'x'.repeat(65) }]],
     ['chat:queue', ['s1', { text: 'later', clientMessageId: 'q-1' }]],
     ['chat:queue', ['s1', { text: 'later', clientMessageId: 9 }]],
+    // IO-22: edit or remove a queued prompt, checked against the text the phone showed.
+    ['chat:editQueued', ['s1', 0, { expect: 'later', text: 'sooner' }]],
+    ['chat:editQueued', ['s1', 1, { expect: 'later' }]],
+    ['chat:editQueued', ['s1', -1, { expect: 'later' }]],
+    ['chat:editQueued', ['s1', 1.5, { expect: 'later' }]],
+    ['chat:editQueued', ['s1', 0, { expect: 'later', images: ['data:x'] }]],
+    ['chat:editQueued', ['s1', 0, { text: 'no expect' }]],
+    ['chat:editQueued', ['s1', 0, { expect: 'later', text: 3 }]],
+    ['chat:editQueued', ['s1', 0, 'sooner']],
+    ['chat:editQueued', ['', 0, { expect: 'later' }]],
+    ['chat:dequeue', ['s1', 0]],
+    // IO-23: fork a chat before a message.
+    ['session:fork', ['s1']],
+    ['session:fork', ['s1', 'm2']],
+    ['session:fork', ['s1', null]],
+    ['session:fork', ['s1', 7]],
+    ['session:fork', []],
+    ['session:truncate', ['s1', 'm2']],
+    // IO-26: the computer's automations: read, and run one; never make or change one.
+    ['tasks:list', ['ignored']],
+    ['task:runNow', ['t1', { extra: true }]],
+    ['task:runNow', []],
+    ['task:create', [{ title: 'x', prompt: 'rm -rf', kind: 'scheduled' }]],
+    ['task:update', ['t1', { prompt: 'x' }]],
+    ['task:delete', ['t1']],
+    ['workflows:list', []],
+    ['workflow:run', ['w1', { inputs: { a: 1 } }]],
+    ['workflow:run', [3]],
+    ['workflow:update', ['w1', {}]],
+    ['workflow:delete', ['w1']],
+    ['workflow:event', [{}]],
+    // IO-27: a chat's pull requests, read only; git goes through the agent.
+    ['pr:sessionList', ['s1']],
+    ['pr:sessionList', ['s1', true]],
+    ['pr:sessionList', ['s1', 'yes']],
+    ['pr:sessionList', []],
+    ['pr:action', ['https://github.com/o/r/pull/1', 'merge']],
+    ['pr:diff', ['https://github.com/o/r/pull/1']],
+    ['workspace:gitStatus', ['w1']],
+    // IO-29: usage and limits, read only; limits by provider id.
+    ['usage:summary', [{ deep: true }]],
+    ['limits:get', ['claude']],
+    ['limits:get', ['or']],
+    ['limits:get', ['p1']],
+    ['limits:get', ['nope']],
+    ['limits:get', ['tok:claude', true]],
+    ['limits:get', []],
   ];
+  // What the computer returns for the channels beyond the chat.
+  const beyond: Record<string, unknown> = {
+    'chat:editQueued': { id: 's1', title: 'Queue', messages: [{ id: 'm1', role: 'user', content: 'hi' }], queue: ['sooner', { text: 'with a photo', images: ['data:image/jpeg;base64,AAAA'], videos: ['data:video/mp4;base64,BBBB'] }, { text: 'Review carefully.\n\nnow', skill: { name: 'review', input: 'now', extra: 1 } }], workspaceId: 'w1' },
+    'session:fork': { id: 's_fork', title: 'New chat', workspaceId: 'w1', messages: [{ id: 'm1', role: 'user', content: 'hi' }] },
+    'tasks:list': [
+      { id: 't1', title: 'Nightly', kind: 'recurring', prompt: 'Run the tests in /Users/me/app', workspaceId: 'w1', providerId: 'p1', modelId: 'm1', intervalMs: 86400000, status: 'active', createdAt: 1, lastRunAt: 2, nextRunAt: 3, runCount: 4, lastSessionId: 's9', lastResult: 'r'.repeat(650) },
+      { id: 't2', title: 'Watch', kind: 'background', prompt: 'p', keepAlive: 'until', condition: 'secret plan', status: 'paused', createdAt: 1, runCount: 0 },
+      'junk',
+    ],
+    'workflows:list': {
+      workflows: [
+        { id: 'w1', name: 'Review PRs', description: 'd'.repeat(700), category: 'Code', enabled: true, steps: [{ id: 'a', kind: 'shell', command: 'gh pr list' }, { id: 'b' }], triggers: [{ kind: 'cron', cron: '0 9 * * *' }], workspaceId: 'w1', providerId: 'p1', modelId: 'm1', createdAt: 1, updatedAt: 2, lastRunAt: 3, lastStatus: 'failure', runCount: 2, nextRunAt: 4 },
+        { id: 'w2', name: 'Blank', category: 'Other', enabled: false, createdAt: 1, updatedAt: 1 },
+      ],
+      runs: [{ id: 'r1', workflowId: 'w1', status: 'failure', steps: [{ output: 'secret log' }] }],
+    },
+    'workflow:run': { id: 'r2', workflowId: 'w1', status: 'queued', triggerKind: 'manual', startedAt: 5, steps: [{ output: 'x' }] },
+    'pr:sessionList': [
+      { url: 'https://github.com/o/r/pull/12', owner: 'o', repo: 'r', number: 12, title: 'Fix it', state: 'open', isDraft: false, additions: 3, deletions: 1, changedFiles: 2, headRefName: 'fix/it', reviewDecision: 'APPROVED', checks: 'failing', source: 'gh', updatedAt: '2026-10-19' },
+      'junk',
+    ],
+    'usage:summary': {
+      totalInput: 1000, totalOutput: 500, totalCost: 1.25, totalCacheRead: 7,
+      byModel: { 'claude-opus-5.5': { input: 600, output: 300, cost: 1 }, 'C:\\models\\qwen3-32b.gguf': { input: 300, output: 150, cost: 0 }, 'b-model': { input: 50, output: 25, subscription: true }, 'a-model': { input: 50, output: 25 }, bad: 3 },
+      byProvider: { p1: { input: 1, output: 1 } },
+      bySession: { s1: { input: 1, output: 1 } },
+      bySessionCost: { s1: 1 },
+      daily: Array.from({ length: 16 }, (_, i) => ({ date: `2026-10-${String(i + 1).padStart(2, '0')}`, input: i, output: i, cost: i / 4, extra: 1 })).concat([{ date: 5 } as never]),
+      avoidedCosts: { secret: 1 },
+    },
+    'limits:get': {
+      windows: [{ id: 'w', label: '5 hours', scope: 'session', usedPercent: 42, resetAt: 9, status: 'warning', token: 'x' }, 'junk'],
+      planType: 'max', creditsBalance: 3, creditsState: 'balance', updatedAt: 8, staleAfterMs: 60000, account: 'me@example.com',
+    },
+  };
   // What the computer can run: the phone sees names, never templates or folders.
   const skills = [
     { name: 'review', description: 'Review the code', category: 'Code quality', source: 'builtin', template: 'Review carefully.\n' },
@@ -305,6 +399,11 @@ it('decides phone requests the way the daemon must', async () => {
       { id: 'u2', role: 'user', content: 'and', images: [] },
     ],
   };
+  sessions.queued = {
+    id: 'queued',
+    messages: [],
+    queue: ['plain', { text: 'with photos', images: ['data:image/jpeg;base64,' + big('Q', 64)], videos: [] }, { text: 'Use the skill.\n\nnow', skill: { name: 'review', input: 'now' } }, 7],
+  };
   for (const id of Object.keys(sessions)) requests.push(['session:get', [id]]);
   // changes:list as a phone receives it (phoneChangesView): diffs, secrets hidden, limits.
   const cv = phoneAccessPolicy().changesView;
@@ -332,6 +431,8 @@ it('decides phone requests the way the daemon must', async () => {
       if (ch === 'skills:runnable') return skills;
       if (ch === 'session:get') return sessions[String(a[0])] ?? null;
       if (ch === 'changes:list') return changes[String(a[0])] ?? [];
+      if (ch === 'task:runNow') return undefined;
+      if (Object.prototype.hasOwnProperty.call(beyond, ch)) return beyond[ch];
       return ch.startsWith('settings:') || ch === 'providers:list' ? (ch === 'providers:list' ? settings.providers : settings) : { ok: ch };
     };
     // The thumbnailer relay.ts uses, so both editions read the same photos.
@@ -341,7 +442,7 @@ it('decides phone requests the way the daemon must', async () => {
     );
     cases.push({ channel, args, calls, ...outcome });
   }
-  check(join(crate, 'tests', 'golden', 'phone.json'), { settings, skills, sessions, changes, cases });
+  check(join(crate, 'tests', 'golden', 'phone.json'), { settings, skills, sessions, changes, beyond, cases });
 });
 
 /** A relay socket the agent dials, recording what it sends. */

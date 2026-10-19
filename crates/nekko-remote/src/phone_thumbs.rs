@@ -72,7 +72,9 @@ fn make(data_url: &str) -> Option<String> {
 /// async runtime.
 pub async fn thumbnail_images(session: Value) -> Value {
     let Value::Object(mut s) = session else { return session };
-    let Some(Value::Array(mut messages)) = s.remove("messages") else { return Value::Object(s) };
+    // Taken in place, so the chat keeps its key order (the TS spreads it).
+    let Some(Value::Array(slot)) = s.get_mut("messages") else { return Value::Object(s) };
+    let mut messages = std::mem::take(slot);
     let from = messages.len().saturating_sub(policy().session_messages);
     let mut room = policy().session_images;
     for m in messages[from..].iter_mut().rev() {
@@ -107,7 +109,9 @@ pub async fn thumbnail_images(session: Value) -> Value {
             o.insert("images".into(), Value::Array(out));
         }
     }
-    s.insert("messages".into(), Value::Array(messages));
+    if let Some(Value::Array(slot)) = s.get_mut("messages") {
+        *slot = messages;
+    }
     Value::Object(s)
 }
 
