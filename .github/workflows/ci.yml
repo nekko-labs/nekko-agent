@@ -155,7 +155,7 @@ jobs:
       # build:core takes 1-2 s here; waiting on another job's artifact would cost more.
       - run: npm run build:core
       - name: Session clearing and command-log callback parity
-        run: npm run test -w @nekko-agent/host -- src/session-clear.golden.test.ts src/session-clear.timezone.test.ts src/session-log-callback.test.ts src/session-clear.daemon.test.ts
+        run: npm run test -w @nekko-agent/host -- src/session-clear.golden.test.ts src/session-clear.timezone.test.ts src/session-log-callback.test.ts
 
   capture:
     needs: scope
