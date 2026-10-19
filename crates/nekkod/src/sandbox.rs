@@ -19,8 +19,6 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-/// What the backend is told the daemon owns (`NEKKOD_OWNS`).
-pub const OWNS: &str = "sandbox";
 /// The channels served here (the last two are the host's).
 pub const CHANNELS: &[&str] = &[
     "sandbox:configure",
@@ -280,14 +278,8 @@ impl Sandboxes {
         Ok(Value::Object(out))
     }
 
-    async fn busy(ctx: &Ctx, id: &str) -> bool {
-        if ctx.turns.running_sessions().iter().any(|s| s == id) {
-            return true;
-        }
-        match tokio::time::timeout(crate::routes::AUX_WAIT, ctx.backend.call("chat:running", json!([]))).await {
-            Ok(Ok(Value::Array(ids))) => ids.iter().any(|v| v.as_str() == Some(id)),
-            _ => false,
-        }
+    fn busy(ctx: &Ctx, id: &str) -> bool {
+        ctx.turns.running_sessions().iter().any(|s| s == id)
     }
 
     async fn diff(&self, ctx: &Ctx, id: &str) -> Result<Value, String> {
@@ -373,7 +365,7 @@ impl Sandboxes {
         let arg = |i: usize| args.get(i).cloned().unwrap_or(Value::Null);
         match channel {
             "sandbox:configure" => {
-                if Self::busy(ctx, &id).await {
+                if Self::busy(ctx, &id) {
                     return Err("Wait for the current reply to finish before sandbox setup.".into());
                 }
                 self.session(ctx, &id)?;
@@ -392,7 +384,7 @@ impl Sandboxes {
                 self.status(ctx, &id)
             }
             "sandbox:cleanup" => {
-                if Self::busy(ctx, &id).await {
+                if Self::busy(ctx, &id) {
                     return Err("Wait for the current reply to finish before sandbox cleanup.".into());
                 }
                 let s = self.sandbox_session(ctx, &id)?;

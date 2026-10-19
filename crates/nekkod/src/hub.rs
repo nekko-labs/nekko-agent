@@ -60,9 +60,6 @@ struct Turn {
     /// for a chat it does not show, to mark it running.
     /// None while the turn has only waited (resending a wait would notify again).
     first: Option<Arc<str>>,
-    /// Published by the TS backend (a turn the host runs itself): dropped if
-    /// the backend restarts, since its end will never come.
-    backend: bool,
     last: Instant,
     /// For replay: the events, deltas joined, and when each arrived (ms).
     events: Vec<Value>,
@@ -140,12 +137,6 @@ fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
-/// Just the fields of a backend frame the hub needs; the rest is skipped.
-#[derive(serde::Deserialize)]
-struct BackendFrame {
-    payload: Value,
-}
-
 impl Hub {
     pub fn new() -> Self {
         let (tx, _) = broadcast::channel(16 * 1024);
@@ -156,36 +147,15 @@ impl Hub {
         self.tx.subscribe()
     }
 
-    /// A frame for everyone, sent as it is.
-    pub fn publish_raw(&self, text: impl Into<Arc<str>>, term_data: bool) {
-        let _ = self.tx.send(Event { text: text.into(), term_data, scope: Scope::Global });
-    }
-
     /// Serialized with `channel` as the first key (serde_json keeps insertion
     /// order, and `channel` is written first), which `?only=` filtering relies on.
     pub fn publish(&self, channel: &str, payload: Value, term_data: bool) {
-        if channel == "daemon:backend" {
-            // A restarted backend will never end the turns it was running.
-            self.lock().turns.retain(|_, t| !t.backend);
-        }
         let frame: Arc<str> = serde_json::json!({ "channel": channel, "payload": payload }).to_string().into();
         if channel == "agent:event" {
-            self.publish_agent(frame, &payload, false);
+            self.publish_agent(frame, &payload);
         } else {
             let _ = self.tx.send(Event { text: frame, term_data, scope: Scope::Global });
         }
-    }
-
-    /// A frame relayed from the TS backend: agent events are scoped to their
-    /// chat like the daemon's own, everything else goes to everyone as it is.
-    pub fn publish_backend(&self, text: &str) {
-        if text.starts_with(r#"{"channel":"agent:event""#)
-            && let Ok(frame) = serde_json::from_str::<BackendFrame>(text)
-        {
-            self.publish_agent(text.into(), &frame.payload, true);
-            return;
-        }
-        self.publish_raw(text, false);
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Sessions> {
@@ -193,7 +163,7 @@ impl Hub {
     }
 
     /// An agent event: scoped, numbered, and kept while its turn runs.
-    fn publish_agent(&self, text: Arc<str>, payload: &Value, backend: bool) {
+    fn publish_agent(&self, text: Arc<str>, payload: &Value) {
         let Some(id) = payload.get("sessionId").and_then(Value::as_str) else {
             let _ = self.tx.send(Event { text, term_data: false, scope: Scope::Global });
             return;
@@ -219,7 +189,6 @@ impl Hub {
                 let turn = s.turns.entry(key.clone()).or_insert_with(|| Turn {
                     phase: Phase::Running,
                     first: None,
-                    backend,
                     last: Instant::now(),
                     events: Vec::new(),
                     at: Vec::new(),
@@ -390,24 +359,6 @@ mod tests {
         got.sort();
         assert_eq!(got.len(), 2, "{got:?}");
         assert!(got[0].contains(r#""delta":"a""#) && got[1].contains("tool_call"));
-    }
-
-    #[test]
-    fn backend_agent_events_are_scoped_and_forgotten_when_the_backend_restarts() {
-        let hub = Hub::new();
-        let mut rx = hub.subscribe();
-        hub.publish_backend(r#"{"channel":"agent:event","payload":{"type":"text","sessionId":"s9","delta":"x"}}"#);
-        hub.publish_backend(r#"{"channel":"tasks:updated","payload":[]}"#);
-        assert!(
-            matches!(rx.try_recv().unwrap().scope, Scope::Session { ref id, summary: true, .. } if id.as_ref() == "s9")
-        );
-        assert!(matches!(rx.try_recv().unwrap().scope, Scope::Global));
-        hub.publish("agent:event", json!({ "type": "text", "sessionId": "d1", "delta": "x" }), false);
-        hub.publish("daemon:backend", json!({ "state": "ready" }), false);
-        let left: Vec<Arc<str>> = vec!["s9".into(), "d1".into()];
-        let replays = hub.replay(&left);
-        assert_eq!(replays.len(), 1);
-        assert_eq!(replays[0].0.as_ref(), "d1", "the daemon's own turn survives a backend restart");
     }
 
     #[test]

@@ -171,18 +171,25 @@ fn write_exec(path: &Path, body: &str) {
     std::fs::write(path, body).unwrap();
 }
 
+/// A turn rig (the daemon, its data dir and its recorded events) plus the
+/// fake `claude` on its PATH.
 struct Rig {
-    data: PathBuf,
-    workspace: PathBuf,
+    t: TurnRig,
     bin: PathBuf,
-    d: Daemon,
+}
+
+impl std::ops::Deref for Rig {
+    type Target = TurnRig;
+    fn deref(&self) -> &TurnRig {
+        &self.t
+    }
 }
 
 impl Drop for Rig {
     fn drop(&mut self) {
-        let _ = self.d.child.kill();
-        let _ = self.d.child.wait();
-        let _ = std::fs::remove_dir_all(&self.data);
+        // The daemon first, so nothing still runs from the fake's folder.
+        let _ = self.t.d.child.kill();
+        let _ = self.t.d.child.wait();
         let _ = std::fs::remove_dir_all(&self.bin);
     }
 }
@@ -205,8 +212,9 @@ fn rig_env(name: &str, mode: &str, cli: bool, extra: &[(&str, Option<&str>)]) ->
     let mut env: Vec<(&str, Option<&str>)> =
         vec![("PATH", Some(&path)), ("CLAUDE_CONFIG_DIR", Some(&config)), ("ANTHROPIC_API_KEY", None)];
     env.extend_from_slice(extra);
-    let d = start_with_env(true, Some(&data), json!({}), &env);
-    Rig { data, workspace, bin, d }
+    let d = start_with_env(Some(&data), json!({}), &env);
+    let events = record_events(d.port);
+    Rig { t: TurnRig { data, workspace, d, events }, bin }
 }
 
 fn spec(rig: &Rig, turn_id: &str, text: &str) -> Value {
@@ -230,11 +238,7 @@ fn saved(rig: &Rig) -> Value {
 }
 
 fn kinds(events: &[Value]) -> Vec<String> {
-    events
-        .iter()
-        .flat_map(|p| p["events"].as_array().cloned().unwrap_or_default())
-        .filter_map(|e| e["type"].as_str().map(str::to_string))
-        .collect()
+    events.iter().filter_map(|e| e["type"].as_str().map(str::to_string)).collect()
 }
 
 fn assistant_texts(session: &Value) -> Vec<String> {
@@ -252,7 +256,7 @@ async fn runs_turns_on_one_claude_code_process_and_keeps_its_session() {
     let rig = rig("plain", "guardrails", true);
     let (status, body) = post(rig.d.port, "chat:turn", json!([spec(&rig, "cc1", "hello")]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{body}");
-    let (events, end) = turn_record(rig.d.port, "cc1").await;
+    let (events, end) = turn_record(&rig, "cc1", "s_cc").await;
     assert_eq!(end["aborted"], false, "{end}");
     let k = kinds(&events);
     assert!(k.ends_with(&["usage".into(), "done".into()]), "{k:?}");
@@ -267,7 +271,7 @@ async fn runs_turns_on_one_claude_code_process_and_keeps_its_session() {
     // The second turn reuses the same child (same pid) and the same Claude Code session.
     let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "cc2", "again")]), Some(TOKEN)).await;
     assert_eq!(status, 200);
-    turn_record(rig.d.port, "cc2").await;
+    turn_record(&rig, "cc2", "s_cc").await;
     let second = saved(&rig);
     assert_eq!(second["claudeCodeSessionId"], session_id.as_str());
     let replies = assistant_texts(&second);
@@ -286,7 +290,7 @@ async fn permission_prompts_reach_nekko_approvals() {
     assert_eq!(approval["severity"], "high");
     let (status, body) = post(rig.d.port, "tool:approve", json!(["s_cc", "toolu_rm", true]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{body}");
-    let (events, end) = turn_record(rig.d.port, "ccA").await;
+    let (events, end) = turn_record(&rig, "ccA", "s_cc").await;
     assert_eq!(end["aborted"], false);
     let k = kinds(&events);
     for kind in ["tool_call", "tool_approval_required", "step", "tool_result", "done"] {
@@ -312,19 +316,15 @@ async fn stop_interrupts_claude_code_and_keeps_the_partial_reply() {
     let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "ccS", "hang")]), Some(TOKEN)).await;
     assert_eq!(status, 200);
     until("the reply to start streaming", Duration::from_secs(30), || async {
-        let calls = host_calls(rig.d.port).await;
-        let streamed = calls
-            .iter()
-            .filter(|c| c[0] == "turn:event" && c[1][0] == "ccS")
-            .any(|c| c[1][1]["events"].as_array().is_some_and(|e| e.iter().any(|e| e["type"] == "text")));
+        let streamed = rig.events.lock().unwrap().iter().any(|e| e["sessionId"] == "s_cc" && e["type"] == "text");
         streamed.then_some(())
     })
     .await;
     let (status, body) = post(rig.d.port, "chat:abort", json!(["s_cc"]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{body}");
-    let (events, end) = turn_record(rig.d.port, "ccS").await;
+    let (events, end) = turn_record(&rig, "ccS", "s_cc").await;
     assert_eq!(end["aborted"], true, "{end}");
-    let all: Vec<Value> = events.iter().flat_map(|p| p["events"].as_array().cloned().unwrap_or_default()).collect();
+    let all = &events;
     assert_eq!(all.last().unwrap()["message"], "Stopped", "{all:?}");
     let s = saved(&rig);
     let last = s["messages"].as_array().unwrap().last().unwrap().clone();
@@ -337,8 +337,8 @@ async fn without_the_bridge_claude_code_never_starts() {
     let rig = rig("nobridge", "guardrails", false);
     let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "ccN", "hello")]), Some(TOKEN)).await;
     assert_eq!(status, 200);
-    let (events, _) = turn_record(rig.d.port, "ccN").await;
-    let all: Vec<Value> = events.iter().flat_map(|p| p["events"].as_array().cloned().unwrap_or_default()).collect();
+    let (events, _) = turn_record(&rig, "ccN", "s_cc").await;
+    let all = &events;
     let error = all.iter().find(|e| e["type"] == "error").expect("an error");
     assert!(error["message"].as_str().unwrap().contains("approval bridge"), "{error}");
     assert!(assistant_texts(&saved(&rig)).is_empty());
@@ -349,8 +349,8 @@ async fn a_bridge_that_does_not_connect_stops_claude_code_before_it_acts() {
     let rig = rig_env("bridgedown", "guardrails", true, &[("NEKKOD_TEST_BRIDGE_DOWN", Some("1"))]);
     let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "ccD", "run rm")]), Some(TOKEN)).await;
     assert_eq!(status, 200);
-    let (events, _) = turn_record(rig.d.port, "ccD").await;
-    let all: Vec<Value> = events.iter().flat_map(|p| p["events"].as_array().cloned().unwrap_or_default()).collect();
+    let (events, _) = turn_record(&rig, "ccD", "s_cc").await;
+    let all = &events;
     let k: Vec<&str> = all.iter().filter_map(|e| e["type"].as_str()).collect();
     assert!(!k.contains(&"tool_call"), "nothing ran: {k:?}");
     let error = all.iter().find(|e| e["type"] == "error").expect("an error");

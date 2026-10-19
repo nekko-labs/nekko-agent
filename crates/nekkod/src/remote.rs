@@ -19,9 +19,6 @@ use std::sync::{Arc, OnceLock};
 
 pub use nekko_remote::CHANNELS;
 
-/// What the backend is told the daemon owns (`NEKKOD_OWNS`): remote.json and the relay agent.
-pub const OWNS: &str = "remote";
-
 pub struct Remote {
     svc: Option<Arc<RemoteService>>,
     dispatch: Arc<OnceLock<Dispatcher>>,
