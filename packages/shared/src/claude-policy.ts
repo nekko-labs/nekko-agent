@@ -364,4 +364,15 @@ export type ClaudeCapabilityStatus =
  * so this is `none` with the reason; the dev-only preview answers `example`
  * and the UI renders `claudePlanUsageExample()` with its label.
  */
+/**
+ * `claude:codeStatus(providerId?)`: whether the user's own Claude Code is
+ * installed and how it is signed in (from `claude --version` and `claude auth
+ * status`; Nekko never reads its credentials). `auth` is the policy row it maps
+ * to; `unknown` while signed out.
+ */
+export type ClaudeCodeStatus =
+  | { installed: false; message: string }
+  | { installed: true; version: string; loggedIn: false; authMethod?: string; apiProvider?: string | null; auth?: ClaudeAuth; message?: string }
+  | { installed: true; version: string; loggedIn: true; authMethod: string; apiProvider?: string | null; auth: ClaudeAuth };
+
 export type ClaudePlanUsageStatus = { source: 'none'; message: string } | { source: 'example'; label: string };

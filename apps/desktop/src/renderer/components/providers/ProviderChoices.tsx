@@ -2,11 +2,12 @@ import React from 'react';
 import type { ProviderKind } from '@nekko-agent/shared';
 import { PROVIDER_DEFAULTS } from '@nekko-agent/shared';
 
-// Claude is an API-key provider here. The Claude Agent choice (runs the user's
-// installed Claude Code) joins this list beside it in the harness UI step.
-const choices: { kind: ProviderKind; icon?: string; description: string }[] = [
+// Claude Agent is a Nekko feature that runs the user's Claude Code, so it gets a
+// plain terminal glyph, not Anthropic's mark (their terms reserve it).
+const choices: { kind: ProviderKind; icon?: string; glyph?: string; description: string }[] = [
   { kind: 'chatgpt', icon: 'openai', description: 'Sign in with your ChatGPT plan' },
-  { kind: 'anthropic', icon: 'anthropic', description: 'Use an Anthropic API key · billed separately' },
+  { kind: 'anthropic', icon: 'anthropic', description: 'API key or cloud account · every Nekko feature' },
+  { kind: 'claude-code', glyph: '>_', description: 'Runs your installed Claude Code · sign in there' },
   { kind: 'openrouter', icon: 'openrouter', description: 'Many models · pay for what you use' },
   { kind: 'openai', icon: 'openai', description: 'Use an API key · billed separately' },
   { kind: 'ollama', icon: 'ollama', description: 'Connect Ollama on your computer' },
@@ -17,8 +18,8 @@ const choices: { kind: ProviderKind; icon?: string; description: string }[] = [
 
 export function ProviderChoices({ value, onPick }: { value?: ProviderKind; onPick: (kind: ProviderKind) => void }) {
   return <div className="provider-choices" role="group" aria-label="Choose a model provider">
-    {choices.map(({ kind, icon, description }) => <button key={kind} type="button" className="provider-choice" aria-pressed={value === kind} onClick={() => onPick(kind)}>
-      <span className="provider-choice-icon" aria-hidden="true">{icon ? <img src={`./providers/${icon}.svg`} alt="" width="28" height="28" /> : <span>↗</span>}</span>
+    {choices.map(({ kind, icon, glyph, description }) => <button key={kind} type="button" className="provider-choice" aria-pressed={value === kind} onClick={() => onPick(kind)}>
+      <span className="provider-choice-icon" aria-hidden="true">{icon ? <img src={`./providers/${icon}.svg`} alt="" width="28" height="28" /> : <span className={glyph ? 'provider-choice-glyph' : undefined}>{glyph ?? '↗'}</span>}</span>
       <span><strong>{kind === 'anthropic' ? 'Claude' : PROVIDER_DEFAULTS[kind].label}</strong><small>{description}</small></span>
     </button>)}
   </div>;

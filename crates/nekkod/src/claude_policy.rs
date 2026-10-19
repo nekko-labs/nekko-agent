@@ -197,9 +197,13 @@ impl ClaudePolicyStore {
     /// Record a harness provider's `claude auth status --json`; its
     /// `authMethod` picks the row its next turns get. The harness calls this
     /// before each session launch and when the app regains focus.
-    #[allow(dead_code)] // the Claude Code harness (H1, H2) calls it
     pub fn note_auth_status(&self, provider_id: &str, status: Value) {
         self.auth_status.lock().unwrap_or_else(|e| e.into_inner()).insert(provider_id.to_string(), status);
+    }
+
+    /// Whether a status has been recorded for `provider_id`.
+    pub fn has_auth_status(&self, provider_id: &str) -> bool {
+        self.auth_status.lock().unwrap_or_else(|e| e.into_inner()).contains_key(provider_id)
     }
 
     /// How the Claude behind `provider` is paid for; `None` for a non-Claude provider.
@@ -263,6 +267,50 @@ impl ClaudePolicyStore {
 }
 
 /// The settings provider `id`.
+/// `claude:codeStatus(providerId?)`: whether the user's own Claude Code is
+/// installed and how it is signed in, for the Claude Agent setup states. It
+/// runs `claude --version` and `claude auth status`, never reads Claude Code's
+/// credentials, and records the status for `providerId` so the policy rows its
+/// turns get match what the user sees.
+pub async fn code_status_route(ctx: &crate::routes::Ctx, args: &[Value]) -> Result<Value, String> {
+    let provider_id = args.first().and_then(Value::as_str).filter(|id| !id.is_empty());
+    let bin = match nekko_harness::locate(None).await {
+        Ok(bin) => bin,
+        Err(message) => return Ok(json!({ "installed": false, "message": message })),
+    };
+    match nekko_harness::auth_status(&bin).await {
+        Ok(s) => {
+            let status = json!({ "loggedIn": s.logged_in, "authMethod": s.auth_method, "apiProvider": s.api_provider });
+            if let Some(id) = provider_id {
+                ctx.claude_policy.note_auth_status(id, status.clone());
+            }
+            let auth = if s.logged_in { policy::auth_from_status(Some(&status)) } else { ClaudeAuth::Unknown };
+            Ok(json!({
+                "installed": true,
+                "version": bin.version,
+                "loggedIn": s.logged_in,
+                "authMethod": s.auth_method,
+                "apiProvider": s.api_provider,
+                "auth": auth.as_str(),
+            }))
+        }
+        Err(message) => Ok(json!({ "installed": true, "version": bin.version, "loggedIn": false, "message": message })),
+    }
+}
+
+/// Read Claude Code's auth status for a Claude Agent provider that has none
+/// recorded yet, so its first turn gets the right rows rather than `unknown`.
+/// Any failure leaves it unrecorded, which fails closed.
+pub async fn ensure_auth_status(ctx: &crate::routes::Ctx, provider: &Value) {
+    let id = provider.get("id").and_then(Value::as_str).unwrap_or_default();
+    if provider.get("kind").and_then(Value::as_str) != Some(policy::CLAUDE_CODE_KIND)
+        || ctx.claude_policy.has_auth_status(id)
+    {
+        return;
+    }
+    let _ = code_status_route(ctx, &[json!(id)]).await;
+}
+
 async fn provider(ctx: &crate::routes::Ctx, id: &str) -> Result<Value, String> {
     let settings = crate::settings::current(ctx).await;
     settings
