@@ -26,6 +26,12 @@ pub enum ProviderKind {
     /// `https://bedrock-mantle.{region}.api.aws/anthropic`, on the user's own
     /// Bedrock bearer token, with `anthropic.`-prefixed model ids.
     Bedrock,
+    /// Claude on Google Cloud Vertex AI: `{base}/publishers/anthropic/models/{model}:streamRawPredict`
+    /// on a Google access token, with the base naming the project and location.
+    Vertex,
+    /// Claude in Microsoft Foundry: the Messages API at
+    /// `https://{resource}.services.ai.azure.com/anthropic` on the resource's key.
+    Foundry,
     /// Claude Agent: the user's own Claude Code runs the chat (nekkod drives it
     /// through `nekko-harness`). No base URL, no key.
     ClaudeCode,
@@ -79,6 +85,17 @@ impl ProviderConfig {
     /// Claude in Amazon Bedrock rather than Anthropic's own API.
     pub(crate) fn bedrock(&self) -> bool {
         self.kind == ProviderKind::Bedrock
+    }
+
+    /// Claude on Google Cloud Vertex AI.
+    pub(crate) fn vertex(&self) -> bool {
+        self.kind == ProviderKind::Vertex
+    }
+
+    /// Claude through a cloud platform (Bedrock, Vertex AI, Foundry), none of
+    /// which serves Anthropic's Models API.
+    pub(crate) fn cloud_platform(&self) -> bool {
+        matches!(self.kind, ProviderKind::Bedrock | ProviderKind::Vertex | ProviderKind::Foundry)
     }
 }
 

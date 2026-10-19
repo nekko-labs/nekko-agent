@@ -159,6 +159,53 @@ describe('Claude in Amazon Bedrock', () => {
   });
 });
 
+describe('Claude on Vertex AI and in Foundry', () => {
+  const sse = () =>
+    new Response('event: message_stop\ndata: {"type":"message_stop"}\n\n', { status: 200, headers: { 'content-type': 'text/event-stream' } });
+  const cfg = (kind: ProviderConfig['kind'], baseUrl: string): ProviderConfig => ({
+    id: 'c1',
+    kind,
+    label: kind,
+    baseUrl,
+    apiKey: 'secret',
+    enabled: true,
+  });
+  const drain = async (it: AsyncIterable<unknown>) => {
+    for await (const _ of it) void _;
+  };
+
+  it('sends Vertex the model in the URL and the version in the body, on a Bearer token', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(sse());
+    const base = 'https://aiplatform.googleapis.com/v1/projects/p/locations/global';
+    await drain(new AnthropicProvider(cfg('vertex', base)).chat({ model: 'claude-opus-5-5', messages: [{ role: 'user', content: 'hi' }] } as never));
+    const [url, init] = spy.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe(`${base}/publishers/anthropic/models/claude-opus-5-5:streamRawPredict`);
+    const body = JSON.parse(String(init.body));
+    expect(body.model).toBeUndefined();
+    expect(body.anthropic_version).toBe('vertex-2023-10-16');
+    expect(init.headers).toEqual({ 'Content-Type': 'application/json', Authorization: 'Bearer secret' });
+  });
+
+  it('sends Foundry the first-party shape on its own host', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(sse());
+    const base = 'https://res.services.ai.azure.com/anthropic';
+    await drain(new AnthropicProvider(cfg('foundry', base)).chat({ model: 'claude-opus-5-5', messages: [{ role: 'user', content: 'hi' }] } as never));
+    const [url, init] = spy.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe(`${base}/v1/messages`);
+    expect(JSON.parse(String(init.body)).model).toBe('claude-opus-5-5');
+    expect((init.headers as Record<string, string>)['x-api-key']).toBe('secret');
+  });
+
+  it('lists each platform\'s own models without a catalog call', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch');
+    const vertex = (await new AnthropicProvider(cfg('vertex', 'https://x')).listModels()).map((m) => m.id);
+    const foundry = (await new AnthropicProvider(cfg('foundry', 'https://x')).listModels()).map((m) => m.id);
+    expect(spy).not.toHaveBeenCalled();
+    expect(vertex).toContain('claude-haiku-4-5@20251001');
+    expect(foundry).toContain('claude-haiku-4-5');
+  });
+});
+
 describe('the live Claude catalog', () => {
   const live = [
     { type: 'model', id: 'claude-opus-6', display_name: 'Claude Opus 6' },

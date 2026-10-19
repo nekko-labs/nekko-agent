@@ -11,6 +11,7 @@ mod common;
 mod assist;
 mod automation;
 mod backendless;
+mod claude_code;
 mod claude_policy;
 mod desktop;
 mod engine;
@@ -22,6 +23,12 @@ mod settings;
 mod tools;
 mod turns;
 mod wire;
+
+/// Not a test of its own: with the env var set, this process is a fake `claude -p`.
+#[test]
+fn fake_claude() {
+    claude_code::fake_claude();
+}
 
 /// Not a test of its own: with the env var set, this process is the backend.
 #[test]

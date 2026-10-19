@@ -279,7 +279,11 @@ impl Transport for Fake {
         Ok(())
     }
 
+    /// Cancel-safe, as the real session's channel receive is: `run_turn`
+    /// drops this future whenever its tick or Stop wins the select, so it
+    /// yields before taking a line, never after.
     async fn recv(&mut self) -> Option<String> {
+        tokio::task::yield_now().await;
         loop {
             if self.killed {
                 return None;
@@ -292,7 +296,6 @@ impl Transport for Fake {
                 Some(Step::Eof) => return None,
                 Some(Step::Line(_)) => {
                     let Some(Step::Line(l)) = self.script.pop_front() else { unreachable!() };
-                    tokio::task::yield_now().await;
                     return Some(l);
                 }
             }

@@ -63,6 +63,22 @@ fn bundled_cli_path(app: &AppPaths) -> Option<String> {
     candidates.into_iter().find(|p| Path::new(p).exists())
 }
 
+/// The app's Electron binary and its bundled CLI, to run the CLI as Node
+/// (the Claude Agent approval bridge, harness.rs).
+pub fn bundled_cli(native: &crate::config::NativeConfig) -> Option<(String, String)> {
+    let app = AppPaths {
+        is_packaged: native.is_packaged,
+        exe: native.exe_path.clone(),
+        resources: native.resources_path.clone(),
+        app_path: native.app_path.clone(),
+        user_data: String::new(),
+    };
+    if app.exe.is_empty() {
+        return None;
+    }
+    bundled_cli_path(&app).map(|cli| (app.exe.clone(), cli))
+}
+
 /// The directory the launcher goes in: `<userData>/bin`.
 pub fn cli_bin_dir(user_data: &str) -> String {
     join(user_data, "bin")

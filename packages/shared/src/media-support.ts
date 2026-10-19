@@ -77,6 +77,8 @@ export function modelMediaSupport(input: {
   switch (input.providerKind) {
     case 'anthropic':
     case 'bedrock':
+    case 'vertex':
+    case 'foundry':
     case 'openai':
     case 'chatgpt':
       // Every current model from these vendors takes images; an unrecognised
