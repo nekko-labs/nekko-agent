@@ -76,6 +76,7 @@ export function modelMediaSupport(input: {
   if (modelModality({ name: id }) === 'vision' || modelModality({ name }) === 'vision') return { image: 'yes', video };
   switch (input.providerKind) {
     case 'anthropic':
+    case 'bedrock':
     case 'openai':
     case 'chatgpt':
       // Every current model from these vendors takes images; an unrecognised

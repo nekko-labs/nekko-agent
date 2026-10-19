@@ -36,6 +36,21 @@ const CLAUDE_MODELS: &[(&str, &str)] = &[
     ("claude-haiku-4-5-20251001", "Claude Haiku 4.5"),
 ];
 
+/// What Claude in Amazon Bedrock serves on its Messages endpoint. It has no
+/// Models API, so this list is the catalog; ids carry Bedrock's provider prefix.
+const BEDROCK_MODELS: &[(&str, &str)] = &[
+    ("anthropic.claude-opus-5-5", "Claude Opus 5.5"),
+    ("anthropic.claude-opus-5", "Claude Opus 5"),
+    ("anthropic.claude-opus-4-8", "Claude Opus 4.8"),
+    ("anthropic.claude-opus-4-7", "Claude Opus 4.7"),
+    ("anthropic.claude-sonnet-5-5", "Claude Sonnet 5.5"),
+    ("anthropic.claude-sonnet-5", "Claude Sonnet 5"),
+    ("anthropic.claude-fable-5-1", "Claude Fable 5.1"),
+    ("anthropic.claude-fable-5", "Claude Fable 5"),
+    ("anthropic.claude-haiku-5-5", "Claude Haiku 5.5"),
+    ("anthropic.claude-haiku-4-5", "Claude Haiku 4.5"),
+];
+
 /// How long the catalog may take, body included, before the shipped list is
 /// served instead. Opening a chat waits on this list, so a stalled connection
 /// must not hold it for the transport's minutes-long idle limit.
@@ -227,6 +242,9 @@ impl AnthropicProvider {
     /// `CATALOG_TIMEOUT`, so the caller falls back to the shipped list.
     async fn fetch_catalog(&self) -> Option<Vec<ModelInfo>> {
         self.config.api_key.as_deref().filter(|k| !k.is_empty())?;
+        if self.config.bedrock() {
+            return None;
+        }
         let req = HttpRequest::get(format!("{}/v1/models?limit=1000", self.config.base_url), self.headers());
         let fetch = async {
             let mut res = self.io.transport.send(&req).await.ok()?;
@@ -268,6 +286,13 @@ impl AnthropicProvider {
                 TestResult::fail("Not signed in. Sign in with Claude in the provider settings.")
             };
         }
+        if self.config.bedrock() {
+            return if has_key {
+                TestResult::ok("Bedrock token set")
+            } else {
+                TestResult::fail("Missing Bedrock bearer token")
+            };
+        }
         if !has_key {
             return TestResult::fail("Missing API key");
         }
@@ -279,7 +304,8 @@ impl AnthropicProvider {
             return Ok(models);
         }
 
-        Ok(CLAUDE_MODELS
+        let shipped = if self.config.bedrock() { BEDROCK_MODELS } else { CLAUDE_MODELS };
+        Ok(shipped
             .iter()
             .map(|(id, name)| ModelInfo {
                 id: id.to_string(),

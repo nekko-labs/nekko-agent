@@ -22,6 +22,10 @@ pub enum ProviderKind {
     /// The engine Nekko Agent runs itself (llama.cpp behind its own router).
     Llamacpp,
     OpenaiCompat,
+    /// Claude in Amazon Bedrock: the Messages API at
+    /// `https://bedrock-mantle.{region}.api.aws/anthropic`, on the user's own
+    /// Bedrock bearer token, with `anthropic.`-prefixed model ids.
+    Bedrock,
     /// Claude Agent: the user's own Claude Code runs the chat (nekkod drives it
     /// through `nekko-harness`). No base URL, no key.
     ClaudeCode,
@@ -70,6 +74,11 @@ pub struct ProviderConfig {
 impl ProviderConfig {
     pub(crate) fn subscription(&self) -> bool {
         self.auth == Some(AuthMode::Subscription)
+    }
+
+    /// Claude in Amazon Bedrock rather than Anthropic's own API.
+    pub(crate) fn bedrock(&self) -> bool {
+        self.kind == ProviderKind::Bedrock
     }
 }
 
