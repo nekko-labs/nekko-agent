@@ -72,6 +72,22 @@ if (git(['rev-parse', 'HEAD'], source) !== pin.revision) throw new Error('Unexpe
 const patch = join(vendor, 'stdio.patch');
 const reverse = spawnSync('git', ['-c', 'core.autocrlf=false', '-c', 'core.eol=lf', 'apply', '--reverse', '--check', patch], { cwd: source });
 if (reverse.status !== 0) {
+  // An earlier version of the maintained patch is still a known state: when
+  // every change is to a file the current patch owns, put those files back
+  // first. The entrypoint is new (untracked, or intent-to-add from `add -N`).
+  const owned = new Set(git(['apply', '--numstat', patch], source).split('\n').filter(Boolean).map((l) => l.split('\t')[2]));
+  // Untrimmed: porcelain's two state columns start with a space for an unstaged change.
+  const status = execFileSync('git', ['-c', 'core.autocrlf=false', 'status', '--porcelain', '--untracked-files=all'], { cwd: source, encoding: 'utf8' });
+  const changed = status.split('\n').filter(Boolean).map((l) => ({ state: l.slice(0, 2), path: l.slice(3) }));
+  if (changed.length && changed.every((c) => owned.has(c.path))) {
+    const added = changed.filter((c) => c.state === '??' || c.state.includes('A'));
+    const tracked = changed.filter((c) => !added.includes(c)).map((c) => c.path);
+    if (tracked.length) git(['checkout', '--', ...tracked], source);
+    for (const c of added) {
+      if (c.state !== '??') git(['reset', '-q', '--', c.path], source);
+      rmSync(join(source, c.path), { force: true });
+    }
+  }
   if (git(['status', '--porcelain', '--untracked-files=all'], source)) throw new Error('Build checkout contains unknown changes');
   git(['apply', '--check', patch], source);
   git(['apply', patch], source);
