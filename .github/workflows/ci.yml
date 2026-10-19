@@ -94,6 +94,10 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      # First, and before anything is installed: Claude sign-in, Claude credential
+      # reads and Claude plan limits must not come back (Anthropic's third-party rules).
+      - name: Claude compliance check
+        run: node scripts/check-claude-compliance.mjs
       - run: npm ci
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'

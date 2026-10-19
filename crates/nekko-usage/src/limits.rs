@@ -4,7 +4,7 @@
 //! service (the snapshot store, throttled polls, problems) is nekkod's
 //! `limits.rs`.
 
-use crate::{get, js_entries, js_round, locale_compare, num, parse_float, parse_int10};
+use crate::{get, js_round, num, parse_float};
 use serde_json::{Map, Value, json};
 
 /// How long a header snapshot stays fresh.
@@ -13,7 +13,6 @@ pub const HEADER_STALE_MS: f64 = 60_000.0;
 pub const POLL_STALE_MS: f64 = 35_000.0;
 const BACKOFF_BASE_MS: f64 = 60_000.0;
 const BACKOFF_MAX_MS: f64 = 30.0 * 60_000.0;
-const ANTHROPIC_PREFIX: &str = "anthropic-ratelimit-unified-";
 
 /// A failed quota read, as `LimitsReadError` carries it.
 #[derive(Clone, Debug, PartialEq)]
@@ -76,12 +75,7 @@ pub fn parse_retry_after(value: Option<&str>, now: f64) -> Option<f64> {
     date.is_finite().then(|| (date - now).max(0.0))
 }
 
-/// The two plan-wide periods, in both spellings (`5h` on the headers,
-/// `five_hour` in the usage JSON).
-const PERIODS: &[(&str, &str, &str, &str, &str)] =
-    &[("5h", "5h", "five_hour", "5-hour", "session"), ("7d", "7d", "seven_day", "7-day", "weekly")];
-
-/// `fable` -> `Fable`, `claude_next` -> `Claude Next`.
+/// `primary` -> `Primary`, `five_hour` -> `Five Hour`.
 fn title_case(value: &str) -> String {
     value
         .split(['_', '-'])
@@ -95,52 +89,6 @@ fn title_case(value: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join(" ")
-}
-
-/// `describeAnthropicWindow(period, family)`: `{ id, label, scope }`, with
-/// `modelFamily` for a per-model window.
-pub fn describe_anthropic_window(period: &str, family: Option<&str>) -> Map<String, Value> {
-    let known = PERIODS.iter().find(|p| p.0 == period);
-    let label = known.map_or(period, |p| p.3);
-    let mut o = Map::new();
-    match family.filter(|f| !f.is_empty()) {
-        None => {
-            o.insert("id".into(), json!(period));
-            o.insert("label".into(), json!(label));
-            o.insert("scope".into(), json!(known.map_or("weekly", |p| p.4)));
-        }
-        Some(f) => {
-            o.insert("id".into(), json!(format!("{period}_{f}")));
-            o.insert("label".into(), json!(format!("{label} {}", title_case(f))));
-            o.insert("scope".into(), json!("model"));
-            o.insert("modelFamily".into(), json!(f));
-        }
-    }
-    o
-}
-
-/// `splitAnthropicWindow(name)`.
-fn split_window(name: &str) -> Option<(String, Option<String>)> {
-    for p in PERIODS {
-        for spelling in [p.1, p.2] {
-            if name == spelling {
-                return Some((p.0.into(), None));
-            }
-            if let Some(rest) = name.strip_prefix(spelling).and_then(|r| r.strip_prefix('_')) {
-                return Some((p.0.into(), Some(rest.into())));
-            }
-        }
-    }
-    (!name.is_empty()).then(|| (name.to_string(), None))
-}
-
-/// `normalizeStatus(value)`.
-fn normalize_status(value: Option<&str>) -> &'static str {
-    match value.map(str::to_lowercase).as_deref() {
-        Some("rate_limited" | "rejected") => "rate_limited",
-        Some("warning" | "allowed_warning") => "warning",
-        _ => "allowed",
-    }
 }
 
 /// `clampPercent(value)`: 0-100, two decimals, `NaN` kept.
@@ -157,35 +105,6 @@ fn window(desc: Map<String, Value>, used: f64, reset_at: f64, status: &str) -> V
     Value::Object(w)
 }
 
-fn rank(w: &Value) -> u8 {
-    match get(w, "scope").and_then(Value::as_str) {
-        Some("session") => 0,
-        Some("weekly") => 1,
-        _ => 2,
-    }
-}
-
-/// `sortWindows(windows)`: plan-wide windows first, then by label.
-pub fn sort_windows(mut windows: Vec<Value>) -> Vec<Value> {
-    let label = |w: &Value| get(w, "label").map(nekko_js::display).unwrap_or_default();
-    windows.sort_by(|a, b| rank(a).cmp(&rank(b)).then_with(|| locale_compare(&label(a), &label(b))));
-    windows
-}
-
-/// `mergeWindows(previous, fresh)`: a fresh window replaces its namesake in
-/// place, and windows the fresh list is silent about survive.
-pub fn merge_windows(previous: &[Value], fresh: &[Value]) -> Vec<Value> {
-    let mut by_id: Vec<(String, Value)> = Vec::new();
-    for w in previous.iter().chain(fresh) {
-        let id = crate::key_of(get(w, "id"));
-        match by_id.iter_mut().find(|(k, _)| *k == id) {
-            Some(slot) => slot.1 = w.clone(),
-            None => by_id.push((id, w.clone())),
-        }
-    }
-    sort_windows(by_id.into_iter().map(|(_, w)| w).collect())
-}
-
 fn snapshot(windows: Vec<Value>, extra: Map<String, Value>, now: f64, stale: f64) -> Value {
     let mut o = Map::new();
     o.insert("windows".into(), Value::Array(windows));
@@ -193,46 +112,6 @@ fn snapshot(windows: Vec<Value>, extra: Map<String, Value>, now: f64, stale: f64
     o.insert("updatedAt".into(), num(now));
     o.insert("staleAfterMs".into(), num(stale));
     Value::Object(o)
-}
-
-/// `parseAnthropicHeaders(headers)` over the response's header pairs, in the
-/// order a `Map` of their lower-cased names keeps them.
-pub fn parse_anthropic_headers(pairs: &[(String, String)], now: f64) -> Value {
-    let mut map: Vec<(String, String)> = Vec::new();
-    for (k, v) in pairs {
-        let k = k.to_lowercase();
-        match map.iter_mut().find(|(n, _)| *n == k) {
-            Some(slot) => slot.1 = v.clone(),
-            None => map.push((k, v.clone())),
-        }
-    }
-    let header = |name: &str| map.iter().find(|(k, _)| k == name).map(|(_, v)| v.as_str());
-    let mut windows = Vec::new();
-    for (key, util) in &map {
-        const SUFFIX: &str = "-utilization";
-        if !key.starts_with(ANTHROPIC_PREFIX) || !key.ends_with(SUFFIX) {
-            continue;
-        }
-        let (start, end) = (ANTHROPIC_PREFIX.len(), key.len() - SUFFIX.len());
-        let name = if end > start { &key[start..end] } else { "" };
-        let Some((period, family)) = split_window(name) else { continue };
-        let utilization = parse_float(util);
-        if !utilization.is_finite() {
-            continue;
-        }
-        let reset_at = match header(&format!("{ANTHROPIC_PREFIX}{name}-reset")) {
-            Some(r) if !r.is_empty() => parse_int10(r) * 1000.0,
-            _ => 0.0,
-        };
-        let status = normalize_status(Some(header(&format!("{ANTHROPIC_PREFIX}{name}-status")).unwrap_or("allowed")));
-        windows.push(window(
-            describe_anthropic_window(&period, family.as_deref()),
-            clamp_percent(utilization * 100.0),
-            reset_at,
-            status,
-        ));
-    }
-    snapshot(sort_windows(windows), Map::new(), now, HEADER_STALE_MS)
 }
 
 /// The Messages API's per-key rate limits: (header family, window id, label).
@@ -250,8 +129,7 @@ const API_WARNING_PERCENT: f64 = 80.0;
 
 /// The standard `anthropic-ratelimit-<family>-{limit,remaining,reset}` headers
 /// an API-key response carries, as one short window per family. These are the
-/// key's own limits, not a subscription plan's: a plan's windows come from the
-/// `-unified-` headers instead. The reset is an RFC 3339 time.
+/// key's own limits, not a subscription plan's. The reset is an RFC 3339 time.
 pub fn parse_anthropic_api_headers(pairs: &[(String, String)], now: f64) -> Value {
     let header = |name: &str| {
         pairs
@@ -301,68 +179,6 @@ fn loose_number(v: Option<&Value>) -> f64 {
         None | Some(Value::Null) => f64::NAN,
         Some(other) => parse_float(&nekko_js::display(other)),
     }
-}
-
-/// `parseAnthropicCredits(json)`.
-fn anthropic_credits(json: &Map<String, Value>) -> Map<String, Value> {
-    let mut o = Map::new();
-    let state = |o: &mut Map<String, Value>, s: &str| {
-        o.insert("creditsState".into(), json!(s));
-    };
-    let Some(extra) = json.get("extra_usage").filter(|e| e.is_object() || e.is_array()) else {
-        state(&mut o, "unknown");
-        return o;
-    };
-    if get(extra, "is_enabled") == Some(&Value::Bool(false)) {
-        state(&mut o, "disabled");
-        return o;
-    }
-    let limit = nekko_js::to_number(get(extra, "monthly_limit"));
-    let used = nekko_js::to_number(get(extra, "used_credits"));
-    if !limit.is_finite() {
-        state(&mut o, "unknown");
-        return o;
-    }
-    let spent = if used.is_finite() { used } else { 0.0 };
-    o.insert("creditsBalance".into(), num((limit - spent).max(0.0)));
-    state(&mut o, "balance");
-    o
-}
-
-/// `parseAnthropicUsageJson(json)` (`GET /api/oauth/usage`, whole percent).
-pub fn parse_anthropic_usage_json(json: &Map<String, Value>, now: f64) -> Value {
-    let mut windows = Vec::new();
-    for (key, win) in js_entries(json) {
-        if !(win.is_object() || win.is_array()) {
-            continue;
-        }
-        let Some((period, family)) = split_window(key) else { continue };
-        let Some(util) = get(win, "utilization") else { continue };
-        let utilization = loose_number(Some(util));
-        if !utilization.is_finite() {
-            continue;
-        }
-        let used = clamp_percent(utilization);
-        let resets = match get(win, "resets_at") {
-            Some(Value::String(s)) => crate::date::parse(s),
-            _ => 0.0,
-        };
-        let reported = normalize_status(get(win, "status").and_then(Value::as_str));
-        let status = if reported == "rate_limited" || used >= 100.0 {
-            "rate_limited"
-        } else if reported == "warning" || used >= 80.0 {
-            "warning"
-        } else {
-            "allowed"
-        };
-        windows.push(window(
-            describe_anthropic_window(&period, family.as_deref()),
-            used,
-            if resets > 0.0 { resets } else { 0.0 },
-            status,
-        ));
-    }
-    snapshot(sort_windows(windows), anthropic_credits(json), now, POLL_STALE_MS)
 }
 
 /// `describeChatGptWindow(key, duration)`: WHAM slots are not periods.
@@ -560,17 +376,5 @@ mod tests {
         assert_eq!(windows.len(), 1);
         assert_eq!(windows[0]["id"], "tpm");
         assert_eq!(windows[0]["usedPercent"], num(75.0));
-    }
-
-    #[test]
-    fn unified_plan_headers_are_not_api_limits() {
-        let got = parse_anthropic_api_headers(
-            &pairs(&[
-                ("anthropic-ratelimit-unified-5h-utilization", "0.5"),
-                ("anthropic-ratelimit-unified-5h-reset", "1"),
-            ]),
-            1.0,
-        );
-        assert_eq!(got["windows"], json!([]));
     }
 }

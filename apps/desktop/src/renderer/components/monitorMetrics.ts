@@ -74,14 +74,7 @@ export function recordedBudgetMetrics(usage: import('@nekko-agent/shared').Usage
 }
  
 
-/** Display-only dedupe; keep independently configured accounts and API entries. */
+/** The cloud providers the Utilization monitor lists: every enabled one, each on its own row. */
 export function utilizationProviders(providers: import('@nekko-agent/shared').ProviderConfig[]) {
-  const enabled = providers.filter(p => p.enabled && !isLocalProvider(p.kind));
-  const claude = (p: import('@nekko-agent/shared').ProviderConfig) => p.auth === 'subscription' && (p.kind === 'anthropic' || p.tokenKey === 'claude' || p.tokenKey?.startsWith('claude:'));
-  return enabled.filter((p, index) => {
-    if (!claude(p) || !p.tokenKey) return true;
-    const peers = enabled.filter(other => claude(other) && other.tokenKey === p.tokenKey);
-    const preferred = peers.find(other => other.kind === 'anthropic') ?? peers[0];
-    return enabled.indexOf(preferred) === index;
-  });
+  return providers.filter(p => p.enabled && !isLocalProvider(p.kind));
 }

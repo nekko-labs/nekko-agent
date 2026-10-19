@@ -230,7 +230,8 @@ impl ClaudePolicyStore {
     /// `chat:send` carries `unattended: true`). Refuses a Claude Code harness
     /// turn when `unattended_runs` is off for its auth. Nekko-engine Claude
     /// providers are not gated here: on an API key or cloud the row is
-    /// enabled, and the old subscription path is being removed (H6).
+    /// enabled, and a Claude plan sign-in left by an older build is refused
+    /// outright by the Anthropic provider (`CLAUDE_PLAN_REMOVED`, H6).
     pub fn gate_turn(&self, provider: &Value, opts: &Value) -> Result<(), Refusal> {
         let kind = provider.get("kind").and_then(Value::as_str).unwrap_or_default();
         if kind != policy::CLAUDE_CODE_KIND || !is_unattended(opts) {

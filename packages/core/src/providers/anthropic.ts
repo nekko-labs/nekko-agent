@@ -109,12 +109,13 @@ function familyRank(id: string): number {
 }
 
 /**
- * Subscription (OAuth) requests ride the Claude Code public client. The
- * endpoint requires this beta flag and validates that the first system block
- * is the Claude Code identity line, per the token's terms of use.
+ * What a provider saved with `auth: 'subscription'` (a Claude plan sign-in
+ * from an older build) answers with. Anthropic does not let third-party apps
+ * send requests on Claude plan credentials, so this provider only ever sends
+ * an API key.
  */
-const OAUTH_BETA = 'oauth-2025-04-20';
-const CLAUDE_CODE_SYSTEM_PREFIX = "You are Claude Code, Anthropic's official CLI for Claude.";
+export const CLAUDE_PLAN_REMOVED =
+  'Claude plan sign-in is no longer available in Nekko Agent. Add an Anthropic API key to this provider, or connect Claude Agent to use your plan through Claude Code.';
 
 /**
  * Does this model reject the sampling parameters?
@@ -286,16 +287,6 @@ export class AnthropicProvider implements Provider {
     if (this.config.kind === 'vertex') {
       return { 'Content-Type': 'application/json', Authorization: `Bearer ${this.config.apiKey ?? ''}` };
     }
-    // Subscription mode: the host injects a fresh OAuth access token into
-    // config.apiKey, which goes out as a Bearer token, not an x-api-key.
-    if (this.config.auth === 'subscription') {
-      return {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.config.apiKey ?? ''}`,
-        'anthropic-version': '2023-06-01',
-        'anthropic-beta': OAUTH_BETA,
-      };
-    }
     return {
       'Content-Type': 'application/json',
       'x-api-key': this.config.apiKey ?? '',
@@ -303,26 +294,19 @@ export class AnthropicProvider implements Provider {
     };
   }
 
-  /**
-   * Subscription tokens are only valid for requests that identify as Claude
-   * Code, so the system prompt goes out as a block array with the required
-   * prefix first; the app's real system prompt follows as a second block.
-   */
-  private systemParam(system: string | undefined) {
-    if (this.config.auth !== 'subscription') return system;
-    const blocks: Array<{ type: 'text'; text: string }> = [{ type: 'text', text: CLAUDE_CODE_SYSTEM_PREFIX }];
-    if (system) blocks.push({ type: 'text', text: system });
-    return blocks;
+  /** A Claude plan sign-in saved by an older build: nothing is sent with it. */
+  private planSignIn(): boolean {
+    return this.config.auth === 'subscription';
   }
 
   /**
-   * The live catalog: `GET {base}/v1/models`, every model this key or
-   * subscription can call, including ones released after this build. One page
-   * of up to 1000 holds the whole list. Returns null on any failure, or after
-   * CATALOG_TIMEOUT_MS, so the caller can fall back to the shipped list.
+   * The live catalog: `GET {base}/v1/models`, every model this key can call,
+   * including ones released after this build. One page of up to 1000 holds
+   * the whole list. Returns null on any failure, or after CATALOG_TIMEOUT_MS,
+   * so the caller can fall back to the shipped list.
    */
   private async fetchCatalog(): Promise<ModelInfo[] | null> {
-    if (!this.config.apiKey || SHIPPED_MODELS[this.config.kind]) return null;
+    if (!this.config.apiKey || this.planSignIn() || SHIPPED_MODELS[this.config.kind]) return null;
     const abort = new AbortController();
     const timer = setTimeout(() => abort.abort(), CATALOG_TIMEOUT_MS);
     let json: any;
@@ -363,11 +347,7 @@ export class AnthropicProvider implements Provider {
   }
 
   async test(): Promise<{ ok: boolean; message: string }> {
-    if (this.config.auth === 'subscription') {
-      return this.config.apiKey
-        ? { ok: true, message: 'Signed in with a Claude subscription' }
-        : { ok: false, message: 'Not signed in. Sign in with Claude in the provider settings.' };
-    }
+    if (this.planSignIn()) return { ok: false, message: CLAUDE_PLAN_REMOVED };
     if (this.config.kind === 'bedrock') {
       return this.config.apiKey ? { ok: true, message: 'Bedrock token set' } : { ok: false, message: 'Missing Bedrock bearer token' };
     }
@@ -381,6 +361,7 @@ export class AnthropicProvider implements Provider {
   }
 
   async *chat(req: ChatRequest): AsyncIterable<ProviderChunk> {
+    if (this.planSignIn()) throw new Error(CLAUDE_PLAN_REMOVED);
     const effort = anthropicEffort(req.model, req.effort);
     const knob = (shape: SamplingShape) =>
       shape === 'effort'
@@ -406,7 +387,7 @@ export class AnthropicProvider implements Provider {
           max_tokens: outputCapFor(req.model, req.maxOutputTokens),
           stream: true,
           ...knob(shape),
-          system: this.systemParam(req.system),
+          system: req.system,
           messages,
           tools: req.tools?.map((t) => ({ name: t.name, description: t.description, input_schema: t.parameters })),
         }, req.promptCaching)),
