@@ -16,7 +16,7 @@ struct ContinueCard: View {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Continue").font(.caption.weight(.semibold)).foregroundStyle(palette.accent)
-                    Text(title).font(.body.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
+                    Text(title).font(.body.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(2)
                     if let preview {
                         Text(preview).font(.footnote).foregroundStyle(palette.inkSoft).lineLimit(2)
                     }
@@ -65,6 +65,7 @@ struct AutomationsView: View {
         .scrollContentBackground(.hidden)
         .background(palette.paper)
         .navigationTitle("Automations")
+        .navigationBarTitleDisplayMode(.inline)
         .overlay { if model?.loaded != true { ProgressView() } }
         .refreshable { await model?.load() }
         .task {
@@ -89,24 +90,24 @@ struct AutomationsView: View {
                 .font(.subheadline).foregroundStyle(palette.inkSoft).listRowBackground(Color.clear)
         }
         if !model.tasks.isEmpty {
-            Section("Tasks") {
+            Section {
                 ForEach(model.tasks) { t in
                     AutomationRow(title: t.title, detail: t.cadence, status: taskStatus(t), result: t.lastResult,
                                   lastRun: t.lastRunAt, started: model.started.contains(t.id), busy: running == t.id) {
                         run(t.id) { try await model.run(task: t.id) }
                     }
                 }
-            }
+            } header: { SectionTitle("Tasks") }
         }
         if !model.workflows.isEmpty {
-            Section("Workflows") {
+            Section {
                 ForEach(model.workflows) { w in
                     AutomationRow(title: w.name, detail: workflowDetail(w), status: workflowStatus(w), result: w.description,
                                   lastRun: w.lastRunAt, started: model.started.contains(w.id), busy: running == w.id) {
                         run(w.id) { try await model.run(workflow: w.id) }
                     }
                 }
-            }
+            } header: { SectionTitle("Workflows") }
         }
     }
 
@@ -209,6 +210,7 @@ struct UsageView: View {
         .scrollContentBackground(.hidden)
         .background(palette.paper)
         .navigationTitle("Usage and limits")
+        .navigationBarTitleDisplayMode(.inline)
         .overlay { if model?.loaded != true { ProgressView() } }
         .refreshable { await model?.load() }
         .task {
@@ -229,28 +231,28 @@ struct UsageView: View {
                     Text("No limits reported.").font(.footnote).foregroundStyle(palette.inkSoft)
                 }
             } header: {
-                Text([item.provider.label, item.limits.planType?.capitalized].compactMap { $0 }.joined(separator: " · "))
+                SectionTitle([item.provider.label, item.limits.planType?.capitalized].compactMap { $0 }.joined(separator: " · "))
             }
         }
         if let s = model.summary {
-            Section("All time") {
+            Section {
                 LabeledContent("Tokens", value: s.totalTokens.formatted(.number.notation(.compactName)))
                 LabeledContent("Estimated spend", value: s.totalCost.formatted(.currency(code: "USD")))
-            }
+            } header: { SectionTitle("All time") }
             if !s.days.isEmpty {
-                Section("Recent days") {
+                Section {
                     ForEach(s.days.reversed()) { d in
                         LabeledContent(d.date, value: "\(d.tokens.formatted(.number.notation(.compactName))) · \(d.cost.formatted(.currency(code: "USD")))")
                     }
-                }
+                } header: { SectionTitle("Recent days") }
             }
             if !s.models.isEmpty {
-                Section("By model") {
+                Section {
                     ForEach(s.models) { m in
                         LabeledContent(m.model, value: m.subscription ? "\(m.tokens.formatted(.number.notation(.compactName))) · plan"
                                        : "\(m.tokens.formatted(.number.notation(.compactName))) · \(m.cost.formatted(.currency(code: "USD")))")
                     }
-                }
+                } header: { SectionTitle("By model") }
             }
         } else if model.loaded && model.error == nil {
             Text("No usage recorded yet.").font(.subheadline).foregroundStyle(palette.inkSoft)
@@ -282,4 +284,12 @@ private struct LimitBar: View {
         if window.limited { return palette.danger }
         return window.status == "warning" || window.usedPercent >= 80 ? palette.warning : palette.success
     }
+}
+
+/// A list section's title in the palette's secondary ink: the system grey only nearly passed contrast on the paper background.
+struct SectionTitle: View {
+    let text: String
+    @Environment(\.palette) private var palette
+    init(_ text: String) { self.text = text }
+    var body: some View { Text(text).foregroundStyle(palette.inkSoft) }
 }

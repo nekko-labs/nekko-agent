@@ -89,7 +89,8 @@ struct ChatView: View {
                             Text(chat.turn.blocks.isEmpty ? "Working…" : "Working on \(store.active?.name ?? "your computer")…")
                                 .font(.footnote).foregroundStyle(palette.inkSoft)
                         }
-                        // One element: the spinner alone is too small a target for the audit.
+                        // One element, as tall as a row: the spinner alone is too small a target for the audit.
+                        .frame(minHeight: 44)
                         .accessibilityElement(children: .combine)
                         .id("working")
                     }

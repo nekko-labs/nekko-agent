@@ -111,7 +111,7 @@ struct ChatsView: View {
                 }
             }
             if !needsYou.isEmpty && query.isEmpty {
-                Section("Needs you") { ForEach(needsYou) { row($0) } }
+                Section { ForEach(needsYou) { row($0) } } header: { SectionTitle("Needs you") }
             }
             ForEach(query.isEmpty || !filtered.isEmpty ? groups : []) { g in
                 Section {
@@ -128,7 +128,7 @@ struct ChatsView: View {
                         }
                     }
                 } header: {
-                    Text(g.name)
+                    SectionTitle(g.name)
                 }
             }
     }
