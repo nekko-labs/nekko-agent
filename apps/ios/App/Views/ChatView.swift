@@ -88,7 +88,10 @@ struct ChatView: View {
                             ProgressView().controlSize(.small)
                             Text(chat.turn.blocks.isEmpty ? "Working…" : "Working on \(store.active?.name ?? "your computer")…")
                                 .font(.footnote).foregroundStyle(palette.inkSoft)
-                        }.id("working")
+                        }
+                        // One element: the spinner alone is too small a target for the audit.
+                        .accessibilityElement(children: .combine)
+                        .id("working")
                     }
                     if let e = chat.error {
                         Label(e, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(palette.danger)
@@ -314,7 +317,8 @@ struct BlockView: View {
             HStack {
                 Spacer(minLength: 48)
                 VStack(alignment: .trailing, spacing: 4) {
-                    Text(text).foregroundStyle(palette.userInk).textSelection(.enabled)
+                    // No text selection here: touch and hold opens the menu (Copy, Edit in a new chat).
+                    Text(text).foregroundStyle(palette.userInk)
                     if photos.contains(where: { !$0.isEmpty }) {
                         PhotoStrip(photos: photos, open: openPhoto)
                     } else if images > 0 {

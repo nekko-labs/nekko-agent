@@ -335,8 +335,10 @@ public final class ChatModel {
     /// A prompt: the new chat ends before it, with that prompt to edit and send (the desktop's split).
     /// A reply or step: the new chat keeps everything up to the next prompt. Nil while it streams.
     public func forkPoint(_ block: Block) -> (before: String?, seed: String?)? {
+        // A block shown under its live id (sent from here) is the saved message it was carried to.
+        let id = shownIds.first { $0.value == block.id }?.key ?? block.id
         guard let messages = session?.messages,
-              let at = messages.firstIndex(where: { $0.id == block.id || $0.toolCalls.contains { $0.id == block.id } }) else { return nil }
+              let at = messages.firstIndex(where: { $0.id == id || $0.toolCalls.contains { $0.id == id } }) else { return nil }
         let m = messages[at]
         if case .user = block, m.role == "user" {
             return (m.id, m.skill.map { "/\($0.name) \($0.input)".trimmingCharacters(in: .whitespaces) } ?? m.content)
