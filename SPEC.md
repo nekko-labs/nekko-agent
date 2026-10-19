@@ -1216,6 +1216,14 @@ Security tests must cover isolation, no local reads except the explicitly suppor
 ### Spooky theme
 The seasonal preset is displayed as Spooky in a dedicated Fun! group below the standard theme preset groups. Its persisted autumn ID remains compatible with existing settings. Seasonal merged-PR confetti is only shown while Spooky is active and disappears on theme changes. Only the bottom-left corner mascot wears the small orange wizard hat (changed 2026-10-08, reversing the earlier composer-avatar placement): the composer's send cat, the empty-wall cat and the title-bar brand mark stay undecorated, and the brand mark no longer carries a seasonal leaf. `[changed 2026-10-09]` The hat is drawn at 80% of its former size and sits higher, its brim on the crown between the ears rather than over the forehead.
 
+### Experimental themes
+`[implemented 2026-10-19; experimental]` An **Experimental** group in Settings → Theme (and the onboarding theme step) sits below the Light and Dark presets and above Fun!. It holds candidate brand colour pairings for review, without replacing any existing theme. Each pairing is one tile named after its main colour (Blueberry, Raspberry, Cyber, Quantum, Clay, Forest, Inkberry, Neon); clicking a tile opens its versions, so the picker stays short:
+- **White**: the website's white look, near-white paper with the main colour as the accent.
+- **Colourful**: the partner colour as the ground, panels frosted over it, dark ink.
+- **Dark** (all but Neon, whose main colour is not dark): the main colour as the ground with light ink and the partner colour as the accent. Raspberry's and Quantum's grounds are deepened slightly (10% and 30%) so text keeps 4.5:1.
+
+Every version draws the website's pixel-dot wave behind the app in its own colours (same timing, pause-when-hidden and reduced-motion rules as Lilac and Lavender), keeps the corner mascot unchanged, and passes the same contrast checks as the shipped presets (`contrast.test.ts`). A new `--on-accent` token (white by default) lets themes with a light accent use dark text on primary buttons. Preset ids are `x-<family>-<white|colour|dark>`; a paired phone that does not know an id falls back as it does for any unknown preset.
+
 ### Idle energy: working animations stop costing the GPU (2026-10-09)
 `[Implemented; measured in an isolated Electron benchmark on macOS (Apple Silicon); long-run Activity Monitor energy impact on a real session not yet re-measured]`
 
