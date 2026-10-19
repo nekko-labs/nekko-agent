@@ -37,15 +37,22 @@ export function parsePairingLink(input: string): PairingLink | null {
   // future longer secret still pairs, but refuse obvious garbage.
   if (!/^[0-9a-f]{8,128}$/i.test(room) || !/^[0-9a-f]{16,256}$/i.test(key)) return null;
   const pair = params.get('pair')?.trim().toUpperCase() || undefined;
-  const relayUrl = relay.replace(/\/+$/, '');
+  const relayUrl = trimSlashes(relay);
   const alts: string[] = [];
   for (const v of params.getAll('alt')) {
-    const url = v.trim().replace(/\/+$/, '');
+    const url = trimSlashes(v.trim());
     if (!url || !usableRoute(url) || url === relayUrl || alts.includes(url)) continue;
     alts.push(url);
     if (alts.length === MAX_ALTS) break;
   }
   return { relayUrl, room, key, pair, alts };
+}
+
+/** Without trailing '/': a loop, since /\/+$/ backtracks on long runs of '/'. */
+function trimSlashes(url: string): string {
+  let end = url.length;
+  while (end > 0 && url.charCodeAt(end - 1) === 47) end--;
+  return url.slice(0, end);
 }
 
 /** Relay host for display ("nekko-agent-relay.fly.dev"). */

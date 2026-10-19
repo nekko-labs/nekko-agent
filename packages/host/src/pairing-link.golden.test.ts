@@ -58,6 +58,15 @@ describe('pairing links', () => {
     expect(parsePairingLink(CASES[6])?.alts).toHaveLength(4);
   });
 
+  it('trims a long run of slashes in linear time (no ReDoS)', () => {
+    const slashes = '/'.repeat(100_000);
+    const start = Date.now();
+    const link = parsePairingLink(`relay=ws://10.0.0.5:4400${slashes}x${slashes}&room=${ROOM}&key=${KEY}&alt=ws://10.0.0.6:4400${slashes}`);
+    expect(Date.now() - start).toBeLessThan(500);
+    expect(link?.relayUrl).toBe(`ws://10.0.0.5:4400${slashes}x`);
+    expect(link?.alts).toEqual(['ws://10.0.0.6:4400']);
+  });
+
   it('builds what it parses', () => {
     const link = pairingLink('nekko-agent-pair:', {
       relayUrl: 'ws://studio.tail1234.ts.net:4400',

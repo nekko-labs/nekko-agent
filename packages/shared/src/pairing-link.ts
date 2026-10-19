@@ -77,5 +77,8 @@ export function pairingLink(
 }
 
 function trimSlashes(url: string): string {
-  return url.replace(/\/+$/, '');
+  // A loop, not /\/+$/: that regex backtracks on long runs of '/' (CodeQL js/polynomial-redos).
+  let end = url.length;
+  while (end > 0 && url.charCodeAt(end - 1) === 47) end--;
+  return url.slice(0, end);
 }

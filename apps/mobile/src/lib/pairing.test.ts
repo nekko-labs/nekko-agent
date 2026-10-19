@@ -47,3 +47,14 @@ describe('alt routes (IO-20)', () => {
     for (const c of cases) expect([c.input, parsePairingLink(c.input)]).toEqual([c.input, c.link]);
   });
 });
+
+describe('long runs of slashes', () => {
+  it('trims them in linear time', () => {
+    const slashes = '/'.repeat(100_000);
+    const start = Date.now();
+    const link = parsePairingLink(`relay=ws://10.0.0.5:4400${slashes}x${slashes}&room=a1b2c3d4e5f60718&key=0123456789abcdef0123456789abcdef&alt=ws://10.0.0.6:4400${slashes}`);
+    expect(Date.now() - start).toBeLessThan(500);
+    expect(link?.relayUrl).toBe(`ws://10.0.0.5:4400${slashes}x`);
+    expect(link?.alts).toEqual(['ws://10.0.0.6:4400']);
+  });
+});
