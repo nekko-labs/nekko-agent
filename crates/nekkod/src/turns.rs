@@ -216,6 +216,25 @@ struct Shared {
     /// The message of the last `error` event the turn sent, for a parent that
     /// drives it as a sub-agent (the TS route reads it off the events).
     last_error: Arc<Mutex<Option<String>>>,
+    /// A workflow run's chat (`unattended`): nobody is there to answer.
+    unattended: Unattended,
+}
+
+/// What an unattended turn tracks: its tool access (`toolAccess`,
+/// `allowedTools`, read when the turn loads its chat), the calls its
+/// allowlist runs without asking, and the reason each denied call was given.
+#[derive(Default)]
+struct Unattended {
+    on: std::sync::atomic::AtomicBool,
+    policy: Mutex<Value>,
+    auto: Mutex<HashSet<String>>,
+    denied: Mutex<HashMap<String, String>>,
+}
+
+impl Unattended {
+    fn is_on(&self) -> bool {
+        self.on.load(std::sync::atomic::Ordering::Relaxed)
+    }
 }
 
 /// How a launched turn ended: its summary and the last error it reported.
@@ -478,8 +497,19 @@ impl Turns {
     /// The approval prompt: the live policy first (the user can allow the
     /// rest of the turn while it waits), then park and ask.
     async fn request_approval(&self, shared: &Shared, call: &Value, reason: &str, severity: &Value) -> bool {
+        let call_id = str_at(call, "id").unwrap_or_default().to_string();
+        if shared.unattended.is_on() && lock(&shared.unattended.auto).contains(&call_id) {
+            return true;
+        }
         if self.live_mode(shared).await == "yolo" {
             return true;
+        }
+        // A workflow run never parks: the call is denied at once, with the
+        // reason, and the tool result says so.
+        if shared.unattended.is_on() {
+            let name = str_at(call, "name").unwrap_or_default();
+            lock(&shared.unattended.denied).insert(call_id, turn::workflow_access::unattended_denial(name, reason));
+            return false;
         }
         let rx = self.pending.park_approval(&shared.session_id, call, reason, severity);
         shared.emit(json!({
@@ -574,6 +604,7 @@ impl Turns {
             events: tx,
             default_mode: spec.pointer("/settings/defaultChatMode").and_then(Value::as_str).map(str::to_string),
             last_error: Arc::default(),
+            unattended: Unattended::default(),
         });
         lock(&self.running).insert(turn_id.clone(), shared.clone());
         let me = self.clone();
@@ -742,6 +773,13 @@ impl Turns {
         let claude_code = facts.pointer("/provider/kind").and_then(Value::as_str) == Some("claude-code");
         if claude_code && sandbox {
             return early("Claude Agent chats run Claude Code on this computer, so they cannot use a sandbox.");
+        }
+        if js::truthy(loaded.get("unattended")) {
+            shared.unattended.on.store(true, std::sync::atomic::Ordering::Relaxed);
+            *lock(&shared.unattended.policy) = json!({
+                "toolAccess": loaded.get("toolAccess").cloned().unwrap_or(Value::Null),
+                "allowedTools": loaded.get("allowedTools").cloned().unwrap_or(Value::Null),
+            });
         }
 
         // MCP: a host that hands over the server list (`turn:mcp`) leaves the
@@ -1534,7 +1572,32 @@ impl TurnTools {
         Ok(post)
     }
 
+    /// A call of an unattended turn (chat.ts `runHostTool`): its tool access
+    /// decides first, then the call runs with any approval it needs denied.
     async fn inner(&self, call: &Value) -> Result<Value, String> {
+        let un = &self.shared.unattended;
+        if !un.is_on() {
+            return self.attended(call).await;
+        }
+        let id = str_at(call, "id").unwrap_or_default().to_string();
+        let policy = lock(&un.policy).clone();
+        let decision = turn::workflow_access::tool_decision(&policy, call);
+        match decision.get("kind").and_then(Value::as_str) {
+            Some("deny") => return Ok(error(&id, decision.get("reason").map(js::display).unwrap_or_default())),
+            Some("auto") => {
+                lock(&un.auto).insert(id.clone());
+            }
+            _ => {}
+        }
+        let out = self.attended(call).await;
+        lock(&un.auto).remove(&id);
+        match lock(&un.denied).remove(&id) {
+            Some(reason) => Ok(error(&id, reason)),
+            None => out,
+        }
+    }
+
+    async fn attended(&self, call: &Value) -> Result<Value, String> {
         if let Some(sandboxes) = &self.sandbox {
             return Ok(self.sandbox_tool(sandboxes, call).await);
         }

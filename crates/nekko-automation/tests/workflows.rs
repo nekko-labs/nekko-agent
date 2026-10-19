@@ -5,6 +5,9 @@
 //! must give the same answers; the engine, driven through the same operations
 //! against a fake daemon that behaves like the TS test's mocks, must leave the
 //! same files and make the same chats, turns, shell calls and actions.
+//! The fixtures are frozen (the TS writer is gone); `workflows.json`'s run
+//! chats were edited by hand to add `unattended` and `workflowRunId` (#681).
+//! The tests after the golden one cover model choice and run safety directly.
 
 use nekko_automation::workflow_rules as rules;
 use nekko_automation::workflows::{BoxFut, ShellResult, WorkflowHost, Workflows};
@@ -80,10 +83,15 @@ fn cron_schedules_and_matching_follow_the_shared_rules() {
     }
 }
 
+/// A chat's title and its other saved fields.
+type SavedChat = (Value, Map<String, Value>);
+
 #[derive(Default)]
 struct Fake {
     settings: Mutex<Value>,
     sessions: Mutex<HashMap<String, Value>>,
+    /// Each chat's saved fields besides id, title, workspace and messages (the TS mock's `rest`).
+    fields: Mutex<HashMap<String, SavedChat>>,
     next_session: Mutex<u32>,
     log: Mutex<Vec<Value>>,
     replies: Mutex<VecDeque<Value>>,
@@ -123,11 +131,22 @@ impl WorkflowHost for Fake {
             }
         }
         self.log.lock().unwrap().push(json!({ "save": id, "title": title, "fields": rest }));
+        self.fields.lock().unwrap().insert(id.clone(), (title, rest));
         self.sessions.lock().unwrap().insert(id.clone(), json!({ "id": id, "messages": [] }));
         Box::pin(async move { Ok(id) })
     }
     fn get_session(&self, id: &str) -> Option<Value> {
         self.sessions.lock().unwrap().get(id).cloned()
+    }
+    fn update_session(&self, id: &str, fields: Vec<(&'static str, Value)>) -> BoxFut<'_, Result<(), String>> {
+        let mut all = self.fields.lock().unwrap();
+        if let Some((title, rest)) = all.get_mut(id) {
+            for (k, v) in fields {
+                rest.insert(k.into(), v);
+            }
+            self.log.lock().unwrap().push(json!({ "save": id, "title": title, "fields": rest }));
+        }
+        Box::pin(async { Ok(()) })
     }
     fn delete_session(&self, id: &str) -> BoxFut<'_, ()> {
         self.log.lock().unwrap().push(json!({ "delete": id }));
@@ -309,5 +328,132 @@ async fn the_engine_leaves_the_same_files_and_side_effects() {
     for d in g["described"].as_array().unwrap() {
         assert_eq!(rules::describe_event(&d["event"]), d["label"].as_str().unwrap(), "{}", d["event"]);
     }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A fresh engine over the fake, with the given settings, in its own folder.
+fn engine_with(name: &str, settings: Value) -> (Arc<Workflows>, Arc<Fake>, std::path::PathBuf) {
+    let dir = std::env::temp_dir().join(format!("nekko-automation-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let fake = Arc::new(Fake::default());
+    *fake.settings.lock().unwrap() = settings;
+    *fake.now.lock().unwrap() = 1_000.0;
+    let n = Arc::new(Mutex::new(0u32));
+    let engine = Workflows::new(
+        &dir,
+        fake.clone(),
+        Arc::new(|| 1_000.0),
+        Arc::new(move || {
+            let mut n = n.lock().unwrap();
+            *n += 1;
+            format!("id-{n}")
+        }),
+    );
+    (engine, fake, dir)
+}
+
+fn local_settings() -> Value {
+    json!({
+        "workspaces": [{ "id": "w", "path": "/work" }],
+        "defaultProviderId": "cloud", "defaultModelId": "claude",
+        "providers": [
+            { "id": "cloud", "kind": "anthropic", "label": "Cloud", "baseUrl": "https://api.anthropic.com", "enabled": true },
+            { "id": "local", "kind": "llamacpp", "label": "Local", "baseUrl": "http://127.0.0.1:8080/v1", "enabled": true },
+            { "id": "lan", "kind": "ollama", "label": "LAN box", "baseUrl": "http://10.0.0.5:11434", "enabled": true },
+        ],
+        "connectors": [{ "kind": "slack", "connected": true, "token": "x" }],
+    })
+}
+
+fn prompt_step(id: &str, extra: Value) -> Value {
+    let mut s = json!({ "id": id, "name": id, "kind": "prompt", "run": "do it" });
+    for (k, v) in extra.as_object().unwrap() {
+        s[k] = v.clone();
+    }
+    s
+}
+
+#[tokio::test]
+async fn a_local_only_workflow_refuses_cloud_models_without_falling_back() {
+    let (engine, fake, dir) = engine_with("local-only", local_settings());
+    // The global default is cloud: refused, not used.
+    let wf = engine
+        .create(&json!({ "name": "L", "localModelOnly": true, "steps": [prompt_step("a", json!({}))] }))
+        .await
+        .unwrap();
+    let run = engine.run(wf["id"].as_str().unwrap()).await.unwrap();
+    assert_eq!(run["status"], "failure");
+    assert!(
+        run["message"].as_str().unwrap().contains("This workflow uses local models only; Cloud is not local."),
+        "{run}"
+    );
+    // A step override to cloud, and a local kind on a LAN address, are refused too.
+    let wf = engine
+        .create(&json!({ "name": "L2", "localModelOnly": true, "providerId": "local", "modelId": "m",
+            "steps": [prompt_step("a", json!({ "providerId": "cloud", "modelId": "claude" }))] }))
+        .await
+        .unwrap();
+    assert!(
+        engine.run(wf["id"].as_str().unwrap()).await.unwrap()["message"]
+            .as_str()
+            .unwrap()
+            .contains("Cloud is not local.")
+    );
+    let wf = engine
+        .create(&json!({ "name": "L3", "localModelOnly": true, "providerId": "lan", "modelId": "m", "steps": [prompt_step("a", json!({}))] }))
+        .await
+        .unwrap();
+    assert!(
+        engine.run(wf["id"].as_str().unwrap()).await.unwrap()["message"]
+            .as_str()
+            .unwrap()
+            .contains("LAN box is not local.")
+    );
+    assert!(fake.turns.lock().unwrap().is_empty(), "no turn reached any model");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test]
+async fn a_local_only_run_is_offline_and_still_runs_action_steps() {
+    let (engine, fake, dir) = engine_with("local-actions", local_settings());
+    fake.replies.lock().unwrap().push_back(json!({ "reply": "diagnosis ⟦PASS⟧" }));
+    let wf = engine
+        .create(&json!({ "name": "L4", "localModelOnly": true, "toolAccess": "read", "providerId": "local", "modelId": "m",
+            "steps": [prompt_step("a", json!({})),
+                { "id": "post", "name": "Post", "kind": "action", "run": "slack.postMessage", "params": { "channel": "#ci", "text": "{{steps.a.output}}" } }] }))
+        .await
+        .unwrap();
+    let run = engine.run(wf["id"].as_str().unwrap()).await.unwrap();
+    assert_eq!(run["status"], "success", "{run}");
+    assert_eq!(fake.turns.lock().unwrap()[0]["providerId"], "local");
+    assert_eq!(fake.actions.lock().unwrap()[0]["op"], "slack.postMessage");
+    let saved = fake.log.lock().unwrap().iter().find(|e| e.get("save").is_some()).cloned().unwrap();
+    let fields = &saved["fields"];
+    assert_eq!(fields["unattended"], true);
+    assert_eq!(fields["workflowRunId"], run["id"]);
+    assert_eq!(fields["offline"], true);
+    assert_eq!(fields["toolAccess"], "read");
+    let off: Vec<&str> = fields["disabledTools"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+    assert!(off.contains(&"write_file") && off.contains(&"bash") && !off.contains(&"read_file"), "{off:?}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test]
+async fn an_allowlist_workflow_sets_each_steps_tools_before_it_runs() {
+    let (engine, fake, dir) = engine_with("allowlist", local_settings());
+    fake.replies.lock().unwrap().extend([json!({ "reply": "a" }), json!({ "reply": "b" })]);
+    let wf = engine
+        .create(&json!({ "name": "A", "toolAccess": "allowlist", "providerId": "local", "modelId": "m",
+            "steps": [prompt_step("a", json!({ "allowedTools": ["Read", "Bash(gh:*)"] })), prompt_step("b", json!({}))] }))
+        .await
+        .unwrap();
+    engine.run(wf["id"].as_str().unwrap()).await.unwrap();
+    let saves: Vec<Value> = fake.log.lock().unwrap().iter().filter(|e| e.get("save").is_some()).cloned().collect();
+    assert_eq!(saves[1]["fields"]["allowedTools"], json!(["Read", "Bash(gh:*)"]));
+    let off: Vec<&str> =
+        saves[1]["fields"]["disabledTools"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+    assert!(!off.contains(&"read_file") && !off.contains(&"bash") && off.contains(&"write_file"), "{off:?}");
+    assert_eq!(saves[2]["fields"]["allowedTools"], json!([]));
     let _ = std::fs::remove_dir_all(&dir);
 }

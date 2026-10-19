@@ -1889,6 +1889,328 @@
   {
    "input": {
     "session": {
+     "workflowRunId": "run_1",
+     "unattended": true
+    },
+    "offline": false,
+    "allowBrowserControl": false,
+    "mcpTools": [],
+    "decide": false
+   },
+   "output": [
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "grep",
+    "list_dir",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "fetch_url",
+    "delegation_targets",
+    "spawn_agent",
+    "agent_watch",
+    "update_plan",
+    "set_chat_title",
+    "complete_session"
+   ]
+  },
+  {
+   "input": {
+    "session": {
+     "workflowRunId": "run_1",
+     "unattended": true
+    },
+    "offline": false,
+    "allowBrowserControl": true,
+    "mcpTools": [],
+    "decide": true
+   },
+   "output": [
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "grep",
+    "list_dir",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "fetch_url",
+    "delegation_targets",
+    "spawn_agent",
+    "agent_watch",
+    "update_plan",
+    "set_chat_title",
+    "complete_session",
+    "decide"
+   ]
+  },
+  {
+   "input": {
+    "session": {
+     "workflowRunId": "run_1",
+     "unattended": true
+    },
+    "offline": false,
+    "orchestration": {
+     "strategy": "solo",
+     "maxDepth": 2,
+     "maxParallel": 4
+    },
+    "allowBrowserControl": false,
+    "mcpTools": [],
+    "decide": false
+   },
+   "output": [
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "grep",
+    "list_dir",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "fetch_url",
+    "agent_watch",
+    "update_plan",
+    "set_chat_title",
+    "complete_session"
+   ]
+  },
+  {
+   "input": {
+    "session": {
+     "workflowRunId": "run_1",
+     "unattended": true
+    },
+    "offline": false,
+    "orchestration": {
+     "strategy": "solo",
+     "maxDepth": 2,
+     "maxParallel": 4
+    },
+    "allowBrowserControl": true,
+    "mcpTools": [],
+    "decide": true
+   },
+   "output": [
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "grep",
+    "list_dir",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "fetch_url",
+    "agent_watch",
+    "update_plan",
+    "set_chat_title",
+    "complete_session",
+    "decide"
+   ]
+  },
+  {
+   "input": {
+    "session": {
+     "workflowRunId": "run_1",
+     "unattended": true
+    },
+    "offline": false,
+    "orchestration": {
+     "strategy": "balanced",
+     "maxDepth": 2,
+     "maxParallel": 4
+    },
+    "allowBrowserControl": false,
+    "mcpTools": [],
+    "decide": false
+   },
+   "output": [
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "grep",
+    "list_dir",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "fetch_url",
+    "delegation_targets",
+    "spawn_agent",
+    "agent_watch",
+    "update_plan",
+    "set_chat_title",
+    "complete_session"
+   ]
+  },
+  {
+   "input": {
+    "session": {
+     "workflowRunId": "run_1",
+     "unattended": true
+    },
+    "offline": false,
+    "orchestration": {
+     "strategy": "balanced",
+     "maxDepth": 2,
+     "maxParallel": 4
+    },
+    "allowBrowserControl": true,
+    "mcpTools": [],
+    "decide": true
+   },
+   "output": [
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "grep",
+    "list_dir",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "fetch_url",
+    "delegation_targets",
+    "spawn_agent",
+    "agent_watch",
+    "update_plan",
+    "set_chat_title",
+    "complete_session",
+    "decide"
+   ]
+  },
+  {
+   "input": {
+    "session": {
+     "workflowRunId": "run_1",
+     "unattended": true
+    },
+    "offline": false,
+    "orchestration": {
+     "strategy": "swarm",
+     "maxDepth": 2,
+     "maxParallel": 4
+    },
+    "allowBrowserControl": false,
+    "mcpTools": [
+     {
+      "name": "mcp__files__read",
+      "description": "Read through MCP",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "p": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "mcp__web__get",
+      "description": "Fetch",
+      "parameters": {
+       "type": "object"
+      }
+     }
+    ],
+    "decide": false
+   },
+   "output": [
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "grep",
+    "list_dir",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "fetch_url",
+    "delegation_targets",
+    "spawn_agent",
+    "mcp__files__read",
+    "mcp__web__get",
+    "agent_watch",
+    "update_plan",
+    "set_chat_title",
+    "complete_session"
+   ]
+  },
+  {
+   "input": {
+    "session": {
+     "workflowRunId": "run_1",
+     "unattended": true
+    },
+    "offline": false,
+    "orchestration": {
+     "strategy": "swarm",
+     "maxDepth": 2,
+     "maxParallel": 4
+    },
+    "allowBrowserControl": true,
+    "mcpTools": [
+     {
+      "name": "mcp__files__read",
+      "description": "Read through MCP",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "p": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     {
+      "name": "mcp__web__get",
+      "description": "Fetch",
+      "parameters": {
+       "type": "object"
+      }
+     }
+    ],
+    "decide": true
+   },
+   "output": [
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "grep",
+    "list_dir",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "fetch_url",
+    "delegation_targets",
+    "spawn_agent",
+    "mcp__files__read",
+    "mcp__web__get",
+    "agent_watch",
+    "update_plan",
+    "set_chat_title",
+    "complete_session",
+    "decide"
+   ]
+  },
+  {
+   "input": {
+    "session": {
      "trainingRunId": "r1"
     },
     "offline": false,
