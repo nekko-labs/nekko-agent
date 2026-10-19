@@ -1,0 +1,359 @@
+{
+ "auths": [
+  "api_key",
+  "cloud",
+  "subscription",
+  "unknown"
+ ],
+ "capabilities": [
+  "interactive_chat",
+  "phone_remote",
+  "unattended_runs",
+  "nekko_tools",
+  "context_note",
+  "usage_limits",
+  "cost_estimate",
+  "model_routing"
+ ],
+ "policy": {
+  "api_key": {
+   "interactive_chat": {
+    "state": "enabled"
+   },
+   "phone_remote": {
+    "state": "enabled"
+   },
+   "unattended_runs": {
+    "state": "enabled"
+   },
+   "nekko_tools": {
+    "state": "enabled"
+   },
+   "context_note": {
+    "state": "enabled"
+   },
+   "usage_limits": {
+    "state": "enabled"
+   },
+   "cost_estimate": {
+    "state": "enabled"
+   },
+   "model_routing": {
+    "state": "enabled"
+   }
+  },
+  "cloud": {
+   "interactive_chat": {
+    "state": "enabled"
+   },
+   "phone_remote": {
+    "state": "enabled"
+   },
+   "unattended_runs": {
+    "state": "enabled"
+   },
+   "nekko_tools": {
+    "state": "enabled"
+   },
+   "context_note": {
+    "state": "enabled"
+   },
+   "usage_limits": {
+    "state": "enabled"
+   },
+   "cost_estimate": {
+    "state": "enabled"
+   },
+   "model_routing": {
+    "state": "enabled"
+   }
+  },
+  "subscription": {
+   "interactive_chat": {
+    "state": "enabled"
+   },
+   "phone_remote": {
+    "state": "enabled"
+   },
+   "unattended_runs": {
+    "state": "awaiting_approval",
+    "reason": "unattended_needs_api_key"
+   },
+   "nekko_tools": {
+    "state": "awaiting_approval",
+    "reason": "nekko_tools_need_api_key"
+   },
+   "context_note": {
+    "state": "awaiting_approval",
+    "reason": "context_note_needs_api_key"
+   },
+   "usage_limits": {
+    "state": "awaiting_approval",
+    "reason": "usage_in_claude_code"
+   },
+   "cost_estimate": {
+    "state": "unsupported",
+    "reason": "billed_to_plan"
+   },
+   "model_routing": {
+    "state": "unsupported",
+    "reason": "claude_code_owns_loop"
+   }
+  },
+  "unknown": {
+   "interactive_chat": {
+    "state": "enabled"
+   },
+   "phone_remote": {
+    "state": "enabled"
+   },
+   "unattended_runs": {
+    "state": "awaiting_approval",
+    "reason": "unattended_needs_api_key"
+   },
+   "nekko_tools": {
+    "state": "awaiting_approval",
+    "reason": "nekko_tools_need_api_key"
+   },
+   "context_note": {
+    "state": "awaiting_approval",
+    "reason": "context_note_needs_api_key"
+   },
+   "usage_limits": {
+    "state": "awaiting_approval",
+    "reason": "usage_in_claude_code"
+   },
+   "cost_estimate": {
+    "state": "unsupported",
+    "reason": "billed_to_plan"
+   },
+   "model_routing": {
+    "state": "unsupported",
+    "reason": "claude_code_owns_loop"
+   }
+  }
+ },
+ "reasons": {
+  "awaiting_anthropic": {
+   "kind": "awaiting_anthropic",
+   "text": "Off with a Claude plan for now: the terms don't clearly cover it for third-party apps.",
+   "cell": "Not yet"
+  },
+  "unattended_needs_api_key": {
+   "kind": "awaiting_anthropic",
+   "text": "Scheduled runs need Claude with an API key.",
+   "cell": "Not yet"
+  },
+  "nekko_tools_need_api_key": {
+   "kind": "awaiting_anthropic",
+   "text": "Nekko tools inside a Claude chat need Claude with an API key.",
+   "cell": "Not yet"
+  },
+  "context_note_needs_api_key": {
+   "kind": "awaiting_anthropic",
+   "text": "Nekko's workspace note for Claude Code needs Claude with an API key.",
+   "cell": "Not yet"
+  },
+  "usage_in_claude_code": {
+   "kind": "awaiting_anthropic",
+   "text": "Check your plan's usage in Claude Code.",
+   "cell": "No, check in Claude Code"
+  },
+  "billed_to_plan": {
+   "kind": "billing",
+   "text": "Billed to your Claude plan, so Nekko shows tokens, not a cost.",
+   "cell": "No, billed to your plan"
+  },
+  "claude_code_owns_loop": {
+   "kind": "structural",
+   "text": "Claude Code runs this chat's model choices.",
+   "cell": "No"
+  }
+ },
+ "awaitingReason": {
+  "interactive_chat": "awaiting_anthropic",
+  "phone_remote": "awaiting_anthropic",
+  "unattended_runs": "unattended_needs_api_key",
+  "nekko_tools": "nekko_tools_need_api_key",
+  "context_note": "context_note_needs_api_key",
+  "usage_limits": "usage_in_claude_code",
+  "cost_estimate": "awaiting_anthropic",
+  "model_routing": "awaiting_anthropic"
+ },
+ "claudeCodeUnsupported": {
+  "model_routing": "claude_code_owns_loop"
+ },
+ "authCases": [
+  {
+   "provider": {
+    "kind": "anthropic"
+   },
+   "auth": "api_key"
+  },
+  {
+   "provider": {
+    "kind": "anthropic",
+    "auth": "apikey"
+   },
+   "auth": "api_key"
+  },
+  {
+   "provider": {
+    "kind": "anthropic",
+    "auth": "subscription"
+   },
+   "auth": "subscription"
+  },
+  {
+   "provider": {
+    "kind": "bedrock"
+   },
+   "auth": "cloud"
+  },
+  {
+   "provider": {
+    "kind": "vertex"
+   },
+   "auth": "cloud"
+  },
+  {
+   "provider": {
+    "kind": "foundry"
+   },
+   "auth": "cloud"
+  },
+  {
+   "provider": {
+    "kind": "openai"
+   },
+   "auth": null
+  },
+  {
+   "provider": {
+    "kind": "chatgpt",
+    "auth": "subscription"
+   },
+   "auth": null
+  },
+  {
+   "provider": {
+    "kind": "claude-code"
+   },
+   "auth": "unknown"
+  },
+  {
+   "provider": {
+    "kind": "claude-code",
+    "claudeCode": {
+     "authSource": "nekko-anthropic-key"
+    }
+   },
+   "auth": "api_key"
+  },
+  {
+   "provider": {
+    "kind": "claude-code",
+    "claudeCode": {
+     "authSource": "bedrock"
+    }
+   },
+   "auth": "cloud"
+  },
+  {
+   "provider": {
+    "kind": "claude-code",
+    "claudeCode": {
+     "authSource": "cli"
+    }
+   },
+   "status": {
+    "loggedIn": true,
+    "authMethod": "api_key",
+    "apiProvider": "firstParty"
+   },
+   "auth": "api_key"
+  },
+  {
+   "provider": {
+    "kind": "claude-code"
+   },
+   "status": {
+    "loggedIn": true,
+    "authMethod": "claude.ai",
+    "apiProvider": "firstParty"
+   },
+   "auth": "subscription"
+  },
+  {
+   "provider": {
+    "kind": "claude-code"
+   },
+   "status": {
+    "loggedIn": true,
+    "authMethod": "oauth_token"
+   },
+   "auth": "subscription"
+  },
+  {
+   "provider": {
+    "kind": "claude-code"
+   },
+   "status": {
+    "loggedIn": true,
+    "authMethod": "api_key",
+    "apiProvider": "bedrock"
+   },
+   "auth": "cloud"
+  },
+  {
+   "provider": {
+    "kind": "claude-code"
+   },
+   "status": {
+    "loggedIn": true,
+    "authMethod": "vertex"
+   },
+   "auth": "cloud"
+  },
+  {
+   "provider": {
+    "kind": "claude-code"
+   },
+   "status": {
+    "loggedIn": false,
+    "authMethod": "none"
+   },
+   "auth": "unknown"
+  },
+  {
+   "provider": {
+    "kind": "claude-code"
+   },
+   "status": {
+    "loggedIn": true,
+    "authMethod": "something-new"
+   },
+   "auth": "unknown"
+  },
+  {
+   "provider": {
+    "kind": "claude-code"
+   },
+   "status": {},
+   "auth": "unknown"
+  },
+  {
+   "provider": {
+    "kind": "claude-code",
+    "claudeCode": {
+     "authSource": "nekko-anthropic-key"
+    }
+   },
+   "status": {
+    "loggedIn": true,
+    "authMethod": "claude.ai"
+   },
+   "auth": "api_key"
+  }
+ ]
+}

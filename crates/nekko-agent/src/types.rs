@@ -26,6 +26,9 @@ pub enum ProviderKind {
     /// `https://bedrock-mantle.{region}.api.aws/anthropic`, on the user's own
     /// Bedrock bearer token, with `anthropic.`-prefixed model ids.
     Bedrock,
+    /// Claude Agent: the user's own Claude Code runs the chat (nekkod drives it
+    /// through `nekko-harness`). No base URL, no key.
+    ClaudeCode,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

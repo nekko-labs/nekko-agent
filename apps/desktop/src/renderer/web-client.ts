@@ -1,5 +1,5 @@
 import { AGENT_REPLAY, IpcChannels, IpcEvents, deriveKey, seal, open, withApiServerDefaults, RELEASE_NOTES_URL, LOCAL_RELAY_PORT } from '@nekko-agent/shared';
-import type { AgentReplay, LocalRelayStatus, NetworkVisibilityStatus, AppSettings, AgentEvent, IndexStatus, NekkoApi, AppInfo, UpdateInfo, TerminalEvent, OAuthStatus, SubscriptionLimits } from '@nekko-agent/shared';
+import type { AgentReplay, LocalRelayStatus, NetworkVisibilityStatus, AppSettings, AgentEvent, IndexStatus, NekkoApi, AppInfo, ClaudeCapabilityStatus, ClaudePlanUsageStatus, ClaudePolicyStatus, UpdateInfo, TerminalEvent, OAuthStatus, SubscriptionLimits } from '@nekko-agent/shared';
 import { readBrandKey } from './brandStorage.js';
 import { openTerminalSocket } from './terminal-socket.js';
 
@@ -592,6 +592,9 @@ function makeWebClient(): NekkoApi {
     // Local Web UI: "update" = the server got a newer build since this tab
     // loaded; we just suggest a refresh (no installer to run in the browser).
     getAppInfo: () => call(IpcChannels.appInfo) as Promise<AppInfo>,
+    getClaudePolicy: () => call(IpcChannels.claudePolicy) as Promise<ClaudePolicyStatus>,
+    getClaudeCapability: (providerId, capability) => call(IpcChannels.claudeCapability, providerId, capability) as Promise<ClaudeCapabilityStatus>,
+    getClaudePlanUsage: (providerId) => call(IpcChannels.claudePlanUsage, providerId) as Promise<ClaudePlanUsageStatus>,
     getMcpStatus: () => call(IpcChannels.mcpStatus),
     detectHypergate: (port) => call(IpcChannels.mcpHypergate, port),
     connectHypergate: (port) => call(IpcChannels.mcpHypergateConnect, port),

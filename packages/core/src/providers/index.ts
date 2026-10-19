@@ -5,6 +5,7 @@ import { OpenAICompatProvider } from './openai-compat.js';
 import { AnthropicProvider } from './anthropic.js';
 import { ChatGptProvider } from './chatgpt.js';
 import { OllamaProvider } from './ollama.js';
+import { ClaudeCodeProvider } from './claude-code.js';
 
 export * from './types.js';
 export * from './errors.js';
@@ -12,6 +13,7 @@ export { OpenAICompatProvider } from './openai-compat.js';
 export { AnthropicProvider } from './anthropic.js';
 export { ChatGptProvider } from './chatgpt.js';
 export { OllamaProvider } from './ollama.js';
+export { ClaudeCodeProvider } from './claude-code.js';
 
 /** Build a Provider instance from its stored config. */
 export function createProvider(config: ProviderConfig): Provider {
@@ -33,6 +35,8 @@ export function createProvider(config: ProviderConfig): Provider {
       return new OpenAICompatProvider(config);
     case 'chatgpt':
       return new ChatGptProvider(config);
+    case 'claude-code':
+      return new ClaudeCodeProvider(config);
   }
 }
 

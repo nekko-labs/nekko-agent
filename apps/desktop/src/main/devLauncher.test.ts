@@ -50,6 +50,15 @@ describe('development launcher wiring (source checks until the launcher is refac
     expect(source).toContain("resolve('build/icon.ico')");
     expect(source).toContain('env.ELECTRON_EXEC_PATH = await prepareWindowsRuntime()');
   });
+  it('makes a bare launch of the Windows dev runtime reopen Nekko Agent, not an empty Electron window', () => {
+    // Notification clicks and its Start Menu entry start the runtime with no app path.
+    expect(source).toContain("join(cache, 'resources', 'app')");
+    expect(source).toContain("cpSync(resolve('scripts/dev-runtime-app.cjs'), join(dir, 'index.cjs'))");
+    expect(source.match(/return installRuntimeApp\(cache, exe\)/g)).toHaveLength(2);
+    const shim = readFileSync(new URL('../../scripts/dev-runtime-app.cjs', import.meta.url), 'utf8');
+    expect(shim).toContain("join(process.resourcesPath, 'default_app.asar', 'main.js')");
+    expect(shim).toContain('spawn(process.execPath, [appDir]');
+  });
   it('uses LaunchServices and a distinct development bundle identity', () => {
     expect(readFileSync(new URL('../../scripts/dev-launch-wrapper.cjs', import.meta.url), 'utf8')).toContain("'/usr/bin/open'");
     expect(source).toContain('com.nekkoagent.desktop.dev');

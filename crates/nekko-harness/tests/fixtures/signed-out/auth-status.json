@@ -1,0 +1,8 @@
+{
+  "loggedIn": false,
+  "authMethod": "none",
+  "apiProvider": "firstParty",
+  "analyticsDisabled": false,
+  "projectsDirectory": "C:\\work\\probe-config\\projects",
+  "configDirectory": "C:\\work\\probe-config"
+}

@@ -71,3 +71,5 @@ export * from './oauth.js';
 export * from './monitor.js';
 export * from './themes.js';
 export * from './turn-stats.js';
+export * from './claude-policy.js';
+export * from './claude-plan-usage-fixture.js';

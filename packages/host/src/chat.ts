@@ -24,7 +24,7 @@ import {
 } from '@nekko-agent/core';
 import { trainingTool } from './training.js';
 import { getSettings } from './store.js';
-import { DEFAULT_TURN_WRAPPER } from '@nekko-agent/shared';
+import { DEFAULT_TURN_WRAPPER, claudeUnattendedRefusal } from '@nekko-agent/shared';
 import { chatWorkspaces, prepareChatWorktrees, runWorktreeSetup } from './chat-worktrees.js';
 
 /**
@@ -851,6 +851,11 @@ async function admitTurn(opts: SendOptions, send: Sender, allowBrowserControl: b
   const provider = settings.providers.find((p) => p.id === opts.providerId);
   if (!provider?.enabled) {
     send({ type: 'error', sessionId: opts.sessionId, message: 'Provider not configured or disabled.' });
+    return null;
+  }
+  const unattendedRefusal = opts.unattended ? claudeUnattendedRefusal(provider) : null;
+  if (unattendedRefusal) {
+    send({ type: 'error', sessionId: opts.sessionId, message: unattendedRefusal });
     return null;
   }
   const session = getSession(opts.sessionId);
