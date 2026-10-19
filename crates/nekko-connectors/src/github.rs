@@ -22,6 +22,8 @@ const ERROR_BEFORE: usize = 40;
 const ERROR_AFTER: usize = 5;
 /// The most log text one action returns, across every job.
 const MAX_LOG_TOTAL: usize = 60_000;
+/// The longest comment body posted, in characters (GitHub's own limit is 65536).
+const MAX_COMMENT_CHARS: usize = 20_000;
 
 fn headers(token: &str) -> Vec<(String, String)> {
     vec![
@@ -424,7 +426,8 @@ pub fn trim_log(raw: &str, cap: usize) -> String {
 /* ---------------------------- PR comment ----------------------------- */
 
 /// `github.upsertPRComment`: the PR's one comment carrying `<!-- marker -->`,
-/// updated in place, else a new one.
+/// updated in place, else a new one. The body is often a model's words about
+/// text someone else wrote, so it pings nobody and stays bounded.
 pub async fn upsert_pr_comment(
     http: &dyn Http,
     token: &str,
@@ -436,7 +439,7 @@ pub async fn upsert_pr_comment(
     // A marker holding `--` or `>` would close the HTML comment early.
     let marker: String = marker.replace("--", "-").chars().filter(|c| *c != '>').collect();
     let tag = format!("<!-- {marker} -->");
-    let full = format!("{body}\n\n{tag}");
+    let full = format!("{}\n\n{tag}", cap_comment(&quiet_mentions(body)));
     let n = js::encode_uri_component(number);
     let mut found: Option<Value> = None;
     for page in 1..=MAX_COMMENT_PAGES {
@@ -468,6 +471,33 @@ pub async fn upsert_pr_comment(
     let json: Value = serde_json::from_str(&res.body).unwrap_or(Value::Null);
     let link = json.get("html_url").and_then(Value::as_str).map(|u| format!(" {u}")).unwrap_or_default();
     Ok(Outcome::ok(format!("{verb} the comment on {repo}#{number}{link}")))
+}
+
+/// `@name` and `@org/team` with a zero-width space after the `@`, so GitHub
+/// renders them as text and notifies no one. An `@` inside a word (an email
+/// address) is not a mention and is left alone.
+pub fn quiet_mentions(body: &str) -> String {
+    let mut out = String::with_capacity(body.len());
+    let mut prev: Option<char> = None;
+    let mut chars = body.chars().peekable();
+    while let Some(c) = chars.next() {
+        out.push(c);
+        let starts_word = !prev.is_some_and(|p| p.is_alphanumeric() || p == '_' || p == '`');
+        if c == '@' && starts_word && chars.peek().is_some_and(|n| n.is_ascii_alphanumeric()) {
+            out.push('\u{200b}');
+        }
+        prev = Some(c);
+    }
+    out
+}
+
+/// The body cut to `MAX_COMMENT_CHARS`, saying so when it was.
+pub fn cap_comment(body: &str) -> String {
+    if body.chars().count() <= MAX_COMMENT_CHARS {
+        return body.to_string();
+    }
+    let cut: String = body.chars().take(MAX_COMMENT_CHARS).collect();
+    format!("{cut}\n\n… (trimmed)")
 }
 
 /// The marker a workflow's comment carries when the step names none.
@@ -509,6 +539,25 @@ mod tests {
         let out = trim_log(&log.join("\n"), 200);
         assert!(out.ends_with("line 999"));
         assert!(out.len() <= 200);
+    }
+
+    #[test]
+    fn mentions_are_quieted() {
+        let zw = '\u{200b}';
+        assert_eq!(quiet_mentions("cc @octocat and @org/team"), format!("cc @{zw}octocat and @{zw}org/team"));
+        assert_eq!(quiet_mentions("@here: fix it"), format!("@{zw}here: fix it"));
+        assert_eq!(quiet_mentions("(@a) [@b]"), format!("(@{zw}a) [@{zw}b]"));
+        assert_eq!(quiet_mentions("mail dev@example.com"), "mail dev@example.com");
+        assert_eq!(quiet_mentions("a lone @ and @@"), "a lone @ and @@");
+    }
+
+    #[test]
+    fn long_comments_are_capped() {
+        let long = "é".repeat(MAX_COMMENT_CHARS + 50);
+        let out = cap_comment(&long);
+        assert!(out.ends_with("… (trimmed)"));
+        assert_eq!(out.chars().filter(|c| *c == 'é').count(), MAX_COMMENT_CHARS);
+        assert_eq!(cap_comment("short"), "short");
     }
 
     #[test]

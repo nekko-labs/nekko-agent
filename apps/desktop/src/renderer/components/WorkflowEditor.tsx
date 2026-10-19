@@ -79,6 +79,10 @@ export interface WorkflowSeed {
   workspaceId?: string;
   notify?: WorkflowNotify;
   templateId?: string;
+  providerId?: string;
+  modelId?: string;
+  localModelOnly?: boolean;
+  toolAccess?: WorkflowToolAccess;
   steps: WorkflowStep[];
   triggers: WorkflowTrigger[];
 }
@@ -187,6 +191,10 @@ export function WorkflowEditor({
           workspaceId: seed.workspaceId ?? base.workspaceId,
           notify: seed.notify ?? base.notify,
           templateId: seed.templateId,
+          providerId: seed.providerId ?? base.providerId,
+          modelId: seed.modelId ?? base.modelId,
+          localModelOnly: seed.localModelOnly ?? base.localModelOnly,
+          toolAccess: seed.toolAccess ?? base.toolAccess,
           steps: seed.steps,
           triggers: seed.triggers,
         }
@@ -1276,7 +1284,7 @@ function useModelNames(providers: ProviderConfig[]): Record<string, string> {
  * cannot resolve), plus a reset to the inherited model. A local-only workflow
  * lists only providers that pass the loopback check.
  */
-function WorkflowModelField({
+export function WorkflowModelField({
   providers, providerId, modelId, unsetLabel, localOnly, onChange,
 }: {
   providers: ProviderConfig[];

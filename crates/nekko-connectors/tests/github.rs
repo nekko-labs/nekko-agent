@@ -416,7 +416,7 @@ async fn upsert_creates_when_no_comment_has_the_marker() {
         &http,
         "github.upsertPRComment",
         Some(&gh_config()),
-        &json!({ "body": "Fixed" }),
+        &json!({ "body": "Fixed, @octocat" }),
         &comment_ctx(Some(9)),
     )
     .await;
@@ -428,7 +428,9 @@ async fn upsert_creates_when_no_comment_has_the_marker() {
             "POST https://api.github.com/repos/o/r/issues/9/comments",
         ]
     );
-    assert_eq!(http.request(1).body.unwrap(), r#"{"body":"Fixed\n\n<!-- nekko-agent:ci-fixer -->"}"#);
+    // The mention goes out with a zero-width space after the @, so nobody is pinged.
+    let body: Value = serde_json::from_str(&http.request(1).body.unwrap()).unwrap();
+    assert_eq!(body, json!({ "body": "Fixed, @\u{200b}octocat\n\n<!-- nekko-agent:ci-fixer -->" }));
 }
 
 #[tokio::test]
