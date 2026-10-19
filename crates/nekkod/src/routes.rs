@@ -67,6 +67,9 @@ pub struct Ctx {
     pub app: Arc<AppCtx>,
     /// The catalog refresh checks (`updates:check`) and their scheduler.
     pub update_checks: Arc<crate::small_services::UpdateChecks>,
+    /// The Claude policy: the shipped table, a verified signed override, and
+    /// the dev-only preview (`claude:*`, and the gates the Claude paths call).
+    pub claude_policy: Arc<crate::claude_policy::ClaudePolicyStore>,
     /// The messaging bridges (`messaging:status`), with a data directory.
     pub messaging: Option<Arc<crate::messaging::Messaging>>,
     /// What Electron main used to answer (dialogs, shell, microphone, updater), for the desktop app.
@@ -170,6 +173,9 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         }
     }
     match channel {
+        "claude:policy" => Ok(ctx.claude_policy.status()),
+        "claude:capability" => crate::claude_policy::capability_route(ctx, &args).await,
+        "claude:planUsage" => crate::claude_policy::plan_usage_route(ctx, &args).await,
         "daemon:info" => Ok(json!({
             "app": "nekkod",
             "version": env!("CARGO_PKG_VERSION"),
@@ -670,6 +676,10 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
 /// Channels the daemon serves itself (reported by `daemon:info`).
 pub const OWNED: &[&str] = &[
     "daemon:info",
+    // The Claude policy and its reasons (claude_policy.rs).
+    "claude:policy",
+    "claude:capability",
+    "claude:planUsage",
     // Whole chat turns and the input they wait on (turns.rs).
     "chat:turn",
     "turn:abort",

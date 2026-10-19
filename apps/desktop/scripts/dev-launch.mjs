@@ -60,7 +60,7 @@ export async function prepareWindowsRuntime() {
   const cache = resolve('.dev-runtime', `${version}-win`);
   const exe = join(cache, 'Nekko Agent.exe');
   const ready = join(cache, 'ready-v1');
-  if (existsSync(ready) && existsSync(exe)) return exe;
+  if (existsSync(ready) && existsSync(exe)) return installRuntimeApp(cache, exe);
   rmSync(cache, { recursive: true, force: true });
   mkdirSync(cache, { recursive: true });
   const dist = dirname(electron);
@@ -80,6 +80,21 @@ export async function prepareWindowsRuntime() {
   res.outputResource(pe);
   writeFileSync(exe, Buffer.from(pe.generate()));
   writeFileSync(ready, 'patched');
+  return installRuntimeApp(cache, exe);
+}
+
+/**
+ * Give the runtime an app of its own so a launch without an app path (a
+ * notification click, its Start Menu entry) reopens Nekko Agent rather than
+ * Electron's empty default window. See scripts/dev-runtime-app.cjs. Rewritten
+ * on every run so it follows the launcher and this checkout's path.
+ */
+function installRuntimeApp(cache, exe) {
+  const dir = join(cache, 'resources', 'app');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'nekko-agent-dev-runtime', productName: 'Nekko Agent', private: true, main: 'index.cjs' }));
+  writeFileSync(join(dir, 'target.json'), JSON.stringify({ appDir: resolve('.') }));
+  cpSync(resolve('scripts/dev-runtime-app.cjs'), join(dir, 'index.cjs'));
   return exe;
 }
 

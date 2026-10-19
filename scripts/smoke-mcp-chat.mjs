@@ -4,16 +4,20 @@
 // is the one that answered.
 //
 // Nothing touches the user's data or a running app: the CLI runs on a fresh
-// temporary data dir with NEKKO_URL cleared and the app link ignored, and the
-// "model server" is a loopback OpenAI-compatible stub started here.
+// temporary data dir and home with NEKKO_URL cleared and the app link
+// ignored, its engine is the nekkod this checkout built (NEKKOD_PATH), and the
+// "model server" is a loopback OpenAI-compatible stub started here. The CLI,
+// nekkod and everything under them are ended as one tree.
 //
-//   npm run build:core && npm run build -w @nekko-agent/host && npm run build --workspace=apps/cli
-//   node scripts/smoke-mcp-chat.mjs
+//   cargo build -p nekkod && npm run build:core && npm run build --workspace=apps/cli
+//   node scripts/smoke-mcp-chat.mjs [extra tool names to expect]
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { nekkodPath } from './itest-nekkod.mjs';
+import { killTree, treeOptions } from './itest-procs.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const cli = join(root, 'apps/cli/dist/index.js');
@@ -48,7 +52,11 @@ const server = createServer((req, res) => {
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const port = server.address().port;
 
-const dataDir = mkdtempSync(join(tmpdir(), 'nekko-mcp-smoke-'));
+const scratch = mkdtempSync(join(tmpdir(), 'nekko-mcp-smoke-'));
+const dataDir = join(scratch, 'data');
+const home = join(scratch, 'home');
+mkdirSync(dataDir, { recursive: true });
+mkdirSync(home, { recursive: true });
 writeFileSync(
   join(dataDir, 'settings.json'),
   JSON.stringify({
@@ -59,8 +67,9 @@ writeFileSync(
 );
 
 const child = spawn(process.execPath, [cli, 'mcp'], {
-  env: { ...process.env, NEKKO_URL: '', NEKKO_TOKEN: '', NEKKO_DATA_DIR: dataDir },
+  env: { ...process.env, NEKKO_URL: '', NEKKO_TOKEN: '', NEKKO_DATA_DIR: dataDir, NEKKOD_PATH: nekkodPath(), HOME: home, USERPROFILE: home },
   stdio: ['pipe', 'pipe', 'pipe'],
+  ...treeOptions,
 });
 let stderr = '';
 child.stderr.on('data', (c) => (stderr += c));
@@ -128,9 +137,13 @@ try {
 } catch (e) {
   check('smoke run', false, e.message);
 } finally {
-  child.kill();
+  // Closing stdin ends the MCP server and, through its engine's stdin, nekkod.
+  child.stdin.end();
+  await new Promise((r) => setTimeout(r, 1000));
+  killTree(child);
   server.close();
-  rmSync(dataDir, { recursive: true, force: true });
+  await new Promise((r) => setTimeout(r, 300));
+  try { rmSync(scratch, { recursive: true, force: true }); } catch { /* a child may still hold a file */ }
 }
 const failed = checks.filter((c) => !c.ok).length;
 console.log(failed ? `\n${failed} check(s) failed` : '\nall checks passed');

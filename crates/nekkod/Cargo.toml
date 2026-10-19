@@ -10,8 +10,13 @@ publish.workspace = true
 [features]
 # Linux: run decision models on CUDA (pulls the several-hundred-MB CUDA build of ONNX Runtime).
 cuda = ["nekko-decide/cuda"]
+# Developer-only settings (`npm run dev`'s daemon, stage-daemon.mjs): the Claude
+# policy preview. Never on in the release build the app packages.
+dev-tools = []
 
 [dependencies]
+# Verifies the signed claudePolicy document (claude_policy.rs).
+ed25519-dalek = "2"
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 anyhow.workspace = true
 axum.workspace = true

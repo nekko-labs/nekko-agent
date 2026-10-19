@@ -12,6 +12,7 @@ mod assist;
 mod automation;
 mod backendless;
 mod claude_code;
+mod claude_policy;
 mod desktop;
 mod engine;
 mod native;

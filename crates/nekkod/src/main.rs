@@ -12,6 +12,7 @@ mod automation;
 mod backend;
 mod boot;
 mod catalog;
+mod claude_policy;
 mod cli_install;
 mod compaction;
 mod config;
@@ -293,6 +294,10 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             decision_models_url: cfg.decision_models_url.clone(),
         }),
         update_checks: small_services::UpdateChecks::new(),
+        claude_policy: Arc::new(claude_policy::ClaudePolicyStore::new(
+            cfg.data_dir.clone().map(std::path::PathBuf::from),
+            cfg.native.as_ref().is_some_and(|n| n.is_packaged),
+        )),
         messaging: messaging.clone(),
         native: cfg
             .native
