@@ -1,8 +1,9 @@
 //! The Anthropic Messages API, streamed over SSE. A port of `anthropic.ts`.
 //!
-//! Subscription (OAuth) sign-in stays in the TS host: it refreshes the token
-//! and passes it in as `config.api_key` with `auth: subscription`, and this
-//! provider only has to send it the way the endpoint requires.
+//! Only an API key is ever sent. A provider saved with `auth: subscription`
+//! (a Claude plan sign-in from an older build) is refused with
+//! `CLAUDE_PLAN_REMOVED`: Anthropic does not let third-party apps send
+//! requests on Claude plan credentials.
 
 use super::Io;
 use crate::claude::{
@@ -101,11 +102,8 @@ fn family_rank(id: &str) -> usize {
     }
 }
 
-/// Subscription requests ride the Claude Code public client: the endpoint
-/// requires this beta flag and a first system block that is the Claude Code
-/// identity line, per the token's terms of use.
-const OAUTH_BETA: &str = "oauth-2025-04-20";
-const CLAUDE_CODE_SYSTEM_PREFIX: &str = "You are Claude Code, Anthropic's official CLI for Claude.";
+/// What a provider saved with `auth: subscription` answers with.
+pub const CLAUDE_PLAN_REMOVED: &str = "Claude plan sign-in is no longer available in Nekko Agent. Add an Anthropic API key to this provider, or connect Claude Agent to use your plan through Claude Code.";
 
 #[derive(Clone)]
 pub struct AnthropicProvider {
@@ -135,29 +133,7 @@ impl AnthropicProvider {
             let bearer = format!("Bearer {key}");
             return headers(&[("Content-Type", "application/json"), ("Authorization", &bearer)]);
         }
-        if self.config.subscription() {
-            let bearer = format!("Bearer {key}");
-            return headers(&[
-                ("Content-Type", "application/json"),
-                ("Authorization", &bearer),
-                ("anthropic-version", "2023-06-01"),
-                ("anthropic-beta", OAUTH_BETA),
-            ]);
-        }
         headers(&[("Content-Type", "application/json"), ("x-api-key", key), ("anthropic-version", "2023-06-01")])
-    }
-
-    /// Subscription tokens only work for requests that identify as Claude
-    /// Code, so the system prompt becomes blocks with that prefix first.
-    fn system_param(&self, system: Option<&str>) -> Option<Value> {
-        if !self.config.subscription() {
-            return system.map(|s| json!(s));
-        }
-        let mut blocks = vec![json!({ "type": "text", "text": CLAUDE_CODE_SYSTEM_PREFIX })];
-        if let Some(s) = system.filter(|s| !s.is_empty()) {
-            blocks.push(json!({ "type": "text", "text": s }));
-        }
-        Some(Value::Array(blocks))
     }
 
     /// The request `chat` sends with a given sampling shape.
@@ -179,8 +155,8 @@ impl AnthropicProvider {
             }
             SamplingShape::Neither => {}
         }
-        if let Some(system) = self.system_param(req.system.as_deref()) {
-            body.insert("system".into(), system);
+        if let Some(system) = &req.system {
+            body.insert("system".into(), json!(system));
         }
         body.insert("messages".into(), Value::Array(to_anthropic_messages(req)));
         if let Some(tools) = &req.tools {
@@ -214,6 +190,9 @@ impl AnthropicProvider {
     }
 
     async fn run(self, req: ChatRequest, sink: Sink) -> Result<(), Stop> {
+        if self.config.subscription() {
+            return Err(ProviderError::new(CLAUDE_PLAN_REMOVED).into());
+        }
         // A 400 about the sampling parameter means our guess about this model
         // was wrong, not that the turn should fail. Work through the shapes
         // until one is accepted (a model that rejects both named knobs still
@@ -278,12 +257,12 @@ impl AnthropicProvider {
         sink.emit(ProviderChunk::Done).await
     }
 
-    /// The live catalog: `GET {base}/v1/models`, every model this key or
-    /// subscription can call, including ones released after this build. One
-    /// page of up to 1000 holds the whole list. None on any failure, or after
-    /// `CATALOG_TIMEOUT`, so the caller falls back to the shipped list.
+    /// The live catalog: `GET {base}/v1/models`, every model this key can
+    /// call, including ones released after this build. One page of up to 1000
+    /// holds the whole list. None on any failure, or after `CATALOG_TIMEOUT`,
+    /// so the caller falls back to the shipped list.
     async fn fetch_catalog(&self) -> Option<Vec<ModelInfo>> {
-        self.config.api_key.as_deref().filter(|k| !k.is_empty())?;
+        self.config.api_key.as_deref().filter(|k| !k.is_empty() && !self.config.subscription())?;
         if self.config.cloud_platform() {
             return None;
         }
@@ -322,11 +301,7 @@ impl AnthropicProvider {
     pub async fn test(&self) -> TestResult {
         let has_key = self.config.api_key.as_deref().is_some_and(|k| !k.is_empty());
         if self.config.subscription() {
-            return if has_key {
-                TestResult::ok("Signed in with a Claude subscription")
-            } else {
-                TestResult::fail("Not signed in. Sign in with Claude in the provider settings.")
-            };
+            return TestResult::fail(CLAUDE_PLAN_REMOVED);
         }
         if self.config.bedrock() {
             return if has_key {

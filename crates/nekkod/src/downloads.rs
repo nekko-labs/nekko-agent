@@ -33,10 +33,6 @@ pub const CHANNELS: &[&str] = &[
     "engine:hostDownloads",
 ];
 
-/// What the backend is told the daemon owns (`NEKKOD_OWNS`): model downloads,
-/// and with them the `downloads:updated` event.
-pub const OWNS: &str = "downloads";
-
 /// Downloads from Hugging Face wherever the config says it is (`huggingFaceUrl`).
 pub struct Rebased(pub HttpFetch, pub Option<String>);
 

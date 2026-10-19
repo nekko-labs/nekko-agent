@@ -1,5 +1,5 @@
-//! The desktop-only features the TS desktop backend served (PF14 step 5
-//! prep, part 6), so the desktop app runs nekkod with no backend at all:
+//! The desktop-only features the TS desktop backend used to serve (PF14
+//! step 5 prep, part 6):
 //!
 //! - the local API server for the CLI, MCP clients and integrations
 //!   (`api_server.rs`, `apiServer:*`), with the CLI's link file and the MCP
@@ -88,7 +88,7 @@ impl Desktop {
         Arc::new(Self { app, api: ApiServer::default(), relay, visibility, webhooks: Arc::default() })
     }
 
-    /// Startup, in the backend's order: the webhook listener; the local API
+    /// Startup, in the old desktop backend's order: the webhook listener; the local API
     /// server with a token, the launcher linked (packaged builds only: a
     /// development run would otherwise put a checkout's CLI on the real
     /// PATH) and everything pointed at it refreshed; then the relay and the

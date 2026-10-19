@@ -2304,7 +2304,36 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 .provider-choice strong { display: block; font-size: 14px; }
 .provider-choice small { display: block; margin-top: 5px; font-size: 12px; color: var(--ink-soft); }
 .provider-choice-icon { display: grid; place-items: center; flex-shrink: 0; width: 46px; height: 46px; border-radius: 14px; background: #fff; color: #171717; }
+.provider-choice-glyph { font: 600 15px/1 ui-monospace, SFMono-Regular, Consolas, monospace; letter-spacing: -0.5px; }
 .setup-illustration { color: var(--accent); margin-bottom: 16px; }
+/* Claude Agent setup, comparison and reasons (components/claude/ClaudeAgent.tsx). */
+.claude-setup { border: 1px solid var(--line); border-radius: 14px; padding: 16px; background: var(--surface-2); }
+.claude-setup-state { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--ink-soft); }
+.claude-setup-state strong { font-size: 13px; color: var(--ink); }
+.claude-setup-state code { font-size: 12px; padding: 1px 5px; border-radius: 5px; background: var(--surface); }
+.claude-setup-state[data-state="ready"] strong { color: var(--success); }
+.claude-setup-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.claude-why { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.claude-why:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+.claude-reason { font-size: 12px; color: var(--ink-soft); }
+.claude-compare { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+.claude-compare table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.claude-compare th, .claude-compare td { padding: 7px 10px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+.claude-compare tr:last-child th, .claude-compare tr:last-child td { border-bottom: 0; }
+.claude-compare thead th { font-weight: 600; color: var(--ink); background: var(--surface); }
+.claude-compare tbody th { font-weight: 500; color: var(--ink-soft); }
+.claude-compare td { color: var(--ink-faint); }
+.claude-compare td[data-yes] { color: var(--ink); }
+/* One-time notices from nekkod (components/AppNotices.tsx). */
+.app-notice { position: fixed; left: 16px; bottom: 16px; z-index: 60; width: min(420px, calc(100vw - 32px)); padding: 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); color: var(--ink); box-shadow: 0 12px 32px rgb(0 0 0 / 0.28); }
+.app-notice-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.app-notice h2 { font-size: 14px; font-weight: 600; }
+.app-notice p { margin-top: 6px; font-size: 12.5px; line-height: 1.5; color: var(--ink-soft); }
+.app-notice ul { margin-top: 8px; padding-left: 18px; list-style: disc; font-size: 12.5px; line-height: 1.5; color: var(--ink-soft); }
+.app-notice-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.app-notice-close { flex-shrink: 0; padding: 4px; border-radius: 6px; color: var(--ink-faint); }
+.app-notice-close:hover { color: var(--ink); }
+.app-notice-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .provider-step { animation: provider-step-in 200ms ease-out; }
 @keyframes provider-step-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) {
@@ -2484,10 +2513,55 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 
 /* Focus mode, new chat: one centered composer on a quiet page. The first send
    drops data-clean-start and the window becomes the full chat. */
-[data-clean-start] .clean-start { align-items: center; padding: 0 24px 12vh; background: radial-gradient(60% 50% at 50% 42%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 70%); }
+[data-clean-start] .clean-start { position: relative; isolation: isolate; align-items: center; padding: 0 24px 12vh; }
+/* Prism light: soft washes anchored off the window's corners and edges, never a
+   centred disc (the old radial wash read as a halo behind the composer). It is
+   static, so the glass above it costs no per-frame repaint. */
+[data-clean-start] .clean-start::before {
+  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(55% 70% at 0% 100%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%),
+    radial-gradient(50% 60% at 100% 0%, color-mix(in srgb, var(--accent-2) 11%, transparent), transparent 70%),
+    radial-gradient(40% 45% at 92% 96%, color-mix(in srgb, #ff7eb6 8%, transparent), transparent 70%),
+    linear-gradient(180deg, transparent 35%, color-mix(in srgb, var(--accent) 4%, transparent));
+}
 [data-clean-start] .clean-start .composer-section { width: min(720px, 100%); padding: 0; }
 [data-clean-start] .clean-start .composer-column { width: 100% !important; }
-[data-clean-start] .clean-start .composer { border-radius: 18px; box-shadow: 0 12px 40px -18px color-mix(in srgb, var(--ink) 35%, transparent); }
+/* The composer is frosted glass: a translucent tint over a blur of the light
+   behind it, a top highlight, and a prism hairline as its only edge. */
+[data-clean-start][data-chat-surface] .clean-start .composer,
+[data-clean-start][data-chat-surface] .clean-start .composer:focus-within {
+  position: relative;
+  border-radius: 18px;
+  border-color: transparent;
+  background: color-mix(in srgb, var(--win, var(--surface)) 58%, transparent);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  backdrop-filter: blur(22px) saturate(160%);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 9%, transparent),
+    0 18px 50px -22px color-mix(in srgb, var(--accent) 45%, transparent),
+    0 2px 10px -4px color-mix(in srgb, #000 30%, transparent);
+}
+[data-clean-start] .clean-start .composer::after {
+  content: ''; position: absolute; inset: -1px; border-radius: inherit; padding: 1px; pointer-events: none;
+  background: linear-gradient(120deg, var(--accent), var(--accent-2) 40%, #46e0bd 58%, #ffbe5c 76%, #ff7eb6);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  opacity: 0.38; transition: opacity 0.25s var(--ease-out);
+}
+[data-clean-start] .clean-start .composer:focus-within::after { opacity: 0.9; }
+/* Light themes: a whiter glass and a brighter highlight. */
+[data-theme='light'] [data-clean-start][data-chat-surface] .clean-start .composer,
+[data-theme='light'] [data-clean-start][data-chat-surface] .clean-start .composer:focus-within {
+  background: color-mix(in srgb, #fff 62%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 85%, transparent),
+    0 18px 50px -22px color-mix(in srgb, var(--accent) 38%, transparent),
+    0 2px 8px -4px color-mix(in srgb, #1e1450 10%, transparent);
+}
+@media (prefers-reduced-transparency: reduce) {
+  [data-clean-start][data-chat-surface] .clean-start .composer { background: var(--win, var(--surface)); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
 .clean-start-greeting { margin: 0 auto 18px; text-align: center; }
 .clean-start-greeting h2 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
 .clean-start-greeting p { margin-top: 6px; font-size: 13px; color: var(--ink-faint); }

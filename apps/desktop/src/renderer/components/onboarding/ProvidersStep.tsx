@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import type { ModelInfo, OAuthStatus, ProviderConfig, ProviderKind } from '@nekko-agent/shared';
-import { PROVIDER_DEFAULTS, isLocalProvider, formatModelPriceLabel, modelPricing } from '@nekko-agent/shared';
+import { PROVIDER_DEFAULTS, isLocalProvider, formatModelPriceLabel, modelPricing, oauthProviderOffered } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../../store.js';
 import { Badge } from '../primitives/index.js';
@@ -11,8 +11,8 @@ import { CheckIcon, ServerIcon } from '../../icons.js';
 type TestState = { state: 'testing' } | { state: 'done'; ok: boolean; message: string };
 
 /**
- * The providers step: subscription-first online options (Claude, ChatGPT,
- * OpenRouter, any OpenAI-compatible endpoint) and one-click local servers
+ * The providers step: online options (ChatGPT first, Claude, OpenRouter, any
+ * OpenAI-compatible endpoint) and one-click local servers
  * (Ollama / LM Studio / vLLM) discovered by probing localhost on mount. The
  * probe writes nothing - a server is only saved when the user clicks Add - so
  * skipping the step stays non-destructive. A kind that is already configured
@@ -72,6 +72,7 @@ export function ProvidersStep({ onExit }: { onExit?: (after?: () => void) => voi
   // Dedup: a provider of a card's kind already configured means the card is
   // connected - we never re-add the same kind from the wizard.
   const claude = matchingProviders(providers, ['anthropic']);
+  const claudeSignIn = oauthProviderOffered('claude');
   const chatgpt = matchingProviders(providers, ['chatgpt', 'openai']);
   const openrouter = matchingProviders(providers, ['openrouter']);
   const compat = matchingProviders(providers, ['openai-compat']);
@@ -130,7 +131,7 @@ export function ProvidersStep({ onExit }: { onExit?: (after?: () => void) => voi
     <div className="w-full">
       <h1 className="text-center text-2xl font-semibold tracking-tight">Connect a model</h1>
       <p className="mx-auto mt-2 max-w-md text-center text-[14px] leading-relaxed text-ink-soft">
-        Nekko Agent chats through providers you connect: a Claude or ChatGPT subscription, an API key,
+        Nekko Agent chats through providers you connect: a ChatGPT subscription, an API key,
         or a local server like Ollama or LM Studio.
       </p>
 
@@ -143,18 +144,6 @@ export function ProvidersStep({ onExit }: { onExit?: (after?: () => void) => voi
           Subscriptions first, so you run on a plan you already pay for instead of a metered key.
         </p>
         <div className="mt-3 space-y-2">
-          <OnlineCard
-            title="Claude"
-            blurb="Sign in with a Claude Pro or Max plan - runs on your subscription, not a metered API key."
-            connected={claude}
-          >
-            <SubscriptionSignIn
-              oauthProvider="claude"
-              label="Sign in with Claude"
-              onConnected={connectSubscription('claude')}
-            />
-            <ApiKeyDisclosure kind="anthropic" apiKeyOnly onSaved={refresh} />
-          </OnlineCard>
           <OnlineCard
             title="ChatGPT / OpenAI"
             blurb="Runs on a ChatGPT Plus, Pro, or Business subscription, or an OpenAI API key billed per token."
@@ -175,6 +164,33 @@ export function ProvidersStep({ onExit }: { onExit?: (after?: () => void) => voi
               />
             </label>
             <ApiKeyDisclosure kind="openai" onSaved={refresh} />
+          </OnlineCard>
+          {/* Claude runs on an Anthropic API key. Claude plan sign-in is only offered
+              if its approved-client slot is ever filled; the Claude Agent card
+              (runs the user's installed Claude Code) joins here in the harness UI step. */}
+          <OnlineCard
+            title="Claude"
+            blurb={
+              claudeSignIn
+                ? 'Sign in with your Claude account, or use an Anthropic API key billed per token.'
+                : 'Use an Anthropic API key, billed per token to your Anthropic account.'
+            }
+            connected={claude}
+          >
+            {claudeSignIn ? (
+              <>
+                <SubscriptionSignIn
+                  oauthProvider="claude"
+                  label="Sign in with Claude"
+                  onConnected={connectSubscription('claude')}
+                />
+                <ApiKeyDisclosure kind="anthropic" apiKeyOnly onSaved={refresh} />
+              </>
+            ) : (
+              <div className="mt-3">
+                <AddProvider fixedKind="anthropic" apiKeyOnly bare onDone={refresh} />
+              </div>
+            )}
           </OnlineCard>
           <OnlineCard
             title="OpenRouter"

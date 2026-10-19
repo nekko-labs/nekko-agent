@@ -27,11 +27,11 @@ async fn runs_chats_and_answers_the_busy_checks_with_no_backend() {
         "hooks": [{ "id": "h1", "event": "TurnEnd", "command": "echo turn-ended> turnend.txt" }],
     });
     std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
-    let d = start_with(false, Some(&data));
+    let d = start_with(Some(&data));
     let mut events = ws(d.port, &format!("/api/events?token={TOKEN}"), None).await.unwrap();
 
     let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    assert_eq!(info["backend"], "disabled", "{info}");
+    assert!(info.get("backend").is_none(), "no backend to report: {info}");
     for c in ["chat:send", "chat:compact", "chat:suggest", "chat:generateImage"] {
         assert!(info["owned"].as_array().unwrap().contains(&json!(c)), "{c} is owned: {info}");
     }
@@ -65,8 +65,10 @@ async fn runs_chats_and_answers_the_busy_checks_with_no_backend() {
     assert_eq!(saved["messages"].as_array().unwrap().last().unwrap()["content"], "wrote it", "{saved}");
 
     // The TurnEnd hook ran (nothing waits on it).
-    wait_for("the TurnEnd hook", || workspace.join("turnend.txt").exists()).await;
-    assert!(std::fs::read_to_string(workspace.join("turnend.txt")).unwrap().contains("turn-ended"));
+    wait_for("the TurnEnd hook", || {
+        std::fs::read_to_string(workspace.join("turnend.txt")).is_ok_and(|t| t.contains("turn-ended"))
+    })
+    .await;
 
     // The UI hears that the chat's changes moved, from this daemon.
     let mut heard = false;
@@ -167,7 +169,7 @@ async fn delegation_targets_lists_exact_chat_models_without_the_host() {
         "defaultChatMode": "yolo",
     });
     std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
-    let d = start_with(false, Some(&data));
+    let d = start_with(Some(&data));
     let opts =
         json!({ "sessionId": "s_del", "providerId": "p1", "modelId": "synthetic", "text": "who can I delegate to" });
     let (status, body) = post(d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
@@ -219,7 +221,7 @@ async fn spawn_agent_refuses_what_prepare_sub_agent_refuses() {
         "orchestration": { "strategy": "swarm" },
     });
     std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
-    let d = start_with(false, Some(&data));
+    let d = start_with(Some(&data));
     let opts = json!({ "sessionId": "s_sp", "providerId": "p1", "modelId": "synthetic", "text": "delegate" });
     let (status, body) = post(d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{body}");
@@ -246,6 +248,86 @@ async fn spawn_agent_refuses_what_prepare_sub_agent_refuses() {
         .filter(|e| std::fs::read_to_string(e.path()).unwrap_or_default().contains("\"parentSessionId\""))
         .count();
     assert_eq!(children, 0, "no child chat was made");
+    drop(d);
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_chat_that_runs_out_of_context_is_compacted_and_carried_on() {
+    let data = std::env::temp_dir().join(format!("nekkod-backendless-ac-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    let workspace = data.join("project");
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    std::fs::create_dir_all(&workspace).unwrap();
+    let chat = json!({
+        "id": "s_full", "title": "Full", "workspaceId": "w1", "providerId": "p1", "modelId": "synthetic",
+        "messages": [
+            { "id": "m1", "role": "user", "content": "start the long task", "createdAt": 1 },
+            { "id": "m2", "role": "assistant", "content": "working on it", "createdAt": 2 },
+        ],
+        "createdAt": 1, "updatedAt": 2,
+    });
+    std::fs::write(data.join("sessions/s_full.json"), chat.to_string()).unwrap();
+    // The reply overflows; the compaction's summary; then the continued reply.
+    let model = scripted_model(vec![
+        http_error(400, "This model's maximum context length is 8192 tokens"),
+        say_text("Summary: the long task is half done."),
+        say_text("carried on"),
+    ])
+    .await;
+    let settings = json!({
+        "providers": [{ "id": "p1", "kind": "openai-compat", "label": "Scripted", "enabled": true, "baseUrl": format!("http://127.0.0.1:{}/v1", model.port) }],
+        "workspaces": [{ "id": "w1", "name": "project", "path": workspace.to_string_lossy() }],
+        "defaultChatMode": "yolo", "defaultProviderId": "p1", "defaultModelId": "synthetic",
+    });
+    std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
+    let d = start_with(Some(&data));
+
+    let opts = json!({ "sessionId": "s_full", "providerId": "p1", "modelId": "synthetic", "text": "keep going" });
+    post(d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
+    let saved = until("the chat to be compacted and carried on", Duration::from_secs(30), || async {
+        let text = std::fs::read_to_string(data.join("sessions/s_full.json")).ok()?;
+        let s: Value = serde_json::from_str(&text).ok()?;
+        let last = s["messages"].as_array()?.last()?.clone();
+        (last["role"] == "assistant" && last["content"] == "carried on").then_some(s)
+    })
+    .await;
+    let messages = saved["messages"].as_array().unwrap();
+    assert!(messages.iter().any(|m| !m["compaction"].is_null()), "{saved}");
+    let nudge = &messages[messages.len() - 2];
+    assert_eq!(nudge["role"], "user");
+    assert!(nudge["content"].as_str().unwrap().starts_with("The conversation was compacted automatically"), "{nudge}");
+    drop(d);
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn reviews_a_repository_change_on_the_default_model_without_tools() {
+    let data = std::env::temp_dir().join(format!("nekkod-backendless-rr-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    let verdict = json!({ "verdict": "COMMENT", "reviewedHead": "abc123", "complete": true, "summary": "One nit." });
+    let model =
+        scripted_model(vec![say_text(&verdict.to_string()), call_tool("c1", "bash", json!({ "command": "rm -rf /" }))])
+            .await;
+    let settings = json!({
+        "providers": [{ "id": "p1", "kind": "openai-compat", "label": "Scripted", "enabled": true, "baseUrl": format!("http://127.0.0.1:{}/v1", model.port) }],
+        "defaultProviderId": "p1", "defaultModelId": "synthetic",
+    });
+    std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
+    let d = start_with(Some(&data));
+    let input = json!({ "head": "abc123", "prompt": "focus on safety", "title": "t", "description": "d", "files": [{ "filename": "a.rs", "status": "modified", "patch": "+x" }] });
+    let (status, body) = post(d.port, "repository:review", json!([input.clone()]), Some(TOKEN)).await;
+    assert_eq!((status, body), (200, verdict));
+    // The model saw the policy and the review data, and no tools.
+    let sent = model.requests.lock().unwrap()[0].clone();
+    assert!(
+        sent["messages"][0]["content"].as_str().unwrap().starts_with("You are performing a read-only code review"),
+        "{sent}"
+    );
+    assert!(sent.get("tools").is_none(), "{sent}");
+    let (status, body) = post(d.port, "repository:review", json!([input]), Some(TOKEN)).await;
+    assert_eq!((status >= 400, body["error"].clone()), (true, json!("Review attempted tool use")));
     drop(d);
     let _ = std::fs::remove_dir_all(&data);
 }

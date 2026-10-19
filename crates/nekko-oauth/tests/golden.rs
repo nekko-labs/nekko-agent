@@ -50,12 +50,10 @@ fn every_case_matches_the_ts_functions() {
         each("authorizeUrls")
             .iter()
             .map(|c| {
-                outcome(Ok(json!(authorize_url(
-                    s(c, "provider"),
-                    s(c, "redirectUri"),
-                    s(c, "challenge"),
-                    s(c, "state")
-                ))))
+                outcome(
+                    authorize_url(s(c, "provider"), s(c, "redirectUri"), s(c, "challenge"), s(c, "state"))
+                        .map(|u| json!(u)),
+                )
             })
             .collect(),
     );
@@ -76,14 +74,16 @@ fn every_case_matches_the_ts_functions() {
         each("exchangeRequests")
             .iter()
             .map(|c| {
-                outcome(Ok(exchange_request(
-                    s(c, "provider"),
-                    s(c, "code"),
-                    s(c, "redirectUri"),
-                    s(c, "verifier"),
-                    s(c, "state"),
+                outcome(
+                    exchange_request(
+                        s(c, "provider"),
+                        s(c, "code"),
+                        s(c, "redirectUri"),
+                        s(c, "verifier"),
+                        s(c, "state"),
+                    )
+                    .map(|r| r.to_value()),
                 )
-                .to_value()))
             })
             .collect(),
     );
@@ -108,7 +108,7 @@ fn every_case_matches_the_ts_functions() {
     );
     check(
         "refreshRequests",
-        each("refreshRequests").iter().map(|c| outcome(Ok(refresh_request(c).to_value()))).collect(),
+        each("refreshRequests").iter().map(|c| outcome(refresh_request(c).map(|r| r.to_value()))).collect(),
     );
     check(
         "refreshResults",
@@ -149,12 +149,7 @@ fn every_case_matches_the_ts_functions() {
         each("cli")
             .iter()
             .map(|c| {
-                let got = if s(c, "kind") == "claude" {
-                    claude_cli_token(s(c, "raw"), f(c, "now"))
-                } else {
-                    codex_cli_token(s(c, "raw"), f(c, "now"))
-                };
-                match got {
+                match codex_cli_token(s(c, "raw"), f(c, "now")) {
                     Ok(Some(v)) => outcome(Ok(v)),
                     Ok(None) => json!({ "value": "undefined" }),
                     // A JSON.parse error's wording is V8's; only the fact is compared.
@@ -170,7 +165,7 @@ fn every_case_matches_the_ts_functions() {
             .map(|c| outcome(Ok(json!(token_key(s(c, "provider"), c["accountId"].as_str(), s(c, "sessionId"))))))
             .collect(),
     );
-    assert!(checked >= 50, "the golden set is too small to mean anything");
+    assert!(checked >= 40, "the golden set is too small to mean anything");
 }
 
 #[test]
@@ -180,6 +175,17 @@ fn iso_dates_parse_as_date_parse_does() {
     assert_eq!(date_parse("2025-10-01"), 1_759_276_800_000.0);
     assert!(date_parse("not a date").is_nan());
     assert!(date_parse("2025-13-01").is_nan());
+}
+
+#[test]
+fn the_claude_slot_is_empty_and_claude_sign_in_is_refused() {
+    assert_eq!(CLAUDE_APPROVED_CLIENT.client_id, None);
+    assert!(!provider_offered("claude"));
+    assert!(provider_offered("chatgpt") && provider_offered("openrouter"));
+    assert_eq!(
+        authorize_url("claude", "http://localhost:1/callback", "c", "s"),
+        Err(CLAUDE_SIGN_IN_UNAVAILABLE.into())
+    );
 }
 
 #[test]

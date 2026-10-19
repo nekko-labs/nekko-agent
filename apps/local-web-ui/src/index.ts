@@ -4,19 +4,16 @@ import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
-import { defaultUserDataDir, prepareUserDataRoot } from '@nekko-agent/host';
+import { defaultUserDataDir, prepareUserDataRoot } from '@nekko-agent/host/user-data';
 import { brandEnv, unsupportedPlatformReason } from '@nekko-agent/shared';
 import { runRelayAgent } from './relay-agent.js';
 import { runCli } from 'nekko-agent/run';
 import { isLoopbackHost, tokenMatches, validateBindSecurity } from './security.js';
 import { createApiSecurityHook, type RequestSecurityOptions } from './request-security.js';
 import { registerWebhookRoutes, type WebhookTarget } from './webhooks.js';
-import { reviewRepository } from '@nekko-agent/host';
-import { githubReviewConfig, registerGitHubReviewRoutes, ReviewReplayLedger } from './github-review.js';
-import { runBackend } from 'nekko-agent/backend';
-import { BACKEND_FLAG, startNekkod } from 'nekko-agent/engine';
+import { githubReviewConfig, registerGitHubReviewRoutes, ReviewReplayLedger, type RepositoryReviewInput, type RepositoryReviewVerdict } from './github-review.js';
+import { startNekkod } from 'nekko-agent/engine';
 import { forwardCall, isSocketRoute, proxyUpgrade, refuse, upgradeAllowed, upstreamPath } from './proxy.js';
-import { WEBHOOK_DISPATCH, webChannelOverrides, type WebhookDispatchResult } from './web-channels.js';
 
 /** Subcommands handled by the embedded CLI (so `npx nekko-agent mcp|chat|…` works). */
 const CLI_SUBCOMMANDS = new Set([
@@ -62,12 +59,6 @@ async function main() {
     await runCli(process.argv.slice(2));
     return;
   }
-  // Started by nekkod as its TS host backend.
-  if (process.argv.includes(BACKEND_FLAG)) {
-    await runBackend(DATA_DIR, { overrides: webChannelOverrides });
-    return;
-  }
-
   // Intel Macs were dropped (no engine daemon for them): refuse before
   // anything starts. CLI subcommands above still reach a remote app (--url).
   const unsupported = unsupportedPlatformReason(process.platform, process.arch);
@@ -84,7 +75,6 @@ async function main() {
       key: env('PAIR_KEY') || randomUUID().slice(0, 8),
       dataDir: DATA_DIR,
       here: __dirname,
-      script: SCRIPT,
     });
     return;
   }
@@ -118,7 +108,7 @@ async function main() {
     }
   }
 
-  const engine = await startNekkod({ here: __dirname, script: SCRIPT, dataDir: DATA_DIR });
+  const engine = await startNekkod({ here: __dirname, dataDir: DATA_DIR });
   const daemon = engine.daemon;
   const security: RequestSecurityOptions = {
     host: HOST,
@@ -145,15 +135,19 @@ async function main() {
   };
   const webhookTarget: WebhookTarget = {
     dispatchWebhook: async (slug, secret, payload) => {
-      const r = (await call(WEBHOOK_DISPATCH, [slug, secret, payload])) as WebhookDispatchResult;
-      if ('unauthorized' in r) throw Object.assign(new Error('unauthorized'), { code: 'WEBHOOK_UNAUTHORIZED' });
-      return { length: r.started };
+      try {
+        return { length: ((await call('workflow:webhook', [slug, secret, payload])) as unknown[]).length };
+      } catch (e) {
+        if ((e as Error).message === 'unauthorized') throw Object.assign(e as Error, { code: 'WEBHOOK_UNAUTHORIZED' });
+        throw e;
+      }
     },
   };
+  // The GitHub review: one tool-free model call in nekkod (repository_review.rs).
+  const reviewRepository = (input: RepositoryReviewInput) => call('repository:review', [input]) as Promise<RepositoryReviewVerdict>;
   app.post<{ Params: { channel: string }; Body: { args?: unknown[] } }>('/api/:channel', async (req, reply) => {
     const channel = req.params.channel;
     if (channel === CAPABILITIES_CHANNEL) return reply.send(capabilities);
-    if (channel === WEBHOOK_DISPATCH) return reply.code(404).send({ error: 'not found' });
     let up;
     try {
       up = await daemon.endpoint();

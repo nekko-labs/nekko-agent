@@ -4,11 +4,8 @@
 //!
 //! A workspace's folder comes from the settings (`crate::settings::current`,
 //! the daemon's own store when it knows the data directory); everything runs
-//! here, off the async threads. Index progress goes to the UI from here and to the
-//! host's own listeners (the phone relay) through `index:progress`, marked
-//! `relayOnly` there so the backend's copy is not sent twice.
+//! here, off the async threads. Index progress goes to the UI from here.
 
-use crate::backend::Backend;
 use crate::hub::Hub;
 use crate::routes::Ctx;
 use nekko_workspace::{comments, design, files, git::Git, index::Index, memory, pr::Prs, skills, spec};
@@ -154,14 +151,9 @@ async fn settings(ctx: &Ctx) -> Value {
 
 /// A chat, from the daemon's store or else the host.
 async fn session(ctx: &Ctx, id: &str) -> Value {
-    if let Some(store) = ctx.sessions.clone() {
-        let id = id.to_string();
-        return blocking(move || store.get(&id).unwrap_or(Value::Null)).await.unwrap_or(Value::Null);
-    }
-    match tokio::time::timeout(crate::routes::AUX_WAIT, ctx.backend.call("session:get", json!([id]))).await {
-        Ok(Ok(s)) => s,
-        _ => Value::Null,
-    }
+    let Some(store) = ctx.sessions.clone() else { return Value::Null };
+    let id = id.to_string();
+    blocking(move || store.get(&id).unwrap_or(Value::Null)).await.unwrap_or(Value::Null)
 }
 
 /// The GitHub token for the REST fallback: the GitHub connector's, else the
@@ -253,7 +245,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
             let Some(root) = folder_path(&folders(ctx).await, &id) else {
                 return Err("Workspace not found".into());
             };
-            index_now(ws.index.clone(), ctx.backend.clone(), ctx.hub.clone(), id, root).await
+            index_now(ws.index.clone(), ctx.hub.clone(), id, root).await
         }
         "workspace:search" => {
             let id = text(&args, 0);
@@ -423,10 +415,10 @@ pub async fn add_folder(ctx: &Ctx, path: Option<&Value>) -> Result<Value, String
     let mut workspaces = current;
     workspaces.push(folder);
     crate::settings::update(ctx, json!({ "workspaces": workspaces })).await?;
-    let (index, backend, hub, root) = (ctx.workspace.index.clone(), ctx.backend.clone(), ctx.hub.clone(), path.clone());
+    let (index, hub, root) = (ctx.workspace.index.clone(), ctx.hub.clone(), path.clone());
     tokio::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-        let _ = index_now(index, backend, hub, id, root).await;
+        let _ = index_now(index, hub, id, root).await;
     });
     Ok(Value::Array(workspaces))
 }
@@ -445,19 +437,9 @@ fn base36(mut n: u64) -> String {
     String::from_utf8(out).unwrap_or_default()
 }
 
-/// The chats the host or this daemon is running right now.
-async fn busy_chats(ctx: &Ctx) -> Result<Vec<String>, String> {
-    if ctx.backend.is_none() {
-        return Ok(ctx.turns.running_sessions());
-    }
-    let host = tokio::time::timeout(crate::routes::AUX_WAIT, ctx.backend.call("chats:busy", json!([]))).await;
-    let mut ids: Vec<String> = match host {
-        Ok(Ok(Value::Array(a))) => a.iter().filter_map(Value::as_str).map(str::to_string).collect(),
-        Ok(Err(e)) if e.contains("Unknown channel") => Vec::new(),
-        _ => return Err("Could not check which chats are running. Try again in a moment.".into()),
-    };
-    ids.extend(ctx.turns.running_sessions());
-    Ok(ids)
+/// The chats this daemon is running right now.
+fn busy_chats(ctx: &Ctx) -> Vec<String> {
+    ctx.turns.running_sessions()
 }
 
 /// `removeWorkspace(id)`: revoke saved access only, never touching the
@@ -483,7 +465,7 @@ async fn remove_folder(ctx: &Ctx, id: &str) -> Result<Value, String> {
     })
     .await?;
     if !affected.is_empty() {
-        let busy = busy_chats(ctx).await?;
+        let busy = busy_chats(ctx);
         if affected.iter().any(|s| busy.contains(s)) {
             return Err("Wait for chats using this folder to finish before revoking access.".into());
         }
@@ -645,24 +627,7 @@ fn nekko_workspace_now() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
-/// Index a folder off the async threads, telling the UI and the host's
-/// listeners as it goes.
-pub async fn index_now(
-    index: Arc<Index>,
-    backend: Arc<Backend>,
-    hub: Hub,
-    id: String,
-    root: String,
-) -> Result<Value, String> {
-    let rt = tokio::runtime::Handle::current();
-    blocking(move || {
-        index.index(&id, &root, &|status| {
-            hub.publish("index:progress", status.clone(), false);
-            let (backend, status) = (backend.clone(), status.clone());
-            rt.spawn(async move {
-                let _ = backend.call("index:progress", json!([status])).await;
-            });
-        })
-    })
-    .await
+/// Index a folder off the async threads, telling the UI as it goes.
+pub async fn index_now(index: Arc<Index>, hub: Hub, id: String, root: String) -> Result<Value, String> {
+    blocking(move || index.index(&id, &root, &|status| hub.publish("index:progress", status.clone(), false))).await
 }

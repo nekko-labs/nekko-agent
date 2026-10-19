@@ -3,6 +3,7 @@ import type { NewTask, TaskKind, KeepAlive } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
 import { CloseIcon } from '../icons.js';
 import { Modal } from './primitives/index.js';
+import { ClaudeReasonLine, useClaudeCapability } from './claude/ClaudeAgent.js';
 
 /**
  * Create an automation task from a chat: a one-shot **scheduled** run, a
@@ -17,6 +18,9 @@ export function ScheduleTaskModal({
 }) {
   const pushToast = useStore((s) => s.pushToast);
   const titleId = useId();
+  // A Claude Agent on a Claude plan cannot run unattended yet (claude-policy.ts).
+  const unattended = useClaudeCapability(providerId, 'unattended_runs');
+  const blocked = unattended?.claude === true && unattended.state !== 'enabled' ? unattended.message ?? 'Not available for this provider.' : null;
   const [kind, setKind] = useState<TaskKind>('scheduled');
   const [title, setTitle] = useState('');
   const [prompt, setPrompt] = useState(initialPrompt ?? '');
@@ -32,7 +36,7 @@ export function ScheduleTaskModal({
   const unitMs = { min: 60_000, hour: 3_600_000, day: 86_400_000 };
   const intervalMs = Math.max(1, every) * unitMs[unit];
 
-  const valid = prompt.trim().length > 0 && (kind !== 'scheduled' || !!runAt) && (kind !== 'background' || keepAlive === 'forever' || condition.trim().length > 0);
+  const valid = !blocked && prompt.trim().length > 0 && (kind !== 'scheduled' || !!runAt) && (kind !== 'background' || keepAlive === 'forever' || condition.trim().length > 0);
 
   const create = async () => {
     if (!valid) return;
@@ -134,6 +138,7 @@ export function ScheduleTaskModal({
         </div>
       )}
 
+      {blocked && <div className="mt-3"><ClaudeReasonLine message={blocked} /></div>}
       <div className="mt-4 flex justify-end gap-2">
         <button className="btn btn-ghost py-1.5 text-[12px]" onClick={onClose}>Cancel</button>
         <button className="btn btn-primary py-1.5 text-[12px]" disabled={!valid} onClick={create}>Create task</button>

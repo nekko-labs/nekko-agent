@@ -13,7 +13,7 @@ async fn reports_mcp_status_from_its_own_servers() {
         { "id": "off", "name": "Off", "enabled": false, "command": "nope", "args": [] },
     ] });
     std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
-    let d = start_with(true, Some(&data));
+    let d = start_with(Some(&data));
     let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
     assert!(info["owned"].as_array().unwrap().contains(&json!("mcp:status")), "{info}");
     let (status, rows) = post(d.port, "mcp:status", json!([]), Some(TOKEN)).await;
@@ -25,9 +25,6 @@ async fn reports_mcp_status_from_its_own_servers() {
             { "id": "off", "name": "Off", "connected": false, "tools": [] },
         ])
     );
-    // Answered here: the backend never heard of it.
-    let (_, all) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    assert!(!all.as_array().unwrap().iter().any(|e| e[0] == "mcp:status"), "{all}");
     mcp_server.abort();
     drop(d);
     std::fs::remove_dir_all(data).ok();
@@ -93,10 +90,10 @@ async fn a_daemon_turn_syncs_and_calls_its_mcp_servers_itself() {
     assert_eq!(approval["severity"], "medium");
     let (status, body) = post(rig.d.port, "tool:approve", json!(["s_turn_m", "c_mcp", true]), Some(TOKEN)).await;
     assert_eq!((status, body), (200, Value::Null));
-    let (_, end) = turn_record(rig.d.port, "turn_m").await;
+    let (_, end) = turn_record(&rig, "turn_m", "s_turn_m").await;
     assert_eq!(end["stop"], "complete", "{end}");
 
-    // The daemon synced the server, offered its tool and ran the call; the host never saw it.
+    // The daemon synced the server, offered its tool and ran the call.
     let tools: Vec<String> = model.requests.lock().unwrap()[0]["tools"]
         .as_array()
         .unwrap()
@@ -105,8 +102,6 @@ async fn a_daemon_turn_syncs_and_calls_its_mcp_servers_itself() {
         .collect();
     assert!(tools.contains(&"mcp__srv__echo".to_string()), "{tools:?}");
     assert_eq!(mcp_calls.lock().unwrap().len(), 1);
-    let (_, all) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    assert!(!all.as_array().unwrap().iter().any(|e| e[0] == "turn:tool"), "no host round trip for MCP");
     let saved = saved_session(&rig, "s_turn_m");
     let result = saved["messages"]
         .as_array()
@@ -140,7 +135,7 @@ async fn hypergate_is_found_and_connected_by_the_daemon() {
     std::fs::create_dir_all(&data).unwrap();
     let mine = json!({ "id": "fs", "name": "Files", "command": "npx", "args": [], "enabled": false });
     std::fs::write(data.join("settings.json"), json!({ "mcpServers": [mine] }).to_string()).unwrap();
-    let d = start_with(true, Some(&data));
+    let d = start_with(Some(&data));
     let (_, found) = post(d.port, "mcp:hypergate", json!([port]), Some(TOKEN)).await;
     assert_eq!(found["version"], "9.9");
     assert_eq!(found["port"], port);
@@ -148,7 +143,7 @@ async fn hypergate_is_found_and_connected_by_the_daemon() {
     let (_, connected) = post(d.port, "mcp:hypergate:connect", json!([port]), Some(TOKEN)).await;
     assert_eq!(connected["token"], "agent");
     assert_eq!(connected["agent"], "Nekko Agent");
-    // Saved here, beside the user's own servers, and nothing asked of the host.
+    // Saved here, beside the user's own servers.
     let saved: Value = serde_json::from_str(&std::fs::read_to_string(data.join("settings.json")).unwrap()).unwrap();
     let servers = saved["mcpServers"].as_array().unwrap();
     assert_eq!(servers[0], mine);
@@ -161,8 +156,6 @@ async fn hypergate_is_found_and_connected_by_the_daemon() {
         ),
         (json!("hypergate"), json!("Hypergate"), json!("agent"), json!(true))
     );
-    let (_, all) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    assert!(!all.as_array().unwrap().iter().any(|e| e[0] == "mcp:hypergate:save"), "{all}");
     // Nothing listening: null, not an error.
     server.abort();
     let free = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
@@ -187,18 +180,13 @@ async fn a_daemon_turn_drives_its_sub_agent_and_answers_with_it() {
     ])
     .await;
     // The child's chat is made and its turn admitted here, from these settings.
-    std::fs::write(rig.data.join("settings.json"), scripted_settings(&rig, &model).to_string()).unwrap();
+    write_settings(&rig, scripted_settings(&rig, &model)).await;
     let mut spec = turn_spec(&rig, &model, "turn_p", "s_turn_p", json!({}));
     spec["facts"]["spawn"] = json!(true);
     let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
     assert_eq!(status, 200);
-    let (_, end) = turn_record(rig.d.port, "turn_p").await;
+    let (_, end) = turn_record(&rig, "turn_p", "s_turn_p").await;
     assert_eq!(end["stop"], "complete", "{end}");
-
-    let (_, all) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    let all = all.as_array().unwrap().clone();
-    assert!(!all.iter().any(|e| e[0] == "spawn:prepare"), "the host was not asked to make the child: {all:?}");
-    assert!(!all.iter().any(|e| e[0] == "turn:tool"), "spawn_agent never ran in the host");
 
     // The child: made here, named after its task, inheriting the parent's provider and model.
     let child = child_of(&rig, "s_turn_p").expect("the child chat");
@@ -227,7 +215,7 @@ async fn stopping_the_parent_stops_its_sub_agent() {
     let model =
         scripted_model(vec![call_tool("c_spawn", "spawn_agent", json!({ "task": "wait forever" })), HANG.to_string()])
             .await;
-    std::fs::write(rig.data.join("settings.json"), scripted_settings(&rig, &model).to_string()).unwrap();
+    write_settings(&rig, scripted_settings(&rig, &model)).await;
     let mut spec = turn_spec(&rig, &model, "turn_ps", "s_turn_ps", json!({}));
     spec["facts"]["spawn"] = json!(true);
     post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
@@ -241,7 +229,7 @@ async fn stopping_the_parent_stops_its_sub_agent() {
     .await;
     let (_, stopped) = post(rig.d.port, "turn:abort", json!(["turn_ps"]), Some(TOKEN)).await;
     assert_eq!(stopped, json!(true));
-    let (_, end) = turn_record(rig.d.port, "turn_ps").await;
+    let (_, end) = turn_record(&rig, "turn_ps", "s_turn_ps").await;
     assert_eq!(end["aborted"], true, "{end}");
     until("the child to stop with its parent", Duration::from_secs(10), || async {
         let (_, running) = post(rig.d.port, "chat:running", json!([]), Some(TOKEN)).await;
@@ -267,7 +255,7 @@ async fn a_daemon_turn_runs_the_local_decide_tool_itself() {
     spec["facts"]["decideWith"] = json!("local");
     let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
     assert_eq!(status, 200);
-    let (_, end) = turn_record(rig.d.port, "turn_d").await;
+    let (_, end) = turn_record(&rig, "turn_d", "s_turn_d").await;
     assert_eq!(end["stop"], "complete", "{end}");
     let saved = saved_session(&rig, "s_turn_d");
     let out = |id: &str| -> Value {
@@ -283,8 +271,6 @@ async fn a_daemon_turn_runs_the_local_decide_tool_itself() {
     // No model is loaded in this daemon: the daemon's own answer, not the host's.
     assert_eq!(out("c_run")["output"], "decide failed: No decision model is loaded. Load one with decide:load.");
     assert_eq!(out("c_run")["isError"], true);
-    let (_, all) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    assert!(!all.as_array().unwrap().iter().any(|e| e[0] == "turn:tool"), "decide never ran in the host");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -306,14 +292,12 @@ async fn a_daemon_turn_runs_the_typesafe_decide_tool_through_its_decision_servic
     spec["facts"]["decide"] = json!(true);
     spec["facts"]["decideWith"] = json!("typesafe");
     post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
-    let (_, end) = turn_record(rig.d.port, "turn_dt").await;
+    let (_, end) = turn_record(&rig, "turn_dt", "s_turn_dt").await;
     assert_eq!(end["stop"], "complete", "{end}");
     let saved = saved_session(&rig, "s_turn_dt");
     let out = saved["messages"].as_array().unwrap().iter().find(|m| m["role"] == "tool").unwrap()["toolResult"].clone();
     assert_eq!(out["output"], "decide failed: Add a TypeSafe API key to use Jev.");
     assert_eq!(out["isError"], true);
-    let (_, all) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    assert!(!all.as_array().unwrap().iter().any(|e| e[0] == "turn:tool"), "decide never ran in the host");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -353,7 +337,7 @@ async fn a_daemon_turn_fetches_pages_and_runs_background_processes_itself() {
     let approval = wait_pending(rig.d.port, "s_turn_f", "approval", "c_start").await;
     assert_eq!(approval["reason"], "Start a background process");
     post(rig.d.port, "tool:approve", json!(["s_turn_f", "c_start", true]), Some(TOKEN)).await;
-    let (_, end) = turn_record(rig.d.port, "turn_f").await;
+    let (_, end) = turn_record(&rig, "turn_f", "s_turn_f").await;
     assert_eq!(end["stop"], "complete", "{end}");
 
     let saved = saved_session(&rig, "s_turn_f");
@@ -366,11 +350,6 @@ async fn a_daemon_turn_fetches_pages_and_runs_background_processes_itself() {
     let started = tool_out("c_start");
     assert!(started.starts_with("Started p_"), "{started}");
     assert!(started.contains("(echoer)"), "{started}");
-    let (_, all) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    let calls = all.as_array().unwrap();
-    assert!(!calls.iter().any(|e| e[0] == "turn:tool"), "neither tool went through the host: {all}");
-    // The output reached the chat's agent terminal, kept here.
-    assert!(!calls.iter().any(|e| e[0] == "loop:log"), "nothing logged through the host: {all}");
     until_agent_log(rig.d.port, "s_turn_f", "[echoer, background]", Duration::from_secs(10)).await;
     server.abort();
 }
@@ -404,7 +383,7 @@ async fn a_daemon_turn_runs_its_tool_hooks_itself() {
     spec["facts"]["hookRules"] = json!([]);
     let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
     assert_eq!(status, 200);
-    let (_, end) = turn_record(rig.d.port, "turn_h").await;
+    let (_, end) = turn_record(&rig, "turn_h", "s_turn_h").await;
     assert_eq!(end["stop"], "complete", "{end}");
     let saved = saved_session(&rig, "s_turn_h");
     let messages = saved["messages"].as_array().unwrap();
@@ -418,9 +397,6 @@ async fn a_daemon_turn_runs_its_tool_hooks_itself() {
     let read = tool("c_read")["output"].as_str().unwrap().to_string();
     assert!(read.contains("pineapple"), "{read}");
     assert!(read.contains("\n\n[hook note]: saw read_file in "), "{read}");
-    let (_, all) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    let calls = all.as_array().unwrap();
-    assert!(!calls.iter().any(|e| e[0] == "turn:hook" || e[0] == "turn:tool"), "the host ran nothing: {all}");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -428,7 +404,7 @@ async fn classifies_commands_and_lists_tools_without_the_host() {
     let data = std::env::temp_dir().join(format!("nekkod-tooling-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&data);
     std::fs::create_dir_all(&data).unwrap();
-    let d = start_with(false, Some(&data));
+    let d = start_with(Some(&data));
     let (status, decision) = post(d.port, "guardrails:classify", json!(["rm -rf /"]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{decision}");
     assert_eq!(decision["action"], "ask", "{decision}");
@@ -488,7 +464,7 @@ async fn a_daemon_turn_drives_the_in_app_browser_and_capture_through_the_bridge(
     spec["allowBrowserControl"] = json!(true);
     let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
     assert_eq!(status, 200);
-    let (_, end) = turn_record(rig.d.port, "turn_b").await;
+    let (_, end) = turn_record(&rig, "turn_b", "s_turn_b").await;
     assert_eq!(end["stop"], "complete", "{end}");
     let saved = saved_session(&rig, "s_turn_b");
     let messages = saved["messages"].as_array().unwrap();
@@ -503,8 +479,6 @@ async fn a_daemon_turn_drives_the_in_app_browser_and_capture_through_the_bridge(
     assert!(seen.iter().all(|r| r["authorized"] == true));
     assert_eq!(seen[0]["body"]["sessionId"], "s_turn_b");
     assert_eq!(seen[1]["body"], json!({ "tool": "capture", "sessionId": "s_turn_b", "action": "list" }));
-    let (_, all) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    assert!(!all.as_array().unwrap().iter().any(|e| e[0] == "turn:tool"), "the host ran nothing: {all}");
     server.abort();
 }
 
@@ -527,7 +501,7 @@ async fn a_daemon_turn_arms_agent_watches_itself_and_owns_their_file() {
     let spec = turn_spec(&rig, &model, "turn_w", "s_turn_w", json!({}));
     let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
     assert_eq!(status, 200);
-    let (_, end) = turn_record(rig.d.port, "turn_w").await;
+    let (_, end) = turn_record(&rig, "turn_w", "s_turn_w").await;
     assert_eq!(end["stop"], "complete", "{end}");
     let saved = saved_session(&rig, "s_turn_w");
     let messages = saved["messages"].as_array().unwrap();
@@ -547,6 +521,4 @@ async fn a_daemon_turn_arms_agent_watches_itself_and_owns_their_file() {
     assert!(listed.as_str().unwrap().contains("\"Check the build\""), "{listed}");
     let (_, info) = post(rig.d.port, "daemon:info", json!([]), Some(TOKEN)).await;
     assert!(info["owned"].as_array().unwrap().contains(&json!("session:nextWatch")));
-    let (_, all) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    assert!(!all.as_array().unwrap().iter().any(|e| e[0] == "turn:tool"), "the host ran nothing: {all}");
 }

@@ -22,7 +22,7 @@ impl Drop for Daemon {
 }
 
 fn start(data_dir: &std::path::Path) -> Daemon {
-    let config = json!({ "token": TOKEN, "backend": null, "allowedOrigins": ["null"], "dataDir": data_dir });
+    let config = json!({ "token": TOKEN, "allowedOrigins": ["null"], "dataDir": data_dir });
     let mut child = Command::new(env!("CARGO_BIN_EXE_nekkod"))
         .env("NEKKOD_CONFIG", config.to_string())
         .stdin(Stdio::piped())

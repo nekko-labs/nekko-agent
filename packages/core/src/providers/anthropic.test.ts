@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import {
   AnthropicProvider,
+  CLAUDE_PLAN_REMOVED,
   learnOutputLimit,
   outputCapFor,
   outputLimitError,
@@ -65,7 +66,7 @@ async function runChat(
 
 afterEach(() => vi.restoreAllMocks());
 
-describe('AnthropicProvider subscription auth', () => {
+describe('AnthropicProvider auth', () => {
   it('sends x-api-key in API-key mode, unchanged', async () => {
     const { headers, body } = await runChat(apiKeyCfg, 'be terse');
     expect(headers['x-api-key']).toBe('sk-ant-test');
@@ -74,24 +75,11 @@ describe('AnthropicProvider subscription auth', () => {
     expect(body.system).toEqual([{ type: 'text', text: 'be terse', cache_control: { type: 'ephemeral' } }]);
   });
 
-  it('sends a Bearer token plus the oauth beta header in subscription mode', async () => {
-    const { headers } = await runChat(subCfg, 'be terse');
-    expect(headers.Authorization).toBe('Bearer oauth-access-token');
-    expect(headers['anthropic-beta']).toBe('oauth-2025-04-20');
-    expect(headers['x-api-key']).toBeUndefined();
-  });
-
-  it('prepends the Claude Code identity block ahead of the real system prompt', async () => {
-    const { body } = await runChat(subCfg, 'You are a coding agent.');
-    expect(Array.isArray(body.system)).toBe(true);
-    expect(body.system[0].text).toContain('Claude Code');
-    expect(body.system[1].text).toBe('You are a coding agent.');
-  });
-
-  it('still sends the required prefix when the request has no system prompt', async () => {
-    const { body } = await runChat(subCfg);
-    expect(body.system).toHaveLength(1);
-    expect(body.system[0].text).toContain('Claude Code');
+  it('refuses a Claude plan sign-in saved by an older build, sending nothing', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch');
+    const chat = new AnthropicProvider(subCfg).chat({ model: 'claude-sonnet-4-6', messages: [], system: 'be terse' });
+    await expect(chat[Symbol.asyncIterator]().next()).rejects.toThrow(CLAUDE_PLAN_REMOVED);
+    expect(spy).not.toHaveBeenCalled();
   });
 
   it('sends an effort level instead of a temperature on models that dropped sampling', async () => {
@@ -118,14 +106,8 @@ describe('AnthropicProvider subscription auth', () => {
     expect(body.output_config).toBeUndefined();
   });
 
-  it('test() reports subscription sign-in state', async () => {
-    expect(await new AnthropicProvider(subCfg).test()).toEqual({
-      ok: true,
-      message: 'Signed in with a Claude subscription',
-    });
-    const signedOut = await new AnthropicProvider({ ...subCfg, apiKey: undefined }).test();
-    expect(signedOut.ok).toBe(false);
-    expect(signedOut.message).toMatch(/sign in/i);
+  it('test() says a Claude plan sign-in no longer works', async () => {
+    expect(await new AnthropicProvider(subCfg).test()).toEqual({ ok: false, message: CLAUDE_PLAN_REMOVED });
   });
 });
 
@@ -259,14 +241,11 @@ describe('the live Claude catalog', () => {
     ]);
   });
 
-  it('asks with the subscription token in subscription mode', async () => {
+  it('never asks with a Claude plan sign-in, serving the shipped list', async () => {
     const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(modelsResponse(live));
     const models = await new AnthropicProvider(subCfg).listModels();
-    expect(models[0].id).toBe('claude-opus-6');
-    const headers = (spy.mock.calls[0] as unknown as [string, RequestInit])[1].headers as Record<string, string>;
-    expect(headers.Authorization).toBe('Bearer oauth-access-token');
-    expect(headers['anthropic-beta']).toBe('oauth-2025-04-20');
-    expect(headers['x-api-key']).toBeUndefined();
+    expect(spy).not.toHaveBeenCalled();
+    expect(models.map((m) => m.id)).toContain('claude-opus-5-5');
   });
 
   it('gives up after 5 seconds and serves the shipped list', async () => {

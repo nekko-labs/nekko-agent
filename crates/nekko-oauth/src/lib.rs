@@ -1,11 +1,12 @@
-//! Subscription sign-in (Claude, ChatGPT) and OpenRouter's key sign-in, for
-//! the engine daemon, which writes `tokens.json` alone.
+//! Subscription sign-in (ChatGPT) and OpenRouter's key sign-in, for the
+//! engine daemon, which writes `tokens.json` alone. Claude sign-in is an
+//! empty approved-client slot (`CLAUDE_APPROVED_CLIENT`): not offered.
 //!
 //! A port of the pure half of the TS host's `oauth.ts`: the authorize URLs,
 //! reading a pasted code or redirect URL, the token requests and what their
 //! responses become (token sets or the errors a sign-in fails with), the
-//! status the UI is shown, the Claude and Codex CLI credential imports, and
-//! the token store. Token sets keep the TS object literals' key order, with
+//! status the UI is shown, the Codex CLI credential import, and the token
+//! store. Token sets keep the TS object literals' key order, with
 //! `undefined` fields left out as `JSON.stringify` leaves them out, so the
 //! file and every value handed back are what the TS host produced.
 //! `tests/golden.rs` holds it to the TS functions
@@ -16,12 +17,32 @@
 use serde_json::{Map, Value, json};
 use std::path::{Path, PathBuf};
 
-pub const CLAUDE_CLIENT_ID: &str = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
-pub const CLAUDE_AUTHORIZE_URL: &str = "https://claude.com/cai/oauth/authorize";
-pub const CLAUDE_TOKEN_URL: &str = "https://platform.claude.com/v1/oauth/token";
-pub const CLAUDE_SCOPES: &str = "org:create_api_key user:profile user:inference";
-pub const CLAUDE_MANUAL_REDIRECT_URI: &str = "https://platform.claude.com/oauth/code/callback";
-pub const CLAUDE_LOOPBACK_PORTS: std::ops::RangeInclusive<u16> = 8765..=8795;
+/// An OAuth client a vendor issued to Nekko Agent itself; every field is
+/// `None` until the vendor hands one over (`ApprovedOAuthClient` in
+/// packages/shared/src/oauth-providers.ts).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ApprovedClient {
+    /// `false` while awaiting approval.
+    pub enabled: bool,
+    pub client_id: Option<&'static str>,
+    pub authorize_url: Option<&'static str>,
+    pub token_url: Option<&'static str>,
+    pub scopes: Option<&'static str>,
+}
+
+/// The approved-client slot for Claude sign-in (`CLAUDE_APPROVED_CLIENT`).
+///
+/// Anthropic does not let third-party apps offer Claude.ai login or send
+/// requests on a Claude plan's credentials, so the slot is empty and Claude
+/// sign-in is not offered. If Anthropic ever issues Nekko Agent its own
+/// client, filling it (and the TS mirror) in one reviewed PR turns it on.
+/// Never put another app's client id here: scripts/check-claude-compliance.mjs
+/// fails CI if this slot is filled.
+pub const CLAUDE_APPROVED_CLIENT: ApprovedClient =
+    ApprovedClient { enabled: false, client_id: None, authorize_url: None, token_url: None, scopes: None };
+
+/// `CLAUDE_SIGN_IN_UNAVAILABLE`: what a Claude sign-in fails with.
+pub const CLAUDE_SIGN_IN_UNAVAILABLE: &str = "Nekko Agent cannot sign in to Claude plans. Use Claude with an API key or a cloud account, or connect Claude Agent to run your installed Claude Code.";
 
 pub const CHATGPT_CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
 pub const CHATGPT_AUTHORIZE_URL: &str = "https://auth.openai.com/oauth/authorize";
@@ -174,31 +195,69 @@ fn form(pairs: &[(&str, &str)]) -> String {
     s.finish()
 }
 
+/// `oauthProviderOffered`: whether the app offers sign-in through `provider`.
+pub fn provider_offered(provider: &str) -> bool {
+    provider != "claude" || claude_client().is_some()
+}
+
+/// A PKCE client: who we sign in as, where, and for what.
+#[derive(Clone, Copy, Debug)]
+struct SignInClient {
+    client_id: &'static str,
+    authorize_url: &'static str,
+    token_url: &'static str,
+    scopes: &'static str,
+}
+
+const CHATGPT_CLIENT: SignInClient = SignInClient {
+    client_id: CHATGPT_CLIENT_ID,
+    authorize_url: CHATGPT_AUTHORIZE_URL,
+    token_url: CHATGPT_TOKEN_URL,
+    scopes: CHATGPT_SCOPES,
+};
+
+/// The approved Claude client, once the slot is filled and enabled.
+fn claude_client() -> Option<SignInClient> {
+    let c = CLAUDE_APPROVED_CLIENT;
+    if !c.enabled {
+        return None;
+    }
+    Some(SignInClient {
+        client_id: c.client_id.filter(|s| !s.is_empty())?,
+        authorize_url: c.authorize_url.filter(|s| !s.is_empty())?,
+        token_url: c.token_url.filter(|s| !s.is_empty())?,
+        scopes: c.scopes.unwrap_or(""),
+    })
+}
+
+/// `signInClient`: ChatGPT's, or Claude's approved one; anything else fails.
+fn sign_in_client(provider: &str) -> Result<SignInClient, String> {
+    match provider {
+        "chatgpt" => Ok(CHATGPT_CLIENT),
+        "claude" => claude_client().ok_or_else(|| CLAUDE_SIGN_IN_UNAVAILABLE.to_string()),
+        _ => Err(format!("No sign-in client for {provider}.")),
+    }
+}
+
 /// `buildAuthorizeUrl`.
-pub fn authorize_url(provider: &str, redirect_uri: &str, challenge: &str, state: &str) -> String {
+pub fn authorize_url(provider: &str, redirect_uri: &str, challenge: &str, state: &str) -> Result<String, String> {
     if provider == "openrouter" {
         // OpenRouter calls the redirect `callback_url` and takes no client_id, scope or state.
         let q =
             form(&[("callback_url", redirect_uri), ("code_challenge", challenge), ("code_challenge_method", "S256")]);
-        return format!("{OPENROUTER_AUTHORIZE_URL}?{q}");
+        return Ok(format!("{OPENROUTER_AUTHORIZE_URL}?{q}"));
     }
-    let claude = provider == "claude";
-    let mut pairs: Vec<(&str, &str)> = Vec::new();
-    // Claude's console callback only renders the `code#state` to copy with `code=true`;
-    // a loopback redirect must not set it.
-    if claude && redirect_uri == CLAUDE_MANUAL_REDIRECT_URI {
-        pairs.push(("code", "true"));
-    }
-    pairs.extend([
+    let client = sign_in_client(provider)?;
+    let pairs = [
         ("response_type", "code"),
-        ("client_id", if claude { CLAUDE_CLIENT_ID } else { CHATGPT_CLIENT_ID }),
+        ("client_id", client.client_id),
         ("redirect_uri", redirect_uri),
-        ("scope", if claude { CLAUDE_SCOPES } else { CHATGPT_SCOPES }),
+        ("scope", client.scopes),
         ("code_challenge", challenge),
         ("code_challenge_method", "S256"),
         ("state", state),
-    ]);
-    format!("{}?{}", if claude { CLAUDE_AUTHORIZE_URL } else { CHATGPT_AUTHORIZE_URL }, form(&pairs))
+    ];
+    Ok(format!("{}?{}", client.authorize_url, form(&pairs)))
 }
 
 /// `makeTokenKey`.
@@ -302,13 +361,9 @@ pub fn token_from_response(provider: &str, json: &Value, obtained_at: f64, now: 
     } else {
         None
     };
-    let account_email = if provider == "claude" {
-        clean_email(prop(prop(Some(json), "account"), "email_address"))
-    } else {
-        match id_token {
-            Some(Value::String(s)) if !s.is_empty() => extract_email(s),
-            _ => None,
-        }
+    let account_email = match id_token {
+        Some(Value::String(s)) if !s.is_empty() => extract_email(s),
+        _ => None,
     };
     let expires_in = prop(Some(json), "expires_in").and_then(Value::as_f64).unwrap_or(3600.0);
     let jwt_exp = if chatgpt { exp_from_jwt(access.as_ref()) } else { None };
@@ -345,39 +400,34 @@ const FORM_HEADERS: [(&str, &str); 2] =
     [("Content-Type", "application/x-www-form-urlencoded"), ("Accept", "application/json")];
 
 /// `exchangeRequest`.
-pub fn exchange_request(provider: &str, code: &str, redirect_uri: &str, verifier: &str, state: &str) -> TokenRequest {
-    match provider {
-        "openrouter" => TokenRequest {
+pub fn exchange_request(
+    provider: &str,
+    code: &str,
+    redirect_uri: &str,
+    verifier: &str,
+    _state: &str,
+) -> Result<TokenRequest, String> {
+    if provider == "openrouter" {
+        return Ok(TokenRequest {
             url: OPENROUTER_KEY_URL.into(),
             headers: JSON_HEADERS.to_vec(),
             body: nekko_js::stringify(
                 &json!({ "code": code, "code_verifier": verifier, "code_challenge_method": "S256" }),
             ),
-        },
-        "claude" => TokenRequest {
-            url: CLAUDE_TOKEN_URL.into(),
-            headers: JSON_HEADERS.to_vec(),
-            body: nekko_js::stringify(&json!({
-                "client_id": CLAUDE_CLIENT_ID,
-                "grant_type": "authorization_code",
-                "code": code,
-                "state": state,
-                "redirect_uri": redirect_uri,
-                "code_verifier": verifier,
-            })),
-        },
-        _ => TokenRequest {
-            url: CHATGPT_TOKEN_URL.into(),
-            headers: FORM_HEADERS.to_vec(),
-            body: form(&[
-                ("grant_type", "authorization_code"),
-                ("client_id", CHATGPT_CLIENT_ID),
-                ("code", code),
-                ("redirect_uri", redirect_uri),
-                ("code_verifier", verifier),
-            ]),
-        },
+        });
     }
+    let client = sign_in_client(provider)?;
+    Ok(TokenRequest {
+        url: client.token_url.into(),
+        headers: FORM_HEADERS.to_vec(),
+        body: form(&[
+            ("grant_type", "authorization_code"),
+            ("client_id", client.client_id),
+            ("code", code),
+            ("redirect_uri", redirect_uri),
+            ("code_verifier", verifier),
+        ]),
+    })
 }
 
 /// `String(safeJson(text)?.error_description ?? text.slice(0, 200) ?? ...)`.
@@ -429,32 +479,22 @@ pub fn exchange_result(
 }
 
 /// `refreshRequest`.
-pub fn refresh_request(token: &Value) -> TokenRequest {
-    let refresh = token.get("refreshToken").cloned().unwrap_or(Value::Null);
-    if token.get("provider").and_then(Value::as_str) == Some("claude") {
-        let scope = coalesce(token.get("scopes"), Some(&json!(CLAUDE_SCOPES))).unwrap_or(Value::Null);
-        let mut body = Map::new();
-        body.insert("client_id".into(), json!(CLAUDE_CLIENT_ID));
-        body.insert("grant_type".into(), json!("refresh_token"));
-        if !refresh.is_null() || token.get("refreshToken").is_some() {
-            body.insert("refresh_token".into(), refresh);
-        }
-        body.insert("scope".into(), scope);
-        return TokenRequest {
-            url: CLAUDE_TOKEN_URL.into(),
-            headers: JSON_HEADERS.to_vec(),
-            body: nekko_js::stringify(&Value::Object(body)),
-        };
-    }
-    let refresh = match &refresh {
-        Value::Null => String::new(),
-        v => nekko_js::display(v),
+pub fn refresh_request(token: &Value) -> Result<TokenRequest, String> {
+    let provider = match token.get("provider") {
+        Some(Value::String(s)) => s.clone(),
+        Some(v) if !v.is_null() => nekko_js::display(v),
+        _ => "undefined".into(),
     };
-    TokenRequest {
-        url: CHATGPT_TOKEN_URL.into(),
+    let client = sign_in_client(&provider)?;
+    let refresh = match token.get("refreshToken") {
+        None | Some(Value::Null) => String::new(),
+        Some(v) => nekko_js::display(v),
+    };
+    Ok(TokenRequest {
+        url: client.token_url.into(),
         headers: FORM_HEADERS.to_vec(),
-        body: form(&[("grant_type", "refresh_token"), ("client_id", CHATGPT_CLIENT_ID), ("refresh_token", &refresh)]),
-    }
+        body: form(&[("grant_type", "refresh_token"), ("client_id", client.client_id), ("refresh_token", &refresh)]),
+    })
 }
 
 /// `refreshResult`: a renewal's response as the next token set, or the error.
@@ -519,42 +559,6 @@ pub fn status(token_key: &str, token: Option<&Value>, state: &str, message: Opti
         ("message", message),
     ])
     .into_value()
-}
-
-/// `Array.prototype.join(' ')`.
-fn join_space(a: &[Value]) -> String {
-    a.iter().map(|x| if x.is_null() { String::new() } else { nekko_js::display(x) }).collect::<Vec<_>>().join(" ")
-}
-
-/// `claudeCliToken`: `~/.claude/.credentials.json` as a token set.
-pub fn claude_cli_token(raw: &str, now: f64) -> Result<Option<Value>, String> {
-    let parsed: Value = serde_json::from_str(raw).map_err(|e| e.to_string())?;
-    if parsed.is_null() {
-        return Err("Cannot read properties of null (reading 'claudeAiOauth')".into());
-    }
-    let block = coalesce(prop(Some(&parsed), "claudeAiOauth"), Some(&parsed)).unwrap_or(Value::Null);
-    if block.is_null() {
-        return Err("Cannot read properties of null (reading 'accessToken')".into());
-    }
-    let access = coalesce(prop(Some(&block), "accessToken"), prop(Some(&block), "access_token"));
-    if !nekko_js::truthy(access.as_ref()) {
-        return Ok(None);
-    }
-    let scopes = match prop(Some(&block), "scopes") {
-        Some(Value::Array(a)) => Some(json!(join_space(a))),
-        other => other.cloned(),
-    };
-    Ok(Some(
-        Obj::new(vec![
-            ("provider", Some(json!("claude"))),
-            ("accessToken", access),
-            ("refreshToken", coalesce(prop(Some(&block), "refreshToken"), prop(Some(&block), "refresh_token"))),
-            ("expiresAt", coalesce(prop(Some(&block), "expiresAt"), prop(Some(&block), "expires_at"))),
-            ("scopes", scopes),
-            ("obtainedAt", Some(num(now))),
-        ])
-        .into_value(),
-    ))
 }
 
 /// `codexCliToken`: `~/.codex/auth.json` as a token set.

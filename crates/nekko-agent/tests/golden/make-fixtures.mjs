@@ -30,6 +30,7 @@ const providers = {
   // The OpenAI-compatible URL pasted into an Ollama provider.
   ollama: cfg('ollama', 'ollama', 'http://localhost:11434/v1'),
   anthropic: cfg('anthropic', 'anthropic', 'https://api.anthropic.com', { apiKey: 'sk-ant-test' }),
+  // A Claude plan sign-in saved by an older build: refused, nothing is sent.
   'anthropic-sub': cfg('anthropic-sub', 'anthropic', 'https://api.anthropic.com', {
     apiKey: 'oauth-access-token',
     auth: 'subscription',
@@ -444,7 +445,7 @@ const streams = [
   },
   {
     name: 'an-thinking-ignored-but-timed',
-    provider: 'anthropic-sub',
+    provider: 'anthropic',
     request: 'opus-5-normal',
     responses: [
       {
@@ -543,7 +544,8 @@ const streams = [
     ],
   },
   { name: 'an-400-not-sampling', provider: 'anthropic', request: 'opus-5-normal', responses: [{ status: 400, body: '{"error":{"message":"max_tokens: must be greater than 0"}}' }] },
-  { name: 'an-401', provider: 'anthropic-sub', responses: [{ status: 401, body: '{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}' }] },
+  { name: 'an-plan-sign-in-refused', provider: 'anthropic-sub', responses: [] },
+  { name: 'an-401', provider: 'anthropic', responses: [{ status: 401, body: '{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}' }] },
   { name: 'an-network-error', provider: 'anthropic', responses: [{ networkError: 'fetch failed' }] },
 
   // ChatGPT
@@ -783,7 +785,8 @@ const models = [
     responses: { 'https://api.anthropic.com/v1/models?limit=1000': { status: 200, body: "{\"data\":[{\"type\":\"model\",\"id\":\"claude-haiku-4-5-20251001\",\"display_name\":\"Claude Haiku 4.5\"},{\"type\":\"model\",\"id\":\"claude-haiku-5-5\",\"display_name\":\"Claude Haiku 5.5\",\"max_input_tokens\":1000000},{\"type\":\"model\",\"id\":\"claude-labs-x\",\"display_name\":\"Claude Labs X\",\"max_input_tokens\":500000},{\"type\":\"model\",\"id\":\"claude-no-name\",\"display_name\":\"\"},{\"type\":\"model\",\"display_name\":\"no id\"},{\"type\":\"model\",\"id\":\"claude-opus-6\",\"display_name\":\"Claude Opus 6\",\"created_at\":\"2026-10-01T00:00:00Z\"}],\"has_more\":false}" } },
   },
   {
-    name: 'anthropic-sub-live',
+    // A plan sign-in never calls the catalog: the shipped list.
+    name: 'anthropic-sub-no-catalog',
     provider: 'anthropic-sub',
     responses: { 'https://api.anthropic.com/v1/models?limit=1000': { status: 200, body: "{\"data\":[{\"type\":\"model\",\"id\":\"claude-haiku-4-5-20251001\",\"display_name\":\"Claude Haiku 4.5\"},{\"type\":\"model\",\"id\":\"claude-haiku-5-5\",\"display_name\":\"Claude Haiku 5.5\",\"max_input_tokens\":1000000},{\"type\":\"model\",\"id\":\"claude-labs-x\",\"display_name\":\"Claude Labs X\",\"max_input_tokens\":500000},{\"type\":\"model\",\"id\":\"claude-no-name\",\"display_name\":\"\"},{\"type\":\"model\",\"display_name\":\"no id\"},{\"type\":\"model\",\"id\":\"claude-opus-6\",\"display_name\":\"Claude Opus 6\",\"created_at\":\"2026-10-01T00:00:00Z\"}],\"has_more\":false}" } },
   },
@@ -791,7 +794,7 @@ const models = [
   { name: 'anthropic-offline-falls-back', provider: 'anthropic', responses: {} },
   {
     name: 'anthropic-401-falls-back',
-    provider: 'anthropic-sub',
+    provider: 'anthropic',
     responses: { 'https://api.anthropic.com/v1/models?limit=1000': { status: 401, body: '{"type":"error"}' } },
   },
   {
@@ -857,7 +860,7 @@ const models = [
 ];
 
 // Every provider sees every request fixture.
-const requestMatrix = Object.keys(providers).filter((p) => !['chatgpt-no-account', 'chatgpt-custom', 'chatgpt-custom-dup'].includes(p));
+const requestMatrix = Object.keys(providers).filter((p) => !['chatgpt-no-account', 'chatgpt-custom', 'chatgpt-custom-dup', 'anthropic-sub'].includes(p));
 
 write('providers.json', providers);
 write('request-cases.json', { providers: requestMatrix, requests });

@@ -6,14 +6,13 @@
 //! the bridge stops or its token changes, so a disabled bot stops polling at
 //! once), the 1.5 s reply flushes and the 5 s poll backoff as timers, the
 //! state file written atomically in order, and the host-side work through
-//! the daemon's router: `session:create` (the backend owns a new chat's
-//! defaults), `models:list`, `chat:send` (admitted by the daemon), and
+//! the daemon's router: `session:create` (with a new chat's defaults),
+//! `models:list`, `chat:send` (admitted by the daemon), and
 //! `tool:approve` / `chat:answer`. It hears every agent event the UI hears
 //! from the hub, and reconfigures on every settings save.
 //!
-//! Owned only when the daemon knows the data directory; the backend is then
-//! told (`NEKKOD_OWNS=messaging`) and never starts its own bridge, since
-//! Telegram allows one long poll per bot token (a second gets 409 Conflict).
+//! Owned only when the daemon knows the data directory. Telegram allows one
+//! long poll per bot token (a second gets 409 Conflict).
 
 use crate::hub::Hub;
 use nekko_messaging::bridge::{Bridge, Effect, Host};
@@ -26,9 +25,6 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 use tokio::sync::mpsc;
-
-/// What the backend is told the daemon owns (`NEKKOD_OWNS`).
-pub const OWNS: &str = "messaging";
 
 pub const CHANNELS: &[&str] = &["messaging:status"];
 

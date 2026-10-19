@@ -23,6 +23,7 @@ import { ResourceHud } from './components/ResourceMonitor.js';
 import { Toasts } from './components/Toasts.js';
 import { CommandPalette } from './components/CommandPalette.js';
 import { UpdateBanner } from './components/UpdateBanner.js';
+import { AppNotices } from './components/AppNotices.js';
 import { RelayPairing } from './components/RelayPairing.js';
 import { DeepLinkListener } from './components/DeepLink.js';
 import { WorkspacesView } from './views/WorkspacesView.js';
@@ -38,6 +39,7 @@ import { ConnectorsView } from './views/ConnectorsView.js';
 import { MemoryView } from './views/MemoryView.js';
 import { SettingsView } from './views/SettingsView.js';
 import { OnboardingView } from './views/OnboardingView.js';
+import { ClaudePlanSheet } from './components/claude/ClaudeAgent.js';
 import {
   ArtifactsColorIcon,
   CommandHudIcon,
@@ -382,11 +384,13 @@ export function App() {
       {settings?.themePreset === 'autumn' && <AutumnBackground />}
       {(settings?.themePreset === 'lilac' || settings?.themePreset === 'lavender') && <PixelWaveBackground variant={settings?.themePreset === 'lavender' ? 'lavender' : 'lilac'} />}
       <ErrorBoundary label="Updates"><UpdateBanner /></ErrorBoundary>
+      <ErrorBoundary label="Notices"><AppNotices /></ErrorBoundary>
       <ErrorBoundary label="Pairing"><RelayPairing /></ErrorBoundary>
       {view !== 'command' && <ErrorBoundary label="Resource monitor"><ResourceHud /></ErrorBoundary>}
       <ErrorBoundary label="Nekko"><Mascot mood={mascotMood} enabled={settings?.mascotEnabled ?? true} wizardHat={settings?.themePreset === 'autumn'} /></ErrorBoundary>
       <ErrorBoundary label="Command palette"><CommandPalette /></ErrorBoundary>
       <ErrorBoundary label="Links"><DeepLinkListener /></ErrorBoundary>
+      <ErrorBoundary label="Claude plan"><ClaudePlanSheet /></ErrorBoundary>
       <ErrorBoundary label="Notifications"><Toasts /></ErrorBoundary>
     </div>
   );

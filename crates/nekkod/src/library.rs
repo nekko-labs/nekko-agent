@@ -3,15 +3,12 @@
 //! `engine:deleteModel`, `engine:saveModelPreset`, `engine:folders`,
 //! `engine:foldersSave` and `engine:autoload`, plus `engine:library`, the
 //! bare rows the TS engine's model server reads. The daemon is the single
-//! writer of `<models>/library.json` (`NEKKOD_OWNS=library`); the folder list
-//! and the autoload list are engine settings, saved through the settings
-//! store; the first read of the library seeds the folder list from the
-//! other apps on this machine, as the host did at startup. Load state
-//! (which models are resident, the last failure) still
-//! lives in the TS engine's server, so `engine:models` asks the host for it
-//! (`engine:runtime` `loadState`).
+//! writer of `<models>/library.json`; the folder list and the autoload list
+//! are engine settings, saved through the settings store; the first read of
+//! the library seeds the folder list from the other apps on this machine, as
+//! the host did at startup. Load state (which models are resident, the last
+//! failure) is the daemon's model server's (model_server.rs).
 
-use crate::backend::Backend;
 use nekko_engine::capacity::{Device, Hardware};
 use nekko_engine::library::{self as lib, LibraryConfig};
 use nekko_settings::SettingsStore;
@@ -31,9 +28,6 @@ pub const CHANNELS: &[&str] = &[
     "engine:autoload",
     "engine:library",
 ];
-
-/// What the backend is told the daemon owns (`NEKKOD_OWNS`): `library.json`.
-pub const OWNS: &str = "library";
 
 const MB: f64 = 1024.0 * 1024.0;
 
@@ -65,7 +59,6 @@ pub struct Library {
     settings: Arc<crate::settings::Settings>,
     store: Arc<SettingsStore>,
     data_dir: PathBuf,
-    backend: Arc<Backend>,
     machine: Arc<nekko_machine::Machine>,
     engine: Arc<crate::engine::Engine>,
     /// One library operation at a time: they all read, change and write the index.
@@ -79,7 +72,6 @@ pub struct Library {
 impl Library {
     pub fn new(
         settings: Arc<crate::settings::Settings>,
-        backend: Arc<Backend>,
         machine: Arc<nekko_machine::Machine>,
         engine: Arc<crate::engine::Engine>,
     ) -> Arc<Self> {
@@ -89,7 +81,6 @@ impl Library {
             settings,
             store,
             data_dir,
-            backend,
             machine,
             engine,
             lock: tokio::sync::Mutex::new(()),
@@ -151,9 +142,9 @@ impl Library {
         self.store.get()
     }
 
-    /// What the host's model server knows: the resident ids, the last load
-    /// errors and the installed llama.cpp version. When the host is not
-    /// answering, the daemon's own record of what it runs says what is loaded.
+    /// What the model server knows: the resident ids, the last load errors
+    /// and the installed llama.cpp version. Before the server is set, the
+    /// daemon's own record of what it runs says what is loaded.
     pub fn set_installs(&self, installs: Arc<crate::installs::Installs>) {
         let _ = self.installs.set(installs);
     }
@@ -164,20 +155,7 @@ impl Library {
             let version = installs.detect("llama").await.get("version").cloned();
             return (server.loaded_ids().into_iter().collect(), server.load_errors(), version);
         }
-        let state =
-            tokio::time::timeout(crate::routes::AUX_WAIT, self.backend.call("engine:runtime", json!(["loadState"])))
-                .await;
-        match state {
-            Ok(Ok(s)) => (
-                s.get("loaded")
-                    .and_then(Value::as_array)
-                    .map(|a| a.iter().map(nekko_js::display).collect())
-                    .unwrap_or_default(),
-                s.get("errors").and_then(Value::as_object).cloned().unwrap_or_default(),
-                s.get("version").cloned(),
-            ),
-            _ => (self.engine.supervisor.list().into_iter().map(|c| c.model_id).collect(), Map::new(), None),
-        }
+        (self.engine.supervisor.list().into_iter().map(|c| c.model_id).collect(), Map::new(), None)
     }
 
     /// `overheadFloorFor('llamacpp', version)` from `runtime-calibration.json`.

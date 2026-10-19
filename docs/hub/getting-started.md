@@ -14,7 +14,7 @@ We care about three things:
 
 ## What Nekko Agent does
 
-- **Use AI on your computer or online.** Run models with the built-in engine, connect Ollama, LM Studio or vLLM, or sign in with a Claude or ChatGPT subscription. Mix them in one workspace.
+- **Use AI on your computer or online.** Run models with the built-in engine, connect Ollama, LM Studio or vLLM, or sign in with a ChatGPT subscription. Mix them in one workspace.
 - **Pick the right AI for each job.** Use a capable model for hard work and a small local one for simple tasks. Local models have no per-token bill.
 - **Work in your real projects.** The agent reads, edits and runs code in the folders you add, with diffs to review, guardrails and an optional sandbox.
 - **Automate repeat work.** Schedule tasks and save workflows, with retry limits and a visible history.

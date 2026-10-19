@@ -25,7 +25,6 @@
     "dist/run.js",
     "dist/run.d.ts",
     "dist/engine.js",
-    "dist/backend.js",
     "README.md",
     "LICENSE"
   ],
@@ -45,10 +44,6 @@
     "./engine": {
       "types": "./dist/engine.d.ts",
       "import": "./dist/engine.js"
-    },
-    "./backend": {
-      "types": "./dist/backend.d.ts",
-      "import": "./dist/backend.js"
     }
   },
   "scripts": {

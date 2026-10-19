@@ -1,12 +1,9 @@
 //! The model server's data plane, served from the daemon (`nekko-infer`).
 //!
-//! The TS engine keeps deciding what to load and with which arguments; it
-//! sends the resulting command here (`infer:spawn`), and the daemon owns the
-//! process and the OpenAI-compatible port in front of it. When the router
-//! needs a model that is not running, it asks the TS engine to load it
-//! (`engine:routerLoad`), which comes back through `infer:spawn`.
+//! The daemon owns the model processes and the OpenAI-compatible port in
+//! front of them. When the router needs a model that is not running, the
+//! model server's policy (model_server.rs) loads it.
 
-use crate::backend::Backend;
 use crate::decide::{DecideService, RouterDecisions};
 use nekko_infer::{BoxFuture, EngineRouter, Policy, ServeConfig, SpawnSpec, Supervisor};
 use serde_json::{Value, json};
@@ -23,11 +20,11 @@ pub struct Engine {
 }
 
 impl Engine {
-    pub fn new(backend: Arc<Backend>) -> Self {
+    pub fn new() -> Self {
         let supervisor = Arc::new(Supervisor::new());
         let decide = DecideService::new();
         let server: Arc<std::sync::OnceLock<Arc<nekko_engine::server::ModelServer>>> = Arc::default();
-        let router = EngineRouter::new(supervisor.clone(), Arc::new(BackendPolicy { backend, server: server.clone() }))
+        let router = EngineRouter::new(supervisor.clone(), Arc::new(ServerPolicy { server: server.clone() }))
             .with_decisions(Arc::new(RouterDecisions(decide.clone())));
         Self { supervisor, server, router, decide }
     }
@@ -38,21 +35,20 @@ impl Engine {
     }
 }
 
-/// The model server's answers: the daemon's own policy when it runs it, else the TS engine's.
-struct BackendPolicy {
-    backend: Arc<Backend>,
+/// The model server's answers, from the daemon's own policy once it runs it
+/// (no data directory, no model server).
+struct ServerPolicy {
     server: Arc<std::sync::OnceLock<Arc<nekko_engine::server::ModelServer>>>,
 }
 
-impl Policy for BackendPolicy {
+const NO_SERVER: &str = "No model server runs here.";
+
+impl Policy for ServerPolicy {
     fn load(&self, model: String, image: bool) -> BoxFuture<Result<(), (u16, String)>> {
-        let backend = self.backend.clone();
         let server = self.server.get().cloned();
         Box::pin(async move {
-            let r = match server {
-                Some(server) => server.router_load(&model, image).await,
-                None => backend.call("engine:routerLoad", json!([model, image])).await.map_err(|e| (503, e))?,
-            };
+            let server = server.ok_or((503, NO_SERVER.to_string()))?;
+            let r = server.router_load(&model, image).await;
             if r.get("ok").and_then(Value::as_bool) == Some(true) {
                 return Ok(());
             }
@@ -63,24 +59,14 @@ impl Policy for BackendPolicy {
     }
 
     fn models(&self) -> BoxFuture<Result<Value, String>> {
-        let backend = self.backend.clone();
         let server = self.server.get().cloned();
-        Box::pin(async move {
-            match server {
-                Some(server) => Ok(server.router_models().await),
-                None => backend.call("engine:routerModels", json!([])).await,
-            }
-        })
+        Box::pin(async move { Ok(server.ok_or(NO_SERVER)?.router_models().await) })
     }
 
     fn model(&self, id: String) -> BoxFuture<Result<Option<Value>, String>> {
-        let backend = self.backend.clone();
         let server = self.server.get().cloned();
         Box::pin(async move {
-            let v = match server {
-                Some(server) => server.router_model(&id).await,
-                None => backend.call("engine:routerModel", json!([id])).await?,
-            };
+            let v = server.ok_or(NO_SERVER)?.router_model(&id).await;
             Ok((!v.is_null()).then_some(v))
         })
     }

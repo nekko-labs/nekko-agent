@@ -3,12 +3,13 @@ import { needsProviderSetup } from '../components/providers/providerSetup.js';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { columnsFor, packGroups } from './providerLayout.js';
 import type { LimitWindow, ModelInfo, OAuthProvider, OAuthStatus, ProviderConfig, ProviderKind, SubscriptionLimits } from '@nekko-agent/shared';
-import { formatUSD, isLocalProvider, isRuntimeKind, formatModelPriceLabel, modelPricing } from '@nekko-agent/shared';
+import { formatUSD, isLocalProvider, isRuntimeKind, formatModelPriceLabel, modelPricing, oauthProviderOffered } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store.js';
 import { Badge, Toggle } from '../components/primitives/index.js';
 import { SubscriptionSignIn } from '../components/SubscriptionSignIn.js';
 import { AddProvider, SUBSCRIPTION_KINDS, reconnectProviderConfig } from '../components/providers/AddProvider.js';
+import { ClaudeWhyLink } from '../components/claude/ClaudeAgent.js';
 import { PlusIcon, TrashIcon, CheckIcon, StarIcon } from '../icons.js';
 import { ContextMenu, ContextAction } from '../components/ContextMenu.js';
 import { RuntimeCard } from '../components/runtimes/RuntimeCard.js';
@@ -60,6 +61,15 @@ export function ModelsView() {
   // Keep this flow mounted through saving so its completion step does not disappear.
   const [firstSetup] = useState(() => needsProviderSetup(providers, useStore.getState().activeModelId ?? useStore.getState().models[0]?.id));
   const [adding, setAdding] = useState(false);
+  // A notice action ("Connect Claude Agent", "Add API key") opens the form on a kind.
+  const [addKind, setAddKind] = useState<ProviderKind | undefined>();
+  const requestedKind = useStore((s) => s.addProviderKind);
+  useEffect(() => {
+    if (!requestedKind) return;
+    setAddKind(requestedKind);
+    setAdding(true);
+    useStore.setState({ addProviderKind: null });
+  }, [requestedKind]);
   const [discovering, setDiscovering] = useState(false);
 
   useEffect(() => {
@@ -101,13 +111,13 @@ export function ModelsView() {
             <button className="btn btn-outline" onClick={discover} disabled={discovering}>
               {discovering ? 'Scanning…' : 'Auto-discover local'}
             </button>
-            <button className="btn btn-primary" onClick={() => setAdding((v) => !v)}>
+            <button className="btn btn-primary" onClick={() => { setAddKind(undefined); setAdding((v) => !v); }}>
               <PlusIcon /> Add provider
             </button>
           </div>
         </div>
 
-        {adding && <AddProvider onDone={() => { setAdding(false); refreshProviders(); }} />}
+        {adding && <AddProvider key={addKind ?? 'any'} initialKind={addKind} onDone={() => { setAdding(false); setAddKind(undefined); refreshProviders(); }} />}
 
         <ProviderSections
           groups={[
@@ -294,6 +304,69 @@ function ProviderSections({ groups, onChanged }: { groups: ProviderGroup[]; onCh
   );
 }
 
+/**
+ * A Claude plan card from an older build. Nekko Agent no longer signs in to
+ * Claude plans, so the card explains that and turns into an API-key card when
+ * the user adds a key. Nothing here touches Claude credentials.
+ */
+function RetiredClaudePlan({ provider, onChanged }: { provider: ProviderConfig; onChanged: () => void }) {
+  const [apiKey, setApiKey] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string>();
+  const useKey = async () => {
+    setSaving(true);
+    setError(undefined);
+    try {
+      const next: ProviderConfig = {
+        ...provider,
+        label: provider.label.replace(/\s*\(subscription\)\s*$/i, '') || 'Claude',
+        auth: 'apikey',
+        apiKey: apiKey.trim(),
+        tokenKey: undefined,
+        accountId: undefined,
+        enabled: true,
+      };
+      const check = await window.nekko.testProviderConfig(next);
+      if (!check.ok) {
+        setError(check.message);
+        return;
+      }
+      await window.nekko.saveProvider(next);
+      onChanged();
+    } catch (e) {
+      setError(String((e as Error)?.message ?? e));
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <div className="mt-3 space-y-2 rounded-xl border p-3 text-[12px]" style={{ borderColor: 'var(--line)' }}>
+      <p className="text-ink-soft">
+        Nekko Agent no longer signs in to Claude plans, so this card is turned off and its saved Claude sign-in was deleted.
+        Add an Anthropic API key to keep using it, billed per token to your Anthropic account, or keep using your plan through Claude Agent, which runs your installed Claude Code.
+      </p>
+      <div className="flex gap-2">
+        <input
+          className="input py-1.5 text-[12px]"
+          type="password"
+          aria-label="Anthropic API key"
+          placeholder="sk-ant-…"
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
+        />
+        <button className="btn btn-primary py-1.5 text-[12px]" disabled={saving || !apiKey.trim()} onClick={() => void useKey()}>
+          {saving ? 'Checking…' : 'Use this key'}
+        </button>
+      </div>
+      {error && <p style={{ color: 'var(--danger)' }}>{error}</p>}
+      <div className="flex flex-wrap items-center gap-2">
+        <button className="btn btn-outline py-1.5 text-[12px]" onClick={() => useStore.getState().openAddProvider('claude-code')}>Use Claude Agent instead</button>
+        <ClaudeWhyLink label="What works with a Claude plan?" />
+      </div>
+    </div>
+  );
+}
+
 function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onChanged: () => void }) {
   const settings = useStore((s) => s.settings);
   const refreshSettings = useStore((s) => s.refreshSettings);
@@ -321,7 +394,14 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
   // renderer only ever sees this sanitized status (connected/account/expiry,
   // never a token). OpenRouter joins them with auth 'apikey' + a tokenKey: the
   // key its sign-in minted is metered, not a plan.
-  const subscription = provider.auth === 'subscription' || (provider.kind === 'openrouter' && !!provider.tokenKey);
+  //
+  // A Claude plan card saved by an older build is neither: Claude sign-in is
+  // not offered (its approved-client slot is empty), the startup migration
+  // disabled the card and deleted its token, and the card offers an API key
+  // instead (RetiredClaudePlan).
+  const retiredClaudePlan = provider.kind === 'anthropic' && provider.auth === 'subscription' && !oauthProviderOffered('claude');
+  const subscription =
+    (provider.auth === 'subscription' && !retiredClaudePlan) || (provider.kind === 'openrouter' && !!provider.tokenKey);
   const [sub, setSub] = useState<OAuthStatus | null>(null);
   const [limits, setLimits] = useState<SubscriptionLimits | null>(null);
   const [relinking, setRelinking] = useState(false);
@@ -379,7 +459,7 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
     if (provider.kind === 'lmstudio') {
       window.nekko.lmsAvailable(provider.id).then(setLms).catch(() => setLms({ available: false }));
     }
-    if (provider.auth === 'subscription' || (provider.kind === 'openrouter' && provider.tokenKey)) {
+    if (subscription) {
       window.nekko.oauthStatus(provider.id).then(setSub).catch(() => setSub(null));
     }
     /* eslint-disable-next-line */
@@ -579,6 +659,15 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
         </div>
       </div>
   );
+
+  if (retiredClaudePlan) {
+    return (
+      <div className="card p-5">
+        {header}
+        <RetiredClaudePlan provider={provider} onChanged={onChanged} />
+      </div>
+    );
+  }
 
   // A disabled provider is never contacted: no connection test, no model
   // list, no `lms` probe and no runtime polling, so a stopped LM Studio is

@@ -468,32 +468,50 @@
       }
     ]
   },
-  "anthropic-sub-live": {
-    "requests": [
-      {
-        "method": "GET",
-        "url": "https://api.anthropic.com/v1/models?limit=1000",
-        "headers": {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer oauth-access-token",
-          "anthropic-version": "2023-06-01",
-          "anthropic-beta": "oauth-2025-04-20"
-        },
-        "body": null
-      }
-    ],
+  "anthropic-sub-no-catalog": {
+    "requests": [],
     "models": [
       {
-        "id": "claude-opus-6",
+        "id": "claude-opus-5-5",
         "providerId": "anthropic-sub",
-        "name": "Claude Opus 6",
+        "name": "Claude Opus 5.5",
         "contextLength": 1000000
       },
       {
-        "id": "claude-haiku-4-5-20251001",
+        "id": "claude-opus-5",
         "providerId": "anthropic-sub",
-        "name": "Claude Haiku 4.5",
-        "contextLength": 200000
+        "name": "Claude Opus 5",
+        "contextLength": 1000000
+      },
+      {
+        "id": "claude-opus-4-8",
+        "providerId": "anthropic-sub",
+        "name": "Claude Opus 4.8",
+        "contextLength": 1000000
+      },
+      {
+        "id": "claude-sonnet-5-5",
+        "providerId": "anthropic-sub",
+        "name": "Claude Sonnet 5.5",
+        "contextLength": 1000000
+      },
+      {
+        "id": "claude-sonnet-5",
+        "providerId": "anthropic-sub",
+        "name": "Claude Sonnet 5",
+        "contextLength": 1000000
+      },
+      {
+        "id": "claude-sonnet-4-6",
+        "providerId": "anthropic-sub",
+        "name": "Claude Sonnet 4.6",
+        "contextLength": 1000000
+      },
+      {
+        "id": "claude-fable-5-1",
+        "providerId": "anthropic-sub",
+        "name": "Claude Fable 5.1",
+        "contextLength": 1000000
       },
       {
         "id": "claude-haiku-5-5",
@@ -502,15 +520,9 @@
         "contextLength": 1000000
       },
       {
-        "id": "claude-labs-x",
+        "id": "claude-haiku-4-5-20251001",
         "providerId": "anthropic-sub",
-        "name": "Claude Labs X",
-        "contextLength": 500000
-      },
-      {
-        "id": "claude-no-name",
-        "providerId": "anthropic-sub",
-        "name": "claude-no-name",
+        "name": "Claude Haiku 4.5",
         "contextLength": 200000
       }
     ]
@@ -592,9 +604,8 @@
         "url": "https://api.anthropic.com/v1/models?limit=1000",
         "headers": {
           "Content-Type": "application/json",
-          "Authorization": "Bearer oauth-access-token",
-          "anthropic-version": "2023-06-01",
-          "anthropic-beta": "oauth-2025-04-20"
+          "x-api-key": "sk-ant-test",
+          "anthropic-version": "2023-06-01"
         },
         "body": null
       }
@@ -602,55 +613,55 @@
     "models": [
       {
         "id": "claude-opus-5-5",
-        "providerId": "anthropic-sub",
+        "providerId": "anthropic",
         "name": "Claude Opus 5.5",
         "contextLength": 1000000
       },
       {
         "id": "claude-opus-5",
-        "providerId": "anthropic-sub",
+        "providerId": "anthropic",
         "name": "Claude Opus 5",
         "contextLength": 1000000
       },
       {
         "id": "claude-opus-4-8",
-        "providerId": "anthropic-sub",
+        "providerId": "anthropic",
         "name": "Claude Opus 4.8",
         "contextLength": 1000000
       },
       {
         "id": "claude-sonnet-5-5",
-        "providerId": "anthropic-sub",
+        "providerId": "anthropic",
         "name": "Claude Sonnet 5.5",
         "contextLength": 1000000
       },
       {
         "id": "claude-sonnet-5",
-        "providerId": "anthropic-sub",
+        "providerId": "anthropic",
         "name": "Claude Sonnet 5",
         "contextLength": 1000000
       },
       {
         "id": "claude-sonnet-4-6",
-        "providerId": "anthropic-sub",
+        "providerId": "anthropic",
         "name": "Claude Sonnet 4.6",
         "contextLength": 1000000
       },
       {
         "id": "claude-fable-5-1",
-        "providerId": "anthropic-sub",
+        "providerId": "anthropic",
         "name": "Claude Fable 5.1",
         "contextLength": 1000000
       },
       {
         "id": "claude-haiku-5-5",
-        "providerId": "anthropic-sub",
+        "providerId": "anthropic",
         "name": "Claude Haiku 5.5",
         "contextLength": 1000000
       },
       {
         "id": "claude-haiku-4-5-20251001",
-        "providerId": "anthropic-sub",
+        "providerId": "anthropic",
         "name": "Claude Haiku 4.5",
         "contextLength": 200000
       }
