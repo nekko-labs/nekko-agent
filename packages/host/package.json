@@ -17,6 +17,10 @@
     "./legacy-profiles": {
       "types": "./dist/legacy-profiles.d.ts",
       "import": "./dist/legacy-profiles.js"
+    },
+    "./app-control": {
+      "types": "./dist/app-control.d.ts",
+      "import": "./dist/app-control.js"
     }
   },
   "scripts": {

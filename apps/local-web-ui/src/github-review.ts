@@ -3,7 +3,23 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
-import type { RepositoryReviewer } from '@nekko-agent/host';
+
+/** Provider-neutral, one-shot review contract. No workspace, session or tools. */
+export interface RepositoryReviewInput {
+  head: string;
+  prompt: string;
+  title: string;
+  description: string;
+  files: { filename: string; status: string; patch: string }[];
+}
+export interface RepositoryReviewVerdict {
+  verdict: 'APPROVE' | 'COMMENT' | 'INCONCLUSIVE';
+  reviewedHead: string;
+  complete: boolean;
+  summary: string;
+}
+/** nekkod's `repository:review` (repository_review.rs). */
+export type RepositoryReviewer = (input: RepositoryReviewInput) => Promise<RepositoryReviewVerdict>;
 
 export interface GitHubReviewConfig {
   appId: string; privateKey: string; secret: string; bot: string;

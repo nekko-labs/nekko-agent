@@ -31,6 +31,10 @@ pub struct Config {
     /// started it (the parent holds our stdin open for its whole life).
     #[serde(default = "yes")]
     pub exit_on_stdin_close: bool,
+    /// Whether the model server starts at launch when `engine.autoStart` says
+    /// so. A one-shot CLI command passes `false`: it must not bring it up.
+    #[serde(default = "yes")]
+    pub auto_start_engine: bool,
     /// Whether subscription sign-in is offered (the desktop app). The web
     /// edition passes `false`: its browser is not on the machine whose
     /// loopback port receives the sign-in callback.

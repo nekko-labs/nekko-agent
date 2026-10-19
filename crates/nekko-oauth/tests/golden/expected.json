@@ -1,10 +1,7 @@
 {
   "authorizeUrls": [
     {
-      "value": "\"https://claude.com/cai/oauth/authorize?code=true&response_type=code&client_id=9d1c250a-e61b-44d9-88ed-5944d1962f5e&redirect_uri=https%3A%2F%2Fplatform.claude.com%2Foauth%2Fcode%2Fcallback&scope=org%3Acreate_api_key+user%3Aprofile+user%3Ainference&code_challenge=ch-_x&code_challenge_method=S256&state=st%2F%2B%3D+\""
-    },
-    {
-      "value": "\"https://claude.com/cai/oauth/authorize?response_type=code&client_id=9d1c250a-e61b-44d9-88ed-5944d1962f5e&redirect_uri=http%3A%2F%2Flocalhost%3A8765%2Fcallback&scope=org%3Acreate_api_key+user%3Aprofile+user%3Ainference&code_challenge=ch&code_challenge_method=S256&state=st\""
+      "error": "Nekko Agent cannot sign in to Claude plans. Use Claude with an API key or a cloud account, or connect Claude Agent to run your installed Claude Code."
     },
     {
       "value": "\"https://auth.openai.com/oauth/authorize?response_type=code&client_id=app_EMoamEEZ73f0CkXaXp7hrann&redirect_uri=http%3A%2F%2Flocalhost%3A1455%2Fauth%2Fcallback&scope=openid+profile+email+offline_access&code_challenge=c%21*%27%28%29%7E&code_challenge_method=S256&state=%C3%A9+%C3%BC%26\""
@@ -50,7 +47,7 @@
   ],
   "exchangeRequests": [
     {
-      "value": "{\"url\":\"https://platform.claude.com/v1/oauth/token\",\"headers\":{\"Content-Type\":\"application/json\",\"Accept\":\"application/json\"},\"body\":\"{\\\"client_id\\\":\\\"9d1c250a-e61b-44d9-88ed-5944d1962f5e\\\",\\\"grant_type\\\":\\\"authorization_code\\\",\\\"code\\\":\\\"c\\\",\\\"state\\\":\\\"s\\\",\\\"redirect_uri\\\":\\\"https://platform.claude.com/oauth/code/callback\\\",\\\"code_verifier\\\":\\\"v\\\"}\"}"
+      "error": "Nekko Agent cannot sign in to Claude plans. Use Claude with an API key or a cloud account, or connect Claude Agent to run your installed Claude Code."
     },
     {
       "value": "{\"url\":\"https://auth.openai.com/oauth/token\",\"headers\":{\"Content-Type\":\"application/x-www-form-urlencoded\",\"Accept\":\"application/json\"},\"body\":\"grant_type=authorization_code&client_id=app_EMoamEEZ73f0CkXaXp7hrann&code=c+d%26e&redirect_uri=http%3A%2F%2Flocalhost%3A1455%2Fauth%2Fcallback&code_verifier=v%7E\"}"
@@ -103,15 +100,6 @@
       "error": "Key exchange failed: nah"
     },
     {
-      "value": "{\"provider\":\"claude\",\"accessToken\":\"at\",\"refreshToken\":\"rt\",\"expiresAt\":1760028800000,\"accountEmail\":\"davide@example.com\",\"scopes\":\"user:inference\",\"obtainedAt\":1760000000000}"
-    },
-    {
-      "value": "{\"provider\":\"claude\",\"accessToken\":\"at\",\"expiresAt\":1760003600000,\"obtainedAt\":1760000000000}"
-    },
-    {
-      "value": "{\"provider\":\"claude\",\"accessToken\":\"at\",\"expiresAt\":1760003600000,\"obtainedAt\":1760000000000}"
-    },
-    {
       "value": "{\"provider\":\"chatgpt\",\"accessToken\":\"at\",\"refreshToken\":\"rt\",\"expiresAt\":1760000010000,\"accountId\":\"acct_9\",\"accountEmail\":\"work@example.com\",\"obtainedAt\":1760000000000}"
     },
     {
@@ -120,10 +108,7 @@
   ],
   "refreshRequests": [
     {
-      "value": "{\"url\":\"https://platform.claude.com/v1/oauth/token\",\"headers\":{\"Content-Type\":\"application/json\",\"Accept\":\"application/json\"},\"body\":\"{\\\"client_id\\\":\\\"9d1c250a-e61b-44d9-88ed-5944d1962f5e\\\",\\\"grant_type\\\":\\\"refresh_token\\\",\\\"refresh_token\\\":\\\"r\\\",\\\"scope\\\":\\\"user:inference user:profile\\\"}\"}"
-    },
-    {
-      "value": "{\"url\":\"https://platform.claude.com/v1/oauth/token\",\"headers\":{\"Content-Type\":\"application/json\",\"Accept\":\"application/json\"},\"body\":\"{\\\"client_id\\\":\\\"9d1c250a-e61b-44d9-88ed-5944d1962f5e\\\",\\\"grant_type\\\":\\\"refresh_token\\\",\\\"refresh_token\\\":\\\"r\\\",\\\"scope\\\":\\\"org:create_api_key user:profile user:inference\\\"}\"}"
+      "error": "Nekko Agent cannot sign in to Claude plans. Use Claude with an API key or a cloud account, or connect Claude Agent to run your installed Claude Code."
     },
     {
       "value": "{\"url\":\"https://auth.openai.com/oauth/token\",\"headers\":{\"Content-Type\":\"application/x-www-form-urlencoded\",\"Accept\":\"application/json\"},\"body\":\"grant_type=refresh_token&client_id=app_EMoamEEZ73f0CkXaXp7hrann&refresh_token=r+%3D%26\"}"
@@ -150,9 +135,6 @@
     },
     {
       "value": "{\"provider\":\"claude\",\"accessToken\":\"new\",\"refreshToken\":\"rt\",\"expiresAt\":1760000060000,\"accountEmail\":\"davide@example.com\",\"obtainedAt\":1760000000000}"
-    },
-    {
-      "value": "{\"provider\":\"claude\",\"accessToken\":\"new\",\"refreshToken\":\"rt\",\"expiresAt\":1760003600000,\"accountEmail\":\"new@example.com\",\"obtainedAt\":1760000000000}"
     }
   ],
   "statuses": [
@@ -176,18 +158,6 @@
     }
   ],
   "cli": [
-    {
-      "value": "{\"provider\":\"claude\",\"accessToken\":\"a\",\"refreshToken\":\"r\",\"expiresAt\":1760000000010,\"scopes\":\"user:inference user:profile\",\"obtainedAt\":1760000000000}"
-    },
-    {
-      "value": "{\"provider\":\"claude\",\"accessToken\":\"a\",\"refreshToken\":\"r\",\"expiresAt\":5,\"scopes\":\"one two\",\"obtainedAt\":1760000000000}"
-    },
-    {
-      "value": "undefined"
-    },
-    {
-      "error": true
-    },
     {
       "value": "{\"provider\":\"chatgpt\",\"accessToken\":\"eyJhbGciOiJub25lIn0.eyJleHAiOjE3NjAwMDcyMDAuNX0.sig\",\"refreshToken\":\"r\",\"accountId\":\"acct\",\"expiresAt\":1760007200500,\"obtainedAt\":1759276800000}"
     },

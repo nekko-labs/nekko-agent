@@ -1,21 +1,22 @@
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import Fastify from 'fastify';
-import { createHost, setDataDir, type Host } from '@nekko-agent/host';
-import { registerWebhookRoutes } from './webhooks.js';
+import { registerWebhookRoutes, type WebhookTarget } from './webhooks.js';
 
-let dir = '';
-let host: Host;
+/** nekkod's `workflow:webhook` as the server sees it: one hook, `good-secret` starts it. */
+let calls: Array<[string, string, Record<string, unknown>]> = [];
+const target: WebhookTarget = {
+  dispatchWebhook: async (slug, secret, payload) => {
+    calls.push([slug, secret, payload]);
+    if (slug === 'my-workflow' && secret !== 'good-secret') throw Object.assign(new Error('unauthorized'), { code: 'WEBHOOK_UNAUTHORIZED' });
+    return { length: slug === 'my-workflow' ? 1 : 0 };
+  },
+};
 let app: ReturnType<typeof Fastify>;
 
 beforeEach(async () => {
-  dir = mkdtempSync(join(tmpdir(), 'local-model-server-webhooks-'));
-  setDataDir(dir);
-  host = createHost({ dataDir: dir });
+  calls = [];
   app = Fastify();
-  registerWebhookRoutes(app, host);
+  registerWebhookRoutes(app, target);
   await app.ready();
 });
 
@@ -24,35 +25,23 @@ afterEach(async () => {
 });
 
 describe('POST /api/hooks/:slug', () => {
-  it('rejects a missing key', async () => {
+  it('rejects a missing key before asking the engine', async () => {
     const res = await app.inject({ method: 'POST', url: '/api/hooks/my-workflow', payload: {} });
     expect(res.statusCode).toBe(401);
+    expect(calls).toEqual([]);
   });
 
-  it('rejects a bad secret and does not start a workflow', async () => {
-    const wf = await host.createWorkflow({
-      name: 'My Workflow',
-      steps: [{ id: 's1', name: 'Echo', kind: 'shell', run: 'echo ok' }],
-      triggers: [{ id: 't1', kind: 'webhook', webhookSecret: 'good-secret' }],
-    });
+  it('answers a bad secret with 403', async () => {
     const res = await app.inject({ method: 'POST', url: '/api/hooks/my-workflow?key=bad-secret', payload: { foo: 1 } });
     expect(res.statusCode).toBe(403);
-    expect(await host.listWorkflowRuns(wf.id)).toHaveLength(0);
+    expect(JSON.parse(res.body)).toEqual({ error: 'unauthorized' });
   });
 
-  it('dispatches a workflow with a valid secret', async () => {
-    const wf = await host.createWorkflow({
-      name: 'My Workflow',
-      steps: [{ id: 's1', name: 'Echo', kind: 'shell', run: 'echo ok' }],
-      triggers: [{ id: 't1', kind: 'webhook', webhookSecret: 'good-secret' }],
-    });
+  it('hands a valid call to the engine and reports the runs it started', async () => {
     const res = await app.inject({ method: 'POST', url: '/api/hooks/my-workflow?key=good-secret', payload: { branch: 'main' } });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).started).toBe(1);
-    const runs = await host.listWorkflowRuns(wf.id);
-    expect(runs).toHaveLength(1);
-    expect(runs[0].triggerKind).toBe('webhook');
-    expect(runs[0].triggerLabel).toContain('Webhook');
+    expect(calls).toEqual([['my-workflow', 'good-secret', { branch: 'main', __raw: '{"branch":"main"}' }]]);
   });
 
   it('enforces the 10 MB body cap', async () => {

@@ -25,8 +25,7 @@ import { daemonOwns, LIVENESS_INTERVAL_MS, LIVENESS_STRIKES } from './daemon-cap
  *   (`turn:tool`: delegation targets; a training or goal run's tools only
  *   when the daemon does not own training), for
  *   hooks when the daemon does not run them itself (`turn:hook`; it does when
- *   it owns `turn:hooks`) and with Anthropic
- *   rate-limit headers (`turn:headers`); a tool here that needs approval parks it in the daemon
+ *   it owns `turn:hooks`); a tool here that needs approval parks it in the daemon
  *   (`turn:approval`) and hears the answer through `turn:approved`;
  * - the events this side still reads reach it too (`turn:event`, deltas
  *   batched; `hostTurnEvents`), marked `relayOnly` (the UI already has them
@@ -70,7 +69,6 @@ export interface HostTurn {
   /** A tool that still runs here. `patch` carries session fields it changed (a goal run's plan). */
   executeTool: (call: ToolCall) => Promise<{ result: ToolResult; patch?: Partial<Session> }>;
   hook: (phase: 'pre' | 'post', call: ToolCall, result?: ToolResult) => Promise<unknown>;
-  headers: (pairs: Array<[string, string]>) => void;
   /** What still follows a turn here once it has ended: the agent terminal, TurnEnd hooks, the linked spec. */
   afterEach: (summary: TurnSummary) => void;
   /**
@@ -293,9 +291,6 @@ export async function turnCallback(channel: string, args: unknown[]): Promise<un
     case 'turn:hook':
       if (!turn) return args[1] === 'post' ? args[3] : { notes: [] };
       return turn.hook(args[1] as 'pre' | 'post', args[2] as ToolCall, args[3] as ToolResult | undefined);
-    case 'turn:headers':
-      turn?.headers((args[1] ?? []) as Array<[string, string]>);
-      return;
     case 'spawn:prepare': {
       const call = args[1] as ToolCall;
       if (!turn?.spawn || turn.chain.abort.signal.aborted) return { error: 'This run has already ended.' };

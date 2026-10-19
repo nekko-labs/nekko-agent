@@ -122,7 +122,6 @@ describe('a daemon-driven turn', () => {
       hooks: false,
       platform: process.platform,
       provider: { id: 'p1', kind: 'openai-compat' },
-      headers: false,
     });
     // Every event is the caller's too, marked as already shown by the daemon.
     expect(events.map((e) => e.type)).toEqual(['text', 'text', 'usage', 'done']);

@@ -8,8 +8,8 @@ import { daemonRequest, startNekkod } from 'nekko-agent/engine';
  * boot; more devices can be paired later from the UI (or by restarting). Runs
  * until stopped; nekkod and its backend stop with it.
  */
-export async function runRelayAgent(opts: { relayUrl: string; room: string; key: string; dataDir: string; here: string; script: string }): Promise<void> {
-  const { daemon } = await startNekkod({ here: opts.here, script: opts.script, dataDir: opts.dataDir });
+export async function runRelayAgent(opts: { relayUrl: string; room: string; key: string; dataDir: string; here: string }): Promise<void> {
+  const { daemon } = await startNekkod({ here: opts.here, dataDir: opts.dataDir });
   const stop = () => void daemon.stop().finally(() => process.exit(0));
   process.once('SIGINT', stop);
   process.once('SIGTERM', stop);

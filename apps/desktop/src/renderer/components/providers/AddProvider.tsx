@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { OAuthProvider, OAuthStatus, ProviderConfig, ProviderKind } from '@nekko-agent/shared';
-import { PROVIDER_DEFAULTS } from '@nekko-agent/shared';
+import { PROVIDER_DEFAULTS, oauthProviderOffered } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
 import { SubscriptionSignIn } from '../SubscriptionSignIn.js';
 import { ProviderChoices } from './ProviderChoices.js';
@@ -25,9 +25,11 @@ export const ADD_PROVIDER_KINDS: ProviderKind[] = [
 
 /** Provider kinds whose primary path is a sign-in flow, mapped to the OAuth
  *  provider they sign in through. OpenRouter's "sign-in" mints an API key —
- *  it stays metered, unlike the two real subscriptions. */
+ *  it stays metered, unlike a real subscription. Anthropic is an API-key kind:
+ *  Claude sign-in is only offered once its approved-client slot
+ *  (`CLAUDE_APPROVED_CLIENT`) is filled, which it is not. */
 export const SUBSCRIPTION_KINDS: Partial<Record<ProviderKind, OAuthProvider>> = {
-  anthropic: 'claude',
+  ...(oauthProviderOffered('claude') ? { anthropic: 'claude' as const } : {}),
   chatgpt: 'chatgpt',
   openrouter: 'openrouter',
 };
@@ -127,15 +129,18 @@ export function AddProvider({
   const [label, setLabel] = useState(fixedKind ? PROVIDER_DEFAULTS[fixedKind].label : '');
   const [baseUrl, setBaseUrl] = useState(PROVIDER_DEFAULTS[fixedKind ?? 'ollama'].baseUrl);
   const [apiKey, setApiKey] = useState('');
-  // For Anthropic the subscription sign-in is the primary path; the API key
-  // field hides behind a quiet disclosure until the user asks for it. ChatGPT
-  // is subscription-only, so it has no API-key disclosure at all. `apiKeyOnly`
-  // is for surfaces (the wizard) that already present the subscription path
-  // themselves and embed this form purely as the key fallback.
+  // Where a kind has both a sign-in and an API key (Anthropic, if Claude
+  // sign-in is ever offered), the sign-in is the primary path and the key
+  // field hides behind a quiet disclosure. ChatGPT is subscription-only, so it
+  // has no API-key disclosure at all. `apiKeyOnly` is for surfaces (the
+  // wizard) that already present the subscription path themselves and embed
+  // this form purely as the key fallback.
   const [useApiKey, setUseApiKey] = useState(apiKeyOnly);
   // Free-text ChatGPT model override, for model ids not in the curated list.
   const [customModelId, setCustomModelId] = useState('');
   const oauthProvider = apiKeyOnly ? undefined : SUBSCRIPTION_KINDS[kind];
+  // Anthropic's key field waits behind the disclosure only while a Claude sign-in sits beside it.
+  const keyBehindSignIn = kind === 'anthropic' && oauthProvider !== undefined;
 
   const pick = (k: ProviderKind) => {
     setResult(null);
@@ -246,7 +251,7 @@ export function AddProvider({
             </p>
             <p className="mt-0.5 text-[12px] text-ink-faint">
               {oauthProvider === 'claude'
-                ? 'Sign in with your Claude Pro or Max account to run on your existing plan, with no API usage fees.'
+                ? 'Sign in with your Claude account.'
                 : oauthProvider === 'chatgpt'
                   ? 'Sign in with your ChatGPT Plus, Pro, or Business account to run on your existing plan, with no API usage fees.'
                   : 'Approving in the browser creates a key on your OpenRouter account and saves it here — no copy-pasting. Or paste a key below instead.'}
@@ -267,13 +272,13 @@ export function AddProvider({
             )}
           </div>
         )}
-        {(PROVIDER_DEFAULTS[kind].needsKey || optionalKey) && (kind !== 'anthropic' || useApiKey) && (
+        {(PROVIDER_DEFAULTS[kind].needsKey || optionalKey) && (!keyBehindSignIn || useApiKey) && (
           <label className="col-span-2 text-[12px] font-medium text-ink-soft">
             API key{optionalKey && !PROVIDER_DEFAULTS[kind].needsKey ? ' (optional)' : ''}
             <input className="input mt-1" type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="sk-…" />
           </label>
         )}
-        {kind === 'anthropic' && !apiKeyOnly && (
+        {keyBehindSignIn && (
           <button
             className="col-span-2 justify-self-start text-[12px] text-ink-faint hover:text-ink"
             onClick={() => setUseApiKey((v) => !v)}
@@ -294,11 +299,12 @@ export function AddProvider({
         </div>
         <div className="flex shrink-0 gap-2">
           <button className="btn btn-ghost" onClick={onCancel ?? onDone}>Cancel</button>
-          {/* For Anthropic the subscription sign-in completes the add itself;
-              test/save only make sense once the API-key path is revealed.
-              ChatGPT has no API-key path, so its sign-in always completes.
-              OpenRouter keeps both paths: sign in, or paste a key and save. */}
-          {kind !== 'claude-code' && (oauthProvider === undefined || kind === 'openrouter' || (kind === 'anthropic' && useApiKey)) && (
+          {/* Where a sign-in sits beside the key, the sign-in completes the
+              add itself; test/save only make sense once the API-key path is
+              revealed. ChatGPT has no API-key path, so its sign-in always
+              completes. OpenRouter keeps both paths: sign in, or paste a key
+              and save. */}
+          {kind !== 'claude-code' && (oauthProvider === undefined || kind === 'openrouter' || (keyBehindSignIn && useApiKey)) && (
             <>
               <button className="btn btn-outline" onClick={test} disabled={testing}>
                 {testing ? 'Testing…' : 'Test connection'}

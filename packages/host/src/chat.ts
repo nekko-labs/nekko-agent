@@ -1129,10 +1129,6 @@ export async function sendChat(opts: SendOptions, send: Sender, allowBrowserCont
         resume: opts.resume,
         pullSteering: () => steering.get(opts.sessionId)?.splice(0) ?? [],
         signal: abort.signal,
-        onHeaders:
-          provider.kind === 'anthropic' && provider.auth === 'subscription' && provider.tokenKey
-            ? (headers: Headers) => LimitsService.recordFromHeaders(provider.tokenKey!, provider.kind, headers)
-            : undefined,
       };
       // On disk while the turn runs: a host that starts and finds it knows the
       // turn was cut off, and marks the reply so the chat offers Continue
@@ -1369,7 +1365,6 @@ async function buildDaemonTurn(t: DaemonTurnInput): Promise<{ spec: TurnSpec; ho
       imageInput: await imageInputFor(provider, opts.modelId, () => createProvider(resolvedProvider ?? provider).listModels()),
       ...(resolvedProvider ? { provider: config(resolvedProvider) } : {}),
       ...(providerError !== undefined ? { providerError } : {}),
-      headers: provider.kind === 'anthropic' && provider.auth === 'subscription' && !!provider.tokenKey,
       // This host can make a `spawn_agent` child for the daemon to drive (`spawn:prepare`).
       spawn: true,
       account: {
@@ -1429,9 +1424,6 @@ function hostTurnFor(t: DaemonTurnInput, turnId: string, resolvedProvider: Provi
       const hookCtx = { sessionId: opts.sessionId, cwd: defaultCwd ?? process.cwd() };
       if (!hasToolHooks(hookSettings)) return phase === 'pre' ? { notes: [] } : result;
       return phase === 'pre' ? preToolHooks(hookSettings, call, hookCtx) : postToolHooks(hookSettings, call, result!, hookCtx);
-    },
-    headers: (pairs) => {
-      if (!daemonAccounts && provider.tokenKey) LimitsService.recordFromHeaders(provider.tokenKey, provider.kind, pairs);
     },
     // `spawn_agent` in the daemon (`turn:spawn`): the checks and the child are
     // made here, the child's turn admitted here, and the daemon drives it.
