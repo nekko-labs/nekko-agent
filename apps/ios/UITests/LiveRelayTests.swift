@@ -168,9 +168,10 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertTrue(reveal(finished, in: app), "Settings → Notify me about")
         settle()
         XCTAssertEqual(finished.value as? String, "1")
-        // The switch itself, at the row's trailing edge: tapping the label does nothing.
-        finished.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
-        XCTAssertEqual(finished.value as? String, "0", "finished replies switched off")
+        // iOS 17's SwiftUI toggle is a row-wide switch holding the real one; tapping the row does nothing.
+        let knob = finished.switches.firstMatch
+        (knob.exists ? knob : finished).tap()
+        XCTAssertTrue(waitValue(finished, "0", 5), "finished replies switched off")
         // Through the computer and the test stack's relay, which has no Apple push key:
         // the app shows it, and says so.
         let test = app.buttons["settings.notify.test"]
@@ -276,6 +277,11 @@ final class LiveRelayTests: XCTestCase {
 
     /// A tap while a swipe is still decelerating only stops the scroll; let it finish.
     private func settle() { RunLoop.current.run(until: Date().addingTimeInterval(1.2)) }
+
+    private func waitValue(_ e: XCUIElement, _ value: String, _ seconds: TimeInterval) -> Bool {
+        let p = expectation(for: NSPredicate(format: "value == %@", value), evaluatedWith: e)
+        return XCTWaiter.wait(for: [p], timeout: seconds) == .completed
+    }
 
     private func waitEnabled(_ e: XCUIElement, _ seconds: TimeInterval) -> Bool {
         let p = expectation(for: NSPredicate(format: "isEnabled == true"), evaluatedWith: e)
