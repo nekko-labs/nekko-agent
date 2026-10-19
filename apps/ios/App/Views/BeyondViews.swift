@@ -16,7 +16,8 @@ struct ContinueCard: View {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Continue").font(.caption.weight(.semibold)).foregroundStyle(palette.accent)
-                    Text(title).font(.body.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(2)
+                    Text(title).font(.body.weight(.semibold)).foregroundStyle(palette.ink)
+                        .fixedSize(horizontal: false, vertical: true)
                     if let preview {
                         Text(preview).font(.footnote).foregroundStyle(palette.inkSoft).lineLimit(2)
                     }

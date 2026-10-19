@@ -84,14 +84,15 @@ struct ChatView: View {
                             .id("waiting-\(item.id)")
                     }
                     if chat.turn.running && chat.turn.approval == nil && chat.turn.question == nil {
+                        let working = chat.turn.blocks.isEmpty ? "Working…" : "Working on \(store.active?.name ?? "your computer")…"
                         HStack(spacing: 8) {
                             ProgressView().controlSize(.small)
-                            Text(chat.turn.blocks.isEmpty ? "Working…" : "Working on \(store.active?.name ?? "your computer")…")
-                                .font(.footnote).foregroundStyle(palette.inkSoft)
+                            Text(working).font(.footnote).foregroundStyle(palette.inkSoft)
                         }
-                        // One element, as tall as a row: the spinner alone is too small a target for the audit.
-                        .frame(minHeight: 44)
-                        .accessibilityElement(children: .combine)
+                        // A status line, not a spinner control: the audit took the spinner for a tiny target.
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(working)
+                        .accessibilityAddTraits(.updatesFrequently)
                         .id("working")
                     }
                     if let e = chat.error {

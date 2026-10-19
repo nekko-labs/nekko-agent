@@ -49,7 +49,9 @@ struct QueueList: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 4)
+        // On an opaque surface: over the translucent bar the queued text measured below contrast.
+        .padding(.horizontal, 10).padding(.vertical, 6)
+        .background(palette.surface, in: RoundedRectangle(cornerRadius: 12))
         .sheet(item: $editing) { e in
             QueueEditor(prompt: e.prompt, computer: store.active?.name ?? "your computer") { text in
                 try await chat.editQueued(e.index, expect: e.prompt.text, text: text)
