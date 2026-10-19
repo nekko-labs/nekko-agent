@@ -2324,6 +2324,16 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 .claude-compare tbody th { font-weight: 500; color: var(--ink-soft); }
 .claude-compare td { color: var(--ink-faint); }
 .claude-compare td[data-yes] { color: var(--ink); }
+/* One-time notices from nekkod (components/AppNotices.tsx). */
+.app-notice { position: fixed; left: 16px; bottom: 16px; z-index: 60; width: min(420px, calc(100vw - 32px)); padding: 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); color: var(--ink); box-shadow: 0 12px 32px rgb(0 0 0 / 0.28); }
+.app-notice-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.app-notice h2 { font-size: 14px; font-weight: 600; }
+.app-notice p { margin-top: 6px; font-size: 12.5px; line-height: 1.5; color: var(--ink-soft); }
+.app-notice ul { margin-top: 8px; padding-left: 18px; list-style: disc; font-size: 12.5px; line-height: 1.5; color: var(--ink-soft); }
+.app-notice-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.app-notice-close { flex-shrink: 0; padding: 4px; border-radius: 6px; color: var(--ink-faint); }
+.app-notice-close:hover { color: var(--ink); }
+.app-notice-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .provider-step { animation: provider-step-in 200ms ease-out; }
 @keyframes provider-step-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) {

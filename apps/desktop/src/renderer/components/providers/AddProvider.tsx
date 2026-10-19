@@ -112,6 +112,7 @@ export function reconnectProviderConfig(provider: ProviderConfig, status: OAuthS
 export function AddProvider({
   onDone,
   fixedKind,
+  initialKind,
   apiKeyOnly = false,
   optionalKey = false,
   bare = false,
@@ -119,15 +120,18 @@ export function AddProvider({
 }: {
   onDone: () => void;
   fixedKind?: ProviderKind;
+  /** Preselect a kind but keep the picker (a notice's action). */
+  initialKind?: ProviderKind;
   apiKeyOnly?: boolean;
   optionalKey?: boolean;
   bare?: boolean;
   onCancel?: () => void;
 }) {
   const pushToast = useStore((s) => s.pushToast);
-  const [kind, setKind] = useState<ProviderKind>(fixedKind ?? 'ollama');
-  const [label, setLabel] = useState(fixedKind ? PROVIDER_DEFAULTS[fixedKind].label : '');
-  const [baseUrl, setBaseUrl] = useState(PROVIDER_DEFAULTS[fixedKind ?? 'ollama'].baseUrl);
+  const startKind = fixedKind ?? initialKind;
+  const [kind, setKind] = useState<ProviderKind>(startKind ?? 'ollama');
+  const [label, setLabel] = useState(startKind ? PROVIDER_DEFAULTS[startKind].label : '');
+  const [baseUrl, setBaseUrl] = useState(PROVIDER_DEFAULTS[startKind ?? 'ollama'].baseUrl);
   const [apiKey, setApiKey] = useState('');
   // Where a kind has both a sign-in and an API key (Anthropic, if Claude
   // sign-in is ever offered), the sign-in is the primary path and the key
