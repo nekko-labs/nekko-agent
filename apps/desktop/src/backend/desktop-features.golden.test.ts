@@ -12,7 +12,7 @@ import {
 } from '@nekko-agent/shared';
 import { launcherScript } from '../main/cli-install.js';
 import { parseWebhookPayload } from '../main/workflow-listener.js';
-import { localRelayUrl, relayFailure, tailnetAddress } from './local-relay.js';
+import { localRelayUrl, readyLine, relayFailure, relayLanAddresses, tailnetAddress } from './local-relay.js';
 import {
   answersFor,
   decodePacket,
@@ -55,6 +55,10 @@ const IFACES: Record<string, Record<string, [string, boolean, string?][]>> = {
   tailnetEdges: { a: [['100.63.255.255', false], ['100.128.0.1', false], ['100.64.0.0', false], ['100.127.255.255', false]] },
   twoLans: { en0: [['192.168.1.20', false]], en1: [['172.16.4.2', false], ['100.64.1.1', false]], lo: [['127.0.0.1', true]] },
   internalTailnet: { lo: [['100.100.1.1', true]], wg: [['100.100.1.2', false, 'IPv6']] },
+  lanEdges: {
+    en0: [['169.254.1.1', false], ['172.32.0.1', false], ['8.8.8.8', false], ['10.255.255.255', false], ['192.168.1.20', false]],
+    en1: [['192.168.1.20', false], ['10.0.0.1', true], ['172.31.0.1', false], ['fd12::5', false, 'IPv6']],
+  },
 };
 
 function ifaces(name: string): NodeJS.Dict<NetworkInterfaceInfo[]> {
@@ -141,9 +145,25 @@ function relay() {
       ['studio.tail1234.ts.net', '100.101.102.103', 4400],
       [undefined, '100.64.0.1', 9000],
     ].map(([name, ip, port]) => ({ name: name ?? null, ip, port, url: localRelayUrl(name as string | undefined, ip as string, port as number) })),
+    // Where it listens besides the tailnet (TASKS.md IO-20): RFC 1918 only.
+    lan: Object.keys(IFACES).map((name) => ({ ifaces: name, addresses: relayLanAddresses(ifaces(name)) })),
+    ready: RELAY_READY.map((out) => {
+      const r = readyLine(out);
+      return { out, ready: r ? { port: r.port ?? null, lan: r.lan } : null };
+    }),
     failures: RELAY_STDERR.map((stderr) => ({ stderr, port: 4400, message: relayFailure(stderr, 4400) })),
   };
 }
+
+const RELAY_READY = [
+  'NEKKO_RELAY_READY {"port":4400}',
+  'NEKKO_RELAY_READY {"port":4400,"lan":["192.168.1.20","10.0.0.5"]}',
+  'noise NEKKO_RELAY_READY {"port":0,"lan":["192.168.1.20",7,null]}',
+  'NEKKO_RELAY_READY {"port":70000,"lan":"192.168.1.20"}',
+  'NEKKO_RELAY_READY',
+  'NEKKO_RELAY_READY {not json}',
+  'nothing here',
+];
 
 const LABELS = [
   'Studio',

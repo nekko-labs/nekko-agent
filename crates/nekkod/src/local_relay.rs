@@ -8,10 +8,13 @@
 //! by the app's Electron binary under `ELECTRON_RUN_AS_NODE=1`; it prints
 //! `NEKKO_RELAY_READY` once listening and exits when its stdin closes.
 //!
-//! Tailscale first, and only Tailscale: binding to the tailnet address keeps
-//! the relay off the LAN and the internet. When Tailscale isn't up the card
-//! says so; a switched-on relay keeps checking and starts when Tailscale
-//! comes back, and moves when the tailnet address changes.
+//! Tailscale first: the relay runs only while Tailscale is up. Next to the
+//! tailnet address it also listens on this computer's private LAN addresses
+//! (RFC 1918 only; never 0.0.0.0, link-local or a public address), so a phone
+//! on the same Wi-Fi reaches it without the tailnet (TASKS.md IO-20). That is
+//! on by default and has its own switch. When Tailscale isn't up the card says
+//! so; a switched-on relay keeps checking and starts when Tailscale comes
+//! back, and moves when the tailnet or LAN addresses change.
 
 use crate::mdns::{Nic, interfaces};
 use serde_json::{Value, json};
@@ -54,6 +57,49 @@ pub fn is_tailscale_ipv4(h: &str) -> bool {
 /// The first address in Tailscale's 100.64.0.0/10 range on any interface.
 pub fn tailnet_address(nics: &[Nic]) -> Option<String> {
     nics.iter().find(|n| n.ipv4 && !n.internal && is_tailscale_ipv4(&n.address)).map(|n| n.address.clone())
+}
+
+/// `isRfc1918IPv4` (packages/shared/src/relay-route.ts): 10/8, 172.16/12, 192.168/16.
+pub fn is_rfc1918_ipv4(h: &str) -> bool {
+    let parts: Vec<&str> = h.split('.').collect();
+    if parts.len() != 4 || !parts.iter().all(|p| (1..=3).contains(&p.len()) && p.bytes().all(|b| b.is_ascii_digit())) {
+        return false;
+    }
+    let n: Vec<u32> = parts.iter().map(|p| p.parse().unwrap_or(0)).collect();
+    n.iter().all(|x| *x <= 255)
+        && (n[0] == 10 || (n[0] == 172 && (16..=31).contains(&n[1])) || (n[0] == 192 && n[1] == 168))
+}
+
+/// This computer's private LAN addresses (RFC 1918 IPv4, not internal), in
+/// interface order, without repeats: where the relay listens besides the tailnet.
+pub fn relay_lan_addresses(nics: &[Nic]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for n in nics {
+        if n.ipv4 && !n.internal && is_rfc1918_ipv4(&n.address) && !out.contains(&n.address) {
+            out.push(n.address.clone());
+        }
+    }
+    out
+}
+
+/// `NEKKO_RELAY_READY {"port":N,"lan":[…]}`: the port and LAN addresses the
+/// relay bound. `None` without the marker; an unreadable payload reads as empty.
+pub fn ready_line(out: &str) -> Option<(Option<u16>, Vec<String>)> {
+    let at = out.find("NEKKO_RELAY_READY")?;
+    let rest = &out[at..];
+    let re = regress::Regex::new(r"^NEKKO_RELAY_READY (\{.*\})").expect("valid pattern");
+    let v = re
+        .find(rest)
+        .and_then(|m| m.group(1))
+        .and_then(|g| serde_json::from_str::<Value>(&rest[g]).ok());
+    let Some(v) = v else { return Some((None, Vec::new())) };
+    let port = v.get("port").and_then(Value::as_u64).filter(|p| *p <= u16::MAX as u64).map(|p| p as u16);
+    let lan = v
+        .get("lan")
+        .and_then(Value::as_array)
+        .map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect())
+        .unwrap_or_default();
+    Some((port, lan))
 }
 
 /// The address phones dial: the MagicDNS name when known (Android needs one), else the tailnet IP.
@@ -112,6 +158,8 @@ async fn magic_dns_name() -> Option<String> {
 struct State {
     enabled: bool,
     port: u16,
+    /// Listen on the LAN too (saved only when switched off).
+    lan: bool,
     /// The running relay: the address it bound and the signal that stops it.
     running: Option<Running>,
     name: Option<String>,
@@ -121,6 +169,10 @@ struct State {
 
 struct Running {
     ip: String,
+    /// The LAN addresses asked for, and the ones the relay bound.
+    asked_lan: Vec<String>,
+    lan: Vec<String>,
+    port: u16,
     id: u64,
     stop: Arc<Notify>,
     /// Resolves once the process has exited.
@@ -142,20 +194,21 @@ pub struct LocalRelay {
 impl LocalRelay {
     pub fn new(state_file: PathBuf, command: Option<(String, String)>) -> Arc<Self> {
         let saved = std::fs::read_to_string(&state_file).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok());
-        let (enabled, port) = match &saved {
+        let (enabled, port, lan) = match &saved {
             Some(s) => (
                 s.get("enabled") == Some(&Value::Bool(true)),
                 s.get("port")
                     .and_then(Value::as_u64)
                     .filter(|p| *p <= u16::MAX as u64)
                     .map_or(LOCAL_RELAY_PORT, |p| p as u16),
+                s.get("lan") != Some(&Value::Bool(false)),
             ),
-            None => (false, LOCAL_RELAY_PORT),
+            None => (false, LOCAL_RELAY_PORT, true),
         };
         Arc::new(Self {
             state_file,
             command,
-            state: Mutex::new(State { enabled, port, ..State::default() }),
+            state: Mutex::new(State { enabled, port, lan, ..State::default() }),
             ensuring: tokio::sync::Mutex::new(()),
             ids: Default::default(),
             naming: Default::default(),
@@ -202,6 +255,10 @@ impl LocalRelay {
                 out.insert("error".into(), json!(e));
             }
         }
+        out.insert("lan".into(), json!(s.lan));
+        let lan_urls: Vec<String> =
+            s.running.as_ref().map(|r| r.lan.iter().map(|a| format!("ws://{a}:{}", r.port)).collect()).unwrap_or_default();
+        out.insert("lanUrls".into(), json!(lan_urls));
         Value::Object(out)
     }
 
@@ -234,7 +291,7 @@ impl LocalRelay {
             let mut s = lock(&self.state);
             if !s.enabled {
                 s.enabled = true;
-                self.save(true, s.port);
+                self.save(true, s.port, s.lan);
             }
             !std::mem::replace(&mut s.watching, true)
         };
@@ -263,9 +320,25 @@ impl LocalRelay {
             s.enabled = false;
             s.watching = false;
             s.error = None;
-            self.save(false, s.port);
+            self.save(false, s.port, s.lan);
         }
         self.kill().await;
+        self.status()
+    }
+
+    /// The LAN switch. A running relay restarts on the new set of addresses.
+    pub async fn set_lan(self: &Arc<Self>, on: bool) -> Value {
+        let enabled = {
+            let mut s = lock(&self.state);
+            if s.lan != on {
+                s.lan = on;
+                self.save(s.enabled, s.port, on);
+            }
+            s.enabled
+        };
+        if enabled {
+            self.ensure().await;
+        }
         self.status()
     }
 
@@ -275,12 +348,15 @@ impl LocalRelay {
         self.kill().await;
     }
 
-    /// Running on the current tailnet address, or a reason why not.
+    /// Running on the current tailnet (and LAN) addresses, or a reason why not.
     async fn ensure(self: &Arc<Self>) {
         let _one = self.ensuring.lock().await;
-        let ip = tailnet_address(&interfaces());
+        let nics = interfaces();
+        let ip = tailnet_address(&nics);
+        let lan = if lock(&self.state).lan { relay_lan_addresses(&nics) } else { Vec::new() };
         if let (Some(r), Some(ip)) = (&lock(&self.state).running, &ip)
             && &r.ip == ip
+            && r.asked_lan == lan
         {
             return;
         }
@@ -291,11 +367,11 @@ impl LocalRelay {
         };
         let name = magic_dns_name().await;
         lock(&self.state).name = name;
-        let error = self.launch(&ip).await;
+        let error = self.launch(&ip, lan).await;
         lock(&self.state).error = error;
     }
 
-    async fn launch(self: &Arc<Self>, ip: &str) -> Option<String> {
+    async fn launch(self: &Arc<Self>, ip: &str, lan: Vec<String>) -> Option<String> {
         let port = lock(&self.state).port;
         let Some((exe, entry)) = self.command.clone() else {
             return Some("The relay could not start: this build does not include it.".into());
@@ -305,6 +381,7 @@ impl LocalRelay {
             .env("ELECTRON_RUN_AS_NODE", "1")
             .env("NEKKO_RELAY_HOST", ip)
             .env("NEKKO_RELAY_PORT", port.to_string())
+            .env("NEKKO_RELAY_LAN_HOSTS", lan.join(","))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -317,16 +394,16 @@ impl LocalRelay {
         };
         let stdout = child.stdout.take();
         let mut stderr = child.stderr.take();
-        let (ready_tx, ready_rx) = oneshot::channel::<()>();
+        let (ready_tx, ready_rx) = oneshot::channel::<(Option<u16>, Vec<String>)>();
         if let Some(stdout) = stdout {
             tokio::spawn(async move {
                 let mut lines = BufReader::new(stdout).lines();
                 let mut ready = Some(ready_tx);
                 while let Ok(Some(line)) = lines.next_line().await {
-                    if line.contains("NEKKO_RELAY_READY")
+                    if let Some(bound) = ready_line(&line)
                         && let Some(tx) = ready.take()
                     {
-                        let _ = tx.send(());
+                        let _ = tx.send(bound);
                     }
                 }
             });
@@ -367,8 +444,17 @@ impl LocalRelay {
             });
         }
         tokio::select! {
-            r = ready_rx => if r.is_ok() {
-                lock(&self.state).running = Some(Running { ip: ip.to_string(), id, stop, exited });
+            r = ready_rx => if let Ok((bound_port, bound_lan)) = r {
+                let bound_lan = bound_lan.into_iter().filter(|a| lan.contains(a)).collect();
+                lock(&self.state).running = Some(Running {
+                    ip: ip.to_string(),
+                    asked_lan: lan,
+                    lan: bound_lan,
+                    port: bound_port.filter(|p| *p != 0).unwrap_or(port),
+                    id,
+                    stop,
+                    exited,
+                });
                 None
             } else {
                 // stdout closed without the line: wait for the exit to read why.
@@ -393,12 +479,18 @@ impl LocalRelay {
         }
     }
 
-    fn save(&self, enabled: bool, port: u16) {
+    fn save(&self, enabled: bool, port: u16, lan: bool) {
         // The relay still works this session; it just won't come back by itself.
         if let Some(dir) = self.state_file.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
-        let _ = std::fs::write(&self.state_file, json!({ "enabled": enabled, "port": port }).to_string());
+        // `lan` only when switched off, as the TS writes it.
+        let body = if lan {
+            json!({ "enabled": enabled, "port": port })
+        } else {
+            json!({ "enabled": enabled, "port": port, "lan": false })
+        };
+        let _ = std::fs::write(&self.state_file, body.to_string());
     }
 }
 
@@ -441,6 +533,16 @@ mod tests {
             );
             assert_eq!(url, case["url"].as_str().unwrap());
         }
+        for case in g["relay"]["lan"].as_array().unwrap() {
+            let nics = crate::mdns::tests::nics_of(&g["ifaces"][case["ifaces"].as_str().unwrap()]);
+            assert_eq!(json!(relay_lan_addresses(&nics)), case["addresses"], "{}", case["ifaces"]);
+        }
+        for case in g["relay"]["ready"].as_array().unwrap() {
+            let got = ready_line(case["out"].as_str().unwrap())
+                .map(|(port, lan)| json!({ "port": port, "lan": lan }))
+                .unwrap_or(Value::Null);
+            assert_eq!(got, case["ready"], "{}", case["out"]);
+        }
         for case in g["relay"]["failures"].as_array().unwrap() {
             let msg = relay_failure(case["stderr"].as_str().unwrap(), case["port"].as_u64().unwrap() as u16);
             assert_eq!(msg, case["message"].as_str().unwrap(), "{}", case["stderr"]);
@@ -461,6 +563,8 @@ mod tests {
         assert_eq!(relay.status()["enabled"], true);
         assert_eq!(relay.status()["port"], 4555);
         assert_eq!(relay.status()["running"], false);
+        std::fs::write(&file, r#"{"enabled":true,"port":4555,"lan":false}"#).unwrap();
+        assert_eq!(LocalRelay::new(file.clone(), None).status()["lan"], false);
         std::fs::write(&file, r#"{"enabled":"yes","port":4400.5}"#).unwrap();
         let relay = LocalRelay::new(file, None);
         assert_eq!(relay.status()["enabled"], false);

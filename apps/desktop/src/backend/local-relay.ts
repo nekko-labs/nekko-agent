@@ -2,7 +2,7 @@ import { spawn, execFile, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { networkInterfaces, type NetworkInterfaceInfo } from 'node:os';
 import { dirname, join } from 'node:path';
-import { isTailscaleIPv4, LOCAL_RELAY_PORT, type LocalRelayStatus } from '@nekko-agent/shared';
+import { isRfc1918IPv4, isTailscaleIPv4, LOCAL_RELAY_PORT, type LocalRelayStatus } from '@nekko-agent/shared';
 
 /**
  * "Relay on this computer" (TASKS.md PH4): the desktop runs `apps/relay-server`
@@ -10,15 +10,20 @@ import { isTailscaleIPv4, LOCAL_RELAY_PORT, type LocalRelayStatus } from '@nekko
  * tailnet reaches it over WireGuard with no hosted relay in between. It
  * replaces `scripts/private-relay.*`.
  *
- * Tailscale first, and only Tailscale: binding to the tailnet address keeps the
- * relay off the LAN and the internet. When Tailscale isn't up the card says so;
+ * Tailscale first: the relay runs only while Tailscale is up. Next to the
+ * tailnet address it also listens on this computer's private LAN addresses
+ * (RFC 1918 only; never 0.0.0.0, link-local or a public address), so a phone on
+ * the same Wi-Fi reaches it without the tailnet (TASKS.md IO-20). That is on
+ * by default and has its own switch. When Tailscale isn't up the card says so;
  * a switched-on relay keeps checking and starts when Tailscale comes back, and
- * moves when the tailnet address changes.
+ * moves when the tailnet or LAN addresses change.
  */
 
 interface Saved {
   enabled: boolean;
   port: number;
+  /** Listen on the LAN too. Saved only when switched off. */
+  lan: boolean;
 }
 
 export interface LocalRelayDeps {
@@ -29,7 +34,7 @@ export interface LocalRelayDeps {
   interfaces?: () => NodeJS.Dict<NetworkInterfaceInfo[]>;
   /** This computer's MagicDNS name, if the Tailscale CLI is installed and up. */
   tailnetName?: () => Promise<string | undefined>;
-  spawnRelay?: (entry: string, host: string, port: number) => ChildProcess;
+  spawnRelay?: (entry: string, host: string, port: number, lan: string[]) => ChildProcess;
   /** How often a switched-on relay rechecks Tailscale. */
   watchMs?: number;
   startTimeoutMs?: number;
@@ -43,6 +48,20 @@ export function tailnetAddress(ifaces: NodeJS.Dict<NetworkInterfaceInfo[]>): str
     }
   }
   return undefined;
+}
+
+/**
+ * This computer's private LAN addresses (RFC 1918 IPv4, not internal), in
+ * interface order, without repeats: where the relay listens besides the tailnet.
+ */
+export function relayLanAddresses(ifaces: NodeJS.Dict<NetworkInterfaceInfo[]>): string[] {
+  const out: string[] = [];
+  for (const list of Object.values(ifaces)) {
+    for (const i of list ?? []) {
+      if (i.family === 'IPv4' && !i.internal && isRfc1918IPv4(i.address) && !out.includes(i.address)) out.push(i.address);
+    }
+  }
+  return out;
 }
 
 /** The address phones dial: the MagicDNS name when known (Android needs one), else the tailnet IP. */
@@ -71,9 +90,15 @@ export function magicDnsName(): Promise<string | undefined> {
   return attempt(0);
 }
 
-function spawnBundledRelay(entry: string, host: string, port: number): ChildProcess {
+function spawnBundledRelay(entry: string, host: string, port: number, lan: string[]): ChildProcess {
   return spawn(process.execPath, [entry], {
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', NEKKO_RELAY_HOST: host, NEKKO_RELAY_PORT: String(port) },
+    env: {
+      ...process.env,
+      ELECTRON_RUN_AS_NODE: '1',
+      NEKKO_RELAY_HOST: host,
+      NEKKO_RELAY_PORT: String(port),
+      NEKKO_RELAY_LAN_HOSTS: lan.join(','),
+    },
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
   });
@@ -83,6 +108,10 @@ export class LocalRelay {
   private saved: Saved;
   private child: ChildProcess | null = null;
   private boundIp: string | undefined;
+  /** The LAN addresses asked for, and the ones the relay actually bound. */
+  private askedLan: string[] = [];
+  private boundLan: string[] = [];
+  private boundPort = 0;
   private name: string | undefined;
   private error: string | undefined;
   private starting: Promise<void> | null = null;
@@ -90,16 +119,16 @@ export class LocalRelay {
   private timer: ReturnType<typeof setInterval> | null = null;
   private readonly interfaces: () => NodeJS.Dict<NetworkInterfaceInfo[]>;
   private readonly tailnetName: () => Promise<string | undefined>;
-  private readonly spawnRelay: (entry: string, host: string, port: number) => ChildProcess;
+  private readonly spawnRelay: (entry: string, host: string, port: number, lan: string[]) => ChildProcess;
 
   constructor(private readonly deps: LocalRelayDeps) {
     this.interfaces = deps.interfaces ?? networkInterfaces;
     this.tailnetName = deps.tailnetName ?? magicDnsName;
     this.spawnRelay = deps.spawnRelay ?? spawnBundledRelay;
-    this.saved = { enabled: false, port: LOCAL_RELAY_PORT };
+    this.saved = { enabled: false, port: LOCAL_RELAY_PORT, lan: true };
     try {
       const s = JSON.parse(readFileSync(deps.stateFile, 'utf8')) as Partial<Saved>;
-      this.saved = { enabled: s.enabled === true, port: Number.isInteger(s.port) ? s.port! : LOCAL_RELAY_PORT };
+      this.saved = { enabled: s.enabled === true, port: Number.isInteger(s.port) ? s.port! : LOCAL_RELAY_PORT, lan: s.lan !== false };
     } catch {
       // Never switched on.
     }
@@ -132,7 +161,16 @@ export class LocalRelay {
       tailnetName: this.name,
       url: at ? localRelayUrl(this.name, at, this.saved.port) : undefined,
       error: running ? undefined : this.error ?? (ip ? undefined : NO_TAILSCALE),
+      lan: this.saved.lan,
+      lanUrls: running ? this.boundLan.map((a) => `ws://${a}:${this.boundPort}`) : [],
     };
+  }
+
+  /** The LAN switch. A running relay restarts on the new set of addresses. */
+  async setLan(on: boolean): Promise<LocalRelayStatus> {
+    if (on !== this.saved.lan) this.save({ ...this.saved, lan: on });
+    if (this.saved.enabled) await this.ensure();
+    return this.status();
   }
 
   async start(): Promise<LocalRelayStatus> {
@@ -164,32 +202,34 @@ export class LocalRelay {
     this.timer.unref?.();
   }
 
-  /** Running on the current tailnet address, or a reason why not. */
+  /** Running on the current tailnet (and LAN) addresses, or a reason why not. */
   private ensure(): Promise<void> {
     if (this.starting) return this.starting;
     this.starting = (async () => {
-      const ip = tailnetAddress(this.interfaces());
-      if (this.child && this.boundIp === ip) return;
+      const ifaces = this.interfaces();
+      const ip = tailnetAddress(ifaces);
+      const lan = this.saved.lan ? relayLanAddresses(ifaces) : [];
+      if (this.child && this.boundIp === ip && sameList(this.askedLan, lan)) return;
       await this.kill();
       if (!ip) {
         this.error = NO_TAILSCALE;
         return;
       }
       this.name = await this.tailnetName().catch(() => undefined);
-      this.error = await this.launch(ip);
+      this.error = await this.launch(ip, lan);
     })().finally(() => {
       this.starting = null;
     });
     return this.starting;
   }
 
-  private launch(ip: string): Promise<string | undefined> {
+  private launch(ip: string, lan: string[]): Promise<string | undefined> {
     const port = this.saved.port;
     return new Promise((done) => {
       let settled = false;
       let stderr = '';
-      const child = this.spawnRelay(this.deps.entry, ip, port);
-      const finish = (error?: string) => {
+      const child = this.spawnRelay(this.deps.entry, ip, port, lan);
+      const finish = (error?: string, ready?: Ready) => {
         if (settled) return;
         settled = true;
         clearTimeout(timeout);
@@ -198,12 +238,16 @@ export class LocalRelay {
         } else {
           this.child = child;
           this.boundIp = ip;
+          this.askedLan = lan;
+          this.boundPort = ready?.port || port;
+          this.boundLan = (ready?.lan ?? []).filter((a) => lan.includes(a));
         }
         done(error);
       };
       const timeout = setTimeout(() => finish('The relay did not start in time.'), this.deps.startTimeoutMs ?? 10_000);
       child.stdout?.on('data', (d: Buffer) => {
-        if (String(d).includes('NEKKO_RELAY_READY')) finish();
+        const ready = readyLine(String(d));
+        if (ready) finish(undefined, ready);
       });
       child.stderr?.on('data', (d: Buffer) => {
         stderr += String(d);
@@ -214,6 +258,7 @@ export class LocalRelay {
         if (this.child === child) {
           this.child = null;
           this.boundIp = undefined;
+          this.boundLan = [];
           this.error = 'The relay stopped unexpectedly. It restarts on its own while this is switched on.';
         }
       });
@@ -224,6 +269,7 @@ export class LocalRelay {
     const child = this.child;
     this.child = null;
     this.boundIp = undefined;
+    this.boundLan = [];
     if (!child || child.exitCode !== null) return Promise.resolve();
     return new Promise((done) => {
       child.once('exit', () => done());
@@ -238,11 +284,41 @@ export class LocalRelay {
     this.saved = next;
     try {
       if (!existsSync(dirname(this.deps.stateFile))) mkdirSync(dirname(this.deps.stateFile), { recursive: true });
-      writeFileSync(this.deps.stateFile, JSON.stringify(next));
+      const { lan, ...rest } = next;
+      writeFileSync(this.deps.stateFile, JSON.stringify(lan ? rest : next));
     } catch {
       // The relay still works this session; it just won't come back by itself.
     }
   }
+}
+
+interface Ready {
+  port?: number;
+  lan: string[];
+}
+
+/**
+ * `NEKKO_RELAY_READY {"port":N,"lan":[…]}`: the port and LAN addresses the
+ * relay bound. Undefined without the marker; an unreadable payload reads as empty.
+ */
+export function readyLine(out: string): Ready | undefined {
+  const at = out.indexOf('NEKKO_RELAY_READY');
+  if (at < 0) return undefined;
+  const m = out.slice(at).match(/^NEKKO_RELAY_READY (\{.*\})/);
+  try {
+    const r = m ? (JSON.parse(m[1]) as Partial<Ready>) : {};
+    const port = r.port;
+    return {
+      port: Number.isInteger(port) && port! >= 0 && port! <= 65535 ? port : undefined,
+      lan: Array.isArray(r.lan) ? r.lan.filter((a): a is string => typeof a === 'string') : [],
+    };
+  } catch {
+    return { lan: [] };
+  }
+}
+
+function sameList(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((x, i) => x === b[i]);
 }
 
 const NO_TAILSCALE = "Tailscale isn't connected on this computer. Install Tailscale and sign in, and the relay starts.";

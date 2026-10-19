@@ -100,6 +100,49 @@
           "IPv6"
         ]
       ]
+    },
+    "lanEdges": {
+      "en0": [
+        [
+          "169.254.1.1",
+          false
+        ],
+        [
+          "172.32.0.1",
+          false
+        ],
+        [
+          "8.8.8.8",
+          false
+        ],
+        [
+          "10.255.255.255",
+          false
+        ],
+        [
+          "192.168.1.20",
+          false
+        ]
+      ],
+      "en1": [
+        [
+          "192.168.1.20",
+          false
+        ],
+        [
+          "10.0.0.1",
+          true
+        ],
+        [
+          "172.31.0.1",
+          false
+        ],
+        [
+          "fd12::5",
+          false,
+          "IPv6"
+        ]
+      ]
     }
   },
   "apiServer": [
@@ -685,6 +728,10 @@
       {
         "ifaces": "internalTailnet",
         "address": null
+      },
+      {
+        "ifaces": "lanEdges",
+        "address": null
       }
     ],
     "urls": [
@@ -705,6 +752,104 @@
         "ip": "100.64.0.1",
         "port": 9000,
         "url": "ws://100.64.0.1:9000"
+      }
+    ],
+    "lan": [
+      {
+        "ifaces": "none",
+        "addresses": []
+      },
+      {
+        "ifaces": "loopbackOnly",
+        "addresses": []
+      },
+      {
+        "ifaces": "lan",
+        "addresses": [
+          "192.168.1.20"
+        ]
+      },
+      {
+        "ifaces": "tailnetFirst",
+        "addresses": [
+          "10.0.0.5"
+        ]
+      },
+      {
+        "ifaces": "tailnetEdges",
+        "addresses": []
+      },
+      {
+        "ifaces": "twoLans",
+        "addresses": [
+          "192.168.1.20",
+          "172.16.4.2"
+        ]
+      },
+      {
+        "ifaces": "internalTailnet",
+        "addresses": []
+      },
+      {
+        "ifaces": "lanEdges",
+        "addresses": [
+          "10.255.255.255",
+          "192.168.1.20",
+          "172.31.0.1"
+        ]
+      }
+    ],
+    "ready": [
+      {
+        "out": "NEKKO_RELAY_READY {\"port\":4400}",
+        "ready": {
+          "port": 4400,
+          "lan": []
+        }
+      },
+      {
+        "out": "NEKKO_RELAY_READY {\"port\":4400,\"lan\":[\"192.168.1.20\",\"10.0.0.5\"]}",
+        "ready": {
+          "port": 4400,
+          "lan": [
+            "192.168.1.20",
+            "10.0.0.5"
+          ]
+        }
+      },
+      {
+        "out": "noise NEKKO_RELAY_READY {\"port\":0,\"lan\":[\"192.168.1.20\",7,null]}",
+        "ready": {
+          "port": 0,
+          "lan": [
+            "192.168.1.20"
+          ]
+        }
+      },
+      {
+        "out": "NEKKO_RELAY_READY {\"port\":70000,\"lan\":\"192.168.1.20\"}",
+        "ready": {
+          "port": null,
+          "lan": []
+        }
+      },
+      {
+        "out": "NEKKO_RELAY_READY",
+        "ready": {
+          "port": null,
+          "lan": []
+        }
+      },
+      {
+        "out": "NEKKO_RELAY_READY {not json}",
+        "ready": {
+          "port": null,
+          "lan": []
+        }
+      },
+      {
+        "out": "nothing here",
+        "ready": null
       }
     ],
     "failures": [
@@ -886,6 +1031,18 @@
       {
         "ifaces": "internalTailnet",
         "addresses": []
+      },
+      {
+        "ifaces": "lanEdges",
+        "addresses": [
+          "169.254.1.1",
+          "172.32.0.1",
+          "8.8.8.8",
+          "10.255.255.255",
+          "192.168.1.20",
+          "192.168.1.20",
+          "172.31.0.1"
+        ]
       }
     ],
     "txt": [

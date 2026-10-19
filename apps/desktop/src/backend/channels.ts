@@ -72,6 +72,7 @@ export function desktopChannels(app: AppLike, host: Host, localRelay?: LocalRela
           [C.localRelayStatus]: () => localRelay.status(),
           [C.localRelayStart]: () => localRelay.start(),
           [C.localRelayStop]: () => localRelay.stop(),
+          [C.localRelaySetLan]: (on: unknown) => localRelay.setLan(on !== false),
         }
       : {}),
     // "Visible on this network" (mDNS). Desktop only, and phones never reach it.
