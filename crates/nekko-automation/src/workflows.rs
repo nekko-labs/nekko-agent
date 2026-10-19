@@ -68,6 +68,9 @@ pub trait WorkflowHost: Send + Sync + 'static {
         fields: Vec<(&'static str, Value)>,
     ) -> BoxFut<'_, Result<String, String>>;
     fn get_session(&self, id: &str) -> Option<Value>;
+    /// `getSession(id)`, the fields assigned, `saveSession`: a run's chat
+    /// between steps (an allowlist step's tools).
+    fn update_session(&self, id: &str, fields: Vec<(&'static str, Value)>) -> BoxFut<'_, Result<(), String>>;
     fn delete_session(&self, id: &str) -> BoxFut<'_, ()>;
     /// A turn: `Ok(Some(message))` when the turn emitted an error event (the
     /// last one), `Err` when it threw.
@@ -303,7 +306,7 @@ impl Workflows {
         if let Some(m) = input.get("modelId") {
             wf.insert("modelId".into(), m.clone());
         }
-        for k in ["notify", "templateId"] {
+        for k in ["notify", "templateId", "localModelOnly", "toolAccess"] {
             if let Some(v) = input.get(k) {
                 wf.insert(k.into(), v.clone());
             }
@@ -414,7 +417,7 @@ impl Workflows {
         input.insert("enabled".into(), json!(false));
         input.insert("steps".into(), source.get("steps").cloned().unwrap_or(json!([])));
         input.insert("triggers".into(), Value::Array(triggers));
-        for k in ["workspaceId", "providerId", "modelId"] {
+        for k in ["workspaceId", "providerId", "modelId", "localModelOnly", "toolAccess"] {
             if let Some(v) = source.get(k) {
                 input.insert(k.into(), v.clone());
             }
@@ -577,6 +580,20 @@ impl Workflows {
             }
             if let Some(m) = wf.get("modelId").filter(|v| nekko_js::truthy(Some(v))) {
                 fields.push(("modelId", m.clone()));
+            }
+            // Nobody watches the run: approvals it would need are denied, it is
+            // never offered ask_user, and its tools are what the workflow's
+            // access allows. A local-only workflow's chat is offline.
+            fields.push(("unattended", json!(true)));
+            fields.push(("workflowRunId", json!(run_id)));
+            if nekko_js::truthy(wf.get("localModelOnly")) {
+                fields.push(("offline", json!(true)));
+            }
+            if let Some(access) =
+                wf.get("toolAccess").and_then(Value::as_str).filter(|a| !a.is_empty() && *a != "workspace")
+            {
+                fields.push(("toolAccess", json!(access)));
+                fields.push(("disabledTools", json!(nekko_turn::workflow_access::disabled_tools(Some(access), &[]))));
             }
             let session = self.host.create_session(wf.get("workspaceId").cloned(), fields).await;
 
@@ -895,6 +912,21 @@ impl Workflows {
         let (Some(provider), Some(model)) = (provider, model) else {
             return fail("No model configured. Pick a default provider and model in Models.");
         };
+        // Whichever model the step lands on is checked; a non-local one is
+        // refused, never swapped for another.
+        if nekko_js::truthy(wf.get("localModelOnly")) {
+            let found = settings
+                .get("providers")
+                .and_then(Value::as_array)
+                .and_then(|ps| ps.iter().find(|p| p.get("id") == Some(&provider)));
+            if !found.is_some_and(nekko_turn::providers::offline_provider_allowed) {
+                let label = found
+                    .and_then(|p| nullish(p.get("label")))
+                    .map(nekko_js::display)
+                    .unwrap_or_else(|| nekko_js::display(&provider));
+                return fail(&format!("This workflow uses local models only; {label} is not local."));
+            }
+        }
         let mut body = nekko_js::trim(run_text).to_string();
         if str_field(step, "kind") == Some("skill") {
             let want = nekko_js::trim(run_text);
@@ -909,6 +941,19 @@ impl Workflows {
         }
         if body.is_empty() {
             return fail("This step has nothing to run.");
+        }
+        // Under allowlist access each step offers only the tools it lists.
+        if str_field(wf, "toolAccess") == Some("allowlist") && self.host.get_session(session_id).is_some() {
+            let allowed: Vec<String> = step
+                .get("allowedTools")
+                .and_then(Value::as_array)
+                .map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect())
+                .unwrap_or_default();
+            let disabled = nekko_turn::workflow_access::disabled_tools(Some("allowlist"), &allowed);
+            let fields = vec![("allowedTools", json!(allowed)), ("disabledTools", json!(disabled))];
+            if let Err(e) = self.host.update_session(session_id, fields).await {
+                return fail(&e);
+            }
         }
         let can_retry = nekko_js::to_number(nullish(step.get("retries")).or(Some(&json!(0)))) > 0.0
             || nekko_js::truthy(step.get("onFailure"));

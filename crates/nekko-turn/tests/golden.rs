@@ -256,3 +256,34 @@ fn decide_requests_match() {
         assert_eq!(nekko_js::stringify(&shown), c["request"].as_str().unwrap(), "request {i}");
     }
 }
+
+#[test]
+fn workflow_access_matches() {
+    use nekko_turn::workflow_access as wa;
+    // Shared with packages/shared/src/workflow-access.test.ts, which checks the
+    // renderer's TS copy against the same cases.
+    let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("golden").join("workflow-access.json");
+    let g: Value = serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap();
+    let strings = |v: &Value| -> Vec<String> {
+        v.as_array().map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect()).unwrap_or_default()
+    };
+    for c in g["tokens"].as_array().unwrap() {
+        let got = wa::tokenize_command(c["command"].as_str().unwrap());
+        assert_eq!(json!(got), c["words"], "tokens {}", c["command"]);
+    }
+    for c in g["matches"].as_array().unwrap() {
+        let got = match wa::command_allowed(c["command"].as_str().unwrap(), &strings(&c["allowed"])) {
+            Ok(()) => json!({ "ok": true }),
+            Err(r) => json!({ "ok": false, "reason": r }),
+        };
+        assert_eq!(got, c["verdict"], "match {} against {}", c["command"], c["allowed"]);
+    }
+    for c in g["disabled"].as_array().unwrap() {
+        let got = wa::disabled_tools(c["access"].as_str(), &strings(&c["allowed"]));
+        assert_eq!(json!(got), c["disabled"], "disabled {} {}", c["access"], c["allowed"]);
+    }
+    for c in g["decisions"].as_array().unwrap() {
+        let got = wa::tool_decision(&c["session"], &c["call"]);
+        assert_eq!(got, c["decision"], "decision {} {}", c["session"], c["call"]);
+    }
+}

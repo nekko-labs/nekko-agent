@@ -942,3 +942,55 @@ async fn a_resent_client_message_id_runs_one_turn_and_queues_once() {
     assert_eq!(saved["queue"], json!(["later"]));
     assert_eq!(saved["clientMessageIds"], json!(["6f1c2a9e-7b1d-4c35-9a52-2b8f0f6f8d11", "q-1"]));
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_unattended_workflow_turn_denies_approvals_and_follows_its_allowlist() {
+    // A workflow run's chat in ask mode: nothing may park, ask_user is not
+    // offered, and the step's allowlist runs a matching command without asking.
+    let session = json!({
+        "id": "s_turn_u", "title": "Run", "mode": "ask", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1,
+        "unattended": true, "workflowRunId": "run_1", "toolAccess": "allowlist",
+        "allowedTools": ["Read", "Bash(echo:*)"], "executionMode": "unified",
+    });
+    let rig = turn_rig("unattended", session);
+    let model = scripted_model(vec![
+        call_tool("c_write", "write_file", json!({ "path": "new.txt", "content": "hi" })),
+        call_tool("c_echo", "bash", json!({ "command": "echo allowed" })),
+        call_tool("c_chain", "bash", json!({ "command": "echo a && touch pwned" })),
+        call_tool("c_push", "bash", json!({ "command": "git push" })),
+        say_text("done"),
+    ])
+    .await;
+    let spec = turn_spec(&rig, &model, "turn_u", "s_turn_u", json!({}));
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let (events, end) = turn_record(&rig, "turn_u", "s_turn_u").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+    let types = event_types(&events);
+    assert!(!types.iter().any(|t| t == "tool_approval_required"), "{types:?}");
+    assert!(!rig.workspace.join("new.txt").exists());
+    assert!(!rig.workspace.join("pwned").exists());
+    let results: Vec<Value> =
+        events.iter().filter(|e| e["type"] == "tool_result").map(|e| e["result"].clone()).collect();
+    let by = |id: &str| {
+        results.iter().find(|r| r["toolCallId"] == id).cloned().unwrap_or_else(|| panic!("no {id}: {results:?}"))
+    };
+    for id in ["c_write", "c_chain", "c_push"] {
+        let r = by(id);
+        assert_eq!(r["isError"], true, "{r}");
+        assert!(r["output"].as_str().unwrap().starts_with("Denied: unattended automation run ("), "{r}");
+    }
+    let echo = by("c_echo");
+    assert_ne!(echo["isError"], true, "{echo}");
+    assert!(echo["output"].as_str().unwrap().contains("allowed"), "{echo}");
+    let first = model.requests.lock().unwrap()[0].clone();
+    let tools: Vec<String> = first["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["function"]["name"].as_str().unwrap().to_string())
+        .collect();
+    assert!(!tools.contains(&"ask_user".to_string()), "{tools:?}");
+    let (_, pending) = post(rig.d.port, "chat:pending", json!([]), Some(TOKEN)).await;
+    assert!(pending.get("s_turn_u").is_none(), "{pending}");
+}

@@ -15,6 +15,7 @@ nekko-store = { path = "../nekko-store" }
 nekko-tools = { path = "../nekko-tools" }
 futures-util.workspace = true
 serde_json.workspace = true
+url = "2.5"
 
 [dev-dependencies]
 tokio.workspace = true

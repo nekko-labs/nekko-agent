@@ -64,6 +64,12 @@
           "description": "Ready-made automations, run results and notifications, and pausing them all."
         },
         {
+          "slug": "workflows",
+          "title": "Workflow runs",
+          "source": "docs/workflows.md",
+          "description": "Pick a workflow's model, keep it on local models, and control what its unattended runs may do."
+        },
+        {
           "slug": "local-ci-runner",
           "title": "Local CI runner",
           "source": "docs/git-runner.md",

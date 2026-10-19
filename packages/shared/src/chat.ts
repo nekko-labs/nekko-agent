@@ -204,6 +204,17 @@ export interface Session {
    *  Training/Goals tabs, kept out of the regular chat boards/lanes; the
    *  report_experiment tool becomes available to the agent). */
   trainingRunId?: string;
+  /**
+   * Set on the chat a workflow run makes. Nobody watches it: an approval it
+   * would need is denied at once and it is never offered ask_user.
+   */
+  unattended?: boolean;
+  /** The workflow run this chat belongs to. */
+  workflowRunId?: string;
+  /** The run's tool access (workflow-access.ts); absent means the normal tool set. */
+  toolAccess?: import('./workflow-access.js').WorkflowToolAccess;
+  /** The running step's allowed tools under `allowlist` access, set by the run before each step. */
+  allowedTools?: string[];
   providerId?: string;
   modelId?: string;
   /**

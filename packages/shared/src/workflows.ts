@@ -115,6 +115,12 @@ export interface WorkflowStep {
    * Put it last: later steps share the session and inherit that text.
    */
   tools?: 'none';
+  /**
+   * prompt/skill only, under the workflow's `allowlist` tool access: the tools
+   * this step may use without asking, in Claude Code's allowed-tools syntax
+   * (`Read`, `Grep`, `Glob`, `Bash(gh pr view:*)`). See workflow-access.ts.
+   */
+  allowedTools?: string[];
 }
 
 /* ------------------------------------------------------------------ *
@@ -512,6 +518,14 @@ export interface Workflow {
   notify?: WorkflowNotify;
   /** The gallery template it was created from, if any. */
   templateId?: string;
+  /**
+   * Run only on local models: a prompt or skill step whose provider is not a
+   * local server on a loopback address is refused, never sent elsewhere, and
+   * the run's chat is offline (no internet tools or connectors).
+   */
+  localModelOnly?: boolean;
+  /** What tools prompt and skill steps get. Absent means `workspace`. */
+  toolAccess?: import('./workflow-access.js').WorkflowToolAccess;
   createdAt: number;
   updatedAt: number;
 
@@ -545,6 +559,8 @@ export interface NewWorkflow {
   modelId?: string;
   notify?: WorkflowNotify;
   templateId?: string;
+  localModelOnly?: boolean;
+  toolAccess?: import('./workflow-access.js').WorkflowToolAccess;
 }
 
 /** Categories offered in the editor. Any string is valid; these are the nudge. */

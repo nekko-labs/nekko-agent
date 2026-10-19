@@ -272,6 +272,14 @@ impl WorkflowHost for Engine {
         Box::pin(Engine::settings(self))
     }
 
+    fn update_session(&self, id: &str, fields: Vec<(&'static str, Value)>) -> BoxFut<'_, Result<(), String>> {
+        let (store, sid) = (self.store.clone(), id.to_string());
+        Box::pin(async move {
+            tokio::task::spawn_blocking(move || store.assign(&sid, &fields)).await.map_err(|e| e.to_string())??;
+            Ok(())
+        })
+    }
+
     fn create_session(
         &self,
         workspace_id: Option<Value>,
