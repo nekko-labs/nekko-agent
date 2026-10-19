@@ -16,8 +16,8 @@ two old installs, four updater caches and ~4,600 `kotrain-*` temp folders.
 
 | Piece | File | Notes |
 |---|---|---|
-| Detect, merge, verify, clean | `packages/host/src/legacy-profiles.ts` | Pure functions taking an injected `LegacyEnv`, so every path is testable. Exported as `@nekko-agent/host/legacy-profiles` (no node-pty) for the desktop main bundle, and from the host index for the CLI. |
-| Close / reopen the app | `packages/host/src/app-control.ts` | Finds the app from `cli-link.json`'s pid, climbs to the window process, closes the tree (`taskkill /T`, forced after a grace period). Never climbs into a shell or dev launcher. |
+| Detect, merge, verify, clean | `packages/profile/src/legacy-profiles.ts` | Pure functions taking an injected `LegacyEnv`, so every path is testable. Exported as `@nekko-agent/host/legacy-profiles` (no node-pty) for the desktop main bundle, and from the host index for the CLI. |
+| Close / reopen the app | `packages/profile/src/app-control.ts` | Finds the app from `cli-link.json`'s pid, climbs to the window process, closes the tree (`taskkill /T`, forced after a grace period). Never climbs into a shell or dev launcher. |
 | Terminal command | `apps/cli/src/migrate.ts`, wired in `apps/cli/src/run.ts` | `nekko-agent migrate [--dry-run] [--yes] [--keep-old] [--no-restart]`. Runs before `getClient`, which would refuse to open an unmerged root. |
 | Launch prompt | `apps/desktop/src/main/legacyPrompt.ts`, called from `main/index.ts` | Native dialog before the engine starts. "Not now" is deliberately not remembered. |
 | Spec | `SPEC.md`, "Consolidating earlier installs" | Status labelled implemented / unverified. |
@@ -28,7 +28,7 @@ changed files is written before the first change; refuse while another Nekko pro
 
 ## Verified
 
-- `packages/host`: `legacy-profiles.test.ts` (12), `app-control.test.ts` (7), existing `user-data.test.ts` (7).
+- `packages/profile`: `legacy-profiles.test.ts` (12), `app-control.test.ts` (7), existing `user-data.test.ts` (7).
 - `apps/desktop`: `legacyPrompt.test.ts` (8); `src/main` suite 78/78; typecheck clean (host, cli, desktop).
 - Rehearsal on a sandbox copy of the real small files (script not committed): `migrate --yes` produced the exact
   union, 271 sessions and 15,508 usage records, kept every old provider and sign-in, and removed the sandbox
@@ -61,5 +61,5 @@ git fetch origin && git worktree add .worktrees/legacy-profile-consolidation fea
 cd .worktrees/legacy-profile-consolidation && npm ci --ignore-scripts && npm run build:core
 npm run build -w @nekko-agent/host && npm run build --workspace=apps/cli
 node apps/cli/dist/index.js migrate --dry-run     # safe: changes nothing
-cd packages/host && npx vitest run src/legacy-profiles.test.ts src/app-control.test.ts
+cd packages/profile && npx vitest run src/legacy-profiles.test.ts src/app-control.test.ts
 ```

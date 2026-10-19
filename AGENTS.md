@@ -255,14 +255,16 @@ For substantial research, comparisons, architecture, and explanations, provide a
 
 General reporting behavior belongs in the shared system prompt, not a personal memory file. Repository-specific workflow belongs here. Preview changes must retain explicit user consent for local reads, isolate generated HTML from the app, and prevent silent external resource fetching.
 
-## Shared prompt parity
+## Golden fixtures
 
-When editing `packages/core/src/agent/prompt.ts`, inspect its Rust counterpart
-`crates/nekko-context/src/prompt.rs` in the same change. Keep shared instruction
-text synchronized. Regenerate `crates/nekko-context/tests/golden/expected.json`
-with the host context golden test (`UPDATE_GOLDEN=1`) against the changed core,
-then rerun that test without regeneration and `cargo test -p nekko-context --locked`.
-Core-only prompt tests do not prove host/daemon parity.
+The engine is all Rust (`crates/`); the TS engine it was ported from
+(`packages/host`, `packages/core`) is deleted. The golden fixtures under
+`crates/*/tests/golden` were recorded from that TS code and are now frozen: no
+test rewrites them any more, and the `UPDATE_GOLDEN=1` notes in their doc
+comments name writers that no longer exist. A change that alters a recorded
+behaviour (the system prompt in `crates/nekko-context/src/prompt.rs`, a
+provider's request, a store write) edits the fixture by hand in the same
+change, and the PR says why.
 
 ## Verification must preserve the user desktop
 

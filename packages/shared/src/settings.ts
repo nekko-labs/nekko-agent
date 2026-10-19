@@ -330,7 +330,7 @@ export interface AppSettings {
   automationsPaused?: boolean;
   /**
    * Lifecycle hooks: your own commands run around the agent's actions, with
-   * the event as JSON on stdin (see packages/host/src/hooks.ts).
+   * the event as JSON on stdin (see crates/nekko-tools/src/hooks.rs).
    */
   hooks?: HookRule[];
   /**

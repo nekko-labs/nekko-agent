@@ -7,12 +7,12 @@ import { findVcRuntimeDir, VC_RUNTIME_DLLS } from './vc-runtime.mjs';
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-test('stages the same DLLs the host copies into engine folders', () => {
-  // The host cannot import this script (it runs from the packaged app), so the
+test('stages the same DLLs the engine copies into engine folders', () => {
+  // The engine (nekko-engine's install.rs) cannot import this script, so the
   // list is written twice; this keeps the copies in step.
-  const host = readFileSync(join(repo, 'packages/host/src/engine/vc-runtime.ts'), 'utf8');
-  const block = host.match(/export const VC_RUNTIME_DLLS = \[([\s\S]*?)\];/)?.[1] ?? '';
-  const listed = [...block.matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  const engine = readFileSync(join(repo, 'crates/nekko-engine/src/install.rs'), 'utf8');
+  const block = engine.match(/pub const VC_RUNTIME_DLLS: \[&str; \d+\] = \[([\s\S]*?)\];/)?.[1] ?? '';
+  const listed = [...block.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
   assert.deepEqual(listed, VC_RUNTIME_DLLS);
 });
 

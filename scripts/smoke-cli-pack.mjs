@@ -91,15 +91,6 @@ try {
   );
   if (runImport !== 'function') throw new Error(`nekko-agent/run import failed: ${runImport}`);
   console.log(`nekko-agent/run import: ${runImport}`);
-  const nativeDependency = run(
-    process.execPath,
-    ['-e', "import('@lydell/node-pty').then(() => console.log('native node-pty: resolved'))"],
-    {
-      cwd: unpacked,
-      stdio: ['ignore', 'pipe', 'inherit'],
-    },
-  );
-  console.log(nativeDependency);
 
   run('npm', ['install', '--prefix', installed, '--ignore-scripts', '--no-package-lock', tarball]);
   for (const executable of executables) {

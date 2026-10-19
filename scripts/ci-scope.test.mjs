@@ -35,8 +35,12 @@ test('a desktop main-process change skips perf, which measures the Local Web UI'
   assert.equal(queue(['apps/desktop/src/main/index.ts']).perf, false);
 });
 
-test('a host change runs the daemon parity job and capture', () => {
-  assert.deepEqual(pr(['packages/host/src/tools.ts']), p({ daemon_os: ['ubuntu-latest'], capture_os: ['windows-latest'], perf: false }));
+test('a shared contract change runs the daemon job and capture', () => {
+  assert.deepEqual(pr(['packages/shared/src/phone-access.ts']), p({ daemon_os: ['ubuntu-latest'], capture_os: ['windows-latest'], perf: false }));
+});
+
+test('a profile change runs capture but not the daemon', () => {
+  assert.deepEqual(pr(['packages/profile/src/user-data.ts']), p({ daemon_os: [], capture_os: ['windows-latest'], perf: false }));
 });
 
 test('labels opt a PR into macOS and the speed contract', () => {

@@ -18,8 +18,8 @@
 ## Checklist
 
 - [ ] UI change: before/after screenshots attached (plus a short video if animation changed), or "no visual change"
-- [ ] `npm run build` passes (shared → core → desktop)
+- [ ] `npm run build` passes (nekkod, then shared, profile, the CLI and desktop)
 - [ ] `npm test` passes
 - [ ] `npm run typecheck` passes
-- [ ] Added/updated tests for engine changes (`packages/core`)
-- [ ] For provider changes: verified against a real server (`scripts/itest-local.mjs`)
+- [ ] Added/updated tests for engine changes (`crates/`, `cargo test --workspace`)
+- [ ] For provider changes: verified against a real server (a chat through the CLI on this checkout's nekkod)
