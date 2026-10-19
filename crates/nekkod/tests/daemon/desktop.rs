@@ -41,7 +41,7 @@ impl Desk {
         let mut all: Vec<(&str, Option<&str>)> =
             vec![("USERPROFILE", Some(&home)), ("HOME", Some(&home)), ("NEKKO_DATA_DIR", Some(&link))];
         all.extend_from_slice(env);
-        start_with_env(false, Some(&self.data), json!({ "native": native, "edition": "desktop" }), &all)
+        start_with_env(Some(&self.data), json!({ "native": native, "edition": "desktop" }), &all)
     }
 
     fn link(&self) -> Value {

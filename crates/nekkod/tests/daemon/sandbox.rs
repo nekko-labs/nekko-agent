@@ -97,19 +97,17 @@ async fn the_daemon_admits_sandbox_chats_and_refuses_what_they_cannot_do() {
     });
     let rig = turn_rig("sandbox-admit", session);
     let model = scripted_model(vec![say_text("unused")]).await;
-    std::fs::write(rig.data.join("settings.json"), scripted_settings(&rig, &model).to_string()).unwrap();
-    // Not set up yet: refused with the host's words, nothing handed to the host.
+    write_settings(&rig, scripted_settings(&rig, &model)).await;
+    // Not set up yet: refused with the host's words, told to the chat.
     let opts = json!({ "sessionId": "s_boxed", "providerId": "p1", "modelId": "synthetic", "text": "hello" });
     let (status, _) = post(rig.d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
     assert_eq!(status, 200);
-    let refused = |c: &Value| {
-        c[0] == "turn:notify"
-            && c[1][0]["message"] == "Sandbox requires explicit setup and supports text chat without host skills only."
+    let refused = |e: &Value| {
+        e["type"] == "error"
+            && e["sessionId"] == "s_boxed"
+            && e["message"] == "Sandbox requires explicit setup and supports text chat without host skills only."
     };
-    let calls =
-        until_host_call(rig.d.port, "the refusal to reach the host's listeners", Duration::from_secs(10), refused)
-            .await;
-    assert!(!calls.iter().any(|c| c[0] == "chat:send"), "the daemon kept it");
+    wait_for("the refusal to reach the chat", || rig.events.lock().unwrap().iter().any(refused)).await;
     assert!(model.requests.lock().unwrap().is_empty(), "no model call");
 }
 
@@ -132,7 +130,7 @@ async fn a_sandbox_chat_turn_runs_in_the_daemon_and_its_container() {
         say_text("(after stop)"),
     ])
     .await;
-    std::fs::write(rig.data.join("settings.json"), scripted_settings(&rig, &model).to_string()).unwrap();
+    write_settings(&rig, scripted_settings(&rig, &model)).await;
     let (status, configured) = post(rig.d.port, "sandbox:configure", json!(["s_boxturn", image]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{configured}");
     assert_eq!(configured["phase"], "ready", "{configured}");
@@ -199,13 +197,6 @@ async fn a_sandbox_chat_turn_runs_in_the_daemon_and_its_container() {
             status["error"], "Sandbox stopped by cancellation. Create a new sandbox chat to resume.",
             "{status}"
         );
-
-        // Nothing went through the host's container route or its own turn.
-        let calls = until_adopted(port, 2).await;
-        assert!(!calls.iter().any(|c| c[0] == "chat:send" || c[0] == "turn:tool"), "{calls:?}");
-        let adopt = calls.iter().find(|c| c[0] == "turn:adopt").expect("the host was handed the turn");
-        assert_eq!(adopt[1][0]["mode"], "ask");
-        assert_eq!(adopt[1][0]["workspaces"][0]["path"], "folder-0");
     });
     let outcome = futures_util::FutureExt::catch_unwind(checks).await;
     let (status, _) = post(rig.d.port, "sandbox:cleanup", json!(["s_boxturn", identity]), Some(TOKEN)).await;

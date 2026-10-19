@@ -25,8 +25,7 @@ async fn adds_a_folder_from_the_desktop_picker_through_the_bridge() {
     let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let bridge = format!("http://127.0.0.1:{}/", l.local_addr().unwrap().port());
     tokio::spawn(async move { axum::serve(l, app).await.unwrap() });
-    let d =
-        start_with_config(true, Some(&data), json!({ "browserBridge": { "url": bridge, "token": "bridge-token" } }));
+    let d = start_with_config(Some(&data), json!({ "browserBridge": { "url": bridge, "token": "bridge-token" } }));
 
     let (status, added) = post(d.port, "workspace:add", json!([]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{added}");
@@ -72,7 +71,6 @@ async fn fake_shell_bridge(answers: Value) -> (String, std::sync::Arc<std::sync:
 
 fn native_daemon(data: &std::path::Path, bridge: &str, native: Value) -> Daemon {
     start_with_config(
-        true,
         Some(data),
         json!({ "appVersion": "0.8.1", "edition": "desktop", "browserBridge": { "url": bridge, "token": "bridge-token" }, "native": native }),
     )
@@ -144,13 +142,10 @@ async fn answers_the_channels_electron_main_used_to() {
     assert_eq!(state["message"], "Updates are available in the installed app.");
     let (status, _) = post(d.port, "update:install", json!([]), Some(TOKEN)).await;
     assert_eq!(status, 400, "nothing downloaded");
-    // None of it reached the TS backend.
-    let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    assert!(!calls.to_string().contains("dialog:") && !calls.to_string().contains("update:"), "{calls}");
     drop(d);
 
     // Without `native` (the Local Web UI), nothing here is the daemon's.
-    let web = start_with(true, Some(&data));
+    let web = start_with(Some(&data));
     let (_, info) = post(web.port, "daemon:info", json!([]), Some(TOKEN)).await;
     assert!(!info["owned"].as_array().unwrap().iter().any(|o| o == "update:check"));
     drop(web);
@@ -241,7 +236,7 @@ async fn updates_from_a_release_feed_with_checksums_and_events() {
         &bridge,
         json!({ "isPackaged": false, "exePath": "x", "updateFeedUrl": feed, "updateCacheDir": cache, "dialogs": "bridge" }),
     );
-    // Only the updater's events (the fake backend sends one every 100 ms).
+    // Only the updater's events.
     let mut events = ws(d.port, &format!("/api/events?token={TOKEN}&only=update:event"), Some("null")).await.unwrap();
 
     let (_, state) = post(d.port, "update:check", json!([]), Some(TOKEN)).await;

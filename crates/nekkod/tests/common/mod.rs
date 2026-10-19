@@ -1,7 +1,7 @@
-//! Shared rig for the nekkod end-to-end tests: the real `nekkod` binary, with
-//! the test binary itself re-run as a fake TS backend (`fake_backend`), a
-//! scripted OpenAI-compatible model, socket helpers, port allocation, and the
-//! waits (`until` and friends) that poll for a condition with a deadline.
+//! Shared rig for the nekkod end-to-end tests: the real `nekkod` binary, a
+//! scripted OpenAI-compatible model, an event recorder, socket helpers, port
+//! allocation, and the waits (`until` and friends) that poll for a condition
+//! with a deadline.
 //!
 //! Included by `daemon/main.rs` (`#[path]`), so a new domain module there gets
 //! all of it with `use crate::common::*;`.
@@ -16,226 +16,6 @@ pub use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 
 pub const TOKEN: &str = "test-token-0123456789abcdef";
 
-pub const FAKE_ENV: &str = "NEKKOD_TEST_FAKE_BACKEND";
-
-/// The fake TS backend, run by the `fake_backend` test in `daemon/main.rs`:
-/// `start_with_env` re-runs the current test binary filtered to that test with
-/// `FAKE_ENV` set, and then this process is the backend. It answers every channel with an echo, serves
-/// `settings:get`, and pushes one event (plus a terminal echo the daemon must
-/// drop) to each events socket. Without the env var it returns at once.
-pub fn fake_backend() {
-    if std::env::var(FAKE_ENV).is_err() {
-        return;
-    }
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    rt.block_on(async {
-        use axum::extract::ws::{Message as AMessage, WebSocketUpgrade};
-        use axum::extract::{Path, Query};
-        use axum::routing::{get, post};
-        use std::collections::HashMap;
-        let token = std::env::var("NEKKO_BACKEND_TOKEN").unwrap();
-        assert!(std::env::var("NEKKOD_URL").unwrap().starts_with("http://127.0.0.1:"));
-        let t1 = token.clone();
-        let completions = std::sync::Arc::new(std::sync::Mutex::new(Vec::<Value>::new()));
-        let recorded = completions.clone();
-        // What `turn:prepare` admits a queued prompt as: a test sets the spec's template.
-        let template = std::sync::Arc::new(std::sync::Mutex::new(None::<Value>));
-        let prepared = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
-        // What `design:provider` answers: a test points it at its scripted model.
-        let design_provider = std::sync::Arc::new(std::sync::Mutex::new(None::<Value>));
-        // Checkpoint events and loop:end carry the same image-bearing transcript.
-        // The fake host must accept it rather than silently rejecting >2 MiB JSON.
-        let app = axum::Router::new()
-            .route(
-                "/api/{channel}",
-                post(move |Path(channel): Path<String>, headers: axum::http::HeaderMap, body: axum::Json<Value>| {
-                    let ok = headers.get("authorization").and_then(|v| v.to_str().ok()) == Some(&format!("Bearer {t1}"));
-                    async move {
-                        if !ok {
-                            return (axum::http::StatusCode::UNAUTHORIZED, axum::Json(json!({"error":"bad token"})));
-                        }
-                        match channel.as_str() {
-                            "session:get" => (axum::http::StatusCode::OK, axum::Json(json!({ "id": body.0["args"][0], "messages": [], "executionMode": if body.0["args"][0] == "sandbox" { "sandbox" } else { "worktree" } }))),
-                            "session:create" => {
-                                let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
-                                let session = json!({ "id": "s_created", "workspaceId": body.0["args"][0], "messages": [], "executionMode": "worktree", "gitIsolation": true, "createdAt": now, "updatedAt": now });
-                                if let Ok(dir) = std::env::var("FAKE_DATA_DIR")
-                                    && !dir.is_empty()
-                                {
-                                    std::fs::create_dir_all(std::path::Path::new(&dir).join("sessions")).unwrap();
-                                    std::fs::write(std::path::Path::new(&dir).join("sessions/s_created.json"), session.to_string()).unwrap();
-                                }
-                                (axum::http::StatusCode::OK, axum::Json(session))
-                            },
-                            "settings:get" => (axum::http::StatusCode::OK, axum::Json(json!({ "workspaces": [] }))),
-                            "sessions:deleteAgentLog" if body.0["args"][0] == "callback_fail" => {
-                                (axum::http::StatusCode::BAD_REQUEST, axum::Json(json!({ "error": "command log unlink failed" })))
-                            }
-                            "chat:pending:host" => (axum::http::StatusCode::OK, axum::Json(json!({}))),
-                            "chat:indexSnippets" | "chat:connectorSnippets" => {
-                                recorded.lock().unwrap().push(json!([channel, body.0["args"].clone()]));
-                                (axum::http::StatusCode::OK, axum::Json(json!([{ "relPath": "app.ts", "path": "app.ts", "body": "1: pineapple" }])))
-                            }
-                            "chat:running" => (axum::http::StatusCode::OK, axum::Json(json!([]))),
-                            // A daemon-driven turn's host-run tool (MCP, sub-agents, the browser...).
-                            "turn:tool" => (
-                                {
-                                    recorded.lock().unwrap().push(json!([channel, body.0["args"].clone()]));
-                                    axum::http::StatusCode::OK
-                                },
-                                axum::Json(json!({ "result": { "toolCallId": body.0["args"][1]["id"], "output": "host tool ran" } })),
-                            ),
-                            "chats:busy" => (axum::http::StatusCode::OK, axum::Json(json!(["s_busy"]))),
-                            // The desktop's local server, for MCP entries written with no target.
-                            "integrations:target" => (
-                                axum::http::StatusCode::OK,
-                                axum::Json(json!({ "url": "http://127.0.0.1:1439", "token": "tok-desk", "command": "/opt/nekko/nekko-agent" })),
-                            ),
-                            // The engine's model server, for the daemon's `engine:models`.
-                            "engine:runtime" => {
-                                recorded.lock().unwrap().push(json!([channel, body.0["args"].clone()]));
-                                let answer = match body.0["args"][0].as_str() {
-                                    Some("loadState") => json!({
-                                        "loaded": ["chat/acme_tiny-gguf/tiny-q4_k_m"],
-                                        "errors": { "ollama/tiny:latest": "Not enough memory to load it." },
-                                        "version": "b9999",
-                                    }),
-                                    // The host's own queue (runtime installs) is pushed, not asked for here.
-                                    _ => Value::Null,
-                                };
-                                (axum::http::StatusCode::OK, axum::Json(answer))
-                            }
-                            "test:designProvider" => {
-                                *design_provider.lock().unwrap() = Some(body.0["args"][0].clone());
-                                (axum::http::StatusCode::OK, axum::Json(Value::Null))
-                            }
-                            "provider:resolved" => match design_provider.lock().unwrap().clone() {
-                                Some(v) => (axum::http::StatusCode::OK, axum::Json(v)),
-                                None => (axum::http::StatusCode::BAD_REQUEST, axum::Json(json!({ "error": "no provider" }))),
-                            },
-                            "design:provider" => match design_provider.lock().unwrap().clone() {
-                                Some(v) => (axum::http::StatusCode::OK, axum::Json(v)),
-                                None => (
-                                    axum::http::StatusCode::BAD_REQUEST,
-                                    axum::Json(json!({ "error": "Set a default provider and model in Models first." })),
-                                ),
-                            },
-                            "test:prepareTemplate" => {
-                                *template.lock().unwrap() = Some(body.0["args"][0].clone());
-                                (axum::http::StatusCode::OK, axum::Json(Value::Null))
-                            }
-                            // A spawn_agent child: made on disk, its first turn from the template.
-                            "spawn:prepare" => {
-                                recorded.lock().unwrap().push(json!([channel, body.0["args"].clone()]));
-                                let Some(mut spec) = template.lock().unwrap().clone() else {
-                                    return (axum::http::StatusCode::OK, axum::Json(json!({ "error": "no template" })));
-                                };
-                                let parent = spec["opts"]["sessionId"].clone();
-                                let task = body.0["args"][1]["input"]["task"].clone();
-                                let child = json!({ "id": "s_child", "title": "Sub-agent", "workspaceId": "w1", "parentSessionId": parent, "messages": [], "createdAt": 1, "updatedAt": 1 });
-                                if let Ok(dir) = std::env::var("FAKE_DATA_DIR") {
-                                    std::fs::write(std::path::Path::new(&dir).join("sessions/s_child.json"), child.to_string()).unwrap();
-                                }
-                                spec["turnId"] = json!("turn_child");
-                                spec["opts"] = json!({ "sessionId": "s_child", "providerId": "p1", "modelId": "synthetic", "text": task });
-                                spec["facts"]["spawn"] = json!(false);
-                                (axum::http::StatusCode::OK, axum::Json(json!({ "childId": "s_child", "spec": spec })))
-                            }
-                            "turn:prepare" => {
-                                recorded.lock().unwrap().push(json!([channel, body.0["args"].clone()]));
-                                let Some(mut spec) = template.lock().unwrap().clone() else {
-                                    return (axum::http::StatusCode::OK, axum::Json(json!({ "ended": true })));
-                                };
-                                let n = prepared.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
-                                spec["turnId"] = json!(format!("turn_next_{n}"));
-                                spec["opts"] = body.0["args"][1]["opts"].clone();
-                                spec["queued"] = body.0["args"][1]["queued"].clone();
-                                (axum::http::StatusCode::OK, axum::Json(json!({ "spec": spec })))
-                            }
-                            "turn:event" | "turn:end" | "turn:approved" | "turn:usage" | "turn:notify" | "loop:log" | "limits:notify"
-                            | "settings:changed" | "turn:adopt" | "chat:send" => {
-                                recorded.lock().unwrap().push(json!([channel, body.0["args"].clone()]));
-                                (axum::http::StatusCode::OK, axum::Json(Value::Null))
-                            }
-                            "sessions:deleteAgentLog" | "loop:end" => {
-                                recorded.lock().unwrap().push(body.0["args"].clone());
-                                (axum::http::StatusCode::OK, axum::Json(Value::Null))
-                            }
-                            "test:completions" => (
-                                axum::http::StatusCode::OK,
-                                axum::Json(json!(recorded.lock().unwrap().clone())),
-                            ),
-                            "terminals:list:agent" => (
-                                axum::http::StatusCode::OK,
-                                axum::Json(json!([{ "id": "agent_s1", "title": "Agent commands" }])),
-                            ),
-                            // A saved Hypergate entry: the server list the daemon then runs.
-                            "mcp:hypergate:save" => {
-                                recorded.lock().unwrap().push(json!([channel, body.0["args"].clone()]));
-                                (axum::http::StatusCode::OK, axum::Json(json!([])))
-                            }
-                            "fail:please" => {
-                                (axum::http::StatusCode::BAD_REQUEST, axum::Json(json!({ "error": "asked to fail" })))
-                            }
-                            _ => (
-                                axum::http::StatusCode::OK,
-                                axum::Json(json!({ "echo": channel, "args": body.0.get("args") })),
-                            ),
-                        }
-                    }
-                }),
-            )
-            .route(
-                "/api/events",
-                get(move |ws: WebSocketUpgrade, Query(q): Query<HashMap<String, String>>| {
-                    let ok = q.get("token") == Some(&token);
-                    async move {
-                        ws.on_upgrade(move |mut socket| async move {
-                            if !ok {
-                                return;
-                            }
-                            let echo = json!({"channel":"terminal:event","payload":{"type":"data","terminalId":"term_x","data":"dup"}});
-                            let _ = socket.send(AMessage::Text(echo.to_string().into())).await;
-                            // Repeated, not sent once: a client that subscribes to the
-                            // daemon after this socket opened must still see one.
-                            let ev = json!({"channel":"agent:event","payload":{"type":"hello-from-backend"}});
-                            let mut tick = tokio::time::interval(std::time::Duration::from_millis(100));
-                            loop {
-                                tokio::select! {
-                                    _ = tick.tick() => {
-                                        if socket.send(AMessage::Text(ev.to_string().into())).await.is_err() {
-                                            break;
-                                        }
-                                    }
-                                    msg = socket.recv() => {
-                                        if !matches!(msg, Some(Ok(_))) {
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-                        })
-                    }
-                }),
-            )
-            .layer(axum::extract::DefaultBodyLimit::max(64 * 1024 * 1024));
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let port = listener.local_addr().unwrap().port();
-        println!("NEKKO_BACKEND_READY {}", json!({ "port": port }));
-        // Exit when the daemon closes our stdin, like the real backend.
-        let stdin_closed = async {
-            let (tx, rx) = tokio::sync::oneshot::channel::<()>();
-            std::thread::spawn(move || {
-                let mut b = [0u8; 64];
-                while matches!(std::io::Read::read(&mut std::io::stdin(), &mut b), Ok(n) if n > 0) {}
-                let _ = tx.send(());
-            });
-            let _ = rx.await;
-        };
-        axum::serve(listener, app).with_graceful_shutdown(stdin_closed).await.unwrap();
-    });
-}
-
 pub struct Daemon {
     pub child: Child,
     pub port: u16,
@@ -247,33 +27,21 @@ impl Drop for Daemon {
     }
 }
 
-pub fn start(with_backend: bool) -> Daemon {
-    start_with(with_backend, None)
+pub fn start() -> Daemon {
+    start_with(None)
 }
 
-pub fn start_with(with_backend: bool, data_dir: Option<&std::path::Path>) -> Daemon {
-    start_with_config(with_backend, data_dir, json!({}))
+pub fn start_with(data_dir: Option<&std::path::Path>) -> Daemon {
+    start_with_config(data_dir, json!({}))
 }
 
-pub fn start_with_config(with_backend: bool, data_dir: Option<&std::path::Path>, extra: Value) -> Daemon {
-    start_with_env(with_backend, data_dir, extra, &[])
+pub fn start_with_config(data_dir: Option<&std::path::Path>, extra: Value) -> Daemon {
+    start_with_env(data_dir, extra, &[])
 }
 
 /// With the daemon's own environment changed: `(name, None)` removes a variable.
-pub fn start_with_env(
-    with_backend: bool,
-    data_dir: Option<&std::path::Path>,
-    extra: Value,
-    env: &[(&str, Option<&str>)],
-) -> Daemon {
-    let backend = with_backend.then(|| {
-        json!({
-            "exe": std::env::current_exe().unwrap(),
-            "args": ["--exact", "fake_backend", "--nocapture", "--test-threads=1"],
-            "env": { FAKE_ENV: "1", "FAKE_DATA_DIR": data_dir.map(|p| p.to_string_lossy().to_string()).unwrap_or_default() },
-        })
-    });
-    let mut config = json!({ "token": TOKEN, "backend": backend, "allowedOrigins": ["null"], "dataDir": data_dir });
+pub fn start_with_env(data_dir: Option<&std::path::Path>, extra: Value, env: &[(&str, Option<&str>)]) -> Daemon {
+    let mut config = json!({ "token": TOKEN, "allowedOrigins": ["null"], "dataDir": data_dir });
     for (k, v) in extra.as_object().cloned().unwrap_or_default() {
         config[k] = v;
     }
@@ -443,6 +211,8 @@ pub struct TurnRig {
     pub data: std::path::PathBuf,
     pub workspace: std::path::PathBuf,
     pub d: Daemon,
+    /// Every agent event the daemon published since the rig started.
+    pub events: Events,
 }
 
 impl Drop for TurnRig {
@@ -468,8 +238,30 @@ pub fn turn_rig_with(name: &str, session: Value, extra: Value) -> TurnRig {
     let id = session["id"].as_str().unwrap().to_string();
     std::fs::write(data.join("sessions").join(format!("{id}.json")), serde_json::to_string_pretty(&session).unwrap())
         .unwrap();
-    let d = start_with_config(true, Some(&data), extra);
-    TurnRig { data, workspace, d }
+    let d = start_with_config(Some(&data), extra);
+    let events = record_events(d.port);
+    boot_settled(&data);
+    TurnRig { data, workspace, d, events }
+}
+
+/// Replace the rig's settings, as writing settings.json before launch would:
+/// through the daemon, which caches the file from its first read.
+pub async fn write_settings(rig: &TurnRig, settings: Value) {
+    let (status, body) = post(rig.d.port, "settings:reset", json!([]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    let (status, body) = post(rig.d.port, "settings:update", json!([settings]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+}
+
+/// Wait out the daemon's launch work on settings.json (boot.rs adds the
+/// model server's provider entry), so a test that writes the file itself is
+/// not overwritten by it.
+pub fn boot_settled(data: &std::path::Path) {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !std::fs::read_to_string(data.join("settings.json")).is_ok_and(|s| s.contains("\"llamacpp\"")) {
+        assert!(Instant::now() < deadline, "the daemon never added its engine provider");
+        std::thread::sleep(POLL);
+    }
 }
 
 pub fn turn_spec(rig: &TurnRig, model: &ScriptedModel, turn_id: &str, session_id: &str, extra_opts: Value) -> Value {
@@ -489,7 +281,7 @@ pub fn turn_spec(rig: &TurnRig, model: &ScriptedModel, turn_id: &str, session_id
         "settings": { "providers": [provider], "defaultChatMode": "yolo", "unattendedQuestionMinutes": 0 },
         "facts": {
             "workspaces": [{ "id": "w1", "name": "project", "path": rig.workspace.to_string_lossy() }],
-            "mcpTools": [], "decide": false, "hooks": false,
+            "mcpTools": [], "decide": false,
             "connectorSnippets": [], "indexSnippets": [],
             "platform": "win32", "temperature": 0.7, "effort": "normal", "statsEffort": "normal",
             "promptCaching": true, "provider": provider, "headers": false,
@@ -532,59 +324,45 @@ pub async fn until_agent_log(port: u16, session_id: &str, needle: &str, limit: D
     .await
 }
 
-/// The fake backend's record of every callback the daemon made, in order.
-pub async fn host_calls(port: u16) -> Vec<Value> {
-    let (_, all) = post(port, "test:completions", json!([]), Some(TOKEN)).await;
-    all.as_array().cloned().unwrap_or_default()
-}
+/// The agent events a daemon publishes, as its UI hears them.
+pub type Events = std::sync::Arc<std::sync::Mutex<Vec<Value>>>;
 
-/// Wait until a host callback matches, and return every callback so far. On a
-/// timeout the panic shows the calls the host did hear.
-pub async fn until_host_call(port: u16, what: &str, limit: Duration, matches: impl Fn(&Value) -> bool) -> Vec<Value> {
-    let deadline = Instant::now() + limit;
-    loop {
-        let calls = host_calls(port).await;
-        if calls.iter().any(&matches) {
-            return calls;
+/// Record every `agent:event` payload from a socket opened now, on a thread
+/// of its own, until the daemon goes away. Connected before this returns, so
+/// a turn started after it is heard from its first event.
+pub fn record_events(port: u16) -> Events {
+    let url = format!("ws://127.0.0.1:{port}/api/events?token={TOKEN}");
+    let (mut socket, _) = tokio_tungstenite::tungstenite::connect(url).expect("the events socket opens");
+    let events = Events::default();
+    let into = events.clone();
+    std::thread::spawn(move || {
+        while let Ok(msg) = socket.read() {
+            if let Message::Text(text) = msg
+                && let Ok(frame) = serde_json::from_str::<Value>(text.as_str())
+                && frame["channel"] == "agent:event"
+            {
+                into.lock().unwrap().push(frame["payload"].clone());
+            }
         }
-        assert!(Instant::now() < deadline, "timed out after {limit:?} waiting for {what}; the host heard {calls:?}");
-        tokio::time::sleep(POLL).await;
-    }
+    });
+    events
 }
 
-/// Every callback so far, once the host has been handed `count` turns.
-/// `turn:adopt` is sent without waiting on it (admission.rs), so a turn can
-/// end, and `chat:send` answer, before the host hears it.
-pub async fn until_adopted(port: u16, count: usize) -> Vec<Value> {
-    let deadline = Instant::now() + Duration::from_secs(10);
-    loop {
-        let calls = host_calls(port).await;
-        if calls.iter().filter(|c| c[0] == "turn:adopt").count() >= count {
-            return calls;
-        }
-        assert!(Instant::now() < deadline, "the host was handed fewer than {count} turns: {calls:?}");
-        tokio::time::sleep(POLL).await;
-    }
-}
-
-/// The backend's record of one turn's callbacks: `turn:event` payloads and the `turn:end` summary.
-pub async fn turn_record(port: u16, turn_id: &str) -> (Vec<Value>, Value) {
+/// One turn, once it has ended: its chat's events (from the rig's recorder)
+/// and how it ended, `{ stop, aborted }`, read from them (`done.stop`, and the
+/// loop's `Aborted` or `Stopped` error).
+pub async fn turn_record(rig: &TurnRig, turn_id: &str, session_id: &str) -> (Vec<Value>, Value) {
     until("the daemon to end the turn", Duration::from_secs(30), || async {
-        let mut events = Vec::new();
-        let mut end = None;
-        for entry in host_calls(port).await {
-            if entry[1][0] != turn_id {
-                continue;
-            }
-            match entry[0].as_str() {
-                Some("turn:event") => events.push(entry[1][1].clone()),
-                Some("turn:end") => end = Some(entry[1][1].clone()),
-                _ => {}
-            }
-        }
-        end.map(|end| (events, end))
+        let (_, alive) = post(rig.d.port, "turn:alive", json!([turn_id]), Some(TOKEN)).await;
+        (alive == json!(false)).then_some(())
     })
-    .await
+    .await;
+    let events: Vec<Value> =
+        rig.events.lock().unwrap().iter().filter(|e| e["sessionId"] == session_id).cloned().collect();
+    let stop = events.iter().rev().find(|e| e["type"] == "done").map_or(Value::Null, |e| e["stop"].clone());
+    let aborted =
+        events.iter().any(|e| e["type"] == "error" && (e["message"] == "Aborted" || e["message"] == "Stopped"));
+    (events, json!({ "stop": stop, "aborted": aborted }))
 }
 
 pub async fn wait_pending(port: u16, session_id: &str, key: &str, call_id: &str) -> Value {

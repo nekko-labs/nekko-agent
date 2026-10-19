@@ -1,7 +1,7 @@
 //! The loopback wire.
 //!
 //! - `POST /api/{channel}` with `{ "args": [...] }`: the Local Web UI's request
-//!   shape, for the CLI, the TS backend and anything else that speaks it.
+//!   shape, for the CLI and anything else that speaks it.
 //! - `GET /api/events`: every event as a `{ channel, payload }` text frame
 //!   (`?only=<channel>` for one channel, `?sessions=a,b` for those chats'
 //!   agent event stream only).
@@ -152,9 +152,8 @@ async fn events(
     if let Err(code) = check(&app, &headers, &query) {
         return code.into_response();
     }
-    // `?only=<channel>` narrows the stream to one channel. The TS backend uses
-    // it to take the daemon's terminal events without receiving its own
-    // events back. Frames always start with the channel key (see `Hub`).
+    // `?only=<channel>` narrows the stream to one channel. Frames always
+    // start with the channel key (see `Hub`).
     let only = query.get("only").map(|c| format!("{{\"channel\":\"{c}\""));
     // `?sessions=a,b` takes the stream of those chats only (summary events of
     // every chat still come); `?sessions=` (empty) takes no chat's stream.

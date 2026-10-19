@@ -72,13 +72,7 @@ impl ImageTurns {
     /// `generateImageTurn(opts)`.
     pub async fn generate(&self, ctx: &Ctx, opts: &Value) -> Result<Value, String> {
         let session_id = opts.get("sessionId").and_then(Value::as_str).unwrap_or_default().to_string();
-        let say = |event: Value| {
-            ctx.hub.publish("agent:event", event.clone(), false);
-            let backend = ctx.backend.clone();
-            tokio::spawn(async move {
-                let _ = backend.call("turn:notify", json!([event])).await;
-            });
-        };
+        let say = |event: Value| ctx.hub.publish("agent:event", event, false);
         let fail = |message: &str| say(json!({ "type": "error", "sessionId": session_id, "message": message }));
         let (Some(store), Some(server)) = (ctx.sessions.clone(), ctx.server.clone()) else {
             return Err("Image generation needs the data directory".into());

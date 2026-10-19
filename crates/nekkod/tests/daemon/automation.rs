@@ -49,7 +49,7 @@ async fn the_daemon_runs_tasks_and_fires_them_on_time() {
     std::fs::create_dir_all(data.join("sessions")).unwrap();
     let model = scripted_model(vec![say_text("Nightly summary.")]).await;
     scripted_p1(&data, &model, json!({}));
-    let d = start_with(true, Some(&data));
+    let d = start_with(Some(&data));
     let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
     assert!(info["owned"].as_array().unwrap().contains(&json!("tasks:list")), "{info}");
 
@@ -59,9 +59,7 @@ async fn the_daemon_runs_tasks_and_fires_them_on_time() {
     assert_eq!(list[0]["title"], "Nightly");
     // The daemon made the chat (with its defaults) and named it after the task.
     let made = list[0]["lastSessionId"].as_str().unwrap().to_string();
-    assert!(made.starts_with("s_") && made != "s_created", "{list}");
-    let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    assert!(!calls.as_array().unwrap().iter().any(|c| c[0] == "session:create"), "the host made no chat: {calls}");
+    assert!(made.starts_with("s_"), "{list}");
     let chat: Value =
         serde_json::from_str(&std::fs::read_to_string(data.join(format!("sessions/{made}.json"))).unwrap()).unwrap();
     assert_eq!(chat["title"], "Nightly");
@@ -73,8 +71,6 @@ async fn the_daemon_runs_tasks_and_fires_them_on_time() {
     .await;
     let task = read_tasks(&data)[0].clone();
     wait_for("the task's reply", || replies(&data, &made) == ["Nightly summary."]).await;
-    let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    assert!(!calls.as_array().unwrap().iter().any(|c| c[0] == "chat:send"), "the host ran no turn: {calls}");
     let asked = model.requests.lock().unwrap().iter().any(|r| {
         r["messages"].as_array().is_some_and(|m| m.iter().any(|m| m["role"] == "user" && m["content"] == "Summarize"))
     });
@@ -106,7 +102,7 @@ async fn a_task_cut_short_by_a_restart_fires_again() {
         r#"[{"id":"t1","title":"Cut short","kind":"recurring","prompt":"Again","providerId":"p1","modelId":"m1","status":"active","createdAt":5,"runCount":2,"lastRunAt":9,"lastSessionId":"s_old"}]"#,
     )
     .unwrap();
-    let d = start_with(true, Some(&data));
+    let d = start_with(Some(&data));
     wait_for("the fire after restart", || read_tasks(&data)[0]["runCount"] == json!(3)).await;
     // runCount is saved before the asynchronous turn runs; its reply lands in the old chat.
     wait_for("the restarted task's reply", || replies(&data, "s_old") == ["Again, done."]).await;
@@ -119,7 +115,7 @@ async fn a_scheduled_task_fires_when_it_is_due_not_a_tick_later() {
     let data = std::env::temp_dir().join(format!("nekkod-tasks-due-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&data);
     std::fs::create_dir_all(data.join("sessions")).unwrap();
-    let d = start_with(true, Some(&data));
+    let d = start_with(Some(&data));
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as f64;
     let run_at = now + 2_000.0;
     let input = json!({ "title": "Soon", "kind": "scheduled", "prompt": "p", "runAt": run_at, "providerId": "p1", "modelId": "m1" });
@@ -170,7 +166,7 @@ async fn the_daemon_runs_training_and_goal_runs_and_their_tools_itself() {
         "workspaces": [{ "id": "w1", "name": "project", "path": rig.workspace.to_string_lossy() }],
         "defaultChatMode": "yolo", "defaultProviderId": "p1", "defaultModelId": "synthetic",
     });
-    std::fs::write(rig.data.join("settings.json"), settings.to_string()).unwrap();
+    write_settings(&rig, settings).await;
     let mut events = ws(rig.d.port, &format!("/api/events?token={TOKEN}"), None).await.unwrap();
 
     let (_, info) = post(rig.d.port, "daemon:info", json!([]), Some(TOKEN)).await;
@@ -184,7 +180,7 @@ async fn the_daemon_runs_training_and_goal_runs_and_their_tools_itself() {
     assert_eq!(run["name"], "CSV importer");
     assert_eq!(run["status"], "draft");
     let run_chat = run["sessionId"].as_str().unwrap().to_string();
-    assert!(run_chat.starts_with("s_") && run_chat != "s_created", "the daemon made the run's chat: {run}");
+    assert!(run_chat.starts_with("s_"), "the daemon made the run's chat: {run}");
     let id = run["id"].as_str().unwrap().to_string();
     let chat = saved_session(&rig, &run_chat);
     assert_eq!(chat["title"], "CSV importer");
@@ -229,9 +225,6 @@ async fn the_daemon_runs_training_and_goal_runs_and_their_tools_itself() {
     assert!(
         first.ends_with("USER GUIDANCE (fold these into your next experiments; acknowledge each):\n- Keep it small")
     );
-    let (_, calls) = post(rig.d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    let calls = calls.as_array().unwrap();
-    assert!(!calls.iter().any(|c| c[0] == "turn:tool" || c[0] == "chat:send"), "the host ran nothing: {calls:?}");
     // Its history window went with the turn.
     let requests = model.requests.lock().unwrap().clone();
     assert!(requests.len() >= 6, "{}", requests.len());
@@ -278,7 +271,7 @@ async fn a_running_training_run_resumes_when_the_daemon_starts() {
         r#"[{"id":"r1","kind":"training","name":"Old","goal":"g","status":"running","config":{},"sessionId":"s_run","experiments":[],"hints":[],"log":[],"createdAt":1,"updatedAt":1,"startedAt":1,"turns":3}]"#,
     )
     .unwrap();
-    let d = start_with(true, Some(&data));
+    let d = start_with(Some(&data));
     wait_for("the resumed run", || read_runs(&data)[0]["status"] == json!("failed")).await;
     let run = read_runs(&data)[0].clone();
     let log: Vec<&str> = run["log"].as_array().unwrap().iter().map(|l| l["text"].as_str().unwrap()).collect();
@@ -308,7 +301,7 @@ async fn the_daemon_runs_workflows_with_shell_prompt_and_webhook() {
         r#"[{"id":"old","workflowId":"gone","status":"running","triggerKind":"manual","startedAt":1,"steps":[]}]"#,
     )
     .unwrap();
-    let d = start_with(true, Some(&data));
+    let d = start_with(Some(&data));
     let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
     assert!(info["owned"].as_array().unwrap().contains(&json!("workflow:run")), "{info}");
     wait_for("the reconcile", || {
@@ -340,8 +333,6 @@ async fn the_daemon_runs_workflows_with_shell_prompt_and_webhook() {
         })
     });
     assert!(asked, "the model was sent the step's prompt");
-    let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    assert!(!calls.as_array().unwrap().iter().any(|c| c[0] == "chat:send"), "the host ran no turn: {calls}");
 
     // Webhooks: the right secret starts a run, a wrong one is refused.
     let (status, bad) = post(d.port, "workflow:webhook", json!(["echo-flow", "nope", {}]), Some(TOKEN)).await;

@@ -5,18 +5,13 @@ use crate::common::*;
 /// A relay socket as the test sees it (it plays apps/relay-server).
 type RelaySide = tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>;
 
-/// The agent's next frame other than the backend's repeating test event.
+/// The agent's next frame, and what it seals when it is a data frame.
 async fn next_agent_frame(agent: &mut RelaySide, key: &nekko_remote::e2e::Key) -> (Value, Option<Value>) {
-    loop {
-        let f = next_json(agent, Duration::from_secs(20)).await.expect("an agent frame");
-        let sealed = (f["type"] == "d")
-            .then(|| serde_json::from_str::<Value>(f["data"].as_str().unwrap()).unwrap())
-            .and_then(|d| nekko_remote::e2e::open(key, d["enc"].as_str().unwrap()));
-        if sealed.as_ref().is_some_and(|s| s["type"] == "event" && s["payload"]["type"] == "hello-from-backend") {
-            continue;
-        }
-        return (f, sealed);
-    }
+    let f = next_json(agent, Duration::from_secs(20)).await.expect("an agent frame");
+    let sealed = (f["type"] == "d")
+        .then(|| serde_json::from_str::<Value>(f["data"].as_str().unwrap()).unwrap())
+        .and_then(|d| nekko_remote::e2e::open(key, d["enc"].as_str().unwrap()));
+    (f, sealed)
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -24,7 +19,7 @@ async fn the_daemon_runs_the_phone_relay_agent() {
     let data = std::env::temp_dir().join(format!("nekkod-remote-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&data);
     std::fs::create_dir_all(&data).unwrap();
-    let d = start_with(true, Some(&data));
+    let d = start_with(Some(&data));
     let relay = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let relay_port = relay.local_addr().unwrap().port();
 
@@ -113,14 +108,15 @@ async fn the_daemon_runs_the_phone_relay_agent() {
     assert_ne!(saved["sandboxMode"], "off");
     assert_eq!(saved["hfToken"], "hf_secret");
 
-    // The host's events reach the welcomed phone.
-    let f = next_json(&mut agent, Duration::from_secs(20)).await.expect("a relayed event");
-    let frame_data: Value = serde_json::from_str(f["data"].as_str().unwrap()).unwrap();
-    let event = nekko_remote::e2e::open(&key, frame_data["enc"].as_str().unwrap()).unwrap();
-    assert_eq!(
-        event,
-        json!({ "type": "event", "channel": "agent:event", "payload": { "type": "hello-from-backend" } })
-    );
+    // The daemon's events reach the welcomed phone: the UI's theme change, which the phone mirrors.
+    post(d.port, "settings:update", json!([{ "theme": "dark" }]), Some(TOKEN)).await;
+    let event = loop {
+        let (_, sealed) = next_agent_frame(&mut agent, &key).await;
+        if let Some(s) = sealed.filter(|s| s["type"] == "event" && s["channel"] == "appearance:updated") {
+            break s;
+        }
+    };
+    assert_eq!(event["payload"]["theme"], "dark", "{event}");
     let (_, status) = post(d.port, "remote:status", json!([]), Some(TOKEN)).await;
     assert_eq!(status["connected"], json!(["phone-1"]), "{status}");
     assert_eq!(status["online"], true);
@@ -237,7 +233,7 @@ async fn the_daemon_runs_the_telegram_bridge() {
         "messaging": { "telegram": { "enabled": true, "botToken": "123:TEST", "allowedChatIds": ["42"] } },
     });
     std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
-    let d = start_with_config(true, Some(&data), json!({ "telegramApiUrl": format!("http://127.0.0.1:{}", tg.port) }));
+    let d = start_with_config(Some(&data), json!({ "telegramApiUrl": format!("http://127.0.0.1:{}", tg.port) }));
 
     let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
     assert!(info["owned"].as_array().unwrap().contains(&json!("messaging:status")), "{info}");
@@ -279,9 +275,7 @@ async fn the_daemon_runs_the_telegram_bridge() {
     let messages = saved["messages"].as_array().unwrap();
     assert_eq!(messages.first().unwrap()["content"], "say hello");
     assert_eq!(messages.last().unwrap()["content"], "Hello from the daemon");
-    // Admitted and driven by the daemon: the host was handed the turn, never asked to send it.
-    let calls = until_adopted(d.port, 1).await;
-    assert!(!calls.iter().any(|c| c[0] == "chat:send"), "{calls:?}");
+    // Admitted and driven by the daemon.
     assert_eq!(model.requests.lock().unwrap()[0]["model"], "synthetic");
     // The offset moved past both updates, and no session was made for chat 99.
     wait_for("the offset saved", || {
@@ -313,8 +307,6 @@ async fn the_daemon_runs_the_telegram_bridge() {
     // Proving a negative again: nothing reads the update in this window.
     tokio::time::sleep(Duration::from_millis(300)).await;
     assert_eq!(model.requests.lock().unwrap().len(), 1, "no turn while off");
-    // The backend never ran a bridge of its own.
-    assert!(!calls.iter().any(|c| c[0] == "messaging:status"));
     drop(d);
     std::fs::remove_dir_all(&data).ok();
 }

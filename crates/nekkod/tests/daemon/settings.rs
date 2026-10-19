@@ -7,7 +7,7 @@ async fn settings_are_the_daemons_to_write_when_it_knows_the_data_dir() {
     let data = std::env::temp_dir().join(format!("nekkod-settings-{}", std::process::id()));
     std::fs::create_dir_all(&data).unwrap();
     std::fs::write(data.join("settings.json"), r#"{"theme":"dark","maxSteps":3}"#).unwrap();
-    let d = start_with(true, Some(&data));
+    let d = start_with(Some(&data));
 
     let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
     assert!(info["owned"].as_array().unwrap().contains(&json!("settings:update")));
@@ -16,29 +16,22 @@ async fn settings_are_the_daemons_to_write_when_it_knows_the_data_dir() {
     assert_eq!(got["theme"], "dark");
     assert!(got.get("maxSteps").is_none());
     assert!(got["guardrails"].as_array().is_some_and(|g| !g.is_empty()), "merged over the defaults");
-    // The UI's update: written by the daemon and told to the host.
+    // The UI's update: written by the daemon.
     let patch = json!({ "voice": { "enabled": true }, "workspaces": [{ "id": "a", "path": "/x" }, { "id": "b", "path": "/x/" }] });
     let (_, next) = post(d.port, "settings:update", json!([patch]), Some(TOKEN)).await;
     assert_eq!(next["workspaces"], json!([{ "id": "a", "path": "/x" }]));
     let on_disk: Value = serde_json::from_str(&std::fs::read_to_string(data.join("settings.json")).unwrap()).unwrap();
     assert_eq!(on_disk, next);
-    // The host's own write: saved, not echoed back to it.
-    let (_, saved) = post(d.port, "settings:save", json!([{ "theme": "light" }]), Some(TOKEN)).await;
+    // A patch merges over what is saved.
+    let (_, saved) = post(d.port, "settings:update", json!([{ "theme": "light" }]), Some(TOKEN)).await;
     assert_eq!((saved["theme"].clone(), saved["voice"].clone()), (json!("light"), json!({ "enabled": true })));
+    // The TS host's own write channel is gone with the host.
+    let (status, _) = post(d.port, "settings:save", json!([{ "theme": "dark" }]), Some(TOKEN)).await;
+    assert_ne!(status, 200);
     let (status, err) = post(d.port, "settings:update", json!([null]), Some(TOKEN)).await;
     assert_ne!(status, 200, "a missing patch is refused as saveSettings refuses it: {err}");
     let (_, reset) = post(d.port, "settings:reset", json!([]), Some(TOKEN)).await;
     assert_eq!(reset["theme"], "system");
-    // The host hears changes in the order they were saved (one queue), so once
-    // the reset's has arrived, any for the host's own save would have too.
-    let calls = until_host_call(d.port, "the reset's settings:changed", Duration::from_secs(10), |c| {
-        c[0] == "settings:changed" && c[1][1].is_null()
-    })
-    .await;
-    let changed: Vec<&Value> = calls.iter().filter(|c| c[0] == "settings:changed").collect();
-    assert_eq!(changed.len(), 2, "the UI's update and reset reach the host, the host's own save does not: {calls:?}");
-    assert_eq!(changed[0][1], json!([next, patch]));
-    assert_eq!(changed[1][1], json!([reset, null]));
     drop(d);
     std::fs::remove_dir_all(data).ok();
 }
@@ -57,7 +50,7 @@ async fn tokens_are_the_daemons_to_read_renew_and_forget() {
         r#"{"openrouter:k":{"provider":"openrouter","accessToken":"sk-or","obtainedAt":1}}"#,
     )
     .unwrap();
-    let d = start_with(true, Some(&data));
+    let d = start_with(Some(&data));
 
     let (_, status) = post(d.port, "oauth:status", json!(["or"]), Some(TOKEN)).await;
     assert_eq!(
@@ -66,7 +59,7 @@ async fn tokens_are_the_daemons_to_read_renew_and_forget() {
     );
     let (_, plain) = post(d.port, "oauth:status", json!(["plain"]), Some(TOKEN)).await;
     assert_eq!(plain["message"], "Provider has no token key.");
-    // The host's question: a permanent key needs no renewal.
+    // A permanent key needs no renewal.
     let (_, fresh) = post(d.port, "oauth:fresh", json!(["openrouter:k", false]), Some(TOKEN)).await;
     assert_eq!(fresh, json!("sk-or"));
     let (status_code, missing) = post(d.port, "oauth:fresh", json!(["claude:none", false]), Some(TOKEN)).await;
@@ -74,8 +67,6 @@ async fn tokens_are_the_daemons_to_read_renew_and_forget() {
     post(d.port, "oauth:signout", json!(["or"]), Some(TOKEN)).await;
     let tokens: Value = serde_json::from_str(&std::fs::read_to_string(data.join("tokens.json")).unwrap()).unwrap();
     assert_eq!(tokens, json!({}));
-    let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    assert!(!calls.to_string().contains("oauth"), "nothing about sign-in reached the host: {calls}");
     drop(d);
     std::fs::remove_dir_all(data).ok();
 }
@@ -98,13 +89,19 @@ async fn providers_are_listed_saved_tested_and_asked_for_models_by_the_daemon() 
     let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://{}/v1", l.local_addr().unwrap());
     tokio::spawn(async move { axum::serve(l, app).await.unwrap() });
-    let d = start_with(true, Some(&data));
+    let d = start_with(Some(&data));
+    // The model server's own entry, added at launch.
+    boot_settled(&data);
+    let read =
+        || -> Value { serde_json::from_str(&std::fs::read_to_string(data.join("settings.json")).unwrap()).unwrap() };
+    let engine = read()["providers"][0].clone();
+    assert_eq!(engine["kind"], "llamacpp");
 
     let p = json!({ "id": "p1", "kind": "openai-compat", "label": "Local", "baseUrl": base, "apiKey": "k1", "enabled": true });
     let (_, saved) = post(d.port, "providers:save", json!([p]), Some(TOKEN)).await;
-    assert_eq!(saved, json!([p]));
+    assert_eq!(saved, json!([engine, p]));
     let (_, listed) = post(d.port, "providers:list", json!([]), Some(TOKEN)).await;
-    assert_eq!(listed, json!([p]));
+    assert_eq!(listed, json!([engine, p]));
     let (_, ok) = post(d.port, "providers:test", json!(["p1"]), Some(TOKEN)).await;
     assert_eq!(ok, json!({ "ok": true, "message": "Connected" }));
     let mut bad = p.clone();
@@ -131,9 +128,8 @@ async fn providers_are_listed_saved_tested_and_asked_for_models_by_the_daemon() 
     let (_, none) = post(d.port, "lms:probe", json!(["p1"]), Some(TOKEN)).await;
     assert_eq!(none, json!({ "available": false }));
     let (_, removed) = post(d.port, "providers:remove", json!(["p1"]), Some(TOKEN)).await;
-    assert_eq!(removed, json!([]));
-    let on_disk: Value = serde_json::from_str(&std::fs::read_to_string(data.join("settings.json")).unwrap()).unwrap();
-    assert_eq!(on_disk["providers"], json!([]));
+    assert_eq!(removed, json!([engine]));
+    assert_eq!(read()["providers"], json!([engine]));
     drop(d);
     std::fs::remove_dir_all(data).ok();
 }
@@ -145,7 +141,7 @@ async fn adds_and_revokes_folders_through_the_daemons_settings() {
     std::fs::create_dir_all(project.join("src")).unwrap();
     std::fs::write(project.join("src").join("x.rs"), "pub fn x() {}\n").unwrap();
     let path = project.to_string_lossy().into_owned();
-    let d = start_with(true, Some(&data));
+    let d = start_with(Some(&data));
     let (_, added) = post(d.port, "workspace:addByPath", json!([path]), Some(TOKEN)).await;
     let folder = added[0].clone();
     assert_eq!((folder["name"].clone(), folder["path"].clone()), (json!("My Project"), json!(path)));
@@ -169,9 +165,28 @@ async fn adds_and_revokes_folders_through_the_daemons_settings() {
     std::fs::create_dir_all(&sessions).unwrap();
     let chat = |sid: &str| json!({ "id": sid, "title": sid, "workspaceId": id, "supportingWorkspaceIds": [id], "messages": [], "createdAt": 1, "updatedAt": 1 });
     std::fs::write(sessions.join("s_busy.json"), chat("s_busy").to_string()).unwrap();
+    // A turn that waits on its model keeps s_busy running.
+    let model = scripted_model(vec![HANG.into()]).await;
+    let provider = json!({ "id": "p1", "kind": "openai-compat", "label": "Scripted", "enabled": true,
+        "baseUrl": format!("http://127.0.0.1:{}/v1", model.port) });
+    let spec = json!({
+        "turnId": "turn_busy",
+        "opts": { "sessionId": "s_busy", "providerId": "p1", "modelId": "synthetic", "text": "wait" },
+        "settings": { "providers": [provider], "defaultChatMode": "yolo" },
+        "facts": { "workspaces": [], "provider": provider, "promptCaching": true },
+    });
+    let (status, _) = post(d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    until_model_asked(&model, 1, "the busy chat's model call", Duration::from_secs(10)).await;
     let (status, refused) = post(d.port, "workspace:remove", json!([id]), Some(TOKEN)).await;
     assert_ne!(status, 200);
     assert!(refused.to_string().contains("Wait for chats"), "{refused}");
+    post(d.port, "turn:abort", json!(["turn_busy"]), Some(TOKEN)).await;
+    until("the busy turn to stop", Duration::from_secs(10), || async {
+        let (_, alive) = post(d.port, "turn:alive", json!(["turn_busy"]), Some(TOKEN)).await;
+        (alive == json!(false)).then_some(())
+    })
+    .await;
     std::fs::remove_file(sessions.join("s_busy.json")).unwrap();
     std::fs::write(sessions.join("s_idle.json"), chat("s_idle").to_string()).unwrap();
     let (status, left) = post(d.port, "workspace:remove", json!([id]), Some(TOKEN)).await;
@@ -189,7 +204,7 @@ async fn the_daemon_keeps_and_reads_connectors() {
     let data = std::env::temp_dir().join(format!("nekkod-connectors-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&data);
     std::fs::create_dir_all(&data).unwrap();
-    let d = start_with(true, Some(&data));
+    let d = start_with(Some(&data));
     let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
     assert!(info["owned"].as_array().unwrap().contains(&json!("connector:fetch")), "{info}");
     let (_, missing) = post(d.port, "connector:fetch", json!(["teams"]), Some(TOKEN)).await;

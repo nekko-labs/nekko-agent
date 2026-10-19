@@ -35,7 +35,7 @@ async fn gates_unattended_claude_code_turns_and_reports_reasons() {
     });
     std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
     // The preview is asked for, but this build has no `dev-tools`: it must not apply.
-    let d = start_with_env(false, Some(&data), json!({}), &[("NEKKO_CLAUDE_POLICY_PREVIEW", Some("subscription"))]);
+    let d = start_with_env(Some(&data), json!({}), &[("NEKKO_CLAUDE_POLICY_PREVIEW", Some("subscription"))]);
     let mut events = ws(d.port, &format!("/api/events?token={TOKEN}"), None).await.unwrap();
 
     let (status, policy) = post(d.port, "claude:policy", json!([]), Some(TOKEN)).await;
