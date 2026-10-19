@@ -46,13 +46,6 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1200, 400])
       await page.getByRole('button', { name: 'Back to active agents', exact: true }).click();
     });
 
-    await test.step('an emptied wall opens the Focused new-chat screen', async () => {
-      // The only window's chat was completed above, so the wall is empty.
-      await expect(page.locator('[data-wall-layout]')).toHaveAttribute('data-wall-layout', 'focus');
-      await expect(page.locator('[data-clean-start-greeting]')).toBeVisible();
-      await expect(page.locator('[data-wall-empty]')).toHaveCount(0);
-    });
-
     await test.step('the emptied wall opens the Focused new-chat screen', async () => {
       // The wall's only chat became the completed one, leaving no windows: the
       // wall shows the new-chat prompt instead of "The wall is empty".
@@ -66,11 +59,7 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1200, 400])
     });
 
     await test.step('an active card selects its window outside Focus', async () => {
-      await page.locator('[aria-label="Wall layout"] button', { hasText: 'Dynamic' }).click();
-      // Completing the wall's only chat emptied it, which opens the Focused
-      // new-chat screen; go back to Dynamic for this check.
-      await page.locator('[data-wall-layout=focus]').waitFor();
-      await page.evaluate(() => document.querySelector<HTMLButtonElement>('[aria-label="Wall layout"] button:nth-child(2)')!.click());
+      // The step above already switched the emptied wall back to Dynamic.
       await expect(page.locator('[data-wall-layout]')).toHaveAttribute('data-wall-layout', 'grid');
       await openList();
       await card('Active conversation').click();
