@@ -154,7 +154,7 @@ final class LiveRelayTests: XCTestCase {
         menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         app.buttons["Settings"].firstMatch.tap()
         let connection = app.buttons["Connection"].firstMatch
-        if !connection.waitForExistence(timeout: 5) { app.swipeUp() }
+        XCTAssertTrue(reveal(connection, in: app), "Settings → Connection")
         connection.tap()
         // LabeledContent reads as one element: "Status" with the value "Online".
         let online = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", "Online", "Online")).firstMatch
@@ -165,8 +165,7 @@ final class LiveRelayTests: XCTestCase {
         // Settings → Notify me about (IO-30) and Dictation (IO-28).
         app.navigationBars.buttons.element(boundBy: 0).tap()
         let finished = app.switches["settings.notify.finished"]
-        XCTAssertTrue(finished.waitForExistence(timeout: 10))
-        if !finished.isHittable { app.swipeUp() }
+        XCTAssertTrue(reveal(finished, in: app), "Settings → Notify me about")
         XCTAssertEqual(finished.value as? String, "1")
         // The switch itself, at the row's trailing edge: tapping the label does nothing.
         finished.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
@@ -174,6 +173,7 @@ final class LiveRelayTests: XCTestCase {
         // Through the computer and the test stack's relay, which has no Apple push key:
         // the app shows it, and says so.
         let test = app.buttons["settings.notify.test"]
+        XCTAssertTrue(reveal(test, in: app))
         test.tap()
         let result = app.staticTexts["settings.notify.testResult"]
         XCTAssertTrue(result.waitForExistence(timeout: 20), "the test reports which path it took")
@@ -188,7 +188,7 @@ final class LiveRelayTests: XCTestCase {
         sleep(6) // the banner goes up before the audit samples the screen
         auditAccessibility(app, "\(theme)-settings-notifications")
         let mic = app.buttons["settings.dictationHold"]
-        if !mic.isHittable { app.swipeUp() }
+        XCTAssertTrue(reveal(mic, in: app), "Settings → Dictation")
         mic.tap()
         app.buttons["Hold to talk"].firstMatch.tap()
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Hold the microphone while you speak")).firstMatch
@@ -257,6 +257,19 @@ final class LiveRelayTests: XCTestCase {
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         let allow = springboard.buttons["Allow"]
         if allow.waitForExistence(timeout: 4) { allow.tap() }
+    }
+
+    /// Scrolls a long form until `e` can be tapped: down first, then back up
+    /// (a form loads its rows lazily, so an off-screen row may not exist yet).
+    private func reveal(_ e: XCUIElement, in app: XCUIApplication) -> Bool {
+        if e.waitForExistence(timeout: 3), e.isHittable { return true }
+        for up in [true, false] {
+            for _ in 0..<8 {
+                if up { app.swipeUp() } else { app.swipeDown() }
+                if e.exists, e.isHittable { return true }
+            }
+        }
+        return false
     }
 
     private func waitEnabled(_ e: XCUIElement, _ seconds: TimeInterval) -> Bool {
