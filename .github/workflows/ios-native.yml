@@ -46,7 +46,6 @@ jobs:
         run: |
           npm ci --no-audit --no-fund --ignore-scripts
           npm run build:core
-          npm run build -w @nekko-agent/host
           npm run build --workspace=apps/cli
           npm run build -w @nekko-agent/local-web-ui
           npm run build -w @nekko-agent/relay-server

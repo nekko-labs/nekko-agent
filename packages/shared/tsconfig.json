@@ -4,5 +4,8 @@
     "outDir": "./dist",
     "rootDir": "./src"
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
+  // The golden tests read the engine crates' files from disk (Node only); this
+  // package stays free of Node types, so Vitest runs them without tsc.
+  "exclude": ["src/**/*.golden.test.ts"]
 }

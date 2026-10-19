@@ -8,11 +8,10 @@ What lives here:
 - **The API service** (`src/`, deployed): beta signups now. Fastify on one small
   Fly.io machine, Postgres on Neon's free plan. It is its own npm package (not a
   root workspace) so the image holds only this folder.
-- **Cloud accounts** (`cloud/`, the `@nekko-agent/cloud` workspace package, off
-  and not deployed): sign-up and login, per-account data, plans and Stripe
-  billing, from the earlier hosted-edition prototype. It is parked until Nekko
-  Cloud accounts are designed for real (PF14 step 4 design); it is not in the
-  image (`.dockerignore`).
+- **Cloud accounts**: not here yet. The earlier hosted-edition prototype (one TS
+  host per account) was deleted with the TS engine; PF14 step 4 designs
+  accounts on a shared, multi-tenant nekkod, and this service is where their
+  sign-up, login and billing will live.
 - **Relay** (the product) is part of Nekko Cloud but a separate service:
   [`apps/relay-server`](../relay-server). This service is where Relay's
   permissions and user auth will live: the relay already asks

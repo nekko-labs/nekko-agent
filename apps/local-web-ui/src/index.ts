@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
-import { defaultUserDataDir, prepareUserDataRoot } from '@nekko-agent/host/user-data';
+import { defaultUserDataDir, prepareUserDataRoot } from '@nekko-agent/profile/user-data';
 import { brandEnv, unsupportedPlatformReason } from '@nekko-agent/shared';
 import { runRelayAgent } from './relay-agent.js';
 import { runCli } from 'nekko-agent/run';

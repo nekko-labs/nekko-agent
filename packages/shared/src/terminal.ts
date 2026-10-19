@@ -4,8 +4,8 @@
  * Each terminal is a live shell attached to a pseudo-terminal, so it behaves
  * like a native terminal: tab-completion, powerline prompts, zsh plugins, and
  * full-screen TUIs (vim, htop, lazygit) all work. The renderer is xterm.js; the
- * host streams raw bytes both ways. (Backed by @lydell/node-pty, an N-API,
- * prebuilt PTY that needs no native toolchain or electron-rebuild.)
+ * engine daemon streams raw bytes both ways (crates/nekko-term, on
+ * portable-pty: ConPTY on Windows, a Unix pty elsewhere).
  */
 
 /** A live shell session attached to a PTY. */
