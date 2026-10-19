@@ -429,7 +429,7 @@ export function AutoQualityMenu({
               onClick={() => onFollowCapacity(!followCapacity)}
             >
               <span
-                className={`mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border text-[9px] ${followCapacity ? 'border-accent bg-accent text-white' : 'border-line'}`}
+                className={`mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border text-[9px] ${followCapacity ? 'border-accent bg-accent text-on-accent' : 'border-line'}`}
                 aria-hidden
               >
                 {followCapacity ? '✓' : ''}
