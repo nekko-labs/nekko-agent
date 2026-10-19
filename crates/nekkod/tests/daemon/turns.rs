@@ -906,7 +906,7 @@ async fn a_resent_client_message_id_runs_one_turn_and_queues_once() {
     let rig = turn_rig("once", session);
     let model = scripted_model(vec![HANG.to_string(), say_text("second")]).await;
     let settings = json!({ "providers": [{ "id": "p1", "kind": "openai-compat", "enabled": true, "baseUrl": format!("http://127.0.0.1:{}/v1", model.port) }], "workspaces": [{ "id": "w1", "name": "project", "path": rig.workspace.to_string_lossy() }], "defaultChatMode": "yolo" });
-    std::fs::write(rig.data.join("settings.json"), settings.to_string()).unwrap();
+    write_settings(&rig, settings).await;
     let opts = json!({ "sessionId": "s_once", "providerId": "p1", "modelId": "synthetic", "text": "from the phone", "clientMessageId": "6f1c2a9e-7b1d-4c35-9a52-2b8f0f6f8d11" });
     let port = rig.d.port;
     let first_opts = opts.clone();
