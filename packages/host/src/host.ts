@@ -695,7 +695,7 @@ export function createHost(opts: {
     compact: (id) => compactSession(id),
     send: async (s, text) => {
       if (interrupting.has(s.id) || isChatRunning(s.id)) return;
-      const run = sendChat({ sessionId: s.id, providerId: s.providerId!, modelId: s.modelId!, text }, (e) => events.emit('agentEvent', e), !!opts.allowBrowserControl);
+      const run = sendChat({ sessionId: s.id, providerId: s.providerId!, modelId: s.modelId!, text, unattended: true }, (e) => events.emit('agentEvent', e), !!opts.allowBrowserControl);
       activeChats.set(s.id, run);
       void run.finally(() => { if (activeChats.get(s.id) === run) activeChats.delete(s.id); }).catch(() => {});
       await run;

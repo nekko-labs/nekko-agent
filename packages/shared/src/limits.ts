@@ -16,6 +16,14 @@ export const MODEL_PRICING_CHECKED_AT = MODEL_PRICING_SNAPSHOT.checkedAt;
 const API_KEY_LIMIT_KINDS: ReadonlySet<ProviderConfig['kind']> = new Set(['openrouter']);
 
 /**
+ * Provider kinds whose API-key responses carry the key's own rate limits as
+ * standard headers (Anthropic's `anthropic-ratelimit-requests-*` and token
+ * families). nekkod records them after each turn under the same
+ * `provider:<id>` key; there is nothing to poll between turns.
+ */
+const API_KEY_HEADER_LIMIT_KINDS: ReadonlySet<ProviderConfig['kind']> = new Set(['anthropic']);
+
+/**
  * The key the limits service can fetch for this provider, or null when nothing
  * can be read. A signed-in provider reads by `tokenKey`; an API-key provider
  * with a documented read gets `provider:<id>` so its snapshot lives in the same
@@ -24,7 +32,9 @@ const API_KEY_LIMIT_KINDS: ReadonlySet<ProviderConfig['kind']> = new Set(['openr
  */
 export function limitsKeyFor(provider: ProviderConfig): string | null {
   if (provider.auth === 'subscription' && provider.tokenKey) return provider.tokenKey;
-  if (provider.apiKey && API_KEY_LIMIT_KINDS.has(provider.kind)) return `provider:${provider.id}`;
+  if (provider.apiKey && (API_KEY_LIMIT_KINDS.has(provider.kind) || API_KEY_HEADER_LIMIT_KINDS.has(provider.kind))) {
+    return `provider:${provider.id}`;
+  }
   return null;
 }
 

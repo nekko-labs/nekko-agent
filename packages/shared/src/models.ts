@@ -18,7 +18,12 @@ export type ProviderKind =
   /** Claude on Google Cloud Vertex AI, on the user's own Google credentials. */
   | 'vertex'
   /** Claude in Microsoft Foundry, on the Foundry resource's key. */
-  | 'foundry';
+  | 'foundry'
+  /**
+   * Claude Agent: the user's own installed Claude Code runs the chat, driven
+   * headless by nekkod. No base URL and no key; sign-in happens in Claude Code.
+   */
+  | 'claude-code';
 
 /** A configured connection to a model server / provider. */
 export interface ProviderConfig {
@@ -187,6 +192,7 @@ export const PROVIDER_DEFAULTS: Record<ProviderKind, { baseUrl: string; needsKey
   vertex: { baseUrl: 'https://aiplatform.googleapis.com/v1/projects/YOUR_PROJECT/locations/global', needsKey: false, label: 'Claude on Vertex AI' },
   // Replace YOUR_RESOURCE with the Foundry resource name.
   foundry: { baseUrl: 'https://YOUR_RESOURCE.services.ai.azure.com/anthropic', needsKey: true, label: 'Claude in Microsoft Foundry' },
+  'claude-code': { baseUrl: '', needsKey: false, label: 'Claude Agent' },
 };
 
 /** Ports we probe when auto-discovering local servers. */

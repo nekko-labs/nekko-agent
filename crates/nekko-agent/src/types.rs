@@ -32,6 +32,9 @@ pub enum ProviderKind {
     /// Claude in Microsoft Foundry: the Messages API at
     /// `https://{resource}.services.ai.azure.com/anthropic` on the resource's key.
     Foundry,
+    /// Claude Agent: the user's own Claude Code runs the chat (nekkod drives it
+    /// through `nekko-harness`). No base URL, no key.
+    ClaudeCode,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
