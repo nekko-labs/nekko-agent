@@ -166,6 +166,7 @@ final class LiveRelayTests: XCTestCase {
         app.navigationBars.buttons.element(boundBy: 0).tap()
         let finished = app.switches["settings.notify.finished"]
         XCTAssertTrue(reveal(finished, in: app), "Settings → Notify me about")
+        settle()
         XCTAssertEqual(finished.value as? String, "1")
         // The switch itself, at the row's trailing edge: tapping the label does nothing.
         finished.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
@@ -174,6 +175,7 @@ final class LiveRelayTests: XCTestCase {
         // the app shows it, and says so.
         let test = app.buttons["settings.notify.test"]
         XCTAssertTrue(reveal(test, in: app))
+        settle()
         test.tap()
         let result = app.staticTexts["settings.notify.testResult"]
         XCTAssertTrue(result.waitForExistence(timeout: 20), "the test reports which path it took")
@@ -187,10 +189,10 @@ final class LiveRelayTests: XCTestCase {
         add(bannerShot)
         sleep(6) // the banner goes up before the audit samples the screen
         auditAccessibility(app, "\(theme)-settings-notifications")
-        let mic = app.buttons["settings.dictationHold"]
-        XCTAssertTrue(reveal(mic, in: app), "Settings → Dictation")
-        mic.tap()
-        app.buttons["Hold to talk"].firstMatch.tap()
+        let hold = app.buttons["Hold to talk"].firstMatch
+        XCTAssertTrue(reveal(hold, in: app), "Settings → Dictation")
+        settle()
+        hold.tap()
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Hold the microphone while you speak")).firstMatch
             .waitForExistence(timeout: 5))
         attach(app, "\(theme)-7d-settings-dictation")
@@ -271,6 +273,9 @@ final class LiveRelayTests: XCTestCase {
         }
         return false
     }
+
+    /// A tap while a swipe is still decelerating only stops the scroll; let it finish.
+    private func settle() { RunLoop.current.run(until: Date().addingTimeInterval(1.2)) }
 
     private func waitEnabled(_ e: XCUIElement, _ seconds: TimeInterval) -> Bool {
         let p = expectation(for: NSPredicate(format: "isEnabled == true"), evaluatedWith: e)

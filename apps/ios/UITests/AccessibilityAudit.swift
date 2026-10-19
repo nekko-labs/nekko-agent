@@ -15,6 +15,7 @@ extension XCTestCase {
     ///   or covered by other UI (not hittable), for contrast and clipping:
     ///   the audit samples whatever covers them.
     /// - Clipping on the system search field's placeholder.
+    /// - Hit regions of activity indicators (spinners aren't tappable).
     /// - Findings the audit can't attach to an element.
     /// `ignoring`: element labels excluded on this screen, each with its reason at the call site.
     /// `covered`: a pinned, translucent bar; text under it is measured against the
@@ -74,6 +75,8 @@ extension XCTestCase {
         // audit samples whatever is on top, not the element's own colours.
         if issue.auditType == .contrast || issue.auditType == .textClipped, !e.isHittable { return false }
         if issue.auditType == .textClipped, e.elementType == .searchField { return false }
+        // A spinner can't be tapped, so a hit region on it means nothing.
+        if issue.auditType == .hitRegion, e.elementType == .activityIndicator { return false }
         return true
     }
 

@@ -134,11 +134,12 @@ struct SettingsView: View {
                 Text("Running chats show on the Lock Screen and in the Dynamic Island, with Allow / Deny for approvals.")
             }
             Section {
+                // Inline: both choices are short rows with a checkmark, never cut off.
                 Picker("Microphone", selection: $prefs.dictationHold) {
                     Text("Tap to start and stop").tag(false)
                     Text("Hold to talk").tag(true)
                 }
-                .accessibilityIdentifier("settings.dictationHold")
+                .pickerStyle(.inline)
                 Toggle("Use Whisper on the computer when available", isOn: $prefs.dictationOnComputer)
             } header: { Text("Dictation") } footer: {
                 Text(prefs.dictationHold
@@ -147,10 +148,16 @@ struct SettingsView: View {
             }
             if store.active != nil {
                 Section {
-                    Picker("Tools in new chats", selection: Binding(get: { store.pcSettings.effectiveMode }, set: { m in
-                        Task { do { try await store.updatePcSettings(PcSettings.patch(mode: m)) } catch { self.error = error.localizedDescription } }
-                    })) {
-                        ForEach(PcSettings.ChatMode.allCases, id: \.self) { Text(modeName($0)).tag($0) }
+                    // The choice on its own line: beside the label, "Guardrails (ask for risky tools)" was cut off.
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Tools in new chats").accessibilityHidden(true)
+                        Picker("Tools in new chats", selection: Binding(get: { store.pcSettings.effectiveMode }, set: { m in
+                            Task { do { try await store.updatePcSettings(PcSettings.patch(mode: m)) } catch { self.error = error.localizedDescription } }
+                        })) {
+                            ForEach(PcSettings.ChatMode.allCases, id: \.self) { Text(modeName($0)).tag($0) }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
                     }
                     Picker("Chat’s main action", selection: Binding(get: { store.pcSettings.effectiveAction }, set: { a in
                         Task { do { try await store.updatePcSettings(PcSettings.patch(action: a)) } catch { self.error = error.localizedDescription } }
