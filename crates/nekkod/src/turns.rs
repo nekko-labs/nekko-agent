@@ -17,29 +17,21 @@
 //! - it owns what the turn waits on a person for ([`Pending`]): approvals and
 //!   questions are raised to the UI from here and answered here
 //!   (`tool:approve`, `chat:answer`, `chat:pending`), so an approval's round
-//!   trip never passes through the TS event loop. Tools that still run in the
-//!   host park their approvals here too (`turn:approval`).
+//!   trip never passes through the TS event loop.
 //!
 //! It runs `fetch_url`, the browser and window capture (`nekko-web`, the
 //! in-app browser through the desktop app's bridge) and the background-process
 //! tools (`nekko-tools`), `agent_watch` (watches.rs) and a training or goal
 //! run's `report_experiment`, `report_artifact` and `update_plan`
-//! (nekko-automation `training`) itself, and calls back for what has not moved:
-//! `turn:tool` (delegation targets, and MCP, sub-agents, `decide` or the run
-//! tools for a host that keeps them), `turn:hook` (tool
-//! hooks, for a host that keeps them; given `facts.hookRules` they run here),
-//! `loop:log` (the agent terminal); and it sends the host the events
-//! it asks for (`turn:event`, deltas batched; `facts.hostEvents`, every one
-//! when the host does not say, which a TS phone relay, messaging bridge or
-//! accounting needs), then `turn:end`.
+//! (nekko-automation `training`) itself, with the tool hooks
+//! (`facts.hookRules`), MCP, sub-agents and `decide`.
 //!
-//! After a turn (step 4) the daemon starts the chat's generated title and
-//! runs its next queued prompt: the host admits that prompt (`turn:prepare`)
-//! and the daemon drives it as the next turn of the same chain, so the
-//! host's `sendChat` resolves once the queue is worked through, as it did.
+//! After a turn (step 4) the daemon starts the chat's generated title, runs
+//! the TurnEnd hooks and the linked spec, and runs its next queued prompt:
+//! admitted here (admission.rs `admit_queued`) and driven as the next turn
+//! of the same chain, so `chat:send` answers once the queue is worked through.
 
 use crate::accounts::{Accounts, TurnAccount};
-use crate::backend::Backend;
 use crate::decide::DecideService;
 use crate::hub::Hub;
 use crate::mcp::Mcp;
@@ -59,10 +51,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::{mpsc, oneshot};
-
-/// How long text and reasoning deltas are batched before the host gets them.
-/// The UI gets each one at once; the host only relays them.
-const DELTA_BATCH: Duration = Duration::from_millis(100);
 
 /// The built-in tools the daemon runs itself (`nekko-tools`).
 const NATIVE: &[&str] = &[
@@ -217,15 +205,8 @@ enum Out {
     End,
 }
 
-/// One event for the host, with a reply's stats on its `done`.
-struct HostMsg {
-    event: Value,
-    extra: Option<Value>,
-}
-
 /// A running turn, as the routes that reach into it see it.
 struct Shared {
-    turn_id: String,
     session_id: String,
     cancel: Cancel,
     steering: Steering,
@@ -413,13 +394,10 @@ impl Turns {
         self
     }
 
-    /// A line of a chat's command output: its agent log here, else the host's (`loop:log`).
-    pub async fn command_output(&self, backend: &Backend, session_id: &str, workspace_id: &Value, text: &str) {
-        match &self.agent_logs {
-            Some(logs) => logs.append(session_id, workspace_id.as_str(), text),
-            None => {
-                let _ = backend.call("loop:log", json!([session_id, workspace_id, text])).await;
-            }
+    /// A line of a chat's command output, in its agent log.
+    pub fn command_output(&self, session_id: &str, workspace_id: &Value, text: &str) {
+        if let Some(logs) = &self.agent_logs {
+            logs.append(session_id, workspace_id.as_str(), text);
         }
     }
 
@@ -497,28 +475,6 @@ impl Turns {
         })
     }
 
-    /// `turn:approval`: an approval for a tool the host runs, parked here
-    /// with the rest of the turn's input; the answer goes back through
-    /// `turn:approved`.
-    pub fn host_approval(
-        self: &Arc<Self>,
-        backend: Arc<Backend>,
-        turn_id: &str,
-        args: &[Value],
-    ) -> Result<Value, String> {
-        let shared = lock(&self.running).get(turn_id).cloned().ok_or("This run has already ended.")?;
-        let call = args.first().cloned().unwrap_or(Value::Null);
-        let reason = args.get(1).and_then(Value::as_str).unwrap_or_default().to_string();
-        let severity = args.get(2).cloned().unwrap_or(json!("medium"));
-        let me = self.clone();
-        tokio::spawn(async move {
-            let id = str_at(&call, "id").unwrap_or_default().to_string();
-            let ok = me.request_approval(&shared, &call, &reason, &severity).await;
-            let _ = backend.call("turn:approved", json!([id, ok])).await;
-        });
-        Ok(json!(true))
-    }
-
     /// The approval prompt: the live policy first (the user can allow the
     /// rest of the turn while it waits), then park and ask.
     async fn request_approval(&self, shared: &Shared, call: &Value, reason: &str, severity: &Value) -> bool {
@@ -594,20 +550,15 @@ impl Turns {
         mode.or_else(|| shared.default_mode.clone()).unwrap_or_else(|| "guardrails".into())
     }
 
-    /// `chat:turn`: start driving a turn; `turn:end` tells the host when it is over.
-    pub fn start(self: &Arc<Self>, backend: Arc<Backend>, hub: Hub, spec: Value) -> Result<Value, String> {
-        self.launch(backend, hub, spec).map(|_| json!({ "started": true }))
+    /// `chat:turn`: start driving a turn.
+    pub fn start(self: &Arc<Self>, hub: Hub, spec: Value) -> Result<Value, String> {
+        self.launch(hub, spec).map(|_| json!({ "started": true }))
     }
 
     /// Start a turn and hear how it ended (its summary, after what follows
     /// it here, and the last error it reported), with its id: a `spawn_agent`
     /// child the parent turn waits on.
-    pub(crate) fn launch(
-        self: &Arc<Self>,
-        backend: Arc<Backend>,
-        hub: Hub,
-        spec: Value,
-    ) -> Result<(String, Ended), String> {
+    pub(crate) fn launch(self: &Arc<Self>, hub: Hub, spec: Value) -> Result<(String, Ended), String> {
         let store = self.store.clone().ok_or("chat:turn needs the daemon to know the data directory")?;
         let turn_id = str_at(&spec, "turnId").ok_or("chat:turn needs a turnId")?.to_string();
         let opts = spec.get("opts").cloned().ok_or("chat:turn needs the send options")?;
@@ -617,7 +568,6 @@ impl Turns {
         }
         let (tx, rx) = mpsc::unbounded_channel();
         let shared = Arc::new(Shared {
-            turn_id: turn_id.clone(),
             session_id,
             cancel: Cancel::default(),
             steering: Arc::default(),
@@ -630,19 +580,15 @@ impl Turns {
         let (ended_tx, ended_rx) = oneshot::channel();
         let id = turn_id.clone();
         tokio::spawn(async move {
-            let summary = me.drive(&backend, hub.clone(), store.clone(), &spec, shared.clone(), rx).await;
+            let summary = me.run_turn(&hub, store.clone(), &spec, &shared, rx).await;
             lock(&me.running).remove(&turn_id);
             me.pending.release(&shared.session_id);
-            let summary = me.after_turn(&backend, &hub, &store, &spec, &turn_id, summary).await;
+            let summary = me.after_turn(&hub, &store, &spec, &turn_id, summary).await;
             // The chat's agent terminal stops showing a running command.
             if let Some(logs) = &me.agent_logs {
                 logs.finish(&shared.session_id);
             }
-            // With no host to adopt the turn, what follows it runs here.
-            if backend.is_none() {
-                me.after_turn_hooks(&store, &spec, &summary);
-            }
-            let _ = backend.call("turn:end", json!([turn_id, summary.clone()])).await;
+            me.after_turn_hooks(&store, &spec, &summary);
             let _ = ended_tx.send((summary, lock(&shared.last_error).clone()));
         });
         Ok((id, ended_rx))
@@ -650,12 +596,11 @@ impl Turns {
 
     /// What follows a turn here (PF14 step 4): the chat's generated title,
     /// started and left to land on its own, and the next queued prompt, run
-    /// as the next turn of the chain (`summary.next`) once the host has
-    /// admitted it (`turn:prepare`), or handed back to the host to run
-    /// (`summary.drain`). A turn that never started has nothing after it.
+    /// as the next turn of the chain (`summary.next`) once it is admitted
+    /// (admission.rs `admit_queued`). A turn that never started has nothing after it.
     /// `afterTurnHooks`: the TurnEnd hooks (how the reply ended; nothing waits
     /// on them) and the linked spec kept in sync with the chat. A sandbox turn
-    /// runs neither. Here only when no host adopted the turn.
+    /// runs neither.
     fn after_turn_hooks(self: &Arc<Self>, store: &Arc<SessionStore>, spec: &Value, summary: &Value) {
         if spec.pointer("/facts/sandbox") == Some(&Value::Bool(true)) {
             return;
@@ -694,7 +639,6 @@ impl Turns {
 
     async fn after_turn(
         self: &Arc<Self>,
-        backend: &Arc<Backend>,
         hub: &Hub,
         store: &Arc<SessionStore>,
         spec: &Value,
@@ -719,7 +663,7 @@ impl Turns {
             && let Some(flight) = self.title_flights.claim(&session_id)
         {
             let accounts = self.accounts.enabled().then(|| self.accounts.clone());
-            tokio::spawn(generate_title(backend.clone(), hub.clone(), store.clone(), accounts, spec.clone(), flight));
+            tokio::spawn(generate_title(hub.clone(), store.clone(), accounts, spec.clone(), flight));
         }
         if summary.get("aborted") == Some(&Value::Bool(true)) || js::truthy(fresh.get("archivedAt")) {
             return summary;
@@ -735,20 +679,16 @@ impl Turns {
         });
         let payload =
             json!({ "opts": turn::send_options_for_queued_item(&base, &next), "queued": { "index": 0, "item": next } });
-        // A chain the daemon admitted (`turn_d...`) is admitted here; the host only as a fallback.
-        let mine = match self.preparer.get() {
-            Some(p) if turn_id.starts_with("turn_d") => p(payload.clone()).await,
+        // Only a chain the daemon admitted (`turn_d...`) runs its queue on.
+        let reply = match self.preparer.get() {
+            Some(p) if turn_id.starts_with("turn_d") => p(payload).await,
             _ => None,
         };
-        let reply = match mine {
-            Some(r) => Ok(r),
-            None => backend.call("turn:prepare", json!([turn_id, payload])).await,
-        };
         match reply {
-            Ok(reply) if reply.get("spec").is_some_and(Value::is_object) => {
+            Some(reply) if reply.get("spec").is_some_and(Value::is_object) => {
                 let next_spec = reply["spec"].clone();
                 let next_id = next_spec.get("turnId").cloned().unwrap_or(Value::Null);
-                match self.launch(backend.clone(), hub.clone(), next_spec) {
+                match self.launch(hub.clone(), next_spec) {
                     Ok((id, ended)) => {
                         if lock(&self.watched).contains_key(&session_id) {
                             lock(&self.chained).insert(id, ended);
@@ -758,47 +698,19 @@ impl Turns {
                     Err(e) => eprintln!("nekkod: could not start the next queued turn: {e}"),
                 }
             }
-            Ok(reply) if reply.get("inProcess") == Some(&Value::Bool(true)) => summary["drain"] = json!("host"),
-            Ok(_) => {}
-            Err(e) => eprintln!("nekkod: the host could not admit the next queued turn: {e}"),
+            _ => {}
         }
         summary
     }
 
-    async fn drive(
-        self: &Arc<Self>,
-        backend: &Arc<Backend>,
-        hub: Hub,
-        store: Arc<SessionStore>,
-        spec: &Value,
-        shared: Arc<Shared>,
-        rx: mpsc::UnboundedReceiver<Out>,
-    ) -> Value {
-        // The host's copy of every event, in order and batched; the UI never
-        // waits on it. Drained before `turn:end`.
-        let (host_tx, host_rx) = mpsc::unbounded_channel::<HostMsg>();
-        let wanted = host_events(&spec["facts"]);
-        // With no host there is no copy to keep: the channel is just dropped.
-        let host_task = (!backend.is_none())
-            .then(|| tokio::spawn(forward_to_host(host_rx, backend.clone(), shared.turn_id.clone(), wanted)));
-        let summary = self.run_turn(backend, &hub, store, spec, &shared, rx, &host_tx).await;
-        drop(host_tx);
-        if let Some(task) = host_task {
-            let _ = task.await;
-        }
-        summary
-    }
-
-    #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines)]
     async fn run_turn(
         self: &Arc<Self>,
-        backend: &Arc<Backend>,
         hub: &Hub,
         store: Arc<SessionStore>,
         spec: &Value,
         shared: &Arc<Shared>,
         rx: mpsc::UnboundedReceiver<Out>,
-        host_tx: &mpsc::UnboundedSender<HostMsg>,
     ) -> Value {
         let opts = &spec["opts"];
         let settings = &spec["settings"];
@@ -806,8 +718,7 @@ impl Turns {
         let session_id = shared.session_id.clone();
         let say = |event: Value| {
             note_error(&shared.last_error, &event);
-            hub.publish("agent:event", event.clone(), false);
-            let _ = host_tx.send(HostMsg { event, extra: None });
+            hub.publish("agent:event", event, false);
         };
         let early = |message: &str| {
             say(json!({ "type": "error", "sessionId": session_id, "message": message }));
@@ -961,7 +872,6 @@ impl Turns {
             Forward {
                 account: account.clone().map(|a| (self.accounts.clone(), a, opts.clone())),
                 hub: hub.clone(),
-                host: host_tx.clone(),
                 store: store.clone(),
                 session: session.clone(),
                 incognito,
@@ -1000,13 +910,9 @@ impl Turns {
             .map(str::to_string)
             .or_else(|| shared.default_mode.clone())
             .unwrap_or_else(|| "guardrails".into());
-        // A sandbox turn runs no hooks and no host tool: everything goes to its container.
-        let hooks = !sandbox && facts.get("hooks") == Some(&Value::Bool(true));
-        let native = if hooks || sandbox {
-            None
-        } else {
-            native_context(self, shared, backend, settings, &workspaces, &mode, &session_id)
-        };
+        // A sandbox turn runs no hooks and no built-in tool here: everything goes to its container.
+        let native =
+            if sandbox { None } else { native_context(self, shared, settings, &workspaces, &mode, &session_id) };
         let runner = TurnTools {
             sandbox: sandbox.then(|| self.sandboxes.clone()).flatten(),
             // The decision runner the host picked; the local one is this daemon's.
@@ -1018,12 +924,10 @@ impl Turns {
             sandbox_mode: settings.get("sandboxMode").and_then(Value::as_str).map(str::to_string),
             turns: self.clone(),
             shared: shared.clone(),
-            backend: backend.clone(),
             store: store.clone(),
             session: session.clone(),
             names,
             native,
-            hooks,
             hook_rules: facts.get("hookRules").filter(|r| r.is_array() && !sandbox).map(nekko_tools::hooks::rules),
             hook_cwd: workspaces.first().and_then(|w| str_at(w, "path")).map(str::to_string).unwrap_or_else(|| {
                 std::env::current_dir().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default()
@@ -1235,11 +1139,9 @@ impl Turns {
 /// `titleSession`: ask the turn's own provider and model for a short title
 /// once a chat's turn has content, and land it unless the user named the
 /// chat meanwhile. A failure just leaves the prompt-prefix placeholder. The
-/// call's usage goes to the usage log (written here when this daemon keeps it,
-/// else through the host's `turn:usage`), and the title's `session_meta` to
-/// the UI and the host's listeners (`turn:notify`).
+/// call's usage goes to the usage log when this daemon keeps it, and the
+/// title's `session_meta` to the UI.
 async fn generate_title(
-    backend: Arc<Backend>,
     hub: Hub,
     store: Arc<SessionStore>,
     accounts: Option<Arc<Accounts>>,
@@ -1277,19 +1179,12 @@ async fn generate_title(
         "usageOnFailure": true,
     });
     let Ok(out) = crate::sideband::complete(&request).await else { return };
-    if let Some(usage) = out.get("usage").filter(|u| u.as_array().is_some_and(|a| !a.is_empty())) {
+    if let Some(usage) = out.get("usage").filter(|u| u.as_array().is_some_and(|a| !a.is_empty()))
+        && let Some(a) = &accounts
+    {
         let provider = &facts["provider"];
         let who = json!({ "id": provider.get("id"), "kind": provider.get("kind"), "auth": provider.get("auth") });
-        match &accounts {
-            Some(a) => {
-                a.side_usage(&who, opts.get("modelId"), &session_id, usage.as_array().map_or(&[], Vec::as_slice))
-            }
-            None => {
-                let record =
-                    json!({ "provider": who, "modelId": opts.get("modelId"), "sessionId": session_id, "usage": usage });
-                let _ = backend.call("turn:usage", json!([record])).await;
-            }
-        }
+        a.side_usage(&who, opts.get("modelId"), &session_id, usage.as_array().map_or(&[], Vec::as_slice));
     }
     if out.get("error").is_some() {
         return;
@@ -1301,9 +1196,7 @@ async fn generate_title(
     let (st, id) = (store.clone(), session_id.clone());
     let landed = tokio::task::spawn_blocking(move || st.set_auto_title(&id, &title)).await;
     if matches!(landed, Ok(Ok(true))) {
-        let meta = json!({ "type": "session_meta", "sessionId": session_id });
-        hub.publish("agent:event", meta.clone(), false);
-        let _ = backend.call("turn:notify", json!([meta])).await;
+        hub.publish("agent:event", json!({ "type": "session_meta", "sessionId": session_id }), false);
     }
 }
 
@@ -1319,10 +1212,6 @@ pub(crate) fn base36(mut n: u64) -> String {
     }
     out.reverse();
     String::from_utf8(out).unwrap_or_default()
-}
-
-fn is_delta(e: &Value) -> bool {
-    matches!(str_at(e, "type"), Some("text" | "reasoning"))
 }
 
 fn is_checkpoint(e: &Value) -> bool {
@@ -1405,7 +1294,6 @@ struct Forward {
     /// Where this turn's usage and reply lines go, when the daemon keeps them.
     account: Option<(Arc<Accounts>, TurnAccount, Value)>,
     hub: Hub,
-    host: mpsc::UnboundedSender<HostMsg>,
     store: Arc<SessionStore>,
     session: Arc<Mutex<Value>>,
     incognito: bool,
@@ -1416,8 +1304,8 @@ struct Forward {
     last_error: Arc<Mutex<Option<String>>>,
 }
 
-/// The turn's events, in order: checkpoints saved first, then the UI told,
-/// then the host. Returns how the reply ended (`done.stop`).
+/// The turn's events, in order: checkpoints saved first, then the UI told.
+/// Returns how the reply ended (`done.stop`).
 async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option<Value> {
     let mut last_stop = None;
     while let Some(out) = rx.recv().await {
@@ -1425,8 +1313,7 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
             Out::End => break,
             Out::Event(e) => {
                 note_error(&f.last_error, &e);
-                f.hub.publish("agent:event", e.clone(), false);
-                let _ = f.host.send(HostMsg { event: e, extra: None });
+                f.hub.publish("agent:event", e, false);
                 continue;
             }
             Out::Loop(e, s) => (e, s),
@@ -1437,7 +1324,6 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
                 accounts.turn_usage(opts, account, &event);
             }
         }
-        let mut extra = None;
         if let Some(snapshot) = snapshot {
             let mut s = lock(&f.session);
             if let Some(obj) = s.as_object_mut() {
@@ -1460,104 +1346,19 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
             if let Some((accounts, account, opts)) = &f.account {
                 accounts.turn_end(opts, account, f.started_at, &event, finished.as_ref());
             }
-            extra = Some(json!({ "stats": finished, "startedAt": f.started_at }));
         }
         if is_checkpoint(&event) {
             persist(&f.store, &f.session, f.incognito).await;
         }
         let steered = str_at(&event, "type") == Some("steered");
         note_error(&f.last_error, &event);
-        f.hub.publish("agent:event", event.clone(), false);
-        let _ = f.host.send(HostMsg { event, extra });
+        f.hub.publish("agent:event", event, false);
         if steered {
             // The steering message is in the transcript now; panes re-read it.
-            let meta = json!({ "type": "session_meta", "sessionId": f.session_id });
-            f.hub.publish("agent:event", meta.clone(), false);
-            let _ = f.host.send(HostMsg { event: meta, extra: None });
+            f.hub.publish("agent:event", json!({ "type": "session_meta", "sessionId": f.session_id }), false);
         }
     }
     last_stop
-}
-
-/// Deltas of one kind in a row, joined, as the host relays them.
-fn coalesce(batch: Vec<Value>) -> Vec<Value> {
-    let mut out: Vec<Value> = Vec::new();
-    for e in batch {
-        if let Some(last) = out.last_mut()
-            && last["type"] == e["type"]
-        {
-            let joined = format!("{}{}", last["delta"].as_str().unwrap_or(""), e["delta"].as_str().unwrap_or(""));
-            last["delta"] = json!(joined);
-            continue;
-        }
-        out.push(e);
-    }
-    out
-}
-
-/// What a host with no TS relay, messaging or accounting asks for.
-pub const HOST_END_EVENTS: [&str; 2] = ["done", "error"];
-
-/// The event types the host asked for (`facts.hostEvents`), or `None` for
-/// every one: a host whose phone relay, messaging bridge or accounting still
-/// runs in TS reads the whole turn, one that only follows how turns end
-/// (agent watches, auto-continue) asks for `done` and `error`.
-fn host_events(facts: &Value) -> Option<HashSet<String>> {
-    facts
-        .get("hostEvents")?
-        .as_array()
-        .map(|kinds| kinds.iter().filter_map(Value::as_str).map(str::to_string).collect())
-}
-
-/// The host's copy of the turn's events, in order, deltas batched. The UI
-/// never waits on this: it has each event already.
-async fn forward_to_host(
-    mut rx: mpsc::UnboundedReceiver<HostMsg>,
-    backend: Arc<Backend>,
-    turn_id: String,
-    wanted: Option<HashSet<String>>,
-) {
-    let mut deltas: Vec<Value> = Vec::new();
-    let send = |payload: Value| {
-        let (backend, turn_id) = (backend.clone(), turn_id.clone());
-        async move {
-            let _ = backend.call("turn:event", json!([turn_id, payload])).await;
-        }
-    };
-    loop {
-        let next = if deltas.is_empty() {
-            rx.recv().await
-        } else {
-            match tokio::time::timeout(DELTA_BATCH, rx.recv()).await {
-                Ok(v) => v,
-                Err(_) => {
-                    send(json!({ "events": coalesce(std::mem::take(&mut deltas)) })).await;
-                    continue;
-                }
-            }
-        };
-        let Some(msg) = next else { break };
-        if wanted.as_ref().is_some_and(|w| !str_at(&msg.event, "type").is_some_and(|t| w.contains(t))) {
-            continue;
-        }
-        if is_delta(&msg.event) {
-            deltas.push(msg.event);
-            continue;
-        }
-        if !deltas.is_empty() {
-            send(json!({ "events": coalesce(std::mem::take(&mut deltas)) })).await;
-        }
-        let mut payload = json!({ "events": [msg.event] });
-        if let Some(Value::Object(extra)) = msg.extra {
-            for (k, v) in extra {
-                payload[k] = v;
-            }
-        }
-        send(payload).await;
-    }
-    if !deltas.is_empty() {
-        send(json!({ "events": coalesce(deltas) })).await;
-    }
 }
 
 /// The `decide` tool on the local decision model (chat.ts: `decisions.run`
@@ -1584,22 +1385,12 @@ async fn decide_tool(service: &DecideService, id: &str, input: &Value) -> Value 
     }
 }
 
-/// The agent terminal lines of one turn, sent to the host in order.
-struct HostLog(mpsc::UnboundedSender<Value>);
-
-impl CommandLog for HostLog {
-    fn append(&self, session_id: &str, workspace_id: Option<&str>, data: &str) {
-        let _ = self.0.send(json!([session_id, workspace_id, data]));
-    }
-}
-
-/// The built-in tools' context, or `None` (every tool then runs in the
-/// host) when a setting is one this build cannot read, such as a guardrail
-/// rule it does not know.
+/// The built-in tools' context, or `None` (no built-in tool then runs) when
+/// a setting is one this build cannot read, such as a guardrail rule it does
+/// not know.
 fn native_context(
     turns: &Arc<Turns>,
     shared: &Arc<Shared>,
-    backend: &Arc<Backend>,
     settings: &Value,
     workspaces: &[Value],
     mode: &str,
@@ -1629,20 +1420,7 @@ fn native_context(
     ctx.session_id = Some(session_id.to_string());
     ctx.changes = Some(turns.changes.clone());
     ctx.processes = Some(turns.processes.clone());
-    ctx.command_log = match &turns.agent_logs {
-        Some(logs) => Some(logs.clone() as Arc<dyn CommandLog>),
-        // No data directory here: the host keeps the agent terminal.
-        None => {
-            let (tx, mut rx) = mpsc::unbounded_channel::<Value>();
-            let b = backend.clone();
-            tokio::spawn(async move {
-                while let Some(line) = rx.recv().await {
-                    let _ = b.call("loop:log", line).await;
-                }
-            });
-            Some(Arc::new(HostLog(tx)))
-        }
-    };
+    ctx.command_log = turns.agent_logs.clone().map(|logs| logs as Arc<dyn CommandLog>);
     // Stop stops a running command too.
     let tools_cancel = ctx.cancel.clone();
     shared.cancel.on_cancel(move || tools_cancel.cancel());
@@ -1656,8 +1434,7 @@ struct TurnTools {
     /// The `decide` tool runs here when the host picked the local model.
     decide: Option<Arc<DecideService>>,
     hub: Hub,
-    /// `spawn_agent` children are driven here; the host only checks the call,
-    /// makes the child and admits its turns (`spawn:prepare`).
+    /// `spawn_agent` children are checked, made, admitted and driven here.
     spawn: bool,
     /// MCP calls run here when the host handed over the servers.
     mcp: Option<Arc<Mcp>>,
@@ -1667,13 +1444,10 @@ struct TurnTools {
     sandbox_mode: Option<String>,
     turns: Arc<Turns>,
     shared: Arc<Shared>,
-    backend: Arc<Backend>,
     store: Arc<SessionStore>,
     session: Arc<Mutex<Value>>,
     names: HashSet<String>,
     native: Option<ToolContext>,
-    /// The host runs this turn's tool hooks (`turn:hook`): an older host.
-    hooks: bool,
     /// This turn's hook rules, run here (`facts.hookRules`), and the folder they run in.
     hook_rules: Option<Vec<nekko_tools::hooks::HookRule>>,
     hook_cwd: String,
@@ -1720,35 +1494,7 @@ impl ToolRunner for TurnTools {
             }
             return self.inner(call).await;
         }
-        if !self.hooks {
-            return self.inner(call).await;
-        }
-        // PreToolUse hooks may block a call, PostToolUse hooks may add to its result (hooks.ts).
-        let id = str_at(call, "id").unwrap_or_default();
-        let pre =
-            self.backend.call("turn:hook", json!([self.shared.turn_id, "pre", call])).await.unwrap_or(Value::Null);
-        let notes: Vec<String> =
-            pre.get("notes").and_then(Value::as_array).map(|a| a.iter().map(js::display).collect()).unwrap_or_default();
-        if let Some(block) = pre.get("block").filter(|b| js::truthy(Some(b))) {
-            let mut lines = vec![js::display(block)];
-            lines.extend(notes);
-            return Ok(error(id, lines.join("\n")));
-        }
-        let out = self.inner(call).await?;
-        let post = self
-            .backend
-            .call("turn:hook", json!([self.shared.turn_id, "post", call, out]))
-            .await
-            .ok()
-            .filter(|v| v.is_object())
-            .unwrap_or(out);
-        if notes.is_empty() {
-            return Ok(post);
-        }
-        let mut post = post;
-        let output = format!("{}\n\n{}", post.get("output").map(js::display).unwrap_or_default(), notes.join("\n"));
-        post["output"] = json!(output);
-        Ok(post)
+        self.inner(call).await
     }
 }
 
@@ -1872,20 +1618,7 @@ impl TurnTools {
             let call: ToolCall = serde_json::from_value(call.clone()).map_err(|e| e.to_string())?;
             return serde_json::to_value(nekko_tools::execute(&call, ctx).await).map_err(|e| e.to_string());
         }
-        let reply = self.backend.call("turn:tool", json!([self.shared.turn_id, call])).await?;
-        if let Some(Value::Object(patch)) = reply.get("patch") {
-            {
-                let mut s = lock(&self.session);
-                if let Some(obj) = s.as_object_mut() {
-                    for (k, v) in patch {
-                        obj.insert(k.clone(), v.clone());
-                    }
-                }
-            }
-            persist(&self.store, &self.session, self.incognito).await;
-            self.shared.emit(json!({ "type": "session_meta", "sessionId": self.shared.session_id }));
-        }
-        Ok(reply.get("result").cloned().unwrap_or_else(|| error(id, "The host returned no result.")))
+        Err(format!("{name}: no tool runner for it here"))
     }
 
     /// A run chat's `report_experiment`, `report_artifact` or `update_plan`
@@ -2130,7 +1863,7 @@ impl TurnTools {
                     });
                     d("turn:spawnPrepare".into(), vec![req]).await
                 }
-                None => self.backend.call("spawn:prepare", json!([self.shared.turn_id, call, attempt, child])).await,
+                None => Err("Sub-agents need the daemon to know the data directory.".into()),
             };
             let prepared = match prepared {
                 Ok(v) => v,
@@ -2143,7 +1876,7 @@ impl TurnTools {
             if let Some(f) = prepared.get("failure") {
                 failure = Some(js::display(f));
             } else if let Some(spec) = prepared.get("spec").filter(|s| s.is_object()) {
-                match self.turns.launch(self.backend.clone(), self.hub.clone(), spec.clone()) {
+                match self.turns.launch(self.hub.clone(), spec.clone()) {
                     Ok((child_turn, ended)) => {
                         let turns = self.turns.clone();
                         self.shared.cancel.on_cancel(move || {
@@ -2364,14 +2097,7 @@ mod tests {
             tx.send((fail, String::new())).unwrap();
             tokio::time::timeout(
                 Duration::from_secs(10),
-                generate_title(
-                    Backend::disabled(),
-                    Hub::new(),
-                    store.clone(),
-                    None,
-                    spec.clone(),
-                    flights.claim("s_title").unwrap(),
-                ),
+                generate_title(Hub::new(), store.clone(), None, spec.clone(), flights.claim("s_title").unwrap()),
             )
             .await
             .unwrap();
@@ -2381,14 +2107,7 @@ mod tests {
         tx.send((false, "Later attempt".into())).unwrap();
         tokio::time::timeout(
             Duration::from_secs(10),
-            generate_title(
-                Backend::disabled(),
-                Hub::new(),
-                store.clone(),
-                None,
-                spec.clone(),
-                flights.claim("s_title").unwrap(),
-            ),
+            generate_title(Hub::new(), store.clone(), None, spec.clone(), flights.claim("s_title").unwrap()),
         )
         .await
         .unwrap();
@@ -2397,14 +2116,8 @@ mod tests {
         std::fs::write(&path, session.to_string()).unwrap();
         // Hold a successful response, then rename while it is pending.
         while seen_rx.try_recv().is_ok() {}
-        let task = tokio::spawn(generate_title(
-            Backend::disabled(),
-            Hub::new(),
-            store.clone(),
-            None,
-            spec,
-            flights.claim("s_title").unwrap(),
-        ));
+        let task =
+            tokio::spawn(generate_title(Hub::new(), store.clone(), None, spec, flights.claim("s_title").unwrap()));
         tokio::time::timeout(Duration::from_secs(10), seen_rx.recv()).await.unwrap().unwrap();
         let mut renamed = store.get("s_title").unwrap();
         renamed["title"] = json!("My name");
@@ -2475,12 +2188,5 @@ mod tests {
         assert_eq!(m["content"], "also check the tests");
         let id = m["id"].as_str().unwrap();
         assert!(id.starts_with("msg_") && id.matches('_').count() == 2, "{id}");
-    }
-
-    #[test]
-    fn coalesces_runs_of_the_same_delta_kind_only() {
-        let e = |t: &str, d: &str| json!({ "type": t, "sessionId": "s", "delta": d });
-        let out = coalesce(vec![e("reasoning", "a"), e("reasoning", "b"), e("text", "c"), e("text", "d")]);
-        assert_eq!(out, vec![e("reasoning", "ab"), e("text", "cd")]);
     }
 }

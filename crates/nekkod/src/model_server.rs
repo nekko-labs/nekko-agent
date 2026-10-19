@@ -32,9 +32,6 @@ pub const CHANNELS: &[&str] = &[
     "engine:loadedIds",
 ];
 
-/// What the backend is told the daemon owns (`NEKKOD_OWNS`): the model server.
-pub const OWNS: &str = "server";
-
 /// The daemon's own processes and router, as the policy drives them.
 struct Processes(Arc<crate::engine::Engine>);
 

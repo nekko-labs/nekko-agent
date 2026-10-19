@@ -7,14 +7,10 @@
 //! `packages/host/src/limits.ts`: the snapshot per token key, the 30-second
 //! poll throttle, one poll at a time per key, why the last read failed and
 //! the backoff before the next. A sign-in is renewed by the daemon's own
-//! OAuth service (`oauth.rs`, tokens.json's single writer), or by the TS host
-//! (`oauth:refresh`) when there is none; the TS host keeps the phone relay
-//! (`limits:notify`).
+//! OAuth service (`oauth.rs`, tokens.json's single writer).
 //!
-//! Owned only when the daemon knows the data directory; otherwise every one
-//! of these channels goes to the TS host as before.
+//! Owned only when the daemon knows the data directory.
 
-use crate::backend::Backend;
 use crate::hub::Hub;
 use nekko_usage::{LimitsError, Problem};
 use serde_json::{Map, Value, json};
@@ -106,29 +102,19 @@ impl TurnAccount {
 
 pub struct Accounts {
     dir: Option<PathBuf>,
-    backend: Arc<Backend>,
     hub: Hub,
     http: reqwest::Client,
     state: Mutex<State>,
     /// Appends from this process, one at a time, so lines never interleave.
     append: Mutex<()>,
-    /// The daemon's own sign-in service, which renews tokens; without it the
-    /// host renews them (`oauth:refresh`).
+    /// The daemon's own sign-in service, which renews tokens.
     pub oauth: std::sync::OnceLock<std::sync::Weak<crate::oauth::OAuth>>,
 }
 
 impl Accounts {
-    pub fn new(dir: Option<PathBuf>, backend: Arc<Backend>, hub: Hub) -> Self {
+    pub fn new(dir: Option<PathBuf>, hub: Hub) -> Self {
         let http = reqwest::Client::builder().timeout(READ_TIMEOUT).build().unwrap_or_default();
-        Self {
-            dir,
-            backend,
-            hub,
-            http,
-            state: Mutex::default(),
-            append: Mutex::new(()),
-            oauth: std::sync::OnceLock::new(),
-        }
+        Self { dir, hub, http, state: Mutex::default(), append: Mutex::new(()), oauth: std::sync::OnceLock::new() }
     }
 
     /// Whether this daemon owns accounting (it knows the data directory).
@@ -250,11 +236,7 @@ impl Accounts {
     /// Tell the UI, and the host for the phone relay.
     fn notify(&self, key: &str, limits: &Value) {
         let payload = json!({ "tokenKey": key, "limits": limits });
-        self.hub.publish("limits:updated", payload.clone(), false);
-        let backend = self.backend.clone();
-        tokio::spawn(async move {
-            let _ = backend.call("limits:notify", json!([payload])).await;
-        });
+        self.hub.publish("limits:updated", payload, false);
     }
 
     fn get(&self, key: &str) -> Option<Value> {
@@ -391,7 +373,7 @@ impl Accounts {
     }
 
     /// A token usable now: the stored one while it is good for another
-    /// minute (or never expires), else the host renews it and it is read back.
+    /// minute (or never expires), else the sign-in service renews it and it is read back.
     async fn fresh_token(&self, key: &str) -> Result<Option<Value>, Problem> {
         let usable = |t: &Value| {
             let expires = token_expires_at(t);
@@ -403,14 +385,12 @@ impl Accounts {
         if let Some(t) = self.token(key).filter(usable) {
             return Ok(Some(t));
         }
-        match self.oauth.get().and_then(std::sync::Weak::upgrade) {
-            Some(oauth) => {
-                oauth.ensure_fresh(key, false).await.map_err(Problem::Message)?;
-            }
-            None => {
-                self.backend.call("oauth:refresh", json!([key])).await.map_err(Problem::Message)?;
-            }
-        }
+        let oauth = self
+            .oauth
+            .get()
+            .and_then(std::sync::Weak::upgrade)
+            .ok_or_else(|| Problem::Message("no sign-in service to renew the token".into()))?;
+        oauth.ensure_fresh(key, false).await.map_err(Problem::Message)?;
         Ok(self.token(key))
     }
 
@@ -537,7 +517,7 @@ mod tests {
     }
 
     fn accounts(dir: &std::path::Path) -> Arc<Accounts> {
-        Arc::new(Accounts::new(Some(dir.to_path_buf()), Backend::disabled(), Hub::new()))
+        Arc::new(Accounts::new(Some(dir.to_path_buf()), Hub::new()))
     }
 
     fn pairs(list: &[(&str, &str)]) -> Vec<(String, String)> {
@@ -624,7 +604,7 @@ mod tests {
     #[test]
     fn turn_lines_are_the_hosts() {
         let dir = temp_dir("lines");
-        let a = Accounts::new(Some(dir.clone()), Backend::disabled(), Hub::new());
+        let a = Accounts::new(Some(dir.clone()), Hub::new());
         let account = TurnAccount::from_facts(&json!({ "account": { "auth": "apikey", "kind": "llamacpp" } })).unwrap();
         let opts = json!({ "sessionId": "s", "providerId": "p", "modelId": "m" });
         a.turn_usage(&opts, &account, &json!({ "type": "usage", "inputTokens": 1, "outputTokens": 2 }));

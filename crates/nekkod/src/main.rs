@@ -10,7 +10,7 @@ mod agent_logs;
 mod api_server;
 mod auto_continue;
 mod automation;
-mod backend;
+
 mod boot;
 mod catalog;
 mod claude_plan;
@@ -64,7 +64,6 @@ mod wire;
 mod workspace;
 mod worktrees;
 
-use backend::Backend;
 use hub::Hub;
 use nekko_term::Registry;
 use routes::Ctx;
@@ -104,38 +103,10 @@ fn main() -> std::process::ExitCode {
 async fn run(cfg: config::Config) -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(&cfg.listen).await?;
     let port = listener.local_addr()?.port();
-    let url = format!("http://127.0.0.1:{port}");
 
     let hub = Hub::new();
     let terminals = Arc::new(Registry::new());
-    let backend = match cfg.backend.clone() {
-        Some(mut cmd) => {
-            // What the backend must reach through the daemon rather than write itself.
-            if cfg.data_dir.is_some() {
-                let owns = [
-                    settings::OWNS,
-                    voice::OWNS,
-                    oauth::OWNS,
-                    automation::OWNS,
-                    remote::OWNS,
-                    messaging::OWNS,
-                    watches::OWNS,
-                    sandbox::OWNS,
-                    library::OWNS,
-                    downloads::OWNS,
-                    installs::OWNS,
-                    model_server::OWNS,
-                    small_services::OWNS,
-                    // Compactions are the daemon's wherever it admits turns.
-                    compaction::OWNS,
-                ];
-                cmd.env.insert("NEKKOD_OWNS".into(), owns.join(","));
-            }
-            Backend::spawn(cmd, url.clone(), cfg.token.clone(), hub.clone())
-        }
-        None => Backend::disabled(),
-    };
-    let engine = Arc::new(engine::Engine::new(backend.clone()));
+    let engine = Arc::new(engine::Engine::new());
     let sessions = cfg.data_dir.clone().map(|d| Arc::new(nekko_store::SessionStore::new(d)));
     let mcp: Arc<mcp::Mcp> = Arc::default();
     let changes = Arc::new(nekko_tools::ChangeTracker::new());
@@ -146,12 +117,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             hub.publish("changes:updated", serde_json::json!({ "sessionId": session_id }), false);
         });
     }
-    let accounts = Arc::new(accounts::Accounts::new(
-        cfg.data_dir.clone().map(std::path::PathBuf::from),
-        backend.clone(),
-        hub.clone(),
-    ));
-    let settings = cfg.data_dir.clone().map(|d| settings::Settings::new(d.into(), backend.clone(), hub.clone()));
+    let accounts = Arc::new(accounts::Accounts::new(cfg.data_dir.clone().map(std::path::PathBuf::from), hub.clone()));
+    let settings = cfg.data_dir.clone().map(|d| settings::Settings::new(d.into(), hub.clone()));
     // Older builds signed in to Claude plans; delete what they left (claude_plan.rs).
     if let (Some(d), Some(s)) = (&cfg.data_dir, &settings) {
         match claude_plan::migrate(std::path::Path::new(d), &s.store, nekko_oauth::now_ms()) {
@@ -172,12 +139,11 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     });
     let compactions = compaction::Compactions::new();
     let sandboxes = cfg.data_dir.clone().filter(|_| sessions.is_some()).map(|d| sandbox::Sandboxes::new(d.into()));
-    // Turns are admitted here wherever this daemon owns the data, with or without a TS backend.
+    // Turns are admitted here wherever this daemon owns the data.
     let admission =
         cfg.data_dir.is_some().then(|| admission::Admission::new(compactions.clone(), cfg.allow_browser_control));
     let catalog = settings.as_deref().map(|s| catalog::new(s, cfg.hugging_face_url.clone()));
-    let automation =
-        Arc::new(automation::Automation::new(sessions.clone(), settings.clone(), backend.clone(), hub.clone()));
+    let automation = Arc::new(automation::Automation::new(sessions.clone(), settings.clone(), hub.clone()));
     let remote = Arc::new(remote::Remote::new(cfg.data_dir.clone().map(std::path::PathBuf::from), hub.clone()));
     // The messaging bridges, with the data directory (and so the settings and sessions).
     let messaging = match (&cfg.data_dir, &settings, &sessions) {
@@ -201,12 +167,12 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     };
     // Agent watches, when the daemon knows the data directory (watches.rs).
     let agent_watches = match (&cfg.data_dir, &sessions) {
-        (Some(d), Some(store)) => Some(watches::Watches::new(d.into(), store.clone(), backend.clone(), hub.clone())),
+        (Some(d), Some(store)) => Some(watches::Watches::new(d.into(), store.clone(), hub.clone())),
         _ => None,
     };
     let machine =
         Arc::new(nekko_machine::Machine::new(cfg.data_dir.clone().map(std::path::PathBuf::from), Box::new(engine_bin)));
-    let library = settings.clone().map(|s| library::Library::new(s, backend.clone(), machine.clone(), engine.clone()));
+    let library = settings.clone().map(|s| library::Library::new(s, machine.clone(), engine.clone()));
     let model_downloads = library.clone().zip(catalog.clone()).map(|(library, catalog)| {
         let fetch =
             downloads::Rebased(nekko_engine::download::HttpFetch(reqwest::Client::new()), cfg.hugging_face_url.clone());
@@ -219,7 +185,6 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             d.queue(),
             s.store.clone(),
             machine.clone(),
-            backend.clone(),
             engine.clone(),
             cfg.github_api_url.clone(),
         )
@@ -235,10 +200,9 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     );
     let runtimes = settings
         .as_deref()
-        .map(|s| runtimes::new(s, backend.clone(), machine.clone(), library.clone(), installs.clone(), server.clone()));
+        .map(|s| runtimes::new(s, machine.clone(), library.clone(), installs.clone(), server.clone()));
     let ctx = Ctx {
         terminals: terminals.clone(),
-        backend: backend.clone(),
         hub: hub.clone(),
         engine: engine.clone(),
         sessions: sessions.clone(),
@@ -321,10 +285,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             .filter(|_| cfg.browser_bridge.is_some())
             .map(|n| native::Native::new(n, cfg.app_version.clone())),
         desktop: match (&cfg.native, &cfg.data_dir, &settings) {
-            // A desktop backend, while one runs, still serves these itself.
-            (Some(n), Some(d), Some(_)) if cfg.backend.is_none() => {
-                Some(desktop::Desktop::new(n, std::path::Path::new(d)))
-            }
+            (Some(n), Some(d), Some(_)) => Some(desktop::Desktop::new(n, std::path::Path::new(d))),
             _ => None,
         },
     };
@@ -352,11 +313,9 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             Box::pin(async move { routes::route(&ctx, &channel, args).await })
         }));
     }
-    // What a host used to do when it started, with no host to do it (boot.rs):
-    // first, so no turn starts before the last run's leftovers are written off.
-    if backend.is_none() {
-        boot::start(&ctx, cfg.auto_start_engine);
-    }
+    // What a host used to do when it started (boot.rs): first, so no turn
+    // starts before the last run's leftovers are written off.
+    boot::start(&ctx, cfg.auto_start_engine);
     automation.start();
     if let Some(n) = &ctx.native {
         n.start(ctx.clone());
@@ -407,7 +366,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     ctx.turns.harness.start_reaper();
     // Claude Agent's approval bridge: the app's own CLI, else `nekko-agent` on PATH.
     ctx.turns.harness.configure(harness::BridgeSetup {
-        wire_url: url.clone(),
+        wire_url: format!("http://127.0.0.1:{port}"),
         command: cfg
             .native
             .as_ref()
@@ -429,14 +388,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         out.flush()?;
     }
 
-    // The backend goes first, while this daemon still serves: what it is still
-    // sending (a settings change, a session save) has somewhere to land.
-    let (first, watch_stdin) = (backend.clone(), cfg.exit_on_stdin_close);
-    let stop = async move {
-        shutdown_signal(watch_stdin).await;
-        first.shutdown().await;
-    };
-    axum::serve(listener, router).with_graceful_shutdown(stop).await?;
+    axum::serve(listener, router).with_graceful_shutdown(shutdown_signal(cfg.exit_on_stdin_close)).await?;
 
     if let Some(d) = &after.desktop {
         d.shutdown(&after).await;
@@ -453,7 +405,6 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     if let Some(voice) = &voice {
         voice.stop().await;
     }
-    backend.shutdown().await;
     terminals.close_all();
     mcp.stop_all();
     processes.kill_all();

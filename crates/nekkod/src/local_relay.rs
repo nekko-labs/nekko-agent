@@ -583,6 +583,27 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn the_lan_switch_is_saved_only_when_off() {
+        let dir = std::env::temp_dir().join(format!("nekkod-local-relay-lan-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let file = dir.join("local-relay.json");
+        let relay = LocalRelay::new(file.clone(), None);
+        assert_eq!(relay.status()["lan"], true);
+        assert_eq!(relay.status()["lanUrls"], json!([]));
+        // Switched off while the relay is off: saved, nothing started.
+        let off = relay.set_lan(false).await;
+        assert_eq!(off["lan"], false);
+        assert_eq!(off["running"], false);
+        let saved: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+        assert_eq!(saved, json!({ "enabled": false, "port": LOCAL_RELAY_PORT, "lan": false }));
+        assert_eq!(LocalRelay::new(file.clone(), None).status()["lan"], false);
+        relay.set_lan(true).await;
+        let saved: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+        assert_eq!(saved, json!({ "enabled": false, "port": LOCAL_RELAY_PORT }));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
     #[test]
     fn a_saved_switch_and_port_come_back() {
         let dir = std::env::temp_dir().join(format!("nekkod-local-relay-{}", std::process::id()));

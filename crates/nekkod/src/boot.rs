@@ -1,9 +1,9 @@
-//! What the TS host did when it started (`createHost`), done here when no
-//! host runs beside the daemon (PF14 step 5 prep, part 6):
+//! What the TS host did when it started (`createHost`), done here
+//! (PF14 step 5 prep, part 6):
 //!
 //! - chats a previous run left mid-reply are written off
-//!   (`reconcileInterruptedChats`): with no host, nothing else drives a turn,
-//!   so every `activeRun` a fresh daemon finds is stale;
+//!   (`reconcileInterruptedChats`): nothing else drives a turn, so every
+//!   `activeRun` a fresh daemon finds is stale;
 //! - the model server's provider entry exists from the first launch
 //!   (`ensureEngineProvider`), since the Models tab addresses the engine
 //!   through it, and the server starts when `engine.autoStart` says so;
@@ -11,8 +11,6 @@
 //!   hourly (`removeMergedChatWorktrees`);
 //! - a chat that runs out of context with nobody watching is compacted and
 //!   carried on (`startAutoContinue`, auto_continue.rs).
-//!
-//! While a backend runs beside the daemon it still does all of these itself.
 
 use crate::routes::Ctx;
 use serde_json::{Map, Value, json};

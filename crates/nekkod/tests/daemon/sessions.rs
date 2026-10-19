@@ -12,7 +12,7 @@ async fn serves_session_reads_from_disk_when_it_knows_the_data_dir() {
         { "id": "a", "role": "assistant", "content": "", "images": ["data:x"], "generated": { "width": 8, "height": 8, "seed": 3 }, "createdAt": 2 },
     ] });
     std::fs::write(sessions.join("s_one.json"), serde_json::to_vec_pretty(&chat).unwrap()).unwrap();
-    let d = start_with(true, Some(&data));
+    let d = start_with(Some(&data));
 
     let (status, list) = post(d.port, "sessions:summaries", json!([]), Some(TOKEN)).await;
     assert_eq!(status, 200);
@@ -50,7 +50,6 @@ async fn serves_session_reads_from_disk_when_it_knows_the_data_dir() {
     post(d.port, "session:delete", json!([new_id]), Some(TOKEN)).await;
     let (_, gone) = post(d.port, "session:get", json!([new_id]), Some(TOKEN)).await;
     assert_eq!(gone, Value::Null);
-    // Clearing is owned by the daemon, not echoed by the backend.
     let (_, fresh) = post(d.port, "session:create", json!([]), Some(TOKEN)).await;
     let (_, cleared) = post(d.port, "sessions:clear", json!(["today"]), Some(TOKEN)).await;
     assert_eq!(cleared, json!(1));
@@ -58,11 +57,6 @@ async fn serves_session_reads_from_disk_when_it_knows_the_data_dir() {
     let (_, cleared) = post(d.port, "sessions:clear", json!(["all"]), Some(TOKEN)).await;
     assert_eq!(cleared, json!(1));
     assert!(!sessions.join("s_one.json").exists());
-    // The host's copy of each command log was dropped too (it may have written to one).
-    let (_, callbacks) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    let deletes: Vec<&Value> =
-        callbacks.as_array().unwrap().iter().filter(|c| c.as_array().is_some_and(|a| a.len() == 1)).collect();
-    assert_eq!(deletes, [&json!([new_id]), &json!([fresh["id"]]), &json!(["s_one"])], "{callbacks}");
     drop(d);
     std::fs::remove_dir_all(data).ok();
 }
@@ -84,13 +78,12 @@ async fn forks_chats_and_purges_expired_archives_itself() {
         let s = json!({ "id": id, "title": id, "updatedAt": 1, "messages": [], "archivedAt": archived });
         std::fs::write(sessions.join(format!("{id}.json")), serde_json::to_vec(&s).unwrap()).unwrap();
     }
-    let d = start_with(true, Some(&data));
+    let d = start_with(Some(&data));
 
     let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
     for channel in ["session:fork", "sessions:purgeArchived"] {
         assert!(info["owned"].as_array().unwrap().contains(&json!(channel)), "{channel} is not owned");
     }
-    // Served here, not echoed by the backend.
     let (status, fork) = post(d.port, "session:fork", json!(["s_src", "u2"]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{fork}");
     assert_eq!(fork["title"], "Source (split)");
@@ -108,25 +101,13 @@ async fn forks_chats_and_purges_expired_archives_itself() {
     assert_eq!((status, purged), (200, json!(1)));
     assert!(!sessions.join("s_old.json").exists());
     assert!(sessions.join("s_recent.json").exists() && sessions.join("s_live.json").exists());
-    // The host dropped the purged chat's command log first.
-    let (_, callbacks) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    assert_eq!(callbacks, json!([["s_old"]]));
     drop(d);
     std::fs::remove_dir_all(data).ok();
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn failed_log_callback_retains_json_for_delete_and_clear() {
-    assert_log_callback_failure_retains_json(true).await;
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn disabled_backend_retains_json_for_delete_and_clear() {
-    assert_log_callback_failure_retains_json(false).await;
-}
-
-async fn assert_log_callback_failure_retains_json(with_backend: bool) {
-    let data = std::env::temp_dir().join(format!("nekkod-retention-{}-{with_backend}", std::process::id()));
+async fn a_command_log_that_cannot_be_removed_retains_json_for_delete_and_clear() {
+    let data = std::env::temp_dir().join(format!("nekkod-retention-{}", std::process::id()));
     let sessions = data.join("sessions");
     std::fs::create_dir_all(&sessions).unwrap();
     // A command log that cannot be removed (a folder in its place): the chat must stay.
@@ -137,7 +118,7 @@ async fn assert_log_callback_failure_retains_json(with_backend: bool) {
     }))
     .unwrap();
     std::fs::write(&path, &bytes).unwrap();
-    let d = start_with(with_backend, Some(&data));
+    let d = start_with(Some(&data));
     for (channel, args) in [("session:delete", json!(["callback_fail"])), ("sessions:clear", json!(["all"]))] {
         let (status, body) = post(d.port, channel, args, Some(TOKEN)).await;
         assert_eq!(status, 400, "{channel}: {body}");
@@ -156,7 +137,7 @@ async fn serves_files_memory_and_comments_itself() {
     let project = data.join("project");
     std::fs::create_dir_all(project.join("src")).unwrap();
     std::fs::write(project.join("src").join("a.ts"), "export function a() {}\n").unwrap();
-    let d = start_with(true, Some(&data));
+    let d = start_with(Some(&data));
 
     let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
     for c in ["file:read", "dir:list", "workspace:search", "memory:save", "comment:add"] {
@@ -340,7 +321,6 @@ async fn continues_and_links_pr_stacks_itself() {
         "providerId": "p", "modelId": "m", "mode": "ask", "disabledTools": ["browser"], "messages": [], "createdAt": 1, "updatedAt": 1 });
     std::fs::write(data.join("sessions/s_src.json"), source.to_string()).unwrap();
     let d = start_with_env(
-        true,
         Some(&data),
         json!({ "githubApiUrl": format!("http://127.0.0.1:{gh}") }),
         &[
@@ -413,8 +393,6 @@ async fn continues_and_links_pr_stacks_itself() {
     ] {
         assert!(info["owned"].as_array().unwrap().contains(&json!(c)), "{c} not owned");
     }
-    let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    assert!(!calls.to_string().contains("continueStack"), "the host ran nothing: {calls}");
     drop(d);
     let _ = std::fs::remove_dir_all(&data);
 }
@@ -439,7 +417,7 @@ async fn wipes_the_data_it_owns_and_answers_the_small_services() {
         std::fs::create_dir_all(data.join(p).parent().unwrap()).unwrap();
         std::fs::write(data.join(p), text).unwrap();
     }
-    let d = start_with_config(true, Some(&data), json!({ "appVersion": "9.8.7", "edition": "desktop" }));
+    let d = start_with_config(Some(&data), json!({ "appVersion": "9.8.7", "edition": "desktop" }));
     post(d.port, "settings:update", json!([{ "theme": "light" }]), Some(TOKEN)).await;
 
     // session:watches: what the transcript shows, never the prompt.
@@ -467,13 +445,6 @@ async fn wipes_the_data_it_owns_and_answers_the_small_services() {
     assert!(data.join("tokens.json").exists(), "sign-ins are not part of a wipe");
     let saved: Value = serde_json::from_str(&std::fs::read_to_string(data.join("settings.json")).unwrap()).unwrap();
     assert_eq!(saved["theme"], json!("system"));
-    let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    let calls = calls.as_array().unwrap();
-    assert!(calls.iter().any(|c| c == &json!(["s_a"])), "the chat's command log went first: {calls:?}");
-    assert!(
-        calls.iter().any(|c| c[0] == "settings:changed" && c[1][1].is_null()),
-        "the host heard the reset: {calls:?}"
-    );
     drop(d);
     let _ = std::fs::remove_dir_all(&data);
 }
@@ -490,7 +461,7 @@ async fn writes_other_agent_tools_mcp_entries_itself() {
     let hand = json!({ "mcpServers": { "nekko-agent": { "command": "node", "args": ["dist/index.js", "mcp"] } } });
     std::fs::write(home.join(".cursor/mcp.json"), hand.to_string()).unwrap();
     let h = home.to_string_lossy().to_string();
-    let d = start_with_env(true, Some(&data), json!({}), &[("HOME", Some(&h)), ("USERPROFILE", Some(&h))]);
+    let d = start_with_env(Some(&data), json!({}), &[("HOME", Some(&h)), ("USERPROFILE", Some(&h))]);
 
     let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
     for c in ["integrations:detect", "integrations:install", "integrations:snippet", "integrations:refresh"] {
@@ -513,15 +484,12 @@ async fn writes_other_agent_tools_mcp_entries_itself() {
         ]
     );
 
-    // No target from the renderer: the backend's (the desktop's local server).
+    // No target from the renderer and no desktop app: the portable `npx` form.
     let (status, res) = post(d.port, "integrations:install", json!(["claude"]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{res}");
     assert_eq!(res["ok"], json!(true));
     let written: Value = serde_json::from_str(&std::fs::read_to_string(home.join(".claude.json")).unwrap()).unwrap();
-    assert_eq!(
-        written["mcpServers"]["nekko-agent"],
-        json!({ "command": "/opt/nekko/nekko-agent", "args": ["mcp"], "env": { "NEKKO_URL": "http://127.0.0.1:1439", "NEKKO_TOKEN": "tok-desk" } })
-    );
+    assert_eq!(written["mcpServers"]["nekko-agent"], json!({ "command": "npx", "args": ["-y", "nekko-agent", "mcp"] }));
     // A target given is used as given.
     let (_, res) = post(
         d.port,
@@ -534,7 +502,7 @@ async fn writes_other_agent_tools_mcp_entries_itself() {
     let toml = std::fs::read_to_string(home.join(".codex/config.toml")).unwrap();
     assert!(toml.contains("NEKKO_TOKEN = \"t9\"") && toml.contains("command = \"npx\""), "{toml}");
     let (_, snip) = post(d.port, "integrations:snippet", json!(["cursor", null]), Some(TOKEN)).await;
-    assert!(snip["snippet"].as_str().unwrap().contains("tok-desk"), "{snip}");
+    assert!(snip["snippet"].as_str().unwrap().contains("npx"), "{snip}");
 
     // A rolled token re-points the entries this app wrote, not the hand-written one.
     let target = json!({ "url": "http://127.0.0.1:1440", "token": "tok-new" });

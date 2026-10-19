@@ -871,7 +871,7 @@ pub async fn sweep_merged(ctx: &crate::routes::Ctx) -> Vec<(String, String)> {
         let sessions = store.list();
         move |r: &str| owner_in(&sessions, &running, r)
     };
-    let running = crate::routes::running_chats(ctx).await;
+    let running = crate::routes::running_chats(ctx);
     let (s, st) = (settings.clone(), store.clone());
     let entries = tokio::task::spawn_blocking(move || list(&s, &owners(st, running))).await.unwrap_or_default();
     let mut removed = Vec::new();
@@ -886,7 +886,7 @@ pub async fn sweep_merged(ctx: &crate::routes::Ctx) -> Vec<(String, String)> {
         }
         // Re-check right before removing: the chat may have started a turn,
         // edited a file or committed while GitHub was being asked.
-        let running = crate::routes::running_chats(ctx).await;
+        let running = crate::routes::running_chats(ctx);
         let (s, st, source) = (settings.clone(), store.clone(), self::s(&w, "sourceRoot").to_string());
         let (r, b) = (root.clone(), branch.clone());
         let done = tokio::task::spawn_blocking(move || {
@@ -916,7 +916,7 @@ pub async fn sweep_merged(ctx: &crate::routes::Ctx) -> Vec<(String, String)> {
 pub async fn route(ctx: &crate::routes::Ctx, channel: &str, args: &[Value]) -> Result<Value, String> {
     let settings = crate::settings::current(ctx).await;
     let store = ctx.sessions.clone().ok_or("chat worktrees need the data directory")?;
-    let running = crate::routes::running_chats(ctx).await;
+    let running = crate::routes::running_chats(ctx);
     let root = args.first().and_then(Value::as_str).unwrap_or_default().to_string();
     let channel = channel.to_string();
     tokio::task::spawn_blocking(move || {
