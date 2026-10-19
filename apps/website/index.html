@@ -118,7 +118,10 @@
 
     <header class="nav">
       <a class="brand" href="#top" aria-label="Nekko Agent home"><img class="brand-mark" src="/logo.svg?v=nekko-agent-6" alt="" width="30" height="23" /> NEKKO AGENT</a>
-      <nav class="nav-links" aria-label="Main navigation">
+      <button class="nav-menu" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="Open menu">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+      <nav class="nav-links" id="nav-links" aria-label="Main navigation">
         <a href="#pillars">What it does</a>
         <a href="#local">AI on your computer</a>
         <a href="#beta">Beta</a>
@@ -127,7 +130,7 @@
         <a href="/docs">Docs</a>
         <a href="https://github.com/nekko-labs/nekko-agent" target="_blank" rel="noopener">GitHub</a>
       </nav>
-      <button class="theme-toggle" type="button" aria-label="Switch between light and dark" title="Light or dark">
+      <button class="theme-toggle" type="button" aria-pressed="false" aria-label="Colourful look" title="Switch between the White and Colourful looks">
         <svg class="ic-moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
         <svg class="ic-sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       </button>
@@ -288,7 +291,7 @@
               </svg>
             </div>
             <!-- TODO before launch: point data-endpoint at the sign-up service (Formspree, Loops, Buttondown or similar).
-                 Until then the form only shows its thank-you and sends nothing. -->
+                 Until then the form says sign-ups are not open yet; it never claims a sign-up it did not send. -->
             <form class="beta-card" data-beta-form data-endpoint="" novalidate>
               <div class="beta-ask">
                 <h3>Join the beta</h3>

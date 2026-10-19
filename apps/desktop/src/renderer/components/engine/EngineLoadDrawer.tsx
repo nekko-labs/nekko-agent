@@ -209,7 +209,7 @@ export function EngineLoadDrawer({
                   <p className="text-[12px]">Load when the engine starts</p>
                   <p className="text-[11px] text-ink-faint">Comes up with these saved settings every time the engine does.</p>
                 </div>
-                <Toggle value={autoloaded} onChange={onToggleAutoload} />
+                <Toggle value={autoloaded} onChange={onToggleAutoload} label="Load when the engine starts" />
               </div>
             )}
             <div className="flex items-center justify-between gap-3">
@@ -222,6 +222,7 @@ export function EngineLoadDrawer({
               <Toggle
                 value={params.ttlSeconds === 0}
                 onChange={(v) => patch({ ttlSeconds: v ? 0 : undefined })}
+                label="Keep it loaded"
               />
             </div>
             {model.modality === 'vision' && !model.hasProjector && onFetchCompanions && (
@@ -545,7 +546,7 @@ function AdvancedSurface({
         label="Speculative decoding"
         hint="Guesses upcoming tokens from text already in the conversation and checks them in one pass. Edits that repeat their input come out several times faster."
       >
-        <Toggle value={params.speculative !== false} onChange={(on) => onChange({ speculative: on ? undefined : false })} />
+        <Toggle value={params.speculative !== false} onChange={(on) => onChange({ speculative: on ? undefined : false })} label="Speculative decoding" />
       </Row>
 
       {params.speculative !== false && <DraftModelRow model={model} value={params.draftModelId} onChange={(id) => onChange({ draftModelId: id })} />}
@@ -562,10 +563,10 @@ function AdvancedSurface({
             <NumberInput value={params.ubatchSize} min={16} max={4096} placeholder="auto" onChange={(n) => onChange({ ubatchSize: n })} />
           </Row>
           <Row label="Keep weights in RAM" hint="Stops the OS paging the model out. Uses more RAM and avoids a stall after idle.">
-            <Toggle value={params.mlock ?? false} onChange={(v) => onChange({ mlock: v })} />
+            <Toggle value={params.mlock ?? false} onChange={(v) => onChange({ mlock: v })} label="Keep weights in RAM" />
           </Row>
           <Row label="Memory-map the file" hint="On by default. Turning it off reads the whole model in, which is slower to start but avoids disk stalls.">
-            <Toggle value={params.mmap !== false} onChange={(v) => onChange({ mmap: v })} />
+            <Toggle value={params.mmap !== false} onChange={(v) => onChange({ mmap: v })} label="Memory-map the file" />
           </Row>
         </div>
       </details>

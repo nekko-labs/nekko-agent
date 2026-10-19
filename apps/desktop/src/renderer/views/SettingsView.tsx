@@ -135,11 +135,11 @@ export function SettingsView() {
           </div>
           <div className="mt-2 flex min-h-[40px] items-center justify-between">
             <span className="text-[13px]">Show tips</span>
-            <Toggle on={settings.showTips !== false} onChange={(v) => update({ showTips: v })} />
+            <Toggle aria-label="Show tips" on={settings.showTips !== false} onChange={(v) => update({ showTips: v })} />
           </div>
           <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3">
             <span className="text-[13px]">Confirm deletions</span>
-            <Toggle on={settings.skipDeleteConfirmation !== true} onChange={(v) => update({ skipDeleteConfirmation: !v })} />
+            <Toggle aria-label="Confirm deletions" on={settings.skipDeleteConfirmation !== true} onChange={(v) => update({ skipDeleteConfirmation: !v })} />
           </div>
           <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3 border-t border-line pt-3">
             <div className="min-w-0">
@@ -155,7 +155,7 @@ export function SettingsView() {
         <DesktopBehaviorSection settings={settings} update={update} />
         <FunSection settings={settings} update={update} />
         <section className="card mt-5 p-5">
-          <h2 className="font-semibold">Command Center</h2>
+          <h2 className="font-semibold">Agents wall</h2>
           <WallLayoutSettings settings={settings} update={update} />
           <label className="mt-3 flex items-center justify-between gap-3 text-[13px]">Auto-add new agents
             <input type="checkbox" checked={loadWallState(localStorage, settings.commandWall).autoAdd} onChange={async (e) => {
@@ -300,12 +300,12 @@ export function SettingsView() {
           <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
             <div><span className="text-[13px]">Show Chat workspace</span>
               <p className="text-[11px] text-ink-faint">Show the legacy Chat workspace tab. Off by default; Agents remains the main destination.</p></div>
-            <Toggle on={settings.developer?.chat === true} onChange={(v) => update({ developer: { ...settings.developer, chat: v } })} />
+            <Toggle aria-label="Show Chat workspace" on={settings.developer?.chat === true} onChange={(v) => update({ developer: { ...settings.developer, chat: v } })} />
           </div>
           <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
             <div><span className="text-[13px]">Show server controls</span>
               <p className="text-[11px] text-ink-faint">Desktop only. Show agent and model server toggles and Restart server in the top-right title bar. Off by default.</p></div>
-            <Toggle on={settings.developer?.serverControls === true} onChange={(v) => update({ developer: { ...settings.developer, serverControls: v } })} />
+            <Toggle aria-label="Show server controls" on={settings.developer?.serverControls === true} onChange={(v) => update({ developer: { ...settings.developer, serverControls: v } })} />
           </div>
         </section>
 
@@ -329,6 +329,7 @@ export function SettingsView() {
                   <p className="text-[11px] text-ink-faint">{f.desc}</p>
                 </div>
                 <Toggle
+                  aria-label={f.label}
                   on={settings.experimental?.[f.key] === true}
                   onChange={(v) => update({ experimental: { ...settings.experimental, [f.key]: v } })}
                 />
@@ -482,7 +483,7 @@ function HooksSection({ settings, update }: { settings: AppSettings; update: (pa
                   <input className="input max-w-[170px] py-1 font-mono text-[12px]" placeholder="Tools (regex), empty = all" aria-label="Hook tool matcher" defaultValue={h.matcher ?? ''} onBlur={(e) => edit(h.id, { matcher: e.target.value.trim() })} />
                 )}
                 <div className="ml-auto flex items-center gap-2">
-                  <Toggle on={h.enabled !== false} onChange={(v) => edit(h.id, { enabled: v })} />
+                  <Toggle aria-label={`Hook ${h.name || 'enabled'}`} on={h.enabled !== false} onChange={(v) => edit(h.id, { enabled: v })} />
                   <button className="btn btn-ghost px-2 py-1 text-ink-faint hover:text-(--danger)" title="Remove hook" aria-label="Remove hook" onClick={() => save(hooks.filter((x) => x.id !== h.id))}><TrashIcon className="h-3.5 w-3.5" /></button>
                 </div>
               </div>
@@ -797,7 +798,7 @@ function McpSection({
                   </Badge>
                 )}
                 <div className="ml-auto flex items-center gap-2">
-                  <Toggle on={s.enabled} onChange={(v) => edit(s.id, { enabled: v })} />
+                  <Toggle aria-label={`MCP server ${s.name}`} on={s.enabled} onChange={(v) => edit(s.id, { enabled: v })} />
                   <button className="btn btn-ghost px-2 py-1" title="Remove" onClick={() => remove(s.id)}><TrashIcon className="h-4 w-4" /></button>
                 </div>
               </div>
@@ -1102,7 +1103,7 @@ function GuardrailsSection({
                       );
                     })}
                   </div>
-                  <Toggle on={g.enabled} onChange={(v) => updateGuardrail({ ...g, enabled: v })} />
+                  <Toggle aria-label={g.label} on={g.enabled} onChange={(v) => updateGuardrail({ ...g, enabled: v })} />
                 </div>
               </div>
             </div>
@@ -1168,21 +1169,21 @@ function UpdatesSection({ settings, update }: { settings: AppSettings; update: (
           <span className="text-[13px]">App updates</span>
           <p className="text-[11px] text-ink-faint">Connects to the internet to look for new versions.</p>
         </div>
-        <Toggle on={checks.app} onChange={(v) => void setCheck('app', v)} />
+        <Toggle aria-label="App updates" on={checks.app} onChange={(v) => void setCheck('app', v)} />
       </div>
       <div className="mt-3 flex min-h-[40px] items-center justify-between border-t border-line pt-3">
         <div>
           <span className="text-[13px]">Provider model lists</span>
           <p className="text-[11px] text-ink-faint">Re-read each configured provider's catalog in the background, so new models appear without an app release.</p>
         </div>
-        <Toggle on={checks.modelLists} onChange={(v) => void setCheck('modelLists', v)} />
+        <Toggle aria-label="Provider model lists" on={checks.modelLists} onChange={(v) => void setCheck('modelLists', v)} />
       </div>
       <div className="mt-3 flex min-h-[40px] items-center justify-between border-t border-line pt-3">
         <div>
           <span className="text-[13px]">Skills catalog</span>
           <p className="text-[11px] text-ink-faint">Refresh the skills marketplace shelf in the background.</p>
         </div>
-        <Toggle on={checks.skills} onChange={(v) => void setCheck('skills', v)} />
+        <Toggle aria-label="Skills catalog" on={checks.skills} onChange={(v) => void setCheck('skills', v)} />
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <button className="btn btn-outline py-1.5 text-[12px]" onClick={() => void runCatalogChecks()} disabled={catalogState === 'checking'}>

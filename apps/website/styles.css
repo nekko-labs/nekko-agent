@@ -703,6 +703,25 @@ body {
 .theme-toggle .ic-sun { display: none; } /* light: show the moon (go dark) */
 @media (max-width: 560px) { .theme-toggle { width: 32px; height: 32px; } }
 
+/* ---- phone menu: below 900px the links fold behind a button; opening it
+   grows the glass pill downward (the pill clips anything outside it) ---- */
+.nav-menu {
+  display: none; place-items: center; width: 36px; height: 36px;
+  border-radius: 11px; border: 2px solid var(--sticker); background: var(--bg-2);
+  box-shadow: 3px 3px 0 var(--sticker); color: var(--ink); cursor: pointer;
+}
+.nav-menu:focus-visible { outline: 3px solid #9d8ce6; outline-offset: 3px; }
+@media (max-width: 900px) {
+  .nav-menu { display: grid; }
+  .nav.nav-open { flex-wrap: wrap; }
+  .nav.nav-open .nav-links {
+    display: flex; order: 10; flex-basis: 100%; flex-direction: column; gap: 2px;
+    padding: 8px 0 4px; border-top: 1px solid var(--line); margin-top: 6px;
+  }
+  .nav.nav-open .nav-links a { padding: 10px 6px; font-size: 15px; color: var(--ink); }
+}
+@media (max-width: 560px) { .nav-menu { width: 32px; height: 32px; } }
+
 /* ---- colourful mode: the whole page painted in the logo's lavender
    (#9D8CE6), with lighter lilac, aqua and mint drifting through it. No dark
    ground anywhere: text stays dark ink, cards are frosted white, and the
