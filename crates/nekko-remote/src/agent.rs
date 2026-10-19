@@ -261,7 +261,11 @@ impl AgentCore {
             }
             "done" => "done",
             "error" => {
-                if stopped(e) { "done" } else { "failed" }
+                if stopped(e) {
+                    "done"
+                } else {
+                    "failed"
+                }
             }
             _ => return None,
         };
