@@ -62,15 +62,15 @@ public enum Diagnostics {
         }
         func ms(_ start: TimeInterval) -> Int { max(0, Int(((clock() - start) * 1000).rounded())) }
 
-        var address = host
+        var addresses = [host]
         if isLiteral(host) {
             report.dns = ProbeStep(ok: true, ms: 0, detail: "Address, no lookup needed")
         } else {
             let start = clock()
             do {
                 let found = try await network.resolve(host, timeout: timeout)
-                guard let first = found.first else { throw RelayError("No addresses") }
-                address = first
+                guard !found.isEmpty else { throw RelayError("No addresses") }
+                addresses = found
                 report.dns = ProbeStep(ok: true, ms: ms(start), detail: found.prefix(3).joined(separator: ", "))
             } catch {
                 report.dns = ProbeStep(ok: false, ms: ms(start), detail: "Name not found: \(redact(error.localizedDescription))")
@@ -78,12 +78,23 @@ public enum Diagnostics {
             }
         }
 
+        // Every address the name has, in order, as the socket would (`localhost`
+        // is often ::1 first while the relay listens on 127.0.0.1).
         let start = clock()
-        do {
-            try await network.connect(address, port: port, timeout: timeout)
-            report.tcp = ProbeStep(ok: true, ms: ms(start), detail: "Port \(port) open")
-        } catch {
-            report.tcp = ProbeStep(ok: false, ms: ms(start), detail: redact(error.localizedDescription))
+        var lastError: Error?
+        for address in addresses.prefix(4) {
+            do {
+                try await network.connect(address, port: port, timeout: timeout)
+                let via = addresses.count > 1 ? " on \(address)" : ""
+                report.tcp = ProbeStep(ok: true, ms: ms(start), detail: "Port \(port) open\(via)")
+                lastError = nil
+                break
+            } catch {
+                lastError = error
+            }
+        }
+        if let lastError {
+            report.tcp = ProbeStep(ok: false, ms: ms(start), detail: redact(lastError.localizedDescription))
             return report
         }
 

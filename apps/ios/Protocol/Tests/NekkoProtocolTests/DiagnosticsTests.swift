@@ -41,6 +41,15 @@ final class DiagnosticsTests: XCTestCase {
         XCTAssertEqual(r.kind, .tailscale)
     }
 
+    func testTriesEveryAddressTheNameHas() async {
+        // localhost on a Mac: ::1 first, while the relay listens on 127.0.0.1 (found on macOS CI).
+        let net = FakeNetwork(addresses: ["localhost": ["::1", "127.0.0.1"]], open: ["127.0.0.1:4400"])
+        let r = await Diagnostics.check("ws://localhost:4400", network: net) { _ in ProbeStep(ok: true, detail: "answered") }
+        XCTAssertEqual(r.tcp?.ok, true)
+        XCTAssertEqual(r.tcp?.detail, "Port 4400 open on 127.0.0.1")
+        XCTAssertEqual(r.hello?.ok, true)
+    }
+
     func testStopsAtTheFirstFailedStep() async {
         let net = FakeNetwork(addresses: ["studio.tail1234.ts.net": ["100.101.102.103"]])
         let noName = await Diagnostics.check("ws://nowhere.tail1234.ts.net:4400", network: net) { _ in
