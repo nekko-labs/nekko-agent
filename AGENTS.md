@@ -40,9 +40,13 @@ it skips the queue, and the queue is what tests your PR against everything landi
 beside it. The auto-merge workflow also queues every ready PR, so `gh pr merge
 --auto` is a belt to its braces. Never add `--squash` (or another method) to it:
 with a method, gh arms classic auto-merge, which waits outside the queue forever.
-The queue's own setting squashes. If a ready PR with a green `gate` is not in the
-queue (`gh pr view <n> --json mergeStateStatus`, or the PR page), run `gh pr merge
---auto <n>` again once `gate` is green: with checks already passed, gh enqueues it.
+The queue's own setting squashes. The auto-merge workflow also runs on every push,
+so a fix to a red PR re-queues itself. Every 15 minutes `queue-sweeper.yml`
+re-queues a ready PR whose `gate` is green but which is not in the queue (once per
+head commit, so a queue ejection by a flake heals and a real one waits for your
+fix), and re-runs a red `gate`'s failed jobs once. To keep a ready PR out of the
+queue, mark it draft or label it `hold`. If you need it queued sooner, `gh pr merge
+--auto <n>` once `gate` is green still works.
 
 ### Ready, not draft
 
