@@ -55,7 +55,6 @@ export const ALLOW = [
   { path: 'scripts/check-claude-compliance.test.mjs', rules: '*', why: 'seeds violations on purpose' },
   { path: 'docs/superpowers/plans/', rules: '*', why: 'docs history: the plans the removed sign-in shipped from' },
   { path: 'TASKS.md', rules: '*', why: 'task history (T138 and the CL group record what was removed)' },
-  { path: 'packages/host/src/oauth.test.ts', rules: ['claude-credentials-file'], why: 'proves the credential file is never imported' },
   {
     path: 'scripts/claude-code-probe.test.mjs',
     rules: ['sets-claude-code-oauth-token'],
