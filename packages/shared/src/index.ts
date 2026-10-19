@@ -54,6 +54,7 @@ export * from './limits.js';
 export * from './e2e.js';
 export * from './remote.js';
 export * from './relay-route.js';
+export * from './pairing-link.js';
 export * from './phone-access.js';
 export * from './phone-changes.js';
 export * from './phone-views.js';

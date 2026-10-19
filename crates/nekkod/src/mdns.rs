@@ -345,6 +345,8 @@ pub fn host_label(raw: &str) -> String {
 /// One address of `os.networkInterfaces()`.
 #[derive(Clone, Debug)]
 pub struct Nic {
+    /// The adapter's name, as the OS gives it ("en0", "Ethernet").
+    pub name: String,
     pub address: String,
     pub ipv4: bool,
     pub internal: bool,
@@ -355,7 +357,12 @@ pub fn interfaces() -> Vec<Nic> {
     if_addrs::get_if_addrs()
         .unwrap_or_default()
         .into_iter()
-        .map(|i| Nic { address: i.ip().to_string(), ipv4: i.ip().is_ipv4(), internal: i.is_loopback() })
+        .map(|i| Nic {
+            name: i.name.clone(),
+            address: i.ip().to_string(),
+            ipv4: i.ip().is_ipv4(),
+            internal: i.is_loopback(),
+        })
         .collect()
 }
 
@@ -830,9 +837,10 @@ pub mod tests {
 
     pub fn nics_of(spec: &Value) -> Vec<Nic> {
         let mut out = Vec::new();
-        for list in spec.as_object().unwrap().values() {
+        for (name, list) in spec.as_object().unwrap() {
             for n in list.as_array().unwrap() {
                 out.push(Nic {
+                    name: name.clone(),
                     address: n[0].as_str().unwrap().into(),
                     internal: n[1].as_bool().unwrap(),
                     ipv4: n.get(2).and_then(Value::as_str).unwrap_or("IPv4") == "IPv4",

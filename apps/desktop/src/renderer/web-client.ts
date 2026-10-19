@@ -585,6 +585,7 @@ function makeWebClient(): NekkoApi {
     localRelayStatus: async () => webLocalRelay,
     localRelayStart: async () => webLocalRelay,
     localRelayStop: async () => webLocalRelay,
+    localRelaySetLan: async () => webLocalRelay,
     networkVisibilityStatus: async () => webVisibility,
     networkVisibilityStart: async () => webVisibility,
     networkVisibilityStop: async () => webVisibility,

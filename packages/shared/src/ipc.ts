@@ -293,6 +293,7 @@ export const IpcChannels = {
   localRelayStatus: 'localRelay:status',
   localRelayStart: 'localRelay:start',
   localRelayStop: 'localRelay:stop',
+  localRelaySetLan: 'localRelay:setLan',
   networkVisibilityStatus: 'networkVisibility:status',
   networkVisibilityStart: 'networkVisibility:start',
   networkVisibilityStop: 'networkVisibility:stop',
@@ -872,6 +873,8 @@ export interface NekkoApi {
   /** Switch it on (and keep it on across restarts); reports why if it can't start. */
   localRelayStart(): Promise<import('./relay-route.js').LocalRelayStatus>;
   localRelayStop(): Promise<import('./relay-route.js').LocalRelayStatus>;
+  /** Also listen on this computer's private LAN addresses (on by default). Desktop only. */
+  localRelaySetLan(on: boolean): Promise<import('./relay-route.js').LocalRelayStatus>;
   /**
    * "Visible on this network": answer mDNS for `_nekko-agent._tcp` so phones
    * on the same Wi-Fi can list this computer. Off by default; says nothing
