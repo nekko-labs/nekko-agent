@@ -22,10 +22,22 @@ interface ClaudeId {
 }
 
 /** A Claude model id as family + version, or null for anything else. */
+/**
+ * Bedrock names a model `anthropic.claude-…`, or `us.anthropic.claude-…`
+ * through a cross-region inference profile. The part after the provider prefix
+ * is the Claude id the version rules read.
+ */
+export function withoutBedrockPrefix(id: string): string {
+  const at = id.indexOf('anthropic.');
+  if (at < 0) return id;
+  const rest = id.slice(at + 'anthropic.'.length);
+  return rest.startsWith('claude-') ? rest : id;
+}
+
 export function parseClaudeModel(modelId: string | undefined): ClaudeId | null {
   // Gateways prefix the vendor (`anthropic/claude-opus-5`) and the pattern is
-  // anchored, so strip the prefix before reading it.
-  const id = (modelId ?? '').toLowerCase().trim().replace(/^.*\//, '');
+  // anchored, so strip the prefix before reading it. Bedrock's `anthropic.` too.
+  const id = withoutBedrockPrefix((modelId ?? '').toLowerCase().trim().replace(/^.*\//, ''));
   const m = /^claude-(opus|sonnet|haiku|fable|mythos)-(\d+)(?:-(\d{1,2})(?!\d))?/.exec(id);
   if (!m) return null;
   return { family: m[1] as ClaudeId['family'], major: Number(m[2]), minor: Number(m[3] ?? 0) };

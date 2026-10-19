@@ -180,11 +180,19 @@ fn is_local(kind: &str) -> bool {
 /// `providerEndpoint`: a provider's URL when it is one a turn may call.
 pub(crate) fn provider_endpoint(provider: &Value) -> Option<url::Url> {
     let kind = s(provider, "kind");
-    if !is_local(kind) && !["anthropic", "openai", "openrouter", "chatgpt", "openai-compat"].contains(&kind) {
+    if !is_local(kind) && !["anthropic", "bedrock", "openai", "openrouter", "chatgpt", "openai-compat"].contains(&kind)
+    {
         return None;
     }
     let url = url::Url::parse(provider.get("baseUrl").and_then(Value::as_str)?).ok()?;
     (matches!(url.scheme(), "http" | "https") && url.username().is_empty() && url.password().is_none()).then_some(url)
+}
+
+/// Whether a turn may run on this provider: one with a valid endpoint, or
+/// Claude Agent (`claude-code`), which runs the user's own Claude Code and has
+/// no URL at all.
+pub(crate) fn turn_provider_allowed(provider: &Value) -> bool {
+    s(provider, "kind") == "claude-code" || provider_endpoint(provider).is_some()
 }
 
 /// `offlineProviderAllowed`: a local kind (or openai-compat) on a loopback address.
@@ -518,7 +526,7 @@ async fn admit(
         )
         .await;
     }
-    if provider_endpoint(&provider).is_none() {
+    if !turn_provider_allowed(&provider) {
         return ended(ctx, &session_id, "Provider requires a valid HTTP(S) endpoint.").await;
     }
 
@@ -837,6 +845,10 @@ mod tests {
         assert!(provider_endpoint(&p("openai", "https://u:p@api.openai.com")).is_none());
         assert!(provider_endpoint(&p("openai", "ftp://x")).is_none());
         assert!(provider_endpoint(&p("mystery", "http://x")).is_none());
+        assert!(provider_endpoint(&p("claude-code", "")).is_none());
+        assert!(turn_provider_allowed(&p("claude-code", "")));
+        assert!(!turn_provider_allowed(&p("mystery", "http://x")));
+        assert!(turn_provider_allowed(&p("openai", "https://api.openai.com/v1")));
     }
 
     #[test]

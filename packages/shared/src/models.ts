@@ -12,7 +12,14 @@ export type ProviderKind =
   | 'vllm'
   /** The engine Nekko Agent runs itself (llama.cpp behind its own router). */
   | 'llamacpp'
-  | 'openai-compat';
+  | 'openai-compat'
+  /** Claude in Amazon Bedrock: the Messages API on the user's own Bedrock bearer token. */
+  | 'bedrock'
+  /**
+   * Claude Agent: the user's own installed Claude Code runs the chat, driven
+   * headless by nekkod. No base URL and no key; sign-in happens in Claude Code.
+   */
+  | 'claude-code';
 
 /** A configured connection to a model server / provider. */
 export interface ProviderConfig {
@@ -174,6 +181,9 @@ export const PROVIDER_DEFAULTS: Record<ProviderKind, { baseUrl: string; needsKey
   vllm: { baseUrl: 'http://localhost:8000/v1', needsKey: false, label: 'vLLM' },
   llamacpp: { baseUrl: `http://127.0.0.1:${ENGINE_PORT_DEFAULT}/v1`, needsKey: false, label: 'Nekko Agent engine' },
   'openai-compat': { baseUrl: 'http://localhost:8080/v1', needsKey: false, label: 'OpenAI-compatible' },
+  // The region is part of the host: edit it to match the Bedrock region you use.
+  bedrock: { baseUrl: 'https://bedrock-mantle.us-east-1.api.aws/anthropic', needsKey: true, label: 'Claude in Amazon Bedrock' },
+  'claude-code': { baseUrl: '', needsKey: false, label: 'Claude Agent' },
 };
 
 /** Ports we probe when auto-discovering local servers. */

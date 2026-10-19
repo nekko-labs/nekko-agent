@@ -191,7 +191,16 @@ struct ConnectionBanner: View {
         if let l = line {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: l.icon).foregroundStyle(l.color)
-                Text(l.text).font(.footnote).foregroundStyle(palette.ink).fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(l.text).font(.footnote).foregroundStyle(palette.ink).fixedSize(horizontal: false, vertical: true)
+                    // iOS doesn't let an app turn the VPN on; this is the shortest way to the switch (TS-4).
+                    if app.offersTailscale {
+                        Button("Open Tailscale") { app.openTailscale() }
+                            .font(.footnote.weight(.semibold))
+                            .accessibilityIdentifier("open-tailscale")
+                            .accessibilityHint("Opens the Tailscale app, or the App Store if it isn’t installed.")
+                    }
+                }
                 Spacer(minLength: 0)
                 if store.conn == .connecting || store.conn == .offline {
                     Button("Retry") { store.reconnect() }.font(.footnote.weight(.semibold))

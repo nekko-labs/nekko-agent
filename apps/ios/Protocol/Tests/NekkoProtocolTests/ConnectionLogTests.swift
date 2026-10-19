@@ -46,3 +46,28 @@ final class ConnectionLogTests: XCTestCase {
         XCTAssertTrue(cert.contains { $0.contains("certificate") })
     }
 }
+
+final class TailscaleAppTests: XCTestCase {
+    func testOfferedOnlyWhenTheTailnetRouteIsDownOnThisPhone() {
+        XCTAssertTrue(TailscaleApp.shouldOffer(route: .tailscale, tailscaleOn: false, state: .connecting))
+        XCTAssertTrue(TailscaleApp.shouldOffer(route: .tailscale, tailscaleOn: false, state: .offline))
+        XCTAssertFalse(TailscaleApp.shouldOffer(route: .tailscale, tailscaleOn: true, state: .connecting), "Tailscale is on: the computer is the problem")
+        XCTAssertFalse(TailscaleApp.shouldOffer(route: .tailscale, tailscaleOn: false, state: .online))
+        XCTAssertFalse(TailscaleApp.shouldOffer(route: .tailscale, tailscaleOn: false, state: .denied), "pairing again is the fix, not Tailscale")
+        XCTAssertFalse(TailscaleApp.shouldOffer(route: .internet, tailscaleOn: false, state: .connecting))
+        XCTAssertFalse(TailscaleApp.shouldOffer(route: .lan, tailscaleOn: false, state: .connecting))
+    }
+
+    func testOpensTheAppOrItsAppStorePage() {
+        XCTAssertEqual(TailscaleApp.destination(installed: true).absoluteString, "tailscale://")
+        XCTAssertEqual(TailscaleApp.destination(installed: false).host, "apps.apple.com")
+        XCTAssertEqual(TailscaleApp.appURL.scheme, TailscaleApp.scheme)
+    }
+
+    func testOpenFallsBackToTheAppStore() {
+        var opened: [URL] = []
+        XCTAssertEqual(TailscaleApp.open(canOpen: { _ in true }, open: { opened.append($0) }), TailscaleApp.appURL)
+        XCTAssertEqual(TailscaleApp.open(canOpen: { _ in false }, open: { opened.append($0) }), TailscaleApp.appStoreURL)
+        XCTAssertEqual(opened, [TailscaleApp.appURL, TailscaleApp.appStoreURL])
+    }
+}

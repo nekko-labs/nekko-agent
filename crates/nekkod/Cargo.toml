@@ -35,6 +35,7 @@ nekko-connectors = { path = "../nekko-connectors" }
 nekko-context = { path = "../nekko-context" }
 nekko-decide = { path = "../nekko-decide" }
 nekko-engine = { path = "../nekko-engine" }
+nekko-harness = { path = "../nekko-harness" }
 nekko-infer = { path = "../nekko-infer" }
 nekko-js = { path = "../nekko-js" }
 nekko-loop = { path = "../nekko-loop" }

@@ -3,7 +3,7 @@ import { withToolImages } from './tool-images.js';
 import { withVideoNote } from './media.js';
 import { normalizeAnthropicImages } from './anthropic-images.js';
 import type { ModelAvailability, ModelInfo, ProviderConfig, ToolCall } from '@nekko-agent/shared';
-import { claudeContextWindow, claudeMaxOutputTokens, effectiveEffort, modelEffortLevels, parseClaudeModel } from '@nekko-agent/shared';
+import { claudeContextWindow, claudeMaxOutputTokens, effectiveEffort, modelEffortLevels, parseClaudeModel, withoutBedrockPrefix } from '@nekko-agent/shared';
 import type { Provider, ChatRequest, ProviderChunk } from './types.js';
 import { parseSSE } from './sse.js';
 import { httpError } from './errors.js';
@@ -28,6 +28,23 @@ const CLAUDE_MODELS: Array<{ id: string; name: string; availability?: ModelAvail
   { id: 'claude-fable-5-1', name: 'Claude Fable 5.1' },
   { id: 'claude-haiku-5-5', name: 'Claude Haiku 5.5' },
   { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5' },
+];
+
+/**
+ * What Claude in Amazon Bedrock serves on its Messages endpoint. It has no
+ * Models API, so this list is the catalog; ids carry Bedrock's provider prefix.
+ */
+const BEDROCK_MODELS: Array<{ id: string; name: string; availability?: ModelAvailability }> = [
+  { id: 'anthropic.claude-opus-5-5', name: 'Claude Opus 5.5' },
+  { id: 'anthropic.claude-opus-5', name: 'Claude Opus 5' },
+  { id: 'anthropic.claude-opus-4-8', name: 'Claude Opus 4.8' },
+  { id: 'anthropic.claude-opus-4-7', name: 'Claude Opus 4.7' },
+  { id: 'anthropic.claude-sonnet-5-5', name: 'Claude Sonnet 5.5' },
+  { id: 'anthropic.claude-sonnet-5', name: 'Claude Sonnet 5' },
+  { id: 'anthropic.claude-fable-5-1', name: 'Claude Fable 5.1' },
+  { id: 'anthropic.claude-fable-5', name: 'Claude Fable 5' },
+  { id: 'anthropic.claude-haiku-5-5', name: 'Claude Haiku 5.5' },
+  { id: 'anthropic.claude-haiku-4-5', name: 'Claude Haiku 4.5' },
 ];
 
 /**
@@ -96,7 +113,7 @@ export function rejectsSampling(model: string): boolean {
  * most common way the rule gets fooled.
  */
 function normalizeModelId(model: string): string {
-  return model.toLowerCase().trim().replace(/^.*\//, '');
+  return withoutBedrockPrefix(model.toLowerCase().trim().replace(/^.*\//, ''));
 }
 
 /**
@@ -260,7 +277,7 @@ export class AnthropicProvider implements Provider {
    * CATALOG_TIMEOUT_MS, so the caller can fall back to the shipped list.
    */
   private async fetchCatalog(): Promise<ModelInfo[] | null> {
-    if (!this.config.apiKey) return null;
+    if (!this.config.apiKey || this.config.kind === 'bedrock') return null;
     const abort = new AbortController();
     const timer = setTimeout(() => abort.abort(), CATALOG_TIMEOUT_MS);
     let json: any;
@@ -289,7 +306,7 @@ export class AnthropicProvider implements Provider {
   async listModels(): Promise<ModelInfo[]> {
     return (
       (await this.fetchCatalog()) ??
-      CLAUDE_MODELS.map((m) => ({
+      (this.config.kind === 'bedrock' ? BEDROCK_MODELS : CLAUDE_MODELS).map((m) => ({
         id: m.id,
         providerId: this.config.id,
         name: m.name,
@@ -305,6 +322,9 @@ export class AnthropicProvider implements Provider {
       return this.config.apiKey
         ? { ok: true, message: 'Signed in with a Claude subscription' }
         : { ok: false, message: 'Not signed in. Sign in with Claude in the provider settings.' };
+    }
+    if (this.config.kind === 'bedrock') {
+      return this.config.apiKey ? { ok: true, message: 'Bedrock token set' } : { ok: false, message: 'Missing Bedrock bearer token' };
     }
     if (!this.config.apiKey) return { ok: false, message: 'Missing API key' };
     return { ok: true, message: 'API key set' };

@@ -17,6 +17,36 @@ export const MANAGED_RELAY_URL = 'wss://nekko-agent-relay.fly.dev';
 const SELF_HOST_DOCS = 'https://github.com/nekko-labs/nekko-agent/blob/main/docs/REMOTE.md';
 const TAILSCALE_DOWNLOAD = 'https://tailscale.com/download';
 
+/**
+ * The relay the field starts with (TASKS.md IO-19 TS-1). A relay the owner
+ * chose wins. Otherwise, with Tailscale connected here, the relay on this
+ * computer: phones on the tailnet reach it with nothing hosted in between, and
+ * the managed host may be gone (PH5). The managed relay is the last resort, and
+ * a saved managed URL counts as no choice, since it was only ever the default.
+ */
+export function defaultRelay(saved: string | undefined, local: LocalRelayStatus | null): { url: string; local: boolean } {
+  if (saved && saved !== MANAGED_RELAY_URL) return { url: saved, local: false };
+  if (local && local.available !== false && local.tailnetIp && local.url) return { url: local.url, local: true };
+  return { url: saved ?? MANAGED_RELAY_URL, local: false };
+}
+
+/**
+ * The address Enable connects to. When it is the default relay on this
+ * computer and that relay isn't running, start it first and use the address
+ * it ended up on; if it can't start, say why instead of enabling.
+ */
+export async function relayToEnable(
+  url: string,
+  fallback: { url: string; local: boolean },
+  local: LocalRelayStatus | null,
+  start: () => Promise<LocalRelayStatus>,
+): Promise<{ url?: string; started?: LocalRelayStatus; problem?: string }> {
+  if (!fallback.local || url !== fallback.url || local?.running) return { url };
+  const started = await start();
+  if (!started.running || !started.url) return { started, problem: started.error ?? 'The relay on this computer did not start.' };
+  return { url: started.url, started };
+}
+
 export function RemoteAccess() {
   const [status, setStatus] = useState<RemoteStatus>({ enabled: false });
   const [relayUrl, setRelayUrl] = useState(MANAGED_RELAY_URL);
@@ -29,12 +59,19 @@ export function RemoteAccess() {
   const [link, setLink] = useState('');
   const [urlProblem, setUrlProblem] = useState<string | undefined>();
   const editedUrl = useRef(false);
+  const [localRelay, setLocalRelay] = useState<LocalRelayStatus | null>(null);
+  const fallback = defaultRelay(status.relayUrl, localRelay);
 
   const refresh = async () => {
-    const s = await window.nekko.getRemoteStatus();
-    setStatus(s);
-    if (s.relayUrl && !editedUrl.current) setRelayUrl(s.relayUrl);
+    setStatus(await window.nekko.getRemoteStatus());
   };
+
+  // Until the owner types or picks one, the field follows the default: it moves
+  // to this computer's relay when Tailscale connects, and to its MagicDNS name
+  // once that is known.
+  useEffect(() => {
+    if (!editedUrl.current) setRelayUrl(fallback.url);
+  }, [fallback.url]);
 
   useEffect(() => {
     void refresh();
@@ -86,7 +123,11 @@ export function RemoteAccess() {
     if (problem) return;
     setBusy(true);
     try {
-      setStatus(await window.nekko.enableRemote(relayUrl.trim()));
+      const target = await relayToEnable(relayUrl.trim(), fallback, localRelay, () => window.nekko.localRelayStart());
+      if (target.started) setLocalRelay(target.started);
+      if (!target.url) return setUrlProblem(target.problem);
+      setRelayUrl(target.url);
+      setStatus(await window.nekko.enableRemote(target.url));
     } catch (e) {
       // The computer applies the same rule (and any other refusal) and says why.
       setUrlProblem(String((e as Error)?.message ?? e).replace(/^Error:\s*/, ''));
@@ -167,14 +208,23 @@ export function RemoteAccess() {
               {urlProblem}
             </p>
           )}
-          <p className="text-[11.5px] text-ink-faint">
-            The default is the managed Nekko Agent relay (free during beta). Privacy purists can{' '}
-            <a className="underline" href={SELF_HOST_DOCS} target="_blank" rel="noreferrer">
-              self-host the relay
-            </a>{' '}
-            with one Docker command and paste its URL here.
-          </p>
+          {fallback.local && relayUrl.trim() === fallback.url ? (
+            <p className="text-[11.5px] text-ink-faint" data-shot="tailnet-default">
+              Tailscale is connected, so the default is the relay on this computer: phones on your tailnet connect
+              straight here, and Enable starts it. To use a hosted relay instead, paste its URL.
+            </p>
+          ) : (
+            <p className="text-[11.5px] text-ink-faint">
+              The default is the managed Nekko Agent relay (free during beta). Privacy purists can{' '}
+              <a className="underline" href={SELF_HOST_DOCS} target="_blank" rel="noreferrer">
+                self-host the relay
+              </a>{' '}
+              with one Docker command and paste its URL here.
+            </p>
+          )}
           <LocalRelayCard
+            onStatus={setLocalRelay}
+            inUse={relayUrl.trim()}
             onUse={(url) => {
               editedUrl.current = true;
               setUrlProblem(undefined);
@@ -188,7 +238,7 @@ export function RemoteAccess() {
             <Field label="Relay" value={status.relayUrl!} />
             <Field label="Room" value={status.room!} mono />
           </div>
-          <LocalRelayCard inUse={status.relayUrl} />
+          <LocalRelayCard inUse={status.relayUrl} onStatus={setLocalRelay} />
           <NetworkVisibilitySwitch />
           <PhoneChangesSwitch />
 
@@ -282,10 +332,26 @@ export function RemoteAccess() {
  * Relay on this computer: the app runs the relay itself on this computer's
  * Tailscale address, so phones on the same tailnet need no hosted relay.
  * `onUse` fills the relay field (before remote access is on); `inUse` is the
- * relay remote access is using (after), to say whether it is this one.
+ * relay in the field (before) or the one remote access is using (after), to say
+ * whether it is this one.
  */
-export function LocalRelayCard({ onUse, inUse }: { onUse?: (url: string) => void; inUse?: string }) {
-  const [relay, setRelay] = useState<LocalRelayStatus | null>(null);
+export function LocalRelayCard({
+  onUse,
+  inUse,
+  onStatus,
+}: {
+  onUse?: (url: string) => void;
+  inUse?: string;
+  /** Every status the card reads, so Remote access can default to this relay. */
+  onStatus?: (s: LocalRelayStatus) => void;
+}) {
+  const [relay, setRelayState] = useState<LocalRelayStatus | null>(null);
+  const report = useRef(onStatus);
+  report.current = onStatus;
+  const setRelay = (s: LocalRelayStatus) => {
+    setRelayState(s);
+    report.current?.(s);
+  };
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -367,12 +433,14 @@ export function LocalRelayView({
           <code className="rounded px-2 py-1 font-mono text-[11.5px]" style={{ background: 'var(--surface-2)' }}>
             {relay.url}
           </code>
-          {onUse ? (
+          {usedHere ? (
+            <span className="text-[12px] text-ink-faint">
+              {onUse ? 'Remote access will use this relay.' : 'Remote access is using this relay.'}
+            </span>
+          ) : onUse ? (
             <button className="btn btn-primary py-1 text-[12px]" onClick={() => onUse(relay.url!)}>
               Use this relay
             </button>
-          ) : usedHere ? (
-            <span className="text-[12px] text-ink-faint">Remote access is using this relay.</span>
           ) : null}
         </div>
       )}
