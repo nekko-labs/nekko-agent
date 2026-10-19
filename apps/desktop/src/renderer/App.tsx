@@ -38,6 +38,7 @@ import { ConnectorsView } from './views/ConnectorsView.js';
 import { MemoryView } from './views/MemoryView.js';
 import { SettingsView } from './views/SettingsView.js';
 import { OnboardingView } from './views/OnboardingView.js';
+import { ClaudePlanSheet } from './components/claude/ClaudeAgent.js';
 import {
   ArtifactsColorIcon,
   CommandHudIcon,
@@ -387,6 +388,7 @@ export function App() {
       <ErrorBoundary label="Nekko"><Mascot mood={mascotMood} enabled={settings?.mascotEnabled ?? true} wizardHat={settings?.themePreset === 'autumn'} /></ErrorBoundary>
       <ErrorBoundary label="Command palette"><CommandPalette /></ErrorBoundary>
       <ErrorBoundary label="Links"><DeepLinkListener /></ErrorBoundary>
+      <ErrorBoundary label="Claude plan"><ClaudePlanSheet /></ErrorBoundary>
       <ErrorBoundary label="Notifications"><Toasts /></ErrorBoundary>
     </div>
   );

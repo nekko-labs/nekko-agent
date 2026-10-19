@@ -451,7 +451,9 @@ async fn admit(
         return ended(ctx, &session_id, "Provider not configured or disabled.").await;
     };
     // A scheduled task, workflow, goal step, watch or auto-continue on Claude
-    // Code needs `unattended_runs` for its auth (claude_policy.rs).
+    // Code needs `unattended_runs` for its auth (claude_policy.rs). Its auth
+    // comes from `claude auth status`, read once if nothing has read it yet.
+    crate::claude_policy::ensure_auth_status(ctx, &provider).await;
     if let Err(refusal) = ctx.claude_policy.gate_turn(&provider, &opts) {
         return ended(ctx, &session_id, refusal.message).await;
     }
