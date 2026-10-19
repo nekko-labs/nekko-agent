@@ -57,7 +57,7 @@ final class AppModel {
         self.offlineFiles = offlineFiles
         store = ComputersStore(
             store: keychain,
-            makeConnection: { RelayClient(config: $0, transport: URLSessionTransport()) },
+            makeConnection: { RelayClient(config: $0, transport: URLSessionTransport(), prober: HealthProber()) },
             deviceName: { deviceName },
             app: Bundle.main.bundleIdentifier,
             offlineFiles: offlineFiles)
@@ -89,7 +89,8 @@ final class AppModel {
         _ = store.subscribe { [weak self] e in self?.onEvent(e) }
         WatchBridge.shared.start()
         watchWidget()
-        network.onChange = { [weak self] in Task { @MainActor in self?.store.reconnect() } }
+        network.onFirst = { [weak self] path in Task { @MainActor in self?.store.networkKnown(path) } }
+        network.onChange = { [weak self] path in Task { @MainActor in self?.store.networkChanged(path) } }
         network.start()
         if prefs.keepChatList { store.chatListCache = chatLists }
         store.load(preferredId: prefs.defaultComputer)
@@ -119,11 +120,20 @@ final class AppModel {
         // What is typed is on disk before iOS may end the app.
         store.drafts.flush()
         if !store.outbox.items.isEmpty { OutboxRefresh.schedule() }
-        // A little time to deliver an approval or a finished turn as a notification.
+        // A little time to deliver an approval or a finished turn as a notification:
+        // a healthy socket stays open for the grace (IO-20), then closes before
+        // iOS would suspend it; the same background task covers it, no new mode.
         backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "nekko.relay") { [weak self] in
-            Task { @MainActor in self?.endBackgroundTask() }
+            Task { @MainActor in
+                self?.store.suspend()
+                self?.endBackgroundTask()
+            }
         }
+        store.enterBackground(grace: Self.backgroundGrace)
     }
+
+    /// How long a healthy socket outlives an app switch (Orca keeps about as long).
+    static let backgroundGrace: TimeInterval = 30
 
     /// A background refresh: connect, deliver what waits, and ask for another
     /// try if anything is left. True when the outbox is empty.
@@ -194,6 +204,7 @@ final class AppModel {
         // notification action asks for it; a Lock Screen button may not).
         if allow && !UIApplication.shared.isProtectedDataAvailable { return }
         start(force: true)
+        store.resume()
         guard await waitOnline(seconds: 10), let r = try? store.remote() else { return }
         _ = try? await r.call(Channels.toolApprove, [.string(sessionId), .string(callId), .bool(allow)])
         notifier.clear(sessionId: sessionId)
@@ -201,6 +212,7 @@ final class AppModel {
 
     func stopChat(_ sessionId: String) async {
         start(force: true)
+        store.resume()
         guard await waitOnline(seconds: 10), let r = try? store.remote() else { return }
         _ = try? await r.call(Channels.chatAbort, [.string(sessionId)])
     }

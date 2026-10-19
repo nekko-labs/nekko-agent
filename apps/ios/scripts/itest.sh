@@ -14,7 +14,7 @@ status=0
 if command -v swift >/dev/null 2>&1 && [ "$(uname)" = Darwin ]; then
   (cd "$root/apps/ios/Protocol" && swift test --filter RelayIntegrationTests) || status=$?
 else
-  SWIFT_ENV="-e NEKKO_ITEST_RELAY -e NEKKO_ITEST_ROOM -e NEKKO_ITEST_KEY -e NEKKO_ITEST_PAIR -e NEKKO_ITEST_RELAY_CTL" \
+  SWIFT_ENV="-e NEKKO_ITEST_RELAY -e NEKKO_ITEST_ROOM -e NEKKO_ITEST_KEY -e NEKKO_ITEST_PAIR -e NEKKO_ITEST_RELAY_CTL -e NEKKO_ITEST_ROUTE -e NEKKO_ITEST_ROUTE_CTL" \
     "$root/apps/ios/scripts/linux-test.sh" --filter RelayIntegrationTests || status=$?
 fi
 if [ "$status" != 0 ]; then

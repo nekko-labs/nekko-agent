@@ -148,6 +148,21 @@ final class LiveRelayTests: XCTestCase {
         attach(app, "\(theme)-7b-connection")
         auditAccessibility(app, "\(theme)-connection")
 
+        // The link carries a second route (IO-20): the screen names both, and
+        // Check routes looks each one up, connects and says hello (IO-21).
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Other routes")).firstMatch.exists)
+        let check = app.buttons["check-routes"].firstMatch
+        for _ in 0..<3 where !(check.exists && check.isHittable) { app.swipeUp() }
+        check.tap()
+        let answered = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "answered")).firstMatch
+        XCTAssertTrue(answered.waitForExistence(timeout: 30), "a relay hello came back")
+        attach(app, "\(theme)-7c-checks")
+        // The results push Share diagnostics below the fold; a List only builds what's on screen.
+        let share = app.buttons["share-diagnostics"].firstMatch
+        for _ in 0..<4 where !(share.exists && share.isHittable) { app.swipeUp() }
+        XCTAssertTrue(share.exists, "Share diagnostics is offered")
+        attach(app, "\(theme)-7d-share")
+
         // Shared from another app: relaunch with what the share extension leaves
         // in the App Group. New chat opens with the text; nothing is sent.
         app.terminate()

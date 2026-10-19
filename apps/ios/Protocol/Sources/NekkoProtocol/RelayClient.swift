@@ -29,11 +29,14 @@ public struct RelayStatus: Equatable, Sendable {
     public let state: RelayState
     public let detail: String?
     public let denied: DenyReason?
+    /// The relay address in use or being dialed (one of the computer's routes).
+    public let route: String?
 
-    public init(_ state: RelayState, detail: String? = nil, denied: DenyReason? = nil) {
+    public init(_ state: RelayState, detail: String? = nil, denied: DenyReason? = nil, route: String? = nil) {
         self.state = state
         self.detail = detail
         self.denied = denied
+        self.route = route
     }
 }
 
@@ -81,6 +84,10 @@ public protocol WsTransport: Sendable {
 
 public struct RelayConfig: Sendable {
     public var relayUrl: String
+    /// Other addresses of the same relay (the pairing link's `alt` routes).
+    /// With any, the client picks among them (`RouteSupervisor`).
+    public var alternates: [String] = []
+    public var routeRules = RouteRules()
     public var room: String
     /// Pairing secret: relay transport auth (the relay hashes it; never decrypts).
     public var key: String
@@ -112,9 +119,15 @@ public struct RelayConfig: Sendable {
         self.platform = platform
     }
 
+    /// Every address of the relay, the paired one first.
+    public var routes: [String] { [relayUrl] + alternates }
+
     /// `<relay>/relay?role=client&room=…&key=…`
-    public var dialURL: URL? {
-        var base = relayUrl
+    public var dialURL: URL? { dialURL(for: relayUrl) }
+
+    /// The same, for one of the relay's other addresses.
+    public func dialURL(for relay: String) -> URL? {
+        var base = relay
         while base.hasSuffix("/") { base.removeLast() }
         guard var c = URLComponents(string: base + "/relay") else { return nil }
         c.queryItems = [URLQueryItem(name: "role", value: "client"), URLQueryItem(name: "room", value: room),
@@ -134,9 +147,16 @@ public struct RelayConfig: Sendable {
 /// backoff until closed. A port of Android's `RelayClient.kt` with the same
 /// state machine (pair code never resent, kick 4001 / bad key are terminal,
 /// an offline computer is polled at a fixed pace).
+///
+/// A computer can have several addresses for its relay (TASKS.md IO-20): the
+/// client dials the one `RouteSupervisor` picks, leaves it at once when it
+/// fails, and while on a worse route probes the better one (`RouteProber`,
+/// `/healthz`) and moves back at a quiet moment once the hysteresis allows.
 public final class RelayClient: @unchecked Sendable {
     public let config: RelayConfig
     private let transport: WsTransport
+    private let prober: RouteProber?
+    private let now: @Sendable () -> Date
     private let lock = NSLock()
     private let queue = DispatchQueue(label: "nekko.relay")
 
@@ -153,6 +173,10 @@ public final class RelayClient: @unchecked Sendable {
     private var waiters: [Int: CheckedContinuation<Void, Never>] = [:]
     private var nextWaiter = 0
     private var _status = RelayStatus(.idle)
+    private var routes: RouteSupervisor
+    /// One probe loop at a time; bumped to stop the running one.
+    private var probeGeneration = 0
+    private var probing = false
 
     /// Status changes, events and the welcome, delivered on a background queue in order.
     private let handlerLock = NSLock()
@@ -160,10 +184,34 @@ public final class RelayClient: @unchecked Sendable {
     private var _onEvent: (@Sendable (String, JSONValue) -> Void)?
     private var _onWelcome: (@Sendable (WelcomedDevice) -> Void)?
 
-    public init(config: RelayConfig, transport: WsTransport) {
+    public init(config: RelayConfig, transport: WsTransport, prober: RouteProber? = nil,
+                now: @escaping @Sendable () -> Date = { Date() }) {
         self.config = config
         self.transport = transport
+        self.prober = prober
+        self.now = now
         self.pairCode = config.pairCode
+        routes = RouteSupervisor(routes: config.routes, rules: config.routeRules, now: now())
+    }
+
+    /// The address in use (or being dialed).
+    public var route: String { locked { routes.url } }
+
+    /// The phone moved to another network: start again from the best route
+    /// for it (the LAN only on Wi-Fi), and dial a fresh socket now.
+    public func networkChanged(_ path: NetworkPath) {
+        locked { _ = routes.pathChanged(path, now: now()) }
+        reconnect()
+    }
+
+    /// Where the phone is, without having moved (the first network report, or
+    /// before connecting): dial again only if that changes the route.
+    public func setNetworkPath(_ path: NetworkPath) {
+        let moved: Bool = locked {
+            guard path != routes.path else { return false }
+            return routes.pathChanged(path, now: now()) && !stopped
+        }
+        if moved { reconnect() }
     }
 
     public func setHandlers(onStatus: (@Sendable (RelayStatus) -> Void)? = nil,
@@ -195,6 +243,7 @@ public final class RelayClient: @unchecked Sendable {
         let c: WsConnection? = locked {
             stopped = true
             cancelRetryLocked()
+            stopProbesLocked()
             let c = conn
             conn = nil
             welcomed = false
@@ -320,21 +369,25 @@ public final class RelayClient: @unchecked Sendable {
 
     // MARK: - Socket
 
-    private func dial() {
-        guard locked({ () -> Bool in
-            if stopped { return false }
+    private func dial(detail: String? = nil) {
+        let plan: (route: String, early: Bool)? = locked {
+            if stopped { return nil }
             welcomed = false
-            return true
-        }) else { return }
-        setStatus(RelayStatus(.connecting))
-        guard let url = config.dialURL else {
-            scheduleRetry("bad relay address")
+            stopProbesLocked()
+            let route = routes.routeToDial(now: now())
+            return (route, routes.fallbackExists)
+        }
+        guard let plan else { return }
+        setStatus(RelayStatus(.connecting, detail: detail, route: plan.route))
+        guard let url = config.dialURL(for: plan.route) else {
+            routeFailed("bad relay address")
             return
         }
         let box = ConnBox()
         let handlers = WsHandlers(
             onOpen: { [weak self] in
                 guard let self, let c = box.conn, self.isCurrent(c) else { return }
+                box.markOpen()
                 self.hello()
             },
             onMessage: { [weak self] text in
@@ -349,7 +402,7 @@ public final class RelayClient: @unchecked Sendable {
         do {
             c = try transport.open(url: url, handlers: handlers)
         } catch {
-            scheduleRetry(error.localizedDescription)
+            routeFailed(error.localizedDescription)
             return
         }
         box.set(c)
@@ -359,7 +412,38 @@ public final class RelayClient: @unchecked Sendable {
             return true
         }
         // Published before it dials, so every callback finds it current.
-        if keep { c.start() }
+        guard keep else { return }
+        c.start()
+        // A LAN address on another Wi-Fi doesn't refuse, it hangs: with a
+        // fallback behind it, give it a few seconds, not the transport's 20.
+        if plan.early {
+            queue.asyncAfter(deadline: .now() + config.routeRules.openTimeout) { [weak self] in
+                guard let self, !box.isOpen else { return }
+                let mine: Bool = self.locked {
+                    guard self.conn === c else { return false }
+                    self.conn = nil
+                    return true
+                }
+                guard mine else { return }
+                c.close(code: 1000, reason: "route timed out")
+                self.routeFailed("\(Pairing.relayHost(plan.route)) didn’t answer")
+            }
+        }
+    }
+
+    /// The route in use didn't open or dropped: with another, move to it (at
+    /// once when it isn't cooling down); else back off as before.
+    private func routeFailed(_ detail: String?) {
+        let next: (changed: Bool, ready: Bool) = locked {
+            if stopped { return (false, false) }
+            return routes.failed(now: now())
+        }
+        if next.changed && next.ready {
+            locked { cancelRetryLocked() }
+            dial(detail: detail)
+        } else {
+            scheduleRetry(detail)
+        }
     }
 
     private func isCurrent(_ c: WsConnection) -> Bool { locked { conn === c } }
@@ -380,10 +464,11 @@ public final class RelayClient: @unchecked Sendable {
         } else if code == 1008 && r.contains("bad pairing key") {
             deny(.badKey)
         } else if code == 1008 && r.contains("agent offline") {
-            setStatus(RelayStatus(.offline))
+            // The relay answered on this route: the computer is away, not the path.
+            setStatus(RelayStatus(.offline, route: route))
             scheduleRetry(nil, offline: true)
         } else {
-            scheduleRetry(reason.trimmingCharacters(in: .whitespaces).isEmpty ? "closed (\(code))" : reason)
+            routeFailed(reason.trimmingCharacters(in: .whitespaces).isEmpty ? "closed (\(code))" : reason)
         }
     }
 
@@ -433,6 +518,7 @@ public final class RelayClient: @unchecked Sendable {
             }
             let d = frame["device"]
             setStatus(RelayStatus(.online))
+            startProbes()
             let device = WelcomedDevice(id: d?.str("id") ?? config.deviceId, name: d?.str("name") ?? config.deviceName,
                                         platform: d?.str("platform") ?? config.platform)
             emit { $0._onWelcome?(device) }
@@ -509,16 +595,89 @@ public final class RelayClient: @unchecked Sendable {
         all.forEach { $0.resume(throwing: RelayError(message)) }
     }
 
-    private func setStatus(_ s: RelayStatus) {
-        let woken: [CheckedContinuation<Void, Never>] = locked {
+    private func setStatus(_ status: RelayStatus) {
+        let (s, woken): (RelayStatus, [CheckedContinuation<Void, Never>]) = locked {
+            // Every status but idle names the route it is about.
+            let s = status.route == nil && status.state != .idle
+                ? RelayStatus(status.state, detail: status.detail, denied: status.denied, route: routes.url) : status
             _status = s
-            guard [.online, .denied, .idle].contains(s.state) else { return [] }
+            guard [.online, .denied, .idle].contains(s.state) else { return (s, []) }
             let w = Array(waiters.values)
             waiters.removeAll()
-            return w
+            return (s, w)
         }
         woken.forEach { $0.resume() }
         emit { $0._onStatus?(s) }
+    }
+
+    // MARK: - Routes
+
+    /// While online on a worse route, probe the better one every
+    /// `probeInterval`; move back once the supervisor's hysteresis allows and
+    /// no request is in flight (a running turn is never cut to change route).
+    private func startProbes() {
+        guard prober != nil else { return }
+        let gen: Int? = locked {
+            guard !probing, !stopped, !routes.onBest else { return nil }
+            probing = true
+            probeGeneration += 1
+            return probeGeneration
+        }
+        if let gen { scheduleProbe(gen) }
+    }
+
+    private func stopProbesLocked() {
+        probeGeneration += 1
+        probing = false
+    }
+
+    private func scheduleProbe(_ gen: Int) {
+        queue.asyncAfter(deadline: .now() + config.routeRules.probeInterval) { [weak self] in
+            guard let self, let prober = self.prober else { return }
+            let step: (go: Bool, target: (Int, String)?) = self.locked {
+                guard self.probeGeneration == gen, !self.stopped, self.welcomed, !self.routes.onBest else {
+                    if self.probeGeneration == gen { self.probing = false }
+                    return (false, nil)
+                }
+                // The better route may still be cooling down: wait it out.
+                guard let t = self.routes.probeTarget(now: self.now()) else { return (true, nil) }
+                return (true, (t, self.routes.routes[t]))
+            }
+            guard step.go else { return }
+            guard let target = step.target else { return self.scheduleProbe(gen) }
+            let timeout = min(3, max(0.5, self.config.routeRules.probeInterval))
+            Task {
+                let ok = await prober.reachable(target.1, timeout: timeout)
+                let move: Bool = self.locked {
+                    guard self.probeGeneration == gen, !self.stopped else { return false }
+                    self.routes.probed(target.0, ok: ok, now: self.now())
+                    guard self.welcomed, self.pending.isEmpty, self.routes.shouldMoveBack(now: self.now()) else { return false }
+                    self.routes.moveBack(now: self.now())
+                    return true
+                }
+                if move {
+                    self.moveRoute(detail: "Moving to \(Pairing.relayHost(target.1))")
+                } else if self.locked({ self.probeGeneration == gen && !self.stopped }) {
+                    self.scheduleProbe(gen)
+                }
+            }
+        }
+    }
+
+    /// The supervisor chose another route: drop this socket and dial it.
+    private func moveRoute(detail: String) {
+        let old: WsConnection? = locked {
+            cancelRetryLocked()
+            retry = 0
+            let c = conn
+            conn = nil
+            welcomed = false
+            return c
+        }
+        // conn is already nil, so this socket's late onClosed is ignored.
+        old?.close(code: 1000, reason: "route changed")
+        failPending("connection lost")
+        dial(detail: detail)
     }
 
     /// Deliver to handlers in order, off the caller's stack and outside the state lock.
@@ -543,10 +702,23 @@ public final class RelayClient: @unchecked Sendable {
 private final class ConnBox: @unchecked Sendable {
     private let lock = NSLock()
     private var _conn: WsConnection?
+    private var _open = false
     var conn: WsConnection? {
         lock.lock()
         defer { lock.unlock() }
         return _conn
+    }
+
+    var isOpen: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return _open
+    }
+
+    func markOpen() {
+        lock.lock()
+        _open = true
+        lock.unlock()
     }
 
     func set(_ c: WsConnection) {

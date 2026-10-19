@@ -8,6 +8,9 @@
 # NEKKO_ITEST_RELAY_HOST binds the relay elsewhere, e.g. this computer's Tailscale
 # address, and NEKKO_ITEST_RELAY_NAME is the name clients dial (its MagicDNS
 # name), so a phone or Mac on the tailnet can run the tests against it (IO-19).
+# A route proxy (route-proxy.mjs) is a second address of the same relay: the
+# pairing link carries it as `alt`, and NEKKO_ITEST_ROUTE_CTL takes it down and
+# up again for the failover test (IO-20).
 # Needs Node and a root build of shared, core, host, cli, server and relay.
 set -euo pipefail
 out="${1:?usage: itest-stack.sh <env-file>}"
@@ -34,6 +37,11 @@ model_pid=$!
 NEKKO_RELAY_PORT="$relay_port" NEKKO_RELAY_HOST="$relay_host" NEKKO_RELAY_ALLOW_UNAUTHENTICATED=1 \
   nohup node apps/ios/scripts/relay-ctl.mjs "$ctl_port" >"$logs/relay.log" 2>&1 &
 relay_pid=$!
+# A second route to the same relay that a test can take down (IO-20 failover).
+route_port="$(free_port)"
+route_ctl_port="$(free_port)"
+nohup node apps/ios/scripts/route-proxy.mjs "$route_port" "$relay_port" "$route_ctl_port" >"$logs/route.log" 2>&1 &
+route_pid=$!
 sleep 1
 cat >"$data/settings.json" <<JSON
 {"providers":[{"id":"fake","kind":"openai-compat","label":"Fake","baseUrl":"http://127.0.0.1:$model_port/v1","apiKey":"sk-should-never-reach-the-phone","enabled":true}],
@@ -52,7 +60,7 @@ done
 if [ -z "$pair" ]; then
   echo "agent printed no pairing code:" >&2
   cat "$logs/agent.log" >&2
-  kill "$model_pid" "$relay_pid" "$agent_pid" 2>/dev/null || true
+  kill "$model_pid" "$relay_pid" "$route_pid" "$agent_pid" 2>/dev/null || true
   exit 1
 fi
 cat >"$out" <<ENV
@@ -60,9 +68,11 @@ export NEKKO_ITEST_RELAY="$relay_url"
 export NEKKO_ITEST_ROOM="$room"
 export NEKKO_ITEST_KEY="$key"
 export NEKKO_ITEST_PAIR="$pair"
-export NEKKO_ITEST_LINK="nekko-agent-pair:?relay=ws%3A%2F%2Flocalhost%3A$relay_port&room=$room&key=$key&pair=$pair"
+export NEKKO_ITEST_LINK="nekko-agent-pair:?relay=ws%3A%2F%2Flocalhost%3A$relay_port&room=$room&key=$key&pair=$pair&alt=ws%3A%2F%2F127.0.0.1%3A$route_port"
 export NEKKO_ITEST_RELAY_CTL="http://127.0.0.1:$ctl_port"
-export NEKKO_ITEST_PIDS="$model_pid $relay_pid $agent_pid"
+export NEKKO_ITEST_ROUTE="ws://127.0.0.1:$route_port"
+export NEKKO_ITEST_ROUTE_CTL="http://127.0.0.1:$route_ctl_port"
+export NEKKO_ITEST_PIDS="$model_pid $relay_pid $route_pid $agent_pid"
 export NEKKO_ITEST_LOGDIR="$logs"
 ENV
 echo "stack up: relay :$relay_port, model :$model_port, logs $logs"

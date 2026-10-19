@@ -326,6 +326,7 @@ const api: NekkoApi = {
   localRelayStatus: () => inv(IpcChannels.localRelayStatus),
   localRelayStart: () => inv(IpcChannels.localRelayStart),
   localRelayStop: () => inv(IpcChannels.localRelayStop),
+  localRelaySetLan: (on) => inv(IpcChannels.localRelaySetLan, on),
   networkVisibilityStatus: () => inv(IpcChannels.networkVisibilityStatus),
   networkVisibilityStart: () => inv(IpcChannels.networkVisibilityStart),
   networkVisibilityStop: () => inv(IpcChannels.networkVisibilityStop),
