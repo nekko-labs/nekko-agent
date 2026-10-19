@@ -135,6 +135,8 @@ pub struct LocalRelay {
     /// One ensure at a time (the TS `starting` promise).
     ensuring: tokio::sync::Mutex<()>,
     ids: std::sync::atomic::AtomicU64,
+    /// The MagicDNS lookup `status_learning_name` started (once; `ensure` looks again).
+    naming: std::sync::atomic::AtomicBool,
 }
 
 impl LocalRelay {
@@ -156,6 +158,7 @@ impl LocalRelay {
             state: Mutex::new(State { enabled, port, ..State::default() }),
             ensuring: tokio::sync::Mutex::new(()),
             ids: Default::default(),
+            naming: Default::default(),
         })
     }
 
@@ -200,6 +203,30 @@ impl LocalRelay {
             }
         }
         Value::Object(out)
+    }
+
+    /// `status`, and the first time Tailscale is up without a known name, look
+    /// the MagicDNS name up in the background: the address Remote access offers
+    /// as its default before the relay ever starts is then the name, which
+    /// Android needs (TASKS.md IO-19 TS-1).
+    pub fn status_learning_name(self: &Arc<Self>) -> Value {
+        let out = self.status();
+        if out.get("tailnetIp").is_some()
+            && out.get("tailnetName").is_none()
+            && !self.naming.swap(true, std::sync::atomic::Ordering::SeqCst)
+        {
+            let me = Arc::downgrade(self);
+            tokio::spawn(async move {
+                let name = magic_dns_name().await;
+                if let Some(me) = me.upgrade() {
+                    let mut s = lock(&me.state);
+                    if s.name.is_none() {
+                        s.name = name;
+                    }
+                }
+            });
+        }
+        out
     }
 
     pub async fn start(self: &Arc<Self>) -> Value {

@@ -224,7 +224,8 @@ The app finds this computer's Tailscale address (any interface in `100.64.0.0/10
 bundled relay bound to that address only, and shows the URL phones use. That is the MagicDNS name
 (for example `ws://gomi.tailfd6474.ts.net:4400`) when the Tailscale CLI reports one, else the
 `100.x.y.z` address. **Use this relay** fills it in; then Enable, **Pair a device**, and scan the QR
-from the phone with Tailscale switched on.
+from the phone with Tailscale switched on. When Tailscale is connected and you haven't chosen a
+relay, this relay is already the default in the relay field, and **Enable** starts it for you.
 
 - **It stays on:** once started it comes back with the app.
 - **It waits for Tailscale:** with Tailscale off it binds nowhere and waits, and starts when
