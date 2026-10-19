@@ -346,6 +346,7 @@ jobs:
       - name: Small services through the daemon
         if: ${{ !cancelled() }}
         run: node scripts/itest-small-services.mjs
+      # nekkod alone (no TS backend) as the MCP client, on the build above.
       - name: MCP streamable-HTTP transport through Hypergate
         if: ${{ !cancelled() }}
         run: node scripts/itest-mcp-http.mjs --spawn hypergate

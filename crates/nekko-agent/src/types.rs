@@ -22,6 +22,9 @@ pub enum ProviderKind {
     /// The engine Nekko Agent runs itself (llama.cpp behind its own router).
     Llamacpp,
     OpenaiCompat,
+    /// Claude Agent: the user's own Claude Code runs the chat (nekkod drives it
+    /// through `nekko-harness`). No base URL, no key.
+    ClaudeCode,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

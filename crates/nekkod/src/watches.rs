@@ -170,7 +170,7 @@ impl WatchHost for HostSide {
                 return Err("Chat has no selected provider/model; no fallback was used".into());
             }
             let Some(d) = self.dispatch.get() else { return Err("Agent watch scheduler is unavailable".into()) };
-            let opts = json!({ "sessionId": session_id, "providerId": provider, "modelId": model, "text": text });
+            let opts = json!({ "sessionId": session_id, "providerId": provider, "modelId": model, "text": text, "unattended": true });
             let send = d("chat:send".into(), vec![opts.clone()]);
             match crate::automation::capture_turn_error(&self.hub, &opts, async move { send.await.map(|_| ()) }).await?
             {

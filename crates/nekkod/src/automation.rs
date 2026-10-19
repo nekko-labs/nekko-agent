@@ -210,7 +210,9 @@ impl Engine {
 
     /// A chat turn through the router (`chat:send`), as the UI sends one:
     /// admitted and run here, the backend only when no router is set yet.
+    /// Every automation turn is unattended: nobody is watching it start.
     async fn send(&self, opts: Value) -> Result<(), String> {
+        let opts = crate::claude_policy::mark_unattended(opts);
         match self.dispatch.get() {
             Some(d) => d("chat:send".into(), vec![opts]).await.map(|_| ()),
             None => self.backend.call("chat:send", json!([opts])).await.map(|_| ()),

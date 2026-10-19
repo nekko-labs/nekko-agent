@@ -331,6 +331,9 @@ const api: NekkoApi = {
   networkVisibilityStop: () => inv(IpcChannels.networkVisibilityStop),
 
   getAppInfo: () => inv(IpcChannels.appInfo),
+  getClaudePolicy: () => inv(IpcChannels.claudePolicy),
+  getClaudeCapability: (providerId, capability) => inv(IpcChannels.claudeCapability, providerId, capability),
+  getClaudePlanUsage: (providerId) => inv(IpcChannels.claudePlanUsage, providerId),
   getMcpStatus: () => inv(IpcChannels.mcpStatus),
   detectHypergate: (port?: number) => inv(IpcChannels.mcpHypergate, port),
   connectHypergate: (port?: number) => inv(IpcChannels.mcpHypergateConnect, port),

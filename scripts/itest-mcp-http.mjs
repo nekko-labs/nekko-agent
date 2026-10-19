@@ -1,7 +1,8 @@
 // Exercises the MCP streamable-HTTP transport against a Hypergate daemon
 // (hypergated): detects the gateway, adds a scratch echo server through the
-// daemon API, connects Nekko Agent's host MCP client to the gateway URL, and
-// lists + calls a tool through it, then proves a wrong token is refused.
+// daemon API, points a real nekkod (no TS backend, its own data dir and home)
+// at the gateway URL, and lists + calls a tool through it over nekkod's wire
+// (`mcp:status`, `mcp:call`), then proves a wrong token is refused.
 //
 // Two ways to run it:
 //   node scripts/itest-mcp-http.mjs [daemonBase]
@@ -15,13 +16,14 @@
 //     ~/.hypergate or a running daemon.
 //
 // Exits non-zero on any failure, including a daemon that never comes up.
-// Needs `npm run build:web` (or at least @nekko-agent/host built).
+// Needs `cargo build -p nekkod` (or NEKKOD_PATH).
 import { spawn, execFileSync } from 'node:child_process';
 import { createServer } from 'node:net';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomBytes } from 'node:crypto';
+import { startNekkod } from './itest-nekkod.mjs';
 
 const args = process.argv.slice(2);
 const spawnMode = args[0] === '--spawn';
@@ -31,6 +33,7 @@ const scratch = mkdtempSync(join(tmpdir(), 'op-mcp-itest-'));
 
 let daemon = null;
 let daemonOut = '';
+let nekkod = null;
 let base = args[0] && !spawnMode ? args[0] : 'http://localhost:7777';
 let token = '';
 
@@ -44,6 +47,7 @@ const killTree = (p) => {
   }
 };
 const cleanup = async () => {
+  await nekkod?.stop();
   killTree(daemon);
   await sleep(300);
   try { rmSync(scratch, { recursive: true, force: true }); } catch { /* a child may still hold a file */ }
@@ -119,35 +123,28 @@ try {
   })).json();
   if (added.state !== 'ready') await fail(`echo server not ready: ${JSON.stringify(added)}`);
 
-  // The host and its MCP client from this checkout's packages/host/dist: the
-  // tool call below must read the same module state the host's sync filled.
-  // (`@nekko-agent/host` resolves through node_modules, which in a worktree
-  // can be another checkout's build, a second copy with its own state.)
-  const { createHost } = await import('../packages/host/dist/index.js');
-  const { callMcpTool } = await import('../packages/host/dist/mcp.js');
-  const host = createHost({ dataDir: join(scratch, 'host') });
-  await host.updateSettings({
+  // A real nekkod with the gateway as its MCP server: `mcp:status` syncs its
+  // connections, `mcp:call` is the path an agent's tool call takes.
+  nekkod = await startNekkod({ root: join(scratch, 'nekkod') });
+  console.log(`nekkod on :${nekkod.port}`);
+  await nekkod.call('settings:update', {
     mcpServers: [{ id: 'hypergate', name: 'Hypergate gateway', command: '', args: [], url: gw.url, token: gw.token, enabled: true }],
   });
 
-  const status = await host.mcpStatus();
+  const status = await nekkod.call('mcp:status');
   const gwStatus = status.find((s) => s.id === 'hypergate');
   console.log(`status: connected=${gwStatus?.connected} tools=${gwStatus?.tools.length} err=${gwStatus?.error ?? '-'}`);
   const echoTool = gwStatus?.tools.find((t) => t.name === 'op-itest-echo__echo');
 
-  // Call the tool through the agent tool-routing path.
-  const result = await callMcpTool({ id: 't1', name: 'mcp__hypergate__op-itest-echo__echo', input: { text: 'paw-to-paw' } });
+  const result = await nekkod.call('mcp:call', { id: 't1', name: 'mcp__hypergate__op-itest-echo__echo', input: { text: 'paw-to-paw' } });
   console.log(`tool call: isError=${result.isError} output=${JSON.stringify(result.output)}`);
 
   // Also prove a bad token is rejected.
-  await host.updateSettings({
+  await nekkod.call('settings:update', {
     mcpServers: [{ id: 'bad', name: 'bad token', command: '', args: [], url: gw.url, token: 'wrong', enabled: true }],
   });
-  const bad = (await host.mcpStatus()).find((s) => s.id === 'bad');
+  const bad = (await nekkod.call('mcp:status')).find((s) => s.id === 'bad');
   console.log(`bad-token status: connected=${bad?.connected} err=${bad?.error ?? '-'}`);
-  // Drop the host's MCP connections so nothing keeps this process alive.
-  await host.updateSettings({ mcpServers: [] });
-  await host.mcpStatus();
 
   await fetch(`${base}/api/servers/op-itest-echo`, { method: 'DELETE', headers: auth }).catch(() => {});
 

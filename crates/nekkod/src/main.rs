@@ -13,6 +13,7 @@ mod backend;
 mod boot;
 mod catalog;
 mod claude_plan;
+mod claude_policy;
 mod cli_install;
 mod compaction;
 mod config;
@@ -23,6 +24,7 @@ mod decisions;
 mod desktop;
 mod downloads;
 mod engine;
+mod harness;
 mod hub;
 mod hypergate;
 mod image_turns;
@@ -305,6 +307,10 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             decision_models_url: cfg.decision_models_url.clone(),
         }),
         update_checks: small_services::UpdateChecks::new(),
+        claude_policy: Arc::new(claude_policy::ClaudePolicyStore::new(
+            cfg.data_dir.clone().map(std::path::PathBuf::from),
+            cfg.native.as_ref().is_some_and(|n| n.is_packaged),
+        )),
         messaging: messaging.clone(),
         native: cfg
             .native
@@ -394,6 +400,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         let c = ctx.clone();
         tokio::spawn(async move { d.start(&c).await });
     }
+    // Claude Agent chats' idle Claude Code children are ended after 15 minutes.
+    ctx.turns.harness.start_reaper();
     let after = ctx.clone();
     let app = wire::App { ctx, token: cfg.token.clone().into(), origins: Arc::new(cfg.allowed_origins.clone()) };
     let router = wire::router(app);
