@@ -216,6 +216,88 @@ final class RelayIntegrationTests: XCTestCase {
         print("itest: spent code refused (\(s?.denied?.rawValue ?? "?"))")
     }
 
+    /// Exactly-once delivery (IO-18 OF-3, OF-8): the relay dies while a prompt
+    /// is in flight, comes back, and the phone sends the prompt again with the
+    /// same `clientMessageId`, as its outbox does. The computer keeps one user
+    /// message per id, whether the first copy arrived or not.
+    func testC_DeliversExactlyOnceWhenTheRelayDiesMidSend() async throws {
+        guard let env = Self.env else { throw XCTSkip("set NEKKO_ITEST_* (apps/ios/scripts/itest.sh)") }
+        guard let ctl = ProcessInfo.processInfo.environment["NEKKO_ITEST_RELAY_CTL"] else { throw XCTSkip("set NEKKO_ITEST_RELAY_CTL") }
+        guard let device = Self.enrolled else { throw XCTSkip("needs testB's enrolled phone") }
+        let (c, r) = client(env, pair: nil, deviceId: device)
+        c.connect()
+        await r.await(.online)
+        let created = try await c.call(Channels.sessionCreate)
+        let chat = try XCTUnwrap(Session.from(created))
+
+        // 1. The computer saved the prompt (a long reply streams), then the relay dies: the answer is lost.
+        let slowId = UUID().uuidString.lowercased()
+        let slow = sendOptions(sessionId: chat.id, providerId: "fake", modelId: "fake-model", text: "slow, exactly once", clientMessageId: slowId)
+        let mark = r.lock.sync { r.events.count }
+        let first = Task { try? await c.call(Channels.chatSend, [slow], timeout: 60) }
+        await waitFor(20, "the computer saved the prompt") {
+            self.events(r, session: chat.id, from: mark).contains { if case .text = $0 { return true } else { return false } }
+        }
+        try await relay(ctl, "stop")
+        _ = await first.value
+        try await relay(ctl, "start")
+        try await resend(c, r, slow)
+        print("itest: relay killed mid-reply, prompt sent again with the same id")
+
+        // 2. The relay dies right after the frame leaves: whether it arrived is unknown.
+        let quickId = UUID().uuidString.lowercased()
+        let quick = queuePrompt(text: "quick, exactly once", clientMessageId: quickId)
+        let second = Task { try? await c.call(Channels.chatQueue, [.string(chat.id), quick], timeout: 30) }
+        try await relay(ctl, "stop")
+        _ = await second.value
+        try await relay(ctl, "start")
+        try await resend(c, r, quick, queueIn: chat.id)
+        print("itest: relay killed as a queued prompt left, sent again with the same id")
+
+        let raw = try await c.call(Channels.sessionGet, [.string(chat.id)])
+        let saved = try XCTUnwrap(Session.from(raw))
+        let users = saved.messages.filter { $0.role == "user" }.map(\.content)
+        XCTAssertEqual(users.filter { $0 == "slow, exactly once" }.count, 1, "one user message for the resent prompt: \(users)")
+        XCTAssertEqual(users.count + saved.queue.count, 2, "each prompt once, sent or queued: \(users) + \(saved.queue)")
+        XCTAssertEqual(saved.queue.filter { $0 == "quick, exactly once" }.count + users.filter { $0 == "quick, exactly once" }.count, 1)
+        XCTAssertTrue(saved.clientMessageIds.contains(slowId) && saved.clientMessageIds.contains(quickId), "\(saved.clientMessageIds)")
+        print("itest: exactly one user message per prompt after two relay restarts")
+        c.close()
+    }
+
+    /// The phone gets back through (relay up, computer re-attached) and sends
+    /// again with the same id, retrying while the computer is still out of reach.
+    private func resend(_ c: RelayClient, _ r: RelayClientTests.Recorder, _ prompt: JSONValue, queueIn chatId: String? = nil) async throws {
+        let deadline = Date().addingTimeInterval(60)
+        while true {
+            c.nudge()
+            do {
+                if let chatId {
+                    _ = try await c.call(Channels.chatQueue, [.string(chatId), prompt], timeout: 15)
+                } else {
+                    _ = try await c.call(Channels.chatSend, [prompt], timeout: 15)
+                }
+                return
+            } catch let e as RelayError where e.fromComputer {
+                throw e
+            } catch {
+                if Date() > deadline { throw error }
+                try? await Task.sleep(nanoseconds: 500_000_000)
+            }
+        }
+    }
+
+    /// `GET <ctl>/stop` or `/start` on the stack's relay controller (scripts/relay-ctl.mjs).
+    private func relay(_ ctl: String, _ action: String) async throws {
+        let url = try XCTUnwrap(URL(string: "\(ctl)/\(action)"))
+        let status: Int = try await withCheckedThrowingContinuation { k in
+            URLSession.shared.dataTask(with: url) { _, response, error in
+                if let error { k.resume(throwing: error) } else { k.resume(returning: (response as? HTTPURLResponse)?.statusCode ?? 0) }
+            }.resume()
+        }
+        XCTAssertEqual(status, 200, "relay \(action)")
+    }
+
     /// IO-20: a pairing with two routes to one relay (the stack's route proxy
     /// first, the relay itself second). Taking the first down moves the phone
     /// to the second at once; bringing it back moves the phone back after the

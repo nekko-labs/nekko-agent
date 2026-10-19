@@ -19,6 +19,8 @@ final class AppModel {
     let lock: AppLock
     let notifier = Notifier()
     let chatLists = ChatListFiles()
+    /// Drafts and the outbox, per computer.
+    let offlineFiles: OfflineFileStore
     private let activities = RunActivities()
     private let network = NetworkWatcher()
     private var started = false
@@ -45,13 +47,20 @@ final class AppModel {
         #endif
         let prefs = Prefs()
         let deviceName = UIDevice.current.name
+        let offlineFiles = OfflineFileStore()
+        #if DEBUG
+        // UI tests start without drafts or waiting prompts left from an earlier run.
+        if ProcessInfo.processInfo.arguments.contains("-uiTestReset") { offlineFiles.removeAll() }
+        #endif
         self.keychain = keychain
         self.prefs = prefs
+        self.offlineFiles = offlineFiles
         store = ComputersStore(
             store: keychain,
             makeConnection: { RelayClient(config: $0, transport: URLSessionTransport(), prober: HealthProber()) },
             deviceName: { deviceName },
-            app: Bundle.main.bundleIdentifier)
+            app: Bundle.main.bundleIdentifier,
+            offlineFiles: offlineFiles)
         lock = AppLock(enabled: prefs.appLock)
         #if DEBUG
         // What the share extension leaves behind, without driving another app's share sheet.
@@ -93,6 +102,7 @@ final class AppModel {
     func didBecomeActive() {
         foreground = true
         endBackgroundTask()
+        OutboxRefresh.cancel()
         if started { store.nudge() }
         takeShare()
     }
@@ -107,6 +117,9 @@ final class AppModel {
     func didEnterBackground() {
         foreground = false
         lock.didEnterBackground(enabled: prefs.appLock)
+        // What is typed is on disk before iOS may end the app.
+        store.drafts.flush()
+        if !store.outbox.items.isEmpty { OutboxRefresh.schedule() }
         // A little time to deliver an approval or a finished turn as a notification:
         // a healthy socket stays open for the grace (IO-20), then closes before
         // iOS would suspend it; the same background task covers it, no new mode.
@@ -121,6 +134,19 @@ final class AppModel {
 
     /// How long a healthy socket outlives an app switch (Orca keeps about as long).
     static let backgroundGrace: TimeInterval = 30
+
+    /// A background refresh: connect, deliver what waits, and ask for another
+    /// try if anything is left. True when the outbox is empty.
+    func deliverInBackground() async -> Bool {
+        // Delivering what the user already wrote is not reading chats: the app lock doesn't hold it.
+        start(force: true)
+        guard !store.outbox.items.isEmpty else { return true }
+        if store.conn != .online { store.reconnect() }
+        if await waitOnline(seconds: 20) { await store.outbox.flush() }
+        let done = store.outbox.items.isEmpty
+        if !done { OutboxRefresh.schedule() }
+        return done
+    }
 
     private func endBackgroundTask() {
         guard backgroundTask != .invalid else { return }
@@ -142,7 +168,8 @@ final class AppModel {
     private func publishWidget() {
         let snapshot = StatusSnapshot(
             computer: store.active?.name, online: store.conn == .online,
-            needsYou: store.needsYouCount, running: store.runningCount, at: .now
+            needsYou: store.needsYouCount, running: store.runningCount, at: .now,
+            waiting: store.outbox.count
         )
         if snapshot.save() {
             WidgetCenter.shared.reloadTimelines(ofKind: StatusSnapshot.kind)
@@ -258,6 +285,8 @@ final class AppModel {
     func forgetEverything() {
         for c in store.computers { store.forget(c.id) }
         chatLists.removeAll()
+        offlineFiles.removeAll()
+        OutboxRefresh.cancel()
         keychain.wipe()
         activities.endAll()
         prefs.defaultComputer = nil

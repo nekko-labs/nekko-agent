@@ -278,6 +278,13 @@ export interface Session {
   /** Queued prompts to run one after another when the current turn finishes. */
   queue?: QueuedPrompt[];
   /**
+   * The newest `clientMessageId`s this chat has taken (`chat:send` or
+   * `chat:queue`), oldest first, at most `CLIENT_MESSAGE_IDS_KEPT`. A repeat is
+   * answered without a second turn or queue entry (exactly-once delivery from a
+   * phone's outbox).
+   */
+  clientMessageIds?: string[];
+  /**
    * Set while a turn is running, cleared when it ends. A session that still
    * carries this when the host starts was cut off by a crash or a quit, and the
    * host marks its last reply interrupted so the chat offers Continue.
@@ -517,10 +524,36 @@ export interface QueuePayload {
   videos?: string[];
   /** Skill invoked for this queued user turn and the user's own input. */
   skill?: { name: string; input: string };
+  /**
+   * The sender's id for this prompt (a phone's outbox), so a resend after a
+   * dropped connection is answered without queueing it twice. Never stored in
+   * the queue itself: the chat remembers it in `clientMessageIds`.
+   */
+  clientMessageId?: string;
 }
 
 /** Queue entries are kept backwards-compatible with older string-only sessions. */
 export type QueuedPrompt = string | QueuePayload;
+
+/** How many `clientMessageId`s a chat remembers. A phone's outbox resends within minutes, so this is plenty. */
+export const CLIENT_MESSAGE_IDS_KEPT = 200;
+
+/** A usable `clientMessageId`: a short id of letters, digits, `-` and `_` (a UUID), else undefined. */
+export function clientMessageIdOf(value: unknown): string | undefined {
+  return typeof value === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(value) ? value : undefined;
+}
+
+/** True when the chat has already taken this `clientMessageId`. */
+export function hasClientMessageId(session: Pick<Session, 'clientMessageIds'> | null | undefined, id: string | undefined): boolean {
+  return !!id && !!session?.clientMessageIds?.includes(id);
+}
+
+/** `ids` with `add` appended (each once, oldest first), cut to the newest `CLIENT_MESSAGE_IDS_KEPT`. */
+export function rememberClientMessageIds(ids: readonly string[] | undefined, add: readonly string[]): string[] {
+  const out = [...(ids ?? [])];
+  for (const id of add) if (!out.includes(id)) out.push(id);
+  return out.slice(Math.max(0, out.length - CLIENT_MESSAGE_IDS_KEPT));
+}
 
 export function queueItemText(item: QueuedPrompt): string {
   return typeof item === 'string' ? item : item.text;
@@ -547,6 +580,12 @@ export interface SendOptions {
   skill?: { name: string; input: string };
   /** File paths the user explicitly attached as context. */
   attachedPaths?: string[];
+  /**
+   * The sender's id for this prompt (a phone's outbox). A chat that already
+   * took it (`Session.clientMessageIds`) answers the repeat without a second
+   * turn, so a resend after a dropped connection never runs a prompt twice.
+   */
+  clientMessageId?: string;
   /** Re-answer the last user turn: drop trailing assistant/tool messages and
    *  don't append a new user message. */
   regenerate?: boolean;

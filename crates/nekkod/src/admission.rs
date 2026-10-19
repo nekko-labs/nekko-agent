@@ -34,6 +34,8 @@ pub struct Admission {
     pending: Mutex<HashMap<String, Cancel>>,
     /// The chats whose queued prompt is being started at once (`chat:interruptQueued`).
     interrupting: Arc<Mutex<HashSet<String>>>,
+    /// `sessionId` and `clientMessageId` of each `chat:send` still running here, so a resend meanwhile is a repeat.
+    sending: Arc<Mutex<HashSet<String>>>,
     compactions: Arc<crate::compaction::Compactions>,
     /// The desktop app's host lets the agent drive a browser; the Local Web UI's does not.
     pub allow_browser_control: bool,
@@ -44,6 +46,7 @@ impl Admission {
         Arc::new(Admission {
             pending: Mutex::default(),
             interrupting: Arc::default(),
+            sending: Arc::default(),
             compactions,
             allow_browser_control,
         })
@@ -57,6 +60,14 @@ impl Admission {
     fn begin_interrupt(&self, id: &str) -> InterruptGuard {
         self.interrupting.lock().unwrap_or_else(|e| e.into_inner()).insert(id.to_string());
         InterruptGuard { set: self.interrupting.clone(), id: id.to_string() }
+    }
+
+    /// Mark a `chat:send` with this `clientMessageId` as running until the
+    /// guard drops; `None` when one with the same id already runs.
+    fn begin_sending(&self, session_id: &str, client_id: &str) -> Option<InterruptGuard> {
+        let key = format!("{session_id}\n{client_id}");
+        let fresh = self.sending.lock().unwrap_or_else(|e| e.into_inner()).insert(key.clone());
+        fresh.then(|| InterruptGuard { set: self.sending.clone(), id: key })
     }
 
     /// Whether a `chat:send` for this chat is being admitted or driven here.
@@ -303,6 +314,25 @@ pub async fn admit_child(ctx: &Ctx, opts: Value) -> Result<Option<Value>, String
 /// `chat:send`.
 pub async fn send(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>) -> Result<Value, String> {
     let opts = args.first().cloned().unwrap_or(Value::Null);
+    // A resend of a prompt this chat already took (a phone's outbox after a
+    // dropped connection) starts no second turn: it resolves at once, where
+    // the first send resolves when its turn ends (host.ts `sendChat`).
+    let client_id = nekko_store::client_ids::client_message_id_of(opts.get("clientMessageId")).map(str::to_string);
+    let _sending = match &client_id {
+        Some(cid) => match adm.begin_sending(s(&opts, "sessionId"), cid) {
+            Some(guard) => Some(guard),
+            None => return Ok(Value::Null),
+        },
+        None => None,
+    };
+    if let (Some(cid), Some(store)) = (&client_id, ctx.sessions.clone()) {
+        let id = s(&opts, "sessionId").to_string();
+        let session = tokio::task::spawn_blocking(move || store.get(&id)).await.map_err(|e| e.to_string())?;
+        let ids = session.as_ref().and_then(|v| v.get("clientMessageIds"));
+        if nekko_store::client_ids::has_client_message_id(ids, Some(cid)) {
+            return Ok(Value::Null);
+        }
+    }
     if adm.interrupting(s(&opts, "sessionId")) {
         return Err("A queued prompt is already starting.".into());
     }

@@ -158,6 +158,22 @@ final class StatusWidgetTests: XCTestCase {
         XCTAssertEqual(s(0, 0, online: false), "Offline")
     }
 
+    func testPromptsWaitingToSendShowOnTheWidgetAndTheWatch() throws {
+        let quiet = StatusSnapshot(computer: "Mac", online: false, needsYou: 0, running: 0, at: .now, waiting: 2)
+        XCTAssertEqual(quiet.headline, "2 waiting to send")
+        XCTAssertNil(quiet.waitingBesideHeadline, "said once")
+        let busy = StatusSnapshot(computer: "Mac", online: false, needsYou: 1, running: 0, at: .now, waiting: 1)
+        XCTAssertEqual(busy.headline, "1 needs you")
+        XCTAssertEqual(busy.waitingBesideHeadline, "1 waiting to send")
+        XCTAssertEqual(StatusSnapshot(watchContext: busy.watchContext), busy)
+        // A snapshot an older version saved has no count, and still reads.
+        let old = Data(#"{"computer":"Mac","online":true,"needsYou":0,"running":0,"at":0}"#.utf8)
+        XCTAssertEqual(try JSONDecoder().decode(StatusSnapshot.self, from: old).waitingCount, 0)
+        let now = Date(timeIntervalSince1970: 10_000)
+        XCTAssertEqual(StatusSnapshot(computer: "Mac", online: false, needsYou: 0, running: 0, at: now, waiting: 3).spoken(now: now),
+                       "Mac was offline when Nekko Agent last checked. 3 waiting to send when Mac is back.")
+    }
+
     func testWhatNeedsMeAnswersInASentence() {
         let now = Date(timeIntervalSince1970: 10_000)
         func say(_ needs: Int, _ running: Int, online: Bool = true, computer: String? = "Mac", ago: TimeInterval = 30) -> String {

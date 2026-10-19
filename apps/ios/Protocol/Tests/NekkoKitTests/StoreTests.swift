@@ -299,8 +299,12 @@ final class ChatModelTests: XCTestCase {
         XCTAssertEqual(chat.title, "T")
         XCTAssertEqual(chat.skills.map(\.name), ["review"])
         XCTAssertNil(chat.blocked)
-        try await chat.send("go", skill: SkillSummary(name: "review"))
+        let sent = try await chat.send("go", skill: SkillSummary(name: "review"))
         XCTAssertTrue(chat.turn.running)
+        // The computer lists the prompt's id once it has it, which takes it out of the outbox.
+        c.replies[Channels.sessionGet] = { _ in
+            ["id": "s", "title": "T", "messages": [["id": "u", "role": "user", "content": "earlier"]], "queue": [], "clientMessageIds": [.string(sent)]]
+        }
         await settle()
         let send = try XCTUnwrap(c.callsTo(Channels.chatSend).last?.first)
         XCTAssertEqual(send["skill"], ["name": "review", "input": "go"])
@@ -375,7 +379,8 @@ final class ChatModelTests: XCTestCase {
         let chat = ChatModel(sessionId: "s", store: s, now: { 7 })
         chat.start()
         await settle()
-        c.replies[Channels.chatSend] = { _ in throw RelayError("The computer went offline.") }
+        // The computer answered with a refusal (not a dropped connection, which goes to the outbox).
+        c.replies[Channels.chatSend] = { _ in throw RelayError("The computer went offline.", fromComputer: true) }
         try await chat.send("draft", skill: SkillSummary(name: "review"), images: ["data:image/jpeg;base64,AA"])
         XCTAssertTrue(chat.running)
         await settle()
@@ -395,7 +400,10 @@ final class ChatModelTests: XCTestCase {
         let chat = ChatModel(sessionId: "s", store: s)
         c.status(RelayStatus(.offline))
         await settle()
-        XCTAssertEqual(chat.blocked, "Mac is offline.".replacingOccurrences(of: "Mac", with: s.active!.name))
+        // Offline is not a reason to block: Send puts the prompt in the outbox.
+        XCTAssertNil(chat.blocked)
+        XCTAssertTrue(chat.sendsLater)
+        XCTAssertEqual(chat.offlineNote, "\(s.active!.name) is offline. What you send waits on this iPhone and goes when it’s back.")
         c.status(RelayStatus(.denied, denied: .revoked))
         await settle()
         XCTAssertEqual(chat.blocked, "This phone is no longer paired.")

@@ -2,6 +2,7 @@
 
 use crate::truthy;
 use nekko_js as js;
+use nekko_store::client_ids::{client_message_id_of, remember_client_message_ids};
 use serde_json::{Map, Value, json};
 
 fn base36(mut n: u64) -> String {
@@ -78,6 +79,11 @@ pub fn apply_turn_input(session: &mut Value, opts: &Value, now: u64) {
     }
     s.insert("providerId".into(), opts.get("providerId").cloned().unwrap_or(Value::Null));
     s.insert("modelId".into(), opts.get("modelId").cloned().unwrap_or(Value::Null));
+    // Saved in the same write as the user turn, so a resend of it is answered without a second turn.
+    if let Some(id) = client_message_id_of(opts.get("clientMessageId")) {
+        let ids = remember_client_message_ids(s.get("clientMessageIds"), &[id.to_string()]);
+        s.insert("clientMessageIds".into(), ids);
+    }
 }
 
 /// `titlePrompt(messages)`: the title request, or `None` with nothing to name the chat from.
