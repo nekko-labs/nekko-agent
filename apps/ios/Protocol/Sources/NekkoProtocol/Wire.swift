@@ -30,6 +30,9 @@ public enum Channels {
     /// What the agent changed in a chat, as a capped read-only diff (`PhoneChanges`);
     /// refused unless the computer allows it (`phoneChanges`).
     public static let changesList = "changes:list"
+    /// *Send a test notification*: answered by the computer's relay agent itself,
+    /// so it is not on the phone allowlist (`PUSH_TEST_CHANNEL`) and not in `all`.
+    public static let pushTest = "push:test"
 
     public static let all = [
         settingsGet, settingsUpdate, providersList, modelsList, sessionsSummaries, sessionCreate, sessionGet,
