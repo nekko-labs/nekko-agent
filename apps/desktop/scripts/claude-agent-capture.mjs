@@ -40,7 +40,7 @@ try {
     const errors = [];
     page.on('pageerror', (e) => errors.push(String(e)));
     await page.goto('file://' + path.join(out, `index-${theme}.html`).replaceAll('\\', '/'));
-    for (const scene of ['choices', 'missing', 'signedOut', 'plan', 'apiKey', 'sheet', 'schedule']) {
+    for (const scene of ['choices', 'missing', 'signedOut', 'plan', 'apiKey', 'sheet', 'schedule', 'notice', 'retired', 'limits', 'connect']) {
       await page.evaluate((s) => window.integration.show(s), scene);
       await page.waitForTimeout(250);
       await page.screenshot({ path: path.join(out, `${scene}-${theme}.png`), fullPage: true });
