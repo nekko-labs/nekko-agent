@@ -1,5 +1,6 @@
 package com.nekko.android
 
+import com.nekko.android.data.ChatListFiles
 import com.nekko.android.data.PhonePrefs
 import com.nekko.android.data.PrefStore
 import org.junit.Assert.assertEquals
@@ -47,6 +48,13 @@ class PhonePrefsTest {
         val relaunched = PhonePrefs(store)
         assertFalse(relaunched.get(haptics))
         assertEquals(Mode.LOUD, relaunched.get(mode))
+    }
+
+    /** OF-9: the saved chat list is on unless the user turned it off. */
+    @Test
+    fun `the saved chat list is on by default and a deliberate off stays off`() {
+        assertTrue(PhonePrefs(MapPrefStore()).get(ChatListFiles.ENABLED))
+        assertFalse(PhonePrefs(MapPrefStore(mutableMapOf("keep_chat_list" to "false"))).get(ChatListFiles.ENABLED))
     }
 
     @Test

@@ -144,6 +144,7 @@ struct ChatsView: View {
         NavigationLink(value: Route.chat(s.id)) {
             ChatRow(summary: s, activity: store.activity[s.id], waiting: store.outbox.count(for: s.id))
         }
+        .accessibilityIdentifier("chats.row")
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             if s.archived {
                 Button { act { try await store.restoreChat(s.id) } } label: { Label("Restore", systemImage: "arrow.uturn.backward") }
@@ -361,13 +362,22 @@ struct ChatDialogs: ViewModifier {
     }
 }
 
-/// The line above a saved chat list: when it was saved, and that it isn't live.
+/// The line above a saved chat list, and above the composer of a saved chat:
+/// when it was saved, and that it isn't live.
 enum SavedListNote {
     static func text(savedAt ms: Int64, computer: String, now: Date = .now, calendar: Calendar = .current) -> String {
+        "Saved list from \(when(ms, now: now, calendar: calendar)). It updates when \(computer) answers."
+    }
+
+    /// A chat read from the phone's saved copy (OF-5).
+    static func copy(savedAt ms: Int64, computer: String, now: Date = .now, calendar: Calendar = .current) -> String {
+        "Saved copy from \(when(ms, now: now, calendar: calendar)). It updates when \(computer) answers."
+    }
+
+    private static func when(_ ms: Int64, now: Date, calendar: Calendar) -> String {
         let date = Date(timeIntervalSince1970: TimeInterval(ms) / 1000)
-        let when = calendar.isDate(date, inSameDayAs: now)
+        return calendar.isDate(date, inSameDayAs: now)
             ? date.formatted(date: .omitted, time: .shortened)
             : date.formatted(date: .abbreviated, time: .shortened)
-        return "Saved list from \(when). It updates when \(computer) answers."
     }
 }

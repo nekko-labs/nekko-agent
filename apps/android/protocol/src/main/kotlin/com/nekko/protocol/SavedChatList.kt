@@ -8,8 +8,8 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 /**
- * The phone's own copy of one computer's chat list, kept only when the user
- * turns on *Keep the chat list when offline* (off by default). The same shape
+ * The phone's own copy of one computer's chat list, kept while *Keep the chat
+ * list when offline* is on (the default since OF-9). The same shape
  * as the iPhone app's `SavedChatList`: each visible chat's id, title, times,
  * folder and manual order, plus the folder names. Never replies, first
  * messages, models or anything a chat contains.

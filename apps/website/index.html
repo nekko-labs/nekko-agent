@@ -6,7 +6,7 @@
     <title>Nekko Agent: AI help on your computer</title>
     <meta
       name="description"
-      content="Get AI help writing, coding, and handling repeat tasks. Use AI on your computer or connect online services. Voice and computer control are planned, not available yet."
+      content="A fast local model server and AI agent in one app. Run models on your own computer, mix in ChatGPT, Claude and more, track what you save, and stay in control of what it can touch."
     />
     <link rel="canonical" href="https://nekkoagent.com/" />
     <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1" />
@@ -22,7 +22,7 @@
     <meta property="og:title" content="Nekko Agent: AI help on your computer" />
     <meta
       property="og:description"
-      content="AI help on your computer, for coding and everyday work. Use your own AI or online services, automate repeat tasks, and explore planned voice control."
+      content="A fast local model server and AI agent in one app. Run models on your own computer, mix in ChatGPT, Claude and more, track what you save, and stay in control of what it can touch."
     />
     <meta property="og:image" content="https://nekkoagent.com/og.png?v=nekko-agent-5" />
     <meta property="og:image:width" content="1200" />
@@ -33,7 +33,7 @@
     <meta name="twitter:title" content="Nekko Agent: AI help on your computer" />
     <meta
       name="twitter:description"
-      content="AI help on your computer, for coding and everyday work. Use your own AI or online services, automate repeat tasks, and explore planned voice control."
+      content="A fast local model server and AI agent in one app. Run models on your own computer, mix in ChatGPT, Claude and more, track what you save, and stay in control of what it can touch."
     />
     <meta name="twitter:image" content="https://nekkoagent.com/og.png?v=nekko-agent-5" />
     <link rel="stylesheet" href="styles.css?v=5" />
@@ -63,7 +63,7 @@
             "@id": "https://nekkoagent.com/#website",
             "url": "https://nekkoagent.com/",
             "name": "Nekko Agent",
-            "description": "AI help for coding and everyday work. Use AI on your computer or connect online services, choose the AI for each task, and automate repetitive work.",
+            "description": "AI help for coding and everyday work: a fast local model server and an AI agent in one app, alongside the online models you already use.",
             "inLanguage": "en",
             "publisher": { "@id": "https://nekkolabs.com/#organization" }
           },
@@ -75,29 +75,25 @@
             "applicationCategory": "DeveloperApplication",
             "applicationSubCategory": "AI assistant for coding and everyday work",
             "operatingSystem": "macOS, Windows, Linux",
-            "description": "Nekko Agent helps you write, code, and handle repeat tasks using AI on your computer or online services. A model is the AI you choose; local means it runs on your computer. Choose models per chat or workflow, review file changes, and connect separately installed model runners such as Ollama, LM Studio, or vLLM. Supported tasks using your own AI can run offline after setup. Online services need internet access and may charge for use. Advanced users can connect through the command-line interface (CLI) or the MCP standard for AI tools.",
+            "description": "Nekko Agent is a local model server and AI agent in one free, open-source app. Its engine, a Rust core driving llama.cpp, downloads and runs models on your own hardware, and you can use them side by side with ChatGPT, Claude, OpenRouter and local runners such as Ollama, LM Studio and vLLM. Track spend and savings, watch your hardware, automate work on a schedule or trigger, dictate by voice on your machine, and choose exactly what the agent can access. Local-only work runs offline once your models are downloaded.",
             "license": "https://opensource.org/licenses/MIT",
             "isAccessibleForFree": true,
             "downloadUrl": "https://github.com/nekko-labs/nekko-agent/releases/latest",
             "codeRepository": "https://github.com/nekko-labs/nekko-agent",
             "featureList": [
-              "Use AI on your computer or connect online AI services",
-              "Choose an AI model for each chat or workflow; running it on your hardware avoids per-token API charges, but hardware, electricity, and paid services still have costs",
-              "Schedule repeat tasks, run recurring checks, and review workflow results",
-              "Connect separately installed Ollama, LM Studio, and vLLM model runners and use their supported model controls",
-              "Inspect the files, instructions, and notes sent with each request, with token counts",
-              "Search across project folders, view files, and edit them in the app",
-              "Use AGENTS.md or CLAUDE.md instructions and saved project notes, individually switchable",
-              "Save project descriptions, plans, and task lists from a conversation",
-              "Check draft instructions on your computer before sending them",
-              "Delegate smaller tasks to separate AI sessions with limits",
-              "Reuse saved procedures called skills and install more from a marketplace",
-              "Connect AI tools through MCP and use connectors for Linear, Slack, Discord, Gmail, and Drive",
-              "Run long tasks with no step limit, plus checks for stalled progress",
-              "Configure which terminal commands are allowed, need approval, or are blocked",
-              "Limit file tools to selected folders, with optional Docker isolation for terminal commands",
-              "Review file changes line by line and keep or undo them",
-              "Desktop, self-hosted browser, and Docker editions, plus encrypted phone remote access"
+              "Built-in local model server: a Rust core driving llama.cpp; download, load and run models from the app",
+              "Faster decode and code edits than Ollama and LM Studio in our published benchmarks (30 September 2026)",
+              "Use ChatGPT (with your plan), Claude, OpenRouter and local models side by side, chosen per chat or workflow",
+              "Also connects to Ollama, LM Studio and vLLM",
+              "Track API spend and what local models saved you, with live hardware and model monitors",
+              "Automations that run on a schedule or wake on a trigger such as a GitHub pull request",
+              "Voice dictation on your computer with Whisper",
+              "CLI and MCP server, so Claude Code, Codex and other agents can hand work to your local models",
+              "Skills library and marketplace, plus sub-agents and long-running goals",
+              "Context Inspector, command approvals, folder limits and line-by-line change review",
+              "Connectors for GitHub, Linear, Slack, Discord, Gmail, Drive and more",
+              "Phone remote control for iOS and Android, end-to-end encrypted (in beta)",
+              "Desktop, self-hosted browser and Docker editions"
             ],
             "offers": {
               "@type": "Offer",
@@ -118,7 +114,10 @@
 
     <header class="nav">
       <a class="brand" href="#top" aria-label="Nekko Agent home"><img class="brand-mark" src="/logo.svg?v=nekko-agent-6" alt="" width="30" height="23" /> NEKKO AGENT</a>
-      <nav class="nav-links" aria-label="Main navigation">
+      <button class="nav-menu" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="Open menu">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+      <nav class="nav-links" id="nav-links" aria-label="Main navigation">
         <a href="#pillars">What it does</a>
         <a href="#local">AI on your computer</a>
         <a href="#beta">Beta</a>
@@ -127,7 +126,7 @@
         <a href="/docs">Docs</a>
         <a href="https://github.com/nekko-labs/nekko-agent" target="_blank" rel="noopener">GitHub</a>
       </nav>
-      <button class="theme-toggle" type="button" aria-label="Switch between light and dark" title="Light or dark">
+      <button class="theme-toggle" type="button" aria-pressed="false" aria-label="Colourful look" title="Switch between the White and Colourful looks">
         <svg class="ic-moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
         <svg class="ic-sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       </button>
@@ -145,9 +144,9 @@
           <span class="grad">For coding and everyday work.</span>
         </p>
         <p class="lede reveal">
-          Get help writing, coding, and handling repeat tasks. Use AI running on your
-          computer or connect an online AI service. You choose what Nekko can access
-          and review its work.
+          A seriously fast local model server and an AI agent, together in one app.
+          Run models on your own computer, bring in ChatGPT or Claude when you want
+          them, and decide exactly what Nekko gets to touch.
         </p>
         <div class="cta-row reveal">
           <!-- the same smart download button as the download section: one click
@@ -206,45 +205,60 @@
 
       <!-- ===== chapters ===== -->
       <section id="pillars" class="chapter pillars">
-        <p class="eyebrow reveal">FIVE WAYS TO USE NEKKO · VOICE CONTROL IS PLANNED</p>
+        <p class="eyebrow reveal">WHY NEKKO · EIGHT REASONS</p>
         <h2 class="reveal">What you can do with Nekko</h2>
-        <p class="chapter-lede reveal">A model is the AI you choose. Local means it runs on your computer, rather than an online service. Start with the tools below, and see what we are planning next.</p>
+        <p class="chapter-lede reveal">A model is the AI that does the thinking. Local means it runs on your own computer instead of someone else's. Nekko makes local fast, then lets you mix in everything else.</p>
         <div class="grid two reveal">
           <div class="card glass">
             <button class="media" type="button" aria-label="Feature animation coming soon. Opens larger."><span>Feature GIF</span></button>
-            <span class="mf-num">01 · YOUR AI OPTIONS</span>
-            <h3>Use AI on your computer or online</h3>
-            <p>Chat and work in the Nekko app with an AI model installed on your computer, or connect an online service such as Anthropic or OpenAI. You can also use Nekko from supported coding tools.</p>
+            <span class="mf-num">01 · SPEED</span>
+            <h3>A model server built to be quick</h3>
+            <p>Nekko runs models with llama.cpp under a Rust core that tunes it for the way agents actually work. On the same model file and the same machine it decoded at <b>154 tokens a second</b> against Ollama's 115 and LM Studio's 116, ran code edits about <b>4.5x faster</b>, and came back to a paused chat about 40% faster than Ollama.</p>
+            <p class="card-note">Measured 30 September 2026 on an NVIDIA RTX 5090 with Gemma 4 12B. Your hardware will differ, so the benchmark harness is open for you to run.</p>
+            <a class="card-link" href="/docs/benchmarks">See every number, wins and losses <span aria-hidden="true">→</span></a>
+          </div>
+          <div class="card glass">
+            <button class="media" type="button" aria-label="Feature animation coming soon. Opens larger."><span>Feature GIF</span></button>
+            <span class="mf-num">02 · ONE APP</span>
+            <h3>Run models and build with them in one place</h3>
+            <p>No more juggling a model runner in one window and your workspace in another. Pick a model, download it, load it and start working, all inside Nekko. Already set up with Ollama, LM Studio or vLLM? Nekko finds them and puts them to work too.</p>
+            <a class="card-link" href="#local">What the engine does <span aria-hidden="true">↓</span></a>
+          </div>
+          <div class="card glass">
+            <button class="media" type="button" aria-label="Feature animation coming soon. Opens larger."><span>Feature GIF</span></button>
+            <span class="mf-num">03 · EVERY MODEL</span>
+            <h3>Your favourite models, side by side</h3>
+            <p>Sign in with your ChatGPT plan, add Claude with an API key, or open up hundreds of models, Gemini included, through OpenRouter. Run them next to your local models, pick one per chat or workflow, and hand smaller jobs to the cheaper one.</p>
+          </div>
+          <div class="card glass">
+            <button class="media" type="button" aria-label="Feature animation coming soon. Opens larger."><span>Feature GIF</span></button>
+            <span class="mf-num">04 · YOUR MONEY</span>
+            <h3>See what you spend, and what you save</h3>
+            <p>Nekko tracks what your online models cost and works out what the same work would have cost in the cloud when a local model did it instead. Live monitors show your CPU, memory, graphics card and loaded models, so you always know what is running while your agents work.</p>
+          </div>
+          <div class="card glass">
+            <span class="mf-num">05 · AUTOMATIONS</span>
+            <h3>Agents that clock in on their own</h3>
+            <p>Check a price every morning, sum up your notifications before you sit down, or review every pull request the moment it opens. Schedule an agent to run on a routine, or have it wake up when something happens, like a new GitHub pull request.</p>
+            <p class="card-note">Scheduled runs need your computer and Nekko to be on.</p>
+          </div>
+          <div class="card glass">
+            <span class="mf-num">06 · VOICE</span>
+            <h3>Talk instead of type</h3>
+            <p>Tap the mic, talk, and Nekko turns your voice into text with Whisper running on your own computer. No cloud service ever hears it, and it works from the phone app too: your words travel encrypted to your computer and are transcribed there.</p>
+            <p class="card-note">Hands-free control of your computer by voice is coming next. <a href="#roadmap">See the plan</a>.</p>
+          </div>
+          <div class="card glass">
+            <span class="mf-num">07 · ANY TOOL</span>
+            <h3>Skip the window, keep the power</h3>
+            <p>Prefer the terminal? Use the Nekko CLI and MCP server directly, or from another agent. Claude Code, Codex and Cursor can hand work to your local models through Nekko, so a quick review or a big refactor runs on your hardware instead of your token budget.</p>
             <a class="card-link" href="https://github.com/nekko-labs/nekko-agent/blob/main/apps/cli/README.md">Connect your coding tools <span aria-hidden="true">↗</span></a>
           </div>
           <div class="card glass">
-            <button class="media" type="button" aria-label="Feature animation coming soon. Opens larger."><span>Feature GIF</span></button>
-            <span class="mf-num">02 · THE RIGHT TOOL</span>
-            <h3>Choose the right AI for the job</h3>
-            <p>Use a powerful online model for a difficult plan, then a model on your computer or a cheaper service for smaller tasks. Running AI on your hardware avoids per-token API charges. Your hardware, electricity, and any paid services still cost money.</p>
-            <p class="card-note">Choose the model for each chat or workflow today. The unreleased rebrand source also lets you choose a provider and model for delegated tasks. Automatically choosing the best model is still a future direction.</p>
-          </div>
-          <div class="card glass">
-            <button class="media" type="button" aria-label="Feature animation coming soon. Opens larger."><span>Feature GIF</span></button>
-            <span class="mf-num">03 · REPEAT TASKS</span>
-            <h3>Automate repetitive work</h3>
-            <p>Save a series of steps as a workflow, schedule it, and check the results in one place. Set up recurring checks, called watchers, for work you want Nekko to keep an eye on.</p>
-            <p class="card-note">Your computer and the app running the workflow need to stay on for scheduled tasks and checks.</p>
-          </div>
-          <div class="card glass">
-            <button class="media" type="button" aria-label="Feature animation coming soon. Opens larger."><span>Feature GIF</span></button>
-            <span class="mf-num">04 · MODEL SETUP</span>
-            <h3>Manage your AI models in one place</h3>
-            <p>Connect Ollama, LM Studio, or vLLM, the software that runs AI models on your computer. Use the model controls each supports, keep an existing setup, and add online AI services when you need them.</p>
-            <a class="card-link" href="#local">See what you can manage <span aria-hidden="true">↓</span></a>
-          </div>
-          <div class="card glass pillar-planned" id="pc-control">
-            <span class="mf-num">05 · VOICE CONTROL <span class="chip">Planned</span></span>
-            <h3>Control your computer by voice</h3>
-            <p>We are planning AI that understands your instructions and speaks back, all on your computer. Voice input would use speech recognition on your computer too. You would approve which apps and actions it can use, confirm sensitive steps, and have a visible stop control.</p>
-            <p class="pc-setup">Guided setup would choose suitable AI and speech models by checking your processor (CPU), memory (RAM), graphics or unified memory, free storage, operating system, supported AI software, and each model's minimum requirements. Preview the plan, then approve one install click. You would still need to approve required operating-system permission prompts.</p>
-            <p class="card-note">Planned, not available today. Initial downloads would need internet or a prepared offline bundle. After setup, supported actions are intended to work offline, with no cloud fallback. Current builds can work with files and terminal commands and show hardware information, but do not yet offer voice, desktop control, or this setup recommender.</p>
-            <a class="card-link" href="#roadmap">See what we are planning <span aria-hidden="true">↓</span></a>
+            <span class="mf-num">08 · ON THE GO <span class="chip">Beta</span></span>
+            <h3>Your agents, in your pocket</h3>
+            <p>Native iOS and Android apps let you start chats, approve risky commands and check on long runs from your phone. Everything still runs on your computer, and the connection is end-to-end encrypted.</p>
+            <a class="card-link" href="#beta">Get early access <span aria-hidden="true">↓</span></a>
           </div>
         </div>
       </section>
@@ -288,7 +302,7 @@
               </svg>
             </div>
             <!-- TODO before launch: point data-endpoint at the sign-up service (Formspree, Loops, Buttondown or similar).
-                 Until then the form only shows its thank-you and sends nothing. -->
+                 Until then the form says sign-ups are not open yet; it never claims a sign-up it did not send. -->
             <form class="beta-card" data-beta-form data-endpoint="" novalidate>
               <div class="beta-ask">
                 <h3>Join the beta</h3>
@@ -311,33 +325,34 @@
 
       <section id="local" class="chapter band band-aqua">
         <p class="eyebrow reveal">AI ON YOUR COMPUTER</p>
-        <h2 class="reveal">Run AI on your own computer</h2>
-        <p class="chapter-lede reveal">Install a model runner such as Ollama, LM Studio, or vLLM separately, then connect it to Nekko. A runner is the software that loads and runs your chosen AI. Nekko adds tools for your files and supported model controls; it does not bundle or automatically install the runner today.</p>
+        <h2 class="reveal">Your own model server, built in</h2>
+        <p class="chapter-lede reveal">Nekko comes with its own engine, so running AI on your computer takes a few clicks rather than a weekend of setup. Find a model, see whether it fits your machine, and start using it.</p>
         <div class="split reveal">
           <ul class="check">
-            <li>Find Ollama, LM Studio, and vLLM running on your computer</li>
-            <li>Download, load, and unload Ollama models from Nekko</li>
-            <li>Load and unload LM Studio models when its <code>lms</code> command-line tool is installed on your computer</li>
-            <li>See which models are loaded and check usage. Stop supported model servers; vLLM models stay loaded until their server stops.</li>
-            <li>Also connect online services such as Anthropic, OpenAI, OpenRouter, or another OpenAI-compatible provider</li>
+            <li>Search and download models from Hugging Face without leaving the app</li>
+            <li>See which models fit your graphics card before you download them</li>
+            <li>Load, unload, or keep a model ready so your first reply comes back fast</li>
+            <li>Serve text and image models on one address that your other apps can use too</li>
+            <li>Already using Ollama, LM Studio or vLLM? Nekko finds them and manages their models</li>
+            <li>Add ChatGPT, Claude, OpenRouter or any OpenAI-compatible service alongside</li>
           </ul>
           <div class="server-cards" aria-label="Example local server connections">
             <p class="micro">Example setup, not a scan of your machine</p>
+            <div class="sc glass"><b>Nekko engine</b><span class="ok">●&nbsp;running</span><code>built in</code></div>
             <div class="sc glass"><b>Ollama</b><span class="ok">●&nbsp;connected</span><code>localhost:11434</code></div>
-            <div class="sc glass"><b>LM Studio</b><span class="ok">●&nbsp;connected</span><code>localhost:1234</code></div>
-            <div class="sc glass"><b>vLLM</b><span class="dim">○&nbsp;not running</span><code>localhost:8000</code></div>
+            <div class="sc glass"><b>LM Studio</b><span class="dim">○&nbsp;not running</span><code>localhost:1234</code></div>
           </div>
         </div>
       </section>
 
       <!-- ===== the harness: a spec-sheet manifest, deliberately not cards ===== -->
       <section id="features" class="chapter">
-        <p class="eyebrow reveal">UNDERSTAND AND REVIEW THE WORK</p>
-        <h2 class="reveal">See what your AI is doing</h2>
+        <p class="eyebrow reveal">PRIVACY AND CONTROL</p>
+        <h2 class="reveal">Share only what you choose</h2>
         <p class="chapter-lede reveal">
-          An AI agent can do more than reply: it can use tools to work on a task.
-          Nekko shows what information it uses, lets you set limits on its tools,
-          and helps you review changes before you keep them.
+          Letting an AI read a prompt is one thing. Handing it your files, your terminal,
+          your microphone and your network is another. Nekko keeps every one of those
+          behind a control you set, and shows you exactly what it did.
         </p>
 
         <div class="manifest reveal">
@@ -384,15 +399,15 @@
               </li>
               <li>
                 <b>Reusable instructions</b>
-                <span>Skills are saved procedures for work such as research, planning, code review, and testing. See their steps as a workflow, or install more from the skills marketplace.</span>
+                <span>Not sure which skill to reach for? Nekko's library sorts skills by the job they do, from research and planning to code review and testing, and shows every step before you run one. Install more from the marketplace in a click.</span>
               </li>
               <li>
                 <b>Connect coding tools</b>
-                <span>MCP is a standard for connecting AI tools. Nekko can use other MCP servers or act as one. Connect Claude Code, Cursor, Codex, or OpenClaw where their CLI or MCP configuration supports it. These are configurable connections, not bundled integrations.</span>
+                <span>MCP is the common language AI tools use to talk to each other. Nekko can use other MCP servers or act as one, so Claude Code, Codex, Cursor or OpenClaw can pass work to your local models through it.</span>
               </li>
               <li>
                 <b>Connect your services</b>
-                <span>Bring relevant information from Linear, Slack, Discord, Gmail, and Drive into your request instead of pasting it by hand. These online connections need a network.</span>
+                <span>Bring in what matters from GitHub, Linear, Slack, Discord, Gmail and Drive instead of pasting it by hand. Each connection is one you switch on, and it only reaches the network when you use it.</span>
               </li>
               <li>
                 <b>Longer tasks with limits</b>
@@ -414,7 +429,7 @@
               </li>
               <li>
                 <b>Limit file access</b>
-                <span>Keep file tools within the folders you selected. For advanced setups, Docker can provide additional isolation for terminal commands.</span>
+                <span>Nekko only touches the folders you pick. Your microphone is only used when you start dictating, and speech is turned into text on your computer. For extra peace of mind, Docker can wall off terminal commands entirely.</span>
               </li>
               <li>
                 <b>Review file changes</b>
@@ -429,7 +444,7 @@
         </div>
 
         <p class="micro center reveal mf-foot">
-          Meet Nekko: a small outline cat keeping you company while your agent gets to work.
+          Meet Nekko: a small pixel cat keeping you company while your agents get to work.
         </p>
       </section>
 
@@ -440,7 +455,7 @@
           <div class="card glass">
             <span class="mf-num">ON YOUR COMPUTER</span>
             <h3>Work without an internet connection</h3>
-            <p>Once your AI model and its runner are installed, supported tasks can work offline. Read, edit, and search your chosen folders without sending requests to an online AI service.</p>
+            <p>Once your model is downloaded, local work keeps going without the internet. Read, edit and search your folders with nothing sent to an online AI service.</p>
           </div>
           <div class="card glass">
             <span class="mf-num">ONLINE SERVICES</span>
@@ -464,12 +479,14 @@
       </section>
 
       <section id="roadmap" class="chapter roadmap">
-        <p class="eyebrow reveal">FUTURE IDEAS · NOT AVAILABLE TODAY</p>
-        <h2 class="reveal">What we are planning next</h2>
-        <p class="chapter-lede reveal">Voice and computer control are only the beginning. Here is a glimpse of where Nekko is heading next, and the bigger ideas we are exploring behind the scenes.</p>
+        <p class="eyebrow reveal">COMING SOON</p>
+        <h2 class="reveal">What we are building next</h2>
+        <p class="chapter-lede reveal">Here is what is on the bench right now. Join the beta to try each one first.</p>
         <div class="grid two reveal">
-          <div class="card glass"><span class="chip">Exploring</span><h3>Ways to work together using Nekko Agent</h3><p>Great work is rarely a solo act. We are exploring how Nekko can bring people together, so ideas, projects and progress flow between you and the people you build with. Watch this space.</p></div>
-          <div class="card glass"><span class="chip">Exploring</span><h3>Run project checks on your machines</h3><p>Explore a local CI and task-runner alternative for repeat jobs such as code tests, with possible cloud runners for extra capacity. This is not a promise of GitHub Actions compatibility.</p></div>
+          <div class="card glass"><span class="chip">Coming soon</span><h3>Model routers</h3><p>Let a router pick the right model for each request, so easy questions go somewhere cheap and hard ones get the heavy hitters. Use our upcoming open-source Nekko Router, another open-source router, or bring your own key for a paid one.</p></div>
+          <div class="card glass"><span class="chip">Coming soon</span><h3>Share with friends and teammates</h3><p>Great work is rarely a solo act. Share agents, workflows and progress with the people you build with, without giving up control of your own machine.</p></div>
+          <div class="card glass" id="pc-control"><span class="chip">Planned</span><h3>Control your computer by voice</h3><p>Dictation is here today. Next, Nekko listens, acts and speaks back, all on your computer: you approve which apps and actions it can use, confirm sensitive steps, and always have a stop button in reach.</p></div>
+          <div class="card glass"><span class="chip">Exploring</span><h3>Run project checks on your machines</h3><p>A local alternative to hosted CI for repeat jobs such as running tests, with the option of cloud runners for extra capacity. This is not a promise of GitHub Actions compatibility.</p></div>
         </div>
       </section>
 

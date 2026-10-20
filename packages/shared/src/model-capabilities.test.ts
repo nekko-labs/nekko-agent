@@ -47,6 +47,15 @@ describe('claudeContextWindow', () => {
   });
 });
 
+describe('Claude Code alias context guesses', () => {
+  it('reads the bare aliases a Claude Agent chat runs on as 1M, and nothing else', () => {
+    expect(guessContextWindow('opus')).toBe(1_000_000);
+    expect(guessContextWindow('Sonnet')).toBe(1_000_000);
+    expect(guessContextWindow('haiku')).toBe(1_000_000);
+    expect(guessContextWindow('my-opus')).toBe(128_000);
+  });
+});
+
 describe('GPT context guesses', () => {
   it('distinguishes published API windows from Codex subscription fallbacks', () => {
     expect(guessContextWindow('openai/gpt-5')).toBe(400_000);

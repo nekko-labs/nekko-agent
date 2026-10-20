@@ -4,7 +4,8 @@ import { WorkflowsView } from '../apps/desktop/src/renderer/views/WorkflowsView'
 import { useStore } from '../apps/desktop/src/renderer/store';
 import '../apps/desktop/src/renderer/styles.css';
 
-// The data set comes from the query string: `empty`, `list` or `paused`.
+// The data set comes from the query string: `empty`, `list`, `paused`, or
+// `local` (empty, with a local default model).
 const scene = new URLSearchParams(location.search).get('data') || 'list';
 const now = Date.now();
 const min = 60_000;
@@ -30,6 +31,18 @@ const workflows = [
     steps: [step('b1', 'Build', 'prompt', 'Implement'), step('v1', 'Verify', 'shell', 'npm test')],
     triggers: [{ id: 't3', kind: 'manual' }],
     createdAt: now - 86_400_000, updatedAt: now - 86_400_000, runCount: 0,
+  },
+  {
+    id: 'w4', name: 'Diagnose failed CI', category: 'Code review', enabled: true, notify: 'failure', templateId: 'diagnose-failed-ci',
+    localModelOnly: true, toolAccess: 'none', providerId: 'local', modelId: 'qwen3-4b',
+    description: 'Watches a GitHub repo for failed Actions runs and keeps one diagnosis comment on the PR.',
+    steps: [
+      { ...step('logs', 'Read the failed logs', 'action', 'github.runFailureLogs'), params: { repo: '{{trigger.repo}}', run_id: '{{trigger.run_id}}' }, onFailure: { goto: 'fail' } },
+      { ...step('diagnose', 'Diagnose', 'prompt', 'A GitHub Actions run failed…\n{{steps.logs.output}}'), tools: 'none' },
+      { ...step('comment', 'Comment on the PR', 'action', 'github.upsertPRComment'), params: { repo: '{{trigger.repo}}', number: '{{trigger.number}}', body: '### CI diagnosis for run …\n\n{{steps.diagnose.output}}' }, continueOnError: true },
+    ],
+    triggers: [{ id: 't4', kind: 'connector', connector: 'github', event: 'workflow_run_failed', repo: 'acme/app', pollIntervalMs: 120_000 }],
+    createdAt: now - 86_400_000, updatedAt: now - 86_400_000, lastRunAt: now - 12 * min, lastStatus: 'success', runCount: 3,
   },
 ];
 const attempt = (stepId: string, status: string, at: number, extra: object = {}) => ({ stepId, status, attempt: 1, startedAt: at, endedAt: at + 20_000, ...extra });
@@ -59,13 +72,32 @@ const runs = [
     steps: [attempt('a', 'failure', now - 31 * 60 * min, { error: 'Command failed: npm outdated\nnpm ERR! enoent Could not read package.json' })],
   },
 ];
-const snapshot = scene === 'empty' ? { workflows: [], runs: [] } : { workflows, runs };
+runs.push(
+  {
+    id: 'r41', workflowId: 'w4', status: 'success', triggerKind: 'connector', triggerLabel: 'GitHub · CI failed on fix-rounding (run 212)', startedAt: now - 12 * min, endedAt: now - 12 * min + 41_000,
+    steps: [
+      attempt('logs', 'success', now - 12 * min, { output: '### test / Run unit tests\nFAIL src/math.test.js\n  ● add › adds two numbers\n    Expected: 4\n    Received: 5' }),
+      attempt('diagnose', 'success', now - 12 * min + 3_000, { sessionId: 's41', output: '**Failing:** job `test`, step *Run unit tests*.\n\n**Likely cause:** `add(2, 2)` returns 5, so `src/math.js` adds an extra 1 (`Expected: 4, Received: 5` at src/math.test.js:4).\n\n**Suggested fix:** return `a + b` in `add` and re-run the tests.' }),
+      attempt('comment', 'success', now - 12 * min + 38_000, { output: 'Updated the comment on acme/app#57 https://github.com/acme/app/pull/57#issuecomment-1' }),
+    ],
+  },
+  {
+    id: 'r42', workflowId: 'w4', status: 'success', triggerKind: 'connector', triggerLabel: 'GitHub · CI failed on main (run 209)', startedAt: now - 3 * 60 * min, endedAt: now - 3 * 60 * min + 36_000,
+    steps: [
+      attempt('logs', 'success', now - 3 * 60 * min, { output: '### build / Compile' }),
+      attempt('diagnose', 'success', now - 3 * 60 * min + 3_000, { sessionId: 's42', output: 'The log does not show enough to tell.' }),
+      attempt('comment', 'success', now - 3 * 60 * min + 35_000, { output: 'No PR, skipped.' }),
+    ],
+  },
+);
+const snapshot = scene === 'empty' || scene === 'local' ? { workflows: [], runs: [] } : { workflows, runs };
 
 // The view reads the store and this bridge; every other call answers nothing.
 const w = window as unknown as { nekko: unknown };
 w.nekko = new Proxy({}, {
   get: (_, k: string) =>
     k === 'listWorkflows' ? () => Promise.resolve(snapshot)
+      : k === 'listModels' ? (id: string) => Promise.resolve(id === 'local' ? [{ id: 'qwen3-4b', providerId: 'local', name: 'Qwen3 4B' }] : [])
       : k.startsWith('on') ? () => () => {}
       : () => Promise.resolve(null),
 });
@@ -76,8 +108,12 @@ useStore.setState({
     automationsPaused: scene === 'paused',
     connectors: [{ kind: 'github', connected: true }],
     workspaces: [{ id: 'ws1', path: '/Users/me/code/app', name: 'app' }],
-    defaultProviderId: 'anthropic',
-    defaultModelId: 'claude-sonnet-5-5',
+    providers: [
+      { id: 'anthropic', kind: 'anthropic', label: 'Anthropic', baseUrl: 'https://api.anthropic.com', enabled: true },
+      { id: 'local', kind: 'llamacpp', label: 'Nekko engine', baseUrl: 'http://127.0.0.1:11500/v1', enabled: true },
+    ],
+    defaultProviderId: scene === 'local' ? 'local' : 'anthropic',
+    defaultModelId: scene === 'local' ? 'qwen3-4b' : 'claude-sonnet-5-5',
   } as never,
 });
 createRoot(document.getElementById('root')!).render(

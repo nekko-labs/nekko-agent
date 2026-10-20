@@ -178,6 +178,14 @@ export interface ImageTurnOptions {
   params: ImageChatParams & { modelId: string };
 }
 
+/** `Session.claudeCodeContext`. */
+export interface ClaudeCodeContext {
+  used?: number;
+  window?: number;
+  model?: string;
+  modelId?: string;
+}
+
 export interface Session {
   id: string;
   title: string;
@@ -204,6 +212,17 @@ export interface Session {
    *  Training/Goals tabs, kept out of the regular chat boards/lanes; the
    *  report_experiment tool becomes available to the agent). */
   trainingRunId?: string;
+  /**
+   * Set on the chat a workflow run makes. Nobody watches it: an approval it
+   * would need is denied at once and it is never offered ask_user.
+   */
+  unattended?: boolean;
+  /** The workflow run this chat belongs to. */
+  workflowRunId?: string;
+  /** The run's tool access (workflow-access.ts); absent means the normal tool set. */
+  toolAccess?: import('./workflow-access.js').WorkflowToolAccess;
+  /** The running step's allowed tools under `allowlist` access, set by the run before each step. */
+  allowedTools?: string[];
   providerId?: string;
   modelId?: string;
   /**
@@ -211,6 +230,15 @@ export interface Session {
    * idle reap or a restart continues it (`claude --resume`). Set by nekkod.
    */
   claudeCodeSessionId?: string;
+  /**
+   * A Claude Agent chat's context as Claude Code reported it after its last
+   * turn, set by nekkod. `used` is what its last main-thread model call sent
+   * (input plus cache reads and writes: Claude Code's own system prompt and
+   * tools included, and lower once it compacts itself); `window` its
+   * `modelUsage` context window; `model` the model it resolved `modelId` (the
+   * chat's alias) to. Trusted only while the chat's `modelId` still matches.
+   */
+  claudeCodeContext?: ClaudeCodeContext;
   messages: ChatMessage[];
   contextPrefs?: ContextPrefs;
   /** Files explicitly attached to this chat's context (absolute paths). */

@@ -1869,6 +1869,7 @@ dependencies = [
  "nekko-tools",
  "serde_json",
  "tokio",
+ "url",
 ]
 
 [[package]]

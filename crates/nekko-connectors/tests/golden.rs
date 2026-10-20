@@ -56,7 +56,7 @@ impl Http for Scripted {
                 (None, Some(j)) => nekko_js::stringify(j),
                 (None, None) => String::new(),
             };
-            Ok(Response { status, body })
+            Ok(Response { status, body, location: None })
         })
     }
 }

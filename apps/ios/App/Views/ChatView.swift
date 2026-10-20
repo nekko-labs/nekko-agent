@@ -139,6 +139,13 @@ struct ChatView: View {
                     }
                     if !chat.queuedPrompts.isEmpty { QueueList(chat: chat) }
                     PrChip(chat: chat).frame(maxWidth: .infinity, alignment: .leading)
+                    // The phone's saved copy (OF-5): read-only until the computer answers.
+                    if let at = chat.savedAt {
+                        Label(SavedListNote.copy(savedAt: at, computer: store.active?.name ?? "your computer"), systemImage: "clock.arrow.circlepath")
+                            .font(.footnote).foregroundStyle(palette.inkSoft)
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4)
+                            .accessibilityIdentifier("chat.savedCopy")
+                    }
                     Composer(chat: chat)
                 }
                 .padding(.horizontal, 12).padding(.bottom, 8).padding(.top, 6)
@@ -155,22 +162,26 @@ struct ChatView: View {
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
-                    Button { showModels = true } label: { Label("Model", systemImage: "cpu") }
-                    Menu {
-                        ForEach(PcSettings.ChatMode.allCases, id: \.self) { m in
-                            Button {
-                                act { try await chat.setOptions(mode: m) }
-                            } label: {
-                                if chat.session?.mode == m.rawValue { Label(modeName(m), systemImage: "checkmark") } else { Text(modeName(m)) }
+                    // A saved copy is read-only: changing the chat needs the computer.
+                    Group {
+                        Button { showModels = true } label: { Label("Model", systemImage: "cpu") }
+                        Menu {
+                            ForEach(PcSettings.ChatMode.allCases, id: \.self) { m in
+                                Button {
+                                    act { try await chat.setOptions(mode: m) }
+                                } label: {
+                                    if chat.session?.mode == m.rawValue { Label(modeName(m), systemImage: "checkmark") } else { Text(modeName(m)) }
+                                }
                             }
+                        } label: { Label("Tool policy", systemImage: "shield.lefthalf.filled") }
+                        if store.pcSettings.phoneChanges {
+                            Button { showChanges = true } label: { Label("Changes", systemImage: "plusminus") }
                         }
-                    } label: { Label("Tool policy", systemImage: "shield.lefthalf.filled") }
-                    if store.pcSettings.phoneChanges {
-                        Button { showChanges = true } label: { Label("Changes", systemImage: "plusminus") }
+                        Button { showGit = true } label: { Label("Commit or open a PR", systemImage: "arrow.triangle.pull") }
+                        Button { renameText = chat.title; renaming = true } label: { Label("Rename", systemImage: "pencil") }
+                        Button { act { try await store.completeChat(sessionId) } } label: { Label("Complete", systemImage: "checkmark.circle") }
                     }
-                    Button { showGit = true } label: { Label("Commit or open a PR", systemImage: "arrow.triangle.pull") }
-                    Button { renameText = chat.title; renaming = true } label: { Label("Rename", systemImage: "pencil") }
-                    Button { act { try await store.completeChat(sessionId) } } label: { Label("Complete", systemImage: "checkmark.circle") }
+                    .disabled(chat.savedAt != nil)
                     Button { Task { await chat.reload() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
                 } label: { Label("More", systemImage: "ellipsis.circle") }
             }
@@ -198,7 +209,7 @@ struct ChatView: View {
         if let text = b.copyText, !text.isEmpty {
             Button { UIPasteboard.general.string = text } label: { Label("Copy", systemImage: "doc.on.doc") }
         }
-        if chat.forkPoint(b) != nil {
+        if chat.savedAt == nil, chat.forkPoint(b) != nil {
             Button {
                 act {
                     let id = try await chat.fork(from: b)

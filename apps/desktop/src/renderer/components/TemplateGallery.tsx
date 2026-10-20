@@ -4,26 +4,30 @@ import {
   WORKFLOW_NOTIFY_OPTIONS,
   WORKFLOW_TEMPLATES,
   templateInputProblem,
+  offlineProviderAllowed,
   templateInputValues,
+  templateLocalModel,
   templateReadiness,
 } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
 import { Badge, Modal } from './primitives/index.js';
-import type { WorkflowSeed } from './WorkflowEditor.js';
+import { WorkflowModelField, type WorkflowSeed } from './WorkflowEditor.js';
 import { CloseIcon } from '../icons.js';
 import { STATUS } from '../tokens.js';
 
 /**
  * The template gallery: ready-made automations in plain words, each one a
  * setup sheet away from running. Setup checks what the template needs
- * (connectors, a project folder, a default model), asks for its few inputs, and
+ * (connectors, a project folder, a default or local model), asks for its few inputs, and
  * turns it on. The step canvas stays one click further, behind Customize, for
  * people who want to change how it works rather than just use it.
  */
 
 type Env = ReturnType<typeof useTemplateEnv>;
 
-function useTemplateEnv(workspaceId?: string) {
+type ChosenModel = { providerId?: string; modelId?: string };
+
+function useTemplateEnv(workspaceId?: string, model: ChosenModel = {}) {
   const settings = useStore((s) => s.settings);
   return {
     connectors: settings?.connectors ?? [],
@@ -31,6 +35,8 @@ function useTemplateEnv(workspaceId?: string) {
     workspaceId: workspaceId ?? settings?.workspaces?.[0]?.id,
     defaultProviderId: settings?.defaultProviderId,
     defaultModelId: settings?.defaultModelId,
+    providers: settings?.providers ?? [],
+    ...model,
   };
 }
 
@@ -129,6 +135,8 @@ export function templateSeed(t: WorkflowTemplate, inputs: Record<string, string>
     category: t.category,
     notify: t.notify,
     templateId: blank ? undefined : t.id,
+    localModelOnly: t.localModelOnly,
+    toolAccess: t.toolAccess,
     steps,
     triggers,
     ...extra,
@@ -149,7 +157,8 @@ export function TemplateSetup({
 }) {
   const setView = useStore((s) => s.setView);
   const [workspaceId, setWorkspaceId] = useState<string | undefined>(undefined);
-  const env: Env = useTemplateEnv(workspaceId);
+  const [model, setModel] = useState<ChosenModel>({});
+  const env: Env = useTemplateEnv(workspaceId, model);
   const [typed, setTyped] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState<Set<string>>(new Set());
   const [notify, setNotify] = useState<WorkflowNotify>(template.notify ?? 'failure');
@@ -159,14 +168,27 @@ export function TemplateSetup({
   const values = templateInputValues(template, typed);
   const problems = Object.fromEntries((template.inputs ?? []).map((i) => [i.key, templateInputProblem(i, values[i.key])]));
   const ready = needs.every((n) => n.ok) && Object.values(problems).every((p) => !p) && !busy;
-  const seed = () => templateSeed(template, values, { notify, workspaceId: template.requires?.workspace ? env.workspaceId : undefined });
+  // A local-only template names its model: the app default may be a cloud one.
+  const localModel = template.requires?.localModel ? templateLocalModel(env) : undefined;
+  const hasLocalProvider = env.providers.some((p) => p.enabled && offlineProviderAllowed(p));
+  const seed = () => templateSeed(template, values, {
+    notify,
+    workspaceId: template.requires?.workspace ? env.workspaceId : undefined,
+    providerId: localModel?.providerId,
+    modelId: localModel?.modelId,
+  });
 
   const turnOn = async () => {
     if (!ready) return;
     setBusy(true);
     try {
       const s = seed();
-      await onTurnOn({ name: s.name ?? template.name, description: s.description, category: s.category, enabled: true, workspaceId: s.workspaceId, notify: s.notify, templateId: s.templateId, steps: s.steps, triggers: s.triggers });
+      await onTurnOn({
+        name: s.name ?? template.name, description: s.description, category: s.category, enabled: true,
+        workspaceId: s.workspaceId, notify: s.notify, templateId: s.templateId,
+        providerId: s.providerId, modelId: s.modelId, localModelOnly: s.localModelOnly, toolAccess: s.toolAccess,
+        steps: s.steps, triggers: s.triggers,
+      });
     } finally {
       setBusy(false);
     }
@@ -175,7 +197,7 @@ export function TemplateSetup({
   const go = (fix: TemplateNeed['fix']) => {
     if (fix === 'workspace') return;
     onClose();
-    setView(fix);
+    setView(fix === 'localModel' ? 'models' : fix);
   };
 
   return (
@@ -209,11 +231,20 @@ export function TemplateSetup({
                       {env.workspaces.length === 0 && <option value="">No folders added</option>}
                       {env.workspaces.map((w) => <option key={w.id} value={w.id}>{w.name ?? w.path}</option>)}
                     </select>
+                  ) : n.fix === 'localModel' && hasLocalProvider ? (
+                    <WorkflowModelField
+                      providers={env.providers}
+                      providerId={localModel?.providerId}
+                      modelId={localModel?.modelId}
+                      unsetLabel="Choose a local model"
+                      localOnly
+                      onChange={(providerId, modelId) => setModel({ providerId, modelId })}
+                    />
                   ) : n.ok ? (
                     n.fix === 'models' && <span className="truncate font-mono text-[11px] text-ink-faint">{env.defaultModelId}</span>
                   ) : (
                     <button className="btn btn-outline py-0.5! text-[11.5px]" onClick={() => go(n.fix)}>
-                      {n.fix === 'connectors' ? 'Connect' : 'Choose a model'}
+                      {n.fix === 'connectors' ? 'Connect' : n.fix === 'localModel' ? 'Set up a local model' : 'Choose a model'}
                     </button>
                   )}
                 </li>

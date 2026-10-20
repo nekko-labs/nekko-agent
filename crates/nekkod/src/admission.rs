@@ -169,36 +169,14 @@ fn is_local(kind: &str) -> bool {
     LOCAL_KINDS.contains(&kind)
 }
 
-/// `providerEndpoint`: a provider's URL when it is one a turn may call.
-pub(crate) fn provider_endpoint(provider: &Value) -> Option<url::Url> {
-    let kind = s(provider, "kind");
-    if !is_local(kind)
-        && !["anthropic", "bedrock", "vertex", "foundry", "openai", "openrouter", "chatgpt", "openai-compat"]
-            .contains(&kind)
-    {
-        return None;
-    }
-    let url = url::Url::parse(provider.get("baseUrl").and_then(Value::as_str)?).ok()?;
-    (matches!(url.scheme(), "http" | "https") && url.username().is_empty() && url.password().is_none()).then_some(url)
-}
+/// `providerEndpoint` and `offlineProviderAllowed`, shared with the workflow engine (nekko-turn).
+pub(crate) use nekko_turn::providers::{offline_provider_allowed, provider_endpoint};
 
 /// Whether a turn may run on this provider: one with a valid endpoint, or
 /// Claude Agent (`claude-code`), which runs the user's own Claude Code and has
 /// no URL at all.
 pub(crate) fn turn_provider_allowed(provider: &Value) -> bool {
     s(provider, "kind") == "claude-code" || provider_endpoint(provider).is_some()
-}
-
-/// `offlineProviderAllowed`: a local kind (or openai-compat) on a loopback address.
-pub(crate) fn offline_provider_allowed(provider: &Value) -> bool {
-    let Some(url) = provider_endpoint(provider) else { return false };
-    let kind = s(provider, "kind");
-    let host = url.host_str().unwrap_or_default();
-    let loop_v4 = host.strip_prefix("127.").is_some_and(|rest| {
-        let parts: Vec<&str> = rest.split('.').collect();
-        parts.len() == 3 && parts.iter().all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()))
-    });
-    (is_local(kind) || kind == "openai-compat") && (host == "localhost" || host == "[::1]" || loop_v4)
 }
 
 /// `clampMaxOutputTokens`.

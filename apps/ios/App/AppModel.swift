@@ -19,6 +19,8 @@ final class AppModel {
     let lock: AppLock
     let notifier = Notifier()
     let chatLists = ChatListFiles()
+    /// The recent chats kept to read offline (OF-5).
+    let transcriptFiles = TranscriptFiles()
     /// Drafts and the outbox, per computer.
     let offlineFiles: OfflineFileStore
     private let activities = RunActivities()
@@ -49,8 +51,12 @@ final class AppModel {
         let deviceName = UIDevice.current.name
         let offlineFiles = OfflineFileStore()
         #if DEBUG
-        // UI tests start without drafts or waiting prompts left from an earlier run.
-        if ProcessInfo.processInfo.arguments.contains("-uiTestReset") { offlineFiles.removeAll() }
+        // UI tests start without drafts, waiting prompts or saved chats left from an earlier run.
+        if ProcessInfo.processInfo.arguments.contains("-uiTestReset") {
+            offlineFiles.removeAll()
+            ChatListFiles().removeAll()
+            TranscriptFiles().removeAll()
+        }
         #endif
         self.keychain = keychain
         self.prefs = prefs
@@ -93,6 +99,7 @@ final class AppModel {
         network.onChange = { [weak self] path in Task { @MainActor in self?.store.networkChanged(path) } }
         network.start()
         if prefs.keepChatList { store.chatListCache = chatLists }
+        if prefs.keepTranscripts { store.transcriptCache = transcriptFiles }
         store.load(preferredId: prefs.defaultComputer)
         if !store.computers.isEmpty { registerForPush() }
     }
@@ -281,10 +288,18 @@ final class AppModel {
         if !on { chatLists.removeAll() }
     }
 
+    /// Settings → Keep recent chats to read offline. Off deletes every saved chat.
+    func setKeepTranscripts(_ on: Bool) {
+        prefs.keepTranscripts = on
+        store.transcriptCache = on ? transcriptFiles : nil
+        if !on { transcriptFiles.removeAll() }
+    }
+
     /// Settings → Forget everything on this iPhone.
     func forgetEverything() {
         for c in store.computers { store.forget(c.id) }
         chatLists.removeAll()
+        transcriptFiles.removeAll()
         offlineFiles.removeAll()
         OutboxRefresh.cancel()
         keychain.wipe()
