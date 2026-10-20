@@ -162,6 +162,13 @@ impl Git {
         status
     }
 
+    /// Forget every cached read of `path` (under any workspace or chat id),
+    /// after a commit, stage, switch or push changed it.
+    pub fn invalidate(&self, path: &str) {
+        let suffix = format!("|{path}");
+        self.cache.lock().unwrap_or_else(|e| e.into_inner()).retain(|k, _| !k.ends_with(&suffix));
+    }
+
     async fn read(&self, workspace_id: &str, path: &str) -> Value {
         if self.git_missing.load(Ordering::SeqCst) {
             return not_a_repo(workspace_id);
