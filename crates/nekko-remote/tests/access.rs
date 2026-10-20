@@ -110,7 +110,8 @@ fn the_change_key_is_trusted_on_first_use_until_the_phone_pairs_again() {
 
 #[test]
 fn activity_is_kept_per_device_newest_200_and_rotation_clears_it() {
-    let (dir, svc) = registry();
+    // Bound (not `_`) so the folder lives to the end; only Unix reads it back.
+    let (_dir, svc) = registry();
     for i in 0..205 {
         let reason = (i % 2 == 1).then(|| "change-off".to_string());
         svc.record("phone-1", Activity { at: i as f64, channel: "file:write".into(), ok: reason.is_none(), reason });
@@ -126,7 +127,7 @@ fn activity_is_kept_per_device_newest_200_and_rotation_clears_it() {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let mode = std::fs::metadata(dir.path().join("remote-activity.json")).unwrap().permissions().mode();
+        let mode = std::fs::metadata(_dir.path().join("remote-activity.json")).unwrap().permissions().mode();
         assert_eq!(mode & 0o777, 0o600, "owner only, like remote.json");
     }
     svc.route("remote:rotate", &[]).unwrap();
