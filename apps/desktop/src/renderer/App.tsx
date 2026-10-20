@@ -97,7 +97,8 @@ export function App() {
   // Experimental surfaces only exist in the nav once their Settings flag is on.
   const [draggedNav, setDraggedNav] = useState<View | null>(null);
   const [dropNav, setDropNav] = useState<View | null>(null);
-  const wave = pixelWaveFor(settings?.themePreset);
+  // The theme's moving background, unless turned off in Settings → Appearance.
+  const wave = settings?.backgroundAnimation === false ? null : pixelWaveFor(settings?.themePreset);
   const order = navOrder(NAV.map(n => n.view), settings?.navOrder);
   const visibleNav = order.map(v => NAV.find(n => n.view === v)!).filter(n => viewEnabled(n.view, settings));
   const activeNavIndex = visibleNav.findIndex(n => n.view === view);
