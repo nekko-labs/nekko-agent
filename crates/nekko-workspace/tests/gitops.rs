@@ -31,7 +31,12 @@ fn git(dir: &Path, args: &[&str]) -> String {
 
 fn init(dir: &Path) {
     git(dir, &["init", "-q", "-b", "main"]);
-    for (k, v) in [("user.name", "Test"), ("user.email", "t@example.com"), ("commit.gpgsign", "false")] {
+    for (k, v) in [
+        ("user.name", "Test"),
+        ("user.email", "t@example.com"),
+        ("commit.gpgsign", "false"),
+        ("core.autocrlf", "false"),
+    ] {
         git(dir, &["config", k, v]);
     }
 }

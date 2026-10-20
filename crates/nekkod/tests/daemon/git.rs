@@ -18,7 +18,12 @@ async fn stages_writes_a_message_commits_and_reads_history_in_a_saved_folder() {
     let repo = data.join("repo");
     std::fs::create_dir_all(&repo).unwrap();
     git(&repo, &["init", "-q", "-b", "main"]);
-    for (k, v) in [("user.name", "Test"), ("user.email", "t@example.com"), ("commit.gpgsign", "false")] {
+    for (k, v) in [
+        ("user.name", "Test"),
+        ("user.email", "t@example.com"),
+        ("commit.gpgsign", "false"),
+        ("core.autocrlf", "false"),
+    ] {
         git(&repo, &["config", k, v]);
     }
     std::fs::write(repo.join("a.txt"), "one\n").unwrap();
