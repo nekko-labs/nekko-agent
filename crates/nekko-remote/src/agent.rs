@@ -40,13 +40,18 @@ pub const RELAYED_EVENTS: &[&str] = &[
     "appearance:updated",
 ];
 
-/// What to do after a relay frame.
+/// What to do after a relay frame. Short-lived (one per frame, consumed at
+/// once), so the larger `Dispatch` is not worth a box.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, PartialEq)]
 pub enum Out {
     /// Send this text to the relay.
     Send(String),
     /// Run a host channel for a welcomed connection, then send `reply(..)`.
-    Dispatch { cid: String, id: Option<Value>, channel: String, args: Value },
+    /// `device_id` is the device the HELLO welcomed on `cid`, so the phone
+    /// gate knows who is calling; `proof` is the request's signed Change
+    /// proof, when it carried one (IO-33).
+    Dispatch { cid: String, id: Option<Value>, device_id: String, channel: String, args: Value, proof: Option<Value> },
 }
 
 pub struct AgentCore {
@@ -163,7 +168,10 @@ impl AgentCore {
                     None | Some(Value::Null) => json!([]),
                     Some(a) => a.clone(),
                 };
-                vec![Out::Dispatch { cid: cid.to_string(), id, channel, args }]
+                // Welcomed above, so the connection has its device.
+                let device_id = self.conn(cid).clone().unwrap_or_default();
+                let proof = f.get("proof").filter(|p| !p.is_null()).cloned();
+                vec![Out::Dispatch { cid: cid.to_string(), id, device_id, channel, args, proof }]
             }
             _ => Vec::new(),
         }
@@ -369,4 +377,76 @@ fn res(id: Option<Value>, result: Result<Value, String>) -> Value {
 pub fn activity_tag(session_id: &str) -> String {
     let d = Sha256::digest(format!("nekko-activity:{session_id}").as_bytes());
     d.iter().take(16).map(|b| format!("{b:02x}")).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn core() -> (AgentCore, Key) {
+        let key = e2e::derive_key("00112233445566778899aabbccddeeff", "room-1");
+        (AgentCore::new(key.clone(), Box::new(e2e::random_iv)), key)
+    }
+
+    fn client(key: &Key, cid: &str, v: Value) -> String {
+        let data = json!({ "enc": e2e::seal_with_iv(key, &v, e2e::random_iv()) }).to_string();
+        json!({ "type": "c", "cid": cid, "data": data }).to_string()
+    }
+
+    fn welcome_all(h: &Value) -> Value {
+        json!({ "type": "welcome", "device": { "id": h["deviceId"] } })
+    }
+
+    #[test]
+    fn each_request_names_the_device_welcomed_on_its_connection() {
+        let (mut core, key) = core();
+        for (cid, device) in [("c1", "phone-1"), ("c2", "phone-2")] {
+            core.on_relay(&client(&key, cid, json!({ "type": "hello", "deviceId": device })), &welcome_all);
+        }
+        let req = json!({ "type": "req", "id": 7, "channel": "tasks:list", "args": [] });
+        let out = core.on_relay(&client(&key, "c2", req), &welcome_all);
+        assert_eq!(
+            out,
+            vec![Out::Dispatch {
+                cid: "c2".into(),
+                id: Some(json!(7)),
+                device_id: "phone-2".into(),
+                channel: "tasks:list".into(),
+                args: json!([]),
+                proof: None,
+            }]
+        );
+    }
+
+    #[test]
+    fn a_change_proof_travels_beside_the_args() {
+        let (mut core, key) = core();
+        core.on_relay(&client(&key, "c1", json!({ "type": "hello", "deviceId": "phone-1" })), &welcome_all);
+        let proof = json!({ "ts": 1, "sig": "c2ln" });
+        let req = json!({ "type": "req", "id": 1, "channel": "file:write", "args": ["a"], "proof": proof });
+        match core.on_relay(&client(&key, "c1", req), &welcome_all).pop() {
+            Some(Out::Dispatch { device_id, args, proof: p, .. }) => {
+                assert_eq!(device_id, "phone-1");
+                assert_eq!(args, json!(["a"]), "the proof is not one of the args");
+                assert_eq!(p, Some(proof));
+            }
+            other => panic!("{other:?}"),
+        }
+        // `proof: null` is no proof.
+        let req = json!({ "type": "req", "id": 2, "channel": "file:write", "args": [], "proof": null });
+        assert!(matches!(
+            core.on_relay(&client(&key, "c1", req), &welcome_all).pop(),
+            Some(Out::Dispatch { proof: None, .. })
+        ));
+    }
+
+    #[test]
+    fn a_reconnected_cid_is_nobody_until_it_says_hello_again() {
+        let (mut core, key) = core();
+        core.on_relay(&client(&key, "c1", json!({ "type": "hello", "deviceId": "phone-1" })), &welcome_all);
+        core.on_relay(&json!({ "type": "client-open", "cid": "c1" }).to_string(), &welcome_all);
+        let req = json!({ "type": "req", "id": 3, "channel": "tasks:list", "args": [] });
+        let out = core.on_relay(&client(&key, "c1", req), &welcome_all);
+        assert!(matches!(out.as_slice(), [Out::Send(_)]), "refused, not dispatched as phone-1: {out:?}");
+    }
 }

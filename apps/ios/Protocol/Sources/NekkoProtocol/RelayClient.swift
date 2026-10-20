@@ -309,13 +309,20 @@ public final class RelayClient: @unchecked Sendable {
     /// Call a host IPC channel. Waits (briefly) for the handshake if needed.
     /// `chat:send` replies only when the whole turn is over: pass hours.
     public func call(_ channel: String, _ args: [JSONValue] = [], timeout: TimeInterval? = nil) async throws -> JSONValue {
+        try await call(channel, args, proof: nil, timeout: timeout)
+    }
+
+    /// `call`, with a signed Change proof beside the args (`ChangeProof`, IO-33).
+    public func call(_ channel: String, _ args: [JSONValue], proof: JSONValue?, timeout: TimeInterval?) async throws -> JSONValue {
         try await awaitReady()
         let id: Int64 = locked {
             let id = nextId
             nextId += 1
             return id
         }
-        let frame: JSONValue = ["type": "req", "id": .int(id), "channel": .string(channel), "args": .array(args)]
+        var fields: [String: JSONValue] = ["type": "req", "id": .int(id), "channel": .string(channel), "args": .array(args)]
+        if let proof { fields["proof"] = proof }
+        let frame = JSONValue.object(fields)
         let limit = timeout ?? config.requestTimeout
         return try await withCheckedThrowingContinuation { (cont: CheckedContinuation<JSONValue, Error>) in
             locked { pending[id] = cont }

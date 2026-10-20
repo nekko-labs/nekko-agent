@@ -65,12 +65,15 @@ final class AppModel {
         self.keychain = keychain
         self.prefs = prefs
         self.offlineFiles = offlineFiles
-        store = ComputersStore(
+        let computers = ComputersStore(
             store: keychain,
             makeConnection: { RelayClient(config: $0, transport: URLSessionTransport(), prober: HealthProber()) },
             deviceName: { deviceName },
             app: Bundle.main.bundleIdentifier,
             offlineFiles: offlineFiles)
+        // Change actions (IO-33) are signed in the Secure Enclave behind Face ID or the passcode.
+        computers.changeSigner = SecureEnclaveChangeSigner(store: keychain)
+        store = computers
         lock = AppLock(enabled: prefs.appLock)
         #if DEBUG
         // What the share extension leaves behind, without driving another app's share sheet.

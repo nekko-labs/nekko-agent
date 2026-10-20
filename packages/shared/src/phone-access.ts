@@ -82,57 +82,165 @@ export const PHONE_CHANNELS = [
   'workspace:list',
 ] as const;
 
+/** A family of channels a phone may not call: exact names, and whole prefixes. */
+export interface PhoneDeniedGroup {
+  channels: readonly string[];
+  prefixes: readonly string[];
+}
+
 /**
- * Refused from a phone even if someone adds them to `PHONE_CHANNELS` (a test
- * holds the two apart): destructive, credential, remote-access, shell, file
- * write, folder, install and server-management channels.
+ * Never from a phone, whatever IO-33 opens up: the end state of
+ * `PHONE_ALWAYS_DENIED` (SPEC "Full phone access"). Provider keys and other
+ * credentials, remote access itself (settings, pairing more devices,
+ * revoking, rotating), wiping data or resetting settings, and the desktop's
+ * own OAuth sign-in, native dialogs, updater and OS shell.
  */
-export const PHONE_ALWAYS_DENIED = {
+export const PHONE_DENIED_FOREVER: PhoneDeniedGroup = {
   channels: [
-    'attachment:import',
-    // Changing files, or reading any file: never from a phone (the Changes view is read only).
-    'changes:accept',
-    'changes:acceptAll',
-    // Pull request actions and diffs: git happens through the agent (a prompt), so its approvals apply.
-    'pr:action',
-    'pr:continueStack',
-    'pr:diff',
-    'pr:linkStack',
     'connector:connect',
     'connector:disconnect',
     'data:wipe',
-    'dir:list',
-    'file:read',
-    'file:write',
-    // Makes this computer fetch an arbitrary URL; a phone shows remote images itself.
-    'image:fetch',
     'providers:importCliAuth',
     'providers:remove',
     'providers:save',
     'settings:reset',
-    // Making, changing or deleting automations stays on the computer; a phone may run one.
-    'task:create',
-    'task:delete',
-    'task:update',
-    'voice:cancel',
-    'voice:install',
-    'voice:permission',
-    'voice:uninstall',
-    'workflow:cancel',
-    'workflow:create',
-    'workflow:delete',
-    'workflow:duplicate',
-    'workflow:event',
-    'workflow:update',
-    'workspace:addByPath',
-    'workspace:gitStatus',
-    'workspace:remove',
   ],
-  /** Whole families: remote access, terminals, MCP servers, OAuth sign-in, and the desktop's native dialogs, OS shell and updater. */
-  prefixes: ['dialog:', 'mcp:', 'oauth:', 'remote:', 'shell:', 'terminal:', 'terminals:', 'update:'],
+  prefixes: ['dialog:', 'oauth:', 'remote:', 'shell:', 'update:'],
+};
+
+/**
+ * Refused today, but not forever. IO-33 (decided 2026-10-19) gives phones
+ * files, git and terminals: each feature PR deletes its group here in the same
+ * change that adds the channels to `PHONE_CHANNELS`, classes them in
+ * `PHONE_READ_CHANNELS` / `PHONE_CHANGE_CHANNELS` and adds their projections.
+ * `undecided` stays until someone decides otherwise.
+ */
+export const PHONE_DENIED_FOR_NOW: Record<'files' | 'git' | 'terminal' | 'undecided', PhoneDeniedGroup> = {
+  /** FA-1. Changing files, or reading any file: the Changes view is the only read today. */
+  files: {
+    channels: ['attachment:import', 'changes:accept', 'changes:acceptAll', 'dir:list', 'file:read', 'file:write'],
+    prefixes: [],
+  },
+  /** FA-2. Pull request actions, diffs and git status: today git happens through the agent (a prompt). */
+  git: {
+    channels: ['pr:action', 'pr:continueStack', 'pr:diff', 'pr:linkStack', 'workspace:gitStatus'],
+    prefixes: [],
+  },
+  /** FA-3. Terminals. */
+  terminal: { channels: [], prefixes: ['terminal:', 'terminals:'] },
+  undecided: {
+    channels: [
+      // Makes this computer fetch an arbitrary URL; a phone shows remote images itself.
+      'image:fetch',
+      // Making, changing or deleting automations stays on the computer; a phone may run one.
+      'task:create',
+      'task:delete',
+      'task:update',
+      'voice:cancel',
+      'voice:install',
+      'voice:permission',
+      'voice:uninstall',
+      'workflow:cancel',
+      'workflow:create',
+      'workflow:delete',
+      'workflow:duplicate',
+      'workflow:event',
+      'workflow:update',
+      'workspace:addByPath',
+      'workspace:remove',
+    ],
+    /** MCP servers. */
+    prefixes: ['mcp:'],
+  },
+};
+
+const DENIED_GROUPS = [PHONE_DENIED_FOREVER, ...Object.values(PHONE_DENIED_FOR_NOW)];
+
+/**
+ * Refused from a phone even if someone adds them to `PHONE_CHANNELS` (a test
+ * holds the two apart): `PHONE_DENIED_FOREVER` plus every group of
+ * `PHONE_DENIED_FOR_NOW`, flattened for the gate.
+ */
+export const PHONE_ALWAYS_DENIED = {
+  channels: DENIED_GROUPS.flatMap((g) => g.channels).sort(),
+  prefixes: DENIED_GROUPS.flatMap((g) => g.prefixes).sort(),
   /** Not forced off by a prefix (it still has to be in `PHONE_CHANNELS` to be callable). */
   except: ['remote:status'],
 };
+
+/**
+ * IO-33 access classes. A paired phone's *Read* and *Change* switches
+ * (Settings → Remote access → What phones can do, `RemoteDevice.access`)
+ * decide whether it may call the channels listed here: a read-class call is
+ * refused with `read-off` while Read is off, a change-class call with
+ * `change-off` while Change is off. A change-class call also needs a fresh
+ * signed proof from the phone (`PHONE_CHANGE_PROOF`) and is written to the
+ * device's activity list, allowed or not. A channel here must also be in
+ * `PHONE_CHANNELS`. The 30 channels phones had before IO-33 are in neither
+ * class and behave as before. Feature PRs (FA-1 to FA-6) fill these.
+ */
+export const PHONE_READ_CHANNELS: readonly string[] = [];
+export const PHONE_CHANGE_CHANNELS: readonly string[] = [];
+
+/** `null`: neither class (no per-device switch applies). */
+export type PhoneChannelClass = 'read' | 'change' | null;
+
+export function phoneChannelClass(channel: string): PhoneChannelClass {
+  if (PHONE_CHANGE_CHANNELS.includes(channel)) return 'change';
+  if (PHONE_READ_CHANNELS.includes(channel)) return 'read';
+  return null;
+}
+
+/** A paired phone's switches. Missing means on, so phones paired before IO-33 keep working. */
+export interface PhoneDeviceAccess {
+  read: boolean;
+  change: boolean;
+}
+
+export function phoneDeviceAccess(device: { access?: { read?: boolean; change?: boolean } } | null | undefined): PhoneDeviceAccess {
+  return { read: device?.access?.read !== false, change: device?.access?.change !== false };
+}
+
+/**
+ * The signed proof a change-class call carries (`{ type:'req', id, channel,
+ * args, proof: { ts, sig } }`). The phone signs, with its registered P-256
+ * key, `version + "\n" + deviceId + "\n" + channel + "\n" + hex(sha256(canonical
+ * JSON of args)) + "\n" + ts` (ECDSA P-256 SHA-256, raw r||s, base64). The
+ * computer refuses a proof older than `maxAgeMs`, more than `maxAheadMs` in the
+ * future, or seen before. Verified by the daemon (crates/nekko-remote/src/proof.rs);
+ * the shared test vector is crates/nekko-remote/tests/golden/change-proof.json.
+ */
+export const PHONE_CHANGE_PROOF = { version: 'nekko-change-v1', maxAgeMs: 5 * 60 * 1000, maxAheadMs: 60 * 1000 } as const;
+
+/**
+ * The phone channel the computer's gate answers itself: register this phone's
+ * public key for signing Change actions (`[publicKey]`, base64 of the X9.63
+ * uncompressed P-256 point). Trust on first use; a different key is refused
+ * until the phone is paired again.
+ */
+export const PHONE_KEY_CHANNEL = 'device:registerKey';
+
+/** The newest entries kept in a device's activity list. */
+export const PHONE_ACTIVITY_LIMIT = 200;
+
+/** One change-class call from a phone, allowed or refused (`remote:activity`). */
+export interface PhoneActivityEntry {
+  at: number;
+  channel: string;
+  ok: boolean;
+  /** Why it was refused (a `PhoneAccessCode`), or `failed` when the computer's call threw. */
+  reason?: string;
+}
+
+/**
+ * Whether a device's switches let it call `channel` (the class check the
+ * daemon's gate makes after the allowlist), or a `PhoneAccessError`.
+ */
+export function checkPhoneAccess(channel: string, access: PhoneDeviceAccess): void {
+  const cls = phoneChannelClass(channel);
+  if (cls === 'read' && !access.read) throw new PhoneAccessError('read-off', channel);
+  if (cls === 'change' && !access.change) throw new PhoneAccessError('change-off', channel);
+}
 
 /**
  * The settings a phone may change with `settings:update`, as dotted paths
@@ -256,7 +364,24 @@ export function phoneFrameTooLarge(bytes: number): string {
   return `This reply is too large to send to a phone (${mb} MB). Open it on the computer.`;
 }
 
-export type PhoneAccessCode = 'channel-denied' | 'setting-denied' | 'option-denied' | 'value-invalid' | 'skill-unknown' | 'turned-off';
+export type PhoneAccessCode =
+  | 'channel-denied'
+  | 'setting-denied'
+  | 'option-denied'
+  | 'value-invalid'
+  | 'skill-unknown'
+  | 'turned-off'
+  // IO-33: the device's switches, and the signed proof a Change action carries.
+  | 'read-off'
+  | 'change-off'
+  | 'device-unknown'
+  | 'key-missing'
+  | 'key-invalid'
+  | 'key-mismatch'
+  | 'proof-required'
+  | 'proof-invalid'
+  | 'proof-stale'
+  | 'proof-replayed';
 
 /** Why the computer refused a phone's request. The wire carries `message`. */
 export class PhoneAccessError extends Error {
@@ -682,6 +807,11 @@ export function phoneAccessPolicy() {
   return {
     channels: [...PHONE_CHANNELS],
     alwaysDenied: PHONE_ALWAYS_DENIED,
+    readChannels: [...PHONE_READ_CHANNELS],
+    changeChannels: [...PHONE_CHANGE_CHANNELS],
+    changeProof: { ...PHONE_CHANGE_PROOF },
+    keyChannel: PHONE_KEY_CHANNEL,
+    activityLimit: PHONE_ACTIVITY_LIMIT,
     settingsKeys: [...PHONE_SETTINGS_KEYS],
     settingsView: [...PHONE_SETTINGS_VIEW],
     providerView: [...PHONE_PROVIDER_VIEW],

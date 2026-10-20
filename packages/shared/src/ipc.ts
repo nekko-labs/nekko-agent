@@ -310,6 +310,9 @@ export const IpcChannels = {
   remoteRevoke: 'remote:revoke',
   remoteRename: 'remote:rename',
   remoteRotate: 'remote:rotate',
+  // IO-33: a paired phone's Read and Change switches, and its Change activity. Never phone-callable.
+  remoteSetAccess: 'remote:setAccess',
+  remoteActivity: 'remote:activity',
   // Desktop only: the relay this computer can run on its Tailscale address.
   localRelayStatus: 'localRelay:status',
   localRelayStart: 'localRelay:start',
@@ -917,6 +920,10 @@ export interface NekkoApi {
   renameRemoteDevice(deviceId: string, name: string): Promise<import('./remote.js').RemoteDevice[]>;
   /** Rotate the pairing secret: re-keys the room; every device must re-pair. */
   rotateRemoteSecret(): Promise<import('./remote.js').RemoteStatus>;
+  /** Turn a paired phone's Read or Change access on or off (IO-33). Returns every device. */
+  setRemoteAccess(deviceId: string, access: { read?: boolean; change?: boolean }): Promise<import('./remote.js').RemoteDevice[]>;
+  /** A paired phone's Change actions, oldest first, allowed or refused (IO-33). */
+  getRemoteActivity(deviceId: string): Promise<import('./phone-access.js').PhoneActivityEntry[]>;
   /**
    * The relay this computer runs itself, bound to its Tailscale address, so
    * phones on the tailnet reach it with nothing in between. Desktop only.

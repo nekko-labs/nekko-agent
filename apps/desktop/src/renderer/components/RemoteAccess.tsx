@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
-import { pairingLink, relayHost, relayUrlProblem, type LocalRelayStatus, type NetworkVisibilityStatus, type PairingGrant, type RemoteDevice, type RemoteStatus } from '@nekko-agent/shared';
+import { pairingLink, phoneDeviceAccess, PHONE_KEY_CHANNEL, relayHost, relayUrlProblem, type LocalRelayStatus, type NetworkVisibilityStatus, type PairingGrant, type PhoneActivityEntry, type RemoteDevice, type RemoteStatus } from '@nekko-agent/shared';
 import { Badge } from './primitives/index.js';
 import { Toggle } from './primitives/Toggle.js';
 import { useStore } from '../store.js';
@@ -256,6 +256,7 @@ export function RemoteAccess() {
           <LocalRelayCard inUse={status.relayUrl} onStatus={setLocalRelay} />
           <NetworkVisibilitySwitch />
           <PhoneChangesSwitch />
+          <PhoneAccess devices={active} onChanged={() => void refresh()} />
 
           {/* Paired devices */}
           <div>
@@ -597,6 +598,158 @@ export function NetworkVisibilityView({ vis, busy, onChange }: { vis: NetworkVis
         )}
       </div>
       <Toggle value={vis.enabled} onChange={onChange} disabled={busy} label="Visible on this network" />
+    </div>
+  );
+}
+
+/** Why a phone's change was refused, in a few words (`PhoneActivityEntry.reason`). */
+export function activityReason(reason: string | undefined): string {
+  switch (reason) {
+    case undefined:
+      return 'Done';
+    case 'change-off':
+      return 'Refused: Change is off';
+    case 'proof-required':
+    case 'proof-invalid':
+    case 'proof-stale':
+    case 'proof-replayed':
+    case 'key-missing':
+    case 'key-invalid':
+      return 'Refused: no fresh Face ID or passcode';
+    case 'key-mismatch':
+      return 'Refused: the phone’s key changed (pair it again)';
+    case 'failed':
+      return 'Failed on this computer';
+    default:
+      return `Refused (${reason})`;
+  }
+}
+
+/** What a channel name means, for the activity list. */
+function activityAction(channel: string): string {
+  return channel === PHONE_KEY_CHANNEL ? 'Set up Face ID for changes' : channel;
+}
+
+/**
+ * What phones can do (IO-33): per paired phone, Read and Change switches and
+ * the phone's Change activity. Each Change action also needs Face ID or the
+ * passcode on the phone within the last 5 minutes, checked by this computer.
+ */
+export function PhoneAccess({ devices, onChanged }: { devices: RemoteDevice[]; onChanged: () => void }) {
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [activity, setActivity] = useState<Record<string, PhoneActivityEntry[]>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const loadActivity = (id: string) =>
+    void window.nekko.getRemoteActivity(id).then((list) => setActivity((a) => ({ ...a, [id]: list }))).catch(() => {});
+  useEffect(() => {
+    if (!openId) return;
+    loadActivity(openId);
+    // New changes from a connected phone show without a click.
+    const t = setInterval(() => loadActivity(openId), 5000);
+    return () => clearInterval(t);
+  }, [openId]);
+
+  const set = async (id: string, patch: { read?: boolean; change?: boolean }) => {
+    setBusy(id);
+    try {
+      await window.nekko.setRemoteAccess(id, patch);
+      onChanged();
+    } catch (e) {
+      useStore.getState().pushToast('error', String(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <PhoneAccessView
+      devices={devices}
+      activity={activity}
+      openId={openId}
+      busyId={busy}
+      now={Date.now()}
+      onSet={(id, patch) => void set(id, patch)}
+      onOpen={(id) => setOpenId((o) => (o === id ? null : id))}
+    />
+  );
+}
+
+export function PhoneAccessView({
+  devices,
+  activity,
+  openId,
+  busyId,
+  now,
+  onSet,
+  onOpen,
+}: {
+  devices: RemoteDevice[];
+  activity: Record<string, PhoneActivityEntry[]>;
+  openId: string | null;
+  busyId?: string | null;
+  now: number;
+  onSet: (id: string, patch: { read?: boolean; change?: boolean }) => void;
+  onOpen: (id: string) => void;
+}) {
+  if (devices.length === 0) return null;
+  return (
+    <div data-shot="phone-access" className="rounded-md border border-line p-3">
+      <div className="text-[13px] font-medium">What phones can do</div>
+      <p className="mt-0.5 text-[12px] text-ink-faint">
+        <span className="font-medium text-ink-soft">Read</span>: look at files, git, logs and boards.{' '}
+        <span className="font-medium text-ink-soft">Change</span>: edit and save files, commit and push, type in
+        terminals. Each change needs Face ID or the passcode on the phone within the last 5 minutes and is listed here.
+        Revoke a phone to stop everything.
+      </p>
+      <ul className="mt-2 divide-y divide-line rounded-lg border border-line">
+        {devices.map((d) => {
+          const access = phoneDeviceAccess(d);
+          const list = activity[d.id];
+          const open = openId === d.id;
+          return (
+            <li key={d.id} className="px-3 py-2 text-[12.5px]" data-device={d.id}>
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="min-w-0 flex-1 truncate font-medium">{d.name}</span>
+                <label className="flex items-center gap-1.5 text-ink-soft">
+                  Read
+                  <Toggle value={access.read} onChange={(v) => onSet(d.id, { read: v })} disabled={busyId === d.id} label={`Read from ${d.name}`} />
+                </label>
+                <label className="flex items-center gap-1.5 text-ink-soft">
+                  Change
+                  <Toggle value={access.change} onChange={(v) => onSet(d.id, { change: v })} disabled={busyId === d.id} label={`Change from ${d.name}`} />
+                </label>
+                <button className="btn btn-ghost py-0.5 text-[12px]" aria-expanded={open} onClick={() => onOpen(d.id)}>
+                  {open ? 'Hide activity' : 'Activity'}
+                </button>
+              </div>
+              {open && (
+                <div className="mt-2" data-shot="phone-activity">
+                  {!list ? (
+                    <p className="text-[12px] text-ink-faint">Loading…</p>
+                  ) : list.length === 0 ? (
+                    <p className="text-[12px] text-ink-faint">No changes from this phone yet.</p>
+                  ) : (
+                    <ul className="space-y-1">
+                      {list
+                        .slice()
+                        .reverse()
+                        .map((e, i) => (
+                          <li key={`${e.at}-${i}`} className="flex items-center gap-2 text-[12px]">
+                            <span className="w-24 shrink-0 text-ink-faint">{ago(e.at, now)}</span>
+                            <span className="truncate font-mono text-[11.5px]">{activityAction(e.channel)}</span>
+                            <span className="ml-auto shrink-0" style={{ color: e.ok ? 'var(--success)' : 'var(--danger)' }}>
+                              {activityReason(e.ok ? undefined : e.reason)}
+                            </span>
+                          </li>
+                        ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

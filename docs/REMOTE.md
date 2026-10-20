@@ -227,6 +227,38 @@ changes how the computer itself is set up:
   switch it between Ask, Guardrails and YOLO, but not its tools, isolation or
   offline/incognito switches. Messages cannot attach files from the computer.
 
+### What phones can do: Read and Change, per phone
+
+Files, git, terminals, task boards, logs and SSH are coming to the phone app. Ahead of them,
+*Remote access → What phones can do* on the computer lists each paired phone with two switches:
+
+- **Read:** look at files, git status and history, logs and boards.
+- **Change:** edit and save files, commit and push, branch and pull request actions, type in a
+  terminal, edit boards, SSH.
+
+Both are on for every phone, including phones paired before the switches existed. Turn one off and
+your computer refuses those requests from that phone, whatever the phone app does.
+
+**Every change is confirmed on the phone and checked by your computer.** The first time a phone
+makes a change, it creates a key in its Secure Enclave (on iPhone) that only Face ID, Touch ID or
+the passcode can use, and gives your computer the public half. Each change after that is signed
+with the key, and your computer checks the signature before doing anything: a change with no
+signature, a wrong one, one more than 5 minutes old, or one it has already seen is refused. One
+Face ID covers 5 minutes, as for *Allow* from the Lock Screen.
+
+Your computer trusts the first key a phone gives it. A phone that later shows up with a different
+key is refused until you remove it and pair it again. *Forget all computers* on the iPhone deletes
+its key too.
+
+**Activity.** *Activity* under each phone lists every change it made or tried, newest first, with
+why one was refused (Change off, no fresh Face ID or passcode, a changed key). Your computer keeps
+the newest 200 per phone; rotating the secret clears them.
+
+**Revoke** a phone to stop all of it at once. Whatever the switches say, a phone can never reach
+provider keys or other credentials, remote access itself (pairing more devices, revoking,
+rotating), wiping data or resetting settings, or the computer's own sign-in windows, dialogs,
+updater and shell. Until the features ship, files, git and terminals stay refused as described above.
+
 ## Security model, honestly stated
 
 | Threat | Defense |
@@ -238,6 +270,7 @@ changes how the computer itself is set up:
 | Revoked device replays old creds | The agent refuses its handshake and unicasts nothing to it; it gets back in only with a fresh one-time pairing code from the computer's owner; rotate the secret for a full cryptographic reset |
 | Malicious relay withholding/reordering | Availability only; it still can't read or forge frames (AES-GCM auth) |
 | Phone asks for something dangerous | Your computer only serves the phone allowlist above (no wipe, settings reset, remote-access changes, terminals, file writes); tool calls run on your machine under your guardrails/sandbox and chat mode |
+| Someone else picks up the phone, or the relay replays a request, to make a change | Each change must be signed by the phone's Secure Enclave key, which needs Face ID or the passcode (one check lasts 5 minutes); your computer checks the signature, its age and that it was not used before, and logs every attempt in the phone's activity |
 
 What the relay does see: connection metadata (IPs, timing, frame sizes), the room code, and, if you
 enable push, device push tokens plus the content-free fact "a run finished". That's the whole list,

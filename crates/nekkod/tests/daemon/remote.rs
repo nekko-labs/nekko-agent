@@ -132,6 +132,40 @@ async fn the_daemon_runs_the_phone_relay_agent() {
     assert_eq!(status["connected"], json!(["phone-1"]), "{status}");
     assert_eq!(status["online"], true);
 
+    // IO-33: the gate knows which phone calls. A Change key registered
+    // without the proof is refused, and the refusal lands in that phone's
+    // activity, which only the desktop reads; the phone may not set its own
+    // switches or read its activity.
+    let mut ask_res = async |id: u32, channel: &str, args: Value| {
+        agent.send(client("c1", json!({ "type": "req", "id": id, "channel": channel, "args": args }))).await.unwrap();
+        loop {
+            let (_, sealed) = next_agent_frame(&mut agent, &key).await;
+            if let Some(s) = sealed.filter(|s| s["type"] == "res" && s["id"] == id) {
+                break s;
+            }
+        }
+    };
+    let res = ask_res(
+        40,
+        "device:registerKey",
+        json!(["BAR/v8sCAzk1hHTpnnCLIlF1ruz+rF+jQdEeUu/OcjwnZmPysLs7FJ2/VAL5o51uKkNxeTc8jKMMcQno/2Tp6WI="]),
+    )
+    .await;
+    assert_eq!(res["error"], "Not allowed from a paired phone (proof-required): device:registerKey", "{res}");
+    let res = ask_res(41, "remote:setAccess", json!(["phone-1", { "change": true }])).await;
+    assert_eq!(res["error"], "Not allowed from a paired phone (channel-denied): remote:setAccess");
+    let res = ask_res(42, "remote:activity", json!(["phone-1"])).await;
+    assert_eq!(res["error"], "Not allowed from a paired phone (channel-denied): remote:activity");
+    let (_, activity) = post(d.port, "remote:activity", json!(["phone-1"]), Some(TOKEN)).await;
+    assert_eq!(activity.as_array().map(Vec::len), Some(1), "{activity}");
+    assert_eq!(activity[0]["channel"], "device:registerKey");
+    assert_eq!(activity[0]["ok"], false);
+    assert_eq!(activity[0]["reason"], "proof-required");
+    let (_, devices) = post(d.port, "remote:setAccess", json!(["phone-1", { "change": false }]), Some(TOKEN)).await;
+    assert_eq!(devices[0]["access"], json!({ "read": true, "change": false }), "{devices}");
+    let saved: Value = serde_json::from_str(&std::fs::read_to_string(data.join("remote.json")).unwrap()).unwrap();
+    assert_eq!(saved["devices"][0]["access"]["change"], false);
+
     // Revoking kicks the phone live and drops its push token.
     post(d.port, "remote:revoke", json!(["phone-1"]), Some(TOKEN)).await;
     let (kick, _) = next_agent_frame(&mut agent, &key).await;
