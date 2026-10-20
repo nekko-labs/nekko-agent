@@ -653,6 +653,7 @@ pub const OWNED: &[&str] = &[
     "spec:setLinked",
     "chat:queue",
     "chat:dequeue",
+    "chat:editQueued",
     "terminals:list",
     "terminals:list:native",
     "terminal:shells",
@@ -816,6 +817,7 @@ const SESSION_CHANNELS: &[&str] = &[
     "spec:setLinked",
     "chat:queue",
     "chat:dequeue",
+    "chat:editQueued",
 ];
 
 /// `createSession(workspaceId, parentSessionId, supportingWorkspaceIds)` with
@@ -888,6 +890,7 @@ async fn session_op(
             "spec:setLinked" => or_null(store.set_spec_linked(id, arg(&args, 1))),
             "chat:queue" => or_null(store.queue(id, arg(&args, 1))),
             "chat:dequeue" => or_null(store.dequeue(id, arg(&args, 1))),
+            "chat:editQueued" => or_null(store.edit_queued(id, arg(&args, 1), arg(&args, 2))),
             other => Err(format!("{other} is not a session channel")),
         }
     })

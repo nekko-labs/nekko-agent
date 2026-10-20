@@ -72,6 +72,10 @@
    ]
   },
   {
+   "channel": "tasks:list",
+   "args": []
+  },
+  {
    "channel": "providers:list",
    "args": []
   }
@@ -199,10 +203,10 @@
   },
   {
    "input": {
-    "relay": "{\"type\":\"c\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"b3Z9hIuSmaCnrrW89rbQFsJXH3SmWwE07bjYJAPb1IXcFn6wzkXxCBJMe1Hg8ND5TfaYU/Tzcj4i/DDRNyH+w7YwbLJopYH5WqvdwxEHcvzY3ts=\\\"}\"}"
+    "relay": "{\"type\":\"c\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"8/oBCA8WHSQrMjlAcDsnQhWe73Q2E8bRO0+FaW4xiFhyPDXiIHChv+enZ5EFQz/k/8aMh6cZCzRz2Rwfm5WbJWEvDMLUsFn0Fnvhngd3DpymYyQ=\\\"}\"}"
    },
    "sent": [
-    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"jpWco6qxuL/GzdTb+gbr6h5niYxiZa0s3kUuGPz4Xo5+7k/W4Rq8hhvV8rTwyedEZm0l2tIzNyu6BXJgSEIVyNuLEvciNm9/X56M4LYJbMXa8+hicwj9lKteVkC5woLJgu3jRNEt3pmXU9oMMZJimH83yQbUlD2F7A==\\\"}\"}"
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"EhkgJy41PENKUVhf8HL4JzewtrzihAKjcRzshfCIm1kCPPSxwtEHDHFpO4i61PLUXqRXXF0foPKdQMzlwI5FgcOVQ1yO60+FfWVtUdzrBOd7Ysc5spASkMBoykmESSz1u3pR8tEXQC+93aY=\\\"}\"}"
    ],
    "connected": [
     "phone-1"

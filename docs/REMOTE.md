@@ -87,6 +87,21 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > it kept. Like the drafts, the copies are encrypted until the phone is first unlocked, aren't
 > backed up, and are deleted when you forget the computer or a chat is deleted on it.
 >
+> **Beyond the chat** (iPhone): the phone is a remote for the agent, not a second desktop.
+> - **Edit the queue:** a follow-up sent while a reply runs waits under **Queued** with Edit and
+>   Remove. An edit only lands if that prompt hasn't started yet; otherwise nothing changes.
+> - **Fork:** touch and hold a message. On your prompt, **Edit in a new chat** starts a new chat with
+>   the conversation before it and the prompt in the message box; on a reply, **Fork from here**.
+> - **Photos:** tap a photo in a message to see it full screen; **+ → Paste image** adds one from the clipboard.
+> - **Saved prompts:** the prompts you saved on the computer show in `/` and under **+**, run like skills.
+> - **Continue and search:** the list opens with your most recent chat; search finds completed chats too.
+> - **Automations:** **Computers and settings → Automations** lists the computer's tasks and
+>   workflows with how each last went, and **Run now**. You set them up on the computer.
+> - **Pull requests:** a chip shows the chat's pull request and its checks. **Commit these changes**,
+>   **Open a PR** and **Fix the failing checks** send a prompt to the chat, so the agent does the git
+>   work on your computer and asks you before anything that needs approval.
+> - **Usage and limits:** what each provider plan has used and when it resets, and recent usage. Read only.
+>
 > **All your chats, grouped like the desktop** (Android): the chat list shows every chat on the
 > computer, completed ones included, in the same groups as the desktop's agent sidebar: **General**
 > first, then one group per project folder. Tap a group's name to fold it. Each group lists its
@@ -185,19 +200,23 @@ Your computer decides what a paired phone may ask for, whatever the phone app do
 phone app is not the boundary, your computer is. A phone can use your chats and nothing that
 changes how the computer itself is set up:
 
-- **Allowed:** list, open, start, complete and delete chats; send, queue and stop messages; answer
-  approvals and the agent's questions; pick a model from the computer's providers and a folder from
-  its list; voice status and transcription; and a few settings (below).
+- **Allowed:** list, open, start, fork, complete and delete chats; send, queue, edit or remove
+  queued, and stop messages; answer approvals and the agent's questions; pick a model from the
+  computer's providers and a folder from its list; voice status and transcription; read a chat's
+  pull requests, the computer's automations, its usage and plan limits, and run an automation now;
+  and a few settings (below).
 - **Never allowed from a phone:** wiping data or resetting settings, remote access itself (pairing,
-  revoking, rotating the secret), terminals, reading or writing files, accepting or reverting changes, adding or removing folders, installing
+  revoking, rotating the secret), terminals, reading or writing files, accepting or reverting changes,
+  git itself (merging, closing or reviewing a pull request, its diff, git status: ask the agent
+  instead), making, changing or deleting automations, adding or removing folders, installing
   or removing voice models, connecting or disconnecting connectors, provider keys and sign-ins, MCP
   servers and hooks. Everything not on the allowed list is refused too, with an error that starts
   *Not allowed from a paired phone*.
 - **Settings a phone may change:** the chat mode for new chats (Ask, Guardrails or YOLO), what the chat pane's top-right button does (Complete or Delete),
   whether deleting asks first, and voice on/off and its language. An update that touches any other
   setting is refused as a whole: nothing in it is applied.
-- **Settings a phone can read:** only the theme and accents, the default and starred models, and
-  the settings above. API keys, tokens, provider details, folders, hooks, guardrails and your
+- **Settings a phone can read:** only the theme and accents, the default and starred models, your
+  saved prompts (name and text), whether automations are paused, and the settings above. API keys, tokens, provider details, folders, hooks, guardrails and your
   instructions never leave the computer this way; provider lists arrive as name and type only.
 - **A chat's changes, read only, only if you allow it:** with *Let phones see changes* on (off
   unless you turn it on, in Remote access on the computer), a phone can see a diff of the files the

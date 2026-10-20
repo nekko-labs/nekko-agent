@@ -106,8 +106,13 @@ struct ChatsView: View {
                     Text("Waiting to send")
                 }
             }
+            if query.isEmpty, let last = ChatSearch.continueChat(store.summaries), store.activity[last.id] != .needsYou {
+                Section {
+                    ContinueCard(summary: last, activity: store.activity[last.id]) { open(.chat(last.id)) }
+                }
+            }
             if !needsYou.isEmpty && query.isEmpty {
-                Section("Needs you") { ForEach(needsYou) { row($0) } }
+                Section { ForEach(needsYou) { row($0) } } header: { SectionTitle("Needs you") }
             }
             ForEach(query.isEmpty || !filtered.isEmpty ? groups : []) { g in
                 Section {
@@ -124,18 +129,13 @@ struct ChatsView: View {
                         }
                     }
                 } header: {
-                    Text(g.name)
+                    SectionTitle(g.name)
                 }
             }
     }
 
-    private var filtered: [SessionSummary] {
-        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !q.isEmpty else { return store.summaries }
-        return store.summaries.filter {
-            $0.title.lowercased().contains(q) || ($0.lastReplyText ?? "").lowercased().contains(q) || ($0.firstUserText ?? "").lowercased().contains(q)
-        }
-    }
+    /// Every word of the search, in the title, first prompt or last reply; completed chats too.
+    private var filtered: [SessionSummary] { ChatSearch.matches(store.summaries, query) }
 
     private var groups: [ChatGroup] { ChatGroup.of(filtered, folders: store.workspaces) }
 
@@ -307,6 +307,8 @@ struct ComputerMenu: View {
             }
             Divider()
             Button { path.append(.pair) } label: { Label("Pair another computer", systemImage: "plus") }
+            Button { path.append(.automations) } label: { Label("Automations", systemImage: "bolt.badge.clock") }
+            Button { path.append(.usage) } label: { Label("Usage and limits", systemImage: "gauge.with.dots.needle.33percent") }
             Button { path.append(.computers) } label: { Label("Computers", systemImage: "desktopcomputer") }
             Button { path.append(.settings) } label: { Label("Settings", systemImage: "gearshape") }
         } label: {

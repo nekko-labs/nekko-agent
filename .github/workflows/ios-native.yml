@@ -135,6 +135,14 @@ jobs:
             -only-testing:NekkoNativeUITests/LiveRelayTests/testSendWithTheRelayDownAndSeeItDelivered || { failed=1; stack_logs offline; }
           kill $NEKKO_ITEST_PIDS 2>/dev/null || true
           xcrun simctl uninstall "$DEVICE" com.nekko.native.ios || true
+          # Beyond the chat (IO-22 to IO-29): queue edit, fork, Continue, an automation run, usage.
+          ../../apps/ios/scripts/itest-stack.sh /tmp/stack-beyond.env
+          . /tmp/stack-beyond.env
+          TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" \
+            xcodebuild "${COMMON[@]}" -resultBundlePath evidence/beyond.xcresult test-without-building \
+            -only-testing:NekkoNativeUITests/LiveRelayTests/testQueueForkAutomationsAndUsageFromThePhone || failed=1
+          kill $NEKKO_ITEST_PIDS 2>/dev/null || true
+          xcrun simctl uninstall "$DEVICE" com.nekko.native.ios || true
           # The deep link from the computer's QR (Camera → nekko-agent-pair:) pairs through the confirmation sheet.
           xcrun simctl ui "$DEVICE" appearance light
           ../../apps/ios/scripts/itest-stack.sh /tmp/stack-link.env

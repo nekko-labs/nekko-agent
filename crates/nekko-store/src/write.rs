@@ -961,6 +961,61 @@ impl SessionStore {
         })
     }
 
+    /// `editQueuedPrompt`: change or remove the queued prompt at `index`, only
+    /// while it still shows the text the editor saw (`edit.expect`). A missing
+    /// `text`, or a blank one with no photos, removes it; a skill's prompt can
+    /// only be removed. A stale edit changes nothing and is an error.
+    pub fn edit_queued(&self, id: &str, index: &Value, edit: &Value) -> Result<Option<Value>, String> {
+        let stale = || "That queued prompt already started or changed.".to_string();
+        let index = index.as_f64().filter(|i| i.fract() == 0.0 && *i >= 0.0).map(|i| i as usize);
+        let expect = edit.get("expect").and_then(Value::as_str).map(str::to_string);
+        let text = edit.get("text").and_then(Value::as_str).map(|t| js::trim(t).to_string());
+        let mut failure: Option<String> = None;
+        let out = self.patch(id, |s| {
+            let q = s.get("queue").and_then(Value::as_array).cloned().unwrap_or_default();
+            let Some((i, item)) = index.and_then(|i| q.get(i).map(|item| (i, item.clone()))) else {
+                failure = Some(stale());
+                return false;
+            };
+            let shown = item.as_str().or_else(|| item.get("text").and_then(Value::as_str));
+            if expect.is_none() || shown != expect.as_deref() {
+                failure = Some(stale());
+                return false;
+            }
+            let count = |k: &str| item.get(k).and_then(Value::as_array).map_or(0, Vec::len);
+            let photos = count("images") + count("videos");
+            if text.is_some() && item.is_object() && item.get("skill").is_some_and(|v| !v.is_null()) {
+                failure = Some("A skill’s queued prompt can only be removed.".into());
+                return false;
+            }
+            let next: Vec<Value> = match &text {
+                Some(t) if !t.is_empty() || photos > 0 => q
+                    .into_iter()
+                    .enumerate()
+                    .map(|(j, v)| {
+                        if j != i {
+                            return v;
+                        }
+                        match v {
+                            Value::Object(mut o) => {
+                                o.insert("text".into(), json!(t));
+                                Value::Object(o)
+                            }
+                            _ => json!(t),
+                        }
+                    })
+                    .collect(),
+                _ => q.into_iter().enumerate().filter(|(j, _)| *j != i).map(|(_, v)| v).collect(),
+            };
+            s.insert("queue".into(), Value::Array(next));
+            true
+        })?;
+        match failure {
+            Some(e) => Err(e),
+            None => Ok(out),
+        }
+    }
+
     /// `applyAutoTitle(id, title)`: land a generated title, unless the user
     /// named the chat meanwhile (`titleAuto` no longer `true`). Landing it also
     /// ends generation. `Ok(true)` when it was written.

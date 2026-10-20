@@ -307,6 +307,111 @@ final class LiveRelayTests: XCTestCase {
         attach(app, "offline-3-saved-copy")
     }
 
+    /// IO-22 to IO-29 in the app: edit a queued prompt while a reply runs, fork
+    /// from a prompt into a new chat, Continue on the chat list, the computer's
+    /// automation run from the phone, and usage. Each screen is audited.
+    func testQueueForkAutomationsAndUsageFromThePhone() throws {
+        guard let raw = ProcessInfo.processInfo.environment["NEKKO_ITEST_LINK"], let link = URL(string: raw) else {
+            throw XCTSkip("set NEKKO_ITEST_LINK (apps/ios/scripts/itest-stack.sh)")
+        }
+        let app = XCUIApplication()
+        app.launchArguments = ["-appLock", "NO", "-theme", "light", "-uiTestReset", "YES"]
+        app.launch()
+        allowSystemAlerts()
+        let start = app.buttons["Pair with your computer"]
+        XCTAssertTrue(start.waitForExistence(timeout: 10))
+        start.tap()
+        let field = app.input("nekko-agent-pair:?relay=…")
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText(link.absoluteString)
+        app.buttons["Pair"].firstMatch.tap()
+        tapSystemAlertIfShown()
+        XCTAssertTrue(waitOnline(app, 30), "connected to the computer")
+
+        app.navigationBars.buttons["New chat"].tap()
+        let prompt = app.input("What should your computer do?")
+        XCTAssertTrue(prompt.waitForExistence(timeout: 5))
+        prompt.tap()
+        prompt.typeText("Say hello")
+        app.buttons["Start"].tap()
+        XCTAssertTrue(app.staticTexts["Hello from your computer."].waitForExistence(timeout: 30), "the first reply streamed in")
+
+        // IO-22: a slow reply runs; a follow-up waits in the queue and is edited before it runs.
+        let message = app.input("chat.message")
+        message.tap()
+        // "long run" streams for 90 s on the fake model: time for a slow simulator to type and edit.
+        message.typeText("a long run please")
+        app.buttons["Send"].tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "word1")).firstMatch.waitForExistence(timeout: 45))
+        message.tap()
+        message.typeText("next one")
+        let queue = app.buttons["Queue"]
+        XCTAssertTrue(queue.waitForExistence(timeout: 10), "mid-run, Send queues")
+        queue.tap()
+        let edit = app.buttons["chat.queue.edit"].firstMatch
+        XCTAssertTrue(edit.waitForExistence(timeout: 10), "the queued prompt shows with Edit")
+        attach(app, "beyond-1-queued")
+        edit.tap()
+        let editor = app.input("queue.editor.text")
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        editor.tap()
+        editor.typeText(", edited")
+        attach(app, "beyond-2-queue-editor")
+        app.buttons["queue.editor.save"].tap()
+        let edited = app.staticTexts["next one, edited"]
+        XCTAssertTrue(edited.waitForExistence(timeout: 10), "the edit reached the computer's queue")
+        attach(app, "beyond-3-queue-edited")
+        auditAccessibility(app, "beyond-queue")
+        // The edited prompt runs after the slow reply, as edited.
+        let ranEdited = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "You: next one, edited"))
+        XCTAssertTrue(ranEdited.firstMatch.waitForExistence(timeout: 150), "the edited prompt ran")
+
+        // IO-23: fork from the first prompt; the new chat has it in its message box.
+        let first = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "You: Say hello")).firstMatch
+        XCTAssertTrue(first.waitForExistence(timeout: 10))
+        first.press(forDuration: 1.0)
+        let fork = app.buttons["Edit in a new chat"].firstMatch
+        XCTAssertTrue(fork.waitForExistence(timeout: 5), "the prompt's menu offers a fork")
+        attach(app, "beyond-4-fork-menu")
+        fork.tap()
+        let forkedBox = app.input("chat.message")
+        let seeded = expectation(for: NSPredicate(format: "value == %@", "Say hello"), evaluatedWith: forkedBox)
+        wait(for: [seeded], timeout: 20)
+        attach(app, "beyond-5-forked")
+
+        // IO-25: the chat list offers to continue the most recent chat.
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        let resume = app.buttons["chats.continue"].firstMatch
+        XCTAssertTrue(resume.waitForExistence(timeout: 15), "the Continue card")
+        attach(app, "beyond-6-continue")
+        auditAccessibility(app, "beyond-chats")
+
+        // IO-26: the computer's automation, run from the phone; its answer comes back.
+        let menu = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Computers and settings")).firstMatch
+        XCTAssertTrue(waitForFrame(menu, in: app, 10))
+        menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        app.buttons["Automations"].firstMatch.tap()
+        let run = app.buttons["Run Say hello nightly now"]
+        XCTAssertTrue(run.waitForExistence(timeout: 15), "the task is listed with Run now")
+        attach(app, "beyond-7-automations")
+        auditAccessibility(app, "beyond-automations")
+        run.tap()
+        let result = app.staticTexts["Hello from your computer."]
+        XCTAssertTrue(result.waitForExistence(timeout: 60), "the run's answer shows as the last result")
+        attach(app, "beyond-8-ran")
+
+        // IO-29: usage, read only.
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(waitForFrame(menu, in: app, 10))
+        menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        app.buttons["Usage and limits"].firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Usage and limits"].waitForExistence(timeout: 10))
+        sleep(2)
+        attach(app, "beyond-9-usage")
+        auditAccessibility(app, "beyond-usage")
+    }
+
     func testPairFromADeepLink() throws {
         guard let raw = ProcessInfo.processInfo.environment["NEKKO_ITEST_LINK"], let link = URL(string: raw) else {
             throw XCTSkip("set NEKKO_ITEST_LINK (apps/ios/scripts/itest-stack.sh)")
