@@ -216,6 +216,7 @@
  "workflow:event",
  "workflow:run",
  "workflow:runs",
+ "workflow:skillDefs",
  "workflow:update",
  "workflows:list",
  "workspace:add",

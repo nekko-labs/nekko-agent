@@ -539,6 +539,7 @@ function makeWebClient(): NekkoApi {
     runWorkflow: (id) => call(IpcChannels.workflowRun, id),
     cancelWorkflowRun: (runId) => call(IpcChannels.workflowCancel, runId),
     listWorkflowRuns: (workflowId) => call(IpcChannels.workflowRuns, workflowId),
+    listWorkflowSkillDefs: () => call(IpcChannels.workflowSkillDefs),
     dispatchWorkflowEvent: (event) => call(IpcChannels.workflowEvent, event),
 
     listConnectors: () => call(IpcChannels.connectorsList),

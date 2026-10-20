@@ -248,6 +248,7 @@ export const IpcChannels = {
   workflowRun: 'workflow:run',
   workflowCancel: 'workflow:cancel',
   workflowRuns: 'workflow:runs',
+  workflowSkillDefs: 'workflow:skillDefs',
   /**
    * Feed an external event to the listeners. One door for every transport: the
    * CLI calls it directly, and the Local Web UI's generic `/api/:channel` route
@@ -815,6 +816,8 @@ export interface NekkoApi {
   cancelWorkflowRun(runId: string): Promise<void>;
   /** Run history, newest first, for one workflow or all of them. */
   listWorkflowRuns(workflowId?: string): Promise<WorkflowRun[]>;
+  /** Every skill a workflow's skill step can run, built-in first, then installs, other tools' and Claude Code plugins'. */
+  listWorkflowSkillDefs(): Promise<import('./skills.js').SkillDef[]>;
   /** Offer an event to every listening workflow; returns the runs it started. */
   dispatchWorkflowEvent(event: WorkflowEvent): Promise<WorkflowRun[]>;
 

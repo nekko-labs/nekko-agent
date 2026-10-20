@@ -15,6 +15,7 @@ CI on your machine, see [Local CI runner](git-runner.md).
 | Summarize my GitHub notifications every morning | Weekdays at a time you pick | GitHub connected, the `gh` CLI signed in, a default model |
 | Review every PR I open | Each pull request you open in a repo you pick (checked every 2 minutes) | GitHub connected, the `gh` CLI signed in, a default model |
 | Diagnose failed CI | Each failed GitHub Actions run in a repo you pick (checked every 2 minutes) | GitHub connected, a local model |
+| Review new PRs with a skill | Each new pull request in a repo you pick (checked every 2 minutes); new commits too if you turn on its second trigger | GitHub connected, a project folder that is a clone of the repo, a model (local if you leave **Local models only** on) |
 | Nightly dependency check | Every night at a time you pick | A project folder, a default model |
 
 Each card marks what you already have. Click one to open its setup sheet:
@@ -32,10 +33,31 @@ Each card marks what you already have. Click one to open its setup sheet:
 **Customize** opens the same automation in the workflow editor instead, where you can change its
 steps, triggers and model before saving.
 
-Every ready-made automation but one only reads: it summarizes or reviews, and never comments,
+Every ready-made automation but two only reads: it summarizes or reviews, and never comments,
 posts, installs or changes anything. Results land in the run history (and a notification, if you
-asked for one). The exception is **Diagnose failed CI**, which keeps one comment on the failing
-PR; see [Diagnose failed CI](git-runner.md#diagnose-failed-ci).
+asked for one). The exceptions are **Diagnose failed CI**, which keeps one comment on the failing
+PR (see [Diagnose failed CI](git-runner.md#diagnose-failed-ci)), and **Review new PRs with a
+skill**, below.
+
+## Review new PRs with a skill
+
+Runs a skill on every new pull request in a repo and keeps its verdict in one comment on the PR.
+
+- **The skill.** The setup sheet picks `nyaa:cr` when the nyaa Claude Code plugin is enabled,
+  else the built-in `review`; any skill a step can run is offered. It gets the PR number as its
+  arguments and runs with only the tools its `allowed-tools` lists.
+- **Where it runs.** On a checkout of the PR's head made for the run and removed after it; your
+  own checkout is never touched. A draft PR waits until it is marked ready.
+- **Untrusted PRs.** A PR from a fork, or from someone who cannot push to the repo, never runs its
+  code: package managers, builds, linters and scripts are off, and the comment says
+  *lint/audit skipped: untrusted PR*.
+- **The comment.** Posted by an action step, not by the model: one comment per PR, marked with the
+  workflow's name, with @mentions quieted and the length capped. Turn on the template's second
+  trigger (*PR updated*) to re-review each new commit; the same comment is updated.
+- **Model.** **Local models only** starts on when you have a local model set up; turn it off to
+  use your default model.
+
+How skills, plugins and the checkout work: [Workflows](workflows.md#skill-steps).
 
 Digests read text other people wrote, such as notification titles or package advisories. So a
 fixed command fetches it first, and the agent that summarizes it has **no tools**: it can only

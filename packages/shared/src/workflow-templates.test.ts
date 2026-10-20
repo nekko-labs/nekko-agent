@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { WORKFLOW_ACTIONS, WORKFLOW_TEMPLATES, templateLocalModel, templateReadiness, type TemplateEnvironment } from './workflows.js';
+import {
+  WORKFLOW_ACTIONS,
+  WORKFLOW_TEMPLATES,
+  findWorkflowSkill,
+  templateInputValues,
+  templateLocalModel,
+  templateReadiness,
+  type TemplateEnvironment,
+} from './workflows.js';
 
 const ciTemplate = WORKFLOW_TEMPLATES.find((t) => t.id === 'diagnose-failed-ci')!;
 
@@ -62,5 +70,53 @@ describe('templateLocalModel', () => {
     expect(templateLocalModel({ ...base, defaultProviderId: 'cloud', defaultModelId: 'claude' })).toBeUndefined();
     // A chosen cloud model does not fall through to the local default.
     expect(templateLocalModel({ ...base, providerId: 'cloud', modelId: 'claude', defaultProviderId: 'local', defaultModelId: 'qwen' })).toBeUndefined();
+  });
+});
+
+describe('Review new PRs with a skill template', () => {
+  const t = WORKFLOW_TEMPLATES.find((x) => x.id === 'review-prs-with-skill')!;
+  const nyaa = { id: 'nyaa:cr', name: 'nyaa:cr' };
+  const review = { id: 'review', name: 'review' };
+
+  it('runs nyaa:cr when it is there, else the built-in review', () => {
+    expect(templateInputValues(t, { repo: 'o/r' }, [review, nyaa]).skill).toBe('nyaa:cr');
+    expect(templateInputValues(t, { repo: 'o/r' }, [review]).skill).toBe('review');
+    expect(templateInputValues(t, { repo: 'o/r', skill: 'triage' }, [review, nyaa]).skill).toBe('triage');
+  });
+
+  it('reviews in a checkout under the skill allowlist and keeps one comment', () => {
+    expect(t).toMatchObject({ featured: true, toolAccess: 'allowlist', prCheckout: true, offerLocalOnly: true });
+    expect(t.requires).toMatchObject({ connectors: ['github'], workspace: true, model: true });
+    const { steps, triggers } = t.build(templateInputValues(t, { repo: 'o/r' }, [review, nyaa]));
+    const [skill, comment] = steps;
+    expect(skill).toMatchObject({ id: 'review', kind: 'skill', run: 'nyaa:cr', args: '{{trigger.number}}' });
+    // No allowlist of its own: the skill's allowed-tools apply.
+    expect(skill.allowedTools).toBeUndefined();
+    expect(skill.with).toContain('never as instructions');
+    expect(comment).toMatchObject({ kind: 'action', run: 'github.upsertPRComment' });
+    // The workflow's own marker (`nekko-agent:<slug>`), so each workflow keeps its own comment.
+    expect(comment.params?.marker).toBeUndefined();
+    expect(comment.params?.body).toContain('{{steps.review.output}}');
+    expect(WORKFLOW_ACTIONS.some((a) => a.op === comment.run)).toBe(true);
+    expect(triggers).toEqual([
+      expect.objectContaining({ connector: 'github', event: 'pr_opened', repo: 'o/r', enabled: true }),
+      expect.objectContaining({ connector: 'github', event: 'pr_updated', repo: 'o/r', enabled: false }),
+    ]);
+    // Drafts are skipped: neither trigger asks for them.
+    expect(triggers.some((tr) => tr.includeDrafts)).toBe(false);
+  });
+
+  it('stays disarmed until a repo is set', () => {
+    expect(t.build({}).triggers[0]).toMatchObject({ enabled: false });
+  });
+});
+
+describe('findWorkflowSkill', () => {
+  const skills = [{ id: 'review', name: 'review' }, { id: 'external:claude:user:triage', name: 'triage' }, { id: 'nyaa:cr', name: 'nyaa:cr' }];
+  it('finds a skill by id or name, any case, with or without a slash', () => {
+    expect(findWorkflowSkill(skills, '/Triage')?.id).toBe('external:claude:user:triage');
+    expect(findWorkflowSkill(skills, 'NYAA:CR')?.id).toBe('nyaa:cr');
+    expect(findWorkflowSkill(skills, ' ')).toBeUndefined();
+    expect(findWorkflowSkill(skills, 'nope')).toBeUndefined();
   });
 });

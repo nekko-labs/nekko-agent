@@ -31,6 +31,7 @@ import {
   WORKFLOW_TRIGGER_KINDS,
   cliCommand,
   findWorkflowAction,
+  findWorkflowSkill,
   formatEvery,
   isValidCron,
   newStepId,
@@ -67,6 +68,7 @@ export interface Draft {
   modelId?: string;
   localModelOnly: boolean;
   toolAccess: WorkflowToolAccess;
+  prCheckout: boolean;
   steps: WorkflowStep[];
   triggers: WorkflowTrigger[];
 }
@@ -83,6 +85,7 @@ export interface WorkflowSeed {
   modelId?: string;
   localModelOnly?: boolean;
   toolAccess?: WorkflowToolAccess;
+  prCheckout?: boolean;
   steps: WorkflowStep[];
   triggers: WorkflowTrigger[];
 }
@@ -100,6 +103,7 @@ export function toDraft(wf?: Workflow): Draft {
     modelId: wf?.modelId,
     localModelOnly: !!wf?.localModelOnly,
     toolAccess: wf?.toolAccess ?? 'workspace',
+    prCheckout: !!wf?.prCheckout,
     steps: (wf?.steps ?? []).map((s) => ({ ...s })),
     triggers: (wf?.triggers ?? [{ id: newStepId('trg'), kind: 'manual' }]).map((t) => ({ ...t })),
   };
@@ -124,9 +128,11 @@ export function draftPatch(draft: Draft): NewWorkflow {
     modelId: draft.providerId && draft.modelId ? draft.modelId : undefined,
     localModelOnly: draft.localModelOnly || undefined,
     toolAccess: draft.toolAccess === 'workspace' ? undefined : draft.toolAccess,
+    prCheckout: draft.prCheckout || undefined,
     steps: draft.steps.map((s) => {
-      const { providerId, modelId, allowedTools, ...rest } = s;
+      const { providerId, modelId, allowedTools, args, ...rest } = s;
       const out: WorkflowStep = { ...rest };
+      if (s.kind === 'skill' && args?.trim()) out.args = args;
       if (agent(s) && providerId && modelId) Object.assign(out, { providerId, modelId });
       if (agent(s) && draft.toolAccess === 'allowlist' && allowedTools?.length) out.allowedTools = allowedTools;
       return out;
@@ -168,7 +174,7 @@ export function WorkflowEditor({
   seed?: WorkflowSeed;
   /** Every workflow, so a `workflow` step can pick a target. */
   workflows: Workflow[];
-  /** Installed skills, so a `skill` step can pick one. */
+  /** Every skill a step can run (`workflow:skillDefs`), so a `skill` step can pick one. */
   skills: SkillDef[];
   onClose: () => void;
   onSave: (patch: NewWorkflow) => Promise<void> | void;
@@ -195,6 +201,7 @@ export function WorkflowEditor({
           modelId: seed.modelId ?? base.modelId,
           localModelOnly: seed.localModelOnly ?? base.localModelOnly,
           toolAccess: seed.toolAccess ?? base.toolAccess,
+          prCheckout: seed.prCheckout ?? base.prCheckout,
           steps: seed.steps,
           triggers: seed.triggers,
         }
@@ -393,6 +400,23 @@ export function WorkflowEditor({
                 </span>
               </span>
             </label>
+            <label className="flex items-start gap-2 sm:col-span-2">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                data-wf-pr-checkout
+                checked={draft.prCheckout}
+                onChange={(e) => set('prCheckout', e.target.checked)}
+              />
+              <span className="text-[12.5px]">
+                Check out the pull request
+                <span className="block text-[11px] text-ink-faint">
+                  A run started by a pull request works in a checkout of its head made for that run and removed when it ends;
+                  your own checkout is never touched. A PR from a fork, or from someone who cannot push to the repo, gets
+                  read-only tools: no package manager, build, linter or script runs its code.
+                </span>
+              </span>
+            </label>
             <p className="text-[11px] text-ink-faint sm:pt-0.5">
               Approvals are denied automatically in runs: a step that would need one gets the refusal as its tool result and
               carries on. Shell and action steps you write here still run.
@@ -509,6 +533,76 @@ export function WorkflowEditor({
   );
 }
 
+/** The skill picker's groups, in the order a step resolves a name. */
+export const SKILL_GROUPS: Array<{ source: NonNullable<SkillDef['source']>; label: string }> = [
+  { source: 'builtin', label: 'Built-in' },
+  { source: 'installed', label: 'Installed' },
+  { source: 'external', label: 'Claude Code skills' },
+  { source: 'plugin', label: 'Plugins' },
+];
+
+/** Where a skill lives, for the picker: a plugin's name and version, else its folder. */
+export function skillSourceLabel(s: SkillDef): string | undefined {
+  const o = s.origin;
+  if (s.source === 'plugin' && o?.plugin) {
+    const at = [o.marketplace && `@${o.marketplace}`, o.version && ` ${o.version}`].filter(Boolean).join('');
+    return `${o.kind === 'command' ? 'Command' : 'Skill'} from ${o.plugin}${at} · ${s.pluginRoot ?? o.dir}`;
+  }
+  return o?.dir;
+}
+
+function SkillStepFields({
+  step,
+  skills,
+  onPatch,
+}: {
+  step: WorkflowStep;
+  skills: SkillDef[];
+  onPatch: (patch: Partial<WorkflowStep>) => void;
+}) {
+  const picked = findWorkflowSkill(skills, step.run);
+  const where = picked && skillSourceLabel(picked);
+  // A skill the list no longer has stays selectable, so opening the editor never changes the step.
+  const missing = step.run && !picked;
+  return (
+    <div className="grid gap-2" data-step-skill>
+      <select className="input w-full text-[12.5px]" value={picked?.id ?? step.run} onChange={(e) => onPatch({ run: e.target.value })}>
+        <option value="">Pick a skill…</option>
+        {missing && <option value={step.run}>{step.run} (not found)</option>}
+        {SKILL_GROUPS.map((g) => {
+          const list = skills.filter((s) => (s.source ?? 'installed') === g.source);
+          if (!list.length) return null;
+          return (
+            <optgroup key={g.source} label={g.label}>
+              {list.map((s) => <option key={s.id} value={s.id}>/{s.name}: {s.description}</option>)}
+            </optgroup>
+          );
+        })}
+      </select>
+      {where && <p className="truncate font-mono text-[10.5px] text-ink-faint" title={where} data-step-skill-source>{where}</p>}
+      {missing && (
+        <p className="text-[11px]" style={{ color: 'var(--warning)' }}>
+          No skill named {step.run} is available here. Install or enable it, or pick another.
+        </p>
+      )}
+      <label className="block">
+        <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-ink-faint">Arguments</span>
+        <input
+          className="input w-full font-mono text-[12px]"
+          data-step-args
+          placeholder={picked?.argumentHint ?? '{{trigger.number}}'}
+          value={step.args ?? ''}
+          onChange={(e) => onPatch({ args: e.target.value || undefined })}
+        />
+        <span className="mt-0.5 block text-[10.5px] text-ink-faint">
+          Fills the skill's $ARGUMENTS ($1, $2… word by word). Templates such as {'{{trigger.number}}'} are filled in when the
+          step runs.
+        </span>
+      </label>
+    </div>
+  );
+}
+
 /** Whether a route survives the removal of step `goneId`. */
 function routeStillValid(t: WorkflowTransition | undefined, goneId: string): boolean {
   return !t || t.goto !== 'step' || t.stepId !== goneId;
@@ -540,6 +634,7 @@ function StepEditor({
   highlighted: boolean;
 }) {
   const kindMeta = WORKFLOW_STEP_KINDS.find((k) => k.kind === step.kind);
+  const stepSkill = step.kind === 'skill' ? findWorkflowSkill(skills, step.run) : undefined;
   return (
     <div
       className="card px-3.5 py-3"
@@ -601,12 +696,7 @@ function StepEditor({
             />
           </div>
         )}
-        {step.kind === 'skill' && (
-          <select className="input w-full text-[12.5px]" value={step.run} onChange={(e) => onPatch({ run: e.target.value })}>
-            <option value="">Pick a skill…</option>
-            {skills.map((s) => <option key={s.id} value={s.id}>/{s.name} — {s.description}</option>)}
-          </select>
-        )}
+        {step.kind === 'skill' && <SkillStepFields step={step} skills={skills} onPatch={onPatch} />}
         {step.kind === 'workflow' && (
           <select className="input w-full text-[12.5px]" value={step.run} onChange={(e) => onPatch({ run: e.target.value })}>
             <option value="">Pick a workflow…</option>
@@ -653,13 +743,22 @@ function StepEditor({
                 <textarea
                   className="input min-h-[36px] w-full resize-y font-mono text-[11.5px]"
                   data-step-allowed-tools
-                  placeholder={'Read, Grep, Glob, Bash(gh pr view:*)'}
+                  placeholder={
+                    stepSkill?.allowedTools?.length ? stepSkill.allowedTools.join(', ') : 'Read, Grep, Glob, Bash(gh pr view:*)'
+                  }
                   defaultValue={(step.allowedTools ?? []).join(', ')}
                   onBlur={(e) => {
                     const list = parseAllowedTools(e.target.value);
                     onPatch({ allowedTools: list.length ? list : undefined });
                   }}
                 />
+                {step.kind === 'skill' && !step.allowedTools?.length && (
+                  <span className="mt-0.5 block text-[10.5px] text-ink-faint" data-step-skill-tools>
+                    {stepSkill?.allowedTools?.length
+                      ? "Empty runs with the skill's own allowed-tools, shown above. List fewer to narrow them."
+                      : 'This skill lists no allowed-tools: list what it may use, or it runs with none.'}
+                  </span>
+                )}
                 <span className="mt-0.5 block text-[10.5px] text-ink-faint">
                   Claude Code syntax. Commands match by their words; chaining, substitution and redirection never match. gh and git
                   stay read-only.

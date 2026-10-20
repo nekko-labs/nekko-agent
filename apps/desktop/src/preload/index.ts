@@ -282,6 +282,7 @@ const api: NekkoApi = {
   runWorkflow: (id) => inv(IpcChannels.workflowRun, id),
   cancelWorkflowRun: (runId) => inv(IpcChannels.workflowCancel, runId),
   listWorkflowRuns: (workflowId) => inv(IpcChannels.workflowRuns, workflowId),
+  listWorkflowSkillDefs: () => inv(IpcChannels.workflowSkillDefs),
   dispatchWorkflowEvent: (event) => inv(IpcChannels.workflowEvent, event),
 
   listConnectors: () => inv(IpcChannels.connectorsList),
