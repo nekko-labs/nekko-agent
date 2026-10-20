@@ -14,6 +14,14 @@ describe('window state', () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
+  it('keeps a maximised window maximised', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'nekko-window-'));
+    setWindowStateDir(dir);
+    saveWindowBounds({ width: 1500, height: 900, x: 10, y: 20, maximized: true });
+    expect(loadWindowBounds()).toEqual({ width: 1500, height: 900, x: 10, y: 20, maximized: true });
+    rmSync(dir, { recursive: true, force: true });
+  });
+
   it('opens a first launch at 70% by 80% of the work area, centred', () => {
     // A 2560x1440 display with a 40px taskbar at the bottom.
     expect(initialWindowBounds({ x: 0, y: 0, width: 2560, height: 1400 })).toEqual({ width: 1792, height: 1120, x: 384, y: 140 });
