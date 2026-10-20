@@ -345,3 +345,117 @@ async fn the_daemon_runs_workflows_with_shell_prompt_and_webhook() {
     drop(d);
     let _ = std::fs::remove_dir_all(&data);
 }
+
+fn git_at(dir: &std::path::Path, args: &[&str]) -> String {
+    let out = std::process::Command::new("git")
+        .args(["-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false"])
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
+/// A Claude Code plugin skill runs as a workflow step: listed by its
+/// `<plugin>:<name>` id, its arguments and plugin root filled in, its bundled
+/// references readable, on a checkout of the PR that is removed after, and on
+/// an untrusted PR without the package manager its `allowed-tools` lists.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_plugin_skill_reviews_a_pr_in_its_own_checkout() {
+    let base = std::env::temp_dir().join(format!("nekkod-plugin-skill-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    std::fs::create_dir_all(&base).unwrap();
+    let base = std::fs::canonicalize(base).unwrap();
+    let (data, home, remote) = (base.join("data"), base.join("home"), base.join("remote"));
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    // The plugin, enabled in Claude Code's settings.
+    let root = home.join(".claude/plugins/cache/nekko-labs/nyaa/1.0.0");
+    for (rel, text) in [
+        (".claude-plugin/plugin.json", r#"{"name":"nyaa","version":"1.0.0"}"#),
+        (
+            "commands/cr.md",
+            "---\ndescription: Review a PR\nallowed-tools: Bash(gh:*) Bash(git:*) Bash(pnpm:*) Read Grep Glob\n---\nReview PR $ARGUMENTS following ${CLAUDE_PLUGIN_ROOT}/skills/nyaa/references/rules.md.",
+        ),
+        ("skills/nyaa/SKILL.md", "---\nname: nyaa\ndescription: method\n---\nThe method."),
+        ("skills/nyaa/references/rules.md", "RULE-ONE"),
+    ] {
+        let f = root.join(rel);
+        std::fs::create_dir_all(f.parent().unwrap()).unwrap();
+        std::fs::write(f, text).unwrap();
+    }
+    std::fs::write(home.join(".claude/settings.json"), r#"{"enabledPlugins":{"nyaa@nekko-labs":true}}"#).unwrap();
+    // A repo with PR 7, and the user's clone of it.
+    std::fs::create_dir_all(&remote).unwrap();
+    git_at(&remote, &["init", "-q", "-b", "main"]);
+    std::fs::write(remote.join("a.txt"), "main").unwrap();
+    git_at(&remote, &["add", "."]);
+    git_at(&remote, &["commit", "-q", "-m", "main"]);
+    git_at(&remote, &["checkout", "-q", "-b", "feature"]);
+    std::fs::write(remote.join("a.txt"), "from the pr").unwrap();
+    git_at(&remote, &["commit", "-q", "-am", "pr"]);
+    let sha = git_at(&remote, &["rev-parse", "HEAD"]);
+    git_at(&remote, &["update-ref", "refs/pull/7/head", &sha]);
+    git_at(&remote, &["checkout", "-q", "main"]);
+    git_at(&base, &["clone", "-q", &remote.to_string_lossy(), "user"]);
+    let user = base.join("user");
+
+    let rules = root.join("skills/nyaa/references/rules.md").to_string_lossy().into_owned();
+    let model = scripted_model(vec![
+        call_tool("c1", "read_file", json!({ "path": rules })),
+        call_tool("c2", "read_file", json!({ "path": "a.txt" })),
+        call_tool("c3", "bash", json!({ "command": "pnpm audit" })),
+        call_tool("c4", "write_file", json!({ "path": rules, "content": "changed" })),
+        say_text("Verdict: fine. lint/audit skipped: untrusted PR"),
+    ])
+    .await;
+    scripted_p1(&data, &model, json!({ "workspaces": [{ "id": "w1", "path": user }] }));
+    let h = home.to_string_lossy().into_owned();
+    let d = start_with_env(Some(&data), json!({}), &[("HOME", Some(&h)), ("USERPROFILE", Some(&h))]);
+
+    let (_, defs) = post(d.port, "workflow:skillDefs", json!([]), Some(TOKEN)).await;
+    let cr = defs.as_array().unwrap().iter().find(|s| s["id"] == "nyaa:cr").cloned().expect("nyaa:cr is listed");
+    assert_eq!(cr["source"], "plugin", "{cr}");
+    assert_eq!(defs[0]["source"], "builtin", "built-ins come first");
+
+    let input = json!({
+        "name": "Review PRs",
+        "toolAccess": "allowlist",
+        "prCheckout": true,
+        "steps": [{ "id": "review", "name": "Review", "kind": "skill", "run": cr["id"], "args": "{{trigger.number}}" }],
+        "triggers": [{ "id": "t", "kind": "connector", "connector": "github", "event": "pr_opened" }],
+    });
+    let (_, wf) = post(d.port, "workflow:create", json!([input]), Some(TOKEN)).await;
+    assert_eq!(wf["steps"][0]["run"], "nyaa:cr", "{wf}");
+    let event = json!({ "kind": "connector", "connector": "github", "event": "pr_opened", "repo": "o/r",
+        "payload": { "number": 7, "sha": sha, "author_association": "CONTRIBUTOR", "is_fork": true } });
+    let (_, runs) = post(d.port, "workflow:event", json!([event]), Some(TOKEN)).await;
+    let run = &runs[0];
+    assert_eq!(run["status"], "success", "{run}");
+
+    // What the model was sent, and what each tool call came back with.
+    let requests = model.requests.lock().unwrap().clone();
+    let last = requests.last().unwrap()["messages"].as_array().unwrap().clone();
+    let user_text = last.iter().find(|m| m["role"] == "user").unwrap()["content"].to_string();
+    assert!(user_text.contains("Review PR 7 following"), "{user_text}");
+    assert!(user_text.contains(&rules.replace('\\', "\\\\")), "{user_text}");
+    assert!(user_text.contains("lint/audit skipped: untrusted PR"), "{user_text}");
+    let tool = |id: &str| {
+        last.iter().find(|m| m["role"] == "tool" && m["tool_call_id"] == id).map(|m| m["content"].to_string()).unwrap()
+    };
+    assert!(tool("c1").contains("RULE-ONE"), "the skill's references are readable: {}", tool("c1"));
+    assert!(tool("c2").contains("from the pr"), "the step runs on the PR's head: {}", tool("c2"));
+    assert!(tool("c3").contains("Denied: unattended automation run"), "no package manager: {}", tool("c3"));
+    assert!(tool("c4").contains("Denied") || tool("c4").contains("Read-only"), "{}", tool("c4"));
+    assert_eq!(std::fs::read_to_string(&rules).unwrap(), "RULE-ONE");
+
+    // The checkout is gone and the user's own is as it was.
+    assert_eq!(std::fs::read_to_string(user.join("a.txt")).unwrap(), "main");
+    assert_eq!(git_at(&user, &["status", "--porcelain"]), "");
+    assert_eq!(git_at(&user, &["worktree", "list"]).lines().count(), 1);
+    assert!(git_at(&user, &["for-each-ref", "refs/nekko-runs"]).is_empty());
+    let left = std::fs::read_dir(data.join("workflow-checkouts")).map(|r| r.count()).unwrap_or(0);
+    assert_eq!(left, 0);
+    drop(d);
+    let _ = std::fs::remove_dir_all(&base);
+}

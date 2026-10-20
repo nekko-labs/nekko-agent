@@ -207,7 +207,9 @@ async fn serves_files_memory_and_comments_itself() {
     assert_eq!(listed[0]["skillId"], json!("nekko-agent-review-council"));
     // The install runs as a skill and as a workflow step, after the built-ins.
     let (_, defs) = post(d.port, "workflow:skillDefs", json!([]), Some(TOKEN)).await;
-    let name = defs[0]["name"].clone();
+    assert_eq!(defs[0]["source"], json!("builtin"), "{defs}");
+    let name =
+        defs.as_array().unwrap().iter().find(|s| s["source"] == "installed").expect("the install")["name"].clone();
     assert!(name.is_string(), "{defs}");
     let (_, runnable) = post(d.port, "skills:runnable", json!([]), Some(TOKEN)).await;
     let runnable = runnable.as_array().unwrap();

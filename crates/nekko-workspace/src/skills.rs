@@ -660,6 +660,305 @@ pub fn external_skills(data_dir: &Path, home: &str, project_roots: &[String]) ->
     discover_external(home, project_roots, &exclude, &reserved_names(data_dir))
 }
 
+/// The raw value of one frontmatter key (`allowed-tools`, `argument-hint`):
+/// a scalar, a flow list (`[a, b]`) or a block list (`- a` lines), as text
+/// with list items joined by `, `.
+pub fn frontmatter_value(raw: &str, key: &str) -> Option<String> {
+    let text = raw.strip_prefix('\u{FEFF}').unwrap_or(raw).replace("\r\n", "\n");
+    let rest = text.strip_prefix("---\n")?;
+    let end = rest.find("\n---")?;
+    let lines: Vec<&str> = rest[..end].split('\n').collect();
+    let want = key.to_lowercase();
+    let mut i = 0;
+    while i < lines.len() {
+        let line = lines[i];
+        i += 1;
+        let Some((k, v)) = line.split_once(':') else { continue };
+        if k.trim().to_lowercase() != want || line.starts_with([' ', '\t']) {
+            continue;
+        }
+        let v = v.trim();
+        if !v.is_empty() {
+            let v = v.strip_prefix('[').and_then(|s| s.strip_suffix(']')).unwrap_or(v);
+            let unq = |s: &str| s.trim().trim_matches(|c| c == '"' || c == '\'').to_string();
+            return Some(unq(v));
+        }
+        let mut items = Vec::new();
+        while i < lines.len() {
+            let Some(item) = lines[i].trim_start().strip_prefix("- ") else { break };
+            items.push(item.trim().trim_matches(|c| c == '"' || c == '\'').to_string());
+            i += 1;
+        }
+        return (!items.is_empty()).then(|| items.join(", "));
+    }
+    None
+}
+
+/// Claude Code's `allowed-tools` value as entries: split on commas and
+/// whitespace outside parentheses, so `Bash(git add:*) Read` is two.
+pub fn split_allowed_tools(value: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    let mut depth = 0i32;
+    for c in value.chars() {
+        match c {
+            '(' => depth += 1,
+            ')' => depth -= 1,
+            _ => {}
+        }
+        if depth <= 0 && (c == ',' || c.is_whitespace()) {
+            if !cur.trim().is_empty() {
+                out.push(cur.trim().to_string());
+            }
+            cur.clear();
+            depth = 0;
+            continue;
+        }
+        cur.push(c);
+    }
+    if !cur.trim().is_empty() {
+        out.push(cur.trim().to_string());
+    }
+    out
+}
+
+/// A file's text when it sits inside `root` once links are followed, is a
+/// regular file and is no larger than [`MAX_SKILL_BYTES`].
+fn read_contained(file: &Path, root: &Path) -> Option<String> {
+    let real = std::fs::canonicalize(file).ok()?;
+    if !real.starts_with(root) {
+        return None;
+    }
+    let meta = std::fs::metadata(&real).ok()?;
+    if !meta.is_file() || meta.len() > MAX_SKILL_BYTES {
+        return None;
+    }
+    std::fs::read_to_string(&real).ok()
+}
+
+/// Folder entries, by name, that are directories inside `root` once links
+/// are followed (a link pointing out of the plugin is dropped).
+fn contained_dirs(dir: &Path, root: &Path) -> Vec<(String, std::path::PathBuf)> {
+    let Ok(rd) = std::fs::read_dir(dir) else { return Vec::new() };
+    let mut out: Vec<(String, std::path::PathBuf)> = rd
+        .filter_map(|e| e.ok())
+        .filter_map(|e| {
+            let real = std::fs::canonicalize(e.path()).ok()?;
+            (real.starts_with(root) && real.is_dir()).then(|| (e.file_name().to_string_lossy().into_owned(), real))
+        })
+        .collect();
+    out.sort_by(|a, b| utf16_cmp(&a.0, &b.0));
+    out
+}
+
+/// `1.10.0` above `1.9.2`: numeric parts compared as numbers, anything else as text.
+fn version_cmp(a: &str, b: &str) -> std::cmp::Ordering {
+    let parts = |s: &str| -> Vec<String> { s.split(['.', '-', '+']).map(str::to_string).collect() };
+    let (pa, pb) = (parts(a), parts(b));
+    for i in 0..pa.len().max(pb.len()) {
+        let (x, y) = (pa.get(i).map(String::as_str).unwrap_or("0"), pb.get(i).map(String::as_str).unwrap_or("0"));
+        let ord = match (x.parse::<u64>(), y.parse::<u64>()) {
+            (Ok(m), Ok(n)) => m.cmp(&n),
+            _ => x.cmp(y),
+        };
+        if ord != std::cmp::Ordering::Equal {
+            return ord;
+        }
+    }
+    std::cmp::Ordering::Equal
+}
+
+fn valid_name(name: &str) -> bool {
+    static NAME: OnceLock<Regex> = OnceLock::new();
+    re(&NAME, r"^[a-z0-9._-]+$", "i").find(name).is_some()
+}
+
+/// The plugins `~/.claude/settings.json` turns on: `(plugin, marketplace)`.
+fn enabled_plugins(home: &str) -> Vec<(String, String)> {
+    let file = path::join(&[home, ".claude", "settings.json"]);
+    let Some(settings) = std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()) else {
+        return Vec::new();
+    };
+    let Some(map) = settings.get("enabledPlugins").and_then(Value::as_object) else { return Vec::new() };
+    let mut out: Vec<(String, String)> = map
+        .iter()
+        .filter(|(_, on)| on.as_bool() == Some(true))
+        .filter_map(|(k, _)| {
+            let (plugin, market) = k.split_once('@')?;
+            (valid_name(plugin) && valid_name(market)).then(|| (plugin.to_string(), market.to_string()))
+        })
+        .collect();
+    out.sort();
+    out
+}
+
+/// One plugin skill or command as a runnable skill, `<plugin>:<name>`.
+#[allow(clippy::too_many_arguments)]
+fn plugin_def(
+    plugin: &str,
+    market: &str,
+    version: &str,
+    root: &Path,
+    kind: &str,
+    name: &str,
+    raw: &str,
+    dir: &Path,
+) -> Option<Value> {
+    let (fm_name, description, body) = parse_skill_markdown(raw);
+    if body.is_empty() {
+        return None;
+    }
+    // A skill names itself; a command is its file name.
+    let name = match (kind, fm_name) {
+        ("skill", Some(n)) if valid_name(&n) => n,
+        _ => name.to_string(),
+    };
+    if !valid_name(&name) {
+        return None;
+    }
+    let id = format!("{plugin}:{name}");
+    let root_s = root.to_string_lossy().into_owned();
+    let template =
+        if kind == "skill" { skill_template(&id, Some(&dir.to_string_lossy()), &body) } else { body.clone() };
+    let allowed: Vec<String> =
+        frontmatter_value(raw, "allowed-tools").map(|v| split_allowed_tools(&v)).unwrap_or_default();
+    let mut def = json!({
+        "id": id,
+        "name": id,
+        "description": description.unwrap_or_else(|| first_line(&body)),
+        "template": template,
+        "category": "Imported",
+        "source": "plugin",
+        "origin": {
+            "tool": "claude-plugin",
+            "scope": "user",
+            "dir": dir.to_string_lossy(),
+            "plugin": plugin,
+            "marketplace": market,
+            "version": version,
+            "kind": kind,
+        },
+        "pluginRoot": root_s,
+        "allowedTools": allowed,
+        "workflow": {
+            "nodes": [
+                { "id": "t", "kind": "trigger", "label": format!("/{id}"), "detail": "Skill invoked" },
+                { "id": "agent", "kind": "agent", "label": if kind == "skill" { "Follow SKILL.md" } else { "Run the command" }, "detail": format!("From the {plugin} plugin") },
+                { "id": "out", "kind": "output", "label": "Deliverable" },
+            ],
+            "edges": [{ "from": "t", "to": "agent" }, { "from": "agent", "to": "out" }],
+        },
+    });
+    if let Some(hint) = frontmatter_value(raw, "argument-hint").filter(|h| !h.is_empty()) {
+        def["argumentHint"] = json!(hint);
+    }
+    Some(def)
+}
+
+/// Claude Code plugin skills and commands: for each plugin enabled in
+/// `~/.claude/settings.json`, its installed version with the highest
+/// `.claude-plugin/plugin.json` version under
+/// `~/.claude/plugins/cache/<marketplace>/<plugin>/`, then `skills/*/SKILL.md`
+/// and `commands/*.md` as `<plugin>:<name>` (a skill wins over a command of
+/// the same name). Read only; links out of the plugin folder are not followed.
+pub fn plugin_skills(home: &str) -> Vec<Value> {
+    let cache = Path::new(home).join(".claude").join("plugins").join("cache");
+    let mut out = Vec::new();
+    for (plugin, market) in enabled_plugins(home) {
+        let Ok(folder) = std::fs::canonicalize(cache.join(&market).join(&plugin)) else { continue };
+        let mut versions: Vec<(String, std::path::PathBuf)> = contained_dirs(&folder, &folder)
+            .into_iter()
+            .filter(|(n, _)| !n.starts_with('.'))
+            .map(|(n, dir)| {
+                let manifest = read_contained(&dir.join(".claude-plugin").join("plugin.json"), &dir)
+                    .and_then(|t| serde_json::from_str::<Value>(&t).ok());
+                let v =
+                    manifest.as_ref().and_then(|m| m.get("version")).and_then(Value::as_str).unwrap_or(&n).to_string();
+                (v, dir)
+            })
+            .collect();
+        versions.sort_by(|a, b| version_cmp(&a.0, &b.0).then_with(|| a.1.cmp(&b.1)));
+        let Some((version, root)) = versions.pop() else { continue };
+        let mut names: Vec<String> = Vec::new();
+        let mut push = |def: Option<Value>| {
+            if let Some(d) = def {
+                let id = d["id"].as_str().unwrap_or_default().to_lowercase();
+                if !names.contains(&id) {
+                    names.push(id);
+                    out.push(d);
+                }
+            }
+        };
+        for (dir_name, dir) in contained_dirs(&root.join("skills"), &root) {
+            let Some(raw) = read_contained(&dir.join("SKILL.md"), &root) else { continue };
+            push(plugin_def(&plugin, &market, &version, &root, "skill", &dir_name, &raw, &dir));
+        }
+        let commands = root.join("commands");
+        let mut files: Vec<(String, std::path::PathBuf)> = std::fs::read_dir(&commands)
+            .into_iter()
+            .flatten()
+            .filter_map(|e| e.ok())
+            .filter_map(|e| {
+                let name = e.file_name().to_string_lossy().into_owned();
+                name.strip_suffix(".md").map(|stem| (stem.to_string(), e.path()))
+            })
+            .collect();
+        files.sort_by(|a, b| utf16_cmp(&a.0, &b.0));
+        for (stem, file) in files {
+            let Some(raw) = read_contained(&file, &root) else { continue };
+            push(plugin_def(&plugin, &market, &version, &root, "command", &stem, &raw, &root));
+        }
+    }
+    out
+}
+
+/// Every skill a workflow's skill step can run, in precedence order (the
+/// first of a name wins): built-in, Nekko installs, other tools' `SKILL.md`
+/// folders, then Claude Code plugin skills and commands. Each carries its
+/// `source` (`builtin`, `installed`, `external`, `plugin`); an external or
+/// plugin skill also its `allowedTools` from `allowed-tools`, and a plugin's
+/// its `pluginRoot`.
+pub fn resolve_skill_defs(data_dir: &Path, home: &str, project_roots: &[String]) -> Vec<Value> {
+    let builtin: Vec<Value> = data()["builtin"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|s| s.get("kind").and_then(Value::as_str) != Some("goal"))
+        .cloned()
+        .collect();
+    let external: Vec<Value> = external_skills(data_dir, home, project_roots)
+        .into_iter()
+        .map(|mut s| {
+            let file = s.pointer("/origin/dir").and_then(Value::as_str).map(|d| path::join(&[d, "SKILL.md"]));
+            let allowed = file
+                .and_then(|f| nodefs::read_utf8(&f).ok())
+                .and_then(|raw| frontmatter_value(&raw, "allowed-tools"))
+                .map(|v| split_allowed_tools(&v))
+                .unwrap_or_default();
+            s["allowedTools"] = json!(allowed);
+            s
+        })
+        .collect();
+    let lists = [
+        (builtin, "builtin"),
+        (installed_skill_defs(data_dir), "installed"),
+        (external, "external"),
+        (plugin_skills(home), "plugin"),
+    ];
+    let mut seen = std::collections::HashSet::new();
+    let mut out = Vec::new();
+    for (list, source) in lists {
+        for mut s in list {
+            if !seen.insert(show(s.get("name")).to_lowercase()) {
+                continue;
+            }
+            s["source"] = json!(source);
+            out.push(s);
+        }
+    }
+    out
+}
+
 /// `runnableSkills(SKILLS, listInstalledSkillDefs(), externalSkills())`: every
 /// skill a chat can run, built-ins first, then installs, then other tools'
 /// (the first of a name wins); goals are not runnable this way.

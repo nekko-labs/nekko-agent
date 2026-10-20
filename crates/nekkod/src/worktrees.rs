@@ -101,7 +101,8 @@ fn no_window(cmd: &mut Command) {
 }
 
 /// Run a command to completion with a time limit, feeding `input` to stdin.
-fn run(
+/// Git never asks for credentials here: nobody is at a terminal to answer.
+pub(crate) fn run(
     program: &str,
     args: &[&str],
     cwd: &str,
@@ -114,6 +115,9 @@ fn run(
         .stdin(if input.is_some() { Stdio::piped() } else { Stdio::null() })
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    if program == "git" {
+        cmd.env("GIT_TERMINAL_PROMPT", "0");
+    }
     no_window(&mut cmd);
     let mut child = cmd.spawn().map_err(|e| {
         if e.kind() == std::io::ErrorKind::NotFound {

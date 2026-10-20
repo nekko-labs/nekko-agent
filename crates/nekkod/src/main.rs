@@ -40,6 +40,7 @@ mod messaging;
 mod model_server;
 mod native;
 mod oauth;
+mod pr_checkouts;
 mod procgroup;
 mod providers;
 mod remote;

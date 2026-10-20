@@ -297,7 +297,8 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
         "skills:installed" | "skills:targets" | "skill:install" | "skill:uninstall" | "skills:external"
         | "skills:runnable" | "workflow:skillDefs" => {
             let Some(dir) = ws.data_dir.clone() else { return Err(format!("{channel} needs the data directory")) };
-            let roots: Vec<String> = if matches!(channel, "skills:external" | "skills:runnable") {
+            let roots: Vec<String> = if matches!(channel, "skills:external" | "skills:runnable" | "workflow:skillDefs")
+            {
                 folders(ctx).await.iter().filter_map(|w| w.get("path").map(nekko_js::display)).collect()
             } else {
                 Vec::new()
@@ -486,7 +487,7 @@ async fn remove_folder(ctx: &Ctx, id: &str) -> Result<Value, String> {
 }
 
 /// `os.homedir()`.
-fn home_dir() -> String {
+pub(crate) fn home_dir() -> String {
     std::env::var(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap_or_default()
 }
 
@@ -504,7 +505,7 @@ fn skills_route(dir: &std::path::Path, channel: &str, args: &[Value], roots: &[S
         }
         "skills:external" => Ok(Value::Array(skills::external_skills(dir, &home, roots))),
         "skills:runnable" => Ok(Value::Array(skills::runnable_skills(dir, &home, roots))),
-        "workflow:skillDefs" => Ok(Value::Array(skills::installed_skill_defs(dir))),
+        "workflow:skillDefs" => Ok(Value::Array(skills::resolve_skill_defs(dir, &home, roots))),
         other => Err(format!("{other} is not a skills channel")),
     }
 }

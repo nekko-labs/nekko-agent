@@ -229,6 +229,24 @@ pub fn read_only_violation(words: &[String]) -> Option<&'static str> {
     None
 }
 
+/// What an untrusted pull request's run keeps of an allowlist: the file
+/// readers and `gh`/`git` commands (held to reads by [`read_only_violation`]).
+/// Everything that could run the PR's own code goes: any other command
+/// (package managers, build tools, linters, scripts), writes, the web, MCP.
+pub fn untrusted_allowlist(allowed: &[String]) -> Vec<String> {
+    allowed
+        .iter()
+        .filter(|entry| match parse_allowed(entry) {
+            Some((tool, None)) => READ_TOOLS.contains(&tool.as_str()),
+            Some((tool, Some((prefix, _)))) => {
+                tool == "bash" && matches!(prefix.first().map(String::as_str), Some("gh" | "git"))
+            }
+            None => false,
+        })
+        .cloned()
+        .collect()
+}
+
 /// `commandAllowed(command, allowed)`: `Ok(())` or the reason.
 pub fn command_allowed(command: &str, allowed: &[String]) -> Result<(), String> {
     let words = match tokenize_command(command) {
@@ -291,4 +309,28 @@ pub fn tool_decision(session: &Value, call: &Value) -> Value {
         };
     }
     json!({ "kind": "auto" })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_untrusted_pr_keeps_only_reads() {
+        let nyaa: Vec<String> = ["Bash(gh:*)", "Bash(git:*)", "Bash(pnpm:*)", "Bash(npm:*)", "Read", "Grep", "Glob"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert_eq!(untrusted_allowlist(&nyaa), ["Bash(gh:*)", "Bash(git:*)", "Read", "Grep", "Glob"]);
+        let wide: Vec<String> = ["Bash", "Bash(*)", "Write", "Edit", "WebFetch", "mcp__x", "Bash(make test)", "LS"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert_eq!(untrusted_allowlist(&wide), ["LS"]);
+        // What is left still holds gh and git to reads.
+        let left = untrusted_allowlist(&nyaa);
+        assert!(command_allowed("gh pr diff 12", &left).is_ok());
+        assert!(command_allowed("pnpm audit", &left).is_err());
+        assert!(command_allowed("git push", &left).is_err());
+    }
 }

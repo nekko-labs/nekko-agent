@@ -107,6 +107,10 @@ struct Fake {
     /// The settings each poll got, and what the next polls return (none: no poll).
     polls: Mutex<Vec<Value>>,
     poll_results: Mutex<VecDeque<Value>>,
+    /// PR checkouts made (`[folder, number, run]`) and removed, and a refusal to make one.
+    checkouts: Mutex<Vec<Value>>,
+    removed: Mutex<Vec<Value>>,
+    checkout_error: Mutex<Option<String>>,
 }
 
 impl WorkflowHost for Fake {
@@ -188,6 +192,10 @@ impl WorkflowHost for Fake {
             vec![
                 json!({ "id": "review", "name": "Code Review", "template": "  Review the diff.  " }),
                 json!({ "id": "empty", "name": "Empty", "template": "   " }),
+                json!({ "id": "nyaa:cr", "name": "nyaa:cr", "source": "plugin", "pluginRoot": "/plugins/nyaa/1.0.0",
+                    "origin": { "dir": "/plugins/nyaa/1.0.0" },
+                    "template": "Review PR $ARGUMENTS with ${CLAUDE_PLUGIN_ROOT}/skills/nyaa/references/rules.md.",
+                    "allowedTools": ["Bash(gh:*)", "Bash(git:*)", "Bash(pnpm:*)", "Read", "Grep", "Glob"] }),
             ]
         })
     }
@@ -229,6 +237,20 @@ impl WorkflowHost for Fake {
     }
     fn resolve_path(&self, root: &str, rel: &str) -> String {
         if rel.starts_with('/') { rel.to_string() } else { format!("{root}/{rel}") }
+    }
+    fn pr_checkout(&self, folder: &str, number: &str, run_id: &str) -> BoxFut<'_, Result<Value, String>> {
+        self.checkouts.lock().unwrap().push(json!([folder, number, run_id]));
+        let r = match self.checkout_error.lock().unwrap().clone() {
+            Some(e) => Err(e),
+            None => Ok(
+                json!({ "path": format!("/checkouts/{run_id}"), "root": format!("/checkouts/{run_id}"), "sourceRoot": folder }),
+            ),
+        };
+        Box::pin(async move { r })
+    }
+    fn remove_pr_checkout(&self, checkout: &Value) -> BoxFut<'_, ()> {
+        self.removed.lock().unwrap().push(checkout.clone());
+        Box::pin(async {})
     }
 }
 
@@ -566,5 +588,144 @@ async fn an_allowlist_workflow_sets_each_steps_tools_before_it_runs() {
         saves[1]["fields"]["disabledTools"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
     assert!(!off.contains(&"read_file") && !off.contains(&"bash") && off.contains(&"write_file"), "{off:?}");
     assert_eq!(saves[2]["fields"]["allowedTools"], json!([]));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+fn pr_event(assoc: &str, fork: bool) -> Value {
+    json!({ "kind": "connector", "connector": "github", "event": "pr_opened", "repo": "o/r",
+        "payload": { "number": 42, "sha": "abc", "author_association": assoc, "is_fork": fork } })
+}
+
+fn review_workflow(extra: Value) -> Value {
+    let mut wf = json!({ "name": "Review PRs", "providerId": "local", "modelId": "m", "prCheckout": true,
+        "toolAccess": "allowlist",
+        "triggers": [{ "id": "t", "kind": "connector", "connector": "github", "event": "pr_opened" }],
+        "steps": [{ "id": "review", "name": "Review", "kind": "skill", "run": "nyaa:cr", "args": "{{trigger.number}}" }] });
+    for (k, v) in extra.as_object().unwrap() {
+        wf[k] = v.clone();
+    }
+    wf
+}
+
+/// Every save of the run's chat, in order.
+fn saves(fake: &Fake) -> Vec<Value> {
+    fake.log.lock().unwrap().iter().filter(|e| e.get("save").is_some()).map(|e| e["fields"].clone()).collect()
+}
+
+#[tokio::test]
+async fn a_skill_step_fills_its_arguments_and_runs_under_its_skills_allowlist() {
+    let (engine, fake, dir) = engine_with("skill-args", local_settings());
+    fake.replies.lock().unwrap().push_back(json!({ "reply": "LGTM" }));
+    let mut wf = review_workflow(json!({ "prCheckout": false }));
+    wf["steps"][0]["args"] = json!("42 --strict");
+    let wf = engine.create(&wf).await.unwrap();
+    let run = engine.run(wf["id"].as_str().unwrap()).await.unwrap();
+    assert_eq!(run["status"], "success", "{run}");
+    let text = fake.turns.lock().unwrap()[0]["text"].as_str().unwrap().to_string();
+    assert!(text.contains("Review PR 42 --strict with /plugins/nyaa/1.0.0/skills/nyaa/references/rules.md."), "{text}");
+    assert!(!text.contains("$ARGUMENTS") && !text.contains("${CLAUDE_PLUGIN_ROOT}"), "{text}");
+    let last = saves(&fake).last().cloned().unwrap();
+    assert_eq!(last["allowedTools"], json!(["Bash(gh:*)", "Bash(git:*)", "Bash(pnpm:*)", "Read", "Grep", "Glob"]));
+    assert_eq!(last["readOnlyFolders"], json!(["/plugins/nyaa/1.0.0"]));
+    // A step that lists its own tools narrows the skill's.
+    let mut wf2 = review_workflow(json!({ "prCheckout": false, "name": "Narrow" }));
+    wf2["steps"][0]["allowedTools"] = json!(["Read"]);
+    let wf2 = engine.create(&wf2).await.unwrap();
+    fake.replies.lock().unwrap().push_back(json!({ "reply": "ok" }));
+    engine.run(wf2["id"].as_str().unwrap()).await.unwrap();
+    assert_eq!(saves(&fake).last().unwrap()["allowedTools"], json!(["Read"]));
+    // No match names the skill it looked for.
+    let wf3 = engine
+        .create(&json!({ "name": "Missing", "providerId": "local", "modelId": "m",
+            "steps": [{ "id": "s", "name": "s", "kind": "skill", "run": "nope:x" }] }))
+        .await
+        .unwrap();
+    let run = engine.run(wf3["id"].as_str().unwrap()).await.unwrap();
+    assert!(run["message"].as_str().unwrap().contains("No skill matches \"nope:x\""), "{run}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test]
+async fn a_trusted_pr_is_reviewed_in_its_own_checkout_which_is_removed_after() {
+    let (engine, fake, dir) = engine_with("pr-trusted", local_settings());
+    fake.replies.lock().unwrap().push_back(json!({ "reply": "verdict" }));
+    engine.create(&review_workflow(json!({}))).await.unwrap();
+    let runs = engine.dispatch_event(&pr_event("MEMBER", false)).await;
+    assert_eq!(runs[0]["status"], "success", "{runs:?}");
+    let checkouts = fake.checkouts.lock().unwrap().clone();
+    assert_eq!(checkouts, vec![json!(["/work", "42", runs[0]["id"]])]);
+    let first = saves(&fake)[0].clone();
+    assert_eq!(first["gitIsolation"], true);
+    assert_eq!(first["gitWorktrees"]["w"]["path"], json!(format!("/checkouts/{}", runs[0]["id"].as_str().unwrap())));
+    // Trusted: the skill's tools as they are, package managers included.
+    let text = fake.turns.lock().unwrap()[0]["text"].as_str().unwrap().to_string();
+    assert!(text.contains("Review PR 42 with"), "{text}");
+    assert!(!text.contains("untrusted"), "{text}");
+    assert!(saves(&fake).iter().any(|f| f["allowedTools"].to_string().contains("pnpm")));
+    assert_eq!(fake.removed.lock().unwrap().len(), 1);
+    assert_eq!(saves(&fake).last().unwrap()["gitWorktrees"], json!({}));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test]
+async fn an_untrusted_pr_never_gets_tools_that_run_its_code() {
+    for (name, event, access) in [
+        ("fork", pr_event("MEMBER", true), "allowlist"),
+        ("outsider", pr_event("CONTRIBUTOR", false), "allowlist"),
+        ("workspace-access", pr_event("NONE", false), "workspace"),
+    ] {
+        let (engine, fake, dir) = engine_with(&format!("pr-untrusted-{name}"), local_settings());
+        fake.replies.lock().unwrap().push_back(json!({ "reply": "lint/audit skipped: untrusted PR" }));
+        engine.create(&review_workflow(json!({ "toolAccess": access }))).await.unwrap();
+        let runs = engine.dispatch_event(&event).await;
+        assert_eq!(runs[0]["status"], "success", "{name}: {runs:?}");
+        let all = saves(&fake);
+        // From the chat's first save on, nothing but reads.
+        assert_eq!(all[0]["toolAccess"], "allowlist", "{name}");
+        let step = all.iter().rev().find(|f| f.get("readOnlyFolders").is_some()).unwrap();
+        assert_eq!(step["toolAccess"], "allowlist", "{name}");
+        assert_eq!(step["allowedTools"], json!(["Bash(gh:*)", "Bash(git:*)", "Read", "Grep", "Glob"]), "{name}");
+        let off: Vec<&str> = step["disabledTools"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+        assert!(off.contains(&"write_file") && !off.contains(&"bash"), "{name}: {off:?}");
+        let text = fake.turns.lock().unwrap()[0]["text"].as_str().unwrap().to_string();
+        assert!(text.contains("lint/audit skipped: untrusted PR"), "{name}: {text}");
+        assert_eq!(fake.removed.lock().unwrap().len(), 1, "{name}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[tokio::test]
+async fn the_checkout_is_removed_when_the_run_fails_or_is_cancelled() {
+    let (engine, fake, dir) = engine_with("pr-fail", local_settings());
+    *fake.engine.lock().unwrap() = Some(Arc::downgrade(&engine));
+    engine.create(&review_workflow(json!({}))).await.unwrap();
+    fake.replies.lock().unwrap().push_back(json!({ "throws": "model down" }));
+    let runs = engine.dispatch_event(&pr_event("OWNER", false)).await;
+    assert_eq!(runs[0]["status"], "failure");
+    assert_eq!(fake.removed.lock().unwrap().len(), 1);
+    fake.replies.lock().unwrap().push_back(json!({ "cancel": true, "reply": "" }));
+    let runs = engine.dispatch_event(&pr_event("OWNER", false)).await;
+    assert_eq!(runs[0]["status"], "cancelled");
+    assert_eq!(fake.removed.lock().unwrap().len(), 2);
+    // A checkout that cannot be made fails the run before any turn.
+    *fake.checkout_error.lock().unwrap() = Some("no such ref".into());
+    let turns = fake.turns.lock().unwrap().len();
+    let runs = engine.dispatch_event(&pr_event("OWNER", false)).await;
+    assert_eq!(runs[0]["status"], "failure");
+    assert!(runs[0]["message"].as_str().unwrap().contains("could not check out PR #42: no such ref"), "{runs:?}");
+    assert_eq!(fake.turns.lock().unwrap().len(), turns);
+    assert_eq!(fake.removed.lock().unwrap().len(), 2);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test]
+async fn without_pr_checkout_a_pr_run_uses_the_workspace_as_before() {
+    let (engine, fake, dir) = engine_with("pr-off", local_settings());
+    fake.replies.lock().unwrap().push_back(json!({ "reply": "ok" }));
+    engine.create(&review_workflow(json!({ "prCheckout": false }))).await.unwrap();
+    let runs = engine.dispatch_event(&pr_event("NONE", true)).await;
+    assert_eq!(runs[0]["status"], "success");
+    assert!(fake.checkouts.lock().unwrap().is_empty());
+    assert!(saves(&fake)[0].get("gitWorktrees").is_none());
     let _ = std::fs::remove_dir_all(&dir);
 }
