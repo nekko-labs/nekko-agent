@@ -3967,29 +3967,21 @@
    "error": "Not allowed from a paired phone (value-invalid): chat id"
   },
   {
-   "channel": "pr:action",
+   "channel": "pr:continueStack",
    "args": [
     "https://github.com/o/r/pull/1",
     "merge"
    ],
    "calls": [],
-   "error": "Not allowed from a paired phone (channel-denied): pr:action"
+   "error": "Not allowed from a paired phone (channel-denied): pr:continueStack"
   },
   {
-   "channel": "pr:diff",
+   "channel": "pr:linkStack",
    "args": [
     "https://github.com/o/r/pull/1"
    ],
    "calls": [],
-   "error": "Not allowed from a paired phone (channel-denied): pr:diff"
-  },
-  {
-   "channel": "workspace:gitStatus",
-   "args": [
-    "w1"
-   ],
-   "calls": [],
-   "error": "Not allowed from a paired phone (channel-denied): workspace:gitStatus"
+   "error": "Not allowed from a paired phone (channel-denied): pr:linkStack"
   },
   {
    "channel": "usage:summary",

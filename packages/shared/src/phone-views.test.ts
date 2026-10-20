@@ -65,9 +65,10 @@ describe('the phone views beyond the chat', () => {
     expect(seen).toEqual([['providers:list', []]]);
   });
 
-  it('keep git, files, terminal commands, the browser and automation editing off the phone', () => {
+  it('keep files, terminal commands, the browser, stack calls and automation editing off the phone', () => {
+    // Git opened with IO-33 FA-2 (phone-git.test.ts); the stack calls did not.
     for (const channel of [
-      'pr:action', 'pr:diff', 'pr:continueStack', 'workspace:gitStatus', 'file:read', 'file:write', 'dir:list',
+      'pr:continueStack', 'pr:linkStack', 'file:read', 'file:write', 'dir:list',
       'terminal:run', 'shell:openPath', 'task:create', 'task:update', 'task:delete', 'workflow:create',
       'workflow:update', 'workflow:delete', 'workflow:cancel', 'workflow:event', 'changes:accept',
     ]) {

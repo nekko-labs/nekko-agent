@@ -419,6 +419,9 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             None => Err("voice needs the data directory".into()),
         },
         c if ctx.workspace.serves(c) => crate::workspace::route(ctx, c, &args).await,
+        c if crate::logs::CHANNELS.contains(&c) && ctx.workspace.data_dir().is_some() => {
+            crate::logs::route(ctx, c, &args).await
+        }
         c if crate::automation::TASK_CHANNELS.contains(&c) && ctx.automation.owns_tasks() => {
             ctx.automation.route(c, &args).await
         }
@@ -587,6 +590,9 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
         all.extend_from_slice(crate::context::CHANNELS);
     }
     all.extend(ctx.workspace.owned());
+    if ctx.workspace.data_dir().is_some() {
+        all.extend_from_slice(crate::logs::CHANNELS);
+    }
     if ctx.automation.owns_tasks() {
         all.extend_from_slice(crate::automation::TASK_CHANNELS);
     }

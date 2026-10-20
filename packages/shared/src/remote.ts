@@ -86,8 +86,9 @@ export interface RemotePairing {
  * new from the computer (or the other way round).
  *
  * 2 (2026-10-19): `push:test`, notification kinds and dismissal frames.
+ * 3 (2026-10-20): git from a phone (IO-33 FA-2), the first Change actions.
  */
-export const REMOTE_PROTOCOL_VERSION = 2;
+export const REMOTE_PROTOCOL_VERSION = 3;
 
 /** First sealed frame a device sends after connecting. */
 export interface RemoteHello {

@@ -33,12 +33,15 @@ const code = (fn: () => unknown) => {
   return 'ok';
 };
 
+/** What phones could call before IO-33: in neither class, so they decide as before. */
+const BEFORE_IO33 = PHONE_CHANNELS.filter(
+  (c) => !PHONE_READ_CHANNELS.includes(c) && !PHONE_CHANGE_CHANNELS.includes(c) && !PHONE_TOKEN_CHANNELS.includes(c),
+);
+
 describe('phone access classes', () => {
   it('leaves every channel phones had before IO-33 in neither class', () => {
-    const classed = new Set([...PHONE_READ_CHANNELS, ...PHONE_CHANGE_CHANNELS, ...PHONE_TOKEN_CHANNELS]);
-    const before = PHONE_CHANNELS.filter((c) => !classed.has(c));
-    expect(before.length).toBe(30);
-    for (const c of before) expect(phoneChannelClass(c), c).toBeNull();
+    expect(BEFORE_IO33).toHaveLength(30);
+    for (const c of BEFORE_IO33) expect(phoneChannelClass(c), c).toBeNull();
   });
 
   it('only classes channels a phone may call, each in one class', () => {
@@ -58,7 +61,7 @@ describe('phone access classes', () => {
     // The lists are empty until the feature PRs: check the rule with the
     // classes the TS reports, so it holds whatever they contain.
     const all = { read: true, change: true };
-    for (const c of PHONE_CHANNELS.filter((c) => phoneChannelClass(c) === null)) {
+    for (const c of BEFORE_IO33) {
       expect(code(() => checkPhoneAccess(c, { read: false, change: false })), c).toBe('ok');
       expect(code(() => checkPhoneAccess(c, all)), c).toBe('ok');
     }
@@ -106,9 +109,9 @@ describe('the always-denied list', () => {
     }
   });
 
-  it('still refuses files, git and the other terminal channels until their feature PRs', () => {
+  it('still refuses files, the stack calls and the other terminal channels until their feature PRs', () => {
     for (const c of [
-      'file:read', 'file:write', 'dir:list', 'pr:action', 'pr:diff', 'workspace:gitStatus',
+      'file:read', 'file:write', 'dir:list', 'pr:continueStack', 'pr:linkStack',
       'terminal:run', 'terminal:update', 'terminal:shells', 'terminal:snapshot', 'terminals:list:native',
       'terminal:attach', 'terminal:detach',
     ]) {

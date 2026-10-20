@@ -1989,6 +1989,8 @@ dependencies = [
  "regress",
  "reqwest",
  "serde_json",
+ "sha2",
+ "tempfile",
  "tokio",
 ]
 
@@ -2040,6 +2042,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "socket2",
+ "tempfile",
  "tokio",
  "tokio-tungstenite 0.27.0",
  "url",
