@@ -47,6 +47,7 @@ class ChatListFiles(context: Context) : ChatListCache {
     private fun name(computerId: String) = computerId.filter { it.isLetterOrDigit() || it == '-' }.ifEmpty { "computer" }
 
     companion object {
-        val ENABLED = PhonePrefs.boolean("keep_chat_list", default = false)
+        // On unless the user turned it off (OF-9): only the switch writes the key, so an install that never touched it reads the default.
+        val ENABLED = PhonePrefs.boolean("keep_chat_list", default = true)
     }
 }

@@ -158,9 +158,20 @@ public final class ComputersStore {
     /// When the list on screen is the phone's saved copy (not yet re-read from
     /// the computer), when it was saved; nil once the computer has answered.
     public private(set) var savedListAt: Int64?
-    /// Set while *Keep the chat list when offline* is on; nil keeps nothing.
+    /// Set while *Keep the chat list when offline* is on (the default); nil keeps nothing.
     public var chatListCache: ChatListCache? {
         didSet { if chatListCache == nil { savedListAt = nil } else { saveList() } }
+    }
+    /// The active computer's recently opened chats, kept to read offline (OF-5).
+    public let transcripts: SavedTranscripts
+    /// Set while *Keep recent chats to read offline* is on (the default); nil
+    /// keeps none. Turning it off deletes every saved chat, on every computer.
+    public var transcriptCache: TranscriptCache? {
+        didSet {
+            guard transcriptCache !== oldValue else { return }
+            if transcriptCache == nil { oldValue?.removeAll() }
+            transcripts.use(transcriptCache, computerId: offlineComputer)
+        }
     }
     private var loggedComputer: String?
     /// The active computer's drafts (every chat's composer and New chat's), kept on disk.
@@ -217,6 +228,7 @@ public final class ComputersStore {
                 draftDebounce: TimeInterval = 0.5,
                 outboxPoll: TimeInterval = 0.5,
                 outboxConfirmTimeout: TimeInterval = 45,
+                transcripts: SavedTranscripts? = nil,
                 probeNetwork: ProbeNetwork = PosixProbeNetwork()) {
         self.store = store
         self.probeNetwork = probeNetwork
@@ -230,6 +242,7 @@ public final class ComputersStore {
         self.summariesDebounce = summariesDebounce
         self.modelListTimeout = modelListTimeout
         self.offlineFiles = offlineFiles
+        self.transcripts = transcripts ?? SavedTranscripts(now: now)
         let drafts = DraftStore(files: offlineFiles, debounce: draftDebounce)
         self.drafts = drafts
         var reach: () -> Caller? = { nil }
@@ -313,9 +326,11 @@ public final class ComputersStore {
         if wasActive {
             drafts.load(nil)
             outbox.load(nil)
+            transcripts.load(nil)
             offlineComputer = nil
         }
         offlineFiles?.remove(id)
+        transcriptCache?.removeComputer(id)
         computers.removeAll { $0.id == id }
         saveIndex()
         if wasActive {
@@ -339,6 +354,7 @@ public final class ComputersStore {
         if offlineComputer != id {
             drafts.load(id)
             outbox.load(id)
+            transcripts.load(id)
             offlineComputer = id
         }
         activeId = id
@@ -616,6 +632,8 @@ public final class ComputersStore {
             summariesLoaded = true
             savedListAt = nil
             saveList()
+            // A chat deleted on the computer (or by another device) leaves no copy here.
+            transcripts.keepOnly(Set((r.0.array ?? []).compactMap { $0.str("id") }))
         } catch {
             if client === c {
                 summariesLoading = false
@@ -687,6 +705,7 @@ public final class ComputersStore {
     public func deleteChat(_ sessionId: String) async throws {
         _ = try await remote().call(Channels.sessionDelete, [.string(sessionId)])
         summaries.removeAll { $0.id == sessionId }
+        transcripts.remove(sessionId)
         activity[sessionId] = nil
     }
 

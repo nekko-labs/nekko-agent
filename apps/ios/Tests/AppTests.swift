@@ -242,6 +242,33 @@ final class SavedListNoteTests: XCTestCase {
         let old = SavedListNote.text(savedAt: Int64((now.timeIntervalSince1970 - 3 * 86_400) * 1000), computer: "Mac", now: now, calendar: cal)
         XCTAssertGreaterThan(old.count, today.count, "an older list also names the day")
     }
+
+    func testASavedChatSaysItIsACopy() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let text = SavedListNote.copy(savedAt: Int64((now.timeIntervalSince1970 - 600) * 1000), computer: "Mac", now: now,
+                                      calendar: Calendar(identifier: .gregorian))
+        XCTAssertTrue(text.hasPrefix("Saved copy from "))
+        XCTAssertTrue(text.hasSuffix("It updates when Mac answers."))
+    }
+}
+
+/// OF-9 and OF-5: both offline switches are on unless the user turned them off.
+@MainActor
+final class OfflinePrefsTests: XCTestCase {
+    func testOnForANewInstallAndOffWhenTheUserTurnedThemOff() throws {
+        let suite = "com.nekko.native.ios.tests.prefs.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let fresh = Prefs(defaults: defaults)
+        XCTAssertTrue(fresh.keepChatList, "on for an install that never touched the switch")
+        XCTAssertTrue(fresh.keepTranscripts)
+        XCTAssertNil(defaults.object(forKey: "keepChatList"), "reading the default stores nothing")
+        fresh.keepChatList = false
+        fresh.keepTranscripts = false
+        let again = Prefs(defaults: defaults)
+        XCTAssertFalse(again.keepChatList, "a deliberate off stays off")
+        XCTAssertFalse(again.keepTranscripts)
+    }
 }
 
 /// TS-4: Open Tailscale. Without `tailscale` in LSApplicationQueriesSchemes,

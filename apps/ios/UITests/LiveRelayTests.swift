@@ -239,6 +239,21 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertEqual(sent.count, 1, "delivered exactly once")
         XCTAssertEqual(replies.count, 2, "answered once")
         attach(app, "offline-2-delivered")
+
+        // Read offline and instant paint (OF-5, OF-6, on by default): the relay
+        // goes away and the app starts cold. The list and the chat are on screen
+        // from the phone's saved copies, marked as saved, before any answer.
+        relay(ctl, "stop")
+        app.terminate()
+        app.launchArguments = ["-appLock", "NO", "-theme", "light"]
+        app.launch()
+        XCTAssertTrue(app.descendants(matching: .any)["chats.savedList"].waitForExistence(timeout: 10), "the saved list, at once")
+        let row = app.descendants(matching: .any).matching(identifier: "chats.row").firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        row.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["chat.savedCopy"].waitForExistence(timeout: 5), "the saved copy, marked as one")
+        XCTAssertTrue(app.staticTexts["Hello from your computer."].firstMatch.exists, "what the computer said, readable offline")
+        attach(app, "offline-3-saved-copy")
     }
 
     func testPairFromADeepLink() throws {
