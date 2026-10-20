@@ -95,6 +95,20 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-10
 
+### #817 agent-browser builds: no forced rebuilds, a dev profile, a per-machine cache (2026-10-19)
+Area: dev build
+Result: improvement
+Conditions: one Windows machine, 32 threads; single runs, cold and warm as labelled
+
+| Metric | Before | After |
+|---|---|---|
+| agent-browser, `npm run dev` with nothing changed | recompiled every time (about 3 min, one core) | 0.4 s (cache hit) or 0.38 s cargo no-op |
+| agent-browser, cold, dev | 3 min 21 s (`release`: fat LTO, 1 codegen unit) | 79 s (`nekko-dev`) |
+| agent-browser, a new worktree | a full cold build each time | the cached binary, 0.4 s |
+| nekkod `dev-daemon`, cold / after a one-file change | 1 min 53 s / 14 s | unchanged |
+
+Why: upstream's `build.rs` rewrote a file it watched, so cargo saw the crate as dirty on every run; the build now writes that file first with a fixed old mtime, builds a `nekko-dev` profile without fat LTO for dev and CI, and caches the binary in the common git directory so every worktree reuses it. Not improved: each worktree still compiles nekkod's ~400 crates once (about 2 min). Source: [#817](https://github.com/nekko-labs/nekko-agent/pull/817).
+
 ### Agent browser: snapshot and element refs (2026-10-18)
 Area: browser driver / agent context
 Result: mixed (half the bytes the model writes and no locating script; more to read unless scoped; no time effect)
