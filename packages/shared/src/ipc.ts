@@ -3,7 +3,7 @@
 import type { AppSettings, UsageSummary } from './settings.js';
 import type { ProviderConfig, ModelInfo } from './models.js';
 import type { Session, SendOptions, AgentEvent, PendingInput, ReplySuggestions } from './chat.js';
-import type { TerminalInfo, TerminalSnapshot, ShellOption } from './terminal.js';
+import type { TerminalInfo, TerminalSnapshot, ShellOption, SshHost } from './terminal.js';
 import type { ContextBundle } from './context.js';
 import type { MemoryEntry, MemoryScope } from './memory.js';
 import type { WorkspaceFolder, IndexStatus, SearchHit, IndexedFile } from './workspace.js';
@@ -137,6 +137,12 @@ export const IpcChannels = {
   terminalRun: 'terminal:run',
   terminalSignal: 'terminal:signal',
   terminalClose: 'terminal:close',
+  /** The last N bytes of scroll-back (64 KB by default, 512 KB at most), cut cleanly. */
+  terminalTail: 'terminal:tail',
+  /** Host aliases from the computer's ~/.ssh/config, for display. */
+  sshHosts: 'ssh:hosts',
+  /** A terminal running the system `ssh` to one of those aliases. */
+  sshOpen: 'ssh:open',
 
   contextPreview: 'context:preview',
   contextToggle: 'context:toggle',
@@ -329,6 +335,8 @@ export const IpcEvents = {
   indexProgress: 'index:progress',
   updateEvent: 'update:event',
   terminalEvent: 'terminal:event',
+  /** A terminal's remote viewers changed (`TerminalViewersEvent`). */
+  terminalViewers: 'terminal:viewers',
   changesUpdated: 'changes:updated',
   tasksUpdated: 'tasks:updated',
   trainingUpdated: 'training:updated',
@@ -620,14 +628,18 @@ export interface NekkoApi {
   /** The chats whose turn is running right now, so a screen that opens mid-run shows them working at once. */
   runningSessions(): Promise<string[]>;
 
-  /** Live terminal sessions (in-memory; they don't persist across restarts). */
-  listTerminals(): Promise<TerminalInfo[]>;
+  /** Live terminal sessions (in-memory; they don't persist across restarts); `sessionId` narrows to one chat's. */
+  listTerminals(filter?: { sessionId?: string }): Promise<TerminalInfo[]>;
   /** Shells the host detected as available to launch. */
   listShells(): Promise<ShellOption[]>;
   /** Spawn a PTY-backed shell, optionally scoped to a project / cwd / shell. */
   createTerminal(opts?: { workspaceId?: string; sessionId?: string; cwd?: string; title?: string; shell?: string; cols?: number; rows?: number }): Promise<TerminalInfo>;
-  /** Fetch current info + retained raw scrollback (for reattaching a renderer). */
-  terminalSnapshot(id: string): Promise<TerminalSnapshot | null>;
+  /** Fetch current info + retained raw scrollback (for reattaching a renderer); `maxBytes` keeps only the tail. */
+  terminalSnapshot(id: string, opts?: { maxBytes?: number }): Promise<TerminalSnapshot | null>;
+  /** Host aliases from the computer's ~/.ssh/config (display fields only). */
+  listSshHosts?(): Promise<SshHost[]>;
+  /** Open a terminal running `ssh <alias>` for a host from `listSshHosts`. */
+  openSsh?(alias: string, opts?: { cols?: number; rows?: number; sessionId?: string; workspaceId?: string }): Promise<TerminalInfo>;
   /** Update a terminal's project/order (sidebar drag-and-drop). */
   updateTerminal(id: string, patch: { workspaceId?: string | null; order?: number; title?: string }): Promise<void>;
   /** Write raw input (keystrokes) to the PTY. */
@@ -931,6 +943,8 @@ export interface NekkoApi {
   onIndexProgress(cb: (s: IndexStatus) => void): () => void;
   onUpdateEvent(cb: (u: UpdateInfo) => void): () => void;
   onTerminalEvent(cb: (e: import('./terminal.js').TerminalEvent) => void): () => void;
+  /** A terminal's remote viewers changed (a phone attached or left). */
+  onTerminalViewers?(cb: (e: import('./terminal.js').TerminalViewersEvent) => void): () => void;
   /**
    * One terminal's raw byte stream straight from the engine daemon, with
    * flow control: output arrives at most once per frame, and a flood waits
