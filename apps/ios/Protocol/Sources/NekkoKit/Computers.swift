@@ -311,6 +311,17 @@ public final class ComputersStore {
         return try await calls.call(change: channel, args, timeout: timeout)
     }
 
+    /// A Read action on the active computer (IO-33): a plain call, with the
+    /// computer's refusals (`read-off`, `channel-denied`, ...) said plainly.
+    public func call(read channel: String, _ args: [JSONValue] = [], timeout: TimeInterval? = nil) async throws -> JSONValue {
+        do {
+            return try await remote().call(channel, args, timeout: timeout)
+        } catch let e as RelayError where e.fromComputer {
+            guard let r = PhoneRefusal(e.message), let m = r.message(computer: active?.name ?? "your computer") else { throw e }
+            throw ChangeRefused(code: r.code, message: m)
+        }
+    }
+
     /// Every `agent:event` from the active computer. Returns an id for `unsubscribe`.
     public func subscribe(_ f: @escaping (AgentEvent) -> Void) -> UUID {
         let id = UUID()
