@@ -76,6 +76,17 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > and are deleted when you forget the computer. Sending prompts written offline needs this version
 > of Nekko Agent on the computer.
 >
+> **Read offline** (iPhone; the chat list on Android too): the phone keeps each computer's chat list
+> and, on iPhone, the last 20 chats you opened (up to 5 MB per computer; a very long chat keeps its
+> newest messages). Opening the app or a chat shows them at once, and while the computer can't be
+> reached they stay readable under **Saved list from 10:42** and **Saved copy from 10:42**. When the
+> computer answers, the live list and chat replace them in place. A saved chat can't be changed
+> (model, tool policy, rename, complete) until the computer is back, but what you send waits as
+> above. Photos are never kept, only how many a message had. Both are on unless you turn them off
+> in **Settings → Offline** (Android: **Settings → Connection**); turning a switch off deletes what
+> it kept. Like the drafts, the copies are encrypted until the phone is first unlocked, aren't
+> backed up, and are deleted when you forget the computer or a chat is deleted on it.
+>
 > **All your chats, grouped like the desktop** (Android): the chat list shows every chat on the
 > computer, completed ones included, in the same groups as the desktop's agent sidebar: **General**
 > first, then one group per project folder. Tap a group's name to fold it. Each group lists its

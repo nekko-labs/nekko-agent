@@ -1,4 +1,5 @@
 import Foundation
+import NekkoKit
 import Observation
 
 /// Phone-only, non-secret preferences (UserDefaults). Each is a plain stored
@@ -37,8 +38,12 @@ final class Prefs {
     /// Dictation: the computer's Whisper when installed, else this iPhone's recognizer.
     var dictationOnComputer: Bool { didSet { d.set(dictationOnComputer, forKey: "dictationOnComputer") } }
     /// Keep each computer's chat list (titles, times, folders) on this iPhone to show
-    /// while the computer is unreachable. Off by default: nothing about chats is stored.
+    /// while the computer is unreachable. On unless the user turned it off (OF-9).
+    /// Written only when the switch is flipped: the stored value is the user's choice.
     var keepChatList: Bool { didSet { d.set(keepChatList, forKey: "keepChatList") } }
+    /// Keep the last chats opened (up to 20, 5 MB per computer, no photos) to read
+    /// while the computer is unreachable (OF-5). On unless the user turned it off.
+    var keepTranscripts: Bool { didSet { d.set(keepTranscripts, forKey: "keepTranscripts") } }
     /// Per computer, the last model chosen for a new chat: `providerId::modelId`.
     var lastModel: [String: String] { didSet { d.set(lastModel, forKey: "lastModel") } }
 
@@ -55,6 +60,9 @@ final class Prefs {
         defaultComputer = d.string(forKey: "defaultComputer")
         dictationOnComputer = flag("dictationOnComputer", true)
         lastModel = d.dictionary(forKey: "lastModel") as? [String: String] ?? [:]
-        keepChatList = flag("keepChatList", false)
+        // On unless the user turned them off: an install that never touched a switch has nothing stored.
+        func choice(_ k: String) -> Bool? { defaults.object(forKey: k) == nil ? nil : defaults.bool(forKey: k) }
+        keepChatList = OfflineSetting.isOn(stored: choice("keepChatList"))
+        keepTranscripts = OfflineSetting.isOn(stored: choice("keepTranscripts"))
     }
 }

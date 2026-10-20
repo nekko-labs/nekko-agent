@@ -1,8 +1,8 @@
 import Foundation
 import NekkoProtocol
 
-/// The phone's own copy of one computer's chat list, kept only when the user
-/// turns on *Keep the chat list when offline* (off by default). It holds what
+/// The phone's own copy of one computer's chat list, kept while *Keep the
+/// chat list when offline* is on (on by default since OF-9). It holds what
 /// the list shows and nothing else: each chat's id, title, times, folder and
 /// pin, plus the folder names. Never the replies, the first message, the
 /// model or anything a chat contains. The app stores it in a file the system
@@ -50,4 +50,14 @@ public protocol ChatListCache: AnyObject {
     func load(_ computerId: String) -> SavedChatList?
     func save(_ computerId: String, _ list: SavedChatList)
     func remove(_ computerId: String)
+}
+
+/// The offline switches (*Keep the chat list when offline*, *Keep recent
+/// chats to read offline*) are on unless the user turned them off (OF-9,
+/// decided 2026-10-19). `stored` is the user's own choice: the app writes it
+/// only when the switch is flipped, never at launch, so its presence is the
+/// "user chose" record. A new install, or one that never touched the switch,
+/// has none and gets it on; a deliberate off (before or after OF-9) stays off.
+public enum OfflineSetting {
+    public static func isOn(stored: Bool?) -> Bool { stored ?? true }
 }

@@ -47,6 +47,10 @@ public final class ChatModel {
     /// A prompt the computer never started on, handed back to the composer.
     public private(set) var unsent: UnsentPrompt?
     public private(set) var loadError: String?
+    /// When the transcript on screen is the phone's saved copy (the computer
+    /// hasn't answered since it opened), when that copy was saved; nil once
+    /// the computer has sent the chat (OF-5, OF-6).
+    public private(set) var savedAt: Int64?
     /// The computer's runnable skills, re-read with the chat.
     public private(set) var skills: [SkillSummary] = []
     public private(set) var sending = false
@@ -63,11 +67,22 @@ public final class ChatModel {
         self.now = now
     }
 
-    /// Start following the computer's events for this chat.
+    /// Start following the computer's events for this chat. A saved copy, if
+    /// the phone has one, is on screen at once; the computer's answer then
+    /// replaces it in place (the same message ids, so nothing jumps).
     public func start() {
         guard subscription == nil else { return }
         subscription = store.subscribe { [weak self] e in self?.onEvent(e) }
+        showSavedCopy()
         Task { await reload() }
+    }
+
+    /// Paint the saved copy while nothing better is on screen.
+    private func showSavedCopy() {
+        guard session == nil, let saved = store.transcripts.saved(sessionId) else { return }
+        session = saved.session
+        savedAt = saved.savedAt
+        store.transcripts.touch(sessionId)
     }
 
     public func stop() {
@@ -90,12 +105,19 @@ public final class ChatModel {
             Task { await loadSkills() }
             guard let session = Session.from(s) else {
                 loadError = "This chat was deleted on your computer."
+                store.transcripts.remove(sessionId)
+                if savedAt != nil {
+                    savedAt = nil
+                    self.session = nil
+                }
                 return
             }
             let mine = PendingInput.map(p)[sessionId]
             let shown = blocks
             self.session = session
+            savedAt = nil
             loadError = nil
+            store.transcripts.save(session)
             // Mid-turn the overlay keeps streaming; mergeLive hides what the
             // re-read session already holds. After the turn the session has it all.
             var t = turn
@@ -108,6 +130,9 @@ public final class ChatModel {
             let carried = Transcript.carriedIds(shown: shown, next: Transcript.mergeLive(saved: savedBlocks, live: turn.blocks))
             if !carried.isEmpty { shownIds.merge(carried) { a, _ in a } }
         } catch {
+            // Out of reach: the saved copy (if any) says so itself, under "Saved copy from …".
+            showSavedCopy()
+            if savedAt != nil, !((error as? RelayError)?.fromComputer ?? false) { return }
             loadError = error.localizedDescription
         }
     }
