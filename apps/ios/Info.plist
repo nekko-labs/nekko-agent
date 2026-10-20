@@ -36,7 +36,7 @@
     <key>UIBackgroundModes</key><array><string>remote-notification</string><string>fetch</string></array>
     <key>BGTaskSchedulerPermittedIdentifiers</key><array><string>com.nekko.native.ios.outbox</string></array>
     <key>NSCameraUsageDescription</key><string>Scan the pairing code your computer shows in Settings → Remote access.</string>
-    <key>NSFaceIDUsageDescription</key><string>Unlock Nekko Agent, which can run tools on your computer.</string>
+    <key>NSFaceIDUsageDescription</key><string>Unlock Nekko Agent and confirm changes it makes on your computer.</string>
     <key>NSMicrophoneUsageDescription</key><string>Dictate a message. The recording is turned into text and then deleted.</string>
     <key>NSSpeechRecognitionUsageDescription</key><string>Turn your dictation into text when your computer can’t.</string>
     <key>NSLocalNetworkUsageDescription</key><string>Reach the relay on your computer over your local network or Tailscale, and list computers on this Wi-Fi when you tap Look on this network.</string>

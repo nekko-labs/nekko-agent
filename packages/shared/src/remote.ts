@@ -27,6 +27,21 @@ export interface RemoteDevice {
   lastSeenAt: number;
   /** Revoked devices are denied at HELLO and kicked if connected. */
   revoked?: boolean;
+  /**
+   * What this phone may do beyond the chat (IO-33, *What phones can do*):
+   * `read` covers read-class channels, `change` change-class ones
+   * (`PHONE_READ_CHANNELS` / `PHONE_CHANGE_CHANNELS`). Missing, or a missing
+   * field, means on. Set with `remote:setAccess`.
+   */
+  access?: { read?: boolean; change?: boolean };
+  /**
+   * The phone's public key for Change proofs (base64 X9.63 P-256), registered
+   * by the phone itself over `device:registerKey` on its first Change action.
+   * Trust on first use; pairing again starts a fresh record without it.
+   */
+  changeKey?: string;
+  /** When `changeKey` was registered. */
+  changeKeyAt?: number;
 }
 
 /** A short-lived, single-use enrollment code for pairing a new device. */
