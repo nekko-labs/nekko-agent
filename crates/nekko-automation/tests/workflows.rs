@@ -350,8 +350,12 @@ async fn an_armed_cursor_holds_until_the_first_event() {
     *fake.settings.lock().unwrap() = json!({ "connectors": [{ "kind": "github", "connected": true, "token": "t" }] });
     *fake.now.lock().unwrap() = 1_000_000.0;
     let clock = fake.clone();
-    let engine =
-        Workflows::new(&dir, fake.clone(), Arc::new(move || *clock.now.lock().unwrap()), Arc::new(|| "id-1".to_string()));
+    let engine = Workflows::new(
+        &dir,
+        fake.clone(),
+        Arc::new(move || *clock.now.lock().unwrap()),
+        Arc::new(|| "id-1".to_string()),
+    );
     engine
         .create(&json!({
             "name": "Diagnose",
@@ -370,8 +374,12 @@ async fn an_armed_cursor_holds_until_the_first_event() {
     drop(engine);
     *fake.now.lock().unwrap() = 1_120_001.0;
     let clock = fake.clone();
-    let engine =
-        Workflows::new(&dir, fake.clone(), Arc::new(move || *clock.now.lock().unwrap()), Arc::new(|| "id-1".to_string()));
+    let engine = Workflows::new(
+        &dir,
+        fake.clone(),
+        Arc::new(move || *clock.now.lock().unwrap()),
+        Arc::new(|| "id-1".to_string()),
+    );
     fake.poll_results.lock().unwrap().push_back(json!({ "events": [], "nextCursor": 1_000_000 }));
     engine.tick_listeners().await;
     assert_eq!(fake.polls.lock().unwrap()[1]["cursor"], 1_000_000.0);
