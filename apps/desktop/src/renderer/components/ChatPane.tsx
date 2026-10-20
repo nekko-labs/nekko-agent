@@ -14,7 +14,7 @@ import { createPortal } from 'react-dom';
 import { DictationButton } from './DictationButton.js';
 import { decideApproval, type ApprovalScope } from './agent-console/approval-decision.js';
 import type { AgentEvent, AskAnswer, AskRequest, AutoQuality, Session, ContextBundle, IndexedFile, ModelInfo, ProviderConfig, SkillDef, PrInfo, QueuePayload, QueuedPrompt } from '@nekko-agent/shared';
-import { archiveDaysLeft, CLAUDE_CODE_PROVIDER_KIND, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, modelSupportsThinking, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
+import { archiveDaysLeft, CLAUDE_CODE_PROVIDER_KIND, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, modelSupportsThinking, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
 import type { AutoProviderPick, ProviderPool } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { approvalAfterResult } from './ChatPane.approval.js';
@@ -446,9 +446,16 @@ interface LiveMarks {
   outMark: number;
 }
 
-function useLiveContextTokens(sessionId: string, marks: LiveMarks): number {
+/**
+ * Context the running turn has added on top of the gauge's base. Against
+ * Claude Code's reported figure (`reported`) that is everything the turn has
+ * produced so far, and nothing once it ends: the figure saved with the turn
+ * already holds it, and the bundle's marks do not apply to it.
+ */
+function useLiveContextTokens(sessionId: string, marks: LiveMarks, reported = false): number {
   const produced = useProducedTokens(sessionId);
   const running = !!getLiveRun(sessionId);
+  if (reported) return running ? produced.context : 0;
   return Math.max(0, (running ? produced.context : marks.ctxTail) - marks.ctxMark);
 }
 
@@ -456,7 +463,7 @@ function useLiveContextTokens(sessionId: string, marks: LiveMarks): number {
 const LiveContextGauge = memo(function LiveContextGauge({
   sessionId, marks, ...gauge
 }: Omit<React.ComponentProps<typeof ContextGauge>, 'liveTokens'> & { sessionId: string; marks: LiveMarks }) {
-  return <ContextGauge {...gauge} liveTokens={useLiveContextTokens(sessionId, marks)} />;
+  return <ContextGauge {...gauge} liveTokens={useLiveContextTokens(sessionId, marks, !!gauge.reported)} />;
 });
 
 /** The "running out of room" warning, counting the reply as it streams. */
@@ -973,6 +980,16 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // Leaving the composer out also stops it wiping the window's number when the
   // chat is deselected and the composer copy unmounts.
   const publishesContext = surface !== 'composer' && !readOnly;
+  // A Claude Agent chat's gauge and card read Claude Code's own figures once
+  // it has reported them for the picked model (see reportedClaudeCodeContext).
+  const claudeCodeChat = providers.find((p) => p.id === providerId)?.kind === CLAUDE_CODE_PROVIDER_KIND;
+  const claudeCodeContext = claudeCodeChat ? session?.claudeCodeContext : undefined;
+  const reportedCtx = useMemo(
+    () => reportedClaudeCodeContext({ claudeCodeContext }, modelId ?? undefined),
+    [claudeCodeContext, modelId],
+  );
+  const latestReportedRef = useRef(reportedCtx);
+  latestReportedRef.current = reportedCtx;
   const latestCtxRef = useRef(ctx);
   latestCtxRef.current = ctx;
   const latestSessionRef = useRef(session);
@@ -981,10 +998,16 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     if (!publishesContext) return;
     const publish = () => {
       const bundle = latestCtxRef.current;
+      const reported = latestReportedRef.current;
+      const run = getLiveRun(sessionId);
+      if (reported) {
+        // The gauge's own sum (useLiveContextTokens): Claude Code's figure plus the running turn.
+        useStore.getState().setSessionCtxEstimate(sessionId, reported.used + (run ? producedTokens(run).context : 0));
+        return;
+      }
       const base = bundle
         ? bundle.items.filter((i) => i.included).reduce((s, i) => s + i.tokens, 0)
         : estimateTranscriptTokens(latestSessionRef.current?.messages ?? []);
-      const run = getLiveRun(sessionId);
       const produced = run ? producedTokens(run).context : marksRef.current.ctxTail;
       const live = Math.max(0, produced - marksRef.current.ctxMark);
       useStore.getState().setSessionCtxEstimate(sessionId, base + live);
@@ -993,7 +1016,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     if (!streaming) return;
     const t = setInterval(publish, 4_000);
     return () => clearInterval(t);
-  }, [publishesContext, streaming, sessionId, ctx, marks]);
+  }, [publishesContext, streaming, sessionId, ctx, marks, reportedCtx]);
   useEffect(() => {
     if (!publishesContext) return;
     return () => useStore.getState().setSessionCtxEstimate(sessionId, null);
@@ -3263,6 +3286,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     draftTokens={deferredDraft.trim() ? estimateTokens(deferredDraft) : 0}
                     contextWindow={selectedModelInfo?.contextLength}
                     windowReported={!!selectedModelInfo?.contextLength}
+                    reported={reportedCtx}
                   />
                   <LiveUsageChip
                     sessionId={sessionId}

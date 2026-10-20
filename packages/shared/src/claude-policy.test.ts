@@ -10,6 +10,7 @@ import {
   claudeComparisonTable,
   claudeReasonText,
   claudeUnattendedRefusal,
+  reportedClaudeCodeContext,
 } from './claude-policy.js';
 import { CLAUDE_PLAN_USAGE_EXAMPLE_LABEL, claudePlanUsageExample } from './claude-plan-usage-fixture.js';
 
@@ -92,5 +93,14 @@ describe('claudeUnattendedRefusal', () => {
     expect(claudeUnattendedRefusal({ kind: 'claude-code', claudeCode: { authSource: 'foundry' } })).toBeNull();
     expect(claudeUnattendedRefusal({ kind: 'anthropic', auth: 'subscription' })).toBeNull();
     expect(claudeUnattendedRefusal({ kind: 'openai' })).toBeNull();
+  });
+});
+
+describe('reportedClaudeCodeContext', () => {
+  const claudeCodeContext = { used: 21_002, window: 1_000_000, model: 'claude-opus-5-5', modelId: 'opus' };
+  it('gives Claude Code\'s figures while the chat keeps the model they were reported for', () => {
+    expect(reportedClaudeCodeContext({ modelId: 'opus', claudeCodeContext })).toEqual({ used: 21_002, window: 1_000_000 });
+    expect(reportedClaudeCodeContext({ modelId: 'opus', claudeCodeContext }, 'sonnet')).toBeUndefined();
+    expect(reportedClaudeCodeContext({ modelId: 'opus' })).toBeUndefined();
   });
 });

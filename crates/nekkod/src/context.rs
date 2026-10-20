@@ -80,6 +80,15 @@ fn since_compaction(messages: &[Value]) -> &[Value] {
     }
 }
 
+/// The window Claude Code reported for a Claude Agent chat's current model
+/// (`claudeCodeContext`, saved after each of its turns); `None` before the
+/// first turn or once the chat's model changed, when the alias guess stands.
+pub fn claude_code_window(session: Option<&Value>, model: Option<&str>) -> Option<u64> {
+    let reported = session?.get("claudeCodeContext")?;
+    (reported.get("modelId").and_then(Value::as_str) == model).then_some(())?;
+    reported.get("window").and_then(Value::as_u64).filter(|w| *w > 0)
+}
+
 /// `previewContext(sessionId, attachedPaths)`, given what it reads.
 pub fn preview(
     data_dir: &std::path::Path,
@@ -132,7 +141,7 @@ pub fn preview(
         index_snippets: Vec::new(),
         history: Some(history),
         system_text: Some(&system_text),
-        context_window: Some(json!(guess_context_window(model))),
+        context_window: Some(json!(claude_code_window(session, model).unwrap_or_else(|| guess_context_window(model)))),
         excluded: strings(prefs.and_then(|p| p.get("excluded"))).into_iter().collect::<HashSet<_>>(),
         pinned: strings(prefs.and_then(|p| p.get("pinned"))).into_iter().collect::<HashSet<_>>(),
     });
@@ -250,5 +259,15 @@ mod tests {
         assert_eq!(guess_context_window(Some("Sonnet")), 1_000_000);
         assert_eq!(guess_context_window(Some("haiku")), 1_000_000);
         assert_eq!(guess_context_window(Some("my-opus")), 128_000);
+    }
+
+    #[test]
+    fn a_claude_agent_chat_uses_the_window_claude_code_reported_for_its_model() {
+        let session =
+            json!({ "modelId": "opus", "claudeCodeContext": { "used": 30_000, "window": 200_000, "modelId": "opus" } });
+        assert_eq!(claude_code_window(Some(&session), Some("opus")), Some(200_000));
+        // Switched model, or no turn yet: the guess stands.
+        assert_eq!(claude_code_window(Some(&session), Some("sonnet")), None);
+        assert_eq!(claude_code_window(Some(&json!({ "modelId": "opus" })), Some("opus")), None);
     }
 }

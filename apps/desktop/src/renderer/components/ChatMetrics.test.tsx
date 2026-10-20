@@ -2,6 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 vi.hoisted(() => { Object.assign(globalThis, { window: {}, localStorage: { getItem: () => null } }); });
+import type { ContextBundle } from '@nekko-agent/shared';
 import { ContextGauge, EffortSlider, effortRungs, formatContextTokens } from './ChatMetrics.js';
 
 describe('effort slider', () => {
@@ -39,6 +40,13 @@ describe('context token formatting', () => {
     expect(html).toContain('177k / 1m');
     expect(html).not.toContain('1000k');
     expect(html).toContain('177,000 of 1,000,000 tokens in use');
+  });
+  it('shows what Claude Code reported for a Claude Agent chat instead of the bundle estimate', () => {
+    const bundle = { items: [{ id: 'c', source: 'conversation', label: 'Conversation', tokens: 3000, included: true }], contextWindow: 1000000 } as unknown as ContextBundle;
+    const html = renderToStaticMarkup(<ContextGauge bundle={bundle} reported={{ used: 42000, window: 200000 }} />);
+    expect(html).toContain('42k / 200k');
+    expect(html).not.toContain('/ ~');
+    expect(html).toContain('Reported by Claude Code after its last model call.');
   });
   it.each([[0, 'success'], [599999, 'success'], [600000, 'warning'], [849999, 'warning'], [850000, 'danger'], [1000000, 'danger']])
     ('retains the filled gauge at %i tokens with %s tone', (tokens, tone) => {
