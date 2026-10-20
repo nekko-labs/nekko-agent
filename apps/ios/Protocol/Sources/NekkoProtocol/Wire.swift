@@ -48,12 +48,41 @@ public enum Channels {
     /// so it is not on the phone allowlist (`PUSH_TEST_CHANNEL`) and not in `all`.
     public static let pushTest = "push:test"
 
+    /// Git on a chat's folder (IO-33 FA-2, `Git.swift`). Reads: status, diffs,
+    /// history, a commit, branches, compare, a PR's checks and diff.
+    public static let workspaceGitStatus = "workspace:gitStatus"
+    public static let gitDiff = "git:diff"
+    public static let gitLog = "git:log"
+    public static let gitShow = "git:show"
+    public static let gitBranches = "git:branches"
+    public static let gitCompare = "git:compare"
+    public static let prChecks = "pr:checks"
+    public static let prDiff = "pr:diff"
+    /// Change actions: signed, so Face ID or the passcode is asked (`ComputersStore.call(change:)`).
+    public static let gitStage = "git:stage"
+    public static let gitUnstage = "git:unstage"
+    public static let gitCommit = "git:commit"
+    /// Spends the computer's model tokens, so it is a Change too.
+    public static let gitCommitMessage = "git:commitMessage"
+    public static let gitPush = "git:push"
+    public static let gitSwitch = "git:switch"
+    public static let gitMergeAbort = "git:mergeAbort"
+    public static let prCreate = "pr:create"
+    public static let prAction = "pr:action"
+
+    /// The change-class channels among these (`PHONE_CHANGE_CHANNELS`).
+    public static let gitChange: Set<String> = [
+        gitStage, gitUnstage, gitCommit, gitCommitMessage, gitPush, gitSwitch, gitMergeAbort, prCreate, prAction,
+    ]
+
     public static let all = [
         settingsGet, settingsUpdate, providersList, modelsList, sessionsSummaries, sessionCreate, sessionGet,
         sessionSetOptions, sessionDelete, voiceStatus, voiceTranscribe, chatSend, chatAbort, chatQueue,
         chatPending, chatAnswer, toolApprove, workspaceList, appInfo, skillsRunnable, changesList,
         chatEditQueued, sessionFork, tasksList, taskRunNow, workflowsList, workflowRun, prSessionList,
         usageSummary, limitsGet,
+        workspaceGitStatus, gitDiff, gitLog, gitShow, gitBranches, gitCompare, prChecks, prDiff,
+        gitStage, gitUnstage, gitCommit, gitCommitMessage, gitPush, gitSwitch, gitMergeAbort, prCreate, prAction,
     ]
 }
 

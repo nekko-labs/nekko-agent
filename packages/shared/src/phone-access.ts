@@ -16,6 +16,20 @@ import { clientMessageIdOf } from './chat.js';
 import { skillTurnText } from './skills.js';
 import { phoneChangesView, PHONE_CHANGES_VIEW } from './phone-changes.js';
 import {
+  PHONE_BRANCH_VIEW,
+  PHONE_CHECK_VIEW,
+  PHONE_COMMIT_VIEW,
+  PHONE_GIT_CHANGE_CHANNELS,
+  PHONE_GIT_CHANNELS,
+  PHONE_GIT_OPTION_KEYS,
+  PHONE_GIT_READ_CHANNELS,
+  PHONE_GIT_VIEW,
+  PHONE_PR_ACTIONS,
+  PhoneGitRefusal,
+  phoneGitView,
+  screenPhoneGit,
+} from './phone-git.js';
+import {
   PHONE_LIMIT_WINDOW_VIEW,
   PHONE_LIMITS_VIEW,
   PHONE_PR_VIEW,
@@ -46,8 +60,11 @@ import {
  * (2026-10-19) the phone is a remote for the agent: it edits its own queue,
  * forks a chat, reads a chat's pull requests, the computer's automations and
  * its usage and limits through narrow views (phone-views.ts), and starts an
- * automation the owner already set up (`task:runNow`, `workflow:run`). Git
- * happens through the agent (a prompt, so approvals apply), never a raw channel.
+ * automation the owner already set up (`task:runNow`, `workflow:run`).
+ * IO-33 FA-2 (2026-10-20) adds git on a chat's own folder (phone-git.ts):
+ * status, diffs, history, branches, compare and PR checks to read; stage,
+ * commit, a model-written message, push, switch, abort a merge, open a PR and
+ * act on one as Change actions.
  */
 export const PHONE_CHANNELS = [
   'app:info',
@@ -58,8 +75,24 @@ export const PHONE_CHANNELS = [
   'chat:pending',
   'chat:queue',
   'chat:send',
+  'git:branches',
+  'git:commit',
+  'git:commitMessage',
+  'git:compare',
+  'git:diff',
+  'git:log',
+  'git:mergeAbort',
+  'git:push',
+  'git:show',
+  'git:stage',
+  'git:switch',
+  'git:unstage',
   'limits:get',
   'models:list',
+  'pr:action',
+  'pr:checks',
+  'pr:create',
+  'pr:diff',
   'pr:sessionList',
   'providers:list',
   'session:create',
@@ -79,6 +112,7 @@ export const PHONE_CHANNELS = [
   'voice:transcribe',
   'workflow:run',
   'workflows:list',
+  'workspace:gitStatus',
   'workspace:list',
 ] as const;
 
@@ -121,9 +155,12 @@ export const PHONE_DENIED_FOR_NOW: Record<'files' | 'git' | 'terminal' | 'undeci
     channels: ['attachment:import', 'changes:accept', 'changes:acceptAll', 'dir:list', 'file:read', 'file:write'],
     prefixes: [],
   },
-  /** FA-2. Pull request actions, diffs and git status: today git happens through the agent (a prompt). */
+  /**
+   * FA-2 opened git (phone-git.ts); the stack calls stay refused: they
+   * restack and force-push several branches at once, which wants the desktop.
+   */
   git: {
-    channels: ['pr:action', 'pr:continueStack', 'pr:diff', 'pr:linkStack', 'workspace:gitStatus'],
+    channels: ['pr:continueStack', 'pr:linkStack'],
     prefixes: [],
   },
   /** FA-3. Terminals. */
@@ -179,8 +216,8 @@ export const PHONE_ALWAYS_DENIED = {
  * `PHONE_CHANNELS`. The 30 channels phones had before IO-33 are in neither
  * class and behave as before. Feature PRs (FA-1 to FA-6) fill these.
  */
-export const PHONE_READ_CHANNELS: readonly string[] = [];
-export const PHONE_CHANGE_CHANNELS: readonly string[] = [];
+export const PHONE_READ_CHANNELS: readonly string[] = [...PHONE_GIT_READ_CHANNELS];
+export const PHONE_CHANGE_CHANNELS: readonly string[] = [...PHONE_GIT_CHANGE_CHANNELS];
 
 /** `null`: neither class (no per-device switch applies). */
 export type PhoneChannelClass = 'read' | 'change' | null;
@@ -480,8 +517,16 @@ export function checkPhoneSettingsPatch(patch: unknown): Array<[string, unknown]
 export function screenPhoneCall(
   channel: string,
   args: unknown[],
-): { settingsPatch?: Array<[string, unknown]>; skill?: { name: string; input: string } } {
+): { settingsPatch?: Array<[string, unknown]>; skill?: { name: string; input: string }; callArgs?: unknown[] } {
   if (!phoneChannelAllowed(channel)) throw new PhoneAccessError('channel-denied', channel);
+  if (PHONE_GIT_CHANNELS.includes(channel)) {
+    try {
+      return { callArgs: screenPhoneGit(channel, args) };
+    } catch (e) {
+      if (e instanceof PhoneGitRefusal) throw new PhoneAccessError(e.code, e.detail);
+      throw e;
+    }
+  }
   switch (channel) {
     case 'changes:list':
     case 'pr:sessionList':
@@ -643,7 +688,7 @@ export function redactPhoneResult(channel: string, result: unknown): unknown {
     case 'limits:get':
       return phoneLimitsView(result);
     default:
-      return result;
+      return PHONE_GIT_CHANNELS.includes(channel) ? phoneGitView(channel, result) : result;
   }
 }
 
@@ -767,13 +812,13 @@ export async function callFromPhone(
   /** Shrinks a chat's photos for `session:get`; without it they arrive as `''` unless already tiny. */
   thumb?: PhoneThumbnailer,
 ): Promise<unknown> {
-  const { settingsPatch, skill } = screenPhoneCall(channel, args);
+  const { settingsPatch, skill, callArgs: checked } = screenPhoneCall(channel, args);
   if (channel === 'changes:list') {
     // Off unless the computer's owner turned it on (Settings → Remote access).
     const settings = await dispatch('settings:get', []);
     if (!isObj(settings) || settings.phoneChanges !== true) throw new PhoneAccessError('turned-off', 'changes:list');
   }
-  let callArgs = args;
+  let callArgs = checked ?? args;
   // Only what the computer's own call takes: an id, or nothing.
   if (channel === 'task:runNow' || channel === 'workflow:run') callArgs = [args[0]];
   if (channel === 'tasks:list' || channel === 'workflows:list' || channel === 'usage:summary') callArgs = [];
@@ -831,6 +876,14 @@ export function phoneAccessPolicy() {
     limitsView: [...PHONE_LIMITS_VIEW],
     limitWindowView: [...PHONE_LIMIT_WINDOW_VIEW],
     queueEditKeys: [...PHONE_QUEUE_EDIT_KEYS],
+    git: {
+      view: { ...PHONE_GIT_VIEW },
+      optionKeys: Object.fromEntries(Object.entries(PHONE_GIT_OPTION_KEYS).map(([k, v]) => [k, [...v]])),
+      prActions: [...PHONE_PR_ACTIONS],
+      commitView: [...PHONE_COMMIT_VIEW],
+      branchView: [...PHONE_BRANCH_VIEW],
+      checkView: [...PHONE_CHECK_VIEW],
+    },
     maxFrameBytes: PHONE_MAX_FRAME_BYTES,
   };
 }

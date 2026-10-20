@@ -5,7 +5,7 @@ import Foundation
 /// packages/shared/src/remote.ts, `PROTOCOL_VERSION` in nekko-remote). A
 /// computer from before the field counts as 1.
 public enum PhoneProtocol {
-    public static let version = 2
+    public static let version = 3
 
     /// What the welcome says, or 1 for a computer that sends nothing.
     public static func of(welcome frame: JSONValue) -> Int {

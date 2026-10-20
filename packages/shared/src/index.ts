@@ -60,6 +60,7 @@ export * from './pairing-link.js';
 export * from './phone-access.js';
 export * from './phone-changes.js';
 export * from './phone-views.js';
+export * from './phone-git.js';
 export * from './update.js';
 export * from './mcp.js';
 export * from './spec.js';
