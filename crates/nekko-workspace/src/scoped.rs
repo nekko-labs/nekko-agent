@@ -803,7 +803,7 @@ mod tests {
         assert_eq!(listed["hiddenSecrets"], 3);
         let text = listed.to_string();
         for leak in [".ssh", ".env", "server.pem"] {
-            assert!(!text.contains(leak), "{leak} leaked: {text}");
+            assert!(!text.contains(leak), "{leak} appeared in the listing");
         }
         assert_eq!(s.list(".git").unwrap()["hiddenSecrets"], 1);
         for p in [".env", ".ssh/id_rsa", "server.pem", ".git/config", "sub/.env.local"] {
