@@ -242,6 +242,8 @@ export interface AppSettings {
   defaultModelId?: string;
   /** Show the mascot. */
   mascotEnabled: boolean;
+  /** Draw the moving pixel-dot wave behind themes that have one (Lilac, Lavender, Experimental). On unless set to false. */
+  backgroundAnimation?: boolean;
   /** Desktop close button defaults to keeping work alive in the tray. */
   desktopCloseBehavior?: 'tray' | 'shutdown';
   trayCloseHintSeen?: boolean;

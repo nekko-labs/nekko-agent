@@ -6,6 +6,7 @@ import { useStore } from '../store.js';
 import { Badge } from '../components/primitives/index.js';
 import { UpdateProgress, useUpdater } from '../components/UpdateBanner.js';
 import { ThemePresetPicker } from '../components/ThemePresetPicker.js';
+import { pixelWaveFor } from '../components/PixelWaveBackground.js';
 import { DEFAULT_SPEC_METHODOLOGY, SPEC_METHODOLOGIES, ORCHESTRATION_STRATEGIES, DEFAULT_ORCHESTRATION, MAX_OUTPUT_TOKENS_DEFAULT, MAX_OUTPUT_TOKENS_RANGE, clampMaxOutputTokens, ONBOARDING_VERSION, updateChecks, DEFAULT_TURN_WRAPPER } from '@nekko-agent/shared';
 import { ShieldIcon, SunIcon, TrashIcon, RobotIcon, WandIcon } from '../icons.js';
 import { VoiceSettings } from '../components/VoiceSettings.js';
@@ -85,6 +86,23 @@ export function SettingsView() {
         <section className="card mt-6 p-5">
           <div className="flex items-center gap-2"><SunIcon className="h-4 w-4" /><h2 className="font-semibold">{tr('settings.appearance')}</h2><SettingsSearch root={pageRef} /></div>
           <ErrorBoundary label="Appearance"><ThemePresetPicker settings={settings} update={update} /></ErrorBoundary>
+
+          <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
+            <div className="min-w-0">
+              <span className="text-[13px]">Background animation</span>
+              <p id="background-animation-hint" className="text-[11px] text-ink-faint">
+                {pixelWaveFor(settings.themePreset)
+                  ? 'The moving pixel dots behind this theme. Turn off for a still background and lower power use.'
+                  : 'The moving pixel dots behind Lilac, Lavender and the Experimental themes. This theme has none.'}
+              </p>
+            </div>
+            <Toggle
+              aria-label="Background animation"
+              aria-describedby="background-animation-hint"
+              on={settings.backgroundAnimation !== false}
+              onChange={(v) => update({ backgroundAnimation: v })}
+            />
+          </div>
 
           <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3">
             <div className="min-w-0">

@@ -12,6 +12,8 @@
   height: 100%;
   pointer-events: none;
   z-index: -1;
+  /* Drawn at one pixel per CSS pixel; keep the dots crisp on high-DPI screens. */
+  image-rendering: pixelated;
 }
 
 /* Faint seasonal decoration; never intercepts app input. */
