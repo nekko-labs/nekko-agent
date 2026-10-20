@@ -16,6 +16,7 @@ import type {
   IndexStatus,
   UpdateInfo,
   TerminalEvent,
+  TerminalViewersEvent,
   OAuthStatus,
   SubscriptionLimits,
 } from '@nekko-agent/shared';
@@ -155,10 +156,12 @@ const api: NekkoApi = {
   pendingInput: () => inv(IpcChannels.chatPending),
   runningSessions: () => inv(IpcChannels.chatRunning),
 
-  listTerminals: () => inv(IpcChannels.terminalsList),
+  listTerminals: (filter) => (filter ? inv(IpcChannels.terminalsList, filter) : inv(IpcChannels.terminalsList)),
   listShells: () => inv(IpcChannels.terminalShells),
   createTerminal: (opts) => inv(IpcChannels.terminalCreate, opts),
-  terminalSnapshot: (id) => inv(IpcChannels.terminalSnapshot, id),
+  terminalSnapshot: (id, opts) => (opts ? inv(IpcChannels.terminalSnapshot, id, opts) : inv(IpcChannels.terminalSnapshot, id)),
+  listSshHosts: () => inv(IpcChannels.sshHosts),
+  openSsh: (alias, opts) => inv(IpcChannels.sshOpen, alias, opts ?? {}),
   updateTerminal: (id, patch) => inv(IpcChannels.terminalUpdate, id, patch),
   writeTerminal: (id, data) => inv(IpcChannels.terminalWrite, id, data),
   resizeTerminal: (id, cols, rows) => inv(IpcChannels.terminalResize, id, cols, rows),
@@ -392,6 +395,11 @@ const api: NekkoApi = {
     const listener = (_: unknown, e: TerminalEvent) => cb(e);
     bus.on(IpcEvents.terminalEvent, listener);
     return () => bus.removeListener(IpcEvents.terminalEvent, listener);
+  },
+  onTerminalViewers: (cb: (e: TerminalViewersEvent) => void) => {
+    const listener = (_: unknown, e: TerminalViewersEvent) => cb(e);
+    bus.on(IpcEvents.terminalViewers, listener);
+    return () => bus.removeListener(IpcEvents.terminalViewers, listener);
   },
   onChangesUpdated: (cb: (e: { sessionId: string }) => void) => {
     const listener = (_: unknown, e: { sessionId: string }) => cb(e);
