@@ -78,9 +78,10 @@ describe('Review new PRs with a skill template', () => {
   const nyaa = { id: 'nyaa:cr', name: 'nyaa:cr' };
   const review = { id: 'review', name: 'review' };
 
-  it('runs nyaa:cr when it is there, else the built-in review', () => {
+  it('runs the nyaa council when it is there, else the built-in review', () => {
     expect(templateInputValues(t, { repo: 'o/r' }, [review, nyaa]).skill).toBe('nyaa:cr');
     expect(templateInputValues(t, { repo: 'o/r' }, [review]).skill).toBe('review');
+    expect(templateInputValues(t, { repo: 'o/r' }, [review, { id: 'vaizer:cr', name: 'vaizer:cr' }]).skill).toBe('vaizer:cr');
     expect(templateInputValues(t, { repo: 'o/r', skill: 'triage' }, [review, nyaa]).skill).toBe('triage');
   });
 

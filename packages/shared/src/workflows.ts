@@ -1146,13 +1146,13 @@ export function findWorkflowSkill<T extends { id: string; name: string }>(skills
   return skills.find((s) => s.id.toLowerCase() === want || s.name.toLowerCase() === want);
 }
 
-/** The skill the PR review template runs: the nyaa plugin's `cr` when it is enabled, else the built-in review. */
-export const PREFERRED_REVIEW_SKILL = 'nyaa:cr';
+/**
+ * The skills the PR review template prefers, in order: the nyaa council's `cr`
+ * command (the `nyaa` plugin, or the `vaizer` plugin that now ships it), else
+ * the built-in review.
+ */
+export const REVIEW_SKILLS = ['nyaa:cr', 'vaizer:cr', 'review'];
 export const FALLBACK_REVIEW_SKILL = 'review';
-
-export function defaultReviewSkill(skills: Array<{ id: string; name: string }>): string {
-  return findWorkflowSkill(skills, PREFERRED_REVIEW_SKILL) ? PREFERRED_REVIEW_SKILL : FALLBACK_REVIEW_SKILL;
-}
 
 /* ------------------------------------------------------------------ *
  * Starter templates
@@ -1569,9 +1569,9 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
         key: 'skill',
         label: 'Review skill',
         kind: 'skill',
-        prefer: [PREFERRED_REVIEW_SKILL, FALLBACK_REVIEW_SKILL],
+        prefer: REVIEW_SKILLS,
         required: true,
-        hint: 'Gets the PR number as its arguments. nyaa:cr when the nyaa plugin is enabled in Claude Code.',
+        hint: 'Gets the PR number as its arguments. Defaults to the nyaa council (nyaa:cr or vaizer:cr) when that plugin is enabled in Claude Code.',
       },
     ],
     notify: 'failure',

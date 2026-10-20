@@ -43,7 +43,7 @@ skill**, below.
 
 Runs a skill on every new pull request in a repo and keeps its verdict in one comment on the PR.
 
-- **The skill.** The setup sheet picks `nyaa:cr` when the nyaa Claude Code plugin is enabled,
+- **The skill.** The setup sheet picks the nyaa council (`nyaa:cr`, or `vaizer:cr` from the vaizer plugin) when its Claude Code plugin is enabled,
   else the built-in `review`; any skill a step can run is offered. It gets the PR number as its
   arguments and runs with only the tools its `allowed-tools` lists.
 - **Where it runs.** On a checkout of the PR's head made for the run and removed after it; your
