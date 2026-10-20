@@ -21,6 +21,7 @@ pub mod memory;
 pub mod outline;
 pub mod pr;
 pub mod proc;
+pub mod scoped;
 pub mod skills;
 pub mod spec;
 pub mod stacks;

@@ -227,6 +227,27 @@ changes how the computer itself is set up:
   switch it between Ask, Guardrails and YOLO, but not its tools, isolation or
   offline/incognito switches. Messages cannot attach files from the computer.
 
+### Coming next: files and logs
+
+The computer side of browsing a chat's files and reading the computer's logs from a phone is built;
+phones can't call it yet (they need the access levels and the phone screens first). What it will
+allow:
+
+- **Files in the chat's folder only.** The phone names a chat (or a saved folder), never a path on
+  your computer. Paths are relative to that folder, and anything that leaves it (`..`, absolute
+  paths, a link pointing outside) is refused. Files that may hold secrets (`.env`, keys, `.ssh`,
+  `.aws`, git credentials and `.git/config`) are counted in a listing and never named, opened or
+  saved. Text previews are capped at 256 KB and images at 2 MB. A save from the phone only lands if
+  the file is still the version the phone opened. If you edited it on the computer in between,
+  the phone is told and nothing is overwritten.
+- **Logs, read only.** The desktop app's log, the engine's log and each chat's agent run log, with
+  search. API keys, tokens, passwords and other secret-looking values are replaced with
+  `[redacted]` before a line leaves the computer, and a search only matches the redacted text.
+
+The logs are files you can open yourself: `logs/app.log` and `logs/nekkod.log` in the data folder
+(`~/.nekko-agent` unless you moved it). Each is rotated at 5 MB, and the last three old copies are kept
+(`app.log.1` to `app.log.3`). Windows' engine log holds only start-up lines and crashes for now.
+
 ## Security model, honestly stated
 
 | Threat | Defense |
