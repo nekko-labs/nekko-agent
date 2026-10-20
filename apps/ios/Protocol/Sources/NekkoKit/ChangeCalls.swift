@@ -1,0 +1,100 @@
+import Foundation
+import NekkoProtocol
+
+/// A connection that can carry a signed Change proof beside a call's args.
+public protocol ProofCaller: Caller {
+    func call(_ channel: String, _ args: [JSONValue], proof: JSONValue?, timeout: TimeInterval?) async throws -> JSONValue
+}
+
+extension RelayClient: ProofCaller {}
+
+/// A Change action the computer refused, said plainly.
+public struct ChangeRefused: Error, Equatable, LocalizedError, Sendable {
+    /// The computer's code (`change-off`, `proof-stale`, ...), or nil when it wasn't a refusal.
+    public let code: String?
+    public let message: String
+    public var errorDescription: String? { message }
+    public init(code: String?, message: String) {
+        self.code = code
+        self.message = message
+    }
+}
+
+/// Change actions from this phone (TASKS.md IO-33): every call is signed
+/// (`ChangeProof`), and the phone's key is registered with the computer on
+/// the first one (trust on first use). Feature screens call
+/// `ComputersStore.call(change:_:)`, which uses this.
+public final class ChangeCalls: @unchecked Sendable {
+    private let caller: ProofCaller
+    private let signer: ChangeSigner
+    private let deviceId: String
+    private let computerName: String
+    private let now: @Sendable () -> Int64
+    private let lock = NSLock()
+    private var registered = false
+    private var lastTs: Int64 = 0
+
+    public init(caller: ProofCaller, signer: ChangeSigner, deviceId: String, computerName: String,
+                now: @escaping @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }) {
+        self.caller = caller
+        self.signer = signer
+        self.deviceId = deviceId
+        self.computerName = computerName
+        self.now = now
+    }
+
+    /// Call a change-class channel with a fresh proof. Registers this phone's
+    /// key first if this connection hasn't yet. A refusal comes back as a
+    /// `ChangeRefused` with a message for the owner.
+    public func call(change channel: String, _ args: [JSONValue] = [], timeout: TimeInterval? = nil) async throws -> JSONValue {
+        do {
+            try await registerIfNeeded()
+            return try await signed(channel, args, timeout: timeout)
+        } catch let e as RelayError where e.fromComputer {
+            guard let refusal = PhoneRefusal(e.message) else { throw e }
+            if refusal.code == "key-missing" {
+                // The computer lost the key (paired again on its side): register and try once more.
+                setRegistered(false)
+                do {
+                    try await registerIfNeeded()
+                    return try await signed(channel, args, timeout: timeout)
+                } catch let again as RelayError where again.fromComputer {
+                    throw refused(again.message)
+                }
+            }
+            throw ChangeRefused(code: refusal.code, message: refusal.message(computer: computerName) ?? e.message)
+        } catch is ChangeProof.Unsignable {
+            throw ChangeRefused(code: nil, message: "This change can’t be sent from a phone.")
+        }
+    }
+
+    private func refused(_ message: String) -> ChangeRefused {
+        let r = PhoneRefusal(message)
+        return ChangeRefused(code: r?.code, message: r?.message(computer: computerName) ?? message)
+    }
+
+    private func setRegistered(_ v: Bool) {
+        lock.withLock { registered = v }
+    }
+
+    private func registerIfNeeded() async throws {
+        if lock.withLock({ registered }) { return }
+        let key: JSONValue = .string(try signer.publicKey().base64EncodedString())
+        _ = try await signed(ChangeProof.keyChannel, [key], timeout: nil)
+        setRegistered(true)
+    }
+
+    /// Never the same timestamp twice: the computer refuses a proof it has
+    /// seen, and the same call signed twice in one millisecond would be one.
+    private func nextTs() -> Int64 {
+        lock.withLock {
+            lastTs = max(now(), lastTs + 1)
+            return lastTs
+        }
+    }
+
+    private func signed(_ channel: String, _ args: [JSONValue], timeout: TimeInterval?) async throws -> JSONValue {
+        let proof = try await ChangeProof.proof(signer: signer, deviceId: deviceId, channel: channel, args: args, ts: nextTs())
+        return try await caller.call(channel, args, proof: proof, timeout: timeout)
+    }
+}

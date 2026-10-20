@@ -17,13 +17,15 @@ pub mod phone;
 pub mod phone_changes;
 pub mod phone_thumbs;
 pub mod phone_views;
+pub mod proof;
 pub mod route;
 pub mod service;
 pub mod socket;
 
 pub use agent::{AgentCore, Out, PUSH_TEST_CHANNEL, RELAYED_EVENTS};
+pub use phone::{Activity, DeviceAccess, Devices, PhoneDevice};
 pub use service::{CHANNELS, Clock, Link, LinkHandle, RemoteService, Verifier, system_clock};
-pub use socket::{Dispatcher, Events, RelayAgent, Spawn, agent_url};
+pub use socket::{Dispatcher, Events, PhoneCall, PhoneDispatcher, RelayAgent, Spawn, agent_url};
 
 /// Every public IPC channel the host's dispatcher serves (`IpcChannels`,
 /// written by the golden test); the daemon's internal callbacks (`turn:*`,
