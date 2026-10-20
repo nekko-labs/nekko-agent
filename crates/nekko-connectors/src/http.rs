@@ -26,6 +26,10 @@ impl Request {
         Self::new("POST", url, headers, body)
     }
 
+    pub fn patch(url: impl Into<String>, headers: &[(&str, &str)], body: Option<String>) -> Self {
+        Self::new("PATCH", url, headers, body)
+    }
+
     fn new(method: &'static str, url: impl Into<String>, headers: &[(&str, &str)], body: Option<String>) -> Self {
         Self {
             method,
@@ -41,6 +45,8 @@ impl Request {
 pub struct Response {
     pub status: u16,
     pub body: String,
+    /// The `Location` header, read when a request did not follow a redirect.
+    pub location: Option<String>,
 }
 
 impl Response {
@@ -78,7 +84,11 @@ impl Http for Net {
     fn send(&self, req: Request) -> BoxFut<'_, Result<Response, String>> {
         Box::pin(async move {
             let client = if req.no_redirect { &self.manual } else { &self.follow };
-            let mut b = if req.method == "POST" { client.post(&req.url) } else { client.get(&req.url) };
+            let mut b = match req.method {
+                "POST" => client.post(&req.url),
+                "PATCH" => client.patch(&req.url),
+                _ => client.get(&req.url),
+            };
             for (k, v) in &req.headers {
                 b = b.header(k, v);
             }
@@ -91,8 +101,10 @@ impl Http for Net {
             }
             let res = b.send().await.map_err(|_| FETCH_FAILED.to_string())?;
             let status = res.status().as_u16();
+            let location =
+                res.headers().get(reqwest::header::LOCATION).and_then(|v| v.to_str().ok()).map(str::to_string);
             let body = res.text().await.map_err(|_| FETCH_FAILED.to_string())?;
-            Ok(Response { status, body })
+            Ok(Response { status, body, location })
         })
     }
 }

@@ -40,6 +40,12 @@ pub fn read_step_outcome(text: &str) -> &'static str {
     if fail > pass { "fail" } else { "pass" }
 }
 
+/// An agent step's answer as later steps see it (`{{steps.<id>.output}}`):
+/// the outcome tokens are for routing, not for a PR comment or a message.
+pub fn without_outcome_tokens(text: &str) -> String {
+    text.replace(STEP_PASS_TOKEN, "").replace(STEP_FAIL_TOKEN, "").trim_end().to_string()
+}
+
 /// `slugify(name)`: URL- and CLI-safe, at most 48 characters, `workflow` when empty.
 pub fn slugify(name: &str) -> String {
     let lower = name.to_lowercase();

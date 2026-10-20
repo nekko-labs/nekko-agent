@@ -9,6 +9,7 @@ const state = {
     workspaces: [{ id: 'ws1', path: '/work/app' }],
     defaultProviderId: 'p',
     defaultModelId: 'm',
+    providers: [{ id: 'p', kind: 'anthropic', baseUrl: 'https://api.anthropic.com', enabled: true }],
   },
 };
 vi.mock('../store.js', () => ({ useStore: Object.assign((pick: (s: typeof state) => unknown) => pick(state), { getState: () => state }) }));
@@ -22,6 +23,16 @@ describe('template gallery', () => {
     expect(html).not.toContain('data-template="blank"');
     expect(html).toContain('✓ GitHub connected');
     expect(html).not.toContain('data-template="ticket-digest"');
+    // The default model is a cloud one, so the CI template still needs a local model.
+    expect(html).toContain('data-template="diagnose-failed-ci"');
+    expect(html).toContain('>A local model<');
+  });
+
+  it('seeds the CI template local-only, with no tools and the chosen model', () => {
+    const t = WORKFLOW_TEMPLATES.find((x) => x.id === 'diagnose-failed-ci')!;
+    const seed = templateSeed(t, { repo: 'o/r' }, { providerId: 'local', modelId: 'qwen' });
+    expect(seed).toMatchObject({ localModelOnly: true, toolAccess: 'none', providerId: 'local', modelId: 'qwen', category: 'Code review' });
+    expect(seed.triggers[0]).toMatchObject({ event: 'workflow_run_failed', repo: 'o/r', enabled: true });
   });
 
   it('seeds a workflow that remembers its template and notify setting', () => {

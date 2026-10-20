@@ -1808,7 +1808,7 @@
      },
      "params": {
       "channel": "#ci",
-      "text": "running: fine ⟦PASS⟧"
+      "text": "running: fine"
      },
      "ctx": {
       "run": {
@@ -4245,7 +4245,7 @@
      },
      "params": {
       "channel": "#ci",
-      "text": "running: v ⟦PASS⟧"
+      "text": "running: v"
      },
      "ctx": {
       "run": {

@@ -17,10 +17,10 @@ pub struct Outcome {
 }
 
 impl Outcome {
-    fn ok(output: impl Into<String>) -> Self {
+    pub(crate) fn ok(output: impl Into<String>) -> Self {
         Self { output: output.into(), is_error: false }
     }
-    fn fail(output: impl Into<String>) -> Self {
+    pub(crate) fn fail(output: impl Into<String>) -> Self {
         Self { output: output.into(), is_error: true }
     }
     /// As the TS object prints (`{ output }` or `{ output, isError: true }`).
@@ -38,6 +38,8 @@ pub const OPS: &[&str] = &[
     "jira.commentIssue",
     "github.commentPR",
     "github.setCommitStatus",
+    "github.runFailureLogs",
+    "github.upsertPRComment",
     "gitlab.setCommitStatus",
     "gitlab.commentMR",
     "discord.postMessage",
@@ -257,7 +259,7 @@ fn settings_of(config: Option<&Value>) -> Option<&Value> {
 }
 
 /// A short error out of a failed response.
-fn http_error(res: &Response, label: &str) -> Outcome {
+pub(crate) fn http_error(res: &Response, label: &str) -> Outcome {
     let mut folded = String::new();
     let mut space = false;
     for c in res.body.chars() {
@@ -349,7 +351,7 @@ fn github_headers(tok: &str) -> Vec<(String, String)> {
 }
 
 /// `owner/name`, or the TS error.
-fn repo_path(value: &str) -> Result<String, String> {
+pub(crate) fn repo_path(value: &str) -> Result<String, String> {
     let repo = nekko_js::trim(value).to_string();
     let part =
         |p: &str| !p.is_empty() && p.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.' || c == '-');
@@ -594,6 +596,26 @@ async fn run(http: &dyn Http, op: &str, config: Option<&Value>, p: &Value, ctx: 
                 return Ok(http_error(&res, &format!("GitHub commit status on {repo}@{short}")));
             }
             Ok(Outcome::ok(format!("Set {repo}@{short} \u{2192} {state}")))
+        }
+        "github.runFailureLogs" => {
+            let repo = repo_path(&required(pick(p, "repo", event, &["repo", "repository.full_name"]), "Repo")?)?;
+            let run_id = required(pick(p, "run_id", event, &["run_id", "workflow_run.id"]), "Run id")?;
+            let tok = need_token(config, "GitHub")?;
+            Ok(crate::github::run_failure_logs(http, &tok, &repo, &run_id, p).await)
+        }
+        "github.upsertPRComment" => {
+            let number = pick(p, "number", event, &["number", "pull_number", "issue_number", "pull_request.number"]);
+            let number = number.strip_prefix('#').unwrap_or(&number).to_string();
+            // A failed push with no PR: the step ends cleanly so the run can too.
+            if number.is_empty() {
+                return Ok(Outcome::ok("No PR, skipped."));
+            }
+            let repo = repo_path(&required(pick(p, "repo", event, &["repo", "repository.full_name"]), "Repo")?)?;
+            let body = required(s("body"), "Comment")?;
+            let marker =
+                if s("marker").is_empty() { crate::github::default_marker(&workflow_name) } else { s("marker") };
+            let tok = need_token(config, "GitHub")?;
+            crate::github::upsert_pr_comment(http, &tok, &repo, &number, &body, &marker).await
         }
         "gitlab.setCommitStatus" => {
             let base = gitlab_base(settings_of(config))?;

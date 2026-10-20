@@ -20,6 +20,7 @@ import type {
 import {
   CONNECTOR_CATALOG,
   DEFAULT_WORKFLOW_CATEGORIES,
+  GITHUB_POLL_EVENTS,
   GIT_EVENTS,
   GIT_PROVIDERS,
   UNCATEGORIZED,
@@ -78,6 +79,10 @@ export interface WorkflowSeed {
   workspaceId?: string;
   notify?: WorkflowNotify;
   templateId?: string;
+  providerId?: string;
+  modelId?: string;
+  localModelOnly?: boolean;
+  toolAccess?: WorkflowToolAccess;
   steps: WorkflowStep[];
   triggers: WorkflowTrigger[];
 }
@@ -186,6 +191,10 @@ export function WorkflowEditor({
           workspaceId: seed.workspaceId ?? base.workspaceId,
           notify: seed.notify ?? base.notify,
           templateId: seed.templateId,
+          providerId: seed.providerId ?? base.providerId,
+          modelId: seed.modelId ?? base.modelId,
+          localModelOnly: seed.localModelOnly ?? base.localModelOnly,
+          toolAccess: seed.toolAccess ?? base.toolAccess,
           steps: seed.steps,
           triggers: seed.triggers,
         }
@@ -844,6 +853,10 @@ function ConnectorTriggerFields({
   const isRepo = trigger.connector === 'github' || trigger.connector === 'gitlab';
   const isChannel = trigger.connector === 'slack' || trigger.connector === 'discord';
   const isGitHub = trigger.connector === 'github';
+  // These read their own endpoints, which need a repo; the PR ones can take drafts.
+  const pollEvent = isGitHub && GITHUB_POLL_EVENTS.some((e) => e.id === trigger.event);
+  const isPrEvent = isGitHub && (trigger.event === 'pr_opened' || trigger.event === 'pr_updated');
+  const eventListId = React.useId();
   return (
     <div className="mt-2 grid gap-2 sm:grid-cols-2">
       <label className="block">
@@ -864,9 +877,17 @@ function ConnectorTriggerFields({
         <input
           className="input w-full text-[12px]"
           placeholder={trigger.connector === 'slack' ? 'message' : 'issue'}
+          list={isGitHub ? eventListId : undefined}
           value={trigger.event ?? ''}
-          onChange={(e) => onPatch({ event: e.target.value || undefined })}
+          onChange={(e) => onPatch({ event: e.target.value || undefined, includeDrafts: undefined })}
         />
+        {isGitHub && (
+          <datalist id={eventListId}>
+            {GITHUB_POLL_EVENTS.map((e) => (
+              <option key={e.id} value={e.id}>{e.label}</option>
+            ))}
+          </datalist>
+        )}
       </label>
       <label className="block">
         <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-ink-faint">Poll every N minutes</span>
@@ -896,10 +917,20 @@ function ConnectorTriggerFields({
           <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-ink-faint">Repo / project</span>
           <input
             className="input w-full text-[12px]"
-            placeholder="owner/name (any)"
+            placeholder={pollEvent ? 'owner/name (required)' : 'owner/name (any)'}
             value={trigger.repo ?? ''}
             onChange={(e) => onPatch({ repo: e.target.value || undefined })}
           />
+        </label>
+      )}
+      {isPrEvent && (
+        <label className="flex items-center gap-2 sm:col-span-2">
+          <input
+            type="checkbox"
+            checked={!!trigger.includeDrafts}
+            onChange={(e) => onPatch({ includeDrafts: e.target.checked || undefined })}
+          />
+          <span className="text-[11.5px] text-ink-soft">Include draft PRs</span>
         </label>
       )}
       {isGitHub && (
@@ -1253,7 +1284,7 @@ function useModelNames(providers: ProviderConfig[]): Record<string, string> {
  * cannot resolve), plus a reset to the inherited model. A local-only workflow
  * lists only providers that pass the loopback check.
  */
-function WorkflowModelField({
+export function WorkflowModelField({
   providers, providerId, modelId, unsetLabel, localOnly, onChange,
 }: {
   providers: ProviderConfig[];
