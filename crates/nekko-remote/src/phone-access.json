@@ -36,10 +36,6 @@
    "attachment:import",
    "changes:accept",
    "changes:acceptAll",
-   "pr:action",
-   "pr:continueStack",
-   "pr:diff",
-   "pr:linkStack",
    "connector:connect",
    "connector:disconnect",
    "data:wipe",
@@ -47,6 +43,10 @@
    "file:read",
    "file:write",
    "image:fetch",
+   "pr:action",
+   "pr:continueStack",
+   "pr:diff",
+   "pr:linkStack",
    "providers:importCliAuth",
    "providers:remove",
    "providers:save",
@@ -82,6 +82,15 @@
    "remote:status"
   ]
  },
+ "readChannels": [],
+ "changeChannels": [],
+ "changeProof": {
+  "version": "nekko-change-v1",
+  "maxAgeMs": 300000,
+  "maxAheadMs": 60000
+ },
+ "keyChannel": "device:registerKey",
+ "activityLimit": 200,
  "settingsKeys": [
   "chatPaneAction",
   "defaultChatMode",

@@ -220,6 +220,9 @@ public final class ComputersStore {
     private let platform: String
     private let app: String?
     private let probeNetwork: ProbeNetwork
+    /// Signs Change actions (IO-33): the Secure Enclave in the app; nil where there is none.
+    @ObservationIgnored public var changeSigner: ChangeSigner?
+    @ObservationIgnored private var changeCalls: (client: ObjectIdentifier, calls: ChangeCalls)?
 
     private var client: RemoteConnection?
     private var graceTask: Task<Void, Never>?
@@ -286,6 +289,26 @@ public final class ComputersStore {
     public func remote() throws -> RemoteConnection {
         guard let client else { throw RelayError("Not connected to a computer.") }
         return client
+    }
+
+    /// A Change action on the active computer (IO-33): signed with this
+    /// phone's key (Face ID or the passcode within the last 5 minutes), the
+    /// key registered on first use. Refusals throw `ChangeRefused` with a
+    /// message to show, e.g. "Changes from this phone are turned off on Studio".
+    public func call(change channel: String, _ args: [JSONValue] = [], timeout: TimeInterval? = nil) async throws -> JSONValue {
+        guard let client else { throw RelayError("Not connected to a computer.") }
+        guard let signer = changeSigner, let caller = client as? ProofCaller else {
+            throw ChangeRefused(code: nil, message: "This phone can’t confirm changes with Face ID or a passcode.")
+        }
+        let id = ObjectIdentifier(client)
+        let calls: ChangeCalls
+        if let cached = changeCalls, cached.client == id {
+            calls = cached.calls
+        } else {
+            calls = ChangeCalls(caller: caller, signer: signer, deviceId: deviceId(), computerName: active?.name ?? "your computer")
+            changeCalls = (id, calls)
+        }
+        return try await calls.call(change: channel, args, timeout: timeout)
     }
 
     /// Every `agent:event` from the active computer. Returns an id for `unsubscribe`.

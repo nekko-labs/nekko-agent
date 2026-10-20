@@ -9,7 +9,7 @@ use nekko_remote::agent::AgentCore;
 use nekko_remote::e2e;
 use nekko_remote::hello::{self, Grant, Random};
 use nekko_remote::service::{Link, LinkHandle, RemoteService, Verifier};
-use nekko_remote::{Out, RELAYED_EVENTS};
+use nekko_remote::{Activity, Devices, Out, PhoneCall, PhoneDevice, RELAYED_EVENTS};
 use serde_json::{Value, json};
 use std::collections::VecDeque;
 use std::path::Path;
@@ -18,6 +18,26 @@ use std::sync::{Arc, Mutex};
 fn golden(name: &str) -> Value {
     let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("golden").join(name);
     serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap()
+}
+
+/// The TS gate these goldens recorded knew no devices (IO-33 came after),
+/// and none of the recorded channels is read- or change-class, so the gate
+/// never asks: any question here fails the test.
+struct NoDevices;
+
+impl Devices for NoDevices {
+    fn device(&self, id: &str) -> Option<PhoneDevice> {
+        panic!("the gate looked up {id} for a channel recorded before IO-33")
+    }
+    fn register_key(&self, id: &str, _key: &str) -> Result<bool, &'static str> {
+        panic!("register_key({id})")
+    }
+    fn record(&self, id: &str, entry: Activity) {
+        panic!("record({id}, {entry:?})")
+    }
+    fn now(&self) -> f64 {
+        0.0
+    }
 }
 
 fn s(v: &Value) -> &str {
@@ -152,7 +172,7 @@ fn the_relay_agent_sends_the_same_frames() {
             for out in core.on_relay(text, &verify) {
                 match out {
                     Out::Send(f) => sent.push(f),
-                    Out::Dispatch { cid, id, channel, args } => {
+                    Out::Dispatch { cid, id, device_id, channel, args, proof } => {
                         // As the daemon runs it: through the phone gate, then the host.
                         let seen = Arc::new(Mutex::new(Vec::new()));
                         let (record, responses) = (seen.clone(), responses.clone());
@@ -169,7 +189,8 @@ fn the_relay_agent_sends_the_same_frames() {
                             };
                             Box::pin(std::future::ready(result))
                         });
-                        let result = rt.block_on(nekko_remote::phone::gate(host)(channel, args));
+                        let gated = nekko_remote::phone::gate(host, Arc::new(NoDevices));
+                        let result = rt.block_on(gated(PhoneCall { device_id, proof }, channel, args));
                         calls.extend(seen.lock().unwrap().drain(..));
                         sent.push(core.reply(&cid, id, result));
                     }
@@ -299,9 +320,10 @@ fn the_phone_gate_decides_as_the_ts_does() {
             };
             Box::pin(std::future::ready(Ok(out)))
         });
-        let gated = nekko_remote::phone::gate(host);
+        let gated = nekko_remote::phone::gate(host, Arc::new(NoDevices));
         let channel = s(&case["channel"]).to_string();
-        let got = rt.block_on(gated(channel.clone(), case["args"].clone()));
+        let who = PhoneCall { device_id: "phone-1".into(), proof: None };
+        let got = rt.block_on(gated(who, channel.clone(), case["args"].clone()));
         let what = format!("{channel} {}", case["args"]);
         match case.get("error") {
             Some(e) => assert_eq!(got.as_ref().unwrap_err(), s(e), "{what}"),
