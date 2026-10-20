@@ -94,6 +94,7 @@
   "source"
  ],
  "queueKeys": [
+  "clientMessageId",
   "images",
   "skill",
   "text"
@@ -109,6 +110,7 @@
   "title"
  ],
  "chatSendKeys": [
+  "clientMessageId",
   "images",
   "modelId",
   "providerId",

@@ -2824,6 +2824,145 @@
    "error": "Not allowed from a paired phone (value-invalid): chat:queue prompt"
   },
   {
+   "channel": "chat:send",
+   "args": [
+    {
+     "sessionId": "s1",
+     "providerId": "p1",
+     "modelId": "m1",
+     "text": "hi",
+     "clientMessageId": "6f1c2a9e-7b1d-4c35-9a52-2b8f0f6f8d11"
+    }
+   ],
+   "calls": [
+    [
+     "chat:send",
+     [
+      {
+       "sessionId": "s1",
+       "providerId": "p1",
+       "modelId": "m1",
+       "text": "hi",
+       "clientMessageId": "6f1c2a9e-7b1d-4c35-9a52-2b8f0f6f8d11"
+      }
+     ]
+    ]
+   ],
+   "result": {
+    "ok": "chat:send"
+   }
+  },
+  {
+   "channel": "chat:send",
+   "args": [
+    {
+     "sessionId": "s1",
+     "text": "x",
+     "skill": {
+      "name": "review",
+      "input": "x"
+     },
+     "clientMessageId": "abc_1"
+    }
+   ],
+   "calls": [
+    [
+     "skills:runnable",
+     []
+    ],
+    [
+     "chat:send",
+     [
+      {
+       "sessionId": "s1",
+       "text": "Review carefully.\n\nx",
+       "skill": {
+        "name": "review",
+        "input": "x"
+       },
+       "clientMessageId": "abc_1"
+      }
+     ]
+    ]
+   ],
+   "result": {
+    "ok": "chat:send"
+   }
+  },
+  {
+   "channel": "chat:send",
+   "args": [
+    {
+     "sessionId": "s1",
+     "text": "hi",
+     "clientMessageId": ""
+    }
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (value-invalid): clientMessageId"
+  },
+  {
+   "channel": "chat:send",
+   "args": [
+    {
+     "sessionId": "s1",
+     "text": "hi",
+     "clientMessageId": "a/b"
+    }
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (value-invalid): clientMessageId"
+  },
+  {
+   "channel": "chat:send",
+   "args": [
+    {
+     "sessionId": "s1",
+     "text": "hi",
+     "clientMessageId": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    }
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (value-invalid): clientMessageId"
+  },
+  {
+   "channel": "chat:queue",
+   "args": [
+    "s1",
+    {
+     "text": "later",
+     "clientMessageId": "q-1"
+    }
+   ],
+   "calls": [
+    [
+     "chat:queue",
+     [
+      "s1",
+      {
+       "text": "later",
+       "clientMessageId": "q-1"
+      }
+     ]
+    ]
+   ],
+   "result": {
+    "ok": "chat:queue"
+   }
+  },
+  {
+   "channel": "chat:queue",
+   "args": [
+    "s1",
+    {
+     "text": "later",
+     "clientMessageId": 9
+    }
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (value-invalid): clientMessageId"
+  },
+  {
    "channel": "session:get",
    "args": [
     "small"

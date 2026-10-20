@@ -242,16 +242,23 @@ struct ConnectionBanner: View {
         }
     }
 
+    /// The outbox, in a sentence: what is written here goes when the computer is back.
+    private var waitingNote: String {
+        let n = store.outbox.count
+        if n == 0 { return "" }
+        return n == 1 ? " 1 prompt waits on this iPhone and goes when it’s back." : " \(n) prompts wait on this iPhone and go when it’s back."
+    }
+
     private var line: (text: String, color: Color, icon: String)? {
         let name = store.active?.name ?? "Your computer"
         switch store.conn {
         case .online, .idle:
             return nil
         case .connecting:
-            if let hint = app.tailnetHint { return (hint, palette.warning, "network.slash") }
-            return ("Connecting to \(name)…" + (store.connDetail.map { " (\($0))" } ?? ""), palette.running, "arrow.triangle.2.circlepath")
+            if let hint = app.tailnetHint { return (hint + waitingNote, palette.warning, "network.slash") }
+            return ("Connecting to \(name)…" + (store.connDetail.map { " (\($0))" } ?? "") + waitingNote, palette.running, "arrow.triangle.2.circlepath")
         case .offline:
-            return ("\(name) is offline. Open Nekko Agent on it, with Remote access on. This phone keeps trying.", palette.warning, "moon.zzz")
+            return ("\(name) is offline. Open Nekko Agent on it, with Remote access on. This phone keeps trying." + waitingNote, palette.warning, "moon.zzz")
         case .denied:
             let why: String
             switch store.denied {

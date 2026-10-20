@@ -29,6 +29,14 @@
    "connector": "github"
   },
   {
+   "op": "github.runFailureLogs",
+   "connector": "github"
+  },
+  {
+   "op": "github.upsertPRComment",
+   "connector": "github"
+  },
+  {
    "op": "gitlab.setCommitStatus",
    "connector": "gitlab"
   },

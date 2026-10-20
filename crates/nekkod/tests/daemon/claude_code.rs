@@ -48,9 +48,12 @@ pub fn fake_claude() {
             "is_error": reason != "completed", "terminal_reason": reason, "session_id": session,
             "num_turns": 1, "total_cost_usd": 0.01, "result": text,
             "usage": { "input_tokens": 3, "output_tokens": 5, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0 },
+            "modelUsage": { "claude-opus-5-5": { "inputTokens": 3, "outputTokens": 5, "contextWindow": 1_000_000 } },
         })
     };
-    let assistant = |id: &str, content: Value| json!({ "type": "assistant", "message": { "id": id, "role": "assistant", "content": content }, "parent_tool_use_id": null, "session_id": session });
+    // Each call reports what it sent: Claude Code's ~20k of system prompt and tools plus the turn.
+    let usage = json!({ "input_tokens": 2, "cache_read_input_tokens": 20_000, "cache_creation_input_tokens": 1_000, "output_tokens": 5 });
+    let assistant = |id: &str, content: Value| json!({ "type": "assistant", "message": { "id": id, "role": "assistant", "content": content, "usage": usage }, "parent_tool_use_id": null, "session_id": session });
     let rt = tokio::runtime::Runtime::new().unwrap();
     let stdin = std::io::stdin();
     let mut lines = stdin.lock().lines();
@@ -267,6 +270,11 @@ async fn runs_turns_on_one_claude_code_process_and_keeps_its_session() {
     assert_eq!(replies.len(), 1);
     assert!(replies[0].ends_with(": hello"), "{replies:?}");
     assert!(first["messages"].as_array().unwrap().last().unwrap()["turnStats"].is_object());
+    // What the context gauge shows: Claude Code's own figures, not Nekko's transcript estimate.
+    assert_eq!(
+        first["claudeCodeContext"],
+        json!({ "used": 21_002, "window": 1_000_000, "model": "claude-opus-5-5", "modelId": "opus" })
+    );
 
     // The second turn reuses the same child (same pid) and the same Claude Code session.
     let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "cc2", "again")]), Some(TOKEN)).await;

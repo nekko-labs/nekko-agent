@@ -180,6 +180,20 @@ pub struct Screened {
 }
 
 /// `{ name, input }` from a phone, or why not (`phoneSkill`).
+/// A phone's `clientMessageId`, when it sent one, must be a short id (a UUID): `clientMessageIdOf`.
+fn client_message_id(o: &Value) -> Result<(), Denied> {
+    match o.get("clientMessageId") {
+        None => Ok(()),
+        Some(Value::String(id))
+            if (1..=64).contains(&id.len())
+                && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_') =>
+        {
+            Ok(())
+        }
+        Some(_) => Err(denied("value-invalid", "clientMessageId")),
+    }
+}
+
 fn phone_skill(v: &Value) -> Result<SkillCall, Denied> {
     let bad = || denied("value-invalid", "skill");
     let o = v.as_object().ok_or_else(bad)?;
@@ -217,6 +231,7 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
         }
         "chat:send" => {
             keys_within(arg(0), &policy().chat_send_keys, "chat:send options")?;
+            client_message_id(arg(0))?;
             if let Some(skill) = arg(0).get("skill") {
                 out.skill = Some(phone_skill(skill)?);
             }
@@ -228,6 +243,7 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
                     return Err(denied("value-invalid", "chat:queue prompt"));
                 }
                 keys_within(item, &policy().queue_keys, "chat:queue prompt")?;
+                client_message_id(item)?;
                 if let Some(skill) = item.get("skill") {
                     out.skill = Some(phone_skill(skill)?);
                 }

@@ -29,7 +29,11 @@ public final class ChatModel {
     public let sessionId: String
     public private(set) var session: Session? {
         // Parsed once per read, not on every streamed token.
-        didSet { savedBlocks = session.map { Transcript.fromMessages($0.messages) } ?? [] }
+        didSet {
+            savedBlocks = session.map { Transcript.fromMessages($0.messages) } ?? []
+            // What the computer lists has arrived: it leaves the outbox.
+            if let ids = session?.clientMessageIds, !ids.isEmpty { store.outbox.confirm(sessionId, ids) }
+        }
     }
     private var savedBlocks: [Block] = []
     /// Saved block id → the live id the view already shows it under (see `Transcript.carriedIds`).
@@ -137,18 +141,51 @@ public final class ChatModel {
         }
     }
 
-    /// Throws when the prompt couldn't be sent, so the composer can keep the text.
-    /// `images` are `data:image/jpeg;base64,…` URLs.
-    public func send(_ text: String, skill: SkillSummary? = nil, images: [String] = []) async throws {
-        let r = try store.remote()
+    /// Send a prompt. From this moment until the computer's copy of the chat
+    /// lists its `clientMessageId`, it is on the phone's disk (the outbox), so
+    /// a crash, iOS ending the app or a dropped connection never loses it.
+    /// Offline it waits there and goes when the computer is back; online this
+    /// chat sends it at once. Throws when the computer refused it, so the
+    /// composer can keep the text. `images` are `data:image/jpeg;base64,…`
+    /// URLs. Returns the prompt's `clientMessageId`.
+    @discardableResult
+    public func send(_ text: String, skill: SkillSummary? = nil, images: [String] = []) async throws -> String {
+        let outbox = store.outbox
+        let id = outbox.newId()
+        guard store.conn == .online, let r = try? store.remote() else {
+            outbox.add(chatId: sessionId, text: text, skill: skill, images: images, id: id)
+            return id
+        }
+        // Anything already waiting for this chat goes first, in order.
+        if !outbox.items(for: sessionId).isEmpty {
+            outbox.add(chatId: sessionId, text: text, skill: skill, images: images, id: id)
+            store.flushOutbox()
+            return id
+        }
+        outbox.add(chatId: sessionId, text: text, skill: skill, images: images, id: id, direct: true)
         if turn.running {
             // Same as the desktop: a prompt sent mid-run waits its turn.
-            let s = Session.from(try await r.call(Channels.chatQueue, [.string(sessionId), queuePrompt(text: text, skill: skill, images: images)]))
-            if let s { session = s }
-            return
+            do {
+                let raw = try await callWithId(r, Channels.chatQueue, id) { cid in
+                    [.string(self.sessionId), queuePrompt(text: text, skill: skill, images: images, clientMessageId: cid)]
+                }
+                if let s = Session.from(raw) { session = s }
+                // Listed (confirmed by the didSet), or a computer too old to list it: done either way.
+                outbox.drop(id)
+            } catch let e as RelayError where e.fromComputer {
+                outbox.drop(id)
+                throw e
+            } catch {
+                // No answer: the outbox finds out, with the same id, when the computer is back.
+                outbox.endDirect(id)
+            }
+            return id
         }
         let (providerId, modelId) = Self.resolveModel(session, store.defaults)
-        guard let providerId, let modelId else { throw RelayError("Choose a default model on your computer first.") }
+        guard let providerId, let modelId else {
+            outbox.drop(id)
+            throw RelayError("Choose a default model on your computer first.")
+        }
         let at = now()
         let shown = skill.map { "/\($0.name) \(text)".trimmingCharacters(in: .whitespaces) } ?? text
         turn = LiveTurn(running: true, blocks: [.user(id: "pending-\(at)", text: shown, at: at, images: images.count)], startedAt: at)
@@ -157,22 +194,56 @@ public final class ChatModel {
         Task { @MainActor in
             defer { self.sending = false }
             do {
-                _ = try await r.call(Channels.chatSend, [sendOptions(sessionId: sessionId, providerId: providerId, modelId: modelId,
-                                                                     text: text, skill: skill, images: images)], timeout: turnTimeout)
+                _ = try await self.callWithId(r, Channels.chatSend, id, timeout: turnTimeout) { cid in
+                    [sendOptions(sessionId: self.sessionId, providerId: providerId, modelId: modelId, text: text, skill: skill,
+                                 images: images, clientMessageId: cid)]
+                }
+                // The turn ended. The re-read confirms the prompt; if the chat
+                // doesn't list it, the outbox settles it (a refusal comes back as a draft).
+                await self.reload()
+                if outbox.direct.contains(id) {
+                    outbox.endDirect(id)
+                    self.store.flushOutbox()
+                }
             } catch {
                 var t = self.turn
-                // Nothing came back for it: give the prompt back instead of
-                // leaving a bubble that was never delivered.
                 let started = t.blocks.contains { $0.id != "pending-\(at)" }
-                if !started {
-                    t.blocks.removeAll { $0.id == "pending-\(at)" }
-                    self.unsent = UnsentPrompt(text: text, skill: skill, images: images)
-                }
+                if !started { t.blocks.removeAll { $0.id == "pending-\(at)" } }
                 t.running = false
-                t.error = error.localizedDescription
+                if let e = error as? RelayError, e.fromComputer {
+                    // The computer turned it down: the prompt goes back to the composer.
+                    outbox.drop(id)
+                    if !started { self.unsent = UnsentPrompt(text: text, skill: skill, images: images) }
+                    t.error = e.message
+                } else {
+                    // No answer (the connection dropped): it may or may not have
+                    // arrived. The outbox sends it again with the same id once the
+                    // computer is back, and the computer takes it only once.
+                    outbox.endDirect(id)
+                }
                 self.turn = t
             }
         }
+        return id
+    }
+
+    /// `channel` with the prompt's `clientMessageId`. A computer from before
+    /// exactly-once delivery refuses the unknown key: then the prompt goes
+    /// as before, without it, and the outbox lets go of it (it could not tell
+    /// whether a resend would run twice).
+    private func callWithId(_ r: RemoteConnection, _ channel: String, _ id: String, timeout: TimeInterval? = nil,
+                            _ args: (String?) -> [JSONValue]) async throws -> JSONValue {
+        do {
+            return try await r.call(channel, args(id), timeout: timeout)
+        } catch let e as RelayError where e.fromComputer && Outbox.isOldComputer(e) {
+            store.outbox.drop(id)
+            return try await r.call(channel, args(nil), timeout: timeout)
+        }
+    }
+
+    /// The computer's copy of this chat lists the prompt: it was delivered.
+    public func delivered(_ clientMessageId: String) -> Bool {
+        session?.clientMessageIds.contains(clientMessageId) == true
     }
 
     public func abort() {
@@ -181,8 +252,12 @@ public final class ChatModel {
         Task { _ = try? await r.call(Channels.chatAbort, [.string(id)]) }
     }
 
+    /// Approvals and answers are never queued: they are time-sensitive and safety-relevant.
+    public static let reconnectToAnswer = "Reconnect to answer. Approvals and answers are never sent later."
+
     public func approve(_ ok: Bool) async throws {
         guard let a = turn.approval else { return }
+        guard store.conn == .online else { throw RelayError(Self.reconnectToAnswer) }
         turn.approval = nil
         do {
             _ = try await store.remote().call(Channels.toolApprove, [.string(sessionId), .string(a.call.id), .bool(ok)])
@@ -195,6 +270,7 @@ public final class ChatModel {
 
     public func answer(_ answers: [AskAnswer]) async throws {
         guard let q = turn.question else { return }
+        guard store.conn == .online else { throw RelayError(Self.reconnectToAnswer) }
         turn.question = nil
         do {
             _ = try await store.remote().call(Channels.chatAnswer, [.string(sessionId), .string(q.callId), .array(answers.map(\.json))])
@@ -258,13 +334,28 @@ public final class ChatModel {
     public var error: String? { loadError ?? turn.error }
     public var ready: Bool { session != nil || loadError != nil }
 
-    /// Why the composer can't send right now, or nil.
+    /// Why the composer can't send right now, or nil. Being offline is not a
+    /// reason: the prompt waits in the outbox (`sendsLater`).
     public var blocked: String? {
-        let name = store.active?.name ?? "your computer"
         let (p, m) = Self.resolveModel(session, store.defaults)
         if store.conn == .denied || store.denied != nil { return "This phone is no longer paired." }
-        if store.conn != .online { return "\(name) is \(store.conn == .offline ? "offline" : "reconnecting")." }
-        if p == nil || m == nil { return "No model chosen for this chat. Set a default model on your computer." }
+        if store.conn == .online && session != nil && (p == nil || m == nil) {
+            return "No model chosen for this chat. Set a default model on your computer."
+        }
         return nil
     }
+
+    /// The computer is out of reach: Send puts the prompt in the outbox ("Send when online").
+    public var sendsLater: Bool { store.conn != .online }
+
+    /// What the composer says about the connection while it is down, or nil.
+    public var offlineNote: String? {
+        guard store.conn != .online, store.conn != .denied, store.denied == nil else { return nil }
+        let name = store.active?.name ?? "your computer"
+        let state = store.conn == .offline ? "offline" : "reconnecting"
+        return "\(name) is \(state). What you send waits on this iPhone and goes when it’s back."
+    }
+
+    /// This chat's prompts waiting in the outbox, oldest first.
+    public var waiting: [OutboxItem] { store.outbox.items(for: sessionId) }
 }

@@ -159,6 +159,16 @@ describe('chat options from a phone', () => {
     expect(code(() => screenPhoneCall('chat:send', [{ sessionId: 's', text: 'hi', attachedPaths: ['/etc/passwd'] }]))).toBe('option-denied');
   });
 
+  it('lets an outbox id through on chat:send and chat:queue, only a short id', () => {
+    const id = '6f1c2a9e-7b1d-4c35-9a52-2b8f0f6f8d11';
+    expect(code(() => screenPhoneCall('chat:send', [{ sessionId: 's', text: 'hi', clientMessageId: id }]))).toBe('ok');
+    expect(code(() => screenPhoneCall('chat:queue', ['s', { text: 'hi', clientMessageId: id }]))).toBe('ok');
+    for (const bad of ['', 'x'.repeat(65), 'a b', 7, null, '../etc']) {
+      expect(code(() => screenPhoneCall('chat:send', [{ sessionId: 's', text: 'hi', clientMessageId: bad }]))).toBe('value-invalid');
+      expect(code(() => screenPhoneCall('chat:queue', ['s', { text: 'hi', clientMessageId: bad }]))).toBe('value-invalid');
+    }
+  });
+
   it('passes an allowed call through unchanged', async () => {
     const dispatch = vi.fn(() => ({ id: 's1' }));
     await expect(callFromPhone(dispatch, 'session:get', ['s1'])).resolves.toEqual({ id: 's1' });

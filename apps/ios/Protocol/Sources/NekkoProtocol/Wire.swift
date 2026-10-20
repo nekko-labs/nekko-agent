@@ -137,6 +137,11 @@ public struct Session: Equatable, Sendable {
     public let omittedMessages: Int
     public let queue: [String]
     public let updatedAt: Int64
+    /// The outbox ids this chat has taken (`chat:send` / `chat:queue` with a
+    /// `clientMessageId`): a prompt whose id is here was delivered.
+    public var clientMessageIds: [String] = []
+    /// A turn is running on the computer (`activeRun`): a prompt waits in its queue.
+    public var running = false
 
     public static func from(_ v: JSONValue?) -> Session? {
         guard let v, let id = v.str("id") else { return nil }
@@ -147,7 +152,9 @@ public struct Session: Equatable, Sendable {
             omittedMessages: max(0, Int(v.long("omittedMessages") ?? 0)),
             // Queue entries may be plain strings or {text, images, skill}; the phone shows text.
             queue: v["queue"]?.array?.compactMap { $0.string ?? $0.str("text") } ?? [],
-            updatedAt: v.long("updatedAt") ?? 0)
+            updatedAt: v.long("updatedAt") ?? 0,
+            clientMessageIds: v["clientMessageIds"]?.array?.compactMap(\.string) ?? [],
+            running: v["activeRun"].map { !$0.isNull } ?? false)
     }
 }
 
@@ -649,20 +656,24 @@ public func skillCall(name: String, input: String) -> JSONValue { ["name": .stri
 
 /// `chat:send` argument (SendOptions): only `PHONE_CHAT_SEND_KEYS`.
 /// `images` are `data:image/jpeg;base64,…` URLs.
+/// `clientMessageId` is the outbox's id for the prompt: the computer answers a
+/// repeat of it without a second turn (exactly-once delivery after a reconnect).
 public func sendOptions(sessionId: String, providerId: String, modelId: String, text: String,
-                        skill: SkillSummary? = nil, images: [String] = []) -> JSONValue {
+                        skill: SkillSummary? = nil, images: [String] = [], clientMessageId: String? = nil) -> JSONValue {
     var o: [String: JSONValue] = ["sessionId": .string(sessionId), "providerId": .string(providerId),
                                   "modelId": .string(modelId), "text": .string(text)]
     if let skill { o["skill"] = skillCall(name: skill.name, input: text) }
     if !images.isEmpty { o["images"] = .array(images.map { .string($0) }) }
+    if let clientMessageId { o["clientMessageId"] = .string(clientMessageId) }
     return .object(o)
 }
 
-/// `chat:queue` prompt: plain text, or `{text, skill, images}`.
-public func queuePrompt(text: String, skill: SkillSummary? = nil, images: [String] = []) -> JSONValue {
-    if skill == nil && images.isEmpty { return .string(text) }
+/// `chat:queue` prompt: plain text, or `{text, skill, images, clientMessageId}`.
+public func queuePrompt(text: String, skill: SkillSummary? = nil, images: [String] = [], clientMessageId: String? = nil) -> JSONValue {
+    if skill == nil && images.isEmpty && clientMessageId == nil { return .string(text) }
     var o: [String: JSONValue] = ["text": .string(text)]
     if let skill { o["skill"] = skillCall(name: skill.name, input: text) }
     if !images.isEmpty { o["images"] = .array(images.map { .string($0) }) }
+    if let clientMessageId { o["clientMessageId"] = .string(clientMessageId) }
     return .object(o)
 }

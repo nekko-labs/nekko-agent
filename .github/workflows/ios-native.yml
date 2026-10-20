@@ -123,6 +123,15 @@ jobs:
             # The app is reinstalled per run; wipe it so the next theme pairs from scratch.
             xcrun simctl uninstall "$DEVICE" com.nekko.native.ios || true
           done
+          # Offline mode: a prompt sent with the relay down waits, then goes exactly once when it is back.
+          xcrun simctl ui "$DEVICE" appearance light
+          ../../apps/ios/scripts/itest-stack.sh /tmp/stack-offline.env
+          . /tmp/stack-offline.env
+          TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" TEST_RUNNER_NEKKO_ITEST_RELAY_CTL="$NEKKO_ITEST_RELAY_CTL" \
+            xcodebuild "${COMMON[@]}" -resultBundlePath evidence/offline.xcresult test-without-building \
+            -only-testing:NekkoNativeUITests/LiveRelayTests/testSendWithTheRelayDownAndSeeItDelivered || failed=1
+          kill $NEKKO_ITEST_PIDS 2>/dev/null || true
+          xcrun simctl uninstall "$DEVICE" com.nekko.native.ios || true
           # The deep link from the computer's QR (Camera → nekko-agent-pair:) pairs through the confirmation sheet.
           xcrun simctl ui "$DEVICE" appearance light
           ../../apps/ios/scripts/itest-stack.sh /tmp/stack-link.env

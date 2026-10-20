@@ -14,6 +14,8 @@
  * switch: a user-flippable toggle would make Nekko the party offering it.
  */
 
+import type { ClaudeCodeContext } from './chat.js';
+
 /** How the Claude behind a provider is paid for. */
 export type ClaudeAuth = 'api_key' | 'cloud' | 'subscription' | 'unknown';
 
@@ -183,6 +185,20 @@ export const CLAUDE_CODE_UNSUPPORTED: Partial<Record<ClaudeCapability, ClaudeRea
 
 /** The provider kind of the Claude Code harness ("Claude Agent"). */
 export const CLAUDE_CODE_PROVIDER_KIND = 'claude-code';
+
+/**
+ * What Claude Code last reported about a Claude Agent chat's context, for the
+ * chat's current model: `undefined` before its first turn or once the model
+ * changed, when the gauges fall back to Nekko's estimate and the alias guess.
+ */
+export function reportedClaudeCodeContext(
+  session: { claudeCodeContext?: ClaudeCodeContext; modelId?: string } | null | undefined,
+  modelId: string | undefined = session?.modelId,
+): { used: number; window?: number } | undefined {
+  const c = session?.claudeCodeContext;
+  if (!c || c.used === undefined || c.modelId !== modelId) return undefined;
+  return { used: c.used, ...(c.window ? { window: c.window } : {}) };
+}
 
 /** Provider kinds that run Claude on the user's own cloud account. */
 export const CLAUDE_CLOUD_PROVIDER_KINDS: readonly string[] = ['bedrock', 'vertex', 'foundry'];

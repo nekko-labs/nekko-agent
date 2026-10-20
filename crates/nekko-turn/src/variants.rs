@@ -197,6 +197,9 @@ pub fn compaction_sizes_json(context_window: f64) -> Value {
     json!({ "chunkChars": chunk, "maxOutputTokens": out })
 }
 
+/// Why a Claude Agent (`claude-code`) chat is never compacted by Nekko.
+pub const CLAUDE_CODE_COMPACTS: &str = "Claude Code manages this chat's context and compacts it by itself.";
+
 /// `compactionRefusal(session, provider, offlineAllowed)`: why a chat cannot be compacted.
 pub fn compaction_refusal(
     session: Option<&Value>,
@@ -218,6 +221,12 @@ pub fn compaction_refusal(
     }
     if !provider.is_some_and(|p| js::truthy(p.get("enabled"))) {
         return Some("The conversation provider is unavailable.");
+    }
+    // A Claude Agent chat's context is Claude Code's own session, which it
+    // compacts itself: a summary from Nekko would never reach it, and the
+    // provider has no model API to write one with.
+    if provider.and_then(|p| p.get("kind")).and_then(Value::as_str) == Some("claude-code") {
+        return Some(CLAUDE_CODE_COMPACTS);
     }
     if js::truthy(s.get("offline")) && !offline_allowed {
         return Some("Offline conversations can only be compacted with a local-compatible loopback provider.");

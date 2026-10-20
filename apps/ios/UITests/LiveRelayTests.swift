@@ -44,7 +44,7 @@ final class LiveRelayTests: XCTestCase {
 
         let newChat = app.navigationBars.buttons["New chat"]
         XCTAssertTrue(newChat.waitForExistence(timeout: 20))
-        XCTAssertTrue(waitEnabled(newChat, 20), "connected to the computer")
+        XCTAssertTrue(waitOnline(app, 20), "connected to the computer")
         // Same protocol on both sides (IO-32): no banner.
         XCTAssertFalse(app.descendants(matching: .any)["protocol-banner"].exists)
         attach(app, "\(theme)-2-chats")
@@ -229,6 +229,68 @@ final class LiveRelayTests: XCTestCase {
     /// The computer's QR opens `nekko-agent-pair:` from the Camera app: iOS asks
     /// "Open in Nekko Agent?", the app shows the confirmation sheet, and pairing
     /// from it connects.
+    /// Offline mode (IO-18): with the relay down, a prompt is written and sent
+    /// "when online"; it waits in the transcript, and once the relay is back it
+    /// is delivered exactly once and answered.
+    func testSendWithTheRelayDownAndSeeItDelivered() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let raw = env["NEKKO_ITEST_LINK"], let link = URL(string: raw), let ctl = env["NEKKO_ITEST_RELAY_CTL"] else {
+            throw XCTSkip("set NEKKO_ITEST_LINK and NEKKO_ITEST_RELAY_CTL (apps/ios/scripts/itest-stack.sh)")
+        }
+        let app = XCUIApplication()
+        app.launchArguments = ["-appLock", "NO", "-theme", "light", "-uiTestReset", "YES"]
+        app.launch()
+        allowSystemAlerts()
+        let start = app.buttons["Pair with your computer"]
+        XCTAssertTrue(start.waitForExistence(timeout: 10))
+        start.tap()
+        let field = app.input("nekko-agent-pair:?relay=…")
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText(link.absoluteString)
+        app.buttons["Pair"].firstMatch.tap()
+        tapSystemAlertIfShown()
+        XCTAssertTrue(waitOnline(app, 30), "connected to the computer")
+
+        app.navigationBars.buttons["New chat"].tap()
+        let prompt = app.input("What should your computer do?")
+        XCTAssertTrue(prompt.waitForExistence(timeout: 5))
+        prompt.tap()
+        prompt.typeText("Say hello")
+        app.buttons["Start"].tap()
+        XCTAssertTrue(app.staticTexts["Hello from your computer."].waitForExistence(timeout: 30), "the first reply streamed in")
+
+        // The relay goes away: the composer stays usable and says the prompt will wait.
+        relay(ctl, "stop")
+        let later = app.buttons["chat.sendLater"]
+        XCTAssertTrue(later.waitForExistence(timeout: 30), "the composer offers Send when online")
+        let message = app.input("chat.message")
+        message.tap()
+        message.typeText("written while offline")
+        XCTAssertTrue(app.descendants(matching: .any)["chat.offlineNote"].exists)
+        later.tap()
+        let waiting = app.staticTexts["Waiting to send"]
+        XCTAssertTrue(waiting.waitForExistence(timeout: 10), "the prompt waits in the transcript")
+        attach(app, "offline-1-waiting")
+        auditAccessibility(app, "offline-waiting")
+
+        // Back: it goes on its own, once. (Not tapping Try now: the app often
+        // reconnects and delivers first, and the row vanishes mid-tap.)
+        XCTAssertTrue(app.buttons["Try now"].exists, "the waiting row offers Try now while offline")
+        relay(ctl, "start")
+        XCTAssertTrue(waitGone(waiting, 90), "the waiting prompt was delivered")
+        // A user bubble reads as one element, "You: …".
+        let sent = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "You: written while offline"))
+        XCTAssertTrue(sent.firstMatch.waitForExistence(timeout: 20))
+        let replies = app.staticTexts.matching(NSPredicate(format: "label == %@", "Hello from your computer."))
+        let answered = expectation(for: NSPredicate(format: "count == 2"), evaluatedWith: replies)
+        wait(for: [answered], timeout: 30)
+        sleep(2)
+        XCTAssertEqual(sent.count, 1, "delivered exactly once")
+        XCTAssertEqual(replies.count, 2, "answered once")
+        attach(app, "offline-2-delivered")
+    }
+
     func testPairFromADeepLink() throws {
         guard let raw = ProcessInfo.processInfo.environment["NEKKO_ITEST_LINK"], let link = URL(string: raw) else {
             throw XCTSkip("set NEKKO_ITEST_LINK (apps/ios/scripts/itest-stack.sh)")
@@ -255,7 +317,7 @@ final class LiveRelayTests: XCTestCase {
 
         let newChat = app.navigationBars.buttons["New chat"]
         XCTAssertTrue(newChat.waitForExistence(timeout: 20))
-        XCTAssertTrue(waitEnabled(newChat, 20), "paired from the link and connected")
+        XCTAssertTrue(waitOnline(app, 20), "paired from the link and connected")
         attach(app, "deeplink-2-connected")
     }
 
@@ -297,9 +359,25 @@ final class LiveRelayTests: XCTestCase {
         return XCTWaiter.wait(for: [p], timeout: seconds) == .completed
     }
 
-    private func waitEnabled(_ e: XCUIElement, _ seconds: TimeInterval) -> Bool {
-        let p = expectation(for: NSPredicate(format: "isEnabled == true"), evaluatedWith: e)
-        return XCTWaiter.wait(for: [p], timeout: seconds) == .completed
+    /// Connected to the computer, as the computer menu says (New chat works offline too).
+    private func waitOnline(_ app: XCUIApplication, _ seconds: TimeInterval) -> Bool {
+        connectionMenu(app, "online").waitForExistence(timeout: seconds)
+    }
+
+    private func connectionMenu(_ app: XCUIApplication, _ state: String) -> XCUIElement {
+        app.buttons.matching(NSPredicate(format: "label == %@", "Computers and settings, \(state)")).firstMatch
+    }
+
+    /// `GET <NEKKO_ITEST_RELAY_CTL>/stop` or `/start` (apps/ios/scripts/relay-ctl.mjs): kill or restart the relay.
+    private func relay(_ ctl: String, _ action: String) {
+        let done = expectation(description: "relay \(action)")
+        var status = 0
+        URLSession.shared.dataTask(with: URL(string: "\(ctl)/\(action)")!) { _, response, _ in
+            status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            done.fulfill()
+        }.resume()
+        wait(for: [done], timeout: 20)
+        XCTAssertEqual(status, 200, "relay \(action)")
     }
 
     /// Polls until the element has a non-empty frame inside the app's window.

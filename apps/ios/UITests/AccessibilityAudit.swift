@@ -40,8 +40,9 @@ extension XCTestCase {
         let bars = navBar.union(homeStrip)
 
         var blocking: [String] = [], other: [String] = []
-        // XCTest's audit sometimes times out on a busy simulator (code -56): one retry.
-        for attempt in 1...2 {
+        // XCTest's audit sometimes times out on a busy simulator (code -56), more than once
+        // when several macOS runs share the host: up to three tries, letting it settle between.
+        for attempt in 1...3 {
             blocking = []
             other = []
             do {
@@ -52,7 +53,8 @@ extension XCTestCase {
                     return true // handled here; reported below
                 }
                 break
-            } catch let e as NSError where e.code == -56 && attempt == 1 {
+            } catch let e as NSError where e.code == -56 && attempt < 3 {
+                RunLoop.current.run(until: Date().addingTimeInterval(2))
                 continue
             } catch {
                 blocking.append("audit did not run: \(error)")

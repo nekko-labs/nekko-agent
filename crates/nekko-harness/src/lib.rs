@@ -37,7 +37,7 @@ mod turn;
 
 pub use auth::{AuthStatus, auth_status, parse_auth_status};
 pub use locate::{ClaudeBin, MIN_VERSION, locate, parse_version, pick_windows_candidate};
-pub use map::{Init, Mapped, Mapper, Outcome, StopKind, TurnEnd, USER_STOPPED, user_content};
+pub use map::{Init, Mapped, Mapper, Outcome, ReportedContext, StopKind, TurnEnd, USER_STOPPED, user_content};
 pub use session::{
     LaunchSpec, PermissionMode, Session, SessionStart, control_error_line, interrupt_line, launch_args, new_session_id,
     user_line,

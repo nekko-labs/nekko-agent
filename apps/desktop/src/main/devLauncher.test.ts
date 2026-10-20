@@ -1,4 +1,6 @@
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const launcher = '../../scripts/dev-launch.mjs';
@@ -14,6 +16,21 @@ describe('development launcher safety', () => {
     const mod = await import(/* @vite-ignore */ launcher);
     expect(typeof mod.prepareWindowsRuntime).toBe('function');
     expect(typeof mod.prepareMacBundle).toBe('function');
+  });
+
+  it('rebuilds the cached runtime when the app icon changes', async () => {
+    const { runtimeStamp, runtimeIsCurrent } = await import(/* @vite-ignore */ launcher);
+    const dir = mkdtempSync(join(tmpdir(), 'nekko-runtime-'));
+    const icon = join(dir, 'icon.ico'), ready = join(dir, 'ready-v1');
+    writeFileSync(icon, 'old logo');
+    const old = runtimeStamp(icon, 'patched');
+    expect(runtimeIsCurrent(ready, old)).toBe(false); // nothing built yet
+    writeFileSync(ready, old);
+    expect(runtimeIsCurrent(ready, runtimeStamp(icon, 'patched'))).toBe(true); // same icon: reuse
+    writeFileSync(icon, 'new logo');
+    expect(runtimeIsCurrent(ready, runtimeStamp(icon, 'patched'))).toBe(false); // new icon: rebuild
+    writeFileSync(ready, 'patched'); // a copy cached before icons were stamped
+    expect(runtimeIsCurrent(ready, runtimeStamp(icon, 'patched'))).toBe(false);
   });
 
   it('prints a banner once the app reports in, naming the API, renderer, data folder and how to stop', async () => {

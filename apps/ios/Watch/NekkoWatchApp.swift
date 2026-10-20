@@ -59,6 +59,9 @@ struct WatchStatusView: View {
             Text(snapshot.headline)
                 .font(.title3.weight(.semibold))
                 .multilineTextAlignment(.center)
+            if let w = snapshot.waitingBesideHeadline {
+                Label(w, systemImage: "tray.and.arrow.up").font(.footnote)
+            }
             if let computer = snapshot.computer {
                 Text(computer).font(.footnote).foregroundStyle(.secondary)
             }

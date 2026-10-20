@@ -899,3 +899,98 @@ async fn interrupting_starts_the_chosen_queued_prompt_and_keeps_the_others() {
     assert_eq!(users, ["old", "selected", "first", "last"], "{saved}");
     assert_eq!(saved["queue"], json!([]));
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_resent_client_message_id_runs_one_turn_and_queues_once() {
+    let session = json!({ "id": "s_once", "title": "Named", "titleAuto": false, "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    let rig = turn_rig("once", session);
+    let model = scripted_model(vec![HANG.to_string(), say_text("second")]).await;
+    let settings = json!({ "providers": [{ "id": "p1", "kind": "openai-compat", "enabled": true, "baseUrl": format!("http://127.0.0.1:{}/v1", model.port) }], "workspaces": [{ "id": "w1", "name": "project", "path": rig.workspace.to_string_lossy() }], "defaultChatMode": "yolo" });
+    write_settings(&rig, settings).await;
+    let opts = json!({ "sessionId": "s_once", "providerId": "p1", "modelId": "synthetic", "text": "from the phone", "clientMessageId": "6f1c2a9e-7b1d-4c35-9a52-2b8f0f6f8d11" });
+    let port = rig.d.port;
+    let first_opts = opts.clone();
+    let first = tokio::spawn(async move { post(port, "chat:send", json!([first_opts]), Some(TOKEN)).await });
+    let until = std::time::Instant::now() + Duration::from_secs(20);
+    while model.requests.lock().unwrap().is_empty() {
+        assert!(std::time::Instant::now() < until, "the first send never reached the model");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    // The phone resends while the first is still running (its connection dropped): answered at once, not refused.
+    let (status, reply) = post(port, "chat:send", json!([opts.clone()]), Some(TOKEN)).await;
+    assert_eq!((status, reply), (200, Value::Null));
+    post(port, "chat:abort", json!(["s_once"]), Some(TOKEN)).await;
+    let (status, _) = tokio::time::timeout(Duration::from_secs(10), first).await.expect("Stop ends the turn").unwrap();
+    assert_eq!(status, 200);
+    // After the turn ended, saved with the chat: a repeat still starts nothing.
+    let (status, reply) = post(port, "chat:send", json!([opts]), Some(TOKEN)).await;
+    assert_eq!((status, reply), (200, Value::Null));
+    let saved = saved_session(&rig, "s_once");
+    let users = saved["messages"].as_array().unwrap().iter().filter(|m| m["role"] == "user").count();
+    assert_eq!(users, 1, "{saved}");
+    assert_eq!(saved["clientMessageIds"], json!(["6f1c2a9e-7b1d-4c35-9a52-2b8f0f6f8d11"]));
+    assert_eq!(model.requests.lock().unwrap().len(), 1);
+
+    // chat:queue: the same id twice queues one prompt.
+    for _ in 0..2 {
+        let (status, _) =
+            post(port, "chat:queue", json!(["s_once", { "text": "later", "clientMessageId": "q-1" }]), Some(TOKEN))
+                .await;
+        assert_eq!(status, 200);
+    }
+    let saved = saved_session(&rig, "s_once");
+    assert_eq!(saved["queue"], json!(["later"]));
+    assert_eq!(saved["clientMessageIds"], json!(["6f1c2a9e-7b1d-4c35-9a52-2b8f0f6f8d11", "q-1"]));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_unattended_workflow_turn_denies_approvals_and_follows_its_allowlist() {
+    // A workflow run's chat in ask mode: nothing may park, ask_user is not
+    // offered, and the step's allowlist runs a matching command without asking.
+    let session = json!({
+        "id": "s_turn_u", "title": "Run", "mode": "ask", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1,
+        "unattended": true, "workflowRunId": "run_1", "toolAccess": "allowlist",
+        "allowedTools": ["Read", "Bash(echo:*)"], "executionMode": "unified",
+    });
+    let rig = turn_rig("unattended", session);
+    let model = scripted_model(vec![
+        call_tool("c_write", "write_file", json!({ "path": "new.txt", "content": "hi" })),
+        call_tool("c_echo", "bash", json!({ "command": "echo allowed" })),
+        call_tool("c_chain", "bash", json!({ "command": "echo a && touch pwned" })),
+        call_tool("c_push", "bash", json!({ "command": "git push" })),
+        say_text("done"),
+    ])
+    .await;
+    let spec = turn_spec(&rig, &model, "turn_u", "s_turn_u", json!({}));
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let (events, end) = turn_record(&rig, "turn_u", "s_turn_u").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+    let types = event_types(&events);
+    assert!(!types.iter().any(|t| t == "tool_approval_required"), "{types:?}");
+    assert!(!rig.workspace.join("new.txt").exists());
+    assert!(!rig.workspace.join("pwned").exists());
+    let results: Vec<Value> =
+        events.iter().filter(|e| e["type"] == "tool_result").map(|e| e["result"].clone()).collect();
+    let by = |id: &str| {
+        results.iter().find(|r| r["toolCallId"] == id).cloned().unwrap_or_else(|| panic!("no {id}: {results:?}"))
+    };
+    for id in ["c_write", "c_chain", "c_push"] {
+        let r = by(id);
+        assert_eq!(r["isError"], true, "{r}");
+        assert!(r["output"].as_str().unwrap().starts_with("Denied: unattended automation run ("), "{r}");
+    }
+    let echo = by("c_echo");
+    assert_ne!(echo["isError"], true, "{echo}");
+    assert!(echo["output"].as_str().unwrap().contains("allowed"), "{echo}");
+    let first = model.requests.lock().unwrap()[0].clone();
+    let tools: Vec<String> = first["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["function"]["name"].as_str().unwrap().to_string())
+        .collect();
+    assert!(!tools.contains(&"ask_user".to_string()), "{tools:?}");
+    let (_, pending) = post(rig.d.port, "chat:pending", json!([]), Some(TOKEN)).await;
+    assert!(pending.get("s_turn_u").is_none(), "{pending}");
+}

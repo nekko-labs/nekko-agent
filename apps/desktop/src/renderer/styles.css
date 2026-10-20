@@ -12,6 +12,8 @@
   height: 100%;
   pointer-events: none;
   z-index: -1;
+  /* Drawn at one pixel per CSS pixel; keep the dots crisp on high-DPI screens. */
+  image-rendering: pixelated;
 }
 
 /* Faint seasonal decoration; never intercepts app input. */
@@ -59,6 +61,7 @@
   --color-surface-2: var(--surface-2);
   --color-line: var(--line);
   --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
   --color-accent-soft: var(--accent-soft);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
@@ -210,7 +213,7 @@
 
 @utility btn-primary {
   background: var(--brand-grad);
-  color: #fff;
+  color: var(--on-accent);
   box-shadow: var(--shadow-sm);
   &:hover {
     filter: brightness(1.06) saturate(1.05);
@@ -298,7 +301,7 @@
 @utility create-tile-brand {
   /* The one tile that is the brand itself rather than a tint of a status color. */
   background: var(--brand-grad);
-  color: #fff;
+  color: var(--on-accent);
   box-shadow: 0 2px 10px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
@@ -1102,7 +1105,7 @@
 .title-update-primary {
   border-color: transparent;
   background: var(--brand-grad);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .title-update-primary:hover {
@@ -1239,6 +1242,8 @@
     --ink-faint: #8a8a97;
     --line: #e8e8ef;
     --accent: #6d5efc;
+    /* Text on the accent fill (primary buttons). Themes with a light accent switch it to dark ink. */
+    --on-accent: #ffffff;
     /* A cyan secondary paired with the indigo-violet accent into a violet→cyan
      brand gradient (the modern developer-tool look). Derived soft/gradient
      tokens track --accent (which the user can recolor in Settings). */
@@ -1426,6 +1431,380 @@
     --merged-wash-soft: rgba(255, 255, 255, 0.12);
     --merged-chip: rgba(255, 255, 255, 0.55);
   }
+
+  /* Experimental: candidate brand colour pairings (Settings → Theme → Experimental).
+     Each family is one pairing in the website's White look, its Colourful look
+     (the soft colour as the ground) and, where the main colour is dark, a Dark
+     version on that colour. Generated from the pairings with every token held to
+     the same contrast checks as the shipped presets (contrast.test.ts). */
+  [data-theme='light'][data-preset='x-blueberry-white'] {
+    --paper: #fffdf8;
+    --win: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #fffaec;
+    --ink: #17151f;
+    --ink-soft: #1b1f3b;
+    --ink-faint: #6a6d80;
+    --line: #ece5d4;
+    --on-accent: #ffffff;
+    --merged-ink: #253b8f;
+    --merged-wash: rgba(37, 59, 143, 0.08);
+    --merged-wash-soft: rgba(37, 59, 143, 0.04);
+    --merged-chip: rgba(37, 59, 143, 0.1);
+  }
+
+  [data-theme='light'][data-preset='x-blueberry-colour'] {
+    --paper: #fef0c8;
+    --win: #fffbf0;
+    --surface: #fffaeb;
+    --surface-2: #fef6de;
+    --ink: #17151f;
+    --ink-soft: #1b2041;
+    --ink-faint: #7f786b;
+    --line: #ded1b0;
+    --on-accent: #ffffff;
+    --merged-ink: #253b8f;
+    --merged-wash: rgba(255, 255, 255, 0.3);
+    --merged-wash-soft: rgba(255, 255, 255, 0.12);
+    --merged-chip: rgba(255, 255, 255, 0.55);
+  }
+
+  [data-theme='dark'][data-preset='x-blueberry-dark'] {
+    --paper: #253b8f;
+    --win: #344997;
+    --surface: #344997;
+    --surface-2: #42559e;
+    --ink: #fff9e9;
+    --ink-soft: #dedfe4;
+    --ink-faint: #929abc;
+    --line: #505f9a;
+    --on-accent: #253b8f;
+    --merged-ink: #fef0c8;
+    --merged-wash: rgba(254, 240, 200, 0.14);
+    --merged-wash-soft: rgba(254, 240, 200, 0.06);
+    --merged-chip: rgba(254, 240, 200, 0.16);
+  }
+
+  [data-theme='light'][data-preset='x-raspberry-white'] {
+    --paper: #fbfdff;
+    --win: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #f4fafe;
+    --ink: #17151f;
+    --ink-soft: #42162e;
+    --ink-faint: #846777;
+    --line: #dee6ec;
+    --on-accent: #ffffff;
+    --merged-ink: #bd1757;
+    --merged-wash: rgba(193, 23, 89, 0.08);
+    --merged-wash-soft: rgba(193, 23, 89, 0.04);
+    --merged-chip: rgba(193, 23, 89, 0.1);
+  }
+
+  [data-theme='light'][data-preset='x-raspberry-colour'] {
+    --paper: #e0f1fd;
+    --win: #f6fbfe;
+    --surface: #f4fafe;
+    --surface-2: #ecf7fe;
+    --ink: #17151f;
+    --ink-soft: #4a1630;
+    --ink-faint: #717883;
+    --line: #c4d2de;
+    --on-accent: #ffffff;
+    --merged-ink: #ae1550;
+    --merged-wash: rgba(255, 255, 255, 0.3);
+    --merged-wash-soft: rgba(255, 255, 255, 0.12);
+    --merged-chip: rgba(255, 255, 255, 0.55);
+  }
+
+  [data-theme='dark'][data-preset='x-raspberry-dark'] {
+    --paper: #ae1550;
+    --win: #b3255c;
+    --surface: #b3255c;
+    --surface-2: #b93467;
+    --ink: #f3f9fe;
+    --ink-soft: #faf5f8;
+    --ink-faint: #d087a7;
+    --line: #b84173;
+    --on-accent: #ae1550;
+    --merged-ink: #f6fbfe;
+    --merged-wash: rgba(224, 241, 253, 0.14);
+    --merged-wash-soft: rgba(224, 241, 253, 0.06);
+    --merged-chip: rgba(224, 241, 253, 0.16);
+  }
+
+  [data-theme='light'][data-preset='x-cyber-white'] {
+    --paper: #f1fffb;
+    --win: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #d7fff4;
+    --ink: #17151f;
+    --ink-soft: #121c26;
+    --ink-faint: #656b72;
+    --line: #b8ecdf;
+    --on-accent: #ffffff;
+    --merged-ink: #02313b;
+    --merged-wash: rgba(2, 49, 59, 0.08);
+    --merged-wash-soft: rgba(2, 49, 59, 0.04);
+    --merged-chip: rgba(2, 49, 59, 0.1);
+  }
+
+  [data-theme='light'][data-preset='x-cyber-colour'] {
+    --paper: #8efee0;
+    --win: #dffff6;
+    --surface: #d6fff4;
+    --surface-2: #bbfeec;
+    --ink: #17151f;
+    --ink-soft: #111d27;
+    --ink-faint: #4d7e76;
+    --line: #7dddc5;
+    --on-accent: #ffffff;
+    --merged-ink: #02313b;
+    --merged-wash: rgba(255, 255, 255, 0.3);
+    --merged-wash-soft: rgba(255, 255, 255, 0.12);
+    --merged-chip: rgba(255, 255, 255, 0.55);
+  }
+
+  [data-theme='dark'][data-preset='x-cyber-dark'] {
+    --paper: #02313b;
+    --win: #19444d;
+    --surface: #19444d;
+    --surface-2: #2d545d;
+    --ink: #d2fff3;
+    --ink-soft: #b1d6d0;
+    --ink-faint: #6a9897;
+    --line: #1e5a5c;
+    --on-accent: #02313b;
+    --merged-ink: #8efee0;
+    --merged-wash: rgba(142, 254, 224, 0.14);
+    --merged-wash-soft: rgba(142, 254, 224, 0.06);
+    --merged-chip: rgba(142, 254, 224, 0.16);
+  }
+
+  [data-theme='light'][data-preset='x-quantum-white'] {
+    --paper: #fbfeff;
+    --win: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #f3fcff;
+    --ink: #17151f;
+    --ink-soft: #1a2557;
+    --ink-faint: #6a7192;
+    --line: #dde8ed;
+    --on-accent: #ffffff;
+    --merged-ink: #204fea;
+    --merged-wash: rgba(35, 86, 254, 0.08);
+    --merged-wash-soft: rgba(35, 86, 254, 0.04);
+    --merged-chip: rgba(35, 86, 254, 0.1);
+  }
+
+  [data-theme='light'][data-preset='x-quantum-colour'] {
+    --paper: #ddf6fe;
+    --win: #f5fcff;
+    --surface: #f3fcff;
+    --surface-2: #ebfafe;
+    --ink: #17151f;
+    --ink-soft: #1b2962;
+    --ink-faint: #707a83;
+    --line: #c1d7df;
+    --on-accent: #ffffff;
+    --merged-ink: #1e4ada;
+    --merged-wash: rgba(255, 255, 255, 0.3);
+    --merged-wash-soft: rgba(255, 255, 255, 0.12);
+    --merged-chip: rgba(255, 255, 255, 0.55);
+  }
+
+  [data-theme='dark'][data-preset='x-quantum-dark'] {
+    --paper: #193cb2;
+    --win: #294ab7;
+    --surface: #294ab7;
+    --surface-2: #3756bc;
+    --ink: #f1fbff;
+    --ink-soft: #dee6f6;
+    --ink-faint: #859cd8;
+    --line: #4061c1;
+    --on-accent: #193cb2;
+    --merged-ink: #ddf6fe;
+    --merged-wash: rgba(221, 246, 254, 0.14);
+    --merged-wash-soft: rgba(221, 246, 254, 0.06);
+    --merged-chip: rgba(221, 246, 254, 0.16);
+  }
+
+  [data-theme='light'][data-preset='x-clay-white'] {
+    --paper: #fffdf4;
+    --win: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #fffae0;
+    --ink: #17151f;
+    --ink-soft: #2c1d22;
+    --ink-faint: #766c6f;
+    --line: #ece6c4;
+    --on-accent: #ffffff;
+    --merged-ink: #6b352a;
+    --merged-wash: rgba(107, 53, 42, 0.08);
+    --merged-wash-soft: rgba(107, 53, 42, 0.04);
+    --merged-chip: rgba(107, 53, 42, 0.1);
+  }
+
+  [data-theme='light'][data-preset='x-clay-colour'] {
+    --paper: #fff1a6;
+    --win: #fffbe6;
+    --surface: #fffadf;
+    --surface-2: #fff7ca;
+    --ink: #17151f;
+    --ink-soft: #301f22;
+    --ink-faint: #7f785c;
+    --line: #dfd293;
+    --on-accent: #ffffff;
+    --merged-ink: #6b352a;
+    --merged-wash: rgba(255, 255, 255, 0.3);
+    --merged-wash-soft: rgba(255, 255, 255, 0.12);
+    --merged-chip: rgba(255, 255, 255, 0.55);
+  }
+
+  [data-theme='dark'][data-preset='x-clay-dark'] {
+    --paper: #6b352a;
+    --win: #754339;
+    --surface: #754339;
+    --surface-2: #7f5046;
+    --ink: #fff9db;
+    --ink-soft: #ebe1d4;
+    --ink-faint: #b59783;
+    --line: #895b43;
+    --on-accent: #6b352a;
+    --merged-ink: #fff1a6;
+    --merged-wash: rgba(255, 241, 166, 0.14);
+    --merged-wash-soft: rgba(255, 241, 166, 0.06);
+    --merged-chip: rgba(255, 241, 166, 0.16);
+  }
+
+  [data-theme='light'][data-preset='x-forest-white'] {
+    --paper: #f6ffee;
+    --win: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #e6ffce;
+    --ink: #17151f;
+    --ink-soft: #17191f;
+    --ink-faint: #686a6d;
+    --line: #cbecac;
+    --on-accent: #ffffff;
+    --merged-ink: #18251d;
+    --merged-wash: rgba(24, 37, 29, 0.08);
+    --merged-wash-soft: rgba(24, 37, 29, 0.04);
+    --merged-chip: rgba(24, 37, 29, 0.1);
+  }
+
+  [data-theme='light'][data-preset='x-forest-colour'] {
+    --paper: #b7ff72;
+    --win: #ebffd8;
+    --surface: #e5ffcc;
+    --surface-2: #d4ffaa;
+    --ink: #17151f;
+    --ink-soft: #171a1e;
+    --ink-faint: #5f7e44;
+    --line: #a1de66;
+    --on-accent: #ffffff;
+    --merged-ink: #18251d;
+    --merged-wash: rgba(255, 255, 255, 0.3);
+    --merged-wash-soft: rgba(255, 255, 255, 0.12);
+    --merged-chip: rgba(255, 255, 255, 0.55);
+  }
+
+  [data-theme='dark'][data-preset='x-forest-dark'] {
+    --paper: #18251d;
+    --win: #2d3931;
+    --surface: #2d3931;
+    --surface-2: #404a44;
+    --ink: #e2ffc7;
+    --ink-soft: #b3cba0;
+    --ink-faint: #7d9272;
+    --line: #38512e;
+    --on-accent: #18251d;
+    --merged-ink: #b7ff72;
+    --merged-wash: rgba(183, 255, 114, 0.14);
+    --merged-wash-soft: rgba(183, 255, 114, 0.06);
+    --merged-chip: rgba(183, 255, 114, 0.16);
+  }
+
+  [data-theme='light'][data-preset='x-inkberry-white'] {
+    --paper: #fff6f4;
+    --win: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #ffe6e0;
+    --ink: #17151f;
+    --ink-soft: #181323;
+    --ink-faint: #696570;
+    --line: #eccbc4;
+    --on-accent: #ffffff;
+    --merged-ink: #1a0b2e;
+    --merged-wash: rgba(26, 11, 46, 0.08);
+    --merged-wash-soft: rgba(26, 11, 46, 0.04);
+    --merged-chip: rgba(26, 11, 46, 0.1);
+  }
+
+  [data-theme='light'][data-preset='x-inkberry-colour'] {
+    --paper: #ffb7a5;
+    --win: #ffebe6;
+    --surface: #ffe5df;
+    --surface-2: #ffd4c9;
+    --ink: #17151f;
+    --ink-soft: #181224;
+    --ink-faint: #7f5e5b;
+    --line: #dfa092;
+    --on-accent: #ffffff;
+    --merged-ink: #1a0b2e;
+    --merged-wash: rgba(255, 255, 255, 0.3);
+    --merged-wash-soft: rgba(255, 255, 255, 0.12);
+    --merged-chip: rgba(255, 255, 255, 0.55);
+  }
+
+  [data-theme='dark'][data-preset='x-inkberry-dark'] {
+    --paper: #1a0b2e;
+    --win: #2f2141;
+    --surface: #2f2141;
+    --surface-2: #413552;
+    --ink: #ffe2db;
+    --ink-soft: #c6acb0;
+    --ink-faint: #8d7785;
+    --line: #482d46;
+    --on-accent: #1a0b2e;
+    --merged-ink: #ffb7a5;
+    --merged-wash: rgba(255, 183, 165, 0.14);
+    --merged-wash-soft: rgba(255, 183, 165, 0.06);
+    --merged-chip: rgba(255, 183, 165, 0.16);
+  }
+
+  [data-theme='light'][data-preset='x-neon-white'] {
+    --paper: #fffffe;
+    --win: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #fffefb;
+    --ink: #17151f;
+    --ink-soft: #51281d;
+    --ink-faint: #8e736c;
+    --line: #ecebe8;
+    --on-accent: #ffffff;
+    --merged-ink: #a8400e;
+    --merged-wash: rgba(255, 97, 21, 0.08);
+    --merged-wash-soft: rgba(255, 97, 21, 0.04);
+    --merged-chip: rgba(255, 97, 21, 0.1);
+  }
+
+  [data-theme='light'][data-preset='x-neon-colour'] {
+    --paper: #fffcf4;
+    --win: #fffefc;
+    --surface: #fffefb;
+    --surface-2: #fffdf8;
+    --ink: #17151f;
+    --ink-soft: #5d2c1c;
+    --ink-faint: #7f7d7f;
+    --line: #dfdcd6;
+    --on-accent: #ffffff;
+    --merged-ink: #a8400e;
+    --merged-wash: rgba(255, 255, 255, 0.3);
+    --merged-wash-soft: rgba(255, 255, 255, 0.12);
+    --merged-chip: rgba(255, 255, 255, 0.55);
+  }
+
 
   /* Belt-and-suspenders for the native <select> popup list. The OS draws that
      list, and it ignores the select's own color unless each option says its

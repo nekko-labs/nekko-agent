@@ -7,7 +7,7 @@ import { CONTEXT_SOURCE, STATUS, SURFACE } from './tokens.js';
  * Context Inspector, so the color vocabulary can never drift between the two.
  * Colors resolve through the semantic provenance tokens (see tokens.ts).
  */
-export const SOURCE_META: Record<ContextItem['source'] | 'draft' | 'reply', { label: string; color: string; explain: string }> = {
+export const SOURCE_META: Record<ContextItem['source'] | 'draft' | 'reply' | 'claude-code', { label: string; color: string; explain: string }> = {
   system: {
     label: 'System prompt',
     color: CONTEXT_SOURCE.system,
@@ -61,6 +61,13 @@ export const SOURCE_META: Record<ContextItem['source'] | 'draft' | 'reply', { la
     label: 'This reply',
     color: STATUS.info,
     explain: 'What the agent is writing right now, plus the tools it is running. All of it is carried into the next step of the same turn.',
+  },
+  // Renderer-only: a Claude Agent chat's context as Claude Code reported it.
+  // Claude Code builds that request itself, so it comes as one total.
+  'claude-code': {
+    label: 'Claude Code',
+    color: CONTEXT_SOURCE.conversation,
+    explain: "What Claude Code's last model call sent: its own system prompt and tools, this chat's history and the files it read. It drops when Claude Code compacts the chat.",
   },
 };
 

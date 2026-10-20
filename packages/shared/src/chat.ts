@@ -178,6 +178,14 @@ export interface ImageTurnOptions {
   params: ImageChatParams & { modelId: string };
 }
 
+/** `Session.claudeCodeContext`. */
+export interface ClaudeCodeContext {
+  used?: number;
+  window?: number;
+  model?: string;
+  modelId?: string;
+}
+
 export interface Session {
   id: string;
   title: string;
@@ -204,6 +212,17 @@ export interface Session {
    *  Training/Goals tabs, kept out of the regular chat boards/lanes; the
    *  report_experiment tool becomes available to the agent). */
   trainingRunId?: string;
+  /**
+   * Set on the chat a workflow run makes. Nobody watches it: an approval it
+   * would need is denied at once and it is never offered ask_user.
+   */
+  unattended?: boolean;
+  /** The workflow run this chat belongs to. */
+  workflowRunId?: string;
+  /** The run's tool access (workflow-access.ts); absent means the normal tool set. */
+  toolAccess?: import('./workflow-access.js').WorkflowToolAccess;
+  /** The running step's allowed tools under `allowlist` access, set by the run before each step. */
+  allowedTools?: string[];
   providerId?: string;
   modelId?: string;
   /**
@@ -211,6 +230,15 @@ export interface Session {
    * idle reap or a restart continues it (`claude --resume`). Set by nekkod.
    */
   claudeCodeSessionId?: string;
+  /**
+   * A Claude Agent chat's context as Claude Code reported it after its last
+   * turn, set by nekkod. `used` is what its last main-thread model call sent
+   * (input plus cache reads and writes: Claude Code's own system prompt and
+   * tools included, and lower once it compacts itself); `window` its
+   * `modelUsage` context window; `model` the model it resolved `modelId` (the
+   * chat's alias) to. Trusted only while the chat's `modelId` still matches.
+   */
+  claudeCodeContext?: ClaudeCodeContext;
   messages: ChatMessage[];
   contextPrefs?: ContextPrefs;
   /** Files explicitly attached to this chat's context (absolute paths). */
@@ -277,6 +305,13 @@ export interface Session {
   tags?: string[];
   /** Queued prompts to run one after another when the current turn finishes. */
   queue?: QueuedPrompt[];
+  /**
+   * The newest `clientMessageId`s this chat has taken (`chat:send` or
+   * `chat:queue`), oldest first, at most `CLIENT_MESSAGE_IDS_KEPT`. A repeat is
+   * answered without a second turn or queue entry (exactly-once delivery from a
+   * phone's outbox).
+   */
+  clientMessageIds?: string[];
   /**
    * Set while a turn is running, cleared when it ends. A session that still
    * carries this when the host starts was cut off by a crash or a quit, and the
@@ -517,10 +552,36 @@ export interface QueuePayload {
   videos?: string[];
   /** Skill invoked for this queued user turn and the user's own input. */
   skill?: { name: string; input: string };
+  /**
+   * The sender's id for this prompt (a phone's outbox), so a resend after a
+   * dropped connection is answered without queueing it twice. Never stored in
+   * the queue itself: the chat remembers it in `clientMessageIds`.
+   */
+  clientMessageId?: string;
 }
 
 /** Queue entries are kept backwards-compatible with older string-only sessions. */
 export type QueuedPrompt = string | QueuePayload;
+
+/** How many `clientMessageId`s a chat remembers. A phone's outbox resends within minutes, so this is plenty. */
+export const CLIENT_MESSAGE_IDS_KEPT = 200;
+
+/** A usable `clientMessageId`: a short id of letters, digits, `-` and `_` (a UUID), else undefined. */
+export function clientMessageIdOf(value: unknown): string | undefined {
+  return typeof value === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(value) ? value : undefined;
+}
+
+/** True when the chat has already taken this `clientMessageId`. */
+export function hasClientMessageId(session: Pick<Session, 'clientMessageIds'> | null | undefined, id: string | undefined): boolean {
+  return !!id && !!session?.clientMessageIds?.includes(id);
+}
+
+/** `ids` with `add` appended (each once, oldest first), cut to the newest `CLIENT_MESSAGE_IDS_KEPT`. */
+export function rememberClientMessageIds(ids: readonly string[] | undefined, add: readonly string[]): string[] {
+  const out = [...(ids ?? [])];
+  for (const id of add) if (!out.includes(id)) out.push(id);
+  return out.slice(Math.max(0, out.length - CLIENT_MESSAGE_IDS_KEPT));
+}
 
 export function queueItemText(item: QueuedPrompt): string {
   return typeof item === 'string' ? item : item.text;
@@ -547,6 +608,12 @@ export interface SendOptions {
   skill?: { name: string; input: string };
   /** File paths the user explicitly attached as context. */
   attachedPaths?: string[];
+  /**
+   * The sender's id for this prompt (a phone's outbox). A chat that already
+   * took it (`Session.clientMessageIds`) answers the repeat without a second
+   * turn, so a resend after a dropped connection never runs a prompt twice.
+   */
+  clientMessageId?: string;
   /** Re-answer the last user turn: drop trailing assistant/tool messages and
    *  don't append a new user message. */
   regenerate?: boolean;
