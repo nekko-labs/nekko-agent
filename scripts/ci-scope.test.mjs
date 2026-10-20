@@ -31,6 +31,12 @@ test('a renderer change: Windows capture on the PR; capture and perf in the queu
   assert.deepEqual(queue(['apps/desktop/src/renderer/App.tsx']), q({ daemon_os: [], capture_os: ['windows-latest'], perf: true }));
 });
 
+test('a native browser patch or build-script change runs Windows capture, which builds it', () => {
+  for (const file of ['vendor/agent-browser/stdio.patch', 'scripts/build-agent-browser.mjs']) {
+    assert.deepEqual(pr([file]), p({ daemon_os: [], capture_os: ['windows-latest'], perf: false }), file);
+  }
+});
+
 test('a desktop main-process change skips perf, which measures the Local Web UI', () => {
   assert.equal(queue(['apps/desktop/src/main/index.ts']).perf, false);
 });
