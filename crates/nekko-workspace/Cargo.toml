@@ -9,6 +9,7 @@ publish.workspace = true
 
 [dev-dependencies]
 nekko-store = { path = "../nekko-store" }
+tempfile = "3"
 
 [dependencies]
 futures-util.workspace = true
@@ -20,4 +21,6 @@ nekko-tools = { path = "../nekko-tools" }
 regress.workspace = true
 reqwest = { workspace = true, features = ["native-tls"] }
 serde_json.workspace = true
+# The hash a scoped save checks against (`files:write`).
+sha2 = "0.10"
 tokio.workspace = true

@@ -34,6 +34,92 @@ export interface RemoteImage {
   finalUrl: string;
 }
 
+/**
+ * Files in one folder for callers that must not reach outside it (IO-33
+ * FA-1: `files:list`, `files:search`, `files:read`, `files:write`), served by
+ * nekkod (crates/nekko-workspace/src/scoped.rs). The caller names the folder
+ * by chat or saved-folder id, never by path; every path is relative to it and
+ * `/`-separated. `..`, absolute paths and symlinks that resolve outside are
+ * refused, and files that may hold secrets (`.env`, `.ssh/`, keys, git
+ * credentials) are counted, never named, read or written. Refusals are
+ * errors whose message starts with a {@link ScopedFileError} code.
+ */
+export type ScopedRoot = { sessionId: string; workspaceId?: string } | { workspaceId: string; sessionId?: undefined };
+
+export type ScopedFileError =
+  | 'outside-root'
+  | 'secret-file'
+  | 'not-found'
+  | 'not-a-file'
+  | 'not-a-folder'
+  | 'no-folder'
+  | 'binary'
+  | 'too-large'
+  | 'bad-request'
+  | 'io';
+
+export interface ScopedEntry {
+  name: string;
+  /** Relative to the root. */
+  path: string;
+  dir: boolean;
+  /** Bytes, files only. */
+  size?: number;
+  /** Epoch ms. */
+  mtime?: number;
+  /** A symlink that resolves inside the root. */
+  link?: true;
+}
+
+export interface ScopedListing {
+  /** The folder listed, relative to the root ('' for the root). */
+  path: string;
+  /** Folders first, then files, at most 500. */
+  entries: ScopedEntry[];
+  /** Entries before the cap. */
+  total: number;
+  truncated: boolean;
+  /** Entries left out because they may hold secrets. */
+  hiddenSecrets: number;
+  /** Links left out because they lead outside the root, or nowhere. */
+  hiddenLinks: number;
+}
+
+export interface ScopedSearch {
+  /** Best first: exact name, name prefix, name contains, path contains. */
+  hits: { path: string; name: string }[];
+  /** More files matched than the limit. */
+  truncated: boolean;
+  /** False when the search stopped looking (50,000 files). */
+  complete: boolean;
+}
+
+export interface ScopedFile {
+  path: string;
+  name: string;
+  size: number;
+  mtime: number | null;
+  /** sha256 of all the file's bytes (null past 64 MB); send it back as `expectHash`. */
+  hash: string | null;
+  kind: 'text' | 'image' | 'binary';
+  /** Text, up to `maxBytes` (default 256 KB, at most 1 MB). */
+  content?: string;
+  truncated: boolean;
+  /** A syntax-colouring hint (highlight.js names). */
+  language?: string;
+  markdown?: boolean;
+  /** Images up to 2 MB. */
+  imageDataUrl?: string;
+  mime?: string;
+  /** Whole UTF-8 text under 1 MB: a save may replace it. */
+  editable: boolean;
+}
+
+export type ScopedWriteResult =
+  | { ok: true; hash: string; size: number; mtime: number | null }
+  /** The file changed since it was read (or exists when none was expected); `hash` is its current hash. */
+  | { ok: false; error: 'conflict'; hash: string | null };
+
 /** A file the agent changed this session, original vs current, for diff/approve. */
 export interface FileChange {
   path: string;

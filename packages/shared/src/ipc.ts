@@ -7,7 +7,19 @@ import type { TerminalInfo, TerminalSnapshot, ShellOption, SshHost } from './ter
 import type { ContextBundle } from './context.js';
 import type { MemoryEntry, MemoryScope } from './memory.js';
 import type { WorkspaceFolder, IndexStatus, SearchHit, IndexedFile } from './workspace.js';
-import type { DirEntry, FileContent, FileChange, LineComment, RemoteImage } from './files.js';
+import type {
+  DirEntry,
+  FileContent,
+  FileChange,
+  LineComment,
+  RemoteImage,
+  ScopedFile,
+  ScopedListing,
+  ScopedRoot,
+  ScopedSearch,
+  ScopedWriteResult,
+} from './files.js';
+import type { LogInfo, LogRead, LogReadOptions } from './logs.js';
 import type { DesignBoard, DesignPage, GenerateDesignInput } from './design.js';
 import type { AutomationTask, NewTask } from './tasks.js';
 import type { TrainingRun, NewTrainingRun } from './training.js';
@@ -192,6 +204,14 @@ export const IpcChannels = {
   fileRead: 'file:read',
   fileWrite: 'file:write',
   dirList: 'dir:list',
+  /** Files in a chat's or saved folder, relative to it, secrets hidden (IO-33 FA-1). */
+  filesList: 'files:list',
+  filesSearch: 'files:search',
+  filesRead: 'files:read',
+  filesWrite: 'files:write',
+  /** The app's, the engine's and each chat's agent logs, redacted (IO-33 FA-5). */
+  logsList: 'logs:list',
+  logsRead: 'logs:read',
   attachmentImport: 'attachment:import',
   imageFetch: 'image:fetch',
 
@@ -755,6 +775,24 @@ export interface NekkoApi {
   writeFile(path: string, content: string): Promise<void>;
   /** List a directory's immediate entries (file explorer). */
   listDir(path: string): Promise<DirEntry[]>;
+  /**
+   * Scoped file access for remote callers (IO-33 FA-1): the folder is named
+   * by chat or saved-folder id, paths are relative to it, escapes and
+   * secret-looking files are refused. See {@link ScopedRoot}.
+   */
+  listScopedFiles(root: ScopedRoot, relPath: string): Promise<ScopedListing>;
+  /** Files whose name (then path) holds `query`; gitignored files left out. */
+  searchScopedFiles(root: ScopedRoot, query: string, limit?: number): Promise<ScopedSearch>;
+  readScopedFile(root: ScopedRoot, relPath: string, opts?: { maxBytes?: number }): Promise<ScopedFile>;
+  /**
+   * Save text only if the file still has `expectHash` (null: only if it does
+   * not exist yet); otherwise `{ ok: false, error: 'conflict', hash }`.
+   */
+  writeScopedFile(root: ScopedRoot, relPath: string, content: string, opts: { expectHash: string | null }): Promise<ScopedWriteResult>;
+  /** The computer's logs: app, engine and each chat's agent run log (IO-33 FA-5). */
+  listLogs(): Promise<LogInfo[]>;
+  /** A log's redacted tail, or its redacted lines that hold `query`. */
+  readLog(id: string, opts?: LogReadOptions): Promise<LogRead>;
   /**
    * Fetch a remote photo for the chat through the host: public http(s) only,
    * size-capped and type-sniffed, returned as an inert data URL.

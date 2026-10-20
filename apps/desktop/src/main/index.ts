@@ -12,6 +12,7 @@ import { initialWindowBounds, loadWindowBounds, MIN_WINDOW, saveWindowBounds, se
 import { registerDevLaunch, reportDevReady } from './devLaunchProcess.js';
 import { preservePackagedProfile } from './appIdentity.js';
 import { EngineProcess } from './engine-process.js';
+import { startAppLog } from './appLog.js';
 import { createDesktopTray } from './tray.js';
 import { createTrayCompanion } from './trayCompanion.js';
 import { startAgentBrowser } from './agentBrowser.js';
@@ -498,6 +499,8 @@ app.whenReady().then(async () => {
     },
     tell: (title, detail, error) => { dialog.showMessageBoxSync({ type: error ? 'warning' : 'info', title: 'Nekko Agent', message: title, detail, buttons: ['OK'] }); },
   });
+  // Main's console, teed to `<dataDir>/logs/app.log` (appLog.ts); nekkod serves it as `logs:read('app')`.
+  startAppLog(dataDir);
   // The engine runs in its own processes (see engine-process.ts); the window
   // only needs to know where it listens.
   const rendererUrl = process.env['ELECTRON_RENDERER_URL'];

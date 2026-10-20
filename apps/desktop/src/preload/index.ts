@@ -226,6 +226,12 @@ const api: NekkoApi = {
   readFile: (path) => inv(IpcChannels.fileRead, path),
   writeFile: (path, content) => inv(IpcChannels.fileWrite, path, content),
   listDir: (path) => inv(IpcChannels.dirList, path),
+  listScopedFiles: (root, relPath) => inv(IpcChannels.filesList, root, relPath),
+  searchScopedFiles: (root, query, limit) => inv(IpcChannels.filesSearch, root, query, limit),
+  readScopedFile: (root, relPath, opts) => inv(IpcChannels.filesRead, root, relPath, opts ?? {}),
+  writeScopedFile: (root, relPath, content, opts) => inv(IpcChannels.filesWrite, root, relPath, content, opts),
+  listLogs: () => inv(IpcChannels.logsList),
+  readLog: (id, opts) => inv(IpcChannels.logsRead, id, opts ?? {}),
   fetchRemoteImage: (url) => inv(IpcChannels.imageFetch, url),
 
   listChanges: (sessionId) => inv(IpcChannels.changesList, sessionId),

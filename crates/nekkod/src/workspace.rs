@@ -9,7 +9,7 @@
 use crate::hub::Hub;
 use crate::routes::Ctx;
 use nekko_workspace::gitops::{self, DiffOpts, GitOps, LogOpts};
-use nekko_workspace::{comments, design, files, git::Git, index::Index, memory, pr::Prs, skills, spec};
+use nekko_workspace::{comments, design, files, git::Git, index::Index, memory, pr::Prs, scoped, skills, spec};
 use serde_json::{Value, json};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -19,6 +19,11 @@ pub const CHANNELS: &[&str] = &[
     "file:read",
     "file:write",
     "dir:list",
+    // Files in a chat's folder, relative to it (IO-33 FA-1, nekko-workspace scoped.rs).
+    "files:list",
+    "files:search",
+    "files:read",
+    "files:write",
     "workspace:index",
     "workspace:indexStatus",
     "workspace:search",
@@ -116,6 +121,11 @@ impl Workspace {
             prs,
             vaizer: skills::Vaizer::default(),
         }
+    }
+
+    /// The data directory, when this daemon knows it.
+    pub fn data_dir(&self) -> Option<&std::path::Path> {
+        self.data_dir.as_deref()
     }
 
     /// The PR reads and their caches, shared with the stacked-PR channels.
@@ -235,6 +245,72 @@ async fn git_folder(ctx: &Ctx, id: &str) -> Option<String> {
     )
 }
 
+/// The folder a scoped file call (`files:*`, IO-33 FA-1) works in, from
+/// `{ sessionId }` (the chat's checkout: its worktree when it is isolated and
+/// the worktree exists, else its project folder), `{ sessionId, workspaceId }`
+/// (one of that chat's folders) or `{ workspaceId }` (a saved folder). The
+/// caller never names a path: it is looked up here.
+pub(crate) async fn scoped_root(ctx: &Ctx, root: Option<&Value>) -> Result<PathBuf, String> {
+    let bad = || "bad-request: the root is { sessionId } or { workspaceId }".to_string();
+    let obj = root.and_then(Value::as_object).ok_or_else(bad)?;
+    let field = |k: &str| obj.get(k).and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string);
+    let (sid, wid) = (field("sessionId"), field("workspaceId"));
+    let saved = folders(ctx).await;
+    let Some(sid) = sid else {
+        let wid = wid.ok_or_else(bad)?;
+        return folder_path(&saved, &wid).map(PathBuf::from).ok_or_else(|| "not-found: no such folder".to_string());
+    };
+    let s = session(ctx, &sid).await;
+    if s.is_null() {
+        return Err("not-found: no such chat".into());
+    }
+    let ids = session_workspace_ids(&s);
+    let wid = match wid {
+        Some(w) if ids.contains(&w) => w,
+        Some(_) => return Err("not-found: that folder is not this chat's".into()),
+        None => ids
+            .iter()
+            .find(|w| folder_path(&saved, w).is_some())
+            .cloned()
+            .ok_or_else(|| "no-folder: this chat has no folder".to_string())?,
+    };
+    if s.get("gitIsolation") != Some(&json!(false))
+        && let Some(p) = s.get("gitWorktrees").and_then(|w| w.get(&wid)).and_then(|w| w.get("path"))
+        && let Some(p) = p.as_str().filter(|p| std::path::Path::new(p).is_dir())
+    {
+        return Ok(PathBuf::from(p));
+    }
+    folder_path(&saved, &wid).map(PathBuf::from).ok_or_else(|| "no-folder: this chat has no folder".to_string())
+}
+
+/// `files:*`: resolve the root, then run the call on its scope off the async threads.
+async fn scoped(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, String> {
+    let root = scoped_root(ctx, arg(&args, 0)).await?;
+    let listed = if channel == "files:search" { scoped::git_files(&root).await } else { None };
+    let channel = channel.to_string();
+    blocking(move || {
+        let scope = scoped::Scope::new(&root)?;
+        let opt = |k: &str| arg(&args, 2).and_then(|o| o.get(k));
+        match channel.as_str() {
+            "files:list" => scope.list(&text(&args, 1)),
+            "files:search" => {
+                let limit = arg(&args, 2).and_then(Value::as_u64).map(|n| n as usize);
+                Ok(scope.search(&text(&args, 1), limit, listed))
+            }
+            "files:read" => scope.read(&text(&args, 1), opt("maxBytes").and_then(Value::as_u64).map(|n| n as usize)),
+            "files:write" => {
+                let Some(Value::String(content)) = arg(&args, 2) else {
+                    return Err("bad-request: content must be text".into());
+                };
+                let expect = arg(&args, 3).and_then(|o| o.get("expectHash")).and_then(Value::as_str);
+                scope.write(&text(&args, 1), content, expect)
+            }
+            _ => Err(format!("unknown channel {channel}")),
+        }
+    })
+    .await?
+}
+
 fn folder_path(folders: &[Value], id: &str) -> Option<String> {
     folders
         .iter()
@@ -253,6 +329,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
             Ok(Value::Null)
         }
         "dir:list" => blocking(move || files::list_dir(&text(&args, 0))).await?,
+        "files:list" | "files:search" | "files:read" | "files:write" => scoped(ctx, channel, args).await,
         "workspace:indexStatus" => Ok(ws.index.status(&text(&args, 0))),
         "workspace:files" => {
             let list = ws.index.files(&text(&args, 0));
@@ -760,4 +837,42 @@ fn nekko_workspace_now() -> u64 {
 /// Index a folder off the async threads, telling the UI as it goes.
 pub async fn index_now(index: Arc<Index>, hub: Hub, id: String, root: String) -> Result<Value, String> {
     blocking(move || index.index(&id, &root, &|status| hub.publish("index:progress", status.clone(), false))).await
+}
+
+#[cfg(test)]
+mod tests {
+    use nekko_workspace::scoped::secret_path;
+
+    #[test]
+    fn scoped_files_hide_at_least_what_the_phone_changes_view_hides() {
+        let paths = [
+            ".env",
+            ".env.local",
+            "a/.env.prod",
+            ".ssh/config",
+            "x/.aws/credentials",
+            ".gnupg/k",
+            "id_rsa",
+            "id_ed25519.pub",
+            ".npmrc",
+            ".netrc",
+            ".pypirc",
+            "credentials",
+            "a.pem",
+            "b.key",
+            "c.p12",
+            "d.pfx",
+            "e.keystore",
+            "f.jks",
+            "src/environment.ts",
+            "README.md",
+            "keys/notes.md",
+            "Cargo.toml",
+        ];
+        for p in paths {
+            assert_eq!(secret_path(p), nekko_remote::phone_changes::secret_file(p), "{p}");
+        }
+        // The extras: git's stored credentials and a repository's config.
+        assert!(secret_path(".git-credentials") && secret_path(".git/config"));
+    }
 }

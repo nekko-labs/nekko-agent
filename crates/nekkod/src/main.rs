@@ -33,6 +33,7 @@ mod image_turns;
 mod installs;
 mod library;
 mod local_relay;
+mod logs;
 mod machine;
 mod mcp;
 mod mdns;
@@ -88,6 +89,10 @@ fn main() -> std::process::ExitCode {
     // The token must not leak into the environment of every shell we start.
     // SAFETY: no other thread exists yet.
     unsafe { std::env::remove_var("NEKKOD_CONFIG") };
+    // `<dataDir>/logs/nekkod.log` (logs.rs): stderr teed to a rotating file,
+    // held until main returns so the last lines are copied out.
+    let _daemon_log = cfg.data_dir.as_ref().and_then(|d| logs::start_daemon_log(&std::path::Path::new(d).join("logs")));
+    logs::note(&format!("nekkod {} starting, pid {}", env!("CARGO_PKG_VERSION"), std::process::id()));
     procgroup::init();
 
     let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("tokio runtime");
