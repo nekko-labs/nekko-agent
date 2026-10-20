@@ -178,6 +178,14 @@ export interface ImageTurnOptions {
   params: ImageChatParams & { modelId: string };
 }
 
+/** `Session.claudeCodeContext`. */
+export interface ClaudeCodeContext {
+  used?: number;
+  window?: number;
+  model?: string;
+  modelId?: string;
+}
+
 export interface Session {
   id: string;
   title: string;
@@ -222,6 +230,15 @@ export interface Session {
    * idle reap or a restart continues it (`claude --resume`). Set by nekkod.
    */
   claudeCodeSessionId?: string;
+  /**
+   * A Claude Agent chat's context as Claude Code reported it after its last
+   * turn, set by nekkod. `used` is what its last main-thread model call sent
+   * (input plus cache reads and writes: Claude Code's own system prompt and
+   * tools included, and lower once it compacts itself); `window` its
+   * `modelUsage` context window; `model` the model it resolved `modelId` (the
+   * chat's alias) to. Trusted only while the chat's `modelId` still matches.
+   */
+  claudeCodeContext?: ClaudeCodeContext;
   messages: ChatMessage[];
   contextPrefs?: ContextPrefs;
   /** Files explicitly attached to this chat's context (absolute paths). */

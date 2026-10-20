@@ -1099,10 +1099,14 @@ impl Turns {
             require_mcp: Some(BRIDGE_SERVER),
         };
         let mut seen: Option<String> = None;
+        let mut model: Option<String> = None;
         let exit = nekko_harness::run_turn(child, &mut mapper, input, &mut |m| match m {
             Mapped::Message(message) => history.push(message),
             Mapped::Event(event) => send(event, &history),
-            Mapped::Init(init) => seen = Some(init.session_id),
+            Mapped::Init(init) => {
+                seen = Some(init.session_id);
+                model = init.model.or(model.take());
+            }
             Mapped::Unparsed(line) => eprintln!("nekkod: Claude Code printed a non-JSON line: {line}"),
             _ => {}
         })
@@ -1116,6 +1120,7 @@ impl Turns {
             (None, TurnExit::Dead) if resumed => None,
             (None, _) => stored.clone(),
         };
+        let mut changed = false;
         if next != stored {
             if let Some(obj) = lock(session).as_object_mut() {
                 match &next {
@@ -1123,6 +1128,17 @@ impl Turns {
                     None => obj.shift_remove("claudeCodeSessionId"),
                 };
             }
+            changed = true;
+        }
+        if let Some(reported) = mapper.context() {
+            let mut s = lock(session);
+            let context = claude_code_context(s.get("claudeCodeContext"), reported, model, wanted.model.clone());
+            if let Some(obj) = s.as_object_mut() {
+                obj.insert("claudeCodeContext".into(), context);
+            }
+            changed = true;
+        }
+        if changed {
             persist(store, session, incognito).await;
         }
         if exit == TurnExit::Dead {
@@ -1172,6 +1188,37 @@ impl Turns {
         }
         summary
     }
+}
+
+/// `claudeCodeContext`: what a Claude Agent chat's context gauge shows, as
+/// Claude Code reported it (nekko_harness::ReportedContext). `modelId` is the
+/// chat's own model (an alias such as `opus`) the figures were reported for,
+/// `model` the one Claude Code resolved it to. A figure this turn did not
+/// report (an interrupted turn has no `modelUsage`) keeps the last one for the
+/// same model.
+fn claude_code_context(
+    previous: Option<&Value>,
+    reported: nekko_harness::ReportedContext,
+    model: Option<String>,
+    model_id: Option<String>,
+) -> Value {
+    let same = previous.is_some_and(|p| p.get("modelId").and_then(Value::as_str) == model_id.as_deref());
+    let keep = |key: &str| previous.filter(|_| same).and_then(|p| p.get(key)).and_then(Value::as_u64);
+    let mut out = Map::new();
+    if let Some(used) = reported.used.or_else(|| keep("used")) {
+        out.insert("used".into(), json!(used));
+    }
+    if let Some(window) = reported.window.or_else(|| keep("window")) {
+        out.insert("window".into(), json!(window));
+    }
+    let model = model.or_else(|| previous.filter(|_| same).and_then(|p| str_at(p, "model")).map(str::to_string));
+    if let Some(model) = model {
+        out.insert("model".into(), json!(model));
+    }
+    if let Some(id) = model_id {
+        out.insert("modelId".into(), json!(id));
+    }
+    Value::Object(out)
 }
 
 /// `titleSession`: ask the turn's own provider and model for a short title
@@ -2242,6 +2289,23 @@ mod tests {
         assert!(p.snapshot().get("s2").is_some());
         assert!(p.approve("s2", "c2", true));
         assert!(other.await.unwrap());
+    }
+
+    #[test]
+    fn claude_code_context_keeps_a_missing_window_only_for_the_same_model() {
+        use nekko_harness::ReportedContext;
+        let before = json!({ "used": 50_000, "window": 1_000_000, "model": "claude-opus-5-5", "modelId": "opus" });
+        // An interrupted turn reports what it sent but no window.
+        let stopped = ReportedContext { used: Some(52_000), window: None };
+        assert_eq!(
+            claude_code_context(Some(&before), stopped, None, Some("opus".into())),
+            json!({ "used": 52_000, "window": 1_000_000, "model": "claude-opus-5-5", "modelId": "opus" })
+        );
+        // Another model's window is not this one's.
+        assert_eq!(
+            claude_code_context(Some(&before), stopped, Some("claude-sonnet-5-5".into()), Some("sonnet".into())),
+            json!({ "used": 52_000, "model": "claude-sonnet-5-5", "modelId": "sonnet" })
+        );
     }
 
     #[test]

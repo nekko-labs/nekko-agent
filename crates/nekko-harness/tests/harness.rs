@@ -1,7 +1,7 @@
 //! `map_event` and `run_turn` against recorded Claude Code stream-json
 //! (tests/fixtures, see its README).
 
-use nekko_harness::{Mapped, Mapper, Outcome, StopKind, Transport, TurnExit, TurnInput, run_turn};
+use nekko_harness::{Mapped, Mapper, Outcome, ReportedContext, StopKind, Transport, TurnExit, TurnInput, run_turn};
 use nekko_loop::{Cancel, INTERRUPTED_NOTE, Steering};
 use serde_json::{Value, json};
 use std::collections::VecDeque;
@@ -245,6 +245,58 @@ fn tools_subagents_and_retries() {
     assert_eq!((usage["inputTokens"].as_u64(), usage["cacheReadTokens"].as_u64()), (Some(10), Some(20000)));
     let done = ev.last().unwrap();
     assert_eq!((done["steps"].as_u64(), &done["messageId"]), (Some(2), &msgs[4]["id"]));
+}
+
+/// The reported context of each `result`, in order.
+fn contexts(items: &[Mapped]) -> Vec<Option<ReportedContext>> {
+    items.iter().filter_map(|i| if let Mapped::End(e) = i { Some(e.context) } else { None }).collect()
+}
+
+const fn reported(used: u64, window: Option<u64>) -> Option<ReportedContext> {
+    Some(ReportedContext { used: Some(used), window })
+}
+
+#[test]
+fn the_context_is_the_last_calls_input_against_claude_codes_window() {
+    // input 2 + cache read 15417 + cache write 4821: Claude Code's own prompt and tools included.
+    assert_eq!(contexts(&map_all(&fixture("api-key/turn.jsonl"))), [reported(20_240, Some(1_000_000))]);
+    // Each turn reports its own, not a running total.
+    assert_eq!(
+        contexts(&map_all(&fixture("api-key/two-turns.jsonl"))),
+        [reported(20_244, Some(1_000_000)), reported(20_311, Some(1_000_000))]
+    );
+}
+
+#[test]
+fn a_multi_call_turn_reports_its_last_call_while_usage_stays_the_total() {
+    let items = map_all(&fixture("api-key/permission-denied.jsonl"));
+    // The second call: 2 + 20243 + 347. Summing both calls would read 40837.
+    assert_eq!(contexts(&items), [reported(20_592, Some(1_000_000))]);
+    let usage = events(&items).into_iter().find(|e| e["type"] == "usage").unwrap();
+    assert_eq!(
+        (usage["inputTokens"].as_u64(), usage["cacheReadTokens"].as_u64(), usage["cacheWriteTokens"].as_u64()),
+        (Some(4), Some(37_246), Some(3_587))
+    );
+}
+
+#[test]
+fn an_interrupted_turn_with_no_model_usage_keeps_the_occupancy() {
+    let items = map_all(&fixture("api-key/interrupt-control.jsonl"));
+    assert_eq!(contexts(&items), [reported(20_248, None), reported(20_299, Some(1_000_000))]);
+}
+
+#[test]
+fn a_sub_agents_calls_are_not_the_chats_context() {
+    let mut lines = fixture("api-key/turn.jsonl");
+    let at = lines.iter().position(|l| l.contains("\"type\":\"result\"")).unwrap();
+    let main = lines.iter().find(|l| l.contains("\"type\":\"assistant\"")).unwrap();
+    let mut sub: Value = serde_json::from_str(main).unwrap();
+    sub["parent_tool_use_id"] = json!("toolu_task");
+    sub["message"]["id"] = json!("msg_sub");
+    sub["message"]["content"] = json!([{ "type": "text", "text": "sub-agent" }]);
+    sub["message"]["usage"] = json!({ "input_tokens": 90_000, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0, "output_tokens": 9 });
+    lines.insert(at, sub.to_string());
+    assert_eq!(contexts(&map_all(&lines)), [reported(20_240, Some(1_000_000))]);
 }
 
 // ---- run_turn over a scripted Claude Code ----
