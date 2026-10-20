@@ -807,8 +807,9 @@ mod tests {
         }
         assert_eq!(s.list(".git").unwrap()["hiddenSecrets"], 1);
         for p in [".env", ".ssh/id_rsa", "server.pem", ".git/config", "sub/.env.local"] {
-            assert_eq!(code(s.read(p, None)), codes::SECRET_FILE, "{p}");
-            assert_eq!(code(s.write(p, "x", None)), codes::SECRET_FILE, "{p}");
+            // Compared without printing the refusal: a failure names only the path tried.
+            assert!(code(s.read(p, None)) == codes::SECRET_FILE, "{p} was not refused for reading");
+            assert!(code(s.write(p, "x", None)) == codes::SECRET_FILE, "{p} was not refused for writing");
         }
         assert_eq!(code(s.list(".ssh")), codes::SECRET_FILE);
         assert_eq!(std::fs::read_to_string(root.join(".env")).unwrap(), "TOKEN=x");
