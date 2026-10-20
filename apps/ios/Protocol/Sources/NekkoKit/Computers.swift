@@ -230,6 +230,8 @@ public final class ComputersStore {
     private var pump: Task<Void, Never>?
     private var summariesTask: Task<Void, Never>?
     private var listeners: [UUID: (AgentEvent) -> Void] = [:]
+    /// Open terminal screens (IO-33 FA-3): the computer sends only the output of terminals this phone opened.
+    private var terminalListeners: [UUID: (TerminalEvent) -> Void] = [:]
     private var pushToken: String?
     /// Whose drafts and outbox are loaded.
     private var offlineComputer: String?
@@ -319,6 +321,15 @@ public final class ComputersStore {
     }
 
     public func unsubscribe(_ id: UUID) { listeners[id] = nil }
+
+    /// Every `terminal:event` from the active computer (`TerminalSession`). Returns an id for `unsubscribeTerminal`.
+    public func subscribeTerminal(_ f: @escaping (TerminalEvent) -> Void) -> UUID {
+        let id = UUID()
+        terminalListeners[id] = f
+        return id
+    }
+
+    public func unsubscribeTerminal(_ id: UUID) { terminalListeners[id] = nil }
 
     // MARK: Pairing
 
@@ -482,6 +493,10 @@ public final class ComputersStore {
         case .event(let channel, let payload):
             if channel == Events.appearanceUpdated {
                 appearance = Appearance.from(payload)
+                return
+            }
+            if channel == TerminalChannels.event {
+                if let e = TerminalEvent.from(payload) { for f in terminalListeners.values { f(e) } }
                 return
             }
             guard channel == Events.agentEvent, let e = AgentEvent.from(payload) else { return }
