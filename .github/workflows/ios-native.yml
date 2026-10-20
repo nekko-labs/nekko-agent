@@ -110,6 +110,9 @@ jobs:
           # Unit tests and first-run UI tests.
           # Every suite runs even when one fails, so one run shows every failure and keeps its evidence.
           failed=0
+          # A failed live run prints its stack's own logs (fake model, relay, agent): the phone's
+          # screenshots alone can't say why the computer stopped answering.
+          stack_logs() { for f in "$NEKKO_ITEST_LOGDIR"/*.log; do echo "::group::$1 $(basename "$f")"; tail -n 120 "$f"; echo "::endgroup::"; done; }
           xcodebuild "${COMMON[@]}" -resultBundlePath evidence/first-run.xcresult test -skip-testing:NekkoNativeUITests/LiveRelayTests || failed=1
           # The live journey, once per theme, each against a fresh stack (pairing codes are single-use).
           for THEME in light dark; do
@@ -118,7 +121,7 @@ jobs:
             . "/tmp/stack-$THEME.env"
             TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" TEST_RUNNER_NEKKO_ITEST_THEME="$THEME" \
               xcodebuild "${COMMON[@]}" -resultBundlePath "evidence/live-$THEME.xcresult" test-without-building \
-              -only-testing:NekkoNativeUITests/LiveRelayTests/testPairStreamAndApproveFromThePhone || failed=1
+              -only-testing:NekkoNativeUITests/LiveRelayTests/testPairStreamAndApproveFromThePhone || { failed=1; stack_logs "live-$THEME"; }
             kill $NEKKO_ITEST_PIDS 2>/dev/null || true
             # The app is reinstalled per run; wipe it so the next theme pairs from scratch.
             xcrun simctl uninstall "$DEVICE" com.nekko.native.ios || true
@@ -129,7 +132,7 @@ jobs:
           . /tmp/stack-offline.env
           TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" TEST_RUNNER_NEKKO_ITEST_RELAY_CTL="$NEKKO_ITEST_RELAY_CTL" \
             xcodebuild "${COMMON[@]}" -resultBundlePath evidence/offline.xcresult test-without-building \
-            -only-testing:NekkoNativeUITests/LiveRelayTests/testSendWithTheRelayDownAndSeeItDelivered || failed=1
+            -only-testing:NekkoNativeUITests/LiveRelayTests/testSendWithTheRelayDownAndSeeItDelivered || { failed=1; stack_logs offline; }
           kill $NEKKO_ITEST_PIDS 2>/dev/null || true
           xcrun simctl uninstall "$DEVICE" com.nekko.native.ios || true
           # The deep link from the computer's QR (Camera → nekko-agent-pair:) pairs through the confirmation sheet.
@@ -138,7 +141,7 @@ jobs:
           . /tmp/stack-link.env
           TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" \
             xcodebuild "${COMMON[@]}" -resultBundlePath evidence/deeplink.xcresult test-without-building \
-            -only-testing:NekkoNativeUITests/LiveRelayTests/testPairFromADeepLink || failed=1
+            -only-testing:NekkoNativeUITests/LiveRelayTests/testPairFromADeepLink || { failed=1; stack_logs deeplink; }
           kill $NEKKO_ITEST_PIDS 2>/dev/null || true
           exit $failed
       - name: Export screenshots from the test results

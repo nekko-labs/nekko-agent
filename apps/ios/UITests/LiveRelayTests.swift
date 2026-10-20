@@ -238,7 +238,8 @@ final class LiveRelayTests: XCTestCase {
             throw XCTSkip("set NEKKO_ITEST_LINK and NEKKO_ITEST_RELAY_CTL (apps/ios/scripts/itest-stack.sh)")
         }
         let app = XCUIApplication()
-        app.launchArguments = ["-appLock", "NO", "-theme", "light", "-uiTestReset", "YES"]
+        // Past the first run (IO-31), which the live journey walks; this test is about the outbox.
+        app.launchArguments = ["-appLock", "NO", "-theme", "light", "-onboarded", "YES", "-uiTestReset", "YES"]
         app.launch()
         allowSystemAlerts()
         let start = app.buttons["Pair with your computer"]
@@ -295,7 +296,7 @@ final class LiveRelayTests: XCTestCase {
         // from the phone's saved copies, marked as saved, before any answer.
         relay(ctl, "stop")
         app.terminate()
-        app.launchArguments = ["-appLock", "NO", "-theme", "light"]
+        app.launchArguments = ["-appLock", "NO", "-theme", "light", "-onboarded", "YES"]
         app.launch()
         XCTAssertTrue(app.descendants(matching: .any)["chats.savedList"].waitForExistence(timeout: 10), "the saved list, at once")
         let row = app.descendants(matching: .any).matching(identifier: "chats.row").firstMatch
