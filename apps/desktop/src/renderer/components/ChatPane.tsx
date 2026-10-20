@@ -1579,7 +1579,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         modelId: brain.modelId,
         intervalMs: 5 * 60_000,
       });
-      useStore.getState().pushToast('success', 'Goal started as a background task, track it in Command Center.');
+      useStore.getState().pushToast('success', 'Goal started as a background task, track it on the Agents wall.');
       if (override === undefined) { setDraft(''); clearDraft(sessionId); }
       return;
     }

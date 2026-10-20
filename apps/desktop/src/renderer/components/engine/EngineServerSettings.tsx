@@ -132,7 +132,7 @@ export function EngineServerSettings({
         </Field>
 
         <Field label="Load on demand" hint="A request for a model that is not loaded loads it, the way LM Studio does.">
-          <Toggle value={draft.jitLoad} onChange={(v) => setDraft({ ...draft, jitLoad: v })} />
+          <Toggle value={draft.jitLoad} onChange={(v) => setDraft({ ...draft, jitLoad: v })} label="Load on demand" />
         </Field>
       </div>
 
