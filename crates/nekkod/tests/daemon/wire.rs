@@ -199,3 +199,104 @@ async fn exits_when_stdin_closes() {
     .await;
     assert!(status.success(), "nekkod exited with {status}");
 }
+
+/// IO-33 FA-3 / FA-6: a chat's terminals, a capped tail, remote viewers and
+/// SSH hosts from `~/.ssh/config`, opened through a stand-in `ssh` that prints
+/// its argv (no real connection).
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread")]
+async fn chat_terminals_tails_viewers_and_ssh() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = std::env::temp_dir().join(format!("nekkod-ssh-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let (home, bin, data) = (root.join("home"), root.join("bin"), root.join("data"));
+    std::fs::create_dir_all(home.join(".ssh")).unwrap();
+    std::fs::create_dir_all(&bin).unwrap();
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    std::fs::write(
+        home.join(".ssh/config"),
+        "Host devbox\n  HostName 10.0.0.5\n  User philip\n  IdentityFile ~/.ssh/secret_key_file\nHost *\n  ForwardAgent no\n",
+    )
+    .unwrap();
+    let ssh = bin.join("ssh");
+    std::fs::write(&ssh, "#!/bin/sh\nprintf 'fake-ssh'\nfor a in \"$@\"; do printf ' [%s]' \"$a\"; done\necho\n")
+        .unwrap();
+    std::fs::set_permissions(&ssh, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let path = format!("{}:/usr/bin:/bin", bin.display());
+    let home_s = home.to_string_lossy().into_owned();
+    let d = start_with_env(Some(&data), json!({}), &[("HOME", Some(&home_s)), ("PATH", Some(&path))]);
+
+    // Hosts: the alias and display fields, never the key path.
+    let (status, hosts) = post(d.port, "ssh:hosts", json!([]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{hosts}");
+    assert_eq!(hosts, json!([{ "alias": "devbox", "hostName": "10.0.0.5", "user": "philip" }]));
+    assert!(!hosts.to_string().contains("secret_key"));
+    let (status, refused) = post(d.port, "ssh:open", json!(["devbox; touch /tmp/x", {}]), Some(TOKEN)).await;
+    assert_eq!(status, 400);
+    assert!(refused["error"].as_str().unwrap().contains("not a host"), "{refused}");
+
+    // A chat to link terminals to.
+    let (_, chat) = post(d.port, "session:create", json!([]), Some(TOKEN)).await;
+    let sid = chat["id"].as_str().expect("a chat id").to_string();
+    let (status, term) =
+        post(d.port, "ssh:open", json!(["devbox", { "cols": 100, "rows": 30, "sessionId": sid }]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{term}");
+    assert_eq!(term["title"], "ssh devbox");
+    assert_eq!(term["sessionId"], sid.as_str());
+    let id = term["id"].as_str().unwrap().to_string();
+    let (_, other) = post(d.port, "terminal:create", json!([echo_shell("unlinked")]), Some(TOKEN)).await;
+
+    // The alias reached ssh as its own argument, after the options.
+    let port = d.port;
+    let tail = until("ssh output", Duration::from_secs(20), || {
+        let id = id.clone();
+        async move {
+            let (_, snap) = post(port, "terminal:tail", json!([id, 4096]), Some(TOKEN)).await;
+            snap["buffer"].as_str().is_some_and(|b| b.contains("[devbox]")).then_some(snap)
+        }
+    })
+    .await;
+    assert!(tail["buffer"].as_str().unwrap().contains("fake-ssh [-o] [BatchMode=no] [--] [devbox]"), "{tail}");
+    assert_eq!(tail["truncated"], false);
+    let (_, capped) = post(d.port, "terminal:snapshot", json!([id, { "maxBytes": 8 }]), Some(TOKEN)).await;
+    assert!(capped["buffer"].as_str().unwrap().len() <= 8, "{capped}");
+    assert_eq!(capped["truncated"], true);
+
+    // This chat's terminals only.
+    let (_, mine) = post(d.port, "terminals:list", json!([{ "sessionId": sid }]), Some(TOKEN)).await;
+    let ids: Vec<&str> = mine.as_array().unwrap().iter().filter_map(|t| t["id"].as_str()).collect();
+    assert_eq!(ids, [id.as_str()], "{mine}");
+    let (_, all) = post(d.port, "terminals:list", json!([]), Some(TOKEN)).await;
+    assert!(all.as_array().unwrap().iter().any(|t| t["id"] == other["id"]));
+
+    // Viewers: attach publishes `terminal:viewers`, detach-everywhere clears it.
+    let mut sock = ws(d.port, &format!("/api/ws?token={TOKEN}"), Some("null")).await.unwrap();
+    let (status, viewers) =
+        post(d.port, "terminal:attach", json!([id, { "id": "dev_1", "name": "Philip's iPhone" }]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{viewers}");
+    assert_eq!(viewers[0]["kind"], "phone");
+    let mut event = None;
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while event.is_none() && Instant::now() < deadline {
+        let Some(v) = next_json(&mut sock, Duration::from_secs(10)).await else { break };
+        if v["channel"] == "terminal:viewers" {
+            event = Some(v["payload"].clone());
+        }
+    }
+    let event = event.expect("a terminal:viewers event");
+    assert_eq!(event["terminalId"], id.as_str());
+    assert_eq!(event["viewers"][0]["name"], "Philip's iPhone");
+    let (_, listed) = post(d.port, "terminals:list", json!([{ "sessionId": sid }]), Some(TOKEN)).await;
+    assert_eq!(listed[0]["viewers"][0]["id"], "dev_1");
+    let (_, left) = post(d.port, "terminal:detach", json!([null, "dev_1"]), Some(TOKEN)).await;
+    assert_eq!(left, json!([id]));
+    let (_, listed) = post(d.port, "terminals:list", json!([{ "sessionId": sid }]), Some(TOKEN)).await;
+    assert!(listed[0].get("viewers").is_none(), "{listed}");
+    let (status, _) = post(d.port, "terminal:attach", json!(["term_missing", { "id": "dev_1" }]), Some(TOKEN)).await;
+    assert_eq!(status, 400);
+
+    post(d.port, "terminal:close", json!([id]), Some(TOKEN)).await;
+    post(d.port, "terminal:close", json!([other["id"]]), Some(TOKEN)).await;
+    drop(d);
+    let _ = std::fs::remove_dir_all(root);
+}

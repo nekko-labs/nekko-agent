@@ -5,6 +5,7 @@ import { PaneActions, useInPaneFrame } from './PaneFrame.js';
 import { useStore } from '../store.js';
 import { ContextAction, ContextMenu } from './ContextMenu.js';
 import { terminalKeyAction, terminalKeyLabels } from './terminalClipboard.js';
+import { TerminalViewersBadge } from './TerminalViewersBadge.js';
 
 /**
  * A real terminal wired to a pty. Keystrokes stream to the pty and raw output
@@ -387,6 +388,7 @@ export function TerminalPane({ terminalId }: { terminalId: string }) {
   };
   const status = (
     <span className="flex items-center gap-2 text-[11px] text-ink-faint">
+      <TerminalViewersBadge terminalId={terminalId} initial={info?.viewers} />
       <span className="max-w-[26ch] truncate font-mono">{info?.cwd ?? ''}</span>
       {info && !info.running && (
         <span className="shrink-0 text-red-400">shell exited{info.exitCode != null ? ` (${info.exitCode})` : ''}</span>
