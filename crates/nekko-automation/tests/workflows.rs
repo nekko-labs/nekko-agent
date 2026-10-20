@@ -104,6 +104,9 @@ struct Fake {
     notices: Mutex<Vec<Value>>,
     now: Mutex<f64>,
     engine: Mutex<Option<std::sync::Weak<Workflows>>>,
+    /// The settings each poll got, and what the next polls return (none: no poll).
+    polls: Mutex<Vec<Value>>,
+    poll_results: Mutex<VecDeque<Value>>,
 }
 
 impl WorkflowHost for Fake {
@@ -211,8 +214,12 @@ impl WorkflowHost for Fake {
         };
         Box::pin(async move { res })
     }
-    fn poll(&self, _: &str, _: &str, _: Value, _: f64) -> BoxFut<'_, Option<Result<Value, String>>> {
-        Box::pin(async { None })
+    fn poll(&self, _: &str, _: &str, settings: Value, cursor: f64) -> BoxFut<'_, Option<Result<Value, String>>> {
+        let next = self.poll_results.lock().unwrap().pop_front();
+        if next.is_some() {
+            self.polls.lock().unwrap().push(json!({ "settings": settings, "cursor": cursor }));
+        }
+        Box::pin(async move { next.map(Ok) })
     }
     fn notify(&self, snapshot: &Value) {
         self.notices.lock().unwrap().push(snapshot.clone());
@@ -331,6 +338,108 @@ async fn the_engine_leaves_the_same_files_and_side_effects() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+#[tokio::test]
+async fn an_armed_cursor_holds_until_the_first_event() {
+    // A failed-run poll returns no state, and its cursor only moves with an
+    // event: the arming time must be kept, or every poll re-arms at "now" and
+    // a run failing between two polls is never seen.
+    let dir = std::env::temp_dir().join(format!("nekko-automation-armed-cursor-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let fake = Arc::new(Fake::default());
+    *fake.settings.lock().unwrap() = json!({ "connectors": [{ "kind": "github", "connected": true, "token": "t" }] });
+    *fake.now.lock().unwrap() = 1_000_000.0;
+    let clock = fake.clone();
+    let engine = Workflows::new(
+        &dir,
+        fake.clone(),
+        Arc::new(move || *clock.now.lock().unwrap()),
+        Arc::new(|| "id-1".to_string()),
+    );
+    engine
+        .create(&json!({
+            "name": "Diagnose",
+            "steps": [{ "id": "s", "name": "S", "kind": "prompt", "run": "x" }],
+            "triggers": [{ "id": "t1", "kind": "connector", "connector": "github", "repo": "o/r", "event": "workflow_run_failed", "pollIntervalMs": 120_000 }],
+        }))
+        .await
+        .unwrap();
+    fake.poll_results.lock().unwrap().push_back(json!({ "events": [], "nextCursor": 1_000_000 }));
+    engine.tick_listeners().await;
+    let file: Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.join("workflow-cursors.json")).unwrap()).unwrap();
+    assert_eq!(file["cursors"]["t1"]["lastCursor"], 1_000_000);
+
+    // Two minutes later, from a fresh engine (a restart), the poll still asks from the arming time.
+    drop(engine);
+    *fake.now.lock().unwrap() = 1_120_001.0;
+    let clock = fake.clone();
+    let engine = Workflows::new(
+        &dir,
+        fake.clone(),
+        Arc::new(move || *clock.now.lock().unwrap()),
+        Arc::new(|| "id-1".to_string()),
+    );
+    fake.poll_results.lock().unwrap().push_back(json!({ "events": [], "nextCursor": 1_000_000 }));
+    engine.tick_listeners().await;
+    assert_eq!(fake.polls.lock().unwrap()[1]["cursor"], 1_000_000.0);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test]
+async fn a_poll_state_is_kept_in_the_cursor_record_across_restarts() {
+    let dir = std::env::temp_dir().join(format!("nekko-automation-poll-state-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let fake = Arc::new(Fake::default());
+    *fake.settings.lock().unwrap() = json!({ "connectors": [{ "kind": "github", "connected": true, "token": "t" }] });
+    *fake.now.lock().unwrap() = 1_000_000.0;
+    let start = |fake: &Arc<Fake>| {
+        let clock = fake.clone();
+        Workflows::new(
+            &dir,
+            fake.clone(),
+            Arc::new(move || *clock.now.lock().unwrap()),
+            Arc::new(|| "id-1".to_string()),
+        )
+    };
+    let engine = start(&fake);
+    engine
+        .create(&json!({
+            "name": "Review PRs",
+            "steps": [{ "id": "s", "name": "S", "kind": "prompt", "run": "Review {{trigger.number}}" }],
+            "triggers": [{ "id": "t1", "kind": "connector", "connector": "github", "repo": "o/r", "event": "pr_opened", "includeDrafts": true }],
+        }))
+        .await
+        .unwrap();
+    // Arming: the poll returns its state and no events.
+    fake.poll_results
+        .lock()
+        .unwrap()
+        .push_back(json!({ "events": [], "nextCursor": 1_000_000, "pollState": { "prHeads": { "1": "a" } } }));
+    engine.tick_listeners().await;
+    let first = fake.polls.lock().unwrap()[0].clone();
+    assert_eq!(first["settings"]["includeDrafts"], true);
+    assert!(first["settings"].get("pollState").is_none());
+    let file: Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.join("workflow-cursors.json")).unwrap()).unwrap();
+    assert_eq!(file["version"], 1);
+    assert_eq!(file["cursors"]["t1"]["lastCursor"], 1_000_000);
+    assert_eq!(file["cursors"]["t1"]["pollState"], json!({ "prHeads": { "1": "a" } }));
+
+    // A restart reads the state back and hands it to the next poll.
+    drop(engine);
+    let engine = start(&fake);
+    *fake.now.lock().unwrap() = 2_000_000.0;
+    fake.poll_results
+        .lock()
+        .unwrap()
+        .push_back(json!({ "events": [], "nextCursor": 1_000_000, "pollState": { "prHeads": { "1": "a" } } }));
+    engine.tick_listeners().await;
+    assert_eq!(fake.polls.lock().unwrap()[1]["settings"]["pollState"], json!({ "prHeads": { "1": "a" } }));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// A fresh engine over the fake, with the given settings, in its own folder.
 fn engine_with(name: &str, settings: Value) -> (Arc<Workflows>, Arc<Fake>, std::path::PathBuf) {
     let dir = std::env::temp_dir().join(format!("nekko-automation-{name}-{}", std::process::id()));
@@ -428,6 +537,8 @@ async fn a_local_only_run_is_offline_and_still_runs_action_steps() {
     assert_eq!(run["status"], "success", "{run}");
     assert_eq!(fake.turns.lock().unwrap()[0]["providerId"], "local");
     assert_eq!(fake.actions.lock().unwrap()[0]["op"], "slack.postMessage");
+    // The outcome token routes the step; it is not part of what gets posted.
+    assert_eq!(fake.actions.lock().unwrap()[0]["params"]["text"], "diagnosis");
     let saved = fake.log.lock().unwrap().iter().find(|e| e.get("save").is_some()).cloned().unwrap();
     let fields = &saved["fields"];
     assert_eq!(fields["unattended"], true);

@@ -12,7 +12,7 @@
 use crate::json::{self, num};
 use crate::workflow_rules::{
     self as rules, MAX_STEP_LOOPS, MAX_WORKFLOW_DEPTH, UNCATEGORIZED, describe_event, event_context, match_workflows,
-    read_step_outcome, slugify, step_outcome_instruction,
+    read_step_outcome, slugify, step_outcome_instruction, without_outcome_tokens,
 };
 use serde_json::{Map, Value, json};
 use std::collections::{HashMap, HashSet};
@@ -706,6 +706,7 @@ impl Workflows {
                     .await;
                 first = false;
                 let out = result.output.clone().or_else(|| result.error.clone()).unwrap_or_default();
+                let out = without_outcome_tokens(&out);
                 match outputs.iter_mut().find(|(k, _)| *k == step_id) {
                     Some(slot) => slot.1 = out,
                     None => outputs.push((step_id.clone(), out)),
@@ -1229,19 +1230,29 @@ impl Workflows {
             return Ok(());
         };
         let mut conn_settings = config.get("settings").and_then(Value::as_object).cloned().unwrap_or_default();
-        for k in ["channel", "repo", "event", "filter"] {
+        for k in ["channel", "repo", "event", "filter", "includeDrafts"] {
             if let Some(v) = t.get(k).filter(|v| nekko_js::truthy(Some(v))) {
                 conn_settings.insert(k.into(), v.clone());
             }
         }
         let now = self.now();
-        let record_cursor = {
+        let (record_cursor, poll_state) = {
             let mut cursors = self.load_cursors();
-            let rec = cursors
-                .entry(tid.to_string())
-                .or_insert_with(|| json!({ "lastCursor": num(now), "seenIds": [], "lastPollAt": 0 }));
-            nekko_js::to_number(rec.get("lastCursor"))
+            // Arming starts the cursor now, and it is written at once: a poll
+            // whose cursor never advances (no event yet) must not re-arm at
+            // "now" each time, or anything between two polls is missed.
+            if !cursors.contains_key(tid) {
+                cursors.insert(tid.to_string(), json!({ "lastCursor": num(now), "seenIds": [], "lastPollAt": 0 }));
+                self.save_cursors(&cursors);
+            }
+            let rec = &cursors[tid];
+            (nekko_js::to_number(rec.get("lastCursor")), rec.get("pollState").cloned())
         };
+        // A poll that keeps more than a cursor (the GitHub PR head SHAs) gets
+        // back what it returned last time.
+        if let Some(state) = poll_state {
+            conn_settings.insert("pollState".into(), state);
+        }
         let token = nullish(config.get("token")).map(nekko_js::display).unwrap_or_default();
         let Some(result) = self.host.poll(&kind, &token, Value::Object(conn_settings), record_cursor).await else {
             return Ok(());
@@ -1297,6 +1308,14 @@ impl Workflows {
         let next = nekko_js::to_number(result.get("nextCursor"));
         if next > nekko_js::to_number(rec.get("lastCursor")) {
             rec["lastCursor"] = num(next);
+            advanced = true;
+        }
+        // Extends the record rather than replacing it: older builds read the
+        // fields they know and carry this one along.
+        if let Some(state) = result.get("pollState").filter(|s| !s.is_null())
+            && rec.get("pollState") != Some(state)
+        {
+            rec["pollState"] = state.clone();
             advanced = true;
         }
         rec["lastPollAt"] = num(self.now());

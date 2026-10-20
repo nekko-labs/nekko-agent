@@ -30,7 +30,8 @@ const LAYOUT = `(() => {
   };
 })()`;
 
-// Each scene: the fixture's data set, then the DOM steps that lead to the shot.
+// Each scene: the fixture's data set, then the DOM steps that lead to the shot. `fresh` ones show something new and
+// are captured only after.
 const SCENES = [
   { name: 'empty', data: 'empty', steps: [] },
   { name: 'gallery', data: 'empty', steps: [clickText('main button', 'New workflow')] },
@@ -41,6 +42,10 @@ const SCENES = [
   { name: 'editor', data: 'list', steps: [`(() => { const row = [...document.querySelectorAll('main .card')].find((x) => x.textContent.includes('Nightly dependency check')); const b = row && [...row.querySelectorAll('button')].find((x) => x.textContent.trim() === 'Edit'); if (!b) return false; b.click(); return true; })()`] },
   { name: 'setup-review', data: 'empty', steps: [clickText('main button', 'New workflow'), `(() => { const b = document.querySelector('[role=dialog] [data-template="review-my-prs"]'); if (!b) return false; b.click(); return true; })()`] },
   { name: 'editor-notools', data: 'list', steps: [`(() => { const row = [...document.querySelectorAll('main .card')].find((x) => x.textContent.includes('Nightly dependency check')); const b = row && [...row.querySelectorAll('button')].find((x) => x.textContent.trim() === 'Edit'); if (!b) return false; b.click(); return true; })()`, `(() => { const t = [...document.querySelectorAll('[role=dialog] span')].find((x) => x.textContent.startsWith('No tools')); if (!t) return false; t.scrollIntoView({ block: 'center' }); return true; })()`] },
+  { name: 'setup-ci', fresh: true, data: 'empty', steps: [clickText('main button', 'New workflow'), `(() => { const b = document.querySelector('[role=dialog] [data-template="diagnose-failed-ci"]'); if (!b) return false; b.click(); return true; })()`] },
+  { name: 'setup-ci-local', fresh: true, data: 'local', steps: [clickText('main button', 'New workflow'), `(() => { const b = document.querySelector('[role=dialog] [data-template="diagnose-failed-ci"]'); if (!b) return false; b.click(); return true; })()`] },
+  { name: 'run-ci', fresh: true, data: 'list', steps: [EXPAND('Diagnose failed CI')] },
+  { name: 'editor-ci', fresh: true, data: 'list', steps: [`(() => { const row = [...document.querySelectorAll('main .card')].find((x) => x.textContent.includes('Diagnose failed CI')); const b = row && [...row.querySelectorAll('button')].find((x) => x.textContent.trim() === 'Edit'); if (!b) return false; b.click(); return true; })()`] },
   { name: 'editor-review', data: 'list', steps: [`(() => { const row = [...document.querySelectorAll('main .card')].find((x) => x.textContent.includes('Review every PR I open')); const b = row && [...row.querySelectorAll('button')].find((x) => x.textContent.trim() === 'Edit'); if (!b) return false; b.click(); return true; })()`, `(() => { const t = [...document.querySelectorAll('[role=dialog] span')].find((x) => x.textContent.trim() === 'Only by'); if (!t) return false; t.scrollIntoView({ block: 'center' }); return true; })()`] },
 ];
 
@@ -55,6 +60,8 @@ app.whenReady().then(async () => {
     win.showInactive();
     for (const theme of ['dark', 'light']) {
       for (const [i, scene] of SCENES.entries()) {
+        // A new surface has no before: the base has nothing to show.
+        if (scene.fresh && kind === 'before') continue;
         // A fresh page per scene: the query differs every time, so nothing carries over.
         await win.loadFile(path.join(dir, 'index.html'), { query: { data: scene.data, n: `${theme}-${i}` } });
         await run(`document.documentElement.dataset.theme=${js(theme)}`);
