@@ -35,6 +35,9 @@ pub trait Deps: Send + Sync + 'static {
     fn session(&self, id: &str) -> Fut<'_, Option<Value>>;
     /// A reply running, being admitted, or a compaction under way.
     fn is_running(&self, id: &str) -> Fut<'_, bool>;
+    /// Whether the provider is a Claude Agent (`claude-code`): Claude Code
+    /// keeps and compacts that chat's context itself, so it is left alone.
+    fn is_claude_code(&self, provider_id: &str) -> Fut<'_, bool>;
     /// The window last used for this chat's model.
     fn context_window(&self, provider_id: &str, model_id: &str) -> u64;
     fn compact(&self, id: &str) -> Fut<'_, Result<(), String>>;
@@ -113,6 +116,14 @@ impl<D: Deps> AutoContinue<D> {
         }))
     }
 
+    /// The chat, when this daemon may compact and continue it: `eligible`, and
+    /// not a Claude Agent chat.
+    async fn compactable(&self, id: &str) -> Option<Value> {
+        let session = self.deps.session(id).await.filter(|s| eligible(Some(s)))?;
+        let provider = session.get("providerId").and_then(Value::as_str).unwrap_or_default();
+        (!self.deps.is_claude_code(provider).await).then_some(session)
+    }
+
     /// Wait for the ending turn to let go of the chat; false when it never does.
     async fn settled(&self, id: &str) -> bool {
         let until = tokio::time::Instant::now() + self.settle;
@@ -135,7 +146,7 @@ impl<D: Deps> AutoContinue<D> {
             }));
             return;
         }
-        if !self.settled(id).await || !eligible(self.deps.session(id).await.as_ref()) {
+        if !self.settled(id).await || self.compactable(id).await.is_none() {
             return;
         }
         lock(&self.continues).insert(id.to_string(), used + 1);
@@ -151,8 +162,7 @@ impl<D: Deps> AutoContinue<D> {
         if self.deps.is_running(id).await {
             return;
         }
-        let fresh = self.deps.session(id).await;
-        if let Some(fresh) = fresh.filter(|s| eligible(Some(s))) {
+        if let Some(fresh) = self.compactable(id).await {
             self.deps.send(&fresh, CONTINUE_AFTER_COMPACTION).await;
         }
     }
@@ -161,7 +171,7 @@ impl<D: Deps> AutoContinue<D> {
         if !self.settled(id).await {
             return;
         }
-        let Some(session) = self.deps.session(id).await.filter(|s| eligible(Some(s))) else { return };
+        let Some(session) = self.compactable(id).await else { return };
         let messages = session.get("messages").and_then(Value::as_array).cloned().unwrap_or_default();
         if messages.is_empty() {
             return;
@@ -207,6 +217,10 @@ impl Deps for Daemon {
                 || ctx.admission.as_ref().is_some_and(|a| a.is_admitting(&id))
                 || crate::routes::running_chats(ctx).contains(&id)
         })
+    }
+    fn is_claude_code(&self, provider_id: &str) -> Fut<'_, bool> {
+        let id = provider_id.to_string();
+        Box::pin(async move { crate::providers::kind_of(&self.0, &id).await.as_deref() == Some("claude-code") })
     }
     fn context_window(&self, provider_id: &str, model_id: &str) -> u64 {
         crate::providers::known_context_window(&json!({ "id": provider_id }), model_id)
@@ -274,6 +288,10 @@ mod tests {
         fn is_running(&self, _: &str) -> Fut<'_, bool> {
             let r = self.running.load(Ordering::SeqCst);
             Box::pin(async move { r })
+        }
+        fn is_claude_code(&self, provider_id: &str) -> Fut<'_, bool> {
+            let cc = provider_id == "cc";
+            Box::pin(async move { cc })
         }
         fn context_window(&self, _: &str, _: &str) -> u64 {
             self.window
@@ -381,6 +399,15 @@ mod tests {
                 .is_none()
         );
         assert!(ac.on_event(&json!({ "type": "text", "sessionId": "s1" })).is_none());
+    }
+
+    #[tokio::test]
+    async fn a_claude_agent_chat_is_never_compacted_or_continued() {
+        let (fake, ac) = rig(110);
+        lock(&fake.session).as_mut().unwrap()["providerId"] = json!("cc");
+        ac.on_event(&overflow_event()).unwrap().await.unwrap();
+        ac.on_event(&json!({ "type": "done", "sessionId": "s1" })).unwrap().await.unwrap();
+        assert!(log(&fake).is_empty(), "{:?}", log(&fake));
     }
 
     #[tokio::test]

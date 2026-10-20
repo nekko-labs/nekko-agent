@@ -135,6 +135,9 @@ export function guessContextWindow(modelId: string | undefined): number {
   if (!id) return 128_000;
   const claude = claudeContextWindow(id);
   if (claude) return claude;
+  // Claude Code's model aliases (a Claude Agent chat's model): each names the
+  // newest model of its family, and every current one holds 1M.
+  if (id === 'opus' || id === 'sonnet' || id === 'haiku') return 1_000_000;
   if (id.includes('claude')) return 200_000;
   if (id.includes('gemini')) return 1_000_000;
   // Codex subscription generations have a smaller window than the API's

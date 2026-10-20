@@ -133,6 +133,11 @@ pub fn is_enabled(p: &Value) -> bool {
     p.get("enabled") != Some(&Value::Bool(false))
 }
 
+/// The `kind` of the settings provider `id`, when there is one.
+pub async fn kind_of(ctx: &Ctx, id: &str) -> Option<String> {
+    find(&providers(ctx).await, id).and_then(|p| p.get("kind")).and_then(Value::as_str).map(str::to_string)
+}
+
 fn find<'a>(list: &'a [Value], id: &str) -> Option<&'a Value> {
     list.iter().find(|p| p.get("id").and_then(Value::as_str) == Some(id))
 }

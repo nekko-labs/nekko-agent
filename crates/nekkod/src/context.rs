@@ -46,6 +46,11 @@ pub fn guess_context_window(model_id: Option<&str>) -> u64 {
     if let Some(w) = nekko_agent::claude::claude_context_window(&id) {
         return w;
     }
+    // Claude Code's model aliases (a Claude Agent chat's model): each names the
+    // newest model of its family, and every current one holds 1M.
+    if matches!(id.as_str(), "opus" | "sonnet" | "haiku") {
+        return 1_000_000;
+    }
     if id.contains("claude") {
         return 200_000;
     }
@@ -241,5 +246,9 @@ mod tests {
         assert_eq!(guess_context_window(Some("o3")), 200_000);
         assert_eq!(guess_context_window(Some("gemini-3-pro")), 1_000_000);
         assert_eq!(guess_context_window(Some("some-claude-gateway")), 200_000);
+        assert_eq!(guess_context_window(Some("opus")), 1_000_000);
+        assert_eq!(guess_context_window(Some("Sonnet")), 1_000_000);
+        assert_eq!(guess_context_window(Some("haiku")), 1_000_000);
+        assert_eq!(guess_context_window(Some("my-opus")), 128_000);
     }
 }
