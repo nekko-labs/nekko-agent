@@ -1,6 +1,7 @@
 import { confirmDeletion } from './components/DeleteConfirmation.js';
 import { needsProviderSetup } from './components/providers/providerSetup.js';
 import { create } from 'zustand';
+import { rememberSplashColours } from './splash.js';
 import type { AppSettings, Session, SessionSummary, ProviderConfig, ProviderKind, ModelInfo, TerminalInfo, InstalledSkillRecord, SkillDef, PrInfo, HypergateInfo } from '@nekko-agent/shared';
 import { AUTO_COMPLETE_CHOICES, agentsToAutoComplete, autoCompleteDays, DEFAULT_IMAGE_CHAT_PARAMS, isArchived, getMarketSkill, marketToSkillDef, normalizeInstallTarget, summarizeSession, THEME_PRESETS, currentPresetAccent } from '@nekko-agent/shared';
 import type { MascotMood } from './components/Mascot.js';
@@ -883,6 +884,8 @@ export const useStore = create<UiState>((set, get) => ({
     // The native window buttons sit in our title bar, so they have to follow
     // the theme with everything else.
     syncTitleBarOverlay();
+    // The next launch's splash shows before settings load, so it reads these.
+    if (get().settingsLoaded) rememberSplashColours([accent ?? preset?.accent, ...(preset?.swatch ?? [])]);
   },
 
   refreshTerminals: async () => {

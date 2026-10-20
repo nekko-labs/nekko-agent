@@ -2135,21 +2135,30 @@
 .compass-line {
   --compass-flow: 2.8s;
   position: absolute;
-  background-repeat: repeat;
+  overflow: hidden;
   opacity: 0.45;
   transition: opacity 0.18s ease;
 }
-.compass-line-h {
-  height: 1px;
+/* The dashes are a strip one dash-period longer than the line, slid along by
+   transform. Sliding the background instead repainted the lines every frame
+   on the main thread; a transform runs on the compositor. */
+.compass-line::before {
+  content: '';
+  position: absolute;
+  background-repeat: repeat;
+  animation: var(--compass-anim) var(--compass-flow) linear infinite;
+}
+.compass-line-h { height: 1px; --compass-anim: compass-flow-h; }
+.compass-line-h::before {
+  inset: 0 0 0 -7px;
   background-image: linear-gradient(to right, currentColor 0 3px, transparent 3px 7px);
   background-size: 7px 1px;
-  animation: compass-flow-h var(--compass-flow) linear infinite;
 }
-.compass-line-v {
-  width: 1px;
+.compass-line-v { width: 1px; --compass-anim: compass-flow-v; }
+.compass-line-v::before {
+  inset: -7px 0 0 0;
   background-image: linear-gradient(to bottom, currentColor 0 3px, transparent 3px 7px);
   background-size: 1px 7px;
-  animation: compass-flow-v var(--compass-flow) linear infinite;
 }
 /* Pointing at a direction: the line to it runs faster and brighter. */
 .compass-line-live {
@@ -2158,18 +2167,16 @@
 }
 /* Away from the centre for the two that run backwards, so every line still
    flows outwards from the window you are splitting. */
-.compass-line-reverse {
+.compass-line-reverse::before {
   animation-direction: reverse;
 }
 @keyframes compass-flow-h {
-  to {
-    background-position: 7px 0;
-  }
+  from { transform: translateX(0); }
+  to { transform: translateX(7px); }
 }
 @keyframes compass-flow-v {
-  to {
-    background-position: 0 7px;
-  }
+  from { transform: translateY(0); }
+  to { transform: translateY(7px); }
 }
 
 /*
@@ -2233,8 +2240,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .compass-line-h,
-  .compass-line-v {
+  .compass-line::before {
     animation: none;
   }
   /* The band still says where the drop lands; only the movement goes. */

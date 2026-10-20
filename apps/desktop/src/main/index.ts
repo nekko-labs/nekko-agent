@@ -280,12 +280,18 @@ function createWindow(): void {
   if (mainWindow && !mainWindow.isDestroyed()) { showWindow(); return; }
   // A first launch is sized to the screen before the window exists, so it
   // appears at that size rather than visibly growing into it.
-  const bounds = loadWindowBounds() ?? initialWindowBounds(screen.getPrimaryDisplay().workArea);
+  const { maximized, ...bounds } = loadWindowBounds() ?? initialWindowBounds(screen.getPrimaryDisplay().workArea);
   const win = newAppWindow(bounds);
 
   mainWindow = win;
   win.once('closed', () => { if (mainWindow === win) mainWindow = null; });
-  win.on('ready-to-show', () => win.show());
+  win.on('ready-to-show', () => {
+    if (maximized) win.maximize();
+    win.show();
+    // Without focus, Windows may leave a window opened from a terminal behind
+    // others, flashing in the taskbar instead of coming to the front.
+    win.focus();
+  });
   const closeIntent = createCloseIntent();
   if (process.platform === 'win32') {
     win.hookWindowMessage(WM_SYSCOMMAND, (wParam) => closeIntent.sysCommand(readWParam(wParam)));
@@ -299,7 +305,7 @@ function createWindow(): void {
     // `nekko-agent migrate` and installers do): quit for real, through the
     // clean engine shutdown, rather than hide into the tray.
     if (external) { app.quit(); return; }
-    void trayCompanion?.closeWindow(() => { saveWindowBounds(win.getBounds()); win.hide(); });
+    void trayCompanion?.closeWindow(() => { saveWindowBounds(win.isMaximized() ? { ...win.getNormalBounds(), maximized: true } : win.getBounds()); win.hide(); });
   });
 
   // A link that arrived before the page could listen (a cold launch from
@@ -317,8 +323,9 @@ function createWindow(): void {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
       if (win.isDestroyed() || win.isMinimized()) return;
-      const b = win.getBounds();
-      saveWindowBounds(b);
+      // A maximised window keeps its restored size, so un-maximising next run still works.
+      const maximized = win.isMaximized();
+      saveWindowBounds({ ...(maximized ? win.getNormalBounds() : win.getBounds()), ...(maximized ? { maximized } : {}) });
       // Dragged onto another screen: that screen's own window (if any) goes,
       // and the old screen becomes switchable.
       displayWindows?.mainMoved();
@@ -326,6 +333,8 @@ function createWindow(): void {
   };
   win.on('resize', persist);
   win.on('move', persist);
+  win.on('maximize', persist);
+  win.on('unmaximize', persist);
   // Hidden to the tray: the other screens' windows go with it, and come back with it.
   win.on('hide', () => displayWindows?.setVisible(false));
   win.on('show', () => displayWindows?.setVisible(true));
