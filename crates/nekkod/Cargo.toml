@@ -70,3 +70,7 @@ windows-sys.workspace = true
 
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true
+
+[dev-dependencies]
+# Signs the Change proofs a phone sends in the relay itest (IO-33 FA-3).
+p256 = { version = "0.13", default-features = false, features = ["ecdsa", "std"] }

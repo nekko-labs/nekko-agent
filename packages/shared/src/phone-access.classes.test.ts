@@ -10,6 +10,7 @@ import {
   PHONE_DENIED_FOREVER,
   PHONE_KEY_CHANNEL,
   PHONE_READ_CHANNELS,
+  PHONE_TOKEN_CHANNELS,
   PhoneAccessError,
   checkPhoneAccess,
   phoneAccessPolicy,
@@ -34,7 +35,10 @@ const code = (fn: () => unknown) => {
 
 describe('phone access classes', () => {
   it('leaves every channel phones had before IO-33 in neither class', () => {
-    for (const c of PHONE_CHANNELS) expect(phoneChannelClass(c), c).toBeNull();
+    const classed = new Set([...PHONE_READ_CHANNELS, ...PHONE_CHANGE_CHANNELS, ...PHONE_TOKEN_CHANNELS]);
+    const before = PHONE_CHANNELS.filter((c) => !classed.has(c));
+    expect(before.length).toBe(30);
+    for (const c of before) expect(phoneChannelClass(c), c).toBeNull();
   });
 
   it('only classes channels a phone may call, each in one class', () => {
@@ -43,13 +47,18 @@ describe('phone access classes', () => {
       expect(phoneAlwaysDenied(c), c).toBe(false);
     }
     for (const c of PHONE_READ_CHANNELS) expect(PHONE_CHANGE_CHANNELS.includes(c), c).toBe(false);
+    for (const c of PHONE_TOKEN_CHANNELS) {
+      expect((PHONE_CHANNELS as readonly string[]).includes(c), c).toBe(true);
+      expect(PHONE_CHANGE_CHANNELS.includes(c) || PHONE_READ_CHANNELS.includes(c), c).toBe(false);
+      expect(phoneChannelClass(c), c).toBe('token');
+    }
   });
 
   it('refuses a classed call when the device switch is off, and nothing else', () => {
     // The lists are empty until the feature PRs: check the rule with the
     // classes the TS reports, so it holds whatever they contain.
     const all = { read: true, change: true };
-    for (const c of PHONE_CHANNELS) {
+    for (const c of PHONE_CHANNELS.filter((c) => phoneChannelClass(c) === null)) {
       expect(code(() => checkPhoneAccess(c, { read: false, change: false })), c).toBe('ok');
       expect(code(() => checkPhoneAccess(c, all)), c).toBe('ok');
     }
@@ -57,7 +66,7 @@ describe('phone access classes', () => {
       expect(code(() => checkPhoneAccess(c, { read: false, change: true }))).toBe('read-off');
       expect(code(() => checkPhoneAccess(c, { read: true, change: false }))).toBe('ok');
     }
-    for (const c of PHONE_CHANGE_CHANNELS) {
+    for (const c of [...PHONE_CHANGE_CHANNELS, ...PHONE_TOKEN_CHANNELS]) {
       expect(code(() => checkPhoneAccess(c, { read: true, change: false }))).toBe('change-off');
       expect(code(() => checkPhoneAccess(c, { read: false, change: true }))).toBe('ok');
     }
@@ -97,8 +106,12 @@ describe('the always-denied list', () => {
     }
   });
 
-  it('still refuses files, git and terminals until their feature PRs', () => {
-    for (const c of ['file:read', 'file:write', 'dir:list', 'pr:action', 'pr:diff', 'workspace:gitStatus', 'terminal:create', 'terminals:list']) {
+  it('still refuses files, git and the other terminal channels until their feature PRs', () => {
+    for (const c of [
+      'file:read', 'file:write', 'dir:list', 'pr:action', 'pr:diff', 'workspace:gitStatus',
+      'terminal:run', 'terminal:update', 'terminal:shells', 'terminal:snapshot', 'terminals:list:native',
+      'terminal:attach', 'terminal:detach',
+    ]) {
       expect(phoneChannelAllowed(c), c).toBe(false);
       expect(phoneAlwaysDenied(c), c).toBe(true);
     }

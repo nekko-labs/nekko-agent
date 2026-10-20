@@ -13,7 +13,8 @@
 
 use crate::hub::Hub;
 use nekko_remote::{
-    Dispatcher, Link, LinkHandle, PhoneDispatcher, RELAYED_EVENTS, RelayAgent, RemoteService, Spawn, Verifier,
+    Dispatcher, Link, LinkHandle, PhoneDispatcher, PhoneTerminals, RELAYED_EVENTS, RelayAgent, RemoteService, Spawn,
+    Verifier,
 };
 use serde_json::Value;
 use std::path::PathBuf;
@@ -24,16 +25,24 @@ pub use nekko_remote::CHANNELS;
 pub struct Remote {
     svc: Option<Arc<RemoteService>>,
     dispatch: Arc<OnceLock<PhoneDispatcher>>,
+    /// Phones attached to terminals (FA-3), shared by the gate and the relay agent.
+    terminals: Arc<PhoneTerminals>,
 }
 
 impl Remote {
     pub fn new(dir: Option<PathBuf>, hub: Hub) -> Self {
         let dispatch: Arc<OnceLock<PhoneDispatcher>> = Arc::default();
+        let terminals = PhoneTerminals::new();
         let svc = dir.map(|d| {
-            let link = HubLink { rt: tokio::runtime::Handle::current(), hub, dispatch: dispatch.clone() };
+            let link = HubLink {
+                rt: tokio::runtime::Handle::current(),
+                hub,
+                dispatch: dispatch.clone(),
+                terminals: terminals.clone(),
+            };
             RemoteService::new(&d, nekko_remote::hello::os_random(), nekko_remote::system_clock(), Box::new(link))
         });
-        Self { svc, dispatch }
+        Self { svc, dispatch, terminals }
     }
 
     pub fn enabled(&self) -> bool {
@@ -43,11 +52,12 @@ impl Remote {
     /// How a phone's request runs: through the router, limited to what the
     /// phone access policy allows (`nekko_remote::phone`), with secrets
     /// stripped from what it returns. The gate reads the calling device's
-    /// switches, Change key and activity from the registry (IO-33).
+    /// switches, Change key and activity from the registry (IO-33), and
+    /// shares terminal attachments with the relay agent (FA-3).
     pub fn set_dispatcher(&self, run: Dispatcher) {
         // Without a data directory there is no registry and no relay agent to dispatch for.
         if let Some(svc) = &self.svc {
-            let _ = self.dispatch.set(nekko_remote::phone::gate(run, svc.clone()));
+            let _ = self.dispatch.set(nekko_remote::phone::gate_shared(run, svc.clone(), self.terminals.clone()));
         }
     }
 
@@ -77,6 +87,7 @@ struct HubLink {
     rt: tokio::runtime::Handle,
     hub: Hub,
     dispatch: Arc<OnceLock<PhoneDispatcher>>,
+    terminals: Arc<PhoneTerminals>,
 }
 
 impl Link for HubLink {
@@ -116,6 +127,7 @@ impl Link for HubLink {
                 verify,
                 dispatch,
                 events,
+                terminals: self.terminals.clone(),
             },
         ))
     }

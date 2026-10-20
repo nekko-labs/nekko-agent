@@ -2033,6 +2033,7 @@ dependencies = [
  "nekko-usage",
  "nekko-web",
  "nekko-workspace",
+ "p256",
  "regress",
  "reqwest",
  "serde",

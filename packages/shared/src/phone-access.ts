@@ -16,6 +16,18 @@ import { clientMessageIdOf } from './chat.js';
 import { skillTurnText } from './skills.js';
 import { phoneChangesView, PHONE_CHANGES_VIEW } from './phone-changes.js';
 import {
+  PHONE_TERMINAL,
+  PHONE_TERMINAL_CHANGE_CHANNELS,
+  PHONE_TERMINAL_CHANNELS,
+  PHONE_TERMINAL_LEAVE_CHANNEL,
+  PHONE_TERMINAL_OPEN_CHANNEL,
+  PHONE_TERMINAL_READ_CHANNELS,
+  PHONE_TERMINAL_TOKEN_CHANNELS,
+  phoneTerminalCallArgs,
+  phoneTerminalProblem,
+  phoneTerminalResult,
+} from './phone-terminal.js';
+import {
   PHONE_LIMIT_WINDOW_VIEW,
   PHONE_LIMITS_VIEW,
   PHONE_PR_VIEW,
@@ -48,6 +60,8 @@ import {
  * its usage and limits through narrow views (phone-views.ts), and starts an
  * automation the owner already set up (`task:runNow`, `workflow:run`). Git
  * happens through the agent (a prompt, so approvals apply), never a raw channel.
+ * IO-33 FA-3 / FA-6 add the chat's terminals and SSH (`PHONE_TERMINAL_CHANNELS`,
+ * phone-terminal.ts).
  */
 export const PHONE_CHANNELS = [
   'app:info',
@@ -71,8 +85,17 @@ export const PHONE_CHANNELS = [
   'settings:get',
   'settings:update',
   'skills:runnable',
+  'ssh:hosts',
+  'ssh:open',
   'task:runNow',
   'tasks:list',
+  'terminal:close',
+  'terminal:create',
+  'terminal:resize',
+  'terminal:signal',
+  'terminal:tail',
+  'terminal:write',
+  'terminals:list',
   'tool:approve',
   'usage:summary',
   'voice:status',
@@ -126,7 +149,13 @@ export const PHONE_DENIED_FOR_NOW: Record<'files' | 'git' | 'terminal' | 'undeci
     channels: ['pr:action', 'pr:continueStack', 'pr:diff', 'pr:linkStack', 'workspace:gitStatus'],
     prefixes: [],
   },
-  /** FA-3. Terminals. */
+  /**
+   * FA-3. Terminals: the prefixes stay denied, and only `PHONE_TERMINAL_CHANNELS`
+   * are let through (`PHONE_ALWAYS_DENIED.except`). `terminal:run`,
+   * `terminal:update`, `terminal:shells`, `terminal:snapshot` (uncapped),
+   * `terminals:list:native` and the remote layer's own `terminal:attach` /
+   * `terminal:detach` stay refused.
+   */
   terminal: { channels: [], prefixes: ['terminal:', 'terminals:'] },
   undecided: {
     channels: [
@@ -164,8 +193,8 @@ const DENIED_GROUPS = [PHONE_DENIED_FOREVER, ...Object.values(PHONE_DENIED_FOR_N
 export const PHONE_ALWAYS_DENIED = {
   channels: DENIED_GROUPS.flatMap((g) => g.channels).sort(),
   prefixes: DENIED_GROUPS.flatMap((g) => g.prefixes).sort(),
-  /** Not forced off by a prefix (it still has to be in `PHONE_CHANNELS` to be callable). */
-  except: ['remote:status'],
+  /** Not forced off by a prefix (each still has to be in `PHONE_CHANNELS` to be callable). */
+  except: ['remote:status', ...PHONE_TERMINAL_CHANNELS],
 };
 
 /**
@@ -179,14 +208,21 @@ export const PHONE_ALWAYS_DENIED = {
  * `PHONE_CHANNELS`. The 30 channels phones had before IO-33 are in neither
  * class and behave as before. Feature PRs (FA-1 to FA-6) fill these.
  */
-export const PHONE_READ_CHANNELS: readonly string[] = [];
-export const PHONE_CHANGE_CHANNELS: readonly string[] = [];
+export const PHONE_READ_CHANNELS: readonly string[] = [...PHONE_TERMINAL_READ_CHANNELS];
+export const PHONE_CHANGE_CHANNELS: readonly string[] = [...PHONE_TERMINAL_CHANGE_CHANNELS];
+/**
+ * Change-level channels that carry a terminal session token instead of a
+ * proof per call (`terminal:write`, `terminal:resize`; see phone-terminal.ts).
+ * The Change switch applies to them as to `PHONE_CHANGE_CHANNELS`.
+ */
+export const PHONE_TOKEN_CHANNELS: readonly string[] = [...PHONE_TERMINAL_TOKEN_CHANNELS];
 
-/** `null`: neither class (no per-device switch applies). */
-export type PhoneChannelClass = 'read' | 'change' | null;
+/** `null`: neither class (no per-device switch applies). `token`: Change level, with a terminal session token. */
+export type PhoneChannelClass = 'read' | 'change' | 'token' | null;
 
 export function phoneChannelClass(channel: string): PhoneChannelClass {
   if (PHONE_CHANGE_CHANNELS.includes(channel)) return 'change';
+  if (PHONE_TOKEN_CHANNELS.includes(channel)) return 'token';
   if (PHONE_READ_CHANNELS.includes(channel)) return 'read';
   return null;
 }
@@ -239,7 +275,7 @@ export interface PhoneActivityEntry {
 export function checkPhoneAccess(channel: string, access: PhoneDeviceAccess): void {
   const cls = phoneChannelClass(channel);
   if (cls === 'read' && !access.read) throw new PhoneAccessError('read-off', channel);
-  if (cls === 'change' && !access.change) throw new PhoneAccessError('change-off', channel);
+  if ((cls === 'change' || cls === 'token') && !access.change) throw new PhoneAccessError('change-off', channel);
 }
 
 /**
@@ -381,7 +417,12 @@ export type PhoneAccessCode =
   | 'proof-required'
   | 'proof-invalid'
   | 'proof-stale'
-  | 'proof-replayed';
+  | 'proof-replayed'
+  // FA-3: the terminal session token `terminal:write` / `terminal:resize` carry, and terminals a phone can't reach.
+  | 'token-required'
+  | 'token-invalid'
+  | 'token-expired'
+  | 'terminal-hidden';
 
 /** Why the computer refused a phone's request. The wire carries `message`. */
 export class PhoneAccessError extends Error {
@@ -482,6 +523,11 @@ export function screenPhoneCall(
   args: unknown[],
 ): { settingsPatch?: Array<[string, unknown]>; skill?: { name: string; input: string } } {
   if (!phoneChannelAllowed(channel)) throw new PhoneAccessError('channel-denied', channel);
+  if ((PHONE_TERMINAL_CHANNELS as readonly string[]).includes(channel)) {
+    const problem = phoneTerminalProblem(channel, args);
+    if (problem) throw new PhoneAccessError(problem[0] as PhoneAccessCode, problem[1]);
+    return {};
+  }
   switch (channel) {
     case 'changes:list':
     case 'pr:sessionList':
@@ -642,6 +688,16 @@ export function redactPhoneResult(channel: string, result: unknown): unknown {
       return phoneUsageView(result);
     case 'limits:get':
       return phoneLimitsView(result);
+    case 'terminals:list':
+    case 'terminal:tail':
+    case 'ssh:hosts':
+    case 'terminal:create':
+    case 'ssh:open':
+    case 'terminal:write':
+    case 'terminal:resize':
+    case 'terminal:signal':
+    case 'terminal:close':
+      return phoneTerminalResult(channel, result);
     default:
       return result;
   }
@@ -780,6 +836,12 @@ export async function callFromPhone(
   if (channel === 'session:fork') callArgs = args[1] == null ? [args[0]] : [args[0], args[1]];
   if (channel === 'chat:editQueued') callArgs = [args[0], args[1], pick(args[2], PHONE_QUEUE_EDIT_KEYS)];
   if (channel === 'pr:sessionList') callArgs = [args[0], args[1] === true];
+  if ((PHONE_TERMINAL_CHANNELS as readonly string[]).includes(channel)) callArgs = phoneTerminalCallArgs(channel, args);
+  if (channel === 'terminal:create') {
+    // A new terminal starts in the chat's folder, as the desktop's does: the phone never names a path.
+    const chat = await dispatch('session:get', [(callArgs[0] as Obj).sessionId]);
+    if (isObj(chat) && typeof chat.workspaceId === 'string') callArgs = [{ ...(callArgs[0] as Obj), workspaceId: chat.workspaceId }];
+  }
   if (channel === 'limits:get') {
     // The phone names a provider; the computer reads that provider's limits key itself.
     const key = phoneLimitsKey(await dispatch('providers:list', []), args[0] as string);
@@ -809,6 +871,8 @@ export function phoneAccessPolicy() {
     alwaysDenied: PHONE_ALWAYS_DENIED,
     readChannels: [...PHONE_READ_CHANNELS],
     changeChannels: [...PHONE_CHANGE_CHANNELS],
+    tokenChannels: [...PHONE_TOKEN_CHANNELS],
+    terminal: { ...PHONE_TERMINAL, openChannel: PHONE_TERMINAL_OPEN_CHANNEL, leaveChannel: PHONE_TERMINAL_LEAVE_CHANNEL },
     changeProof: { ...PHONE_CHANGE_PROOF },
     keyChannel: PHONE_KEY_CHANNEL,
     activityLimit: PHONE_ACTIVITY_LIMIT,
