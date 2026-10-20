@@ -1,4 +1,5 @@
 import Foundation
+import NekkoKit
 import NekkoProtocol
 import Observation
 
@@ -46,8 +47,12 @@ final class Prefs {
     /// The first run (IO-31) was finished or skipped; it never shows again.
     var onboarded: Bool { didSet { d.set(onboarded, forKey: "onboarded") } }
     /// Keep each computer's chat list (titles, times, folders) on this iPhone to show
-    /// while the computer is unreachable. Off by default: nothing about chats is stored.
+    /// while the computer is unreachable. On unless the user turned it off (OF-9).
+    /// Written only when the switch is flipped: the stored value is the user's choice.
     var keepChatList: Bool { didSet { d.set(keepChatList, forKey: "keepChatList") } }
+    /// Keep the last chats opened (up to 20, 5 MB per computer, no photos) to read
+    /// while the computer is unreachable (OF-5). On unless the user turned it off.
+    var keepTranscripts: Bool { didSet { d.set(keepTranscripts, forKey: "keepTranscripts") } }
     /// Per computer, the last model chosen for a new chat: `providerId::modelId`.
     var lastModel: [String: String] { didSet { d.set(lastModel, forKey: "lastModel") } }
 
@@ -70,7 +75,10 @@ final class Prefs {
         dictationHold = flag("dictationHold", false)
         onboarded = flag("onboarded", false)
         lastModel = d.dictionary(forKey: "lastModel") as? [String: String] ?? [:]
-        keepChatList = flag("keepChatList", false)
+        // On unless the user turned them off: an install that never touched a switch has nothing stored.
+        func choice(_ k: String) -> Bool? { defaults.object(forKey: k) == nil ? nil : defaults.bool(forKey: k) }
+        keepChatList = OfflineSetting.isOn(stored: choice("keepChatList"))
+        keepTranscripts = OfflineSetting.isOn(stored: choice("keepTranscripts"))
     }
 
     func wants(_ kind: PushKind) -> Bool {

@@ -119,7 +119,8 @@ public struct ChatMessage: Equatable, Sendable {
         if let s = v["skill"], let name = s.str("name") { skill = (name, s.str("input") ?? "") }
         return ChatMessage(
             id: id, role: role, content: v.str("content") ?? "", reasoning: v.str("reasoning"),
-            createdAt: v.long("createdAt"), imageCount: v["images"]?.array?.count ?? 0, skill: skill,
+            // The phone's saved copy (`SavedTranscripts`) keeps only how many photos there were.
+            createdAt: v.long("createdAt"), imageCount: v["images"]?.array?.count ?? max(0, Int(v.long("imageCount") ?? 0)), skill: skill,
             toolCalls: v["toolCalls"]?.array?.compactMap(ToolCall.from) ?? [],
             toolResult: ToolResult.from(v["toolResult"]), interrupted: v.flag("interrupted"))
     }

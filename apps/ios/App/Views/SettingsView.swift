@@ -95,8 +95,10 @@ struct SettingsView: View {
             Section {
                 Toggle("Keep the chat list when offline", isOn: Binding(get: { prefs.keepChatList }, set: { app.setKeepChatList($0) }))
                     .accessibilityIdentifier("settings.keepChatList")
+                Toggle("Keep recent chats to read offline", isOn: Binding(get: { prefs.keepTranscripts }, set: { app.setKeepTranscripts($0) }))
+                    .accessibilityIdentifier("settings.keepTranscripts")
             } header: { SectionHeader("Offline") } footer: {
-                Text("Shows each computer’s chat titles and folders, as last seen, while it can’t be reached. Only the list is kept on this iPhone, never what the chats say, and it isn’t backed up. Turning this off deletes it.")
+                Text("While a computer can’t be reached, this iPhone shows its chat list and the last 20 chats you opened, as last seen. Photos aren’t kept, nothing is backed up, and turning a switch off deletes what it kept.")
                     .foregroundStyle(palette.inkSoft)
             }
             Section {
