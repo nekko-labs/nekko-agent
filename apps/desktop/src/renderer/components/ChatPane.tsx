@@ -14,7 +14,7 @@ import { createPortal } from 'react-dom';
 import { DictationButton } from './DictationButton.js';
 import { decideApproval, type ApprovalScope } from './agent-console/approval-decision.js';
 import type { AgentEvent, AskAnswer, AskRequest, AutoQuality, Session, ContextBundle, IndexedFile, ModelInfo, ProviderConfig, SkillDef, PrInfo, QueuePayload, QueuedPrompt } from '@nekko-agent/shared';
-import { archiveDaysLeft, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, modelSupportsThinking, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
+import { archiveDaysLeft, CLAUDE_CODE_PROVIDER_KIND, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, modelSupportsThinking, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
 import type { AutoProviderPick, ProviderPool } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { approvalAfterResult } from './ChatPane.approval.js';
@@ -2586,15 +2586,19 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   </div>
                   );
                 })()}
-                <LiveContextWarning
-                  sessionId={sessionId}
-                  marks={marks}
-                  baseUsed={ctxUsed}
-                  windowTokens={selectedModelInfo?.contextLength ?? ctx?.contextWindow ?? 0}
-                  session={session}
-                  streaming={streaming}
-                  onCompacted={onCompacted}
-                />
+                {/* Claude Code keeps and compacts a Claude Agent chat's context
+                    itself, so Nekko neither warns nor compacts it. */}
+                {activeProvider?.kind !== CLAUDE_CODE_PROVIDER_KIND && (
+                  <LiveContextWarning
+                    sessionId={sessionId}
+                    marks={marks}
+                    baseUsed={ctxUsed}
+                    windowTokens={selectedModelInfo?.contextLength ?? ctx?.contextWindow ?? 0}
+                    session={session}
+                    streaming={streaming}
+                    onCompacted={onCompacted}
+                  />
+                )}
 
               </>
             }
