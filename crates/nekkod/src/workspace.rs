@@ -8,6 +8,7 @@
 
 use crate::hub::Hub;
 use crate::routes::Ctx;
+use nekko_workspace::gitops::{self, DiffOpts, GitOps, LogOpts};
 use nekko_workspace::{comments, design, files, git::Git, index::Index, memory, pr::Prs, skills, spec};
 use serde_json::{Value, json};
 use std::path::PathBuf;
@@ -28,6 +29,21 @@ pub const CHANNELS: &[&str] = &[
     "pr:sessionList",
     "pr:diff",
     "pr:action",
+    // IO-33 FA-2: git in the workspace's folder, and PRs from it.
+    "git:diff",
+    "git:log",
+    "git:show",
+    "git:branches",
+    "git:compare",
+    "git:stage",
+    "git:unstage",
+    "git:commit",
+    "git:commitMessage",
+    "git:push",
+    "git:switch",
+    "git:mergeAbort",
+    "pr:create",
+    "pr:checks",
 ];
 
 /// Channels that keep their files in the data directory, served only when
@@ -76,6 +92,7 @@ pub struct Workspace {
     index: Arc<Index>,
     prs: Arc<Prs>,
     git: Git,
+    ops: GitOps,
     vaizer: skills::Vaizer,
 }
 
@@ -95,6 +112,7 @@ impl Workspace {
             data_dir,
             index: Arc::new(Index::new()),
             git: Git::new(prs.clone()),
+            ops: GitOps::default(),
             prs,
             vaizer: skills::Vaizer::default(),
         }
@@ -291,6 +309,11 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
                 None => Ok(out),
             }
         }
+        "pr:checks" => {
+            let token = github_token(&settings(ctx).await);
+            ws.prs.checks(&text(&args, 0), token.as_deref()).await
+        }
+        c if c.starts_with("git:") || c == "pr:create" => git_route(ctx, c, &args).await,
         "workspace:list" => Ok(settings(ctx).await.get("workspaces").cloned().unwrap_or(json!([]))),
         "workspace:addByPath" => add_folder(ctx, arg(&args, 0)).await,
         "workspace:remove" => remove_folder(ctx, &text(&args, 0)).await,
@@ -544,6 +567,113 @@ async fn build_spec(ctx: &Ctx, args: Vec<Value>) -> Result<Value, String> {
         Err(e) => return Ok(json!({ "ok": false, "message": e })),
     };
     blocking(move || spec::land(&sid, &session, &plan, &raw)).await?
+}
+
+/// The `git:*` calls and `pr:create`, in the folder `git_folder` finds for
+/// the first argument (a saved workspace id, or `session:<chat id>` for the
+/// chat's checkout). A change drops the folder's cached `workspace:gitStatus`.
+async fn git_route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, String> {
+    let id = text(args, 0);
+    let Some(dir) = git_folder(ctx, &id).await.filter(|p| !p.is_empty()) else {
+        return Err("This workspace has no folder to run git in.".into());
+    };
+    let ops = &ctx.workspace.ops;
+    let paths = || -> Result<Vec<String>, String> {
+        let list = arg(args, 1).and_then(Value::as_array).ok_or("Pass the paths as a list.")?;
+        list.iter()
+            .map(|p| p.as_str().map(str::to_string).ok_or_else(|| "Every path must be text.".to_string()))
+            .collect()
+    };
+    let out = match channel {
+        "git:diff" => ops.diff(&dir, &DiffOpts::from_json(arg(args, 1))?).await,
+        "git:log" => ops.log(&dir, &LogOpts::from_json(arg(args, 1))?).await,
+        "git:show" => ops.show(&dir, &text(args, 1)).await,
+        "git:branches" => ops.branches(&dir).await,
+        "git:compare" => ops.compare(&dir, &text(args, 1), &text(args, 2)).await,
+        "git:stage" => ops.stage(&dir, &paths()?).await,
+        "git:unstage" => ops.unstage(&dir, &paths()?).await,
+        "git:commit" => ops.commit(&dir, arg(args, 1)).await,
+        "git:commitMessage" => commit_message(ctx, &dir).await,
+        "git:push" => ops.push(&dir, arg(args, 1)).await,
+        "git:switch" => ops.switch(&dir, &text(args, 1), arg(args, 2)).await,
+        "git:mergeAbort" => ops.merge_abort(&dir).await,
+        "pr:create" => create_pr(ctx, &dir, arg(args, 1)).await,
+        other => return Err(format!("Unknown git call: {other}")),
+    };
+    if matches!(
+        channel,
+        "git:stage" | "git:unstage" | "git:commit" | "git:push" | "git:switch" | "git:mergeAbort" | "pr:create"
+    ) {
+        ctx.workspace.git.invalidate(&dir);
+    }
+    out
+}
+
+/// `git:commitMessage`: a commit message for what is staged, written by the
+/// default provider and model from the file list and the (capped) diff.
+async fn commit_message(ctx: &Ctx, dir: &str) -> Result<Value, String> {
+    let (stat, patch, cut) = ctx.workspace.ops.staged_for_message(dir).await?;
+    let chosen = design_provider(ctx).await?;
+    let provider = chosen.get("provider").cloned().unwrap_or(Value::Null);
+    let model = chosen.get("model").cloned().unwrap_or(Value::Null);
+    let content = gitops::commit_message_prompt(&stat, &patch, cut);
+    let request = json!({
+        "provider": provider,
+        "request": {
+            "model": model,
+            "messages": [{ "id": "commit-message", "role": "user", "createdAt": nekko_workspace_now(), "content": content }],
+            "temperature": 0.2,
+            "maxOutputTokens": 400,
+            "think": false,
+            "promptCaching": chosen.get("promptCaching").cloned().unwrap_or(json!(true)),
+        },
+        "timeoutMs": 60_000,
+        "usageOnFailure": true,
+    });
+    let out = crate::sideband::complete(&request).await.map_err(|e| format!("Writing the message failed: {e}"))?;
+    if let Some(usage) = out.get("usage").and_then(Value::as_array).filter(|u| !u.is_empty())
+        && ctx.accounts.enabled()
+    {
+        let who = json!({ "id": provider.get("id"), "kind": provider.get("kind"), "auth": provider.get("auth") });
+        ctx.accounts.side_usage(&who, Some(&model), "", usage);
+    }
+    if let Some(e) = out.get("error") {
+        return Err(format!("Writing the message failed: {}", nekko_js::display(e)));
+    }
+    let message = gitops::clean_commit_message(out.get("text").and_then(Value::as_str).unwrap_or_default());
+    if message.is_empty() {
+        return Err("The model wrote no message. Try again, or write one.".into());
+    }
+    Ok(json!({ "message": message, "inputTruncated": cut }))
+}
+
+/// `pr:create`: a PR from the folder's current branch, which must be pushed.
+async fn create_pr(ctx: &Ctx, dir: &str, opts: Option<&Value>) -> Result<Value, String> {
+    let get = |k: &str| opts.and_then(|o| o.get(k));
+    let title = get("title").and_then(Value::as_str).map(str::trim).unwrap_or_default().to_string();
+    if title.is_empty() {
+        return Err("Give the PR a title.".into());
+    }
+    if title.chars().count() > 256 {
+        return Err("The PR title is too long (at most 256 characters).".into());
+    }
+    let body = get("body").and_then(Value::as_str).unwrap_or_default().to_string();
+    if body.len() > 60_000 {
+        return Err("The PR description is too long.".into());
+    }
+    let base = get("base").and_then(Value::as_str).filter(|b| !b.is_empty()).map(gitops::safe_ref).transpose()?;
+    let draft = nekko_js::truthy(get("draft"));
+    let ops = &ctx.workspace.ops;
+    let Some(branch) = ops.current_branch(dir).await? else {
+        return Ok(json!({ "ok": false, "message": "Not on a branch (detached HEAD). Switch to a branch first." }));
+    };
+    let slug = match ops.push_remote(dir, &branch).await {
+        Some(remote) => ops.github_slug(dir, &remote).await,
+        None => None,
+    };
+    let token = github_token(&settings(ctx).await);
+    let prs = &ctx.workspace.prs;
+    Ok(prs.create(dir, &branch, slug.as_deref(), &title, &body, base.as_deref(), draft, token.as_deref()).await)
 }
 
 /// `fetchPrInfo(url)`: one PR's live state, read now (gh, else the REST API

@@ -66,7 +66,45 @@ export interface PrActionResult {
   pr?: PrInfo;
 }
 
-const PR_URL_RE = /https?:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pull\/\d+/g;
+/** `pr:create`: a PR from the workspace's current branch, which must already be pushed. */
+export interface PrCreateOptions {
+  title: string;
+  body?: string;
+  /** The branch to merge into; the repository's default when omitted. */
+  base?: string;
+  draft?: boolean;
+}
+
+export interface PrCreateResult {
+  ok: boolean;
+  message: string;
+  url?: string;
+  /** The new PR's live state, when it could be read. */
+  pr?: PrInfo;
+}
+
+/** gh's bucket for one check. */
+export type PrCheckState = 'pass' | 'fail' | 'pending' | 'skipping' | 'cancel';
+
+export interface PrCheck {
+  name: string;
+  state: PrCheckState;
+  workflow: string | null;
+  link: string | null;
+  description: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+}
+
+/** `pr:checks`: each check on the PR's head commit, and their rollup. */
+export interface PrCheckList {
+  url: string;
+  checks: PrChecks;
+  items: PrCheck[];
+  source: 'gh' | 'api';
+}
+
+const PR_URL_RE =/https?:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pull\/\d+/g;
 
 /**
  * Every unique GitHub PR URL mentioned in a blob of text. A match ends at the

@@ -1,5 +1,5 @@
 diff --git a/cli/Cargo.toml b/cli/Cargo.toml
-index 997ac70..a7d98d4 100644
+index 997ac70..fba8829 100644
 --- a/cli/Cargo.toml
 +++ b/cli/Cargo.toml
 @@ -1,4 +1,5 @@
@@ -8,10 +8,18 @@ index 997ac70..a7d98d4 100644
  name = "agent-browser"
  version = "0.39.1"
  edition = "2021"
-@@ -70,3 +71,9 @@ opt-level = 3
+@@ -70,3 +71,17 @@ opt-level = 3
  
  [profile.dev.package.png]
  opt-level = 3
++
++# Nekko's development and CI build: optimized like release, but without fat LTO
++# and with parallel, incremental codegen. Packaging still builds `release`.
++[profile.nekko-dev]
++inherits = "release"
++lto = false
++codegen-units = 256
++incremental = true
 +
 +[[bin]]
 +name = "agent-browser"
@@ -53,26 +61,64 @@ index abdc7ef..76e10dd 100644
  #[allow(dead_code)]
  pub mod diff;
  #[allow(dead_code)]
+diff --git a/cli/src/native/stream/http.rs b/cli/src/native/stream/http.rs
+index 394677d..4607c1a 100644
+--- a/cli/src/native/stream/http.rs
++++ b/cli/src/native/stream/http.rs
+@@ -5,6 +5,7 @@ use std::sync::Arc;
+ use tokio::io::{AsyncReadExt, AsyncWriteExt};
+ use tokio::sync::RwLock;
+ 
++#[cfg(unix)]
+ use crate::connection::get_socket_dir;
+ #[cfg(windows)]
+ use crate::connection::resolve_port;
+diff --git a/cli/src/native/stream/mod.rs b/cli/src/native/stream/mod.rs
+index dea9606..08e8324 100644
+--- a/cli/src/native/stream/mod.rs
++++ b/cli/src/native/stream/mod.rs
+@@ -6,9 +6,7 @@ mod http;
+ mod websocket;
+ 
+ pub use cdp_loop::{ack_screencast_frame, start_screencast, stop_screencast};
+-pub use dashboard::{
+-    is_valid_dashboard_access_token, normalize_dashboard_allowed_origins, run_dashboard_server,
+-};
++// The dashboard re-exports served only upstream main and the daemon, neither compiled here.
+ 
+ use serde_json::{json, Value};
+ use std::sync::Arc;
 diff --git a/cli/src/nekko_main.rs b/cli/src/nekko_main.rs
 new file mode 100644
-index 0000000..5896713
+index 0000000..81cd163
 --- /dev/null
 +++ b/cli/src/nekko_main.rs
-@@ -0,0 +1,106 @@
+@@ -0,0 +1,117 @@
 +// Dedicated Nekko inherited-stdio entrypoint. Upstream CLI main is not compiled.
 +// Any upstream diagnostic macro must never corrupt protocol stdout.
 +macro_rules! println { ($($arg:tt)*) => { eprintln!($($arg)*) }; }
 +macro_rules! print { ($($arg:tt)*) => { eprint!($($arg)*) }; }
++// Upstream modules serve its CLI and daemon too; only the parts native::actions
++// reaches are live here, so the rest is expected dead code, as in native/mod.rs.
 +mod ca_bundle;
++#[allow(dead_code)]
 +mod color;
++#[allow(dead_code)]
 +mod commands;
++#[allow(dead_code)]
 +mod connection;
++#[allow(dead_code)]
 +mod flags;
++#[allow(dead_code)]
 +mod install;
 +mod native;
++#[allow(dead_code)]
 +mod output;
++#[allow(dead_code)]
 +mod plugins;
++#[allow(dead_code)]
 +mod read;
++#[allow(dead_code)]
 +mod tls;
 +mod validation;
 +
