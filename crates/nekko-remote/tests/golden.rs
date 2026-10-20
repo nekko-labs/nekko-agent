@@ -276,13 +276,14 @@ fn the_phone_gate_decides_as_the_ts_does() {
     let skills = g["skills"].clone();
     let sessions = g["sessions"].clone();
     let changes = g["changes"].clone();
+    let beyond = g["beyond"].clone();
     let cases = g["cases"].as_array().unwrap();
     assert!(cases.len() >= 30);
     let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
     for case in cases {
         let calls: Arc<Mutex<Vec<Value>>> = Arc::default();
-        let (seen, settings, skills, sessions, changes) =
-            (calls.clone(), settings.clone(), skills.clone(), sessions.clone(), changes.clone());
+        let (seen, settings, skills, sessions, changes, beyond) =
+            (calls.clone(), settings.clone(), skills.clone(), sessions.clone(), changes.clone(), beyond.clone());
         let host: nekko_remote::Dispatcher = Arc::new(move |channel: String, args: Value| {
             seen.lock().unwrap().push(json!([channel, args]));
             let out = match channel.as_str() {
@@ -290,6 +291,9 @@ fn the_phone_gate_decides_as_the_ts_does() {
                 "changes:list" => changes.get(args[0].as_str().unwrap_or("")).cloned().unwrap_or(json!([])),
                 "providers:list" => settings["providers"].clone(),
                 "skills:runnable" => skills.clone(),
+                // The channels beyond the chat answer with what the TS fixture holds (task:runNow: nothing).
+                "task:runNow" => Value::Null,
+                c if beyond.get(c).is_some() => beyond[c].clone(),
                 c if c.starts_with("settings:") => settings.clone(),
                 c => json!({ "ok": c }),
             };

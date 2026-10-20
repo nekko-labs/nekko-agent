@@ -115,6 +115,8 @@ export const IpcChannels = {
   chatCancelCompaction: 'chat:cancelCompaction',
   chatQueue: 'chat:queue',
   chatDequeue: 'chat:dequeue',
+  /** Change or remove a queued prompt, checked against the text the editor showed (a phone's queue). */
+  chatEditQueued: 'chat:editQueued',
   chatInterruptQueued: 'chat:interruptQueued',
   chatSteer: 'chat:steer',
   chatSuggest: 'chat:suggest',

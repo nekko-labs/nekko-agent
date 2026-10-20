@@ -45,7 +45,13 @@ route_pid=$!
 sleep 1
 cat >"$data/settings.json" <<JSON
 {"providers":[{"id":"fake","kind":"openai-compat","label":"Fake","baseUrl":"http://127.0.0.1:$model_port/v1","apiKey":"sk-should-never-reach-the-phone","enabled":true}],
- "defaultProviderId":"fake","defaultModelId":"fake-model","phoneChanges":true}
+ "defaultProviderId":"fake","defaultModelId":"fake-model","phoneChanges":true,
+ "prompts":[{"id":"hello","name":"hello","body":"Say hello"}]}
+JSON
+# An automation the phone can run but never edit (IO-26); its schedule is far off, so only Run now fires it.
+cat >"$data/tasks.json" <<JSON
+[{"id":"itest-task","title":"Say hello nightly","kind":"recurring","prompt":"Say hello","providerId":"fake","modelId":"fake-model",
+  "intervalMs":86400000,"status":"active","createdAt":1760000000000,"nextRunAt":4102444800000,"runCount":0}]
 JSON
 # The agent runs in its data dir, so files the fake model writes land there, not in the repo.
 (cd "$data" && NEKKO_RELAY_URL="$relay_url" NEKKO_ROOM="$room" NEKKO_PAIR_KEY="$key" NEKKO_DATA_DIR="$data" \

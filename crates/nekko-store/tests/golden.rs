@@ -85,6 +85,7 @@ fn every_write_leaves_the_file_the_ts_host_would() {
                 "truncate" => store.truncate(fixture, &arg),
                 "queue" => store.queue(fixture, &arg),
                 "dequeue" => store.dequeue(fixture, &arg),
+                "editQueued" => store.edit_queued(fixture, &arg, op.get(2).unwrap_or(&Value::Null)),
                 "autoTitle" => store.set_auto_title(fixture, arg.as_str().unwrap()).map(|_| Some(Value::Null)),
                 "configureSandbox" => store
                     .configure_sandbox(fixture, arg.as_str().unwrap(), op[2].as_str().unwrap(), op[3].as_f64().unwrap())

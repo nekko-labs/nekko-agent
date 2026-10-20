@@ -37,6 +37,9 @@ pub struct Policy {
     pub max_frame_bytes: usize,
     /// `PHONE_CHANGES_VIEW`: the limits of a phone's Changes view.
     pub changes_view: crate::phone_changes::Limits,
+    /// `PHONE_VIEWS` and the views beyond the chat (phone_views.rs).
+    pub views: crate::phone_views::Views,
+    pub queue_edit_keys: Vec<String>,
 }
 
 fn strings(v: &Value) -> Vec<String> {
@@ -70,6 +73,8 @@ pub fn policy() -> &'static Policy {
             thumb_chars: v["sessionView"]["thumbChars"].as_u64().unwrap_or(0) as usize,
             max_frame_bytes: v["maxFrameBytes"].as_u64().unwrap_or(9 * 1024 * 1024) as usize,
             changes_view: crate::phone_changes::Limits::from_policy(&v["changesView"]),
+            views: crate::phone_views::Views::from_policy(&v),
+            queue_edit_keys: strings(&v["queueEditKeys"]),
         }
     })
 }
@@ -216,12 +221,38 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
     }
     let arg = |i: usize| args.get(i).unwrap_or(&Value::Null);
     let mut out = Screened::default();
+    let id = |i: usize, what: &str| -> Result<(), Denied> {
+        if arg(i).as_str().is_none_or(|s| s.is_empty()) { Err(denied("value-invalid", what)) } else { Ok(()) }
+    };
     match channel {
-        "changes:list" => {
-            if arg(0).as_str().is_none_or(|s| s.is_empty()) {
-                return Err(denied("value-invalid", "chat id"));
+        "changes:list" => id(0, "chat id")?,
+        "pr:sessionList" => {
+            id(0, "chat id")?;
+            if args.len() > 1 && !arg(1).is_boolean() {
+                return Err(denied("value-invalid", "refresh"));
             }
         }
+        "session:fork" => {
+            id(0, "chat id")?;
+            if args.len() > 1 && !arg(1).is_null() && arg(1).as_str().is_none_or(|s| s.is_empty()) {
+                return Err(denied("value-invalid", "message id"));
+            }
+        }
+        "chat:editQueued" => {
+            id(0, "chat id")?;
+            let index_ok = arg(1).as_f64().is_some_and(|i| i.fract() == 0.0 && i >= 0.0);
+            if !index_ok {
+                return Err(denied("value-invalid", "queue index"));
+            }
+            let edit = arg(2);
+            keys_within(edit, &policy().queue_edit_keys, "queued prompt edit")?;
+            if !edit.get("expect").is_some_and(Value::is_string) || edit.get("text").is_some_and(|t| !t.is_string()) {
+                return Err(denied("value-invalid", "queued prompt edit"));
+            }
+        }
+        "task:runNow" => id(0, "task id")?,
+        "workflow:run" => id(0, "workflow id")?,
+        "limits:get" => id(0, "provider id")?,
         "settings:update" => out.settings = Some(check_settings_patch(arg(0))?),
         "session:setOptions" => {
             keys_within(arg(1), &policy().session_option_keys, "chat options")?;
@@ -331,7 +362,15 @@ fn pick(value: &Value, paths: &[String]) -> Value {
 /// What a phone receives for a channel's result: secrets never leave the computer.
 pub fn redact(channel: &str, result: Value) -> Value {
     match channel {
-        "settings:get" | "settings:update" => pick(&result, &policy().settings_view),
+        "settings:get" | "settings:update" => {
+            let mut view = pick(&result, &policy().settings_view);
+            if let Some(o) = view.as_object_mut()
+                && let Some(p) = o.get("prompts").cloned()
+            {
+                o.insert("prompts".into(), crate::phone_views::prompts(&p, &policy().views));
+            }
+            view
+        }
         "providers:list" => match result {
             Value::Array(list) => Value::Array(list.iter().map(|p| pick(p, &policy().provider_view)).collect()),
             _ => json!([]),
@@ -342,6 +381,33 @@ pub fn redact(channel: &str, result: Value) -> Value {
         },
         "session:get" => session_view(result),
         "changes:list" => crate::phone_changes::view(&result, &policy().changes_view),
+        "chat:editQueued" => match &result {
+            Value::Object(o) => json!({
+                "id": o.get("id").cloned().unwrap_or(Value::Null),
+                "queue": crate::phone_views::queue(o.get("queue").unwrap_or(&Value::Null)),
+            }),
+            _ => Value::Null,
+        },
+        "session:fork" => {
+            if result.is_object() {
+                pick(&result, &["id".into(), "title".into()])
+            } else {
+                Value::Null
+            }
+        }
+        "tasks:list" => crate::phone_views::tasks(&result, &policy().views),
+        "workflows:list" => crate::phone_views::workflows(&result, &policy().views),
+        "workflow:run" => {
+            if result.is_object() {
+                pick(&result, &policy().views.workflow_run)
+            } else {
+                Value::Null
+            }
+        }
+        "task:runNow" => Value::Null,
+        "pr:sessionList" => crate::phone_views::prs(&result, &policy().views),
+        "usage:summary" => crate::phone_views::usage(&result, &policy().views),
+        "limits:get" => crate::phone_views::limits(&result, &policy().views),
         _ => result,
     }
 }
@@ -459,6 +525,10 @@ pub fn session_view(session: Value) -> Value {
         }
     }
     s.insert("messages".into(), Value::Array(kept));
+    if let Some(q) = s.get("queue") {
+        let q = crate::phone_views::queue(q);
+        s.insert("queue".into(), q);
+    }
     if omitted > 0 {
         s.insert("omittedMessages".into(), json!(omitted));
     }
@@ -481,6 +551,27 @@ pub async fn call(run: &Dispatcher, channel: String, args: Value) -> Result<Valu
             return Err(denied("turned-off", "changes:list").to_string());
         }
     }
+    // Only what the computer's own call takes: an id, or nothing.
+    let first = args.first().cloned().unwrap_or(Value::Null);
+    let args: Vec<Value> = match channel.as_str() {
+        "task:runNow" | "workflow:run" => vec![first.clone()],
+        "tasks:list" | "workflows:list" | "usage:summary" => Vec::new(),
+        "session:fork" => match args.get(1) {
+            None | Some(Value::Null) => vec![first.clone()],
+            Some(m) => vec![first.clone(), m.clone()],
+        },
+        "chat:editQueued" => vec![first.clone(), args[1].clone(), pick(&args[2], &policy().queue_edit_keys)],
+        "pr:sessionList" => vec![first.clone(), json!(args.get(1) == Some(&Value::Bool(true)))],
+        "limits:get" => {
+            // The phone names a provider; the computer reads that provider's limits key itself.
+            let providers = run("providers:list".to_string(), json!([])).await?;
+            let Some(key) = crate::phone_views::limits_key(&providers, first.as_str().unwrap_or_default()) else {
+                return Ok(Value::Null);
+            };
+            vec![json!(key), json!(false)]
+        }
+        _ => args,
+    };
     let mut args = match screened.settings {
         Some(sets) => {
             let current = if sets.iter().any(|(p, _)| p.contains('.')) {
@@ -567,7 +658,12 @@ mod tests {
             "voice:install",
             "connector:connect",
             "mcp:status",
-            "tasks:list",
+            "task:create",
+            "task:delete",
+            "workflow:update",
+            "pr:action",
+            "pr:diff",
+            "workspace:gitStatus",
             "turn:pending",
         ] {
             let err = run(&calls, c, json!([])).unwrap_err();

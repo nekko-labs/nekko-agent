@@ -9,6 +9,7 @@
  "chat:cancelCompaction",
  "chat:compact",
  "chat:dequeue",
+ "chat:editQueued",
  "chat:fillPrompt",
  "chat:generateImage",
  "chat:interruptQueued",

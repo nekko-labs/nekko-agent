@@ -40,6 +40,8 @@ const SETTINGS = {
   defaultChatMode: 'ask',
   chatPaneAction: 'complete',
   skipDeleteConfirmation: false,
+  automationsPaused: false,
+  prompts: [{ id: 'fix', name: 'fix', body: 'Find and fix the bug.' }],
   sandboxMode: 'workspace',
   providers: [{ id: 'p1', kind: 'anthropic', label: 'Claude', baseUrl: 'https://x', apiKey: 'sk-secret', tokenKey: 'tk', enabled: true }],
   guardrails: [{ id: 'g', pattern: 'rm -rf' }],

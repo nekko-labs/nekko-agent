@@ -353,3 +353,62 @@ final class TranscriptTests: XCTestCase {
         XCTAssertNil(a["s"])
     }
 }
+
+/// The replies a phone gets beyond the chat, decoded from what the computer's
+/// phone gate produced in the golden set (crates/nekko-remote/tests/golden/phone.json).
+final class BeyondWireTests: XCTestCase {
+    func golden() throws -> [JSONValue] {
+        let file = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("crates/nekko-remote/tests/golden/phone.json")
+        guard let data = try? Data(contentsOf: file) else { throw XCTSkip("repository sources not available at \(file.path)") }
+        return try XCTUnwrap(JSONValue.parse(data)["cases"]?.array)
+    }
+
+    func result(_ cases: [JSONValue], _ channel: String, _ first: JSONValue? = nil) throws -> JSONValue? {
+        let c = try XCTUnwrap(cases.first { $0.str("channel") == channel && (first == nil || $0["args"]?.array?.first == first) && $0["error"] == nil })
+        return c["result"]
+    }
+
+    func testDecodesWhatTheComputerSendsBeyondTheChat() throws {
+        let cases = try golden()
+        let tasks = AutomationTask.list(try result(cases, "tasks:list"))
+        XCTAssertEqual(tasks.map(\.id), ["t1", "t2"])
+        XCTAssertEqual(tasks[0].cadence, "Every day")
+        XCTAssertEqual(tasks[0].lastResult?.count, 600, "cut on the computer")
+        XCTAssertEqual(tasks[1].cadence, "Until it’s done")
+        XCTAssertTrue(tasks[1].paused)
+
+        let workflows = AutomationWorkflow.list(try result(cases, "workflows:list"))
+        XCTAssertEqual(workflows.map(\.name), ["Review PRs", "Blank"])
+        XCTAssertEqual(workflows[0].stepCount, 2)
+        XCTAssertEqual(workflows[0].lastStatus, "failure")
+
+        let prs = PullRequest.list(try result(cases, "pr:sessionList"))
+        XCTAssertEqual(prs.map(\.summary), ["#12 Open · checks failing"])
+
+        let usage = try XCTUnwrap(UsageSummary.from(try result(cases, "usage:summary")))
+        XCTAssertEqual(usage.totalTokens, 1500)
+        XCTAssertEqual(usage.models.map(\.model).first, "claude-opus-5.5")
+        XCTAssertTrue(usage.models.contains { $0.model == "qwen3-32b.gguf" }, "a local model's path is cut to its file name")
+        XCTAssertEqual(usage.days.count, 14)
+
+        let limits = try XCTUnwrap(ProviderLimits.from(try result(cases, "limits:get", "claude")))
+        XCTAssertEqual(limits.planType, "max")
+        XCTAssertEqual(limits.windows.map(\.label), ["5 hours"])
+        XCTAssertNil(ProviderLimits.from(try result(cases, "limits:get", "p1")))
+
+        let settings = PcSettings.from(try result(cases, "settings:get"))
+        XCTAssertEqual(settings.prompts.map(\.name), ["review"])
+        XCTAssertTrue(settings.automationsPaused)
+
+        let queued = try XCTUnwrap(Session.from(try result(cases, "session:get", "queued")))
+        XCTAssertEqual(queued.queue, ["plain", "with photos", "/review now"])
+        XCTAssertEqual(queued.queued.map(\.images), [0, 1, 0])
+
+        let edited = try XCTUnwrap(try result(cases, "chat:editQueued"))
+        XCTAssertEqual(QueuedPrompt.list(edited["queue"]).map(\.shown), ["sooner", "with a photo", "/review now"])
+        XCTAssertEqual(try result(cases, "session:fork")?.str("id"), "s_fork")
+    }
+}

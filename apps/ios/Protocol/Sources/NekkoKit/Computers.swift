@@ -721,6 +721,9 @@ public final class ComputersStore {
         return session.id
     }
 
+    /// Re-read the chat list soon (a chat was made or changed from here).
+    public func reloadList() { scheduleSummaries() }
+
     /// Change the computer's phone-settable settings; the reply is what was saved there.
     public func updatePcSettings(_ patch: JSONValue) async throws {
         pcSettings = PcSettings.from(try await remote().call(Channels.settingsUpdate, [patch]))
