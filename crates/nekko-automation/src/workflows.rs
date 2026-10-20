@@ -12,7 +12,7 @@
 use crate::json::{self, num};
 use crate::workflow_rules::{
     self as rules, MAX_STEP_LOOPS, MAX_WORKFLOW_DEPTH, UNCATEGORIZED, describe_event, event_context, match_workflows,
-    read_step_outcome, slugify, step_outcome_instruction,
+    read_step_outcome, slugify, step_outcome_instruction, without_outcome_tokens,
 };
 use serde_json::{Map, Value, json};
 use std::collections::{HashMap, HashSet};
@@ -706,6 +706,7 @@ impl Workflows {
                     .await;
                 first = false;
                 let out = result.output.clone().or_else(|| result.error.clone()).unwrap_or_default();
+                let out = without_outcome_tokens(&out);
                 match outputs.iter_mut().find(|(k, _)| *k == step_id) {
                     Some(slot) => slot.1 = out,
                     None => outputs.push((step_id.clone(), out)),
@@ -1237,9 +1238,14 @@ impl Workflows {
         let now = self.now();
         let (record_cursor, poll_state) = {
             let mut cursors = self.load_cursors();
-            let rec = cursors
-                .entry(tid.to_string())
-                .or_insert_with(|| json!({ "lastCursor": num(now), "seenIds": [], "lastPollAt": 0 }));
+            // Arming starts the cursor now, and it is written at once: a poll
+            // whose cursor never advances (no event yet) must not re-arm at
+            // "now" each time, or anything between two polls is missed.
+            if !cursors.contains_key(tid) {
+                cursors.insert(tid.to_string(), json!({ "lastCursor": num(now), "seenIds": [], "lastPollAt": 0 }));
+                self.save_cursors(&cursors);
+            }
+            let rec = &cursors[tid];
             (nekko_js::to_number(rec.get("lastCursor")), rec.get("pollState").cloned())
         };
         // A poll that keeps more than a cursor (the GitHub PR head SHAs) gets

@@ -18,7 +18,7 @@ const git = (...a) => cp.execFileSync('git', a, { cwd: repo, windowsHide: true, 
     let renderer = path.join(repo, 'apps/desktop/src/renderer');
     if (kind === 'before') {
       const source = path.join(dir, 'source');
-      for (const p of git('ls-tree', '-r', '--name-only', base, 'apps/desktop/src/renderer', 'packages/shared/src').trim().split('\n')) {
+      for (const p of git('ls-tree', '-r', '--name-only', base, 'apps/desktop/src', 'packages/shared/src').trim().split('\n')) {
         const dest = path.join(source, p);
         fs.mkdirSync(path.dirname(dest), { recursive: true });
         fs.writeFileSync(dest, cp.execFileSync('git', ['show', `${base}:${p}`], { cwd: repo, windowsHide: true, maxBuffer: 50e6 }));

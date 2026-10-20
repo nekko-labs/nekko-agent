@@ -339,6 +339,46 @@ async fn the_engine_leaves_the_same_files_and_side_effects() {
 }
 
 #[tokio::test]
+async fn an_armed_cursor_holds_until_the_first_event() {
+    // A failed-run poll returns no state, and its cursor only moves with an
+    // event: the arming time must be kept, or every poll re-arms at "now" and
+    // a run failing between two polls is never seen.
+    let dir = std::env::temp_dir().join(format!("nekko-automation-armed-cursor-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let fake = Arc::new(Fake::default());
+    *fake.settings.lock().unwrap() = json!({ "connectors": [{ "kind": "github", "connected": true, "token": "t" }] });
+    *fake.now.lock().unwrap() = 1_000_000.0;
+    let clock = fake.clone();
+    let engine =
+        Workflows::new(&dir, fake.clone(), Arc::new(move || *clock.now.lock().unwrap()), Arc::new(|| "id-1".to_string()));
+    engine
+        .create(&json!({
+            "name": "Diagnose",
+            "steps": [{ "id": "s", "name": "S", "kind": "prompt", "run": "x" }],
+            "triggers": [{ "id": "t1", "kind": "connector", "connector": "github", "repo": "o/r", "event": "workflow_run_failed", "pollIntervalMs": 120_000 }],
+        }))
+        .await
+        .unwrap();
+    fake.poll_results.lock().unwrap().push_back(json!({ "events": [], "nextCursor": 1_000_000 }));
+    engine.tick_listeners().await;
+    let file: Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.join("workflow-cursors.json")).unwrap()).unwrap();
+    assert_eq!(file["cursors"]["t1"]["lastCursor"], 1_000_000);
+
+    // Two minutes later, from a fresh engine (a restart), the poll still asks from the arming time.
+    drop(engine);
+    *fake.now.lock().unwrap() = 1_120_001.0;
+    let clock = fake.clone();
+    let engine =
+        Workflows::new(&dir, fake.clone(), Arc::new(move || *clock.now.lock().unwrap()), Arc::new(|| "id-1".to_string()));
+    fake.poll_results.lock().unwrap().push_back(json!({ "events": [], "nextCursor": 1_000_000 }));
+    engine.tick_listeners().await;
+    assert_eq!(fake.polls.lock().unwrap()[1]["cursor"], 1_000_000.0);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test]
 async fn a_poll_state_is_kept_in_the_cursor_record_across_restarts() {
     let dir = std::env::temp_dir().join(format!("nekko-automation-poll-state-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
@@ -489,6 +529,8 @@ async fn a_local_only_run_is_offline_and_still_runs_action_steps() {
     assert_eq!(run["status"], "success", "{run}");
     assert_eq!(fake.turns.lock().unwrap()[0]["providerId"], "local");
     assert_eq!(fake.actions.lock().unwrap()[0]["op"], "slack.postMessage");
+    // The outcome token routes the step; it is not part of what gets posted.
+    assert_eq!(fake.actions.lock().unwrap()[0]["params"]["text"], "diagnosis");
     let saved = fake.log.lock().unwrap().iter().find(|e| e.get("save").is_some()).cloned().unwrap();
     let fields = &saved["fields"];
     assert_eq!(fields["unattended"], true);
