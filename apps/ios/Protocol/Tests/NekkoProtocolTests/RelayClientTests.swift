@@ -430,6 +430,8 @@ final class RelayClientTests: XCTestCase {
         c.connect()
         _ = try await c.call(Channels.appInfo)
         XCTAssertEqual(relay.sync { relay.hellos.first?.long("protocol") }, Int64(PhoneProtocol.version))
+        // The welcome reaches handlers on the client's queue, after the reply may have resolved the call.
+        await waitForWelcome(r)
         XCTAssertEqual(r.lock.sync { r.welcomes.last?.protocolVersion }, 3)
         c.close()
         // A computer from before the field: version 1.
@@ -437,8 +439,14 @@ final class RelayClientTests: XCTestCase {
         let (c2, r2) = client(old)
         c2.connect()
         _ = try await c2.call(Channels.appInfo)
+        await waitForWelcome(r2)
         XCTAssertEqual(r2.lock.sync { r2.welcomes.last?.protocolVersion }, 1)
         c2.close()
+    }
+
+    private func waitForWelcome(_ r: Recorder, _ seconds: TimeInterval = 2) async {
+        let deadline = Date().addingTimeInterval(seconds)
+        while r.lock.sync({ r.welcomes.isEmpty }), Date() < deadline { await sleep(0.01) }
     }
 
     func testRegistersPushKindsAndHearsTheRelaysOwnFrames() async throws {
