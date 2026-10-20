@@ -26,6 +26,7 @@ export * from './session-summary.js';
 export * from './archive.js';
 export * from './live-activity.js';
 export * from './pr.js';
+export * from './git.js';
 export * from './terminal.js';
 export * from './guardrails.js';
 export * from './context.js';
