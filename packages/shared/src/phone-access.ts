@@ -16,6 +16,19 @@ import { clientMessageIdOf } from './chat.js';
 import { skillTurnText } from './skills.js';
 import { phoneChangesView, PHONE_CHANGES_VIEW } from './phone-changes.js';
 import {
+  PHONE_FILE_ENTRY_VIEW,
+  PHONE_FILE_VIEW,
+  PHONE_FILE_WRITE_VIEW,
+  PHONE_FILES_CHANGE_CHANNELS,
+  PHONE_FILES_CHANNELS,
+  PHONE_FILES_READ_CHANNELS,
+  PHONE_FILES_VIEW,
+  PHONE_LOG_VIEW,
+  PhoneFilesRefusal,
+  phoneFilesView,
+  screenPhoneFiles,
+} from './phone-files.js';
+import {
   PHONE_LIMIT_WINDOW_VIEW,
   PHONE_LIMITS_VIEW,
   PHONE_PR_VIEW,
@@ -48,6 +61,9 @@ import {
  * its usage and limits through narrow views (phone-views.ts), and starts an
  * automation the owner already set up (`task:runNow`, `workflow:run`). Git
  * happens through the agent (a prompt, so approvals apply), never a raw channel.
+ * IO-33 FA-1 and FA-5 (2026-10-20) add a chat's or saved folder's files
+ * (list, search, read; save as a Change action) and the computer's logs, read
+ * only (phone-files.ts).
  */
 export const PHONE_CHANNELS = [
   'app:info',
@@ -58,7 +74,13 @@ export const PHONE_CHANNELS = [
   'chat:pending',
   'chat:queue',
   'chat:send',
+  'files:list',
+  'files:read',
+  'files:search',
+  'files:write',
   'limits:get',
+  'logs:list',
+  'logs:read',
   'models:list',
   'pr:sessionList',
   'providers:list',
@@ -116,7 +138,11 @@ export const PHONE_DENIED_FOREVER: PhoneDeniedGroup = {
  * `undecided` stays until someone decides otherwise.
  */
 export const PHONE_DENIED_FOR_NOW: Record<'files' | 'git' | 'terminal' | 'undecided', PhoneDeniedGroup> = {
-  /** FA-1. Changing files, or reading any file: the Changes view is the only read today. */
+  /**
+   * FA-1 opened a folder's files by chat or saved-folder id (`files:*`,
+   * phone-files.ts). The desktop's absolute-path calls, importing a file by
+   * path and accepting the agent's changes stay refused.
+   */
   files: {
     channels: ['attachment:import', 'changes:accept', 'changes:acceptAll', 'dir:list', 'file:read', 'file:write'],
     prefixes: [],
@@ -179,8 +205,8 @@ export const PHONE_ALWAYS_DENIED = {
  * `PHONE_CHANNELS`. The 30 channels phones had before IO-33 are in neither
  * class and behave as before. Feature PRs (FA-1 to FA-6) fill these.
  */
-export const PHONE_READ_CHANNELS: readonly string[] = [];
-export const PHONE_CHANGE_CHANNELS: readonly string[] = [];
+export const PHONE_READ_CHANNELS: readonly string[] = [...PHONE_FILES_READ_CHANNELS];
+export const PHONE_CHANGE_CHANNELS: readonly string[] = [...PHONE_FILES_CHANGE_CHANNELS];
 
 /** `null`: neither class (no per-device switch applies). */
 export type PhoneChannelClass = 'read' | 'change' | null;
@@ -480,8 +506,16 @@ export function checkPhoneSettingsPatch(patch: unknown): Array<[string, unknown]
 export function screenPhoneCall(
   channel: string,
   args: unknown[],
-): { settingsPatch?: Array<[string, unknown]>; skill?: { name: string; input: string } } {
+): { settingsPatch?: Array<[string, unknown]>; skill?: { name: string; input: string }; callArgs?: unknown[] } {
   if (!phoneChannelAllowed(channel)) throw new PhoneAccessError('channel-denied', channel);
+  if (PHONE_FILES_CHANNELS.includes(channel)) {
+    try {
+      return { callArgs: screenPhoneFiles(channel, args) };
+    } catch (e) {
+      if (e instanceof PhoneFilesRefusal) throw new PhoneAccessError(e.code, e.detail);
+      throw e;
+    }
+  }
   switch (channel) {
     case 'changes:list':
     case 'pr:sessionList':
@@ -643,7 +677,7 @@ export function redactPhoneResult(channel: string, result: unknown): unknown {
     case 'limits:get':
       return phoneLimitsView(result);
     default:
-      return result;
+      return PHONE_FILES_CHANNELS.includes(channel) ? phoneFilesView(channel, result) : result;
   }
 }
 
@@ -767,13 +801,13 @@ export async function callFromPhone(
   /** Shrinks a chat's photos for `session:get`; without it they arrive as `''` unless already tiny. */
   thumb?: PhoneThumbnailer,
 ): Promise<unknown> {
-  const { settingsPatch, skill } = screenPhoneCall(channel, args);
+  const { settingsPatch, skill, callArgs: checked } = screenPhoneCall(channel, args);
   if (channel === 'changes:list') {
     // Off unless the computer's owner turned it on (Settings → Remote access).
     const settings = await dispatch('settings:get', []);
     if (!isObj(settings) || settings.phoneChanges !== true) throw new PhoneAccessError('turned-off', 'changes:list');
   }
-  let callArgs = args;
+  let callArgs = checked ?? args;
   // Only what the computer's own call takes: an id, or nothing.
   if (channel === 'task:runNow' || channel === 'workflow:run') callArgs = [args[0]];
   if (channel === 'tasks:list' || channel === 'workflows:list' || channel === 'usage:summary') callArgs = [];
@@ -831,6 +865,13 @@ export function phoneAccessPolicy() {
     limitsView: [...PHONE_LIMITS_VIEW],
     limitWindowView: [...PHONE_LIMIT_WINDOW_VIEW],
     queueEditKeys: [...PHONE_QUEUE_EDIT_KEYS],
+    files: {
+      view: { ...PHONE_FILES_VIEW },
+      entryView: [...PHONE_FILE_ENTRY_VIEW],
+      fileView: [...PHONE_FILE_VIEW],
+      writeView: [...PHONE_FILE_WRITE_VIEW],
+      logView: [...PHONE_LOG_VIEW],
+    },
     maxFrameBytes: PHONE_MAX_FRAME_BYTES,
   };
 }

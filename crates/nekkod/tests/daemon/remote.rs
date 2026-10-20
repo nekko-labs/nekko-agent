@@ -166,6 +166,47 @@ async fn the_daemon_runs_the_phone_relay_agent() {
     let saved: Value = serde_json::from_str(&std::fs::read_to_string(data.join("remote.json")).unwrap()).unwrap();
     assert_eq!(saved["devices"][0]["access"]["change"], false);
 
+    // IO-33 FA-1 and FA-5: files and logs from a phone. A saved folder by its
+    // id; secret files left out and refused; a save is a Change (off here, so
+    // refused and logged); logs are read only; Read off refuses both.
+    let project = data.join("phone-project");
+    std::fs::create_dir_all(project.join("src")).unwrap();
+    std::fs::write(project.join("src").join("lib.rs"), "pub fn hi() {}\n").unwrap();
+    std::fs::write(project.join(".env"), "TOKEN=abc").unwrap();
+    let folder = json!([{ "workspaces": [{ "id": "w1", "name": "phone-project", "path": project.to_string_lossy(), "addedAt": 1 }] }]);
+    post(d.port, "settings:update", folder, Some(TOKEN)).await;
+    let w1 = json!({ "workspaceId": "w1" });
+    let res = ask_res(50, "files:list", json!([w1, ""])).await;
+    assert_eq!(
+        res["result"]["entries"],
+        json!([{ "name": "src", "path": "src", "dir": true, "mtime": res["result"]["entries"][0]["mtime"] }]),
+        "{res}"
+    );
+    assert_eq!(res["result"]["hiddenSecrets"], 1, "{res}");
+    let res = ask_res(51, "files:read", json!([w1, "src/lib.rs", { "maxBytes": 999_999_999 }])).await;
+    assert_eq!(res["result"]["content"], "pub fn hi() {}\n", "{res}");
+    let hash = res["result"]["hash"].as_str().expect("a hash to save against").to_string();
+    let res = ask_res(52, "files:read", json!([w1, ".env"])).await;
+    assert_eq!(res["error"], "Not allowed from a paired phone (value-invalid): secret file", "{res}");
+    let res = ask_res(53, "files:search", json!([w1, "lib"])).await;
+    assert_eq!(res["result"]["hits"][0]["path"], "src/lib.rs", "{res}");
+    let res = ask_res(54, "files:write", json!([w1, "src/lib.rs", "pub fn bye() {}\n", { "expectHash": hash }])).await;
+    assert_eq!(res["error"], "Not allowed from a paired phone (change-off): files:write", "{res}");
+    assert_eq!(std::fs::read_to_string(project.join("src").join("lib.rs")).unwrap(), "pub fn hi() {}\n");
+    let res = ask_res(55, "logs:list", json!([])).await;
+    let ids: Vec<&str> = res["result"].as_array().unwrap().iter().filter_map(|l| l["id"].as_str()).collect();
+    assert!(ids.contains(&"daemon") && ids.contains(&"app"), "{res}");
+    let res = ask_res(56, "logs:read", json!(["daemon", { "tailBytes": 999_999_999 }])).await;
+    assert!(res["result"]["text"].is_string(), "{res}");
+    let (_, activity) = post(d.port, "remote:activity", json!(["phone-1"]), Some(TOKEN)).await;
+    let last = activity.as_array().and_then(|a| a.iter().find(|e| e["channel"] == "files:write")).cloned();
+    assert_eq!(last.map(|e| e["reason"].clone()), Some(json!("change-off")), "{activity}");
+    post(d.port, "remote:setAccess", json!(["phone-1", { "read": false }]), Some(TOKEN)).await;
+    let res = ask_res(57, "files:list", json!([w1, ""])).await;
+    assert_eq!(res["error"], "Not allowed from a paired phone (read-off): files:list", "{res}");
+    let res = ask_res(58, "logs:read", json!(["daemon"])).await;
+    assert_eq!(res["error"], "Not allowed from a paired phone (read-off): logs:read", "{res}");
+
     // Revoking kicks the phone live and drops its push token.
     post(d.port, "remote:revoke", json!(["phone-1"]), Some(TOKEN)).await;
     let (kick, _) = next_agent_frame(&mut agent, &key).await;

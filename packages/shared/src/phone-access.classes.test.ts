@@ -32,9 +32,18 @@ const code = (fn: () => unknown) => {
   return 'ok';
 };
 
+/** What phones could call before IO-33: in neither class, so they decide as before. */
+const BEFORE_IO33 = PHONE_CHANNELS.filter((c) => !PHONE_READ_CHANNELS.includes(c) && !PHONE_CHANGE_CHANNELS.includes(c));
+
 describe('phone access classes', () => {
   it('leaves every channel phones had before IO-33 in neither class', () => {
-    for (const c of PHONE_CHANNELS) expect(phoneChannelClass(c), c).toBeNull();
+    expect(BEFORE_IO33).toHaveLength(30);
+    for (const c of BEFORE_IO33) expect(phoneChannelClass(c), c).toBeNull();
+  });
+
+  it('classes files and logs (FA-1, FA-5): saving is the only Change', () => {
+    for (const c of ['files:list', 'files:search', 'files:read', 'logs:list', 'logs:read']) expect(phoneChannelClass(c), c).toBe('read');
+    expect(phoneChannelClass('files:write')).toBe('change');
   });
 
   it('only classes channels a phone may call, each in one class', () => {
@@ -49,7 +58,7 @@ describe('phone access classes', () => {
     // The lists are empty until the feature PRs: check the rule with the
     // classes the TS reports, so it holds whatever they contain.
     const all = { read: true, change: true };
-    for (const c of PHONE_CHANNELS) {
+    for (const c of BEFORE_IO33) {
       expect(code(() => checkPhoneAccess(c, { read: false, change: false })), c).toBe('ok');
       expect(code(() => checkPhoneAccess(c, all)), c).toBe('ok');
     }
@@ -97,7 +106,7 @@ describe('the always-denied list', () => {
     }
   });
 
-  it('still refuses files, git and terminals until their feature PRs', () => {
+  it('still refuses absolute-path files, git and terminals', () => {
     for (const c of ['file:read', 'file:write', 'dir:list', 'pr:action', 'pr:diff', 'workspace:gitStatus', 'terminal:create', 'terminals:list']) {
       expect(phoneChannelAllowed(c), c).toBe(false);
       expect(phoneAlwaysDenied(c), c).toBe(true);
