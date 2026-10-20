@@ -58,6 +58,7 @@ struct ChatsView: View {
 
     @ViewBuilder private var rows: some View {
             ConnectionBanner().listRowSeparator(.hidden).listRowBackground(Color.clear)
+            ProtocolBanner().listRowSeparator(.hidden).listRowBackground(Color.clear)
             if let at = store.savedListAt {
                 Label(SavedListNote.text(savedAt: at, computer: store.active?.name ?? "your computer"), systemImage: "clock.arrow.circlepath")
                     .font(.footnote).foregroundStyle(palette.inkSoft)

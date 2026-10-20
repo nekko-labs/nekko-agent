@@ -13,10 +13,16 @@ final class LiveRelayTests: XCTestCase {
         }
         let theme = ProcessInfo.processInfo.environment["NEKKO_ITEST_THEME"] ?? "light"
         let app = XCUIApplication()
-        app.launchArguments = ["-appLock", "NO", "-theme", theme == "dark" ? "dark" : "light", "-uiTestReset", "YES"]
+        // Settings persist across runs on one simulator: start each from the defaults it checks.
+        app.launchArguments = ["-appLock", "NO", "-onboarded", "NO", "-notifyFinished", "YES", "-dictationHold", "NO",
+                               "-theme", theme == "dark" ? "dark" : "light", "-uiTestReset", "YES"]
         app.launch()
         allowSystemAlerts()
 
+        // The first run (IO-31): what the app does, then pairing, then notifications.
+        let intro = app.buttons["firstRun.continue"]
+        XCTAssertTrue(intro.waitForExistence(timeout: 10))
+        intro.tap()
         // Pair through the paste field; testPairFromADeepLink covers the link path.
         let start = app.buttons["Pair with your computer"]
         XCTAssertTrue(start.waitForExistence(timeout: 10))
@@ -28,11 +34,19 @@ final class LiveRelayTests: XCTestCase {
         field.typeText(link.absoluteString)
         attach(app, "\(theme)-1-pair")
         app.buttons["Pair"].firstMatch.tap()
+        // Step 3 follows the first pairing; only then does iOS ask.
+        let allowNotifications = app.buttons["firstRun.allowNotifications"]
+        XCTAssertTrue(allowNotifications.waitForExistence(timeout: 20), "the notification step follows pairing")
+        attach(app, "\(theme)-1b-notifications-step")
+        allowNotifications.tap()
         tapSystemAlertIfShown()
+        XCTAssertTrue(waitGone(allowNotifications, 10))
 
         let newChat = app.navigationBars.buttons["New chat"]
         XCTAssertTrue(newChat.waitForExistence(timeout: 20))
         XCTAssertTrue(waitOnline(app, 20), "connected to the computer")
+        // Same protocol on both sides (IO-32): no banner.
+        XCTAssertFalse(app.descendants(matching: .any)["protocol-banner"].exists)
         attach(app, "\(theme)-2-chats")
         auditAccessibility(app, "\(theme)-chats")
 
@@ -140,7 +154,7 @@ final class LiveRelayTests: XCTestCase {
         menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         app.buttons["Settings"].firstMatch.tap()
         let connection = app.buttons["Connection"].firstMatch
-        if !connection.waitForExistence(timeout: 5) { app.swipeUp() }
+        XCTAssertTrue(reveal(connection, in: app), "Settings → Connection")
         connection.tap()
         // LabeledContent reads as one element: "Status" with the value "Online".
         let online = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", "Online", "Online")).firstMatch
@@ -162,12 +176,48 @@ final class LiveRelayTests: XCTestCase {
         for _ in 0..<4 where !(share.exists && share.isHittable) { app.swipeUp() }
         XCTAssertTrue(share.exists, "Share diagnostics is offered")
         attach(app, "\(theme)-7d-share")
+        // Settings → Notify me about (IO-30) and Dictation (IO-28).
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        let finished = app.switches["settings.notify.finished"]
+        XCTAssertTrue(reveal(finished, in: app), "Settings → Notify me about")
+        settle()
+        XCTAssertEqual(finished.value as? String, "1")
+        // iOS 17's SwiftUI toggle is a row-wide switch holding the real one; tapping the row does nothing.
+        let knob = finished.switches.firstMatch
+        (knob.exists ? knob : finished).tap()
+        XCTAssertTrue(waitValue(finished, "0", 5), "finished replies switched off")
+        // Through the computer and the test stack's relay, which has no Apple push key:
+        // the app shows it, and says so.
+        let test = app.buttons["settings.notify.test"]
+        XCTAssertTrue(reveal(test, in: app))
+        settle()
+        test.tap()
+        let result = app.staticTexts["settings.notify.testResult"]
+        XCTAssertTrue(result.waitForExistence(timeout: 20), "the test reports which path it took")
+        XCTAssertTrue(result.label.contains("shown by the app"), result.label)
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let banner = springboard.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Test notification")).firstMatch
+        XCTAssertTrue(banner.waitForExistence(timeout: 10), "the test notification shows over the app")
+        let bannerShot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        bannerShot.name = "\(theme)-7e-test-notification"
+        bannerShot.lifetime = .keepAlways
+        add(bannerShot)
+        sleep(6) // the banner goes up before the audit samples the screen
+        auditAccessibility(app, "\(theme)-settings-notifications")
+        let hold = app.buttons["Hold to talk"].firstMatch
+        XCTAssertTrue(reveal(hold, in: app), "Settings → Dictation")
+        settle()
+        hold.tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Hold the microphone while you speak")).firstMatch
+            .waitForExistence(timeout: 5))
+        attach(app, "\(theme)-7f-settings-dictation")
+        auditAccessibility(app, "\(theme)-settings-dictation")
 
         // Shared from another app: relaunch with what the share extension leaves
         // in the App Group. New chat opens with the text; nothing is sent.
         app.terminate()
         let shared = "Summarise https://example.com/release-notes"
-        app.launchArguments = ["-appLock", "NO", "-theme", theme == "dark" ? "dark" : "light", "-uiTestShare", shared]
+        app.launchArguments = ["-appLock", "NO", "-onboarded", "YES", "-theme", theme == "dark" ? "dark" : "light", "-uiTestShare", shared]
         app.launch()
         let prefilled = app.input("newChat.prompt")
         XCTAssertTrue(prefilled.waitForExistence(timeout: 15), "New chat opened for the share")
@@ -188,7 +238,8 @@ final class LiveRelayTests: XCTestCase {
             throw XCTSkip("set NEKKO_ITEST_LINK and NEKKO_ITEST_RELAY_CTL (apps/ios/scripts/itest-stack.sh)")
         }
         let app = XCUIApplication()
-        app.launchArguments = ["-appLock", "NO", "-theme", "light", "-uiTestReset", "YES"]
+        // Past the first run (IO-31), which the live journey walks; this test is about the outbox.
+        app.launchArguments = ["-appLock", "NO", "-theme", "light", "-onboarded", "YES", "-uiTestReset", "YES"]
         app.launch()
         allowSystemAlerts()
         let start = app.buttons["Pair with your computer"]
@@ -245,7 +296,7 @@ final class LiveRelayTests: XCTestCase {
         // from the phone's saved copies, marked as saved, before any answer.
         relay(ctl, "stop")
         app.terminate()
-        app.launchArguments = ["-appLock", "NO", "-theme", "light"]
+        app.launchArguments = ["-appLock", "NO", "-theme", "light", "-onboarded", "YES"]
         app.launch()
         XCTAssertTrue(app.descendants(matching: .any)["chats.savedList"].waitForExistence(timeout: 10), "the saved list, at once")
         let row = app.descendants(matching: .any).matching(identifier: "chats.row").firstMatch
@@ -366,7 +417,7 @@ final class LiveRelayTests: XCTestCase {
             throw XCTSkip("set NEKKO_ITEST_LINK (apps/ios/scripts/itest-stack.sh)")
         }
         let app = XCUIApplication()
-        app.launchArguments = ["-appLock", "NO", "-uiTestReset", "YES"]
+        app.launchArguments = ["-appLock", "NO", "-onboarded", "YES", "-uiTestReset", "YES"]
         app.launch()
         XCTAssertTrue(app.buttons["Pair with your computer"].waitForExistence(timeout: 10))
 
@@ -406,6 +457,27 @@ final class LiveRelayTests: XCTestCase {
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         let allow = springboard.buttons["Allow"]
         if allow.waitForExistence(timeout: 4) { allow.tap() }
+    }
+
+    /// Scrolls a long form until `e` can be tapped: down first, then back up
+    /// (a form loads its rows lazily, so an off-screen row may not exist yet).
+    private func reveal(_ e: XCUIElement, in app: XCUIApplication) -> Bool {
+        if e.waitForExistence(timeout: 3), e.isHittable { return true }
+        for up in [true, false] {
+            for _ in 0..<8 {
+                if up { app.swipeUp() } else { app.swipeDown() }
+                if e.exists, e.isHittable { return true }
+            }
+        }
+        return false
+    }
+
+    /// A tap while a swipe is still decelerating only stops the scroll; let it finish.
+    private func settle() { RunLoop.current.run(until: Date().addingTimeInterval(1.2)) }
+
+    private func waitValue(_ e: XCUIElement, _ value: String, _ seconds: TimeInterval) -> Bool {
+        let p = expectation(for: NSPredicate(format: "value == %@", value), evaluatedWith: e)
+        return XCTWaiter.wait(for: [p], timeout: seconds) == .completed
     }
 
     /// Connected to the computer, as the computer menu says (New chat works offline too).

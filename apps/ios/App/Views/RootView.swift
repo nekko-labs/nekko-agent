@@ -20,6 +20,8 @@ struct RootView: View {
     @Environment(\.palette) private var palette
     @State private var path: [Route] = []
     @State private var selected: Route?
+    /// First run: step 1 was passed with Continue (this launch).
+    @State private var introDone = false
     @Environment(\.horizontalSizeClass) private var size
 
     var body: some View {
@@ -60,6 +62,10 @@ struct RootView: View {
         .sheet(item: Binding(get: { covered ? nil : app.pendingLink.map(LinkBox.init) }, set: { app.pendingLink = $0?.link })) { box in
             ConfirmPairSheet(link: box.link) { path = [] }
         }
+        // First run, step 3: right after the first pairing.
+        .fullScreenCover(isPresented: Binding(get: { app.showNotificationStep && !covered }, set: { if !$0 { app.showNotificationStep = false } })) {
+            NotificationStepView()
+        }
     }
 
     /// A cold launch from the control waits until the computers are loaded.
@@ -75,7 +81,9 @@ struct RootView: View {
         if !store.ready && !(app.prefs.appLock && app.lock.locked) {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity).background(palette.paper)
         } else if store.computers.isEmpty {
-            NavigationStack { WelcomeView() }
+            NavigationStack {
+                if app.prefs.onboarded || introDone { WelcomeView() } else { FirstRunIntroView { introDone = true } }
+            }
         } else if size == .regular {
             // iPad and large landscape: chats in the sidebar, the selected one beside it.
             NavigationSplitView {
@@ -182,6 +190,27 @@ struct CatMark: View {
             ctx.stroke(p, with: .foreground, style: StrokeStyle(lineWidth: max(1.5, w / 40), lineCap: .butt, lineJoin: .miter))
         }
         .accessibilityHidden(true)
+    }
+}
+
+/// The phone and the computer speak different protocol versions (IO-32): which side to update.
+struct ProtocolBanner: View {
+    @Environment(ComputersStore.self) private var store
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        if let text = store.protocolCheck.message(computer: store.active?.name ?? "your computer") {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "arrow.triangle.2.circlepath.circle").foregroundStyle(palette.warning)
+                    .accessibilityHidden(true)
+                Text(text).font(.footnote).foregroundStyle(palette.ink).fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .padding(12)
+            .background(palette.warning.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("protocol-banner")
+        }
     }
 }
 

@@ -44,6 +44,9 @@ public enum Channels {
     /// Provider usage, and one provider's limits by its id, read only.
     public static let usageSummary = "usage:summary"
     public static let limitsGet = "limits:get"
+    /// *Send a test notification*: answered by the computer's relay agent itself,
+    /// so it is not on the phone allowlist (`PUSH_TEST_CHANNEL`) and not in `all`.
+    public static let pushTest = "push:test"
 
     public static let all = [
         settingsGet, settingsUpdate, providersList, modelsList, sessionsSummaries, sessionCreate, sessionGet,

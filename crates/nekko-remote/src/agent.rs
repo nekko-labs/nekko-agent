@@ -8,7 +8,8 @@
 //! relay -> agent : { type:'c', cid, data }        (data = the client's raw frame)
 //! agent -> relay : { type:'d', cid, data }        (unicast to one client)
 //! agent -> relay : { type:'kick', cid }           (relay closes that client)
-//! agent -> relay : { type:'notify', title, body } (content-free push trigger)
+//! agent -> relay : { type:'notify', kind, tag?, deviceId?, title, body } (content-free push trigger)
+//! agent -> relay : { type:'dismiss', tag }        (a needs-you push was handled)
 //! agent -> relay : { type:'push-remove', deviceId }
 //! agent -> relay : { type:'activity', tag, phase, callId?, severity? } (content-free Live Activity update)
 //! ```
@@ -129,10 +130,14 @@ impl AgentCore {
         self.conn(cid);
         match f.get("type").and_then(Value::as_str) {
             Some("hello") => {
-                let reply = verify(&Value::Object(f));
+                let mut reply = verify(&Value::Object(f));
                 let welcomed = reply.get("type").and_then(Value::as_str) == Some("welcome");
                 if welcomed {
                     *self.conn(cid) = reply.pointer("/device/id").map(nekko_js::display);
+                    // The phone compares this with its own and says which side to update.
+                    if let Some(o) = reply.as_object_mut() {
+                        o.insert("protocol".into(), json!(crate::hello::PROTOCOL_VERSION));
+                    }
                 }
                 let mut out = vec![Out::Send(self.send_to(cid, &reply))];
                 if !welcomed {
@@ -146,6 +151,12 @@ impl AgentCore {
                     // No completed handshake: never dispatch. Tell the client why.
                     let res = res(id, Err("not paired (send hello first)".into()));
                     return vec![Out::Send(self.send_to(cid, &res))];
+                }
+                if f.get("channel").and_then(Value::as_str) == Some(PUSH_TEST_CHANNEL) {
+                    // *Send a test notification*: the relay pushes to this phone only.
+                    let device = self.conn(cid).clone();
+                    let notify = frame(notify_frame("test", None, device.as_deref(), None));
+                    return vec![Out::Send(notify), Out::Send(self.reply(cid, id, Ok(json!({ "ok": true }))))];
                 }
                 let channel = f.get("channel").map_or_else(|| "undefined".to_string(), nekko_js::display);
                 let args = match f.get("args") {
@@ -170,16 +181,12 @@ impl AgentCore {
         self.send_to(cid, &error)
     }
 
-    /// A host event: the push ping when a run finished, then the event to
-    /// every welcomed connection, sealed once.
+    /// A host event: the relay's content-free control frames (`relay_frames`),
+    /// then the event to every welcomed connection, sealed once.
     pub fn on_event(&mut self, channel: &str, payload: &Value) -> Vec<String> {
         let mut out = Vec::new();
-        if channel == "agent:event" && payload.get("type").and_then(Value::as_str) == Some("done") {
-            out.push(frame(json!({ "type": "notify", "title": "Nekko finished", "body": "Your task is ready." })));
-        }
-        let activity = if channel == "agent:event" { self.activity_frame(payload) } else { None };
-        if let Some(a) = activity {
-            out.push(frame(a));
+        if channel == "agent:event" {
+            out.extend(self.relay_frames(payload).into_iter().map(frame));
         }
         let welcomed: Vec<String> = self.conns.iter().filter(|(_, d)| d.is_some()).map(|(c, _)| c.clone()).collect();
         if welcomed.is_empty() {
@@ -188,6 +195,33 @@ impl AgentCore {
         let data = self.seal(&json!({ "type": "event", "channel": channel, "payload": payload }));
         for cid in welcomed {
             out.push(frame(json!({ "type": "d", "cid": cid, "data": data })));
+        }
+        out
+    }
+
+    /// Every relay control frame one agent event causes, in order: a
+    /// `finished` or `failed` push request, the Live Activity update, a
+    /// `dismiss` when an approval or a question was answered or its run ended,
+    /// and a `needs-you` push request when one is waiting. Exactly
+    /// `relayFrames` in packages/host/src/relay.ts.
+    fn relay_frames(&mut self, e: &Value) -> Vec<Value> {
+        let sid = e.get("sessionId").and_then(Value::as_str).map(str::to_string);
+        let prev = sid.as_ref().and_then(|s| self.phases.get(s).copied());
+        let mut out = Vec::new();
+        match e.get("type").and_then(Value::as_str) {
+            Some("done") => out.push(notify_frame("finished", sid.as_deref(), None, None)),
+            Some("error") if !stopped(e) => out.push(notify_frame("failed", sid.as_deref(), None, None)),
+            _ => {}
+        }
+        let Some(activity) = self.activity_frame(e) else { return out };
+        let phase = activity.get("phase").and_then(Value::as_str).unwrap_or("").to_string();
+        let tag = activity.get("tag").cloned().unwrap_or(Value::Null);
+        out.push(activity);
+        if matches!(prev, Some("approval" | "question")) && prev != Some(phase.as_str()) {
+            out.push(json!({ "type": "dismiss", "tag": tag }));
+        }
+        if phase == "approval" || phase == "question" {
+            out.push(notify_frame("needs-you", sid.as_deref(), None, Some(&phase)));
         }
         out
     }
@@ -227,12 +261,11 @@ impl AgentCore {
             }
             "done" => "done",
             "error" => {
-                let stopped = e
-                    .get("message")
-                    .and_then(Value::as_str)
-                    .map(|m| m.eq_ignore_ascii_case("stopped") || m.eq_ignore_ascii_case("aborted"))
-                    .unwrap_or(false);
-                if stopped { "done" } else { "failed" }
+                if stopped(e) {
+                    "done"
+                } else {
+                    "failed"
+                }
             }
             _ => return None,
         };
@@ -277,6 +310,43 @@ impl AgentCore {
         }
         out
     }
+}
+
+/// The phone channel the relay agent answers itself (`PUSH_TEST_CHANNEL`).
+pub const PUSH_TEST_CHANNEL: &str = "push:test";
+
+/// An `error` event that is the user stopping the run, not a failure.
+fn stopped(e: &Value) -> bool {
+    e.get("message")
+        .and_then(Value::as_str)
+        .map(|m| m.eq_ignore_ascii_case("stopped") || m.eq_ignore_ascii_case("aborted"))
+        .unwrap_or(false)
+}
+
+/// The content-free push request for one kind (`notifyFrame` in relay.ts);
+/// `tag` is the chat's `activity_tag`.
+pub fn notify_frame(kind: &str, session_id: Option<&str>, device_id: Option<&str>, phase: Option<&str>) -> Value {
+    let mut o = serde_json::Map::new();
+    o.insert("type".into(), json!("notify"));
+    o.insert("kind".into(), json!(kind));
+    if let Some(sid) = session_id {
+        o.insert("tag".into(), json!(activity_tag(sid)));
+    }
+    if let Some(d) = device_id {
+        o.insert("deviceId".into(), json!(d));
+    }
+    let (title, body) = match kind {
+        "needs-you" => (
+            "Nekko needs you",
+            if phase == Some("question") { "Your computer has a question." } else { "A tool needs your approval." },
+        ),
+        "failed" => ("Nekko stopped", "A task stopped with an error."),
+        "test" => ("Nekko Agent", "Test notification: your computer can reach this phone."),
+        _ => ("Nekko finished", "Your task is ready."),
+    };
+    o.insert("title".into(), json!(title));
+    o.insert("body".into(), json!(body));
+    Value::Object(o)
 }
 
 /// `{ type:'res', id, result: result ?? null }` or `{ type:'res', id, error }`;

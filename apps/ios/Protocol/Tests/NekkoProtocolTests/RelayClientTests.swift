@@ -23,6 +23,8 @@ final class RelayClientTests: XCTestCase {
         /// Hosts (host:port) that don't answer: true hangs (a LAN address on
         /// another Wi-Fi), false refuses at once.
         var unreachable: [String: Bool] = [:]
+        /// The computer's phone protocol version in its welcome; nil sends none (an older computer).
+        var welcomeProtocol: Int?
         var answer: (JSONValue) -> JSONValue? = { req in
             ["type": "res", "id": req["id"]!, "result": .string("ok:\(req.str("channel")!)")]
         }
@@ -93,7 +95,9 @@ final class RelayClientTests: XCTestCase {
                         push(["type": "denied", "reason": .string(reply)])
                         drop(4001, "kicked by agent")
                     } else {
-                        push(["type": "welcome", "device": ["id": .string(id), "name": frame["name"]!, "platform": "ios"]])
+                        var welcome: [String: JSONValue] = ["type": "welcome", "device": ["id": .string(id), "name": frame["name"]!, "platform": "ios"]]
+                        if let v = relay.sync({ relay.welcomeProtocol }) { welcome["protocol"] = .int(Int64(v)) }
+                        push(.object(welcome))
                     }
                 case "req":
                     let a = relay.sync { () -> JSONValue? in
@@ -417,6 +421,63 @@ final class RelayClientTests: XCTestCase {
         XCTAssertEqual(reg?.str("platform"), "ios")
         XCTAssertEqual(reg?.str("deviceId"), "dev-1")
         c.close()
+    }
+
+    func testTheHelloCarriesThePhonesProtocolAndTheWelcomeTheComputers() async throws {
+        let relay = FakeRelay(key: key, known: ["dev-1"])
+        relay.welcomeProtocol = 3
+        let (c, r) = client(relay)
+        c.connect()
+        _ = try await c.call(Channels.appInfo)
+        XCTAssertEqual(relay.sync { relay.hellos.first?.long("protocol") }, Int64(PhoneProtocol.version))
+        // The welcome reaches handlers on the client's queue, after the reply may have resolved the call.
+        await waitForWelcome(r)
+        XCTAssertEqual(r.lock.sync { r.welcomes.last?.protocolVersion }, 3)
+        c.close()
+        // A computer from before the field: version 1.
+        let old = FakeRelay(key: key, known: ["dev-1"])
+        let (c2, r2) = client(old)
+        c2.connect()
+        _ = try await c2.call(Channels.appInfo)
+        await waitForWelcome(r2)
+        XCTAssertEqual(r2.lock.sync { r2.welcomes.last?.protocolVersion }, 1)
+        c2.close()
+    }
+
+    private func waitForWelcome(_ r: Recorder, _ seconds: TimeInterval = 2) async {
+        let deadline = Date().addingTimeInterval(seconds)
+        while r.lock.sync({ r.welcomes.isEmpty }), Date() < deadline { await sleep(0.01) }
+    }
+
+    func testRegistersPushKindsAndHearsTheRelaysOwnFrames() async throws {
+        let relay = FakeRelay(key: key, known: ["dev-1"])
+        let (c, _) = client(relay)
+        let seen = Seen()
+        c.setControlHandler { control in seen.add(control) }
+        c.connect()
+        try await c.registerPush(token: "abcdef0123456789abcdef", kinds: ["needs-you", "failed"])
+        try await c.registerPush(token: "abcdef0123456789abcdef")
+        let regs = relay.sync { relay.registrations }
+        XCTAssertEqual(regs.first?["kinds"], ["needs-you", "failed"])
+        // Without kinds the relay pushes every kind, as for older phones.
+        XCTAssertNil(regs.last?["kinds"])
+        let conn = try XCTUnwrap(relay.sync { relay.current })
+        conn.plain(["type": "push-registered", "delivers": true])
+        conn.plain(["type": "dismiss", "tag": .string(E2E.activityTag("s1"))])
+        conn.plain(["type": "dismiss", "tag": "not a tag"])
+        conn.plain(["type": "mystery"])
+        try await Task.sleep(nanoseconds: 100_000_000)
+        XCTAssertEqual(seen.all, [.pushRegistered(delivers: true), .dismiss(tag: E2E.activityTag("s1"))])
+        // The plain frames changed nothing else: still online.
+        XCTAssertEqual(c.state, .online)
+        c.close()
+    }
+
+    final class Seen: @unchecked Sendable {
+        private let lock = NSLock()
+        private var items: [RelayControl] = []
+        func add(_ c: RelayControl) { lock.sync { items.append(c) } }
+        var all: [RelayControl] { lock.sync { items } }
     }
 
     func testRegistersALiveActivityUnderItsTag() async throws {

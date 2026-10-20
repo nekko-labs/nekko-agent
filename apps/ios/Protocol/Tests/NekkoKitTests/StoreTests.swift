@@ -46,7 +46,16 @@ final class FakeConnection: RemoteConnection, @unchecked Sendable {
     func reconnect() {}
     func networkChanged(_ path: NetworkPath) { lock.lock(); paths.append(path); lock.unlock() }
     func setNetworkPath(_ path: NetworkPath) { lock.lock(); paths.append(path); lock.unlock() }
-    func registerPush(token: String) async throws { lock.lock(); pushTokens.append(token); lock.unlock() }
+    func registerPush(token: String) async throws { try await registerPush(token: token, kinds: nil) }
+    var pushKinds: [[String]?] = []
+    func registerPush(token: String, kinds: [String]?) async throws {
+        lock.lock(); pushTokens.append(token); pushKinds.append(kinds); lock.unlock()
+    }
+    private var onControl: (@Sendable (RelayControl) -> Void)?
+    func setControlHandler(_ f: (@Sendable (RelayControl) -> Void)?) { onControl = f }
+    func control(_ c: RelayControl) { onControl?(c) }
+    /// The computer's protocol version in its welcome.
+    var welcomeProtocol = 1
     var activities: [(String, String)] = []
     func registerActivity(tag: String, token: String) async throws { lock.lock(); activities.append((tag, token)); lock.unlock() }
 
@@ -65,7 +74,7 @@ final class FakeConnection: RemoteConnection, @unchecked Sendable {
     }
 
     func online() {
-        onWelcome?(WelcomedDevice(id: config.deviceId, name: config.deviceName, platform: "ios"))
+        onWelcome?(WelcomedDevice(id: config.deviceId, name: config.deviceName, platform: "ios", protocolVersion: welcomeProtocol))
         onStatus?(RelayStatus(.online))
     }
 
@@ -155,6 +164,60 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(s2.activeId, id)
         XCTAssertNil(connections.last?.config.pairCode)
         XCTAssertEqual(connections.last?.config.deviceId, c.config.deviceId, "same device id")
+    }
+
+    func testVersionPushKindsDismissalsAndTheTestNotification() async throws {
+        let s = makeStore()
+        s.load()
+        _ = await s.pair(PairingLink(relayUrl: "wss://relay.example", room: room, key: key, pair: nil))
+        let c = try XCTUnwrap(connections.last)
+        XCTAssertEqual(s.protocolCheck, .same, "unknown until welcomed")
+        c.welcomeProtocol = 1
+        s.setPushToken("abcdef0123456789abcdef")
+        c.online()
+        await settle()
+        XCTAssertEqual(s.hostProtocol, 1)
+        XCTAssertEqual(s.protocolCheck, .updateComputer)
+        // Registered on connect, with every kind until the phone picks.
+        XCTAssertEqual(c.pushKinds.last, .some(nil))
+        s.pushKinds = [.needsYou, .failed]
+        await settle()
+        XCTAssertEqual(c.pushKinds.last, ["needs-you", "failed"])
+
+        // The relay's own frames.
+        var dismissed: [String] = []
+        s.onDismiss = { dismissed.append($0) }
+        c.control(.pushRegistered(delivers: true))
+        c.control(.dismiss(tag: E2E.activityTag("s1")))
+        await settle()
+        XCTAssertEqual(s.relayDelivers, true)
+        XCTAssertEqual(dismissed, [E2E.activityTag("s1")])
+
+        // The computer answers push:test and the relay can push: the relay path.
+        c.replies[Channels.pushTest] = { _ in ["ok": true] }
+        let viaRelay = try await s.sendTestNotification()
+        XCTAssertEqual(viaRelay, .relay)
+        XCTAssertEqual(c.callsTo(Channels.pushTest).count, 1)
+        c.control(.pushRegistered(delivers: false))
+        await settle()
+        let local = try await s.sendTestNotification()
+        XCTAssertEqual(local, .local(.relayCannotPush))
+        // An older computer refuses the channel: still a notification, shown by the app.
+        c.replies[Channels.pushTest] = { _ in throw RelayError("Not allowed from a paired phone (channel-denied): push:test") }
+        let old = try await s.sendTestNotification()
+        XCTAssertEqual(old, .local(.computerTooOld))
+        // Anything else is an error the screen shows.
+        c.replies[Channels.pushTest] = { _ in throw RelayError("push:test: timed out") }
+        do {
+            _ = try await s.sendTestNotification()
+            XCTFail("should throw")
+        } catch {}
+
+        // Another computer: nothing is known about it yet.
+        s.disconnect()
+        s.connect(s.activeId!)
+        XCTAssertNil(s.hostProtocol)
+        XCTAssertNil(s.relayDelivers)
     }
 
     func testRepairingAKnownComputerKeepsItsIdAndName() async {

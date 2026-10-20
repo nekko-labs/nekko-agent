@@ -21,7 +21,7 @@ pub mod route;
 pub mod service;
 pub mod socket;
 
-pub use agent::{AgentCore, Out, RELAYED_EVENTS};
+pub use agent::{AgentCore, Out, PUSH_TEST_CHANNEL, RELAYED_EVENTS};
 pub use service::{CHANNELS, Clock, Link, LinkHandle, RemoteService, Verifier, system_clock};
 pub use socket::{Dispatcher, Events, RelayAgent, Spawn, agent_url};
 

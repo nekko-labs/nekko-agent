@@ -5,7 +5,7 @@ final class FirstRunTests: XCTestCase {
     /// and makes no connection before a computer is paired.
     func testWelcomeLeadsToPairing() {
         let app = XCUIApplication()
-        app.launchArguments = ["-appLock", "NO", "-uiTestReset", "YES"]
+        app.launchArguments = ["-appLock", "NO", "-onboarded", "YES", "-uiTestReset", "YES"]
         app.launch()
         let pair = app.buttons["Pair with your computer"]
         XCTAssertTrue(pair.waitForExistence(timeout: 10))
@@ -32,7 +32,7 @@ final class FirstRunTests: XCTestCase {
     /// A plain ws:// relay on the open internet is refused before anything is dialed.
     func testRefusesAPublicCleartextRelay() {
         let app = XCUIApplication()
-        app.launchArguments = ["-appLock", "NO", "-uiTestReset", "YES"]
+        app.launchArguments = ["-appLock", "NO", "-onboarded", "YES", "-uiTestReset", "YES"]
         app.launch()
         app.buttons["Pair with your computer"].tap()
         let field = app.input("nekko-agent-pair:?relay=…")
@@ -47,7 +47,7 @@ final class FirstRunTests: XCTestCase {
     /// The largest accessibility text size still lays out: no clipped controls on the first screens.
     func testLargestTextSizesStillFit() {
         let app = XCUIApplication()
-        app.launchArguments = ["-appLock", "NO", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXL", "-uiTestReset", "YES"]
+        app.launchArguments = ["-appLock", "NO", "-onboarded", "YES", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXL", "-uiTestReset", "YES"]
         app.launch()
         let pair = app.buttons["Pair with your computer"]
         XCTAssertTrue(pair.waitForExistence(timeout: 10))
@@ -58,6 +58,68 @@ final class FirstRunTests: XCTestCase {
         if !field.waitForExistence(timeout: 5) { app.swipeUp() }
         XCTAssertTrue(field.exists)
         attach(app, "Pair (accessibility XL text)")
+    }
+
+    /// IO-31: the three first-run steps, each audited in light and dark. Step 3
+    /// follows the first pairing; here a launch argument opens it directly.
+    func testTheFirstRunInLightAndDark() {
+        for theme in ["light", "dark"] {
+            let app = XCUIApplication()
+            app.launchArguments = ["-appLock", "NO", "-onboarded", "NO", "-theme", theme, "-uiTestReset", "YES"]
+            app.launch()
+            let next = app.buttons["firstRun.continue"]
+            XCTAssertTrue(next.waitForExistence(timeout: 10), "step 1 on a fresh install")
+            XCTAssertTrue(app.staticTexts["Step 1 of 3"].exists)
+            XCTAssertTrue(app.buttons["firstRun.skip"].exists)
+            attach(app, "(theme)-firstrun-1")
+            auditAccessibility(app, "(theme)-firstrun-1", covered: bar(app, above: next))
+            next.tap()
+            let pair = app.buttons["Pair with your computer"]
+            XCTAssertTrue(pair.waitForExistence(timeout: 5))
+            XCTAssertTrue(app.staticTexts["Step 2 of 3"].exists)
+            attach(app, "(theme)-firstrun-2")
+            auditAccessibility(app, "(theme)-firstrun-2", covered: bar(app, above: pair))
+            app.terminate()
+
+            app.launchArguments = ["-appLock", "NO", "-onboarded", "NO", "-theme", theme, "-uiTestReset", "YES", "-uiTestNotificationStep"]
+            app.launch()
+            let allow = app.buttons["firstRun.allowNotifications"]
+            XCTAssertTrue(allow.waitForExistence(timeout: 10), "step 3")
+            XCTAssertTrue(app.staticTexts["Step 3 of 3"].exists)
+            XCTAssertTrue(app.descendants(matching: .any)["Preview: an approval with Allow and Deny, and a finished reply."].exists)
+            attach(app, "(theme)-firstrun-3")
+            auditAccessibility(app, "(theme)-firstrun-3", covered: bar(app, above: allow))
+            // Not now: iOS is not asked, and the step goes away.
+            app.buttons["firstRun.notNow"].tap()
+            XCTAssertFalse(app.alerts.firstMatch.waitForExistence(timeout: 2))
+            XCTAssertTrue(waitGone(allow, 5))
+            app.terminate()
+        }
+    }
+
+    /// Skip ends the first run on step 1: straight to pairing, with no step label.
+    func testSkipGoesStraightToPairing() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-appLock", "NO", "-onboarded", "NO", "-uiTestReset", "YES"]
+        app.launch()
+        let skip = app.buttons["firstRun.skip"]
+        XCTAssertTrue(skip.waitForExistence(timeout: 10))
+        skip.tap()
+        XCTAssertTrue(app.buttons["Pair with your computer"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Step 2 of 3"].exists, "skipped: no more steps")
+        attach(app, "firstrun-skipped")
+    }
+
+    /// The pinned bottom bar over a screen, measured from its button.
+    private func bar(_ app: XCUIApplication, above button: XCUIElement) -> CGRect {
+        let window = app.windows.firstMatch.frame
+        let top = button.frame.minY - 12
+        return CGRect(x: window.minX, y: top, width: window.width, height: window.maxY - top)
+    }
+
+    private func waitGone(_ e: XCUIElement, _ seconds: TimeInterval) -> Bool {
+        let p = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: e)
+        return XCTWaiter.wait(for: [p], timeout: seconds) == .completed
     }
 
     private func attach(_ app: XCUIApplication, _ name: String) {

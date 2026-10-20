@@ -3,6 +3,7 @@ import NekkoKit
 import NekkoProtocol
 import Observation
 import UIKit
+import UserNotifications
 import WidgetKit
 
 /// The app's root object: the computers store plus the iOS glue around it
@@ -39,6 +40,9 @@ final class AppModel {
     var sharedText: String?
     /// `nekko-agent://new` (the Control Center control): open New chat once.
     var newChatRequested = false
+    /// First run, step 3 (IO-31): shown right after the first pairing, where
+    /// notification permission is asked.
+    var showNotificationStep = false
     private let shareInbox = ShareInbox(defaults: UserDefaults(suiteName: StatusSnapshot.appGroup) ?? .standard)
 
     init() {
@@ -72,6 +76,8 @@ final class AppModel {
         // What the share extension leaves behind, without driving another app's share sheet.
         let args = ProcessInfo.processInfo.arguments
         if let i = args.firstIndex(of: "-uiTestShare"), i + 1 < args.count { shareInbox.offer(args[i + 1]) }
+        // First run's step 3 without pairing a computer first.
+        if args.contains("-uiTestNotificationStep") { showNotificationStep = true }
         #endif
     }
 
@@ -93,6 +99,8 @@ final class AppModel {
             Task { await self.store.registerActivity(sessionId: sid, token: token) }
         }
         _ = store.subscribe { [weak self] e in self?.onEvent(e) }
+        store.pushKinds = prefs.pushKinds
+        store.onDismiss = { tag in Task { await Notifier.dismissNeedsYou(tag: tag) } }
         WatchBridge.shared.start()
         watchWidget()
         network.onFirst = { [weak self] path in Task { @MainActor in self?.store.networkKnown(path) } }
@@ -102,6 +110,14 @@ final class AppModel {
         if prefs.keepTranscripts { store.transcriptCache = transcriptFiles }
         store.load(preferredId: prefs.defaultComputer)
         if !store.computers.isEmpty { registerForPush() }
+        // Paired but never onboarded: closed on the first run's last step (iOS hasn't
+        // asked yet: show it again), or paired before the first run existed (done).
+        if !prefs.onboarded && !store.computers.isEmpty {
+            Task {
+                let asked = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus != .notDetermined
+                if asked { prefs.onboarded = true } else { showNotificationStep = true }
+            }
+        }
     }
 
     // MARK: Lifecycle
@@ -198,8 +214,8 @@ final class AppModel {
         default:
             break
         }
-        // Only the chats the phone lists, and only when out of sight.
-        guard !foreground, prefs.notify, let chat else { return }
+        // Only the chats the phone lists, only when out of sight, and only the kinds switched on.
+        guard !foreground, let kind = PushKind.of(e), prefs.wants(kind), let chat else { return }
         notifier.post(e, chatTitle: chat.title.isEmpty ? "Chat" : chat.title, computer: computer?.name ?? "Your computer",
                       hideContent: prefs.appLock)
     }
@@ -262,8 +278,48 @@ final class AppModel {
         start()
         let id = await store.pair(link)
         if prefs.defaultComputer == nil { prefs.defaultComputer = id }
-        if await notifier.requestPermission() { registerForPush() }
+        if prefs.onboarded {
+            if await notifier.requestPermission() { registerForPush() }
+        } else {
+            // The first run's last step explains notifications before iOS asks.
+            showNotificationStep = true
+        }
         return nil
+    }
+
+    /// First run, step 3: *Allow notifications* (true) or *Not now*. Either way it's done.
+    func finishOnboarding(allowNotifications: Bool) async {
+        showNotificationStep = false
+        prefs.onboarded = true
+        if allowNotifications, await notifier.requestPermission() { registerForPush() }
+    }
+
+    /// Settings → Notifications: one kind on or off, and the relay asked for only the kinds on.
+    func setNotify(_ kind: PushKind, _ on: Bool) {
+        switch kind {
+        case .needsYou: prefs.notifyNeedsYou = on
+        case .finished: prefs.notifyFinished = on
+        case .failed: prefs.notifyFailed = on
+        case .test: return
+        }
+        store.pushKinds = prefs.pushKinds
+    }
+
+    /// *Send a test notification* (IO-30): through the computer and its relay,
+    /// or shown by the app when the relay can't push. Returns what to show under the button.
+    func sendTestNotification() async -> (text: String, ok: Bool) {
+        guard await notifier.ensurePermission() else {
+            return ("Notifications are off for Nekko Agent. Turn them on in the iPhone’s Settings → Notifications.", false)
+        }
+        registerForPush()
+        let name = store.active?.name ?? "Your computer"
+        do {
+            let result = try await store.sendTestNotification()
+            if case .local = result { notifier.postTest(computer: name) }
+            return (result.message(computer: name, relayHost: store.active?.relayHost ?? "the relay"), true)
+        } catch {
+            return ("Couldn’t reach \(name): \(error.localizedDescription)", false)
+        }
     }
 
     func registerForPush() {
