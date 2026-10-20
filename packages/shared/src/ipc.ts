@@ -218,6 +218,21 @@ export const IpcChannels = {
   prAction: 'pr:action',
   prContinueStack: 'pr:continueStack',
   prLinkStack: 'pr:linkStack',
+  prCreate: 'pr:create',
+  prChecks: 'pr:checks',
+
+  gitDiff: 'git:diff',
+  gitLog: 'git:log',
+  gitShow: 'git:show',
+  gitBranches: 'git:branches',
+  gitCompare: 'git:compare',
+  gitStage: 'git:stage',
+  gitUnstage: 'git:unstage',
+  gitCommit: 'git:commit',
+  gitCommitMessage: 'git:commitMessage',
+  gitPush: 'git:push',
+  gitSwitch: 'git:switch',
+  gitMergeAbort: 'git:mergeAbort',
 
   commentsList: 'comments:list',
   commentAdd: 'comment:add',
@@ -784,6 +799,31 @@ export interface NekkoApi {
   prAction(url: string, action: import('./pr.js').PrAction): Promise<import('./pr.js').PrActionResult>;
   continuePrStack(sessionId: string, url: string): Promise<Session>;
   linkPrStack(sessionId: string, url: string): Promise<import('./pr.js').PrActionResult>;
+  /** Open a PR from the workspace's current (pushed) branch, with gh or the GitHub token. */
+  createPr(workspaceId: string, opts: import('./pr.js').PrCreateOptions): Promise<import('./pr.js').PrCreateResult>;
+  /** Each check on a PR's head commit, and their rollup. */
+  getPrChecks(url: string): Promise<import('./pr.js').PrCheckList>;
+
+  /**
+   * Git in a workspace's folder (IO-33 FA-2). `workspaceId` is a saved folder's
+   * id or `session:<chatId>`. Paths are relative to the folder. Changes answer
+   * `{ ok: false, message }` when git refuses; nothing force-pushes, amends or
+   * skips hooks. Each change drops the folder's cached `getGitStatus`.
+   */
+  gitDiff(workspaceId: string, opts?: import('./git.js').GitDiffOptions): Promise<import('./git.js').GitDiff>;
+  gitLog(workspaceId: string, opts?: import('./git.js').GitLogOptions): Promise<import('./git.js').GitCommit[]>;
+  gitShow(workspaceId: string, sha: string): Promise<import('./git.js').GitCommitDetail>;
+  gitBranches(workspaceId: string): Promise<import('./git.js').GitBranches>;
+  gitCompare(workspaceId: string, base: string, head: string): Promise<import('./git.js').GitCompare>;
+  gitStage(workspaceId: string, paths: string[]): Promise<import('./git.js').GitResult>;
+  gitUnstage(workspaceId: string, paths: string[]): Promise<import('./git.js').GitResult>;
+  gitCommit(workspaceId: string, opts: import('./git.js').GitCommitOptions): Promise<import('./git.js').GitCommitResult>;
+  /** A commit message for what is staged, from the default provider and model. */
+  gitCommitMessage(workspaceId: string): Promise<import('./git.js').GitCommitMessage>;
+  gitPush(workspaceId: string, opts?: import('./git.js').GitPushOptions): Promise<import('./git.js').GitPushResult>;
+  gitSwitch(workspaceId: string, branch: string, opts?: import('./git.js').GitSwitchOptions): Promise<import('./git.js').GitSwitchResult>;
+  /** Back out of a conflicted merge; `ok: false` when none is in progress. */
+  gitMergeAbort(workspaceId: string): Promise<import('./git.js').GitResult>;
 
   /** Inline editor comments on a file (gutter "+" annotations the agent picks up). */
   listComments(path: string): Promise<LineComment[]>;
