@@ -4,7 +4,7 @@
 
 **AI help on your computer. For coding and everyday work.**
 
-Free and open source · MIT licensed · AI on your computer or online
+Free and open source · MIT licensed · A fast local model server and AI agent in one app
 
 </div>
 
@@ -12,59 +12,69 @@ Free and open source · MIT licensed · AI on your computer or online
 
 ## Overview
 
-Nekko Agent helps you write, code, and handle repetitive work. Use AI running
-on your computer or connect an online AI service. You choose what Nekko can
-access and review its work. A **model** is the AI you choose; **local** means
-it runs on your own computer.
+Nekko Agent is a seriously fast local model server and an AI agent, together
+in one app. Run models on your own computer, bring in ChatGPT or Claude when you
+want them, and decide exactly what Nekko gets to touch. A **model** is the AI
+that does the thinking; **local** means it runs on your computer instead of
+someone else's.
 
-Use Nekko's desktop app or connect it to your existing tools through its
-command-line interface (CLI) or the Model Context Protocol (MCP).
+1. **A model server built to be quick.** A Rust core runs llama.cpp tuned for
+   the way agents work. On the same model file and machine it decoded at
+   **154 tokens/s** against Ollama's 115 and LM Studio's 116, ran code edits
+   about **4.5x faster**, and came back to a paused chat about 40% faster than
+   Ollama. It is not ahead everywhere: the first turn of a brand-new long chat
+   is still slower than Ollama's. Measured 30 September 2026 on an RTX 5090;
+   every number, and the harness to rerun them, is in
+   [docs/benchmarks.md](docs/benchmarks.md).
+2. **Run models and build with them in one place.** Search and download models
+   from Hugging Face, see which fit your graphics card, and load them, all inside
+   Nekko. Already using Ollama, LM Studio or vLLM? Nekko finds them and puts them
+   to work too.
+3. **Your favourite models, side by side.** Sign in with your ChatGPT plan, add
+   Claude with an API key, or reach hundreds of models (Gemini included) through
+   OpenRouter. Mix them with local models per chat or workflow, and hand smaller
+   jobs to the cheaper one.
+4. **See what you spend, and what you save.** Track what online models cost and
+   what local models saved you against cloud prices. Live monitors show your CPU,
+   memory, GPU and loaded models while your agents run.
+5. **Agents that clock in on their own.** Run an agent on a schedule (check a
+   price every morning) or wake it on a trigger (review every new GitHub pull
+   request), with a visible history of every run.
+6. **Talk instead of type.** Local dictation with Whisper turns your voice into
+   text on your own computer, from the desktop or the phone app.
+7. **Skip the window, keep the power.** Use the CLI and MCP server from your
+   terminal or another agent. Claude Code, Codex and Cursor can hand work to your
+   local models through Nekko.
+8. **Your agents, in your pocket (beta).** Native iOS and Android apps let you
+   start chats, approve risky commands and follow long runs, end-to-end
+   encrypted, with everything still running on your computer.
 
-1. **Use AI on your computer or online.** Connect AI running through Ollama,
-   LM Studio, or vLLM alongside online AI services. Use Nekko's app or compatible
-   tools such as Claude Code, Cursor, Codex, and OpenClaw.
-2. **Choose the right AI for the job.** Use a more capable model for difficult
-   work and a smaller one for simpler tasks. Models running on your computer
-   have no per-token API bill; hardware, electricity, and online services still
-   have costs. Explicit cross-model delegation is in this unreleased source.
-3. **Automate repetitive work.** Schedule tasks and save reusable workflows,
-   with limits on retries and a visible history of what happened.
-4. **Manage your AI models in one place.** Connect existing model servers and
-   use supported controls to download, load, or unload models. Automatic setup
-   of the software that runs them is planned, not available yet.
-5. **Control your computer by voice (planned).** One guided setup
-   chooses a compatible intent LLM, TTS, optional voice-input STT, and required
-   runtimes by checking your hardware against minimum requirements. Control
-   supported local apps and actions within permissions you choose, with
-   sensitive-action confirmations and an immediate stop control. Initial
-   downloads need a connection or a verified offline bundle; the intended
-   control experience then works locally without cloud fallback. This complete
-   setup and computer-control flow is not available yet.
+**Share only what you choose.** Letting an AI read a prompt is one thing;
+handing it your files, terminal, microphone and network is another. File tools
+stay inside the folders you pick, terminal commands follow the approval rules
+you set, the microphone is only used when you start dictating, and connectors
+are opt-in. The Context Inspector shows what each request sends, and every file
+change can be reviewed line by line. Local-only work keeps going offline once
+your models are downloaded.
 
-Local-only sessions can work offline after their models and dependencies are
-installed. Frontier calls and online integrations need a connection and send
-selected context to their configured services. The Context Inspector, approvals,
-and sandbox help make those choices visible.
-
-**Nekko**, our hand-drawn secret-agent cat, is a slender line-art character
-who leans against the app edge with crossed ankles. She wears slim sunglasses,
-a little collar and tie, and a discreet earpiece. The glasses lift when she
-sleeps or stretches. She still wakes, watches work, and sleeps when you're
-away, with the same gentle activity timing.
+**Nekko**, our pixel-art cat, sits in the corner of the app, blinks, hops and
+naps while your agents work, and wakes up when you come back.
 
 Built by [Nekko Labs](https://nekkolabs.com), MIT-licensed, and developed in the
 open. See [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
 
-### On the roadmap
+### Coming soon
 
-- Hardware-aware, one-click offline PC control: local intent and speech models,
-  scoped app access, confirmations, and stop controls. See the
+- **Model routers.** Let a router pick the model for each request: our upcoming
+  open-source Nekko Router, another open-source router, or a paid one with your
+  own key.
+- **Sharing with friends and teammates.** Share agents, workflows and progress
+  with the people you build with.
+- **Hands-free computer control by voice** (planned): local intent and speech
+  models, scoped app access, confirmations and a stop control. See the
   [planned experience](SPEC.md#one-click-setup-for-safe-offline-pc-control-planned).
-- Opt-in team hardware pools and distributed agent/workflow execution.
-- Local task-runner improvements for jobs otherwise using hosted CI credits.
-  This is not a claim of GitHub Actions workflow compatibility.
-- Shared team workflows with permissions and auditable execution.
-- Optional cloud runners if there is demand, without making local work depend on them.
+- **Local task runner** (exploring): an alternative to hosted CI for repeat jobs
+  such as tests. This is not a claim of GitHub Actions workflow compatibility.
 
 > **Verified working** end-to-end against a live LM Studio server (`google/gemma-4-31b-qat`):
 > connect, model listing, streaming, **reasoning models**, and the full tool-calling
@@ -210,9 +220,15 @@ private by design.
 ## Features
 
 - **Unified chat / cowork / code**: one thread, no mode switching.
-- **Local models, first-class**: auto-discover Ollama / LM Studio / vLLM; pull,
-  load, and unload Ollama models; manage servers and watch token usage.
-- **Cloud providers too**: Anthropic, OpenAI, OpenRouter, any OpenAI-compatible endpoint.
+- **Built-in model server**: a Rust core driving llama.cpp that downloads, loads and serves
+  models from Hugging Face, with GPU fit estimates and keep-loaded controls.
+- **Local runners too**: auto-discover Ollama / LM Studio / vLLM; pull, load, and
+  unload Ollama models; manage servers and watch token usage.
+- **Cloud providers too**: ChatGPT plan sign-in, Anthropic, OpenAI, OpenRouter, any OpenAI-compatible endpoint.
+- **Spend and savings**: API spend, estimated savings from local models, and live hardware and model monitors.
+- **Automations**: workflows on a schedule or an event trigger, such as a GitHub pull request.
+- **Voice dictation**: Whisper Tiny English, transcribed on your computer.
+- **Skills**: a library sorted by job with every step visible, plus a marketplace.
 - **Context Inspector**: see exactly what enters the prompt (files, guidelines,
   memory, connectors) with live token counts; toggle and pin anything.
 - **Guardrails**: risky commands (`rm -rf`, force push, `curl | sh`, …) prompt
@@ -220,8 +236,8 @@ private by design.
 - **Sandbox**: workspace-jail by default, optional Docker isolation, or ask-everything.
 - **Multi-folder index**: add multiple roots; file + symbol index with fast search.
 - **Memory**: global and per-project, stored as plain markdown.
-- **Connectors**: Linear, Slack, Discord, Gmail, Google Drive.
-- **Nekko the mascot**: a hand-drawn outline cat with resting, waking, stretching, working, and sleeping poses.
+- **Connectors**: GitHub, GitLab, Linear, Jira, Slack, Discord, Microsoft Teams, Gmail, Google Drive, Trello, Asana, Todoist.
+- **Nekko the mascot**: a pixel-art cat that blinks, hops, works and naps in the corner of the app.
 
 ## Architecture
 

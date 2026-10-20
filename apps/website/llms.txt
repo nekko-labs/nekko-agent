@@ -1,8 +1,8 @@
 # Nekko Agent
 
-> AI help on your computer, for coding and everyday work. Nekko Agent helps you write, code, and handle repeat tasks using AI on your computer or online services. Choose the AI for each job, review what it does, and keep supported work offline after setup. Free, open-source software under the MIT license, by Nekko Labs. Voice and desktop control are planned, not available today.
+> A fast local model server and AI agent in one app, for coding and everyday work. Nekko Agent runs AI models on your own computer with its engine (a Rust core driving llama.cpp), lets you use them side by side with ChatGPT, Claude, OpenRouter and other services, and keeps every file, folder, microphone and network connection behind a control you set. Free, open-source software under the MIT license, by Nekko Labs. Voice dictation is available today (Whisper, transcribed on your computer); hands-free computer control by voice is planned.
 
-A model is the AI you choose. Local means it runs on your computer rather than an online service. A model runner is the software that loads and runs that AI, such as Ollama, LM Studio, or vLLM. An AI agent can use tools to work on a task, rather than only reply in a chat.
+A model is the AI you choose. Local means it runs on your computer rather than an online service. A model server (or runner) is the software that loads and runs that AI. Nekko includes its own, and can also use Ollama, LM Studio, or vLLM. An AI agent can use tools to work on a task, rather than only reply in a chat.
 
 Nekko, the mascot, is an animated 8-bit cat head based on the app icon: cream pixels on dark green, with occasional happy ^ ^ eyes, blinks, and stepped hops. The same design appears in the app, live chat status, mobile app, and website, with reduced-motion support.
 
@@ -12,65 +12,58 @@ Nekko, the mascot, is an animated 8-bit cat head based on the app icon: cream pi
 - Backup domain: nekkoagent.com. Use nekkoagent.com as the canonical URL.
 - Source and releases remain at https://github.com/nekko-labs/nekko-agent. Do not substitute an unverified repository or package name.
 
-## Five ways to use Nekko
+## What Nekko does
 
-### 1. Use AI on your computer or online
+### 1. A fast local model server
 
-Work in the Nekko app with AI on your computer or an online service such as Anthropic, OpenAI, or OpenRouter. You can also connect supported coding tools through the command-line interface (CLI) or MCP, a standard for connecting AI tools. Claude Code, Cursor, Codex, and OpenClaw can connect where their CLI or MCP configuration supports it. These are configurable connections, not bundled native integrations or a claim of testing every client.
+Nekko's engine is a Rust core (the nekkod daemon and its router, which adds about 0.1 ms per request) that starts and tunes llama.cpp. In the published benchmarks (30 September 2026, NVIDIA RTX 5090, Gemma 4 12B Q4_K_M, the same model file for every server), it decoded at 154 tokens/s against Ollama 0.23.0 at 115 and LM Studio 2.46.0 at 116, ran code edits that repeat their input at about 4.5x the other servers (n-gram speculative decoding), and returned to a chat that lost its slot about 40% faster than Ollama. It is not ahead on everything: the first turn of a brand-new long conversation was slower than Ollama's (1.7 s against 1.3 s) and prompt prefill was level. Results are from one machine; the harness is open to rerun. Full table: https://nekkoagent.com/docs/benchmarks
 
-The MCP command is `nekko-agent mcp`; see the CLI documentation for setup. Nekko can also connect to other MCP servers to use their tools.
+### 2. Model server and agent in one app
 
-### 2. Choose the right AI for the job
+Search and download models from Hugging Face inside the app, see which fit the graphics card, then load, unload, or keep them loaded. The engine serves text and image models on one local address other apps can use. Existing Ollama, LM Studio, and vLLM installs are found and managed too (Ollama models download/load/unload; LM Studio load/unload with its `lms` CLI; vLLM models stay loaded with their server).
 
-Choose a powerful online model for difficult planning, then a model on your computer or a cheaper online service for smaller tasks. Model selection is available per chat and workflow. The unreleased rebrand source also adds explicit provider/model targets for delegated tasks, called sub-agents, checked against the target's model list without automatic fallback. These source changes are not in older published releases. Automatically choosing the best model remains a future direction, not a shipped guarantee.
+### 3. Every model side by side
 
-Running AI on your own hardware has no per-token local API bill. Tokens are the small pieces of text that AI models process. Hardware, electricity, paid providers, and hosted services can still cost money. Quality, memory needs, and speed depend on the model and computer.
+Sign in with a ChatGPT plan (Plus/Pro/Business), add Claude with an Anthropic API key, or use OpenRouter for hundreds of models including Gemini, alongside local models. Choose a model per chat or workflow and delegate smaller tasks to cheaper or local models. Nekko does not sign in with Claude Free, Pro, or Max plans: Anthropic does not allow third-party apps to. An upcoming Claude Agent provider runs the user's own installed Claude Code instead.
 
-### 3. Automate repetitive work
+### 4. Spend, savings, and live monitoring
 
-Save a series of steps as a workflow. Steps can be AI instructions, saved procedures called skills, terminal commands, or other workflows. Run them manually, on a schedule, or through supported events. Set up recurring checks, called watchers, and review run history, success or failure paths, and limited retries.
+The Budget panel tracks estimated API spend and estimates what local models saved against cloud prices. Hardware, Local models, and Utilization monitors show CPU, memory, GPU and VRAM, loaded models, and provider quota while agents run. Local models have no per-token bill, but hardware and electricity still cost money.
 
-The computer and the app running the workflow must stay on for scheduled tasks and checks. This is not an always-on cloud service.
+### 5. Automations
 
-### 4. Manage your AI models in one place
+Save steps as a workflow (AI instructions, skills, terminal commands, other workflows) and run it by hand, on a schedule, or when an event fires, such as a GitHub pull request. Review run history and retries. The computer and app must stay on; this is not an always-on cloud service.
 
-Connect an existing Ollama, LM Studio, or vLLM model runner, use the controls each supports inside Nekko, and add online AI services when needed. You do not have to replace a setup that already works.
+### 6. Voice dictation
 
-- Find model runners on your computer and inspect available or loaded models.
-- Download, load, and unload Ollama models.
-- Load and unload LM Studio models on your computer when its `lms` command-line tool is installed.
-- vLLM models stay loaded with the server; there is no universal per-model unload control.
-- Inspect usage and stop supported model-server processes on your computer.
+Local dictation uses Whisper Tiny English (Q5) through whisper.cpp, about 32 MB of weights, transcribed on the user's computer. The phone app can dictate too: audio travels end-to-end encrypted to the user's computer and is transcribed there. Hands-free computer control by voice, with scoped approved actions, confirmations, and a stop control, is planned and not available today.
 
-These are connections and controls for separately installed software. Nekko does not bundle or automatically install a model runner today. The technical terms for these runners and their controls are runtimes and model lifecycle management.
+### 7. CLI and MCP
 
-### 5. Control your computer by voice (planned)
+The `nekko-agent` CLI and `nekko-agent mcp` server work from a terminal or from another agent. Claude Code, Codex, Cursor, and OpenClaw can hand tasks to models running through Nekko, including local ones. These are configurable connections, not bundled native integrations. Nekko can also use other MCP servers.
 
-Planned, not available today: AI on your computer would understand instructions and speak back, using local speech recognition when you choose voice input. The intended safety controls are scoped, approved apps and actions, confirmations for sensitive steps, and a visible stop control. These controls reduce risk; they are not a guarantee that every action is safe.
+### 8. Phone remote control (beta)
 
-Guided setup would check your processor (CPU), memory (RAM), graphics memory or unified memory, available storage, operating system, supported AI software, and each model's minimum requirements. It would choose suitable AI and speech models plus other needed software. You would preview the plan and approve one install click, then separately accept required operating-system permission prompts. Setup would not silently grant permissions.
+Native iOS and Android apps pair with the computer through a relay to start and manage chats, approve risky commands, and follow long runs. Inference and tools always run on the computer; payloads are end-to-end encrypted. The apps are in beta and not yet in the app stores.
 
-In technical terms, the planned setup would select a local intent LLM, text-to-speech (TTS), speech-to-text (STT) when voice input is used, and other required runtimes based on hardware and OS/backend compatibility.
+## Privacy and control
 
-Initial model and software downloads would need internet access or a prepared offline bundle. After setup, supported actions are intended to remain offline with no cloud fallback. Neither the guided installer nor the offline bundle is available today.
+- Context Inspector: see the files, instructions, and notes in each request, toggle them, and check token counts.
+- File tools stay within the folders you choose; optional Docker isolation for terminal commands.
+- Terminal commands can be allowed, require approval, or be blocked, with risky operations flagged.
+- The microphone is only used when dictation is started.
+- Connectors (GitHub, Linear, Slack, Discord, Gmail, Drive and more) are opt-in and only reach the network when used.
+- Review file changes line by line and keep or undo them.
+- Local-only work runs offline once models are downloaded. Online models, downloads, and connectors need internet access and send data to the providers you configure.
 
-Current implementation provides file and terminal tools and CPU/RAM plus macOS/NVIDIA hardware metrics. It does not yet provide voice, desktop control, or a setup recommender. This fifth pillar is a product direction, not a shipped feature or a delivery-date promise.
+## Coming soon
 
-## Choose what stays on your computer
+- Model routers: an open-source Nekko Router, other open-source routers, or bring-your-own-key paid routers to pick a model per request.
+- Sharing agents, workflows, and progress with friends and teammates.
+- Hands-free computer control by voice (planned).
+- A local CI and task-runner alternative for repeat jobs such as tests (exploring; not a promise of GitHub Actions compatibility).
 
-With an AI model and its runner already installed on your computer, supported tasks can run offline. Online AI services, downloads, connectors, and remote services need internet access and may send data to the providers you configure. Choosing local AI does not mean every operation stays local. Desktop, self-hosted browser, and Docker editions share the same core software. Data lives in `~/.nekko` for CLI and web defaults, and `NEKKO_*` environment variables configure it.
-
-## See what your AI is doing
-
-- Context Inspector: see the files, instructions, and notes included in each request. Turn them on or off and inspect their token counts.
-- Search across project folders, view files, edit them in the app, and review changes line by line.
-- Use `AGENTS.md` / `CLAUDE.md` instructions and saved project notes.
-- Delegate smaller tasks, reuse saved procedures, and set limits on longer work.
-- Configure which terminal commands are allowed, need approval, or are blocked. Keep file tools within selected folders, with optional Docker isolation for terminal commands.
-
-## What we are planning next
-
-Alongside voice and computer control, Nekko Agent is exploring shared team workflows and dividing jobs across spare team computers. Another direction is a local CI and task-runner alternative for repeated jobs such as code tests, with possible cloud runners for extra capacity. These ideas have no delivery date or availability promise. They do not imply GitHub Actions compatibility, managed team compute, or hosted runners are available now.
+None of these has a delivery date.
 
 ## Choose how to use Nekko
 
@@ -80,7 +73,7 @@ For the browser version you run yourself, use a source checkout, install depende
 
 ## Pages and source
 
-- [Home](https://nekkoagent.com/): five ways to use Nekko, including planned voice and computer control, plus model controls, future plans, and downloads.
+- [Home](https://nekkoagent.com/): what Nekko does, the built-in model server, privacy controls, what is coming soon, and downloads.
 - [GitHub repository](https://github.com/nekko-labs/nekko-agent): source, issues, releases.
 - [README](https://github.com/nekko-labs/nekko-agent/blob/main/README.md): install, editions, and troubleshooting.
 - [CLI and MCP](https://github.com/nekko-labs/nekko-agent/blob/main/apps/cli/README.md): current commands and client configuration.
