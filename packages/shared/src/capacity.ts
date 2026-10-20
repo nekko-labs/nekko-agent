@@ -2,8 +2,8 @@
  * Fit-planning types: what we know about a model, what the machine has, and the
  * projection that answers "will this fit, where will it run, and why".
  *
- * The math lives in @nekko-agent/core (pure, no I/O). These are the contracts that
- * travel between it, the host adapters that gather the facts, and the renderer
+ * The math lives in the engine (crates/nekko-engine/src/capacity.rs). These are
+ * the contracts that travel between it, what gathers the facts, and the renderer
  * that draws the result.
  *
  * Every optional field is optional on purpose. A missing field means the planner

@@ -5,9 +5,9 @@
  * A *methodology* is an ordered set of *artifacts* (markdown files in the
  * workspace root). Artifacts are generated in order and chained: a later
  * artifact is given the earlier ones as context (e.g. the plan sees the spec,
- * the tasks see the spec + plan). The host (`packages/host/src/spec.ts`) does
- * the model calls; everything in this file is pure so the renderer and tests
- * can share it.
+ * the tasks see the spec + plan). The engine (crates/nekko-workspace spec.rs,
+ * with the model call in nekkod) does the model calls; everything in this
+ * file is pure so the renderer and tests can share it.
  */
 
 /** What kind of artifact this is, drives the generation prompt in the host. */

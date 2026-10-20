@@ -155,7 +155,7 @@ export function ModelsView() {
         </section>
 
         <p className="mt-8 text-center text-[12px] text-ink-faint">
-          Token usage and live worker status now live in the Command Center.
+          Token usage and live worker status now live on the Agents screen.
         </p>
       </div>
     </div>

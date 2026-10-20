@@ -36,6 +36,7 @@ pub const CHANNELS: &[&str] = &[
     "localRelay:status",
     "localRelay:start",
     "localRelay:stop",
+    "localRelay:setLan",
     "networkVisibility:status",
     "networkVisibility:start",
     "networkVisibility:stop",
@@ -225,6 +226,8 @@ impl Desktop {
             "localRelay:status" => Ok(self.relay.status_learning_name()),
             "localRelay:start" => Ok(self.relay.start().await),
             "localRelay:stop" => Ok(self.relay.stop().await),
+            // `on !== false`: anything but an explicit false keeps the LAN on.
+            "localRelay:setLan" => Ok(self.relay.set_lan(args.first() != Some(&Value::Bool(false))).await),
             "networkVisibility:status" => Ok(self.visibility.status()),
             "networkVisibility:start" => Ok(self.visibility.start().await),
             "networkVisibility:stop" => Ok(self.visibility.stop().await),

@@ -6,6 +6,8 @@ export interface WindowBounds {
   height: number;
   x?: number;
   y?: number;
+  /** The window was maximised; the other fields are its size when restored. */
+  maximized?: boolean;
 }
 
 /** A display's usable area (Electron's `Display.workArea`). */

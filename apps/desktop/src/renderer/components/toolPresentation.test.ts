@@ -10,9 +10,19 @@ const { ToolsList } = await import('./ChatControls.js');
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
 describe('tool picker presentation', () => {
-  it('covers every built-in core and host tool without changing identifiers', () => {
-    const sources = [read('../../../../../packages/core/src/agent/tools.ts'), read('../../../../../packages/host/src/agent-watches.ts'), read('../../../../../packages/host/src/host.ts')];
-    const names = sources.flatMap((s) => [...s.matchAll(/^\s*name: '([a-z_]+)',/gm)].map((m) => m[1]));
+  it('covers every built-in tool without changing identifiers', () => {
+    // The engine's tool catalog (nekko-turn), every tool a turn can offer.
+    const catalog = JSON.parse(read('../../../../../crates/nekko-turn/src/catalog.json')).tools;
+    const names: string[] = [];
+    const walk = (v: unknown): void => {
+      if (Array.isArray(v)) v.forEach(walk);
+      else if (v && typeof v === 'object') {
+        const { name } = v as { name?: unknown };
+        if (typeof name === 'string') names.push(name);
+        Object.values(v).forEach(walk);
+      }
+    };
+    walk(catalog);
     expect(names).toContain('grep');
     for (const name of names) expect(TOOL_LABELS[name], name).toBeTruthy();
   });

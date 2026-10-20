@@ -11,6 +11,7 @@ import SwiftUI
 /// transcribes it with Whisper on the computer (`voice:transcribe`) when Nekko
 /// Voice is installed there, else with this iPhone's speech recognizer
 /// (on-device when the phone supports it). Same split as Android's AN-15.
+/// Tap to start and stop, or hold to talk (IO-28, *Settings → Dictation*).
 @MainActor
 @Observable
 final class Dictation {
@@ -21,6 +22,8 @@ final class Dictation {
     private(set) var transcribing = false
     private(set) var status = ""
     private(set) var error: String?
+    /// A hint that isn't an error (hold-to-talk: the microphone was just allowed, a tap too short).
+    private(set) var notice: String?
     /// The words, once per dictation: the composer inserts them. Set whether the
     /// user tapped stop or the 30-second limit ended the recording.
     private(set) var result: Words?
@@ -34,9 +37,65 @@ final class Dictation {
     private var recorder: AVAudioRecorder?
     private var url: URL?
     private var timer: Task<Void, Never>?
+    private var hold = HoldToTalk()
 
-    func start(store: ComputersStore) async {
+    /// Hold to talk: the finger went down on the microphone.
+    func press(store: ComputersStore) async {
+        notice = nil
+        let permission: HoldToTalk.Permission
+        switch AVAudioApplication.shared.recordPermission {
+        case .granted: permission = .granted
+        case .denied: permission = .denied
+        default: permission = .undetermined
+        }
+        switch hold.press(at: .now, permission: permission) {
+        case .askPermission:
+            if await AVAudioApplication.requestRecordPermission() {
+                notice = "Microphone on. Hold the microphone while you speak."
+            } else {
+                error = "Microphone access is off. Allow it in Settings → Nekko Agent."
+            }
+        case .start:
+            await start(store: store, holding: true)
+            if recording {
+                if hold.didStart(at: .now) == .discard { discard() }
+            } else {
+                hold.failedToStart()
+            }
+        default:
+            break
+        }
+    }
+
+    /// Hold to talk: the finger came up.
+    func letGo(store: ComputersStore) async {
+        switch hold.release(at: .now) {
+        case .finish:
+            await finish(store: store)
+        case .discard:
+            discard()
+            notice = "Hold the microphone while you speak, then let go."
+        default:
+            break
+        }
+    }
+
+    /// Stop without transcribing.
+    func discard() {
+        timer?.cancel()
+        timer = nil
+        recorder?.stop()
+        recorder = nil
+        recording = false
+        status = ""
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        if let url { try? FileManager.default.removeItem(at: url) }
+        url = nil
+    }
+
+    func start(store: ComputersStore, holding: Bool = false) async {
         error = nil
+        notice = nil
         guard await AVAudioApplication.requestRecordPermission() else {
             error = "Microphone access is off. Allow it in Settings → Nekko Agent."
             return
@@ -53,7 +112,7 @@ final class Dictation {
             recorder = r
             url = file
             recording = true
-            status = "Listening… tap stop when you’re done"
+            status = holding ? "Listening… let go when you’re done" : "Listening… tap stop when you’re done"
             AccessibilityNotification.Announcement("Listening").post()
             // The recorder stops itself at the limit; finish the dictation then
             // too, instead of leaving "Listening…" up with nothing recording.

@@ -242,6 +242,8 @@ export interface AppSettings {
   defaultModelId?: string;
   /** Show the mascot. */
   mascotEnabled: boolean;
+  /** Draw the moving pixel-dot wave behind themes that have one (Lilac, Lavender, Experimental). On unless set to false. */
+  backgroundAnimation?: boolean;
   /** Desktop close button defaults to keeping work alive in the tray. */
   desktopCloseBehavior?: 'tray' | 'shutdown';
   trayCloseHintSeen?: boolean;
@@ -330,7 +332,7 @@ export interface AppSettings {
   automationsPaused?: boolean;
   /**
    * Lifecycle hooks: your own commands run around the agent's actions, with
-   * the event as JSON on stdin (see packages/host/src/hooks.ts).
+   * the event as JSON on stdin (see crates/nekko-tools/src/hooks.rs).
    */
   hooks?: HookRule[];
   /**

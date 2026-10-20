@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { defaultUserDataDir, prepareUserDataRoot } from '@nekko-agent/host/user-data';
+import { defaultUserDataDir, prepareUserDataRoot } from '@nekko-agent/profile/user-data';
 import { startNekkod, type DaemonProcess } from './engine.js';
 import { brandEnv, CLI_LINK_FILE, isCliLink, IpcChannels, IpcEvents, unsupportedPlatformReason, type CliLink } from '@nekko-agent/shared';
 import type {

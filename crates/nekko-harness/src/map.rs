@@ -16,6 +16,7 @@
 //! | `system/permission_denied` | the call's `tool_result` marked `denied` |
 //! | `assistant` with `is_api_error_message` | `error` |
 //! | `result` | [`Mapped::End`]; then [`Mapper::finish`] gives `usage` + `done`, or `error` |
+//! | main-thread `assistant` `message.usage`, `result.modelUsage[model].contextWindow` | [`TurnEnd::context`] (what the context gauge shows) |
 //! | `result` `terminal_reason: aborted_*` | an interrupted turn, not a failure |
 //!
 //! With `--include-partial-messages` text arrives twice: as deltas, then as
@@ -121,6 +122,27 @@ pub struct TurnEnd {
     /// The turn's tokens, as a `usage` event's fields (no `type`/`sessionId`).
     pub usage: Option<Value>,
     pub terminal_reason: Option<String>,
+    /// How full Claude Code's context is, as it reports it. Never summed
+    /// into `usage`, which stays the turn's total over every call.
+    pub context: Option<ReportedContext>,
+}
+
+/// Claude Code's context occupancy against its window, from its own figures.
+///
+/// `used` is the input side of the last main-thread model call: the sum of
+/// `input_tokens`, `cache_read_input_tokens` and `cache_creation_input_tokens`
+/// in its `assistant` event. That is everything the call sent, Claude Code's
+/// system prompt and tools included, and it drops on its own once Claude Code
+/// compacts.
+/// `result.usage` cannot stand in for it: it sums every call of the turn, and
+/// its `iterations` holds only one of them (the recorded two-call turn in
+/// `permission-denied.jsonl` lists just the last). A sub-agent's calls
+/// (`parent_tool_use_id` set) run in their own context and are left out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ReportedContext {
+    pub used: Option<u64>,
+    /// `result.modelUsage[<the init model>].contextWindow`.
+    pub window: Option<u64>,
 }
 
 /// Why an interrupt was sent: a Stop ends the Nekko turn and marks the reply
@@ -164,6 +186,11 @@ pub struct Mapper {
     /// An `error` event was sent for this turn already.
     error_sent: bool,
     stopping: Option<StopKind>,
+    /// `system/init`'s model, the key of its `result.modelUsage` entry.
+    model: Option<String>,
+    /// The latest reported context, kept across the Claude Code turns a
+    /// steered Nekko turn spans.
+    context: ReportedContext,
 }
 
 /// A user message's content for stream-json: its text, and its images as
@@ -212,6 +239,15 @@ fn num(v: Option<&Value>) -> u64 {
     v.and_then(Value::as_u64).unwrap_or(0)
 }
 
+/// The tokens one model call sent, from its `message.usage`; `None` when it
+/// reports nothing.
+fn occupancy(usage: Option<&Value>) -> Option<u64> {
+    let u = usage?;
+    let sent =
+        num(u.get("input_tokens")) + num(u.get("cache_read_input_tokens")) + num(u.get("cache_creation_input_tokens"));
+    (sent > 0).then_some(sent)
+}
+
 impl Mapper {
     pub fn new(session_id: impl Into<String>) -> Self {
         Self {
@@ -224,7 +260,15 @@ impl Mapper {
             last_message_id: None,
             error_sent: false,
             stopping: None,
+            model: None,
+            context: ReportedContext::default(),
         }
+    }
+
+    /// What Claude Code last reported about its context this Nekko turn, if
+    /// anything.
+    pub fn context(&self) -> Option<ReportedContext> {
+        (self.context != ReportedContext::default()).then_some(self.context)
     }
 
     /// Tool round trips so far.
@@ -298,6 +342,9 @@ impl Mapper {
         match str_at(v, "subtype") {
             Some("init") => {
                 self.streaming = None;
+                if let Some(model) = str_at(v, "model") {
+                    self.model = Some(model.to_string());
+                }
                 let mcp_servers = v
                     .get("mcp_servers")
                     .and_then(Value::as_array)
@@ -403,6 +450,11 @@ impl Mapper {
             out.push(self.error(&message));
             return;
         }
+        if parent.is_none()
+            && let Some(used) = occupancy(message.get("usage"))
+        {
+            self.context.used = Some(used);
+        }
         if let Some(parent) = parent {
             // A sub-agent's steps: shown under the call that started it, never
             // in the chat's own transcript (Claude Code keeps that history).
@@ -507,6 +559,10 @@ impl Mapper {
                 "cacheWriteTokens": tokens("cache_creation_input_tokens"),
             })
         });
+        if let Some(window) = self.window(v.get("modelUsage")) {
+            self.context.window = Some(window);
+        }
+        let context = self.context();
         out.push(Mapped::End(TurnEnd {
             outcome,
             session_id: str_at(v, "session_id").map(str::to_string),
@@ -514,7 +570,20 @@ impl Mapper {
             num_turns: v.get("num_turns").and_then(Value::as_u64),
             usage,
             terminal_reason: reason,
+            context,
         }));
+    }
+
+    /// Claude Code's window for the turn's model: its `modelUsage` entry, or
+    /// the only entry when none is keyed by the init model.
+    fn window(&self, model_usage: Option<&Value>) -> Option<u64> {
+        let entries = model_usage?.as_object()?;
+        let entry = match self.model.as_deref().and_then(|m| entries.get(m)) {
+            Some(e) => e,
+            None if entries.len() == 1 => entries.values().next()?,
+            None => return None,
+        };
+        entry.get("contextWindow").and_then(Value::as_u64).filter(|w| *w > 0)
     }
 
     /// Close the step being assembled. `interrupted` marks a reply cut off;

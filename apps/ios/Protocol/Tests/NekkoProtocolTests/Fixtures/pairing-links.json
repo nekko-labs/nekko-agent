@@ -1,0 +1,122 @@
+[
+ {
+  "input": "nekko-agent-pair:?relay=ws%3A%2F%2Fstudio.tail1234.ts.net%3A4400&room=0123456789abcdef&key=00112233445566778899aabbccddeeff",
+  "link": {
+   "relayUrl": "ws://studio.tail1234.ts.net:4400",
+   "room": "0123456789abcdef",
+   "key": "00112233445566778899aabbccddeeff",
+   "alts": []
+  }
+ },
+ {
+  "input": "nekko-agent-pair:?relay=ws%3A%2F%2Fstudio.tail1234.ts.net%3A4400&room=0123456789abcdef&key=00112233445566778899aabbccddeeff&pair=ab12cd",
+  "link": {
+   "relayUrl": "ws://studio.tail1234.ts.net:4400",
+   "room": "0123456789abcdef",
+   "key": "00112233445566778899aabbccddeeff",
+   "pair": "AB12CD",
+   "alts": []
+  }
+ },
+ {
+  "input": "nekko-agent-pair:?relay=ws%3A%2F%2Fstudio.tail1234.ts.net%3A4400&room=0123456789abcdef&key=00112233445566778899aabbccddeeff&alt=ws%3A%2F%2F192.168.1.20%3A4400",
+  "link": {
+   "relayUrl": "ws://studio.tail1234.ts.net:4400",
+   "room": "0123456789abcdef",
+   "key": "00112233445566778899aabbccddeeff",
+   "alts": [
+    "ws://192.168.1.20:4400"
+   ]
+  }
+ },
+ {
+  "input": "nekko-agent-pair:?relay=ws%3A%2F%2Fstudio.tail1234.ts.net%3A4400&room=0123456789abcdef&key=00112233445566778899aabbccddeeff&alt=ws%3A%2F%2F192.168.1.20%3A4400%2F&alt=ws://10.0.0.5:4400&pair=XY",
+  "link": {
+   "relayUrl": "ws://studio.tail1234.ts.net:4400",
+   "room": "0123456789abcdef",
+   "key": "00112233445566778899aabbccddeeff",
+   "pair": "XY",
+   "alts": [
+    "ws://192.168.1.20:4400",
+    "ws://10.0.0.5:4400"
+   ]
+  }
+ },
+ {
+  "input": "nekko-agent-pair:?relay=ws%3A%2F%2Fstudio.tail1234.ts.net%3A4400&room=0123456789abcdef&key=00112233445566778899aabbccddeeff&alt=ws%3A%2F%2F8.8.8.8%3A4400&alt=http%3A%2F%2F192.168.1.20&alt=&alt=wss%3A%2F%2Frelay.example.com",
+  "link": {
+   "relayUrl": "ws://studio.tail1234.ts.net:4400",
+   "room": "0123456789abcdef",
+   "key": "00112233445566778899aabbccddeeff",
+   "alts": [
+    "wss://relay.example.com"
+   ]
+  }
+ },
+ {
+  "input": "nekko-agent-pair:?relay=ws%3A%2F%2Fstudio.tail1234.ts.net%3A4400&room=0123456789abcdef&key=00112233445566778899aabbccddeeff&alt=ws%3A%2F%2Fstudio.tail1234.ts.net%3A4400&alt=ws://10.0.0.5:4400&alt=ws://10.0.0.5:4400/",
+  "link": {
+   "relayUrl": "ws://studio.tail1234.ts.net:4400",
+   "room": "0123456789abcdef",
+   "key": "00112233445566778899aabbccddeeff",
+   "alts": [
+    "ws://10.0.0.5:4400"
+   ]
+  }
+ },
+ {
+  "input": "nekko-agent-pair:?relay=ws%3A%2F%2Fstudio.tail1234.ts.net%3A4400&room=0123456789abcdef&key=00112233445566778899aabbccddeeff&alt=ws://10.0.0.1:1&alt=ws://10.0.0.2:1&alt=ws://10.0.0.3:1&alt=ws://10.0.0.4:1&alt=ws://10.0.0.5:1",
+  "link": {
+   "relayUrl": "ws://studio.tail1234.ts.net:4400",
+   "room": "0123456789abcdef",
+   "key": "00112233445566778899aabbccddeeff",
+   "alts": [
+    "ws://10.0.0.1:1",
+    "ws://10.0.0.2:1",
+    "ws://10.0.0.3:1",
+    "ws://10.0.0.4:1"
+   ]
+  }
+ },
+ {
+  "input": "nekko-agent-pair:?relay=ws%3A%2F%2Fstudio.tail1234.ts.net%3A4400&room=0123456789abcdef&key=00112233445566778899aabbccddeeff&alt=ws%3A%2F%2F%5Bfd12%3A%3A5%5D%3A4400",
+  "link": {
+   "relayUrl": "ws://studio.tail1234.ts.net:4400",
+   "room": "0123456789abcdef",
+   "key": "00112233445566778899aabbccddeeff",
+   "alts": [
+    "ws://[fd12::5]:4400"
+   ]
+  }
+ },
+ {
+  "input": "https://studio.local:1439/?relay=wss%3A%2F%2Frelay.example.com&room=0123456789abcdef&key=00112233445566778899aabbccddeeff&alt=ws%3A%2F%2F172.16.4.2%3A4400#x",
+  "link": {
+   "relayUrl": "wss://relay.example.com",
+   "room": "0123456789abcdef",
+   "key": "00112233445566778899aabbccddeeff",
+   "alts": [
+    "ws://172.16.4.2:4400"
+   ]
+  }
+ },
+ {
+  "input": "relay=ws://100.101.102.103:4400&room=0123456789abcdef&key=00112233445566778899aabbccddeeff&alt=ws://192.168.50.100:4400",
+  "link": {
+   "relayUrl": "ws://100.101.102.103:4400",
+   "room": "0123456789abcdef",
+   "key": "00112233445566778899aabbccddeeff",
+   "alts": [
+    "ws://192.168.50.100:4400"
+   ]
+  }
+ },
+ {
+  "input": "nekko-agent-pair:?relay=http%3A%2F%2Fx&room=0123456789abcdef&key=00112233445566778899aabbccddeeff&alt=ws://10.0.0.5:4400",
+  "link": null
+ },
+ {
+  "input": "nekko-agent-pair:?alt=ws://10.0.0.5:4400&room=0123456789abcdef&key=00112233445566778899aabbccddeeff",
+  "link": null
+ }
+]

@@ -101,9 +101,8 @@ jobs:
       - run: npm ci
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
-      # Build every workspace first: the cloud test suite imports @nekko-agent/host,
-      # and @nekko-agent/local-web-ui imports the CLI package, so their dists must exist
-      # before `npm test` / typecheck run.
+      # Build every workspace first: @nekko-agent/local-web-ui imports the CLI
+      # package, so its dist must exist before `npm test` / typecheck run.
       - run: npm run build:web
       # The TypeScript build is OS-independent: `perf` downloads this one rather
       # than rebuilding it. Uploaded only when perf runs, so the PR tier pays
@@ -152,19 +151,6 @@ jobs:
         run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
-      # Host/daemon deletion parity needs a runnable daemon, not only test binaries.
-      - run: cargo build -p nekkod --locked
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-        env:
-          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
-      # build:core takes 1-2 s here; waiting on another job's artifact would cost more.
-      - run: npm run build:core
-      - name: Session clearing and command-log callback parity
-        run: npm run test -w @nekko-agent/host -- src/session-clear.golden.test.ts src/session-clear.timezone.test.ts src/session-log-callback.test.ts
 
   capture:
     needs: scope
@@ -200,9 +186,8 @@ jobs:
         run: node scripts/build-agent-browser.mjs --dev
         env:
           RUSTFLAGS: ${{ runner.os == 'Windows' && '-Dwarnings' || '' }}
-      # shared + core + host take 2-4 s here; waiting on another job's artifact would cost more.
+      # shared + profile take 1-2 s here; waiting on another job's artifact would cost more.
       - run: npm run build:core
-      - run: npm run build -w @nekko-agent/host
       - name: Grid model selection and mode-menu regressions
         run: npm run test:grid-bugs -w @nekko-agent/desktop
       # Consolidated end-to-end journeys (apps/desktop/e2e): hidden, non-focusable

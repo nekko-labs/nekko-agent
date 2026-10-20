@@ -106,6 +106,32 @@ export function isLocalProvider(kind: ProviderKind): boolean {
 }
 
 /**
+ * A provider's endpoint when it is one the app can call: a known kind on an
+ * http(s) URL with no credentials in it. Null otherwise.
+ */
+export function providerEndpoint(provider: Pick<ProviderConfig, 'kind' | 'baseUrl'>): URL | null {
+  if (!isLocalProvider(provider.kind) && !['anthropic', 'openai', 'openrouter', 'chatgpt', 'openai-compat'].includes(provider.kind)) return null;
+  try {
+    const url = new URL(provider.baseUrl);
+    return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether a provider is a local model server on this machine: a local kind
+ * (or openai-compat, a dual-use kind allowed by name) on a loopback address.
+ * Offline chats and local-only workflows run only on these.
+ */
+export function offlineProviderAllowed(provider: Pick<ProviderConfig, 'kind' | 'baseUrl'>): boolean {
+  const url = providerEndpoint(provider);
+  return !!url && (isLocalProvider(provider.kind) || provider.kind === 'openai-compat') && (
+    url.hostname === 'localhost' || url.hostname === '[::1]' || /^127\.\d+\.\d+\.\d+$/.test(url.hostname)
+  );
+}
+
+/**
  * A single GPU's memory snapshot (megabytes). Utilization is 0-100 when known.
  */
 export interface GpuDevice {

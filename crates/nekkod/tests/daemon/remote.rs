@@ -68,6 +68,17 @@ async fn the_daemon_runs_the_phone_relay_agent() {
     let welcome = welcome.unwrap();
     assert_eq!(welcome["type"], "welcome", "{welcome}");
     assert_eq!(welcome["device"]["name"], "Pixel");
+    // The phone compares this with its own and says which side to update (IO-32).
+    assert_eq!(welcome["protocol"], nekko_remote::hello::PROTOCOL_VERSION, "{welcome}");
+    // *Send a test notification* (IO-30): the agent asks the relay to push to
+    // this phone only, then answers the phone.
+    agent.send(client("c1", json!({ "type": "req", "id": 32, "channel": "push:test", "args": [] }))).await.unwrap();
+    let (notify, _) = next_agent_frame(&mut agent, &key).await;
+    assert_eq!(notify["type"], "notify", "{notify}");
+    assert_eq!(notify["kind"], "test");
+    assert_eq!(notify["deviceId"], "phone-1");
+    let (_, res) = next_agent_frame(&mut agent, &key).await;
+    assert_eq!(res.unwrap(), json!({ "type": "res", "id": 32, "result": { "ok": true } }));
     let saved: Value = serde_json::from_str(&std::fs::read_to_string(data.join("remote.json")).unwrap()).unwrap();
     assert_eq!(saved["devices"][0]["id"], "phone-1");
 

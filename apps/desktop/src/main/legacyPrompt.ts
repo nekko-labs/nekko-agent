@@ -1,4 +1,4 @@
-import { cleanup, consolidate, describeItem, detectLegacy, legacyEnv, summarize, type LegacyEnv, type LegacyItem } from '@nekko-agent/host/legacy-profiles';
+import { cleanup, consolidate, describeItem, detectLegacy, legacyEnv, summarize, type LegacyEnv, type LegacyItem } from '@nekko-agent/profile/legacy-profiles';
 
 /**
  * The launch-time offer to fold earlier installs into the current data folder.

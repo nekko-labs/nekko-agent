@@ -40,9 +40,10 @@ describe('Notifications settings', () => {
     const { useStore } = await import('../store.js');
     const { SettingsView } = await import('./SettingsView.js');
     const { UpdateProvider } = await import('../components/UpdateBanner.js');
-    // The host's own defaults, so every section has what it reads.
-    const { defaultSettings } = await import('../../../../../packages/host/dist/store.js');
-    useStore.setState({ settings: defaultSettings(), settingsLoaded: true });
+    // The engine's own defaults (nekko-settings), so every section has what it reads.
+    const { readFileSync } = await import('node:fs');
+    const defaults = JSON.parse(readFileSync(new URL('../../../../../crates/nekko-settings/src/defaults.json', import.meta.url), 'utf8')).defaults;
+    useStore.setState({ settings: defaults, settingsLoaded: true });
     const html = renderToStaticMarkup(<UpdateProvider><SettingsView /></UpdateProvider>);
     // Its own card, and the one place the setting appears.
     const cards = html.split(/(?=<section )/);

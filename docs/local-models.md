@@ -116,7 +116,7 @@ Nothing that could not be verified against real hardware ships as a working butt
 ### When a card lists no models
 
 A card whose model list fails says why instead of "No models found." A server that does not
-answer reads *"Ollama didn't answer at http://localhost:11434. Is it running?"*; any other
+answer reads *"Ollama didn't answer at `http://localhost:11434`. Is it running?"*; any other
 failure shows the provider's own message, such as a 401 from a refused key, unless the
 connection test above it already says why. **Retry**
 re-tests the connection and asks for the list again. A card with more than eight models

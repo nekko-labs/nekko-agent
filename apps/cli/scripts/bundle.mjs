@@ -14,8 +14,6 @@ const bundleOptions = {
   format: 'esm',
   platform: 'node',
   target: 'node22',
-  // The backend's HTTP server stays a real dependency (package.json), as in the web bundle.
-  external: ['@lydell/node-pty', 'fastify', '@fastify/websocket'],
   logLevel: 'info',
 };
 

@@ -10,6 +10,21 @@ struct StatusSnapshot: Codable, Equatable {
     var needsYou: Int
     var running: Int
     var at: Date
+    /// Prompts written on the iPhone waiting for the computer (the outbox).
+    /// Optional so a snapshot saved by an older version still decodes.
+    var waiting: Int? = nil
+
+    var waitingCount: Int { waiting ?? 0 }
+    var waitingLine: String? {
+        let n = waitingCount
+        return n == 0 ? nil : "\(n) waiting to send"
+    }
+
+    /// "N waiting to send" as a second line, when the headline says something else.
+    var waitingBesideHeadline: String? {
+        guard let w = waitingLine, headline != w else { return nil }
+        return w
+    }
 
     static let appGroup = "group.com.nekko.native.ios"
     static let key = "widget.status"
@@ -49,6 +64,7 @@ struct StatusSnapshot: Codable, Equatable {
         } else {
             text = online ? "All quiet on \(computer)." : "\(computer) was offline when Nekko Agent last checked."
         }
+        if let w = waitingLine { text += " \(w) when \(computer) is back." }
         if now.timeIntervalSince(at) > 5 * 60 {
             let f = RelativeDateTimeFormatter()
             f.unitsStyle = .full
@@ -61,6 +77,7 @@ struct StatusSnapshot: Codable, Equatable {
         if computer == nil { return "Not paired" }
         if needsYou > 0 { return needsYou == 1 ? "1 needs you" : "\(needsYou) need you" }
         if running > 0 { return running == 1 ? "1 working" : "\(running) working" }
+        if let w = waitingLine { return w }
         return online ? "All quiet" : "Offline"
     }
 }

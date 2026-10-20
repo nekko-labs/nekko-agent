@@ -1145,6 +1145,35 @@
         "offlineAllowed": false
       },
       "output": null
+    },
+    {
+      "input": {
+        "session": {
+          "id": "s",
+          "title": "Chat",
+          "messages": [
+            {
+              "id": "m64",
+              "role": "user",
+              "content": "hi",
+              "createdAt": 1065
+            }
+          ],
+          "providerId": "cc",
+          "modelId": "opus",
+          "createdAt": 1,
+          "updatedAt": 1
+        },
+        "provider": {
+          "id": "cc",
+          "kind": "claude-code",
+          "label": "Claude Agent",
+          "baseUrl": "",
+          "enabled": true
+        },
+        "offlineAllowed": false
+      },
+      "output": "Claude Code manages this chat's context and compacts it by itself."
     }
   ],
   "summaries": [

@@ -1,16 +1,19 @@
 import React, { useState } from 'react';
 import type { AppSettings, ThemePreset } from '@nekko-agent/shared';
-import { THEME_PRESETS, currentPresetAccent, findThemePreset } from '@nekko-agent/shared';
+import { THEME_PRESETS, currentPresetAccent, experimentalFamilies, findThemePreset } from '@nekko-agent/shared';
 import { useT } from '../i18n.js';
 import { ColorWheel } from './ColorWheel.js';
 
-/** Preset groups, so light and dark looks sit under their own headings. */
-const GROUPS: Array<{ mode: ThemePreset['mode']; titleKey: string; fun?: boolean }> = [
+/** Preset groups, so light and dark looks sit under their own headings. Experimental sits above Fun!. */
+const GROUPS: Array<{ mode: ThemePreset['mode']; titleKey: string; fun?: boolean; experimental?: boolean }> = [
   { mode: 'system', titleKey: 'settings.themeAuto' },
   { mode: 'light', titleKey: 'settings.themeLight' },
   { mode: 'dark', titleKey: 'settings.themeDark' },
+  { mode: 'light', titleKey: 'Experimental', experimental: true },
   { mode: 'dark', titleKey: 'Fun!', fun: true },
 ];
+
+const FAMILIES = experimentalFamilies();
 
 /** Hard stops show the actual palette colors without blended intermediate shades. */
 export function slicedSwatch(colors: readonly string[]): string {
@@ -56,6 +59,8 @@ export function ThemePresetPicker({
     !!activePreset && (accent !== activePreset.accent || accent2 !== activePreset.accent2);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<'accent' | 'accent2'>('accent');
+  // Experimental families show one tile each; the open family lists its versions.
+  const [openFamily, setOpenFamily] = useState<string | undefined>(activePreset?.family);
 
   const select = (preset: ThemePreset) => {
     void update({
@@ -79,7 +84,65 @@ export function ThemePresetPicker({
 
       <div className={showLabel ? 'mt-2 space-y-3' : 'space-y-3'}>
         {GROUPS.map((group) => {
-          const presets = THEME_PRESETS.filter((p) => group.fun ? p.id === 'autumn' : p.mode === group.mode && p.id !== 'autumn');
+          if (group.experimental) return FAMILIES.length ? (
+            <div key="experimental">
+              <span className="text-[11px] font-medium tracking-wide text-ink-faint uppercase">Experimental</span>
+              <div className="mt-1.5 grid grid-cols-4 gap-2" role="group" aria-label="Experimental">
+                {FAMILIES.map((family) => {
+                  const active = family.presets.some((p) => p.id === activeId);
+                  const open = openFamily === family.id;
+                  const first = family.presets[0];
+                  return (
+                    <button
+                      key={family.id}
+                      onClick={() => setOpenFamily(open ? undefined : family.id)}
+                      title={`${family.label}: ${family.presets.map((p) => p.label).join(', ')}`}
+                      aria-expanded={open}
+                      aria-controls={`theme-family-${family.id}`}
+                      data-theme-family={family.id}
+                      className={`flex flex-col items-center gap-1.5 rounded-xl border p-2 text-[11px] font-medium transition-colors ${
+                        active ? 'border-accent bg-accent-soft' : open ? 'border-ink-faint bg-surface-2' : 'border-line bg-surface hover:bg-surface-2'
+                      }`}
+                    >
+                      <span
+                        className={`${large ? 'h-14 w-14' : 'h-10 w-10'} rounded-full border border-line shadow-sm`}
+                        style={{ background: slicedSwatch([first.accent, first.paper ?? first.accent2, ...family.presets.slice(1).map((p) => p.paper ?? p.accent)]) }}
+                      />
+                      <span className={active ? 'text-accent' : 'text-ink-soft'}>
+                        {family.label} <span aria-hidden className="text-ink-faint">{open ? '▴' : '▾'}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              {FAMILIES.filter((f) => f.id === openFamily).map((family) => (
+                <div key={family.id} id={`theme-family-${family.id}`} className="mt-2 rounded-xl border border-line bg-surface-2 p-2">
+                  <span className="text-[11px] text-ink-faint">{family.label} versions</span>
+                  <div className={`mt-1.5 grid gap-2 ${family.presets.length === 3 ? 'grid-cols-3' : 'grid-cols-2'}`} role="radiogroup" aria-label={`${family.label} versions`}>
+                    {family.presets.map((preset) => {
+                      const active = activeId === preset.id;
+                      return (
+                        <button
+                          key={preset.id}
+                          onClick={() => select(preset)}
+                          title={`${family.label} ${preset.label}`}
+                          role="radio"
+                          aria-checked={active}
+                          className={`flex items-center gap-2 rounded-lg border p-2 text-[11px] font-medium transition-colors ${
+                            active ? 'border-accent bg-accent-soft' : 'border-line bg-surface hover:bg-surface-2'
+                          }`}
+                        >
+                          <span className="h-7 w-7 shrink-0 rounded-full border border-line shadow-sm" style={{ background: slicedSwatch(preset.swatch) }} />
+                          <span className={active ? 'text-accent' : 'text-ink-soft'}>{preset.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null;
+          const presets = THEME_PRESETS.filter((p) => p.group !== 'experimental' && (group.fun ? p.id === 'autumn' : p.mode === group.mode && p.id !== 'autumn'));
           if (presets.length === 0) return null;
           return (
             <div key={group.titleKey}>

@@ -45,6 +45,17 @@ async fn serves_session_reads_from_disk_when_it_knows_the_data_dir() {
     assert_eq!((patched["title"].clone(), patched["titleAuto"].clone()), (json!("Named"), json!(false)));
     let (_, queued) = post(d.port, "chat:queue", json!([new_id, "  later  "]), Some(TOKEN)).await;
     assert_eq!(queued["queue"], json!(["later"]));
+    // A phone's queue editor: an edit lands only on the text it showed.
+    let (_, edited) =
+        post(d.port, "chat:editQueued", json!([new_id, 0, { "expect": "later", "text": " sooner " }]), Some(TOKEN))
+            .await;
+    assert_eq!(edited["queue"], json!(["sooner"]));
+    let (status, stale) =
+        post(d.port, "chat:editQueued", json!([new_id, 0, { "expect": "later", "text": "x" }]), Some(TOKEN)).await;
+    assert_eq!(status, 400, "{stale}");
+    assert!(stale.to_string().contains("already started or changed"), "{stale}");
+    let (_, removed) = post(d.port, "chat:editQueued", json!([new_id, 0, { "expect": "sooner" }]), Some(TOKEN)).await;
+    assert_eq!(removed["queue"], json!([]));
     let (_, list) = post(d.port, "sessions:summaries", json!([]), Some(TOKEN)).await;
     assert_eq!(list.as_array().unwrap().len(), 2);
     post(d.port, "session:delete", json!([new_id]), Some(TOKEN)).await;

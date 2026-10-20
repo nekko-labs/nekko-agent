@@ -13,6 +13,7 @@
 //! Both sides write each file to a temp name and rename it into place, so a
 //! reader never sees half a file.
 
+pub mod client_ids;
 mod summary;
 mod write;
 

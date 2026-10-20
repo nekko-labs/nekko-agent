@@ -60,6 +60,16 @@ export function isTailscaleIPv4(h: string): boolean {
   return !!n && n[0] === 100 && n[1] >= 64 && n[1] <= 127;
 }
 
+/**
+ * RFC 1918 (10/8, 172.16/12, 192.168/16): the only LAN addresses the relay on
+ * this computer listens on besides the tailnet one (TASKS.md IO-20). Never
+ * link-local, never a public address.
+ */
+export function isRfc1918IPv4(h: string): boolean {
+  const n = ipv4(h);
+  return !!n && (n[0] === 10 || (n[0] === 172 && n[1] >= 16 && n[1] <= 31) || (n[0] === 192 && n[1] === 168));
+}
+
 function isPrivateIPv4(h: string): boolean {
   const n = ipv4(h);
   if (!n) return false;
@@ -72,7 +82,8 @@ function isPrivateIPv6(h: string): boolean {
 
 /**
  * The relay the desktop app can run itself, on this computer's Tailscale
- * address (Settings → Remote access → Relay on this computer). Desktop only.
+ * address and, unless switched off, its private LAN addresses (Settings →
+ * Remote access → Relay on this computer). Desktop only.
  */
 export interface LocalRelayStatus {
   /** False where this edition can't run one (the web app); the card is hidden then. */
@@ -90,6 +101,13 @@ export interface LocalRelayStatus {
   url?: string;
   /** Why it isn't running, in words for the settings card. */
   error?: string;
+  /**
+   * Also listen on this computer's private LAN addresses (RFC 1918), so a phone
+   * on the same Wi-Fi skips the tailnet (TASKS.md IO-20). On unless switched off.
+   */
+  lan?: boolean;
+  /** The LAN addresses phones can dial while it runs; pairing links carry them as `alt` routes. */
+  lanUrls?: string[];
 }
 
 export const LOCAL_RELAY_PORT = 4400;

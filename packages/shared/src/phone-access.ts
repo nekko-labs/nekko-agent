@@ -1,20 +1,39 @@
 /**
  * What a paired phone may do on this computer, enforced by the computer.
  *
- * This is the single source of truth for both relay agents: the TS one
- * (packages/host/src/relay.ts) applies it directly, and the engine daemon's
- * (crates/nekko-remote/src/phone.rs) reads the same lists from
- * `crates/nekko-remote/src/phone-access.json`, which
- * packages/host/src/remote.golden.test.ts writes from this file and fails on
- * when stale (UPDATE_GOLDEN=1 rewrites it). The same test records decisions
- * the Rust gate must reproduce exactly (`tests/golden/phone.json`).
+ * This is the single source of truth for the computer's relay agent: the
+ * engine daemon's gate (crates/nekko-remote/src/phone.rs) reads these lists
+ * from `crates/nekko-remote/src/phone-access.json`, which
+ * phone-access.golden.test.ts writes from this file and fails on when stale
+ * (UPDATE_GOLDEN=1 rewrites it). `tests/golden/phone.json` there records the
+ * decisions the gate must make.
  *
  * The policy is an allowlist: a channel that is not listed is refused. A
  * phone's own app lock is not a boundary; this is.
  */
 
+import { clientMessageIdOf } from './chat.js';
 import { skillTurnText } from './skills.js';
 import { phoneChangesView, PHONE_CHANGES_VIEW } from './phone-changes.js';
+import {
+  PHONE_LIMIT_WINDOW_VIEW,
+  PHONE_LIMITS_VIEW,
+  PHONE_PR_VIEW,
+  PHONE_PROMPT_VIEW,
+  PHONE_QUEUE_EDIT_KEYS,
+  PHONE_TASK_VIEW,
+  PHONE_VIEWS,
+  PHONE_WORKFLOW_RUN_VIEW,
+  PHONE_WORKFLOW_VIEW,
+  phoneLimitsKey,
+  phoneLimitsView,
+  phonePromptsView,
+  phonePrsView,
+  phoneQueueView,
+  phoneTasksView,
+  phoneUsageView,
+  phoneWorkflowsView,
+} from './phone-views.js';
 
 /**
  * Channels a paired phone may call. Built from what the phone clients send
@@ -23,29 +42,43 @@ import { phoneChangesView, PHONE_CHANGES_VIEW } from './phone-changes.js';
  * releases need: settings (filtered), completing or deleting a chat the way
  * the desktop does (`session:setOptions` with `archivedAt`, `session:delete`)
  * and voice input. `changes:list` is read only, through `phoneChangesView`, and
- * only when the computer's `phoneChanges` setting is on.
+ * only when the computer's `phoneChanges` setting is on. Beyond the chat
+ * (2026-10-19) the phone is a remote for the agent: it edits its own queue,
+ * forks a chat, reads a chat's pull requests, the computer's automations and
+ * its usage and limits through narrow views (phone-views.ts), and starts an
+ * automation the owner already set up (`task:runNow`, `workflow:run`). Git
+ * happens through the agent (a prompt, so approvals apply), never a raw channel.
  */
 export const PHONE_CHANNELS = [
   'app:info',
   'changes:list',
   'chat:abort',
   'chat:answer',
+  'chat:editQueued',
   'chat:pending',
   'chat:queue',
   'chat:send',
+  'limits:get',
   'models:list',
+  'pr:sessionList',
   'providers:list',
   'session:create',
   'session:delete',
+  'session:fork',
   'session:get',
   'session:setOptions',
   'sessions:summaries',
   'settings:get',
   'settings:update',
   'skills:runnable',
+  'task:runNow',
+  'tasks:list',
   'tool:approve',
+  'usage:summary',
   'voice:status',
   'voice:transcribe',
+  'workflow:run',
+  'workflows:list',
   'workspace:list',
 ] as const;
 
@@ -60,6 +93,11 @@ export const PHONE_ALWAYS_DENIED = {
     // Changing files, or reading any file: never from a phone (the Changes view is read only).
     'changes:accept',
     'changes:acceptAll',
+    // Pull request actions and diffs: git happens through the agent (a prompt), so its approvals apply.
+    'pr:action',
+    'pr:continueStack',
+    'pr:diff',
+    'pr:linkStack',
     'connector:connect',
     'connector:disconnect',
     'data:wipe',
@@ -72,11 +110,22 @@ export const PHONE_ALWAYS_DENIED = {
     'providers:remove',
     'providers:save',
     'settings:reset',
+    // Making, changing or deleting automations stays on the computer; a phone may run one.
+    'task:create',
+    'task:delete',
+    'task:update',
     'voice:cancel',
     'voice:install',
     'voice:permission',
     'voice:uninstall',
+    'workflow:cancel',
+    'workflow:create',
+    'workflow:delete',
+    'workflow:duplicate',
+    'workflow:event',
+    'workflow:update',
     'workspace:addByPath',
+    'workspace:gitStatus',
     'workspace:remove',
   ],
   /** Whole families: remote access, terminals, MCP servers, OAuth sign-in, and the desktop's native dialogs, OS shell and updater. */
@@ -107,6 +156,8 @@ export const PHONE_SETTINGS_KEYS = [
 export const PHONE_SETTINGS_VIEW = [
   'accent',
   'accent2',
+  // Whether the computer's automations are paused (read only; set on the computer).
+  'automationsPaused',
   'chatPaneAction',
   'defaultChatMode',
   'defaultModelId',
@@ -114,6 +165,8 @@ export const PHONE_SETTINGS_VIEW = [
   'favoriteModels',
   // Whether this computer shows phones the agent's changes (set on the computer only).
   'phoneChanges',
+  // The saved prompts, as names and text (`PHONE_PROMPT_VIEW`).
+  'prompts',
   'skipDeleteConfirmation',
   'theme',
   'themePreset',
@@ -142,6 +195,7 @@ export const PHONE_SESSION_OPTION_KEYS = [
 
 /** `chat:send` fields a phone may set: no `attachedPaths` (files on this computer) or history limits. */
 export const PHONE_CHAT_SEND_KEYS = [
+  'clientMessageId',
   'images',
   'modelId',
   'providerId',
@@ -160,7 +214,7 @@ export const PHONE_CHAT_SEND_KEYS = [
 export const PHONE_SKILL_VIEW = ['category', 'description', 'name', 'source'] as const;
 
 /** `chat:queue` payload fields a phone may set (a plain string is text). */
-export const PHONE_QUEUE_KEYS = ['images', 'skill', 'text'] as const;
+export const PHONE_QUEUE_KEYS = ['clientMessageId', 'images', 'skill', 'text'] as const;
 
 /**
  * Chat modes a phone may choose, for new chats or for one chat. YOLO is
@@ -305,7 +359,33 @@ export function screenPhoneCall(
   if (!phoneChannelAllowed(channel)) throw new PhoneAccessError('channel-denied', channel);
   switch (channel) {
     case 'changes:list':
+    case 'pr:sessionList':
       if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
+      if (channel === 'pr:sessionList' && args[1] !== undefined && typeof args[1] !== 'boolean') throw new PhoneAccessError('value-invalid', 'refresh');
+      return {};
+    case 'session:fork':
+      if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
+      if (args[1] !== undefined && args[1] !== null && (typeof args[1] !== 'string' || args[1] === '')) throw new PhoneAccessError('value-invalid', 'message id');
+      return {};
+    case 'chat:editQueued': {
+      if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
+      if (typeof args[1] !== 'number' || !Number.isInteger(args[1]) || args[1] < 0) throw new PhoneAccessError('value-invalid', 'queue index');
+      const edit = args[2];
+      if (!isObj(edit)) throw new PhoneAccessError('value-invalid', 'queued prompt edit');
+      for (const key of Object.keys(edit)) {
+        if (!(PHONE_QUEUE_EDIT_KEYS as readonly string[]).includes(key)) throw new PhoneAccessError('option-denied', key);
+      }
+      if (typeof edit.expect !== 'string' || (own(edit, 'text') && typeof edit.text !== 'string')) {
+        throw new PhoneAccessError('value-invalid', 'queued prompt edit');
+      }
+      return {};
+    }
+    case 'task:runNow':
+    case 'workflow:run':
+      if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', channel === 'task:runNow' ? 'task id' : 'workflow id');
+      return {};
+    case 'limits:get':
+      if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'provider id');
       return {};
     case 'settings:update':
       return { settingsPatch: checkPhoneSettingsPatch(args[0]) };
@@ -324,6 +404,7 @@ export function screenPhoneCall(
       for (const key of Object.keys(opts)) {
         if (!(PHONE_CHAT_SEND_KEYS as readonly string[]).includes(key)) throw new PhoneAccessError('option-denied', key);
       }
+      phoneClientMessageId(opts);
       return own(opts, 'skill') ? { skill: phoneSkill(opts.skill) } : {};
     }
     case 'chat:queue': {
@@ -333,11 +414,17 @@ export function screenPhoneCall(
       for (const key of Object.keys(item)) {
         if (!(PHONE_QUEUE_KEYS as readonly string[]).includes(key)) throw new PhoneAccessError('option-denied', key);
       }
+      phoneClientMessageId(item);
       return own(item, 'skill') ? { skill: phoneSkill(item.skill) } : {};
     }
     default:
       return {};
   }
+}
+
+/** A phone's `clientMessageId`, when it sent one, must be a short id (a UUID). */
+function phoneClientMessageId(o: Obj): void {
+  if (own(o, 'clientMessageId') && !clientMessageIdOf(o.clientMessageId)) throw new PhoneAccessError('value-invalid', 'clientMessageId');
 }
 
 /** A `{ name, input }` skill invocation from a phone, or why not. */
@@ -399,8 +486,11 @@ export function phoneSettingsUpdate(sets: Array<[string, unknown]>, current: unk
 export function redactPhoneResult(channel: string, result: unknown): unknown {
   switch (channel) {
     case 'settings:get':
-    case 'settings:update':
-      return pick(result, PHONE_SETTINGS_VIEW);
+    case 'settings:update': {
+      const view = pick(result, PHONE_SETTINGS_VIEW);
+      if (own(view, 'prompts')) view.prompts = phonePromptsView(view.prompts);
+      return view;
+    }
     case 'providers:list':
       return Array.isArray(result) ? result.map((p) => pick(p, PHONE_PROVIDER_VIEW)) : [];
     case 'skills:runnable':
@@ -409,6 +499,24 @@ export function redactPhoneResult(channel: string, result: unknown): unknown {
       return phoneSessionView(result);
     case 'changes:list':
       return phoneChangesView(result);
+    case 'chat:editQueued':
+      return isObj(result) ? { id: result.id, queue: phoneQueueView(result.queue) } : null;
+    case 'session:fork':
+      return isObj(result) ? pick(result, ['id', 'title']) : null;
+    case 'tasks:list':
+      return phoneTasksView(result);
+    case 'workflows:list':
+      return phoneWorkflowsView(result);
+    case 'workflow:run':
+      return isObj(result) ? pick(result, PHONE_WORKFLOW_RUN_VIEW) : null;
+    case 'task:runNow':
+      return null;
+    case 'pr:sessionList':
+      return phonePrsView(result);
+    case 'usage:summary':
+      return phoneUsageView(result);
+    case 'limits:get':
+      return phoneLimitsView(result);
     default:
       return result;
   }
@@ -487,6 +595,7 @@ export function phoneSessionView(session: unknown): unknown {
     messages[i] = { ...m, images: imgs };
   }
   const out: Obj = { ...session, messages };
+  if (own(session, 'queue')) out.queue = phoneQueueView(session.queue);
   if (all.length > keep.length) out.omittedMessages = all.length - keep.length;
   return out;
 }
@@ -540,6 +649,18 @@ export async function callFromPhone(
     if (!isObj(settings) || settings.phoneChanges !== true) throw new PhoneAccessError('turned-off', 'changes:list');
   }
   let callArgs = args;
+  // Only what the computer's own call takes: an id, or nothing.
+  if (channel === 'task:runNow' || channel === 'workflow:run') callArgs = [args[0]];
+  if (channel === 'tasks:list' || channel === 'workflows:list' || channel === 'usage:summary') callArgs = [];
+  if (channel === 'session:fork') callArgs = args[1] == null ? [args[0]] : [args[0], args[1]];
+  if (channel === 'chat:editQueued') callArgs = [args[0], args[1], pick(args[2], PHONE_QUEUE_EDIT_KEYS)];
+  if (channel === 'pr:sessionList') callArgs = [args[0], args[1] === true];
+  if (channel === 'limits:get') {
+    // The phone names a provider; the computer reads that provider's limits key itself.
+    const key = phoneLimitsKey(await dispatch('providers:list', []), args[0] as string);
+    if (!key) return null;
+    callArgs = [key, false];
+  }
   if (settingsPatch) {
     const nested = settingsPatch.some(([path]) => path.includes('.'));
     const current = nested ? await dispatch('settings:get', []) : undefined;
@@ -571,6 +692,15 @@ export function phoneAccessPolicy() {
     chatModes: [...PHONE_CHAT_MODES],
     sessionView: { ...PHONE_SESSION_VIEW },
     changesView: { ...PHONE_CHANGES_VIEW },
+    views: { ...PHONE_VIEWS },
+    promptView: [...PHONE_PROMPT_VIEW],
+    taskView: [...PHONE_TASK_VIEW],
+    workflowView: [...PHONE_WORKFLOW_VIEW],
+    workflowRunView: [...PHONE_WORKFLOW_RUN_VIEW],
+    prView: [...PHONE_PR_VIEW],
+    limitsView: [...PHONE_LIMITS_VIEW],
+    limitWindowView: [...PHONE_LIMIT_WINDOW_VIEW],
+    queueEditKeys: [...PHONE_QUEUE_EDIT_KEYS],
     maxFrameBytes: PHONE_MAX_FRAME_BYTES,
   };
 }

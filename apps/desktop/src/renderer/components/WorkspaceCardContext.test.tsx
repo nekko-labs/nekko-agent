@@ -21,8 +21,8 @@ const session = {
   messageCount: 2, exchangeCount: 1, stalled: false, recentTurns: [], prUrls: [], imageCount: 0, createdAt: 0,
 } as unknown as SessionSummary;
 
-const card = (status?: 'working') => renderToStaticMarkup(
-  <WorkspaceCard workspace={null} session={session} terminal={null} status={status} isActive={false} now={0} projects={[]} onOpen={() => {}} onClose={() => {}} />,
+const card = (status?: 'working', chat: SessionSummary = session) => renderToStaticMarkup(
+  <WorkspaceCard workspace={null} session={chat} terminal={null} status={status} isActive={false} now={0} projects={[]} onOpen={() => {}} onClose={() => {}} />,
 );
 
 describe('workspace card completion control', () => {
@@ -46,6 +46,16 @@ describe('workspace card context readout', () => {
   it('falls back to the transcript estimate when the chat is not open', () => {
     delete (state.sessionCtxEstimate as Record<string, number>).s1;
     expect(card()).toContain('76k/1M');
+  });
+
+  it('prefers what Claude Code reported for a Claude Agent chat over the transcript estimate and model guess', () => {
+    const claudeAgent = {
+      ...session, modelId: 'opus', transcriptTokens: 3_000,
+      claudeCodeContext: { used: 42_000, window: 200_000, model: 'claude-opus-5-5', modelId: 'opus' },
+    } as unknown as SessionSummary;
+    expect(card(undefined, claudeAgent)).toContain('42k/200k');
+    // Switched to another model since: back to the estimate against the alias guess.
+    expect(card(undefined, { ...claudeAgent, modelId: 'sonnet' })).toContain('3.0k/1M');
   });
 
   // Source pins, pending the wall e2e journey: the card's number is published

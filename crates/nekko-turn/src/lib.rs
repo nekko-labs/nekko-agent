@@ -25,10 +25,12 @@ pub mod delegate;
 pub mod input;
 pub mod plan;
 pub mod plan_update;
+pub mod providers;
 pub mod scope;
 pub mod side;
 pub mod stats;
 pub mod variants;
+pub mod workflow_access;
 
 pub use ask::{format_ask_answers, parse_ask_request};
 pub use input::{apply_turn_input, clean_title, send_options_for_queued_item, title_prompt};

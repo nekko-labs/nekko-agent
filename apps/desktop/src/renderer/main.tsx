@@ -6,9 +6,21 @@ import { CloudLogin, cloudAuthRequired } from './components/CloudLogin.js';
 import { UpdateProvider } from './components/UpdateBanner.js';
 import './styles.css';
 import { useStore } from './store.js';
+import { playSplash } from './splash.js';
+import { isScreenWindow } from './displays.js';
 
 // Resolve the system preference before mounting even the loading or login UI.
 useStore.getState().applyTheme();
+
+// The startup splash plays over the app and zooms through once settings have
+// loaded, so it opens onto the real app rather than the loading screen.
+if (!isScreenWindow) {
+  const loaded = new Promise<void>((resolve) => {
+    if (useStore.getState().settingsLoaded) return resolve();
+    const stop = useStore.subscribe((s) => { if (s.settingsLoaded) { stop(); requestAnimationFrame(() => resolve()); } });
+  });
+  playSplash(loaded);
+}
 
 function registerServiceWorker() {
   // Web/PWA editions only (not Electron's file://).

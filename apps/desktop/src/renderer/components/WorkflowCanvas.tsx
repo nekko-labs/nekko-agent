@@ -44,11 +44,14 @@ export function WorkflowCanvas({
   run,
   selectedId,
   onSelect,
+  modelLabel,
 }: {
   steps: WorkflowStep[];
   run?: WorkflowRun;
   selectedId?: string | null;
   onSelect?: (stepId: string) => void;
+  /** The model a step overrides the workflow's with, as a short label, or undefined. */
+  modelLabel?: (step: WorkflowStep) => string | undefined;
 }) {
   const graph = useMemo(() => workflowGraph(steps), [steps]);
   const layout = useMemo(() => layoutWorkflow<WorkflowNode, WorkflowEdge>(graph, { nodeW: 168, nodeH: 62 }), [graph]);
@@ -137,6 +140,16 @@ export function WorkflowCanvas({
               <div className="flex items-center gap-1.5">
                 <span style={{ color: kind.color }}>{kind.glyph}</span>
                 <span className="truncate text-[12.5px] font-medium leading-tight">{n.label}</span>
+                {n.step && modelLabel?.(n.step) ? (
+                  <span
+                    className="ml-auto min-w-0 max-w-[60%] shrink truncate rounded-sm px-1 text-[9.5px] text-ink-soft"
+                    style={{ background: 'var(--surface-2)' }}
+                    data-step-model
+                    title={`Model: ${modelLabel(n.step)}`}
+                  >
+                    {modelLabel(n.step)}
+                  </span>
+                ) : null}
                 {outcome?.status === 'running' && (
                   <span className="ml-auto h-1.5 w-1.5 shrink-0 animate-pulse rounded-full" style={{ background: STATUS.running }} />
                 )}

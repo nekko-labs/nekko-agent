@@ -25,7 +25,7 @@ async function main() {
     companion = path.join(source, 'apps/desktop/src/main/trayCompanion.ts');
   }
   const esbuild = require(path.join(modules, 'esbuild'));
-  await esbuild.build({ entryPoints: [entry], bundle: true, jsx: 'automatic', conditions: ['style', 'browser', 'import', 'default'], format: 'iife', outfile: path.join(out, 'fixture.js'), nodePaths: [modules], alias: { '@nekko-agent/shared': shared, '@fixture/context': path.join(repo, 'packages/core/src/context/assembler.ts') }, loader: { '.woff2': 'dataurl', '.svg': 'dataurl', '.png': 'dataurl', '.wasm': 'file' } });
+  await esbuild.build({ entryPoints: [entry], bundle: true, jsx: 'automatic', conditions: ['style', 'browser', 'import', 'default'], format: 'iife', outfile: path.join(out, 'fixture.js'), nodePaths: [modules], alias: { '@nekko-agent/shared': shared, '@fixture/context': path.join(repo, 'apps/desktop/scripts/fixture-context.ts') }, loader: { '.woff2': 'dataurl', '.svg': 'dataurl', '.png': 'dataurl', '.wasm': 'file' } });
   // The tray companion's page is a pure function of the main process; render it
   // here so the sandbox can load exactly what the app shows.
   await esbuild.build({ entryPoints: [companion], bundle: true, platform: 'node', format: 'cjs', outfile: path.join(out, 'companion.cjs'), external: ['electron'], nodePaths: [modules], alias: { '@nekko-agent/shared': shared } });

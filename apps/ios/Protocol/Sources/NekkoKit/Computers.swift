@@ -28,7 +28,23 @@ public protocol RemoteConnection: Caller {
     func nudge()
     func reconnect()
     func registerPush(token: String) async throws
+    /// `kinds`: the pushes this phone wants; nil asks for all.
+    func registerPush(token: String, kinds: [String]?) async throws
     func registerActivity(tag: String, token: String) async throws
+    /// Frames from the relay itself (`RelayControl`).
+    func setControlHandler(_ f: (@Sendable (RelayControl) -> Void)?)
+    /// The phone moved to another network (`RelayClient.networkChanged`).
+    func networkChanged(_ path: NetworkPath)
+    /// The network the phone is on, without moving (`RelayClient.setNetworkPath`).
+    func setNetworkPath(_ path: NetworkPath)
+}
+
+extension RemoteConnection {
+    public func registerPush(token: String, kinds: [String]?) async throws { try await registerPush(token: token) }
+    public func setControlHandler(_ f: (@Sendable (RelayControl) -> Void)?) {}
+    /// A connection with one route only has to dial again.
+    public func networkChanged(_ path: NetworkPath) { reconnect() }
+    public func setNetworkPath(_ path: NetworkPath) {}
 }
 
 extension RelayClient: RemoteConnection {}
@@ -40,15 +56,31 @@ public struct Computer: Codable, Equatable, Sendable, Identifiable {
     public let relayUrl: String
     public let pairedAt: Int64
     public var platform: String?
+    /// Other addresses of the same relay, from the pairing link (TASKS.md IO-20).
+    public var alts: [String]
 
-    public init(id: String, name: String, relayUrl: String, pairedAt: Int64, platform: String? = nil) {
+    public init(id: String, name: String, relayUrl: String, pairedAt: Int64, platform: String? = nil, alts: [String] = []) {
         self.id = id
         self.name = name
         self.relayUrl = relayUrl
         self.pairedAt = pairedAt
         self.platform = platform
+        self.alts = alts
     }
 
+    /// Pairings saved before routes existed have no `alts`.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        relayUrl = try c.decode(String.self, forKey: .relayUrl)
+        pairedAt = try c.decode(Int64.self, forKey: .pairedAt)
+        platform = try c.decodeIfPresent(String.self, forKey: .platform)
+        alts = try c.decodeIfPresent([String].self, forKey: .alts) ?? []
+    }
+
+    /// Every address, best first (the order the client tries them).
+    public var routes: [String] { RouteSupervisor.order([relayUrl] + alts) }
     public var route: RelayRoute { RelayRoute.of(relayUrl) }
     public var relayHost: String { Pairing.relayHost(relayUrl) }
 }
@@ -117,19 +149,57 @@ public final class ComputersStore {
     public private(set) var models: [String: [ModelInfo]] = [:]
     public private(set) var modelErrors: [String: String] = [:]
     public private(set) var hostVersion: String?
+    /// The active computer's phone protocol version, once it has welcomed this phone (IO-32).
+    public private(set) var hostProtocol: Int?
+    /// Whether the active computer's relay said it can push to this phone; nil until it says.
+    public private(set) var relayDelivers: Bool?
+    /// The pushes this phone wants (IO-30); nil asks for every kind. Re-registers when it changes.
+    public var pushKinds: [PushKind]? {
+        didSet { if pushKinds != oldValue { registerPushNow() } }
+    }
+    /// An approval or a question was handled somewhere: remove the needs-you
+    /// notification for the chat with this tag (`E2E.activityTag`).
+    public var onDismiss: ((String) -> Void)?
     public private(set) var lastError: String?
     /// The active computer's connection history (memory only, content-free), for the Connection screen.
     public private(set) var connectionLog = ConnectionLog()
+    /// The relay address in use or being dialed (one of the active computer's routes).
+    public private(set) var route: String?
+    /// The network the phone is on, as last reported.
+    public private(set) var networkPath: NetworkPath = .unknown
+    /// The socket was closed after the background grace; it comes back on foreground.
+    public private(set) var suspended = false
+    /// Settings → Connection → Check routes: one report per route, best first.
+    public private(set) var checks: [RouteReport] = []
+    public private(set) var checking = false
     /// When the list on screen is the phone's saved copy (not yet re-read from
     /// the computer), when it was saved; nil once the computer has answered.
     public private(set) var savedListAt: Int64?
-    /// Set while *Keep the chat list when offline* is on; nil keeps nothing.
+    /// Set while *Keep the chat list when offline* is on (the default); nil keeps nothing.
     public var chatListCache: ChatListCache? {
         didSet { if chatListCache == nil { savedListAt = nil } else { saveList() } }
     }
+    /// The active computer's recently opened chats, kept to read offline (OF-5).
+    public let transcripts: SavedTranscripts
+    /// Set while *Keep recent chats to read offline* is on (the default); nil
+    /// keeps none. Turning it off deletes every saved chat, on every computer.
+    public var transcriptCache: TranscriptCache? {
+        didSet {
+            guard transcriptCache !== oldValue else { return }
+            if transcriptCache == nil { oldValue?.removeAll() }
+            transcripts.use(transcriptCache, computerId: offlineComputer)
+        }
+    }
     private var loggedComputer: String?
+    /// The active computer's drafts (every chat's composer and New chat's), kept on disk.
+    public let drafts: DraftStore
+    /// The active computer's prompts waiting to be delivered, kept on disk.
+    public let outbox: Outbox
+    private let offlineFiles: OfflineFiles?
 
     public var active: Computer? { computers.first { $0.id == activeId } }
+    /// Which side to update when the phone and the computer speak different versions.
+    public var protocolCheck: ProtocolCheck { ProtocolCheck.compare(computer: hostProtocol) }
     public var groups: [ChatGroup] { ChatGroup.of(summaries, folders: workspaces) }
     public var needsYouCount: Int { activity.values.filter { $0 == .needsYou }.count }
     public var runningCount: Int { activity.values.filter { $0 == .running }.count }
@@ -149,13 +219,17 @@ public final class ComputersStore {
     private let modelListTimeout: TimeInterval
     private let platform: String
     private let app: String?
+    private let probeNetwork: ProbeNetwork
 
     private var client: RemoteConnection?
+    private var graceTask: Task<Void, Never>?
     private var generation = 0
     private var pump: Task<Void, Never>?
     private var summariesTask: Task<Void, Never>?
     private var listeners: [UUID: (AgentEvent) -> Void] = [:]
     private var pushToken: String?
+    /// Whose drafts and outbox are loaded.
+    private var offlineComputer: String?
 
     public init(store: SecureStore,
                 makeConnection: @escaping (RelayConfig) -> RemoteConnection,
@@ -168,8 +242,15 @@ public final class ComputersStore {
                 newId: @escaping () -> String = { UUID().uuidString.lowercased() },
                 now: @escaping () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) },
                 summariesDebounce: TimeInterval = 0.6,
-                modelListTimeout: TimeInterval = 6) {
+                modelListTimeout: TimeInterval = 6,
+                offlineFiles: OfflineFiles? = nil,
+                draftDebounce: TimeInterval = 0.5,
+                outboxPoll: TimeInterval = 0.5,
+                outboxConfirmTimeout: TimeInterval = 45,
+                transcripts: SavedTranscripts? = nil,
+                probeNetwork: ProbeNetwork = PosixProbeNetwork()) {
         self.store = store
+        self.probeNetwork = probeNetwork
         self.makeConnection = makeConnection
         self.deviceName = deviceName
         self.platform = platform
@@ -179,6 +260,26 @@ public final class ComputersStore {
         self.now = now
         self.summariesDebounce = summariesDebounce
         self.modelListTimeout = modelListTimeout
+        self.offlineFiles = offlineFiles
+        self.transcripts = transcripts ?? SavedTranscripts(now: now)
+        let drafts = DraftStore(files: offlineFiles, debounce: draftDebounce)
+        self.drafts = drafts
+        var reach: () -> Caller? = { nil }
+        var defaultsNow: () -> RemoteDefaults = { RemoteDefaults() }
+        outbox = Outbox(files: offlineFiles, drafts: drafts, caller: { reach() }, defaults: { defaultsNow() },
+                        newId: newId, now: now, pollInterval: outboxPoll, confirmTimeout: outboxConfirmTimeout)
+        reach = { [weak self] in
+            guard let self, self.conn == .online else { return nil }
+            return self.client
+        }
+        defaultsNow = { [weak self] in self?.defaults ?? RemoteDefaults() }
+        outbox.onDelivered = { [weak self] _, _ in self?.scheduleSummaries() }
+    }
+
+    /// Deliver the outbox now (connected, back in the foreground, Send now).
+    public func flushOutbox() {
+        guard conn == .online, !outbox.items.isEmpty else { return }
+        Task { await outbox.flush() }
     }
 
     /// Calls the active computer at call time; throws when none is connected.
@@ -218,7 +319,11 @@ public final class ComputersStore {
         let id = existing?.id ?? newId()
         saveSecret(id, ComputerSecret(room: link.room, key: link.key, keyHex: keyHex, pair: link.pair))
         if existing == nil {
-            computers.append(Computer(id: id, name: defaultComputerName, relayUrl: link.relayUrl, pairedAt: now()))
+            computers.append(Computer(id: id, name: defaultComputerName, relayUrl: link.relayUrl, pairedAt: now(), alts: link.alts))
+            saveIndex()
+        } else if let i = computers.firstIndex(where: { $0.id == id }), computers[i].alts != link.alts {
+            // A fresh QR carries the computer's routes as they are now.
+            computers[i].alts = link.alts
             saveIndex()
         }
         connect(id)
@@ -237,6 +342,14 @@ public final class ComputersStore {
         if wasActive { disconnect() }
         store.set(Self.secretKey(id), nil)
         chatListCache?.remove(id)
+        if wasActive {
+            drafts.load(nil)
+            outbox.load(nil)
+            transcripts.load(nil)
+            offlineComputer = nil
+        }
+        offlineFiles?.remove(id)
+        transcriptCache?.removeComputer(id)
         computers.removeAll { $0.id == id }
         saveIndex()
         if wasActive {
@@ -257,14 +370,22 @@ public final class ComputersStore {
         guard let computer = computers.first(where: { $0.id == id }), let secret = secret(id),
               let keyBytes = E2E.fromHex(secret.keyHex) else { return }
         store.set(Self.activeKey, id)
+        if offlineComputer != id {
+            drafts.load(id)
+            outbox.load(id)
+            transcripts.load(id)
+            offlineComputer = id
+        }
         activeId = id
         conn = .connecting
         denied = nil
         connDetail = nil
         if loggedComputer != id {
             connectionLog.clear()
+            checks = []
             loggedComputer = id
         }
+        route = nil
         connectionLog.record(.connecting)
         clearComputerState()
         // Opening the app away from the computer: show the list as it was, marked as saved.
@@ -275,9 +396,11 @@ public final class ComputersStore {
         }
         var config = RelayConfig(relayUrl: computer.relayUrl, room: secret.room, key: secret.key, keyBytes: keyBytes,
                                  deviceId: deviceId(), deviceName: deviceName(), pairCode: secret.pair, platform: platform)
+        config.alternates = computer.alts
         config.requestTimeout = 120
         config.app = app
         let c = makeConnection(config)
+        if networkPath != .unknown { c.setNetworkPath(networkPath) }
         generation += 1
         let gen = generation
         client = c
@@ -285,7 +408,8 @@ public final class ComputersStore {
         c.setHandlers(
             onStatus: { sink.yield(.status($0)) },
             onEvent: { sink.yield(.event($0, $1)) },
-            onWelcome: { _ in sink.yield(.welcome) })
+            onWelcome: { sink.yield(.welcome($0.protocolVersion)) })
+        c.setControlHandler { sink.yield(.control($0)) }
         // One consumer, in arrival order, on the main actor.
         pump = Task { @MainActor [weak self] in
             for await signal in stream {
@@ -299,7 +423,8 @@ public final class ComputersStore {
     private enum Signal: Sendable {
         case status(RelayStatus)
         case event(String, JSONValue)
-        case welcome
+        case welcome(Int)
+        case control(RelayControl)
     }
 
     private func handle(_ signal: Signal, computerId: String, hadCode: Bool) {
@@ -307,21 +432,37 @@ public final class ComputersStore {
         case .status(let s):
             conn = s.state
             connDetail = s.detail
-            connectionLog.record(s.state, detail: s.detail, denied: s.denied)
-            if let d = s.denied { denied = d }
-            if s.state == .online {
-                Task { await refresh() }
-                if let pushToken { Task { try? await client?.registerPush(token: pushToken) } }
+            if let r = s.route { route = r }
+            // The log names the route when the computer has more than one.
+            let via = (active?.alts.isEmpty ?? true) ? nil : s.route.map(Pairing.relayHost)
+            connectionLog.record(s.state, detail: s.detail, denied: s.denied, via: via)
+            if let d = s.denied {
+                denied = d
+                // Never delivered now: each prompt goes back to its composer, saying why.
+                outbox.handBackAll(reason: "This phone is no longer paired with \(active?.name ?? "your computer").")
             }
-        case .welcome:
+            if s.state == .online {
+                Task {
+                    await refresh()
+                    await outbox.flush()
+                }
+                registerPushNow()
+            }
+        case .welcome(let version):
+            hostProtocol = version
             // Enrollment done: the one-time code must never be sent again.
             if hadCode { dropPairCode(computerId) }
+        case .control(.pushRegistered(let delivers)):
+            relayDelivers = delivers
+        case .control(.dismiss(let tag)):
+            onDismiss?(tag)
         case .event(let channel, let payload):
             if channel == Events.appearanceUpdated {
                 appearance = Appearance.from(payload)
                 return
             }
             guard channel == Events.agentEvent, let e = AgentEvent.from(payload) else { return }
+            outbox.onEvent(e)
             for f in listeners.values { f(e) }
             let next = ActivityTracker.next(activity, e)
             if next != activity { activity = next }
@@ -340,6 +481,9 @@ public final class ComputersStore {
         pump = nil
         summariesTask?.cancel()
         summariesTask = nil
+        graceTask?.cancel()
+        graceTask = nil
+        suspended = false
         client?.close()
         client = nil
         conn = .idle
@@ -348,17 +492,153 @@ public final class ComputersStore {
     /// App came to the foreground: reconnect now rather than after the backoff,
     /// and re-read the list (chats completed or started meanwhile send no event).
     public func nudge() {
+        resume()
         client?.nudge()
-        if conn == .online { scheduleSummaries() }
+        if conn == .online {
+            scheduleSummaries()
+            flushOutbox()
+        }
     }
 
     /// The phone changed network: dial a fresh socket now.
     public func reconnect() { client?.reconnect() }
 
+    /// The phone changed network (`path` says whether a LAN route can work):
+    /// pick the route again and dial a fresh socket now.
+    public func networkChanged(_ path: NetworkPath) {
+        networkPath = path
+        guard !suspended else { return }
+        client?.networkChanged(path)
+    }
+
+    /// The first network the phone reports: not a move, so the socket stays
+    /// unless the route it should use is another one (a LAN route on cellular).
+    public func networkKnown(_ path: NetworkPath) {
+        networkPath = path
+        guard !suspended else { return }
+        client?.setNetworkPath(path)
+    }
+
+    // MARK: Background grace (TASKS.md IO-20)
+
+    /// The app went to the background. A healthy socket is kept for `grace`
+    /// seconds, so a quick app switch comes back to a live connection (and a
+    /// turn finishing meanwhile still notifies); then it is closed, as iOS
+    /// would suspend it anyway. One that isn't online is closed at once
+    /// rather than left retrying in the background. No background mode is
+    /// involved: the grace fits in the app's ordinary background time.
+    public func enterBackground(grace: TimeInterval = 30) {
+        graceTask?.cancel()
+        guard client != nil, !suspended else { return }
+        guard conn == .online, grace > 0 else { return suspend() }
+        graceTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(grace * 1e9))
+            guard let self, !Task.isCancelled else { return }
+            self.graceTask = nil
+            self.suspend()
+        }
+    }
+
+    /// Close the socket now, keeping everything on screen; `resume` reopens it.
+    public func suspend() {
+        graceTask?.cancel()
+        graceTask = nil
+        guard let c = client, !suspended else { return }
+        suspended = true
+        c.close()
+    }
+
+    /// Back in the foreground (or woken by a notification action): cancel a
+    /// pending grace close, and reopen a suspended socket.
+    public func resume() {
+        graceTask?.cancel()
+        graceTask = nil
+        guard suspended, let c = client else { return }
+        suspended = false
+        if networkPath != .unknown { c.setNetworkPath(networkPath) }
+        c.connect()
+    }
+
+    // MARK: Diagnostics (TASKS.md IO-21)
+
+    /// Check every route of the active computer: DNS, TCP, and a hello the
+    /// computer answers, each timed. Never the live connection: the hello is
+    /// a separate socket, closed once the relay and computer have answered.
+    public func runChecks() async {
+        guard !checking, let computer = active, let secret = secret(computer.id),
+              let keyBytes = E2E.fromHex(secret.keyHex) else { return }
+        checking = true
+        defer { checking = false }
+        let routes = computer.routes
+        checks = routes.map { RouteReport(url: $0) }
+        let base = RelayConfig(relayUrl: computer.relayUrl, room: secret.room, key: secret.key, keyBytes: keyBytes,
+                               deviceId: deviceId(), deviceName: deviceName(), pairCode: nil, platform: platform)
+        let make = makeConnection
+        let name = computer.name
+        for (i, url) in routes.enumerated() {
+            let report = await Diagnostics.check(url, network: probeNetwork) { route in
+                var config = base
+                config.relayUrl = route
+                config.handshakeTimeout = 8
+                return await Self.hello(make(config), computer: name)
+            }
+            guard active?.id == computer.id, i < checks.count else { return }
+            checks[i] = report
+        }
+    }
+
+    /// One relay hello on its own socket: open, wait for the relay and the
+    /// computer to answer (or 8 s), close.
+    static func hello(_ c: RemoteConnection, computer: String, timeout: TimeInterval = 8) async -> ProbeStep {
+        let start = Date()
+        let box = HelloBox()
+        let s: RelayStatus? = await withCheckedContinuation { (cont: CheckedContinuation<RelayStatus?, Never>) in
+            box.cont = cont
+            c.setHandlers(onStatus: { s in if s.state != .connecting { box.finish(s) } }, onEvent: nil, onWelcome: nil)
+            c.connect()
+            DispatchQueue.global().asyncAfter(deadline: .now() + timeout) { box.finish(nil) }
+        }
+        c.close()
+        let ms = Int((Date().timeIntervalSince(start) * 1000).rounded())
+        switch s?.state {
+        case .online?: return ProbeStep(ok: true, ms: ms, detail: "\(computer) answered")
+        case .offline?: return ProbeStep(ok: true, ms: ms, detail: "The relay answered; \(computer) isn’t connected to it")
+        case .denied?: return ProbeStep(ok: false, ms: ms, detail: "Refused: \(s?.denied?.rawValue ?? "denied")")
+        default: return ProbeStep(ok: false, ms: ms, detail: "No answer in \(Int(timeout)) s")
+        }
+    }
+
+    /// *Share diagnostics*: the checks and the log, as text with no secrets.
+    public func diagnosticsText(app: String) -> String {
+        let c = active
+        let log = connectionLog.text(relayHost: c?.relayHost ?? "none", route: c?.route ?? .internet)
+        return Diagnostics.text(app: app, network: networkPath, routeInUse: route, reports: checks, log: log)
+    }
+
     /// The APNs device token, registered with the relay on every connect.
     public func setPushToken(_ token: String) {
         pushToken = token
-        if conn == .online { Task { try? await client?.registerPush(token: token) } }
+        registerPushNow()
+    }
+
+    private func registerPushNow() {
+        guard conn == .online, let token = pushToken, let c = client else { return }
+        let kinds = pushKinds?.map(\.rawValue)
+        Task { try? await c.registerPush(token: token, kinds: kinds) }
+    }
+
+    /// *Send a test notification* (IO-30): ask the computer, which asks the relay
+    /// to push to this phone. Says which path it took; on `.local` the app
+    /// shows the notification itself. Throws when the computer can't be reached.
+    public func sendTestNotification() async throws -> TestPushResult {
+        let c = try remote()
+        var answered = true
+        do {
+            _ = try await c.call(Channels.pushTest, [], timeout: 15)
+        } catch let e as RelayError where TestPushResult.unknownToComputer(e.message) {
+            answered = false
+        }
+        return TestPushResult.decide(computerAnswered: answered, hasToken: pushToken != nil, relayDelivers: relayDelivers)
     }
 
     /// A Live Activity's push token for `sessionId` (see `RelayClient.registerActivity`).
@@ -398,6 +678,8 @@ public final class ComputersStore {
             summariesLoaded = true
             savedListAt = nil
             saveList()
+            // A chat deleted on the computer (or by another device) leaves no copy here.
+            transcripts.keepOnly(Set((r.0.array ?? []).compactMap { $0.str("id") }))
         } catch {
             if client === c {
                 summariesLoading = false
@@ -469,6 +751,7 @@ public final class ComputersStore {
     public func deleteChat(_ sessionId: String) async throws {
         _ = try await remote().call(Channels.sessionDelete, [.string(sessionId)])
         summaries.removeAll { $0.id == sessionId }
+        transcripts.remove(sessionId)
         activity[sessionId] = nil
     }
 
@@ -483,6 +766,9 @@ public final class ComputersStore {
         scheduleSummaries()
         return session.id
     }
+
+    /// Re-read the chat list soon (a chat was made or changed from here).
+    public func reloadList() { scheduleSummaries() }
 
     /// Change the computer's phone-settable settings; the reply is what was saved there.
     public func updatePcSettings(_ patch: JSONValue) async throws {
@@ -509,6 +795,8 @@ public final class ComputersStore {
         // Another computer, or the same one later: its settings are unknown until it answers.
         pcSettings = PcSettings()
         hostVersion = nil
+        hostProtocol = nil
+        relayDelivers = nil
         lastError = nil
     }
 
@@ -576,4 +864,18 @@ public final class ComputersStore {
 
 func orNil<T: Sendable>(_ body: @Sendable () async throws -> T) async -> T? {
     try? await body()
+}
+
+/// Hands the first settled status of a hello probe to its waiter, once.
+private final class HelloBox: @unchecked Sendable {
+    private let lock = NSLock()
+    var cont: CheckedContinuation<RelayStatus?, Never>?
+
+    func finish(_ s: RelayStatus?) {
+        lock.lock()
+        let c = cont
+        cont = nil
+        lock.unlock()
+        c?.resume(returning: s)
+    }
 }

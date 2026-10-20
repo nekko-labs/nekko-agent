@@ -31,9 +31,7 @@
     "test:browser": "node ../../scripts/build-agent-browser.mjs --dev && node --test ../../scripts/agent-browser-native.test.mjs && node scripts/browser-automation-smoke.mjs"
   },
   "dependencies": {
-    "@lydell/node-pty": "^1.2.0-beta.15",
-    "@nekko-agent/core": "*",
-    "@nekko-agent/host": "*",
+    "@nekko-agent/profile": "*",
     "@nekko-agent/shared": "*",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-web-links": "^0.12.0",

@@ -47,12 +47,12 @@ describe('image and hardware regression boundaries', () => {
     expect(getGpuStats).toHaveBeenCalledTimes(4);
   });
 
-  // Source pin: the host GPU cache is packages/host code, whose tests this
-  // change does not touch (see the PR's Unfinished work for moving it there).
-  it('caches GPU readings for a second and shares an in-flight probe (source pin, host)', () => {
-    const gpu = source('../../../../../packages/host/src/gpu.ts');
-    expect(gpu).toMatch(/const TTL_MS = 1000;/);
-    expect(gpu).toMatch(/if \(inFlight\) return inFlight;/);
+  // Source pin: the GPU cache is the engine's (nekko-machine), outside this package's tests.
+  it('caches GPU readings for a second and shares an in-flight probe (source pin, engine)', () => {
+    const gpu = source('../../../../../crates/nekko-machine/src/probe.rs');
+    expect(gpu).toMatch(/const GPU_TTL: Duration = Duration::from_secs\(1\);/);
+    // The cache's lock is held across the probe, so a second caller waits for the first one's reading.
+    expect(gpu).toMatch(/let mut cache = self\.gpu\.lock\(\)\.await;[\s\S]*?let stats = self\.probe_gpu\(\)\.await;/);
   });
 
   it('allows only complete text SVG as inert image data, never as a raster response', () => {

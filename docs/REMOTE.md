@@ -63,6 +63,45 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > Delete), and whether deleting asks first. They are saved on the computer, the same settings as in
 > its Settings. A long-press on a chat in the list then completes or deletes it on the computer.
 >
+> **Write offline** (iPhone): with no connection to your computer you can still write. What you
+> type in a chat's message box, and in New chat, is kept on the phone, so leaving the screen or
+> the phone closing the app loses nothing. **Send when online** puts a prompt in a queue on the
+> phone, shown in the chat as **Waiting to send** (Edit, Delete, Send now); a new chat started
+> offline waits under **Waiting to send** in the list. When the computer is back they go in order,
+> and each prompt runs once even if the connection dropped mid-send: the computer recognises a
+> prompt it already has by its id. If the computer refuses one (the chat was deleted, say), it comes
+> back to the message box with the reason. Approvals and answers to questions are never queued;
+> they need the computer to be reachable. The widget and the Watch show how many prompts are waiting.
+> The drafts and the queue are encrypted on the phone until it is first unlocked, aren't backed up,
+> and are deleted when you forget the computer. Sending prompts written offline needs this version
+> of Nekko Agent on the computer.
+>
+> **Read offline** (iPhone; the chat list on Android too): the phone keeps each computer's chat list
+> and, on iPhone, the last 20 chats you opened (up to 5 MB per computer; a very long chat keeps its
+> newest messages). Opening the app or a chat shows them at once, and while the computer can't be
+> reached they stay readable under **Saved list from 10:42** and **Saved copy from 10:42**. When the
+> computer answers, the live list and chat replace them in place. A saved chat can't be changed
+> (model, tool policy, rename, complete) until the computer is back, but what you send waits as
+> above. Photos are never kept, only how many a message had. Both are on unless you turn them off
+> in **Settings → Offline** (Android: **Settings → Connection**); turning a switch off deletes what
+> it kept. Like the drafts, the copies are encrypted until the phone is first unlocked, aren't
+> backed up, and are deleted when you forget the computer or a chat is deleted on it.
+>
+> **Beyond the chat** (iPhone): the phone is a remote for the agent, not a second desktop.
+> - **Edit the queue:** a follow-up sent while a reply runs waits under **Queued** with Edit and
+>   Remove. An edit only lands if that prompt hasn't started yet; otherwise nothing changes.
+> - **Fork:** touch and hold a message. On your prompt, **Edit in a new chat** starts a new chat with
+>   the conversation before it and the prompt in the message box; on a reply, **Fork from here**.
+> - **Photos:** tap a photo in a message to see it full screen; **+ → Paste image** adds one from the clipboard.
+> - **Saved prompts:** the prompts you saved on the computer show in `/` and under **+**, run like skills.
+> - **Continue and search:** the list opens with your most recent chat; search finds completed chats too.
+> - **Automations:** **Computers and settings → Automations** lists the computer's tasks and
+>   workflows with how each last went, and **Run now**. You set them up on the computer.
+> - **Pull requests:** a chip shows the chat's pull request and its checks. **Commit these changes**,
+>   **Open a PR** and **Fix the failing checks** send a prompt to the chat, so the agent does the git
+>   work on your computer and asks you before anything that needs approval.
+> - **Usage and limits:** what each provider plan has used and when it resets, and recent usage. Read only.
+>
 > **All your chats, grouped like the desktop** (Android): the chat list shows every chat on the
 > computer, completed ones included, in the same groups as the desktop's agent sidebar: **General**
 > first, then one group per project folder. Tap a group's name to fold it. Each group lists its
@@ -161,19 +200,23 @@ Your computer decides what a paired phone may ask for, whatever the phone app do
 phone app is not the boundary, your computer is. A phone can use your chats and nothing that
 changes how the computer itself is set up:
 
-- **Allowed:** list, open, start, complete and delete chats; send, queue and stop messages; answer
-  approvals and the agent's questions; pick a model from the computer's providers and a folder from
-  its list; voice status and transcription; and a few settings (below).
+- **Allowed:** list, open, start, fork, complete and delete chats; send, queue, edit or remove
+  queued, and stop messages; answer approvals and the agent's questions; pick a model from the
+  computer's providers and a folder from its list; voice status and transcription; read a chat's
+  pull requests, the computer's automations, its usage and plan limits, and run an automation now;
+  and a few settings (below).
 - **Never allowed from a phone:** wiping data or resetting settings, remote access itself (pairing,
-  revoking, rotating the secret), terminals, reading or writing files, accepting or reverting changes, adding or removing folders, installing
+  revoking, rotating the secret), terminals, reading or writing files, accepting or reverting changes,
+  git itself (merging, closing or reviewing a pull request, its diff, git status: ask the agent
+  instead), making, changing or deleting automations, adding or removing folders, installing
   or removing voice models, connecting or disconnecting connectors, provider keys and sign-ins, MCP
   servers and hooks. Everything not on the allowed list is refused too, with an error that starts
   *Not allowed from a paired phone*.
 - **Settings a phone may change:** the chat mode for new chats (Ask, Guardrails or YOLO), what the chat pane's top-right button does (Complete or Delete),
   whether deleting asks first, and voice on/off and its language. An update that touches any other
   setting is refused as a whole: nothing in it is applied.
-- **Settings a phone can read:** only the theme and accents, the default and starred models, and
-  the settings above. API keys, tokens, provider details, folders, hooks, guardrails and your
+- **Settings a phone can read:** only the theme and accents, the default and starred models, your
+  saved prompts (name and text), whether automations are paused, and the settings above. API keys, tokens, provider details, folders, hooks, guardrails and your
   instructions never leave the computer this way; provider lists arrive as name and type only.
 - **A chat's changes, read only, only if you allow it:** with *Let phones see changes* on (off
   unless you turn it on, in Remote access on the computer), a phone can see a diff of the files the
@@ -232,6 +275,17 @@ relay, this relay is already the default in the relay field, and **Enable** star
   Tailscale connects.
 - **It follows address changes:** it moves when the tailnet address changes.
 - **It says why it isn't running:** for example Tailscale off, or the port (4400) already in use.
+- **It is on your Wi-Fi too:** next to the tailnet address it listens on this computer's private
+  LAN addresses (192.168.x.x, 10.x.x.x, 172.16.x.x to 172.31.x.x; never the internet, and not the
+  virtual adapters of WSL, Hyper-V, Docker or VMs). Pairing
+  codes then carry both routes, and the iPhone app uses the LAN when it is on the same Wi-Fi and
+  moves to Tailscale by itself when it leaves, coming back once the LAN answers steadily again.
+  Switch **Also on this Wi-Fi** off to keep the relay on the tailnet only; pair the phone again
+  after changing it. Phones paired before this keep the one route until they scan a new code.
+
+On the iPhone, **Settings → Connection** shows the route in use. **Check routes** looks up,
+connects to and says hello on each route with timings, and **Share diagnostics** shares those
+results and the connection log as text, without rooms, keys, codes or messages.
 
 It runs as its own process (`out/main/relay.js`, under the app's own runtime) and exits with the
 app. It has no push keys, so phones get no "finished" notifications through it; the in-app

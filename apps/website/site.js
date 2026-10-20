@@ -424,11 +424,31 @@
   const btn = document.querySelector('.theme-toggle');
   if (!btn) return;
   const root = document.documentElement;
+  // a toggle button: pressed means the Colourful look is on
+  const sync = () => btn.setAttribute('aria-pressed', String(root.dataset.theme === 'colour'));
+  sync();
   btn.addEventListener('click', () => {
     const colour = root.dataset.theme !== 'colour';
     if (colour) root.dataset.theme = 'colour'; else delete root.dataset.theme;
+    sync();
     try { localStorage.setItem('nekko-theme', colour ? 'colour' : 'white'); } catch (e) { /* private mode: the choice lasts this page only */ }
   });
+})();
+
+// ---- phone menu: the nav links fold behind a button below 900px ----
+(() => {
+  const nav = document.querySelector('.nav');
+  const btn = document.querySelector('.nav-menu');
+  if (!nav || !btn) return;
+  const set = (open) => {
+    nav.classList.toggle('nav-open', open);
+    btn.setAttribute('aria-expanded', String(open));
+    btn.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+  };
+  btn.addEventListener('click', () => set(!nav.classList.contains('nav-open')));
+  nav.querySelectorAll('.nav-links a').forEach((a) => a.addEventListener('click', () => set(false)));
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && nav.classList.contains('nav-open')) { set(false); btn.focus(); } });
+  document.addEventListener('click', (e) => { if (!nav.contains(e.target)) set(false); });
 })();
 
 // ---- beta sign-up, hosted by Nekko: she peeks over the card and reacts.
@@ -480,7 +500,14 @@
     e.preventDefault();
     if (!input.checkValidity()) { setMood('confused'); input.focus(); return; }
     const endpoint = form.dataset.endpoint;
-    if (endpoint) {
+    if (!endpoint) {
+      // No sign-up service connected yet: say so rather than claim a sign-up that went nowhere.
+      note.textContent = "Beta sign-ups aren't open yet. Follow along on GitHub to hear about the first builds.";
+      setMood('idle'); // sets the idle line, so the bubble's own text goes after it
+      bubble.textContent = 'Almost ready! Check back soon.';
+      return;
+    }
+    {
       try {
         const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ email: input.value }) });
         if (!res.ok) throw new Error(String(res.status));

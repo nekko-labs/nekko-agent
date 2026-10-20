@@ -40,6 +40,8 @@ const SETTINGS = {
   defaultChatMode: 'ask',
   chatPaneAction: 'complete',
   skipDeleteConfirmation: false,
+  automationsPaused: false,
+  prompts: [{ id: 'fix', name: 'fix', body: 'Find and fix the bug.' }],
   sandboxMode: 'workspace',
   providers: [{ id: 'p1', kind: 'anthropic', label: 'Claude', baseUrl: 'https://x', apiKey: 'sk-secret', tokenKey: 'tk', enabled: true }],
   guardrails: [{ id: 'g', pattern: 'rm -rf' }],
@@ -157,6 +159,16 @@ describe('chat options from a phone', () => {
   it('allows a plain chat:send, not attaching files on the computer', () => {
     expect(code(() => screenPhoneCall('chat:send', [{ sessionId: 's', providerId: 'p', modelId: 'm', text: 'hi' }]))).toBe('ok');
     expect(code(() => screenPhoneCall('chat:send', [{ sessionId: 's', text: 'hi', attachedPaths: ['/etc/passwd'] }]))).toBe('option-denied');
+  });
+
+  it('lets an outbox id through on chat:send and chat:queue, only a short id', () => {
+    const id = '6f1c2a9e-7b1d-4c35-9a52-2b8f0f6f8d11';
+    expect(code(() => screenPhoneCall('chat:send', [{ sessionId: 's', text: 'hi', clientMessageId: id }]))).toBe('ok');
+    expect(code(() => screenPhoneCall('chat:queue', ['s', { text: 'hi', clientMessageId: id }]))).toBe('ok');
+    for (const bad of ['', 'x'.repeat(65), 'a b', 7, null, '../etc']) {
+      expect(code(() => screenPhoneCall('chat:send', [{ sessionId: 's', text: 'hi', clientMessageId: bad }]))).toBe('value-invalid');
+      expect(code(() => screenPhoneCall('chat:queue', ['s', { text: 'hi', clientMessageId: bad }]))).toBe('value-invalid');
+    }
   });
 
   it('passes an allowed call through unchanged', async () => {

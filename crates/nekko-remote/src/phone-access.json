@@ -4,22 +4,31 @@
   "changes:list",
   "chat:abort",
   "chat:answer",
+  "chat:editQueued",
   "chat:pending",
   "chat:queue",
   "chat:send",
+  "limits:get",
   "models:list",
+  "pr:sessionList",
   "providers:list",
   "session:create",
   "session:delete",
+  "session:fork",
   "session:get",
   "session:setOptions",
   "sessions:summaries",
   "settings:get",
   "settings:update",
   "skills:runnable",
+  "task:runNow",
+  "tasks:list",
   "tool:approve",
+  "usage:summary",
   "voice:status",
   "voice:transcribe",
+  "workflow:run",
+  "workflows:list",
   "workspace:list"
  ],
  "alwaysDenied": {
@@ -27,6 +36,10 @@
    "attachment:import",
    "changes:accept",
    "changes:acceptAll",
+   "pr:action",
+   "pr:continueStack",
+   "pr:diff",
+   "pr:linkStack",
    "connector:connect",
    "connector:disconnect",
    "data:wipe",
@@ -38,11 +51,21 @@
    "providers:remove",
    "providers:save",
    "settings:reset",
+   "task:create",
+   "task:delete",
+   "task:update",
    "voice:cancel",
    "voice:install",
    "voice:permission",
    "voice:uninstall",
+   "workflow:cancel",
+   "workflow:create",
+   "workflow:delete",
+   "workflow:duplicate",
+   "workflow:event",
+   "workflow:update",
    "workspace:addByPath",
+   "workspace:gitStatus",
    "workspace:remove"
   ],
   "prefixes": [
@@ -69,12 +92,14 @@
  "settingsView": [
   "accent",
   "accent2",
+  "automationsPaused",
   "chatPaneAction",
   "defaultChatMode",
   "defaultModelId",
   "defaultProviderId",
   "favoriteModels",
   "phoneChanges",
+  "prompts",
   "skipDeleteConfirmation",
   "theme",
   "themePreset",
@@ -94,6 +119,7 @@
   "source"
  ],
  "queueKeys": [
+  "clientMessageId",
   "images",
   "skill",
   "text"
@@ -109,6 +135,7 @@
   "title"
  ],
  "chatSendKeys": [
+  "clientMessageId",
   "images",
   "modelId",
   "providerId",
@@ -138,5 +165,77 @@
   "context": 3,
   "diffCells": 4000000
  },
+ "views": {
+  "textChars": 600,
+  "usageDays": 14,
+  "usageModels": 12
+ },
+ "promptView": [
+  "body",
+  "id",
+  "name"
+ ],
+ "taskView": [
+  "createdAt",
+  "id",
+  "intervalMs",
+  "keepAlive",
+  "kind",
+  "lastResult",
+  "lastRunAt",
+  "lastSessionId",
+  "nextRunAt",
+  "runAt",
+  "runCount",
+  "status",
+  "title"
+ ],
+ "workflowView": [
+  "category",
+  "description",
+  "enabled",
+  "id",
+  "lastRunAt",
+  "lastStatus",
+  "name",
+  "nextRunAt",
+  "runCount"
+ ],
+ "workflowRunView": [
+  "id",
+  "startedAt",
+  "status",
+  "workflowId"
+ ],
+ "prView": [
+  "additions",
+  "changedFiles",
+  "checks",
+  "deletions",
+  "isDraft",
+  "number",
+  "reviewDecision",
+  "state",
+  "title",
+  "url"
+ ],
+ "limitsView": [
+  "creditsState",
+  "planType",
+  "updatedAt"
+ ],
+ "limitWindowView": [
+  "id",
+  "label",
+  "modelFamily",
+  "resetAt",
+  "scope",
+  "status",
+  "usedPercent"
+ ],
+ "queueEditKeys": [
+  "expect",
+  "text"
+ ],
  "maxFrameBytes": 9437184
 }

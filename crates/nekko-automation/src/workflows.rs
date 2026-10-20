@@ -12,7 +12,7 @@
 use crate::json::{self, num};
 use crate::workflow_rules::{
     self as rules, MAX_STEP_LOOPS, MAX_WORKFLOW_DEPTH, UNCATEGORIZED, describe_event, event_context, match_workflows,
-    read_step_outcome, slugify, step_outcome_instruction,
+    read_step_outcome, slugify, step_outcome_instruction, without_outcome_tokens,
 };
 use serde_json::{Map, Value, json};
 use std::collections::{HashMap, HashSet};
@@ -68,6 +68,9 @@ pub trait WorkflowHost: Send + Sync + 'static {
         fields: Vec<(&'static str, Value)>,
     ) -> BoxFut<'_, Result<String, String>>;
     fn get_session(&self, id: &str) -> Option<Value>;
+    /// `getSession(id)`, the fields assigned, `saveSession`: a run's chat
+    /// between steps (an allowlist step's tools).
+    fn update_session(&self, id: &str, fields: Vec<(&'static str, Value)>) -> BoxFut<'_, Result<(), String>>;
     fn delete_session(&self, id: &str) -> BoxFut<'_, ()>;
     /// A turn: `Ok(Some(message))` when the turn emitted an error event (the
     /// last one), `Err` when it threw.
@@ -303,7 +306,7 @@ impl Workflows {
         if let Some(m) = input.get("modelId") {
             wf.insert("modelId".into(), m.clone());
         }
-        for k in ["notify", "templateId"] {
+        for k in ["notify", "templateId", "localModelOnly", "toolAccess"] {
             if let Some(v) = input.get(k) {
                 wf.insert(k.into(), v.clone());
             }
@@ -414,7 +417,7 @@ impl Workflows {
         input.insert("enabled".into(), json!(false));
         input.insert("steps".into(), source.get("steps").cloned().unwrap_or(json!([])));
         input.insert("triggers".into(), Value::Array(triggers));
-        for k in ["workspaceId", "providerId", "modelId"] {
+        for k in ["workspaceId", "providerId", "modelId", "localModelOnly", "toolAccess"] {
             if let Some(v) = source.get(k) {
                 input.insert(k.into(), v.clone());
             }
@@ -578,6 +581,20 @@ impl Workflows {
             if let Some(m) = wf.get("modelId").filter(|v| nekko_js::truthy(Some(v))) {
                 fields.push(("modelId", m.clone()));
             }
+            // Nobody watches the run: approvals it would need are denied, it is
+            // never offered ask_user, and its tools are what the workflow's
+            // access allows. A local-only workflow's chat is offline.
+            fields.push(("unattended", json!(true)));
+            fields.push(("workflowRunId", json!(run_id)));
+            if nekko_js::truthy(wf.get("localModelOnly")) {
+                fields.push(("offline", json!(true)));
+            }
+            if let Some(access) =
+                wf.get("toolAccess").and_then(Value::as_str).filter(|a| !a.is_empty() && *a != "workspace")
+            {
+                fields.push(("toolAccess", json!(access)));
+                fields.push(("disabledTools", json!(nekko_turn::workflow_access::disabled_tools(Some(access), &[]))));
+            }
             let session = self.host.create_session(wf.get("workspaceId").cloned(), fields).await;
 
             let mut run_info = Map::new();
@@ -689,6 +706,7 @@ impl Workflows {
                     .await;
                 first = false;
                 let out = result.output.clone().or_else(|| result.error.clone()).unwrap_or_default();
+                let out = without_outcome_tokens(&out);
                 match outputs.iter_mut().find(|(k, _)| *k == step_id) {
                     Some(slot) => slot.1 = out,
                     None => outputs.push((step_id.clone(), out)),
@@ -895,6 +913,21 @@ impl Workflows {
         let (Some(provider), Some(model)) = (provider, model) else {
             return fail("No model configured. Pick a default provider and model in Models.");
         };
+        // Whichever model the step lands on is checked; a non-local one is
+        // refused, never swapped for another.
+        if nekko_js::truthy(wf.get("localModelOnly")) {
+            let found = settings
+                .get("providers")
+                .and_then(Value::as_array)
+                .and_then(|ps| ps.iter().find(|p| p.get("id") == Some(&provider)));
+            if !found.is_some_and(nekko_turn::providers::offline_provider_allowed) {
+                let label = found
+                    .and_then(|p| nullish(p.get("label")))
+                    .map(nekko_js::display)
+                    .unwrap_or_else(|| nekko_js::display(&provider));
+                return fail(&format!("This workflow uses local models only; {label} is not local."));
+            }
+        }
         let mut body = nekko_js::trim(run_text).to_string();
         if str_field(step, "kind") == Some("skill") {
             let want = nekko_js::trim(run_text);
@@ -909,6 +942,19 @@ impl Workflows {
         }
         if body.is_empty() {
             return fail("This step has nothing to run.");
+        }
+        // Under allowlist access each step offers only the tools it lists.
+        if str_field(wf, "toolAccess") == Some("allowlist") && self.host.get_session(session_id).is_some() {
+            let allowed: Vec<String> = step
+                .get("allowedTools")
+                .and_then(Value::as_array)
+                .map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect())
+                .unwrap_or_default();
+            let disabled = nekko_turn::workflow_access::disabled_tools(Some("allowlist"), &allowed);
+            let fields = vec![("allowedTools", json!(allowed)), ("disabledTools", json!(disabled))];
+            if let Err(e) = self.host.update_session(session_id, fields).await {
+                return fail(&e);
+            }
         }
         let can_retry = nekko_js::to_number(nullish(step.get("retries")).or(Some(&json!(0)))) > 0.0
             || nekko_js::truthy(step.get("onFailure"));
@@ -1184,19 +1230,29 @@ impl Workflows {
             return Ok(());
         };
         let mut conn_settings = config.get("settings").and_then(Value::as_object).cloned().unwrap_or_default();
-        for k in ["channel", "repo", "event", "filter"] {
+        for k in ["channel", "repo", "event", "filter", "includeDrafts"] {
             if let Some(v) = t.get(k).filter(|v| nekko_js::truthy(Some(v))) {
                 conn_settings.insert(k.into(), v.clone());
             }
         }
         let now = self.now();
-        let record_cursor = {
+        let (record_cursor, poll_state) = {
             let mut cursors = self.load_cursors();
-            let rec = cursors
-                .entry(tid.to_string())
-                .or_insert_with(|| json!({ "lastCursor": num(now), "seenIds": [], "lastPollAt": 0 }));
-            nekko_js::to_number(rec.get("lastCursor"))
+            // Arming starts the cursor now, and it is written at once: a poll
+            // whose cursor never advances (no event yet) must not re-arm at
+            // "now" each time, or anything between two polls is missed.
+            if !cursors.contains_key(tid) {
+                cursors.insert(tid.to_string(), json!({ "lastCursor": num(now), "seenIds": [], "lastPollAt": 0 }));
+                self.save_cursors(&cursors);
+            }
+            let rec = &cursors[tid];
+            (nekko_js::to_number(rec.get("lastCursor")), rec.get("pollState").cloned())
         };
+        // A poll that keeps more than a cursor (the GitHub PR head SHAs) gets
+        // back what it returned last time.
+        if let Some(state) = poll_state {
+            conn_settings.insert("pollState".into(), state);
+        }
         let token = nullish(config.get("token")).map(nekko_js::display).unwrap_or_default();
         let Some(result) = self.host.poll(&kind, &token, Value::Object(conn_settings), record_cursor).await else {
             return Ok(());
@@ -1252,6 +1308,14 @@ impl Workflows {
         let next = nekko_js::to_number(result.get("nextCursor"));
         if next > nekko_js::to_number(rec.get("lastCursor")) {
             rec["lastCursor"] = num(next);
+            advanced = true;
+        }
+        // Extends the record rather than replacing it: older builds read the
+        // fields they know and carry this one along.
+        if let Some(state) = result.get("pollState").filter(|s| !s.is_null())
+            && rec.get("pollState") != Some(state)
+        {
+            rec["pollState"] = state.clone();
             advanced = true;
         }
         rec["lastPollAt"] = num(self.now());

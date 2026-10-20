@@ -36,9 +36,9 @@ struct ChatsView: View {
         .toolbar {
             ToolbarItem(placement: .topBarLeading) { ComputerMenu(path: $path) }
             ToolbarItem(placement: .topBarTrailing) {
+                // Offline too: a chat started now begins when the computer is back.
                 Button { open(.newChat) } label: { Image(systemName: "square.and.pencil") }
                     .accessibilityLabel("New chat")
-                    .disabled(store.conn != .online)
             }
         }
         .overlay(alignment: .top) { if store.summariesLoading && store.summaries.isEmpty { ProgressView().padding(.top, 80) } }
@@ -58,6 +58,7 @@ struct ChatsView: View {
 
     @ViewBuilder private var rows: some View {
             ConnectionBanner().listRowSeparator(.hidden).listRowBackground(Color.clear)
+            ProtocolBanner().listRowSeparator(.hidden).listRowBackground(Color.clear)
             if let at = store.savedListAt {
                 Label(SavedListNote.text(savedAt: at, computer: store.active?.name ?? "your computer"), systemImage: "clock.arrow.circlepath")
                     .font(.footnote).foregroundStyle(palette.inkSoft)
@@ -98,8 +99,20 @@ struct ChatsView: View {
                 Text("No chats match “\(query)”.").font(.subheadline).foregroundStyle(palette.inkSoft)
                     .frame(maxWidth: .infinity).padding(.vertical, 24).listRowBackground(Color.clear)
             }
+            if !store.outbox.pendingNewChats.isEmpty && query.isEmpty {
+                Section {
+                    ForEach(store.outbox.pendingNewChats) { item in PendingChatRow(item: item, path: $path) }
+                } header: {
+                    Text("Waiting to send")
+                }
+            }
+            if query.isEmpty, let last = ChatSearch.continueChat(store.summaries), store.activity[last.id] != .needsYou {
+                Section {
+                    ContinueCard(summary: last, activity: store.activity[last.id]) { open(.chat(last.id)) }
+                }
+            }
             if !needsYou.isEmpty && query.isEmpty {
-                Section("Needs you") { ForEach(needsYou) { row($0) } }
+                Section { ForEach(needsYou) { row($0) } } header: { SectionTitle("Needs you") }
             }
             ForEach(query.isEmpty || !filtered.isEmpty ? groups : []) { g in
                 Section {
@@ -116,18 +129,13 @@ struct ChatsView: View {
                         }
                     }
                 } header: {
-                    Text(g.name)
+                    SectionTitle(g.name)
                 }
             }
     }
 
-    private var filtered: [SessionSummary] {
-        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !q.isEmpty else { return store.summaries }
-        return store.summaries.filter {
-            $0.title.lowercased().contains(q) || ($0.lastReplyText ?? "").lowercased().contains(q) || ($0.firstUserText ?? "").lowercased().contains(q)
-        }
-    }
+    /// Every word of the search, in the title, first prompt or last reply; completed chats too.
+    private var filtered: [SessionSummary] { ChatSearch.matches(store.summaries, query) }
 
     private var groups: [ChatGroup] { ChatGroup.of(filtered, folders: store.workspaces) }
 
@@ -135,8 +143,9 @@ struct ChatsView: View {
 
     private func row(_ s: SessionSummary) -> some View {
         NavigationLink(value: Route.chat(s.id)) {
-            ChatRow(summary: s, activity: store.activity[s.id])
+            ChatRow(summary: s, activity: store.activity[s.id], waiting: store.outbox.count(for: s.id))
         }
+        .accessibilityIdentifier("chats.row")
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             if s.archived {
                 Button { act { try await store.restoreChat(s.id) } } label: { Label("Restore", systemImage: "arrow.uturn.backward") }
@@ -179,6 +188,8 @@ struct ChatsView: View {
 struct ChatRow: View {
     let summary: SessionSummary
     let activity: Activity?
+    /// Prompts for this chat waiting on the phone (the outbox).
+    var waiting = 0
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -198,6 +209,11 @@ struct ChatRow: View {
                         .font(.caption2).foregroundStyle(palette.inkFaint)
                 }
                 badge
+                if waiting > 0 {
+                    Label("\(waiting) waiting", systemImage: "tray.and.arrow.up")
+                        .font(.caption2).foregroundStyle(palette.inkSoft)
+                        .accessibilityLabel(waiting == 1 ? "1 prompt waiting to send" : "\(waiting) prompts waiting to send")
+                }
             }
         }
         .padding(.vertical, 2)
@@ -227,6 +243,55 @@ struct ChatRow: View {
     }
 }
 
+/// A chat started while the computer was out of reach: its first prompt, and
+/// Edit (back to New chat), Delete and Send now. It becomes a normal row once
+/// the computer has created it.
+struct PendingChatRow: View {
+    let item: OutboxItem
+    @Binding var path: [Route]
+    @Environment(ComputersStore.self) private var store
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let sending = store.outbox.sendingId == item.id
+        VStack(alignment: .leading, spacing: 4) {
+            Text(item.preview).font(.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(2)
+            HStack(spacing: 6) {
+                if sending { ProgressView().controlSize(.mini) } else { Image(systemName: "clock").accessibilityHidden(true) }
+                Text(sending ? "Starting…" : "New chat · waiting to send")
+            }
+            .font(.caption2).foregroundStyle(palette.inkSoft)
+            if let e = item.lastError, !sending { Text(e).font(.caption2).foregroundStyle(palette.inkFaint) }
+        }
+        .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("chats.pending")
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            if !sending {
+                Button(role: .destructive) { _ = store.outbox.remove(item.id) } label: { Label("Delete", systemImage: "trash") }
+            }
+        }
+        .contextMenu {
+            if !sending {
+                Button { edit() } label: { Label("Edit", systemImage: "pencil") }
+                Button { sendNow() } label: { Label("Send now", systemImage: "paperplane") }
+                Button(role: .destructive) { _ = store.outbox.remove(item.id) } label: { Label("Delete", systemImage: "trash") }
+            }
+        }
+        .onTapGesture { if !sending { edit() } }
+    }
+
+    /// Back to New chat with its text, model, folder and tool policy.
+    private func edit() {
+        guard store.outbox.takeBack(item.id) != nil else { return }
+        path.append(.newChat)
+    }
+
+    private func sendNow() {
+        if store.conn == .online { store.flushOutbox() } else { store.reconnect() }
+    }
+}
+
 /// Switch computers, pair another, open settings.
 struct ComputerMenu: View {
     @Binding var path: [Route]
@@ -242,6 +307,8 @@ struct ComputerMenu: View {
             }
             Divider()
             Button { path.append(.pair) } label: { Label("Pair another computer", systemImage: "plus") }
+            Button { path.append(.automations) } label: { Label("Automations", systemImage: "bolt.badge.clock") }
+            Button { path.append(.usage) } label: { Label("Usage and limits", systemImage: "gauge.with.dots.needle.33percent") }
             Button { path.append(.computers) } label: { Label("Computers", systemImage: "desktopcomputer") }
             Button { path.append(.settings) } label: { Label("Settings", systemImage: "gearshape") }
         } label: {
@@ -296,13 +363,22 @@ struct ChatDialogs: ViewModifier {
     }
 }
 
-/// The line above a saved chat list: when it was saved, and that it isn't live.
+/// The line above a saved chat list, and above the composer of a saved chat:
+/// when it was saved, and that it isn't live.
 enum SavedListNote {
     static func text(savedAt ms: Int64, computer: String, now: Date = .now, calendar: Calendar = .current) -> String {
+        "Saved list from \(when(ms, now: now, calendar: calendar)). It updates when \(computer) answers."
+    }
+
+    /// A chat read from the phone's saved copy (OF-5).
+    static func copy(savedAt ms: Int64, computer: String, now: Date = .now, calendar: Calendar = .current) -> String {
+        "Saved copy from \(when(ms, now: now, calendar: calendar)). It updates when \(computer) answers."
+    }
+
+    private static func when(_ ms: Int64, now: Date, calendar: Calendar) -> String {
         let date = Date(timeIntervalSince1970: TimeInterval(ms) / 1000)
-        let when = calendar.isDate(date, inSameDayAs: now)
+        return calendar.isDate(date, inSameDayAs: now)
             ? date.formatted(date: .omitted, time: .shortened)
             : date.formatted(date: .abbreviated, time: .shortened)
-        return "Saved list from \(when). It updates when \(computer) answers."
     }
 }

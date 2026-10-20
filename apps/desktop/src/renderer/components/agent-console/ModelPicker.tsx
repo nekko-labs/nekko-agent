@@ -43,6 +43,9 @@ export function ModelPicker({
   expanded = false,
   recent = [],
   readOnly = false,
+  allowAuto = true,
+  filterProviders,
+  placeholder,
 }: {
   providers: ProviderConfig[];
   providerId: string | null;
@@ -62,9 +65,15 @@ export function ModelPicker({
   recent?: string[];
   /** Allow model selection without changing favorites or default settings. */
   readOnly?: boolean;
+  /** Offer ✨ Auto (a chat picks per turn; a workflow step cannot). */
+  allowAuto?: boolean;
+  /** Only list providers this accepts (a local-only workflow lists local servers). */
+  filterProviders?: (p: ProviderConfig) => boolean;
+  /** Chip text while no model is chosen (an inherited model), instead of "No model". */
+  placeholder?: string;
 }) {
   // A provider switched off on the Models page is neither listed nor contacted.
-  const providers = useMemo(() => allProviders.filter((p) => p.enabled !== false), [allProviders]);
+  const providers = useMemo(() => allProviders.filter((p) => p.enabled !== false && (!filterProviders || filterProviders(p))), [allProviders, filterProviders]);
   const [menu, setMenu] = useState<{x: number; y: number; pid: string; mid: string} | null>(null);
   // Only what the picker shows: the whole settings object is replaced on every save.
   const settings = useStore(useShallow((s) => s.settings && { favoriteModels: s.settings.favoriteModels, defaultProviderId: s.settings.defaultProviderId, defaultModelId: s.settings.defaultModelId }));
@@ -160,7 +169,8 @@ export function ModelPicker({
   const pinnedKeys = new Set([...recentModels, ...starred].map((s) => `${s.provider.id}::${s.model.id}`));
 
   if (defaultKey) pinnedKeys.add(defaultKey);
-  const currentProvider = providers.find((p) => p.id === providerId);
+  // Named from every provider: a filtered-out selection still says what it is.
+  const currentProvider = allProviders.find((p) => p.id === providerId);
   const providerLabel = currentProvider ? nameOf(currentProvider) : 'No provider';
   const currentModel = models.find((m) => m.id === modelId);
   const currentName =
@@ -288,7 +298,7 @@ export function ModelPicker({
             {providers.length > 0 && groups.length === 0 && (
               <p className="px-2.5 py-1.5 text-[11px] text-ink-faint">{q ? 'No models match.' : pending ? 'Loading models…' : 'No models available.'}</p>
             )}
-            {total > 1 && !q && (
+            {allowAuto && total > 1 && !q && (
               <button
                 role="option"
                 aria-selected={modelId === AUTO_MODEL_ID}
@@ -348,11 +358,11 @@ export function ModelPicker({
         aria-expanded={open}
         title={unavailableModel ? `${unavailableModel} is not available right now. Pick a model again.` : needsChoice ? 'This chat has no model yet - pick one' : `Model: ${currentName} · ${providerLabel}`}
       >
-        <span className="max-w-[calc(100%-20px)] shrink-0 whitespace-normal break-words text-left" data-model-chip-name>{unavailableModel ? <><s className="opacity-80">{unavailableModel}</s> · unavailable</> : needsChoice ? 'Choose a model' : currentName}</span>
+        <span className={`max-w-[calc(100%-20px)] shrink-0 ${placeholder && !modelId ? 'whitespace-nowrap' : 'whitespace-normal'} break-words text-left`} data-model-chip-name>{unavailableModel ? <><s className="opacity-80">{unavailableModel}</s> · unavailable</> : needsChoice ? 'Choose a model' : placeholder && !modelId ? placeholder : currentName}</span>
         {/* The name never shrinks; it wraps only when the whole chip cannot
             fit it (its max width). The provider takes what is left and
             truncates, down to nothing. */}
-        <span className="ctl-menu-label hidden min-w-0 flex-1 basis-0 truncate md:inline">· {providerLabel}</span>
+        {!(placeholder && !modelId) && <span className="ctl-menu-label hidden min-w-0 flex-1 basis-0 truncate md:inline">· {providerLabel}</span>}
         <span className="ctl-caret shrink-0">▾</span>
       </button>}
       {/* Portalled out of the pane's overflow clipping and clamped to the viewport. */}
@@ -429,7 +439,7 @@ export function AutoQualityMenu({
               onClick={() => onFollowCapacity(!followCapacity)}
             >
               <span
-                className={`mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border text-[9px] ${followCapacity ? 'border-accent bg-accent text-white' : 'border-line'}`}
+                className={`mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border text-[9px] ${followCapacity ? 'border-accent bg-accent text-on-accent' : 'border-line'}`}
                 aria-hidden
               >
                 {followCapacity ? '✓' : ''}

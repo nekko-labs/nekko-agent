@@ -5,8 +5,11 @@ import java.net.URLDecoder
 /**
  * Pairing links. Settings → Remote access on the computer shows a QR carrying
  * `nekko-agent-pair:?relay=&room=&key=&pair=` (or, from the Local Web UI,
- * `https://host/?relay=…`). Either form, or a bare query string, parses to the
- * same credentials. Mirrors `apps/mobile/src/lib/pairing.ts`.
+ * `https://host/?relay=…`), plus one `alt=` per extra route to the same relay
+ * (the relay on the computer's LAN addresses, TASKS.md IO-20). Either form, or
+ * a bare query string, parses to the same credentials. Mirrors
+ * `packages/shared/src/pairing-link.ts`, held to it by the fixture
+ * `pairing-links.json` (test resources).
  */
 data class PairingLink(
     val relayUrl: String,
@@ -14,9 +17,11 @@ data class PairingLink(
     val key: String,
     /** One-time enrollment code; absent when re-using an existing pairing. */
     val pair: String? = null,
+    /** Other addresses of the same relay, in the link's order. Not dialed yet on Android (IO-20 follow-up). */
+    val alts: List<String> = emptyList(),
 ) {
     /** Never print the secret. */
-    override fun toString(): String = "PairingLink(relay=$relayUrl, room=$room, pair=${pair != null})"
+    override fun toString(): String = "PairingLink(relay=$relayUrl, room=$room, pair=${pair != null}, alts=${alts.size})"
 }
 
 object Pairing {
@@ -24,32 +29,85 @@ object Pairing {
     private val KEY = Regex("^[0-9a-fA-F]{16,256}$")
     private val WS = Regex("^wss?://", RegexOption.IGNORE_CASE)
 
+    /** At most this many `alt` routes are kept (`MAX_PAIRING_ALTS`). */
+    const val MAX_ALTS = 4
+
     fun parse(input: String): PairingLink? {
         val raw = input.trim()
         if (raw.isEmpty()) return null
         val query = (if ('?' in raw) raw.substringAfter('?') else raw).substringBefore('#')
         val params = parseQuery(query) ?: return null
-        val relay = params["relay"]?.trim().orEmpty()
-        val room = params["room"]?.trim().orEmpty()
-        val key = params["key"]?.trim().orEmpty()
+        fun first(k: String) = params.firstOrNull { it.first == k }?.second
+        val relay = first("relay")?.trim().orEmpty()
+        val room = first("room")?.trim().orEmpty()
+        val key = first("key")?.trim().orEmpty()
         if (relay.isEmpty() || room.isEmpty() || key.isEmpty()) return null
         if (!WS.containsMatchIn(relay)) return null
         if (!ROOM.matches(room) || !KEY.matches(key)) return null
-        val pair = params["pair"]?.trim()?.uppercase()?.ifEmpty { null }
-        return PairingLink(relay.trimEnd('/'), room, key, pair)
+        val pair = first("pair")?.trim()?.uppercase()?.ifEmpty { null }
+        val relayUrl = relay.trimEnd('/')
+        return PairingLink(relayUrl, room, key, pair, alts(params.filter { it.first == "alt" }.map { it.second }, relayUrl))
+    }
+
+    /** The usable `alt` values: PH1-clean, no trailing slashes, no repeats of the relay or each other. */
+    fun alts(values: List<String>, relayUrl: String): List<String> {
+        val out = ArrayList<String>()
+        for (v in values) {
+            val url = v.trim().trimEnd('/')
+            if (url.isEmpty() || urlProblem(url) || url == relayUrl || url in out) continue
+            out += url
+            if (out.size == MAX_ALTS) break
+        }
+        return out
     }
 
     /** Relay host for display ("nekko-agent-relay.fly.dev"). */
     fun relayHost(relayUrl: String): String = relayUrl.replace(WS, "").substringBefore('/')
 
-    /** URLSearchParams semantics: first value wins for get(), `+` is a space. */
-    private fun parseQuery(q: String): Map<String, String>? = try {
-        val out = LinkedHashMap<String, String>()
+    /** `relayUrlProblem` (packages/shared/src/relay-route.ts): bad shape, or plain ws:// to the open internet. */
+    private fun urlProblem(url: String): Boolean {
+        if (!Regex("^wss?://[^/?#]", RegexOption.IGNORE_CASE).containsMatchIn(url)) return true
+        return url.startsWith("ws://", ignoreCase = true) && isInternet(sharedHost(url))
+    }
+
+    /** `relayHost` in relay-route.ts: lowercased, IPv6 without brackets, past userinfo. */
+    private fun sharedHost(url: String): String {
+        var s = url.trim().substringAfter("://")
+        val authority = Regex("^[^/?#]*").find(s)?.value.orEmpty()
+        val at = authority.lastIndexOf('@')
+        if (at >= 0) s = s.substring(at + 1)
+        if (s.startsWith("[")) {
+            val end = s.indexOf(']')
+            return if (end < 0) "" else s.substring(1, end).lowercase()
+        }
+        return (Regex("^[^/:?#]*").find(s)?.value.orEmpty()).lowercase()
+    }
+
+    /** `relayRoute(url) === 'internet'`. */
+    private fun isInternet(h: String): Boolean {
+        if (h == "localhost" || h == "::1" || h.startsWith("127.")) return false
+        if (h == "ts.net" || h.endsWith(".ts.net") || RelayHint.isTailscaleIp(h) || h.startsWith("fd7a:115c:a1e0:")) return false
+        if (h.endsWith(".local") || isPrivateIPv4(h)) return false
+        if (':' in h && (h.startsWith("fc") || h.startsWith("fd") || h.startsWith("fe80:"))) return false
+        return true
+    }
+
+    private fun isPrivateIPv4(h: String): Boolean {
+        val parts = h.split('.')
+        if (parts.size != 4 || !parts.all { Regex("^\\d{1,3}$").matches(it) }) return false
+        val n = parts.map { it.toInt() }
+        if (n.any { it > 255 }) return false
+        return n[0] == 10 || (n[0] == 172 && n[1] in 16..31) || (n[0] == 192 && n[1] == 168) || (n[0] == 169 && n[1] == 254)
+    }
+
+    /** URLSearchParams semantics: every pair in order (first wins for get()), `+` is a space. */
+    private fun parseQuery(q: String): List<Pair<String, String>>? = try {
+        val out = ArrayList<Pair<String, String>>()
         for (part in q.split('&')) {
             if (part.isEmpty()) continue
             val k = URLDecoder.decode(part.substringBefore('='), Charsets.UTF_8)
             val v = if ('=' in part) URLDecoder.decode(part.substringAfter('='), Charsets.UTF_8) else ""
-            out.putIfAbsent(k, v)
+            out += k to v
         }
         out
     } catch (_: IllegalArgumentException) {
