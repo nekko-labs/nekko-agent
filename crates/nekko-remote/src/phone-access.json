@@ -12,10 +12,26 @@
   "files:read",
   "files:search",
   "files:write",
+  "git:branches",
+  "git:commit",
+  "git:commitMessage",
+  "git:compare",
+  "git:diff",
+  "git:log",
+  "git:mergeAbort",
+  "git:push",
+  "git:show",
+  "git:stage",
+  "git:switch",
+  "git:unstage",
   "limits:get",
   "logs:list",
   "logs:read",
   "models:list",
+  "pr:action",
+  "pr:checks",
+  "pr:create",
+  "pr:diff",
   "pr:sessionList",
   "providers:list",
   "session:create",
@@ -35,6 +51,7 @@
   "voice:transcribe",
   "workflow:run",
   "workflows:list",
+  "workspace:gitStatus",
   "workspace:list"
  ],
  "alwaysDenied": {
@@ -49,9 +66,7 @@
    "file:read",
    "file:write",
    "image:fetch",
-   "pr:action",
    "pr:continueStack",
-   "pr:diff",
    "pr:linkStack",
    "providers:importCliAuth",
    "providers:remove",
@@ -71,7 +86,6 @@
    "workflow:event",
    "workflow:update",
    "workspace:addByPath",
-   "workspace:gitStatus",
    "workspace:remove"
   ],
   "prefixes": [
@@ -89,6 +103,14 @@
   ]
  },
  "readChannels": [
+  "git:branches",
+  "git:compare",
+  "git:diff",
+  "git:log",
+  "git:show",
+  "pr:checks",
+  "pr:diff",
+  "workspace:gitStatus",
   "files:list",
   "files:read",
   "files:search",
@@ -96,6 +118,15 @@
   "logs:read"
  ],
  "changeChannels": [
+  "git:commit",
+  "git:commitMessage",
+  "git:mergeAbort",
+  "git:push",
+  "git:stage",
+  "git:switch",
+  "git:unstage",
+  "pr:action",
+  "pr:create",
   "files:write"
  ],
  "changeProof": {
@@ -313,6 +344,80 @@
    "size",
    "title",
    "updatedAt"
+  ]
+ },
+ "git": {
+  "view": {
+   "files": 100,
+   "linesPerFile": 300,
+   "totalBytes": 262144,
+   "commits": 100,
+   "branches": 200,
+   "checks": 100,
+   "textChars": 4000
+  },
+  "optionKeys": {
+   "diff": [
+    "base",
+    "path",
+    "staged"
+   ],
+   "log": [
+    "limit",
+    "path",
+    "ref",
+    "skip"
+   ],
+   "commit": [
+    "message"
+   ],
+   "push": [
+    "setUpstream"
+   ],
+   "switch": [
+    "create"
+   ],
+   "prCreate": [
+    "base",
+    "body",
+    "draft",
+    "title"
+   ]
+  },
+  "prActions": [
+   "approve",
+   "close",
+   "merge",
+   "reopen"
+  ],
+  "commitView": [
+   "author",
+   "date",
+   "parents",
+   "sha",
+   "short",
+   "subject"
+  ],
+  "branchView": [
+   "ahead",
+   "behind",
+   "current",
+   "date",
+   "gone",
+   "name",
+   "remote",
+   "sha",
+   "subject",
+   "upstream"
+  ],
+  "checkView": [
+   "completedAt",
+   "description",
+   "link",
+   "name",
+   "startedAt",
+   "state",
+   "workflow"
   ]
  },
  "maxFrameBytes": 9437184

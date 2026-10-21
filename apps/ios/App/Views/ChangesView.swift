@@ -169,7 +169,8 @@ private struct FileChangeView: View {
     }
 }
 
-private struct LineView: View {
+/// One diff line, numbered and tinted; shared with the Git screen's diffs.
+struct LineView: View {
     let line: PhoneChanges.Hunk.Line
     @Environment(\.palette) private var palette
 

@@ -59,6 +59,8 @@ pub struct Policy {
     pub activity_limit: usize,
     /// Files and logs from a phone (IO-33 FA-1, FA-5): limits and views (phone_files.rs).
     pub files: crate::phone_files::FilesPolicy,
+    /// Git from a phone (IO-33 FA-2): limits, option keys and views (phone_git.rs).
+    pub git: crate::phone_git::GitPolicy,
 }
 
 fn strings(v: &Value) -> Vec<String> {
@@ -102,6 +104,7 @@ pub fn policy() -> &'static Policy {
             key_channel: v["keyChannel"].as_str().unwrap_or("device:registerKey").to_string(),
             activity_limit: v["activityLimit"].as_u64().unwrap_or(200) as usize,
             files: crate::phone_files::FilesPolicy::from_policy(&v["files"]),
+            git: crate::phone_git::GitPolicy::from_policy(&v["git"]),
         }
     })
 }
@@ -209,7 +212,7 @@ pub struct SkillCall {
 pub struct Screened {
     pub settings: Option<Vec<(String, Value)>>,
     pub skill: Option<SkillCall>,
-    /// A files or logs call's arguments, rebuilt from the checked fields (phone_files.rs).
+    /// A git, files or logs call's arguments, rebuilt from the checked fields (phone_git.rs, phone_files.rs).
     pub args: Option<Vec<Value>>,
 }
 
@@ -247,6 +250,10 @@ fn phone_skill(v: &Value) -> Result<SkillCall, Denied> {
 pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
     if !channel_allowed(channel) {
         return Err(denied("channel-denied", channel));
+    }
+    if crate::phone_git::is_git(channel) {
+        let args = crate::phone_git::screen(channel, args, &policy().git)?;
+        return Ok(Screened { args: Some(args), ..Screened::default() });
     }
     if crate::phone_files::is_files(channel) {
         let args = crate::phone_files::screen(channel, args, &policy().files)?;
@@ -442,6 +449,7 @@ pub fn redact(channel: &str, result: Value) -> Value {
         "usage:summary" => crate::phone_views::usage(&result, &policy().views),
         "limits:get" => crate::phone_views::limits(&result, &policy().views),
         c if crate::phone_files::is_files(c) => crate::phone_files::view(c, &result, &policy().files),
+        c if crate::phone_git::is_git(c) => crate::phone_git::view(c, &result, &policy().git, &policy().views.pr),
         _ => result,
     }
 }
@@ -1165,6 +1173,52 @@ mod tests {
         }
 
         #[test]
+        fn git_goes_through_the_policy_classes() {
+            let k = signer(13);
+            let devices = Arc::new(MemDevices::default());
+            *devices.now.lock().unwrap() = NOW;
+            let access = DeviceAccess { read: false, change: true };
+            devices.devices.lock().unwrap().insert("phone-1".into(), PhoneDevice { access, key: Some(public(&k)) });
+            let calls: Arc<Mutex<Vec<(String, Value)>>> = Arc::default();
+            let gated = gate(host(calls.clone(), secrets()), devices.clone());
+            let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
+            let ask = |channel: &str, args: Value, proof: Option<Value>| {
+                let who = PhoneCall { device_id: "phone-1".into(), proof };
+                rt.block_on(gated(who, channel.to_string(), args))
+            };
+            // Read is off: a diff is refused before the computer runs anything.
+            assert_eq!(ask("git:diff", json!(["session:s1"]), None), refused("read-off", "git:diff"));
+            // Change is on: a signed push reaches the computer with only the checked fields.
+            let args = json!(["session:s1", { "setUpstream": true }]);
+            let p = proof(&k, "phone-1", "git:push", &args, NOW as i64);
+            assert!(ask("git:push", args, Some(p)).is_ok());
+            // The model-written message is a Change: no proof, no tokens spent.
+            assert_eq!(
+                ask("git:commitMessage", json!(["session:s1"]), None),
+                refused("proof-required", "git:commitMessage")
+            );
+            // A saved folder's id, even signed, is refused by the screen.
+            let args = json!(["w1", ["a.txt"]]);
+            let p = proof(&k, "phone-1", "git:stage", &args, NOW as i64);
+            assert_eq!(
+                ask("git:stage", args, Some(p)),
+                Err("Not allowed from a paired phone (value-invalid): chat folder".into())
+            );
+            assert_eq!(
+                *calls.lock().unwrap(),
+                vec![("git:push".to_string(), json!(["session:s1", { "setUpstream": true }]))]
+            );
+            assert_eq!(
+                r_log(&devices),
+                vec![(true, None), (false, Some("proof-required".into())), (false, Some("value-invalid".into()))]
+            );
+        }
+
+        fn r_log(devices: &MemDevices) -> Vec<(bool, Option<String>)> {
+            devices.log.lock().unwrap().iter().map(|(_, a)| (a.ok, a.reason.clone())).collect()
+        }
+
+        #[test]
         fn files_and_logs_go_through_the_policy_classes() {
             let k = signer(14);
             let devices = Arc::new(MemDevices::default());
@@ -1233,13 +1287,16 @@ mod tests {
         #[test]
         fn the_policy_has_the_io33_pieces() {
             let p = policy();
-            // FA-1 and FA-5 (files and logs): saving a file is the only Change.
+            // FA-2 (git) is the first feature to class its channels.
+            assert!(p.read_channels.iter().any(|c| c == "git:diff"));
+            assert!(p.change_channels.iter().any(|c| c == "git:commitMessage"), "it spends model tokens");
+            // FA-1 and FA-5 (files and logs): saving a file is the only Change among them.
             for c in ["files:list", "files:search", "files:read", "logs:list", "logs:read"] {
                 assert!(has(&p.read_channels, c), "{c}");
             }
             assert!(has(&p.change_channels, "files:write"));
-            for c in &p.read_channels {
-                assert!(!has(&p.change_channels, c), "{c} is in both classes");
+            for c in p.read_channels.iter().chain(&p.change_channels) {
+                assert!(!has(&p.read_channels, c) || !has(&p.change_channels, c), "{c} is in both classes");
             }
             assert_eq!((p.proof_max_age_ms, p.proof_max_ahead_ms), (300_000.0, 60_000.0));
             assert_eq!(p.key_channel, "device:registerKey");
@@ -1278,9 +1335,8 @@ mod tests {
             "task:create",
             "task:delete",
             "workflow:update",
-            "pr:action",
-            "pr:diff",
-            "workspace:gitStatus",
+            "pr:continueStack",
+            "pr:linkStack",
             "turn:pending",
         ] {
             let err = run(&calls, c, json!([])).unwrap_err();

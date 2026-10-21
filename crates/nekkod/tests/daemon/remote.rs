@@ -166,9 +166,26 @@ async fn the_daemon_runs_the_phone_relay_agent() {
     let saved: Value = serde_json::from_str(&std::fs::read_to_string(data.join("remote.json")).unwrap()).unwrap();
     assert_eq!(saved["devices"][0]["access"]["change"], false);
 
+    // IO-33 FA-2: git from a phone. A read names a chat, never a saved folder;
+    // a chat with no folder gets the engine's own answer; a change is refused
+    // while Change is off and lands in the activity; Read off refuses reads.
+    let res = ask_res(43, "git:diff", json!(["w1", { "staged": true }])).await;
+    assert_eq!(res["error"], "Not allowed from a paired phone (value-invalid): chat folder", "{res}");
+    let res = ask_res(44, "git:log", json!(["session:nope"])).await;
+    assert_eq!(res["error"], "This workspace has no folder to run git in.", "{res}");
+    let res = ask_res(45, "git:push", json!(["session:nope", { "setUpstream": true }])).await;
+    assert_eq!(res["error"], "Not allowed from a paired phone (change-off): git:push", "{res}");
+    let (_, activity) = post(d.port, "remote:activity", json!(["phone-1"]), Some(TOKEN)).await;
+    assert_eq!(activity.as_array().map(Vec::len), Some(2), "reads are not logged: {activity}");
+    assert_eq!(activity[1]["channel"], "git:push", "oldest first: {activity}");
+    assert_eq!(activity[1]["reason"], "change-off");
+    post(d.port, "remote:setAccess", json!(["phone-1", { "read": false }]), Some(TOKEN)).await;
+    let res = ask_res(46, "workspace:gitStatus", json!(["session:nope"])).await;
+    assert_eq!(res["error"], "Not allowed from a paired phone (read-off): workspace:gitStatus", "{res}");
     // IO-33 FA-1 and FA-5: files and logs from a phone. A saved folder by its
     // id; secret files left out and refused; a save is a Change (off here, so
     // refused and logged); logs are read only; Read off refuses both.
+    post(d.port, "remote:setAccess", json!(["phone-1", { "read": true }]), Some(TOKEN)).await;
     let project = data.join("phone-project");
     std::fs::create_dir_all(project.join("src")).unwrap();
     std::fs::write(project.join("src").join("lib.rs"), "pub fn hi() {}\n").unwrap();

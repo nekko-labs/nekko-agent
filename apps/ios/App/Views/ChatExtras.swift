@@ -269,7 +269,9 @@ struct PrSheet: View {
     @State private var prs: [PullRequest] = []
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
+    @Environment(ComputersStore.self) private var store
     @State private var failed: String?
+    @State private var git: GitModel?
 
     var body: some View {
         NavigationStack {
@@ -291,7 +293,22 @@ struct PrSheet: View {
                         if let url = URL(string: pr.url) {
                             Link(destination: url) { Label("Open on GitHub", systemImage: "safari") }
                         }
+                        // IO-33 FA-2: its checks, its files and the PR actions, straight from the phone.
+                        if let git {
+                            NavigationLink { PrDetailView(model: git, pr: pr) } label: {
+                                Label("Checks, files and actions", systemImage: "checklist")
+                            }
+                            .accessibilityIdentifier("pr.detail")
+                        }
                     }
+                }
+                Section {
+                    NavigationLink { GitScreen(chatId: chat.sessionId) } label: {
+                        Label("Git: status, commit, push", systemImage: "arrow.triangle.branch")
+                    }
+                    .accessibilityIdentifier("pr.git")
+                } footer: {
+                    Text("Done from this phone, with Face ID or your passcode.")
                 }
                 Section {
                     ForEach(actions, id: \.self) { a in
@@ -307,6 +324,7 @@ struct PrSheet: View {
             }
             .task {
                 prs = initial
+                if git == nil { git = GitModel(store: store, chatId: chat.sessionId) }
                 if let list = try? await chat.pullRequests() { prs = list }
             }
             .navigationTitle(prs.count == 1 ? "Pull request" : "Pull requests")

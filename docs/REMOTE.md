@@ -99,7 +99,20 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 >   workflows with how each last went, and **Run now**. You set them up on the computer.
 > - **Pull requests:** a chip shows the chat's pull request and its checks. **Commit these changes**,
 >   **Open a PR** and **Fix the failing checks** send a prompt to the chat, so the agent does the git
->   work on your computer and asks you before anything that needs approval.
+>   work on your computer and asks you before anything that needs approval. Or do it yourself from
+>   the phone (below).
+> - **Git:** **More → Git** in a chat (or the pull request chip → **Git: status, commit, push**)
+>   shows the chat folder's branch, how far it is ahead or behind, and its changed files, staged and
+>   not, each with its diff. Swipe a file to stage or unstage it, or use **Stage all**. Type a commit
+>   message or tap **Write message** to have your computer's model write one for what is staged (it
+>   uses that model's tokens), then **Commit** and **Push** (a new branch is published to its remote
+>   the first time). **History** lists commits with each one's message and files; **Branches**
+>   switches branch or makes a new one; **Compare** shows what one branch has that another doesn't;
+>   **Open a pull request** takes a title, a description, a base branch and Draft. A pull request's
+>   **Checks, files and actions** lists its checks with links, its changed files, and **Approve**,
+>   **Merge**, **Close** or **Reopen**. **Abort merge** shows while a merge stopped on a conflict.
+>   Every one of these changes asks for Face ID or your passcode (once per 5 minutes) and shows in
+>   the phone's *Activity* on the computer.
 > - **Usage and limits:** what each provider plan has used and when it resets, and recent usage. Read only.
 >
 > **All your chats, grouped like the desktop** (Android): the chat list shows every chat on the
@@ -204,11 +217,11 @@ changes how the computer itself is set up:
   queued, and stop messages; answer approvals and the agent's questions; pick a model from the
   computer's providers and a folder from its list; voice status and transcription; read a chat's
   pull requests, the computer's automations, its usage and plan limits, and run an automation now;
-  and a few settings (below).
+  git in a chat's folder (below); and a few settings (below).
 - **Never allowed from a phone:** wiping data or resetting settings, remote access itself (pairing,
   revoking, rotating the secret), terminals, reading or writing files, accepting or reverting changes,
-  git itself (merging, closing or reviewing a pull request, its diff, git status: ask the agent
-  instead), making, changing or deleting automations, adding or removing folders, installing
+  git outside a chat's own folder, restacking or linking stacked pull requests, making, changing or
+  deleting automations, adding or removing folders, installing
   or removing voice models, connecting or disconnecting connectors, provider keys and sign-ins, MCP
   servers and hooks. Everything not on the allowed list is refused too, with an error that starts
   *Not allowed from a paired phone*.
@@ -223,13 +236,24 @@ changes how the computer itself is set up:
   agent changed in a chat. Your computer works out the diff and sends only that: short paths, a
   capped number of lines, and files that may hold secrets (`.env`, keys, `.ssh`, `.aws`) counted but
   never shown. A phone still can't accept or revert changes or read any other file.
+- **Git in a chat's folder:** a phone names a chat, never a folder, and your computer runs git in
+  that chat's checkout (its worktree when the chat is isolated); a folder's own id from a phone is
+  refused. Reading (status, diffs, history, branches, compare, a pull request's checks and files)
+  needs *Read*; staging, committing, a model-written message, pushing, switching branch, aborting a
+  merge, opening a pull request and approving, merging, closing or reopening one need *Change* and a
+  fresh signature. What reaches the phone is smaller than the desktop's view: at most 100 files,
+  300 lines of each file's diff and 256 KB of diff per answer. Files that may hold secrets (`.env`,
+  keys, `.ssh`, `.aws`) are listed, so a commit never carries one unseen, but their diff is never
+  sent. Commits show the author's name, not their email; no path on the computer is sent. A
+  pull request is named by its GitHub address only. Pushes never force, and commits never skip
+  hooks or amend.
 - **One chat's options:** a phone can change a chat's model, title, pin and tags, complete it, and
   switch it between Ask, Guardrails and YOLO, but not its tools, isolation or
   offline/incognito switches. Messages cannot attach files from the computer.
 
 ### What phones can do: Read and Change, per phone
 
-Files, git, terminals, task boards, logs and SSH are coming to the phone app. Ahead of them,
+Git is on the iPhone now (above); files, terminals, task boards, logs and SSH are coming.
 *Remote access → What phones can do* on the computer lists each paired phone with two switches:
 
 - **Read:** look at files, git status and history, logs and boards.
@@ -257,7 +281,7 @@ the newest 200 per phone; rotating the secret clears them.
 **Revoke** a phone to stop all of it at once. Whatever the switches say, a phone can never reach
 provider keys or other credentials, remote access itself (pairing more devices, revoking,
 rotating), wiping data or resetting settings, or the computer's own sign-in windows, dialogs,
-updater and shell. Until the features ship, files, git and terminals stay refused as described above.
+updater and shell. Until their features ship, files and terminals stay refused as described above.
 
 ### Coming next: files and logs
 

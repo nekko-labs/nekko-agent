@@ -106,8 +106,8 @@ describe('the always-denied list', () => {
     }
   });
 
-  it('still refuses absolute-path files, git and terminals', () => {
-    for (const c of ['file:read', 'file:write', 'dir:list', 'pr:action', 'pr:diff', 'workspace:gitStatus', 'terminal:create', 'terminals:list']) {
+  it('still refuses absolute-path files, the stack calls and terminals', () => {
+    for (const c of ['file:read', 'file:write', 'dir:list', 'pr:continueStack', 'pr:linkStack', 'terminal:create', 'terminals:list']) {
       expect(phoneChannelAllowed(c), c).toBe(false);
       expect(phoneAlwaysDenied(c), c).toBe(true);
     }
