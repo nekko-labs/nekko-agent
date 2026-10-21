@@ -29,7 +29,7 @@ import { chatWelcomeState } from './agent-console/chatWelcome.js';
 import { useAllProviderLimits, useProviderLimits } from '../useLimits.js';
 import { clearDraft, loadDraft, restoredDraftImages, saveDraft } from '../composerDrafts.js';
 import { indentListSelection } from '../composerLists.js';
-import { draftAfterSkillSelection } from '../composerSkills.js';
+import { draftAfterPromptSelection, draftAfterSkillSelection, slashTrigger } from '../composerSkills.js';
 import {
   ActivityGroup, ApprovalBar, AutoQualityMenu, MessageBubble, ModelPicker,
   ReplyStatus, useElementWidth,
@@ -1873,7 +1873,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const summaryType = useStore((st) => st.sessions.find((x) => x.id === sessionId)?.chatType);
   const imageMode = (session ? session.chatType : summaryType) === 'image';
   const canCompose = imageMode || hasProvider;
-  const slashQuery = draft.startsWith('/') && !draft.includes('\n') ? draft.slice(1).toLowerCase() : null;
+  const slashQuery = slashTrigger(draft)?.query.toLowerCase() ?? null;
   const slashMatches =
     slashQuery !== null ? (settings?.prompts ?? []).filter((p) => p.name.toLowerCase().includes(slashQuery)) : [];
   // Skills (standard agent skills + installed marketplace skills) show in the
@@ -1939,7 +1939,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       return;
     }
     const p = slashMatches[i - skillMatches.length];
-    if (p) { setDraft(p.body); composerRef.current?.focus(); }
+    if (p) { setDraft((current) => draftAfterPromptSelection(current, p.body)); composerRef.current?.focus(); }
   };
 
   const pickFile = async (f: IndexedFile) => {
