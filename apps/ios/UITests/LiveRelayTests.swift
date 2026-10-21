@@ -410,6 +410,19 @@ final class LiveRelayTests: XCTestCase {
         sleep(2)
         attach(app, "beyond-9-usage")
         auditAccessibility(app, "beyond-usage")
+
+        // IO-33 FA-5: the computer's logs, read only.
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(waitForFrame(menu, in: app, 10))
+        menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        app.buttons["computer.logs"].firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Logs"].waitForExistence(timeout: 10))
+        let log = app.buttons["logs.row"].firstMatch
+        XCTAssertTrue(log.waitForExistence(timeout: 15), "the computer lists its logs")
+        attach(app, "beyond-10-logs")
+        log.tap()
+        XCTAssertTrue(app.buttons["log.refresh"].waitForExistence(timeout: 10), "a log opens with Refresh")
+        attach(app, "beyond-11-log")
     }
 
     func testPairFromADeepLink() throws {

@@ -167,6 +167,7 @@ public struct PhoneRefusal: Equatable, Sendable {
         case "proof-stale": return "\(computer) couldn’t confirm it was you: check that this phone’s clock is right, then try again."
         case "device-unknown": return "\(computer) doesn’t know this phone any more. Pair it again."
         case "channel-denied": return "\(computer) doesn’t allow this from a phone. Update Nekko on \(computer) if it’s new."
+        case "value-invalid" where detail == "secret file": return "This file may hold secrets, so it never leaves \(computer)."
         default: return nil
         }
     }

@@ -75,6 +75,20 @@ public enum Channels {
         gitStage, gitUnstage, gitCommit, gitCommitMessage, gitPush, gitSwitch, gitMergeAbort, prCreate, prAction,
     ]
 
+    /// Files in a chat's or saved folder's tree (IO-33 FA-1, `Files.swift`): list,
+    /// search and read; saving is a Change, checked against the hash read.
+    public static let filesList = "files:list"
+    public static let filesSearch = "files:search"
+    public static let filesRead = "files:read"
+    public static let filesWrite = "files:write"
+    /// The computer's app, engine and agent logs, read only and redacted there (FA-5).
+    public static let logsList = "logs:list"
+    public static let logsRead = "logs:read"
+    /// The change-class channels among these.
+    public static let filesChange: Set<String> = [filesWrite]
+    /// Every change-class channel the phone calls (`PHONE_CHANGE_CHANNELS`): signed, so Face ID or the passcode is asked.
+    public static let change: Set<String> = gitChange.union(filesChange)
+
     public static let all = [
         settingsGet, settingsUpdate, providersList, modelsList, sessionsSummaries, sessionCreate, sessionGet,
         sessionSetOptions, sessionDelete, voiceStatus, voiceTranscribe, chatSend, chatAbort, chatQueue,
@@ -83,6 +97,7 @@ public enum Channels {
         usageSummary, limitsGet,
         workspaceGitStatus, gitDiff, gitLog, gitShow, gitBranches, gitCompare, prChecks, prDiff,
         gitStage, gitUnstage, gitCommit, gitCommitMessage, gitPush, gitSwitch, gitMergeAbort, prCreate, prAction,
+        filesList, filesSearch, filesRead, filesWrite, logsList, logsRead,
     ]
 }
 

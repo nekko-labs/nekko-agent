@@ -113,6 +113,19 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 >   **Merge**, **Close** or **Reopen**. **Abort merge** shows while a merge stopped on a conflict.
 >   Every one of these changes asks for Face ID or your passcode (once per 5 minutes) and shows in
 >   the phone's *Activity* on the computer.
+> - **Files:** **More → Files** in a chat opens that chat's folder (its worktree when the chat is
+>   isolated); **Computers and settings → Files** lists the computer's saved folders. Tap through
+>   folders, or search by file name. A file opens in monospace with line numbers (Markdown can be
+>   shown formatted, images as pictures); a long file shows its first 256 KB with a note. **Edit**
+>   a text file up to 256 KB and **Save**: Face ID or your passcode is asked (once per 5 minutes)
+>   and the save shows in the phone's *Activity*. If the file changed on the computer after you
+>   opened it, the phone says *Changed on the computer* and you choose **Reload** (your edits are
+>   dropped) or **Save over it**; nothing is overwritten without that choice. Files that may hold
+>   secrets are counted under the list, never shown.
+> - **Logs:** **Computers and settings → Logs** lists the desktop app's log, the engine's log and
+>   each chat's agent run log. A log opens at its newest lines; **Refresh** reads it again, and the
+>   search field shows the matching lines with their line numbers. Read only, with secrets already
+>   replaced by `[redacted]` on the computer.
 > - **Usage and limits:** what each provider plan has used and when it resets, and recent usage. Read only.
 >
 > **All your chats, grouped like the desktop** (Android): the chat list shows every chat on the
@@ -217,9 +230,11 @@ changes how the computer itself is set up:
   queued, and stop messages; answer approvals and the agent's questions; pick a model from the
   computer's providers and a folder from its list; voice status and transcription; read a chat's
   pull requests, the computer's automations, its usage and plan limits, and run an automation now;
-  git in a chat's folder (below); and a few settings (below).
+  git in a chat's folder (below); a chat's or saved folder's files and the computer's logs (below);
+  and a few settings (below).
 - **Never allowed from a phone:** wiping data or resetting settings, remote access itself (pairing,
-  revoking, rotating the secret), terminals, reading or writing files, accepting or reverting changes,
+  revoking, rotating the secret), terminals, files by a path on the computer or outside a chat's or
+  saved folder, creating files, accepting or reverting changes,
   git outside a chat's own folder, restacking or linking stacked pull requests, making, changing or
   deleting automations, adding or removing folders, installing
   or removing voice models, connecting or disconnecting connectors, provider keys and sign-ins, MCP
@@ -247,13 +262,27 @@ changes how the computer itself is set up:
   sent. Commits show the author's name, not their email; no path on the computer is sent. A
   pull request is named by its GitHub address only. Pushes never force, and commits never skip
   hooks or amend.
+- **Files in a chat's or saved folder:** a phone names a chat or a saved folder, never a path on
+  your computer. Paths are relative to that folder, and anything that leaves it (`..`, absolute
+  paths, a link pointing outside) is refused. Listing, searching by name and opening a file need
+  *Read*; saving needs *Change* and a fresh signature. A phone only saves over the version it
+  opened (your computer checks the file's hash) and never creates a file. What reaches the phone is
+  smaller than the desktop's view: at most 500 entries per folder, 100 search results, 256 KB of a
+  file's text and images up to 2 MB; a save is at most 256 KB. Files that may hold secrets
+  (`.env`, keys, `.ssh`, `.aws`, git credentials and `.git/config`) are refused before your computer
+  even looks, and left out of listings and search results (counted, never named).
+- **Logs, read only:** the desktop app's log, the engine's log and each chat's agent run log, with
+  *Read*. A phone gets at most the last 256 KB of a log, or up to 500 matching lines of a search
+  (each cut at 2,000 characters). API keys, tokens, passwords and other secret-looking values are
+  replaced with `[redacted]` before a line leaves the computer, and a search only matches the
+  redacted text.
 - **One chat's options:** a phone can change a chat's model, title, pin and tags, complete it, and
   switch it between Ask, Guardrails and YOLO, but not its tools, isolation or
   offline/incognito switches. Messages cannot attach files from the computer.
 
 ### What phones can do: Read and Change, per phone
 
-Git is on the iPhone now (above); files, terminals, task boards, logs and SSH are coming.
+Git, files and logs are on the iPhone now (above); terminals, task boards and SSH are coming.
 *Remote access → What phones can do* on the computer lists each paired phone with two switches:
 
 - **Read:** look at files, git status and history, logs and boards.
@@ -281,26 +310,11 @@ the newest 200 per phone; rotating the secret clears them.
 **Revoke** a phone to stop all of it at once. Whatever the switches say, a phone can never reach
 provider keys or other credentials, remote access itself (pairing more devices, revoking,
 rotating), wiping data or resetting settings, or the computer's own sign-in windows, dialogs,
-updater and shell. Until their features ship, files and terminals stay refused as described above.
+updater and shell. Until their features ship, terminals stay refused as described above.
 
-### Coming next: files and logs
+### Where the logs live
 
-The computer side of browsing a chat's files and reading the computer's logs from a phone is built;
-phones can't call it yet (they need the access levels and the phone screens first). What it will
-allow:
-
-- **Files in the chat's folder only.** The phone names a chat (or a saved folder), never a path on
-  your computer. Paths are relative to that folder, and anything that leaves it (`..`, absolute
-  paths, a link pointing outside) is refused. Files that may hold secrets (`.env`, keys, `.ssh`,
-  `.aws`, git credentials and `.git/config`) are counted in a listing and never named, opened or
-  saved. Text previews are capped at 256 KB and images at 2 MB. A save from the phone only lands if
-  the file is still the version the phone opened. If you edited it on the computer in between,
-  the phone is told and nothing is overwritten.
-- **Logs, read only.** The desktop app's log, the engine's log and each chat's agent run log, with
-  search. API keys, tokens, passwords and other secret-looking values are replaced with
-  `[redacted]` before a line leaves the computer, and a search only matches the redacted text.
-
-The logs are files you can open yourself: `logs/app.log` and `logs/nekkod.log` in the data folder
+The logs a phone reads are files you can open yourself: `logs/app.log` and `logs/nekkod.log` in the data folder
 (`~/.nekko-agent` unless you moved it). Each is rotated at 5 MB, and the last three old copies are kept
 (`app.log.1` to `app.log.3`). Windows' engine log holds only start-up lines and crashes for now.
 

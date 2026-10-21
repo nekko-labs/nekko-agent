@@ -309,6 +309,10 @@ struct ComputerMenu: View {
             Button { path.append(.pair) } label: { Label("Pair another computer", systemImage: "plus") }
             Button { path.append(.automations) } label: { Label("Automations", systemImage: "bolt.badge.clock") }
             Button { path.append(.usage) } label: { Label("Usage and limits", systemImage: "gauge.with.dots.needle.33percent") }
+            Button { path.append(.files) } label: { Label("Files", systemImage: "folder") }
+                .accessibilityIdentifier("computer.files")
+            Button { path.append(.logs) } label: { Label("Logs", systemImage: "doc.text.magnifyingglass") }
+                .accessibilityIdentifier("computer.logs")
             Button { path.append(.computers) } label: { Label("Computers", systemImage: "desktopcomputer") }
             Button { path.append(.settings) } label: { Label("Settings", systemImage: "gearshape") }
         } label: {

@@ -52,7 +52,8 @@ final class GitTests: XCTestCase {
         guard let data = try? Data(contentsOf: file) else { throw XCTSkip("repository sources not available") }
         let policy = try JSONValue.parse(data)
         let change = Set(policy["changeChannels"]?.array?.compactMap(\.string) ?? [])
-        XCTAssertEqual(change.filter { Channels.all.contains($0) }, Channels.gitChange)
+        XCTAssertEqual(change.filter { Channels.all.contains($0) }, Channels.change)
+        XCTAssertTrue(Channels.gitChange.isSubset(of: Channels.change))
     }
 
     func testDecodesTheComputersViews() throws {
