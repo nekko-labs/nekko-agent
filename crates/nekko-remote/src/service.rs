@@ -491,6 +491,15 @@ impl crate::phone::Devices for RemoteService {
     fn now(&self) -> f64 {
         (self.clock)()
     }
+
+    fn name(&self, id: &str) -> Option<String> {
+        let _io = lock(&self.io);
+        let cfg = self.load();
+        Self::devices_of(&cfg)
+            .into_iter()
+            .find(|d| d.get("id").and_then(Value::as_str) == Some(id))
+            .and_then(|d| d.get("name").and_then(Value::as_str).map(String::from))
+    }
 }
 
 /// The channels `route` serves.

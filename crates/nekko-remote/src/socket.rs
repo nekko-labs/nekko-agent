@@ -41,6 +41,8 @@ pub type PhoneDispatcher =
 pub type Events = mpsc::UnboundedReceiver<(String, Value)>;
 
 const REDIAL: Duration = Duration::from_secs(2);
+/// How often waiting terminal output is checked against its pacing window.
+const TICK: Duration = Duration::from_millis(25);
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
@@ -104,6 +106,9 @@ pub struct Spawn {
     pub verify: Verifier,
     pub dispatch: PhoneDispatcher,
     pub events: Events,
+    /// Phones attached to terminals, shared with the gate (`phone::gate_shared`):
+    /// terminal output goes only to them, and a disconnect detaches them.
+    pub terminals: Arc<crate::phone_terminal::PhoneTerminals>,
 }
 
 impl RelayAgent {
@@ -147,14 +152,14 @@ impl LinkHandle for RelayAgent {
 }
 
 async fn run(shared: Arc<Shared>, spec: Spawn, mut stopped: watch::Receiver<bool>) {
-    let Spawn { url, secret, room, verify, dispatch, mut events } = spec;
+    let Spawn { url, secret, room, verify, dispatch, mut events, terminals } = spec;
     let derive = tokio::task::spawn_blocking(move || e2e::derive_key(&secret, &room));
     let key = tokio::select! {
         k = derive => match k { Ok(k) => k, Err(_) => return },
         _ = stopped.changed() => return,
     };
     let iv: crate::agent::IvSource = Box::new(e2e::random_iv);
-    *lock(&shared.core) = Some(AgentCore::new(key, iv));
+    *lock(&shared.core) = Some(AgentCore::new(key, iv).with_terminals(terminals));
     loop {
         if *stopped.borrow() {
             return;
@@ -215,6 +220,9 @@ async fn serve(
         }
         let _ = sink.close().await;
     });
+    // Paced terminal output to phones waits for its window (phone_terminal::Coalescer).
+    let mut tick = tokio::time::interval(TICK);
+    tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let result = loop {
         tokio::select! {
             msg = stream.next() => match msg {
@@ -235,6 +243,12 @@ async fn serve(
                 }
                 None => break (1000, String::new()),
             },
+            _ = tick.tick() => {
+                if let Some(core) = lock(&shared.core).as_mut() {
+                    let frames = core.tick();
+                    shared.send_all(frames);
+                }
+            }
             _ = stopped.changed() => break (u16::from(CloseCode::Normal), String::new()),
         }
     };

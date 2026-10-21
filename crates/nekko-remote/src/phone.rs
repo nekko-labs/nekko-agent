@@ -57,6 +57,8 @@ pub struct Policy {
     pub key_channel: String,
     /// `PHONE_ACTIVITY_LIMIT`: the newest activity entries kept per device.
     pub activity_limit: usize,
+    /// `PHONE_TERMINAL` and the terminal channels (FA-3, FA-6; phone_terminal.rs).
+    pub terminal: crate::phone_terminal::Limits,
     /// Files and logs from a phone (IO-33 FA-1, FA-5): limits and views (phone_files.rs).
     pub files: crate::phone_files::FilesPolicy,
     /// Git from a phone (IO-33 FA-2): limits, option keys and views (phone_git.rs).
@@ -103,6 +105,7 @@ pub fn policy() -> &'static Policy {
             proof_max_ahead_ms: v["changeProof"]["maxAheadMs"].as_f64().unwrap_or(0.0),
             key_channel: v["keyChannel"].as_str().unwrap_or("device:registerKey").to_string(),
             activity_limit: v["activityLimit"].as_u64().unwrap_or(200) as usize,
+            terminal: crate::phone_terminal::Limits::from_policy(&v),
             files: crate::phone_files::FilesPolicy::from_policy(&v["files"]),
             git: crate::phone_git::GitPolicy::from_policy(&v["git"]),
         }
@@ -250,6 +253,9 @@ fn phone_skill(v: &Value) -> Result<SkillCall, Denied> {
 pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
     if !channel_allowed(channel) {
         return Err(denied("channel-denied", channel));
+    }
+    if policy().terminal.is_terminal(channel) {
+        return crate::phone_terminal::problem(channel, args).map_or(Ok(Screened::default()), Err);
     }
     if crate::phone_git::is_git(channel) {
         let args = crate::phone_git::screen(channel, args, &policy().git)?;
@@ -448,6 +454,7 @@ pub fn redact(channel: &str, result: Value) -> Value {
         "pr:sessionList" => crate::phone_views::prs(&result, &policy().views),
         "usage:summary" => crate::phone_views::usage(&result, &policy().views),
         "limits:get" => crate::phone_views::limits(&result, &policy().views),
+        c if policy().terminal.is_terminal(c) => crate::phone_terminal::result(c, &result),
         c if crate::phone_files::is_files(c) => crate::phone_files::view(c, &result, &policy().files),
         c if crate::phone_git::is_git(c) => crate::phone_git::view(c, &result, &policy().git, &policy().views.pr),
         _ => result,
@@ -613,6 +620,18 @@ pub async fn call(run: &Dispatcher, channel: String, args: Value) -> Result<Valu
             };
             vec![json!(key), json!(false)]
         }
+        c if policy().terminal.is_terminal(c) => {
+            let mut out = crate::phone_terminal::call_args(c, &args);
+            if c == "terminal:create" {
+                // A new terminal starts in the chat's folder, as the desktop's does: the phone never names a path.
+                let chat = run("session:get".to_string(), json!([out[0]["sessionId"]])).await?;
+                if let (Some(w), Some(o)) = (chat.get("workspaceId").filter(|w| w.is_string()), out[0].as_object_mut())
+                {
+                    o.insert("workspaceId".into(), w.clone());
+                }
+            }
+            out
+        }
         _ => args,
     };
     let mut args = match screened.settings {
@@ -704,6 +723,10 @@ pub trait Devices: Send + Sync {
     fn record(&self, id: &str, entry: Activity);
     /// `Date.now()`.
     fn now(&self) -> f64;
+    /// The device's name, for the desktop's *Phone attached* badge (FA-3).
+    fn name(&self, _id: &str) -> Option<String> {
+        None
+    }
 }
 
 /// Which IO-33 class a channel is in.
@@ -737,7 +760,7 @@ impl Classes {
 }
 
 /// The code of a gate refusal's message, or `failed` for any other error.
-fn reason_of(error: &str) -> String {
+pub(crate) fn reason_of(error: &str) -> String {
     error
         .strip_prefix("Not allowed from a paired phone (")
         .and_then(|rest| rest.split_once(')'))
@@ -747,20 +770,25 @@ fn reason_of(error: &str) -> String {
 /// Per device: the timestamp and fingerprint of each accepted proof.
 type Seen = HashMap<String, Vec<(i64, [u8; 32])>>;
 
-struct Gate {
-    run: Dispatcher,
-    devices: Arc<dyn Devices>,
+pub(crate) struct Gate {
+    pub(crate) run: Dispatcher,
+    pub(crate) devices: Arc<dyn Devices>,
     classes: Classes,
     /// Each device's accepted Change proofs still inside the window, by the
     /// fingerprint of what they signed: a replayed request is refused. Memory
     /// only, so a restart forgets them (the window is five minutes).
     seen: Mutex<Seen>,
+    /// Phones attached to terminals and their tokens, shared with the relay agent (FA-3).
+    pub(crate) terminals: Arc<crate::phone_terminal::PhoneTerminals>,
 }
 
 impl Gate {
     async fn call(&self, who: PhoneCall, channel: String, args: Value) -> Result<Value, String> {
         if channel == policy().key_channel {
             return self.register_key(&who, &channel, &args);
+        }
+        if let Some(out) = self.terminal_call(&who, &channel, &args).await {
+            return out;
         }
         let Some(class) = self.classes.of(&channel) else { return call(&self.run, channel, args).await };
         if !channel_allowed(&channel) {
@@ -786,7 +814,7 @@ impl Gate {
         }
     }
 
-    fn record(&self, who: &PhoneCall, channel: &str, outcome: Result<(), String>) {
+    pub(crate) fn record(&self, who: &PhoneCall, channel: &str, outcome: Result<(), String>) {
         let at = self.devices.now();
         let entry = Activity { at, channel: channel.to_string(), ok: outcome.is_ok(), reason: outcome.err() };
         self.devices.record(&who.device_id, entry);
@@ -824,7 +852,7 @@ impl Gate {
 
     /// Everything a change-class call needs before it runs: a known device
     /// with Change on, a registered key, and a fresh, valid, unused proof.
-    fn check_change(&self, who: &PhoneCall, channel: &str, args: &Value) -> Result<(), Denied> {
+    pub(crate) fn check_change(&self, who: &PhoneCall, channel: &str, args: &Value) -> Result<(), Denied> {
         let device = self.devices.device(&who.device_id).ok_or_else(|| denied("device-unknown", channel))?;
         if !device.access.change {
             return Err(denied("change-off", channel));
@@ -876,7 +904,38 @@ pub fn gate(run: Dispatcher, devices: Arc<dyn Devices>) -> PhoneDispatcher {
 
 /// `gate` with the given classes (tests class channels the policy doesn't yet).
 pub fn gate_with(run: Dispatcher, devices: Arc<dyn Devices>, classes: Classes) -> PhoneDispatcher {
-    let gate = Arc::new(Gate { run, devices, classes, seen: Mutex::default() });
+    gate_full(run, devices, classes, crate::phone_terminal::PhoneTerminals::new())
+}
+
+/// `gate` sharing `terminals` with the relay agent (`Spawn::terminals`), so
+/// output reaches only attached phones and a disconnect detaches the phone:
+/// what the daemon runs.
+pub fn gate_shared(
+    run: Dispatcher,
+    devices: Arc<dyn Devices>,
+    terminals: Arc<crate::phone_terminal::PhoneTerminals>,
+) -> PhoneDispatcher {
+    gate_full(run, devices, Classes::from_policy(), terminals)
+}
+
+/// `gate_with` and `gate_shared` in one.
+pub fn gate_full(
+    run: Dispatcher,
+    devices: Arc<dyn Devices>,
+    classes: Classes,
+    terminals: Arc<crate::phone_terminal::PhoneTerminals>,
+) -> PhoneDispatcher {
+    let detach = run.clone();
+    terminals.on_device_gone(Arc::new(move |device: String| {
+        // The computer forgets the phone as a viewer of every terminal.
+        let run = detach.clone();
+        if let Ok(rt) = tokio::runtime::Handle::try_current() {
+            rt.spawn(async move {
+                let _ = run("terminal:detach".to_string(), json!([null, device])).await;
+            });
+        }
+    }));
+    let gate = Arc::new(Gate { run, devices, classes, seen: Mutex::default(), terminals });
     Arc::new(move |who: PhoneCall, channel: String, args: Value| {
         let gate = gate.clone();
         Box::pin(async move { gate.call(who, channel, args).await })
@@ -1287,9 +1346,15 @@ mod tests {
         #[test]
         fn the_policy_has_the_io33_pieces() {
             let p = policy();
-            // FA-2 (git) is the first feature to class its channels.
+            // FA-2 (git) was the first feature to class its channels; FA-3 / FA-6 (terminals) followed.
             assert!(p.read_channels.iter().any(|c| c == "git:diff"));
             assert!(p.change_channels.iter().any(|c| c == "git:commitMessage"), "it spends model tokens");
+            for c in ["terminals:list", "terminal:tail", "ssh:hosts"] {
+                assert!(p.read_channels.iter().any(|r| r == c), "{c}");
+            }
+            for c in ["terminal:create", "ssh:open", "terminal:signal", "terminal:close"] {
+                assert!(p.change_channels.iter().any(|r| r == c), "{c}");
+            }
             // FA-1 and FA-5 (files and logs): saving a file is the only Change among them.
             for c in ["files:list", "files:search", "files:read", "logs:list", "logs:read"] {
                 assert!(has(&p.read_channels, c), "{c}");
@@ -1325,7 +1390,9 @@ mod tests {
             "settings:reset",
             "remote:revoke",
             "remote:rotate",
-            "terminal:create",
+            "terminal:run",
+            "terminal:snapshot",
+            "terminals:list:native",
             "file:write",
             "workspace:addByPath",
             "workspace:remove",

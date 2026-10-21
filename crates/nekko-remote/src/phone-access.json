@@ -43,8 +43,17 @@
   "settings:get",
   "settings:update",
   "skills:runnable",
+  "ssh:hosts",
+  "ssh:open",
   "task:runNow",
   "tasks:list",
+  "terminal:close",
+  "terminal:create",
+  "terminal:resize",
+  "terminal:signal",
+  "terminal:tail",
+  "terminal:write",
+  "terminals:list",
   "tool:approve",
   "usage:summary",
   "voice:status",
@@ -99,7 +108,16 @@
    "update:"
   ],
   "except": [
-   "remote:status"
+   "remote:status",
+   "ssh:hosts",
+   "ssh:open",
+   "terminal:close",
+   "terminal:create",
+   "terminal:resize",
+   "terminal:signal",
+   "terminal:tail",
+   "terminal:write",
+   "terminals:list"
   ]
  },
  "readChannels": [
@@ -115,7 +133,10 @@
   "files:read",
   "files:search",
   "logs:list",
-  "logs:read"
+  "logs:read",
+  "ssh:hosts",
+  "terminal:tail",
+  "terminals:list"
  ],
  "changeChannels": [
   "git:commit",
@@ -127,8 +148,32 @@
   "git:unstage",
   "pr:action",
   "pr:create",
-  "files:write"
+  "files:write",
+  "ssh:open",
+  "terminal:close",
+  "terminal:create",
+  "terminal:signal"
  ],
+ "tokenChannels": [
+  "terminal:resize",
+  "terminal:write"
+ ],
+ "terminal": {
+  "tailBytes": 65536,
+  "writeBytes": 65536,
+  "titleChars": 120,
+  "hosts": 200,
+  "hostChars": 255,
+  "maxCols": 500,
+  "maxRows": 300,
+  "tokenIdleMs": 300000,
+  "tokenMaxMs": 1800000,
+  "eventBytes": 32768,
+  "eventWindowMs": 100,
+  "eventBacklogBytes": 262144,
+  "openChannel": "terminal:open",
+  "leaveChannel": "terminal:leave"
+ },
  "changeProof": {
   "version": "nekko-change-v1",
   "maxAgeMs": 300000,

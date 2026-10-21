@@ -10,6 +10,7 @@ import {
   PHONE_DENIED_FOREVER,
   PHONE_KEY_CHANNEL,
   PHONE_READ_CHANNELS,
+  PHONE_TOKEN_CHANNELS,
   PhoneAccessError,
   checkPhoneAccess,
   phoneAccessPolicy,
@@ -33,7 +34,9 @@ const code = (fn: () => unknown) => {
 };
 
 /** What phones could call before IO-33: in neither class, so they decide as before. */
-const BEFORE_IO33 = PHONE_CHANNELS.filter((c) => !PHONE_READ_CHANNELS.includes(c) && !PHONE_CHANGE_CHANNELS.includes(c));
+const BEFORE_IO33 = PHONE_CHANNELS.filter(
+  (c) => !PHONE_READ_CHANNELS.includes(c) && !PHONE_CHANGE_CHANNELS.includes(c) && !PHONE_TOKEN_CHANNELS.includes(c),
+);
 
 describe('phone access classes', () => {
   it('leaves every channel phones had before IO-33 in neither class', () => {
@@ -52,6 +55,11 @@ describe('phone access classes', () => {
       expect(phoneAlwaysDenied(c), c).toBe(false);
     }
     for (const c of PHONE_READ_CHANNELS) expect(PHONE_CHANGE_CHANNELS.includes(c), c).toBe(false);
+    for (const c of PHONE_TOKEN_CHANNELS) {
+      expect((PHONE_CHANNELS as readonly string[]).includes(c), c).toBe(true);
+      expect(PHONE_CHANGE_CHANNELS.includes(c) || PHONE_READ_CHANNELS.includes(c), c).toBe(false);
+      expect(phoneChannelClass(c), c).toBe('token');
+    }
   });
 
   it('refuses a classed call when the device switch is off, and nothing else', () => {
@@ -66,7 +74,7 @@ describe('phone access classes', () => {
       expect(code(() => checkPhoneAccess(c, { read: false, change: true }))).toBe('read-off');
       expect(code(() => checkPhoneAccess(c, { read: true, change: false }))).toBe('ok');
     }
-    for (const c of PHONE_CHANGE_CHANNELS) {
+    for (const c of [...PHONE_CHANGE_CHANNELS, ...PHONE_TOKEN_CHANNELS]) {
       expect(code(() => checkPhoneAccess(c, { read: true, change: false }))).toBe('change-off');
       expect(code(() => checkPhoneAccess(c, { read: false, change: true }))).toBe('ok');
     }
@@ -106,8 +114,12 @@ describe('the always-denied list', () => {
     }
   });
 
-  it('still refuses absolute-path files, the stack calls and terminals', () => {
-    for (const c of ['file:read', 'file:write', 'dir:list', 'pr:continueStack', 'pr:linkStack', 'terminal:create', 'terminals:list']) {
+  it('still refuses absolute-path files, the stack calls and the other terminal channels', () => {
+    for (const c of [
+      'file:read', 'file:write', 'dir:list', 'pr:continueStack', 'pr:linkStack',
+      'terminal:run', 'terminal:update', 'terminal:shells', 'terminal:snapshot', 'terminals:list:native',
+      'terminal:attach', 'terminal:detach',
+    ]) {
       expect(phoneChannelAllowed(c), c).toBe(false);
       expect(phoneAlwaysDenied(c), c).toBe(true);
     }

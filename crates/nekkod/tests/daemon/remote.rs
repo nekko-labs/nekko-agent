@@ -247,6 +247,155 @@ async fn the_daemon_runs_the_phone_relay_agent() {
     let _ = std::fs::remove_dir_all(&data);
 }
 
+/// Reads the agent's frames until `cid`'s reply to request `id`, keeping
+/// every `terminal:event` it passes as `(cid, payload)`.
+#[cfg(unix)]
+async fn reply_to(
+    agent: &mut RelaySide,
+    key: &nekko_remote::e2e::Key,
+    cid: &str,
+    id: u32,
+    events: &mut Vec<(String, Value)>,
+) -> Value {
+    loop {
+        let (f, sealed) = next_agent_frame(agent, key).await;
+        let Some(s) = sealed else { continue };
+        if s["type"] == "event" && s["channel"] == "terminal:event" {
+            events.push((f["cid"].as_str().unwrap_or("").to_string(), s["payload"].clone()));
+        } else if s["type"] == "res" && s["id"] == id && f["cid"] == cid {
+            return s;
+        }
+    }
+}
+
+/// A Change proof signed by `k`, as the iPhone's Secure Enclave key signs it.
+#[cfg(unix)]
+fn change_proof(k: &p256::ecdsa::SigningKey, device: &str, channel: &str, args: &Value, ts: i64) -> Value {
+    use base64::Engine;
+    use p256::ecdsa::signature::Signer;
+    let text = nekko_remote::proof::payload(device, channel, args, ts).unwrap();
+    let sig: p256::ecdsa::Signature = k.sign(text.as_bytes());
+    json!({ "ts": ts, "sig": base64::engine::general_purpose::STANDARD.encode(sig.to_bytes()) })
+}
+
+/// IO-33 FA-3 over the real relay agent: a phone opens a chat's terminal
+/// (one signed proof), types with the token it got, and only that phone
+/// receives the output; its disconnect takes it off the desktop's badge.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_phone_attaches_to_a_chat_terminal_over_the_relay() {
+    let data = std::env::temp_dir().join(format!("nekkod-remote-term-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    let d = start_with(Some(&data));
+    let relay = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let relay_port = relay.local_addr().unwrap().port();
+    post(d.port, "remote:enable", json!([format!("ws://127.0.0.1:{relay_port}/")]), Some(TOKEN)).await;
+    let (_, pairing) = post(d.port, "remote:pairing", json!([]), Some(TOKEN)).await;
+    let (room, secret) = (pairing["room"].as_str().unwrap().to_string(), pairing["key"].as_str().unwrap().to_string());
+    let (tcp, _) =
+        tokio::time::timeout(Duration::from_secs(20), relay.accept()).await.expect("the agent dials").unwrap();
+    let mut agent = tokio_tungstenite::accept_async(tcp).await.unwrap();
+    let key = nekko_remote::e2e::derive_key(&secret, &room);
+    let seal = |v: Value| {
+        json!({ "enc": nekko_remote::e2e::seal_with_iv(&key, &v, nekko_remote::e2e::random_iv()) }).to_string()
+    };
+    let client = |cid: &str, v: Value| Message::text(json!({ "type": "c", "cid": cid, "data": seal(v) }).to_string());
+    let mut events = Vec::new();
+    // Two phones, each enrolled with its own one-time code.
+    for (cid, device, name) in [("c1", "phone-1", "Pixel"), ("c2", "phone-2", "Other phone")] {
+        let (_, grant) = post(d.port, "remote:pair", json!([]), Some(TOKEN)).await;
+        agent.send(Message::text(json!({ "type": "client-open", "cid": cid }).to_string())).await.unwrap();
+        let hello =
+            json!({ "type": "hello", "deviceId": device, "name": name, "platform": "ios", "pair": grant["code"] });
+        agent.send(client(cid, hello)).await.unwrap();
+        loop {
+            let (f, sealed) = next_agent_frame(&mut agent, &key).await;
+            if f["cid"] == cid && sealed.is_some_and(|s| s["type"] == "welcome") {
+                break;
+            }
+        }
+    }
+    // The desktop opens a terminal for a chat.
+    let (_, chat) = post(d.port, "session:create", json!([]), Some(TOKEN)).await;
+    let sid = chat["id"].as_str().expect("a chat id").to_string();
+    let (_, term) =
+        post(d.port, "terminal:create", json!([{ "shell": "/bin/sh", "title": "t", "sessionId": sid }]), Some(TOKEN))
+            .await;
+    let id = term["id"].as_str().unwrap().to_string();
+
+    // phone-1 registers its key, then opens the terminal with one proof.
+    let k = p256::ecdsa::SigningKey::from_slice(&[7; 32]).unwrap();
+    use base64::Engine;
+    let public = base64::engine::general_purpose::STANDARD.encode(k.verifying_key().to_encoded_point(false).as_bytes());
+    let now = || std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as i64;
+    let args = json!([public]);
+    let proof = change_proof(&k, "phone-1", "device:registerKey", &args, now());
+    let req = json!({ "type": "req", "id": 1, "channel": "device:registerKey", "args": args, "proof": proof });
+    agent.send(client("c1", req)).await.unwrap();
+    let res = reply_to(&mut agent, &key, "c1", 1, &mut events).await;
+    assert_eq!(res["result"], json!({ "registered": true }), "{res}");
+    let args = json!([id]);
+    let proof = change_proof(&k, "phone-1", "terminal:open", &args, now() + 1);
+    agent
+        .send(client("c1", json!({ "type": "req", "id": 2, "channel": "terminal:open", "args": args, "proof": proof })))
+        .await
+        .unwrap();
+    let res = reply_to(&mut agent, &key, "c1", 2, &mut events).await;
+    let token = res["result"]["token"].as_str().unwrap_or_else(|| panic!("a token: {res}")).to_string();
+    assert_eq!(res["result"]["terminal"]["id"], id.as_str());
+    assert!(!res.to_string().contains(&data.to_string_lossy().to_string()), "no absolute path: {res}");
+    // The desktop's badge names the phone.
+    let (_, listed) = post(d.port, "terminals:list", json!([{ "sessionId": sid }]), Some(TOKEN)).await;
+    assert_eq!(listed[0]["viewers"][0]["id"], "phone-1", "{listed}");
+    assert_eq!(listed[0]["viewers"][0]["name"], "Pixel");
+
+    // Typing needs only the token; the output reaches phone-1, never phone-2.
+    let req =
+        json!({ "type": "req", "id": 3, "channel": "terminal:write", "args": [id, "echo phone-typed-ok\r", token] });
+    agent.send(client("c1", req)).await.unwrap();
+    let res = reply_to(&mut agent, &key, "c1", 3, &mut events).await;
+    assert_eq!(res["result"], Value::Null, "{res}");
+    let deadline = Instant::now() + Duration::from_secs(20);
+    let mut typed = String::new();
+    while !typed.contains("phone-typed-ok\r\n") && Instant::now() < deadline {
+        for (cid, p) in events.drain(..) {
+            assert_eq!(cid, "c1", "terminal output went to a phone that isn't attached: {p}");
+            typed.push_str(p["data"].as_str().unwrap_or(""));
+        }
+        if let Ok((f, Some(s))) = tokio::time::timeout(Duration::from_secs(2), next_agent_frame(&mut agent, &key)).await
+            && s["channel"] == "terminal:event"
+        {
+            events.push((f["cid"].as_str().unwrap_or("").to_string(), s["payload"].clone()));
+        }
+    }
+    assert!(typed.contains("phone-typed-ok\r\n"), "{typed:?}");
+    // phone-2 can't use phone-1's token.
+    let req = json!({ "type": "req", "id": 4, "channel": "terminal:write", "args": [id, "rm -rf ~\r", token] });
+    agent.send(client("c2", req)).await.unwrap();
+    let res = reply_to(&mut agent, &key, "c2", 4, &mut events).await;
+    assert_eq!(res["error"], "Not allowed from a paired phone (token-invalid): terminal:write");
+    assert!(events.iter().all(|(cid, _)| cid == "c1"));
+
+    // phone-1 disconnects: it is no longer a viewer on the desktop.
+    agent.send(Message::text(json!({ "type": "client-close", "cid": "c1" }).to_string())).await.unwrap();
+    let port = d.port;
+    until("the phone detached", Duration::from_secs(10), || {
+        let sid = sid.clone();
+        async move {
+            let (_, listed) = post(port, "terminals:list", json!([{ "sessionId": sid }]), Some(TOKEN)).await;
+            listed[0].get("viewers").is_none().then_some(())
+        }
+    })
+    .await;
+    let (_, activity) = post(d.port, "remote:activity", json!(["phone-1"]), Some(TOKEN)).await;
+    let channels: Vec<&str> = activity.as_array().unwrap().iter().filter_map(|a| a["channel"].as_str()).collect();
+    assert!(channels.contains(&"terminal:open") && !channels.contains(&"terminal:write"), "{activity}");
+    post(d.port, "terminal:close", json!([id]), Some(TOKEN)).await;
+    drop(d);
+    let _ = std::fs::remove_dir_all(&data);
+}
+
 /// A loopback stand-in for Telegram's Bot API: records every call (method
 /// and body; the token is in the path), answers `getMe` and `sendMessage`,
 /// and holds `getUpdates` until the test queues updates (or 25 s pass, as

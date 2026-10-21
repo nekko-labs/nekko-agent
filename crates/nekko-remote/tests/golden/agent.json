@@ -722,10 +722,7 @@
      }
     }
    },
-   "sent": [
-    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"lZyjqrG4v8bN1NviEMjxdMrv7Bj1qQatZNY+xiS9MplWXpQFYlNhCJtlYQ+visp3NHr7fq3bDLXwX4CW2y4Ve2/Ms8o0XW2C0emBd9LTwJ4lT/l1nFaZ0gTphAL0ai1nGF9i8WOMQ3PcVMpOOm9uF/ZmUDKUVvfjU8g3fzYPs6SuduJSioqbJWbddP3TouzSExRIl7wp1w==\\\"}\"}",
-    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"lZyjqrG4v8bN1NviEMjxdMrv7Bj1qQatZNY+xiS9MplWXpQFYlNhCJtlYQ+visp3NHr7fq3bDLXwX4CW2y4Ve2/Ms8o0XW2C0emBd9LTwJ4lT/l1nFaZ0gTphAL0ai1nGF9i8WOMQ3PcVMpOOm9uF/ZmUDKUVvfjU8g3fzYPs6SuduJSioqbJWbddP3TouzSExRIl7wp1w==\\\"}\"}"
-   ],
+   "sent": [],
    "connected": [
     "phone-1",
     "phone-2"

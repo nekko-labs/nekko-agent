@@ -19,9 +19,12 @@
 //! events go only to welcomed connections, one seal per event.
 
 use crate::e2e::{self, Key};
+use crate::phone_terminal::{Coalescer, PhoneTerminals, data_event};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Instant;
 
 /// Where IVs come from: random in production, scripted in the golden tests.
 pub type IvSource = Box<dyn FnMut() -> [u8; 12] + Send>;
@@ -62,6 +65,12 @@ pub struct AgentCore {
     conns: Vec<(String, Option<String>)>,
     /// Each chat's last Live Activity phase (`activity_frame`).
     phases: HashMap<String, &'static str>,
+    /// Which phone is attached to which terminal (shared with the phone
+    /// gate): `terminal:event` goes only to those phones (FA-3).
+    terminals: Arc<PhoneTerminals>,
+    /// Paces each terminal's output to phones.
+    flow: Coalescer,
+    epoch: Instant,
 }
 
 fn frame(v: Value) -> String {
@@ -70,7 +79,41 @@ fn frame(v: Value) -> String {
 
 impl AgentCore {
     pub fn new(key: Key, iv: IvSource) -> Self {
-        Self { key, iv, conns: Vec::new(), phases: HashMap::new() }
+        Self {
+            key,
+            iv,
+            conns: Vec::new(),
+            phases: HashMap::new(),
+            terminals: PhoneTerminals::new(),
+            flow: Coalescer::from_policy(),
+            epoch: Instant::now(),
+        }
+    }
+
+    /// Share the phone gate's terminal attachments (`phone::gate_shared`).
+    /// Without it no phone is ever attached, so no terminal output is relayed.
+    pub fn with_terminals(mut self, terminals: Arc<PhoneTerminals>) -> Self {
+        self.terminals = terminals;
+        self
+    }
+
+    /// Pace terminal output with these limits instead of the policy's (tests).
+    pub fn with_flow(mut self, flow: Coalescer) -> Self {
+        self.flow = flow;
+        self
+    }
+
+    fn now_ms(&self) -> u64 {
+        self.epoch.elapsed().as_millis() as u64
+    }
+
+    /// Devices that had a welcomed connection in `before` and have none now:
+    /// they are detached from every terminal.
+    fn forget_gone(&mut self, before: Vec<String>) {
+        let after = self.connected_devices();
+        for d in before.into_iter().filter(|d| !after.contains(d)) {
+            self.terminals.device_gone(&d);
+        }
     }
 
     fn seal(&mut self, value: &Value) -> String {
@@ -96,11 +139,21 @@ impl AgentCore {
 
     /// The relay socket closed: every connection is gone with it.
     pub fn reset(&mut self) {
+        let before = self.connected_devices();
         self.conns.clear();
+        self.forget_gone(before);
     }
 
     /// One frame from the relay. `verify` answers a HELLO (`RemoteHelloReply`).
+    /// A device left with no welcomed connection is detached from its terminals.
     pub fn on_relay(&mut self, text: &str, verify: &dyn Fn(&Value) -> Value) -> Vec<Out> {
+        let before = self.connected_devices();
+        let out = self.on_relay_frame(text, verify);
+        self.forget_gone(before);
+        out
+    }
+
+    fn on_relay_frame(&mut self, text: &str, verify: &dyn Fn(&Value) -> Value) -> Vec<Out> {
         let Ok(Value::Object(msg)) = serde_json::from_str::<Value>(text) else { return Vec::new() };
         // `String(msg.cid)`.
         let cid = || msg.get("cid").map_or_else(|| "undefined".to_string(), nekko_js::display);
@@ -192,6 +245,16 @@ impl AgentCore {
     /// A host event: the relay's content-free control frames (`relay_frames`),
     /// then the event to every welcomed connection, sealed once.
     pub fn on_event(&mut self, channel: &str, payload: &Value) -> Vec<String> {
+        let now = self.now_ms();
+        self.on_event_at(channel, payload, now)
+    }
+
+    /// `on_event` at `now` (ms on the agent's own clock). A terminal's
+    /// output goes only to the phones attached to it, paced (`Coalescer`).
+    pub fn on_event_at(&mut self, channel: &str, payload: &Value, now: u64) -> Vec<String> {
+        if channel == "terminal:event" {
+            return self.terminal_event(payload, now);
+        }
         let mut out = Vec::new();
         if channel == "agent:event" {
             out.extend(self.relay_frames(payload).into_iter().map(frame));
@@ -203,6 +266,73 @@ impl AgentCore {
         let data = self.seal(&json!({ "type": "event", "channel": channel, "payload": payload }));
         for cid in welcomed {
             out.push(frame(json!({ "type": "d", "cid": cid, "data": data })));
+        }
+        out
+    }
+
+    /// Welcomed connections whose device is attached to `terminal`.
+    fn viewers_of(&self, terminal: &str) -> Vec<String> {
+        self.conns
+            .iter()
+            .filter(|(_, d)| d.as_deref().is_some_and(|d| self.terminals.attached(d, terminal)))
+            .map(|(c, _)| c.clone())
+            .collect()
+    }
+
+    /// One sealed event to each of `cids`.
+    fn send_event(&mut self, cids: &[String], channel: &str, payload: Value) -> Vec<String> {
+        if cids.is_empty() {
+            return Vec::new();
+        }
+        let data = self.seal(&json!({ "type": "event", "channel": channel, "payload": payload }));
+        cids.iter().map(|cid| frame(json!({ "type": "d", "cid": cid, "data": data }))).collect()
+    }
+
+    fn terminal_event(&mut self, payload: &Value, now: u64) -> Vec<String> {
+        let Some(id) = payload.get("terminalId").and_then(Value::as_str).map(str::to_string) else { return Vec::new() };
+        let cids = self.viewers_of(&id);
+        match payload.get("type").and_then(Value::as_str) {
+            Some("data") => {
+                if cids.is_empty() {
+                    // Nobody is watching: nothing waits for a phone either.
+                    self.flow.take(&id);
+                    return Vec::new();
+                }
+                let data = payload.get("data").and_then(Value::as_str).unwrap_or("");
+                match self.flow.push(&id, data, now) {
+                    Some((data, skipped)) => self.send_event(&cids, "terminal:event", data_event(&id, &data, skipped)),
+                    None => Vec::new(),
+                }
+            }
+            Some("exit") => {
+                // What was still waiting goes first, then the exit; the terminal's sessions end.
+                let mut out = match self.flow.take(&id) {
+                    Some((data, skipped)) => self.send_event(&cids, "terminal:event", data_event(&id, &data, skipped)),
+                    None => Vec::new(),
+                };
+                out.extend(self.send_event(&cids, "terminal:event", payload.clone()));
+                self.terminals.terminal_gone(&id);
+                out
+            }
+            _ => self.send_event(&cids, "terminal:event", payload.clone()),
+        }
+    }
+
+    /// Terminal output whose pacing window has come round (call often, e.g.
+    /// every 25 ms; it does nothing while no output waits).
+    pub fn tick(&mut self) -> Vec<String> {
+        let now = self.now_ms();
+        self.tick_at(now)
+    }
+
+    pub fn tick_at(&mut self, now: u64) -> Vec<String> {
+        if self.flow.is_idle() {
+            return Vec::new();
+        }
+        let mut out = Vec::new();
+        for (id, data, skipped) in self.flow.due(now) {
+            let cids = self.viewers_of(&id);
+            out.extend(self.send_event(&cids, "terminal:event", data_event(&id, &data, skipped)));
         }
         out
     }

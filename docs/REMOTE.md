@@ -230,10 +230,10 @@ changes how the computer itself is set up:
   queued, and stop messages; answer approvals and the agent's questions; pick a model from the
   computer's providers and a folder from its list; voice status and transcription; read a chat's
   pull requests, the computer's automations, its usage and plan limits, and run an automation now;
-  git in a chat's folder (below); a chat's or saved folder's files and the computer's logs (below);
+  git in a chat's folder and its terminals and SSH (below); a chat's or saved folder's files and the computer's logs (below);
   and a few settings (below).
 - **Never allowed from a phone:** wiping data or resetting settings, remote access itself (pairing,
-  revoking, rotating the secret), terminals, files by a path on the computer or outside a chat's or
+  revoking, rotating the secret), terminals not opened for a chat, files by a path on the computer or outside a chat's or
   saved folder, creating files, accepting or reverting changes,
   git outside a chat's own folder, restacking or linking stacked pull requests, making, changing or
   deleting automations, adding or removing folders, installing
@@ -276,13 +276,26 @@ changes how the computer itself is set up:
   (each cut at 2,000 characters). API keys, tokens, passwords and other secret-looking values are
   replaced with `[redacted]` before a line leaves the computer, and a search only matches the
   redacted text.
+- **Terminals and SSH in a chat:** a phone sees only terminals opened for a chat and the agent's
+  command log (read only), never your other terminals, and only one chat's list at a time. Reading
+  a terminal's last 64 KB and the SSH hosts needs *Read*; opening a terminal, starting a new one (in
+  the chat's folder, with your default shell; a phone can't pick a folder or a shell), opening an SSH
+  session, Ctrl-C and closing need *Change* and a fresh signature. Opening hands the phone a token
+  for typing into that terminal only, so it doesn't ask for Face ID on every key: it ends when the
+  phone leaves or disconnects, after 5 minutes without typing and after 30 minutes in any case, and
+  your computer checks the phone's *Change* switch on every keystroke. Output goes only to the
+  phones that opened that terminal, at most 32 KB every tenth of a second (a flood is cut short and
+  the phone reads the end again). The desktop shows *Phone attached* on a terminal while a phone has
+  it open. SSH hosts arrive as alias, host name and port (no user name); SSH runs on your computer
+  with its own keys and config, and nothing about the keys reaches the phone. Running a command
+  without typing it, renaming terminals and listing shells stay off.
 - **One chat's options:** a phone can change a chat's model, title, pin and tags, complete it, and
   switch it between Ask, Guardrails and YOLO, but not its tools, isolation or
   offline/incognito switches. Messages cannot attach files from the computer.
 
 ### What phones can do: Read and Change, per phone
 
-Git, files and logs are on the iPhone now (above); terminals, task boards and SSH are coming.
+Git, files, logs, terminals and SSH are on the iPhone now (above); task boards are coming.
 *Remote access → What phones can do* on the computer lists each paired phone with two switches:
 
 - **Read:** look at files, git status and history, logs and boards.
@@ -310,7 +323,7 @@ the newest 200 per phone; rotating the secret clears them.
 **Revoke** a phone to stop all of it at once. Whatever the switches say, a phone can never reach
 provider keys or other credentials, remote access itself (pairing more devices, revoking,
 rotating), wiping data or resetting settings, or the computer's own sign-in windows, dialogs,
-updater and shell. Until their features ship, terminals stay refused as described above.
+updater and shell.
 
 ### Where the logs live
 
@@ -328,7 +341,7 @@ The logs a phone reads are files you can open yourself: `logs/app.log` and `logs
 | Lost/stolen phone | The Android app asks for the phone's fingerprint, face or screen lock every time it opens. Revoke the phone in Settings: kicked immediately, denied afterward, push token dropped |
 | Revoked device replays old creds | The agent refuses its handshake and unicasts nothing to it; it gets back in only with a fresh one-time pairing code from the computer's owner; rotate the secret for a full cryptographic reset |
 | Malicious relay withholding/reordering | Availability only; it still can't read or forge frames (AES-GCM auth) |
-| Phone asks for something dangerous | Your computer only serves the phone allowlist above (no wipe, settings reset, remote-access changes, terminals, file writes); tool calls run on your machine under your guardrails/sandbox and chat mode |
+| Phone asks for something dangerous | Your computer only serves the phone allowlist above (no wipe, settings reset, remote-access changes, terminals outside a chat, file writes); tool calls run on your machine under your guardrails/sandbox and chat mode |
 | Someone else picks up the phone, or the relay replays a request, to make a change | Each change must be signed by the phone's Secure Enclave key, which needs Face ID or the passcode (one check lasts 5 minutes); your computer checks the signature, its age and that it was not used before, and logs every attempt in the phone's activity |
 
 What the relay does see: connection metadata (IPs, timing, frame sizes), the room code, and, if you

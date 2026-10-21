@@ -18,6 +18,7 @@ struct ChatView: View {
     @State private var actionError: String?
     @State private var showGit = false
     @State private var showGitScreen = false
+    @State private var showTerminals = false
     @State private var showFiles = false
     /// The photos open full screen.
     @State private var viewing: PhotoSet?
@@ -184,6 +185,8 @@ struct ChatView: View {
                         Button { showFiles = true } label: { Label("Files", systemImage: "folder") }
                             .accessibilityIdentifier("chat.files")
                         Button { showGit = true } label: { Label("Commit or open a PR", systemImage: "arrow.triangle.pull") }
+                        Button { showTerminals = true } label: { Label("Terminals", systemImage: "terminal") }
+                            .accessibilityIdentifier("chat.terminals")
                         Button { renameText = chat.title; renaming = true } label: { Label("Rename", systemImage: "pencil") }
                         Button { act { try await store.completeChat(sessionId) } } label: { Label("Complete", systemImage: "checkmark.circle") }
                     }
@@ -200,6 +203,7 @@ struct ChatView: View {
         .sheet(isPresented: $showChanges) { ChangesView(chat: chat) }
         .sheet(isPresented: $showGit) { PrSheet(chat: chat, initial: []) }
         .sheet(isPresented: $showGitScreen) { GitView(chatId: sessionId) }
+        .sheet(isPresented: $showTerminals) { TerminalsView(chatId: sessionId) }
         .sheet(isPresented: $showFiles) { FilesView(root: .chat(sessionId), title: chat.title) }
         .fullScreenCover(item: $viewing) { set in ImageViewer(photos: set.photos, index: set.index) }
         .alert("Rename chat", isPresented: $renaming) {

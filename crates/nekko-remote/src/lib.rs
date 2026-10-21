@@ -17,6 +17,7 @@ pub mod phone;
 pub mod phone_changes;
 pub mod phone_files;
 pub mod phone_git;
+pub mod phone_terminal;
 pub mod phone_thumbs;
 pub mod phone_views;
 pub mod proof;
@@ -26,6 +27,7 @@ pub mod socket;
 
 pub use agent::{AgentCore, Out, PUSH_TEST_CHANNEL, RELAYED_EVENTS};
 pub use phone::{Activity, DeviceAccess, Devices, PhoneDevice};
+pub use phone_terminal::PhoneTerminals;
 pub use service::{CHANNELS, Clock, Link, LinkHandle, RemoteService, Verifier, system_clock};
 pub use socket::{Dispatcher, Events, PhoneCall, PhoneDispatcher, RelayAgent, Spawn, agent_url};
 

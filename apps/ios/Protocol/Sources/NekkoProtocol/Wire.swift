@@ -87,7 +87,7 @@ public enum Channels {
     /// The change-class channels among these.
     public static let filesChange: Set<String> = [filesWrite]
     /// Every change-class channel the phone calls (`PHONE_CHANGE_CHANNELS`): signed, so Face ID or the passcode is asked.
-    public static let change: Set<String> = gitChange.union(filesChange)
+    public static let change: Set<String> = gitChange.union(filesChange).union(terminalChange)
 
     public static let all = [
         settingsGet, settingsUpdate, providersList, modelsList, sessionsSummaries, sessionCreate, sessionGet,
@@ -98,6 +98,9 @@ public enum Channels {
         workspaceGitStatus, gitDiff, gitLog, gitShow, gitBranches, gitCompare, prChecks, prDiff,
         gitStage, gitUnstage, gitCommit, gitCommitMessage, gitPush, gitSwitch, gitMergeAbort, prCreate, prAction,
         filesList, filesSearch, filesRead, filesWrite, logsList, logsRead,
+        // IO-33 FA-3, FA-6 (Terminal.swift).
+        TerminalChannels.list, TerminalChannels.tail, TerminalChannels.sshHosts, TerminalChannels.create, TerminalChannels.sshOpen,
+        TerminalChannels.write, TerminalChannels.resize, TerminalChannels.signal, TerminalChannels.close,
     ]
 }
 

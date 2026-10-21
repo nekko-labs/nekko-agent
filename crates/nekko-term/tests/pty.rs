@@ -124,8 +124,13 @@ async fn a_subscriber_that_does_not_ack_holds_the_program_back() {
     let info = reg.create(producing(total));
     let mut sub = reg.subscribe(&info.id).unwrap();
 
-    // Read without acknowledging for well under the stall window.
-    let mut received = 0usize;
+    // Wait for the first output: on Windows, ConPTY and the shell can take
+    // longer to start than the window below, which then saw nothing.
+    let mut received = match tokio::time::timeout(Duration::from_secs(30), sub.rx.recv()).await {
+        Ok(Some(StreamMsg::Data(b))) => b.len(),
+        other => panic!("no output from the producer: {:?}", other.map(|m| m.map(|_| "a message"))),
+    };
+    // Then read without acknowledging for well under the stall window.
     let until = Instant::now() + Duration::from_millis(1200);
     while Instant::now() < until {
         match tokio::time::timeout(Duration::from_millis(50), sub.rx.recv()).await {
