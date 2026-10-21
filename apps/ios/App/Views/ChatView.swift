@@ -200,7 +200,7 @@ struct ChatView: View {
         .sheet(isPresented: $showChanges) { ChangesView(chat: chat) }
         .sheet(isPresented: $showGit) { PrSheet(chat: chat, initial: []) }
         .sheet(isPresented: $showGitScreen) { GitView(chatId: sessionId) }
-        .sheet(isPresented: $showFiles) { FilesView(root: .chat(sessionId), title: chat?.title ?? "Files") }
+        .sheet(isPresented: $showFiles) { FilesView(root: .chat(sessionId), title: chat.title) }
         .fullScreenCover(item: $viewing) { set in ImageViewer(photos: set.photos, index: set.index) }
         .alert("Rename chat", isPresented: $renaming) {
             TextField("Title", text: $renameText)
