@@ -12,7 +12,7 @@ final class TerminalScreenTests: XCTestCase {
     func testPlainTextNewlinesAndCarriageReturns() {
         let s = screen(20, 4, "$ ls\r\nREADME.md\r\nsrc\r\n$ ")
         XCTAssertEqual(s.screenText, ["$ ls", "README.md", "src", "$"])
-        XCTAssertEqual((s.cursorX, s.cursorY), (2, 3))
+        XCTAssertEqual([s.cursorX, s.cursorY], [2, 3])
         // CR overwrites: a progress line.
         let p = screen(20, 2, "10%\r50%\r100%")
         XCTAssertEqual(p.screenText[0], "100%")
@@ -62,7 +62,7 @@ final class TerminalScreenTests: XCTestCase {
 
     func testCursorMovesAndAbsolutePositions() {
         let s = screen(10, 4, "\u{1b}[3;4HX\u{1b}[AY\u{1b}[2DZ\u{1b}[GA\u{1b}[4dB")
-        XCTAssertEqual(s.screenText, ["", "A  ZY", "   X", "B"])
+        XCTAssertEqual(s.screenText, ["", "A  ZY", "   X", " B"])
     }
 
     func testScrollingKeepsAScrollBack() {
@@ -126,7 +126,7 @@ final class TerminalScreenTests: XCTestCase {
         s.feed("\u{1b}[?1049l")
         XCTAssertFalse(s.altScreen)
         XCTAssertEqual(s.screenText, ["$ vim", "", ""])
-        XCTAssertEqual((s.cursorX, s.cursorY), (0, 1))
+        XCTAssertEqual([s.cursorX, s.cursorY], [0, 1])
     }
 
     func testModesTheKeysAndPasteFollow() {
@@ -160,7 +160,7 @@ final class TerminalScreenTests: XCTestCase {
         XCTAssertEqual(s.rendered().map(\.text), ["one", "two", "thre", "$"])
         s.resize(cols: 8, rows: 3)
         XCTAssertEqual(s.screenText, ["thre", "$", ""])
-        XCTAssertEqual((s.cols, s.rows), (8, 3))
+        XCTAssertEqual([s.cols, s.rows], [8, 3])
     }
 
     func testTheCursorIsDrawnInverted() {
@@ -266,6 +266,24 @@ final class TerminalWireTests: XCTestCase {
         XCTAssertEqual(parts.joined(), text)
         XCTAssertEqual(TerminalKeys.chunks("ls"), ["ls"])
         XCTAssertEqual(TerminalKeys.chunks(""), [])
+    }
+
+    func testTheClassesMatchTheComputer() throws {
+        let file = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("crates/nekko-remote/src/phone-access.json")
+        guard let data = try? Data(contentsOf: file) else { throw XCTSkip("repository sources not available") }
+        let policy = try JSONValue.parse(data)
+        let set = { (k: String) in Set(policy[k]?.array?.compactMap(\.string) ?? []) }
+        let terminal = Set(Channels.all.filter { $0.hasPrefix("terminal") || $0.hasPrefix("ssh:") })
+        XCTAssertEqual(set("changeChannels").intersection(terminal), Channels.terminalChange)
+        XCTAssertEqual(set("tokenChannels"), [TerminalChannels.write, TerminalChannels.resize])
+        XCTAssertEqual(set("readChannels").intersection(terminal), [TerminalChannels.list, TerminalChannels.tail, TerminalChannels.sshHosts])
+        XCTAssertEqual(policy["terminal"]?.str("openChannel"), TerminalChannels.open)
+        XCTAssertEqual(policy["terminal"]?.str("leaveChannel"), TerminalChannels.leave)
+        XCTAssertEqual(policy["terminal"]?.long("writeBytes"), Int64(TerminalLimits.writeBytes))
+        XCTAssertEqual(policy["terminal"]?.long("maxCols"), Int64(TerminalLimits.maxCols))
     }
 
     func testRefusalsThatOpeningAgainFixes() {

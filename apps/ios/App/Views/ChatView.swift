@@ -18,6 +18,7 @@ struct ChatView: View {
     @State private var actionError: String?
     @State private var showGit = false
     @State private var showGitScreen = false
+    @State private var showTerminals = false
     /// The photos open full screen.
     @State private var viewing: PhotoSet?
     /// Whether the end of the transcript is on screen: only then does it follow new output.
@@ -181,6 +182,8 @@ struct ChatView: View {
                         Button { showGitScreen = true } label: { Label("Git", systemImage: "arrow.triangle.branch") }
                             .accessibilityIdentifier("chat.git")
                         Button { showGit = true } label: { Label("Commit or open a PR", systemImage: "arrow.triangle.pull") }
+                        Button { showTerminals = true } label: { Label("Terminals", systemImage: "terminal") }
+                            .accessibilityIdentifier("chat.terminals")
                         Button { renameText = chat.title; renaming = true } label: { Label("Rename", systemImage: "pencil") }
                         Button { act { try await store.completeChat(sessionId) } } label: { Label("Complete", systemImage: "checkmark.circle") }
                     }
@@ -197,6 +200,7 @@ struct ChatView: View {
         .sheet(isPresented: $showChanges) { ChangesView(chat: chat) }
         .sheet(isPresented: $showGit) { PrSheet(chat: chat, initial: []) }
         .sheet(isPresented: $showGitScreen) { GitView(chatId: sessionId) }
+        .sheet(isPresented: $showTerminals) { TerminalsView(chatId: sessionId) }
         .fullScreenCover(item: $viewing) { set in ImageViewer(photos: set.photos, index: set.index) }
         .alert("Rename chat", isPresented: $renaming) {
             TextField("Title", text: $renameText)

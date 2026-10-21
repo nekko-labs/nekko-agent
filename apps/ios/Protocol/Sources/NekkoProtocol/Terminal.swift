@@ -27,6 +27,13 @@ public enum TerminalChannels {
     public static let event = "terminal:event"
 }
 
+extension Channels {
+    /// The terminal channels the computer asks a signed proof for (`terminal:open` is the gate's own).
+    public static let terminalChange: Set<String> = [
+        TerminalChannels.create, TerminalChannels.sshOpen, TerminalChannels.signal, TerminalChannels.close,
+    ]
+}
+
 /// The computer's limits for terminals on a phone (`PHONE_TERMINAL`).
 public enum TerminalLimits {
     public static let writeBytes = 64 * 1024

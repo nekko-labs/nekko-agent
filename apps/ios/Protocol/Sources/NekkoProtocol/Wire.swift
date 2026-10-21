@@ -83,6 +83,9 @@ public enum Channels {
         usageSummary, limitsGet,
         workspaceGitStatus, gitDiff, gitLog, gitShow, gitBranches, gitCompare, prChecks, prDiff,
         gitStage, gitUnstage, gitCommit, gitCommitMessage, gitPush, gitSwitch, gitMergeAbort, prCreate, prAction,
+        // IO-33 FA-3, FA-6 (Terminal.swift).
+        TerminalChannels.list, TerminalChannels.tail, TerminalChannels.sshHosts, TerminalChannels.create, TerminalChannels.sshOpen,
+        TerminalChannels.write, TerminalChannels.resize, TerminalChannels.signal, TerminalChannels.close,
     ]
 }
 
