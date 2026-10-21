@@ -52,8 +52,8 @@ final class GitTests: XCTestCase {
         guard let data = try? Data(contentsOf: file) else { throw XCTSkip("repository sources not available") }
         let policy = try JSONValue.parse(data)
         let change = Set(policy["changeChannels"]?.array?.compactMap(\.string) ?? [])
-        // Terminals (Terminal.swift) are classed too; their test checks them.
-        XCTAssertEqual(change.filter { Channels.all.contains($0) && !Channels.terminalChange.contains($0) }, Channels.gitChange)
+        XCTAssertEqual(change.filter { Channels.all.contains($0) }, Channels.change)
+        XCTAssertTrue(Channels.gitChange.isSubset(of: Channels.change))
     }
 
     func testDecodesTheComputersViews() throws {
