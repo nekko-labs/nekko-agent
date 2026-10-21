@@ -852,9 +852,12 @@ h3 { font-size: 21px; }
 /* speech bubble: pixel-edged, Handjet */
 .nekko-bubble {
   position: absolute; top: 0; right: 150px; z-index: 2; max-width: 260px;
-  font-family: var(--led); font-size: 20px; line-height: 1.1; color: #17151f;
+  /* 600, not the default 400: at 400 Handjet's segment gaps line up into a
+     strike-through line on 100%-scaled screens. 600 draws each letter solid. */
+  font-family: var(--led); font-weight: 600; font-size: 20px; line-height: 1.1; color: #17151f;
   background: #ffffff; border: 2px solid var(--sticker); border-radius: 10px;
   padding: 8px 12px; box-shadow: 3px 3px 0 var(--sticker);
+  text-wrap: balance; /* two even lines, never one word left on its own */
 }
 .nekko-bubble::after { /* a little pixel tail pointing at Nekko */
   content: ''; position: absolute; right: -8px; top: 14px; width: 6px; height: 6px;
