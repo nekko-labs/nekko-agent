@@ -41,6 +41,11 @@ describe('phone access classes', () => {
     for (const c of BEFORE_IO33) expect(phoneChannelClass(c), c).toBeNull();
   });
 
+  it('classes files and logs (FA-1, FA-5): saving is the only Change', () => {
+    for (const c of ['files:list', 'files:search', 'files:read', 'logs:list', 'logs:read']) expect(phoneChannelClass(c), c).toBe('read');
+    expect(phoneChannelClass('files:write')).toBe('change');
+  });
+
   it('only classes channels a phone may call, each in one class', () => {
     for (const c of [...PHONE_READ_CHANNELS, ...PHONE_CHANGE_CHANNELS]) {
       expect((PHONE_CHANNELS as readonly string[]).includes(c), `${c} is classed but not in PHONE_CHANNELS`).toBe(true);
@@ -101,7 +106,7 @@ describe('the always-denied list', () => {
     }
   });
 
-  it('still refuses files, the stack calls and terminals until their feature PRs', () => {
+  it('still refuses absolute-path files, the stack calls and terminals', () => {
     for (const c of ['file:read', 'file:write', 'dir:list', 'pr:continueStack', 'pr:linkStack', 'terminal:create', 'terminals:list']) {
       expect(phoneChannelAllowed(c), c).toBe(false);
       expect(phoneAlwaysDenied(c), c).toBe(true);

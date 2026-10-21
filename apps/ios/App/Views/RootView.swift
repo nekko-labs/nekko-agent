@@ -11,6 +11,8 @@ enum Route: Hashable {
     case connection
     case automations
     case usage
+    case files
+    case logs
 }
 
 struct RootView: View {
@@ -118,6 +120,8 @@ struct RootView: View {
         case .connection: ConnectionView()
         case .automations: AutomationsView()
         case .usage: UsageView()
+        case .files: FoldersView()
+        case .logs: LogsView()
         }
     }
 

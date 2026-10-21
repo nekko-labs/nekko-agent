@@ -41,10 +41,10 @@ const REST: Record<string, unknown[]> = {
 
 describe('git on a phone (IO-33 FA-2)', () => {
   it('classes reads and changes as decided', () => {
-    expect([...PHONE_READ_CHANNELS].sort()).toEqual(
+    expect(PHONE_READ_CHANNELS.filter((c) => PHONE_GIT_CHANNELS.includes(c)).sort()).toEqual(
       ['git:branches', 'git:compare', 'git:diff', 'git:log', 'git:show', 'pr:checks', 'pr:diff', 'workspace:gitStatus'].sort(),
     );
-    expect([...PHONE_CHANGE_CHANNELS].sort()).toEqual(
+    expect(PHONE_CHANGE_CHANNELS.filter((c) => PHONE_GIT_CHANNELS.includes(c)).sort()).toEqual(
       ['git:commit', 'git:commitMessage', 'git:mergeAbort', 'git:push', 'git:stage', 'git:switch', 'git:unstage', 'pr:action', 'pr:create'].sort(),
     );
     // The model-written message spends tokens: a Change, so Face ID is asked.

@@ -363,6 +363,34 @@ fn a_reply_too_large_for_the_relay_becomes_an_error() {
 }
 
 #[test]
+fn files_and_logs_from_a_phone_match_the_ts() {
+    // Written from packages/shared/src/phone-files.ts by phone-files.golden.test.ts.
+    let g = golden("phone-files.json");
+    let screens = g["screens"].as_array().unwrap();
+    assert!(screens.len() >= 40);
+    for c in screens {
+        let channel = s(&c["channel"]);
+        let args = c["args"].as_array().unwrap();
+        let got = nekko_remote::phone::screen(channel, args);
+        let what = format!("{channel} {}", c["args"]);
+        match c.get("error") {
+            Some(e) => assert_eq!(got.err().map(|d| d.to_string()).as_deref(), Some(s(e)), "{what}"),
+            None => {
+                let args = got.unwrap_or_else(|d| panic!("{what}: {d}")).args.map(Value::Array).unwrap_or(Value::Null);
+                assert_eq!(args, c["callArgs"], "{what}");
+            }
+        }
+    }
+    let views = g["views"].as_array().unwrap();
+    assert!(views.len() >= 20);
+    for c in views {
+        let channel = s(&c["channel"]);
+        let got = nekko_remote::phone::redact(channel, c["result"].clone());
+        assert_eq!(got, c["view"], "{channel} {}", c["result"]);
+    }
+}
+
+#[test]
 fn the_relay_route_rule_matches_the_ts() {
     for case in golden("relay-route.json").as_array().unwrap() {
         let url = s(&case["url"]);

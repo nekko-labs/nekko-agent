@@ -57,6 +57,8 @@ pub struct Policy {
     pub key_channel: String,
     /// `PHONE_ACTIVITY_LIMIT`: the newest activity entries kept per device.
     pub activity_limit: usize,
+    /// Files and logs from a phone (IO-33 FA-1, FA-5): limits and views (phone_files.rs).
+    pub files: crate::phone_files::FilesPolicy,
     /// Git from a phone (IO-33 FA-2): limits, option keys and views (phone_git.rs).
     pub git: crate::phone_git::GitPolicy,
 }
@@ -101,6 +103,7 @@ pub fn policy() -> &'static Policy {
             proof_max_ahead_ms: v["changeProof"]["maxAheadMs"].as_f64().unwrap_or(0.0),
             key_channel: v["keyChannel"].as_str().unwrap_or("device:registerKey").to_string(),
             activity_limit: v["activityLimit"].as_u64().unwrap_or(200) as usize,
+            files: crate::phone_files::FilesPolicy::from_policy(&v["files"]),
             git: crate::phone_git::GitPolicy::from_policy(&v["git"]),
         }
     })
@@ -209,7 +212,7 @@ pub struct SkillCall {
 pub struct Screened {
     pub settings: Option<Vec<(String, Value)>>,
     pub skill: Option<SkillCall>,
-    /// A git call's arguments, rebuilt from the checked fields (phone_git.rs).
+    /// A git, files or logs call's arguments, rebuilt from the checked fields (phone_git.rs, phone_files.rs).
     pub args: Option<Vec<Value>>,
 }
 
@@ -250,6 +253,10 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
     }
     if crate::phone_git::is_git(channel) {
         let args = crate::phone_git::screen(channel, args, &policy().git)?;
+        return Ok(Screened { args: Some(args), ..Screened::default() });
+    }
+    if crate::phone_files::is_files(channel) {
+        let args = crate::phone_files::screen(channel, args, &policy().files)?;
         return Ok(Screened { args: Some(args), ..Screened::default() });
     }
     let arg = |i: usize| args.get(i).unwrap_or(&Value::Null);
@@ -441,6 +448,7 @@ pub fn redact(channel: &str, result: Value) -> Value {
         "pr:sessionList" => crate::phone_views::prs(&result, &policy().views),
         "usage:summary" => crate::phone_views::usage(&result, &policy().views),
         "limits:get" => crate::phone_views::limits(&result, &policy().views),
+        c if crate::phone_files::is_files(c) => crate::phone_files::view(c, &result, &policy().files),
         c if crate::phone_git::is_git(c) => crate::phone_git::view(c, &result, &policy().git, &policy().views.pr),
         _ => result,
     }
@@ -1211,6 +1219,58 @@ mod tests {
         }
 
         #[test]
+        fn files_and_logs_go_through_the_policy_classes() {
+            let k = signer(14);
+            let devices = Arc::new(MemDevices::default());
+            *devices.now.lock().unwrap() = NOW;
+            let access = DeviceAccess { read: true, change: true };
+            devices.devices.lock().unwrap().insert("phone-1".into(), PhoneDevice { access, key: Some(public(&k)) });
+            let calls: Arc<Mutex<Vec<(String, Value)>>> = Arc::default();
+            let gated = gate(host(calls.clone(), secrets()), devices.clone());
+            let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
+            let ask = |channel: &str, args: Value, proof: Option<Value>| {
+                let who = PhoneCall { device_id: "phone-1".into(), proof };
+                rt.block_on(gated(who, channel.to_string(), args))
+            };
+            let set = |read: bool, change: bool| {
+                devices.devices.lock().unwrap().get_mut("phone-1").unwrap().access = DeviceAccess { read, change };
+            };
+            // A read reaches the computer with the phone's caps, not its own.
+            assert!(ask("files:read", json!([{ "sessionId": "s1" }, "a.md", { "maxBytes": 1e9 }]), None).is_ok());
+            // A secret file is refused before the computer is asked.
+            assert_eq!(
+                ask("files:read", json!([{ "sessionId": "s1" }, ".env"]), None),
+                Err("Not allowed from a paired phone (value-invalid): secret file".into())
+            );
+            // A save needs a proof, and Change on.
+            let hash = "e".repeat(64);
+            let args = json!([{ "sessionId": "s1" }, "a.md", "new", { "expectHash": hash }]);
+            assert_eq!(ask("files:write", args.clone(), None), refused("proof-required", "files:write"));
+            let p = proof(&k, "phone-1", "files:write", &args, NOW as i64);
+            assert_eq!(ask("files:write", args.clone(), Some(p)), Ok(json!({ "ok": "files:write" })));
+            set(true, false);
+            let p = proof(&k, "phone-1", "files:write", &args, NOW as i64 + 1);
+            assert_eq!(ask("files:write", args.clone(), Some(p)), refused("change-off", "files:write"));
+            // Read off refuses files and logs; Change alone does not open them.
+            set(false, true);
+            assert_eq!(ask("logs:list", json!([]), None), refused("read-off", "logs:list"));
+            assert_eq!(ask("files:list", json!([{ "workspaceId": "w1" }]), None), refused("read-off", "files:list"));
+            assert_eq!(
+                *calls.lock().unwrap(),
+                vec![
+                    ("files:read".to_string(), json!([{ "sessionId": "s1" }, "a.md", { "maxBytes": 262_144 }])),
+                    ("files:write".to_string(), json!([{ "sessionId": "s1" }, "a.md", "new", { "expectHash": hash }])),
+                ]
+            );
+            let log: Vec<(bool, Option<String>)> =
+                devices.log.lock().unwrap().iter().map(|(_, a)| (a.ok, a.reason.clone())).collect();
+            assert_eq!(
+                log,
+                vec![(false, Some("proof-required".into())), (true, None), (false, Some("change-off".into()))]
+            );
+        }
+
+        #[test]
         fn reads_switches_from_a_device_record() {
             assert_eq!(DeviceAccess::of(&json!({ "id": "p" })), ON);
             assert_eq!(DeviceAccess::of(&json!({ "access": {} })), ON);
@@ -1230,6 +1290,11 @@ mod tests {
             // FA-2 (git) is the first feature to class its channels.
             assert!(p.read_channels.iter().any(|c| c == "git:diff"));
             assert!(p.change_channels.iter().any(|c| c == "git:commitMessage"), "it spends model tokens");
+            // FA-1 and FA-5 (files and logs): saving a file is the only Change among them.
+            for c in ["files:list", "files:search", "files:read", "logs:list", "logs:read"] {
+                assert!(has(&p.read_channels, c), "{c}");
+            }
+            assert!(has(&p.change_channels, "files:write"));
             for c in p.read_channels.iter().chain(&p.change_channels) {
                 assert!(!has(&p.read_channels, c) || !has(&p.change_channels, c), "{c} is in both classes");
             }

@@ -8,6 +8,10 @@
   "chat:pending",
   "chat:queue",
   "chat:send",
+  "files:list",
+  "files:read",
+  "files:search",
+  "files:write",
   "git:branches",
   "git:commit",
   "git:commitMessage",
@@ -21,6 +25,8 @@
   "git:switch",
   "git:unstage",
   "limits:get",
+  "logs:list",
+  "logs:read",
   "models:list",
   "pr:action",
   "pr:checks",
@@ -104,7 +110,12 @@
   "git:show",
   "pr:checks",
   "pr:diff",
-  "workspace:gitStatus"
+  "workspace:gitStatus",
+  "files:list",
+  "files:read",
+  "files:search",
+  "logs:list",
+  "logs:read"
  ],
  "changeChannels": [
   "git:commit",
@@ -115,7 +126,8 @@
   "git:switch",
   "git:unstage",
   "pr:action",
-  "pr:create"
+  "pr:create",
+  "files:write"
  ],
  "changeProof": {
   "version": "nekko-change-v1",
@@ -279,6 +291,61 @@
   "expect",
   "text"
  ],
+ "files": {
+  "view": {
+   "entries": 500,
+   "hits": 100,
+   "hitsDefault": 50,
+   "readBytes": 262144,
+   "imageChars": 3145728,
+   "writeBytes": 262144,
+   "pathChars": 1024,
+   "idChars": 200,
+   "queryChars": 200,
+   "logs": 120,
+   "logTailBytes": 262144,
+   "logSearchBytes": 8388608,
+   "logMatches": 500,
+   "logLineChars": 2000,
+   "logTextChars": 262144
+  },
+  "entryView": [
+   "dir",
+   "link",
+   "mtime",
+   "name",
+   "path",
+   "size"
+  ],
+  "fileView": [
+   "editable",
+   "hash",
+   "kind",
+   "language",
+   "markdown",
+   "mime",
+   "mtime",
+   "name",
+   "path",
+   "size",
+   "truncated"
+  ],
+  "writeView": [
+   "error",
+   "hash",
+   "mtime",
+   "ok",
+   "size"
+  ],
+  "logView": [
+   "id",
+   "kind",
+   "sessionId",
+   "size",
+   "title",
+   "updatedAt"
+  ]
+ },
  "git": {
   "view": {
    "files": 100,
