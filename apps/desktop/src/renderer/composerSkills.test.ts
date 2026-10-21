@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SKILLS, type SkillDef } from '@nekko-agent/shared';
-import { draftAfterSkillSelection } from './composerSkills.js';
+import { draftAfterPromptSelection, draftAfterSkillSelection, slashTrigger } from './composerSkills.js';
 
 const plan = SKILLS.find((skill) => skill.name === 'plan')!;
 const goal = SKILLS.find((skill) => skill.kind === 'goal')!;
@@ -44,5 +44,46 @@ describe('composer skill selection', () => {
 
   it('does not mistake a similarly named word for the goal command', () => {
     expect(draftAfterSkillSelection('/goals matter', goal)).toBe('/goal /goals matter');
+  });
+
+  it.each([
+    ['Help me with this /', 'Help me with this '],
+    ['Help me with this /pl', 'Help me with this '],
+    ['# Notes\n\n- café 🐱\n/plan', '# Notes\n\n- café 🐱\n'],
+  ])('consumes only a slash query typed after the draft: %j', (draft, kept) => {
+    expect(draftAfterSkillSelection(draft, plan)).toBe(kept);
+  });
+
+  it('keeps the draft before a trailing slash query as the goal condition', () => {
+    expect(draftAfterSkillSelection('Fix checkout /go', goal)).toBe('/goal Fix checkout ');
+  });
+});
+
+describe('composer slash trigger', () => {
+  it.each([
+    ['/', ''],
+    ['/pl', 'pl'],
+    ['/my prompt', 'my prompt'],
+  ])('opens on a draft that starts with a slash: %j', (draft, query) => {
+    expect(slashTrigger(draft)).toEqual({ query, start: 0 });
+  });
+
+  it.each([
+    ['Help me with this /', '', 18],
+    ['Help me with this /pl', 'pl', 18],
+    ['First line\n/', '', 11],
+    ['/plan first\nthen /re', 're', 17],
+  ])('opens on a slash typed after existing text: %j', (draft, query, start) => {
+    expect(slashTrigger(draft)).toEqual({ query, start });
+  });
+
+  it.each(['', 'Help me with this', 'see a/b', 'https://example.com/', 'Help me /plan now', 'Help me / now'])
+    ('stays shut without a trailing slash token: %j', (draft) => {
+      expect(slashTrigger(draft)).toBeNull();
+    });
+
+  it('swaps only the slash query for a saved prompt', () => {
+    expect(draftAfterPromptSelection('/rev', 'Review this.')).toBe('Review this.');
+    expect(draftAfterPromptSelection('Context first /rev', 'Review this.')).toBe('Context first Review this.');
   });
 });
