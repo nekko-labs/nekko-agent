@@ -442,6 +442,14 @@ pub(crate) fn read_only(words: &[String], d: Dialect) -> bool {
     }
 }
 
+/// The command runs git in one of its simple commands (an unreadable command
+/// counts, to be safe).
+pub(crate) fn runs_git(command: &str, d: Dialect) -> bool {
+    split(command, d).map_or(true, |segments| {
+        segments.iter().any(|s| s.words.first().is_some_and(|w| w.eq_ignore_ascii_case("git")))
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

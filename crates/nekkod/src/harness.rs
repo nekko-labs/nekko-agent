@@ -467,7 +467,17 @@ pub fn decide(
             .find_map(|k| input.get(*k).and_then(serde_json::Value::as_str))
             .unwrap_or_default();
         let ours = !path.is_empty() && inside(path, roots);
+        // Git config can name programs a later auto-allowed `git status` runs (decision 0010).
+        let git = !path.is_empty() && {
+            let p = std::path::Path::new(path);
+            let full = if p.is_absolute() || roots.is_empty() { p.to_path_buf() } else { roots[0].join(p) };
+            nekko_tools::gitguard::touches_git_config(&full.to_string_lossy())
+        };
         return match mode {
+            "guardrails" if ours && git => ask(
+                format!("Claude Code wants to change git configuration, which can name programs git runs: {path}"),
+                "high",
+            ),
             "guardrails" | "yolo" if ours => Decision::Allow,
             _ if !ours => {
                 ask(format!("Claude Code wants to change a file outside this chat's folders: {path}"), "high")
@@ -557,6 +567,12 @@ mod tests {
         assert!(matches!(rm, Decision::Ask { severity: "high", .. }), "{rm:?}");
         assert_eq!(d("guardrails", "Write", serde_json::json!({ "file_path": abs("src/a.rs") })), Decision::Allow);
         assert_eq!(d("guardrails", "Edit", serde_json::json!({ "file_path": "src/a.rs" })), Decision::Allow);
+        // Git configuration asks, even inside the chat's folders; YOLO still runs it.
+        for f in [abs(".git/config"), ".git/hooks/pre-commit".to_string(), abs("sub/.git")] {
+            let x = d("guardrails", "Write", serde_json::json!({ "file_path": f }));
+            assert!(matches!(x, Decision::Ask { severity: "high", .. }), "{f}: {x:?}");
+        }
+        assert_eq!(d("yolo", "Write", serde_json::json!({ "file_path": abs(".git/config") })), Decision::Allow);
         let outside = d("guardrails", "Edit", serde_json::json!({ "file_path": abs("../other/a.rs") }));
         assert!(matches!(outside, Decision::Ask { severity: "high", .. }), "{outside:?}");
         assert!(asks(&d("guardrails", "WebFetch", serde_json::json!({}))));

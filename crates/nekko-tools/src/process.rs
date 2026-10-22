@@ -14,8 +14,10 @@
 //! replacement characters), and a kill takes the whole tree on Windows too
 //! (a job object, where Node's `taskkill /T` could miss a reparented child).
 
+use crate::allowlist::{Dialect, runs_git};
 use crate::bash::{Utf8Carry, shell, spawn_code, tree::Tree};
 use crate::context::{ChatMode, ToolCall, ToolContext, ToolResult};
+use crate::gitguard::hardened_git_env;
 use crate::guardrails::{Action, NOT_READ_ONLY, classify_command, default_guardrails};
 use crate::sandbox::{asks_everything, first_workspace, process_cwd, resolve_path};
 use nekko_js as js;
@@ -117,6 +119,8 @@ pub struct StartRequest<'a> {
     pub command: &'a str,
     pub cwd: &'a str,
     pub name: Option<String>,
+    /// Environment changes on top of the daemon's own (and the platform's).
+    pub env: &'a [crate::gitguard::EnvChange],
 }
 
 impl Processes {
@@ -183,6 +187,7 @@ impl Processes {
             .env("NO_COLOR", "1")
             .env("CI", std::env::var("CI").unwrap_or_else(|_| "1".into()))
             .kill_on_drop(true);
+        crate::bash::apply_env(&mut cmd, req.env);
         let spawned = cmd.spawn();
         let mut info = ProcessInfo {
             id: self.next_id(),
@@ -455,6 +460,12 @@ pub async fn run_tool(call: &ToolCall, ctx: &ToolContext, procs: &Arc<Processes>
                 return Ok(ToolResult::err(call, format!("Blocked by guardrail ({labels}).")));
             }
             let needs_approval = ctx.mode != ChatMode::Yolo && (asks_everything(ctx) || decision.action == Action::Ask);
+            // An auto-run git gets an environment that keeps repo config from running anything.
+            let env = if !needs_approval && ctx.mode == ChatMode::Guardrails && runs_git(&command, Dialect::host()) {
+                hardened_git_env()
+            } else {
+                Vec::new()
+            };
             if needs_approval {
                 let reason = if labels.is_empty() { "Start a background process" } else { labels.as_str() };
                 let ok = tokio::select! {
@@ -491,6 +502,7 @@ pub async fn run_tool(call: &ToolCall, ctx: &ToolContext, procs: &Arc<Processes>
                 command: &command,
                 cwd: &cwd,
                 name,
+                env: &env,
             };
             match procs.start(req, mirror) {
                 Ok(info) => {
@@ -631,7 +643,10 @@ mod tests {
         let mirror: Mirror = Arc::new(move |_, _, t| lock(&s2).push_str(t));
         let cmd = echo("hello");
         let info = procs
-            .start(StartRequest { session_id: "s", workspace_id: None, command: &cmd, cwd: &cwd, name: None }, mirror)
+            .start(
+                StartRequest { session_id: "s", workspace_id: None, command: &cmd, cwd: &cwd, name: None, env: &[] },
+                mirror,
+            )
             .unwrap();
         let mut out = String::new();
         for _ in 0..50 {
@@ -658,10 +673,11 @@ mod tests {
         let mirror: Mirror = Arc::new(|_, _, _| {});
         let mut ids = Vec::new();
         for _ in 0..PROCESS_LIMIT {
-            let req = StartRequest { session_id: "s", workspace_id: None, command: sleep, cwd: &cwd, name: None };
+            let req =
+                StartRequest { session_id: "s", workspace_id: None, command: sleep, cwd: &cwd, name: None, env: &[] };
             ids.push(procs.start(req, mirror.clone()).unwrap().id);
         }
-        let req = StartRequest { session_id: "s", workspace_id: None, command: sleep, cwd: &cwd, name: None };
+        let req = StartRequest { session_id: "s", workspace_id: None, command: sleep, cwd: &cwd, name: None, env: &[] };
         assert!(procs.start(req, mirror.clone()).unwrap_err().contains("already has 8 processes"));
         assert_eq!(procs.kill_session("s"), PROCESS_LIMIT);
         for id in &ids {
@@ -687,6 +703,7 @@ mod tests {
             command: "echo x",
             cwd: "/definitely/not/here/nekko",
             name: Some("x".into()),
+            env: &[],
         };
         let info = procs.start(req, mirror).unwrap();
         assert!(info.pid.is_none());

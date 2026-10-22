@@ -22,6 +22,7 @@ mod bash;
 mod changes;
 mod context;
 mod exec;
+pub mod gitguard;
 mod guardrails;
 pub mod hooks;
 mod js;
@@ -34,7 +35,7 @@ mod search;
 mod spec;
 
 pub use allowlist::Dialect;
-pub use bash::{BashLimits, CommandRunner, Failure, RunOutcome, RunRequest, ShellRunner, shell};
+pub use bash::{BashLimits, CommandRunner, Failure, RunOutcome, RunRequest, ShellRunner, platform_env, shell};
 pub use changes::{ChangeTracker, FileChange};
 pub use context::{
     Approver, BoxFuture, Cancel, ChatMode, CommandLog, SandboxMode, ToolCall, ToolContext, ToolResult, Workspace,
