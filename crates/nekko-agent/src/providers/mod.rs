@@ -12,6 +12,12 @@ use crate::js;
 use crate::stream::{Clock, system_clock};
 use serde_json::Value;
 use std::sync::Arc;
+use std::time::Duration;
+
+/// How long a live model catalog may take, body included, before the shipped
+/// list is served instead. Opening a chat waits on this list, so a stalled
+/// connection must not hold it for the transport's minutes-long idle limit.
+pub(crate) const CATALOG_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// What a provider talks through: the wire and the clock. Swapped out in tests.
 #[derive(Clone)]

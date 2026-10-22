@@ -5,7 +5,7 @@
 //! `CLAUDE_PLAN_REMOVED`: Anthropic does not let third-party apps send
 //! requests on Claude plan credentials.
 
-use super::Io;
+use super::{CATALOG_TIMEOUT, Io};
 use crate::claude::{
     Family, SamplingMemory, SamplingShape, anthropic_effort, claude_context_window, next_sampling_shape,
     parse_claude_model,
@@ -20,7 +20,6 @@ use serde_json::{Map, Value, json};
 use std::collections::HashMap;
 use std::io::Cursor;
 use std::sync::Arc;
-use std::time::Duration;
 
 /// The shipped Claude catalog, served when `GET /v1/models` can't be reached.
 /// Newest first within a family, the previous generation included so a chat
@@ -81,11 +80,6 @@ const FOUNDRY_MODELS: &[(&str, &str)] = &[
 
 /// Vertex AI takes the API version in the body rather than as a header.
 const VERTEX_VERSION: &str = "vertex-2023-10-16";
-
-/// How long the catalog may take, body included, before the shipped list is
-/// served instead. Opening a chat waits on this list, so a stalled connection
-/// must not hold it for the transport's minutes-long idle limit.
-const CATALOG_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Picker order by family, as the shipped list has it. The API lists newest
 /// release first, which would put a new Haiku above Opus; the sort is stable,
