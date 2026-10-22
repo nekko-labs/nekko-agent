@@ -141,7 +141,7 @@ async fn fail(ctx: &Ctx, session_id: &str, message: &str) -> Result<Value, Strin
 }
 
 /// `newTurnId()`, marked `turn_d`: a turn this daemon admitted, whose queue it runs on.
-fn daemon_turn_id() -> String {
+pub(crate) fn daemon_turn_id() -> String {
     let mut b = [0u8; 4];
     let _ = getrandom::fill(&mut b);
     let hex: String = b.iter().map(|x| format!("{x:02x}")).collect();
