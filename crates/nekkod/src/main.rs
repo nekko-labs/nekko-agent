@@ -152,6 +152,30 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     let catalog = settings.as_deref().map(|s| catalog::new(s, cfg.hugging_face_url.clone()));
     let automation = Arc::new(automation::Automation::new(sessions.clone(), settings.clone(), hub.clone()));
     let remote = Arc::new(remote::Remote::new(cfg.data_dir.clone().map(std::path::PathBuf::from), hub.clone()));
+    // Nekko Cloud sign-in and end-to-end encrypted sync, with the data directory.
+    // A chat a turn is running in is never overwritten from the cloud; the turns
+    // are known once the context below is built.
+    let running: Arc<std::sync::OnceLock<Arc<turns::Turns>>> = Arc::default();
+    let cloud = match (&cfg.data_dir, &sessions) {
+        (Some(d), Some(store)) => {
+            let dir = std::path::PathBuf::from(d).join("cloud");
+            let publish_hub = hub.clone();
+            let busy = running.clone();
+            Some(nekko_cloud::Cloud::new(nekko_cloud::Options {
+                vault: nekko_cloud::vault::default_vault(&dir),
+                dir,
+                api_url: std::env::var("NEKKO_CLOUD_URL")
+                    .ok()
+                    .filter(|u| !u.is_empty())
+                    .unwrap_or_else(|| "https://nekko-agent-api.fly.dev".into()),
+                device_label: gethostname::gethostname().to_string_lossy().chars().take(40).collect(),
+                sessions: store.clone(),
+                publish: Arc::new(move |status| publish_hub.publish(nekko_cloud::EVENT, status, false)),
+                busy: Arc::new(move |id| busy.get().is_some_and(|t| t.running_sessions().iter().any(|s| s == id))),
+            }))
+        }
+        _ => None,
+    };
     // The messaging bridges, with the data directory (and so the settings and sessions).
     let messaging = match (&cfg.data_dir, &settings, &sessions) {
         (Some(d), Some(s), Some(store)) => {
@@ -265,6 +289,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             ))
         }),
         voice: voice.clone(),
+        cloud: cloud.clone(),
         catalog,
         workspace: Arc::new(workspace::Workspace::new(
             cfg.data_dir.clone().map(std::path::PathBuf::from),
@@ -296,6 +321,10 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             _ => None,
         },
     };
+    let _ = running.set(ctx.turns.clone());
+    if let Some(cloud) = &cloud {
+        cloud.start(std::time::Duration::from_secs(60));
+    }
     routes::forward_terminal_events(&ctx);
     if let Some(adm) = ctx.admission.clone() {
         let c = ctx.clone();

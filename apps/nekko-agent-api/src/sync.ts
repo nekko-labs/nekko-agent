@@ -15,9 +15,10 @@ export const SYNC_QUOTA: Record<Plan, number> = { free: 0, pro: 5 * 2 ** 30, tea
 export const MAX_OBJECT_BYTES = 1024 * 1024;
 const MAX_PUSH = 200;
 const MAX_PULL = 500;
-// Exact sizes from crates/nekko-sync: version, salt or ephemeral key, 64-byte keyring, GCM tag.
+// Exact sizes from crates/nekko-sync: version, ephemeral key, 64-byte keyring, GCM tag. The
+// recovery wrap is sealed to the recovery key's public half the same way.
 const WRAP_BYTES = 1 + 65 + 64 + 16;
-const RECOVERY_BYTES = 1 + 32 + 64 + 16;
+const RECOVERY_BYTES = WRAP_BYTES;
 // version, salt, the smallest padded frame (256), tag.
 const MIN_OBJECT_BYTES = 1 + 32 + 256 + 16;
 

@@ -75,7 +75,9 @@ final class SyncCryptoTests: XCTestCase {
         XCTAssertEqual(recovery.text, v["recovery"]?.str("text"))
         let typed = try XCTUnwrap(v["recovery"]?.str("text")).lowercased().replacingOccurrences(of: "-", with: " ")
         XCTAssertEqual(try SyncCrypto.RecoveryKey(text: typed), recovery)
-        let rblob = try SyncCrypto.sealRecovery(recovery, keyring: keyring, account: account, keyId: 1, salt: try d(v["recovery"], "salt"))
+        let recoveryPublic = SyncCrypto.recoveryAgreementKey(recovery).publicKeyX963
+        XCTAssertEqual(SyncCrypto.base64url(recoveryPublic), v["recovery"]?.str("public"))
+        let rblob = try SyncCrypto.sealRecovery(recoveryPublic: recoveryPublic, keyring: keyring, account: account, keyId: 1, ephemeral: eph)
         XCTAssertEqual(rblob, v["recovery"]?.str("blob"))
         XCTAssertEqual(try SyncCrypto.openRecovery(recovery, account: account, keyId: 1, blob: rblob), keyring)
         XCTAssertThrowsError(try SyncCrypto.openRecovery(recovery, account: account, keyId: 2, blob: rblob))

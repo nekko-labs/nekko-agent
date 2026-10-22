@@ -484,6 +484,17 @@ impl SessionStore {
         self.save(target)
     }
 
+    /// Write a chat exactly as given, `updatedAt` included: a chat that arrived
+    /// through end-to-end encrypted sync keeps the time it was last changed
+    /// on the device that changed it. Atomic, like every other write.
+    pub fn put_synced(&self, s: &Value) -> Result<(), String> {
+        let id = s.get("id").and_then(Value::as_str).filter(|id| valid_id(id)).ok_or("a session without a valid id")?;
+        let _guard = self.writes.lock().unwrap_or_else(|e| e.into_inner());
+        std::fs::create_dir_all(&self.dir).map_err(|e| e.to_string())?;
+        let text = serde_json::to_string_pretty(s).map_err(|e| e.to_string())?;
+        write_atomic(&self.path(id), &text).map_err(|e| format!("could not save the chat: {e}"))
+    }
+
     /// `deleteSession`.
     pub fn delete(&self, id: &str) -> Result<(), String> {
         if !valid_id(id) {

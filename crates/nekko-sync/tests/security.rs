@@ -101,7 +101,7 @@ fn recovery_keys_round_trip_and_catch_typos() {
     let text = rk.to_text();
     assert_eq!(text.len(), 55 + 10);
     assert_eq!(text.split('-').count(), 11);
-    let blob = seal_recovery(&rk, &k, A, 1);
+    let blob = seal_recovery(&rk.public_key(), &k, A, 1).unwrap();
     let typed = text.to_lowercase().replace('-', " ").replace('0', "o").replace('1', "l");
     assert_eq!(open_recovery(&RecoveryKey::parse(&typed).unwrap(), A, 1, &blob).unwrap().to_bytes(), k.to_bytes());
     // One wrong character.
@@ -113,6 +113,11 @@ fn recovery_keys_round_trip_and_catch_typos() {
     assert_eq!(RecoveryKey::parse(&format!("{text}0")).unwrap_err(), Error::Malformed);
     assert!(open_recovery(&RecoveryKey::generate(), A, 1, &blob).is_err());
     assert!(open_recovery(&rk, A, 2, &blob).is_err());
+    // The public half is stable and opens nothing by itself; a rotated epoch seals to it too.
+    assert_eq!(rk.public_key(), RecoveryKey::parse(&text).unwrap().public_key());
+    let k2 = k.rotate();
+    let blob2 = seal_recovery(&rk.public_key(), &k2, A, 2).unwrap();
+    assert_eq!(open_recovery(&rk, A, 2, &blob2).unwrap().to_bytes(), k2.to_bytes());
 }
 
 #[test]

@@ -117,7 +117,7 @@ describe("devices and keyrings", () => {
     }
     const t = await issueToken(db, u.id);
     const d = (await call(a, t, "POST", "/v1/sync/devices", { publicKey: devicePub(), label: "ok" })).json().deviceId;
-    expect((await call(a, t, "PUT", "/v1/sync/keyrings/1", { recoveryWrap: b64(112), wraps: [] })).statusCode).toBe(400);
+    expect((await call(a, t, "PUT", "/v1/sync/keyrings/1", { recoveryWrap: b64(145), wraps: [] })).statusCode).toBe(400);
     expect((await call(a, t, "PUT", "/v1/sync/keyrings/1", { recoveryWrap: vectors.recovery.blob, wraps: [{ deviceId: d, wrap: b64(145) }] })).statusCode).toBe(400);
   });
 

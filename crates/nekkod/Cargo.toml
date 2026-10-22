@@ -25,6 +25,7 @@ bytes.workspace = true
 futures-util.workspace = true
 # The computer's name and addresses, for "Visible on this network" and the local relay.
 gethostname = "1"
+nekko-cloud = { path = "../nekko-cloud" }
 if-addrs = "0.13"
 getrandom.workspace = true
 icu_normalizer = "2"

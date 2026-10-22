@@ -11,6 +11,7 @@ import { DEFAULT_SPEC_METHODOLOGY, SPEC_METHODOLOGIES, ORCHESTRATION_STRATEGIES,
 import { ShieldIcon, SunIcon, TrashIcon, RobotIcon, WandIcon } from '../icons.js';
 import { VoiceSettings } from '../components/VoiceSettings.js';
 import { RemoteAccess } from '../components/RemoteAccess.js';
+import { SyncSettings } from '../components/cloud/SyncSettings.js';
 import { DelegationRouteSettings } from '../components/DelegationRouteSettings.js';
 import { useT, LANGUAGES } from '../i18n.js';
 import { loadWallState, saveWallState, toWallSetting } from '../commandWall.js';
@@ -306,6 +307,9 @@ export function SettingsView() {
 
         {/* MCP servers */}
         <ErrorBoundary label="MCP servers"><McpSection settings={settings} update={update} reload={reload} /></ErrorBoundary>
+
+        {/* Nekko Cloud sign-in and end-to-end encrypted sync */}
+        <ErrorBoundary label="Sync"><SyncSettings /></ErrorBoundary>
 
         {/* Remote access (relay) */}
         <ErrorBoundary label="Remote access"><RemoteAccess /></ErrorBoundary>

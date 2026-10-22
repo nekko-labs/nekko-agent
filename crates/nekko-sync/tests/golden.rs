@@ -47,7 +47,7 @@ fn vectors() -> Value {
 
     let device_id = "dev_7f3a";
     let wrap = wrap_keyring_with(&keyring, ACCOUNT, 1, device_id, &device.public(), &eph).unwrap();
-    let recovery_blob = seal_recovery_with(&recovery, &keyring, ACCOUNT, 1, seed("salt-recovery"));
+    let recovery_blob = seal_recovery_with(&recovery.public_key(), &keyring, ACCOUNT, 1, &eph).unwrap();
     let donation = seal_donation_with(
         &research.public(),
         br#"{"kind":"chat","messages":[{"role":"user","text":"[redacted email] asked about Kyoto"}]}"#,
@@ -71,7 +71,7 @@ fn vectors() -> Value {
         "device": { "id": device_id, "private": b64_encode(&device.to_bytes()), "public": b64_encode(&device.public()), "fingerprint": fingerprint(&device.public()) },
         "ephemeral": { "private": b64_encode(&eph.to_bytes()), "public": b64_encode(&eph.public()) },
         "wrap": { "keyId": 1, "blob": wrap },
-        "recovery": { "key": b64_encode(&seed::<32>("recovery")), "text": recovery.to_text(), "keyId": 1, "salt": b64_encode(&seed::<32>("salt-recovery")), "blob": recovery_blob },
+        "recovery": { "key": b64_encode(&seed::<32>("recovery")), "text": recovery.to_text(), "public": b64_encode(&recovery.public_key()), "keyId": 1, "blob": recovery_blob },
         "donation": {
             "researchPrivate": b64_encode(&research.to_bytes()),
             "researchPublic": b64_encode(&research.public()),

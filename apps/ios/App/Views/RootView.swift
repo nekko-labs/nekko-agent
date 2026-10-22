@@ -13,6 +13,8 @@ enum Route: Hashable {
     case usage
     case files
     case logs
+    case cloud
+    case syncedChat(String)
 }
 
 struct RootView: View {
@@ -122,6 +124,8 @@ struct RootView: View {
         case .usage: UsageView()
         case .files: FoldersView()
         case .logs: LogsView()
+        case .cloud: CloudView()
+        case .syncedChat(let id): SyncedChatView(chatId: id)
         }
     }
 

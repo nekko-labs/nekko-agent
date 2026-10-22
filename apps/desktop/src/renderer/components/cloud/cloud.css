@@ -1,0 +1,108 @@
+/* Nekko Cloud: the sign-in screen, the sync card and its picture. Same
+   language as the clean-start composer: prism light behind frosted glass,
+   a prism hairline as the only edge. */
+
+.sync-visual { position: relative; width: 100%; max-width: 360px; margin: 0 auto; }
+.sync-visual svg { display: block; width: 100%; height: auto; overflow: visible; }
+.sync-visual .sv-arc { fill: none; stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 3 4; }
+.sync-visual.is-moving .sv-arc { stroke: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+.sync-visual .sv-device-bg { fill: var(--surface); stroke: var(--line); stroke-width: 1.2; }
+.sync-visual .sv-device.is-self .sv-device-bg { stroke: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.sync-visual .sv-device.is-faded { opacity: 0.45; }
+.sync-visual .sv-glyph { fill: none; stroke: var(--ink-soft); stroke-width: 1.6; stroke-linecap: round; }
+.sync-visual .sv-lock-body { fill: var(--accent); }
+.sync-visual .sv-lock-shackle { stroke: var(--accent); }
+.sync-visual .sv-ok { fill: var(--success); }
+.sync-visual .sv-ok-tick { stroke: #fff; }
+.sync-visual .sv-glow { opacity: 0.55; }
+.sync-visual.tone-error .sv-lock-body { fill: var(--danger); }
+.sync-visual.tone-error .sv-lock-shackle { stroke: var(--danger); }
+.sync-visual.tone-wait .sv-lock-body { fill: var(--warning); }
+.sync-visual.tone-wait .sv-lock-shackle { stroke: var(--warning); }
+.sync-visual.is-dim { filter: grayscale(0.85); opacity: 0.6; }
+.sync-visual .sv-ripple { fill: none; stroke: url(#sv-prism); stroke-width: 1.5; transform-origin: 160px 70px; animation: sv-ripple 1.6s var(--ease-out) infinite; }
+.sync-visual.is-moving .sv-glow { animation: sv-breathe 1.6s ease-in-out infinite; }
+.sync-visual.is-moving .sv-lock-shackle { animation: sv-shackle 1.6s var(--ease-out) infinite; transform-origin: 160px 70px; }
+.sync-visual-cipher {
+  position: absolute; left: 50%; bottom: -2px; transform: translateX(-50%);
+  font: 500 10px/1 var(--font-mono); letter-spacing: 0.08em; color: var(--ink-faint);
+  white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+@keyframes sv-ripple { from { transform: scale(0.85); opacity: 0.7; } to { transform: scale(1.6); opacity: 0; } }
+@keyframes sv-breathe { 0%, 100% { opacity: 0.45; } 50% { opacity: 0.8; } }
+@keyframes sv-shackle { 0%, 70%, 100% { transform: translateY(0); } 80% { transform: translateY(-2px); } }
+@media (prefers-reduced-motion: reduce) {
+  .sync-visual .sv-ripple, .sync-visual.is-moving .sv-glow, .sync-visual.is-moving .sv-lock-shackle { animation: none; }
+}
+
+/* The sign-in screen. */
+.cloud-signin-backdrop {
+  position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; padding: 24px;
+  background: color-mix(in srgb, var(--paper) 72%, transparent);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  animation: cloud-fade 0.18s var(--ease-out);
+}
+.cloud-signin-backdrop::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(55% 70% at 0% 100%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%),
+    radial-gradient(50% 60% at 100% 0%, color-mix(in srgb, var(--accent-2) 13%, transparent), transparent 70%),
+    radial-gradient(40% 45% at 92% 96%, color-mix(in srgb, #ff7eb6 10%, transparent), transparent 70%);
+}
+.cloud-signin {
+  position: relative; width: min(400px, 100%); border-radius: 20px; padding: 28px 28px 22px;
+  background: color-mix(in srgb, var(--win, var(--surface)) 70%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(160%); backdrop-filter: blur(24px) saturate(160%);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 10%, transparent), 0 30px 80px -30px color-mix(in srgb, var(--accent) 50%, transparent), 0 2px 12px -4px color-mix(in srgb, #000 30%, transparent);
+  animation: cloud-rise 0.24s var(--ease-out);
+}
+.cloud-signin::after, .cloud-prism-edge::after {
+  content: ''; position: absolute; inset: -1px; border-radius: inherit; padding: 1px; pointer-events: none;
+  background: linear-gradient(120deg, var(--accent), var(--accent-2) 40%, #46e0bd 58%, #ffbe5c 76%, #ff7eb6);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude; opacity: 0.55;
+}
+[data-theme='light'] .cloud-signin { background: color-mix(in srgb, #fff 78%, transparent); }
+@media (prefers-reduced-transparency: reduce) { .cloud-signin { background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; } }
+.cloud-signin h1 { font-size: 19px; font-weight: 600; letter-spacing: -0.01em; text-align: center; }
+.cloud-signin .cloud-lede { margin-top: 6px; font-size: 13px; color: var(--ink-soft); text-align: center; line-height: 1.45; }
+.cloud-provider {
+  display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; height: 40px;
+  border-radius: 11px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  font-size: 13.5px; font-weight: 500; transition: border-color 0.15s, background 0.15s, transform 0.1s;
+}
+.cloud-provider:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); background: color-mix(in srgb, var(--accent) 5%, var(--surface)); }
+.cloud-provider:active { transform: translateY(1px); }
+.cloud-provider:disabled { opacity: 0.55; }
+.cloud-provider svg { width: 17px; height: 17px; }
+.cloud-or { display: flex; align-items: center; gap: 10px; margin: 16px 0; font-size: 11px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.08em; }
+.cloud-or::before, .cloud-or::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.cloud-otp { display: flex; justify-content: center; gap: 8px; }
+.cloud-otp input {
+  width: 44px; height: 52px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface);
+  text-align: center; font: 600 22px/1 var(--font-mono); color: var(--ink); caret-color: var(--accent);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.cloud-otp input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--ring); }
+.cloud-otp input:nth-child(3) { margin-right: 10px; }
+.cloud-fineprint { margin-top: 18px; display: flex; gap: 8px; align-items: flex-start; font-size: 11.5px; color: var(--ink-faint); line-height: 1.45; }
+.cloud-fineprint svg { flex: none; margin-top: 1px; color: var(--success); }
+@keyframes cloud-fade { from { opacity: 0; } }
+@keyframes cloud-rise { from { opacity: 0; transform: translateY(8px) scale(0.985); } }
+@media (prefers-reduced-motion: reduce) { .cloud-signin-backdrop, .cloud-signin { animation: none; } }
+
+/* The recovery key, as a grid of groups. */
+.recovery-key { display: grid; grid-template-columns: repeat(4, auto); justify-content: center; gap: 8px 12px; padding: 16px; border-radius: 14px; background: var(--surface-2); }
+.recovery-key span { font: 600 15px/1.2 var(--font-mono); letter-spacing: 0.06em; color: var(--ink); }
+.fingerprint { font: 600 18px/1.2 var(--font-mono); letter-spacing: 0.12em; color: var(--ink); text-align: center; }
+.sync-card { position: relative; overflow: hidden; }
+.sync-card-hero { position: relative; padding: 14px 8px 18px; border-radius: 14px; border: 1px solid color-mix(in srgb, var(--line) 70%, transparent); background:
+  radial-gradient(60% 90% at 0% 100%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 70%),
+  radial-gradient(55% 80% at 100% 0%, color-mix(in srgb, var(--accent-2) 8%, transparent), transparent 70%); }
+.sync-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.sync-pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 500; }
+.sync-pill.ok { background: var(--success-soft); color: var(--success); }
+.sync-pill.busy { background: var(--accent-soft); color: var(--accent); }
+.sync-pill.warn { background: var(--warning-soft); color: var(--warning); }
+.sync-pill.bad { background: var(--danger-soft); color: var(--danger); }
+.sync-pill.off { background: var(--neutral-soft); color: var(--ink-soft); }

@@ -4,7 +4,7 @@ Nekko Cloud **Pro** and **Team** sync your chats between your computers and phon
 
 If you turn on **Help improve Nekko Agent** (off unless you turn it on), samples you share are encrypted too, with a key that never sits on any server, and carry nothing that ties them to your account.
 
-> **Status (2026-10-22):** the encryption format, the Nekko Cloud storage API and the iPhone's crypto are implemented and tested. Signing in to Nekko Cloud, the sync engine on the computer and the screens that turn sync on are not built yet, so sync can't be switched on in the app today. See [What's built](#whats-built).
+> **Status (2026-10-22):** sign-in (Supabase Auth), the sync engine, Settings → Sync on the computer and the iPhone's screens are built and tested end to end against a local copy of Nekko Cloud. Sync stays off for users until the Supabase project is connected, Nekko Cloud is deployed with it, and an outside cryptography review is done. See [What's built](#whats-built).
 
 ## What Nekko Cloud can and can't see
 
@@ -32,9 +32,10 @@ flowchart TB
 - **Records.** Each chat is stored as records (`chat`, `chat-part`, and later `prompt` and others). Every revision of a record gets its own AES-256-GCM key and nonce, derived with HKDF-SHA256 from the record key and a fresh 32-byte random salt, so no key is used twice and there is no limit on how many records one key can protect. The account, key epoch, record type, object id and revision are authenticated with it, so the server can't swap a record into another chat, another account, or roll it back to an older revision without the device noticing. The plaintext is padded (Padmé) to hide its exact length.
 - **Object ids.** The server files a record under `HMAC-SHA256(id key, type ‖ chat id)`. Every one of your devices computes the same id; the server can't link it to a chat.
 - **Devices.** Each device has its own P-256 key pair. On the iPhone the private key is created inside the Secure Enclave and never leaves it. The keyring is encrypted to each device's public key (ECIES: ephemeral ECDH, HKDF-SHA256, AES-256-GCM), naming the account, key epoch and device, so a wrap made for one device can't be handed to another.
-- **Adding a device.** A new device registers its public key, and one of your existing devices encrypts the keyring to it. Before it does, both screens show the same short code (a fingerprint of the new key), or the hand-over rides the phone's existing encrypted pairing with your computer. This is what stops a server that registered a key of its own from being trusted.
+- **Adding a device.** Two ways. With the recovery key, the new device unwraps every key epoch itself. Or by approval: the new device shows a 16-character code (a fingerprint of its key), and on a device that already syncs you approve it in Settings → Sync only after checking the same code is on its screen. That check is what stops a server that registered a key of its own from being trusted.
 - **Removing a device.** Revoking a device cuts its sign-in and deletes its wrapped keyring. Your remaining devices then start a new **key epoch**: a new record key, wrapped only to the devices you kept. Everything written afterwards is unreadable to the removed device. Nekko Cloud only accepts writes under the newest epoch, so a rotation takes effect at once.
-- **Recovery key.** When you turn sync on, you get a recovery key: 55 characters in groups of five, with a checksum that catches a typo. It also encrypts the keyring. If you lose every device, the recovery key on a new one gets your chats back; without it, nobody can, including us. There is deliberately no password option: a password-derived key could be guessed by whoever holds the encrypted keyring, and that is the server.
+- **Recovery key.** When you turn sync on, you get a recovery key: 55 characters in groups of five, with a checksum that catches a typo. You save it (copy it, or save the printable recovery kit with a QR code), then type it back so we know it was saved right. The recovery key stands for a P-256 key pair; every key epoch's keyring is also sealed to its public half, so your devices never hold the recovery secret, yet a rotation after removing a device is still recoverable. If you lose every device, the recovery key on a new one gets your chats back; without it, nobody can, including us. There is deliberately no password option: a password-derived key could be guessed by whoever holds the encrypted keyring, and that is the server.
+- **The account record.** One more sealed record lists the devices the account trusts and pins the recovery key's public half. The server can't edit it, so it can't slip a device of its own into the next key rotation, or swap the recovery key that new epochs are sealed to. A device ignores an account record that names a different recovery key from the one it pinned.
 
 ## Plans
 
@@ -73,10 +74,10 @@ The reference implementation is `crates/nekko-sync`; `apps/ios/Protocol/Sources/
 | --- | --- | --- | --- |
 | Record | `01 ‖ salt[32] ‖ ct ‖ tag[16]` | HKDF-SHA256(record key, salt, `nekko-sync/v1 record`) → 44 bytes | `nekko-sync/v1 record⏎account⏎keyId⏎collection⏎objectId⏎revision` |
 | Device wrap | `01 ‖ ephemeral P-256 public[65] ‖ ct ‖ tag` | HKDF-SHA256(ECDH x, ephemeral ‖ device public, context) | context = `nekko-sync/v1 wrap⏎account⏎keyId⏎deviceId` |
-| Recovery wrap | `01 ‖ salt[32] ‖ ct ‖ tag` | HKDF-SHA256(recovery key, salt, context) | context = `nekko-sync/v1 recovery⏎account⏎keyId` |
+| Recovery wrap | as a device wrap, to the recovery public key | as a device wrap | context = `nekko-sync/v1 recovery⏎account⏎keyId` |
 | Donation | as a device wrap, to the research key | as a device wrap | context = `nekko-donation/v1⏎donationId` |
 
-Record and donation plaintext is framed as a 4-byte big-endian length and the bytes, zero-padded to the Padmé size of the frame (at least 256 bytes). The keyring is `record key[32] ‖ id key[32]`. Object ids are `base64url(HMAC-SHA256(id key, "nekko-sync/v1 object⏎" ‖ collection ‖ "⏎" ‖ localId))`. The recovery key text is Crockford base32 of `key[32] ‖ SHA-256(key)[0..2]`, in groups of five.
+Record and donation plaintext is framed as a 4-byte big-endian length and the bytes, zero-padded to the Padmé size of the frame (at least 256 bytes). The keyring is `record key[32] ‖ id key[32]`. Object ids are `base64url(HMAC-SHA256(id key, "nekko-sync/v1 object⏎" ‖ collection ‖ "⏎" ‖ localId))`. The recovery key text is Crockford base32 of `key[32] ‖ SHA-256(key)[0..2]`, in groups of five. Its P-256 key pair is the first valid scalar among `HKDF-SHA256(recovery key, salt = empty, info = "nekko-sync/v1 recovery-key" ‖ counter)` for counter = 0, 1, …. The account record is the `account` collection with local id `account`: `{"v":1,"recoveryPublic":…,"devices":[{"id","publicKey","label"}]}`.
 
 ### Choices and alternatives
 
@@ -86,9 +87,30 @@ Record and donation plaintext is framed as a 4-byte big-endian length and the by
 - **Whole-record last-writer conflicts with revisions** rather than a CRDT: the server enforces `revision = previous + 1`, a losing device pulls, merges in plaintext and pushes again. Transcripts are append-only, so merges are rare.
 - **No server-side search.** Search runs on your devices over decrypted chats. Encrypted search schemes leak access patterns and weren't worth that.
 
+## Signing in
+
+Supabase Auth proves who you are; Nekko Cloud keeps the account. The app signs in to Supabase with an emailed 6-digit code, or with Apple, GitHub or Google in the browser (PKCE; the computer listens on a loopback port for the redirect, the iPhone uses `nekko-agent://cloud-callback`). It trades the Supabase access token once, at `POST /v1/auth/session`, for this device's own Nekko Cloud token, and drops the Supabase session. Nekko Cloud checks the token against the project's published keys (JWKS), its issuer, audience and expiry, and refuses anonymous users. A device token lasts 180 days from its last use; signing out revokes it.
+
+Where the keys live: on a Mac, the Keychain; on Windows, Credential Manager; on Linux, a file only your user can read (like the app's other sign-ins); on the iPhone, a Secure Enclave key-agreement key plus the Keychain (this device only).
+
+## What syncs
+
+Every chat, except incognito chats (never) and chats in the Local only mode (unless you include them in Settings → Sync). Pictures and attached files are left out of the synced copy (a short note stands in), so a record is mostly text; a chat whose text is over 1 MB isn't synced and Settings says how many. The newest change to a chat wins; a chat a reply is being written in is never overwritten from the cloud. Deleting a chat deletes it on your other devices. The iPhone reads synced chats (they stay readable offline) but doesn't change them.
+
+## Locked out?
+
+No company that runs real end-to-end encryption keeps a key it can use on its own. They combine a key you keep, your other devices, a trusted contact, a PIN held in tamper-proof hardware that erases after a few wrong guesses, or (for businesses) an admin key. The research is in [reports/e2ee-lockout-recovery-2026-10-22.md](../reports/e2ee-lockout-recovery-2026-10-22.md). Nekko Agent does the first two today, with the recovery kit, the confirm step and the prompt to add a second device. The next options (a recovery contact, a Team admin key, PIN recovery in an enclave) are open decisions.
+
 ## Nekko Cloud API
 
 All sync routes take `Authorization: Bearer nk_…`. Writes answer `402 {"error":"plan-required"}` on the Free plan.
+
+| Sign-in route | What it does |
+| --- | --- |
+| `GET /v1/auth/config` | The Supabase project URL and its public anon key |
+| `POST /v1/auth/session` `{accessToken, label}` | A Supabase access token for this device's token and the account (30 per IP per minute) |
+| `GET /v1/auth/me` | The account and plan |
+| `DELETE /v1/auth/session` | Sign this device out |
 
 | Route | What it does |
 | --- | --- |
@@ -107,11 +129,13 @@ All sync routes take `Authorization: Bearer nk_…`. Writes answer `402 {"error"
 ## What's built
 
 - [x] Encryption format and reference implementation (`crates/nekko-sync`), with tests for tampering, relabelling, rollback, rotation, wrong devices and recovery-key typos; vectors cross-checked against Node's `crypto`.
-- [x] Nekko Cloud storage API and schema (`apps/nekko-agent-api`), Pro and Team gating, quotas, revocation, delete everything, anonymous donations.
-- [x] iPhone crypto (`SyncCrypto.swift`) held to the same vectors, with a Secure Enclave device key type.
-- [ ] Nekko Cloud sign-in that issues tokens (accounts are PF14 step 4).
-- [ ] The sync engine in nekkod (record layout for chats, push and pull, merge) and the desktop's **Settings → Sync** (turn on, recovery key, devices, delete everything).
-- [ ] The iPhone's sync screens and reading synced chats without the computer online.
-- [ ] Android's crypto port.
-- [ ] Generating the research key offline, pinning its public half in the apps, and the on-device redaction for donations.
-- [ ] An outside cryptography review before sync is switched on for anyone.
+- [x] Nekko Cloud: Supabase sign-in, device tokens, the storage API, Pro and Team gating, quotas, revocation, delete everything, anonymous donations (`apps/nekko-agent-api`), and `npm run dev:local`, the whole service with a stand-in Supabase on one machine.
+- [x] The sync engine (`crates/nekko-cloud`) in nekkod, tested with three devices against the local service (`tests/live.rs`): sign-in, turn on, recovery-key restore, approval by fingerprint, edits both ways, revoke and rotate, deletes, and no plaintext on the server.
+- [x] Settings → Sync and the sign-in screen on the computer, with the animated sync picture, the recovery key and kit, devices, approve and remove.
+- [x] The iPhone: sign-in, join by recovery key or approval, approve a computer, read synced chats offline (`CloudSync` tests on an in-memory server; screens built on macOS CI).
+- [x] The offline research-key tooling and runbook ([research-key-ceremony.md](research-key-ceremony.md)).
+- [ ] Connect the Supabase project and deploy Nekko Cloud with it (settings in `apps/nekko-agent-api/README.md`).
+- [ ] Stripe plans into `users.plan`.
+- [ ] Generate the research key offline, pin it, and build donation redaction and sharing.
+- [ ] Android.
+- [ ] The outside cryptography review ([scope and RFP](../reports/crypto-review-scope-2026-10-22.md)) before sync is switched on for anyone.

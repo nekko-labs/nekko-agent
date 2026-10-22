@@ -23,7 +23,8 @@ public protocol SyncAgreementKey {
 ///   fresh 32-byte salt, the account, epoch, collection, object id and
 ///   revision bound as associated data, and the plaintext Padmé-padded;
 /// - the keyring **wrapped** to each device's P-256 key (ECIES; on the iPhone
-///   the private key is a Secure Enclave key) and to a 256-bit **recovery
+///   the private key is a Secure Enclave key) and to the public half of a
+///   P-256 key derived from a 256-bit **recovery
 ///   key** the user keeps;
 /// - opt-in **donations** sealed to Nekko Labs' offline research key.
 public enum SyncCrypto {
@@ -291,21 +292,28 @@ public enum SyncCrypto {
         "\(version) recovery\n\(account)\n\(keyId)"
     }
 
-    public static func sealRecovery(_ recovery: RecoveryKey, keyring: Keyring, account: String, keyId: UInt32, salt: Data? = nil) throws -> String {
-        let salt = salt ?? E2E.randomBytes(saltBytes)
-        guard salt.count == saltBytes else { throw Failure.invalid }
-        let ctx = Data(recoveryContext(account: account, keyId: keyId).utf8)
-        let (key, nonce) = keyAndNonce(ikm: recovery.bytes, salt: salt, info: ctx)
-        let box = try AES.GCM.seal(keyring.bytes, using: key, nonce: nonce, authenticating: ctx)
-        return base64url(Data([blobVersion]) + salt + box.ciphertext + box.tag)
+    /// The recovery key's P-256 key pair: the first valid scalar among
+    /// HKDF-SHA256(recovery key, info = "nekko-sync/v1 recovery-key" ‖ counter).
+    /// Devices keep only its public half, so a new key epoch can be sealed for
+    /// recovery without any device holding the recovery secret.
+    public static func recoveryAgreementKey(_ recovery: RecoveryKey) -> SoftwareKey {
+        for counter in 0...255 {
+            let info = Data("\(version) recovery-key".utf8) + Data([UInt8(counter)])
+            let d = HKDF<SHA256>.deriveKey(inputKeyMaterial: SymmetricKey(data: recovery.bytes), salt: Data(), info: info,
+                                           outputByteCount: 32)
+            if let key = try? SoftwareKey(rawRepresentation: d.withUnsafeBytes { Data($0) }) { return key }
+        }
+        preconditionFailure("256 HKDF outputs are all outside the P-256 scalar range")
+    }
+
+    /// Seal a key epoch's keyring to the recovery key's public half (ECIES, like a device wrap).
+    public static func sealRecovery(recoveryPublic: Data, keyring: Keyring, account: String, keyId: UInt32,
+                                    ephemeral: SoftwareKey = SoftwareKey()) throws -> String {
+        try seal(to: recoveryPublic, context: recoveryContext(account: account, keyId: keyId), plaintext: keyring.bytes, ephemeral: ephemeral)
     }
 
     public static func openRecovery(_ recovery: RecoveryKey, account: String, keyId: UInt32, blob: String) throws -> Keyring {
-        let raw = try fromBase64url(blob)
-        guard raw.count >= 1 + saltBytes + tagBytes, raw.first == blobVersion else { throw Failure.malformed }
-        let ctx = Data(recoveryContext(account: account, keyId: keyId).utf8)
-        let (key, nonce) = keyAndNonce(ikm: recovery.bytes, salt: raw.subdata(in: 1..<(1 + saltBytes)), info: ctx)
-        return try Keyring(bytes: open(raw.suffix(from: 1 + saltBytes), key: key, nonce: nonce, aad: ctx))
+        try Keyring(bytes: openSealed(key: recoveryAgreementKey(recovery), context: recoveryContext(account: account, keyId: keyId), blob: blob))
     }
 
     // MARK: Donations
@@ -325,6 +333,11 @@ public enum SyncCrypto {
         let token = deleteToken ?? E2E.randomBytes(32)
         let blob = try seal(to: researchPublic, context: "\(donationVersion)\n\(id)", plaintext: frame(payload), ephemeral: ephemeral)
         return Donation(id: id, blob: blob, deleteToken: base64url(token), deleteHash: base64url(Data(SHA256.hash(data: token))))
+    }
+
+    /// The S256 challenge for a PKCE verifier (OAuth sign-in in the browser).
+    public static func pkceChallenge(_ verifier: String) -> String {
+        base64url(Data(SHA256.hash(data: Data(verifier.utf8))))
     }
 
     // MARK: Primitives

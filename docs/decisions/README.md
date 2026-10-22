@@ -11,3 +11,6 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | [0001](0001-split-the-spec-into-feature-files.md) | Split SPEC.md into feature files, AGENTS.md into rules and runbooks | accepted |
 | [0002](0002-bundled-model-feed-with-measured-calibration.md) | Recommend models from a bundled feed, with speeds calibrated on measurements | accepted |
 | [0003](0003-pseudonymize-private-values-at-the-model-client.md) | Pseudonymize private values at the model-client seam (Privacy Shield) | accepted |
+| [0004](0004-supabase-for-identity-only.md) | Use Supabase Auth for identity only; keep accounts and data in Nekko Cloud | accepted |
+| [0005](0005-recovery-key-as-a-p256-key-and-sealed-account-record.md) | Seal key epochs to the recovery key's public half; pin trust in a sealed account record | accepted |
+| [0006](0006-lockout-recovery-without-a-vendor-key.md) | Recover lockouts without a key Nekko Labs can use | proposed |

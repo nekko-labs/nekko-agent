@@ -5,20 +5,20 @@
 //! password-derived key could be brute-forced by whoever holds the wrapped
 //! keyring, and that is the server.
 //!
-//! A recovery wrap is `0x01 ‖ salt (32) ‖ AES-256-GCM ciphertext and tag`,
-//! keyed by `HKDF-SHA256(ikm = recovery key, salt, info = context)` with
-//! context `nekko-sync/v1 recovery \n accountId \n keyId`, also the
-//! associated data.
+//! The recovery key stands for a P-256 key pair
+//! ([`RecoveryKey::agreement_key`]); a recovery wrap is the keyring sealed to
+//! its public half exactly like a device wrap (see `wrap.rs`), under the
+//! context `nekko-sync/v1 recovery \n accountId \n keyId`. Devices pin only
+//! the public half, so rotating to a new key epoch after a revocation can
+//! still be sealed for recovery.
 
 use sha2::{Digest, Sha256};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
-use crate::{Error, Keyring, VERSION, b64, hkdf};
+use crate::wrap::{open_sealed, seal_to_with};
+use crate::{DeviceKey, Error, Keyring, VERSION, hkdf};
 
 const ALPHABET: &[u8; 32] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
-const BLOB_VERSION: u8 = 1;
-const SALT_LEN: usize = 32;
-const TAG_LEN: usize = 16;
 const TEXT_LEN: usize = 55;
 
 /// Bytes as Crockford base32, most significant bit first, the last
@@ -115,40 +115,58 @@ fn context(account_id: &str, key_id: u32) -> String {
     format!("{VERSION} recovery\n{account_id}\n{key_id}")
 }
 
-pub fn seal_recovery(recovery: &RecoveryKey, keyring: &Keyring, account_id: &str, key_id: u32) -> String {
-    seal_recovery_with(recovery, keyring, account_id, key_id, crate::random())
+impl RecoveryKey {
+    /// The P-256 key pair this recovery key stands for: the first valid
+    /// scalar among `HKDF-SHA256(recovery key, info = "nekko-sync/v1
+    /// recovery-key" ‖ counter)`, counter from 0 (a retry is needed with
+    /// probability about 2^-32). Devices keep only its public half, so every
+    /// new key epoch can be sealed to the recovery key without a device ever
+    /// holding the recovery secret.
+    pub fn agreement_key(&self) -> DeviceKey {
+        for counter in 0u8..=u8::MAX {
+            let info = [format!("{VERSION} recovery-key").as_bytes(), &[counter]].concat();
+            let mut d = hkdf::derive32(&self.0, &info);
+            let key = DeviceKey::from_bytes(&d);
+            d.zeroize();
+            if let Ok(key) = key {
+                return key;
+            }
+        }
+        unreachable!("256 HKDF outputs are all outside the P-256 scalar range")
+    }
+
+    /// The public half devices pin (65 bytes, uncompressed).
+    pub fn public_key(&self) -> Vec<u8> {
+        self.agreement_key().public()
+    }
 }
 
-pub fn seal_recovery_with(
-    recovery: &RecoveryKey,
+/// Seal a key epoch's keyring to the recovery key's public half (ECIES, as a
+/// device wrap), under the context `nekko-sync/v1 recovery \n account \n keyId`.
+pub fn seal_recovery(
+    recovery_public: &[u8],
     keyring: &Keyring,
     account_id: &str,
     key_id: u32,
-    salt: [u8; SALT_LEN],
-) -> String {
-    let ctx = context(account_id, key_id);
-    let (mut key, nonce) = hkdf::key_and_nonce(&recovery.0, &salt, ctx.as_bytes());
+) -> Result<String, Error> {
+    seal_recovery_with(recovery_public, keyring, account_id, key_id, &DeviceKey::generate())
+}
+
+pub fn seal_recovery_with(
+    recovery_public: &[u8],
+    keyring: &Keyring,
+    account_id: &str,
+    key_id: u32,
+    ephemeral: &DeviceKey,
+) -> Result<String, Error> {
     let mut bytes = keyring.to_bytes();
-    let ct = hkdf::seal(&key, &nonce, ctx.as_bytes(), &bytes);
-    key.zeroize();
+    let out = seal_to_with(recovery_public, &context(account_id, key_id), &bytes, ephemeral);
     bytes.zeroize();
-    let mut blob = Vec::with_capacity(1 + SALT_LEN + ct.len());
-    blob.push(BLOB_VERSION);
-    blob.extend_from_slice(&salt);
-    blob.extend_from_slice(&ct);
-    b64::encode(&blob)
+    out
 }
 
 pub fn open_recovery(recovery: &RecoveryKey, account_id: &str, key_id: u32, blob: &str) -> Result<Keyring, Error> {
-    let raw = b64::decode(blob)?;
-    if raw.len() < 1 + SALT_LEN + TAG_LEN || raw[0] != BLOB_VERSION {
-        return Err(Error::Malformed);
-    }
-    let ctx = context(account_id, key_id);
-    let (mut key, nonce) = hkdf::key_and_nonce(&recovery.0, &raw[1..1 + SALT_LEN], ctx.as_bytes());
-    let opened = hkdf::open(&key, &nonce, ctx.as_bytes(), &raw[1 + SALT_LEN..]);
-    key.zeroize();
-    let mut bytes = opened?;
+    let mut bytes = open_sealed(&recovery.agreement_key(), &context(account_id, key_id), blob)?;
     let out = Keyring::from_bytes(&bytes);
     bytes.zeroize();
     out
