@@ -252,6 +252,18 @@ describe("push and pull", () => {
   });
 });
 
+describe("sync rate limit", () => {
+  it("answers 429 past the limit, before the token is even checked", async () => {
+    const a = buildServer({ db, allowedOrigins: [], syncRateLimit: { max: 2, windowMs: 60_000 } });
+    const u = await user();
+    expect((await call(a, u.token, "GET", "/v1/sync/state")).statusCode).toBe(200);
+    expect((await call(a, `nk_${b64(32)}`, "GET", "/v1/sync/state")).statusCode).toBe(401);
+    expect((await call(a, u.token, "GET", "/v1/sync/state")).statusCode).toBe(429);
+    // Signups keep their own limiter.
+    expect((await a.inject({ method: "POST", url: "/v1/signups", payload: { email: "a@b.co" } })).statusCode).toBe(202);
+  });
+});
+
 describe("donations", () => {
   const donation = () => ({ id: vectors.donation.id, blob: vectors.donation.blob, deleteHash: vectors.donation.deleteHash });
 

@@ -1,3 +1,4 @@
+import rateLimit from "@fastify/rate-limit";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { Db } from "./db.js";
 import { registerDonations } from "./donations.js";
@@ -10,6 +11,8 @@ export interface ServerOptions {
   allowedOrigins: string[];
   /** Signups per IP per window before 429. */
   rateLimit?: { max: number; windowMs: number };
+  /** Sync requests per IP per window before 429 (token checks included). */
+  syncRateLimit?: { max: number; windowMs: number };
   /** Donations per IP per window before 429. */
   donationRateLimit?: { max: number; windowMs: number };
   logger?: boolean;
@@ -71,7 +74,13 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
     return reply.code(202).send({ ok: true });
   });
 
-  registerSync(app, opts.db);
+  // In its own scope so the limiter covers the sync routes only. It also
+  // slows anyone guessing tokens, since a 401 counts like any other answer.
+  const sync = opts.syncRateLimit ?? { max: 600, windowMs: 60 * 1000 };
+  app.register(async (scope) => {
+    await scope.register(rateLimit, { max: sync.max, timeWindow: sync.windowMs });
+    registerSync(scope, opts.db);
+  });
   registerDonations(app, opts.db, opts.donationRateLimit ?? { max: 20, windowMs: 60 * 60 * 1000 });
 
   return app;
