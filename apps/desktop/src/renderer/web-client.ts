@@ -337,7 +337,7 @@ function makeWebClient(): NekkoApi {
     syncConfirmRecoveryKey: (text) => call(IpcChannels.syncConfirmRecoveryKey, text),
     syncRestore: (text) => call(IpcChannels.syncRestore, text),
     syncRequestJoin: () => call(IpcChannels.syncRequestJoin),
-    syncApprove: (deviceId) => call(IpcChannels.syncApprove, deviceId),
+    syncApprove: (deviceId, joinCode) => call(IpcChannels.syncApprove, deviceId, joinCode),
     syncRevoke: (deviceId) => call(IpcChannels.syncRevoke, deviceId),
     syncNow: () => call(IpcChannels.syncNow),
     syncSetEnabled: (on) => call(IpcChannels.syncSetEnabled, on),

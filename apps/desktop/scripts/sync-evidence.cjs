@@ -149,13 +149,15 @@ async function main() {
   await b.click('[data-testid=sync-request-join]');
   await phase(b, 'Waiting for approval');
   await both(b, '09-awaiting-approval');
-  // A sees B waiting and approves it.
+  const joinCode = (await b.locator('[data-testid=sync-join-code]').textContent()).trim();
+  // A sees B waiting and approves it by typing the code B shows.
   await call(A, 'cloud:refresh');
   await a.waitForSelector('[data-testid=sync-approve]', { timeout: 20000 });
-  await both(a, '10-approve');
-  a.once('dialog', (d) => d.accept());
   await a.click('[data-testid=sync-approve]');
-  await a.waitForSelector('[data-testid=sync-approve]', { state: 'detached', timeout: 20000 });
+  await a.fill('[data-testid=sync-approve-code]', joinCode);
+  await both(a, '10-approve');
+  await a.click('[data-testid=sync-approve-form] button[type=submit]');
+  await a.waitForSelector('[data-testid=sync-approve-form]', { state: 'detached', timeout: 20000 });
   await call(B, 'sync:now');
   await phase(b, 'Up to date');
   await call(A, 'sync:now');

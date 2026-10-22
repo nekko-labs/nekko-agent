@@ -40,6 +40,50 @@ pub(crate) fn crockford(bytes: &[u8]) -> String {
     out
 }
 
+/// Exactly `chars` Crockford base32 characters back to bytes, leniently
+/// (any case, dashes and spaces ignored, `O` as `0`, `I` and `L` as `1`; ASCII
+/// only, so every platform reads the same text the same way). The padding bits
+/// after the last whole byte must be zero.
+pub(crate) fn decode_crockford(text: &str, chars: usize) -> Result<Vec<u8>, Error> {
+    let mut raw = Vec::with_capacity(chars * 5 / 8);
+    let (mut acc, mut bits, mut n) = (0u32, 0u32, 0usize);
+    for c in text.chars() {
+        if c == '-' || c == ' ' || c == '\t' || c == '\n' || c == '\r' {
+            continue;
+        }
+        if !c.is_ascii() {
+            raw.zeroize();
+            return Err(Error::Malformed);
+        }
+        let c = match c.to_ascii_uppercase() {
+            'O' => '0',
+            'I' | 'L' => '1',
+            c => c,
+        };
+        let Some(v) = ALPHABET.iter().position(|&a| a as char == c) else {
+            raw.zeroize();
+            return Err(Error::Malformed);
+        };
+        n += 1;
+        if n > chars {
+            raw.zeroize();
+            return Err(Error::Malformed);
+        }
+        acc = ((acc << 5) | v as u32) & 0xFFFF;
+        bits += 5;
+        if bits >= 8 {
+            bits -= 8;
+            raw.push((acc >> bits) as u8);
+        }
+    }
+    if n != chars || acc & ((1 << bits) - 1) != 0 {
+        raw.zeroize();
+        return Err(Error::Malformed);
+    }
+    acc.zeroize();
+    Ok(raw)
+}
+
 #[derive(Clone, Zeroize, ZeroizeOnDrop)]
 pub struct RecoveryKey([u8; 32]);
 
@@ -71,34 +115,7 @@ impl RecoveryKey {
     /// Parse what the user typed: any case, dashes and spaces ignored, `O`
     /// read as `0` and `I`/`L` as `1`.
     pub fn parse(text: &str) -> Result<RecoveryKey, Error> {
-        let mut raw = [0u8; 35];
-        let (mut acc, mut bits, mut n, mut chars) = (0u32, 0u32, 0usize, 0usize);
-        for c in text.chars() {
-            if c == '-' || c.is_whitespace() {
-                continue;
-            }
-            let c = match c.to_ascii_uppercase() {
-                'O' => '0',
-                'I' | 'L' => '1',
-                c => c,
-            };
-            let v = ALPHABET.iter().position(|&a| a as char == c).ok_or(Error::Malformed)? as u32;
-            chars += 1;
-            if chars > TEXT_LEN {
-                return Err(Error::Malformed);
-            }
-            acc = (acc << 5) | v;
-            bits += 5;
-            if bits >= 8 {
-                bits -= 8;
-                raw[n] = (acc >> bits) as u8;
-                n += 1;
-            }
-        }
-        // 55 characters are 275 bits: 34 bytes and 3 zero bits.
-        if chars != TEXT_LEN || n != 34 || acc & ((1 << bits) - 1) != 0 {
-            return Err(Error::Malformed);
-        }
+        let mut raw = decode_crockford(text, TEXT_LEN)?;
         let mut key = [0u8; 32];
         key.copy_from_slice(&raw[..32]);
         let ok = Sha256::digest(key)[..2] == raw[32..34];

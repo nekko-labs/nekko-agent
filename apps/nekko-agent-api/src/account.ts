@@ -32,7 +32,7 @@ export async function userForIdentity(db: Db, id: SupabaseIdentity): Promise<Use
     const bySubject = await tx.query<UserRow>("select id, email, plan, auth_subject from users where auth_subject = $1", [id.subject]);
     if (bySubject.rows[0]) {
       const u = bySubject.rows[0];
-      if (u.email.toLowerCase() !== id.email.toLowerCase()) {
+      if (id.emailVerified && u.email.toLowerCase() !== id.email.toLowerCase()) {
         // The user changed their email in Supabase; follow it unless another account holds it.
         const taken = await tx.query("select 1 from users where lower(email) = lower($1) and id <> $2", [id.email, u.id]);
         if (!taken.rows.length) {
@@ -47,6 +47,10 @@ export async function userForIdentity(db: Db, id: SupabaseIdentity): Promise<Use
     if (user && user.auth_subject && user.auth_subject !== id.subject) {
       // Another Supabase user already owns this email's account (e.g. the auth user was deleted and recreated).
       throw new AccountConflict("This email belongs to another sign-in. Contact support.");
+    }
+    if (user && !id.emailVerified) {
+      // An unproven email can't take over an account someone made with it (a paid beta signup, say).
+      throw new AccountConflict("Confirm your email address, then sign in again.");
     }
     if (user) {
       await tx.query("update users set auth_subject = $1, updated_at = now() where id = $2", [id.subject, user.id]);

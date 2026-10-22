@@ -47,7 +47,7 @@ export function SyncSettings() {
 
   const phase = status?.sync.phase ?? 'signed-out';
   const others = status?.sync.devices.filter((d) => !d.thisDevice && !d.revoked).length ?? 0;
-  const pending = status?.sync.devices.filter((d) => !d.trusted && !d.revoked && !d.thisDevice) ?? [];
+  const pending = status?.sync.devices.filter((d) => !d.trusted && !d.revoked && !d.thisDevice && d.askedToJoin) ?? [];
 
   return (
     <section id="sync" className="card sync-card mt-5 p-5" aria-label="Sync" data-testid="sync-settings">
@@ -96,8 +96,9 @@ export function SyncSettings() {
 
       {phase === 'awaiting-approval' && (
         <div className="sync-row flex-col items-stretch!">
-          <p className="text-[13px] text-ink-soft">On a computer or iPhone that already syncs, open <strong>Settings → Sync</strong> and approve <strong>{status?.sync.devices.find((d) => d.thisDevice)?.label ?? 'this device'}</strong>. Check that it shows this code:</p>
-          <div className="fingerprint my-3" data-testid="sync-fingerprint">{status?.sync.fingerprint}</div>
+          <p className="text-[13px] text-ink-soft">On a computer or iPhone that already syncs, open <strong>Settings → Sync</strong>, choose <strong>Approve</strong> next to <strong>{status?.sync.devices.find((d) => d.thisDevice)?.label ?? 'this device'}</strong>, and type this code:</p>
+          <div className="fingerprint my-3" data-testid="sync-join-code">{status?.sync.joinCode ?? '…'}</div>
+          <p className="mb-3 text-center text-[11px] text-ink-faint">The code proves to each device that the other is really yours. Don't share it with anyone else.</p>
           <div className="flex justify-center gap-2">
             <button className="btn btn-outline py-1! text-[12px]!" onClick={() => void act('now', () => window.nekko.syncNow())}>Check now</button>
             <button className="btn btn-ghost py-1! text-[12px]!" onClick={() => void act('restore', async () => { await window.nekko.syncSetEnabled(false); return window.nekko.cloudRefresh(); })}>Use the recovery key instead</button>
@@ -181,11 +182,11 @@ function Devices({ devices, pending, busy, act }: { devices: SyncDevice[]; pendi
     <div className="sync-row flex-col items-stretch!">
       <div className="text-[12px] font-medium uppercase tracking-wide text-ink-faint">Devices</div>
       {pending.length > 0 && (
-        <p className="mt-2 text-[12px] text-ink-soft">A device is waiting to join. Approve it only if it's yours and its code matches the one on its screen.</p>
+        <p className="mt-2 text-[12px] text-ink-soft">A device is waiting to join. Approve it only if it's yours: type the code its screen shows.</p>
       )}
       <ul className="mt-2 space-y-1.5" data-testid="sync-devices">
-        {live.map((d) => (
-          <li key={d.id} className="flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 hover:bg-surface-2">
+        {live.filter((d) => d.trusted || d.thisDevice || d.askedToJoin).map((d) => (
+          <li key={d.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg px-2 py-1.5 hover:bg-surface-2">
             <div className="min-w-0">
               <div className="truncate text-[13px] text-ink">{d.label ?? 'Device'}{d.thisDevice && <span className="ml-2 text-[11px] text-ink-faint">this computer</span>}</div>
               <div className="font-mono text-[11px] tracking-wider text-ink-faint">{d.fingerprint}</div>
@@ -196,15 +197,36 @@ function Devices({ devices, pending, busy, act }: { devices: SyncDevice[]; pendi
                 Remove
               </button>
             ) : (
-              <button className="btn btn-primary py-0.5! text-[12px]!" disabled={busy} data-testid="sync-approve"
-                onClick={() => { if (window.confirm(`Approve ${d.label ?? 'this device'}? Only if its screen shows ${d.fingerprint}.`)) void act('approve', () => window.nekko.syncApprove(d.id)); }}>
-                Approve
-              </button>
+              <ApproveWithCode device={d} busy={busy} act={act} />
             ))}
           </li>
         ))}
       </ul>
     </div>
+  );
+}
+
+/** Approve a device by typing the join code it shows: a mistyped code, or a key swapped by anyone else, is refused. */
+function ApproveWithCode({ device, busy, act }: { device: SyncDevice; busy: boolean; act: (label: string, work: () => Promise<unknown>) => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [code, setCode] = useState('');
+  const clean = code.replace(/[^0-9a-z]/gi, '');
+  if (!open) {
+    return (
+      <button className="btn btn-primary py-0.5! text-[12px]!" disabled={busy} data-testid="sync-approve" onClick={() => setOpen(true)}>
+        Approve
+      </button>
+    );
+  }
+  return (
+    <form className="flex w-full items-center gap-2" data-testid="sync-approve-form"
+      onSubmit={(e) => { e.preventDefault(); void act('approve', () => window.nekko.syncApprove(device.id, code)); }}>
+      <input className="input min-w-0 flex-1 font-mono tracking-wider uppercase" autoFocus spellCheck={false} autoComplete="off"
+        aria-label={`Join code shown on ${device.label ?? 'the new device'}`} placeholder="XXXX-XXXX-XXXX-XXXX" maxLength={24}
+        value={code} onChange={(e) => setCode(e.target.value)} data-testid="sync-approve-code" />
+      <button type="submit" className="btn btn-primary py-1! text-[12px]!" disabled={busy || clean.length !== 16}>Approve</button>
+      <button type="button" className="btn btn-ghost py-1! text-[12px]!" onClick={() => { setOpen(false); setCode(''); }}>Cancel</button>
+    </form>
   );
 }
 

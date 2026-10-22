@@ -37,6 +37,8 @@ function app(signIn = true) {
 
 interface Claims {
   sub?: string;
+  amr?: { method: string }[];
+  user_metadata?: Record<string, unknown>;
   email?: string;
   role?: string;
   is_anonymous?: boolean;
@@ -48,7 +50,7 @@ interface Claims {
 
 function jwt(c: Claims = {}) {
   const { key = privateKey, iss = ISSUER, aud = "authenticated", exp = "1h", ...rest } = c;
-  const payload = { sub: "auth-user-1", email: "ada@example.com", role: "authenticated", is_anonymous: false, ...rest };
+  const payload = { sub: "auth-user-1", email: "ada@example.com", role: "authenticated", is_anonymous: false, amr: [{ method: "otp" }], ...rest };
   return new SignJWT(payload).setProtectedHeader({ alg: "ES256", kid: "k1" }).setIssuer(iss).setAudience(aud).setIssuedAt().setExpirationTime(exp).sign(key);
 }
 
@@ -95,6 +97,17 @@ describe("sign-in with Supabase", () => {
     expect(rows).toEqual([{ status: "joined", linked: true }]);
   });
 
+  it("lets only a proven email claim an existing account", async () => {
+    const a = app();
+    await db.query("insert into users (email, plan) values ('ada@example.com', 'pro')", []);
+    // A password sign-up with email confirmation off would carry no proof of the address.
+    const unproven = await signIn(a, { amr: [{ method: "password" }], user_metadata: { email_verified: false } });
+    expect(unproven.statusCode).toBe(409);
+    expect((await db.query("select auth_subject from users", [])).rows).toEqual([{ auth_subject: null }]);
+    const oauth = await signIn(a, { amr: [{ method: "oauth" }], user_metadata: { email_verified: true } });
+    expect(oauth.json().account).toMatchObject({ plan: "pro" });
+  });
+
   it("refuses an email another sign-in already owns", async () => {
     const a = app();
     await signIn(a);
@@ -129,7 +142,7 @@ describe("sign-in with Supabase", () => {
     const token = await new SignJWT({ sub: "u", email: "a@b.co", role: "authenticated" })
       .setProtectedHeader({ alg: "HS256" }).setIssuer(ISSUER).setAudience("authenticated").setExpirationTime("1h")
       .sign(new TextEncoder().encode(secret));
-    expect(await verify(token)).toEqual({ subject: "u", email: "a@b.co" });
+    expect(await verify(token)).toEqual({ subject: "u", email: "a@b.co", emailVerified: false });
     await expect(verify(await jwt())).rejects.toThrow();
   });
 

@@ -24,6 +24,10 @@ pub struct Synced {
     pub digest: String,
     /// A tombstone was pushed or applied.
     pub deleted: bool,
+    /// The key epoch this copy was last pushed or applied under. After a
+    /// rotation, records under an older epoch are ignored, so anything older is
+    /// pushed again under the new one.
+    pub key_id: u32,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -38,15 +42,17 @@ pub struct State {
     pub recovery_confirmed: bool,
     pub device_id: Option<String>,
     pub device_label: String,
-    /// The newest key epoch this device holds.
+    /// The key epoch this device holds (only the newest is kept).
     pub key_id: Option<u32>,
-    /// The recovery key's public half (base64url), pinned from the sealed account record.
+    /// The recovery key's public half (base64url), pinned from the first
+    /// account record this device opened, or from the recovery key itself.
     pub recovery_public: Option<String>,
-    /// The sealed account record as last opened (JSON), for the trusted devices.
+    /// The current epoch's sealed account record as last opened (JSON), for the trusted devices.
     pub account_record: Option<String>,
     /// The pull cursor.
     pub cursor: u64,
-    /// Highest revision seen per object id: an older one is a rollback and is ignored.
+    /// Highest revision seen per object id: an older one is a rollback and is
+    /// ignored, and this never goes down (whatever the server says).
     pub revisions: BTreeMap<String, u64>,
     /// Per chat id.
     pub chats: BTreeMap<String, Synced>,

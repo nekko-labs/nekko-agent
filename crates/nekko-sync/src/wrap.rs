@@ -78,11 +78,28 @@ pub fn seal_to(recipient: &[u8], context: &str, plaintext: &[u8]) -> Result<Stri
 
 /// [`seal_to`] with the ephemeral key given (the shared test vectors).
 pub fn seal_to_with(recipient: &[u8], context: &str, plaintext: &[u8], ephemeral: &DeviceKey) -> Result<String, Error> {
+    seal(recipient, context, plaintext, ephemeral, &[], &[])
+}
+
+/// ECIES with optional extra key material: `extra_ikm` is appended to the
+/// ephemeral ECDH secret and `extra_salt` to the salt. Plain ECIES passes
+/// neither; an authenticated wrap passes the sender's static ECDH secret and
+/// public key; a join wrap passes the join code's pre-shared key.
+pub(crate) fn seal(
+    recipient: &[u8],
+    context: &str,
+    plaintext: &[u8],
+    ephemeral: &DeviceKey,
+    extra_ikm: &[u8],
+    extra_salt: &[u8],
+) -> Result<String, Error> {
     let recipient_key = parse_public(recipient)?;
     let eph_pub = ephemeral.public();
     let shared = diffie_hellman(ephemeral.0.to_nonzero_scalar(), recipient_key.as_affine());
-    let salt = [eph_pub.as_slice(), recipient].concat();
-    let (mut key, nonce) = hkdf::key_and_nonce(shared.raw_secret_bytes(), &salt, context.as_bytes());
+    let mut ikm = [shared.raw_secret_bytes().as_slice(), extra_ikm].concat();
+    let salt = [eph_pub.as_slice(), recipient, extra_salt].concat();
+    let (mut key, nonce) = hkdf::key_and_nonce(&ikm, &salt, context.as_bytes());
+    ikm.zeroize();
     let ct = hkdf::seal(&key, &nonce, context.as_bytes(), plaintext);
     key.zeroize();
     let mut blob = Vec::with_capacity(1 + PUBLIC_KEY_LEN + ct.len());
@@ -92,8 +109,13 @@ pub fn seal_to_with(recipient: &[u8], context: &str, plaintext: &[u8], ephemeral
     Ok(b64::encode(&blob))
 }
 
-/// Open a blob sealed to this key under the same context.
-pub fn open_sealed(key: &DeviceKey, context: &str, blob: &str) -> Result<Vec<u8>, Error> {
+pub(crate) fn open(
+    key: &DeviceKey,
+    context: &str,
+    blob: &str,
+    extra_ikm: &[u8],
+    extra_salt: &[u8],
+) -> Result<Vec<u8>, Error> {
     let raw = b64::decode(blob)?;
     if raw.len() < 1 + PUBLIC_KEY_LEN + TAG_LEN || raw[0] != BLOB_VERSION {
         return Err(Error::Malformed);
@@ -101,51 +123,88 @@ pub fn open_sealed(key: &DeviceKey, context: &str, blob: &str) -> Result<Vec<u8>
     let eph_pub = &raw[1..1 + PUBLIC_KEY_LEN];
     let eph = parse_public(eph_pub).map_err(|_| Error::Malformed)?;
     let shared = diffie_hellman(key.0.to_nonzero_scalar(), eph.as_affine());
-    let salt = [eph_pub, key.public().as_slice()].concat();
-    let (mut k, nonce) = hkdf::key_and_nonce(shared.raw_secret_bytes(), &salt, context.as_bytes());
+    let mut ikm = [shared.raw_secret_bytes().as_slice(), extra_ikm].concat();
+    let salt = [eph_pub, key.public().as_slice(), extra_salt].concat();
+    let (mut k, nonce) = hkdf::key_and_nonce(&ikm, &salt, context.as_bytes());
+    ikm.zeroize();
     let out = hkdf::open(&k, &nonce, context.as_bytes(), &raw[1 + PUBLIC_KEY_LEN..]);
     k.zeroize();
     out
 }
 
-fn wrap_context(account_id: &str, key_id: u32, device_id: &str) -> String {
-    format!("{VERSION} wrap\n{account_id}\n{key_id}\n{device_id}")
+/// Open a blob sealed to this key under the same context.
+pub fn open_sealed(key: &DeviceKey, context: &str, blob: &str) -> Result<Vec<u8>, Error> {
+    open(key, context, blob, &[], &[])
 }
 
-/// Wrap a keyring to a device. The context names the account, the key epoch
-/// and the device, so the server can't hand one device's wrap to another.
+/// The static-static ECDH secret between two device keys (x-coordinate).
+fn static_secret(mine: &DeviceKey, theirs: &[u8]) -> Result<[u8; 32], Error> {
+    let theirs = parse_public(theirs)?;
+    let shared = diffie_hellman(mine.0.to_nonzero_scalar(), theirs.as_affine());
+    Ok((*shared.raw_secret_bytes()).into())
+}
+
+fn wrap_context(account_id: &str, key_id: u32, recipient_id: &str, sender_id: &str) -> String {
+    format!("{VERSION} wrap\n{account_id}\n{key_id}\n{recipient_id}\n{sender_id}")
+}
+
+/// Who a keyring wrap is to. The context names the account, the key epoch and
+/// the device, so the server can't hand one device's wrap to another.
+pub struct Recipient<'a> {
+    pub id: &'a str,
+    pub public: &'a [u8],
+}
+
+/// Wrap a keyring to a device, authenticated by the sending device's own key
+/// (ECIES with a second, static-static ECDH secret in the key derivation, the
+/// shape of HPKE's Auth mode). Only the holder of the sender's private key
+/// could have made the wrap, so a recipient accepts a keyring only from a
+/// device it already trusts, never from whoever can reach the server.
 pub fn wrap_keyring(
     keyring: &Keyring,
     account_id: &str,
     key_id: u32,
-    device_id: &str,
-    device_public: &[u8],
+    to: Recipient<'_>,
+    sender_id: &str,
+    sender: &DeviceKey,
 ) -> Result<String, Error> {
-    wrap_keyring_with(keyring, account_id, key_id, device_id, device_public, &DeviceKey::generate())
+    wrap_keyring_with(keyring, account_id, key_id, to, sender_id, sender, &DeviceKey::generate())
 }
 
 pub fn wrap_keyring_with(
     keyring: &Keyring,
     account_id: &str,
     key_id: u32,
-    device_id: &str,
-    device_public: &[u8],
+    to: Recipient<'_>,
+    sender_id: &str,
+    sender: &DeviceKey,
     ephemeral: &DeviceKey,
 ) -> Result<String, Error> {
+    let mut ss = static_secret(sender, to.public)?;
     let mut bytes = keyring.to_bytes();
-    let out = seal_to_with(device_public, &wrap_context(account_id, key_id, device_id), &bytes, ephemeral);
+    let ctx = wrap_context(account_id, key_id, to.id, sender_id);
+    let out = seal(to.public, &ctx, &bytes, ephemeral, &ss, &sender.public());
     bytes.zeroize();
+    ss.zeroize();
     out
 }
 
+/// Open a wrap made by `sender_id` (whose public key the caller takes from
+/// its own trusted list, never from the server).
 pub fn unwrap_keyring(
     key: &DeviceKey,
     account_id: &str,
     key_id: u32,
     device_id: &str,
+    sender_id: &str,
+    sender_public: &[u8],
     wrap: &str,
 ) -> Result<Keyring, Error> {
-    let mut bytes = open_sealed(key, &wrap_context(account_id, key_id, device_id), wrap)?;
+    let mut ss = static_secret(key, sender_public)?;
+    let ctx = wrap_context(account_id, key_id, device_id, sender_id);
+    let opened = open(key, &ctx, wrap, &ss, sender_public);
+    ss.zeroize();
+    let mut bytes = opened?;
     let out = Keyring::from_bytes(&bytes);
     bytes.zeroize();
     out

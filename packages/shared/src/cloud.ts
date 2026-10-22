@@ -18,8 +18,10 @@ export type SyncPhase =
 export interface SyncDevice {
   id: string;
   label: string | null;
-  /** 16 characters in four groups, to compare on both screens before approving. */
+  /** A short code for the device's public key (16 characters in four groups), to tell devices apart. */
   fingerprint: string | null;
+  /** It asked to join: approve it by typing the join code its screen shows. */
+  askedToJoin: boolean;
   createdAt: string | null;
   revoked: boolean;
   /** Listed in the account's sealed record (approved, or joined with the recovery key). */
@@ -48,6 +50,12 @@ export interface CloudStatus {
     pulled: number;
     skipped: Partial<Record<'incognito' | 'localOnly' | 'tooLarge', number>>;
     fingerprint: string | null;
+    /**
+     * While this device waits for approval: the one-time code to type on a
+     * device that syncs. It checks this device's key there, and that device
+     * here. Never leaves this device except through the user.
+     */
+    joinCode: string | null;
     devices: SyncDevice[];
     usage: { bytes: number; limit: number } | null;
   };

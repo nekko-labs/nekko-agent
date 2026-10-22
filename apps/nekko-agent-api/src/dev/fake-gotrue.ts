@@ -23,7 +23,7 @@ export async function fakeGoTrue(app: FastifyInstance, opts: { baseUrl: () => st
   };
   const session = async (email: string) => {
     const sub = subject(email);
-    const access_token = await new SignJWT({ email, role: "authenticated", is_anonymous: false, aal: "aal1" })
+    const access_token = await new SignJWT({ email, role: "authenticated", is_anonymous: false, aal: "aal1", amr: [{ method: "otp", timestamp: Math.floor(Date.now() / 1000) }], user_metadata: { email_verified: true } })
       .setProtectedHeader({ alg: "ES256", kid: "dev" })
       .setSubject(sub)
       .setIssuer(`${opts.baseUrl()}/auth/v1`)

@@ -78,20 +78,71 @@ fn a_rotated_keyring_locks_out_the_old_one() {
 }
 
 #[test]
-fn a_wrap_opens_only_for_its_device_account_and_epoch() {
+fn a_wrap_opens_only_for_its_device_account_epoch_and_sender() {
     let k = Keyring::generate();
     let phone = DeviceKey::generate();
     let laptop = DeviceKey::generate();
-    let w = wrap_keyring(&k, A, 1, "dev-phone", &phone.public()).unwrap();
-    assert_eq!(unwrap_keyring(&phone, A, 1, "dev-phone", &w).unwrap().to_bytes(), k.to_bytes());
+    let mac = DeviceKey::generate();
+    let (pp, lp, mp) = (phone.public(), laptop.public(), mac.public());
+    let to_phone = || Recipient { id: "dev-phone", public: &pp };
+    let w = wrap_keyring(&k, A, 1, to_phone(), "dev-mac", &mac).unwrap();
+    assert_eq!(unwrap_keyring(&phone, A, 1, "dev-phone", "dev-mac", &mp, &w).unwrap().to_bytes(), k.to_bytes());
     // The server hands the phone's wrap to a device of its own choosing, or relabels it.
-    assert!(unwrap_keyring(&laptop, A, 1, "dev-phone", &w).is_err());
-    assert!(unwrap_keyring(&phone, A, 1, "dev-laptop", &w).is_err());
-    assert!(unwrap_keyring(&phone, A, 2, "dev-phone", &w).is_err());
-    assert!(unwrap_keyring(&phone, "acct-b", 1, "dev-phone", &w).is_err());
+    assert!(unwrap_keyring(&laptop, A, 1, "dev-phone", "dev-mac", &mp, &w).is_err());
+    assert!(unwrap_keyring(&phone, A, 1, "dev-laptop", "dev-mac", &mp, &w).is_err());
+    assert!(unwrap_keyring(&phone, A, 2, "dev-phone", "dev-mac", &mp, &w).is_err());
+    assert!(unwrap_keyring(&phone, "acct-b", 1, "dev-phone", "dev-mac", &mp, &w).is_err());
+    // It opens only as coming from the device that made it.
+    assert!(unwrap_keyring(&phone, A, 1, "dev-phone", "dev-laptop", &lp, &w).is_err());
+    assert!(unwrap_keyring(&phone, A, 1, "dev-phone", "dev-laptop", &mp, &w).is_err());
+    // Anyone who knows the phone's public key (the server) can't make a wrap that opens as the Mac's.
+    let attacker = DeviceKey::generate();
+    let forged = wrap_keyring(&Keyring::generate(), A, 1, to_phone(), "dev-mac", &attacker).unwrap();
+    assert!(unwrap_keyring(&phone, A, 1, "dev-phone", "dev-mac", &mp, &forged).is_err());
     // Bad public keys are refused rather than wrapped to.
-    assert_eq!(wrap_keyring(&k, A, 1, "d", &[4u8; 65]).unwrap_err(), Error::Invalid);
-    assert_eq!(wrap_keyring(&k, A, 1, "d", &phone.public()[..64]).unwrap_err(), Error::Invalid);
+    let bad = [4u8; 65];
+    assert_eq!(wrap_keyring(&k, A, 1, Recipient { id: "d", public: &bad }, "s", &mac).unwrap_err(), Error::Invalid);
+    assert_eq!(
+        wrap_keyring(&k, A, 1, Recipient { id: "d", public: &pp[..64] }, "s", &mac).unwrap_err(),
+        Error::Invalid
+    );
+    assert_eq!(unwrap_keyring(&phone, A, 1, "dev-phone", "s", &bad, &w).unwrap_err(), Error::Invalid);
+}
+
+#[test]
+fn a_join_code_checks_both_sides() {
+    let k = Keyring::generate();
+    let new = DeviceKey::generate();
+    let np = new.public();
+    let code = JoinCode::generate();
+    let text = code.to_text();
+    assert_eq!(text.len(), 16 + 3);
+    let typed = JoinCode::parse(&text.to_lowercase().replace('-', " ").replace('0', "o")).unwrap();
+    // The approver checks the key the server shows against the tag the new device published.
+    let tag = code.tag(A, &np);
+    assert!(typed.verifies(A, &np, &tag));
+    let swapped = DeviceKey::generate().public();
+    assert!(!typed.verifies(A, &swapped, &tag), "a key the server swapped in fails");
+    assert!(!typed.verifies("acct-b", &np, &tag));
+    assert!(!JoinCode::generate().verifies(A, &np, &tag), "a wrong code fails");
+    assert!(!typed.verifies(A, &np, &tag[..31]));
+    // The new device opens only a wrap made with its code.
+    let w = wrap_for_join(&k, A, 4, Recipient { id: "dev-new", public: &np }, &typed).unwrap();
+    assert_eq!(unwrap_join(&new, A, 4, "dev-new", &code, &w).unwrap().to_bytes(), k.to_bytes());
+    assert!(unwrap_join(&new, A, 4, "dev-new", &JoinCode::generate(), &w).is_err());
+    assert!(unwrap_join(&new, A, 3, "dev-new", &code, &w).is_err());
+    assert!(unwrap_join(&new, A, 4, "dev-other", &code, &w).is_err());
+    // A keyring from anyone without the code doesn't open, even sealed to the right key.
+    let forged =
+        seal_to(&np, &format!("{VERSION} join-wrap\n{A}\n4\ndev-new"), &Keyring::generate().to_bytes()).unwrap();
+    assert!(unwrap_join(&new, A, 4, "dev-new", &code, &forged).is_err());
+    // Parsing: the wrong length or a non-ASCII character is refused.
+    assert_eq!(JoinCode::parse(&text[..15]).unwrap_err(), Error::Malformed);
+    assert_eq!(JoinCode::parse(&format!("{text}0")).unwrap_err(), Error::Malformed);
+    assert_eq!(
+        JoinCode::parse(&text.replacen(|c: char| c.is_ascii_alphanumeric(), "ß", 1)).unwrap_err(),
+        Error::Malformed
+    );
 }
 
 #[test]

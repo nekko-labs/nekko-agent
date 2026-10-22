@@ -9,9 +9,19 @@
 //! `nekko-sync` and only ciphertext is uploaded; see `docs/SYNC-ENCRYPTION.md`.
 //! Turning sync on for an account's first device makes the keyring and the
 //! recovery key (shown once). Another device joins either with the recovery
-//! key or by being approved on a device that already syncs, after comparing
-//! the fingerprints both show. Revoking a device starts a new key epoch,
-//! wrapped only to the devices in the sealed account record.
+//! key or by being approved on a device that already syncs, where the user
+//! types the one-time join code the new device shows (it checks the new
+//! device's key on the approver, and the approver on the new device).
+//! Revoking a device starts a new key epoch, wrapped (authenticated by this
+//! device's key) only to the devices in the sealed account record, and
+//! everything is sealed again under it.
+//!
+//! **Trust.** A device holds one key epoch and that epoch's account record.
+//! It takes a newer epoch only from a wrap made by a device that record
+//! trusts, and only once the new epoch's own record lists it. Records under an
+//! older epoch are ignored, revisions never go backwards, and the recovery
+//! key's public half is pinned. See `docs/SYNC-ENCRYPTION.md` for what this
+//! does and doesn't stop.
 //!
 //! Merging is per chat, newest `updatedAt` wins; a chat a turn is running in
 //! is never overwritten (its local copy is newer by the time it saves).
@@ -24,8 +34,8 @@ pub mod vault;
 use http::{Api, HttpError, Supabase};
 use nekko_store::SessionStore;
 use nekko_sync::{
-    DeviceKey, Keyring, RecoveryKey, b64_decode, b64_encode, fingerprint, object_id, open_record, open_recovery,
-    seal_record, seal_recovery, unwrap_keyring, wrap_keyring,
+    DeviceKey, JoinCode, Keyring, Recipient, RecoveryKey, b64_decode, b64_encode, fingerprint, object_id, open_record,
+    open_recovery, seal_record, seal_recovery, unwrap_join, unwrap_keyring, wrap_for_join, wrap_keyring,
 };
 use records::{AccountRecord, ChatRecord, Skip, TrustedDevice};
 use serde_json::{Value, json};
@@ -177,7 +187,7 @@ impl Cloud {
             "sync:confirmRecoveryKey" => self.confirm_recovery_key(&arg(args, 0)),
             "sync:restore" => self.restore(&arg(args, 0)).await,
             "sync:requestJoin" => self.request_join().await,
-            "sync:approve" => self.approve(&arg(args, 0)).await,
+            "sync:approve" => self.approve(&arg(args, 0), &arg(args, 1)).await,
             "sync:revoke" => self.revoke(&arg(args, 0)).await,
             "sync:now" => {
                 self.sync_once().await?;
@@ -312,6 +322,8 @@ impl Cloud {
                             "id": id,
                             "label": d.get("label"),
                             "fingerprint": pk.map(|p| fingerprint(&p)),
+                            // Asked to join and can be approved with its code.
+                            "askedToJoin": d.get("joinTag").is_some_and(|t| !t.is_null()),
                             "createdAt": d.get("createdAt"),
                             "revoked": d.get("revokedAt").is_some_and(|v| !v.is_null()),
                             "trusted": trusted.iter().any(|t| t.id == id),
@@ -322,6 +334,8 @@ impl Cloud {
             })
             .unwrap_or_default();
         let my_fingerprint = self.device_key().map(|k| fingerprint(&k.public()));
+        // Shown only on this device while it waits: the user types it on a device that syncs.
+        let join_code = if phase == "awaiting-approval" { self.vault.get("join-code") } else { None };
         json!({
             "signedIn": signed_in,
             "account": s.account.as_ref().map(|a| json!({ "email": a.email, "plan": a.plan, "canSync": a.can_sync })),
@@ -341,6 +355,7 @@ impl Cloud {
                 "pulled": live.pulled,
                 "skipped": live.skipped,
                 "fingerprint": my_fingerprint,
+                "joinCode": join_code,
                 "devices": devices,
                 "usage": live.remote.as_ref().and_then(|r| r.get("usage")).cloned(),
             },
@@ -431,22 +446,26 @@ impl Cloud {
             axum::routing::get(move |q: axum::extract::Query<BTreeMap<String, String>>| {
                 let (me, supabase, verifier, done_tx) = (me.clone(), supabase.clone(), verifier.clone(), done_tx.clone());
                 async move {
-                    let outcome = match (q.get("code"), q.get("error_description").or(q.get("error"))) {
-                        (Some(code), _) => match supabase.exchange(code, &verifier).await {
-                            Ok(access) => me.finish_sign_in(&access).await.map(|_| ()),
-                            Err(err) => Err(err.message),
+                    // Anything on this machine can open this URL, so nothing it sends is shown
+                    // as is, and only a code that PKCE accepts ends the wait.
+                    let outcome = match q.get("code") {
+                        Some(code) => match supabase.exchange(code, &verifier).await {
+                            // Our own API's answer (a plan or account problem) is worth showing.
+                            Ok(access) => me.finish_sign_in(&access).await.map(|_| ()).map_err(Some),
+                            Err(_) => Err(None),
                         },
-                        (None, Some(why)) => Err(why.clone()),
-                        (None, None) => Err("The sign-in came back without a code.".into()),
+                        None => Err(None),
                     };
-                    if let Some(tx) = lock(&done_tx).take() {
-                        let _ = tx.send(());
-                    }
                     let (title, body) = match &outcome {
                         Ok(()) => ("Signed in", "You're signed in to Nekko Cloud. You can close this tab."),
                         Err(_) => ("Sign-in didn't finish", "Go back to Nekko Agent and try again."),
                     };
-                    if let Err(why) = outcome {
+                    if outcome.is_ok() {
+                        if let Some(tx) = lock(&done_tx).take() {
+                            let _ = tx.send(());
+                        }
+                    } else if let Err(why) = outcome {
+                        let why = why.unwrap_or_else(|| "Sign-in didn't finish. Try again.".into());
                         me.edit(|s| s.last_error = Some(why)).ok();
                         me.changed();
                     }
@@ -524,96 +543,189 @@ impl Cloud {
             self.vault.delete(&format!("keyring:{k}"));
         }
         self.vault.delete("device-key");
+        self.vault.delete("join-code");
     }
 
     // ------------------------------------------------------------ keys, devices
 
-    /// This device's key and its registered id, registering it when needed.
-    async fn ensure_device(&self, token: &str) -> Result<(DeviceKey, String), String> {
-        let key = match self.device_key() {
-            Some(k) => k,
-            None => {
-                let k = DeviceKey::generate();
-                let mut raw = k.to_bytes();
-                self.vault.set("device-key", &b64_encode(&raw))?;
-                raw.zeroize();
-                k
-            }
-        };
-        if let Some(id) = lock(&self.state).device_id.clone() {
-            return Ok((key, id));
+    fn device_key_or_new(&self) -> Result<DeviceKey, String> {
+        if let Some(k) = self.device_key() {
+            return Ok(k);
+        }
+        let k = DeviceKey::generate();
+        let mut raw = k.to_bytes();
+        self.vault.set("device-key", &b64_encode(&raw))?;
+        raw.zeroize();
+        Ok(k)
+    }
+
+    /// This device's key and its registered id. Registers the key when this
+    /// sign-in's token isn't bound to it yet (first use, or after signing in
+    /// again), so revoking the device always ends the token it is using.
+    async fn ensure_device(&self, token: &str, join_tag: Option<&[u8; 32]>) -> Result<(DeviceKey, String), String> {
+        let key = self.device_key_or_new()?;
+        let known = lock(&self.state).device_id.clone();
+        let bound = lock(&self.live).remote.as_ref().and_then(|r| r["device"].as_str().map(String::from));
+        if let Some(id) = &known
+            && bound.as_deref() == Some(id.as_str())
+            && join_tag.is_none()
+        {
+            return Ok((key, id.clone()));
         }
         let label = lock(&self.state).device_label.clone();
-        let body = json!({ "publicKey": b64_encode(&key.public()), "label": label });
+        let mut body = json!({ "publicKey": b64_encode(&key.public()), "label": label });
+        if let Some(tag) = join_tag {
+            body["joinTag"] = json!(b64_encode(tag));
+        }
         let id = match self.api.send(token, reqwest::Method::POST, "/v1/sync/devices", Some(body)).await {
             Ok(v) => v["deviceId"].as_str().unwrap_or("").to_string(),
             Err(err) if err.code == "device-revoked" => {
                 // This key was revoked: start over with a new one.
-                self.vault.delete("device-key");
+                self.forget_keys();
+                self.edit(|s| s.reset_sync())?;
                 return Err("This device was removed from sync. Turn sync on again to add it back.".into());
             }
             Err(err) => return Err(err.message),
         };
+        if known.as_deref().is_some_and(|k| k != id) {
+            return Err("Nekko Cloud gave this device a different id. Turn sync off and on again.".into());
+        }
         self.edit(|s| s.device_id = Some(id.clone()))?;
+        if let Some(r) = lock(&self.live).remote.as_mut() {
+            r["device"] = json!(id);
+        }
         Ok((key, id))
     }
 
-    fn seal_account(
-        &self,
-        record: &AccountRecord,
-        keyring: &Keyring,
-        account_id: &str,
-        key_id: u32,
-    ) -> Result<Value, String> {
-        let oid = object_id(keyring, records::ACCOUNT, records::ACCOUNT_ID).map_err(|err| err.to_string())?;
-        let revision = lock(&self.state).revisions.get(&oid).copied().unwrap_or(0) + 1;
-        let blob = seal_record(keyring, account_id, key_id, records::ACCOUNT, &oid, revision, &record.to_bytes())
-            .map_err(|err| err.to_string())?;
-        Ok(
-            json!({ "collection": records::ACCOUNT, "objectId": oid, "revision": revision, "keyId": key_id, "blob": blob }),
-        )
+    fn account_oid(keyring: &Keyring, epoch: u32) -> Result<String, String> {
+        object_id(keyring, records::ACCOUNT, &records::account_local_id(epoch)).map_err(|err| err.to_string())
     }
 
-    /// Push the account record; it must land (another device may have moved it, so retry once after a pull).
-    async fn push_account(self: &Arc<Self>, token: &str, record: &AccountRecord) -> Result<(), String> {
+    /// Open an epoch's account record and check it: the right object, the
+    /// epoch it claims, the pinned recovery key, and newer than any seen.
+    fn open_account(
+        &self,
+        keyring: &Keyring,
+        account_id: &str,
+        epoch: u32,
+        o: &Value,
+    ) -> Result<(AccountRecord, String, u64), String> {
+        let bad = || "Nekko Cloud sent an account record that doesn't check out.".to_string();
+        let oid = Self::account_oid(keyring, epoch)?;
+        let (Some(got_oid), Some(rev), Some(kid), Some(blob)) =
+            (o["objectId"].as_str(), o["revision"].as_u64(), o["keyId"].as_u64(), o["blob"].as_str())
+        else {
+            return Err(bad());
+        };
+        if got_oid != oid || kid != u64::from(epoch) || o["collection"].as_str() != Some(records::ACCOUNT) {
+            return Err(bad());
+        }
+        let plain = open_record(keyring, account_id, epoch, records::ACCOUNT, &oid, rev, blob).map_err(|_| bad())?;
+        let record = AccountRecord::parse(&plain).ok_or_else(bad)?;
+        if record.epoch != epoch {
+            return Err(bad());
+        }
+        let pinned = lock(&self.state).recovery_public.clone();
+        // The recovery key's public half never changes; a record naming another one is refused.
+        if pinned.as_ref().is_some_and(|p| *p != record.recovery_public) {
+            return Err(bad());
+        }
+        if lock(&self.state).revisions.get(&oid).is_some_and(|seen| *seen > rev) {
+            return Err("Nekko Cloud sent an older account record than this device has seen.".into());
+        }
+        Ok((record, oid, rev))
+    }
+
+    /// Fetch an epoch's account record (out of feed order). None while it isn't written yet.
+    async fn fetch_account(
+        &self,
+        token: &str,
+        keyring: &Keyring,
+        account_id: &str,
+        epoch: u32,
+    ) -> Result<Option<(AccountRecord, String, u64)>, String> {
+        let oid = Self::account_oid(keyring, epoch)?;
+        match self.api.get(token, &format!("/v1/sync/objects/{}/{oid}", records::ACCOUNT)).await {
+            Ok(o) => self.open_account(keyring, account_id, epoch, &o).map(Some),
+            Err(err) if err.status == 404 => Ok(None),
+            Err(err) => Err(err.message),
+        }
+    }
+
+    fn keep_account(&self, record: &AccountRecord, oid: &str, rev: u64) -> Result<(), String> {
+        let text = String::from_utf8_lossy(&record.to_bytes()).to_string();
+        let rp = record.recovery_public.clone();
+        self.edit(|s| {
+            s.recovery_public = Some(rp);
+            s.account_record = Some(text);
+            let seen = s.revisions.entry(oid.to_string()).or_insert(0);
+            *seen = (*seen).max(rev);
+        })
+    }
+
+    /// Change the current epoch's account record: apply `f` to the newest one
+    /// and push it. When another device moved it first, read theirs and apply
+    /// `f` again.
+    async fn update_account(&self, token: &str, f: impl Fn(&mut AccountRecord)) -> Result<(), String> {
         let account_id = self.account_id()?;
-        for attempt in 0..2 {
+        for _ in 0..3 {
             let key_id = self.key_id();
             let keyring = self.keyring(key_id).ok_or("This device has no sync keys.")?;
-            let obj = self.seal_account(record, &keyring, &account_id, key_id)?;
+            let mut record = self
+                .account_record()
+                .filter(|r| r.epoch == key_id)
+                .ok_or("This device hasn't read the account record yet. Sync, then try again.")?;
+            f(&mut record);
+            let oid = Self::account_oid(&keyring, key_id)?;
+            let seen = lock(&self.state).revisions.get(&oid).copied().unwrap_or(0);
+            let revision = seen + 1;
+            let blob = seal_record(&keyring, &account_id, key_id, records::ACCOUNT, &oid, revision, &record.to_bytes())
+                .map_err(|err| err.to_string())?;
+            let obj = json!({ "collection": records::ACCOUNT, "objectId": oid, "revision": revision, "keyId": key_id, "blob": blob });
             let res = self
                 .api
-                .send(token, reqwest::Method::POST, "/v1/sync/push", Some(json!({ "objects": [obj.clone()] })))
+                .send(token, reqwest::Method::POST, "/v1/sync/push", Some(json!({ "objects": [obj] })))
                 .await
                 .map_err(e)?;
             let r = &res["results"][0];
             match r["status"].as_str() {
-                Some("ok") => {
-                    let (oid, rev) =
-                        (obj["objectId"].as_str().unwrap_or("").to_string(), obj["revision"].as_u64().unwrap_or(0));
-                    let text = String::from_utf8_lossy(&record.to_bytes()).to_string();
-                    self.edit(|s| {
-                        s.revisions.insert(oid, rev);
-                        s.account_record = Some(text);
-                    })?;
-                    return Ok(());
+                Some("ok") => return self.keep_account(&record, &oid, revision),
+                Some("conflict") => {
+                    // The server's revision can only be newer than ours; anything else is a rollback.
+                    if r["revision"].as_u64().unwrap_or(0) < seen {
+                        return Err("Nekko Cloud sent an older account record than this device has seen.".into());
+                    }
+                    if let Some((rec, oid, rev)) = self.fetch_account(token, &keyring, &account_id, key_id).await? {
+                        self.keep_account(&rec, &oid, rev)?;
+                    }
                 }
-                Some("conflict") if attempt == 0 => {
-                    let oid = obj["objectId"].as_str().unwrap_or("").to_string();
-                    let have = r["revision"].as_u64().unwrap_or(0);
-                    self.edit(|s| {
-                        s.revisions.insert(oid, have);
-                    })?;
-                }
-                _ => {
-                    return Err(format!(
-                        "Couldn't save the account record ({}).",
-                        r["status"].as_str().unwrap_or("error")
-                    ));
-                }
+                Some("stale-key") => return Err("Another device changed the sync keys. Sync, then try again.".into()),
+                other => return Err(format!("Couldn't save the account record ({}).", other.unwrap_or("error"))),
             }
         }
         Err("Couldn't save the account record.".into())
+    }
+
+    /// Hold `keyring` as the current epoch, forgetting older ones: records
+    /// under an older epoch are never accepted again.
+    fn hold_epoch(
+        &self,
+        epoch: u32,
+        keyring: &Keyring,
+        record: &AccountRecord,
+        oid: &str,
+        rev: u64,
+    ) -> Result<(), String> {
+        let old = lock(&self.state).key_id;
+        self.store_keyring(epoch, keyring)?;
+        self.edit(|s| s.key_id = Some(epoch))?;
+        self.keep_account(record, oid, rev)?;
+        if let Some(old) = old.filter(|o| *o != epoch) {
+            for k in 1..=old {
+                self.vault.delete(&format!("keyring:{k}"));
+            }
+        }
+        Ok(())
     }
 
     /// First device: make the keyring and the recovery key. Returns the recovery key, shown once.
@@ -634,11 +746,13 @@ impl Cloud {
             return Err("needs-join: This account already syncs on another device. Add this one with your recovery key, or approve it on that device.".into());
         }
         let account_id = self.account_id()?;
-        let (key, device_id) = self.ensure_device(&token).await?;
+        let (key, device_id) = self.ensure_device(&token, None).await?;
         let keyring = Keyring::generate();
         let recovery = RecoveryKey::generate();
         let recovery_public = recovery.public_key();
-        let wrap = wrap_keyring(&keyring, &account_id, 1, &device_id, &key.public()).map_err(|err| err.to_string())?;
+        let me = key.public();
+        let wrap = wrap_keyring(&keyring, &account_id, 1, Recipient { id: &device_id, public: &me }, &device_id, &key)
+            .map_err(|err| err.to_string())?;
         let recovery_wrap = seal_recovery(&recovery_public, &keyring, &account_id, 1).map_err(|err| err.to_string())?;
         self.api
             .send(
@@ -649,21 +763,21 @@ impl Cloud {
             )
             .await
             .map_err(e)?;
-        self.store_keyring(1, &keyring)?;
-        let rp = b64_encode(&recovery_public);
+        let label = lock(&self.state).device_label.clone();
+        let record = AccountRecord {
+            epoch: 1,
+            recovery_public: b64_encode(&recovery_public),
+            devices: vec![TrustedDevice { id: device_id, public_key: b64_encode(&me), label }],
+        };
+        // Held before it is pushed, so a failed push leaves a record to push again.
+        let oid = Self::account_oid(&keyring, 1)?;
+        self.hold_epoch(1, &keyring, &record, &oid, 0)?;
         self.edit(|s| {
-            s.key_id = Some(1);
-            s.recovery_public = Some(rp.clone());
             s.recovery_confirmed = false;
             s.enabled = true;
             s.last_error = None;
         })?;
-        let label = lock(&self.state).device_label.clone();
-        let record = AccountRecord {
-            recovery_public: rp,
-            devices: vec![TrustedDevice { id: device_id, public_key: b64_encode(&key.public()), label }],
-        };
-        self.push_account(&token, &record).await?;
+        self.update_account(&token, |_| {}).await?;
         let text = recovery.to_text();
         drop(recovery);
         self.kick();
@@ -684,97 +798,156 @@ impl Cloud {
         Ok(self.changed())
     }
 
-    /// Join with the recovery key: open every key epoch's recovery wrap.
+    /// Join with the recovery key: open the current epoch's recovery wrap,
+    /// check its account record names this recovery key, then add this device.
     async fn restore(self: &Arc<Self>, text: &str) -> Result<Value, String> {
         let token = self.token()?;
         let rk =
             RecoveryKey::parse(text).map_err(|_| "That isn't a valid recovery key. Check it for typos.".to_string())?;
         self.refresh().await?;
         let account_id = self.account_id()?;
-        let current = lock(&self.live)
-            .remote
-            .as_ref()
-            .and_then(|r| r["currentKeyId"].as_u64())
-            .ok_or("This account doesn't sync yet. Turn sync on instead.")? as u32;
-        let (key, device_id) = self.ensure_device(&token).await?;
-        for k in 1..=current {
-            let ring = self.api.get(&token, &format!("/v1/sync/keyrings/{k}")).await.map_err(e)?;
-            let keyring = open_recovery(&rk, &account_id, k, ring["recoveryWrap"].as_str().unwrap_or(""))
-                .map_err(|_| "That recovery key doesn't belong to this account.".to_string())?;
-            let wrap =
-                wrap_keyring(&keyring, &account_id, k, &device_id, &key.public()).map_err(|err| err.to_string())?;
-            self.api
-                .send(
-                    &token,
-                    reqwest::Method::PUT,
-                    &format!("/v1/sync/keyrings/{k}/wraps/{device_id}"),
-                    Some(json!({ "wrap": wrap })),
-                )
-                .await
-                .map_err(e)?;
-            self.store_keyring(k, &keyring)?;
-        }
+        let current = self.remote_key().ok_or("This account doesn't sync yet. Turn sync on instead.")?;
+        let (key, device_id) = self.ensure_device(&token, None).await?;
+        let ring = self.api.get(&token, &format!("/v1/sync/keyrings/{current}")).await.map_err(e)?;
+        let keyring = open_recovery(&rk, &account_id, current, ring["recoveryWrap"].as_str().unwrap_or(""))
+            .map_err(|_| "That recovery key doesn't belong to this account.".to_string())?;
         let rp = b64_encode(&rk.public_key());
+        self.edit(|s| s.recovery_public = Some(rp.clone()))?;
+        // Never invent a record: without the account's own, the other devices would be dropped.
+        let (record, oid, rev) = self
+            .fetch_account(&token, &keyring, &account_id, current)
+            .await?
+            .ok_or("Nekko Cloud didn't send this account's record. Try again in a moment.")?;
+        let me = key.public();
+        let wrap =
+            wrap_keyring(&keyring, &account_id, current, Recipient { id: &device_id, public: &me }, &device_id, &key)
+                .map_err(|err| err.to_string())?;
+        match self
+            .api
+            .send(
+                &token,
+                reqwest::Method::PUT,
+                &format!("/v1/sync/keyrings/{current}/wraps/{device_id}"),
+                Some(json!({ "wrap": wrap })),
+            )
+            .await
+        {
+            Ok(_) => {}
+            Err(err) if err.code == "wrap-exists" => {}
+            Err(err) => return Err(err.message),
+        }
+        self.hold_epoch(current, &keyring, &record, &oid, rev)?;
         self.edit(|s| {
-            s.key_id = Some(current);
-            s.recovery_public = Some(rp.clone());
             s.recovery_confirmed = true;
             s.enabled = true;
             s.last_error = None;
         })?;
-        // Read the account record, then add this device to it.
-        self.sync_once().await?;
-        let mut record = self.account_record().unwrap_or(AccountRecord { recovery_public: rp, devices: vec![] });
         let label = lock(&self.state).device_label.clone();
-        record.add(TrustedDevice { id: device_id, public_key: b64_encode(&key.public()), label });
-        self.push_account(&token, &record).await?;
+        let me = TrustedDevice { id: device_id, public_key: b64_encode(&me), label };
+        self.update_account(&token, |r| r.add(me.clone())).await?;
+        self.sync_once().await?;
         Ok(self.changed())
     }
 
-    /// Join by approval: register and wait for a syncing device to add this one.
+    /// Join by approval: register with a join tag, and show the code to type on a device that syncs.
     async fn request_join(self: &Arc<Self>) -> Result<Value, String> {
         let token = self.token()?;
-        let (key, _) = self.ensure_device(&token).await?;
+        let _ = self.refresh().await;
+        let account_id = self.account_id()?;
+        let key = self.device_key_or_new()?;
+        let code = match self.vault.get("join-code").and_then(|t| JoinCode::parse(&t).ok()) {
+            Some(c) => c,
+            None => {
+                let c = JoinCode::generate();
+                self.vault.set("join-code", &c.to_text())?;
+                c
+            }
+        };
+        let tag = code.tag(&account_id, &key.public());
+        self.ensure_device(&token, Some(&tag)).await?;
         self.edit(|s| s.enabled = true)?;
         let _ = self.refresh().await;
         self.changed();
-        Ok(json!({ "fingerprint": fingerprint(&key.public()), "status": self.status() }))
+        Ok(json!({ "joinCode": code.to_text(), "status": self.status() }))
     }
 
-    /// The keyrings a syncing device wrapped to this one, once approved.
+    /// The keyring a syncing device wrapped to this one with its join code, once approved.
     async fn finish_join(&self, token: &str) -> Result<bool, String> {
         let (Some(key), Some(device_id)) = (self.device_key(), lock(&self.state).device_id.clone()) else {
             return Ok(false);
         };
-        let account_id = self.account_id()?;
-        let current = match lock(&self.live).remote.as_ref().and_then(|r| r["currentKeyId"].as_u64()) {
-            Some(k) => k as u32,
-            None => return Ok(false),
+        let Some(code) = self.vault.get("join-code").and_then(|t| JoinCode::parse(&t).ok()) else {
+            return Ok(false);
         };
-        let mut got = 0;
-        for k in 1..=current {
+        let account_id = self.account_id()?;
+        let Some(current) = self.remote_key() else { return Ok(false) };
+        // The approval may predate a rotation: look back a few epochs, then catch up through the chain.
+        for k in (current.saturating_sub(4).max(1)..=current).rev() {
             let ring = self.api.get(token, &format!("/v1/sync/keyrings/{k}")).await.map_err(e)?;
-            if let Some(w) = ring["wrap"].as_str()
-                && let Ok(kr) = unwrap_keyring(&key, &account_id, k, &device_id, w)
-            {
-                self.store_keyring(k, &kr)?;
-                got = k;
+            let Some(w) = ring["wrap"].as_str() else { continue };
+            let Ok(keyring) = unwrap_join(&key, &account_id, k, &device_id, &code, w) else { continue };
+            let Some((record, oid, rev)) = self.fetch_account(token, &keyring, &account_id, k).await? else {
+                return Ok(false);
+            };
+            if !record.lists(&device_id, &b64_encode(&key.public())) {
+                return Ok(false);
             }
-        }
-        if got == current {
-            self.edit(|s| {
-                s.key_id = Some(current);
-                s.recovery_confirmed = true;
-            })?;
+            self.hold_epoch(k, &keyring, &record, &oid, rev)?;
+            self.vault.delete("join-code");
+            self.edit(|s| s.recovery_confirmed = true)?;
+            if k < current {
+                self.adopt(token, current).await?;
+            }
             return Ok(true);
         }
         Ok(false)
     }
 
-    /// On a syncing device: add a device that asked to join, after the user compared fingerprints.
-    async fn approve(self: &Arc<Self>, device_id: &str) -> Result<Value, String> {
+    /// Move to a newer key epoch, one at a time. Each epoch's keyring is taken
+    /// only from a wrap made by a device the record of the epoch this device
+    /// holds trusts, and only once that epoch's own record lists this device.
+    /// True when caught up; false while the new epoch's record isn't written yet.
+    async fn adopt(&self, token: &str, target: u32) -> Result<bool, String> {
+        let (key, device_id) = match (self.device_key(), lock(&self.state).device_id.clone()) {
+            (Some(k), Some(id)) => (k, id),
+            _ => return Err("This device has no sync keys.".into()),
+        };
+        let account_id = self.account_id()?;
+        let me = b64_encode(&key.public());
+        while self.key_id() < target {
+            let next = self.key_id() + 1;
+            let trusted = self
+                .account_record()
+                .filter(|r| r.epoch + 1 == next)
+                .ok_or("This device hasn't read the account record yet.")?;
+            let ring = self.api.get(token, &format!("/v1/sync/keyrings/{next}")).await.map_err(e)?;
+            let Some(w) = ring["wrap"].as_str() else {
+                return Err(REMOVED.into());
+            };
+            let keyring = trusted
+                .devices
+                .iter()
+                .find_map(|d| {
+                    let public = b64_decode(&d.public_key).ok()?;
+                    unwrap_keyring(&key, &account_id, next, &device_id, &d.id, &public, w).ok()
+                })
+                .ok_or("A new sync key came from a device this one doesn't trust. It was refused.")?;
+            let Some((record, oid, rev)) = self.fetch_account(token, &keyring, &account_id, next).await? else {
+                return Ok(false);
+            };
+            if !record.lists(&device_id, &me) {
+                return Err(REMOVED.into());
+            }
+            self.hold_epoch(next, &keyring, &record, &oid, rev)?;
+        }
+        Ok(true)
+    }
+
+    /// On a syncing device: add a device that asked to join, with the code it shows.
+    async fn approve(self: &Arc<Self>, device_id: &str, code: &str) -> Result<Value, String> {
         let token = self.token()?;
-        self.refresh().await?;
+        let code = JoinCode::parse(code).map_err(|_| "Type the 16-character code the new device shows.".to_string())?;
+        self.sync_once().await?;
         let account_id = self.account_id()?;
         let remote = lock(&self.live).remote.clone().unwrap_or(Value::Null);
         let d = remote["devices"]
@@ -785,47 +958,56 @@ impl Cloud {
         if d["revokedAt"].as_str().is_some() {
             return Err("That device was removed.".into());
         }
+        let label = d["label"].as_str().unwrap_or("").to_string();
+        // The key Nekko Cloud shows must be the one the code was made for; a swapped key fails here.
         let public = b64_decode(d["publicKey"].as_str().unwrap_or("")).map_err(|_| "bad device key")?;
-        let top = self.key_id();
-        for k in 1..=top {
-            if let Some(kr) = self.keyring(k) {
-                let wrap = wrap_keyring(&kr, &account_id, k, device_id, &public).map_err(|err| err.to_string())?;
-                self.api
-                    .send(
-                        &token,
-                        reqwest::Method::PUT,
-                        &format!("/v1/sync/keyrings/{k}/wraps/{device_id}"),
-                        Some(json!({ "wrap": wrap })),
-                    )
-                    .await
-                    .map_err(e)?;
-            }
+        let tag = d["joinTag"].as_str().and_then(|t| b64_decode(t).ok()).unwrap_or_default();
+        if !code.verifies(&account_id, &public, &tag) {
+            return Err(format!("That code doesn't match {label}. Check the code on that device and type it again."));
         }
-        let mut record =
-            self.account_record().ok_or("This device hasn't read the account record yet. Sync, then try again.")?;
-        record.add(TrustedDevice {
-            id: device_id.into(),
-            public_key: b64_encode(&public),
-            label: d["label"].as_str().unwrap_or("").into(),
-        });
-        self.push_account(&token, &record).await?;
+        let joining = TrustedDevice { id: device_id.into(), public_key: b64_encode(&public), label };
+        self.update_account(&token, |r| r.add(joining.clone())).await?;
+        let key_id = self.key_id();
+        let keyring = self.keyring(key_id).ok_or("This device has no sync keys.")?;
+        let wrap = wrap_for_join(&keyring, &account_id, key_id, Recipient { id: device_id, public: &public }, &code)
+            .map_err(|err| err.to_string())?;
+        self.api
+            .send(
+                &token,
+                reqwest::Method::PUT,
+                &format!("/v1/sync/keyrings/{key_id}/wraps/{device_id}"),
+                Some(json!({ "wrap": wrap })),
+            )
+            .await
+            .map_err(e)?;
+        let _ = self.refresh().await;
         Ok(self.changed())
     }
 
-    /// Remove a device and move every other trusted device to a new key epoch.
+    /// Remove a device and move every other trusted device to a new key epoch,
+    /// then seal everything again under it.
     async fn revoke(self: &Arc<Self>, device_id: &str) -> Result<Value, String> {
         let token = self.token()?;
-        if lock(&self.state).device_id.as_deref() == Some(device_id) {
+        let my_id = lock(&self.state).device_id.clone().unwrap_or_default();
+        if my_id == device_id {
             return Err("To stop syncing this device, turn sync off or sign out.".into());
         }
+        // Catch up first: a rotation starts from the newest epoch and record.
+        self.sync_once().await?;
         let account_id = self.account_id()?;
+        let key = self.device_key().ok_or("This device has no sync keys.")?;
+        let current = self.key_id();
+        let mut record = self
+            .account_record()
+            .filter(|r| r.epoch == current)
+            .ok_or("This device hasn't read the account record yet.")?;
         self.api
             .send(&token, reqwest::Method::DELETE, &format!("/v1/sync/devices/{device_id}"), None)
             .await
             .map_err(e)?;
         self.refresh().await?;
-        let mut record = self.account_record().ok_or("This device hasn't read the account record yet.")?;
         record.devices.retain(|d| d.id != device_id);
+        // Devices Nekko Cloud no longer has (removed elsewhere) can't take a wrap.
         let remote = lock(&self.live).remote.clone().unwrap_or(Value::Null);
         let live_ids: BTreeSet<String> = remote["devices"]
             .as_array()
@@ -836,15 +1018,16 @@ impl Cloud {
                     .collect()
             })
             .unwrap_or_default();
-        record.devices.retain(|d| live_ids.contains(&d.id));
-        let current = self.key_id();
+        record.devices.retain(|d| live_ids.contains(&d.id) || d.id == my_id);
         let old = self.keyring(current).ok_or("This device has no sync keys.")?;
         let next = current + 1;
         let new = old.rotate();
         let mut wraps = Vec::new();
         for d in &record.devices {
             let public = b64_decode(&d.public_key).map_err(|_| "bad device key")?;
-            wraps.push(json!({ "deviceId": d.id, "wrap": wrap_keyring(&new, &account_id, next, &d.id, &public).map_err(|err| err.to_string())? }));
+            let wrap = wrap_keyring(&new, &account_id, next, Recipient { id: &d.id, public: &public }, &my_id, &key)
+                .map_err(|err| err.to_string())?;
+            wraps.push(json!({ "deviceId": d.id, "wrap": wrap }));
         }
         let rp = b64_decode(&record.recovery_public).map_err(|_| "bad recovery key")?;
         let recovery_wrap = seal_recovery(&rp, &new, &account_id, next).map_err(|err| err.to_string())?;
@@ -857,16 +1040,24 @@ impl Cloud {
             )
             .await
             .map_err(e)?;
-        self.store_keyring(next, &new)?;
-        self.edit(|s| s.key_id = Some(next))?;
-        self.push_account(&token, &record).await?;
-        let _ = self.refresh().await;
+        record.epoch = next;
+        let oid = Self::account_oid(&new, next)?;
+        self.hold_epoch(next, &new, &record, &oid, 0)?;
+        self.update_account(&token, |_| {}).await?;
+        // Every chat is pushed again under the new epoch (Synced.key_id is now behind).
+        self.sync_once().await?;
         Ok(self.changed())
     }
 
     async fn delete_all(&self) -> Result<Value, String> {
         let token = self.token()?;
-        self.api.send(&token, reqwest::Method::DELETE, "/v1/sync", None).await.map_err(e)?;
+        self.api.send(&token, reqwest::Method::DELETE, "/v1/sync", None).await.map_err(|err| {
+            if err.code == "needs-fresh-sign-in" {
+                "To delete everything without a synced device, sign out and sign in again first.".to_string()
+            } else {
+                err.message
+            }
+        })?;
         self.forget_keys();
         self.edit(|s| s.reset_sync())?;
         let _ = self.refresh().await;
@@ -874,6 +1065,10 @@ impl Cloud {
     }
 
     // ------------------------------------------------------------------- sync
+
+    fn remote_key(&self) -> Option<u32> {
+        lock(&self.live).remote.as_ref().and_then(|r| r["currentKeyId"].as_u64()).and_then(|k| u32::try_from(k).ok())
+    }
 
     fn set_progress(&self, p: Option<(usize, usize)>) {
         lock(&self.live).progress = p;
@@ -910,19 +1105,38 @@ impl Cloud {
 
     async fn pass(self: &Arc<Self>, token: &str) -> Result<(), String> {
         self.refresh().await?;
-        if self.keyring(self.key_id()).is_none() && !self.finish_join(token).await? {
-            return Ok(()); // still waiting to be approved
+        let held = lock(&self.state).key_id;
+        let remote_key = self.remote_key();
+        if held.is_some() && remote_key.is_none() {
+            // Everything synced was deleted (on another device, or by the server).
+            self.forget_keys();
+            self.edit(|s| s.reset_sync())?;
+            return Err("Everything synced was deleted from Nekko Cloud. Turn sync on to start again.".into());
         }
-        // A newer key epoch than ours (another device rotated): take its wrap.
-        let remote_key = lock(&self.live).remote.as_ref().and_then(|r| r["currentKeyId"].as_u64()).unwrap_or(0) as u32;
-        if remote_key > self.key_id() {
-            self.finish_join(token).await?;
-            if self.key_id() < remote_key {
-                return Err("This device was removed from sync on another device.".into());
+        if self.keyring(self.key_id()).is_none() {
+            if !self.finish_join(token).await? {
+                return Ok(()); // still waiting to be approved
             }
+        } else {
+            // Signed in again since this device registered: bind the new token to it.
+            self.ensure_device(token, None).await?;
+        }
+        let remote_key = remote_key.unwrap_or(0);
+        if remote_key < self.key_id() {
+            return Err("Nekko Cloud reports an older sync key than this device holds. Nothing was synced.".into());
+        }
+        if remote_key > self.key_id() && !self.adopt(token, remote_key).await? {
+            return Ok(()); // the new epoch's record isn't written yet
         }
         for _ in 0..3 {
-            self.pull(token).await?;
+            if !self.pull(token).await? {
+                // A newer epoch appeared mid-pull.
+                let top = self.refresh().await.ok().and_then(|_| self.remote_key()).unwrap_or(0);
+                if !self.adopt(token, top).await? {
+                    return Ok(());
+                }
+                continue;
+            }
             if !self.push(token).await? {
                 return Ok(());
             }
@@ -930,61 +1144,70 @@ impl Cloud {
         Ok(())
     }
 
-    async fn pull(&self, token: &str) -> Result<(), String> {
+    /// Pull and apply everything new. False when it stopped at a record under
+    /// a newer key epoch than this device holds (it stays unread until then).
+    async fn pull(&self, token: &str) -> Result<bool, String> {
         let account_id = self.account_id()?;
         loop {
             let since = lock(&self.state).cursor;
             let page =
                 self.api.get(token, &format!("/v1/sync/pull?since={since}&limit={PULL_PAGE}")).await.map_err(e)?;
             let objects = page["objects"].as_array().cloned().unwrap_or_default();
+            let held = self.key_id();
             for o in &objects {
-                self.apply(&account_id, o);
+                if o["keyId"].as_u64().is_some_and(|k| k > u64::from(held)) {
+                    return Ok(false);
+                }
+                self.apply(&account_id, o)?;
+                if let Some(seq) = o["seq"].as_u64() {
+                    self.edit(|s| s.cursor = s.cursor.max(seq))?;
+                }
             }
             let next = page["next"].as_u64().unwrap_or(since);
-            self.edit(|s| s.cursor = next)?;
+            self.edit(|s| s.cursor = s.cursor.max(next))?;
             if page["more"].as_bool() != Some(true) || objects.is_empty() {
-                return Ok(());
+                return Ok(true);
             }
         }
     }
 
-    /// Open and apply one pulled object. Anything that doesn't open, or is an
-    /// older revision than one seen before (a rollback), is ignored.
-    fn apply(&self, account_id: &str, o: &Value) {
+    /// Open and apply one pulled object. Only records under the epoch this
+    /// device holds count: an older epoch's are what a revoked device could
+    /// still write. Anything that doesn't open, or isn't newer than a revision
+    /// seen before (a rollback), is ignored.
+    fn apply(&self, account_id: &str, o: &Value) -> Result<(), String> {
         let (Some(collection), Some(oid), Some(rev), Some(kid), Some(blob)) = (
             o["collection"].as_str(),
             o["objectId"].as_str(),
             o["revision"].as_u64(),
-            o["keyId"].as_u64().map(|k| k as u32),
+            o["keyId"].as_u64().and_then(|k| u32::try_from(k).ok()),
             o["blob"].as_str(),
         ) else {
-            return;
+            return Ok(());
         };
-        if lock(&self.state).revisions.get(oid).is_some_and(|seen| *seen >= rev) {
-            return;
+        let key_id = self.key_id();
+        if kid != key_id || lock(&self.state).revisions.get(oid).is_some_and(|seen| *seen >= rev) {
+            return Ok(());
         }
-        let Some(keyring) = self.keyring(kid) else { return };
-        let Ok(plain) = open_record(&keyring, account_id, kid, collection, oid, rev, blob) else { return };
+        let Some(keyring) = self.keyring(kid) else { return Ok(()) };
         match collection {
             records::ACCOUNT => {
-                if object_id(&keyring, records::ACCOUNT, records::ACCOUNT_ID).as_deref() != Ok(oid) {
-                    return;
+                if Self::account_oid(&keyring, kid).as_deref() != Ok(oid) {
+                    return Ok(());
                 }
-                let Some(record) = AccountRecord::parse(&plain) else { return };
-                let pinned = lock(&self.state).recovery_public.clone();
-                // The recovery key's public half never changes; a record naming another one is refused.
-                if pinned.as_ref().is_some_and(|p| *p != record.recovery_public) {
-                    return;
+                if let Ok((record, oid, rev)) = self.open_account(&keyring, account_id, kid, o) {
+                    self.keep_account(&record, &oid, rev)?;
+                    let me = lock(&self.state).device_id.clone().unwrap_or_default();
+                    if !record.trusts(&me) {
+                        return Err(REMOVED.into());
+                    }
                 }
-                let text = String::from_utf8_lossy(&plain).to_string();
-                let _ = self.edit(|s| {
-                    s.recovery_public = Some(record.recovery_public.clone());
-                    s.account_record = Some(text);
-                    s.revisions.insert(oid.into(), rev);
-                });
             }
             records::CHAT => {
-                let Some(rec) = records::parse_chat(&plain) else { return };
+                let Ok(plain) = open_record(&keyring, account_id, kid, collection, oid, rev, blob) else {
+                    return Ok(());
+                };
+                let Some(rec) = records::parse_chat(&plain) else { return Ok(()) };
                 let id = match &rec {
                     ChatRecord::Chat(c) => c["id"].as_str().unwrap_or("").to_string(),
                     ChatRecord::Deleted { .. } => {
@@ -994,38 +1217,36 @@ impl Cloud {
                         {
                             Some(id) => id,
                             None => {
-                                let _ = self.edit(|s| {
+                                return self.edit(|s| {
                                     s.revisions.insert(oid.into(), rev);
                                 });
-                                return;
                             }
                         }
                     }
                 };
                 // The record must be the one filed under this chat's id: the server can't swap chats.
                 if object_id(&keyring, records::CHAT, &id).as_deref() != Ok(oid) || !nekko_store::valid_id(&id) {
-                    return;
+                    return Ok(());
                 }
                 let local = self.sessions.get(&id);
                 let busy = (self.busy)(&id);
                 match rec {
                     ChatRecord::Chat(chat) => {
-                        let newer = local.as_ref().is_none_or(|l| records::updated_at(&chat) > records::updated_at(l));
+                        let theirs = records::updated_at(&chat);
+                        let newer = local.as_ref().is_none_or(|l| theirs > records::updated_at(l));
+                        let same = local.as_ref().is_some_and(|l| theirs == records::updated_at(l));
                         if newer && !busy && self.sessions.put_synced(&chat).is_ok() {
                             lock(&self.live).pulled += 1;
                         }
-                        let synced = Synced {
-                            updated_at: records::updated_at(&chat),
-                            digest: records::digest(&plain),
-                            deleted: false,
-                        };
-                        let _ = self.edit(|s| {
+                        let synced =
+                            Synced { updated_at: theirs, digest: records::digest(&plain), deleted: false, key_id: kid };
+                        self.edit(|s| {
                             s.revisions.insert(oid.into(), rev);
-                            // Only when we took it; otherwise our newer copy still needs pushing.
-                            if newer && !busy {
+                            // Only when we took it (or already had it); otherwise our newer copy still needs pushing.
+                            if (newer && !busy) || same {
                                 s.chats.insert(id.clone(), synced);
                             }
-                        });
+                        })?;
                     }
                     ChatRecord::Deleted { at } => {
                         if let Some(l) = &local
@@ -1034,18 +1255,23 @@ impl Cloud {
                         {
                             let _ = self.sessions.delete(&id);
                         }
-                        let _ = self.edit(|s| {
+                        self.edit(|s| {
                             s.revisions.insert(oid.into(), rev);
-                            s.chats.insert(id.clone(), Synced { updated_at: at, digest: String::new(), deleted: true });
-                        });
+                            s.chats.insert(
+                                id.clone(),
+                                Synced { updated_at: at, digest: String::new(), deleted: true, key_id: kid },
+                            );
+                        })?;
                     }
                 }
             }
             _ => {}
         }
+        Ok(())
     }
 
-    /// Push what changed here. True when a conflict needs another pass.
+    /// Push what changed here, and anything last written under an older
+    /// epoch. True when a conflict needs another pass.
     async fn push(&self, token: &str) -> Result<bool, String> {
         let account_id = self.account_id()?;
         let key_id = self.key_id();
@@ -1058,7 +1284,7 @@ impl Cloud {
         for s in &summaries {
             let Some(id) = s["id"].as_str() else { continue };
             let updated = s["updatedAt"].as_f64().unwrap_or(0.0);
-            let known = st.chats.get(id);
+            let known = st.chats.get(id).filter(|k| k.key_id == key_id);
             if known.is_some_and(|k| !k.deleted && k.updated_at == updated) {
                 continue;
             }
@@ -1069,7 +1295,7 @@ impl Cloud {
                     if known.is_some_and(|k| k.digest == digest) {
                         continue;
                     }
-                    queue.push((id.to_string(), plain, Synced { updated_at: updated, digest, deleted: false }));
+                    queue.push((id.to_string(), plain, Synced { updated_at: updated, digest, deleted: false, key_id }));
                 }
                 Err(skip) => {
                     *skipped
@@ -1089,7 +1315,7 @@ impl Cloud {
                 queue.push((
                     id.clone(),
                     records::tombstone(at),
-                    Synced { updated_at: at, digest: String::new(), deleted: true },
+                    Synced { updated_at: at, digest: String::new(), deleted: true, key_id },
                 ));
             }
         }
@@ -1103,11 +1329,12 @@ impl Cloud {
             let mut meta = Vec::new();
             for (id, plain, synced) in batch {
                 let oid = object_id(&keyring, records::CHAT, id).map_err(|err| err.to_string())?;
-                let revision = lock(&self.state).revisions.get(&oid).copied().unwrap_or(0) + 1;
+                let seen = lock(&self.state).revisions.get(&oid).copied().unwrap_or(0);
+                let revision = seen + 1;
                 let blob = seal_record(&keyring, &account_id, key_id, records::CHAT, &oid, revision, plain)
                     .map_err(|err| err.to_string())?;
                 objects.push(json!({ "collection": records::CHAT, "objectId": oid, "revision": revision, "keyId": key_id, "blob": blob }));
-                meta.push((id.clone(), oid, revision, synced.clone()));
+                meta.push((id.clone(), oid, revision, seen, synced.clone()));
             }
             let res = self
                 .api
@@ -1115,7 +1342,7 @@ impl Cloud {
                 .await
                 .map_err(e)?;
             let results = res["results"].as_array().cloned().unwrap_or_default();
-            for ((id, oid, revision, synced), r) in meta.into_iter().zip(results) {
+            for ((id, oid, revision, seen, synced), r) in meta.into_iter().zip(results) {
                 match r["status"].as_str() {
                     Some("ok") => {
                         lock(&self.live).pushed += 1;
@@ -1125,14 +1352,11 @@ impl Cloud {
                         })?;
                     }
                     Some("conflict") => {
-                        // Another device wrote it: pull, merge by updatedAt, and try again.
-                        let have = r["revision"].as_u64().unwrap_or(0);
-                        self.edit(|s| {
-                            let seen = s.revisions.entry(oid).or_insert(0);
-                            if *seen > have {
-                                *seen = have;
-                            }
-                        })?;
+                        // Another device wrote it: pull, merge by updatedAt, and try again. The
+                        // server's revision can only be ahead of ours; behind is a rollback.
+                        if r["revision"].as_u64().unwrap_or(0) < seen {
+                            return Err("Nekko Cloud sent an older copy of a chat than this device has seen. Nothing more was synced.".into());
+                        }
                         again = true;
                     }
                     Some("stale-key") => again = true,
@@ -1144,3 +1368,5 @@ impl Cloud {
         Ok(again)
     }
 }
+
+const REMOVED: &str = "This device was removed from sync on another device.";

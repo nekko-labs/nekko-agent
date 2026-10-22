@@ -154,6 +154,91 @@ describe("devices and keyrings", () => {
   });
 });
 
+describe("only a device holding the keys changes them", () => {
+  // Someone who can sign in to the account (an emailed code is enough) but has
+  // no synced device must not be able to start an epoch, add wraps, push,
+  // remove devices or wipe the account. The clients check wraps themselves;
+  // this is the server's half.
+  it("refuses key, device and data changes from a token without the current keys", async () => {
+    const a = app();
+    const u = await user();
+    const mine = await setup(a, u.token);
+    const intruder = await issueToken(db, u.id);
+    const theirs = (await call(a, intruder, "POST", "/v1/sync/devices", { publicKey: devicePub(), label: "Intruder" })).json().deviceId;
+    const refused = { error: "needs-synced-device" };
+    expect((await call(a, intruder, "PUT", "/v1/sync/keyrings/2", { recoveryWrap: vectors.recovery.blob, wraps: [{ deviceId: mine, wrap: vectors.wrap.blob }, { deviceId: theirs, wrap: vectors.wrap.blob }] })).json()).toEqual(refused);
+    expect((await call(a, intruder, "PUT", `/v1/sync/keyrings/1/wraps/${mine}`, { wrap: vectors.wrap.blob })).json()).toEqual(refused);
+    expect((await call(a, intruder, "POST", "/v1/sync/push", { objects: [{ collection: "chat", objectId: oid(), revision: 1, keyId: 1, blob: vectors.records[1].blob }] })).json()).toEqual(refused);
+    expect((await call(a, intruder, "DELETE", `/v1/sync/devices/${mine}`)).json()).toEqual(refused);
+    // A token without any device can't either.
+    const bare = await issueToken(db, u.id);
+    expect((await call(a, bare, "POST", "/v1/sync/push", { objects: [{ collection: "chat", objectId: oid(), revision: 1, keyId: 1, blob: vectors.records[1].blob }] })).statusCode).toBe(403);
+    // A device can always remove itself, and wrap the current epoch to itself (after a restore).
+    expect((await call(a, intruder, "PUT", `/v1/sync/keyrings/1/wraps/${theirs}`, { wrap: vectors.wrap.blob })).statusCode).toBe(204);
+    expect((await call(a, intruder, "DELETE", `/v1/sync/devices/${theirs}`)).statusCode).toBe(204);
+  });
+
+  it("never overwrites a wrap, and adds wraps only to the current epoch", async () => {
+    const a = app();
+    const u = await user();
+    const mine = await setup(a, u.token);
+    const t2 = await issueToken(db, u.id);
+    const d2 = (await call(a, t2, "POST", "/v1/sync/devices", { publicKey: devicePub(), label: "MacBook" })).json().deviceId;
+    const other = vectors.join.blob;
+    expect((await call(a, u.token, "PUT", `/v1/sync/keyrings/1/wraps/${mine}`, { wrap: other })).json()).toEqual({ error: "wrap-exists" });
+    expect((await call(a, u.token, "GET", "/v1/sync/keyrings/1")).json().wrap).toBe(vectors.wrap.blob);
+    expect((await call(a, u.token, "PUT", `/v1/sync/keyrings/1/wraps/${d2}`, { wrap: other })).statusCode).toBe(204);
+    expect((await call(a, u.token, "PUT", `/v1/sync/keyrings/1/wraps/${d2}`, { wrap: vectors.wrap.blob })).statusCode).toBe(409);
+    expect((await call(a, u.token, "PUT", "/v1/sync/keyrings/2", { recoveryWrap: vectors.recovery.blob, wraps: [{ deviceId: mine, wrap: vectors.wrap.blob }] })).statusCode).toBe(201);
+    const t3 = await issueToken(db, u.id);
+    const d3 = (await call(a, t3, "POST", "/v1/sync/devices", { publicKey: devicePub(), label: "iPad" })).json().deviceId;
+    expect((await call(a, u.token, "PUT", `/v1/sync/keyrings/1/wraps/${d3}`, { wrap: other })).json()).toEqual({ error: "key-epoch", currentKeyId: 2 });
+    expect((await call(a, u.token, "PUT", `/v1/sync/keyrings/3/wraps/${d3}`, { wrap: other })).statusCode).toBe(404);
+  });
+
+  it("binds a new sign-in's token to the same key, and keeps a join tag", async () => {
+    const a = app();
+    const u = await user();
+    const key = devicePub();
+    const tag = b64(32);
+    const first = await call(a, u.token, "POST", "/v1/sync/devices", { publicKey: key, label: "MacBook", joinTag: tag });
+    expect(first.statusCode).toBe(201);
+    const id = first.json().deviceId;
+    // Signed out and in again: the new token registers the same key and is bound to the device.
+    const again = await issueToken(db, u.id);
+    expect((await call(a, again, "POST", "/v1/sync/devices", { publicKey: key, label: "MacBook" })).json()).toEqual({ deviceId: id });
+    expect((await call(a, again, "GET", "/v1/sync/state")).json()).toMatchObject({ device: id, devices: [{ id, joinTag: tag }] });
+    // So revoking the device ends that token too.
+    expect((await call(a, again, "DELETE", `/v1/sync/devices/${id}`)).statusCode).toBe(204);
+    expect((await call(a, again, "GET", "/v1/sync/state")).statusCode).toBe(401);
+    expect((await call(a, u.token, "GET", "/v1/sync/state")).statusCode).toBe(401);
+    expect((await call(a, await issueToken(db, u.id), "POST", "/v1/sync/devices", { publicKey: devicePub(), label: "x", joinTag: b64(31) })).statusCode).toBe(400);
+  });
+
+  it("wipes everything only from a keyed device or right after a fresh sign-in", async () => {
+    const a = app();
+    const u = await user();
+    await setup(a, u.token);
+    const stale = await issueToken(db, u.id);
+    await db.query("update api_tokens set created_at = now() - interval '1 hour'", []);
+    expect((await call(a, stale, "DELETE", "/v1/sync")).json()).toEqual({ error: "needs-fresh-sign-in" });
+    const fresh = await issueToken(db, u.id);
+    expect((await call(a, fresh, "DELETE", "/v1/sync")).statusCode).toBe(204);
+  });
+
+  it("reads one object out of feed order", async () => {
+    const a = app();
+    const u = await user();
+    await setup(a, u.token);
+    const id = oid();
+    await call(a, u.token, "POST", "/v1/sync/push", { objects: [{ collection: "account", objectId: id, revision: 1, keyId: 1, blob: vectors.records[1].blob }] });
+    expect((await call(a, u.token, "GET", `/v1/sync/objects/account/${id}`)).json()).toMatchObject({ collection: "account", objectId: id, revision: 1, keyId: 1 });
+    expect((await call(a, u.token, "GET", `/v1/sync/objects/account/${oid()}`)).statusCode).toBe(404);
+    const other = await user();
+    expect((await call(a, other.token, "GET", `/v1/sync/objects/account/${id}`)).statusCode).toBe(404);
+  });
+});
+
 describe("push and pull", () => {
   it("stores ciphertext only and orders changes", async () => {
     const a = app();

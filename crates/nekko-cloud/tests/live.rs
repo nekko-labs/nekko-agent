@@ -47,6 +47,25 @@ fn chat(id: &str, title: &str, text: &str, updated: f64) -> Value {
     json!({ "id": id, "title": title, "messages": [{ "role": "user", "content": text }], "createdAt": 1.0, "updatedAt": updated })
 }
 
+fn token(d: &Device) -> String {
+    let secrets: Value =
+        serde_json::from_str(&std::fs::read_to_string(d._dir.path().join("cloud/secrets.json")).unwrap()).unwrap();
+    secrets["token"].as_str().unwrap().to_string()
+}
+
+async fn raw_pull(url: &str, d: &Device) -> Vec<Value> {
+    let page: Value = reqwest::Client::new()
+        .get(format!("{url}/v1/sync/pull?limit=500"))
+        .bearer_auth(token(d))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    page["objects"].as_array().unwrap().clone()
+}
+
 fn phase(d: &Device) -> String {
     d.cloud.status()["sync"]["phase"].as_str().unwrap().to_string()
 }
@@ -127,28 +146,38 @@ async fn three_devices_sync_end_to_end() {
     call(&a, "sync:now", json!([])).await.unwrap();
     assert_eq!(a.store.get("s_1_aaa").unwrap()["messages"][0]["content"], "booked the ryokan");
 
-    // C asks to join; A approves it after comparing fingerprints.
+    // C asks to join and shows a code; A approves it by typing that code.
     sign_in(&c, &email).await;
     let join = call(&c, "sync:requestJoin", json!([])).await.unwrap();
-    let fp = join["fingerprint"].as_str().unwrap().to_string();
+    let code = join["joinCode"].as_str().unwrap().to_string();
+    assert_eq!(code.len(), 19);
     call(&c, "sync:now", json!([])).await.unwrap();
     assert_eq!(phase(&c), "awaiting-approval");
+    assert_eq!(c.cloud.status()["sync"]["joinCode"], code.as_str());
     call(&a, "cloud:refresh", json!([])).await.unwrap();
     let devices = a.cloud.status()["sync"]["devices"].as_array().unwrap().clone();
-    let pending = devices.iter().find(|d| d["trusted"] == false).unwrap();
-    assert_eq!(pending["fingerprint"], fp, "both screens show the same code");
-    call(&a, "sync:approve", json!([pending["id"]])).await.unwrap();
+    let pending = devices.iter().find(|d| d["trusted"] == false).unwrap().clone();
+    assert_eq!(pending["askedToJoin"], true);
+    // A wrong code is refused, and nothing is wrapped to C.
+    let wrong = call(&a, "sync:approve", json!([pending["id"], "0000-0000-0000-0000"])).await.unwrap_err();
+    assert!(wrong.contains("doesn't match"), "{wrong}");
     call(&c, "sync:now", json!([])).await.unwrap();
-    assert_eq!(phase(&c), "idle");
+    assert_eq!(phase(&c), "awaiting-approval");
+    call(&a, "sync:approve", json!([pending["id"], code.to_lowercase()])).await.unwrap();
+    call(&c, "sync:now", json!([])).await.unwrap();
+    assert_eq!(phase(&c), "idle", "{}", c.cloud.status());
     assert_eq!(c.store.get("s_1_aaa").unwrap()["messages"][0]["content"], "booked the ryokan");
+    assert!(c.cloud.status()["sync"]["joinCode"].is_null(), "the code is forgotten once used");
 
-    // A removes B: a new key epoch, wrapped to A and C only.
+    // A removes B: a new key epoch, wrapped to A and C only, and everything sealed again under it.
     call(&a, "cloud:refresh", json!([])).await.unwrap();
     let b_id = a.cloud.status()["sync"]["devices"].as_array().unwrap().iter().find(|d| d["label"] == "Laptop").unwrap()
         ["id"]
         .clone();
     let after = call(&a, "sync:revoke", json!([b_id])).await.unwrap();
     assert_eq!(after["sync"]["keyEpoch"], 2);
+    let chats: Vec<Value> = raw_pull(&url, &a).await.into_iter().filter(|o| o["collection"] == "chat").collect();
+    assert!(!chats.is_empty() && chats.iter().all(|o| o["keyId"] == 2), "every chat was sealed again under epoch 2");
     a.store.put_synced(&chat("s_3_ccc", "After revoke", "B must not read this", 30.0)).unwrap();
     call(&a, "sync:now", json!([])).await.unwrap();
     assert!(call(&b, "sync:now", json!([])).await.is_err(), "B is signed out of sync");

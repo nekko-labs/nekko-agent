@@ -8,6 +8,12 @@ import { createLocalJWKSet, createRemoteJWKSet, type JWTPayload, type JWTVerifyG
 export interface SupabaseIdentity {
   subject: string;
   email: string;
+  /**
+   * The email was proven: Supabase marked it verified, or this session was
+   * signed in with a code or link sent to it. Only a verified email can claim
+   * an existing account (a beta signup's) or move an account to a new address.
+   */
+  emailVerified: boolean;
 }
 
 export type VerifyAccessToken = (token: string) => Promise<SupabaseIdentity>;
@@ -43,7 +49,7 @@ export function supabaseVerifier(cfg: SupabaseConfig): VerifyAccessToken {
   const algorithms = cfg.jwtSecret ? ["HS256"] : ["ES256", "RS256"];
 
   return async (token) => {
-    let payload: JWTPayload & { email?: unknown; is_anonymous?: unknown; role?: unknown };
+    let payload: JWTPayload & { email?: unknown; is_anonymous?: unknown; role?: unknown; user_metadata?: unknown; amr?: unknown };
     try {
       ({ payload } = await jwtVerify(token, key as never, { issuer, audience: "authenticated", algorithms, clockTolerance: 30 }));
     } catch {
@@ -53,6 +59,9 @@ export function supabaseVerifier(cfg: SupabaseConfig): VerifyAccessToken {
     if (!payload.sub || payload.is_anonymous === true || payload.role !== "authenticated" || !email) {
       throw new InvalidSession("Sign in with an email address or a linked account.");
     }
-    return { subject: payload.sub, email };
+    const meta = (payload.user_metadata ?? {}) as { email_verified?: unknown };
+    const amr = Array.isArray(payload.amr) ? payload.amr : [];
+    const byEmail = amr.some((m) => ["otp", "magiclink"].includes((m as { method?: unknown })?.method as string));
+    return { subject: payload.sub, email, emailVerified: meta.email_verified === true || byEmail };
   };
 }

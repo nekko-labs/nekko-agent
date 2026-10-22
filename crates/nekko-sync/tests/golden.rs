@@ -46,7 +46,13 @@ fn vectors() -> Value {
         seal_record_with(&keyring, ACCOUNT, 2, "chat-part", &oid, 7, long.as_bytes(), seed("salt-long")).unwrap();
 
     let device_id = "dev_7f3a";
-    let wrap = wrap_keyring_with(&keyring, ACCOUNT, 1, device_id, &device.public(), &eph).unwrap();
+    let sender = DeviceKey::from_bytes(&seed::<32>("sender")).unwrap();
+    let sender_id = "dev_51de";
+    let device_public = device.public();
+    let to = || Recipient { id: device_id, public: &device_public };
+    let wrap = wrap_keyring_with(&keyring, ACCOUNT, 1, to(), sender_id, &sender, &eph).unwrap();
+    let code = JoinCode::from_bytes(seed("join-code"));
+    let join_wrap = wrap_for_join_with(&keyring, ACCOUNT, 3, to(), &code, &eph).unwrap();
     let recovery_blob = seal_recovery_with(&recovery.public_key(), &keyring, ACCOUNT, 1, &eph).unwrap();
     let donation = seal_donation_with(
         &research.public(),
@@ -70,7 +76,9 @@ fn vectors() -> Value {
         "padme": pads,
         "device": { "id": device_id, "private": b64_encode(&device.to_bytes()), "public": b64_encode(&device.public()), "fingerprint": fingerprint(&device.public()) },
         "ephemeral": { "private": b64_encode(&eph.to_bytes()), "public": b64_encode(&eph.public()) },
+        "sender": { "id": sender_id, "private": b64_encode(&sender.to_bytes()), "public": b64_encode(&sender.public()) },
         "wrap": { "keyId": 1, "blob": wrap },
+        "join": { "code": code.to_text(), "tag": b64_encode(&code.tag(ACCOUNT, &device.public())), "keyId": 3, "blob": join_wrap },
         "recovery": { "key": b64_encode(&seed::<32>("recovery")), "text": recovery.to_text(), "public": b64_encode(&recovery.public_key()), "keyId": 1, "blob": recovery_blob },
         "donation": {
             "researchPrivate": b64_encode(&research.to_bytes()),
@@ -113,7 +121,21 @@ fn every_vector_opens() {
         assert_eq!(String::from_utf8(opened).unwrap(), r["plaintext"].as_str().unwrap());
     }
     let device = DeviceKey::from_bytes(&b64_decode(v["device"]["private"].as_str().unwrap()).unwrap()).unwrap();
-    let k = unwrap_keyring(&device, ACCOUNT, 1, "dev_7f3a", v["wrap"]["blob"].as_str().unwrap()).unwrap();
+    let sender_public = b64_decode(v["sender"]["public"].as_str().unwrap()).unwrap();
+    let k = unwrap_keyring(
+        &device,
+        ACCOUNT,
+        1,
+        "dev_7f3a",
+        "dev_51de",
+        &sender_public,
+        v["wrap"]["blob"].as_str().unwrap(),
+    )
+    .unwrap();
+    assert_eq!(k.to_bytes(), keyring.to_bytes());
+    let code = JoinCode::parse(v["join"]["code"].as_str().unwrap()).unwrap();
+    assert!(code.verifies(ACCOUNT, &device.public(), &b64_decode(v["join"]["tag"].as_str().unwrap()).unwrap()));
+    let k = unwrap_join(&device, ACCOUNT, 3, "dev_7f3a", &code, v["join"]["blob"].as_str().unwrap()).unwrap();
     assert_eq!(k.to_bytes(), keyring.to_bytes());
     let rk = RecoveryKey::parse(v["recovery"]["text"].as_str().unwrap()).unwrap();
     assert_eq!(

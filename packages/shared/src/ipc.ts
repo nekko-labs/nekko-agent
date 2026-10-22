@@ -443,8 +443,9 @@ export interface NekkoApi {
   syncTurnOn(): Promise<import('./cloud.js').SyncTurnOnResult>;
   syncConfirmRecoveryKey(text: string): Promise<import('./cloud.js').CloudStatus>;
   syncRestore(text: string): Promise<import('./cloud.js').CloudStatus>;
-  syncRequestJoin(): Promise<{ fingerprint: string; status: import('./cloud.js').CloudStatus }>;
-  syncApprove(deviceId: string): Promise<import('./cloud.js').CloudStatus>;
+  syncRequestJoin(): Promise<{ joinCode: string; status: import('./cloud.js').CloudStatus }>;
+  /** Approve a device that asked to join, with the join code its screen shows. */
+  syncApprove(deviceId: string, joinCode: string): Promise<import('./cloud.js').CloudStatus>;
   syncRevoke(deviceId: string): Promise<import('./cloud.js').CloudStatus>;
   syncNow(): Promise<import('./cloud.js').CloudStatus>;
   syncSetEnabled(on: boolean): Promise<import('./cloud.js').CloudStatus>;

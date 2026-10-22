@@ -4,16 +4,22 @@
 //!   tombstone `{ "v": 1, "deleted": true, "deletedAt": ms }`. Pictures are
 //!   left out (replaced by a short note): they would dominate storage, and a
 //!   chat's text is what another device needs.
-//! - `account` (local id `account`): the recovery key's public half and the
-//!   devices this account trusts. Sealed with the keyring, so the server can't
-//!   add a device or swap the recovery key that later key epochs are sealed to.
+//! - `account` (local id `epoch-<n>`, one per key epoch): the epoch number,
+//!   the recovery key's public half and the devices this account trusts. Only
+//!   a holder of that epoch's keyring can write it, so the server can't add a
+//!   device or swap the recovery key that later key epochs are sealed to. A
+//!   device takes a new epoch only from a device listed in the record of the
+//!   epoch it holds, and only once that new epoch's record lists it too.
 
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
 pub const CHAT: &str = "chat";
 pub const ACCOUNT: &str = "account";
-pub const ACCOUNT_ID: &str = "account";
+/// The account record's local id for a key epoch.
+pub fn account_local_id(epoch: u32) -> String {
+    format!("epoch-{epoch}")
+}
 
 /// The largest plaintext a chat record may be (the server caps a sealed object at 1 MiB).
 pub const MAX_CHAT_BYTES: usize = 1_000_000;
@@ -106,9 +112,10 @@ pub struct TrustedDevice {
     pub label: String,
 }
 
-/// The sealed account record.
+/// The sealed account record of one key epoch.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct AccountRecord {
+    pub epoch: u32,
     pub recovery_public: String,
     pub devices: Vec<TrustedDevice>,
 }
@@ -117,12 +124,18 @@ impl AccountRecord {
     pub fn to_bytes(&self) -> Vec<u8> {
         let devices: Vec<Value> =
             self.devices.iter().map(|d| json!({ "id": d.id, "publicKey": d.public_key, "label": d.label })).collect();
-        serde_json::to_vec(&json!({ "v": 1, "recoveryPublic": self.recovery_public, "devices": devices }))
-            .unwrap_or_default()
+        serde_json::to_vec(
+            &json!({ "v": 2, "epoch": self.epoch, "recoveryPublic": self.recovery_public, "devices": devices }),
+        )
+        .unwrap_or_default()
     }
 
     pub fn parse(bytes: &[u8]) -> Option<AccountRecord> {
         let v: Value = serde_json::from_slice(bytes).ok()?;
+        if v.get("v").and_then(Value::as_u64) != Some(2) {
+            return None;
+        }
+        let epoch = u32::try_from(v.get("epoch")?.as_u64()?).ok().filter(|e| *e >= 1)?;
         let devices = v
             .get("devices")?
             .as_array()?
@@ -135,11 +148,16 @@ impl AccountRecord {
                 })
             })
             .collect();
-        Some(AccountRecord { recovery_public: v.get("recoveryPublic")?.as_str()?.to_string(), devices })
+        Some(AccountRecord { epoch, recovery_public: v.get("recoveryPublic")?.as_str()?.to_string(), devices })
     }
 
     pub fn trusts(&self, id: &str) -> bool {
         self.devices.iter().any(|d| d.id == id)
+    }
+
+    /// The listed device with this id and public key.
+    pub fn lists(&self, id: &str, public_key: &str) -> bool {
+        self.devices.iter().any(|d| d.id == id && d.public_key == public_key)
     }
 
     pub fn add(&mut self, d: TrustedDevice) {
@@ -176,12 +194,16 @@ mod tests {
     fn tombstones_and_account_records_round_trip() {
         assert_eq!(parse_chat(&tombstone(9.0)), Some(ChatRecord::Deleted { at: 9.0 }));
         assert_eq!(parse_chat(b"{\"v\":1}"), None);
-        let mut a = AccountRecord { recovery_public: "rp".into(), devices: vec![] };
+        let mut a = AccountRecord { epoch: 3, recovery_public: "rp".into(), devices: vec![] };
         a.add(TrustedDevice { id: "d1".into(), public_key: "pk".into(), label: "Mac".into() });
         a.add(TrustedDevice { id: "d1".into(), public_key: "pk".into(), label: "Mac Studio".into() });
         let back = AccountRecord::parse(&a.to_bytes()).unwrap();
         assert_eq!(back, a);
         assert_eq!(back.devices.len(), 1);
         assert!(back.trusts("d1") && !back.trusts("d2"));
+        assert!(back.lists("d1", "pk") && !back.lists("d1", "other"));
+        // The old format, or an epoch of 0, is refused.
+        assert_eq!(AccountRecord::parse(br#"{"v":1,"recoveryPublic":"rp","devices":[]}"#), None);
+        assert_eq!(AccountRecord::parse(br#"{"v":2,"epoch":0,"recoveryPublic":"rp","devices":[]}"#), None);
     }
 }
