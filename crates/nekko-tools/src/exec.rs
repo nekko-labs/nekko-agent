@@ -6,7 +6,7 @@
 
 use crate::bash::{Failure, RunRequest};
 use crate::context::{ChatMode, ToolCall, ToolContext, ToolResult};
-use crate::guardrails::{Action, Severity, classify_command, default_guardrails};
+use crate::guardrails::{Action, NOT_READ_ONLY, Severity, classify_command, default_guardrails};
 use crate::js;
 use crate::nodefs;
 use crate::sandbox::{asks_everything, assert_readable, assert_writable, first_workspace, process_cwd, resolve_path};
@@ -231,12 +231,20 @@ async fn bash(call: &ToolCall, ctx: &ToolContext) -> Outcome {
         }
     };
     let decision = classify_command(&command, rules);
-    let labels = decision.matches.iter().map(|m| m.label.as_str()).collect::<Vec<_>>().join(", ");
+    // "Not a read-only command" says nothing the prompt's own wording does not.
+    let labels = decision
+        .matches
+        .iter()
+        .filter(|m| m.rule_id != NOT_READ_ONLY)
+        .map(|m| m.label.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
     // A deny guardrail is a hard floor in every mode (even YOLO).
     if decision.action == Action::Deny {
         return Ok(ToolResult::err(call, format!("Blocked by guardrail ({labels}).")));
     }
-    // YOLO never prompts; Ask always prompts; Guardrails prompts on ask-rules.
+    // YOLO never prompts; Ask always prompts; Guardrails prompts unless every
+    // command in it is read-only or allowed by a user rule (decision 0009).
     let needs_approval = ctx.mode != ChatMode::Yolo && (asks_everything(ctx) || decision.action == Action::Ask);
     if needs_approval {
         let reason = if labels.is_empty() { "Run command" } else { labels.as_str() };

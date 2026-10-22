@@ -16,3 +16,4 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | [0006](0006-recovery-key-as-a-p256-key-and-sealed-account-record.md) | Seal key epochs to the recovery key's public half; pin trust in a sealed account record | accepted; account record superseded by 0008 |
 | [0007](0007-lockout-recovery-without-a-vendor-key.md) | Recover lockouts without a key Nekko Labs can use | proposed |
 | [0008](0008-authenticated-wraps-and-join-codes.md) | Authenticate keyring wraps, approve devices with a join code, one account record per key epoch | accepted |
+| [0009](0009-guardrails-mode-auto-runs-only-read-only-commands.md) | Guardrails mode auto-runs only read-only commands; fetch_url asks before reaching the local network | accepted |

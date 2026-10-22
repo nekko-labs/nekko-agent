@@ -16,7 +16,7 @@
 
 use crate::bash::{Utf8Carry, shell, spawn_code, tree::Tree};
 use crate::context::{ChatMode, ToolCall, ToolContext, ToolResult};
-use crate::guardrails::{Action, classify_command, default_guardrails};
+use crate::guardrails::{Action, NOT_READ_ONLY, classify_command, default_guardrails};
 use crate::sandbox::{asks_everything, first_workspace, process_cwd, resolve_path};
 use nekko_js as js;
 use serde_json::Value;
@@ -443,7 +443,14 @@ pub async fn run_tool(call: &ToolCall, ctx: &ToolContext, procs: &Arc<Processes>
                 }
             };
             let decision = classify_command(&command, rules);
-            let labels = decision.matches.iter().map(|m| m.label.as_str()).collect::<Vec<_>>().join(", ");
+            // "Not a read-only command" says nothing the prompt's own wording does not.
+            let labels = decision
+                .matches
+                .iter()
+                .filter(|m| m.rule_id != NOT_READ_ONLY)
+                .map(|m| m.label.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
             if decision.action == Action::Deny {
                 return Ok(ToolResult::err(call, format!("Blocked by guardrail ({labels}).")));
             }

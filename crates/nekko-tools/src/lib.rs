@@ -17,6 +17,7 @@
 //! process trees and can be cancelled; strings are never cut inside a
 //! surrogate pair).
 
+mod allowlist;
 mod bash;
 mod changes;
 mod context;
@@ -32,6 +33,7 @@ mod sandbox;
 mod search;
 mod spec;
 
+pub use allowlist::Dialect;
 pub use bash::{BashLimits, CommandRunner, Failure, RunOutcome, RunRequest, ShellRunner, shell};
 pub use changes::{ChangeTracker, FileChange};
 pub use context::{
@@ -40,7 +42,8 @@ pub use context::{
 };
 pub use exec::execute;
 pub use guardrails::{
-    Action, GuardrailDecision, GuardrailMatch, GuardrailRule, Severity, classify_command, default_guardrails,
+    Action, GuardrailDecision, GuardrailMatch, GuardrailRule, NOT_READ_ONLY, SHELL_SYNTAX, Severity, classify_command,
+    classify_command_in, default_guardrails,
 };
 pub use nodefs::code_name as node_error_code;
 pub use process::{Processes, describe_process};
