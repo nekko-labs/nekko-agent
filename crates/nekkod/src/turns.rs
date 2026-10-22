@@ -1017,7 +1017,7 @@ impl Turns {
         if let Some(shield) = &shield {
             let counts = shield.lock().unwrap_or_else(|e| e.into_inner()).counts_by_kind();
             if !counts.is_empty() {
-                crate::logs::note(&format!("privacy shield: session {session_id} replaced {counts:?}"));
+                crate::logs::note(&format!("privacy shield: replaced {counts:?}"));
             }
         }
         self.end_turn(&store, shared, &session, forwarder, incognito).await

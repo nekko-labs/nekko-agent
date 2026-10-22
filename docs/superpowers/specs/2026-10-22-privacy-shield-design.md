@@ -232,7 +232,7 @@ renderer asks again 250 ms after the draft stops changing while the panel is ope
   Incognito still decides whether the transcript is saved at all.
 - **The allow-list is saved with the chat** (`privacy.allow`), next to the transcript that already
   holds the same values.
-- **Logs record counts by kind, never values:** `privacy shield: session s_1 replaced {"email": 2}`.
+- **Logs record counts by kind, never values:** `privacy shield: replaced {"email": 2}` (no chat id either).
 - **Fail closed on detection, open on restore:** a value that might be private is replaced; a
   placeholder that cannot be restored is shown as is rather than guessed.
 - **Known gaps (stated in the UI and docs):** names and addresses in prose unless they are terms;
