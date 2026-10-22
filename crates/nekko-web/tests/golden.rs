@@ -1,7 +1,7 @@
 //! The Rust `fetch_url` against the TS one.
 //!
-//! `golden/fetch.json` is written by `packages/host/src/web-fetch.golden.test.ts`
-//! (UPDATE_GOLDEN=1) from the real TS functions; every case must come out the
+//! `golden/fetch.json` is a frozen record of the deleted TS functions (edit it
+//! by hand per docs/runbooks/golden-fixtures.md); every case must come out the
 //! same here.
 
 use nekko_web::fetch::{Reply, decode_entities, describe_fetched, html_to_text, max_chars, page_from_reply, parse_url};

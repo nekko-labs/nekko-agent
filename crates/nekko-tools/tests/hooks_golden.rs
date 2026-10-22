@@ -1,5 +1,6 @@
-//! The Rust tool hooks against the TS ones: `golden/hooks.json` is written by
-//! packages/host/src/hooks.golden.test.ts from the real TS functions.
+//! The Rust tool hooks against the TS ones: `golden/hooks.json` is a frozen
+//! record of the deleted TS functions (edit it by hand per
+//! docs/runbooks/golden-fixtures.md).
 
 use nekko_tools::hooks::{HookOutcome, decision_of, has_tool_hooks, label, matching_hooks, rules};
 use serde_json::{Value, json};

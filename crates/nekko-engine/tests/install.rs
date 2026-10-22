@@ -1,4 +1,4 @@
-//! Replays the TS install golden set (`install.golden.test.ts`): the same
+//! Replays the frozen TS install golden set (`golden/install.json`): the same
 //! machines are offered the same builds and release files, and the
 //! installers, driven through the same scripted GitHub, archive tools and
 //! PATH, make the same requests and commands, answer the same, and leave the

@@ -19,7 +19,7 @@ pub struct Ctx {
     pub sessions: Option<Arc<nekko_store::SessionStore>>,
     /// Pending changes the agent's file tools recorded (`changes:*`).
     pub changes: Arc<nekko_tools::ChangeTracker>,
-    /// MCP servers the TS host syncs and calls (`mcp:sync`, `mcp:call`).
+    /// MCP servers, synced and called by turns (and `mcp:sync`, `mcp:call`).
     pub mcp: Arc<crate::mcp::Mcp>,
     /// Whole chat turns (`chat:turn`) and the input they wait on.
     pub turns: Arc<crate::turns::Turns>,
@@ -176,7 +176,6 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             "app": "nekkod",
             "version": env!("CARGO_PKG_VERSION"),
             "pid": std::process::id(),
-            "owned": owned(ctx),
         })),
         "terminals:list" => {
             // `{ sessionId }` narrows it to one chat's terminals and its agent log.
@@ -536,214 +535,6 @@ fn merge_pending(host: Value, daemon: Value) -> Value {
     Value::Object(out)
 }
 
-/// What `daemon:info` reports: the fixed table, and accounting when this
-/// daemon knows the data directory. A host that delegates limits to a daemon
-/// that would forward them straight back would loop, so they are only listed
-/// when they are really served here.
-fn owned(ctx: &Ctx) -> Vec<&'static str> {
-    let mut all = OWNED.to_vec();
-    all.extend_from_slice(crate::tooling::CHANNELS);
-    if ctx.sandboxes.is_some() {
-        all.extend_from_slice(crate::sandbox::CHANNELS);
-    }
-    if ctx.accounts.enabled() {
-        all.extend_from_slice(crate::accounts::OWNED);
-    }
-    if ctx.catalog.is_some() {
-        all.extend_from_slice(crate::catalog::CHANNELS);
-    }
-    if ctx.library.is_some() {
-        all.extend_from_slice(crate::library::CHANNELS);
-    }
-    if ctx.downloads.is_some() {
-        all.extend_from_slice(crate::downloads::CHANNELS);
-    }
-    if ctx.installs.is_some() {
-        all.extend_from_slice(crate::installs::CHANNELS);
-    }
-    if ctx.server.is_some() {
-        all.extend_from_slice(crate::model_server::CHANNELS);
-    }
-    if crate::connectors::owned(ctx) {
-        all.extend_from_slice(crate::connectors::CHANNELS);
-    }
-    if ctx.settings.is_some() {
-        all.extend_from_slice(crate::decisions::CHANNELS);
-    }
-    if ctx.settings.is_some() {
-        all.extend_from_slice(crate::settings::CHANNELS);
-        all.push("mcp:status");
-    }
-    if ctx.voice.is_some() {
-        all.extend_from_slice(crate::voice::CHANNELS);
-    }
-    if ctx.cloud.is_some() {
-        all.extend_from_slice(nekko_cloud::CHANNELS);
-    }
-    if ctx.oauth.is_some() {
-        all.extend_from_slice(crate::oauth::CHANNELS);
-        all.extend_from_slice(crate::providers::CHANNELS);
-    }
-    if ctx.settings.is_some() && ctx.sessions.is_some() {
-        all.extend_from_slice(crate::worktrees::CHANNELS);
-    }
-    if ctx.admission.is_some() {
-        all.extend_from_slice(crate::admission::CHANNELS);
-    }
-    if crate::side::owned(ctx) {
-        all.extend_from_slice(crate::side::CHANNELS);
-    }
-    if owns_compaction(ctx) {
-        all.extend_from_slice(crate::compaction::CHANNELS);
-    }
-    if owns_image_turns(ctx) {
-        all.extend_from_slice(crate::image_turns::CHANNELS);
-    }
-    if ctx.settings.is_some() && ctx.sessions.is_some() {
-        all.extend_from_slice(crate::context::CHANNELS);
-    }
-    if ctx.settings.is_some() {
-        all.extend_from_slice(crate::privacy::CHANNELS);
-    }
-    all.extend(ctx.workspace.owned());
-    if ctx.workspace.data_dir().is_some() {
-        all.extend_from_slice(crate::logs::CHANNELS);
-    }
-    if ctx.automation.owns_tasks() {
-        all.extend_from_slice(crate::automation::TASK_CHANNELS);
-    }
-    if ctx.remote.enabled() {
-        all.extend_from_slice(crate::remote::CHANNELS);
-    }
-    if ctx.messaging.is_some() {
-        all.extend_from_slice(crate::messaging::CHANNELS);
-    }
-    all.extend_from_slice(crate::machine::CHANNELS);
-    // An attachment is written under the data directory; a remote image needs nothing.
-    all.push("image:fetch");
-    if ctx.sessions.is_some() {
-        all.push("attachment:import");
-    }
-    if ctx.settings.is_some() {
-        all.extend_from_slice(crate::skill_sources::CHANNELS);
-        all.push("repository:review");
-    }
-    if ctx.resource_queue.is_some() {
-        all.extend_from_slice(crate::resource_queue::CHANNELS);
-    }
-    if ctx.automation.owns_workflows() {
-        all.extend_from_slice(crate::automation::WORKFLOW_CHANNELS);
-    }
-    if ctx.automation.owns_training() {
-        all.extend_from_slice(crate::automation::TRAINING_CHANNELS);
-        all.push(crate::automation::TRAINING_TOOL);
-    }
-    if ctx.turns.watches.is_some() {
-        all.extend_from_slice(crate::watches::CHANNELS);
-    }
-    if owns_small_services(ctx) {
-        all.extend_from_slice(crate::small_services::CHANNELS);
-    }
-    if ctx.native.is_some() {
-        all.extend_from_slice(crate::native::CHANNELS);
-    }
-    if ctx.runtimes.is_some() {
-        all.extend_from_slice(crate::runtimes::CHANNELS);
-    }
-    all
-}
-
-/// Channels the daemon serves itself (reported by `daemon:info`).
-pub const OWNED: &[&str] = &[
-    "daemon:info",
-    // The Claude policy and its reasons (claude_policy.rs).
-    "claude:policy",
-    "claude:capability",
-    "claude:planUsage",
-    "claude:codeStatus",
-    // Whole chat turns and the input they wait on (turns.rs).
-    "chat:turn",
-    "turn:abort",
-    "turn:alive",
-    "turn:running",
-    "turn:steer",
-    "turn:pending",
-    "turn:approve",
-    "turn:answer",
-    "tool:approve",
-    "chat:answer",
-    "chat:pending",
-    "chat:running",
-    "chat:steer",
-    "chat:abort",
-    "provider:complete",
-    "provider:prompt-caching",
-    "changes:list",
-    "changes:accept",
-    "changes:acceptAll",
-    "changes:record",
-    "mcp:sync",
-    "mcp:call",
-    "mcp:hypergate",
-    "mcp:hypergate:connect",
-    // Not a channel: a turn whose spec carries `facts.mcpServers` syncs and
-    // calls its MCP servers here (turns.rs), approvals included.
-    "turn:mcp",
-    // Not a channel: a turn whose spec says `facts.spawn` drives its
-    // `spawn_agent` children here, the host making them (`spawn:prepare`).
-    "turn:spawn",
-    // Not a channel: a turn whose spec carries `facts.hookRules` runs its
-    // PreToolUse and PostToolUse hooks here (nekko-tools `hooks`).
-    "turn:hooks",
-    "sessions:summaries",
-    "sessions:list",
-    "sessions:clear",
-    "sessions:purgeArchived",
-    "session:get",
-    "session:images",
-    "session:create",
-    "session:delete",
-    "session:setOptions",
-    "session:setWorkspace",
-    "session:setSupportingWorkspaces",
-    "session:setAttachments",
-    "session:truncate",
-    "session:fork",
-    "spec:setLinked",
-    "chat:queue",
-    "chat:dequeue",
-    "chat:editQueued",
-    "terminals:list",
-    "terminals:list:native",
-    "terminal:shells",
-    "terminal:create",
-    "terminal:snapshot",
-    "terminal:update",
-    "terminal:write",
-    "terminal:resize",
-    "terminal:run",
-    "terminal:signal",
-    "terminal:close",
-    "terminal:tail",
-    // Not public (not in channels.json): the remote layer marks a phone as
-    // watching a terminal, so the desktop can show it.
-    "terminal:attach",
-    "terminal:detach",
-    "ssh:hosts",
-    "ssh:open",
-    "infer:serve",
-    "infer:stopServing",
-    "infer:serving",
-    "infer:spawn",
-    "infer:kill",
-    "infer:list",
-    "infer:log",
-    "decide:load",
-    "decide:unload",
-    "decide:status",
-    "decide:run",
-];
-
 fn terminal_op(ctx: &Ctx, channel: &str, id: &str, args: &[Value]) -> Result<Value, String> {
     let reg = &ctx.terminals;
     match channel {
@@ -1082,12 +873,6 @@ mod tests {
         assert_eq!(resolve_cwd(&settings, None, Some(&t)), tmp);
         assert_eq!(resolve_cwd(&settings, Some("w1"), Some("/no/such/dir")), tmp);
         assert_eq!(resolve_cwd(&settings, Some("missing"), None), tmp);
-    }
-
-    #[test]
-    fn info_lists_prompt_caching() {
-        // sideband.ts hands side calls to the daemon only when it says so.
-        assert!(OWNED.contains(&"provider:prompt-caching"));
     }
 
     #[test]

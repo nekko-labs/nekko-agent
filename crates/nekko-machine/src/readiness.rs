@@ -1,7 +1,7 @@
 //! The machine-readiness advisor (AN9b), a port of `evaluateReadiness` in
-//! `packages/core/src/readiness/evaluate.ts` over the catalog the TS writes
-//! (`catalog.json`, from `OFFLINE_STACK_CATALOG`). Catalog entries stay JSON
-//! values, so a pick prints exactly as the TS one does.
+//! `packages/core/src/readiness/evaluate.ts` over `catalog.json` (recorded
+//! from the deleted TS `OFFLINE_STACK_CATALOG`; edited by hand now). Catalog
+//! entries stay JSON values, so a pick prints exactly as the TS one does.
 
 use crate::num;
 use serde_json::{Map, Value, json};

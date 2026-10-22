@@ -7,9 +7,9 @@
 //! mid-generation drops the upstream connection, which stops the generation.
 //!
 //! A request for a model that is not running is handed to the [`Policy`] (the
-//! TS engine, which knows the library, the saved settings and whether
-//! load-on-demand is on); once it reports the model loaded, the request goes
-//! through.
+//! daemon's model server, which knows the library, the saved settings and
+//! whether load-on-demand is on); once it reports the model loaded, the
+//! request goes through.
 //!
 //! Decisions (`/v1/decisions`, `/v1/systemone`) are the one exception to
 //! proxying: the decision model runs inside the daemon, so those requests are
@@ -114,7 +114,7 @@ impl EngineRouter {
     }
 
     /// Listen with this configuration. Already listening with the same one is
-    /// a no-op, which is what makes a restarted TS backend's "start" harmless.
+    /// a no-op, so a repeated "start" is harmless.
     pub async fn serve(&self, config: ServeConfig) -> Result<String, String> {
         if self.serving().as_ref() == Some(&config) {
             return Ok(format!("The engine is serving on port {}.", config.port));

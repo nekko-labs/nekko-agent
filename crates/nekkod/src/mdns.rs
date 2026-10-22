@@ -10,8 +10,8 @@
 //!
 //! A small responder on plain UDP multicast: it answers questions about its
 //! own records, announces on start and on changes, and says goodbye (TTL 0)
-//! on stop. The labels, records and wire format are golden-tested against
-//! the TS (`desktop-features.golden.test.ts`).
+//! on stop. The labels, records and wire format are golden-tested against a
+//! frozen record of the deleted TS responder.
 
 use serde::Serialize;
 use serde_json::{Value, json};

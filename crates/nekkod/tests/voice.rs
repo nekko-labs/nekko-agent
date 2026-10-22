@@ -99,9 +99,6 @@ async fn a_transcription_runs_the_speech_server_in_the_daemon() {
     std::fs::write(dir.join("settings.json"), settings.to_string()).unwrap();
     let d = start(&dir);
 
-    let (_, info) = post(d.port, "daemon:info", json!([])).await;
-    assert!(info["owned"].as_array().unwrap().iter().any(|c| c == "voice:transcribe"), "{info}");
-
     let (status, s) = post(d.port, "voice:status", json!([])).await;
     assert_eq!(status, 200);
     assert_eq!(

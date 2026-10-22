@@ -1,7 +1,8 @@
 //! The Rust accounting against the TS functions.
 //!
-//! `golden/expected.json` is written by `packages/host/src/usage.golden.test.ts`
-//! (UPDATE_GOLDEN=1), inputs and outputs side by side; every input runs
+//! `golden/expected.json` is a frozen record of the deleted TS functions,
+//! inputs and outputs side by side (edit it by hand per
+//! docs/runbooks/golden-fixtures.md); every input runs
 //! through the port and must print exactly what the TS printed (as
 //! `JSON.stringify` would, key order included).
 

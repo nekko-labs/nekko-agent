@@ -144,15 +144,6 @@ impl Workspace {
     pub fn serves(&self, channel: &str) -> bool {
         CHANNELS.contains(&channel) || (self.data_dir.is_some() && DATA_CHANNELS.contains(&channel))
     }
-
-    /// What `daemon:info` lists.
-    pub fn owned(&self) -> Vec<&'static str> {
-        let mut all = CHANNELS.to_vec();
-        if self.data_dir.is_some() {
-            all.extend_from_slice(DATA_CHANNELS);
-        }
-        all
-    }
 }
 
 fn arg(args: &[Value], i: usize) -> Option<&Value> {

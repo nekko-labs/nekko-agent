@@ -6,9 +6,9 @@
 //! host's `store.ts` (`getSettings`, `saveSettings`, `resetSettings`) down to
 //! JavaScript's object spread, property order and `JSON.stringify` output, so
 //! the file and every value handed back are byte for byte what the TS store
-//! produced. `tests/golden.rs` holds it to the TS functions
-//! (packages/host/src/settings.golden.test.ts writes the expected set and the
-//! embedded defaults, and fails when either goes stale).
+//! produced. `tests/golden.rs` holds it to a frozen record of the deleted TS
+//! functions; packages/shared's `engine-data.golden.test.ts` keeps the accents
+//! in the embedded defaults current.
 
 use serde_json::{Map, Value};
 use std::path::{Path, PathBuf};

@@ -1,6 +1,6 @@
 //! The Rust policy table must be the TS one (`packages/shared/src/claude-policy.ts`):
-//! `tests/golden/claude-policy.json` is written by
-//! `packages/host/src/claude-policy.golden.test.ts` (UPDATE_GOLDEN=1).
+//! `tests/golden/claude-policy.json` is a frozen record of the deleted TS
+//! behaviour; edit it by hand per docs/runbooks/golden-fixtures.md.
 
 use nekko_agent::claude_policy::{
     Capability, ClaudeAuth, Policy, ReasonId, auth_for, claude_code_unsupported, reasons_json,

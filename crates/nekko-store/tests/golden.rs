@@ -1,8 +1,8 @@
 //! The Rust summarizer against the TS one.
 //!
-//! `golden/summaries.json` is written by the real `summarizeSession`
-//! (packages/host/src/session-summary.golden.test.ts, which also fails if it
-//! goes stale), from the fixtures in `golden/sessions` (make-fixtures.mjs).
+//! `golden/summaries.json` is a frozen record of what the deleted TS
+//! `summarizeSession` gave for the fixtures in `golden/sessions`
+//! (make-fixtures.mjs); edit it by hand per docs/runbooks/golden-fixtures.md.
 //! Every summary must match exactly: key order included, since the renderer
 //! may be handed either side's output.
 
@@ -223,7 +223,7 @@ fn a_running_turn_saves_exactly_as_save_turn_session_does() {
 }
 
 /// A fork's new id and save times, the top-level lines only
-/// (`normalizeFork` in session-fork.golden.test.ts).
+/// (`normalizeFork` in the deleted TS fork test).
 fn normalize_fork(text: &str) -> String {
     let mut seen = [false; 3];
     text.lines()

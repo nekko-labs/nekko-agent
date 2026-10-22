@@ -1,6 +1,6 @@
-//! The side calls against the TS ones: `golden/side.json` is written by
-//! `packages/host/src/side-prompts.golden.test.ts` (UPDATE_GOLDEN=1), inputs
-//! and outputs side by side, and every input must give the same output here,
+//! The side calls against the TS ones: `golden/side.json` is a frozen record
+//! of the deleted TS functions (edit it by hand per
+//! docs/runbooks/golden-fixtures.md), inputs and outputs side by side, and every input must give the same output here,
 //! compared as JSON text so key order counts.
 
 use nekko_turn::{clean_fill, fill_prompt, parse_reply_suggestions, suggest_prompt};

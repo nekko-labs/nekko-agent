@@ -4,8 +4,8 @@
 //! kept, and the head of the result handed back. The HTML pass is the TS
 //! regex pass run on the same JavaScript regular expressions
 //! ([`nekko_tools::jsre`]) over UTF-16, so the text the model reads is the
-//! same; `golden/fetch.json`, written by `web-fetch.golden.test.ts`, holds it
-//! to that.
+//! same; `golden/fetch.json`, a frozen record of the deleted TS functions,
+//! holds it to that.
 //!
 //! What differs, on purpose or by necessity: a body is decompressed by
 //! reqwest (Node's fetch does too), which drops `content-length` from a

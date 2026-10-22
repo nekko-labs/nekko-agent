@@ -82,6 +82,13 @@ pub async fn post(port: u16, channel: &str, args: Value, token: Option<&str>) ->
     (status, res.json().await.unwrap_or(Value::Null))
 }
 
+/// Calls `channel` and asserts the daemon routed it: whatever it answers, it
+/// is not `unknown channel`.
+pub async fn assert_served(port: u16, channel: &str, args: Value) {
+    let (status, body) = post(port, channel, args, Some(TOKEN)).await;
+    assert_ne!(body["error"], format!("unknown channel {channel}"), "{channel}: {status} {body}");
+}
+
 pub type Socket = tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
 /// Connect, or say why not (as a string: tungstenite's error type is large).
@@ -281,7 +288,7 @@ pub fn turn_spec(rig: &TurnRig, model: &ScriptedModel, turn_id: &str, session_id
         "settings": { "providers": [provider], "defaultChatMode": "yolo", "unattendedQuestionMinutes": 0 },
         "facts": {
             "workspaces": [{ "id": "w1", "name": "project", "path": rig.workspace.to_string_lossy() }],
-            "mcpTools": [], "decide": false,
+            "decide": false,
             "connectorSnippets": [], "indexSnippets": [],
             "platform": "win32", "temperature": 0.7, "effort": "normal", "statsEffort": "normal",
             "promptCaching": true, "provider": provider, "headers": false,

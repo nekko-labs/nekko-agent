@@ -881,18 +881,16 @@ impl Turns {
             });
         }
 
-        // MCP: a host that hands over the server list (`turn:mcp`) leaves the
-        // sync and the calls to this daemon; an older one sends the tool specs.
-        // A sandbox chat has none.
+        // MCP: this daemon syncs and calls the turn's servers
+        // (`facts.mcpServers`, which admission always sends). A sandbox chat,
+        // a Claude Code chat and an offline one have none.
         let own_mcp = facts.get("mcpServers").filter(|s| s.is_array() && !sandbox && !claude_code).cloned();
         let mcp_tools = match &own_mcp {
-            _ if sandbox || claude_code => json!([]),
             Some(configs) if !js::truthy(loaded.get("offline")) => {
                 let any = configs.as_array().is_some_and(|a| a.iter().any(|c| c.get("enabled") == Some(&json!(true))));
                 if any { self.mcp.sync(configs).await["specs"].clone() } else { self.mcp.snapshot()["specs"].clone() }
             }
-            Some(_) => json!([]),
-            None => facts.get("mcpTools").cloned().unwrap_or(json!([])),
+            _ => json!([]),
         };
         // The turn's composition: tools, context from disk, the system prompt.
         let tool_input = json!({
@@ -1025,9 +1023,9 @@ impl Turns {
         if let Some(e) = facts.get("statsEffort").filter(|v| !v.is_null()) {
             identity.insert("effort".into(), e.clone());
         }
-        // The host sends its accounting facts when this daemon keeps the logs
-        // (`turn:account`); an older host leaves them out and accounts itself.
-        let account = TurnAccount::from_facts(facts).filter(|_| self.accounts.enabled());
+        // This daemon accounts every turn when it keeps the logs (admission
+        // always sends `facts.account`).
+        let account = self.accounts.enabled().then(|| TurnAccount::from_facts(facts));
         let forwarder = tokio::spawn(forward(
             rx,
             Forward {

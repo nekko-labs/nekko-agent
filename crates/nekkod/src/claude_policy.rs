@@ -240,18 +240,6 @@ impl ClaudePolicyStore {
         self.gate(provider, Capability::UnattendedRuns)
     }
 
-    /// Whether a harness session may offer Nekko's MCP tools (`--mcp-config`).
-    #[allow(dead_code)] // the harness's --mcp-config (H3) calls it
-    pub fn allows_nekko_tools(&self, provider: &Value) -> Result<(), Refusal> {
-        self.gate(provider, Capability::NekkoTools)
-    }
-
-    /// Whether a harness session may pass Nekko's context note (`--append-system-prompt`).
-    #[allow(dead_code)] // the harness's launch (H2) calls it
-    pub fn allows_context_note(&self, provider: &Value) -> Result<(), Refusal> {
-        self.gate(provider, Capability::ContextNote)
-    }
-
     /// Plan usage for a Claude provider's limits UI. There is no sanctioned
     /// source of Claude plan usage, so even with `usage_limits` enabled this
     /// returns nothing until Anthropic names one; the preview shows example data.
@@ -438,8 +426,8 @@ mod tests {
             assert!(s.gate(&harness(Some("nekko-anthropic-key")), cap).is_ok());
             assert!(s.gate(&harness(Some("vertex")), cap).is_ok());
         }
-        assert!(s.allows_nekko_tools(&plan).is_err());
-        assert!(s.allows_context_note(&plan).is_err());
+        assert!(s.gate(&plan, Capability::NekkoTools).is_err());
+        assert!(s.gate(&plan, Capability::ContextNote).is_err());
         assert_eq!(s.plan_usage(&plan), PlanUsage::Unavailable("Check your plan's usage in Claude Code."));
         // Interactive chat and the phone stay on.
         assert!(s.gate(&plan, Capability::InteractiveChat).is_ok());
@@ -463,7 +451,7 @@ mod tests {
         assert_eq!(s.status()["override"], json!({ "serial": 1, "issuedAt": "2026-11-01T00:00:00Z" }));
         // And off again with a newer one.
         s.apply_signed(&signed(2, json!({ "subscription": { "nekko_tools": "awaiting_approval" } }))).unwrap();
-        assert!(s.allows_nekko_tools(&plan).is_err());
+        assert!(s.gate(&plan, Capability::NekkoTools).is_err());
         assert!(s.gate(&plan, Capability::UnattendedRuns).is_err(), "a new document replaces the old one whole");
     }
 

@@ -165,7 +165,7 @@ mod tests {
     }
 
     /// The same answers give what the TS host's detect and resolve gave
-    /// (`packages/host/src/hypergate.golden.test.ts`), key order included.
+    /// (`tests/golden/hypergate.json`, a frozen record), key order included.
     #[tokio::test]
     async fn discovery_matches_the_ts_host() {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden/hypergate.json");

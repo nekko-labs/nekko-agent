@@ -52,5 +52,6 @@ gh release create decision-models-v1 release\* --repo nekko-labs/nekko-agent --l
 ```
 
 Never as the latest release: the app's updater reads `releases/latest`. Copy the printed sizes
-and digests into `DECISION_CATALOG` (`packages/host/src/engine/decisions.ts`) and rewrite the
-daemon's golden file (`UPDATE_GOLDEN=1` on `decisions.golden.test.ts`).
+and digests into the daemon's catalog (`crates/nekkod/src/decision-catalog.json`), and edit the
+`catalog` reply recorded in `crates/nekkod/tests/golden/decisions.json` to match by hand (see
+[docs/runbooks/golden-fixtures.md](../../docs/runbooks/golden-fixtures.md)).

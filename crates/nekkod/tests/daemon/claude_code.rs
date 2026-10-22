@@ -271,7 +271,7 @@ fn spec(rig: &Rig, turn_id: &str, text: &str) -> Value {
         "settings": { "providers": [provider], "defaultChatMode": "guardrails", "unattendedQuestionMinutes": 0 },
         "facts": {
             "workspaces": [{ "id": "w1", "name": "project", "path": rig.workspace.to_string_lossy() }],
-            "mcpTools": [], "decide": false, "hooks": false, "connectorSnippets": [], "indexSnippets": [],
+            "decide": false, "hooks": false, "connectorSnippets": [], "indexSnippets": [],
             "platform": std::env::consts::OS, "provider": provider, "headers": false,
         },
     })

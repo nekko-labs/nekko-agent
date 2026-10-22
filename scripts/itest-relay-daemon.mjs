@@ -92,7 +92,6 @@ try {
     if (!info) await sleep(250);
   }
   check('the Local Web UI runs behind nekkod', info?.app === 'nekkod', JSON.stringify(info?.backend));
-  check('the daemon owns remote access', info?.owned?.includes('remote:status'));
 
   const status = await api('remote:enable', RELAY_URL);
   check('remote access enabled through the daemon', status?.enabled === true);
