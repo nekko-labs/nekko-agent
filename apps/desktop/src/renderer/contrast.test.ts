@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { THEME_PRESETS } from '@nekko-agent/shared';
 import { composite, contrastRatio, parseColor } from './contrast.js';
 import { rules, stylesheet } from './tests/css.js';
 
@@ -33,6 +34,11 @@ const THEMES: Record<string, Record<string, string>> = {
   'dark/terminal': { ...dark, ...block("[data-theme='dark'][data-preset='terminal']") },
   'dark/nord': { ...dark, ...block("[data-theme='dark'][data-preset='nord']") },
 };
+// Every Experimental preset, on top of its base mode.
+const EXPERIMENTAL = THEME_PRESETS.filter((p) => p.group === 'experimental');
+for (const p of EXPERIMENTAL) {
+  THEMES[`${p.mode}/${p.id}`] = { ...(p.mode === 'dark' ? dark : light), ...block(`[data-theme='${p.mode}'][data-preset='${p.id}']`) };
+}
 
 const AA = 4.5;
 
@@ -78,7 +84,20 @@ const toHex = (c: { r: number; g: number; b: number }) => '#' + [c.r, c.g, c.b].
 const ACCENTS: Record<string, string> = {
   light: '#6d5efc', 'light/solar': '#b45309', 'light/lilac': '#5b4ea7', 'light/lavender': '#3b2f86', dark: '#8b7dff',
   'dark/nebula': '#9d8ce6', 'dark/terminal': '#3fb96a', 'dark/nord': '#88c0d0',
+  ...Object.fromEntries(EXPERIMENTAL.map((p) => [`${p.mode}/${p.id}`, p.accent])),
 };
+
+describe.each(EXPERIMENTAL.map((p) => [p.id, p] as const))('experimental preset %s', (_id, p) => {
+  const vars = THEMES[`${p.mode}/${p.id}`];
+  it('primary-button text is readable on the accent', () => {
+    const ratio = contrastRatio(parseColor(vars['--on-accent']), parseColor(p.accent));
+    expect(ratio, `on-accent on accent = ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(AA);
+  });
+  it('sets its own window surface and paper', () => {
+    expect(vars['--win']).toBeDefined();
+    expect(vars['--paper']).toBe(p.paper);
+  });
+});
 
 describe.each(Object.entries(THEMES))('artifact card colours in %s', (name, vars) => {
   const accent = ACCENTS[name];

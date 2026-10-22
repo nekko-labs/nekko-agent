@@ -1,20 +1,16 @@
 //! Usage, reply and limit accounting owned by the daemon (PF14):
-//! `usage:summary`, `limits:get`, `limits:problem`, `limits:headers`,
-//! `limits:poll`, `limits:clear`, and the lines a daemon-driven turn writes.
+//! `usage:summary`, `limits:get`, `limits:problem`, `limits:poll`,
+//! `limits:clear`, and the lines a daemon-driven turn writes.
 //!
 //! The log formats, the summary and the parsers are `nekko-usage`'s (held to
 //! the TS functions by a golden set). This is the stateful half of
 //! `packages/host/src/limits.ts`: the snapshot per token key, the 30-second
 //! poll throttle, one poll at a time per key, why the last read failed and
 //! the backoff before the next. A sign-in is renewed by the daemon's own
-//! OAuth service (`oauth.rs`, tokens.json's single writer), or by the TS host
-//! (`oauth:refresh`) when there is none; the TS host keeps the phone relay
-//! (`limits:notify`).
+//! OAuth service (`oauth.rs`, tokens.json's single writer).
 //!
-//! Owned only when the daemon knows the data directory; otherwise every one
-//! of these channels goes to the TS host as before.
+//! Owned only when the daemon knows the data directory.
 
-use crate::backend::Backend;
 use crate::hub::Hub;
 use nekko_usage::{LimitsError, Problem};
 use serde_json::{Map, Value, json};
@@ -25,16 +21,14 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// The channels served here when the data directory is known.
-pub const CHANNELS: &[&str] =
-    &["usage:summary", "limits:get", "limits:problem", "limits:headers", "limits:poll", "limits:clear"];
+pub const CHANNELS: &[&str] = &["usage:summary", "limits:get", "limits:problem", "limits:poll", "limits:clear"];
 
 /// What `daemon:info` adds when they are: the channels, and `turn:account`
 /// (a daemon-driven turn writes its own usage and reply lines and limits).
 pub const OWNED: &[&str] =
-    &["usage:summary", "limits:get", "limits:problem", "limits:headers", "limits:poll", "limits:clear", "turn:account"];
+    &["usage:summary", "limits:get", "limits:problem", "limits:poll", "limits:clear", "turn:account"];
 
 const POLL_INTERVAL_MS: f64 = 30_000.0;
-const ANTHROPIC_USAGE_URL: &str = "https://api.anthropic.com/api/oauth/usage";
 const CHATGPT_BASE: &str = "https://chatgpt.com/backend-api";
 const OPENROUTER_BASE: &str = "https://openrouter.ai/api/v1";
 /// A quota read that takes longer than this is a network failure.
@@ -108,40 +102,19 @@ impl TurnAccount {
 
 pub struct Accounts {
     dir: Option<PathBuf>,
-    backend: Arc<Backend>,
     hub: Hub,
     http: reqwest::Client,
-    anthropic_usage_url: String,
     state: Mutex<State>,
     /// Appends from this process, one at a time, so lines never interleave.
     append: Mutex<()>,
-    /// The daemon's own sign-in service, which renews tokens; without it the
-    /// host renews them (`oauth:refresh`).
+    /// The daemon's own sign-in service, which renews tokens.
     pub oauth: std::sync::OnceLock<std::sync::Weak<crate::oauth::OAuth>>,
 }
 
 impl Accounts {
-    pub fn new(dir: Option<PathBuf>, backend: Arc<Backend>, hub: Hub) -> Self {
-        Self::with_anthropic_url(dir, backend, hub, ANTHROPIC_USAGE_URL.into())
-    }
-
-    pub fn with_anthropic_url(
-        dir: Option<PathBuf>,
-        backend: Arc<Backend>,
-        hub: Hub,
-        anthropic_usage_url: String,
-    ) -> Self {
+    pub fn new(dir: Option<PathBuf>, hub: Hub) -> Self {
         let http = reqwest::Client::builder().timeout(READ_TIMEOUT).build().unwrap_or_default();
-        Self {
-            dir,
-            backend,
-            hub,
-            http,
-            anthropic_usage_url,
-            state: Mutex::default(),
-            append: Mutex::new(()),
-            oauth: std::sync::OnceLock::new(),
-        }
+        Self { dir, hub, http, state: Mutex::default(), append: Mutex::new(()), oauth: std::sync::OnceLock::new() }
     }
 
     /// Whether this daemon owns accounting (it knows the data directory).
@@ -161,10 +134,6 @@ impl Accounts {
             }
             "limits:get" => Ok(self.get_limits(&key, arg(1) == &json!(true)).await.unwrap_or(Value::Null)),
             "limits:problem" => Ok(lock(&self.state).problems.get(&key).map_or(Value::Null, Failure::value)),
-            "limits:headers" => {
-                let pairs = pairs_of(arg(2));
-                Ok(self.record_from_headers(&key, arg(1).as_str().unwrap_or_default(), &pairs).unwrap_or(Value::Null))
-            }
             "limits:poll" => Ok(self.poll(&key).await.unwrap_or(Value::Null)),
             "limits:clear" => {
                 self.clear(arg(0).as_str());
@@ -267,11 +236,7 @@ impl Accounts {
     /// Tell the UI, and the host for the phone relay.
     fn notify(&self, key: &str, limits: &Value) {
         let payload = json!({ "tokenKey": key, "limits": limits });
-        self.hub.publish("limits:updated", payload.clone(), false);
-        let backend = self.backend.clone();
-        tokio::spawn(async move {
-            let _ = backend.call("limits:notify", json!([payload])).await;
-        });
+        self.hub.publish("limits:updated", payload, false);
     }
 
     fn get(&self, key: &str) -> Option<Value> {
@@ -303,36 +268,17 @@ impl Accounts {
         (s.generation.get(key).copied().unwrap_or(0), s.generation.get("").copied().unwrap_or(0))
     }
 
-    /// `recordFromHeaders(tokenKey, provider, headers)`: Anthropic's windows,
-    /// merged over the snapshot (plan and credits kept, per-model windows the
-    /// headers do not mention carried forward).
-    pub fn record_from_headers(&self, key: &str, provider: &str, pairs: &[(String, String)]) -> Option<Value> {
-        if provider != "anthropic" && provider != "claude" {
+    /// An Anthropic API-key response's own rate limits, stored under the
+    /// provider's `provider:<id>` key. Each response reports every window, so
+    /// the snapshot is replaced rather than merged.
+    pub fn record_api_headers(&self, key: &str, pairs: &[(String, String)]) -> Option<Value> {
+        let parsed = nekko_usage::parse_anthropic_api_headers(pairs, now_ms());
+        if parsed.get("windows").and_then(Value::as_array).is_none_or(Vec::is_empty) {
             return self.get(key);
         }
-        let parsed = nekko_usage::parse_anthropic_headers(pairs, now_ms());
-        let fresh = parsed.get("windows").and_then(Value::as_array).cloned().unwrap_or_default();
-        if fresh.is_empty() {
-            return self.get(key);
-        }
-        self.quota_history(key, "headers", &parsed);
-        let limits = {
-            let mut s = lock(&self.state);
-            let previous = s.store.get(key).cloned();
-            let prev_windows =
-                previous.as_ref().and_then(|p| p.get("windows")).and_then(Value::as_array).cloned().unwrap_or_default();
-            let mut limits = parsed.clone();
-            limits["windows"] = Value::Array(nekko_usage::merge_windows(&prev_windows, &fresh));
-            for k in ["planType", "creditsBalance", "creditsState"] {
-                if let Some(v) = previous.as_ref().and_then(|p| p.get(k)) {
-                    limits[k] = v.clone();
-                }
-            }
-            s.store.insert(key.to_string(), limits.clone());
-            limits
-        };
-        self.notify(key, &limits);
-        Some(limits)
+        lock(&self.state).store.insert(key.to_string(), parsed.clone());
+        self.notify(key, &parsed);
+        Some(parsed)
     }
 
     /// `getLimits(tokenKey, refresh)`: the snapshot while fresh, else a poll,
@@ -427,7 +373,7 @@ impl Accounts {
     }
 
     /// A token usable now: the stored one while it is good for another
-    /// minute (or never expires), else the host renews it and it is read back.
+    /// minute (or never expires), else the sign-in service renews it and it is read back.
     async fn fresh_token(&self, key: &str) -> Result<Option<Value>, Problem> {
         let usable = |t: &Value| {
             let expires = token_expires_at(t);
@@ -439,14 +385,12 @@ impl Accounts {
         if let Some(t) = self.token(key).filter(usable) {
             return Ok(Some(t));
         }
-        match self.oauth.get().and_then(std::sync::Weak::upgrade) {
-            Some(oauth) => {
-                oauth.ensure_fresh(key, false).await.map_err(Problem::Message)?;
-            }
-            None => {
-                self.backend.call("oauth:refresh", json!([key])).await.map_err(Problem::Message)?;
-            }
-        }
+        let oauth = self
+            .oauth
+            .get()
+            .and_then(std::sync::Weak::upgrade)
+            .ok_or_else(|| Problem::Message("no sign-in service to renew the token".into()))?;
+        oauth.ensure_fresh(key, false).await.map_err(Problem::Message)?;
         Ok(self.token(key))
     }
 
@@ -462,16 +406,6 @@ impl Accounts {
                 .unwrap_or_else(|| default.to_string())
         };
         match fresh.get("provider").and_then(Value::as_str) {
-            Some("claude") => {
-                let req = self
-                    .http
-                    .get(&self.anthropic_usage_url)
-                    .header("Authorization", format!("Bearer {access}"))
-                    .header("anthropic-beta", "oauth-2025-04-20");
-                let (status, body) = send(req).await?;
-                let json = body.as_ref().and_then(Value::as_object).ok_or(unreadable(status))?;
-                Ok(Some(nekko_usage::parse_anthropic_usage_json(json, now_ms())))
-            }
             Some("chatgpt") => {
                 let Some(account) = fresh.get("accountId").and_then(Value::as_str).filter(|a| !a.is_empty()) else {
                     return Err(Problem::Read(LimitsError::new("auth_expired", None)));
@@ -571,15 +505,6 @@ async fn read_openrouter(http: &reqwest::Client, base: &str, bearer: &str) -> Re
     nekko_usage::parse_openrouter_key(body.as_ref(), status, now_ms()).map_err(Problem::Read)
 }
 
-/// The `[name, value]` pairs a host or provider sends.
-fn pairs_of(v: &Value) -> Vec<(String, String)> {
-    v.as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|p| Some((p.get(0)?.as_str()?.to_string(), p.get(1)?.as_str()?.to_string())))
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -592,7 +517,7 @@ mod tests {
     }
 
     fn accounts(dir: &std::path::Path) -> Arc<Accounts> {
-        Arc::new(Accounts::new(Some(dir.to_path_buf()), Backend::disabled(), Hub::new()))
+        Arc::new(Accounts::new(Some(dir.to_path_buf()), Hub::new()))
     }
 
     fn pairs(list: &[(&str, &str)]) -> Vec<(String, String)> {
@@ -600,27 +525,35 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn headers_merge_over_a_polled_snapshot_and_keep_plan_and_credits() {
-        let dir = temp_dir("merge");
+    async fn api_key_headers_replace_the_provider_snapshot() {
+        let dir = temp_dir("api-headers");
         let a = accounts(&dir);
-        lock(&a.state).store.insert(
-            "claude:x".into(),
-            json!({ "windows": [{ "id": "7d_fable", "label": "7-day Fable", "scope": "model", "usedPercent": 3, "resetAt": 0, "status": "allowed" }], "planType": "max", "creditsState": "disabled", "updatedAt": 1, "staleAfterMs": 35000 }),
-        );
-        let got = a
-            .record_from_headers(
-                "claude:x",
-                "anthropic",
-                &pairs(&[("anthropic-ratelimit-unified-5h-utilization", "0.25")]),
+        let key = "provider:anthropic-1";
+        assert_eq!(a.record_api_headers(key, &pairs(&[("x", "y")])), None, "no rate-limit headers, nothing stored");
+        let first = a
+            .record_api_headers(
+                key,
+                &pairs(&[
+                    ("anthropic-ratelimit-requests-limit", "50"),
+                    ("anthropic-ratelimit-requests-remaining", "10"),
+                    ("anthropic-ratelimit-input-tokens-limit", "1000"),
+                    ("anthropic-ratelimit-input-tokens-remaining", "900"),
+                ]),
             )
             .unwrap();
-        let ids: Vec<&str> = got["windows"].as_array().unwrap().iter().map(|w| w["id"].as_str().unwrap()).collect();
-        assert_eq!(ids, ["5h", "7d_fable"]);
-        assert_eq!(got["planType"], "max");
-        assert_eq!(got["creditsState"], "disabled");
-        // Other providers' headers and headers with no windows change nothing.
-        assert_eq!(a.record_from_headers("claude:x", "chatgpt", &pairs(&[])), Some(got.clone()));
-        assert_eq!(a.record_from_headers("claude:x", "claude", &pairs(&[("x", "y")])), Some(got));
+        assert_eq!(first["windows"].as_array().unwrap().len(), 2);
+        let second = a
+            .record_api_headers(
+                key,
+                &pairs(&[
+                    ("anthropic-ratelimit-requests-limit", "50"),
+                    ("anthropic-ratelimit-requests-remaining", "49"),
+                ]),
+            )
+            .unwrap();
+        let ids: Vec<&str> = second["windows"].as_array().unwrap().iter().map(|w| w["id"].as_str().unwrap()).collect();
+        assert_eq!(ids, ["rpm"], "each response reports every window, so nothing is carried forward");
+        assert_eq!(a.get_limits(key, false).await, Some(second));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -629,26 +562,16 @@ mod tests {
         let dir = temp_dir("history");
         std::fs::write(
             dir.join("settings.json"),
-            r#"{"providers":[{"id":"c","kind":"anthropic","tokenKey":"claude:x"}]}"#,
+            r#"{"providers":[{"id":"c","kind":"chatgpt","tokenKey":"chatgpt:x"}]}"#,
         )
         .unwrap();
         let a = accounts(&dir);
-        a.record_from_headers(
-            "claude:x",
-            "anthropic",
-            &pairs(&[("anthropic-ratelimit-unified-5h-utilization", "0.5")]),
-        );
-        a.record_from_headers(
-            "claude:y",
-            "anthropic",
-            &pairs(&[("anthropic-ratelimit-unified-5h-utilization", "0.5")]),
-        );
+        let snapshot = json!({ "windows": [{ "id": "5h", "label": "5-hour", "scope": "session", "usedPercent": 50, "resetAt": 0, "status": "allowed" }], "updatedAt": 1, "staleAfterMs": 35000 });
+        a.quota_history("chatgpt:x", "poll", &snapshot);
+        a.quota_history("chatgpt:y", "poll", &snapshot);
         let text = std::fs::read_to_string(dir.join("quota-history.jsonl")).unwrap();
         assert_eq!(text.lines().count(), 1);
-        assert!(
-            text.starts_with(r#"{"timestamp":"#) && text.contains(r#""providerId":"c","source":"headers""#),
-            "{text}"
-        );
+        assert!(text.starts_with(r#"{"timestamp":"#) && text.contains(r#""providerId":"c","source":"poll""#), "{text}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -656,16 +579,16 @@ mod tests {
     async fn a_missing_sign_in_is_a_signed_out_problem_and_is_not_retried() {
         let dir = temp_dir("signed-out");
         let a = accounts(&dir);
-        assert_eq!(a.poll("claude:none").await, None);
-        let p = a.route("limits:problem", &[json!("claude:none")]).await.unwrap();
+        assert_eq!(a.poll("chatgpt:none").await, None);
+        let p = a.route("limits:problem", &[json!("chatgpt:none")]).await.unwrap();
         assert_eq!(p["kind"], "signed_out");
         assert_eq!(p["failures"], 1);
         assert!(p.get("retryAt").is_none(), "a dead sign-in waits for the user");
-        a.poll("claude:none").await;
-        let p = a.route("limits:problem", &[json!("claude:none")]).await.unwrap();
+        a.poll("chatgpt:none").await;
+        let p = a.route("limits:problem", &[json!("chatgpt:none")]).await.unwrap();
         assert_eq!(p["failures"], 1, "recorded once, not on every poll");
-        a.clear(Some("claude:none"));
-        assert_eq!(a.route("limits:problem", &[json!("claude:none")]).await.unwrap(), Value::Null);
+        a.clear(Some("chatgpt:none"));
+        assert_eq!(a.route("limits:problem", &[json!("chatgpt:none")]).await.unwrap(), Value::Null);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -681,7 +604,7 @@ mod tests {
     #[test]
     fn turn_lines_are_the_hosts() {
         let dir = temp_dir("lines");
-        let a = Accounts::new(Some(dir.clone()), Backend::disabled(), Hub::new());
+        let a = Accounts::new(Some(dir.clone()), Hub::new());
         let account = TurnAccount::from_facts(&json!({ "account": { "auth": "apikey", "kind": "llamacpp" } })).unwrap();
         let opts = json!({ "sessionId": "s", "providerId": "p", "modelId": "m" });
         a.turn_usage(&opts, &account, &json!({ "type": "usage", "inputTokens": 1, "outputTokens": 2 }));

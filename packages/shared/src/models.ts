@@ -12,7 +12,18 @@ export type ProviderKind =
   | 'vllm'
   /** The engine Nekko Agent runs itself (llama.cpp behind its own router). */
   | 'llamacpp'
-  | 'openai-compat';
+  | 'openai-compat'
+  /** Claude in Amazon Bedrock: the Messages API on the user's own Bedrock bearer token. */
+  | 'bedrock'
+  /** Claude on Google Cloud Vertex AI, on the user's own Google credentials. */
+  | 'vertex'
+  /** Claude in Microsoft Foundry, on the Foundry resource's key. */
+  | 'foundry'
+  /**
+   * Claude Agent: the user's own installed Claude Code runs the chat, driven
+   * headless by nekkod. No base URL and no key; sign-in happens in Claude Code.
+   */
+  | 'claude-code';
 
 /** A configured connection to a model server / provider. */
 export interface ProviderConfig {
@@ -100,6 +111,41 @@ export function isLocalProvider(kind: ProviderKind): boolean {
 }
 
 /**
+ * A provider's endpoint when it is one the app can call: a known kind on an
+ * http(s) URL with no credentials in it. Null otherwise.
+ */
+export function providerEndpoint(provider: Pick<ProviderConfig, 'kind' | 'baseUrl'>): URL | null {
+  if (!isLocalProvider(provider.kind) && !['anthropic', 'openai', 'openrouter', 'chatgpt', 'openai-compat'].includes(provider.kind)) return null;
+  try {
+    const url = new URL(provider.baseUrl);
+    return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether a provider is a local model server on this machine: a local kind
+ * (or openai-compat, a dual-use kind allowed by name) on a loopback address.
+ * Offline chats and local-only workflows run only on these.
+ */
+export function offlineProviderAllowed(provider: Pick<ProviderConfig, 'kind' | 'baseUrl'>): boolean {
+  const url = providerEndpoint(provider);
+  return !!url && (isLocalProvider(provider.kind) || provider.kind === 'openai-compat') && (
+    url.hostname === 'localhost' || url.hostname === '[::1]' || /^127\.\d+\.\d+\.\d+$/.test(url.hostname)
+  );
+}
+
+/**
+ * Whether a cloud-only chat may run on a provider: anything that is not a
+ * model server on this machine. A local kind is refused wherever it listens;
+ * openai-compat is refused only on a loopback address.
+ */
+export function cloudProviderAllowed(provider: Pick<ProviderConfig, 'kind' | 'baseUrl'>): boolean {
+  return !isLocalProvider(provider.kind) && !offlineProviderAllowed(provider);
+}
+
+/**
  * A single GPU's memory snapshot (megabytes). Utilization is 0-100 when known.
  */
 export interface GpuDevice {
@@ -179,6 +225,14 @@ export const PROVIDER_DEFAULTS: Record<ProviderKind, { baseUrl: string; needsKey
   vllm: { baseUrl: 'http://localhost:8000/v1', needsKey: false, label: 'vLLM' },
   llamacpp: { baseUrl: `http://127.0.0.1:${ENGINE_PORT_DEFAULT}/v1`, needsKey: false, label: 'Nekko Agent engine' },
   'openai-compat': { baseUrl: 'http://localhost:8080/v1', needsKey: false, label: 'OpenAI-compatible' },
+  // The region is part of the host: edit it to match the Bedrock region you use.
+  bedrock: { baseUrl: 'https://bedrock-mantle.us-east-1.api.aws/anthropic', needsKey: true, label: 'Claude in Amazon Bedrock' },
+  // Replace YOUR_PROJECT; `global` is the recommended location. The token comes from
+  // the user's own Google Application Default Credentials, so there is no key.
+  vertex: { baseUrl: 'https://aiplatform.googleapis.com/v1/projects/YOUR_PROJECT/locations/global', needsKey: false, label: 'Claude on Vertex AI' },
+  // Replace YOUR_RESOURCE with the Foundry resource name.
+  foundry: { baseUrl: 'https://YOUR_RESOURCE.services.ai.azure.com/anthropic', needsKey: true, label: 'Claude in Microsoft Foundry' },
+  'claude-code': { baseUrl: '', needsKey: false, label: 'Claude Agent' },
 };
 
 /** Ports we probe when auto-discovering local servers. */

@@ -9,7 +9,7 @@ const inspect = () => JSON.parse(cp.execFileSync('powershell', ['-NoProfile', '-
 async function main() {
   const args = process.argv.slice(2);
   // `--daemon` is accepted for older invocations; nekkod is the only engine.
-  assert.ok(args.every(arg => ['--daemon', '--built-backend'].includes(arg)), 'Unknown integration argument');
+  assert.ok(args.every(arg => arg === '--daemon'), 'Unknown integration argument');
   fs.mkdirSync(scratch, { recursive: true });
   const out = fs.mkdtempSync(path.join(scratch, 'run-'));
   const isolated = path.join(out, 'isolated');
@@ -17,16 +17,8 @@ async function main() {
   fs.writeFileSync(path.join(out, 'processes-before.json'), JSON.stringify(before, null, 2));
   for (const dir of ['home', 'appdata', 'localappdata', 'data', 'profile', 'temp']) fs.mkdirSync(path.join(isolated, dir), { recursive: true });
   fs.writeFileSync(path.join(isolated, 'data/settings.json'), JSON.stringify({ desktopNotifications: true, providers: [], mcpServers: [], updates: { app: false, modelLists: false, skills: false }, autoUpdate: false, engine: { autoStart: false }, apiServer: { enabled: false, startOnLaunch: false, port: 1439, bind: 'local', token: 'scratch-only' } }));
-  const workspace = Object.fromEntries(['shared', 'core', 'host'].map(name => ['@nekko-agent/' + name, path.join(repo, 'packages', name, 'src/index.ts')]));
+  const workspace = Object.fromEntries(['shared'].map(name => ['@nekko-agent/' + name, path.join(repo, 'packages', name, 'src/index.ts')]));
   const build = async (entry, outfile) => require('esbuild').build({ entryPoints: [entry], outfile, bundle: true, platform: 'node', format: 'cjs', target: 'node22', plugins: [{ name: 'workspace-source-only', setup(b) { b.onResolve({ filter: /^[^./]|^@/ }, args => { if (workspace[args.path]) return { path: workspace[args.path] }; if (!path.isAbsolute(args.path)) return { path: args.path, external: true }; }); } }] });
-  if (args.includes('--built-backend')) {
-    const backend = path.join(repo, 'apps/desktop/out/main/backend.js');
-    assert.ok(fs.existsSync(backend), 'Built backend missing: ' + backend);
-    fs.copyFileSync(backend, path.join(out, 'backend.js'));
-    const chunks = path.join(path.dirname(backend), 'chunks');
-    if (fs.existsSync(chunks)) fs.cpSync(chunks, path.join(out, 'chunks'), { recursive: true });
-    fs.writeFileSync(path.join(out, 'backend-source.json'), JSON.stringify({ source: backend, modified: fs.statSync(backend).mtime.toISOString() }, null, 2));
-  } else await build(path.join(repo, 'apps/desktop/src/backend/index.ts'), path.join(out, 'backend.js'));
   const entry = path.join(out, 'entry.ts');
   fs.writeFileSync(entry, `export { EngineProcess } from ${JSON.stringify(path.join(repo, 'apps/desktop/src/main/engine-process.ts'))}; export * from ${JSON.stringify(path.join(repo, 'apps/desktop/src/main/notifications.ts'))}; export { IpcChannels, IpcEvents } from '@nekko-agent/shared';`);
   await build(entry, path.join(out, 'integration-api.cjs'));

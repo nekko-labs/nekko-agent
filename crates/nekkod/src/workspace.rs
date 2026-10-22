@@ -4,14 +4,12 @@
 //!
 //! A workspace's folder comes from the settings (`crate::settings::current`,
 //! the daemon's own store when it knows the data directory); everything runs
-//! here, off the async threads. Index progress goes to the UI from here and to the
-//! host's own listeners (the phone relay) through `index:progress`, marked
-//! `relayOnly` there so the backend's copy is not sent twice.
+//! here, off the async threads. Index progress goes to the UI from here.
 
-use crate::backend::Backend;
 use crate::hub::Hub;
 use crate::routes::Ctx;
-use nekko_workspace::{comments, design, files, git::Git, index::Index, memory, pr::Prs, skills, spec};
+use nekko_workspace::gitops::{self, DiffOpts, GitOps, LogOpts};
+use nekko_workspace::{comments, design, files, git::Git, index::Index, memory, pr::Prs, scoped, skills, spec};
 use serde_json::{Value, json};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -21,6 +19,11 @@ pub const CHANNELS: &[&str] = &[
     "file:read",
     "file:write",
     "dir:list",
+    // Files in a chat's folder, relative to it (IO-33 FA-1, nekko-workspace scoped.rs).
+    "files:list",
+    "files:search",
+    "files:read",
+    "files:write",
     "workspace:index",
     "workspace:indexStatus",
     "workspace:search",
@@ -31,6 +34,21 @@ pub const CHANNELS: &[&str] = &[
     "pr:sessionList",
     "pr:diff",
     "pr:action",
+    // IO-33 FA-2: git in the workspace's folder, and PRs from it.
+    "git:diff",
+    "git:log",
+    "git:show",
+    "git:branches",
+    "git:compare",
+    "git:stage",
+    "git:unstage",
+    "git:commit",
+    "git:commitMessage",
+    "git:push",
+    "git:switch",
+    "git:mergeAbort",
+    "pr:create",
+    "pr:checks",
 ];
 
 /// Channels that keep their files in the data directory, served only when
@@ -79,6 +97,7 @@ pub struct Workspace {
     index: Arc<Index>,
     prs: Arc<Prs>,
     git: Git,
+    ops: GitOps,
     vaizer: skills::Vaizer,
 }
 
@@ -98,9 +117,15 @@ impl Workspace {
             data_dir,
             index: Arc::new(Index::new()),
             git: Git::new(prs.clone()),
+            ops: GitOps::default(),
             prs,
             vaizer: skills::Vaizer::default(),
         }
+    }
+
+    /// The data directory, when this daemon knows it.
+    pub fn data_dir(&self) -> Option<&std::path::Path> {
+        self.data_dir.as_deref()
     }
 
     /// The PR reads and their caches, shared with the stacked-PR channels.
@@ -154,14 +179,9 @@ async fn settings(ctx: &Ctx) -> Value {
 
 /// A chat, from the daemon's store or else the host.
 async fn session(ctx: &Ctx, id: &str) -> Value {
-    if let Some(store) = ctx.sessions.clone() {
-        let id = id.to_string();
-        return blocking(move || store.get(&id).unwrap_or(Value::Null)).await.unwrap_or(Value::Null);
-    }
-    match tokio::time::timeout(crate::routes::AUX_WAIT, ctx.backend.call("session:get", json!([id]))).await {
-        Ok(Ok(s)) => s,
-        _ => Value::Null,
-    }
+    let Some(store) = ctx.sessions.clone() else { return Value::Null };
+    let id = id.to_string();
+    blocking(move || store.get(&id).unwrap_or(Value::Null)).await.unwrap_or(Value::Null)
 }
 
 /// The GitHub token for the REST fallback: the GitHub connector's, else the
@@ -225,6 +245,72 @@ async fn git_folder(ctx: &Ctx, id: &str) -> Option<String> {
     )
 }
 
+/// The folder a scoped file call (`files:*`, IO-33 FA-1) works in, from
+/// `{ sessionId }` (the chat's checkout: its worktree when it is isolated and
+/// the worktree exists, else its project folder), `{ sessionId, workspaceId }`
+/// (one of that chat's folders) or `{ workspaceId }` (a saved folder). The
+/// caller never names a path: it is looked up here.
+pub(crate) async fn scoped_root(ctx: &Ctx, root: Option<&Value>) -> Result<PathBuf, String> {
+    let bad = || "bad-request: the root is { sessionId } or { workspaceId }".to_string();
+    let obj = root.and_then(Value::as_object).ok_or_else(bad)?;
+    let field = |k: &str| obj.get(k).and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string);
+    let (sid, wid) = (field("sessionId"), field("workspaceId"));
+    let saved = folders(ctx).await;
+    let Some(sid) = sid else {
+        let wid = wid.ok_or_else(bad)?;
+        return folder_path(&saved, &wid).map(PathBuf::from).ok_or_else(|| "not-found: no such folder".to_string());
+    };
+    let s = session(ctx, &sid).await;
+    if s.is_null() {
+        return Err("not-found: no such chat".into());
+    }
+    let ids = session_workspace_ids(&s);
+    let wid = match wid {
+        Some(w) if ids.contains(&w) => w,
+        Some(_) => return Err("not-found: that folder is not this chat's".into()),
+        None => ids
+            .iter()
+            .find(|w| folder_path(&saved, w).is_some())
+            .cloned()
+            .ok_or_else(|| "no-folder: this chat has no folder".to_string())?,
+    };
+    if s.get("gitIsolation") != Some(&json!(false))
+        && let Some(p) = s.get("gitWorktrees").and_then(|w| w.get(&wid)).and_then(|w| w.get("path"))
+        && let Some(p) = p.as_str().filter(|p| std::path::Path::new(p).is_dir())
+    {
+        return Ok(PathBuf::from(p));
+    }
+    folder_path(&saved, &wid).map(PathBuf::from).ok_or_else(|| "no-folder: this chat has no folder".to_string())
+}
+
+/// `files:*`: resolve the root, then run the call on its scope off the async threads.
+async fn scoped(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, String> {
+    let root = scoped_root(ctx, arg(&args, 0)).await?;
+    let listed = if channel == "files:search" { scoped::git_files(&root).await } else { None };
+    let channel = channel.to_string();
+    blocking(move || {
+        let scope = scoped::Scope::new(&root)?;
+        let opt = |k: &str| arg(&args, 2).and_then(|o| o.get(k));
+        match channel.as_str() {
+            "files:list" => scope.list(&text(&args, 1)),
+            "files:search" => {
+                let limit = arg(&args, 2).and_then(Value::as_u64).map(|n| n as usize);
+                Ok(scope.search(&text(&args, 1), limit, listed))
+            }
+            "files:read" => scope.read(&text(&args, 1), opt("maxBytes").and_then(Value::as_u64).map(|n| n as usize)),
+            "files:write" => {
+                let Some(Value::String(content)) = arg(&args, 2) else {
+                    return Err("bad-request: content must be text".into());
+                };
+                let expect = arg(&args, 3).and_then(|o| o.get("expectHash")).and_then(Value::as_str);
+                scope.write(&text(&args, 1), content, expect)
+            }
+            _ => Err(format!("unknown channel {channel}")),
+        }
+    })
+    .await?
+}
+
 fn folder_path(folders: &[Value], id: &str) -> Option<String> {
     folders
         .iter()
@@ -243,6 +329,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
             Ok(Value::Null)
         }
         "dir:list" => blocking(move || files::list_dir(&text(&args, 0))).await?,
+        "files:list" | "files:search" | "files:read" | "files:write" => scoped(ctx, channel, args).await,
         "workspace:indexStatus" => Ok(ws.index.status(&text(&args, 0))),
         "workspace:files" => {
             let list = ws.index.files(&text(&args, 0));
@@ -253,7 +340,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
             let Some(root) = folder_path(&folders(ctx).await, &id) else {
                 return Err("Workspace not found".into());
             };
-            index_now(ws.index.clone(), ctx.backend.clone(), ctx.hub.clone(), id, root).await
+            index_now(ws.index.clone(), ctx.hub.clone(), id, root).await
         }
         "workspace:search" => {
             let id = text(&args, 0);
@@ -299,13 +386,19 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
                 None => Ok(out),
             }
         }
+        "pr:checks" => {
+            let token = github_token(&settings(ctx).await);
+            ws.prs.checks(&text(&args, 0), token.as_deref()).await
+        }
+        c if c.starts_with("git:") || c == "pr:create" => git_route(ctx, c, &args).await,
         "workspace:list" => Ok(settings(ctx).await.get("workspaces").cloned().unwrap_or(json!([]))),
         "workspace:addByPath" => add_folder(ctx, arg(&args, 0)).await,
         "workspace:remove" => remove_folder(ctx, &text(&args, 0)).await,
         "skills:installed" | "skills:targets" | "skill:install" | "skill:uninstall" | "skills:external"
         | "skills:runnable" | "workflow:skillDefs" => {
             let Some(dir) = ws.data_dir.clone() else { return Err(format!("{channel} needs the data directory")) };
-            let roots: Vec<String> = if matches!(channel, "skills:external" | "skills:runnable") {
+            let roots: Vec<String> = if matches!(channel, "skills:external" | "skills:runnable" | "workflow:skillDefs")
+            {
                 folders(ctx).await.iter().filter_map(|w| w.get("path").map(nekko_js::display)).collect()
             } else {
                 Vec::new()
@@ -423,10 +516,10 @@ pub async fn add_folder(ctx: &Ctx, path: Option<&Value>) -> Result<Value, String
     let mut workspaces = current;
     workspaces.push(folder);
     crate::settings::update(ctx, json!({ "workspaces": workspaces })).await?;
-    let (index, backend, hub, root) = (ctx.workspace.index.clone(), ctx.backend.clone(), ctx.hub.clone(), path.clone());
+    let (index, hub, root) = (ctx.workspace.index.clone(), ctx.hub.clone(), path.clone());
     tokio::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-        let _ = index_now(index, backend, hub, id, root).await;
+        let _ = index_now(index, hub, id, root).await;
     });
     Ok(Value::Array(workspaces))
 }
@@ -445,19 +538,9 @@ fn base36(mut n: u64) -> String {
     String::from_utf8(out).unwrap_or_default()
 }
 
-/// The chats the host or this daemon is running right now.
-async fn busy_chats(ctx: &Ctx) -> Result<Vec<String>, String> {
-    if ctx.backend.is_none() {
-        return Ok(ctx.turns.running_sessions());
-    }
-    let host = tokio::time::timeout(crate::routes::AUX_WAIT, ctx.backend.call("chats:busy", json!([]))).await;
-    let mut ids: Vec<String> = match host {
-        Ok(Ok(Value::Array(a))) => a.iter().filter_map(Value::as_str).map(str::to_string).collect(),
-        Ok(Err(e)) if e.contains("Unknown channel") => Vec::new(),
-        _ => return Err("Could not check which chats are running. Try again in a moment.".into()),
-    };
-    ids.extend(ctx.turns.running_sessions());
-    Ok(ids)
+/// The chats this daemon is running right now.
+fn busy_chats(ctx: &Ctx) -> Vec<String> {
+    ctx.turns.running_sessions()
 }
 
 /// `removeWorkspace(id)`: revoke saved access only, never touching the
@@ -483,7 +566,7 @@ async fn remove_folder(ctx: &Ctx, id: &str) -> Result<Value, String> {
     })
     .await?;
     if !affected.is_empty() {
-        let busy = busy_chats(ctx).await?;
+        let busy = busy_chats(ctx);
         if affected.iter().any(|s| busy.contains(s)) {
             return Err("Wait for chats using this folder to finish before revoking access.".into());
         }
@@ -504,7 +587,7 @@ async fn remove_folder(ctx: &Ctx, id: &str) -> Result<Value, String> {
 }
 
 /// `os.homedir()`.
-fn home_dir() -> String {
+pub(crate) fn home_dir() -> String {
     std::env::var(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap_or_default()
 }
 
@@ -522,7 +605,7 @@ fn skills_route(dir: &std::path::Path, channel: &str, args: &[Value], roots: &[S
         }
         "skills:external" => Ok(Value::Array(skills::external_skills(dir, &home, roots))),
         "skills:runnable" => Ok(Value::Array(skills::runnable_skills(dir, &home, roots))),
-        "workflow:skillDefs" => Ok(Value::Array(skills::installed_skill_defs(dir))),
+        "workflow:skillDefs" => Ok(Value::Array(skills::resolve_skill_defs(dir, &home, roots))),
         other => Err(format!("{other} is not a skills channel")),
     }
 }
@@ -562,6 +645,113 @@ async fn build_spec(ctx: &Ctx, args: Vec<Value>) -> Result<Value, String> {
         Err(e) => return Ok(json!({ "ok": false, "message": e })),
     };
     blocking(move || spec::land(&sid, &session, &plan, &raw)).await?
+}
+
+/// The `git:*` calls and `pr:create`, in the folder `git_folder` finds for
+/// the first argument (a saved workspace id, or `session:<chat id>` for the
+/// chat's checkout). A change drops the folder's cached `workspace:gitStatus`.
+async fn git_route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, String> {
+    let id = text(args, 0);
+    let Some(dir) = git_folder(ctx, &id).await.filter(|p| !p.is_empty()) else {
+        return Err("This workspace has no folder to run git in.".into());
+    };
+    let ops = &ctx.workspace.ops;
+    let paths = || -> Result<Vec<String>, String> {
+        let list = arg(args, 1).and_then(Value::as_array).ok_or("Pass the paths as a list.")?;
+        list.iter()
+            .map(|p| p.as_str().map(str::to_string).ok_or_else(|| "Every path must be text.".to_string()))
+            .collect()
+    };
+    let out = match channel {
+        "git:diff" => ops.diff(&dir, &DiffOpts::from_json(arg(args, 1))?).await,
+        "git:log" => ops.log(&dir, &LogOpts::from_json(arg(args, 1))?).await,
+        "git:show" => ops.show(&dir, &text(args, 1)).await,
+        "git:branches" => ops.branches(&dir).await,
+        "git:compare" => ops.compare(&dir, &text(args, 1), &text(args, 2)).await,
+        "git:stage" => ops.stage(&dir, &paths()?).await,
+        "git:unstage" => ops.unstage(&dir, &paths()?).await,
+        "git:commit" => ops.commit(&dir, arg(args, 1)).await,
+        "git:commitMessage" => commit_message(ctx, &dir).await,
+        "git:push" => ops.push(&dir, arg(args, 1)).await,
+        "git:switch" => ops.switch(&dir, &text(args, 1), arg(args, 2)).await,
+        "git:mergeAbort" => ops.merge_abort(&dir).await,
+        "pr:create" => create_pr(ctx, &dir, arg(args, 1)).await,
+        other => return Err(format!("Unknown git call: {other}")),
+    };
+    if matches!(
+        channel,
+        "git:stage" | "git:unstage" | "git:commit" | "git:push" | "git:switch" | "git:mergeAbort" | "pr:create"
+    ) {
+        ctx.workspace.git.invalidate(&dir);
+    }
+    out
+}
+
+/// `git:commitMessage`: a commit message for what is staged, written by the
+/// default provider and model from the file list and the (capped) diff.
+async fn commit_message(ctx: &Ctx, dir: &str) -> Result<Value, String> {
+    let (stat, patch, cut) = ctx.workspace.ops.staged_for_message(dir).await?;
+    let chosen = design_provider(ctx).await?;
+    let provider = chosen.get("provider").cloned().unwrap_or(Value::Null);
+    let model = chosen.get("model").cloned().unwrap_or(Value::Null);
+    let content = gitops::commit_message_prompt(&stat, &patch, cut);
+    let request = json!({
+        "provider": provider,
+        "request": {
+            "model": model,
+            "messages": [{ "id": "commit-message", "role": "user", "createdAt": nekko_workspace_now(), "content": content }],
+            "temperature": 0.2,
+            "maxOutputTokens": 400,
+            "think": false,
+            "promptCaching": chosen.get("promptCaching").cloned().unwrap_or(json!(true)),
+        },
+        "timeoutMs": 60_000,
+        "usageOnFailure": true,
+    });
+    let out = crate::sideband::complete(&request).await.map_err(|e| format!("Writing the message failed: {e}"))?;
+    if let Some(usage) = out.get("usage").and_then(Value::as_array).filter(|u| !u.is_empty())
+        && ctx.accounts.enabled()
+    {
+        let who = json!({ "id": provider.get("id"), "kind": provider.get("kind"), "auth": provider.get("auth") });
+        ctx.accounts.side_usage(&who, Some(&model), "", usage);
+    }
+    if let Some(e) = out.get("error") {
+        return Err(format!("Writing the message failed: {}", nekko_js::display(e)));
+    }
+    let message = gitops::clean_commit_message(out.get("text").and_then(Value::as_str).unwrap_or_default());
+    if message.is_empty() {
+        return Err("The model wrote no message. Try again, or write one.".into());
+    }
+    Ok(json!({ "message": message, "inputTruncated": cut }))
+}
+
+/// `pr:create`: a PR from the folder's current branch, which must be pushed.
+async fn create_pr(ctx: &Ctx, dir: &str, opts: Option<&Value>) -> Result<Value, String> {
+    let get = |k: &str| opts.and_then(|o| o.get(k));
+    let title = get("title").and_then(Value::as_str).map(str::trim).unwrap_or_default().to_string();
+    if title.is_empty() {
+        return Err("Give the PR a title.".into());
+    }
+    if title.chars().count() > 256 {
+        return Err("The PR title is too long (at most 256 characters).".into());
+    }
+    let body = get("body").and_then(Value::as_str).unwrap_or_default().to_string();
+    if body.len() > 60_000 {
+        return Err("The PR description is too long.".into());
+    }
+    let base = get("base").and_then(Value::as_str).filter(|b| !b.is_empty()).map(gitops::safe_ref).transpose()?;
+    let draft = nekko_js::truthy(get("draft"));
+    let ops = &ctx.workspace.ops;
+    let Some(branch) = ops.current_branch(dir).await? else {
+        return Ok(json!({ "ok": false, "message": "Not on a branch (detached HEAD). Switch to a branch first." }));
+    };
+    let slug = match ops.push_remote(dir, &branch).await {
+        Some(remote) => ops.github_slug(dir, &remote).await,
+        None => None,
+    };
+    let token = github_token(&settings(ctx).await);
+    let prs = &ctx.workspace.prs;
+    Ok(prs.create(dir, &branch, slug.as_deref(), &title, &body, base.as_deref(), draft, token.as_deref()).await)
 }
 
 /// `fetchPrInfo(url)`: one PR's live state, read now (gh, else the REST API
@@ -645,24 +835,45 @@ fn nekko_workspace_now() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
-/// Index a folder off the async threads, telling the UI and the host's
-/// listeners as it goes.
-pub async fn index_now(
-    index: Arc<Index>,
-    backend: Arc<Backend>,
-    hub: Hub,
-    id: String,
-    root: String,
-) -> Result<Value, String> {
-    let rt = tokio::runtime::Handle::current();
-    blocking(move || {
-        index.index(&id, &root, &|status| {
-            hub.publish("index:progress", status.clone(), false);
-            let (backend, status) = (backend.clone(), status.clone());
-            rt.spawn(async move {
-                let _ = backend.call("index:progress", json!([status])).await;
-            });
-        })
-    })
-    .await
+/// Index a folder off the async threads, telling the UI as it goes.
+pub async fn index_now(index: Arc<Index>, hub: Hub, id: String, root: String) -> Result<Value, String> {
+    blocking(move || index.index(&id, &root, &|status| hub.publish("index:progress", status.clone(), false))).await
+}
+
+#[cfg(test)]
+mod tests {
+    use nekko_workspace::scoped::secret_path;
+
+    #[test]
+    fn scoped_files_hide_at_least_what_the_phone_changes_view_hides() {
+        let paths = [
+            ".env",
+            ".env.local",
+            "a/.env.prod",
+            ".ssh/config",
+            "x/.aws/credentials",
+            ".gnupg/k",
+            "id_rsa",
+            "id_ed25519.pub",
+            ".npmrc",
+            ".netrc",
+            ".pypirc",
+            "credentials",
+            "a.pem",
+            "b.key",
+            "c.p12",
+            "d.pfx",
+            "e.keystore",
+            "f.jks",
+            "src/environment.ts",
+            "README.md",
+            "keys/notes.md",
+            "Cargo.toml",
+        ];
+        for p in paths {
+            assert_eq!(secret_path(p), nekko_remote::phone_changes::secret_file(p), "{p}");
+        }
+        // The extras: git's stored credentials and a repository's config.
+        assert!(secret_path(".git-credentials") && secret_path(".git/config"));
+    }
 }

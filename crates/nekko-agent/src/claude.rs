@@ -36,9 +36,20 @@ pub struct ClaudeId {
 pub fn normalize_model_id(model: &str) -> String {
     let id = js::trim(&model.to_lowercase()).to_string();
     let first_line = id.find(js::is_line_terminator).unwrap_or(id.len());
-    match id[..first_line].rfind('/') {
+    let id = match id[..first_line].rfind('/') {
         Some(slash) => id[slash + 1..].to_string(),
         None => id,
+    };
+    without_bedrock_prefix(&id).to_string()
+}
+
+/// Bedrock names a model `anthropic.claude-…`, or `us.anthropic.claude-…`
+/// through a cross-region inference profile. The part after the provider
+/// prefix is the Claude id the version rules read.
+pub fn without_bedrock_prefix(id: &str) -> &str {
+    match id.find("anthropic.") {
+        Some(i) if id[i + "anthropic.".len()..].starts_with("claude-") => &id[i + "anthropic.".len()..],
+        _ => id,
     }
 }
 
@@ -416,6 +427,17 @@ pub fn sampling_param_error(status: u16, body: &str) -> Option<SamplingShape> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bedrock_model_ids_read_as_their_claude_id() {
+        for id in ["anthropic.claude-opus-5-5", "us.anthropic.claude-opus-5-5", "global.anthropic.claude-opus-5-5"] {
+            assert_eq!(normalize_model_id(id), "claude-opus-5-5", "{id}");
+        }
+        assert_eq!(claude_context_window("anthropic.claude-haiku-4-5"), Some(200_000));
+        assert_eq!(parse_claude_model("anthropic.claude-sonnet-5-5").map(|c| c.family), Some(Family::Sonnet));
+        // Only a provider prefix in front of a Claude id is dropped.
+        assert_eq!(normalize_model_id("anthropic.titan"), "anthropic.titan");
+    }
 
     #[test]
     fn openai_reasoning_ids_match_the_ts_pattern() {

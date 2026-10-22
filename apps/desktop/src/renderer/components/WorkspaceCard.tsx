@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
 import type { BlockedReason, PrInfo, SessionLane, SessionSummary, TerminalInfo, WorkspaceFolder } from '@nekko-agent/shared';
-import { getSessionWorkspaceIds, guessContextWindow, isLocalProvider } from '@nekko-agent/shared';
+import { getSessionWorkspaceIds, guessContextWindow, isLocalProvider, reportedClaudeCodeContext } from '@nekko-agent/shared';
 import { useStore, type Workspace } from '../store.js';
 import { allPanes } from '../layout.js';
 import { useGitStatus } from '../useGitStatus.js';
@@ -217,8 +217,12 @@ function WorkspaceCardImpl({
   const modelInfo = session?.modelId ? knownModels.find((m) => m.id === session.modelId) : undefined;
   // An open chat publishes the composer gauge's own total (see ChatPane), so
   // the two readouts agree; a closed chat falls back to the transcript estimate.
-  const ctxUsed = liveCtxEstimate ?? session?.transcriptTokens ?? 0;
-  const ctxWindow = modelInfo?.contextLength ?? guessContextWindow(session?.modelId);
+  // A Claude Agent chat reads Claude Code's own figures instead: Nekko's
+  // transcript misses Claude Code's system prompt and tools, and never drops
+  // when Claude Code compacts. Before its first turn the alias guess stands.
+  const reported = reportedClaudeCodeContext(session);
+  const ctxUsed = liveCtxEstimate ?? reported?.used ?? session?.transcriptTokens ?? 0;
+  const ctxWindow = reported?.window ?? modelInfo?.contextLength ?? guessContextWindow(session?.modelId);
   const ctxPct = ctxWindow > 0 ? (ctxUsed / ctxWindow) * 100 : 0;
 
   const windows = workspace ? allPanes(workspace.root).length : 0;

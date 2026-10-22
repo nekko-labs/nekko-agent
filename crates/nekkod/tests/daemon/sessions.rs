@@ -12,7 +12,7 @@ async fn serves_session_reads_from_disk_when_it_knows_the_data_dir() {
         { "id": "a", "role": "assistant", "content": "", "images": ["data:x"], "generated": { "width": 8, "height": 8, "seed": 3 }, "createdAt": 2 },
     ] });
     std::fs::write(sessions.join("s_one.json"), serde_json::to_vec_pretty(&chat).unwrap()).unwrap();
-    let d = start_with(true, Some(&data));
+    let d = start_with(Some(&data));
 
     let (status, list) = post(d.port, "sessions:summaries", json!([]), Some(TOKEN)).await;
     assert_eq!(status, 200);
@@ -45,12 +45,22 @@ async fn serves_session_reads_from_disk_when_it_knows_the_data_dir() {
     assert_eq!((patched["title"].clone(), patched["titleAuto"].clone()), (json!("Named"), json!(false)));
     let (_, queued) = post(d.port, "chat:queue", json!([new_id, "  later  "]), Some(TOKEN)).await;
     assert_eq!(queued["queue"], json!(["later"]));
+    // A phone's queue editor: an edit lands only on the text it showed.
+    let (_, edited) =
+        post(d.port, "chat:editQueued", json!([new_id, 0, { "expect": "later", "text": " sooner " }]), Some(TOKEN))
+            .await;
+    assert_eq!(edited["queue"], json!(["sooner"]));
+    let (status, stale) =
+        post(d.port, "chat:editQueued", json!([new_id, 0, { "expect": "later", "text": "x" }]), Some(TOKEN)).await;
+    assert_eq!(status, 400, "{stale}");
+    assert!(stale.to_string().contains("already started or changed"), "{stale}");
+    let (_, removed) = post(d.port, "chat:editQueued", json!([new_id, 0, { "expect": "sooner" }]), Some(TOKEN)).await;
+    assert_eq!(removed["queue"], json!([]));
     let (_, list) = post(d.port, "sessions:summaries", json!([]), Some(TOKEN)).await;
     assert_eq!(list.as_array().unwrap().len(), 2);
     post(d.port, "session:delete", json!([new_id]), Some(TOKEN)).await;
     let (_, gone) = post(d.port, "session:get", json!([new_id]), Some(TOKEN)).await;
     assert_eq!(gone, Value::Null);
-    // Clearing is owned by the daemon, not echoed by the backend.
     let (_, fresh) = post(d.port, "session:create", json!([]), Some(TOKEN)).await;
     let (_, cleared) = post(d.port, "sessions:clear", json!(["today"]), Some(TOKEN)).await;
     assert_eq!(cleared, json!(1));
@@ -58,11 +68,6 @@ async fn serves_session_reads_from_disk_when_it_knows_the_data_dir() {
     let (_, cleared) = post(d.port, "sessions:clear", json!(["all"]), Some(TOKEN)).await;
     assert_eq!(cleared, json!(1));
     assert!(!sessions.join("s_one.json").exists());
-    // The host's copy of each command log was dropped too (it may have written to one).
-    let (_, callbacks) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    let deletes: Vec<&Value> =
-        callbacks.as_array().unwrap().iter().filter(|c| c.as_array().is_some_and(|a| a.len() == 1)).collect();
-    assert_eq!(deletes, [&json!([new_id]), &json!([fresh["id"]]), &json!(["s_one"])], "{callbacks}");
     drop(d);
     std::fs::remove_dir_all(data).ok();
 }
@@ -84,13 +89,12 @@ async fn forks_chats_and_purges_expired_archives_itself() {
         let s = json!({ "id": id, "title": id, "updatedAt": 1, "messages": [], "archivedAt": archived });
         std::fs::write(sessions.join(format!("{id}.json")), serde_json::to_vec(&s).unwrap()).unwrap();
     }
-    let d = start_with(true, Some(&data));
+    let d = start_with(Some(&data));
 
     let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
     for channel in ["session:fork", "sessions:purgeArchived"] {
         assert!(info["owned"].as_array().unwrap().contains(&json!(channel)), "{channel} is not owned");
     }
-    // Served here, not echoed by the backend.
     let (status, fork) = post(d.port, "session:fork", json!(["s_src", "u2"]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{fork}");
     assert_eq!(fork["title"], "Source (split)");
@@ -108,25 +112,13 @@ async fn forks_chats_and_purges_expired_archives_itself() {
     assert_eq!((status, purged), (200, json!(1)));
     assert!(!sessions.join("s_old.json").exists());
     assert!(sessions.join("s_recent.json").exists() && sessions.join("s_live.json").exists());
-    // The host dropped the purged chat's command log first.
-    let (_, callbacks) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    assert_eq!(callbacks, json!([["s_old"]]));
     drop(d);
     std::fs::remove_dir_all(data).ok();
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn failed_log_callback_retains_json_for_delete_and_clear() {
-    assert_log_callback_failure_retains_json(true).await;
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn disabled_backend_retains_json_for_delete_and_clear() {
-    assert_log_callback_failure_retains_json(false).await;
-}
-
-async fn assert_log_callback_failure_retains_json(with_backend: bool) {
-    let data = std::env::temp_dir().join(format!("nekkod-retention-{}-{with_backend}", std::process::id()));
+async fn a_command_log_that_cannot_be_removed_retains_json_for_delete_and_clear() {
+    let data = std::env::temp_dir().join(format!("nekkod-retention-{}", std::process::id()));
     let sessions = data.join("sessions");
     std::fs::create_dir_all(&sessions).unwrap();
     // A command log that cannot be removed (a folder in its place): the chat must stay.
@@ -137,7 +129,7 @@ async fn assert_log_callback_failure_retains_json(with_backend: bool) {
     }))
     .unwrap();
     std::fs::write(&path, &bytes).unwrap();
-    let d = start_with(with_backend, Some(&data));
+    let d = start_with(Some(&data));
     for (channel, args) in [("session:delete", json!(["callback_fail"])), ("sessions:clear", json!(["all"]))] {
         let (status, body) = post(d.port, channel, args, Some(TOKEN)).await;
         assert_eq!(status, 400, "{channel}: {body}");
@@ -156,7 +148,7 @@ async fn serves_files_memory_and_comments_itself() {
     let project = data.join("project");
     std::fs::create_dir_all(project.join("src")).unwrap();
     std::fs::write(project.join("src").join("a.ts"), "export function a() {}\n").unwrap();
-    let d = start_with(true, Some(&data));
+    let d = start_with(Some(&data));
 
     let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
     for c in ["file:read", "dir:list", "workspace:search", "memory:save", "comment:add"] {
@@ -226,7 +218,9 @@ async fn serves_files_memory_and_comments_itself() {
     assert_eq!(listed[0]["skillId"], json!("nekko-agent-review-council"));
     // The install runs as a skill and as a workflow step, after the built-ins.
     let (_, defs) = post(d.port, "workflow:skillDefs", json!([]), Some(TOKEN)).await;
-    let name = defs[0]["name"].clone();
+    assert_eq!(defs[0]["source"], json!("builtin"), "{defs}");
+    let name =
+        defs.as_array().unwrap().iter().find(|s| s["source"] == "installed").expect("the install")["name"].clone();
     assert!(name.is_string(), "{defs}");
     let (_, runnable) = post(d.port, "skills:runnable", json!([]), Some(TOKEN)).await;
     let runnable = runnable.as_array().unwrap();
@@ -340,7 +334,6 @@ async fn continues_and_links_pr_stacks_itself() {
         "providerId": "p", "modelId": "m", "mode": "ask", "disabledTools": ["browser"], "messages": [], "createdAt": 1, "updatedAt": 1 });
     std::fs::write(data.join("sessions/s_src.json"), source.to_string()).unwrap();
     let d = start_with_env(
-        true,
         Some(&data),
         json!({ "githubApiUrl": format!("http://127.0.0.1:{gh}") }),
         &[
@@ -413,8 +406,6 @@ async fn continues_and_links_pr_stacks_itself() {
     ] {
         assert!(info["owned"].as_array().unwrap().contains(&json!(c)), "{c} not owned");
     }
-    let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    assert!(!calls.to_string().contains("continueStack"), "the host ran nothing: {calls}");
     drop(d);
     let _ = std::fs::remove_dir_all(&data);
 }
@@ -439,7 +430,7 @@ async fn wipes_the_data_it_owns_and_answers_the_small_services() {
         std::fs::create_dir_all(data.join(p).parent().unwrap()).unwrap();
         std::fs::write(data.join(p), text).unwrap();
     }
-    let d = start_with_config(true, Some(&data), json!({ "appVersion": "9.8.7", "edition": "desktop" }));
+    let d = start_with_config(Some(&data), json!({ "appVersion": "9.8.7", "edition": "desktop" }));
     post(d.port, "settings:update", json!([{ "theme": "light" }]), Some(TOKEN)).await;
 
     // session:watches: what the transcript shows, never the prompt.
@@ -467,13 +458,6 @@ async fn wipes_the_data_it_owns_and_answers_the_small_services() {
     assert!(data.join("tokens.json").exists(), "sign-ins are not part of a wipe");
     let saved: Value = serde_json::from_str(&std::fs::read_to_string(data.join("settings.json")).unwrap()).unwrap();
     assert_eq!(saved["theme"], json!("system"));
-    let (_, calls) = post(d.port, "test:completions", json!([]), Some(TOKEN)).await;
-    let calls = calls.as_array().unwrap();
-    assert!(calls.iter().any(|c| c == &json!(["s_a"])), "the chat's command log went first: {calls:?}");
-    assert!(
-        calls.iter().any(|c| c[0] == "settings:changed" && c[1][1].is_null()),
-        "the host heard the reset: {calls:?}"
-    );
     drop(d);
     let _ = std::fs::remove_dir_all(&data);
 }
@@ -490,7 +474,7 @@ async fn writes_other_agent_tools_mcp_entries_itself() {
     let hand = json!({ "mcpServers": { "nekko-agent": { "command": "node", "args": ["dist/index.js", "mcp"] } } });
     std::fs::write(home.join(".cursor/mcp.json"), hand.to_string()).unwrap();
     let h = home.to_string_lossy().to_string();
-    let d = start_with_env(true, Some(&data), json!({}), &[("HOME", Some(&h)), ("USERPROFILE", Some(&h))]);
+    let d = start_with_env(Some(&data), json!({}), &[("HOME", Some(&h)), ("USERPROFILE", Some(&h))]);
 
     let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
     for c in ["integrations:detect", "integrations:install", "integrations:snippet", "integrations:refresh"] {
@@ -513,15 +497,12 @@ async fn writes_other_agent_tools_mcp_entries_itself() {
         ]
     );
 
-    // No target from the renderer: the backend's (the desktop's local server).
+    // No target from the renderer and no desktop app: the portable `npx` form.
     let (status, res) = post(d.port, "integrations:install", json!(["claude"]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{res}");
     assert_eq!(res["ok"], json!(true));
     let written: Value = serde_json::from_str(&std::fs::read_to_string(home.join(".claude.json")).unwrap()).unwrap();
-    assert_eq!(
-        written["mcpServers"]["nekko-agent"],
-        json!({ "command": "/opt/nekko/nekko-agent", "args": ["mcp"], "env": { "NEKKO_URL": "http://127.0.0.1:1439", "NEKKO_TOKEN": "tok-desk" } })
-    );
+    assert_eq!(written["mcpServers"]["nekko-agent"], json!({ "command": "npx", "args": ["-y", "nekko-agent", "mcp"] }));
     // A target given is used as given.
     let (_, res) = post(
         d.port,
@@ -534,7 +515,7 @@ async fn writes_other_agent_tools_mcp_entries_itself() {
     let toml = std::fs::read_to_string(home.join(".codex/config.toml")).unwrap();
     assert!(toml.contains("NEKKO_TOKEN = \"t9\"") && toml.contains("command = \"npx\""), "{toml}");
     let (_, snip) = post(d.port, "integrations:snippet", json!(["cursor", null]), Some(TOKEN)).await;
-    assert!(snip["snippet"].as_str().unwrap().contains("tok-desk"), "{snip}");
+    assert!(snip["snippet"].as_str().unwrap().contains("npx"), "{snip}");
 
     // A rolled token re-points the entries this app wrote, not the hand-written one.
     let target = json!({ "url": "http://127.0.0.1:1440", "token": "tok-new" });
@@ -546,4 +527,78 @@ async fn writes_other_agent_tools_mcp_entries_itself() {
     assert_eq!(cursor, hand);
     drop(d);
     let _ = std::fs::remove_dir_all(&root);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn scoped_files_and_logs_for_remote_callers() {
+    let data = std::env::temp_dir().join(format!("nekkod-scoped-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    let project = data.join("project");
+    std::fs::create_dir_all(project.join("src")).unwrap();
+    std::fs::write(project.join("src").join("main.rs"), "fn main() {}\n").unwrap();
+    std::fs::write(project.join(".env"), "TOKEN=abc").unwrap();
+    std::fs::write(data.join("outside.txt"), "no").unwrap();
+    let d = start_with(Some(&data));
+    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    for c in ["files:list", "files:search", "files:read", "files:write", "logs:list", "logs:read"] {
+        assert!(info["owned"].as_array().unwrap().contains(&json!(c)), "{c} is not owned");
+    }
+    let folder =
+        json!([{ "workspaces": [{ "id": "w1", "name": "project", "path": project.to_string_lossy(), "addedAt": 1 }] }]);
+    post(d.port, "settings:update", folder, Some(TOKEN)).await;
+    let (_, chat) = post(d.port, "session:create", json!(["w1"]), Some(TOKEN)).await;
+    let root = json!({ "sessionId": chat["id"] });
+
+    let (status, listed) = post(d.port, "files:list", json!([root, ""]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{listed}");
+    let names: Vec<_> = listed["entries"].as_array().unwrap().iter().map(|e| e["path"].clone()).collect();
+    assert_eq!(names, [json!("src")]);
+    assert_eq!(listed["hiddenSecrets"], 1);
+    // The same folder by its id; a raw path or an unknown chat is refused.
+    let (_, by_folder) = post(d.port, "files:list", json!([{ "workspaceId": "w1" }, "src"]), Some(TOKEN)).await;
+    assert_eq!(by_folder["entries"][0]["path"], "src/main.rs");
+    for bad in [json!(project.to_string_lossy()), json!({ "sessionId": "nope" }), json!({})] {
+        let (status, body) = post(d.port, "files:list", json!([bad, ""]), Some(TOKEN)).await;
+        assert_ne!(status, 200, "{body}");
+    }
+    let (status, body) = post(d.port, "files:read", json!([root, "../outside.txt"]), Some(TOKEN)).await;
+    assert_ne!(status, 200);
+    assert!(body.to_string().contains("outside-root"), "{body}");
+    let (_, body) = post(d.port, "files:read", json!([root, ".env"]), Some(TOKEN)).await;
+    assert!(body.to_string().contains("secret-file"), "{body}");
+
+    let (_, read) = post(d.port, "files:read", json!([root, "src/main.rs", { "maxBytes": 4096 }]), Some(TOKEN)).await;
+    assert_eq!((read["content"].clone(), read["language"].clone()), (json!("fn main() {}\n"), json!("rust")));
+    let hash = read["hash"].clone();
+    std::fs::write(project.join("src").join("main.rs"), "fn main() { desktop() }\n").unwrap();
+    let (_, refused) =
+        post(d.port, "files:write", json!([root, "src/main.rs", "phone", { "expectHash": hash }]), Some(TOKEN)).await;
+    assert_eq!(refused["error"], "conflict");
+    assert_eq!(std::fs::read_to_string(project.join("src").join("main.rs")).unwrap(), "fn main() { desktop() }\n");
+    let (_, saved) = post(
+        d.port,
+        "files:write",
+        json!([root, "src/main.rs", "phone", { "expectHash": refused["hash"] }]),
+        Some(TOKEN),
+    )
+    .await;
+    assert_eq!(saved["ok"], true, "{saved}");
+    assert_eq!(std::fs::read_to_string(project.join("src").join("main.rs")).unwrap(), "phone");
+    let (_, hits) = post(d.port, "files:search", json!([root, "MAIN", 10]), Some(TOKEN)).await;
+    assert_eq!(hits["hits"][0]["path"], "src/main.rs");
+
+    // The daemon writes its own log, and a read redacts it.
+    let (_, logs) = post(d.port, "logs:list", json!([]), Some(TOKEN)).await;
+    let ids: Vec<_> = logs.as_array().unwrap().iter().map(|l| l["id"].clone()).collect();
+    assert_eq!(ids[..2], [json!("app"), json!("daemon")]);
+    if cfg!(unix) {
+        assert!(logs[1]["size"].as_u64().unwrap() > 0, "{logs}");
+        let (_, tail) = post(d.port, "logs:read", json!(["daemon", { "tailBytes": 4096 }]), Some(TOKEN)).await;
+        assert!(tail["text"].as_str().unwrap().contains("starting"), "{tail}");
+    }
+    std::fs::write(data.join("logs").join("app.log"), "boot\nAuthorization: Bearer abcdefghijkl\n").unwrap();
+    let (_, found) = post(d.port, "logs:read", json!(["app", { "query": "authorization" }]), Some(TOKEN)).await;
+    assert_eq!(found["matches"], json!([{ "line": 2, "text": "Authorization: Bearer [redacted]" }]));
+    drop(d);
+    let _ = std::fs::remove_dir_all(data);
 }

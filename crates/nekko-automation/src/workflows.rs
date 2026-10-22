@@ -10,9 +10,10 @@
 //! this process is their only writer.
 
 use crate::json::{self, num};
+use crate::skill_steps;
 use crate::workflow_rules::{
     self as rules, MAX_STEP_LOOPS, MAX_WORKFLOW_DEPTH, UNCATEGORIZED, describe_event, event_context, match_workflows,
-    read_step_outcome, slugify, step_outcome_instruction,
+    read_step_outcome, slugify, step_outcome_instruction, without_outcome_tokens,
 };
 use serde_json::{Map, Value, json};
 use std::collections::{HashMap, HashSet};
@@ -68,6 +69,9 @@ pub trait WorkflowHost: Send + Sync + 'static {
         fields: Vec<(&'static str, Value)>,
     ) -> BoxFut<'_, Result<String, String>>;
     fn get_session(&self, id: &str) -> Option<Value>;
+    /// `getSession(id)`, the fields assigned, `saveSession`: a run's chat
+    /// between steps (an allowlist step's tools).
+    fn update_session(&self, id: &str, fields: Vec<(&'static str, Value)>) -> BoxFut<'_, Result<(), String>>;
     fn delete_session(&self, id: &str) -> BoxFut<'_, ()>;
     /// A turn: `Ok(Some(message))` when the turn emitted an error event (the
     /// last one), `Err` when it threw.
@@ -87,7 +91,38 @@ pub trait WorkflowHost: Send + Sync + 'static {
     fn next_run(&self, wf: &Value, from: f64) -> Option<f64>;
     /// Node's `path.isAbsolute` and `path.resolve` on this platform.
     fn resolve_path(&self, root: &str, rel: &str) -> String;
+    /// A checkout of the repository holding `folder` at pull request
+    /// `number`'s head, made for run `run_id` outside the user's checkout:
+    /// the run chat's `gitWorktrees` record for that folder.
+    fn pr_checkout(&self, _folder: &str, _number: &str, _run_id: &str) -> BoxFut<'_, Result<Value, String>> {
+        Box::pin(async { Err("pull request checkouts are not available here".to_string()) })
+    }
+    /// Remove a checkout [`WorkflowHost::pr_checkout`] made.
+    fn remove_pr_checkout(&self, _checkout: &Value) -> BoxFut<'_, ()> {
+        Box::pin(async {})
+    }
 }
+
+/// The pull request a run checked out, and whether it is trusted.
+#[derive(Clone, Debug)]
+struct PrRun {
+    number: String,
+    trusted: bool,
+}
+
+/// What an untrusted PR's step may use when the workflow sets no allowlist.
+const UNTRUSTED_DEFAULT: &[&str] = &[
+    "Read",
+    "Grep",
+    "Glob",
+    "Bash(gh pr view:*)",
+    "Bash(gh pr diff:*)",
+    "Bash(gh pr checks:*)",
+    "Bash(git diff:*)",
+    "Bash(git log:*)",
+    "Bash(git show:*)",
+    "Bash(git status:*)",
+];
 
 /// A connector trigger's state: polling now, the ids seen, the last poll.
 type Listener = (bool, Vec<String>, f64);
@@ -303,7 +338,7 @@ impl Workflows {
         if let Some(m) = input.get("modelId") {
             wf.insert("modelId".into(), m.clone());
         }
-        for k in ["notify", "templateId"] {
+        for k in ["notify", "templateId", "localModelOnly", "toolAccess", "prCheckout"] {
             if let Some(v) = input.get(k) {
                 wf.insert(k.into(), v.clone());
             }
@@ -414,7 +449,7 @@ impl Workflows {
         input.insert("enabled".into(), json!(false));
         input.insert("steps".into(), source.get("steps").cloned().unwrap_or(json!([])));
         input.insert("triggers".into(), Value::Array(triggers));
-        for k in ["workspaceId", "providerId", "modelId"] {
+        for k in ["workspaceId", "providerId", "modelId", "localModelOnly", "toolAccess", "prCheckout"] {
             if let Some(v) = source.get(k) {
                 input.insert(k.into(), v.clone());
             }
@@ -578,7 +613,73 @@ impl Workflows {
             if let Some(m) = wf.get("modelId").filter(|v| nekko_js::truthy(Some(v))) {
                 fields.push(("modelId", m.clone()));
             }
-            let session = self.host.create_session(wf.get("workspaceId").cloned(), fields).await;
+            // Nobody watches the run: approvals it would need are denied, it is
+            // never offered ask_user, and its tools are what the workflow's
+            // access allows. A local-only workflow's chat is offline.
+            fields.push(("unattended", json!(true)));
+            fields.push(("workflowRunId", json!(run_id)));
+            if nekko_js::truthy(wf.get("localModelOnly")) {
+                fields.push(("offline", json!(true)));
+            }
+            // A PR run reviews the PR's own code in a checkout made for it.
+            let pr = match (nekko_js::truthy(wf.get("prCheckout")), skill_steps::pr_number(event.as_ref())) {
+                (true, Some(number)) => {
+                    Some(PrRun { number, trusted: event.as_ref().is_some_and(skill_steps::pr_trusted) })
+                }
+                _ => None,
+            };
+            let untrusted = pr.as_ref().is_some_and(|p| !p.trusted);
+            match wf.get("toolAccess").and_then(Value::as_str).filter(|a| !a.is_empty() && *a != "workspace") {
+                Some(access) => {
+                    fields.push(("toolAccess", json!(access)));
+                    fields
+                        .push(("disabledTools", json!(nekko_turn::workflow_access::disabled_tools(Some(access), &[]))));
+                }
+                // An untrusted PR never gets the workspace's tools.
+                None if untrusted => {
+                    let allowed = untrusted_default();
+                    fields.push(("toolAccess", json!("allowlist")));
+                    fields.push(("allowedTools", json!(allowed)));
+                    fields.push((
+                        "disabledTools",
+                        json!(nekko_turn::workflow_access::disabled_tools(Some("allowlist"), &allowed)),
+                    ));
+                }
+                None => {}
+            }
+            let mut checkout: Option<Value> = None;
+            let mut prepared: Result<(), String> = Ok(());
+            if let Some(p) = &pr {
+                let settings = self.host.settings().await;
+                let workspaces = settings.get("workspaces").and_then(Value::as_array).cloned().unwrap_or_default();
+                let folder = workspaces
+                    .iter()
+                    .find(|w| nullish(wf.get("workspaceId")).is_none_or(|id| w.get("id") == Some(id)))
+                    .cloned();
+                prepared = match folder {
+                    None => Err("this workflow has no project folder to check the pull request out from".into()),
+                    Some(folder) => {
+                        let path = nekko_js::display(folder.get("path").unwrap_or(&Value::Null));
+                        match self.host.pr_checkout(&path, &p.number, &run_id).await {
+                            Ok(c) => {
+                                let id = nekko_js::display(folder.get("id").unwrap_or(&Value::Null));
+                                let mut worktrees = Map::new();
+                                worktrees.insert(id, c.clone());
+                                fields.push(("executionMode", json!("worktree")));
+                                fields.push(("gitIsolation", json!(true)));
+                                fields.push(("gitWorktrees", Value::Object(worktrees)));
+                                checkout = Some(c);
+                                Ok(())
+                            }
+                            Err(e) => Err(format!("could not check out PR #{}: {e}", p.number)),
+                        }
+                    }
+                };
+            }
+            let session = match prepared {
+                Ok(()) => self.host.create_session(wf.get("workspaceId").cloned(), fields).await,
+                Err(e) => Err(e),
+            };
 
             let mut run_info = Map::new();
             run_info.insert("id".into(), json!(run_id));
@@ -592,9 +693,16 @@ impl Workflows {
             let run_info = Value::Object(run_info);
 
             let outcome = match &session {
-                Ok(sid) => self.walk(&wf, &steps, &run_id, sid, event.as_ref(), depth, &run_info).await,
+                Ok(sid) => self.walk(&wf, &steps, &run_id, sid, event.as_ref(), depth, &run_info, pr.as_ref()).await,
                 Err(e) => (json!("failure"), Some(format!("Run failed: {e}"))),
             };
+            // The checkout goes however the run ended; the chat stays, without it.
+            if let Some(c) = &checkout {
+                self.host.remove_pr_checkout(c).await;
+                if let Ok(sid) = &session {
+                    let _ = self.host.update_session(sid, vec![("gitWorktrees", json!({}))]).await;
+                }
+            }
             lock(&self.in_flight).remove(workflow_id);
             lock(&self.cancelled).remove(&run_id);
             // A run whose steps were all shell commands never wrote to its chat.
@@ -644,6 +752,7 @@ impl Workflows {
         event: Option<&Value>,
         depth: u32,
         run_info: &Value,
+        pr: Option<&PrRun>,
     ) -> (Value, Option<String>) {
         let mut visits: HashMap<String, u32> = HashMap::new();
         let mut outputs: Vec<(String, String)> = Vec::new();
@@ -685,10 +794,11 @@ impl Workflows {
                 });
                 let tctx = crate::templates::template_context(event, &outputs, Some(run_info));
                 result = self
-                    .run_step(wf, step, session_id, if first { event } else { None }, event, depth, run_info, &tctx)
+                    .run_step(wf, step, session_id, if first { event } else { None }, event, depth, run_info, &tctx, pr)
                     .await;
                 first = false;
                 let out = result.output.clone().or_else(|| result.error.clone()).unwrap_or_default();
+                let out = without_outcome_tokens(&out);
                 match outputs.iter_mut().find(|(k, _)| *k == step_id) {
                     Some(slot) => slot.1 = out,
                     None => outputs.push((step_id.clone(), out)),
@@ -751,6 +861,7 @@ impl Workflows {
         depth: u32,
         run_info: &Value,
         tctx: &Value,
+        pr: Option<&PrRun>,
     ) -> StepResult {
         let render = |k: &str| step.get(k).and_then(Value::as_str).map(|s| crate::templates::render_template(s, tctx));
         let run_text = render("run").unwrap_or_else(|| nekko_js::display(step.get("run").unwrap_or(&Value::Null)));
@@ -759,7 +870,8 @@ impl Workflows {
             Some("workflow") => self.run_nested(&run_text, depth).await,
             Some("action") => self.run_action(step, event, run_info, tctx).await,
             Some("prompt") | Some("skill") => {
-                self.run_agent(wf, step, &run_text, render("with"), session_id, first_event).await
+                let inputs = AgentInputs { with: render("with"), args: render("args"), pr };
+                self.run_agent(wf, step, &run_text, inputs, session_id, first_event).await
             }
             _ => StepResult::fail("Step did not run."),
         }
@@ -880,10 +992,11 @@ impl Workflows {
         wf: &Value,
         step: &Value,
         run_text: &str,
-        with: Option<String>,
+        inputs: AgentInputs<'_>,
         session_id: &str,
         event: Option<&Value>,
     ) -> StepResult {
+        let AgentInputs { with, args, pr } = inputs;
         let sid = || Some(session_id.to_string());
         let fail = |e: &str| StepResult { ok: false, output: None, error: Some(e.to_string()), session_id: sid() };
         let settings = self.host.settings().await;
@@ -895,20 +1008,64 @@ impl Workflows {
         let (Some(provider), Some(model)) = (provider, model) else {
             return fail("No model configured. Pick a default provider and model in Models.");
         };
+        // Whichever model the step lands on is checked; a non-local one is
+        // refused, never swapped for another.
+        if nekko_js::truthy(wf.get("localModelOnly")) {
+            let found = settings
+                .get("providers")
+                .and_then(Value::as_array)
+                .and_then(|ps| ps.iter().find(|p| p.get("id") == Some(&provider)));
+            if !found.is_some_and(nekko_turn::providers::offline_provider_allowed) {
+                let label = found
+                    .and_then(|p| nullish(p.get("label")))
+                    .map(nekko_js::display)
+                    .unwrap_or_else(|| nekko_js::display(&provider));
+                return fail(&format!("This workflow uses local models only; {label} is not local."));
+            }
+        }
         let mut body = nekko_js::trim(run_text).to_string();
+        let mut skill: Option<Value> = None;
         if str_field(step, "kind") == Some("skill") {
             let want = nekko_js::trim(run_text);
             let want = want.strip_prefix('/').unwrap_or(want).to_lowercase();
             let defs = self.host.skill_defs().await;
-            let skill = defs.iter().find(|s| {
+            let found = defs.into_iter().find(|s| {
                 str_field(s, "id").is_some_and(|i| i.to_lowercase() == want)
                     || str_field(s, "name").is_some_and(|n| n.to_lowercase() == want)
             });
-            let Some(skill) = skill else { return fail(&format!("No installed skill matches \"{run_text}\".")) };
-            body = nekko_js::trim(&nekko_js::display(skill.get("template").unwrap_or(&Value::Null))).to_string();
+            let Some(found) = found else { return fail(&format!("No skill matches \"{run_text}\".")) };
+            let template = nekko_js::display(found.get("template").unwrap_or(&Value::Null));
+            let root = str_field(&found, "pluginRoot");
+            let expanded = skill_steps::expand_skill_template(&template, args.as_deref().unwrap_or(""), root);
+            body = nekko_js::trim(&expanded).to_string();
+            skill = Some(found);
         }
         if body.is_empty() {
             return fail("This step has nothing to run.");
+        }
+        if self.host.get_session(session_id).is_some() {
+            let mut fields: Vec<(&'static str, Value)> = Vec::new();
+            // Under allowlist access each step offers only the tools it lists
+            // (a skill step its skill's `allowed-tools` unless it lists its own);
+            // an untrusted PR keeps only the reads of that list.
+            if let Some(allowed) = step_allowlist(wf, step, skill.as_ref(), pr) {
+                let disabled = nekko_turn::workflow_access::disabled_tools(Some("allowlist"), &allowed);
+                fields.push(("toolAccess", json!("allowlist")));
+                fields.push(("allowedTools", json!(allowed)));
+                fields.push(("disabledTools", json!(disabled)));
+            }
+            // The skill's own files (references, scripts) can be read, never written.
+            let folder = skill
+                .as_ref()
+                .and_then(|s| str_field(s, "pluginRoot").or_else(|| s.pointer("/origin/dir").and_then(Value::as_str)));
+            if let Some(dir) = folder {
+                fields.push(("readOnlyFolders", json!([dir])));
+            }
+            if !fields.is_empty()
+                && let Err(e) = self.host.update_session(session_id, fields).await
+            {
+                return fail(&e);
+            }
         }
         let can_retry = nekko_js::to_number(nullish(step.get("retries")).or(Some(&json!(0)))) > 0.0
             || nekko_js::truthy(step.get("onFailure"));
@@ -919,6 +1076,7 @@ impl Workflows {
             body,
             with.map(|w| format!("### Context\n{w}")).unwrap_or_default(),
             event.map(event_context).unwrap_or_default(),
+            if pr.is_some_and(|p| !p.trusted) { skill_steps::UNTRUSTED_NOTE.to_string() } else { String::new() },
             step_outcome_instruction(can_retry),
         ];
         let prompt = parts.into_iter().filter(|p| !p.is_empty()).collect::<Vec<_>>().join("\n\n");
@@ -1184,19 +1342,29 @@ impl Workflows {
             return Ok(());
         };
         let mut conn_settings = config.get("settings").and_then(Value::as_object).cloned().unwrap_or_default();
-        for k in ["channel", "repo", "event", "filter"] {
+        for k in ["channel", "repo", "event", "filter", "includeDrafts"] {
             if let Some(v) = t.get(k).filter(|v| nekko_js::truthy(Some(v))) {
                 conn_settings.insert(k.into(), v.clone());
             }
         }
         let now = self.now();
-        let record_cursor = {
+        let (record_cursor, poll_state) = {
             let mut cursors = self.load_cursors();
-            let rec = cursors
-                .entry(tid.to_string())
-                .or_insert_with(|| json!({ "lastCursor": num(now), "seenIds": [], "lastPollAt": 0 }));
-            nekko_js::to_number(rec.get("lastCursor"))
+            // Arming starts the cursor now, and it is written at once: a poll
+            // whose cursor never advances (no event yet) must not re-arm at
+            // "now" each time, or anything between two polls is missed.
+            if !cursors.contains_key(tid) {
+                cursors.insert(tid.to_string(), json!({ "lastCursor": num(now), "seenIds": [], "lastPollAt": 0 }));
+                self.save_cursors(&cursors);
+            }
+            let rec = &cursors[tid];
+            (nekko_js::to_number(rec.get("lastCursor")), rec.get("pollState").cloned())
         };
+        // A poll that keeps more than a cursor (the GitHub PR head SHAs) gets
+        // back what it returned last time.
+        if let Some(state) = poll_state {
+            conn_settings.insert("pollState".into(), state);
+        }
         let token = nullish(config.get("token")).map(nekko_js::display).unwrap_or_default();
         let Some(result) = self.host.poll(&kind, &token, Value::Object(conn_settings), record_cursor).await else {
             return Ok(());
@@ -1254,6 +1422,14 @@ impl Workflows {
             rec["lastCursor"] = num(next);
             advanced = true;
         }
+        // Extends the record rather than replacing it: older builds read the
+        // fields they know and carry this one along.
+        if let Some(state) = result.get("pollState").filter(|s| !s.is_null())
+            && rec.get("pollState") != Some(state)
+        {
+            rec["pollState"] = state.clone();
+            advanced = true;
+        }
         rec["lastPollAt"] = num(self.now());
         let keep: Vec<String> = seen.iter().skip(seen.len().saturating_sub(MAX_SEEN)).cloned().collect();
         rec["seenIds"] = json!(keep);
@@ -1293,6 +1469,36 @@ impl Workflows {
             }
             other => Err(format!("Unknown channel: {other}")),
         }
+    }
+}
+
+/// A prompt or skill step's extra inputs.
+struct AgentInputs<'a> {
+    with: Option<String>,
+    /// Fills a skill's `$ARGUMENTS`.
+    args: Option<String>,
+    pr: Option<&'a PrRun>,
+}
+
+fn untrusted_default() -> Vec<String> {
+    UNTRUSTED_DEFAULT.iter().map(|s| s.to_string()).collect()
+}
+
+/// The allowlist a prompt or skill step runs under, if any: the workflow's
+/// allowlist access (the step's own list, else its skill's `allowed-tools`),
+/// narrowed to reads on an untrusted PR, which never gets the workspace's tools.
+fn step_allowlist(wf: &Value, step: &Value, skill: Option<&Value>, pr: Option<&PrRun>) -> Option<Vec<String>> {
+    let strings = |v: Option<&Value>| -> Option<Vec<String>> {
+        v.and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect())
+    };
+    let own = strings(step.get("allowedTools")).or_else(|| strings(skill.and_then(|s| s.get("allowedTools"))));
+    let untrusted = pr.is_some_and(|p| !p.trusted);
+    let narrow = nekko_turn::workflow_access::untrusted_allowlist;
+    match str_field(wf, "toolAccess").filter(|a| !a.is_empty()).unwrap_or("workspace") {
+        "allowlist" if untrusted => Some(narrow(&own.unwrap_or_default())),
+        "allowlist" => Some(own.unwrap_or_default()),
+        "workspace" if untrusted => Some(narrow(&own.filter(|o| !o.is_empty()).unwrap_or_else(untrusted_default))),
+        _ => None,
     }
 }
 

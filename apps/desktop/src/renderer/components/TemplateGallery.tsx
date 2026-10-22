@@ -1,29 +1,34 @@
 import React, { useState } from 'react';
-import type { NewWorkflow, TemplateNeed, WorkflowNotify, WorkflowTemplate } from '@nekko-agent/shared';
+import type { NewWorkflow, SkillDef, TemplateNeed, WorkflowNotify, WorkflowTemplate } from '@nekko-agent/shared';
 import {
   WORKFLOW_NOTIFY_OPTIONS,
   WORKFLOW_TEMPLATES,
+  templateInputDefault,
   templateInputProblem,
+  offlineProviderAllowed,
   templateInputValues,
+  templateLocalModel,
   templateReadiness,
 } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
 import { Badge, Modal } from './primitives/index.js';
-import type { WorkflowSeed } from './WorkflowEditor.js';
+import { SKILL_GROUPS, WorkflowModelField, type WorkflowSeed } from './WorkflowEditor.js';
 import { CloseIcon } from '../icons.js';
 import { STATUS } from '../tokens.js';
 
 /**
  * The template gallery: ready-made automations in plain words, each one a
  * setup sheet away from running. Setup checks what the template needs
- * (connectors, a project folder, a default model), asks for its few inputs, and
+ * (connectors, a project folder, a default or local model), asks for its few inputs, and
  * turns it on. The step canvas stays one click further, behind Customize, for
  * people who want to change how it works rather than just use it.
  */
 
 type Env = ReturnType<typeof useTemplateEnv>;
 
-function useTemplateEnv(workspaceId?: string) {
+type ChosenModel = { providerId?: string; modelId?: string };
+
+function useTemplateEnv(workspaceId?: string, model: ChosenModel = {}) {
   const settings = useStore((s) => s.settings);
   return {
     connectors: settings?.connectors ?? [],
@@ -31,6 +36,8 @@ function useTemplateEnv(workspaceId?: string) {
     workspaceId: workspaceId ?? settings?.workspaces?.[0]?.id,
     defaultProviderId: settings?.defaultProviderId,
     defaultModelId: settings?.defaultModelId,
+    providers: settings?.providers ?? [],
+    ...model,
   };
 }
 
@@ -120,8 +127,13 @@ export function TemplateGallery({
 }
 
 /** A template's starting point for the editor or for creating it outright. */
-export function templateSeed(t: WorkflowTemplate, inputs: Record<string, string> = {}, extra: Partial<WorkflowSeed> = {}): WorkflowSeed {
-  const { steps, triggers } = t.build(templateInputValues(t, inputs));
+export function templateSeed(
+  t: WorkflowTemplate,
+  inputs: Record<string, string> = {},
+  extra: Partial<WorkflowSeed> = {},
+  skills: SkillDef[] = [],
+): WorkflowSeed {
+  const { steps, triggers } = t.build(templateInputValues(t, inputs, skills));
   const blank = t.id === 'blank';
   return {
     name: blank ? '' : t.name,
@@ -129,6 +141,9 @@ export function templateSeed(t: WorkflowTemplate, inputs: Record<string, string>
     category: t.category,
     notify: t.notify,
     templateId: blank ? undefined : t.id,
+    localModelOnly: t.localModelOnly,
+    toolAccess: t.toolAccess,
+    prCheckout: t.prCheckout,
     steps,
     triggers,
     ...extra,
@@ -137,36 +152,59 @@ export function templateSeed(t: WorkflowTemplate, inputs: Record<string, string>
 
 /** Check, ask, turn on. */
 export function TemplateSetup({
-  template,
+  template: base,
+  skills = [],
   onTurnOn,
   onCustomize,
   onClose,
 }: {
   template: WorkflowTemplate;
+  /** What a skill input can pick (`workflow:skillDefs`). */
+  skills?: SkillDef[];
   onTurnOn: (input: NewWorkflow) => Promise<void>;
   onCustomize: (seed: WorkflowSeed) => void;
   onClose: () => void;
 }) {
   const setView = useStore((s) => s.setView);
   const [workspaceId, setWorkspaceId] = useState<string | undefined>(undefined);
-  const env: Env = useTemplateEnv(workspaceId);
+  const [model, setModel] = useState<ChosenModel>({});
+  const env: Env = useTemplateEnv(workspaceId, model);
+  // "Local models only" starts on when a local model is set up; on, the template needs one.
+  const [localChoice, setLocalChoice] = useState<boolean | undefined>(undefined);
+  const localOnly = !!base.offerLocalOnly && (localChoice ?? !!templateLocalModel(env));
+  const template: WorkflowTemplate = localOnly
+    ? { ...base, localModelOnly: true, requires: { ...base.requires, model: false, localModel: true } }
+    : base;
   const [typed, setTyped] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState<Set<string>>(new Set());
   const [notify, setNotify] = useState<WorkflowNotify>(template.notify ?? 'failure');
   const [busy, setBusy] = useState(false);
 
   const needs = templateReadiness(template, env);
-  const values = templateInputValues(template, typed);
+  const values = templateInputValues(template, typed, skills);
   const problems = Object.fromEntries((template.inputs ?? []).map((i) => [i.key, templateInputProblem(i, values[i.key])]));
   const ready = needs.every((n) => n.ok) && Object.values(problems).every((p) => !p) && !busy;
-  const seed = () => templateSeed(template, values, { notify, workspaceId: template.requires?.workspace ? env.workspaceId : undefined });
+  // A local-only template names its model: the app default may be a cloud one.
+  const localModel = template.requires?.localModel ? templateLocalModel(env) : undefined;
+  const hasLocalProvider = env.providers.some((p) => p.enabled && offlineProviderAllowed(p));
+  const seed = () => templateSeed(template, values, {
+    notify,
+    workspaceId: template.requires?.workspace ? env.workspaceId : undefined,
+    providerId: localModel?.providerId,
+    modelId: localModel?.modelId,
+  }, skills);
 
   const turnOn = async () => {
     if (!ready) return;
     setBusy(true);
     try {
       const s = seed();
-      await onTurnOn({ name: s.name ?? template.name, description: s.description, category: s.category, enabled: true, workspaceId: s.workspaceId, notify: s.notify, templateId: s.templateId, steps: s.steps, triggers: s.triggers });
+      await onTurnOn({
+        name: s.name ?? template.name, description: s.description, category: s.category, enabled: true,
+        workspaceId: s.workspaceId, notify: s.notify, templateId: s.templateId,
+        providerId: s.providerId, modelId: s.modelId, localModelOnly: s.localModelOnly, toolAccess: s.toolAccess,
+        prCheckout: s.prCheckout, steps: s.steps, triggers: s.triggers,
+      });
     } finally {
       setBusy(false);
     }
@@ -175,7 +213,7 @@ export function TemplateSetup({
   const go = (fix: TemplateNeed['fix']) => {
     if (fix === 'workspace') return;
     onClose();
-    setView(fix);
+    setView(fix === 'localModel' ? 'models' : fix);
   };
 
   return (
@@ -209,11 +247,20 @@ export function TemplateSetup({
                       {env.workspaces.length === 0 && <option value="">No folders added</option>}
                       {env.workspaces.map((w) => <option key={w.id} value={w.id}>{w.name ?? w.path}</option>)}
                     </select>
+                  ) : n.fix === 'localModel' && hasLocalProvider ? (
+                    <WorkflowModelField
+                      providers={env.providers}
+                      providerId={localModel?.providerId}
+                      modelId={localModel?.modelId}
+                      unsetLabel="Choose a local model"
+                      localOnly
+                      onChange={(providerId, modelId) => setModel({ providerId, modelId })}
+                    />
                   ) : n.ok ? (
                     n.fix === 'models' && <span className="truncate font-mono text-[11px] text-ink-faint">{env.defaultModelId}</span>
                   ) : (
                     <button className="btn btn-outline py-0.5! text-[11.5px]" onClick={() => go(n.fix)}>
-                      {n.fix === 'connectors' ? 'Connect' : 'Choose a model'}
+                      {n.fix === 'connectors' ? 'Connect' : n.fix === 'localModel' ? 'Set up a local model' : 'Choose a model'}
                     </button>
                   )}
                 </li>
@@ -228,10 +275,48 @@ export function TemplateSetup({
           </section>
         )}
 
+        {base.offerLocalOnly && (
+          <label className="mt-3 flex items-start gap-2" data-template-local-only>
+            <input type="checkbox" className="mt-0.5" checked={localOnly} onChange={(e) => setLocalChoice(e.target.checked)} />
+            <span className="text-[12.5px]">
+              Local models only
+              <span className="block text-[11px] text-ink-faint">
+                The review runs on a model on this computer and never reaches a cloud provider.
+                {!hasLocalProvider && ' No local model is set up yet.'}
+              </span>
+            </span>
+          </label>
+        )}
+
         {(template.inputs ?? []).length > 0 && (
           <section className="mt-4 space-y-3">
             {template.inputs!.map((input) => {
               const problem = touched.has(input.key) ? problems[input.key] : undefined;
+              if (input.kind === 'skill') {
+                const value = values[input.key];
+                const known = skills.some((sk) => sk.id === value);
+                return (
+                  <label key={input.key} className="block" data-template-skill>
+                    <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-faint">{input.label}</span>
+                    <select
+                      className="input w-full"
+                      value={value}
+                      onChange={(e) => setTyped((t) => ({ ...t, [input.key]: e.target.value }))}
+                    >
+                      {!known && value && <option value={value}>/{value}</option>}
+                      {SKILL_GROUPS.map((g) => {
+                        const list = skills.filter((sk) => (sk.source ?? 'installed') === g.source);
+                        return list.length ? (
+                          <optgroup key={g.source} label={g.label}>
+                            {list.map((sk) => <option key={sk.id} value={sk.id}>/{sk.name}</option>)}
+                          </optgroup>
+                        ) : null;
+                      })}
+                    </select>
+                    {input.hint && <span className="mt-1 block text-[11px] text-ink-faint">{input.hint}</span>}
+                  </label>
+                );
+              }
               return (
                 <label key={input.key} className="block">
                   <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-faint">{input.label}</span>
@@ -239,7 +324,7 @@ export function TemplateSetup({
                     className="input w-full"
                     type={input.kind === 'time' ? 'time' : 'text'}
                     placeholder={input.placeholder}
-                    value={typed[input.key] ?? input.default ?? ''}
+                    value={typed[input.key] ?? templateInputDefault(input) ?? ''}
                     onChange={(e) => setTyped((t) => ({ ...t, [input.key]: e.target.value }))}
                     onBlur={() => setTouched((t) => new Set(t).add(input.key))}
                     aria-invalid={!!problem}

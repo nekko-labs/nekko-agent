@@ -1,5 +1,5 @@
-//! The desktop-only features the TS desktop backend served (PF14 step 5
-//! prep, part 6), so the desktop app runs nekkod with no backend at all:
+//! The desktop-only features the TS desktop backend used to serve (PF14
+//! step 5 prep, part 6):
 //!
 //! - the local API server for the CLI, MCP clients and integrations
 //!   (`api_server.rs`, `apiServer:*`), with the CLI's link file and the MCP
@@ -36,6 +36,7 @@ pub const CHANNELS: &[&str] = &[
     "localRelay:status",
     "localRelay:start",
     "localRelay:stop",
+    "localRelay:setLan",
     "networkVisibility:status",
     "networkVisibility:start",
     "networkVisibility:stop",
@@ -88,7 +89,7 @@ impl Desktop {
         Arc::new(Self { app, api: ApiServer::default(), relay, visibility, webhooks: Arc::default() })
     }
 
-    /// Startup, in the backend's order: the webhook listener; the local API
+    /// Startup, in the old desktop backend's order: the webhook listener; the local API
     /// server with a token, the launcher linked (packaged builds only: a
     /// development run would otherwise put a checkout's CLI on the real
     /// PATH) and everything pointed at it refreshed; then the relay and the
@@ -222,9 +223,11 @@ impl Desktop {
                 Ok(status)
             }
             "integrations:target" => Ok(self.target(ctx).await),
-            "localRelay:status" => Ok(self.relay.status()),
+            "localRelay:status" => Ok(self.relay.status_learning_name()),
             "localRelay:start" => Ok(self.relay.start().await),
             "localRelay:stop" => Ok(self.relay.stop().await),
+            // `on !== false`: anything but an explicit false keeps the LAN on.
+            "localRelay:setLan" => Ok(self.relay.set_lan(args.first() != Some(&Value::Bool(false))).await),
             "networkVisibility:status" => Ok(self.visibility.status()),
             "networkVisibility:start" => Ok(self.visibility.start().await),
             "networkVisibility:stop" => Ok(self.visibility.stop().await),

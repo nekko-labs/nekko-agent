@@ -23,9 +23,12 @@ pub fn allows_spawn(orchestration: Option<&Value>) -> bool {
     strategy(o.get("strategy")).get("allowsSpawn") == Some(&Value::Bool(true))
 }
 
-/// `turnCanAsk`: nobody reads a sub-agent, an automation, or a goal run.
+/// `turnCanAsk`: nobody reads a sub-agent, an automation, a workflow run or a goal run.
 pub fn turn_can_ask(session: &Value) -> bool {
-    !truthy(session, "parentSessionId") && !truthy(session, "taskId") && !truthy(session, "trainingRunId")
+    !truthy(session, "parentSessionId")
+        && !truthy(session, "taskId")
+        && !truthy(session, "trainingRunId")
+        && !truthy(session, "workflowRunId")
 }
 
 /// `turnTools(input)`: the tools a (non-sandbox) turn offers, in order. `input`

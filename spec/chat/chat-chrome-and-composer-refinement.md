@@ -1,0 +1,14 @@
+---
+title: "Chat chrome and composer refinement (implemented; desktop verification pending)"
+area: chat
+split-from: SPEC.md (2026-10-22)
+---
+
+# Chat chrome and composer refinement (implemented; desktop verification pending)
+
+- Chat headers show one checkout control: isolated worktree name or current Git branch/HEAD, never both. The control retains checkout options; PR chips are removed from the header while existing PR surfaces remain available.
+- The plan rail's Change plan action is a slim pencil-icon control. Clicking it pops up a "Change the plan" card where the agent's own questions appear: above the composer in the full chat, pinned at the top of an Agents-wall window. It asks "What should the agent do differently?" with a focused text box, **Send change** (Enter; Shift+Enter for a new line) and **Cancel** (Esc). Nothing is sent until the user types and sends. A running agent takes the change at its next step (the same steer as Ctrl+Enter), so it changes course instead of finishing the old plan first; an idle agent gets it as a new turn. The message leads with "Please revise the current agent plan…" followed by what was typed. The composer draft is left untouched. An open agent question takes precedence over the card. (2026-10-15: it used to insert that sentence into the composer draft, which on the wall is a separate pane, so the button appeared to do nothing.) `[Implemented; unit tests, and an isolated Electron fixture (dark theme) that clicks it on the wall and in the full chat, types, sends, and records the bridge call.]`
+- Composer text grows with input/paste, including Markdown list indentation, and scrolls its caret within the editor once capped. The full composer budget is half the smaller of the viewport and available pane height; surrounding composer controls consume part of that budget. Manually sized text areas may grow to accommodate input within the same cap. Shift+Tab outside a list retains normal keyboard focus traversal.
+- Completion suppresses persisted-interruption detection until the final transcript reload settles, even if no held live reply exists. Actual interrupted transcripts retain recovery actions. This is a client-side stale-snapshot safeguard, not a claim that every provider-side interruption is fixed.
+- Acceptance: one checkout chip, no header PR badges, compact icon action, latest edited/pasted text visible without page scrolling, bounded composer on narrow/short panes, and no recovery notice from stale mid-turn snapshots after completion. Focused checks cover logic; desktop before/after and composer motion evidence remain pending. No credentials or external services are required for verification.
+- Insights cost and token charts have independent today/1wk/1m/6m/1y/all-time ranges (UTC days; 30/180/365-day long windows), defaulting to 1m. Totals reflect the range; monthly projections remain separate. Range tests pass; desktop evidence remains pending.

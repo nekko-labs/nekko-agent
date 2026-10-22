@@ -1,4 +1,6 @@
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const launcher = '../../scripts/dev-launch.mjs';
@@ -14,6 +16,21 @@ describe('development launcher safety', () => {
     const mod = await import(/* @vite-ignore */ launcher);
     expect(typeof mod.prepareWindowsRuntime).toBe('function');
     expect(typeof mod.prepareMacBundle).toBe('function');
+  });
+
+  it('rebuilds the cached runtime when the app icon changes', async () => {
+    const { runtimeStamp, runtimeIsCurrent } = await import(/* @vite-ignore */ launcher);
+    const dir = mkdtempSync(join(tmpdir(), 'nekko-runtime-'));
+    const icon = join(dir, 'icon.ico'), ready = join(dir, 'ready-v1');
+    writeFileSync(icon, 'old logo');
+    const old = runtimeStamp(icon, 'patched');
+    expect(runtimeIsCurrent(ready, old)).toBe(false); // nothing built yet
+    writeFileSync(ready, old);
+    expect(runtimeIsCurrent(ready, runtimeStamp(icon, 'patched'))).toBe(true); // same icon: reuse
+    writeFileSync(icon, 'new logo');
+    expect(runtimeIsCurrent(ready, runtimeStamp(icon, 'patched'))).toBe(false); // new icon: rebuild
+    writeFileSync(ready, 'patched'); // a copy cached before icons were stamped
+    expect(runtimeIsCurrent(ready, runtimeStamp(icon, 'patched'))).toBe(false);
   });
 
   it('prints a banner once the app reports in, naming the API, renderer, data folder and how to stop', async () => {
@@ -49,6 +66,15 @@ describe('development launcher wiring (source checks until the launcher is refac
     expect(source).toContain("FileDescription: 'Nekko Agent'");
     expect(source).toContain("resolve('build/icon.ico')");
     expect(source).toContain('env.ELECTRON_EXEC_PATH = await prepareWindowsRuntime()');
+  });
+  it('makes a bare launch of the Windows dev runtime reopen Nekko Agent, not an empty Electron window', () => {
+    // Notification clicks and its Start Menu entry start the runtime with no app path.
+    expect(source).toContain("join(cache, 'resources', 'app')");
+    expect(source).toContain("cpSync(resolve('scripts/dev-runtime-app.cjs'), join(dir, 'index.cjs'))");
+    expect(source.match(/return installRuntimeApp\(cache, exe\)/g)).toHaveLength(2);
+    const shim = readFileSync(new URL('../../scripts/dev-runtime-app.cjs', import.meta.url), 'utf8');
+    expect(shim).toContain("join(process.resourcesPath, 'default_app.asar', 'main.js')");
+    expect(shim).toContain('spawn(process.execPath, [appDir]');
   });
   it('uses LaunchServices and a distinct development bundle identity', () => {
     expect(readFileSync(new URL('../../scripts/dev-launch-wrapper.cjs', import.meta.url), 'utf8')).toContain("'/usr/bin/open'");

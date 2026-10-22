@@ -72,7 +72,7 @@ try {
     throw new Error('Published package identity must be nekko-agent.');
   }
   const packedDist = readdirSync(join(unpacked, 'dist')).sort();
-  const expectedDist = ['backend.js', 'engine.js', 'index.d.ts', 'index.js', 'run.d.ts', 'run.js'];
+  const expectedDist = ['engine.js', 'index.d.ts', 'index.js', 'run.d.ts', 'run.js'];
   if (JSON.stringify(packedDist) !== JSON.stringify(expectedDist)) {
     throw new Error(`Packed package contains unexpected dist files: ${packedDist.join(', ')}`);
   }
@@ -91,15 +91,6 @@ try {
   );
   if (runImport !== 'function') throw new Error(`nekko-agent/run import failed: ${runImport}`);
   console.log(`nekko-agent/run import: ${runImport}`);
-  const nativeDependency = run(
-    process.execPath,
-    ['-e', "import('@lydell/node-pty').then(() => console.log('native node-pty: resolved'))"],
-    {
-      cwd: unpacked,
-      stdio: ['ignore', 'pipe', 'inherit'],
-    },
-  );
-  console.log(nativeDependency);
 
   run('npm', ['install', '--prefix', installed, '--ignore-scripts', '--no-package-lock', tarball]);
   for (const executable of executables) {

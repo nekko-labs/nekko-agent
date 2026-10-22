@@ -13,14 +13,15 @@ type Phase =
  * Subscription sign-in flow (browser OAuth + paste fallback). Renders only the
  * controls; the parent decides what to persist via `onConnected`, which gets a
  * sanitized OAuthStatus — the access token itself never crosses into the
- * renderer. Shared by the Claude and ChatGPT subscription flows.
+ * renderer. Shared by the ChatGPT and OpenRouter flows, and by Claude's only if
+ * its approved-client slot is ever filled (`oauthProviderOffered('claude')`).
  */
 export function SubscriptionSignIn({
-  oauthProvider = 'claude',
+  oauthProvider,
   label,
   onConnected,
 }: {
-  oauthProvider?: OAuthProvider;
+  oauthProvider: OAuthProvider;
   label?: string;
   onConnected: (status: OAuthStatus) => void | Promise<void>;
 }) {
@@ -38,18 +39,20 @@ export function SubscriptionSignIn({
         ? 'Sign in with ChatGPT'
         : 'Sign in with OpenRouter');
   // The official first-party CLI whose credential file the host can import as
-  // a zero-browser sign-in path. OpenRouter has none.
-  const cliName =
-    oauthProvider === 'claude' ? 'Claude Code' : oauthProvider === 'chatgpt' ? 'the Codex CLI' : undefined;
-  // Anthropic and OpenAI only issue subscription tokens to their own registered
-  // OAuth clients, so we sign in through the first-party CLI's client id. Their
-  // consent screen therefore names that CLI, not us - say so up front, because
-  // an unexplained "Claude Code wants access" reads like the wrong app opened.
-  // OpenRouter is the opposite: its PKCE flow creates an API key for this app.
+  // a zero-browser sign-in path: only the Codex CLI's. Claude Code's
+  // credentials are never read.
+  const cliName = oauthProvider === 'chatgpt' ? 'the Codex CLI' : undefined;
+  // OpenAI only issues ChatGPT subscription tokens to its own registered OAuth
+  // client, so that sign-in goes through the Codex CLI's client id and the
+  // consent screen names it, not us - say so up front, because an unexplained
+  // "Codex CLI wants access" reads like the wrong app opened. OpenRouter's
+  // PKCE flow creates an API key for this app.
   const consentNote =
     oauthProvider === 'openrouter'
       ? 'Approving in the browser creates an API key on your OpenRouter account and hands it to this app. Usage bills to your OpenRouter balance, and you can revoke the key from openrouter.ai at any time.'
-      : `The authorization page will say ${oauthProvider === 'claude' ? 'Claude Code' : 'Codex CLI'}, not Nekko Agent: a plan can only be used through its provider's own sign-in client, and Nekko Agent connects through that.`;
+      : oauthProvider === 'chatgpt'
+        ? "The authorization page will say Codex CLI, not Nekko Agent: a plan can only be used through its provider's own sign-in client, and Nekko Agent connects through that."
+        : undefined;
   const onConnectedRef = useRef(onConnected);
   useEffect(() => {
     onConnectedRef.current = onConnected;
@@ -141,9 +144,9 @@ export function SubscriptionSignIn({
   };
 
   // Zero-browser path: reuse the sign-in the user already did in the official
-  // CLI. The host reads the credential file (~/.claude/.credentials.json or
-  // ~/.codex/auth.json) into its token store under the provider's token key
-  // and reports only that it found one.
+  // CLI. The host reads the Codex CLI's auth file (~/.codex/auth.json) into
+  // its token store under the provider's token key and reports only that it
+  // found one.
   const importCli = async () => {
     setImporting(true);
     try {
@@ -178,7 +181,7 @@ export function SubscriptionSignIn({
               ? 'Your browser could not reach back to the app, so sign-in finishes manually: after you authorize, the tab lands on a page that cannot connect. Copy that tab\'s whole address (it carries your sign-in code) and paste it below.'
               : 'Your browser could not reach back to the app, so sign-in finishes manually: after you authorize, copy the code the page shows and paste it below.'}
         </p>
-        <p className="text-[11.5px] text-ink-faint">{consentNote}</p>
+        {consentNote && <p className="text-[11.5px] text-ink-faint">{consentNote}</p>}
         <button
           className="inline-flex items-center gap-1 text-[12px] text-accent hover:underline"
           onClick={() => void window.nekko.openPath(session.authUrl).catch(() => {})}
@@ -223,7 +226,7 @@ export function SubscriptionSignIn({
           {phase.message}
         </p>
       )}
-      <p className="text-[11.5px] text-ink-faint">{consentNote}</p>
+      {consentNote && <p className="text-[11.5px] text-ink-faint">{consentNote}</p>}
       {cliName && (
         <p className="text-[11.5px] text-ink-faint">
           Already signed in to {cliName}?{' '}

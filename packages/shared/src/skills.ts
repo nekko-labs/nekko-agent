@@ -30,12 +30,24 @@ export interface SkillDef {
   /** The step graph rendered in the Skills tab. */
   workflow: SkillWorkflow;
   origin?: SkillOrigin;
+  /**
+   * Where a skill a workflow step can run comes from (`workflow:skillDefs`):
+   * built in, installed from the marketplace, another tool's SKILL.md folder,
+   * or a Claude Code plugin (`<plugin>:<name>`).
+   */
+  source?: 'builtin' | 'installed' | 'external' | 'plugin';
+  /** The skill's `allowed-tools`, the default allowlist of a step that runs it. */
+  allowedTools?: string[];
+  /** A plugin skill's `${CLAUDE_PLUGIN_ROOT}`. */
+  pluginRoot?: string;
+  /** What the skill expects as arguments (`argument-hint`). */
+  argumentHint?: string;
 }
 
 export type SkillCategory = 'Research & planning' | 'Code quality' | 'Delivery' | 'Automation' | 'Imported';
 
 /** Agent tools whose SKILL.md folders Nekko Agent can read. */
-export type ExternalSkillTool = 'claude' | 'codex' | 'gemini' | 'agents';
+export type ExternalSkillTool = 'claude' | 'codex' | 'gemini' | 'agents' | 'claude-plugin';
 
 /** Where an imported skill came from; absent for built-in and marketplace skills. */
 export interface SkillOrigin {
@@ -43,6 +55,11 @@ export interface SkillOrigin {
   scope: 'user' | 'project';
   /** The skill's folder on disk. */
   dir: string;
+  /** A Claude Code plugin skill: its plugin, marketplace, version, and skill or command. */
+  plugin?: string;
+  marketplace?: string;
+  version?: string;
+  kind?: 'skill' | 'command';
 }
 
 /** A node in a skill's workflow graph. */

@@ -1,0 +1,5782 @@
+{
+ "tokens": [
+  {
+   "command": "gh pr view 12",
+   "words": [
+    "gh",
+    "pr",
+    "view",
+    "12"
+   ]
+  },
+  {
+   "command": "gh pr view \"a b\"",
+   "words": [
+    "gh",
+    "pr",
+    "view",
+    "a b"
+   ]
+  },
+  {
+   "command": "gh pr view 'x'",
+   "words": [
+    "gh",
+    "pr",
+    "view",
+    "x"
+   ]
+  },
+  {
+   "command": "gh pr diff 1",
+   "words": [
+    "gh",
+    "pr",
+    "diff",
+    "1"
+   ]
+  },
+  {
+   "command": "gh pr checks 1",
+   "words": [
+    "gh",
+    "pr",
+    "checks",
+    "1"
+   ]
+  },
+  {
+   "command": "gh repo view",
+   "words": [
+    "gh",
+    "repo",
+    "view"
+   ]
+  },
+  {
+   "command": "gh pr comment 1 --body x",
+   "words": [
+    "gh",
+    "pr",
+    "comment",
+    "1",
+    "--body",
+    "x"
+   ]
+  },
+  {
+   "command": "gh pr merge 1",
+   "words": [
+    "gh",
+    "pr",
+    "merge",
+    "1"
+   ]
+  },
+  {
+   "command": "gh issue list",
+   "words": [
+    "gh",
+    "issue",
+    "list"
+   ]
+  },
+  {
+   "command": "gh api repos/o/r",
+   "words": [
+    "gh",
+    "api",
+    "repos/o/r"
+   ]
+  },
+  {
+   "command": "gh api -X GET repos/o/r",
+   "words": [
+    "gh",
+    "api",
+    "-X",
+    "GET",
+    "repos/o/r"
+   ]
+  },
+  {
+   "command": "gh api -X POST x",
+   "words": [
+    "gh",
+    "api",
+    "-X",
+    "POST",
+    "x"
+   ]
+  },
+  {
+   "command": "gh api -XPOST x",
+   "words": [
+    "gh",
+    "api",
+    "-XPOST",
+    "x"
+   ]
+  },
+  {
+   "command": "gh api --method PATCH x",
+   "words": [
+    "gh",
+    "api",
+    "--method",
+    "PATCH",
+    "x"
+   ]
+  },
+  {
+   "command": "gh api --method=DELETE x",
+   "words": [
+    "gh",
+    "api",
+    "--method=DELETE",
+    "x"
+   ]
+  },
+  {
+   "command": "gh api x -f a=b",
+   "words": [
+    "gh",
+    "api",
+    "x",
+    "-f",
+    "a=b"
+   ]
+  },
+  {
+   "command": "gh api x -Fa=b",
+   "words": [
+    "gh",
+    "api",
+    "x",
+    "-Fa=b"
+   ]
+  },
+  {
+   "command": "gh api x --field=a",
+   "words": [
+    "gh",
+    "api",
+    "x",
+    "--field=a"
+   ]
+  },
+  {
+   "command": "gh api x --raw-field a",
+   "words": [
+    "gh",
+    "api",
+    "x",
+    "--raw-field",
+    "a"
+   ]
+  },
+  {
+   "command": "gh api x --input f",
+   "words": [
+    "gh",
+    "api",
+    "x",
+    "--input",
+    "f"
+   ]
+  },
+  {
+   "command": "git diff",
+   "words": [
+    "git",
+    "diff"
+   ]
+  },
+  {
+   "command": "git log -3",
+   "words": [
+    "git",
+    "log",
+    "-3"
+   ]
+  },
+  {
+   "command": "git show",
+   "words": [
+    "git",
+    "show"
+   ]
+  },
+  {
+   "command": "git status",
+   "words": [
+    "git",
+    "status"
+   ]
+  },
+  {
+   "command": "git rev-parse HEAD",
+   "words": [
+    "git",
+    "rev-parse",
+    "HEAD"
+   ]
+  },
+  {
+   "command": "git fetch",
+   "words": [
+    "git",
+    "fetch"
+   ]
+  },
+  {
+   "command": "git fetch --upload-pack=x",
+   "words": [
+    "git",
+    "fetch",
+    "--upload-pack=x"
+   ]
+  },
+  {
+   "command": "git push",
+   "words": [
+    "git",
+    "push"
+   ]
+  },
+  {
+   "command": "git",
+   "words": [
+    "git"
+   ]
+  },
+  {
+   "command": "git commit -m x",
+   "words": [
+    "git",
+    "commit",
+    "-m",
+    "x"
+   ]
+  },
+  {
+   "command": "/usr/bin/git push",
+   "words": [
+    "/usr/bin/git",
+    "push"
+   ]
+  },
+  {
+   "command": "/usr/local/bin/gh pr view 1",
+   "words": [
+    "/usr/local/bin/gh",
+    "pr",
+    "view",
+    "1"
+   ]
+  },
+  {
+   "command": "npm test",
+   "words": [
+    "npm",
+    "test"
+   ]
+  },
+  {
+   "command": "npm test x",
+   "words": [
+    "npm",
+    "test",
+    "x"
+   ]
+  },
+  {
+   "command": "npm install",
+   "words": [
+    "npm",
+    "install"
+   ]
+  },
+  {
+   "command": "ls",
+   "words": [
+    "ls"
+   ]
+  },
+  {
+   "command": "ls -la",
+   "words": [
+    "ls",
+    "-la"
+   ]
+  },
+  {
+   "command": "npx tsc --noEmit",
+   "words": [
+    "npx",
+    "tsc",
+    "--noEmit"
+   ]
+  },
+  {
+   "command": "npx tscx",
+   "words": [
+    "npx",
+    "tscx"
+   ]
+  },
+  {
+   "command": "a && b",
+   "words": null
+  },
+  {
+   "command": "a; b",
+   "words": null
+  },
+  {
+   "command": "a | b",
+   "words": null
+  },
+  {
+   "command": "a & b",
+   "words": null
+  },
+  {
+   "command": "echo `id`",
+   "words": null
+  },
+  {
+   "command": "echo $(id)",
+   "words": null
+  },
+  {
+   "command": "echo $HOME",
+   "words": null
+  },
+  {
+   "command": "a > f",
+   "words": null
+  },
+  {
+   "command": "a < f",
+   "words": null
+  },
+  {
+   "command": "(a)",
+   "words": null
+  },
+  {
+   "command": "a\\b",
+   "words": null
+  },
+  {
+   "command": "a\nb",
+   "words": null
+  },
+  {
+   "command": "unterminated 'q",
+   "words": null
+  },
+  {
+   "command": "x \"y",
+   "words": null
+  },
+  {
+   "command": "",
+   "words": []
+  },
+  {
+   "command": "   ",
+   "words": []
+  },
+  {
+   "command": "\tgh\tpr view 1",
+   "words": [
+    "gh",
+    "pr",
+    "view",
+    "1"
+   ]
+  }
+ ],
+ "matches": [
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "gh pr view 12",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "gh pr view \"a b\"",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "gh pr view 'x'",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "gh pr diff 1",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "gh pr checks 1",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "gh repo view",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "gh pr comment 1 --body x",
+   "verdict": {
+    "ok": false,
+    "reason": "gh is limited to pr view|diff|checks, repo view and api GETs"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "gh pr merge 1",
+   "verdict": {
+    "ok": false,
+    "reason": "gh is limited to pr view|diff|checks, repo view and api GETs"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "gh issue list",
+   "verdict": {
+    "ok": false,
+    "reason": "gh is limited to pr view|diff|checks, repo view and api GETs"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "gh api repos/o/r",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "gh api -X GET repos/o/r",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "gh api -X POST x",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may only GET"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "gh api -XPOST x",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may only GET"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "gh api --method PATCH x",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may only GET"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "gh api --method=DELETE x",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may only GET"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "gh api x -f a=b",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may not send fields or input"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "gh api x -Fa=b",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may not send fields or input"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "gh api x --field=a",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may not send fields or input"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "gh api x --raw-field a",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may not send fields or input"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "gh api x --input f",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may not send fields or input"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "git diff",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "git log -3",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "git show",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "git status",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "git rev-parse HEAD",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "git fetch",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "git fetch --upload-pack=x",
+   "verdict": {
+    "ok": false,
+    "reason": "git option not allowed"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "git push",
+   "verdict": {
+    "ok": false,
+    "reason": "git is limited to diff, log, show, status, rev-parse and fetch"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "git",
+   "verdict": {
+    "ok": false,
+    "reason": "git is limited to diff, log, show, status, rev-parse and fetch"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "git commit -m x",
+   "verdict": {
+    "ok": false,
+    "reason": "git is limited to diff, log, show, status, rev-parse and fetch"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "/usr/bin/git push",
+   "verdict": {
+    "ok": false,
+    "reason": "git is limited to diff, log, show, status, rev-parse and fetch"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "/usr/local/bin/gh pr view 1",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "npm test",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "npm test x",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "npm install",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "ls",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "ls -la",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "npx tsc --noEmit",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "npx tscx",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "a && b",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "a; b",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "a | b",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "a & b",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "echo `id`",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "echo $(id)",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "echo $HOME",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "a > f",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "a < f",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "(a)",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "a\\b",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "a\nb",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "unterminated 'q",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "x \"y",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "   ",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "command": "\tgh\tpr view 1",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "gh pr view 12",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "gh pr view \"a b\"",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "gh pr view 'x'",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "gh pr diff 1",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "gh pr checks 1",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "gh repo view",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "gh pr comment 1 --body x",
+   "verdict": {
+    "ok": false,
+    "reason": "gh is limited to pr view|diff|checks, repo view and api GETs"
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "gh pr merge 1",
+   "verdict": {
+    "ok": false,
+    "reason": "gh is limited to pr view|diff|checks, repo view and api GETs"
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "gh issue list",
+   "verdict": {
+    "ok": false,
+    "reason": "gh is limited to pr view|diff|checks, repo view and api GETs"
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "gh api repos/o/r",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "gh api -X GET repos/o/r",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "gh api -X POST x",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may only GET"
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "gh api -XPOST x",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may only GET"
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "gh api --method PATCH x",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may only GET"
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "gh api --method=DELETE x",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may only GET"
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "gh api x -f a=b",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may not send fields or input"
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "gh api x -Fa=b",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may not send fields or input"
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "gh api x --field=a",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may not send fields or input"
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "gh api x --raw-field a",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may not send fields or input"
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "gh api x --input f",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may not send fields or input"
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "git diff",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "git log -3",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "git show",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "git status",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "git rev-parse HEAD",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "git fetch",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "git fetch --upload-pack=x",
+   "verdict": {
+    "ok": false,
+    "reason": "git option not allowed"
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "git push",
+   "verdict": {
+    "ok": false,
+    "reason": "git is limited to diff, log, show, status, rev-parse and fetch"
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "git",
+   "verdict": {
+    "ok": false,
+    "reason": "git is limited to diff, log, show, status, rev-parse and fetch"
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "git commit -m x",
+   "verdict": {
+    "ok": false,
+    "reason": "git is limited to diff, log, show, status, rev-parse and fetch"
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "/usr/bin/git push",
+   "verdict": {
+    "ok": false,
+    "reason": "git is limited to diff, log, show, status, rev-parse and fetch"
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "/usr/local/bin/gh pr view 1",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "npm test",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "npm test x",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "npm install",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "ls",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "ls -la",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "npx tsc --noEmit",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "npx tscx",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "a && b",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "a; b",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "a | b",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "a & b",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "echo `id`",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "echo $(id)",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "echo $HOME",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "a > f",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "a < f",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "(a)",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "a\\b",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "a\nb",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "unterminated 'q",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "x \"y",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "   ",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash"
+   ],
+   "command": "\tgh\tpr view 1",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "gh pr view 12",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "gh pr view \"a b\"",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "gh pr view 'x'",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "gh pr diff 1",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "gh pr checks 1",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "gh repo view",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "gh pr comment 1 --body x",
+   "verdict": {
+    "ok": false,
+    "reason": "gh is limited to pr view|diff|checks, repo view and api GETs"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "gh pr merge 1",
+   "verdict": {
+    "ok": false,
+    "reason": "gh is limited to pr view|diff|checks, repo view and api GETs"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "gh issue list",
+   "verdict": {
+    "ok": false,
+    "reason": "gh is limited to pr view|diff|checks, repo view and api GETs"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "gh api repos/o/r",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "gh api -X GET repos/o/r",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "gh api -X POST x",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may only GET"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "gh api -XPOST x",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may only GET"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "gh api --method PATCH x",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may only GET"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "gh api --method=DELETE x",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may only GET"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "gh api x -f a=b",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may not send fields or input"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "gh api x -Fa=b",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may not send fields or input"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "gh api x --field=a",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may not send fields or input"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "gh api x --raw-field a",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may not send fields or input"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "gh api x --input f",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may not send fields or input"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "git diff",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "git log -3",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "git show",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "git status",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "git rev-parse HEAD",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "git fetch",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "git fetch --upload-pack=x",
+   "verdict": {
+    "ok": false,
+    "reason": "git option not allowed"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "git push",
+   "verdict": {
+    "ok": false,
+    "reason": "git is limited to diff, log, show, status, rev-parse and fetch"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "git",
+   "verdict": {
+    "ok": false,
+    "reason": "git is limited to diff, log, show, status, rev-parse and fetch"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "git commit -m x",
+   "verdict": {
+    "ok": false,
+    "reason": "git is limited to diff, log, show, status, rev-parse and fetch"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "/usr/bin/git push",
+   "verdict": {
+    "ok": false,
+    "reason": "git is limited to diff, log, show, status, rev-parse and fetch"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "/usr/local/bin/gh pr view 1",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "npm test",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "npm test x",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "npm install",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "ls",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "ls -la",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "npx tsc --noEmit",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "npx tscx",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "a && b",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "a; b",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "a | b",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "a & b",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "echo `id`",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "echo $(id)",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "echo $HOME",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "a > f",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "a < f",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "(a)",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "a\\b",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "a\nb",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "unterminated 'q",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "x \"y",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "   ",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(*)"
+   ],
+   "command": "\tgh\tpr view 1",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [],
+   "command": "gh pr view 12",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "gh pr view \"a b\"",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "gh pr view 'x'",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "gh pr diff 1",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "gh pr checks 1",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "gh repo view",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "gh pr comment 1 --body x",
+   "verdict": {
+    "ok": false,
+    "reason": "gh is limited to pr view|diff|checks, repo view and api GETs"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "gh pr merge 1",
+   "verdict": {
+    "ok": false,
+    "reason": "gh is limited to pr view|diff|checks, repo view and api GETs"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "gh issue list",
+   "verdict": {
+    "ok": false,
+    "reason": "gh is limited to pr view|diff|checks, repo view and api GETs"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "gh api repos/o/r",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "gh api -X GET repos/o/r",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "gh api -X POST x",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may only GET"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "gh api -XPOST x",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may only GET"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "gh api --method PATCH x",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may only GET"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "gh api --method=DELETE x",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may only GET"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "gh api x -f a=b",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may not send fields or input"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "gh api x -Fa=b",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may not send fields or input"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "gh api x --field=a",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may not send fields or input"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "gh api x --raw-field a",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may not send fields or input"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "gh api x --input f",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may not send fields or input"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "git diff",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "git log -3",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "git show",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "git status",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "git rev-parse HEAD",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "git fetch",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "git fetch --upload-pack=x",
+   "verdict": {
+    "ok": false,
+    "reason": "git option not allowed"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "git push",
+   "verdict": {
+    "ok": false,
+    "reason": "git is limited to diff, log, show, status, rev-parse and fetch"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "git",
+   "verdict": {
+    "ok": false,
+    "reason": "git is limited to diff, log, show, status, rev-parse and fetch"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "git commit -m x",
+   "verdict": {
+    "ok": false,
+    "reason": "git is limited to diff, log, show, status, rev-parse and fetch"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "/usr/bin/git push",
+   "verdict": {
+    "ok": false,
+    "reason": "git is limited to diff, log, show, status, rev-parse and fetch"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "/usr/local/bin/gh pr view 1",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "npm test",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "npm test x",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "npm install",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "ls",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "ls -la",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "npx tsc --noEmit",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "npx tscx",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "a && b",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "a; b",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "a | b",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "a & b",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "echo `id`",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "echo $(id)",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "echo $HOME",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "a > f",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "a < f",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "(a)",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "a\\b",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "a\nb",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "unterminated 'q",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "x \"y",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "   ",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [],
+   "command": "\tgh\tpr view 1",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "gh pr view 12",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "gh pr view \"a b\"",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "gh pr view 'x'",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "gh pr diff 1",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "gh pr checks 1",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "gh repo view",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "gh pr comment 1 --body x",
+   "verdict": {
+    "ok": false,
+    "reason": "gh is limited to pr view|diff|checks, repo view and api GETs"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "gh pr merge 1",
+   "verdict": {
+    "ok": false,
+    "reason": "gh is limited to pr view|diff|checks, repo view and api GETs"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "gh issue list",
+   "verdict": {
+    "ok": false,
+    "reason": "gh is limited to pr view|diff|checks, repo view and api GETs"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "gh api repos/o/r",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "gh api -X GET repos/o/r",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "gh api -X POST x",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may only GET"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "gh api -XPOST x",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may only GET"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "gh api --method PATCH x",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may only GET"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "gh api --method=DELETE x",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may only GET"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "gh api x -f a=b",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may not send fields or input"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "gh api x -Fa=b",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may not send fields or input"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "gh api x --field=a",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may not send fields or input"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "gh api x --raw-field a",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may not send fields or input"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "gh api x --input f",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may not send fields or input"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "git diff",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "git log -3",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "git show",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "git status",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "git rev-parse HEAD",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "git fetch",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "git fetch --upload-pack=x",
+   "verdict": {
+    "ok": false,
+    "reason": "git option not allowed"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "git push",
+   "verdict": {
+    "ok": false,
+    "reason": "git is limited to diff, log, show, status, rev-parse and fetch"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "git",
+   "verdict": {
+    "ok": false,
+    "reason": "git is limited to diff, log, show, status, rev-parse and fetch"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "git commit -m x",
+   "verdict": {
+    "ok": false,
+    "reason": "git is limited to diff, log, show, status, rev-parse and fetch"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "/usr/bin/git push",
+   "verdict": {
+    "ok": false,
+    "reason": "git is limited to diff, log, show, status, rev-parse and fetch"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "/usr/local/bin/gh pr view 1",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "npm test",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "npm test x",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "npm install",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "ls",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "ls -la",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "npx tsc --noEmit",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "npx tscx",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "a && b",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "a; b",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "a | b",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "a & b",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "echo `id`",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "echo $(id)",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "echo $HOME",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "a > f",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "a < f",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "(a)",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "a\\b",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "a\nb",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "unterminated 'q",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "x \"y",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "   ",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view:*)"
+   ],
+   "command": "\tgh\tpr view 1",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "gh pr view 12",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "gh pr view \"a b\"",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "gh pr view 'x'",
+   "verdict": {
+    "ok": true
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "gh pr diff 1",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "gh pr checks 1",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "gh repo view",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "gh pr comment 1 --body x",
+   "verdict": {
+    "ok": false,
+    "reason": "gh is limited to pr view|diff|checks, repo view and api GETs"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "gh pr merge 1",
+   "verdict": {
+    "ok": false,
+    "reason": "gh is limited to pr view|diff|checks, repo view and api GETs"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "gh issue list",
+   "verdict": {
+    "ok": false,
+    "reason": "gh is limited to pr view|diff|checks, repo view and api GETs"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "gh api repos/o/r",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "gh api -X GET repos/o/r",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "gh api -X POST x",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may only GET"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "gh api -XPOST x",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may only GET"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "gh api --method PATCH x",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may only GET"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "gh api --method=DELETE x",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may only GET"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "gh api x -f a=b",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may not send fields or input"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "gh api x -Fa=b",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may not send fields or input"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "gh api x --field=a",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may not send fields or input"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "gh api x --raw-field a",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may not send fields or input"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "gh api x --input f",
+   "verdict": {
+    "ok": false,
+    "reason": "gh api may not send fields or input"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "git diff",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "git log -3",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "git show",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "git status",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "git rev-parse HEAD",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "git fetch",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "git fetch --upload-pack=x",
+   "verdict": {
+    "ok": false,
+    "reason": "git option not allowed"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "git push",
+   "verdict": {
+    "ok": false,
+    "reason": "git is limited to diff, log, show, status, rev-parse and fetch"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "git",
+   "verdict": {
+    "ok": false,
+    "reason": "git is limited to diff, log, show, status, rev-parse and fetch"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "git commit -m x",
+   "verdict": {
+    "ok": false,
+    "reason": "git is limited to diff, log, show, status, rev-parse and fetch"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "/usr/bin/git push",
+   "verdict": {
+    "ok": false,
+    "reason": "git is limited to diff, log, show, status, rev-parse and fetch"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "/usr/local/bin/gh pr view 1",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "npm test",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "npm test x",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "npm install",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "ls",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "ls -la",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "npx tsc --noEmit",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "npx tscx",
+   "verdict": {
+    "ok": false,
+    "reason": "command does not match the step's allowed tools"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "a && b",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "a; b",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "a | b",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "a & b",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "echo `id`",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "echo $(id)",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "echo $HOME",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "a > f",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "a < f",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "(a)",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "a\\b",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "a\nb",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "unterminated 'q",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "x \"y",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "   ",
+   "verdict": {
+    "ok": false,
+    "reason": "only a single plain command can match the allowlist (no chaining, substitution or redirection)"
+   }
+  },
+  {
+   "allowed": [
+    "Bash(gh pr view *)"
+   ],
+   "command": "\tgh\tpr view 1",
+   "verdict": {
+    "ok": true
+   }
+  }
+ ],
+ "disabled": [
+  {
+   "access": "none",
+   "allowed": null,
+   "disabled": [
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "grep",
+    "list_dir",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "fetch_url",
+    "browser",
+    "capture",
+    "delegation_targets",
+    "spawn_agent",
+    "agent_watch",
+    "update_plan",
+    "set_chat_title",
+    "complete_session",
+    "ask_user",
+    "decide",
+    "report_experiment",
+    "report_artifact"
+   ]
+  },
+  {
+   "access": "none",
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "disabled": [
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "grep",
+    "list_dir",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "fetch_url",
+    "browser",
+    "capture",
+    "delegation_targets",
+    "spawn_agent",
+    "agent_watch",
+    "update_plan",
+    "set_chat_title",
+    "complete_session",
+    "ask_user",
+    "decide",
+    "report_experiment",
+    "report_artifact"
+   ]
+  },
+  {
+   "access": "none",
+   "allowed": [
+    "Bash(gh:*)"
+   ],
+   "disabled": [
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "grep",
+    "list_dir",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "fetch_url",
+    "browser",
+    "capture",
+    "delegation_targets",
+    "spawn_agent",
+    "agent_watch",
+    "update_plan",
+    "set_chat_title",
+    "complete_session",
+    "ask_user",
+    "decide",
+    "report_experiment",
+    "report_artifact"
+   ]
+  },
+  {
+   "access": "none",
+   "allowed": [],
+   "disabled": [
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "grep",
+    "list_dir",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "fetch_url",
+    "browser",
+    "capture",
+    "delegation_targets",
+    "spawn_agent",
+    "agent_watch",
+    "update_plan",
+    "set_chat_title",
+    "complete_session",
+    "ask_user",
+    "decide",
+    "report_experiment",
+    "report_artifact"
+   ]
+  },
+  {
+   "access": "read",
+   "allowed": null,
+   "disabled": [
+    "write_file",
+    "edit_file",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "fetch_url",
+    "browser",
+    "capture",
+    "delegation_targets",
+    "spawn_agent",
+    "agent_watch",
+    "complete_session",
+    "ask_user",
+    "decide",
+    "report_experiment",
+    "report_artifact"
+   ]
+  },
+  {
+   "access": "read",
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "disabled": [
+    "write_file",
+    "edit_file",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "fetch_url",
+    "browser",
+    "capture",
+    "delegation_targets",
+    "spawn_agent",
+    "agent_watch",
+    "complete_session",
+    "ask_user",
+    "decide",
+    "report_experiment",
+    "report_artifact"
+   ]
+  },
+  {
+   "access": "read",
+   "allowed": [
+    "Bash(gh:*)"
+   ],
+   "disabled": [
+    "write_file",
+    "edit_file",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "fetch_url",
+    "browser",
+    "capture",
+    "delegation_targets",
+    "spawn_agent",
+    "agent_watch",
+    "complete_session",
+    "ask_user",
+    "decide",
+    "report_experiment",
+    "report_artifact"
+   ]
+  },
+  {
+   "access": "read",
+   "allowed": [],
+   "disabled": [
+    "write_file",
+    "edit_file",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "fetch_url",
+    "browser",
+    "capture",
+    "delegation_targets",
+    "spawn_agent",
+    "agent_watch",
+    "complete_session",
+    "ask_user",
+    "decide",
+    "report_experiment",
+    "report_artifact"
+   ]
+  },
+  {
+   "access": "allowlist",
+   "allowed": null,
+   "disabled": [
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "grep",
+    "list_dir",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "fetch_url",
+    "browser",
+    "capture",
+    "delegation_targets",
+    "spawn_agent",
+    "agent_watch",
+    "complete_session",
+    "ask_user",
+    "decide",
+    "report_experiment",
+    "report_artifact"
+   ]
+  },
+  {
+   "access": "allowlist",
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "disabled": [
+    "write_file",
+    "fetch_url",
+    "browser",
+    "capture",
+    "delegation_targets",
+    "spawn_agent",
+    "agent_watch",
+    "complete_session",
+    "ask_user",
+    "decide",
+    "report_experiment",
+    "report_artifact"
+   ]
+  },
+  {
+   "access": "allowlist",
+   "allowed": [
+    "Bash(gh:*)"
+   ],
+   "disabled": [
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "grep",
+    "list_dir",
+    "fetch_url",
+    "browser",
+    "capture",
+    "delegation_targets",
+    "spawn_agent",
+    "agent_watch",
+    "complete_session",
+    "ask_user",
+    "decide",
+    "report_experiment",
+    "report_artifact"
+   ]
+  },
+  {
+   "access": "allowlist",
+   "allowed": [],
+   "disabled": [
+    "read_file",
+    "write_file",
+    "edit_file",
+    "glob",
+    "grep",
+    "list_dir",
+    "bash",
+    "start_process",
+    "read_process",
+    "kill_process",
+    "fetch_url",
+    "browser",
+    "capture",
+    "delegation_targets",
+    "spawn_agent",
+    "agent_watch",
+    "complete_session",
+    "ask_user",
+    "decide",
+    "report_experiment",
+    "report_artifact"
+   ]
+  },
+  {
+   "access": "workspace",
+   "allowed": null,
+   "disabled": []
+  },
+  {
+   "access": "workspace",
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "disabled": []
+  },
+  {
+   "access": "workspace",
+   "allowed": [
+    "Bash(gh:*)"
+   ],
+   "disabled": []
+  },
+  {
+   "access": "workspace",
+   "allowed": [],
+   "disabled": []
+  },
+  {
+   "access": null,
+   "allowed": null,
+   "disabled": []
+  },
+  {
+   "access": null,
+   "allowed": [
+    "Read",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(gh:*)",
+    "Bash(git:*)",
+    "Bash(npm test)",
+    "Bash(ls *)",
+    "Bash(npx tsc:*)",
+    "Write(x)",
+    "Nope",
+    "mcp__srv__get",
+    " Edit "
+   ],
+   "disabled": []
+  },
+  {
+   "access": null,
+   "allowed": [
+    "Bash(gh:*)"
+   ],
+   "disabled": []
+  },
+  {
+   "access": null,
+   "allowed": [],
+   "disabled": []
+  }
+ ],
+ "decisions": [
+  {
+   "session": {},
+   "call": {
+    "name": "read_file",
+    "input": {
+     "path": "a"
+    }
+   },
+   "decision": {
+    "kind": "allow"
+   }
+  },
+  {
+   "session": {},
+   "call": {
+    "name": "write_file",
+    "input": {}
+   },
+   "decision": {
+    "kind": "allow"
+   }
+  },
+  {
+   "session": {},
+   "call": {
+    "name": "grep",
+    "input": {}
+   },
+   "decision": {
+    "kind": "allow"
+   }
+  },
+  {
+   "session": {},
+   "call": {
+    "name": "update_plan",
+    "input": {}
+   },
+   "decision": {
+    "kind": "allow"
+   }
+  },
+  {
+   "session": {},
+   "call": {
+    "name": "bash",
+    "input": {
+     "command": "gh pr view 1"
+    }
+   },
+   "decision": {
+    "kind": "allow"
+   }
+  },
+  {
+   "session": {},
+   "call": {
+    "name": "bash",
+    "input": {
+     "command": "gh pr view 1 && id"
+    }
+   },
+   "decision": {
+    "kind": "allow"
+   }
+  },
+  {
+   "session": {},
+   "call": {
+    "name": "bash",
+    "input": {}
+   },
+   "decision": {
+    "kind": "allow"
+   }
+  },
+  {
+   "session": {},
+   "call": {
+    "name": "start_process",
+    "input": {
+     "command": "npm test"
+    }
+   },
+   "decision": {
+    "kind": "allow"
+   }
+  },
+  {
+   "session": {},
+   "call": {
+    "name": "read_process",
+    "input": {}
+   },
+   "decision": {
+    "kind": "allow"
+   }
+  },
+  {
+   "session": {},
+   "call": {
+    "name": "mcp__srv__get",
+    "input": {}
+   },
+   "decision": {
+    "kind": "allow"
+   }
+  },
+  {
+   "session": {},
+   "call": {
+    "name": "fetch_url",
+    "input": {}
+   },
+   "decision": {
+    "kind": "allow"
+   }
+  },
+  {
+   "session": {},
+   "call": {
+    "name": "ask_user",
+    "input": {}
+   },
+   "decision": {
+    "kind": "allow"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "workspace"
+   },
+   "call": {
+    "name": "read_file",
+    "input": {
+     "path": "a"
+    }
+   },
+   "decision": {
+    "kind": "allow"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "workspace"
+   },
+   "call": {
+    "name": "write_file",
+    "input": {}
+   },
+   "decision": {
+    "kind": "allow"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "workspace"
+   },
+   "call": {
+    "name": "grep",
+    "input": {}
+   },
+   "decision": {
+    "kind": "allow"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "workspace"
+   },
+   "call": {
+    "name": "update_plan",
+    "input": {}
+   },
+   "decision": {
+    "kind": "allow"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "workspace"
+   },
+   "call": {
+    "name": "bash",
+    "input": {
+     "command": "gh pr view 1"
+    }
+   },
+   "decision": {
+    "kind": "allow"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "workspace"
+   },
+   "call": {
+    "name": "bash",
+    "input": {
+     "command": "gh pr view 1 && id"
+    }
+   },
+   "decision": {
+    "kind": "allow"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "workspace"
+   },
+   "call": {
+    "name": "bash",
+    "input": {}
+   },
+   "decision": {
+    "kind": "allow"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "workspace"
+   },
+   "call": {
+    "name": "start_process",
+    "input": {
+     "command": "npm test"
+    }
+   },
+   "decision": {
+    "kind": "allow"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "workspace"
+   },
+   "call": {
+    "name": "read_process",
+    "input": {}
+   },
+   "decision": {
+    "kind": "allow"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "workspace"
+   },
+   "call": {
+    "name": "mcp__srv__get",
+    "input": {}
+   },
+   "decision": {
+    "kind": "allow"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "workspace"
+   },
+   "call": {
+    "name": "fetch_url",
+    "input": {}
+   },
+   "decision": {
+    "kind": "allow"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "workspace"
+   },
+   "call": {
+    "name": "ask_user",
+    "input": {}
+   },
+   "decision": {
+    "kind": "allow"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "none"
+   },
+   "call": {
+    "name": "read_file",
+    "input": {
+     "path": "a"
+    }
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (read_file: not available with no tool access)"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "none"
+   },
+   "call": {
+    "name": "write_file",
+    "input": {}
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (write_file: not available with no tool access)"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "none"
+   },
+   "call": {
+    "name": "grep",
+    "input": {}
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (grep: not available with no tool access)"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "none"
+   },
+   "call": {
+    "name": "update_plan",
+    "input": {}
+   },
+   "decision": {
+    "kind": "allow"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "none"
+   },
+   "call": {
+    "name": "bash",
+    "input": {
+     "command": "gh pr view 1"
+    }
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (bash: not available with no tool access)"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "none"
+   },
+   "call": {
+    "name": "bash",
+    "input": {
+     "command": "gh pr view 1 && id"
+    }
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (bash: not available with no tool access)"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "none"
+   },
+   "call": {
+    "name": "bash",
+    "input": {}
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (bash: not available with no tool access)"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "none"
+   },
+   "call": {
+    "name": "start_process",
+    "input": {
+     "command": "npm test"
+    }
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (start_process: not available with no tool access)"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "none"
+   },
+   "call": {
+    "name": "read_process",
+    "input": {}
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (read_process: not available with no tool access)"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "none"
+   },
+   "call": {
+    "name": "mcp__srv__get",
+    "input": {}
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (mcp__srv__get: not available with no tool access)"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "none"
+   },
+   "call": {
+    "name": "fetch_url",
+    "input": {}
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (fetch_url: not available with no tool access)"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "none"
+   },
+   "call": {
+    "name": "ask_user",
+    "input": {}
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (ask_user: not available with no tool access)"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "read"
+   },
+   "call": {
+    "name": "read_file",
+    "input": {
+     "path": "a"
+    }
+   },
+   "decision": {
+    "kind": "allow"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "read"
+   },
+   "call": {
+    "name": "write_file",
+    "input": {}
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (write_file: not available with read-only tool access)"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "read"
+   },
+   "call": {
+    "name": "grep",
+    "input": {}
+   },
+   "decision": {
+    "kind": "allow"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "read"
+   },
+   "call": {
+    "name": "update_plan",
+    "input": {}
+   },
+   "decision": {
+    "kind": "allow"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "read"
+   },
+   "call": {
+    "name": "bash",
+    "input": {
+     "command": "gh pr view 1"
+    }
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (bash: not available with read-only tool access)"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "read"
+   },
+   "call": {
+    "name": "bash",
+    "input": {
+     "command": "gh pr view 1 && id"
+    }
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (bash: not available with read-only tool access)"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "read"
+   },
+   "call": {
+    "name": "bash",
+    "input": {}
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (bash: not available with read-only tool access)"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "read"
+   },
+   "call": {
+    "name": "start_process",
+    "input": {
+     "command": "npm test"
+    }
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (start_process: not available with read-only tool access)"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "read"
+   },
+   "call": {
+    "name": "read_process",
+    "input": {}
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (read_process: not available with read-only tool access)"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "read"
+   },
+   "call": {
+    "name": "mcp__srv__get",
+    "input": {}
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (mcp__srv__get: not available with read-only tool access)"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "read"
+   },
+   "call": {
+    "name": "fetch_url",
+    "input": {}
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (fetch_url: not available with read-only tool access)"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "read"
+   },
+   "call": {
+    "name": "ask_user",
+    "input": {}
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (ask_user: not available with read-only tool access)"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "allowlist",
+    "allowedTools": [
+     "Read",
+     "Grep",
+     "Glob",
+     "LS",
+     "Bash(gh:*)",
+     "Bash(git:*)",
+     "Bash(npm test)",
+     "Bash(ls *)",
+     "Bash(npx tsc:*)",
+     "Write(x)",
+     "Nope",
+     "mcp__srv__get",
+     " Edit "
+    ]
+   },
+   "call": {
+    "name": "read_file",
+    "input": {
+     "path": "a"
+    }
+   },
+   "decision": {
+    "kind": "auto"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "allowlist",
+    "allowedTools": [
+     "Read",
+     "Grep",
+     "Glob",
+     "LS",
+     "Bash(gh:*)",
+     "Bash(git:*)",
+     "Bash(npm test)",
+     "Bash(ls *)",
+     "Bash(npx tsc:*)",
+     "Write(x)",
+     "Nope",
+     "mcp__srv__get",
+     " Edit "
+    ]
+   },
+   "call": {
+    "name": "write_file",
+    "input": {}
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (write_file: not in the step's allowed tools)"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "allowlist",
+    "allowedTools": [
+     "Read",
+     "Grep",
+     "Glob",
+     "LS",
+     "Bash(gh:*)",
+     "Bash(git:*)",
+     "Bash(npm test)",
+     "Bash(ls *)",
+     "Bash(npx tsc:*)",
+     "Write(x)",
+     "Nope",
+     "mcp__srv__get",
+     " Edit "
+    ]
+   },
+   "call": {
+    "name": "grep",
+    "input": {}
+   },
+   "decision": {
+    "kind": "auto"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "allowlist",
+    "allowedTools": [
+     "Read",
+     "Grep",
+     "Glob",
+     "LS",
+     "Bash(gh:*)",
+     "Bash(git:*)",
+     "Bash(npm test)",
+     "Bash(ls *)",
+     "Bash(npx tsc:*)",
+     "Write(x)",
+     "Nope",
+     "mcp__srv__get",
+     " Edit "
+    ]
+   },
+   "call": {
+    "name": "update_plan",
+    "input": {}
+   },
+   "decision": {
+    "kind": "allow"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "allowlist",
+    "allowedTools": [
+     "Read",
+     "Grep",
+     "Glob",
+     "LS",
+     "Bash(gh:*)",
+     "Bash(git:*)",
+     "Bash(npm test)",
+     "Bash(ls *)",
+     "Bash(npx tsc:*)",
+     "Write(x)",
+     "Nope",
+     "mcp__srv__get",
+     " Edit "
+    ]
+   },
+   "call": {
+    "name": "bash",
+    "input": {
+     "command": "gh pr view 1"
+    }
+   },
+   "decision": {
+    "kind": "auto"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "allowlist",
+    "allowedTools": [
+     "Read",
+     "Grep",
+     "Glob",
+     "LS",
+     "Bash(gh:*)",
+     "Bash(git:*)",
+     "Bash(npm test)",
+     "Bash(ls *)",
+     "Bash(npx tsc:*)",
+     "Write(x)",
+     "Nope",
+     "mcp__srv__get",
+     " Edit "
+    ]
+   },
+   "call": {
+    "name": "bash",
+    "input": {
+     "command": "gh pr view 1 && id"
+    }
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (bash: only a single plain command can match the allowlist (no chaining, substitution or redirection))"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "allowlist",
+    "allowedTools": [
+     "Read",
+     "Grep",
+     "Glob",
+     "LS",
+     "Bash(gh:*)",
+     "Bash(git:*)",
+     "Bash(npm test)",
+     "Bash(ls *)",
+     "Bash(npx tsc:*)",
+     "Write(x)",
+     "Nope",
+     "mcp__srv__get",
+     " Edit "
+    ]
+   },
+   "call": {
+    "name": "bash",
+    "input": {}
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (bash: only a single plain command can match the allowlist (no chaining, substitution or redirection))"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "allowlist",
+    "allowedTools": [
+     "Read",
+     "Grep",
+     "Glob",
+     "LS",
+     "Bash(gh:*)",
+     "Bash(git:*)",
+     "Bash(npm test)",
+     "Bash(ls *)",
+     "Bash(npx tsc:*)",
+     "Write(x)",
+     "Nope",
+     "mcp__srv__get",
+     " Edit "
+    ]
+   },
+   "call": {
+    "name": "start_process",
+    "input": {
+     "command": "npm test"
+    }
+   },
+   "decision": {
+    "kind": "auto"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "allowlist",
+    "allowedTools": [
+     "Read",
+     "Grep",
+     "Glob",
+     "LS",
+     "Bash(gh:*)",
+     "Bash(git:*)",
+     "Bash(npm test)",
+     "Bash(ls *)",
+     "Bash(npx tsc:*)",
+     "Write(x)",
+     "Nope",
+     "mcp__srv__get",
+     " Edit "
+    ]
+   },
+   "call": {
+    "name": "read_process",
+    "input": {}
+   },
+   "decision": {
+    "kind": "auto"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "allowlist",
+    "allowedTools": [
+     "Read",
+     "Grep",
+     "Glob",
+     "LS",
+     "Bash(gh:*)",
+     "Bash(git:*)",
+     "Bash(npm test)",
+     "Bash(ls *)",
+     "Bash(npx tsc:*)",
+     "Write(x)",
+     "Nope",
+     "mcp__srv__get",
+     " Edit "
+    ]
+   },
+   "call": {
+    "name": "mcp__srv__get",
+    "input": {}
+   },
+   "decision": {
+    "kind": "auto"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "allowlist",
+    "allowedTools": [
+     "Read",
+     "Grep",
+     "Glob",
+     "LS",
+     "Bash(gh:*)",
+     "Bash(git:*)",
+     "Bash(npm test)",
+     "Bash(ls *)",
+     "Bash(npx tsc:*)",
+     "Write(x)",
+     "Nope",
+     "mcp__srv__get",
+     " Edit "
+    ]
+   },
+   "call": {
+    "name": "fetch_url",
+    "input": {}
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (fetch_url: not in the step's allowed tools)"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "allowlist",
+    "allowedTools": [
+     "Read",
+     "Grep",
+     "Glob",
+     "LS",
+     "Bash(gh:*)",
+     "Bash(git:*)",
+     "Bash(npm test)",
+     "Bash(ls *)",
+     "Bash(npx tsc:*)",
+     "Write(x)",
+     "Nope",
+     "mcp__srv__get",
+     " Edit "
+    ]
+   },
+   "call": {
+    "name": "ask_user",
+    "input": {}
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (ask_user: not in the step's allowed tools)"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "allowlist"
+   },
+   "call": {
+    "name": "read_file",
+    "input": {
+     "path": "a"
+    }
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (read_file: not in the step's allowed tools)"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "allowlist"
+   },
+   "call": {
+    "name": "write_file",
+    "input": {}
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (write_file: not in the step's allowed tools)"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "allowlist"
+   },
+   "call": {
+    "name": "grep",
+    "input": {}
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (grep: not in the step's allowed tools)"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "allowlist"
+   },
+   "call": {
+    "name": "update_plan",
+    "input": {}
+   },
+   "decision": {
+    "kind": "allow"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "allowlist"
+   },
+   "call": {
+    "name": "bash",
+    "input": {
+     "command": "gh pr view 1"
+    }
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (bash: not in the step's allowed tools)"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "allowlist"
+   },
+   "call": {
+    "name": "bash",
+    "input": {
+     "command": "gh pr view 1 && id"
+    }
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (bash: not in the step's allowed tools)"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "allowlist"
+   },
+   "call": {
+    "name": "bash",
+    "input": {}
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (bash: not in the step's allowed tools)"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "allowlist"
+   },
+   "call": {
+    "name": "start_process",
+    "input": {
+     "command": "npm test"
+    }
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (start_process: not in the step's allowed tools)"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "allowlist"
+   },
+   "call": {
+    "name": "read_process",
+    "input": {}
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (read_process: not in the step's allowed tools)"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "allowlist"
+   },
+   "call": {
+    "name": "mcp__srv__get",
+    "input": {}
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (mcp__srv__get: not in the step's allowed tools)"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "allowlist"
+   },
+   "call": {
+    "name": "fetch_url",
+    "input": {}
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (fetch_url: not in the step's allowed tools)"
+   }
+  },
+  {
+   "session": {
+    "toolAccess": "allowlist"
+   },
+   "call": {
+    "name": "ask_user",
+    "input": {}
+   },
+   "decision": {
+    "kind": "deny",
+    "reason": "Denied: unattended automation run (ask_user: not in the step's allowed tools)"
+   }
+  }
+ ]
+}

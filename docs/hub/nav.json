@@ -37,7 +37,7 @@
           "slug": "subscriptions",
           "title": "Subscription sign-in",
           "source": "docs/SUBSCRIPTIONS.md",
-          "description": "Use your Claude or ChatGPT subscription instead of a metered API key."
+          "description": "Use your ChatGPT subscription instead of a metered API key, and how Claude works in Nekko Agent."
         },
         {
           "slug": "usage-limits",
@@ -52,6 +52,12 @@
           "description": "Drive the agent on your computer from your phone, end-to-end encrypted."
         },
         {
+          "slug": "sync-encryption",
+          "title": "Encrypted sync",
+          "source": "docs/SYNC-ENCRYPTION.md",
+          "description": "How Pro and Team sync your chats without Nekko Cloud being able to read them."
+        },
+        {
           "slug": "cli",
           "title": "CLI and MCP",
           "source": "docs/CLI.md",
@@ -62,6 +68,12 @@
           "title": "Automations",
           "source": "docs/automations.md",
           "description": "Ready-made automations, run results and notifications, and pausing them all."
+        },
+        {
+          "slug": "workflows",
+          "title": "Workflow runs",
+          "source": "docs/workflows.md",
+          "description": "Pick a workflow's model, keep it on local models, and control what its unattended runs may do."
         },
         {
           "slug": "local-ci-runner",

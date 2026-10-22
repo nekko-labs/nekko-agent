@@ -6,6 +6,7 @@
 
 pub mod actions;
 pub mod connectors;
+pub mod github;
 pub mod http;
 pub mod js;
 

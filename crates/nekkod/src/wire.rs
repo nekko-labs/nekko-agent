@@ -1,7 +1,7 @@
 //! The loopback wire.
 //!
 //! - `POST /api/{channel}` with `{ "args": [...] }`: the Local Web UI's request
-//!   shape, for the CLI, the TS backend and anything else that speaks it.
+//!   shape, for the CLI and anything else that speaks it.
 //! - `GET /api/events`: every event as a `{ channel, payload }` text frame
 //!   (`?only=<channel>` for one channel, `?sessions=a,b` for those chats'
 //!   agent event stream only).
@@ -52,6 +52,7 @@ pub fn router(app: App) -> Router {
         .route("/api/ws", get(rpc))
         .route("/api/term/{id}", get(term))
         .route("/api/{channel}", post(call))
+        .route("/harness/approve", post(harness_approve))
         .with_state(app)
 }
 
@@ -86,6 +87,42 @@ fn check(app: &App, headers: &HeaderMap, query: &HashMap<String, String>) -> Res
     match bearer {
         Some(t) if token_eq(t.trim(), &app.token) => Ok(()),
         _ => Err(StatusCode::UNAUTHORIZED),
+    }
+}
+
+/// A Claude Agent chat's permission prompt, from its approval bridge
+/// (`nekko-agent mcp --bridge`, harness.rs). Authenticated by that chat's
+/// bridge token alone, never the daemon's: the token is written into the
+/// chat's MCP config, so it may only ever answer that chat's prompts. No
+/// browser may call it, and only on a loopback host.
+async fn harness_approve(State(app): State<App>, headers: HeaderMap, request: Request) -> Response {
+    let refuse = |code: StatusCode| (code, axum::Json(json!({ "error": "unauthorized" }))).into_response();
+    if headers.contains_key(header::ORIGIN) {
+        return refuse(StatusCode::FORBIDDEN);
+    }
+    if let Some(host) = headers.get(header::HOST).and_then(|h| h.to_str().ok()) {
+        let name = host.rsplit_once(':').map(|(h, _)| h).unwrap_or(host);
+        if !matches!(name, "127.0.0.1" | "localhost" | "[::1]") {
+            return refuse(StatusCode::FORBIDDEN);
+        }
+    }
+    let Some(token) = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .map(|t| t.trim().to_string())
+    else {
+        return refuse(StatusCode::UNAUTHORIZED);
+    };
+    let Ok(body) = to_bytes(request.into_body(), CALL_BODY_LIMIT).await else {
+        return (StatusCode::PAYLOAD_TOO_LARGE, axum::Json(json!({ "error": "body too large" }))).into_response();
+    };
+    let Ok(prompt) = serde_json::from_slice::<Value>(&body) else {
+        return (StatusCode::BAD_REQUEST, axum::Json(json!({ "error": "body is not JSON" }))).into_response();
+    };
+    match app.ctx.turns.claude_code_approve(&token, &prompt).await {
+        Some(decision) => axum::Json(decision).into_response(),
+        None => refuse(StatusCode::UNAUTHORIZED),
     }
 }
 
@@ -152,9 +189,8 @@ async fn events(
     if let Err(code) = check(&app, &headers, &query) {
         return code.into_response();
     }
-    // `?only=<channel>` narrows the stream to one channel. The TS backend uses
-    // it to take the daemon's terminal events without receiving its own
-    // events back. Frames always start with the channel key (see `Hub`).
+    // `?only=<channel>` narrows the stream to one channel. Frames always
+    // start with the channel key (see `Hub`).
     let only = query.get("only").map(|c| format!("{{\"channel\":\"{c}\""));
     // `?sessions=a,b` takes the stream of those chats only (summary events of
     // every chat still come); `?sessions=` (empty) takes no chat's stream.

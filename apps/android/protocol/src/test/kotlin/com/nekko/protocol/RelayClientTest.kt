@@ -42,6 +42,8 @@ class RelayClientTest {
         val requests = CopyOnWriteArrayList<JsonObject>()
         var current: Conn? = null
         var refuseNext: Pair<Int, String>? = null
+        /** The computer's phone protocol version in its welcome (IO-32); null sends none. */
+        var welcomeProtocol: Int? = null
         var answer: (JsonObject) -> JsonObject? = { req -> buildJsonObject { put("type", "res"); put("id", req["id"]!!); put("result", JsonPrimitive("ok:${req["channel"]!!.jsonPrimitive.content}")) } }
 
         inner class Conn(val listener: WsListener) : WsConnection {
@@ -64,6 +66,7 @@ class RelayClientTest {
                         if (reply == null) push(buildJsonObject {
                             put("type", "welcome")
                             put("device", buildJsonObject { put("id", id); put("name", frame["name"]!!); put("platform", "android") })
+                            welcomeProtocol?.let { put("protocol", it) }
                         }) else {
                             push(buildJsonObject { put("type", "denied"); put("reason", reply) })
                             drop(4001, "kicked by agent")
@@ -122,6 +125,21 @@ class RelayClientTest {
         c.await(RelayState.ONLINE)
         assertEquals(2, relay.hellos.size)
         assertNull(relay.hellos[1]["pair"])
+        c.close()
+    }
+
+    @Test fun `a newer computer and relay, the welcome field and the relay push frames are ignored`() = runBlocking {
+        // iOS reads these (IO-30, IO-32); this client must carry on as before.
+        val relay = FakeRelay(known = mutableSetOf("dev-1")).apply { welcomeProtocol = 2 }
+        val c = client(relay)
+        c.connect()
+        c.await(RelayState.ONLINE)
+        assertEquals("Pixel", c.welcome.first().name)
+        relay.current!!.plain(buildJsonObject { put("type", "push-registered"); put("delivers", true) })
+        relay.current!!.plain(buildJsonObject { put("type", "dismiss"); put("tag", "a".repeat(32)) })
+        assertEquals("ok:app:info", c.call(Channels.APP_INFO, JsonPrimitive("x")).jsonPrimitive.content)
+        assertEquals(RelayState.ONLINE, c.status.first().state)
+        assertEquals(1, relay.hellos.size)
         c.close()
     }
 

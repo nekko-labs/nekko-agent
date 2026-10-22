@@ -11,7 +11,7 @@
   "desktopName": "Nekko Agent",
   "main": "./out/main/index.js",
   "scripts": {
-    "predev": "node scripts/ensure-electron.mjs && npm run build:native-browser",
+    "predev": "node scripts/ensure-electron.mjs && npm run build:native-browser -- --dev",
     "dev": "node scripts/dev-launch.mjs dev",
     "build": "electron-vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -23,17 +23,15 @@
     "test:repo-actions": "node scripts/agent-sidebar-integration.cjs",
     "test:e2e": "playwright test -c e2e/playwright.config.ts",
     "test:command-center": "node scripts/command-center-integration.cjs",
-    "prestart": "node scripts/ensure-electron.mjs && npm run build:native-browser",
+    "prestart": "node scripts/ensure-electron.mjs && npm run build:native-browser -- --dev",
     "start": "node scripts/dev-launch.mjs preview",
     "dist": "npm run build:app --prefix ../cli && electron-vite build && node scripts/stage-daemon.mjs && npm run build:native-browser && electron-builder",
     "release": "npm run build:app --prefix ../cli && electron-vite build && node scripts/stage-daemon.mjs && npm run build:native-browser && electron-builder --publish always",
     "build:native-browser": "node ../../scripts/build-agent-browser.mjs",
-    "test:browser": "node ../../scripts/build-agent-browser.mjs && node --test ../../scripts/agent-browser-native.test.mjs && node scripts/browser-automation-smoke.mjs"
+    "test:browser": "node ../../scripts/build-agent-browser.mjs --dev && node --test ../../scripts/agent-browser-native.test.mjs && node scripts/browser-automation-smoke.mjs"
   },
   "dependencies": {
-    "@lydell/node-pty": "^1.2.0-beta.15",
-    "@nekko-agent/core": "*",
-    "@nekko-agent/host": "*",
+    "@nekko-agent/profile": "*",
     "@nekko-agent/shared": "*",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-web-links": "^0.12.0",

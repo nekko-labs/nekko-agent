@@ -10,15 +10,11 @@
 //! `sendChat` did.
 //!
 //! Connector and workspace-index snippets, a setup command's output (the
-//! chat's agent terminal, agent_logs.rs) and tool hooks are all this
-//! daemon's. When a host runs beside it, the turn is handed to it as well
-//! (`turn:adopt`, not waited on) so it runs what follows a turn (TurnEnd
-//! hooks, the linked spec) and the turn's few host-side tools; with no host,
-//! turns.rs runs that after-work itself. A sandbox chat is admitted here too (its setup checked, ask mode,
-//! only its copied folders, no host context, MCP, decision runner, hooks or
-//! sub-agents) and its turn runs every tool in the daemon's container for it
-//! (sandbox.rs). Only a sandbox chat on a daemon with no containers (no data
-//! directory) goes to the host whole.
+//! chat's agent terminal, agent_logs.rs), tool hooks and what follows a turn
+//! (turns.rs) are all this daemon's. A sandbox chat is admitted here too (its
+//! setup checked, ask mode, only its copied folders, no host context, MCP,
+//! decision runner, hooks or sub-agents) and its turn runs every tool in the
+//! daemon's container for it (sandbox.rs).
 
 use crate::routes::Ctx;
 use nekko_loop::Cancel;
@@ -38,6 +34,8 @@ pub struct Admission {
     pending: Mutex<HashMap<String, Cancel>>,
     /// The chats whose queued prompt is being started at once (`chat:interruptQueued`).
     interrupting: Arc<Mutex<HashSet<String>>>,
+    /// `sessionId` and `clientMessageId` of each `chat:send` still running here, so a resend meanwhile is a repeat.
+    sending: Arc<Mutex<HashSet<String>>>,
     compactions: Arc<crate::compaction::Compactions>,
     /// The desktop app's host lets the agent drive a browser; the Local Web UI's does not.
     pub allow_browser_control: bool,
@@ -48,6 +46,7 @@ impl Admission {
         Arc::new(Admission {
             pending: Mutex::default(),
             interrupting: Arc::default(),
+            sending: Arc::default(),
             compactions,
             allow_browser_control,
         })
@@ -61,6 +60,14 @@ impl Admission {
     fn begin_interrupt(&self, id: &str) -> InterruptGuard {
         self.interrupting.lock().unwrap_or_else(|e| e.into_inner()).insert(id.to_string());
         InterruptGuard { set: self.interrupting.clone(), id: id.to_string() }
+    }
+
+    /// Mark a `chat:send` with this `clientMessageId` as running until the
+    /// guard drops; `None` when one with the same id already runs.
+    fn begin_sending(&self, session_id: &str, client_id: &str) -> Option<InterruptGuard> {
+        let key = format!("{session_id}\n{client_id}");
+        let fresh = self.sending.lock().unwrap_or_else(|e| e.into_inner()).insert(key.clone());
+        fresh.then(|| InterruptGuard { set: self.sending.clone(), id: key })
     }
 
     /// Whether a `chat:send` for this chat is being admitted or driven here.
@@ -123,13 +130,9 @@ async fn stopped(ctx: &Ctx, session_id: &str) -> Result<Admit, String> {
     Ok(Admit::Ended)
 }
 
-/// Tell the UI (and, through the host, the phone relay) what happened.
+/// Tell the UI (and the phone relay) what happened.
 async fn emit(ctx: &Ctx, event: Value) {
-    ctx.hub.publish("agent:event", event.clone(), false);
-    let backend = ctx.backend.clone();
-    tokio::spawn(async move {
-        let _ = backend.call("turn:notify", json!([event])).await;
-    });
+    ctx.hub.publish("agent:event", event, false);
 }
 
 async fn fail(ctx: &Ctx, session_id: &str, message: &str) -> Result<Value, String> {
@@ -137,8 +140,8 @@ async fn fail(ctx: &Ctx, session_id: &str, message: &str) -> Result<Value, Strin
     Ok(Value::Null)
 }
 
-/// `newTurnId()`, marked `turn_d` so the host knows to wait for its `turn:adopt`.
-fn daemon_turn_id() -> String {
+/// `newTurnId()`, marked `turn_d`: a turn this daemon admitted, whose queue it runs on.
+pub(crate) fn daemon_turn_id() -> String {
     let mut b = [0u8; 4];
     let _ = getrandom::fill(&mut b);
     let hex: String = b.iter().map(|x| format!("{x:02x}")).collect();
@@ -166,26 +169,18 @@ fn is_local(kind: &str) -> bool {
     LOCAL_KINDS.contains(&kind)
 }
 
-/// `providerEndpoint`: a provider's URL when it is one a turn may call.
-pub(crate) fn provider_endpoint(provider: &Value) -> Option<url::Url> {
-    let kind = s(provider, "kind");
-    if !is_local(kind) && !["anthropic", "openai", "openrouter", "chatgpt", "openai-compat"].contains(&kind) {
-        return None;
-    }
-    let url = url::Url::parse(provider.get("baseUrl").and_then(Value::as_str)?).ok()?;
-    (matches!(url.scheme(), "http" | "https") && url.username().is_empty() && url.password().is_none()).then_some(url)
-}
+/// A cloud-only chat asked to run on a model server on this machine.
+pub(crate) const CLOUD_ONLY_REFUSAL: &str =
+    "This chat runs on cloud models only. Pick a cloud model, or turn Cloud only off in the Mode panel.";
 
-/// `offlineProviderAllowed`: a local kind (or openai-compat) on a loopback address.
-pub(crate) fn offline_provider_allowed(provider: &Value) -> bool {
-    let Some(url) = provider_endpoint(provider) else { return false };
-    let kind = s(provider, "kind");
-    let host = url.host_str().unwrap_or_default();
-    let loop_v4 = host.strip_prefix("127.").is_some_and(|rest| {
-        let parts: Vec<&str> = rest.split('.').collect();
-        parts.len() == 3 && parts.iter().all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()))
-    });
-    (is_local(kind) || kind == "openai-compat") && (host == "localhost" || host == "[::1]" || loop_v4)
+/// `providerEndpoint` and `offlineProviderAllowed`, shared with the workflow engine (nekko-turn).
+pub(crate) use nekko_turn::providers::{cloud_provider_allowed, offline_provider_allowed, provider_endpoint};
+
+/// Whether a turn may run on this provider: one with a valid endpoint, or
+/// Claude Agent (`claude-code`), which runs the user's own Claude Code and has
+/// no URL at all.
+pub(crate) fn turn_provider_allowed(provider: &Value) -> bool {
+    s(provider, "kind") == "claude-code" || provider_endpoint(provider).is_some()
 }
 
 /// `clampMaxOutputTokens`.
@@ -272,11 +267,9 @@ fn has_index_words(text: &str) -> bool {
 
 /// What admitting a turn came to.
 enum Admit {
-    /// The host runs it (a sandbox chat, or the kill switch).
-    Host,
     /// It cannot run; the chat was told why.
     Ended,
-    /// The `chat:turn` spec to drive; the host has been handed the turn.
+    /// The `chat:turn` spec to drive.
     Spec(Value),
 }
 
@@ -296,13 +289,32 @@ pub async fn admit_child(ctx: &Ctx, opts: Value) -> Result<Option<Value>, String
             spec["allowBrowserControl"] = json!(false);
             Ok(Some(spec))
         }
-        Admit::Host | Admit::Ended => Ok(None),
+        Admit::Ended => Ok(None),
     }
 }
 
 /// `chat:send`.
 pub async fn send(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>) -> Result<Value, String> {
     let opts = args.first().cloned().unwrap_or(Value::Null);
+    // A resend of a prompt this chat already took (a phone's outbox after a
+    // dropped connection) starts no second turn: it resolves at once, where
+    // the first send resolves when its turn ends (host.ts `sendChat`).
+    let client_id = nekko_store::client_ids::client_message_id_of(opts.get("clientMessageId")).map(str::to_string);
+    let _sending = match &client_id {
+        Some(cid) => match adm.begin_sending(s(&opts, "sessionId"), cid) {
+            Some(guard) => Some(guard),
+            None => return Ok(Value::Null),
+        },
+        None => None,
+    };
+    if let (Some(cid), Some(store)) = (&client_id, ctx.sessions.clone()) {
+        let id = s(&opts, "sessionId").to_string();
+        let session = tokio::task::spawn_blocking(move || store.get(&id)).await.map_err(|e| e.to_string())?;
+        let ids = session.as_ref().and_then(|v| v.get("clientMessageIds"));
+        if nekko_store::client_ids::has_client_message_id(ids, Some(cid)) {
+            return Ok(Value::Null);
+        }
+    }
     if adm.interrupting(s(&opts, "sessionId")) {
         return Err("A queued prompt is already starting.".into());
     }
@@ -320,10 +332,6 @@ async fn send_with(ctx: &Ctx, adm: &Arc<Admission>, opts: Value, queued: Option<
         return Ok(Value::Null);
     }
     let spec = match result {
-        Admit::Host => {
-            drop(pending);
-            return ctx.backend.call("chat:send", json!([opts])).await;
-        }
         Admit::Ended => return Ok(Value::Null),
         Admit::Spec(spec) => spec,
     };
@@ -352,9 +360,8 @@ pub async fn interrupt_queued(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>)
     let (st, id) = (store.clone(), session_id.clone());
     let session = tokio::task::spawn_blocking(move || st.get(&id)).await.map_err(|e| e.to_string())?;
     let session = session.ok_or("Session not found.")?;
-    // A sandbox chat without containers here stays in the host whole.
     if crate::worktrees::execution_mode(&session) == "sandbox" && ctx.sandboxes.is_none() {
-        return ctx.backend.call("chat:interruptQueued", Value::Array(args)).await;
+        return Err(NO_SANDBOXES.into());
     }
     let index = nekko_turn::variants::queued_index_valid(&session, &index).ok_or("Queued prompt not found.")?;
     if adm.interrupting(&session_id) {
@@ -372,7 +379,7 @@ pub async fn interrupt_queued(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>)
         async move {
             adm.is_admitting(&id)
                 || ctx.turns.running_sessions().contains(&id)
-                || crate::routes::running_chats(&ctx).await.contains(&id)
+                || crate::routes::running_chats(&ctx).contains(&id)
         }
     };
     if busy(ctx, adm, session_id.clone()).await {
@@ -394,22 +401,21 @@ pub async fn interrupt_queued(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>)
     send_with(ctx, adm, opts, Some(json!({ "index": index, "item": item }))).await
 }
 
-/// The next queued prompt of a chain the daemon admitted (`turn:prepare`,
-/// answered here): `{ spec }`, `{ ended: true }` (it could not start and the
-/// chat was told why), or `{ inProcess: true }` (the host must run it).
-/// `None` (a sandbox chat, or the kill switch) leaves it to the host's `turn:prepare`.
+/// The next queued prompt of a chain the daemon admitted: `{ spec }`, or
+/// `{ ended: true }` (it could not start and the chat was told why).
 pub async fn admit_queued(ctx: &Ctx, adm: &Arc<Admission>, payload: &Value) -> Option<Value> {
     let opts = payload.get("opts").cloned().unwrap_or(Value::Null);
     let cancel = adm.cancellation(s(&opts, "sessionId")).unwrap_or_default();
     match admit(ctx, adm, opts, payload.get("queued").cloned(), true, &cancel).await {
         Ok(Admit::Spec(spec)) => Some(json!({ "spec": spec })),
-        Ok(Admit::Host) => None,
         Ok(Admit::Ended) | Err(_) => Some(json!({ "ended": true })),
     }
 }
 
-/// `admitTurn` and `buildDaemonTurn`: check, provision and describe a turn,
-/// and hand it to the host for its callbacks.
+/// A sandbox chat on a daemon with no containers (no data directory).
+const NO_SANDBOXES: &str = "Sandbox chats need the daemon to know the data directory.";
+
+/// `admitTurn` and `buildDaemonTurn`: check, provision and describe a turn.
 async fn admit(
     ctx: &Ctx,
     adm: &Arc<Admission>,
@@ -424,11 +430,9 @@ async fn admit(
         let (st, id) = (store.clone(), session_id.clone());
         tokio::task::spawn_blocking(move || st.get(&id)).await.map_err(|e| e.to_string())?
     };
-    // A sandbox chat stays in the host when this daemon has no containers
-    // (no data directory).
     let sandbox = session.as_ref().is_some_and(|s| crate::worktrees::execution_mode(s) == "sandbox");
     if sandbox && ctx.sandboxes.is_none() {
-        return Ok(Admit::Host);
+        return Err(NO_SANDBOXES.into());
     }
     // A chained queued prompt was admitted by the host without this check; so it stays.
     if !chained && adm.is_compacting(&session_id) {
@@ -442,6 +446,13 @@ async fn admit(
     let Some(provider) = provider.filter(|p| nekko_js::truthy(p.get("enabled"))) else {
         return ended(ctx, &session_id, "Provider not configured or disabled.").await;
     };
+    // A scheduled task, workflow, goal step, watch or auto-continue on Claude
+    // Code needs `unattended_runs` for its auth (claude_policy.rs). Its auth
+    // comes from `claude auth status`, read once if nothing has read it yet.
+    crate::claude_policy::ensure_auth_status(ctx, &provider).await;
+    if let Err(refusal) = ctx.claude_policy.gate_turn(&provider, &opts) {
+        return ended(ctx, &session_id, refusal.message).await;
+    }
     let Some(mut session) = session else { return ended(ctx, &session_id, "Session not found.").await };
     if sandbox && let Some(refusal) = nekko_turn::variants::sandbox_admission_refusal(&session, &opts) {
         return ended(ctx, &session_id, refusal).await;
@@ -469,12 +480,6 @@ async fn admit(
         crate::worktrees::chat_workspaces(Some(&chat), &settings)
     };
 
-    // A sandbox chat always asks.
-    let mode = match session.get("mode").filter(|m| !m.is_null()) {
-        _ if sandbox => json!("ask"),
-        Some(m) => m.clone(),
-        None => settings.get("defaultChatMode").filter(|m| !m.is_null()).cloned().unwrap_or(json!("guardrails")),
-    };
     if offline && !offline_provider_allowed(&provider) {
         return ended(
             ctx,
@@ -483,7 +488,10 @@ async fn admit(
         )
         .await;
     }
-    if provider_endpoint(&provider).is_none() {
+    if nekko_js::truthy(session.get("cloudOnly")) && !cloud_provider_allowed(&provider) {
+        return ended(ctx, &session_id, CLOUD_ONLY_REFUSAL).await;
+    }
+    if !turn_provider_allowed(&provider) {
         return ended(ctx, &session_id, "Provider requires a valid HTTP(S) endpoint.").await;
     }
 
@@ -555,9 +563,7 @@ async fn admit(
     );
     facts.insert("decide".into(), json!(!decide_with.is_null()));
     facts.insert("decideWith".into(), decide_with.clone());
-    // Tool hooks run here (turns.rs, nekko-tools `hooks`), never through the host;
-    // a sandbox chat runs none.
-    facts.insert("hooks".into(), json!(false));
+    // Tool hooks run here (turns.rs, nekko-tools `hooks`); a sandbox chat runs none.
     if !sandbox {
         facts.insert("hookRules".into(), settings.get("hooks").filter(|h| h.is_array()).cloned().unwrap_or(json!([])));
     }
@@ -586,20 +592,14 @@ async fn admit(
     if let Some(e) = &provider_error {
         facts.insert("providerError".into(), json!(e));
     }
-    facts.insert(
-        "headers".into(),
-        json!(
-            kind == "anthropic" && s(&provider, "auth") == "subscription" && nekko_js::truthy(provider.get("tokenKey"))
-        ),
-    );
+    // An API key's own rate limits, read off each response (`limitsKeyFor`).
+    if kind == "anthropic" && s(&provider, "auth") != "subscription" && nekko_js::truthy(provider.get("apiKey")) {
+        facts.insert("apiLimitsKey".into(), json!(format!("provider:{}", s(&provider, "id"))));
+    }
     facts.insert("spawn".into(), json!(!sandbox));
     let mut account = pick(&provider, &["auth", "kind", "tokenKey"]);
     account["incognito"] = json!(incognito);
     facts.insert("account".into(), account);
-    // The phone relay, messaging and accounting are this daemon's wherever it
-    // admits turns, so the host is sent only how a turn ends (an agent watch's
-    // resume reads the error; turns.rs `host_events`).
-    facts.insert("hostEvents".into(), json!(crate::turns::HOST_END_EVENTS));
 
     let providers: Vec<Value> = settings
         .get("providers")
@@ -634,39 +634,12 @@ async fn admit(
     if cancel.is_cancelled() {
         return stopped(ctx, &session_id).await;
     }
-    // The host registers the turn for its callbacks; nothing here waits on it
-    // (a queued turn's previous turn stays registered there until it lands).
-    // With no host, nothing adopts it.
-    if !ctx.backend.is_none() {
-        let backend = ctx.backend.clone();
-        let cancel = cancel.clone();
-        let payload = json!([{
-            "turnId": turn_id,
-            "opts": opts,
-            "workspaces": workspaces,
-            "mode": mode,
-            "decideWith": decide_with,
-            "allowBrowserControl": adm.allow_browser_control,
-            "provider": resolved,
-            // A queued turn joins the chain the host already follows.
-            "chained": chained,
-        }]);
-        tokio::spawn(async move {
-            if cancel.is_cancelled() {
-                return;
-            }
-            if let Err(e) = backend.call("turn:adopt", payload).await {
-                eprintln!("nekkod: the host could not adopt a turn: {e}");
-            }
-        });
-    }
-
     Ok(Admit::Spec(spec))
 }
 
 /// Start the turn and wait for it and every queued turn the daemon chains after it.
 async fn drive_chain(ctx: &Ctx, spec: Value) -> Result<(), String> {
-    let (_, mut ended) = ctx.turns.launch(ctx.backend.clone(), ctx.hub.clone(), spec)?;
+    let (_, mut ended) = ctx.turns.launch(ctx.hub.clone(), spec)?;
     loop {
         let Ok((summary, _)) = ended.await else { return Ok(()) };
         let Some(next) = summary.get("next").and_then(Value::as_str) else { return Ok(()) };
@@ -734,15 +707,13 @@ async fn provision(
         announce(session).await;
         emit(ctx, json!({ "type": "session_meta", "sessionId": id })).await;
         let folder = json!(folder_id);
-        ctx.turns
-            .command_output(&ctx.backend, &id, &folder, &format!("\r\n$ {command}  (worktree setup in {path})\r\n"))
-            .await;
+        ctx.turns.command_output(&id, &folder, &format!("\r\n$ {command}  (worktree setup in {path})\r\n"));
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
         let writer = {
-            let (turns, backend, id, folder) = (ctx.turns.clone(), ctx.backend.clone(), id.clone(), folder.clone());
+            let (turns, id, folder) = (ctx.turns.clone(), id.clone(), folder.clone());
             tokio::spawn(async move {
                 while let Some(text) = rx.recv().await {
-                    turns.command_output(&backend, &id, &folder, &text).await;
+                    turns.command_output(&id, &folder, &text);
                 }
             })
         };
@@ -798,6 +769,10 @@ mod tests {
         assert!(provider_endpoint(&p("openai", "https://u:p@api.openai.com")).is_none());
         assert!(provider_endpoint(&p("openai", "ftp://x")).is_none());
         assert!(provider_endpoint(&p("mystery", "http://x")).is_none());
+        assert!(provider_endpoint(&p("claude-code", "")).is_none());
+        assert!(turn_provider_allowed(&p("claude-code", "")));
+        assert!(!turn_provider_allowed(&p("mystery", "http://x")));
+        assert!(turn_provider_allowed(&p("openai", "https://api.openai.com/v1")));
     }
 
     #[test]

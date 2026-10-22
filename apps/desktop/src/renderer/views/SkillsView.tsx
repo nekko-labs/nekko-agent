@@ -105,6 +105,7 @@ const ORIGIN_TOOL_LABEL: Record<SkillOrigin['tool'], string> = {
   codex: 'Codex',
   gemini: 'Gemini CLI',
   agents: '.agents',
+  'claude-plugin': 'Claude Code plugin',
 };
 
 /** Source chip for a skill read from another tool's folder (read-only, not a marketplace install). */

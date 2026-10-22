@@ -22,6 +22,19 @@ pub enum ProviderKind {
     /// The engine Nekko Agent runs itself (llama.cpp behind its own router).
     Llamacpp,
     OpenaiCompat,
+    /// Claude in Amazon Bedrock: the Messages API at
+    /// `https://bedrock-mantle.{region}.api.aws/anthropic`, on the user's own
+    /// Bedrock bearer token, with `anthropic.`-prefixed model ids.
+    Bedrock,
+    /// Claude on Google Cloud Vertex AI: `{base}/publishers/anthropic/models/{model}:streamRawPredict`
+    /// on a Google access token, with the base naming the project and location.
+    Vertex,
+    /// Claude in Microsoft Foundry: the Messages API at
+    /// `https://{resource}.services.ai.azure.com/anthropic` on the resource's key.
+    Foundry,
+    /// Claude Agent: the user's own Claude Code runs the chat (nekkod drives it
+    /// through `nekko-harness`). No base URL, no key.
+    ClaudeCode,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -72,6 +85,22 @@ impl ProviderConfig {
     pub(crate) fn subscription(&self) -> bool {
         self.auth == Some(AuthMode::Subscription)
     }
+
+    /// Claude in Amazon Bedrock rather than Anthropic's own API.
+    pub(crate) fn bedrock(&self) -> bool {
+        self.kind == ProviderKind::Bedrock
+    }
+
+    /// Claude on Google Cloud Vertex AI.
+    pub(crate) fn vertex(&self) -> bool {
+        self.kind == ProviderKind::Vertex
+    }
+
+    /// Claude through a cloud platform (Bedrock, Vertex AI, Foundry), none of
+    /// which serves Anthropic's Models API.
+    pub(crate) fn cloud_platform(&self) -> bool {
+        matches!(self.kind, ProviderKind::Bedrock | ProviderKind::Vertex | ProviderKind::Foundry)
+    }
 }
 
 /// A model exposed by a provider.
@@ -100,6 +129,11 @@ pub struct ModelInfo {
     /// today, and the live-limit layering happens in the UI.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub availability: Option<Value>,
+    /// Served from the shipped catalog rather than a live listing (the live
+    /// one failed, or the provider has none). Never on the wire: the update
+    /// check reads it so an outage doesn't look like the models changing.
+    #[serde(skip)]
+    pub fallback: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

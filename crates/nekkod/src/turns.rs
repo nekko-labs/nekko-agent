@@ -17,34 +17,25 @@
 //! - it owns what the turn waits on a person for ([`Pending`]): approvals and
 //!   questions are raised to the UI from here and answered here
 //!   (`tool:approve`, `chat:answer`, `chat:pending`), so an approval's round
-//!   trip never passes through the TS event loop. Tools that still run in the
-//!   host park their approvals here too (`turn:approval`).
+//!   trip never passes through the TS event loop.
 //!
 //! It runs `fetch_url`, the browser and window capture (`nekko-web`, the
 //! in-app browser through the desktop app's bridge) and the background-process
 //! tools (`nekko-tools`), `agent_watch` (watches.rs) and a training or goal
 //! run's `report_experiment`, `report_artifact` and `update_plan`
-//! (nekko-automation `training`) itself, and calls back for what has not moved:
-//! `turn:tool` (delegation targets, and MCP, sub-agents, `decide` or the run
-//! tools for a host that keeps them), `turn:hook` (tool
-//! hooks, for a host that keeps them; given `facts.hookRules` they run here),
-//! `turn:headers` (Anthropic subscription rate
-//! limits), `loop:log` (the agent terminal); and it sends the host the events
-//! it asks for (`turn:event`, deltas batched; `facts.hostEvents`, every one
-//! when the host does not say, which a TS phone relay, messaging bridge or
-//! accounting needs), then `turn:end`.
+//! (nekko-automation `training`) itself, with the tool hooks
+//! (`facts.hookRules`), MCP, sub-agents and `decide`.
 //!
-//! After a turn (step 4) the daemon starts the chat's generated title and
-//! runs its next queued prompt: the host admits that prompt (`turn:prepare`)
-//! and the daemon drives it as the next turn of the same chain, so the
-//! host's `sendChat` resolves once the queue is worked through, as it did.
+//! After a turn (step 4) the daemon starts the chat's generated title, runs
+//! the TurnEnd hooks and the linked spec, and runs its next queued prompt:
+//! admitted here (admission.rs `admit_queued`) and driven as the next turn
+//! of the same chain, so `chat:send` answers once the queue is worked through.
 
 use crate::accounts::{Accounts, TurnAccount};
-use crate::backend::Backend;
 use crate::decide::DecideService;
 use crate::hub::Hub;
 use crate::mcp::Mcp;
-use nekko_agent::{ProviderConfig, create_provider};
+use nekko_agent::{ProviderConfig, ProviderKind, create_provider};
 use nekko_chat::ProviderClient;
 use nekko_js as js;
 use nekko_loop::{Cancel, RunOptions, Steering, ToolRunner, run_agent};
@@ -60,10 +51,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::{mpsc, oneshot};
-
-/// How long text and reasoning deltas are batched before the host gets them.
-/// The UI gets each one at once; the host only relays them.
-const DELTA_BATCH: Duration = Duration::from_millis(100);
 
 /// The built-in tools the daemon runs itself (`nekko-tools`).
 const NATIVE: &[&str] = &[
@@ -218,15 +205,8 @@ enum Out {
     End,
 }
 
-/// One event for the host, with a reply's stats on its `done`.
-struct HostMsg {
-    event: Value,
-    extra: Option<Value>,
-}
-
 /// A running turn, as the routes that reach into it see it.
 struct Shared {
-    turn_id: String,
     session_id: String,
     cancel: Cancel,
     steering: Steering,
@@ -236,6 +216,29 @@ struct Shared {
     /// The message of the last `error` event the turn sent, for a parent that
     /// drives it as a sub-agent (the TS route reads it off the events).
     last_error: Arc<Mutex<Option<String>>>,
+    /// A workflow run's chat (`unattended`): nobody is there to answer.
+    unattended: Unattended,
+    /// The turn is under way: a Claude Agent turn only once it has the
+    /// chat's Claude Code child (it may wait for a wake-up turn to end), so
+    /// a permission prompt goes to the turn that is reading that child.
+    active: std::sync::atomic::AtomicBool,
+}
+
+/// What an unattended turn tracks: its tool access (`toolAccess`,
+/// `allowedTools`, read when the turn loads its chat), the calls its
+/// allowlist runs without asking, and the reason each denied call was given.
+#[derive(Default)]
+struct Unattended {
+    on: std::sync::atomic::AtomicBool,
+    policy: Mutex<Value>,
+    auto: Mutex<HashSet<String>>,
+    denied: Mutex<HashMap<String, String>>,
+}
+
+impl Unattended {
+    fn is_on(&self) -> bool {
+        self.on.load(std::sync::atomic::Ordering::Relaxed)
+    }
 }
 
 /// How a launched turn ended: its summary and the last error it reported.
@@ -311,7 +314,12 @@ pub struct Turns {
     pub sandboxes: Option<Arc<crate::sandbox::Sandboxes>>,
     /// The chats' agent command logs (agent_logs.rs), with a data directory.
     pub agent_logs: Option<Arc<crate::agent_logs::AgentLogs>>,
+    /// Claude Agent chats' Claude Code children (harness.rs).
+    pub harness: Arc<crate::harness::Harness>,
     running: Mutex<HashMap<String, Arc<Shared>>>,
+    /// The last Claude Agent turn's spec and hub by chat, for the turn a
+    /// wake-up of its Claude Code child starts ([`Turns::wake`]).
+    wakes: Mutex<HashMap<String, (Value, Hub)>>,
     pub pending: Pending,
     /// How each queued turn the daemon started as the next of a chain ends,
     /// for a `chat:send` the daemon admitted, which waits for the whole chain.
@@ -331,6 +339,10 @@ pub struct Turns {
 pub type Preparer = Arc<dyn Fn(Value) -> Pin<Box<dyn Future<Output = Option<Value>> + Send>> + Send + Sync>;
 
 static STEER_SEQ: AtomicU64 = AtomicU64::new(0);
+
+/// How long a permission prompt from Claude Code waits for the turn that
+/// reads its child to get under way.
+const WAKE_WAIT: Duration = Duration::from_secs(15);
 
 impl Turns {
     pub fn new(
@@ -357,7 +369,9 @@ impl Turns {
             training: None,
             sandboxes: None,
             agent_logs: None,
+            harness: crate::harness::Harness::new(),
             running: Mutex::default(),
+            wakes: Mutex::default(),
             pending: Pending::default(),
             chained: Mutex::default(),
             watched: Mutex::default(),
@@ -411,18 +425,29 @@ impl Turns {
         self
     }
 
-    /// A line of a chat's command output: its agent log here, else the host's (`loop:log`).
-    pub async fn command_output(&self, backend: &Backend, session_id: &str, workspace_id: &Value, text: &str) {
-        match &self.agent_logs {
-            Some(logs) => logs.append(session_id, workspace_id.as_str(), text),
-            None => {
-                let _ = backend.call("loop:log", json!([session_id, workspace_id, text])).await;
-            }
+    /// A line of a chat's command output, in its agent log.
+    pub fn command_output(&self, session_id: &str, workspace_id: &Value, text: &str) {
+        if let Some(logs) = &self.agent_logs {
+            logs.append(session_id, workspace_id.as_str(), text);
         }
     }
 
+    /// The session's turn here: the one under way, else one waiting to start.
     fn by_session(&self, session_id: &str) -> Option<Arc<Shared>> {
-        lock(&self.running).values().find(|s| s.session_id == session_id).cloned()
+        let running = lock(&self.running);
+        let mut waiting = None;
+        for s in running.values().filter(|s| s.session_id == session_id) {
+            if s.active.load(Ordering::SeqCst) {
+                return Some(s.clone());
+            }
+            waiting.get_or_insert_with(|| s.clone());
+        }
+        waiting
+    }
+
+    /// The session's turn that is under way, if any.
+    fn active_by_session(&self, session_id: &str) -> Option<Arc<Shared>> {
+        self.by_session(session_id).filter(|s| s.active.load(Ordering::SeqCst))
     }
 
     /// Keep how a chat's queued turns end while a `chat:send` waits on its chain.
@@ -445,6 +470,17 @@ impl Turns {
         lock(&self.chained).remove(turn_id)
     }
 
+    /// Watch a chat's Claude Code child until the next turn takes it, and
+    /// make what it starts on its own meanwhile a turn ([`Turns::wake`]).
+    fn watch_idle(self: &Arc<Self>, session_id: &str) {
+        let (me, id) = (self.clone(), session_id.to_string());
+        tokio::spawn(async move {
+            if me.harness.idle(&id).await == crate::harness::Idle::Woke {
+                me.wake(&id);
+            }
+        });
+    }
+
     /// `turn:alive`: whether this turn is still being driven here.
     pub fn is_running(&self, turn_id: &str) -> bool {
         lock(&self.running).contains_key(turn_id)
@@ -465,12 +501,16 @@ impl Turns {
         true
     }
 
-    /// `chat:abort`: stop this session's turn here, if it has one.
+    /// `chat:abort`: stop this session's turns here (a Claude Agent chat's
+    /// may have one waiting behind a wake-up), if it has any.
     pub fn abort_session(&self, session_id: &str) -> bool {
-        let Some(shared) = self.by_session(session_id) else { return false };
-        shared.cancel.cancel();
+        let turns: Vec<Arc<Shared>> =
+            lock(&self.running).values().filter(|s| s.session_id == session_id).cloned().collect();
+        for shared in &turns {
+            shared.cancel.cancel();
+        }
         self.pending.release(session_id);
-        true
+        !turns.is_empty()
     }
 
     /// `turn:steer` / `chat:steer`: a user message for this session's running
@@ -495,33 +535,22 @@ impl Turns {
         })
     }
 
-    /// `turn:approval`: an approval for a tool the host runs, parked here
-    /// with the rest of the turn's input; the answer goes back through
-    /// `turn:approved`.
-    pub fn host_approval(
-        self: &Arc<Self>,
-        backend: Arc<Backend>,
-        turn_id: &str,
-        args: &[Value],
-    ) -> Result<Value, String> {
-        let shared = lock(&self.running).get(turn_id).cloned().ok_or("This run has already ended.")?;
-        let call = args.first().cloned().unwrap_or(Value::Null);
-        let reason = args.get(1).and_then(Value::as_str).unwrap_or_default().to_string();
-        let severity = args.get(2).cloned().unwrap_or(json!("medium"));
-        let me = self.clone();
-        tokio::spawn(async move {
-            let id = str_at(&call, "id").unwrap_or_default().to_string();
-            let ok = me.request_approval(&shared, &call, &reason, &severity).await;
-            let _ = backend.call("turn:approved", json!([id, ok])).await;
-        });
-        Ok(json!(true))
-    }
-
     /// The approval prompt: the live policy first (the user can allow the
     /// rest of the turn while it waits), then park and ask.
     async fn request_approval(&self, shared: &Shared, call: &Value, reason: &str, severity: &Value) -> bool {
+        let call_id = str_at(call, "id").unwrap_or_default().to_string();
+        if shared.unattended.is_on() && lock(&shared.unattended.auto).contains(&call_id) {
+            return true;
+        }
         if self.live_mode(shared).await == "yolo" {
             return true;
+        }
+        // A workflow run never parks: the call is denied at once, with the
+        // reason, and the tool result says so.
+        if shared.unattended.is_on() {
+            let name = str_at(call, "name").unwrap_or_default();
+            lock(&shared.unattended.denied).insert(call_id, turn::workflow_access::unattended_denial(name, reason));
+            return false;
         }
         let rx = self.pending.park_approval(&shared.session_id, call, reason, severity);
         shared.emit(json!({
@@ -532,6 +561,62 @@ impl Turns {
             "severity": severity,
         }));
         rx.await.unwrap_or(false)
+    }
+
+    /// `POST /harness/approve`: one of Claude Code's permission prompts, from
+    /// a chat's approval bridge. `None` when the token is not a live bridge's.
+    /// Decided by the chat's live mode (harness::decide); a prompt that needs
+    /// a person waits in the chat's approvals like any tool call. Anything
+    /// that cannot be decided is denied: permissions fail closed.
+    pub async fn claude_code_approve(self: &Arc<Self>, token: &str, prompt: &Value) -> Option<Value> {
+        let entry = self.harness.bridge_session(token)?;
+        let deny = |message: &str| json!({ "behavior": "deny", "message": message });
+        // Claude Code asks between Nekko turns when a background sub-agent
+        // needs permission: that work becomes a turn of its own to ask in.
+        if self.active_by_session(&entry.session_id).is_none() {
+            self.wake(&entry.session_id);
+        }
+        let mut shared = self.active_by_session(&entry.session_id);
+        let until = tokio::time::Instant::now() + WAKE_WAIT;
+        while shared.is_none() && tokio::time::Instant::now() < until && self.by_session(&entry.session_id).is_some() {
+            tokio::time::sleep(Duration::from_millis(25)).await;
+            shared = self.active_by_session(&entry.session_id);
+        }
+        let Some(shared) = shared else {
+            return Some(deny("No Nekko Agent turn is running for this chat, so nothing can approve this."));
+        };
+        let tool = str_at(prompt, "tool_name").or_else(|| str_at(prompt, "toolName")).unwrap_or_default().to_string();
+        let input = prompt.get("input").filter(|i| i.is_object()).cloned().unwrap_or_else(|| json!({}));
+        let mode = self.live_mode(&shared).await;
+        let rules: Vec<nekko_tools::GuardrailRule> = self
+            .settings
+            .as_ref()
+            .map(|s| s.get())
+            .and_then(|s| s.get("guardrails").cloned())
+            .and_then(|g| serde_json::from_value(g).ok())
+            .unwrap_or_else(nekko_tools::default_guardrails);
+        let allow = || json!({ "behavior": "allow", "updatedInput": input });
+        match crate::harness::decide(&mode, &tool, &input, &rules, &entry.roots) {
+            crate::harness::Decision::Allow => Some(allow()),
+            crate::harness::Decision::Deny(message) => Some(deny(&message)),
+            crate::harness::Decision::Ask { reason, severity } => {
+                let id = str_at(prompt, "tool_use_id")
+                    .or_else(|| str_at(prompt, "toolUseID"))
+                    .map(str::to_string)
+                    .unwrap_or_else(|| format!("claude_code_{}", crate::harness::new_token()));
+                let call = json!({ "id": id, "name": tool, "input": input, "executedBy": "claude-code" });
+                let severity = json!(severity);
+                let rx = self.pending.park_approval(&shared.session_id, &call, &reason, &severity);
+                shared.emit(json!({
+                    "type": "tool_approval_required",
+                    "sessionId": shared.session_id,
+                    "call": call,
+                    "reason": reason,
+                    "severity": severity,
+                }));
+                Some(if rx.await.unwrap_or(false) { allow() } else { deny("The user denied this action.") })
+            }
+        }
     }
 
     /// `getSession(id)?.mode ?? settings.defaultChatMode ?? 'guardrails'`.
@@ -547,20 +632,38 @@ impl Turns {
         mode.or_else(|| shared.default_mode.clone()).unwrap_or_else(|| "guardrails".into())
     }
 
-    /// `chat:turn`: start driving a turn; `turn:end` tells the host when it is over.
-    pub fn start(self: &Arc<Self>, backend: Arc<Backend>, hub: Hub, spec: Value) -> Result<Value, String> {
-        self.launch(backend, hub, spec).map(|_| json!({ "started": true }))
+    /// `chat:turn`: start driving a turn.
+    pub fn start(self: &Arc<Self>, hub: Hub, spec: Value) -> Result<Value, String> {
+        self.launch(hub, spec).map(|_| json!({ "started": true }))
     }
 
     /// Start a turn and hear how it ended (its summary, after what follows
     /// it here, and the last error it reported), with its id: a `spawn_agent`
     /// child the parent turn waits on.
-    pub(crate) fn launch(
-        self: &Arc<Self>,
-        backend: Arc<Backend>,
-        hub: Hub,
-        spec: Value,
-    ) -> Result<(String, Ended), String> {
+    pub(crate) fn launch(self: &Arc<Self>, hub: Hub, spec: Value) -> Result<(String, Ended), String> {
+        self.launch_turn(hub, spec, false)
+    }
+
+    /// A turn for the work a chat's Claude Code child started on its own
+    /// (a background command or sub-agent finished, or one of them asks for
+    /// permission) while no turn reads it: the last Claude Agent turn's spec,
+    /// with no message. False when the chat has a turn already (that turn
+    /// reads the child next) or never ran one here.
+    pub(crate) fn wake(self: &Arc<Self>, session_id: &str) -> bool {
+        let Some((mut spec, hub)) = lock(&self.wakes).get(session_id).cloned() else { return false };
+        spec["turnId"] = json!(crate::admission::daemon_turn_id());
+        spec["wake"] = json!(true);
+        if let Some(o) = spec.as_object_mut() {
+            o.shift_remove("queued");
+        }
+        if let Some(opts) = spec.get_mut("opts").and_then(Value::as_object_mut) {
+            opts.retain(|k, _| ["sessionId", "providerId", "modelId"].contains(&k.as_str()));
+            opts.insert("text".into(), json!(""));
+        }
+        self.launch_turn(hub, spec, true).is_ok()
+    }
+
+    fn launch_turn(self: &Arc<Self>, hub: Hub, spec: Value, wake: bool) -> Result<(String, Ended), String> {
         let store = self.store.clone().ok_or("chat:turn needs the daemon to know the data directory")?;
         let turn_id = str_at(&spec, "turnId").ok_or("chat:turn needs a turnId")?.to_string();
         let opts = spec.get("opts").cloned().ok_or("chat:turn needs the send options")?;
@@ -568,34 +671,53 @@ impl Turns {
         if !nekko_store::valid_id(&session_id) {
             return Err("Session not found.".into());
         }
+        let claude_code = spec.pointer("/facts/provider/kind").and_then(Value::as_str) == Some("claude-code");
         let (tx, rx) = mpsc::unbounded_channel();
         let shared = Arc::new(Shared {
-            turn_id: turn_id.clone(),
             session_id,
             cancel: Cancel::default(),
             steering: Arc::default(),
             events: tx,
             default_mode: spec.pointer("/settings/defaultChatMode").and_then(Value::as_str).map(str::to_string),
             last_error: Arc::default(),
+            unattended: Unattended::default(),
+            active: std::sync::atomic::AtomicBool::new(!claude_code),
         });
-        lock(&self.running).insert(turn_id.clone(), shared.clone());
+        {
+            let mut running = lock(&self.running);
+            if wake && running.values().any(|s| s.session_id == shared.session_id) {
+                return Err("This chat has a turn already.".into());
+            }
+            running.insert(turn_id.clone(), shared.clone());
+        }
+        if claude_code && !wake {
+            lock(&self.wakes).insert(shared.session_id.clone(), (spec.clone(), hub.clone()));
+        }
         let me = self.clone();
         let (ended_tx, ended_rx) = oneshot::channel();
         let id = turn_id.clone();
         tokio::spawn(async move {
-            let summary = me.drive(&backend, hub.clone(), store.clone(), &spec, shared.clone(), rx).await;
+            // A Claude Agent turn waits for the chat's child (a wake-up turn
+            // may be reading it) before it reads or writes the chat.
+            let slot = if claude_code {
+                let slot = me.harness.take(&shared.session_id).await;
+                shared.active.store(true, Ordering::SeqCst);
+                Some(slot)
+            } else {
+                None
+            };
+            let summary = me.run_turn(&hub, store.clone(), &spec, &shared, rx, slot).await;
             lock(&me.running).remove(&turn_id);
+            if claude_code {
+                me.watch_idle(&shared.session_id);
+            }
             me.pending.release(&shared.session_id);
-            let summary = me.after_turn(&backend, &hub, &store, &spec, &turn_id, summary).await;
+            let summary = me.after_turn(&hub, &store, &spec, &turn_id, summary).await;
             // The chat's agent terminal stops showing a running command.
             if let Some(logs) = &me.agent_logs {
                 logs.finish(&shared.session_id);
             }
-            // With no host to adopt the turn, what follows it runs here.
-            if backend.is_none() {
-                me.after_turn_hooks(&store, &spec, &summary);
-            }
-            let _ = backend.call("turn:end", json!([turn_id, summary.clone()])).await;
+            me.after_turn_hooks(&store, &spec, &summary);
             let _ = ended_tx.send((summary, lock(&shared.last_error).clone()));
         });
         Ok((id, ended_rx))
@@ -603,12 +725,11 @@ impl Turns {
 
     /// What follows a turn here (PF14 step 4): the chat's generated title,
     /// started and left to land on its own, and the next queued prompt, run
-    /// as the next turn of the chain (`summary.next`) once the host has
-    /// admitted it (`turn:prepare`), or handed back to the host to run
-    /// (`summary.drain`). A turn that never started has nothing after it.
+    /// as the next turn of the chain (`summary.next`) once it is admitted
+    /// (admission.rs `admit_queued`). A turn that never started has nothing after it.
     /// `afterTurnHooks`: the TurnEnd hooks (how the reply ended; nothing waits
     /// on them) and the linked spec kept in sync with the chat. A sandbox turn
-    /// runs neither. Here only when no host adopted the turn.
+    /// runs neither.
     fn after_turn_hooks(self: &Arc<Self>, store: &Arc<SessionStore>, spec: &Value, summary: &Value) {
         if spec.pointer("/facts/sandbox") == Some(&Value::Bool(true)) {
             return;
@@ -647,7 +768,6 @@ impl Turns {
 
     async fn after_turn(
         self: &Arc<Self>,
-        backend: &Arc<Backend>,
         hub: &Hub,
         store: &Arc<SessionStore>,
         spec: &Value,
@@ -672,7 +792,7 @@ impl Turns {
             && let Some(flight) = self.title_flights.claim(&session_id)
         {
             let accounts = self.accounts.enabled().then(|| self.accounts.clone());
-            tokio::spawn(generate_title(backend.clone(), hub.clone(), store.clone(), accounts, spec.clone(), flight));
+            tokio::spawn(generate_title(hub.clone(), store.clone(), accounts, spec.clone(), flight));
         }
         if summary.get("aborted") == Some(&Value::Bool(true)) || js::truthy(fresh.get("archivedAt")) {
             return summary;
@@ -688,20 +808,16 @@ impl Turns {
         });
         let payload =
             json!({ "opts": turn::send_options_for_queued_item(&base, &next), "queued": { "index": 0, "item": next } });
-        // A chain the daemon admitted (`turn_d...`) is admitted here; the host only as a fallback.
-        let mine = match self.preparer.get() {
-            Some(p) if turn_id.starts_with("turn_d") => p(payload.clone()).await,
+        // Only a chain the daemon admitted (`turn_d...`) runs its queue on.
+        let reply = match self.preparer.get() {
+            Some(p) if turn_id.starts_with("turn_d") => p(payload).await,
             _ => None,
         };
-        let reply = match mine {
-            Some(r) => Ok(r),
-            None => backend.call("turn:prepare", json!([turn_id, payload])).await,
-        };
         match reply {
-            Ok(reply) if reply.get("spec").is_some_and(Value::is_object) => {
+            Some(reply) if reply.get("spec").is_some_and(Value::is_object) => {
                 let next_spec = reply["spec"].clone();
                 let next_id = next_spec.get("turnId").cloned().unwrap_or(Value::Null);
-                match self.launch(backend.clone(), hub.clone(), next_spec) {
+                match self.launch(hub.clone(), next_spec) {
                     Ok((id, ended)) => {
                         if lock(&self.watched).contains_key(&session_id) {
                             lock(&self.chained).insert(id, ended);
@@ -711,47 +827,20 @@ impl Turns {
                     Err(e) => eprintln!("nekkod: could not start the next queued turn: {e}"),
                 }
             }
-            Ok(reply) if reply.get("inProcess") == Some(&Value::Bool(true)) => summary["drain"] = json!("host"),
-            Ok(_) => {}
-            Err(e) => eprintln!("nekkod: the host could not admit the next queued turn: {e}"),
+            _ => {}
         }
         summary
     }
 
-    async fn drive(
-        self: &Arc<Self>,
-        backend: &Arc<Backend>,
-        hub: Hub,
-        store: Arc<SessionStore>,
-        spec: &Value,
-        shared: Arc<Shared>,
-        rx: mpsc::UnboundedReceiver<Out>,
-    ) -> Value {
-        // The host's copy of every event, in order and batched; the UI never
-        // waits on it. Drained before `turn:end`.
-        let (host_tx, host_rx) = mpsc::unbounded_channel::<HostMsg>();
-        let wanted = host_events(&spec["facts"]);
-        // With no host there is no copy to keep: the channel is just dropped.
-        let host_task = (!backend.is_none())
-            .then(|| tokio::spawn(forward_to_host(host_rx, backend.clone(), shared.turn_id.clone(), wanted)));
-        let summary = self.run_turn(backend, &hub, store, spec, &shared, rx, &host_tx).await;
-        drop(host_tx);
-        if let Some(task) = host_task {
-            let _ = task.await;
-        }
-        summary
-    }
-
-    #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines)]
     async fn run_turn(
         self: &Arc<Self>,
-        backend: &Arc<Backend>,
         hub: &Hub,
         store: Arc<SessionStore>,
         spec: &Value,
         shared: &Arc<Shared>,
         rx: mpsc::UnboundedReceiver<Out>,
-        host_tx: &mpsc::UnboundedSender<HostMsg>,
+        slot: Option<tokio::sync::OwnedMutexGuard<crate::harness::Slot>>,
     ) -> Value {
         let opts = &spec["opts"];
         let settings = &spec["settings"];
@@ -759,8 +848,7 @@ impl Turns {
         let session_id = shared.session_id.clone();
         let say = |event: Value| {
             note_error(&shared.last_error, &event);
-            hub.publish("agent:event", event.clone(), false);
-            let _ = host_tx.send(HostMsg { event, extra: None });
+            hub.publish("agent:event", event, false);
         };
         let early = |message: &str| {
             say(json!({ "type": "error", "sessionId": session_id, "message": message }));
@@ -779,13 +867,26 @@ impl Turns {
             return early("chat:turn is unsupported for sandbox sessions; use the host container router");
         }
         let incognito = js::truthy(loaded.get("incognito"));
+        // A Claude Agent chat: the user's Claude Code runs the turn and its
+        // own tools, so none of Nekko's tools or MCP servers are set up.
+        let claude_code = facts.pointer("/provider/kind").and_then(Value::as_str) == Some("claude-code");
+        if claude_code && sandbox {
+            return early("Claude Agent chats run Claude Code on this computer, so they cannot use a sandbox.");
+        }
+        if js::truthy(loaded.get("unattended")) {
+            shared.unattended.on.store(true, std::sync::atomic::Ordering::Relaxed);
+            *lock(&shared.unattended.policy) = json!({
+                "toolAccess": loaded.get("toolAccess").cloned().unwrap_or(Value::Null),
+                "allowedTools": loaded.get("allowedTools").cloned().unwrap_or(Value::Null),
+            });
+        }
 
         // MCP: a host that hands over the server list (`turn:mcp`) leaves the
         // sync and the calls to this daemon; an older one sends the tool specs.
         // A sandbox chat has none.
-        let own_mcp = facts.get("mcpServers").filter(|s| s.is_array() && !sandbox).cloned();
+        let own_mcp = facts.get("mcpServers").filter(|s| s.is_array() && !sandbox && !claude_code).cloned();
         let mcp_tools = match &own_mcp {
-            _ if sandbox => json!([]),
+            _ if sandbox || claude_code => json!([]),
             Some(configs) if !js::truthy(loaded.get("offline")) => {
                 let any = configs.as_array().is_some_and(|a| a.iter().any(|c| c.get("enabled") == Some(&json!(true))));
                 if any { self.mcp.sync(configs).await["specs"].clone() } else { self.mcp.snapshot()["specs"].clone() }
@@ -850,9 +951,12 @@ impl Turns {
             return json!({ "early": true });
         }
 
-        // The user's input, saved before the reply starts.
+        // The user's input, saved before the reply starts. A wake-up has none.
+        let wake = spec.get("wake") == Some(&Value::Bool(true));
         let mut session_value = loaded;
-        turn::apply_turn_input(&mut session_value, opts, now_ms());
+        if !wake {
+            turn::apply_turn_input(&mut session_value, opts, now_ms());
+        }
         let session = Arc::new(Mutex::new(session_value));
         let queued = spec.get("queued").filter(|q| !q.is_null()).cloned();
         if let Some(q) = queued {
@@ -908,7 +1012,6 @@ impl Turns {
             Forward {
                 account: account.clone().map(|a| (self.accounts.clone(), a, opts.clone())),
                 hub: hub.clone(),
-                host: host_tx.clone(),
                 store: store.clone(),
                 session: session.clone(),
                 incognito,
@@ -920,28 +1023,27 @@ impl Turns {
             },
         ));
 
+        if config.kind == ProviderKind::ClaudeCode {
+            let mode = str_at(&lock(&session), "mode")
+                .map(str::to_string)
+                .or_else(|| shared.default_mode.clone())
+                .unwrap_or_else(|| "guardrails".into());
+            let slot = match slot {
+                Some(slot) => slot,
+                None => self.harness.take(&session_id).await,
+            };
+            self.claude_code_turn(shared, slot, &store, &session, incognito, &workspaces, opts, &mode, wake).await;
+            return self.end_turn(&store, shared, &session, forwarder, incognito).await;
+        }
+
         let provider = create_provider(config);
-        let headers_key = account.as_ref().and_then(|a| a.token_key.clone());
-        let client = if facts.get("headers") == Some(&Value::Bool(true))
-            && let Some(key) = headers_key
-        {
-            // Anthropic subscription rate limits, kept here.
+        // An Anthropic API key's own rate limits, read off each response.
+        let client = if let Some(key) = str_at(facts, "apiLimitsKey").map(str::to_string) {
             let accounts = self.accounts.clone();
             ProviderClient::with_headers(
                 provider,
                 Arc::new(move |headers: &Vec<(String, String)>| {
-                    accounts.record_from_headers(&key, "anthropic", headers);
-                }),
-            )
-        } else if facts.get("headers") == Some(&Value::Bool(true)) {
-            let (b, id) = (backend.clone(), shared.turn_id.clone());
-            ProviderClient::with_headers(
-                provider,
-                Arc::new(move |headers: &Vec<(String, String)>| {
-                    let (b, id, pairs) = (b.clone(), id.clone(), json!(headers));
-                    tokio::spawn(async move {
-                        let _ = b.call("turn:headers", json!([id, pairs])).await;
-                    });
+                    accounts.record_api_headers(&key, headers);
                 }),
             )
         } else {
@@ -952,12 +1054,19 @@ impl Turns {
             .map(str::to_string)
             .or_else(|| shared.default_mode.clone())
             .unwrap_or_else(|| "guardrails".into());
-        // A sandbox turn runs no hooks and no host tool: everything goes to its container.
-        let hooks = !sandbox && facts.get("hooks") == Some(&Value::Bool(true));
-        let native = if hooks || sandbox {
+        // A sandbox turn runs no hooks and no built-in tool here: everything goes to its container.
+        let read_only: Vec<String> = lock(&session)
+            .get("readOnlyFolders")
+            .and_then(Value::as_array)
+            .map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect())
+            .unwrap_or_default();
+        let native = if sandbox {
             None
         } else {
-            native_context(self, shared, backend, settings, &workspaces, &mode, &session_id)
+            native_context(self, shared, settings, &workspaces, &mode, &session_id).map(|mut ctx| {
+                ctx.read_only_roots = read_only;
+                ctx
+            })
         };
         let runner = TurnTools {
             sandbox: sandbox.then(|| self.sandboxes.clone()).flatten(),
@@ -970,12 +1079,10 @@ impl Turns {
             sandbox_mode: settings.get("sandboxMode").and_then(Value::as_str).map(str::to_string),
             turns: self.clone(),
             shared: shared.clone(),
-            backend: backend.clone(),
             store: store.clone(),
             session: session.clone(),
             names,
             native,
-            hooks,
             hook_rules: facts.get("hookRules").filter(|r| r.is_array() && !sandbox).map(nekko_tools::hooks::rules),
             hook_cwd: workspaces.first().and_then(|w| str_at(w, "path")).map(str::to_string).unwrap_or_else(|| {
                 std::env::current_dir().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default()
@@ -1020,6 +1127,161 @@ impl Turns {
         })
         .await;
         drop(runner);
+        self.end_turn(&store, shared, &session, forwarder, incognito).await
+    }
+
+    /// A Claude Agent turn: the chat's Claude Code child (started, reused or
+    /// resumed) runs it, and its stream becomes this turn's events and
+    /// transcript, checkpointed as a Nekko turn is. Stop and Steer reach it
+    /// through the turn's own cancel and steering (nekko_harness::run_turn).
+    /// A `wake` turn writes nothing: it reads what the child started on its
+    /// own, up to its `result`.
+    #[allow(clippy::too_many_arguments)]
+    async fn claude_code_turn(
+        self: &Arc<Self>,
+        shared: &Arc<Shared>,
+        mut slot: tokio::sync::OwnedMutexGuard<crate::harness::Slot>,
+        store: &Arc<SessionStore>,
+        session: &Arc<Mutex<Value>>,
+        incognito: bool,
+        workspaces: &[Value],
+        opts: &Value,
+        mode: &str,
+        wake: bool,
+    ) {
+        use crate::harness::{BRIDGE_SERVER, BRIDGE_TOOL, INTERRUPT_GRACE, Wanted, permission_mode};
+        use nekko_harness::{Mapped, Mapper, SessionStart, TurnExit, TurnInput};
+
+        let session_id = shared.session_id.clone();
+        let mut history: Vec<Value> =
+            lock(session).get("messages").and_then(Value::as_array).cloned().unwrap_or_default();
+        let events = shared.events.clone();
+        let send = |event: Value, history: &[Value]| {
+            let snapshot = is_checkpoint(&event).then(|| history.to_vec());
+            let _ = events.send(Out::Loop(event, snapshot));
+        };
+        let fail = |message: &str, history: &[Value]| {
+            send(json!({ "type": "error", "sessionId": session_id, "message": message }), history);
+        };
+        let user = history.iter().rev().find(|m| str_at(m, "role") == Some("user")).cloned();
+        if user.is_none() && !wake {
+            return fail("There is no message to send.", &history);
+        }
+        let paths: Vec<PathBuf> =
+            workspaces.iter().filter_map(|w| str_at(w, "path")).filter(|p| !p.is_empty()).map(PathBuf::from).collect();
+        let Some((cwd, rest)) = paths.split_first() else {
+            return fail("A Claude Agent chat needs a workspace folder to run in.", &history);
+        };
+        let wanted = Wanted {
+            cwd: cwd.clone(),
+            add_dirs: rest.to_vec(),
+            model: str_at(opts, "modelId").filter(|m| !js::trim(m).is_empty()).map(str::to_string),
+            permission_mode: permission_mode(mode),
+        };
+
+        // One turn per chat at a time: the slot stays taken until the end.
+        let reuse = slot.session.as_mut().is_some_and(|s| s.alive() && wanted.matches(&s.spec));
+        if wake && !reuse {
+            // The child that woke is gone or out of date: nothing to read.
+            return;
+        }
+        if !reuse {
+            slot.session = None;
+            let bin = match nekko_harness::locate(None).await {
+                Ok(bin) => bin,
+                Err(e) => return fail(&e, &history),
+            };
+            let stored = str_at(&lock(session), "claudeCodeSessionId").map(str::to_string);
+            let mut spec = wanted.launch(bin, stored.as_deref());
+            // Every permission prompt goes to Nekko through the bridge; with
+            // no bridge Claude Code does not start (fail closed).
+            match self.harness.prepare_bridge(&session_id, &paths) {
+                Ok(config) => spec.mcp_config = Some(config),
+                Err(e) => return fail(&e, &history),
+            }
+            spec.permission_prompt_tool = Some(BRIDGE_TOOL.into());
+            if let SessionStart::New(id) = &spec.session {
+                // Saved before the launch, so a crash mid-turn still resumes.
+                if let Some(obj) = lock(session).as_object_mut() {
+                    obj.insert("claudeCodeSessionId".into(), json!(id));
+                }
+                persist(store, session, incognito).await;
+            }
+            match nekko_harness::Session::spawn(spec) {
+                Ok(child) => slot.session = Some(child),
+                Err(e) => return fail(&format!("Could not start Claude Code: {e}"), &history),
+            }
+        }
+        let Some(child) = slot.session.as_mut() else { return };
+        let resumed = matches!(child.spec.session, SessionStart::Resume(_));
+        let mut mapper = Mapper::new(session_id.clone());
+        let input = TurnInput {
+            content: if wake { None } else { user.as_ref().map(nekko_harness::user_content) },
+            cancel: &shared.cancel,
+            steering: &shared.steering,
+            interrupt_grace: INTERRUPT_GRACE,
+            require_mcp: Some(BRIDGE_SERVER),
+        };
+        let mut seen: Option<String> = None;
+        let mut model: Option<String> = None;
+        let exit = nekko_harness::run_turn(child, &mut mapper, input, &mut |m| match m {
+            Mapped::Message(message) => history.push(message),
+            Mapped::Event(event) => send(event, &history),
+            Mapped::Init(init) => {
+                seen = Some(init.session_id);
+                model = init.model.or(model.take());
+            }
+            Mapped::Unparsed(line) => eprintln!("nekkod: Claude Code printed a non-JSON line: {line}"),
+            _ => {}
+        })
+        .await;
+
+        let stored = str_at(&lock(session), "claudeCodeSessionId").map(str::to_string);
+        let next = match (&seen, exit) {
+            (Some(id), _) => Some(id.clone()),
+            // A resume that died before Claude Code started its turn: the
+            // session is gone on its side, so the next message starts afresh.
+            (None, TurnExit::Dead) if resumed => None,
+            (None, _) => stored.clone(),
+        };
+        let mut changed = false;
+        if next != stored {
+            if let Some(obj) = lock(session).as_object_mut() {
+                match &next {
+                    Some(id) => obj.insert("claudeCodeSessionId".into(), json!(id)),
+                    None => obj.shift_remove("claudeCodeSessionId"),
+                };
+            }
+            changed = true;
+        }
+        if let Some(reported) = mapper.context() {
+            let mut s = lock(session);
+            let context = claude_code_context(s.get("claudeCodeContext"), reported, model, wanted.model.clone());
+            if let Some(obj) = s.as_object_mut() {
+                obj.insert("claudeCodeContext".into(), context);
+            }
+            changed = true;
+        }
+        if changed {
+            persist(store, session, incognito).await;
+        }
+        if exit == TurnExit::Dead {
+            slot.session = None;
+        }
+        slot.last_used = Some(std::time::Instant::now());
+    }
+
+    /// The end of every turn: the forwarder drained, nothing left waiting,
+    /// the chat saved, steering that arrived too late queued, the summary.
+    async fn end_turn(
+        &self,
+        store: &Arc<SessionStore>,
+        shared: &Arc<Shared>,
+        session: &Arc<Mutex<Value>>,
+        forwarder: tokio::task::JoinHandle<Option<Value>>,
+        incognito: bool,
+    ) -> Value {
+        let session_id = shared.session_id.clone();
         // The routes keep a sender for as long as the turn is listed, so the
         // forwarder is told it has had the loop's last event.
         let _ = shared.events.send(Out::End);
@@ -1027,10 +1289,10 @@ impl Turns {
 
         // The turn is over: nothing it waited on can still be answered.
         self.pending.release(&session_id);
-        if let Some(obj) = lock(&session).as_object_mut() {
+        if let Some(obj) = lock(session).as_object_mut() {
             obj.remove("activeRun");
         }
-        persist(&store, &session, incognito).await;
+        persist(store, session, incognito).await;
 
         // Steering that arrived during the final model call runs next, queued.
         let left: Vec<Value> = std::mem::take(&mut *lock(&shared.steering));
@@ -1052,14 +1314,43 @@ impl Turns {
     }
 }
 
+/// `claudeCodeContext`: what a Claude Agent chat's context gauge shows, as
+/// Claude Code reported it (nekko_harness::ReportedContext). `modelId` is the
+/// chat's own model (an alias such as `opus`) the figures were reported for,
+/// `model` the one Claude Code resolved it to. A figure this turn did not
+/// report (an interrupted turn has no `modelUsage`) keeps the last one for the
+/// same model.
+fn claude_code_context(
+    previous: Option<&Value>,
+    reported: nekko_harness::ReportedContext,
+    model: Option<String>,
+    model_id: Option<String>,
+) -> Value {
+    let same = previous.is_some_and(|p| p.get("modelId").and_then(Value::as_str) == model_id.as_deref());
+    let keep = |key: &str| previous.filter(|_| same).and_then(|p| p.get(key)).and_then(Value::as_u64);
+    let mut out = Map::new();
+    if let Some(used) = reported.used.or_else(|| keep("used")) {
+        out.insert("used".into(), json!(used));
+    }
+    if let Some(window) = reported.window.or_else(|| keep("window")) {
+        out.insert("window".into(), json!(window));
+    }
+    let model = model.or_else(|| previous.filter(|_| same).and_then(|p| str_at(p, "model")).map(str::to_string));
+    if let Some(model) = model {
+        out.insert("model".into(), json!(model));
+    }
+    if let Some(id) = model_id {
+        out.insert("modelId".into(), json!(id));
+    }
+    Value::Object(out)
+}
+
 /// `titleSession`: ask the turn's own provider and model for a short title
 /// once a chat's turn has content, and land it unless the user named the
 /// chat meanwhile. A failure just leaves the prompt-prefix placeholder. The
-/// call's usage goes to the usage log (written here when this daemon keeps it,
-/// else through the host's `turn:usage`), and the title's `session_meta` to
-/// the UI and the host's listeners (`turn:notify`).
+/// call's usage goes to the usage log when this daemon keeps it, and the
+/// title's `session_meta` to the UI.
 async fn generate_title(
-    backend: Arc<Backend>,
     hub: Hub,
     store: Arc<SessionStore>,
     accounts: Option<Arc<Accounts>>,
@@ -1097,19 +1388,12 @@ async fn generate_title(
         "usageOnFailure": true,
     });
     let Ok(out) = crate::sideband::complete(&request).await else { return };
-    if let Some(usage) = out.get("usage").filter(|u| u.as_array().is_some_and(|a| !a.is_empty())) {
+    if let Some(usage) = out.get("usage").filter(|u| u.as_array().is_some_and(|a| !a.is_empty()))
+        && let Some(a) = &accounts
+    {
         let provider = &facts["provider"];
         let who = json!({ "id": provider.get("id"), "kind": provider.get("kind"), "auth": provider.get("auth") });
-        match &accounts {
-            Some(a) => {
-                a.side_usage(&who, opts.get("modelId"), &session_id, usage.as_array().map_or(&[], Vec::as_slice))
-            }
-            None => {
-                let record =
-                    json!({ "provider": who, "modelId": opts.get("modelId"), "sessionId": session_id, "usage": usage });
-                let _ = backend.call("turn:usage", json!([record])).await;
-            }
-        }
+        a.side_usage(&who, opts.get("modelId"), &session_id, usage.as_array().map_or(&[], Vec::as_slice));
     }
     if out.get("error").is_some() {
         return;
@@ -1121,9 +1405,7 @@ async fn generate_title(
     let (st, id) = (store.clone(), session_id.clone());
     let landed = tokio::task::spawn_blocking(move || st.set_auto_title(&id, &title)).await;
     if matches!(landed, Ok(Ok(true))) {
-        let meta = json!({ "type": "session_meta", "sessionId": session_id });
-        hub.publish("agent:event", meta.clone(), false);
-        let _ = backend.call("turn:notify", json!([meta])).await;
+        hub.publish("agent:event", json!({ "type": "session_meta", "sessionId": session_id }), false);
     }
 }
 
@@ -1139,10 +1421,6 @@ pub(crate) fn base36(mut n: u64) -> String {
     }
     out.reverse();
     String::from_utf8(out).unwrap_or_default()
-}
-
-fn is_delta(e: &Value) -> bool {
-    matches!(str_at(e, "type"), Some("text" | "reasoning"))
 }
 
 fn is_checkpoint(e: &Value) -> bool {
@@ -1225,7 +1503,6 @@ struct Forward {
     /// Where this turn's usage and reply lines go, when the daemon keeps them.
     account: Option<(Arc<Accounts>, TurnAccount, Value)>,
     hub: Hub,
-    host: mpsc::UnboundedSender<HostMsg>,
     store: Arc<SessionStore>,
     session: Arc<Mutex<Value>>,
     incognito: bool,
@@ -1236,8 +1513,8 @@ struct Forward {
     last_error: Arc<Mutex<Option<String>>>,
 }
 
-/// The turn's events, in order: checkpoints saved first, then the UI told,
-/// then the host. Returns how the reply ended (`done.stop`).
+/// The turn's events, in order: checkpoints saved first, then the UI told.
+/// Returns how the reply ended (`done.stop`).
 async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option<Value> {
     let mut last_stop = None;
     while let Some(out) = rx.recv().await {
@@ -1245,8 +1522,7 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
             Out::End => break,
             Out::Event(e) => {
                 note_error(&f.last_error, &e);
-                f.hub.publish("agent:event", e.clone(), false);
-                let _ = f.host.send(HostMsg { event: e, extra: None });
+                f.hub.publish("agent:event", e, false);
                 continue;
             }
             Out::Loop(e, s) => (e, s),
@@ -1257,7 +1533,6 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
                 accounts.turn_usage(opts, account, &event);
             }
         }
-        let mut extra = None;
         if let Some(snapshot) = snapshot {
             let mut s = lock(&f.session);
             if let Some(obj) = s.as_object_mut() {
@@ -1280,104 +1555,19 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
             if let Some((accounts, account, opts)) = &f.account {
                 accounts.turn_end(opts, account, f.started_at, &event, finished.as_ref());
             }
-            extra = Some(json!({ "stats": finished, "startedAt": f.started_at }));
         }
         if is_checkpoint(&event) {
             persist(&f.store, &f.session, f.incognito).await;
         }
         let steered = str_at(&event, "type") == Some("steered");
         note_error(&f.last_error, &event);
-        f.hub.publish("agent:event", event.clone(), false);
-        let _ = f.host.send(HostMsg { event, extra });
+        f.hub.publish("agent:event", event, false);
         if steered {
             // The steering message is in the transcript now; panes re-read it.
-            let meta = json!({ "type": "session_meta", "sessionId": f.session_id });
-            f.hub.publish("agent:event", meta.clone(), false);
-            let _ = f.host.send(HostMsg { event: meta, extra: None });
+            f.hub.publish("agent:event", json!({ "type": "session_meta", "sessionId": f.session_id }), false);
         }
     }
     last_stop
-}
-
-/// Deltas of one kind in a row, joined, as the host relays them.
-fn coalesce(batch: Vec<Value>) -> Vec<Value> {
-    let mut out: Vec<Value> = Vec::new();
-    for e in batch {
-        if let Some(last) = out.last_mut()
-            && last["type"] == e["type"]
-        {
-            let joined = format!("{}{}", last["delta"].as_str().unwrap_or(""), e["delta"].as_str().unwrap_or(""));
-            last["delta"] = json!(joined);
-            continue;
-        }
-        out.push(e);
-    }
-    out
-}
-
-/// What a host with no TS relay, messaging or accounting asks for.
-pub const HOST_END_EVENTS: [&str; 2] = ["done", "error"];
-
-/// The event types the host asked for (`facts.hostEvents`), or `None` for
-/// every one: a host whose phone relay, messaging bridge or accounting still
-/// runs in TS reads the whole turn, one that only follows how turns end
-/// (agent watches, auto-continue) asks for `done` and `error`.
-fn host_events(facts: &Value) -> Option<HashSet<String>> {
-    facts
-        .get("hostEvents")?
-        .as_array()
-        .map(|kinds| kinds.iter().filter_map(Value::as_str).map(str::to_string).collect())
-}
-
-/// The host's copy of the turn's events, in order, deltas batched. The UI
-/// never waits on this: it has each event already.
-async fn forward_to_host(
-    mut rx: mpsc::UnboundedReceiver<HostMsg>,
-    backend: Arc<Backend>,
-    turn_id: String,
-    wanted: Option<HashSet<String>>,
-) {
-    let mut deltas: Vec<Value> = Vec::new();
-    let send = |payload: Value| {
-        let (backend, turn_id) = (backend.clone(), turn_id.clone());
-        async move {
-            let _ = backend.call("turn:event", json!([turn_id, payload])).await;
-        }
-    };
-    loop {
-        let next = if deltas.is_empty() {
-            rx.recv().await
-        } else {
-            match tokio::time::timeout(DELTA_BATCH, rx.recv()).await {
-                Ok(v) => v,
-                Err(_) => {
-                    send(json!({ "events": coalesce(std::mem::take(&mut deltas)) })).await;
-                    continue;
-                }
-            }
-        };
-        let Some(msg) = next else { break };
-        if wanted.as_ref().is_some_and(|w| !str_at(&msg.event, "type").is_some_and(|t| w.contains(t))) {
-            continue;
-        }
-        if is_delta(&msg.event) {
-            deltas.push(msg.event);
-            continue;
-        }
-        if !deltas.is_empty() {
-            send(json!({ "events": coalesce(std::mem::take(&mut deltas)) })).await;
-        }
-        let mut payload = json!({ "events": [msg.event] });
-        if let Some(Value::Object(extra)) = msg.extra {
-            for (k, v) in extra {
-                payload[k] = v;
-            }
-        }
-        send(payload).await;
-    }
-    if !deltas.is_empty() {
-        send(json!({ "events": coalesce(deltas) })).await;
-    }
 }
 
 /// The `decide` tool on the local decision model (chat.ts: `decisions.run`
@@ -1404,22 +1594,12 @@ async fn decide_tool(service: &DecideService, id: &str, input: &Value) -> Value 
     }
 }
 
-/// The agent terminal lines of one turn, sent to the host in order.
-struct HostLog(mpsc::UnboundedSender<Value>);
-
-impl CommandLog for HostLog {
-    fn append(&self, session_id: &str, workspace_id: Option<&str>, data: &str) {
-        let _ = self.0.send(json!([session_id, workspace_id, data]));
-    }
-}
-
-/// The built-in tools' context, or `None` (every tool then runs in the
-/// host) when a setting is one this build cannot read, such as a guardrail
-/// rule it does not know.
+/// The built-in tools' context, or `None` (no built-in tool then runs) when
+/// a setting is one this build cannot read, such as a guardrail rule it does
+/// not know.
 fn native_context(
     turns: &Arc<Turns>,
     shared: &Arc<Shared>,
-    backend: &Arc<Backend>,
     settings: &Value,
     workspaces: &[Value],
     mode: &str,
@@ -1449,20 +1629,7 @@ fn native_context(
     ctx.session_id = Some(session_id.to_string());
     ctx.changes = Some(turns.changes.clone());
     ctx.processes = Some(turns.processes.clone());
-    ctx.command_log = match &turns.agent_logs {
-        Some(logs) => Some(logs.clone() as Arc<dyn CommandLog>),
-        // No data directory here: the host keeps the agent terminal.
-        None => {
-            let (tx, mut rx) = mpsc::unbounded_channel::<Value>();
-            let b = backend.clone();
-            tokio::spawn(async move {
-                while let Some(line) = rx.recv().await {
-                    let _ = b.call("loop:log", line).await;
-                }
-            });
-            Some(Arc::new(HostLog(tx)))
-        }
-    };
+    ctx.command_log = turns.agent_logs.clone().map(|logs| logs as Arc<dyn CommandLog>);
     // Stop stops a running command too.
     let tools_cancel = ctx.cancel.clone();
     shared.cancel.on_cancel(move || tools_cancel.cancel());
@@ -1476,8 +1643,7 @@ struct TurnTools {
     /// The `decide` tool runs here when the host picked the local model.
     decide: Option<Arc<DecideService>>,
     hub: Hub,
-    /// `spawn_agent` children are driven here; the host only checks the call,
-    /// makes the child and admits its turns (`spawn:prepare`).
+    /// `spawn_agent` children are checked, made, admitted and driven here.
     spawn: bool,
     /// MCP calls run here when the host handed over the servers.
     mcp: Option<Arc<Mcp>>,
@@ -1487,13 +1653,10 @@ struct TurnTools {
     sandbox_mode: Option<String>,
     turns: Arc<Turns>,
     shared: Arc<Shared>,
-    backend: Arc<Backend>,
     store: Arc<SessionStore>,
     session: Arc<Mutex<Value>>,
     names: HashSet<String>,
     native: Option<ToolContext>,
-    /// The host runs this turn's tool hooks (`turn:hook`): an older host.
-    hooks: bool,
     /// This turn's hook rules, run here (`facts.hookRules`), and the folder they run in.
     hook_rules: Option<Vec<nekko_tools::hooks::HookRule>>,
     hook_cwd: String,
@@ -1540,35 +1703,7 @@ impl ToolRunner for TurnTools {
             }
             return self.inner(call).await;
         }
-        if !self.hooks {
-            return self.inner(call).await;
-        }
-        // PreToolUse hooks may block a call, PostToolUse hooks may add to its result (hooks.ts).
-        let id = str_at(call, "id").unwrap_or_default();
-        let pre =
-            self.backend.call("turn:hook", json!([self.shared.turn_id, "pre", call])).await.unwrap_or(Value::Null);
-        let notes: Vec<String> =
-            pre.get("notes").and_then(Value::as_array).map(|a| a.iter().map(js::display).collect()).unwrap_or_default();
-        if let Some(block) = pre.get("block").filter(|b| js::truthy(Some(b))) {
-            let mut lines = vec![js::display(block)];
-            lines.extend(notes);
-            return Ok(error(id, lines.join("\n")));
-        }
-        let out = self.inner(call).await?;
-        let post = self
-            .backend
-            .call("turn:hook", json!([self.shared.turn_id, "post", call, out]))
-            .await
-            .ok()
-            .filter(|v| v.is_object())
-            .unwrap_or(out);
-        if notes.is_empty() {
-            return Ok(post);
-        }
-        let mut post = post;
-        let output = format!("{}\n\n{}", post.get("output").map(js::display).unwrap_or_default(), notes.join("\n"));
-        post["output"] = json!(output);
-        Ok(post)
+        self.inner(call).await
     }
 }
 
@@ -1608,7 +1743,32 @@ impl TurnTools {
         Ok(post)
     }
 
+    /// A call of an unattended turn (chat.ts `runHostTool`): its tool access
+    /// decides first, then the call runs with any approval it needs denied.
     async fn inner(&self, call: &Value) -> Result<Value, String> {
+        let un = &self.shared.unattended;
+        if !un.is_on() {
+            return self.attended(call).await;
+        }
+        let id = str_at(call, "id").unwrap_or_default().to_string();
+        let policy = lock(&un.policy).clone();
+        let decision = turn::workflow_access::tool_decision(&policy, call);
+        match decision.get("kind").and_then(Value::as_str) {
+            Some("deny") => return Ok(error(&id, decision.get("reason").map(js::display).unwrap_or_default())),
+            Some("auto") => {
+                lock(&un.auto).insert(id.clone());
+            }
+            _ => {}
+        }
+        let out = self.attended(call).await;
+        lock(&un.auto).remove(&id);
+        match lock(&un.denied).remove(&id) {
+            Some(reason) => Ok(error(&id, reason)),
+            None => out,
+        }
+    }
+
+    async fn attended(&self, call: &Value) -> Result<Value, String> {
         if let Some(sandboxes) = &self.sandbox {
             return Ok(self.sandbox_tool(sandboxes, call).await);
         }
@@ -1692,20 +1852,7 @@ impl TurnTools {
             let call: ToolCall = serde_json::from_value(call.clone()).map_err(|e| e.to_string())?;
             return serde_json::to_value(nekko_tools::execute(&call, ctx).await).map_err(|e| e.to_string());
         }
-        let reply = self.backend.call("turn:tool", json!([self.shared.turn_id, call])).await?;
-        if let Some(Value::Object(patch)) = reply.get("patch") {
-            {
-                let mut s = lock(&self.session);
-                if let Some(obj) = s.as_object_mut() {
-                    for (k, v) in patch {
-                        obj.insert(k.clone(), v.clone());
-                    }
-                }
-            }
-            persist(&self.store, &self.session, self.incognito).await;
-            self.shared.emit(json!({ "type": "session_meta", "sessionId": self.shared.session_id }));
-        }
-        Ok(reply.get("result").cloned().unwrap_or_else(|| error(id, "The host returned no result.")))
+        Err(format!("{name}: no tool runner for it here"))
     }
 
     /// A run chat's `report_experiment`, `report_artifact` or `update_plan`
@@ -1950,7 +2097,7 @@ impl TurnTools {
                     });
                     d("turn:spawnPrepare".into(), vec![req]).await
                 }
-                None => self.backend.call("spawn:prepare", json!([self.shared.turn_id, call, attempt, child])).await,
+                None => Err("Sub-agents need the daemon to know the data directory.".into()),
             };
             let prepared = match prepared {
                 Ok(v) => v,
@@ -1963,7 +2110,7 @@ impl TurnTools {
             if let Some(f) = prepared.get("failure") {
                 failure = Some(js::display(f));
             } else if let Some(spec) = prepared.get("spec").filter(|s| s.is_object()) {
-                match self.turns.launch(self.backend.clone(), self.hub.clone(), spec.clone()) {
+                match self.turns.launch(self.hub.clone(), spec.clone()) {
                     Ok((child_turn, ended)) => {
                         let turns = self.turns.clone();
                         self.shared.cancel.on_cancel(move || {
@@ -2184,14 +2331,7 @@ mod tests {
             tx.send((fail, String::new())).unwrap();
             tokio::time::timeout(
                 Duration::from_secs(10),
-                generate_title(
-                    Backend::disabled(),
-                    Hub::new(),
-                    store.clone(),
-                    None,
-                    spec.clone(),
-                    flights.claim("s_title").unwrap(),
-                ),
+                generate_title(Hub::new(), store.clone(), None, spec.clone(), flights.claim("s_title").unwrap()),
             )
             .await
             .unwrap();
@@ -2201,14 +2341,7 @@ mod tests {
         tx.send((false, "Later attempt".into())).unwrap();
         tokio::time::timeout(
             Duration::from_secs(10),
-            generate_title(
-                Backend::disabled(),
-                Hub::new(),
-                store.clone(),
-                None,
-                spec.clone(),
-                flights.claim("s_title").unwrap(),
-            ),
+            generate_title(Hub::new(), store.clone(), None, spec.clone(), flights.claim("s_title").unwrap()),
         )
         .await
         .unwrap();
@@ -2217,14 +2350,8 @@ mod tests {
         std::fs::write(&path, session.to_string()).unwrap();
         // Hold a successful response, then rename while it is pending.
         while seen_rx.try_recv().is_ok() {}
-        let task = tokio::spawn(generate_title(
-            Backend::disabled(),
-            Hub::new(),
-            store.clone(),
-            None,
-            spec,
-            flights.claim("s_title").unwrap(),
-        ));
+        let task =
+            tokio::spawn(generate_title(Hub::new(), store.clone(), None, spec, flights.claim("s_title").unwrap()));
         tokio::time::timeout(Duration::from_secs(10), seen_rx.recv()).await.unwrap().unwrap();
         let mut renamed = store.get("s_title").unwrap();
         renamed["title"] = json!("My name");
@@ -2289,18 +2416,28 @@ mod tests {
     }
 
     #[test]
+    fn claude_code_context_keeps_a_missing_window_only_for_the_same_model() {
+        use nekko_harness::ReportedContext;
+        let before = json!({ "used": 50_000, "window": 1_000_000, "model": "claude-opus-5-5", "modelId": "opus" });
+        // An interrupted turn reports what it sent but no window.
+        let stopped = ReportedContext { used: Some(52_000), window: None };
+        assert_eq!(
+            claude_code_context(Some(&before), stopped, None, Some("opus".into())),
+            json!({ "used": 52_000, "window": 1_000_000, "model": "claude-opus-5-5", "modelId": "opus" })
+        );
+        // Another model's window is not this one's.
+        assert_eq!(
+            claude_code_context(Some(&before), stopped, Some("claude-sonnet-5-5".into()), Some("sonnet".into())),
+            json!({ "used": 52_000, "model": "claude-sonnet-5-5", "modelId": "sonnet" })
+        );
+    }
+
+    #[test]
     fn steering_messages_look_like_the_hosts() {
         let m = Turns::steering_message("also check the tests");
         assert_eq!(m["role"], "user");
         assert_eq!(m["content"], "also check the tests");
         let id = m["id"].as_str().unwrap();
         assert!(id.starts_with("msg_") && id.matches('_').count() == 2, "{id}");
-    }
-
-    #[test]
-    fn coalesces_runs_of_the_same_delta_kind_only() {
-        let e = |t: &str, d: &str| json!({ "type": t, "sessionId": "s", "delta": d });
-        let out = coalesce(vec![e("reasoning", "a"), e("reasoning", "b"), e("text", "c"), e("text", "d")]);
-        assert_eq!(out, vec![e("reasoning", "ab"), e("text", "cd")]);
     }
 }

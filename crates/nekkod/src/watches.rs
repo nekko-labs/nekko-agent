@@ -1,7 +1,6 @@
 //! Agent watches: the `agent_watch` tool and the scheduler that wakes a chat
 //! later, ported from `packages/host/src/agent-watches.ts`. The daemon is the
-//! single writer of `agent-watches.json` (the backend hears it from
-//! `NEKKOD_OWNS` and sends its own tool calls here, `watch:tool`).
+//! single writer of `agent-watches.json`.
 //!
 //! A watch is a small durable one-shot state machine: a timer wakes once at
 //! its delay; a PR watch polls the PR every minute and wakes once on a change
@@ -11,7 +10,6 @@
 //! (`watch:snapshot`, `gh pr view` in pr.ts) and continuing the chat
 //! (`watch:resume`, which admits the turn as `chat:send` does).
 
-use crate::backend::Backend;
 use crate::turns::Turns;
 use nekko_js as js;
 use nekko_store::SessionStore;
@@ -21,13 +19,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-/// What the backend is told the daemon owns (`NEKKOD_OWNS`).
-pub const OWNS: &str = "agent-watches";
 /// The channels served here.
 pub const CHANNELS: &[&str] = &["session:nextWatch", "session:watches", "watch:tool"];
 
 const TICK: Duration = Duration::from_secs(15);
-const AUX_WAIT: Duration = Duration::from_secs(5);
 
 fn now_ms() -> f64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as f64).unwrap_or(0.0)
@@ -106,10 +101,9 @@ pub trait WatchHost: Send + Sync {
 
 type BoxFut<'a, T> = std::pin::Pin<Box<dyn std::future::Future<Output = T> + Send + 'a>>;
 
-/// The daemon's sessions, its own turns, and the TS host's callbacks.
+/// The daemon's sessions, its own turns, and the router.
 pub struct HostSide {
     store: Arc<SessionStore>,
-    backend: Arc<Backend>,
     hub: crate::hub::Hub,
     /// The router (`routes::route`), set once the context exists.
     dispatch: Arc<std::sync::OnceLock<crate::automation::Dispatcher>>,
@@ -121,20 +115,7 @@ impl WatchHost for HostSide {
     }
 
     fn busy<'a>(&'a self, turns: Option<&'a Turns>, session_id: &'a str) -> BoxFut<'a, bool> {
-        Box::pin(async move {
-            if turns.is_some_and(|t| t.running_sessions().iter().any(|s| s == session_id)) {
-                return true;
-            }
-            // No backend: no host turns, so this daemon's answer is the whole answer.
-            if self.backend.is_none() {
-                return false;
-            }
-            match tokio::time::timeout(AUX_WAIT, self.backend.call("chat:running", json!([]))).await {
-                Ok(Ok(Value::Array(ids))) => ids.iter().any(|v| v.as_str() == Some(session_id)),
-                // Unknown: do not wake a chat that may be running.
-                _ => true,
-            }
-        })
+        Box::pin(async move { turns.is_some_and(|t| t.running_sessions().iter().any(|s| s == session_id)) })
     }
 
     /// The PR's state as the watch compares it (`snapshot` in host.ts): a
@@ -170,7 +151,7 @@ impl WatchHost for HostSide {
                 return Err("Chat has no selected provider/model; no fallback was used".into());
             }
             let Some(d) = self.dispatch.get() else { return Err("Agent watch scheduler is unavailable".into()) };
-            let opts = json!({ "sessionId": session_id, "providerId": provider, "modelId": model, "text": text });
+            let opts = json!({ "sessionId": session_id, "providerId": provider, "modelId": model, "text": text, "unattended": true });
             let send = d("chat:send".into(), vec![opts.clone()]);
             match crate::automation::capture_turn_error(&self.hub, &opts, async move { send.await.map(|_| ()) }).await?
             {
@@ -192,9 +173,9 @@ pub struct Watches {
 }
 
 impl Watches {
-    pub fn new(data_dir: PathBuf, store: Arc<SessionStore>, backend: Arc<Backend>, hub: crate::hub::Hub) -> Arc<Self> {
+    pub fn new(data_dir: PathBuf, store: Arc<SessionStore>, hub: crate::hub::Hub) -> Arc<Self> {
         let dispatch: Arc<std::sync::OnceLock<crate::automation::Dispatcher>> = Arc::default();
-        let host = Arc::new(HostSide { store, backend, hub, dispatch: dispatch.clone() });
+        let host = Arc::new(HostSide { store, hub, dispatch: dispatch.clone() });
         let mut me = Self::with(data_dir.join("agent-watches.json"), host, Arc::new(now_ms));
         Arc::get_mut(&mut me).expect("just made").dispatch = dispatch;
         me

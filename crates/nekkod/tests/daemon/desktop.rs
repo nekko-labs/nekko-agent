@@ -41,7 +41,7 @@ impl Desk {
         let mut all: Vec<(&str, Option<&str>)> =
             vec![("USERPROFILE", Some(&home)), ("HOME", Some(&home)), ("NEKKO_DATA_DIR", Some(&link))];
         all.extend_from_slice(env);
-        start_with_env(false, Some(&self.data), json!({ "native": native, "edition": "desktop" }), &all)
+        start_with_env(Some(&self.data), json!({ "native": native, "edition": "desktop" }), &all)
     }
 
     fn link(&self) -> Value {
@@ -372,6 +372,26 @@ async fn the_host_boot_work_runs_here_and_the_relay_and_listing_report_their_sta
         (json!(true), json!(false), json!(false))
     );
     assert_eq!(relay["port"], 4400);
+    // TS-1: on a machine with Tailscale up (and its CLI), the MagicDNS name
+    // arrives before the relay ever starts, and the offered address uses it.
+    // CI runners have no tailnet; there the status simply has no name.
+    if relay.get("tailnetIp").is_some() {
+        let mut named = None;
+        for _ in 0..50 {
+            let (_, r) = post(d.port, "localRelay:status", json!([]), Some(TOKEN)).await;
+            if r.get("tailnetName").is_some() {
+                named = Some(r);
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        if let Some(r) = named {
+            let name = r["tailnetName"].as_str().unwrap();
+            assert!(name.ends_with(".ts.net"), "{r}");
+            assert_eq!(r["url"], json!(format!("ws://{name}:4400")), "{r}");
+            assert_eq!(r["running"], false, "{r}");
+        }
+    }
     let (_, relay) = post(d.port, "localRelay:start", json!([]), Some(TOKEN)).await;
     assert_eq!(relay["enabled"], true, "{relay}");
     assert_eq!(relay["running"], false, "{relay}");

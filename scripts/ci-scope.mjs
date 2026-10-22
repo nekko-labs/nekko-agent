@@ -23,9 +23,10 @@
 // group is the commit main moves to), the 6-hourly schedule and a dispatch.
 
 const RUST = [/^crates\//, /^Cargo\.(toml|lock)$/, /^rust-toolchain\.toml$/, /^rustfmt\.toml$/];
-// The daemon job also runs the host's session-clear parity tests against nekkod.
-const DAEMON = [...RUST, /^packages\/(host|core|shared)\//];
-const CAPTURE = [/^apps\/desktop\//, /^packages\//];
+// Shared's contracts feed the engine's golden sets (the phone allowlist, the IPC names).
+const DAEMON = [...RUST, /^packages\/shared\//];
+// Capture is also the job that builds the native browser (and fails on its warnings).
+const CAPTURE = [/^apps\/desktop\//, /^packages\//, /^vendor\/agent-browser\//, /^scripts\/build-agent-browser\.mjs$/];
 // The speed contract measures the Local Web UI: renderer, engine, server, daemon.
 const PERF = [/^scripts\/perf\//, /^apps\/desktop\/src\/renderer\//, /^apps\/local-web-ui\//, /^packages\//, ...RUST];
 // Changes here can affect any job.

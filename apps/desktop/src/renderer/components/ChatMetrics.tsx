@@ -31,6 +31,7 @@ export function ContextGauge({
   liveTokens = 0,
   contextWindow,
   windowReported = false,
+  reported,
 }: {
   bundle: ContextBundle | null;
   /** The skill armed in the composer, folded into the token count when present. */
@@ -50,16 +51,25 @@ export function ContextGauge({
   contextWindow?: number;
   /** True only when the provider catalog reported this exact window. */
   windowReported?: boolean;
+  /**
+   * A Claude Agent chat's context as Claude Code reported it after its last
+   * turn. It replaces the bundle's estimate (which misses Claude Code's own
+   * prompt and tools, and its compactions), and its window beats any guess.
+   */
+  reported?: { used: number; window?: number };
 }) {
-  const included = (bundle?.items ?? []).filter((i: ContextItem) => i.included);
-  const used = included.reduce((s, i) => s + i.tokens, 0) + (skill?.tokens ?? 0) + draftTokens + liveTokens;
-  const windowTokens = contextWindow ?? bundle?.contextWindow ?? 0;
+  const included = reported ? [] : (bundle?.items ?? []).filter((i: ContextItem) => i.included);
+  const base = reported ? reported.used : included.reduce((s, i) => s + i.tokens, 0);
+  const used = base + (skill?.tokens ?? 0) + draftTokens + liveTokens;
+  const windowTokens = reported?.window ?? contextWindow ?? bundle?.contextWindow ?? 0;
+  const windowKnown = windowReported || !!reported?.window;
   const pct = windowTokens ? Math.min(100, (used / windowTokens) * 100) : 0;
 
   const bySource = included.reduce<Record<string, number>>((acc, i) => {
     acc[i.source] = (acc[i.source] ?? 0) + i.tokens;
     return acc;
   }, {});
+  if (reported?.used) bySource['claude-code'] = reported.used;
   if (skill?.tokens) bySource.skill = (bySource.skill ?? 0) + skill.tokens;
   if (draftTokens) bySource.draft = (bySource.draft ?? 0) + draftTokens;
   if (liveTokens) bySource.reply = (bySource.reply ?? 0) + liveTokens;
@@ -95,7 +105,7 @@ export function ContextGauge({
           style={{ transform: `scaleX(${pct / 100})`, background: `color-mix(in srgb, ${fillTone(windowTokens > 0 ? pct : NaN)} 28%, transparent)` }}
         />
         <span className="relative text-ink-soft">
-          {formatContextTokens(used)}{windowTokens ? ` / ${!windowReported ? '~' : ''}${formatContextTokens(windowTokens)}` : ''}
+          {formatContextTokens(used)}{windowTokens ? ` / ${!windowKnown ? '~' : ''}${formatContextTokens(windowTokens)}` : ''}
         </span>
       </span>
       {/* Expanded breakdown: segmented bar + per-source rows with %, plus free space. */}
@@ -111,7 +121,9 @@ export function ContextGauge({
             {windowTokens ? <span className="ml-1 text-ink-soft">({Math.round(pct)}%)</span> : null}
           </span>
         </div>
-        <p className="mb-2 text-ink-faint">{windowReported ? 'Window reported by the model catalog. Usage is estimated.' : 'Window estimated from model family; the provider has not reported its exact limit.'}</p>
+        <p className="mb-2 text-ink-faint">{reported
+          ? `Reported by Claude Code after its last model call.${reported.window ? '' : ' Window estimated from model family.'}`
+          : windowReported ? 'Window reported by the model catalog. Usage is estimated.' : 'Window estimated from model family; the provider has not reported its exact limit.'}</p>
         {/* Segmented usage bar */}
         {windowTokens > 0 && (
           <div className="mb-2.5 flex h-2 w-full overflow-hidden rounded-full" style={{ background: FREE_COLOR }}>
@@ -120,7 +132,7 @@ export function ContextGauge({
             ))}
           </div>
         )}
-        {included.length === 0 && !skill?.tokens && <div className="text-ink-faint">Nothing in context yet.</div>}
+        {included.length === 0 && !reported?.used && !skill?.tokens && <div className="text-ink-faint">Nothing in context yet.</div>}
         {rows.map((r) => (
           <div key={r.src} className="flex items-center gap-2 py-0.5">
             <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: r.meta.color }} />

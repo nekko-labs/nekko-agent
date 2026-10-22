@@ -6,7 +6,8 @@
 // hold for approval (`rm -rf ./nekko-itest-dist`); once the tool result comes
 // back, or for any other prompt, it streams "Hello from your computer.".
 // Prompts containing "slow" stream one word a second for ~20 s, so a run can be
-// watched with the app in the background (keep-alive, local notifications).
+// watched with the app in the background (keep-alive, local notifications);
+// "long run" does the same for 90 s.
 // Prompts containing "ask me" call `ask_user` with one two-option question.
 // Prompts containing "write a note" call `write_file` for `nekko-itest-note.txt`,
 // so the phone's read-only Changes view has a real edit to show.
@@ -53,8 +54,9 @@ createServer((req, res) => {
       const md = '## Build steps\n\n1. Install with **npm ci**\n2. Run `npm test`\n- [x] lint\n\n```sh\nnpm ci && npm test -- --reporter=dot --run-in-band\n```\n\nSee [the docs](https://nekkoagent.com/docs).';
       for (const piece of md.match(/[\s\S]{1,12}/g)) res.write(chunk({ content: piece }));
       res.write(chunk({}, 'stop'));
-    } else if (last?.role === 'user' && /slow/i.test(userText)) {
-      const words = Array.from({ length: 20 }, (_, i) => `word${i + 1} `);
+    } else if (last?.role === 'user' && /slow|long run/i.test(userText)) {
+      // "long run": 90 s, long enough for a slow simulator to queue and edit a follow-up.
+      const words = Array.from({ length: /long run/i.test(userText) ? 90 : 20 }, (_, i) => `word${i + 1} `);
       let i = 0;
       const timer = setInterval(() => {
         if (i < words.length) return void res.write(chunk({ content: words[i++] }));

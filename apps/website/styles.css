@@ -703,6 +703,25 @@ body {
 .theme-toggle .ic-sun { display: none; } /* light: show the moon (go dark) */
 @media (max-width: 560px) { .theme-toggle { width: 32px; height: 32px; } }
 
+/* ---- phone menu: below 900px the links fold behind a button; opening it
+   grows the glass pill downward (the pill clips anything outside it) ---- */
+.nav-menu {
+  display: none; place-items: center; width: 36px; height: 36px;
+  border-radius: 11px; border: 2px solid var(--sticker); background: var(--bg-2);
+  box-shadow: 3px 3px 0 var(--sticker); color: var(--ink); cursor: pointer;
+}
+.nav-menu:focus-visible { outline: 3px solid #9d8ce6; outline-offset: 3px; }
+@media (max-width: 900px) {
+  .nav-menu { display: grid; }
+  .nav.nav-open { flex-wrap: wrap; }
+  .nav.nav-open .nav-links {
+    display: flex; order: 10; flex-basis: 100%; flex-direction: column; gap: 2px;
+    padding: 8px 0 4px; border-top: 1px solid var(--line); margin-top: 6px;
+  }
+  .nav.nav-open .nav-links a { padding: 10px 6px; font-size: 15px; color: var(--ink); }
+}
+@media (max-width: 560px) { .nav-menu { width: 32px; height: 32px; } }
+
 /* ---- colourful mode: the whole page painted in the logo's lavender
    (#9D8CE6), with lighter lilac, aqua and mint drifting through it. No dark
    ground anywhere: text stays dark ink, cards are frosted white, and the
@@ -830,12 +849,16 @@ h3 { font-size: 21px; }
 @keyframes np-hop { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-14px); } }
 @keyframes np-twinkle { 50% { opacity: 0.2; } }
 
-/* speech bubble: pixel-edged, Handjet */
+/* speech bubble: pixel-edged, Space Mono */
 .nekko-bubble {
   position: absolute; top: 0; right: 150px; z-index: 2; max-width: 260px;
-  font-family: var(--led); font-size: 20px; line-height: 1.1; color: #17151f;
+  /* Space Mono, not Handjet: Handjet's LED segments leave gaps that line up
+     into a strike-through line at this size on some screens, whatever the
+     weight. Only the bubble changes; the headings keep Handjet. */
+  font-family: var(--retro-mono); font-weight: 400; font-size: 14px; line-height: 1.35; color: #17151f;
   background: #ffffff; border: 2px solid var(--sticker); border-radius: 10px;
   padding: 8px 12px; box-shadow: 3px 3px 0 var(--sticker);
+  text-wrap: balance; /* two even lines, never one word left on its own */
 }
 .nekko-bubble::after { /* a little pixel tail pointing at Nekko */
   content: ''; position: absolute; right: -8px; top: 14px; width: 6px; height: 6px;
@@ -857,7 +880,7 @@ h3 { font-size: 21px; }
   .beta-stage { padding-top: 78px; }
   .nekko-peek { right: 14px; }
   .nekko-peek-svg { width: 88px; height: 83px; }
-  .nekko-bubble { right: 112px; font-size: 17px; max-width: 190px; }
+  .nekko-bubble { right: 112px; font-size: 12.5px; max-width: 190px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .nekko-peek *, .nekko-peek-svg { animation: none !important; transition: none !important; }
@@ -905,3 +928,6 @@ h3 { font-size: 21px; }
 @media (max-width: 560px) {
   .nav { top: 8px; width: calc(100% - 16px); padding: 8px 8px 8px 14px; border-radius: 18px; }
 }
+
+/* a status chip inside a card's number line (e.g. 08 · ON THE GO  Beta) */
+.mf-num .chip { margin-left: 8px; }

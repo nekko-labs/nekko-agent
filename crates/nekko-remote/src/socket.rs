@@ -19,14 +19,30 @@ use tokio::sync::{mpsc, watch};
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 
-/// Runs a host channel for a welcomed device.
+/// Runs a host channel: the daemon's router, as the desktop and the local
+/// bridges call it. A phone's calls reach it only through `phone::gate`.
 pub type Dispatcher =
     Arc<dyn Fn(String, Value) -> Pin<Box<dyn Future<Output = Result<Value, String>> + Send>> + Send + Sync>;
+
+/// Who is calling, for a welcomed phone's request: the device the HELLO
+/// welcomed on that connection, and the request's signed Change proof
+/// (`proof: { ts, sig }` beside `args`), when it sent one (IO-33).
+#[derive(Debug, Clone, PartialEq)]
+pub struct PhoneCall {
+    pub device_id: String,
+    pub proof: Option<Value>,
+}
+
+/// Runs a welcomed phone's request (`phone::gate` over a `Dispatcher`).
+pub type PhoneDispatcher =
+    Arc<dyn Fn(PhoneCall, String, Value) -> Pin<Box<dyn Future<Output = Result<Value, String>> + Send>> + Send + Sync>;
 
 /// Host events to forward: `(channel, payload)`.
 pub type Events = mpsc::UnboundedReceiver<(String, Value)>;
 
 const REDIAL: Duration = Duration::from_secs(2);
+/// How often waiting terminal output is checked against its pacing window.
+const TICK: Duration = Duration::from_millis(25);
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
@@ -88,8 +104,11 @@ pub struct Spawn {
     pub secret: String,
     pub room: String,
     pub verify: Verifier,
-    pub dispatch: Dispatcher,
+    pub dispatch: PhoneDispatcher,
     pub events: Events,
+    /// Phones attached to terminals, shared with the gate (`phone::gate_shared`):
+    /// terminal output goes only to them, and a disconnect detaches them.
+    pub terminals: Arc<crate::phone_terminal::PhoneTerminals>,
 }
 
 impl RelayAgent {
@@ -133,14 +152,14 @@ impl LinkHandle for RelayAgent {
 }
 
 async fn run(shared: Arc<Shared>, spec: Spawn, mut stopped: watch::Receiver<bool>) {
-    let Spawn { url, secret, room, verify, dispatch, mut events } = spec;
+    let Spawn { url, secret, room, verify, dispatch, mut events, terminals } = spec;
     let derive = tokio::task::spawn_blocking(move || e2e::derive_key(&secret, &room));
     let key = tokio::select! {
         k = derive => match k { Ok(k) => k, Err(_) => return },
         _ = stopped.changed() => return,
     };
     let iv: crate::agent::IvSource = Box::new(e2e::random_iv);
-    *lock(&shared.core) = Some(AgentCore::new(key, iv));
+    *lock(&shared.core) = Some(AgentCore::new(key, iv).with_terminals(terminals));
     loop {
         if *stopped.borrow() {
             return;
@@ -184,7 +203,7 @@ async fn serve(
     shared: &Arc<Shared>,
     ws: Ws,
     verify: &Verifier,
-    dispatch: &Dispatcher,
+    dispatch: &PhoneDispatcher,
     events: &mut Events,
     stopped: &mut watch::Receiver<bool>,
 ) -> (u16, String) {
@@ -201,6 +220,9 @@ async fn serve(
         }
         let _ = sink.close().await;
     });
+    // Paced terminal output to phones waits for its window (phone_terminal::Coalescer).
+    let mut tick = tokio::time::interval(TICK);
+    tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let result = loop {
         tokio::select! {
             msg = stream.next() => match msg {
@@ -221,6 +243,12 @@ async fn serve(
                 }
                 None => break (1000, String::new()),
             },
+            _ = tick.tick() => {
+                if let Some(core) = lock(&shared.core).as_mut() {
+                    let frames = core.tick();
+                    shared.send_all(frames);
+                }
+            }
             _ = stopped.changed() => break (u16::from(CloseCode::Normal), String::new()),
         }
     };
@@ -230,16 +258,16 @@ async fn serve(
     result
 }
 
-fn on_text(shared: &Arc<Shared>, text: &str, verify: &Verifier, dispatch: &Dispatcher) {
+fn on_text(shared: &Arc<Shared>, text: &str, verify: &Verifier, dispatch: &PhoneDispatcher) {
     let mut guard = lock(&shared.core);
     let Some(core) = guard.as_mut() else { return };
     for out in core.on_relay(text, verify.as_ref()) {
         match out {
             Out::Send(f) => shared.send_all(vec![f]),
-            Out::Dispatch { cid, id, channel, args } => {
+            Out::Dispatch { cid, id, device_id, channel, args, proof } => {
                 let (shared, dispatch) = (shared.clone(), dispatch.clone());
                 tokio::spawn(async move {
-                    let result = dispatch(channel, args).await;
+                    let result = dispatch(PhoneCall { device_id, proof }, channel, args).await;
                     if let Some(core) = lock(&shared.core).as_mut() {
                         let frame = core.reply(&cid, id, result);
                         shared.send_all(vec![frame]);

@@ -7,9 +7,7 @@
 //! tools hold (`integrations:*`, `nekko-workspace`'s `integrations`).
 //! `session:watches` is in `watches.rs`.
 //!
-//! Served only with a data directory (the desktop app and the Local Web UI);
-//! the backend learns it must not run its own update-check scheduler from
-//! `NEKKOD_OWNS=update-checks`.
+//! Served only with a data directory (the desktop app and the Local Web UI).
 
 use crate::routes::Ctx;
 use futures_util::future::BoxFuture;
@@ -19,9 +17,6 @@ use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-
-/// What the backend is told the daemon owns (`NEKKOD_OWNS`): the update-check scheduler.
-pub const OWNS: &str = "update-checks";
 
 /// The channels served here when the daemon knows the data directory.
 pub const CHANNELS: &[&str] = &[
@@ -34,7 +29,7 @@ pub const CHANNELS: &[&str] = &[
     "integrations:detect",
     "integrations:install",
     "integrations:snippet",
-    // Internal: the desktop backend re-points the entries this app wrote
+    // Internal: the desktop app re-points the entries this app wrote
     // when its server's address or token changes.
     "integrations:refresh",
 ];
@@ -103,20 +98,16 @@ async fn blocking(f: impl FnOnce() -> Result<Value, String> + Send + 'static) ->
 }
 
 /// How a written MCP entry should reach this app. The caller's target when it
-/// gives one; otherwise the desktop app's (desktop.rs, or a desktop backend's
-/// `integrations:target`: the local server's address and token and the CLI
-/// launcher, which the renderer never holds), and the portable `npx` form
-/// where there is none (the web edition, a backend that is down).
+/// gives one; otherwise the desktop app's (desktop.rs: the local server's
+/// address and token and the CLI launcher, which the renderer never holds),
+/// and the portable `npx` form where there is none (the web edition).
 async fn subagent_target(ctx: &Ctx, given: &Value) -> Value {
     if given.is_object() {
         return given.clone();
     }
-    if let Some(desktop) = &ctx.desktop {
-        return desktop.target(ctx).await;
-    }
-    match tokio::time::timeout(crate::routes::AUX_WAIT, ctx.backend.call("integrations:target", json!([]))).await {
-        Ok(Ok(t)) if t.is_object() => t,
-        _ => json!({}),
+    match &ctx.desktop {
+        Some(desktop) => desktop.target(ctx).await,
+        None => json!({}),
     }
 }
 
@@ -211,16 +202,15 @@ async fn wipe(ctx: &Ctx) -> Result<Value, String> {
     let data_dir = store.dir().parent().map(std::path::Path::to_path_buf).ok_or("no data directory")?;
     // Stop what could write a chat back: turns, their admission, compactions,
     // image turns, and the processes the agent started.
-    for id in crate::routes::running_chats(ctx).await {
+    for id in crate::routes::running_chats(ctx) {
         let _ = crate::routes::stop_chat(ctx, &id).await;
         ctx.compactions.cancel(&id);
     }
     ctx.turns.processes.kill_all();
     // Chats, each command log first (a failure there keeps that chat).
-    let (backend, logs) = (ctx.backend.clone(), ctx.turns.agent_logs.clone());
-    let runtime = tokio::runtime::Handle::current();
+    let logs = ctx.turns.agent_logs.clone();
     let cleared = tokio::task::spawn_blocking(move || {
-        store.clear_with("all", |id| crate::routes::delete_agent_log(&runtime, logs.as_deref(), &backend, id))
+        store.clear_with("all", |id| crate::routes::delete_agent_log(logs.as_deref(), id))
     })
     .await
     .map_err(|e| e.to_string())?;
@@ -340,7 +330,8 @@ impl StackHost for DaemonStacks<'_> {
 /// [`DaemonSide`] is the real one; the golden replay scripts it.
 pub trait UpdateHost: Send + Sync {
     fn settings<'a>(&'a self) -> BoxFuture<'a, Value>;
-    /// `listModels(id)`: the model ids, or `None` when the call failed.
+    /// `listModels(id)`: the model ids, or `None` when the call failed or the
+    /// provider fell back to its shipped catalog (that is no news either).
     fn list_models<'a>(&'a self, provider_id: &'a str) -> BoxFuture<'a, Option<Vec<String>>>;
     /// `refreshVaizerCatalog()`, or `None` when it failed.
     fn skills_catalog<'a>(&'a self) -> BoxFuture<'a, Option<Value>>;
@@ -454,9 +445,11 @@ impl UpdateHost for DaemonSide<'_> {
 
     fn list_models<'a>(&'a self, provider_id: &'a str) -> BoxFuture<'a, Option<Vec<String>>> {
         Box::pin(async move {
-            let models = crate::providers::list_models(self.ctx, provider_id).await;
-            let list = models.as_array()?;
-            Some(list.iter().map(|m| nekko_js::display(m.get("id").unwrap_or(&Value::Null))).collect())
+            let models = crate::providers::listed_models_fresh(self.ctx, provider_id).await.ok()?;
+            if models.iter().any(|m| m.fallback) {
+                return None;
+            }
+            Some(models.into_iter().map(|m| m.id).collect())
         })
     }
 

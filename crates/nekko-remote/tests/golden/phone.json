@@ -20,8 +20,38 @@
     "apiKey": "sk-secret",
     "tokenKey": "tk",
     "enabled": true
+   },
+   {
+    "id": "claude",
+    "kind": "anthropic",
+    "label": "Claude",
+    "auth": "subscription",
+    "tokenKey": "tok:claude",
+    "enabled": true
+   },
+   {
+    "id": "or",
+    "kind": "openrouter",
+    "label": "OpenRouter",
+    "apiKey": "sk-or-secret",
+    "enabled": true
    }
   ],
+  "prompts": [
+   {
+    "id": "review",
+    "name": "review",
+    "body": "Review this.",
+    "createdBy": "/Users/me"
+   },
+   {
+    "id": "bad",
+    "name": 7,
+    "body": "x"
+   },
+   "not a prompt"
+  ],
+  "automationsPaused": true,
   "guardrails": [
    {
     "id": "g"
@@ -1693,6 +1723,28 @@
      "images": []
     }
    ]
+  },
+  "queued": {
+   "id": "queued",
+   "messages": [],
+   "queue": [
+    "plain",
+    {
+     "text": "with photos",
+     "images": [
+      "data:image/jpeg;base64,QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ"
+     ],
+     "videos": []
+    },
+    {
+     "text": "Use the skill.\n\nnow",
+     "skill": {
+      "name": "review",
+      "input": "now"
+     }
+    },
+    7
+   ]
   }
  },
  "changes": {
@@ -2004,6 +2056,354 @@
   ],
   "empty": []
  },
+ "beyond": {
+  "chat:editQueued": {
+   "id": "s1",
+   "title": "Queue",
+   "messages": [
+    {
+     "id": "m1",
+     "role": "user",
+     "content": "hi"
+    }
+   ],
+   "queue": [
+    "sooner",
+    {
+     "text": "with a photo",
+     "images": [
+      "data:image/jpeg;base64,AAAA"
+     ],
+     "videos": [
+      "data:video/mp4;base64,BBBB"
+     ]
+    },
+    {
+     "text": "Review carefully.\n\nnow",
+     "skill": {
+      "name": "review",
+      "input": "now",
+      "extra": 1
+     }
+    }
+   ],
+   "workspaceId": "w1"
+  },
+  "session:fork": {
+   "id": "s_fork",
+   "title": "New chat",
+   "workspaceId": "w1",
+   "messages": [
+    {
+     "id": "m1",
+     "role": "user",
+     "content": "hi"
+    }
+   ]
+  },
+  "tasks:list": [
+   {
+    "id": "t1",
+    "title": "Nightly",
+    "kind": "recurring",
+    "prompt": "Run the tests in /Users/me/app",
+    "workspaceId": "w1",
+    "providerId": "p1",
+    "modelId": "m1",
+    "intervalMs": 86400000,
+    "status": "active",
+    "createdAt": 1,
+    "lastRunAt": 2,
+    "nextRunAt": 3,
+    "runCount": 4,
+    "lastSessionId": "s9",
+    "lastResult": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+   },
+   {
+    "id": "t2",
+    "title": "Watch",
+    "kind": "background",
+    "prompt": "p",
+    "keepAlive": "until",
+    "condition": "secret plan",
+    "status": "paused",
+    "createdAt": 1,
+    "runCount": 0
+   },
+   "junk"
+  ],
+  "workflows:list": {
+   "workflows": [
+    {
+     "id": "w1",
+     "name": "Review PRs",
+     "description": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+     "category": "Code",
+     "enabled": true,
+     "steps": [
+      {
+       "id": "a",
+       "kind": "shell",
+       "command": "gh pr list"
+      },
+      {
+       "id": "b"
+      }
+     ],
+     "triggers": [
+      {
+       "kind": "cron",
+       "cron": "0 9 * * *"
+      }
+     ],
+     "workspaceId": "w1",
+     "providerId": "p1",
+     "modelId": "m1",
+     "createdAt": 1,
+     "updatedAt": 2,
+     "lastRunAt": 3,
+     "lastStatus": "failure",
+     "runCount": 2,
+     "nextRunAt": 4
+    },
+    {
+     "id": "w2",
+     "name": "Blank",
+     "category": "Other",
+     "enabled": false,
+     "createdAt": 1,
+     "updatedAt": 1
+    }
+   ],
+   "runs": [
+    {
+     "id": "r1",
+     "workflowId": "w1",
+     "status": "failure",
+     "steps": [
+      {
+       "output": "secret log"
+      }
+     ]
+    }
+   ]
+  },
+  "workflow:run": {
+   "id": "r2",
+   "workflowId": "w1",
+   "status": "queued",
+   "triggerKind": "manual",
+   "startedAt": 5,
+   "steps": [
+    {
+     "output": "x"
+    }
+   ]
+  },
+  "pr:sessionList": [
+   {
+    "url": "https://github.com/o/r/pull/12",
+    "owner": "o",
+    "repo": "r",
+    "number": 12,
+    "title": "Fix it",
+    "state": "open",
+    "isDraft": false,
+    "additions": 3,
+    "deletions": 1,
+    "changedFiles": 2,
+    "headRefName": "fix/it",
+    "reviewDecision": "APPROVED",
+    "checks": "failing",
+    "source": "gh",
+    "updatedAt": "2026-10-19"
+   },
+   "junk"
+  ],
+  "usage:summary": {
+   "totalInput": 1000,
+   "totalOutput": 500,
+   "totalCost": 1.25,
+   "totalCacheRead": 7,
+   "byModel": {
+    "claude-opus-5.5": {
+     "input": 600,
+     "output": 300,
+     "cost": 1
+    },
+    "C:\\models\\qwen3-32b.gguf": {
+     "input": 300,
+     "output": 150,
+     "cost": 0
+    },
+    "b-model": {
+     "input": 50,
+     "output": 25,
+     "subscription": true
+    },
+    "a-model": {
+     "input": 50,
+     "output": 25
+    },
+    "bad": 3
+   },
+   "byProvider": {
+    "p1": {
+     "input": 1,
+     "output": 1
+    }
+   },
+   "bySession": {
+    "s1": {
+     "input": 1,
+     "output": 1
+    }
+   },
+   "bySessionCost": {
+    "s1": 1
+   },
+   "daily": [
+    {
+     "date": "2026-10-01",
+     "input": 0,
+     "output": 0,
+     "cost": 0,
+     "extra": 1
+    },
+    {
+     "date": "2026-10-02",
+     "input": 1,
+     "output": 1,
+     "cost": 0.25,
+     "extra": 1
+    },
+    {
+     "date": "2026-10-03",
+     "input": 2,
+     "output": 2,
+     "cost": 0.5,
+     "extra": 1
+    },
+    {
+     "date": "2026-10-04",
+     "input": 3,
+     "output": 3,
+     "cost": 0.75,
+     "extra": 1
+    },
+    {
+     "date": "2026-10-05",
+     "input": 4,
+     "output": 4,
+     "cost": 1,
+     "extra": 1
+    },
+    {
+     "date": "2026-10-06",
+     "input": 5,
+     "output": 5,
+     "cost": 1.25,
+     "extra": 1
+    },
+    {
+     "date": "2026-10-07",
+     "input": 6,
+     "output": 6,
+     "cost": 1.5,
+     "extra": 1
+    },
+    {
+     "date": "2026-10-08",
+     "input": 7,
+     "output": 7,
+     "cost": 1.75,
+     "extra": 1
+    },
+    {
+     "date": "2026-10-09",
+     "input": 8,
+     "output": 8,
+     "cost": 2,
+     "extra": 1
+    },
+    {
+     "date": "2026-10-10",
+     "input": 9,
+     "output": 9,
+     "cost": 2.25,
+     "extra": 1
+    },
+    {
+     "date": "2026-10-11",
+     "input": 10,
+     "output": 10,
+     "cost": 2.5,
+     "extra": 1
+    },
+    {
+     "date": "2026-10-12",
+     "input": 11,
+     "output": 11,
+     "cost": 2.75,
+     "extra": 1
+    },
+    {
+     "date": "2026-10-13",
+     "input": 12,
+     "output": 12,
+     "cost": 3,
+     "extra": 1
+    },
+    {
+     "date": "2026-10-14",
+     "input": 13,
+     "output": 13,
+     "cost": 3.25,
+     "extra": 1
+    },
+    {
+     "date": "2026-10-15",
+     "input": 14,
+     "output": 14,
+     "cost": 3.5,
+     "extra": 1
+    },
+    {
+     "date": "2026-10-16",
+     "input": 15,
+     "output": 15,
+     "cost": 3.75,
+     "extra": 1
+    },
+    {
+     "date": 5
+    }
+   ],
+   "avoidedCosts": {
+    "secret": 1
+   }
+  },
+  "limits:get": {
+   "windows": [
+    {
+     "id": "w",
+     "label": "5 hours",
+     "scope": "session",
+     "usedPercent": 42,
+     "resetAt": 9,
+     "status": "warning",
+     "token": "x"
+    },
+    "junk"
+   ],
+   "planType": "max",
+   "creditsBalance": 3,
+   "creditsState": "balance",
+   "updatedAt": 8,
+   "staleAfterMs": 60000,
+   "account": "me@example.com"
+  }
+ },
  "cases": [
   {
    "channel": "data:wipe",
@@ -2030,12 +2430,12 @@
    "error": "Not allowed from a paired phone (channel-denied): remote:status"
   },
   {
-   "channel": "terminal:create",
+   "channel": "terminal:run",
    "args": [
     {}
    ],
    "calls": [],
-   "error": "Not allowed from a paired phone (channel-denied): terminal:create"
+   "error": "Not allowed from a paired phone (channel-denied): terminal:run"
   },
   {
    "channel": "file:write",
@@ -2071,8 +2471,36 @@
   {
    "channel": "tasks:list",
    "args": [],
-   "calls": [],
-   "error": "Not allowed from a paired phone (channel-denied): tasks:list"
+   "calls": [
+    [
+     "tasks:list",
+     []
+    ]
+   ],
+   "result": [
+    {
+     "createdAt": 1,
+     "id": "t1",
+     "intervalMs": 86400000,
+     "kind": "recurring",
+     "lastResult": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+     "lastRunAt": 2,
+     "lastSessionId": "s9",
+     "nextRunAt": 3,
+     "runCount": 4,
+     "status": "active",
+     "title": "Nightly"
+    },
+    {
+     "createdAt": 1,
+     "id": "t2",
+     "keepAlive": "until",
+     "kind": "background",
+     "runCount": 0,
+     "status": "paused",
+     "title": "Watch"
+    }
+   ]
   },
   {
    "channel": "turn:pending",
@@ -2171,6 +2599,7 @@
    ],
    "result": {
     "accent": "#6d5efc",
+    "automationsPaused": true,
     "chatPaneAction": "complete",
     "defaultChatMode": "ask",
     "defaultModelId": "m1",
@@ -2179,6 +2608,13 @@
      "p1::m1"
     ],
     "phoneChanges": true,
+    "prompts": [
+     {
+      "body": "Review this.",
+      "id": "review",
+      "name": "review"
+     }
+    ],
     "theme": "dark",
     "themePreset": "nebula",
     "voice": {
@@ -2198,6 +2634,7 @@
    ],
    "result": {
     "accent": "#6d5efc",
+    "automationsPaused": true,
     "chatPaneAction": "complete",
     "defaultChatMode": "ask",
     "defaultModelId": "m1",
@@ -2206,6 +2643,13 @@
      "p1::m1"
     ],
     "phoneChanges": true,
+    "prompts": [
+     {
+      "body": "Review this.",
+      "id": "review",
+      "name": "review"
+     }
+    ],
     "theme": "dark",
     "themePreset": "nebula",
     "voice": {
@@ -2229,6 +2673,18 @@
      "id": "p1",
      "kind": "openai",
      "label": "GPT"
+    },
+    {
+     "enabled": true,
+     "id": "claude",
+     "kind": "anthropic",
+     "label": "Claude"
+    },
+    {
+     "enabled": true,
+     "id": "or",
+     "kind": "openrouter",
+     "label": "OpenRouter"
     }
    ]
   },
@@ -2253,6 +2709,7 @@
    ],
    "result": {
     "accent": "#6d5efc",
+    "automationsPaused": true,
     "chatPaneAction": "complete",
     "defaultChatMode": "ask",
     "defaultModelId": "m1",
@@ -2261,6 +2718,13 @@
      "p1::m1"
     ],
     "phoneChanges": true,
+    "prompts": [
+     {
+      "body": "Review this.",
+      "id": "review",
+      "name": "review"
+     }
+    ],
     "theme": "dark",
     "themePreset": "nebula",
     "voice": {
@@ -2288,6 +2752,7 @@
    ],
    "result": {
     "accent": "#6d5efc",
+    "automationsPaused": true,
     "chatPaneAction": "complete",
     "defaultChatMode": "ask",
     "defaultModelId": "m1",
@@ -2296,6 +2761,13 @@
      "p1::m1"
     ],
     "phoneChanges": true,
+    "prompts": [
+     {
+      "body": "Review this.",
+      "id": "review",
+      "name": "review"
+     }
+    ],
     "theme": "dark",
     "themePreset": "nebula",
     "voice": {
@@ -2323,6 +2795,7 @@
    ],
    "result": {
     "accent": "#6d5efc",
+    "automationsPaused": true,
     "chatPaneAction": "complete",
     "defaultChatMode": "ask",
     "defaultModelId": "m1",
@@ -2331,6 +2804,13 @@
      "p1::m1"
     ],
     "phoneChanges": true,
+    "prompts": [
+     {
+      "body": "Review this.",
+      "id": "review",
+      "name": "review"
+     }
+    ],
     "theme": "dark",
     "themePreset": "nebula",
     "voice": {
@@ -2390,6 +2870,7 @@
    ],
    "result": {
     "accent": "#6d5efc",
+    "automationsPaused": true,
     "chatPaneAction": "complete",
     "defaultChatMode": "ask",
     "defaultModelId": "m1",
@@ -2398,6 +2879,13 @@
      "p1::m1"
     ],
     "phoneChanges": true,
+    "prompts": [
+     {
+      "body": "Review this.",
+      "id": "review",
+      "name": "review"
+     }
+    ],
     "theme": "dark",
     "themePreset": "nebula",
     "voice": {
@@ -2822,6 +3310,924 @@
    ],
    "calls": [],
    "error": "Not allowed from a paired phone (value-invalid): chat:queue prompt"
+  },
+  {
+   "channel": "chat:send",
+   "args": [
+    {
+     "sessionId": "s1",
+     "providerId": "p1",
+     "modelId": "m1",
+     "text": "hi",
+     "clientMessageId": "6f1c2a9e-7b1d-4c35-9a52-2b8f0f6f8d11"
+    }
+   ],
+   "calls": [
+    [
+     "chat:send",
+     [
+      {
+       "sessionId": "s1",
+       "providerId": "p1",
+       "modelId": "m1",
+       "text": "hi",
+       "clientMessageId": "6f1c2a9e-7b1d-4c35-9a52-2b8f0f6f8d11"
+      }
+     ]
+    ]
+   ],
+   "result": {
+    "ok": "chat:send"
+   }
+  },
+  {
+   "channel": "chat:send",
+   "args": [
+    {
+     "sessionId": "s1",
+     "text": "x",
+     "skill": {
+      "name": "review",
+      "input": "x"
+     },
+     "clientMessageId": "abc_1"
+    }
+   ],
+   "calls": [
+    [
+     "skills:runnable",
+     []
+    ],
+    [
+     "chat:send",
+     [
+      {
+       "sessionId": "s1",
+       "text": "Review carefully.\n\nx",
+       "skill": {
+        "name": "review",
+        "input": "x"
+       },
+       "clientMessageId": "abc_1"
+      }
+     ]
+    ]
+   ],
+   "result": {
+    "ok": "chat:send"
+   }
+  },
+  {
+   "channel": "chat:send",
+   "args": [
+    {
+     "sessionId": "s1",
+     "text": "hi",
+     "clientMessageId": ""
+    }
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (value-invalid): clientMessageId"
+  },
+  {
+   "channel": "chat:send",
+   "args": [
+    {
+     "sessionId": "s1",
+     "text": "hi",
+     "clientMessageId": "a/b"
+    }
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (value-invalid): clientMessageId"
+  },
+  {
+   "channel": "chat:send",
+   "args": [
+    {
+     "sessionId": "s1",
+     "text": "hi",
+     "clientMessageId": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    }
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (value-invalid): clientMessageId"
+  },
+  {
+   "channel": "chat:queue",
+   "args": [
+    "s1",
+    {
+     "text": "later",
+     "clientMessageId": "q-1"
+    }
+   ],
+   "calls": [
+    [
+     "chat:queue",
+     [
+      "s1",
+      {
+       "text": "later",
+       "clientMessageId": "q-1"
+      }
+     ]
+    ]
+   ],
+   "result": {
+    "ok": "chat:queue"
+   }
+  },
+  {
+   "channel": "chat:queue",
+   "args": [
+    "s1",
+    {
+     "text": "later",
+     "clientMessageId": 9
+    }
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (value-invalid): clientMessageId"
+  },
+  {
+   "channel": "chat:editQueued",
+   "args": [
+    "s1",
+    0,
+    {
+     "expect": "later",
+     "text": "sooner"
+    }
+   ],
+   "calls": [
+    [
+     "chat:editQueued",
+     [
+      "s1",
+      0,
+      {
+       "expect": "later",
+       "text": "sooner"
+      }
+     ]
+    ]
+   ],
+   "result": {
+    "id": "s1",
+    "queue": [
+     "sooner",
+     {
+      "text": "with a photo",
+      "images": [
+       "",
+       ""
+      ]
+     },
+     {
+      "text": "Review carefully.\n\nnow",
+      "skill": {
+       "input": "now",
+       "name": "review"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "channel": "chat:editQueued",
+   "args": [
+    "s1",
+    1,
+    {
+     "expect": "later"
+    }
+   ],
+   "calls": [
+    [
+     "chat:editQueued",
+     [
+      "s1",
+      1,
+      {
+       "expect": "later"
+      }
+     ]
+    ]
+   ],
+   "result": {
+    "id": "s1",
+    "queue": [
+     "sooner",
+     {
+      "text": "with a photo",
+      "images": [
+       "",
+       ""
+      ]
+     },
+     {
+      "text": "Review carefully.\n\nnow",
+      "skill": {
+       "input": "now",
+       "name": "review"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "channel": "chat:editQueued",
+   "args": [
+    "s1",
+    -1,
+    {
+     "expect": "later"
+    }
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (value-invalid): queue index"
+  },
+  {
+   "channel": "chat:editQueued",
+   "args": [
+    "s1",
+    1.5,
+    {
+     "expect": "later"
+    }
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (value-invalid): queue index"
+  },
+  {
+   "channel": "chat:editQueued",
+   "args": [
+    "s1",
+    0,
+    {
+     "expect": "later",
+     "images": [
+      "data:x"
+     ]
+    }
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (option-denied): images"
+  },
+  {
+   "channel": "chat:editQueued",
+   "args": [
+    "s1",
+    0,
+    {
+     "text": "no expect"
+    }
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (value-invalid): queued prompt edit"
+  },
+  {
+   "channel": "chat:editQueued",
+   "args": [
+    "s1",
+    0,
+    {
+     "expect": "later",
+     "text": 3
+    }
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (value-invalid): queued prompt edit"
+  },
+  {
+   "channel": "chat:editQueued",
+   "args": [
+    "s1",
+    0,
+    "sooner"
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (value-invalid): queued prompt edit"
+  },
+  {
+   "channel": "chat:editQueued",
+   "args": [
+    "",
+    0,
+    {
+     "expect": "later"
+    }
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (value-invalid): chat id"
+  },
+  {
+   "channel": "chat:dequeue",
+   "args": [
+    "s1",
+    0
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (channel-denied): chat:dequeue"
+  },
+  {
+   "channel": "session:fork",
+   "args": [
+    "s1"
+   ],
+   "calls": [
+    [
+     "session:fork",
+     [
+      "s1"
+     ]
+    ]
+   ],
+   "result": {
+    "id": "s_fork",
+    "title": "New chat"
+   }
+  },
+  {
+   "channel": "session:fork",
+   "args": [
+    "s1",
+    "m2"
+   ],
+   "calls": [
+    [
+     "session:fork",
+     [
+      "s1",
+      "m2"
+     ]
+    ]
+   ],
+   "result": {
+    "id": "s_fork",
+    "title": "New chat"
+   }
+  },
+  {
+   "channel": "session:fork",
+   "args": [
+    "s1",
+    null
+   ],
+   "calls": [
+    [
+     "session:fork",
+     [
+      "s1"
+     ]
+    ]
+   ],
+   "result": {
+    "id": "s_fork",
+    "title": "New chat"
+   }
+  },
+  {
+   "channel": "session:fork",
+   "args": [
+    "s1",
+    7
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (value-invalid): message id"
+  },
+  {
+   "channel": "session:fork",
+   "args": [],
+   "calls": [],
+   "error": "Not allowed from a paired phone (value-invalid): chat id"
+  },
+  {
+   "channel": "session:truncate",
+   "args": [
+    "s1",
+    "m2"
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (channel-denied): session:truncate"
+  },
+  {
+   "channel": "tasks:list",
+   "args": [
+    "ignored"
+   ],
+   "calls": [
+    [
+     "tasks:list",
+     []
+    ]
+   ],
+   "result": [
+    {
+     "createdAt": 1,
+     "id": "t1",
+     "intervalMs": 86400000,
+     "kind": "recurring",
+     "lastResult": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+     "lastRunAt": 2,
+     "lastSessionId": "s9",
+     "nextRunAt": 3,
+     "runCount": 4,
+     "status": "active",
+     "title": "Nightly"
+    },
+    {
+     "createdAt": 1,
+     "id": "t2",
+     "keepAlive": "until",
+     "kind": "background",
+     "runCount": 0,
+     "status": "paused",
+     "title": "Watch"
+    }
+   ]
+  },
+  {
+   "channel": "task:runNow",
+   "args": [
+    "t1",
+    {
+     "extra": true
+    }
+   ],
+   "calls": [
+    [
+     "task:runNow",
+     [
+      "t1"
+     ]
+    ]
+   ],
+   "result": null
+  },
+  {
+   "channel": "task:runNow",
+   "args": [],
+   "calls": [],
+   "error": "Not allowed from a paired phone (value-invalid): task id"
+  },
+  {
+   "channel": "task:create",
+   "args": [
+    {
+     "title": "x",
+     "prompt": "rm -rf",
+     "kind": "scheduled"
+    }
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (channel-denied): task:create"
+  },
+  {
+   "channel": "task:update",
+   "args": [
+    "t1",
+    {
+     "prompt": "x"
+    }
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (channel-denied): task:update"
+  },
+  {
+   "channel": "task:delete",
+   "args": [
+    "t1"
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (channel-denied): task:delete"
+  },
+  {
+   "channel": "workflows:list",
+   "args": [],
+   "calls": [
+    [
+     "workflows:list",
+     []
+    ]
+   ],
+   "result": [
+    {
+     "category": "Code",
+     "description": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+     "enabled": true,
+     "id": "w1",
+     "lastRunAt": 3,
+     "lastStatus": "failure",
+     "name": "Review PRs",
+     "nextRunAt": 4,
+     "runCount": 2,
+     "stepCount": 2
+    },
+    {
+     "category": "Other",
+     "enabled": false,
+     "id": "w2",
+     "name": "Blank",
+     "stepCount": 0
+    }
+   ]
+  },
+  {
+   "channel": "workflow:run",
+   "args": [
+    "w1",
+    {
+     "inputs": {
+      "a": 1
+     }
+    }
+   ],
+   "calls": [
+    [
+     "workflow:run",
+     [
+      "w1"
+     ]
+    ]
+   ],
+   "result": {
+    "id": "r2",
+    "startedAt": 5,
+    "status": "queued",
+    "workflowId": "w1"
+   }
+  },
+  {
+   "channel": "workflow:run",
+   "args": [
+    3
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (value-invalid): workflow id"
+  },
+  {
+   "channel": "workflow:update",
+   "args": [
+    "w1",
+    {}
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (channel-denied): workflow:update"
+  },
+  {
+   "channel": "workflow:delete",
+   "args": [
+    "w1"
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (channel-denied): workflow:delete"
+  },
+  {
+   "channel": "workflow:event",
+   "args": [
+    {}
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (channel-denied): workflow:event"
+  },
+  {
+   "channel": "pr:sessionList",
+   "args": [
+    "s1"
+   ],
+   "calls": [
+    [
+     "pr:sessionList",
+     [
+      "s1",
+      false
+     ]
+    ]
+   ],
+   "result": [
+    {
+     "additions": 3,
+     "changedFiles": 2,
+     "checks": "failing",
+     "deletions": 1,
+     "isDraft": false,
+     "number": 12,
+     "reviewDecision": "APPROVED",
+     "state": "open",
+     "title": "Fix it",
+     "url": "https://github.com/o/r/pull/12"
+    }
+   ]
+  },
+  {
+   "channel": "pr:sessionList",
+   "args": [
+    "s1",
+    true
+   ],
+   "calls": [
+    [
+     "pr:sessionList",
+     [
+      "s1",
+      true
+     ]
+    ]
+   ],
+   "result": [
+    {
+     "additions": 3,
+     "changedFiles": 2,
+     "checks": "failing",
+     "deletions": 1,
+     "isDraft": false,
+     "number": 12,
+     "reviewDecision": "APPROVED",
+     "state": "open",
+     "title": "Fix it",
+     "url": "https://github.com/o/r/pull/12"
+    }
+   ]
+  },
+  {
+   "channel": "pr:sessionList",
+   "args": [
+    "s1",
+    "yes"
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (value-invalid): refresh"
+  },
+  {
+   "channel": "pr:sessionList",
+   "args": [],
+   "calls": [],
+   "error": "Not allowed from a paired phone (value-invalid): chat id"
+  },
+  {
+   "channel": "pr:continueStack",
+   "args": [
+    "https://github.com/o/r/pull/1",
+    "merge"
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (channel-denied): pr:continueStack"
+  },
+  {
+   "channel": "pr:linkStack",
+   "args": [
+    "https://github.com/o/r/pull/1"
+   ],
+   "calls": [],
+   "error": "Not allowed from a paired phone (channel-denied): pr:linkStack"
+  },
+  {
+   "channel": "usage:summary",
+   "args": [
+    {
+     "deep": true
+    }
+   ],
+   "calls": [
+    [
+     "usage:summary",
+     []
+    ]
+   ],
+   "result": {
+    "totalInput": 1000,
+    "totalOutput": 500,
+    "totalCost": 1.25,
+    "byModel": [
+     {
+      "model": "claude-opus-5.5",
+      "input": 600,
+      "output": 300,
+      "cost": 1
+     },
+     {
+      "model": "qwen3-32b.gguf",
+      "input": 300,
+      "output": 150,
+      "cost": 0
+     },
+     {
+      "model": "a-model",
+      "input": 50,
+      "output": 25,
+      "cost": 0
+     },
+     {
+      "model": "b-model",
+      "input": 50,
+      "output": 25,
+      "cost": 0,
+      "subscription": true
+     }
+    ],
+    "daily": [
+     {
+      "date": "2026-10-03",
+      "input": 2,
+      "output": 2,
+      "cost": 0.5
+     },
+     {
+      "date": "2026-10-04",
+      "input": 3,
+      "output": 3,
+      "cost": 0.75
+     },
+     {
+      "date": "2026-10-05",
+      "input": 4,
+      "output": 4,
+      "cost": 1
+     },
+     {
+      "date": "2026-10-06",
+      "input": 5,
+      "output": 5,
+      "cost": 1.25
+     },
+     {
+      "date": "2026-10-07",
+      "input": 6,
+      "output": 6,
+      "cost": 1.5
+     },
+     {
+      "date": "2026-10-08",
+      "input": 7,
+      "output": 7,
+      "cost": 1.75
+     },
+     {
+      "date": "2026-10-09",
+      "input": 8,
+      "output": 8,
+      "cost": 2
+     },
+     {
+      "date": "2026-10-10",
+      "input": 9,
+      "output": 9,
+      "cost": 2.25
+     },
+     {
+      "date": "2026-10-11",
+      "input": 10,
+      "output": 10,
+      "cost": 2.5
+     },
+     {
+      "date": "2026-10-12",
+      "input": 11,
+      "output": 11,
+      "cost": 2.75
+     },
+     {
+      "date": "2026-10-13",
+      "input": 12,
+      "output": 12,
+      "cost": 3
+     },
+     {
+      "date": "2026-10-14",
+      "input": 13,
+      "output": 13,
+      "cost": 3.25
+     },
+     {
+      "date": "2026-10-15",
+      "input": 14,
+      "output": 14,
+      "cost": 3.5
+     },
+     {
+      "date": "2026-10-16",
+      "input": 15,
+      "output": 15,
+      "cost": 3.75
+     }
+    ]
+   }
+  },
+  {
+   "channel": "limits:get",
+   "args": [
+    "claude"
+   ],
+   "calls": [
+    [
+     "providers:list",
+     []
+    ],
+    [
+     "limits:get",
+     [
+      "tok:claude",
+      false
+     ]
+    ]
+   ],
+   "result": {
+    "creditsState": "balance",
+    "planType": "max",
+    "updatedAt": 8,
+    "windows": [
+     {
+      "id": "w",
+      "label": "5 hours",
+      "resetAt": 9,
+      "scope": "session",
+      "status": "warning",
+      "usedPercent": 42
+     }
+    ]
+   }
+  },
+  {
+   "channel": "limits:get",
+   "args": [
+    "or"
+   ],
+   "calls": [
+    [
+     "providers:list",
+     []
+    ],
+    [
+     "limits:get",
+     [
+      "provider:or",
+      false
+     ]
+    ]
+   ],
+   "result": {
+    "creditsState": "balance",
+    "planType": "max",
+    "updatedAt": 8,
+    "windows": [
+     {
+      "id": "w",
+      "label": "5 hours",
+      "resetAt": 9,
+      "scope": "session",
+      "status": "warning",
+      "usedPercent": 42
+     }
+    ]
+   }
+  },
+  {
+   "channel": "limits:get",
+   "args": [
+    "p1"
+   ],
+   "calls": [
+    [
+     "providers:list",
+     []
+    ]
+   ],
+   "result": null
+  },
+  {
+   "channel": "limits:get",
+   "args": [
+    "nope"
+   ],
+   "calls": [
+    [
+     "providers:list",
+     []
+    ]
+   ],
+   "result": null
+  },
+  {
+   "channel": "limits:get",
+   "args": [
+    "tok:claude",
+    true
+   ],
+   "calls": [
+    [
+     "providers:list",
+     []
+    ]
+   ],
+   "result": null
+  },
+  {
+   "channel": "limits:get",
+   "args": [],
+   "calls": [],
+   "error": "Not allowed from a paired phone (value-invalid): provider id"
   },
   {
    "channel": "session:get",
@@ -4494,6 +5900,41 @@
       "content": "and",
       "images": []
      }
+    ]
+   }
+  },
+  {
+   "channel": "session:get",
+   "args": [
+    "queued"
+   ],
+   "calls": [
+    [
+     "session:get",
+     [
+      "queued"
+     ]
+    ]
+   ],
+   "result": {
+    "id": "queued",
+    "messages": [],
+    "queue": [
+     "plain",
+     {
+      "text": "with photos",
+      "images": [
+       ""
+      ]
+     },
+     {
+      "text": "Use the skill.\n\nnow",
+      "skill": {
+       "input": "now",
+       "name": "review"
+      }
+     },
+     7
     ]
    }
   },

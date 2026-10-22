@@ -1,0 +1,142 @@
+{
+  "account": "6f1c2a8e-3b4d-4e5f-8a9b-0c1d2e3f4a5b",
+  "keyring": "X7Krdu2b2gNLGSxIxwaTWSUvzNoWjZJazArn0xbAtT6lYUUnDOazvr0d0BK3OUhnfdYY1JZIi8YIo8tDzjVH3Q",
+  "objectIds": [
+    {
+      "collection": "chat",
+      "localId": "s_1729000000000_abc",
+      "objectId": "pyzooEigcFKdbQmZUiNdKBruOHQo_z4mLG9HTzS6SR4"
+    },
+    {
+      "collection": "chat-part",
+      "localId": "s_1729000000000_abc:0",
+      "objectId": "BcDijDYF3COp3X87oAHmGyLJ78S_VTULH8x_HbD64vE"
+    },
+    {
+      "collection": "prompt",
+      "localId": "日本語のプロンプト",
+      "objectId": "wfrNU_T2LUAEBGbfRY8xUJeMfNBvIAQq4UnDUaZL63Q"
+    }
+  ],
+  "records": [
+    {
+      "collection": "chat",
+      "objectId": "pyzooEigcFKdbQmZUiNdKBruOHQo_z4mLG9HTzS6SR4",
+      "revision": 1,
+      "keyId": 1,
+      "plaintext": "",
+      "salt": "Tp04n0MNLF_b_VEm2rkB5i9UKhMa0S33NKdD2f3w0TM",
+      "aad": "nekko-sync/v1 record\n6f1c2a8e-3b4d-4e5f-8a9b-0c1d2e3f4a5b\n1\nchat\npyzooEigcFKdbQmZUiNdKBruOHQo_z4mLG9HTzS6SR4\n1",
+      "blob": "AU6dOJ9DDSxf2_1RJtq5AeYvVCoTGtEt9zSnQ9n98NEzBHFbvCmr_aBLIMhJgbNuiNrPYPFA8N7cbileTeIa3damtXIhA4VTCSht8aJ7y4je9eYe3YIKwYeMAaCnaUmOIGf1os-cKg6Lof2L3rzgb3PqXmIHI18Zjlrb5TNvE41Ja7I7jydSnsgP-eyI-EA4qOdgheMOjcmdWdDs7Xgefw-42n3XBKh0RaDmIcEfpxGdqp0z8irPxbKoFXnWbKfDRDoBlXFubQ8cVUHXwl0eHScfZzMajcvjtGNroPKFM1ddnCaTKzkBKCRfii9ramu4Eesp0nM6r-Qup4KEos3I6Z7Q5HQwy8UZ2ImDz2RyktwBhNR8Fdx3JhM3ktVDn_g4kRaqj-6w9oJRYiUwclK3-UQ"
+    },
+    {
+      "collection": "chat",
+      "objectId": "pyzooEigcFKdbQmZUiNdKBruOHQo_z4mLG9HTzS6SR4",
+      "revision": 1,
+      "keyId": 1,
+      "plaintext": "{\"title\":\"Plan the trip\",\"messages\":[{\"role\":\"user\",\"text\":\"Kyoto in November?\"}]}",
+      "salt": "I0dS7ozGRK7Ck9OiG1Z1TbPttYVlQnjE_9bugMq5dfs",
+      "aad": "nekko-sync/v1 record\n6f1c2a8e-3b4d-4e5f-8a9b-0c1d2e3f4a5b\n1\nchat\npyzooEigcFKdbQmZUiNdKBruOHQo_z4mLG9HTzS6SR4\n1",
+      "blob": "ASNHUu6MxkSuwpPTohtWdU2z7bWFZUJ4xP_W7oDKuXX7aYa7Ch5Lq1vWnFpTAq1eeSc3RjXGr9A7UK-GrO3PT0saJVTOP5NsNI4-p4cFyxWQ4z0MXPNi0-Doouz4aYai7au0i7MWF1ayPiwZufpbDSD_ttdHraWusQDk4IlE46I6zN80tR85nSmYAm04X1tsMwyGssdWQvtRsdH6TTRo0JZJTFZZ7iLccb6LP6yyXsY7kZYfGLX3uRVYRm2T8tx9m43RKWDGsmjlqGYihy15aWnrhKBbWfeVuIBdaXhmCyxHZbufNar7sXHrHJG92csQK7uiZJC7dD2MxCXH1vDp94tRjm-Bg-_FFpwCE6oACxgGE3KPbNR1rltNSmjGtRH8jpusQCfLrnR8JdUmKpgIxvY"
+    },
+    {
+      "collection": "chat",
+      "objectId": "pyzooEigcFKdbQmZUiNdKBruOHQo_z4mLG9HTzS6SR4",
+      "revision": 2,
+      "keyId": 1,
+      "plaintext": "{\"title\":\"Plan the trip\",\"deleted\":true}",
+      "salt": "xVbiKTaOvw9SiP9xw7vPi12xzf3ElNNoshb31hc0cWs",
+      "aad": "nekko-sync/v1 record\n6f1c2a8e-3b4d-4e5f-8a9b-0c1d2e3f4a5b\n1\nchat\npyzooEigcFKdbQmZUiNdKBruOHQo_z4mLG9HTzS6SR4\n2",
+      "blob": "AcVW4ik2jr8PUoj_ccO7z4tdsc39xJTTaLIW99YXNHFrEL84wbXDqrE1DGY9GnYu3ouHIzgZeQc4HGtJklegr81TfYjftYNPSkPpkqh9N5B7D1vgHqoAXg5LOXLUZsJqymfeO1d9i8Xv3FNe5eDCsvGyKsIq_6vBgu1f7jMqrfPxE5RGybEvlUy0D81BPeUkPII5hG0J_n2O95d358oAdAYUWDwC9tyU0zR74EHt7EvpDmAO2QLXUGCt9yUQkdTSNnLdhOIhnIZrn7HtRgNIRUmmCmeJaYHOlq0mMyY62SqoLj5p8TCb1fQIIw8C7ob7kUKrPCQrvaas1UOnfcFszBX-Hn1v2dfyoRV335CF1OwlTsHg0gBCB6ziySobtewyf5-CRi3q6em1axLqIdiZaWs"
+    }
+  ],
+  "longRecord": {
+    "collection": "chat-part",
+    "objectId": "pyzooEigcFKdbQmZUiNdKBruOHQo_z4mLG9HTzS6SR4",
+    "revision": 7,
+    "keyId": 2,
+    "plaintext": "猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫",
+    "salt": "KWEu6rD-WhVDwmKz9lnwJAmd0kd0sjh0D-2tWqEKGVY",
+    "blob": "ASlhLuqw_loVQ8Jis_ZZ8CQJndJHdLI4dA_trVqhChlWoG1DJ0HsymjzjFeBIhJj1Ete8OOd23enwu5ocTDZuFtz-ldoG6FxZtdHBMKFf8LHyV7-FpQ8fhlvYI-e2EJ527YPIUet8ssP5nR6n3ECGdM_SC6N1FEdI6ytYQi1duAOvDfkm_4gKa9Dl3xrdHmo2PVT1gfuSFOvAenwIIktYg5bvnD-TJyAAkHYM78cV7JiwoP5hprgMYbGrW_cHeh9em7LAt8oI1wRD7YiiGu3ryous3ovqI3veSfsFuGsIDPtoGzzzSipude7dIvV5SpWRkjkIi4RJ7oPjo5A6l4qxF5iGMTAco4BINHGjMsXlmy0bqAdS-9DkcWjSVD2xi_DruZKsiYT9ffQalX0K2hT0t8uiF56TQXsnypO6-XIMZclwmszDDESuzDLEnC7Ncqu1SRXgjhvuyY2VQfjYqMs0b2kS-Mnxgdw3FJuP03AILGet54dxo75UeCbELdn1R2ngGok3OFUGSKzdkA0YkZu4VZSKWtEbe02eTW7LHcxQo3hCuX4WTTB5f67ZxbpHo2Mh3CojIS6f7u4HD4ws1zyoiHDUgus5iAD9CLCo2cYXrqRxDuvC-ByemgfTrb8PaaTQMXSIwGE06FPszYBbvY7k7f0lmpv9KvJ4xO-eNAbzzxMy_dWMfVzTReFp_QxLuKiYjRDajfRjlTmqxbxkSDCszWgbQ7R4TrS70Ex_4464pc2afcinNV32hXL7u94LlRFi6G7OS9zms9U8iTq5dnRZH4xPm1RiD-m6Ad_ANx9Fbr5ShEHDDqRgeFY16feD4xv01gSHhokown3SQBb9FiBvF2vpY26kpZZc3tQkxXUCfxD4KK4a2b7a_C9K9csqhJ3Umgxg5cH2Nku9WFVo4nPOQwA-kaKpXel4_m1yZyI5jEeuinZjIG95iWmPsSCM6UHPp4F_n7NJ-SdHPnBBPxM-FDMXwcD0EGJRzOLH7D2D5dL5MsF-44yhgc8aFFfSWIzJ-WConVqGp5tGzCN6LmOd6fkadSzdX3Q5yEvX0S6MA3lQ45EimdR-HJpfDRer3OwbwaNl--nUzmeMj-4EqGESzpzIubX3EmAy1AMNIGk5UtVxBtI8mVWADYxF3xFarf-jP3L-kfImFOH4zk1-SJNjAzKZnLTqZ4g2-ijGSwGuxp5IpI_QTeelIkYKu83IOWKnufiKWytcm_SkHzroJ42ifewTEPft6km6-uLd6AHY4RoyD5KqqF0Kswrq0e9H_SoFrE36t187CrViWLLIrb0ReqjMIWSpDqVJzgayYMDrk76SPCGUlECWTjbZiWKgoGlM5Qc7SbE-9FeGPbhPU3K-ndW3z_v65VnrmlsjaXdfFT-sxvTOPAbo-YWIeSRE7ksBHbkRGOam6V5jn-yMvUsuKXonmPXnG6WpuocJU3PL6ipD9tisaDVkFgKt4DFFrN3DQlXUT5lfVsCp5_6sJLnXxjruJmt6C3KfEpPKl8vg0Y4tVTPXCNMCZPvxWf76QjiLGaqqeUPHfhqhg4oASI91uf3q0RKCnKIHTEFnPpzWYdxILxHRp7YIySfG_yj40T7guf1VDlFxs5g-JLlbbO-Gr3DyjGclffhNlYXjoxbyKO6FRy8fDhCWaY78W1YS_hHthY8TAZCrcqb5ut5sW_PyEVr32qjsyvKqCW0LfVnOqw765zOv3BuQE0tGXxmN31SMQ3vi9UqHEMn3rFjBb623aOJmmWRzNZS5skCMJMIN6dYArXaaC8rPbsd2qgBfnQP5a30AHttANi_feowXvleF0R0jzZ2uOnkF_2tgNZzGELLE15OtZGEjeyis8x4Hrqayvh5qOqAcQLSDDHlM-HqfzkCNlgEizNw91THpJCccKQ0AtO9hBhL3sXmMJFubc549aoHUSQRMuz8a89HTSbMBZsIwRfBhbJ335dumdLIznTQYgWZzWEBQSPjU11AleJw741-r64cuvl6ay7UhZf9pT8__3XPiUE9jj13FKW3WqqMFaskSvUJ5Ft8SdXeUdtEURIlWFmJqHHpHW-p9bqqtEW-p_hFOwvAn_CNnGRST8-MhWfyvTZonfwLDQGaIxif0Vu99lF7VTqsUnNQl_ZU0HaP7yEjWlohmITANp28i0fbHi6VrYyfBqFFEgYirDpr4zDsSfUvqMPW2K6hEJDnkM6Xn_EukJ_Rlj0f4nbvOjlWEMe9ogPKBMLRfxILCJkWulXRxM7pfzr-mMPinsIqpd6PVPuvvfma2eGuD8WNpd0oaTbQogv75EVpMqFrwCWwc0sddafAe14PaJDzRZoSlKM5hXX-b6UdC804myCYaVjrn9VXkVHCt6vYuXcQHPkmdwMbwjL3dYnuUfe03_0loqkANEClIFA3j8trGX9Cx3MRAOHwAXzchg4Qdxe28nJ5qLtcwogKlSoSWSHi-4GOMOHD6N-15Aqs8iWNG3Zjkr87-5iiW2GZTrI4UkA_8NLxiVCjUyo0vXHwU_V16inSzIi4n3ZxIld6U4Hw-0pAUdEdSAHCcs7TmNzYHBUGJjOUo_N9UjzbRKF61VZIXkNs6mUAJTScNFBGlScPNsdQIlW0AgE8Qqjd_nMgh7Pd829k4IfDi-_l1ok6-ifGRTogKbtdGWE6QmG1pEkm9HuahvAiknIv-zPxxd7sMlP9ObaMFz63L_XUzf6CScb1kbknEJ46Nu_lybR_f48d0zx7DFqrMbD0y2akLjWgIlENHues8WsxxmM3ddMGHxKAo-MXXp-NGGgLftw-SuaB-DAes9s6LfeOnd-6slYarj9wkboHEopdgh1YhW2ZhFScfbEbglPDunGfis0dlJIolIDzQxYIoBhHgwP3oYkUcG-n1mm0d22h_8hV4i6xT_ZD5MGDvXx0LY1RNvzE9w-j31fn4Z1GImOjNbTWZ2m_kncvWtqCszhKWWfi6JwSwLsPdW6ak7g"
+  },
+  "padme": [
+    [
+      0,
+      0
+    ],
+    [
+      1,
+      1
+    ],
+    [
+      2,
+      2
+    ],
+    [
+      3,
+      3
+    ],
+    [
+      255,
+      256
+    ],
+    [
+      256,
+      256
+    ],
+    [
+      257,
+      272
+    ],
+    [
+      1000,
+      1024
+    ],
+    [
+      1025,
+      1088
+    ],
+    [
+      4097,
+      4352
+    ],
+    [
+      65537,
+      67584
+    ],
+    [
+      1000000,
+      1015808
+    ]
+  ],
+  "device": {
+    "id": "dev_7f3a",
+    "private": "JjpNvkFIj7hyFLADIznbufDI2hTBbfzxMIS_PCVS7KU",
+    "public": "BBHWv39x6bRF5B0cTESg-3MKOfO9I0ZNL0A4ir6VIg6sO38SmEASU9CP9d7-kiqPKbMCCg-BAy1LkWCGymbTgmI",
+    "fingerprint": "G9F5-5TH3-08W8-NZEG"
+  },
+  "ephemeral": {
+    "private": "g0FCXK_t6dJLBZmu_f3v8cFSbtdbByF-uZv4wLdJi4E",
+    "public": "BJp4HKbQVafzDQyf-Hk2xzn2gW719ecrS5RkBLChqDsqwZ-EKUXqK_ZaoWSbKwL_eYVMjV7PzUA4YuipfqZsccE"
+  },
+  "wrap": {
+    "keyId": 1,
+    "blob": "AQSaeBym0FWn8w0Mn_h5Nsc59oFu9fXnK0uUZASwoag7KsGfhClF6iv2WqFkmysC_3mFTI1ez81AOGLoqX6mbHHBSdzbu7mGd1Rq5Ma1gSa6vG5qEr0OIL6ejTb-EoSL68T_6pNB621nc9zpLPPlV7wx-D2zL0CC6X_eFANsZx7zvij3_y0PqqFaPTkod7S1IQM"
+  },
+  "recovery": {
+    "key": "jFhTeFE_X3ouFFbuVAQmBf24kDkr7O-t0qsYD9Avs0E",
+    "text": "HHC56-Y2H7X-FQMBG-MAVQ5-81160-QYVH4-1S5FP-EZBEJ-NCC0Z-M1FPD-0YHJ0",
+    "keyId": 1,
+    "salt": "Qo2OZCYY7KeIo69QCdobm-rrJ5oT4mf0e0CdlNVV9FY",
+    "blob": "AUKNjmQmGOyniKOvUAnaG5vq6yeaE-Jn9HtAnZTVVfRWtARXvBK4wms97kLQaiveVTPyGaRp_i6zHCRtj2YUqhC6GKBviEEBiQeUz1oW7rOWKJEjZV03Spwms8EgaBw4-x5vnyRxPIH15VZvyqlcNdU"
+  },
+  "donation": {
+    "researchPrivate": "ZvYtGAfTgho4ZfJXO2nHS-Az8TQSQKyGH-_G1DC_9eA",
+    "researchPublic": "BNBdGhrf2RTsM4HqDbqobAQeEg4Hu6NaTK9Q44FYTF-OiUfUd-fApWCyFnjVRt1o90_eoGiwznnF1JAWs9wvRjc",
+    "payload": "{\"kind\":\"chat\",\"messages\":[{\"role\":\"user\",\"text\":\"[redacted email] asked about Kyoto\"}]}",
+    "id": "lMNaD_t29qvfF0mesoo9KA",
+    "deleteToken": "eYoLpdpGihTw-aAmmy8O4BD_I7dk0OLd2DOBWQ2oe7A",
+    "deleteHash": "rI-ytGWVvhZRY4rclFN9J94sE8GEYQDZqEk_7Xa1T7c",
+    "blob": "AQSaeBym0FWn8w0Mn_h5Nsc59oFu9fXnK0uUZASwoag7KsGfhClF6iv2WqFkmysC_3mFTI1ez81AOGLoqX6mbHHBQqRAuPBKNoWPjT6BkI7i9MyJUG-J5MHy2gBCi5IPJ1obAjpuNBo4VZwugbh6ZYXDTD9nHZcI1UOpxBq8NhtJXmMV3xdmlEgeJjRKnjnh2Y4sCX7g3oEmPKVlUKIqiW4W1t3bvPkEoz4-1uw31A9xBe7zpNfwRXBRcB5HEQBLlY8lqJ6QMS6V1wJP0_BoHEZQXKWL7MCTjYf73Cp9Ci_ODN6kgQUO4QSItJv5uXIUiPOWTox0RcYdJH911hPZxbvIUUg_2Ew4XJEZ4V2R8XL4C6JDp_tvMhxcbIrFLCzt9XHf-K_rPI7oKsq_o2Sxe0kshpzXrxL_C5xe8olNBYZuAeacnYrrxl6lLk3BQ38Rg_8"
+  }
+}

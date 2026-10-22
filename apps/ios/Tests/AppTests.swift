@@ -158,6 +158,22 @@ final class StatusWidgetTests: XCTestCase {
         XCTAssertEqual(s(0, 0, online: false), "Offline")
     }
 
+    func testPromptsWaitingToSendShowOnTheWidgetAndTheWatch() throws {
+        let quiet = StatusSnapshot(computer: "Mac", online: false, needsYou: 0, running: 0, at: .now, waiting: 2)
+        XCTAssertEqual(quiet.headline, "2 waiting to send")
+        XCTAssertNil(quiet.waitingBesideHeadline, "said once")
+        let busy = StatusSnapshot(computer: "Mac", online: false, needsYou: 1, running: 0, at: .now, waiting: 1)
+        XCTAssertEqual(busy.headline, "1 needs you")
+        XCTAssertEqual(busy.waitingBesideHeadline, "1 waiting to send")
+        XCTAssertEqual(StatusSnapshot(watchContext: busy.watchContext), busy)
+        // A snapshot an older version saved has no count, and still reads.
+        let old = Data(#"{"computer":"Mac","online":true,"needsYou":0,"running":0,"at":0}"#.utf8)
+        XCTAssertEqual(try JSONDecoder().decode(StatusSnapshot.self, from: old).waitingCount, 0)
+        let now = Date(timeIntervalSince1970: 10_000)
+        XCTAssertEqual(StatusSnapshot(computer: "Mac", online: false, needsYou: 0, running: 0, at: now, waiting: 3).spoken(now: now),
+                       "Mac was offline when Nekko Agent last checked. 3 waiting to send when Mac is back.")
+    }
+
     func testWhatNeedsMeAnswersInASentence() {
         let now = Date(timeIntervalSince1970: 10_000)
         func say(_ needs: Int, _ running: Int, online: Bool = true, computer: String? = "Mac", ago: TimeInterval = 30) -> String {
@@ -225,5 +241,83 @@ final class SavedListNoteTests: XCTestCase {
         XCTAssertTrue(today.hasSuffix("It updates when Mac answers."))
         let old = SavedListNote.text(savedAt: Int64((now.timeIntervalSince1970 - 3 * 86_400) * 1000), computer: "Mac", now: now, calendar: cal)
         XCTAssertGreaterThan(old.count, today.count, "an older list also names the day")
+    }
+
+    func testASavedChatSaysItIsACopy() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let text = SavedListNote.copy(savedAt: Int64((now.timeIntervalSince1970 - 600) * 1000), computer: "Mac", now: now,
+                                      calendar: Calendar(identifier: .gregorian))
+        XCTAssertTrue(text.hasPrefix("Saved copy from "))
+        XCTAssertTrue(text.hasSuffix("It updates when Mac answers."))
+    }
+}
+
+/// OF-9 and OF-5: both offline switches are on unless the user turned them off.
+@MainActor
+final class OfflinePrefsTests: XCTestCase {
+    func testOnForANewInstallAndOffWhenTheUserTurnedThemOff() throws {
+        let suite = "com.nekko.native.ios.tests.prefs.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let fresh = Prefs(defaults: defaults)
+        XCTAssertTrue(fresh.keepChatList, "on for an install that never touched the switch")
+        XCTAssertTrue(fresh.keepTranscripts)
+        XCTAssertNil(defaults.object(forKey: "keepChatList"), "reading the default stores nothing")
+        fresh.keepChatList = false
+        fresh.keepTranscripts = false
+        let again = Prefs(defaults: defaults)
+        XCTAssertFalse(again.keepChatList, "a deliberate off stays off")
+        XCTAssertFalse(again.keepTranscripts)
+    }
+}
+
+/// TS-4: Open Tailscale. Without `tailscale` in LSApplicationQueriesSchemes,
+/// canOpenURL always answers no and the action would only ever reach the App Store.
+final class OpenTailscaleTests: XCTestCase {
+    func testTheAppMayAskWhetherTailscaleIsInstalled() {
+        let schemes = Bundle.main.object(forInfoDictionaryKey: "LSApplicationQueriesSchemes") as? [String]
+        XCTAssertEqual(schemes?.contains("tailscale"), true)
+    }
+
+    @MainActor
+    func testWithoutTailscaleInstalledItOpensTheAppStorePage() {
+        // The simulator has no Tailscale app.
+        var opened: URL?
+        let url = AppModel.openTailscale(canOpen: { UIApplication.shared.canOpenURL($0) }, open: { opened = $0 })
+        XCTAssertEqual(url.host, "apps.apple.com")
+        XCTAssertEqual(opened, url)
+        XCTAssertEqual(AppModel.openTailscale(canOpen: { _ in true }, open: { _ in }).absoluteString, "tailscale://")
+    }
+}
+
+@MainActor
+final class NotificationPrefsTests: XCTestCase {
+    private func defaults() -> UserDefaults {
+        let name = "nekko.tests.\(UUID().uuidString)"
+        let d = UserDefaults(suiteName: name)!
+        d.removePersistentDomain(forName: name)
+        return d
+    }
+
+    /// IO-30: one switch per kind, and the relay is asked only for those.
+    func testEachKindHasItsSwitchAndTheRelayGetsOnlyThoseOn() {
+        let d = defaults()
+        let p = Prefs(defaults: d)
+        XCTAssertEqual(p.pushKinds, [.needsYou, .finished, .failed])
+        p.notifyFinished = false
+        XCTAssertEqual(p.pushKinds, [.needsYou, .failed])
+        XCTAssertFalse(p.wants(.finished))
+        XCTAssertTrue(p.wants(.test), "a test always shows")
+        XCTAssertEqual(Prefs(defaults: d).pushKinds, [.needsYou, .failed], "saved")
+        XCTAssertFalse(p.dictationHold, "tap to start and stop stays the default (IO-28)")
+        XCTAssertFalse(p.onboarded)
+    }
+
+    /// Someone who had turned the old single switch off keeps every kind off.
+    func testTheOldSingleSwitchSeedsEachKind() {
+        let d = defaults()
+        d.set(false, forKey: "notify")
+        let p = Prefs(defaults: d)
+        XCTAssertEqual(p.pushKinds, [])
     }
 }

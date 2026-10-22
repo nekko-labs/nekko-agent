@@ -3,11 +3,23 @@
 import type { AppSettings, UsageSummary } from './settings.js';
 import type { ProviderConfig, ModelInfo } from './models.js';
 import type { Session, SendOptions, AgentEvent, PendingInput, ReplySuggestions } from './chat.js';
-import type { TerminalInfo, TerminalSnapshot, ShellOption } from './terminal.js';
+import type { TerminalInfo, TerminalSnapshot, ShellOption, SshHost } from './terminal.js';
 import type { ContextBundle } from './context.js';
 import type { MemoryEntry, MemoryScope } from './memory.js';
 import type { WorkspaceFolder, IndexStatus, SearchHit, IndexedFile } from './workspace.js';
-import type { DirEntry, FileContent, FileChange, LineComment, RemoteImage } from './files.js';
+import type {
+  DirEntry,
+  FileContent,
+  FileChange,
+  LineComment,
+  RemoteImage,
+  ScopedFile,
+  ScopedListing,
+  ScopedRoot,
+  ScopedSearch,
+  ScopedWriteResult,
+} from './files.js';
+import type { LogInfo, LogRead, LogReadOptions } from './logs.js';
 import type { DesignBoard, DesignPage, GenerateDesignInput } from './design.js';
 import type { AutomationTask, NewTask } from './tasks.js';
 import type { TrainingRun, NewTrainingRun } from './training.js';
@@ -95,6 +107,8 @@ export const IpcChannels = {
   engineDismissDownload: 'engine:dismissDownload',
 
   machineReadiness: 'machine:readiness',
+  machineProfile: 'machine:profile',
+  machineRecommendations: 'machine:recommendations',
   gpuStats: 'gpu:stats',
   systemStats: 'system:stats',
 
@@ -115,6 +129,8 @@ export const IpcChannels = {
   chatCancelCompaction: 'chat:cancelCompaction',
   chatQueue: 'chat:queue',
   chatDequeue: 'chat:dequeue',
+  /** Change or remove a queued prompt, checked against the text the editor showed (a phone's queue). */
+  chatEditQueued: 'chat:editQueued',
   chatInterruptQueued: 'chat:interruptQueued',
   chatSteer: 'chat:steer',
   chatSuggest: 'chat:suggest',
@@ -135,6 +151,12 @@ export const IpcChannels = {
   terminalRun: 'terminal:run',
   terminalSignal: 'terminal:signal',
   terminalClose: 'terminal:close',
+  /** The last N bytes of scroll-back (64 KB by default, 512 KB at most), cut cleanly. */
+  terminalTail: 'terminal:tail',
+  /** Host aliases from the computer's ~/.ssh/config, for display. */
+  sshHosts: 'ssh:hosts',
+  /** A terminal running the system `ssh` to one of those aliases. */
+  sshOpen: 'ssh:open',
 
   contextPreview: 'context:preview',
   contextToggle: 'context:toggle',
@@ -184,6 +206,14 @@ export const IpcChannels = {
   fileRead: 'file:read',
   fileWrite: 'file:write',
   dirList: 'dir:list',
+  /** Files in a chat's or saved folder, relative to it, secrets hidden (IO-33 FA-1). */
+  filesList: 'files:list',
+  filesSearch: 'files:search',
+  filesRead: 'files:read',
+  filesWrite: 'files:write',
+  /** The app's, the engine's and each chat's agent logs, redacted (IO-33 FA-5). */
+  logsList: 'logs:list',
+  logsRead: 'logs:read',
   attachmentImport: 'attachment:import',
   imageFetch: 'image:fetch',
 
@@ -196,6 +226,21 @@ export const IpcChannels = {
   prAction: 'pr:action',
   prContinueStack: 'pr:continueStack',
   prLinkStack: 'pr:linkStack',
+  prCreate: 'pr:create',
+  prChecks: 'pr:checks',
+
+  gitDiff: 'git:diff',
+  gitLog: 'git:log',
+  gitShow: 'git:show',
+  gitBranches: 'git:branches',
+  gitCompare: 'git:compare',
+  gitStage: 'git:stage',
+  gitUnstage: 'git:unstage',
+  gitCommit: 'git:commit',
+  gitCommitMessage: 'git:commitMessage',
+  gitPush: 'git:push',
+  gitSwitch: 'git:switch',
+  gitMergeAbort: 'git:mergeAbort',
 
   commentsList: 'comments:list',
   commentAdd: 'comment:add',
@@ -248,6 +293,7 @@ export const IpcChannels = {
   workflowRun: 'workflow:run',
   workflowCancel: 'workflow:cancel',
   workflowRuns: 'workflow:runs',
+  workflowSkillDefs: 'workflow:skillDefs',
   /**
    * Feed an external event to the listeners. One door for every transport: the
    * CLI calls it directly, and the Local Web UI's generic `/api/:channel` route
@@ -287,15 +333,24 @@ export const IpcChannels = {
   remoteRevoke: 'remote:revoke',
   remoteRename: 'remote:rename',
   remoteRotate: 'remote:rotate',
+  // IO-33: a paired phone's Read and Change switches, and its Change activity. Never phone-callable.
+  remoteSetAccess: 'remote:setAccess',
+  remoteActivity: 'remote:activity',
   // Desktop only: the relay this computer can run on its Tailscale address.
   localRelayStatus: 'localRelay:status',
   localRelayStart: 'localRelay:start',
   localRelayStop: 'localRelay:stop',
+  localRelaySetLan: 'localRelay:setLan',
   networkVisibilityStatus: 'networkVisibility:status',
   networkVisibilityStart: 'networkVisibility:start',
   networkVisibilityStop: 'networkVisibility:stop',
 
   appInfo: 'app:info',
+  // The Claude policy nekkod enforces, and why a feature is off (claude-policy.ts).
+  claudePolicy: 'claude:policy',
+  claudeCapability: 'claude:capability',
+  claudePlanUsage: 'claude:planUsage',
+  claudeCodeStatus: 'claude:codeStatus',
   mcpStatus: 'mcp:status',
   mcpHypergate: 'mcp:hypergate',
   mcpHypergateConnect: 'mcp:hypergate:connect',
@@ -321,6 +376,8 @@ export const IpcEvents = {
   indexProgress: 'index:progress',
   updateEvent: 'update:event',
   terminalEvent: 'terminal:event',
+  /** A terminal's remote viewers changed (`TerminalViewersEvent`). */
+  terminalViewers: 'terminal:viewers',
   changesUpdated: 'changes:updated',
   tasksUpdated: 'tasks:updated',
   trainingUpdated: 'training:updated',
@@ -529,6 +586,13 @@ export interface NekkoApi {
   machineReadiness(
     language?: string,
   ): Promise<import('./readiness.js').ReadinessReport>;
+  /**
+   * This machine's hardware profile: saved and reused for a week, probed
+   * again when the engine build changes or `refresh` is set.
+   */
+  machineProfile(opts?: { refresh?: boolean }): Promise<import('./recommendations.js').HardwareProfile>;
+  /** Which model to run for each task here, with expected speed and memory headroom, before any download. */
+  machineRecommendations(opts?: { refresh?: boolean }): Promise<import('./recommendations.js').Recommendations>;
   /** GPU/VRAM stats for the metrics bar + Command Center (null if unavailable). */
   getGpuStats(): Promise<import('./models.js').GpuStats | null>;
   /** CPU load + RAM use for the monitor surfaces (null if unavailable). */
@@ -612,14 +676,18 @@ export interface NekkoApi {
   /** The chats whose turn is running right now, so a screen that opens mid-run shows them working at once. */
   runningSessions(): Promise<string[]>;
 
-  /** Live terminal sessions (in-memory; they don't persist across restarts). */
-  listTerminals(): Promise<TerminalInfo[]>;
+  /** Live terminal sessions (in-memory; they don't persist across restarts); `sessionId` narrows to one chat's. */
+  listTerminals(filter?: { sessionId?: string }): Promise<TerminalInfo[]>;
   /** Shells the host detected as available to launch. */
   listShells(): Promise<ShellOption[]>;
   /** Spawn a PTY-backed shell, optionally scoped to a project / cwd / shell. */
   createTerminal(opts?: { workspaceId?: string; sessionId?: string; cwd?: string; title?: string; shell?: string; cols?: number; rows?: number }): Promise<TerminalInfo>;
-  /** Fetch current info + retained raw scrollback (for reattaching a renderer). */
-  terminalSnapshot(id: string): Promise<TerminalSnapshot | null>;
+  /** Fetch current info + retained raw scrollback (for reattaching a renderer); `maxBytes` keeps only the tail. */
+  terminalSnapshot(id: string, opts?: { maxBytes?: number }): Promise<TerminalSnapshot | null>;
+  /** Host aliases from the computer's ~/.ssh/config (display fields only). */
+  listSshHosts?(): Promise<SshHost[]>;
+  /** Open a terminal running `ssh <alias>` for a host from `listSshHosts`. */
+  openSsh?(alias: string, opts?: { cols?: number; rows?: number; sessionId?: string; workspaceId?: string }): Promise<TerminalInfo>;
   /** Update a terminal's project/order (sidebar drag-and-drop). */
   updateTerminal(id: string, patch: { workspaceId?: string | null; order?: number; title?: string }): Promise<void>;
   /** Write raw input (keystrokes) to the PTY. */
@@ -651,7 +719,7 @@ export interface NekkoApi {
   specPath(sessionId: string): Promise<string | null>;
   setSessionOptions(
     id: string,
-    patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'order' | 'mode' | 'disabledTools' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' | 'offline' | 'incognito' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'workMode' | 'thinking' | 'providerId' | 'modelId' | 'plan' | 'chatType' | 'imageParams' | 'archivedAt'>>,
+    patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'order' | 'mode' | 'disabledTools' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' | 'offline' | 'cloudOnly' | 'incognito' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'workMode' | 'thinking' | 'providerId' | 'modelId' | 'plan' | 'chatType' | 'imageParams' | 'archivedAt'>>,
   ): Promise<Session | null>;
   truncateSession(id: string, messageId: string): Promise<Session | null>;
   /** Delete chats within a window; returns how many were removed. */
@@ -718,6 +786,24 @@ export interface NekkoApi {
   /** List a directory's immediate entries (file explorer). */
   listDir(path: string): Promise<DirEntry[]>;
   /**
+   * Scoped file access for remote callers (IO-33 FA-1): the folder is named
+   * by chat or saved-folder id, paths are relative to it, escapes and
+   * secret-looking files are refused. See {@link ScopedRoot}.
+   */
+  listScopedFiles(root: ScopedRoot, relPath: string): Promise<ScopedListing>;
+  /** Files whose name (then path) holds `query`; gitignored files left out. */
+  searchScopedFiles(root: ScopedRoot, query: string, limit?: number): Promise<ScopedSearch>;
+  readScopedFile(root: ScopedRoot, relPath: string, opts?: { maxBytes?: number }): Promise<ScopedFile>;
+  /**
+   * Save text only if the file still has `expectHash` (null: only if it does
+   * not exist yet); otherwise `{ ok: false, error: 'conflict', hash }`.
+   */
+  writeScopedFile(root: ScopedRoot, relPath: string, content: string, opts: { expectHash: string | null }): Promise<ScopedWriteResult>;
+  /** The computer's logs: app, engine and each chat's agent run log (IO-33 FA-5). */
+  listLogs(): Promise<LogInfo[]>;
+  /** A log's redacted tail, or its redacted lines that hold `query`. */
+  readLog(id: string, opts?: LogReadOptions): Promise<LogRead>;
+  /**
    * Fetch a remote photo for the chat through the host: public http(s) only,
    * size-capped and type-sniffed, returned as an inert data URL.
    */
@@ -738,6 +824,31 @@ export interface NekkoApi {
   prAction(url: string, action: import('./pr.js').PrAction): Promise<import('./pr.js').PrActionResult>;
   continuePrStack(sessionId: string, url: string): Promise<Session>;
   linkPrStack(sessionId: string, url: string): Promise<import('./pr.js').PrActionResult>;
+  /** Open a PR from the workspace's current (pushed) branch, with gh or the GitHub token. */
+  createPr(workspaceId: string, opts: import('./pr.js').PrCreateOptions): Promise<import('./pr.js').PrCreateResult>;
+  /** Each check on a PR's head commit, and their rollup. */
+  getPrChecks(url: string): Promise<import('./pr.js').PrCheckList>;
+
+  /**
+   * Git in a workspace's folder (IO-33 FA-2). `workspaceId` is a saved folder's
+   * id or `session:<chatId>`. Paths are relative to the folder. Changes answer
+   * `{ ok: false, message }` when git refuses; nothing force-pushes, amends or
+   * skips hooks. Each change drops the folder's cached `getGitStatus`.
+   */
+  gitDiff(workspaceId: string, opts?: import('./git.js').GitDiffOptions): Promise<import('./git.js').GitDiff>;
+  gitLog(workspaceId: string, opts?: import('./git.js').GitLogOptions): Promise<import('./git.js').GitCommit[]>;
+  gitShow(workspaceId: string, sha: string): Promise<import('./git.js').GitCommitDetail>;
+  gitBranches(workspaceId: string): Promise<import('./git.js').GitBranches>;
+  gitCompare(workspaceId: string, base: string, head: string): Promise<import('./git.js').GitCompare>;
+  gitStage(workspaceId: string, paths: string[]): Promise<import('./git.js').GitResult>;
+  gitUnstage(workspaceId: string, paths: string[]): Promise<import('./git.js').GitResult>;
+  gitCommit(workspaceId: string, opts: import('./git.js').GitCommitOptions): Promise<import('./git.js').GitCommitResult>;
+  /** A commit message for what is staged, from the default provider and model. */
+  gitCommitMessage(workspaceId: string): Promise<import('./git.js').GitCommitMessage>;
+  gitPush(workspaceId: string, opts?: import('./git.js').GitPushOptions): Promise<import('./git.js').GitPushResult>;
+  gitSwitch(workspaceId: string, branch: string, opts?: import('./git.js').GitSwitchOptions): Promise<import('./git.js').GitSwitchResult>;
+  /** Back out of a conflicted merge; `ok: false` when none is in progress. */
+  gitMergeAbort(workspaceId: string): Promise<import('./git.js').GitResult>;
 
   /** Inline editor comments on a file (gutter "+" annotations the agent picks up). */
   listComments(path: string): Promise<LineComment[]>;
@@ -809,6 +920,8 @@ export interface NekkoApi {
   cancelWorkflowRun(runId: string): Promise<void>;
   /** Run history, newest first, for one workflow or all of them. */
   listWorkflowRuns(workflowId?: string): Promise<WorkflowRun[]>;
+  /** Every skill a workflow's skill step can run, built-in first, then installs, other tools' and Claude Code plugins'. */
+  listWorkflowSkillDefs(): Promise<import('./skills.js').SkillDef[]>;
   /** Offer an event to every listening workflow; returns the runs it started. */
   dispatchWorkflowEvent(event: WorkflowEvent): Promise<WorkflowRun[]>;
 
@@ -857,6 +970,10 @@ export interface NekkoApi {
   renameRemoteDevice(deviceId: string, name: string): Promise<import('./remote.js').RemoteDevice[]>;
   /** Rotate the pairing secret: re-keys the room; every device must re-pair. */
   rotateRemoteSecret(): Promise<import('./remote.js').RemoteStatus>;
+  /** Turn a paired phone's Read or Change access on or off (IO-33). Returns every device. */
+  setRemoteAccess(deviceId: string, access: { read?: boolean; change?: boolean }): Promise<import('./remote.js').RemoteDevice[]>;
+  /** A paired phone's Change actions, oldest first, allowed or refused (IO-33). */
+  getRemoteActivity(deviceId: string): Promise<import('./phone-access.js').PhoneActivityEntry[]>;
   /**
    * The relay this computer runs itself, bound to its Tailscale address, so
    * phones on the tailnet reach it with nothing in between. Desktop only.
@@ -865,6 +982,8 @@ export interface NekkoApi {
   /** Switch it on (and keep it on across restarts); reports why if it can't start. */
   localRelayStart(): Promise<import('./relay-route.js').LocalRelayStatus>;
   localRelayStop(): Promise<import('./relay-route.js').LocalRelayStatus>;
+  /** Also listen on this computer's private LAN addresses (on by default). Desktop only. */
+  localRelaySetLan(on: boolean): Promise<import('./relay-route.js').LocalRelayStatus>;
   /**
    * "Visible on this network": answer mDNS for `_nekko-agent._tcp` so phones
    * on the same Wi-Fi can list this computer. Off by default; says nothing
@@ -876,6 +995,14 @@ export interface NekkoApi {
 
   /** Running version + edition. */
   getAppInfo(): Promise<AppInfo>;
+  /** The Claude policy nekkod enforces (shipped table, signed override, dev preview). */
+  getClaudePolicy(): Promise<import('./claude-policy.js').ClaudePolicyStatus>;
+  /** One provider's row for a Claude capability, with the reason line when it is off. */
+  getClaudeCapability(providerId: string, capability: import('./claude-policy.js').ClaudeCapability): Promise<import('./claude-policy.js').ClaudeCapabilityStatus>;
+  /** Plan usage for a Claude provider: none today; example data in the dev-only preview. */
+  getClaudePlanUsage(providerId: string): Promise<import('./claude-policy.js').ClaudePlanUsageStatus>;
+  /** Whether the user's Claude Code is installed and signed in; records it for `providerId`'s policy rows. */
+  getClaudeCodeStatus(providerId?: string): Promise<import('./claude-policy.js').ClaudeCodeStatus>;
   /** Connect configured MCP servers and return their status + tools. */
   getMcpStatus(): Promise<import('./mcp.js').McpServerStatus[]>;
   /** Probe for a local Hypergate daemon (`hypergated`) and return its gateway info. */
@@ -913,6 +1040,8 @@ export interface NekkoApi {
   onIndexProgress(cb: (s: IndexStatus) => void): () => void;
   onUpdateEvent(cb: (u: UpdateInfo) => void): () => void;
   onTerminalEvent(cb: (e: import('./terminal.js').TerminalEvent) => void): () => void;
+  /** A terminal's remote viewers changed (a phone attached or left). */
+  onTerminalViewers?(cb: (e: import('./terminal.js').TerminalViewersEvent) => void): () => void;
   /**
    * One terminal's raw byte stream straight from the engine daemon, with
    * flow control: output arrives at most once per frame, and a flood waits

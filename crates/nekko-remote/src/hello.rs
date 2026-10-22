@@ -165,3 +165,7 @@ pub fn cut16(s: &str, n: usize) -> &str {
     }
     s
 }
+
+/// The phone protocol version this computer speaks, sent in the welcome
+/// (`REMOTE_PROTOCOL_VERSION` in packages/shared/src/remote.ts).
+pub const PROTOCOL_VERSION: u64 = 3;

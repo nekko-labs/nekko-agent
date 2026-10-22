@@ -46,6 +46,11 @@ pub fn guess_context_window(model_id: Option<&str>) -> u64 {
     if let Some(w) = nekko_agent::claude::claude_context_window(&id) {
         return w;
     }
+    // Claude Code's model aliases (a Claude Agent chat's model): each names the
+    // newest model of its family, and every current one holds 1M.
+    if matches!(id.as_str(), "opus" | "sonnet" | "haiku") {
+        return 1_000_000;
+    }
     if id.contains("claude") {
         return 200_000;
     }
@@ -73,6 +78,15 @@ fn since_compaction(messages: &[Value]) -> &[Value] {
         Some(i) => &messages[i..],
         None => messages,
     }
+}
+
+/// The window Claude Code reported for a Claude Agent chat's current model
+/// (`claudeCodeContext`, saved after each of its turns); `None` before the
+/// first turn or once the chat's model changed, when the alias guess stands.
+pub fn claude_code_window(session: Option<&Value>, model: Option<&str>) -> Option<u64> {
+    let reported = session?.get("claudeCodeContext")?;
+    (reported.get("modelId").and_then(Value::as_str) == model).then_some(())?;
+    reported.get("window").and_then(Value::as_u64).filter(|w| *w > 0)
 }
 
 /// `previewContext(sessionId, attachedPaths)`, given what it reads.
@@ -127,7 +141,7 @@ pub fn preview(
         index_snippets: Vec::new(),
         history: Some(history),
         system_text: Some(&system_text),
-        context_window: Some(json!(guess_context_window(model))),
+        context_window: Some(json!(claude_code_window(session, model).unwrap_or_else(|| guess_context_window(model)))),
         excluded: strings(prefs.and_then(|p| p.get("excluded"))).into_iter().collect::<HashSet<_>>(),
         pinned: strings(prefs.and_then(|p| p.get("pinned"))).into_iter().collect::<HashSet<_>>(),
     });
@@ -155,7 +169,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         tokio::task::spawn_blocking(move || st.get(&id)).await.map_err(|e| e.to_string())?
     };
     if session.as_ref().is_some_and(|s| crate::worktrees::execution_mode(s) == "sandbox") {
-        return ctx.backend.call(channel, Value::Array(args)).await;
+        return Err(format!("{channel} is unsupported for sandbox sessions"));
     }
     let settings = crate::settings::current(ctx).await;
     let connected = settings
@@ -241,5 +255,19 @@ mod tests {
         assert_eq!(guess_context_window(Some("o3")), 200_000);
         assert_eq!(guess_context_window(Some("gemini-3-pro")), 1_000_000);
         assert_eq!(guess_context_window(Some("some-claude-gateway")), 200_000);
+        assert_eq!(guess_context_window(Some("opus")), 1_000_000);
+        assert_eq!(guess_context_window(Some("Sonnet")), 1_000_000);
+        assert_eq!(guess_context_window(Some("haiku")), 1_000_000);
+        assert_eq!(guess_context_window(Some("my-opus")), 128_000);
+    }
+
+    #[test]
+    fn a_claude_agent_chat_uses_the_window_claude_code_reported_for_its_model() {
+        let session =
+            json!({ "modelId": "opus", "claudeCodeContext": { "used": 30_000, "window": 200_000, "modelId": "opus" } });
+        assert_eq!(claude_code_window(Some(&session), Some("opus")), Some(200_000));
+        // Switched model, or no turn yet: the guess stands.
+        assert_eq!(claude_code_window(Some(&session), Some("sonnet")), None);
+        assert_eq!(claude_code_window(Some(&json!({ "modelId": "opus" })), Some("opus")), None);
     }
 }

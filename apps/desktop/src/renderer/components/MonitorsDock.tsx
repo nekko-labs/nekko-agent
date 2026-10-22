@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { AutomationTask, EngineStatus, GpuStats, LocalModel, MonitorKind, ProviderConfig, RuntimeStatus, SessionSummary, SystemStats, UsageSummary } from '@nekko-agent/shared';
-import { formatTemperature, temperatureTone, RUNTIME_CAPABILITIES, MODEL_PRICING, MODEL_COMPARISON_TIERS, MODEL_PRICING_SOURCE, MODEL_PRICING_CHECKED_AT, getModelPrice, DEFAULT_LOCAL_COST_BENCHMARK, describeLimitsProblem, formatUSD, gpuMemoryLabel, isLocalProvider, limitsKeyFor } from '@nekko-agent/shared';
+import { formatTemperature, temperatureTone, RUNTIME_CAPABILITIES, MODEL_PRICING, MODEL_COMPARISON_TIERS, MODEL_PRICING_SOURCE, MODEL_PRICING_CHECKED_AT, getModelPrice, DEFAULT_LOCAL_COST_BENCHMARK, describeLimitsProblem, formatUSD, gpuMemoryLabel, isLocalProvider, limitsKeyFor, oauthProviderOffered } from '@nekko-agent/shared';
 import { MONITORS, normalizeMonitorOrder, placeMonitor, reorderMonitor, type CommandWallState, type InsightsPrefs, type MonitorKey } from '../commandWall.js';
 import { useStore } from '../store.js';
 import { useProviderLimitsPortfolio } from '../useLimits.js';
@@ -345,7 +345,10 @@ function Utilization({ providers, usage, now, onOpenModels }: Pick<MonitorsDockP
       const windows = limits?.windows ?? [];
       const showRemaining = provider.kind === 'openai' && provider.auth === 'subscription';
       const problem = key && !limits ? problems[key] : undefined;
-      const status = provider.auth === 'subscription' && !provider.tokenKey ? 'Not signed in.'
+      // A Claude plan card from an older build: no sign-in to fix it with here.
+      const retiredClaudePlan = provider.kind === 'anthropic' && provider.auth === 'subscription' && !oauthProviderOffered('claude');
+      const status = retiredClaudePlan ? 'Claude plan sign-in is no longer available. Add an Anthropic API key in Models.'
+        : provider.auth === 'subscription' && !provider.tokenKey ? 'Not signed in.'
         : !key ? 'Usage API unavailable.'
         : problem ? describeLimitsProblem(problem, now)
         : !limits ? (answered.has(key) ? 'Quota unavailable.' : 'Reading provider quota…')

@@ -133,6 +133,11 @@ pub fn is_enabled(p: &Value) -> bool {
     p.get("enabled") != Some(&Value::Bool(false))
 }
 
+/// The `kind` of the settings provider `id`, when there is one.
+pub async fn kind_of(ctx: &Ctx, id: &str) -> Option<String> {
+    find(&providers(ctx).await, id).and_then(|p| p.get("kind")).and_then(Value::as_str).map(str::to_string)
+}
+
 fn find<'a>(list: &'a [Value], id: &str) -> Option<&'a Value> {
     list.iter().find(|p| p.get("id").and_then(Value::as_str) == Some(id))
 }
@@ -146,6 +151,13 @@ async fn save(ctx: &Ctx, list: Vec<Value>) -> Result<Value, String> {
 /// token store (a subscription, or OpenRouter's signed-in key) with a fresh
 /// token as its `apiKey`, and the account id backfilled from the stored token.
 pub async fn resolve(ctx: &Ctx, config: &Value) -> Result<Value, String> {
+    // Claude on Vertex AI authenticates with the user's own Google Cloud
+    // credentials: a short-lived access token, fetched fresh for each use.
+    if config.get("kind").and_then(Value::as_str) == Some("vertex") {
+        let mut out = config.as_object().cloned().unwrap_or_default();
+        out.insert("apiKey".into(), Value::String(crate::gcp::access_token().await?));
+        return Ok(Value::Object(out));
+    }
     let subscription = config.get("auth").and_then(Value::as_str) == Some("subscription");
     let key = config.get("tokenKey").filter(|k| nekko_js::truthy(Some(k)));
     if !subscription && key.is_none() {
@@ -204,20 +216,91 @@ pub async fn list_models(ctx: &Ctx, id: &str) -> Value {
 /// `listModelsStatus(providerId)`: `{ models, error? }`, where `error` says why
 /// the list failed. A disabled or unknown provider is `{ models: [] }`.
 pub async fn list_models_status(ctx: &Ctx, id: &str) -> Value {
-    use nekko_agent::Provider;
-    // Checked before resolving, so a disabled subscription is not refreshed either.
-    if find(&providers(ctx).await, id).is_none_or(|p| !is_enabled(p)) {
-        return json!({ "models": [] });
-    }
-
-    let listed = match resolve_provider(ctx, id).await.and_then(|c| build(&c)) {
-        Ok(provider) => provider.list_models().await.map_err(|e| e.to_string()),
-        Err(e) => Err(e),
-    };
-    match listed {
+    match listed_models(ctx, id).await {
         Ok(models) => json!({ "models": serde_json::to_value(models).unwrap_or(json!([])) }),
         Err(e) => json!({ "models": [], "error": e }),
     }
+}
+
+/// The provider's models as it listed them, `fallback` flags included (the
+/// wire drops them). A disabled or unknown provider lists nothing. A cloud
+/// catalog is served from [`catalog_cache`] while it is fresh.
+pub async fn listed_models(ctx: &Ctx, id: &str) -> Result<Vec<nekko_agent::ModelInfo>, String> {
+    list(ctx, id, false).await
+}
+
+/// [`listed_models`] straight from the provider, refreshing the cache: the
+/// update check asks this way, so a change it reports is what the next
+/// picker sees.
+pub async fn listed_models_fresh(ctx: &Ctx, id: &str) -> Result<Vec<nekko_agent::ModelInfo>, String> {
+    list(ctx, id, true).await
+}
+
+async fn list(ctx: &Ctx, id: &str, fresh: bool) -> Result<Vec<nekko_agent::ModelInfo>, String> {
+    use nekko_agent::Provider;
+    // Checked before resolving, so a disabled subscription is not refreshed either.
+    let Some(saved) = find(&providers(ctx).await, id).filter(|p| is_enabled(p)).cloned() else {
+        return Ok(Vec::new());
+    };
+    let config = resolve(ctx, &saved).await?;
+    let cacheable = matches!(config.get("kind").and_then(Value::as_str), Some("anthropic" | "chatgpt"));
+    let key = cacheable.then(|| catalog_key(&config));
+    if let Some(key) = key.filter(|_| !fresh)
+        && let Some(models) = catalog_cache().get(id, key)
+    {
+        return Ok(models);
+    }
+    let models = build(&config)?.list_models().await.map_err(|e| e.to_string())?;
+    if let Some(key) = key {
+        catalog_cache().put(id, key, &models);
+    }
+    Ok(models)
+}
+
+/// How long a cloud catalog is reused. Opening a chat pane, the model picker
+/// and `spawn_agent`'s check all list models; the six-hourly update check
+/// refreshes it regardless.
+const CATALOG_TTL: Duration = Duration::from_secs(300);
+
+/// The resolved config's fingerprint: a new key, account, base URL or custom
+/// model id is a different catalog, so a credential change never reads the
+/// old one. Only a hash is kept, never the key itself.
+fn catalog_key(config: &Value) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    config.to_string().hash(&mut h);
+    h.finish()
+}
+
+/// The live catalogs of the cloud providers (Anthropic, ChatGPT), one per
+/// provider id. A shipped fallback list is never kept, so an outage is not
+/// remembered for minutes: the next caller asks the provider again.
+#[derive(Default)]
+struct CatalogCache(Mutex<std::collections::HashMap<String, CachedCatalog>>);
+
+/// The config fingerprint it was listed under, when, and the models.
+type CachedCatalog = (u64, Instant, Vec<nekko_agent::ModelInfo>);
+
+impl CatalogCache {
+    fn get(&self, id: &str, key: u64) -> Option<Vec<nekko_agent::ModelInfo>> {
+        let map = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        let (k, at, models) = map.get(id)?;
+        (*k == key && at.elapsed() < CATALOG_TTL).then(|| models.clone())
+    }
+
+    fn put(&self, id: &str, key: u64, models: &[nekko_agent::ModelInfo]) {
+        let mut map = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        if models.is_empty() || models.iter().any(|m| m.fallback) {
+            map.remove(id);
+        } else {
+            map.insert(id.to_string(), (key, Instant::now(), models.to_vec()));
+        }
+    }
+}
+
+fn catalog_cache() -> &'static CatalogCache {
+    static CACHE: std::sync::OnceLock<CatalogCache> = std::sync::OnceLock::new();
+    CACHE.get_or_init(CatalogCache::default)
 }
 
 /// How long a provider's reported windows are trusted (`CACHE_MS`, context-window.ts).

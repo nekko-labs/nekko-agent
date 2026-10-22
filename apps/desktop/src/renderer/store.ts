@@ -1,7 +1,8 @@
 import { confirmDeletion } from './components/DeleteConfirmation.js';
 import { needsProviderSetup } from './components/providers/providerSetup.js';
 import { create } from 'zustand';
-import type { AppSettings, Session, SessionSummary, ProviderConfig, ModelInfo, TerminalInfo, InstalledSkillRecord, SkillDef, PrInfo, HypergateInfo } from '@nekko-agent/shared';
+import { rememberSplashColours } from './splash.js';
+import type { AppSettings, Session, SessionSummary, ProviderConfig, ProviderKind, ModelInfo, TerminalInfo, InstalledSkillRecord, SkillDef, PrInfo, HypergateInfo } from '@nekko-agent/shared';
 import { AUTO_COMPLETE_CHOICES, agentsToAutoComplete, autoCompleteDays, DEFAULT_IMAGE_CHAT_PARAMS, isArchived, getMarketSkill, marketToSkillDef, normalizeInstallTarget, summarizeSession, THEME_PRESETS, currentPresetAccent } from '@nekko-agent/shared';
 import type { MascotMood } from './components/Mascot.js';
 import { syncTitleBarOverlay } from './chrome.js';
@@ -305,6 +306,14 @@ interface UiState {
   refreshTerminals: () => Promise<void>;
   newTerminal: (workspaceId?: string, shell?: string) => Promise<void>;
   newTerminalWorkspace: (workspaceId?: string, shell?: string) => Promise<void>;
+  /** The "What works with a Claude plan?" sheet (components/claude/ClaudeAgent.tsx). */
+  claudePlanSheet: boolean;
+  setClaudePlanSheet: (open: boolean) => void;
+  /** A provider kind the Models page should open Add provider on (a notice's action), consumed once. */
+  addProviderKind: ProviderKind | null;
+  openAddProvider: (kind: ProviderKind) => void;
+  /** Open a Nekko terminal running the user's `claude`, where they sign in with /login. */
+  openClaudeCodeSignIn: () => Promise<void>;
   openChatPane: (sessionId: string) => void;
   openTerminalPane: (terminalId: string) => void;
   openFilePane: (path: string, sessionId?: string) => void;
@@ -608,6 +617,8 @@ export const useStore = create<UiState>((set, get) => ({
   settingsError: null,
   mascotMood: 'waving',
   toasts: [],
+  claudePlanSheet: false,
+  addProviderKind: null,
   paletteOpen: false,
   activeProjectId: readLastFolder(),
   terminals: [],
@@ -873,6 +884,8 @@ export const useStore = create<UiState>((set, get) => ({
     // The native window buttons sit in our title bar, so they have to follow
     // the theme with everything else.
     syncTitleBarOverlay();
+    // The next launch's splash shows before settings load, so it reads these.
+    if (get().settingsLoaded) rememberSplashColours([accent ?? preset?.accent, ...(preset?.swatch ?? [])]);
   },
 
   refreshTerminals: async () => {
@@ -902,6 +915,26 @@ export const useStore = create<UiState>((set, get) => ({
     const t = await window.nekko.createTerminal({ workspaceId: workspaceId ?? get().activeProjectId ?? undefined, shell });
     await get().refreshTerminals();
     set((s) => ({ ...addWorkspace(s, { id: newPaneId(), kind: 'terminal', refId: t.id }), view: 'chat' }));
+  },
+
+  setClaudePlanSheet: (open) => set({ claudePlanSheet: open }),
+  openAddProvider: (kind) => {
+    get().setView('models');
+    set({ addProviderKind: kind });
+  },
+
+  // Sign-in stays inside Claude Code: this only starts `claude` in a terminal
+  // the user can see and type into; Nekko never touches the login itself.
+  openClaudeCodeSignIn: async () => {
+    try {
+      const t = await window.nekko.createTerminal({ workspaceId: get().activeProjectId ?? undefined, title: 'Claude Code sign-in' });
+      await get().refreshTerminals();
+      set({ view: 'chat' });
+      get().openTerminalPane(t.id);
+      await window.nekko.runInTerminal(t.id, 'claude');
+    } catch (e) {
+      get().pushToast('error', `Could not open Claude Code: ${String(e)}`);
+    }
   },
 
   newTerminal: async (workspaceId, shell) => {

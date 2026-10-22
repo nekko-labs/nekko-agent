@@ -14,7 +14,7 @@ import { createPortal } from 'react-dom';
 import { DictationButton } from './DictationButton.js';
 import { decideApproval, type ApprovalScope } from './agent-console/approval-decision.js';
 import type { AgentEvent, AskAnswer, AskRequest, AutoQuality, Session, ContextBundle, IndexedFile, ModelInfo, ProviderConfig, SkillDef, PrInfo, QueuePayload, QueuedPrompt } from '@nekko-agent/shared';
-import { archiveDaysLeft, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, modelSupportsThinking, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
+import { archiveDaysLeft, CLAUDE_CODE_PROVIDER_KIND, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, modelSupportsThinking, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
 import type { AutoProviderPick, ProviderPool } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { approvalAfterResult } from './ChatPane.approval.js';
@@ -29,7 +29,7 @@ import { chatWelcomeState } from './agent-console/chatWelcome.js';
 import { useAllProviderLimits, useProviderLimits } from '../useLimits.js';
 import { clearDraft, loadDraft, restoredDraftImages, saveDraft } from '../composerDrafts.js';
 import { indentListSelection } from '../composerLists.js';
-import { draftAfterSkillSelection } from '../composerSkills.js';
+import { atTrigger, fileSelectionEdit, promptSelectionEdit, skillSelectionEdit, slashTrigger, type ComposerEdit } from '../composerSkills.js';
 import {
   ActivityGroup, ApprovalBar, AutoQualityMenu, MessageBubble, ModelPicker,
   ReplyStatus, useElementWidth,
@@ -446,9 +446,16 @@ interface LiveMarks {
   outMark: number;
 }
 
-function useLiveContextTokens(sessionId: string, marks: LiveMarks): number {
+/**
+ * Context the running turn has added on top of the gauge's base. Against
+ * Claude Code's reported figure (`reported`) that is everything the turn has
+ * produced so far, and nothing once it ends: the figure saved with the turn
+ * already holds it, and the bundle's marks do not apply to it.
+ */
+function useLiveContextTokens(sessionId: string, marks: LiveMarks, reported = false): number {
   const produced = useProducedTokens(sessionId);
   const running = !!getLiveRun(sessionId);
+  if (reported) return running ? produced.context : 0;
   return Math.max(0, (running ? produced.context : marks.ctxTail) - marks.ctxMark);
 }
 
@@ -456,7 +463,7 @@ function useLiveContextTokens(sessionId: string, marks: LiveMarks): number {
 const LiveContextGauge = memo(function LiveContextGauge({
   sessionId, marks, ...gauge
 }: Omit<React.ComponentProps<typeof ContextGauge>, 'liveTokens'> & { sessionId: string; marks: LiveMarks }) {
-  return <ContextGauge {...gauge} liveTokens={useLiveContextTokens(sessionId, marks)} />;
+  return <ContextGauge {...gauge} liveTokens={useLiveContextTokens(sessionId, marks, !!gauge.reported)} />;
 });
 
 /** The "running out of room" warning, counting the reply as it streams. */
@@ -973,6 +980,16 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // Leaving the composer out also stops it wiping the window's number when the
   // chat is deselected and the composer copy unmounts.
   const publishesContext = surface !== 'composer' && !readOnly;
+  // A Claude Agent chat's gauge and card read Claude Code's own figures once
+  // it has reported them for the picked model (see reportedClaudeCodeContext).
+  const claudeCodeChat = providers.find((p) => p.id === providerId)?.kind === CLAUDE_CODE_PROVIDER_KIND;
+  const claudeCodeContext = claudeCodeChat ? session?.claudeCodeContext : undefined;
+  const reportedCtx = useMemo(
+    () => reportedClaudeCodeContext({ claudeCodeContext }, modelId ?? undefined),
+    [claudeCodeContext, modelId],
+  );
+  const latestReportedRef = useRef(reportedCtx);
+  latestReportedRef.current = reportedCtx;
   const latestCtxRef = useRef(ctx);
   latestCtxRef.current = ctx;
   const latestSessionRef = useRef(session);
@@ -981,10 +998,16 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     if (!publishesContext) return;
     const publish = () => {
       const bundle = latestCtxRef.current;
+      const reported = latestReportedRef.current;
+      const run = getLiveRun(sessionId);
+      if (reported) {
+        // The gauge's own sum (useLiveContextTokens): Claude Code's figure plus the running turn.
+        useStore.getState().setSessionCtxEstimate(sessionId, reported.used + (run ? producedTokens(run).context : 0));
+        return;
+      }
       const base = bundle
         ? bundle.items.filter((i) => i.included).reduce((s, i) => s + i.tokens, 0)
         : estimateTranscriptTokens(latestSessionRef.current?.messages ?? []);
-      const run = getLiveRun(sessionId);
       const produced = run ? producedTokens(run).context : marksRef.current.ctxTail;
       const live = Math.max(0, produced - marksRef.current.ctxMark);
       useStore.getState().setSessionCtxEstimate(sessionId, base + live);
@@ -993,7 +1016,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     if (!streaming) return;
     const t = setInterval(publish, 4_000);
     return () => clearInterval(t);
-  }, [publishesContext, streaming, sessionId, ctx, marks]);
+  }, [publishesContext, streaming, sessionId, ctx, marks, reportedCtx]);
   useEffect(() => {
     if (!publishesContext) return;
     return () => useStore.getState().setSessionCtxEstimate(sessionId, null);
@@ -1579,7 +1602,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         modelId: brain.modelId,
         intervalMs: 5 * 60_000,
       });
-      useStore.getState().pushToast('success', 'Goal started as a background task, track it in Command Center.');
+      useStore.getState().pushToast('success', 'Goal started as a background task, track it on the Agents wall.');
       if (override === undefined) { setDraft(''); clearDraft(sessionId); }
       return;
     }
@@ -1850,7 +1873,44 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const summaryType = useStore((st) => st.sessions.find((x) => x.id === sessionId)?.chatType);
   const imageMode = (session ? session.chatType : summaryType) === 'image';
   const canCompose = imageMode || hasProvider;
-  const slashQuery = draft.startsWith('/') && !draft.includes('\n') ? draft.slice(1).toLowerCase() : null;
+  // The `/` and `@` menus read the word that ends at the caret, so they open
+  // mid-draft too. null until the composer reports a caret (then the end of
+  // the draft counts); -1 while a range is selected, which opens neither.
+  const [caret, setCaret] = useState<number | null>(null);
+  const caretAt = caret === null ? draft.length : Math.min(caret, draft.length);
+  const draftNow = useRef(draft);
+  draftNow.current = draft;
+  const composerCaret = useCallback((): number | null => {
+    const el = composerRef.current;
+    const selection = window.getSelection();
+    if (!el || !selection?.rangeCount || !el.contains(selection.anchorNode)) return null;
+    return el.selectionStart === el.selectionEnd ? el.selectionStart : -1;
+  }, []);
+  // Clicks and arrow keys move the caret without an edit. Only a move that
+  // changes what the menus would show re-renders the pane.
+  useEffect(() => {
+    const triggers = (text: string, at: number) => JSON.stringify([slashTrigger(text, at), atTrigger(text, at)]);
+    const onSelection = () => {
+      const next = composerCaret();
+      if (next === null) return;
+      setCaret((prev) => {
+        const text = draftNow.current;
+        const was = prev === null ? text.length : Math.min(prev, text.length);
+        return triggers(text, was) === triggers(text, next) ? prev : next;
+      });
+    };
+    document.addEventListener('selectionchange', onSelection);
+    return () => document.removeEventListener('selectionchange', onSelection);
+  }, [composerCaret]);
+  /** Apply a menu pick's edit and put the caret where it says. */
+  const applyComposerEdit = (edit: ComposerEdit) => {
+    setDraft(edit.text);
+    setCaret(edit.caret);
+    const el = composerRef.current;
+    el?.focus();
+    requestAnimationFrame(() => el?.setSelectionRange(edit.caret, edit.caret));
+  };
+  const slashQuery = slashTrigger(draft, caretAt)?.query.toLowerCase() ?? null;
   const slashMatches =
     slashQuery !== null ? (settings?.prompts ?? []).filter((p) => p.name.toLowerCase().includes(slashQuery)) : [];
   // Skills (standard agent skills + installed marketplace skills) show in the
@@ -1868,7 +1928,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const allSkills = useMemo(() => matchSkills('', installedSkillDefs), [installedSkillDefs]);
   const slashMenuOpen = !menuClosed && (skillMatches.length > 0 || slashMatches.length > 0);
 
-  const atQuery = (draft.match(/(?:^|\s)@([^\s@]*)$/) ?? [])[1] ?? null;
+  const atQuery = atTrigger(draft, caretAt)?.query ?? null;
   const atMatches =
     atQuery !== null ? atFiles.filter((f) => f.relPath.toLowerCase().includes(atQuery.toLowerCase())).slice(0, 8) : [];
   const atMenuOpen = !menuClosed && atQuery !== null && !!session?.workspaceId;
@@ -1903,30 +1963,29 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     skillsFlyTimer.current = window.setTimeout(() => setSkillsHover(false), 140);
   };
 
-  const armSkill = (sk: SkillDef) => {
+  const armSkill = (sk: SkillDef, at = draft.length) => {
     setActiveSkill(sk.kind === 'goal' ? null : sk);
-    setDraft((current) => draftAfterSkillSelection(current, sk));
-    composerRef.current?.focus();
+    applyComposerEdit(skillSelectionEdit(draft, sk, at));
   };
 
   // Pick a slash-menu row by its combined index (skills first, then prompts).
   const pickSlashIndex = (i: number) => {
     if (i < skillMatches.length) {
-      armSkill(skillMatches[i]);
+      armSkill(skillMatches[i], caretAt);
       return;
     }
     const p = slashMatches[i - skillMatches.length];
-    if (p) { setDraft(p.body); composerRef.current?.focus(); }
+    if (p) applyComposerEdit(promptSelectionEdit(draft, p.body, caretAt));
   };
 
   const pickFile = async (f: IndexedFile) => {
     if (!session) return;
     const next = Array.from(new Set([...(session.attachedPaths ?? []), f.path]));
+    const edit = fileSelectionEdit(draft, f.relPath, caretAt);
     await window.nekko.setSessionAttachments(session.id, next);
-    setDraft((d) => d.replace(/(?:^|\s)@([^\s@]*)$/, (full) => (/^\s/.test(full) ? ' ' : '') + '@' + f.relPath + ' '));
+    applyComposerEdit(edit);
     setSession(await window.nekko.getSession(session.id));
     refreshCtx();
-    composerRef.current?.focus();
   };
 
   // Suggestions only count while the reply they were written for is still the
@@ -2197,7 +2256,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const buildPools = (cross: Record<string, ModelInfo[]>): ProviderPool[] => [
     ...(homePool ? [homePool] : []),
     ...providers
-      .filter((p) => p.enabled && p.id !== providerId)
+      // A cloud-only chat's Auto never moves a turn onto this machine.
+      .filter((p) => p.enabled && p.id !== providerId && (!session?.cloudOnly || cloudProviderAllowed(p)))
       .map((p) => {
         const key = limitsKeyFor(p);
         return {
@@ -2213,6 +2273,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   ];
 
   const isCloudModel = !providerKind || !isLocalProvider(providerKind);
+  // A cloud-only chat's picker lists cloud providers only (the engine refuses the rest).
+  const cloudOnlyFilter = useMemo(() => (session?.cloudOnly ? cloudProviderAllowed : undefined), [session?.cloudOnly]);
   // Reasoning toggle: offered only for a concrete, reasoning-capable model.
   const selectedModelInfo = modelId && modelId !== AUTO_MODEL_ID ? models.find((m) => m.id === modelId) : undefined;
   const thinkingSupported = !!modelId && modelId !== AUTO_MODEL_ID && modelSupportsThinking({ id: modelId, name: selectedModelInfo?.name });
@@ -2365,6 +2427,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     <div className="flex min-w-0 shrink items-center gap-2 rounded-lg">
     <ModelPicker
       providers={providers}
+      filterProviders={cloudOnlyFilter}
       providerId={providerId}
       models={models}
       modelId={modelId}
@@ -2520,7 +2583,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
 
                   </div>
                   {imageMode && session ? <ImageModeControls session={session} onChange={setSession} busy={streaming} /> :
-                    <ModelPicker providers={providers} providerId={providerId} models={models} modelId={modelId}
+                    <ModelPicker providers={providers} filterProviders={cloudOnlyFilter} providerId={providerId} models={models} modelId={modelId}
                       open={false} onOpenChange={openModelMenu} expanded
                       recent={recentModels}
                       onProvider={setProviderId} onModel={(pid, mid) => { setProviderId(pid); setModelId(mid); setUnavailableModel(null); void window.nekko.setSessionOptions(sessionId, { providerId: pid, modelId: mid, autoModel: mid === AUTO_MODEL_ID }).then((s) => { if (s) { useStore.getState().rememberModel(pid, mid); window.dispatchEvent(new CustomEvent('nekko-session-brain', { detail: { id: sessionId, session: s } })); } }).catch((e) => useStore.getState().pushToast('error', String(e))); }} />}
@@ -2586,15 +2649,19 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   </div>
                   );
                 })()}
-                <LiveContextWarning
-                  sessionId={sessionId}
-                  marks={marks}
-                  baseUsed={ctxUsed}
-                  windowTokens={selectedModelInfo?.contextLength ?? ctx?.contextWindow ?? 0}
-                  session={session}
-                  streaming={streaming}
-                  onCompacted={onCompacted}
-                />
+                {/* Claude Code keeps and compacts a Claude Agent chat's context
+                    itself, so Nekko neither warns nor compacts it. */}
+                {activeProvider?.kind !== CLAUDE_CODE_PROVIDER_KIND && (
+                  <LiveContextWarning
+                    sessionId={sessionId}
+                    marks={marks}
+                    baseUsed={ctxUsed}
+                    windowTokens={selectedModelInfo?.contextLength ?? ctx?.contextWindow ?? 0}
+                    session={session}
+                    streaming={streaming}
+                    onCompacted={onCompacted}
+                  />
+                )}
 
               </>
             }
@@ -2874,7 +2941,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                           role="option"
                           aria-selected={i === menuSel}
                           className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left hover:bg-surface-2 ${i === menuSel ? 'bg-surface-2' : ''}`}
-                          onClick={() => armSkill(sk)}
+                          onClick={() => armSkill(sk, caretAt)}
                           onMouseEnter={() => setMenuSel(i)}
                           title={sk.description}
                         >
@@ -3041,7 +3108,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     value={draft}
                     aria-expanded={slashMenuOpen || atMenuOpen}
                     aria-controls={slashMenuOpen ? `slash-menu-${sessionId}` : atMenuOpen ? `at-menu-${sessionId}` : undefined}
-                    onChange={(text) => { setDraft(text); setMenuClosed(false); }}
+                    onChange={(text) => { setDraft(text); setCaret(composerCaret()); setMenuClosed(false); }}
                     onPaste={imageMode ? undefined : onPaste}
                     onKeyDown={onComposerKeyDown}
                     disabled={!canCompose}
@@ -3235,6 +3302,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 </div>
               </div>
             </div>
+            {/* The footer is hidden while the chat starts clean, but the model
+                is still the user's to pick before the first send. */}
+            {cleanStart && <div className="clean-start-model mt-2 flex justify-center" data-clean-start-model>
+              {modelControls}
+             </div>}
           </div>
         </div>
         )}
@@ -3259,6 +3331,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     draftTokens={deferredDraft.trim() ? estimateTokens(deferredDraft) : 0}
                     contextWindow={selectedModelInfo?.contextLength}
                     windowReported={!!selectedModelInfo?.contextLength}
+                    reported={reportedCtx}
                   />
                   <LiveUsageChip
                     sessionId={sessionId}

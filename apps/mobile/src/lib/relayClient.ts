@@ -1,5 +1,5 @@
 /**
- * Relay v2 client: the phone side of `packages/host/src/relay.ts`.
+ * Relay v2 client: the phone side of the computer's relay agent (`crates/nekko-remote`).
  *
  * Connects to the relay as `role=client`, completes the sealed HELLO handshake
  * (device id + optional one-time pairing code), then speaks the host's own

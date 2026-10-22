@@ -1,4 +1,5 @@
 import { createPgDb } from "./db.js";
+import { expireDonations } from "./donations.js";
 import { migrate } from "./migrate.js";
 import { buildServer, DEFAULT_ORIGINS } from "./server.js";
 
@@ -12,6 +13,8 @@ const db = createPgDb(url);
 // Migrations run on every start; they are idempotent and take an advisory lock.
 const applied = await migrate(db);
 if (applied.length) console.log(`migrations applied: ${applied.join(", ")}`);
+await expireDonations(db);
+setInterval(() => expireDonations(db).catch((e) => console.error("expiring donations failed", e)), 24 * 60 * 60 * 1000).unref();
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean)

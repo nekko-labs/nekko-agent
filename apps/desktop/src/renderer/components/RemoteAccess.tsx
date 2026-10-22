@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
-import { relayUrlProblem, type LocalRelayStatus, type NetworkVisibilityStatus, type PairingGrant, type RemoteDevice, type RemoteStatus } from '@nekko-agent/shared';
+import { pairingLink, phoneDeviceAccess, PHONE_KEY_CHANNEL, relayHost, relayUrlProblem, type LocalRelayStatus, type NetworkVisibilityStatus, type PairingGrant, type PhoneActivityEntry, type RemoteDevice, type RemoteStatus } from '@nekko-agent/shared';
 import { Badge } from './primitives/index.js';
 import { Toggle } from './primitives/Toggle.js';
 import { useStore } from '../store.js';
@@ -17,6 +17,50 @@ export const MANAGED_RELAY_URL = 'wss://nekko-agent-relay.fly.dev';
 const SELF_HOST_DOCS = 'https://github.com/nekko-labs/nekko-agent/blob/main/docs/REMOTE.md';
 const TAILSCALE_DOWNLOAD = 'https://tailscale.com/download';
 
+/**
+ * The relay the field starts with (TASKS.md IO-19 TS-1). A relay the owner
+ * chose wins. Otherwise, with Tailscale connected here, the relay on this
+ * computer: phones on the tailnet reach it with nothing hosted in between, and
+ * the managed host may be gone (PH5). The managed relay is the last resort, and
+ * a saved managed URL counts as no choice, since it was only ever the default.
+ */
+export function defaultRelay(saved: string | undefined, local: LocalRelayStatus | null): { url: string; local: boolean } {
+  if (saved && saved !== MANAGED_RELAY_URL) return { url: saved, local: false };
+  if (local && local.available !== false && local.tailnetIp && local.url) return { url: local.url, local: true };
+  return { url: saved ?? MANAGED_RELAY_URL, local: false };
+}
+
+/**
+ * The address Enable connects to. When it is the default relay on this
+ * computer and that relay isn't running, start it first and use the address
+ * it ended up on; if it can't start, say why instead of enabling.
+ */
+export async function relayToEnable(
+  url: string,
+  fallback: { url: string; local: boolean },
+  local: LocalRelayStatus | null,
+  start: () => Promise<LocalRelayStatus>,
+): Promise<{ url?: string; started?: LocalRelayStatus; problem?: string }> {
+  if (!fallback.local || url !== fallback.url || local?.running) return { url };
+  const started = await start();
+  if (!started.running || !started.url) return { started, problem: started.error ?? 'The relay on this computer did not start.' };
+  return { url: started.url, started };
+}
+
+/**
+ * The extra routes a pairing link carries (TASKS.md IO-20): when remote access
+ * uses the relay on this computer (by MagicDNS name or tailnet address, same
+ * port) and that relay also listens on the LAN, its LAN addresses. A phone on
+ * the same Wi-Fi then skips the tailnet. Any other relay: none.
+ */
+export function pairingAlts(relayUrl: string, local: LocalRelayStatus | null): string[] {
+  if (!local?.running || !local.lanUrls?.length) return [];
+  const port = (u: string) => u.trim().match(/^wss?:\/\/(?:\[[^\]]*\]|[^/:?#]*)(?::(\d+))?/i)?.[1] ?? '';
+  const here = [local.tailnetName, local.tailnetIp].filter(Boolean).map((h) => h!.toLowerCase());
+  if (!/^ws:\/\//i.test(relayUrl.trim()) || !here.includes(relayHost(relayUrl)) || port(relayUrl) !== String(local.port)) return [];
+  return local.lanUrls;
+}
+
 export function RemoteAccess() {
   const [status, setStatus] = useState<RemoteStatus>({ enabled: false });
   const [relayUrl, setRelayUrl] = useState(MANAGED_RELAY_URL);
@@ -29,12 +73,19 @@ export function RemoteAccess() {
   const [link, setLink] = useState('');
   const [urlProblem, setUrlProblem] = useState<string | undefined>();
   const editedUrl = useRef(false);
+  const [localRelay, setLocalRelay] = useState<LocalRelayStatus | null>(null);
+  const fallback = defaultRelay(status.relayUrl, localRelay);
 
   const refresh = async () => {
-    const s = await window.nekko.getRemoteStatus();
-    setStatus(s);
-    if (s.relayUrl && !editedUrl.current) setRelayUrl(s.relayUrl);
+    setStatus(await window.nekko.getRemoteStatus());
   };
+
+  // Until the owner types or picks one, the field follows the default: it moves
+  // to this computer's relay when Tailscale connects, and to its MagicDNS name
+  // once that is known.
+  useEffect(() => {
+    if (!editedUrl.current) setRelayUrl(fallback.url);
+  }, [fallback.url]);
 
   useEffect(() => {
     void refresh();
@@ -59,7 +110,9 @@ export function RemoteAccess() {
 
   // Pairing link: on an http origin (Local Web UI) the link opens this same UI;
   // the desktop app has no web origin, so the QR carries the raw pairing params
-  // (the Nekko Agent phone app parses those directly).
+  // (the Nekko Agent phone app parses those directly). The relay on this
+  // computer's LAN addresses ride along as `alt` routes.
+  const alts = pairingAlts(status.relayUrl ?? '', localRelay).join(' ');
   useEffect(() => {
     if (!status.enabled || !liveGrant) {
       setLink('');
@@ -67,11 +120,10 @@ export function RemoteAccess() {
     }
     void window.nekko.getRemotePairing().then((p) => {
       if (!p) return setLink('');
-      setLink(`${location.protocol.startsWith('http') ? location.origin + '/' : 'nekko-agent-pair:'}?relay=${encodeURIComponent(
-        p.relayUrl,
-      )}&room=${p.room}&key=${p.key}&pair=${liveGrant.code}`);
+      const base = location.protocol.startsWith('http') ? location.origin + '/' : 'nekko-agent-pair:';
+      setLink(pairingLink(base, { ...p, pair: liveGrant.code, alts: pairingAlts(p.relayUrl, localRelay) }));
     });
-  }, [status.enabled, liveGrant?.code]);
+  }, [status.enabled, liveGrant?.code, alts]);
 
   useEffect(() => {
     if (link) QRCode.toDataURL(link, { margin: 1, width: 220 }).then(setQr).catch(() => setQr(''));
@@ -86,7 +138,11 @@ export function RemoteAccess() {
     if (problem) return;
     setBusy(true);
     try {
-      setStatus(await window.nekko.enableRemote(relayUrl.trim()));
+      const target = await relayToEnable(relayUrl.trim(), fallback, localRelay, () => window.nekko.localRelayStart());
+      if (target.started) setLocalRelay(target.started);
+      if (!target.url) return setUrlProblem(target.problem);
+      setRelayUrl(target.url);
+      setStatus(await window.nekko.enableRemote(target.url));
     } catch (e) {
       // The computer applies the same rule (and any other refusal) and says why.
       setUrlProblem(String((e as Error)?.message ?? e).replace(/^Error:\s*/, ''));
@@ -167,14 +223,23 @@ export function RemoteAccess() {
               {urlProblem}
             </p>
           )}
-          <p className="text-[11.5px] text-ink-faint">
-            The default is the managed Nekko Agent relay (free during beta). Privacy purists can{' '}
-            <a className="underline" href={SELF_HOST_DOCS} target="_blank" rel="noreferrer">
-              self-host the relay
-            </a>{' '}
-            with one Docker command and paste its URL here.
-          </p>
+          {fallback.local && relayUrl.trim() === fallback.url ? (
+            <p className="text-[11.5px] text-ink-faint" data-shot="tailnet-default">
+              Tailscale is connected, so the default is the relay on this computer: phones on your tailnet connect
+              straight here, and Enable starts it. To use a hosted relay instead, paste its URL.
+            </p>
+          ) : (
+            <p className="text-[11.5px] text-ink-faint">
+              The default is the managed Nekko Agent relay (free during beta). Privacy purists can{' '}
+              <a className="underline" href={SELF_HOST_DOCS} target="_blank" rel="noreferrer">
+                self-host the relay
+              </a>{' '}
+              with one Docker command and paste its URL here.
+            </p>
+          )}
           <LocalRelayCard
+            onStatus={setLocalRelay}
+            inUse={relayUrl.trim()}
             onUse={(url) => {
               editedUrl.current = true;
               setUrlProblem(undefined);
@@ -188,9 +253,10 @@ export function RemoteAccess() {
             <Field label="Relay" value={status.relayUrl!} />
             <Field label="Room" value={status.room!} mono />
           </div>
-          <LocalRelayCard inUse={status.relayUrl} />
+          <LocalRelayCard inUse={status.relayUrl} onStatus={setLocalRelay} />
           <NetworkVisibilitySwitch />
           <PhoneChangesSwitch />
+          <PhoneAccess devices={active} onChanged={() => void refresh()} />
 
           {/* Paired devices */}
           <div>
@@ -282,10 +348,26 @@ export function RemoteAccess() {
  * Relay on this computer: the app runs the relay itself on this computer's
  * Tailscale address, so phones on the same tailnet need no hosted relay.
  * `onUse` fills the relay field (before remote access is on); `inUse` is the
- * relay remote access is using (after), to say whether it is this one.
+ * relay in the field (before) or the one remote access is using (after), to say
+ * whether it is this one.
  */
-export function LocalRelayCard({ onUse, inUse }: { onUse?: (url: string) => void; inUse?: string }) {
-  const [relay, setRelay] = useState<LocalRelayStatus | null>(null);
+export function LocalRelayCard({
+  onUse,
+  inUse,
+  onStatus,
+}: {
+  onUse?: (url: string) => void;
+  inUse?: string;
+  /** Every status the card reads, so Remote access can default to this relay. */
+  onStatus?: (s: LocalRelayStatus) => void;
+}) {
+  const [relay, setRelayState] = useState<LocalRelayStatus | null>(null);
+  const report = useRef(onStatus);
+  report.current = onStatus;
+  const setRelay = (s: LocalRelayStatus) => {
+    setRelayState(s);
+    report.current?.(s);
+  };
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -312,19 +394,30 @@ export function LocalRelayCard({ onUse, inUse }: { onUse?: (url: string) => void
       setBusy(false);
     }
   };
-  return <LocalRelayView relay={relay} busy={busy} onToggle={toggle} onUse={onUse} inUse={inUse} />;
+  const setLan = async (on: boolean) => {
+    setBusy(true);
+    try {
+      setRelay(await window.nekko.localRelaySetLan(on));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return <LocalRelayView relay={relay} busy={busy} onToggle={toggle} onLan={setLan} onUse={onUse} inUse={inUse} />;
 }
 
 export function LocalRelayView({
   relay,
   busy,
   onToggle,
+  onLan,
   onUse,
   inUse,
 }: {
   relay: LocalRelayStatus;
   busy?: boolean;
   onToggle: () => void;
+  /** The LAN switch; hidden when absent. */
+  onLan?: (on: boolean) => void;
   onUse?: (url: string) => void;
   inUse?: string;
 }) {
@@ -344,7 +437,7 @@ export function LocalRelayView({
       </div>
       <p className="mt-1 text-[12px] text-ink-faint">
         Phones on your Tailscale network connect straight to this computer over WireGuard, with no hosted relay in
-        between. Listens on the tailnet address only.
+        between. {relay.lan === false ? 'Listens on the tailnet address only.' : 'Listens on the tailnet address and on this computer’s private network addresses.'}
       </p>
       {relay.tailnetIp ? (
         <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px]">
@@ -367,13 +460,36 @@ export function LocalRelayView({
           <code className="rounded px-2 py-1 font-mono text-[11.5px]" style={{ background: 'var(--surface-2)' }}>
             {relay.url}
           </code>
-          {onUse ? (
+          {usedHere ? (
+            <span className="text-[12px] text-ink-faint">
+              {onUse ? 'Remote access will use this relay.' : 'Remote access is using this relay.'}
+            </span>
+          ) : onUse ? (
             <button className="btn btn-primary py-1 text-[12px]" onClick={() => onUse(relay.url!)}>
               Use this relay
             </button>
-          ) : usedHere ? (
-            <span className="text-[12px] text-ink-faint">Remote access is using this relay.</span>
           ) : null}
+        </div>
+      )}
+      {onLan && (
+        <div className="mt-3 flex items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="text-[12.5px] font-medium">Also on this Wi-Fi</div>
+            <p className="text-[12px] text-ink-faint">
+              A phone on the same network connects over the LAN and moves to Tailscale by itself when it leaves. Only
+              private addresses (192.168.x.x, 10.x.x.x, 172.16.x.x to 172.31.x.x), never the internet. Pair again after changing this.
+            </p>
+            {relay.running && !!relay.lanUrls?.length && (
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {relay.lanUrls.map((u) => (
+                  <code key={u} className="rounded px-1.5 py-0.5 font-mono text-[11px]" style={{ background: 'var(--surface-2)' }}>
+                    {u}
+                  </code>
+                ))}
+              </div>
+            )}
+          </div>
+          <Toggle value={relay.lan !== false} onChange={onLan} disabled={busy} label="Also on this Wi-Fi" />
         </div>
       )}
       {relay.error && relay.tailnetIp && (
@@ -482,6 +598,158 @@ export function NetworkVisibilityView({ vis, busy, onChange }: { vis: NetworkVis
         )}
       </div>
       <Toggle value={vis.enabled} onChange={onChange} disabled={busy} label="Visible on this network" />
+    </div>
+  );
+}
+
+/** Why a phone's change was refused, in a few words (`PhoneActivityEntry.reason`). */
+export function activityReason(reason: string | undefined): string {
+  switch (reason) {
+    case undefined:
+      return 'Done';
+    case 'change-off':
+      return 'Refused: Change is off';
+    case 'proof-required':
+    case 'proof-invalid':
+    case 'proof-stale':
+    case 'proof-replayed':
+    case 'key-missing':
+    case 'key-invalid':
+      return 'Refused: no fresh Face ID or passcode';
+    case 'key-mismatch':
+      return 'Refused: the phone’s key changed (pair it again)';
+    case 'failed':
+      return 'Failed on this computer';
+    default:
+      return `Refused (${reason})`;
+  }
+}
+
+/** What a channel name means, for the activity list. */
+function activityAction(channel: string): string {
+  return channel === PHONE_KEY_CHANNEL ? 'Set up Face ID for changes' : channel;
+}
+
+/**
+ * What phones can do (IO-33): per paired phone, Read and Change switches and
+ * the phone's Change activity. Each Change action also needs Face ID or the
+ * passcode on the phone within the last 5 minutes, checked by this computer.
+ */
+export function PhoneAccess({ devices, onChanged }: { devices: RemoteDevice[]; onChanged: () => void }) {
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [activity, setActivity] = useState<Record<string, PhoneActivityEntry[]>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const loadActivity = (id: string) =>
+    void window.nekko.getRemoteActivity(id).then((list) => setActivity((a) => ({ ...a, [id]: list }))).catch(() => {});
+  useEffect(() => {
+    if (!openId) return;
+    loadActivity(openId);
+    // New changes from a connected phone show without a click.
+    const t = setInterval(() => loadActivity(openId), 5000);
+    return () => clearInterval(t);
+  }, [openId]);
+
+  const set = async (id: string, patch: { read?: boolean; change?: boolean }) => {
+    setBusy(id);
+    try {
+      await window.nekko.setRemoteAccess(id, patch);
+      onChanged();
+    } catch (e) {
+      useStore.getState().pushToast('error', String(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <PhoneAccessView
+      devices={devices}
+      activity={activity}
+      openId={openId}
+      busyId={busy}
+      now={Date.now()}
+      onSet={(id, patch) => void set(id, patch)}
+      onOpen={(id) => setOpenId((o) => (o === id ? null : id))}
+    />
+  );
+}
+
+export function PhoneAccessView({
+  devices,
+  activity,
+  openId,
+  busyId,
+  now,
+  onSet,
+  onOpen,
+}: {
+  devices: RemoteDevice[];
+  activity: Record<string, PhoneActivityEntry[]>;
+  openId: string | null;
+  busyId?: string | null;
+  now: number;
+  onSet: (id: string, patch: { read?: boolean; change?: boolean }) => void;
+  onOpen: (id: string) => void;
+}) {
+  if (devices.length === 0) return null;
+  return (
+    <div data-shot="phone-access" className="rounded-md border border-line p-3">
+      <div className="text-[13px] font-medium">What phones can do</div>
+      <p className="mt-0.5 text-[12px] text-ink-faint">
+        <span className="font-medium text-ink-soft">Read</span>: look at files, git, logs and boards.{' '}
+        <span className="font-medium text-ink-soft">Change</span>: edit and save files, commit and push, type in
+        terminals. Each change needs Face ID or the passcode on the phone within the last 5 minutes and is listed here.
+        Revoke a phone to stop everything.
+      </p>
+      <ul className="mt-2 divide-y divide-line rounded-lg border border-line">
+        {devices.map((d) => {
+          const access = phoneDeviceAccess(d);
+          const list = activity[d.id];
+          const open = openId === d.id;
+          return (
+            <li key={d.id} className="px-3 py-2 text-[12.5px]" data-device={d.id}>
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="min-w-0 flex-1 truncate font-medium">{d.name}</span>
+                <label className="flex items-center gap-1.5 text-ink-soft">
+                  Read
+                  <Toggle value={access.read} onChange={(v) => onSet(d.id, { read: v })} disabled={busyId === d.id} label={`Read from ${d.name}`} />
+                </label>
+                <label className="flex items-center gap-1.5 text-ink-soft">
+                  Change
+                  <Toggle value={access.change} onChange={(v) => onSet(d.id, { change: v })} disabled={busyId === d.id} label={`Change from ${d.name}`} />
+                </label>
+                <button className="btn btn-ghost py-0.5 text-[12px]" aria-expanded={open} onClick={() => onOpen(d.id)}>
+                  {open ? 'Hide activity' : 'Activity'}
+                </button>
+              </div>
+              {open && (
+                <div className="mt-2" data-shot="phone-activity">
+                  {!list ? (
+                    <p className="text-[12px] text-ink-faint">Loading…</p>
+                  ) : list.length === 0 ? (
+                    <p className="text-[12px] text-ink-faint">No changes from this phone yet.</p>
+                  ) : (
+                    <ul className="space-y-1">
+                      {list
+                        .slice()
+                        .reverse()
+                        .map((e, i) => (
+                          <li key={`${e.at}-${i}`} className="flex items-center gap-2 text-[12px]">
+                            <span className="w-24 shrink-0 text-ink-faint">{ago(e.at, now)}</span>
+                            <span className="truncate font-mono text-[11.5px]">{activityAction(e.channel)}</span>
+                            <span className="ml-auto shrink-0" style={{ color: e.ok ? 'var(--success)' : 'var(--danger)' }}>
+                              {activityReason(e.ok ? undefined : e.reason)}
+                            </span>
+                          </li>
+                        ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

@@ -101,7 +101,8 @@ fn no_window(cmd: &mut Command) {
 }
 
 /// Run a command to completion with a time limit, feeding `input` to stdin.
-fn run(
+/// Git never asks for credentials here: nobody is at a terminal to answer.
+pub(crate) fn run(
     program: &str,
     args: &[&str],
     cwd: &str,
@@ -114,6 +115,13 @@ fn run(
         .stdin(if input.is_some() { Stdio::piped() } else { Stdio::null() })
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    if program == "git" {
+        cmd.env("GIT_TERMINAL_PROMPT", "0");
+    }
+    // Its own process group, so a timeout also ends what it started (a
+    // fetch's `git remote-https`), which would otherwise hold the pipes open.
+    #[cfg(unix)]
+    std::os::unix::process::CommandExt::process_group(&mut cmd, 0);
     no_window(&mut cmd);
     let mut child = cmd.spawn().map_err(|e| {
         if e.kind() == std::io::ErrorKind::NotFound {
@@ -144,6 +152,11 @@ fn run(
         match child.try_wait() {
             Ok(Some(s)) => break Some(s),
             Ok(None) if Instant::now() >= deadline => {
+                #[cfg(unix)]
+                // SAFETY: kill takes a process group id and a signal number, no pointers.
+                unsafe {
+                    libc::kill(-(child.id() as i32), libc::SIGKILL);
+                }
                 let _ = child.kill();
                 let _ = child.wait();
                 break None;
@@ -152,11 +165,11 @@ fn run(
             Err(_) => break None,
         }
     };
+    // Timed out: the readers are left behind rather than waited on, since
+    // something the command started may still hold its pipes.
+    let Some(status) = status else { return Err(format!("Error: spawnSync {program} ETIMEDOUT")) };
     let (stdout, stderr) = (out.join().unwrap_or_default(), err.join().unwrap_or_default());
-    match status {
-        Some(s) => Ok((s.code().unwrap_or(-1), stdout, stderr)),
-        None => Err(format!("Error: spawnSync {program} ETIMEDOUT")),
-    }
+    Ok((status.code().unwrap_or(-1), stdout, stderr))
 }
 
 /// `git(cwd, args)`: trimmed stdout, or the error `execFileSync` throws.
@@ -871,7 +884,7 @@ pub async fn sweep_merged(ctx: &crate::routes::Ctx) -> Vec<(String, String)> {
         let sessions = store.list();
         move |r: &str| owner_in(&sessions, &running, r)
     };
-    let running = crate::routes::running_chats(ctx).await;
+    let running = crate::routes::running_chats(ctx);
     let (s, st) = (settings.clone(), store.clone());
     let entries = tokio::task::spawn_blocking(move || list(&s, &owners(st, running))).await.unwrap_or_default();
     let mut removed = Vec::new();
@@ -886,7 +899,7 @@ pub async fn sweep_merged(ctx: &crate::routes::Ctx) -> Vec<(String, String)> {
         }
         // Re-check right before removing: the chat may have started a turn,
         // edited a file or committed while GitHub was being asked.
-        let running = crate::routes::running_chats(ctx).await;
+        let running = crate::routes::running_chats(ctx);
         let (s, st, source) = (settings.clone(), store.clone(), self::s(&w, "sourceRoot").to_string());
         let (r, b) = (root.clone(), branch.clone());
         let done = tokio::task::spawn_blocking(move || {
@@ -916,7 +929,7 @@ pub async fn sweep_merged(ctx: &crate::routes::Ctx) -> Vec<(String, String)> {
 pub async fn route(ctx: &crate::routes::Ctx, channel: &str, args: &[Value]) -> Result<Value, String> {
     let settings = crate::settings::current(ctx).await;
     let store = ctx.sessions.clone().ok_or("chat worktrees need the data directory")?;
-    let running = crate::routes::running_chats(ctx).await;
+    let running = crate::routes::running_chats(ctx);
     let root = args.first().and_then(Value::as_str).unwrap_or_default().to_string();
     let channel = channel.to_string();
     tokio::task::spawn_blocking(move || {
@@ -934,6 +947,23 @@ pub async fn route(ctx: &crate::routes::Ctx, channel: &str, args: &[Value]) -> R
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A timed-out command returns on time even when something it started
+    /// still holds its output, and that something is ended too.
+    #[cfg(unix)]
+    #[test]
+    fn a_timeout_returns_and_ends_the_whole_group() {
+        let marker = std::env::temp_dir().join(format!("nekkod-run-group-{}", std::process::id()));
+        let _ = std::fs::remove_file(&marker);
+        let script = format!("(sleep 2; touch {}) & sleep 30", marker.display());
+        let started = Instant::now();
+        let out =
+            run("sh", &["-c", &script], &std::env::temp_dir().to_string_lossy(), None, Duration::from_millis(300));
+        assert!(out.unwrap_err().contains("ETIMEDOUT"));
+        assert!(started.elapsed() < Duration::from_secs(2), "took {:?}", started.elapsed());
+        std::thread::sleep(Duration::from_secs(3));
+        assert!(!marker.exists(), "the background child was left running");
+    }
 
     struct Repo {
         root: String,

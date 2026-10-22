@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import type {
   ConnectorKind,
+  ModelInfo,
+  ProviderConfig,
   GitEvent,
   GitProvider,
   NewWorkflow,
@@ -11,31 +13,37 @@ import type {
   WorkflowStepKind,
   WorkflowTransition,
   WorkflowTrigger,
+  WorkflowToolAccess,
   WorkflowTriggerKind,
   WorkflowNotify,
 } from '@nekko-agent/shared';
 import {
   CONNECTOR_CATALOG,
   DEFAULT_WORKFLOW_CATEGORIES,
+  GITHUB_POLL_EVENTS,
   GIT_EVENTS,
   GIT_PROVIDERS,
   UNCATEGORIZED,
   WORKFLOW_ACTIONS,
   WORKFLOW_NOTIFY_OPTIONS,
   WORKFLOW_STEP_KINDS,
+  WORKFLOW_TOOL_ACCESS,
   WORKFLOW_TRIGGER_KINDS,
   cliCommand,
   findWorkflowAction,
+  findWorkflowSkill,
   formatEvery,
   isValidCron,
   newStepId,
   nextCronRun,
+  offlineProviderAllowed,
   slugify,
   unreachableSteps,
 } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
 import { Modal } from './primitives/index.js';
 import { WorkflowCanvas } from './WorkflowCanvas.js';
+import { ModelPicker, MODEL_LIST_TIMEOUT_MS, withTimeout } from './agent-console/ModelPicker.js';
 import { CloseIcon, PlusIcon } from '../icons.js';
 
 /**
@@ -47,7 +55,7 @@ import { CloseIcon, PlusIcon } from '../icons.js';
  * Nothing is saved until Save, so an abandoned edit leaves the workflow alone.
  */
 
-interface Draft {
+export interface Draft {
   name: string;
   description: string;
   category: string;
@@ -55,6 +63,12 @@ interface Draft {
   workspaceId?: string;
   notify: WorkflowNotify;
   templateId?: string;
+  /** Workflow model; both unset means the app's default model. */
+  providerId?: string;
+  modelId?: string;
+  localModelOnly: boolean;
+  toolAccess: WorkflowToolAccess;
+  prCheckout: boolean;
   steps: WorkflowStep[];
   triggers: WorkflowTrigger[];
 }
@@ -67,11 +81,16 @@ export interface WorkflowSeed {
   workspaceId?: string;
   notify?: WorkflowNotify;
   templateId?: string;
+  providerId?: string;
+  modelId?: string;
+  localModelOnly?: boolean;
+  toolAccess?: WorkflowToolAccess;
+  prCheckout?: boolean;
   steps: WorkflowStep[];
   triggers: WorkflowTrigger[];
 }
 
-function toDraft(wf?: Workflow): Draft {
+export function toDraft(wf?: Workflow): Draft {
   return {
     name: wf?.name ?? '',
     description: wf?.description ?? '',
@@ -80,9 +99,65 @@ function toDraft(wf?: Workflow): Draft {
     workspaceId: wf?.workspaceId,
     notify: wf?.notify ?? 'failure',
     templateId: wf?.templateId,
+    providerId: wf?.providerId,
+    modelId: wf?.modelId,
+    localModelOnly: !!wf?.localModelOnly,
+    toolAccess: wf?.toolAccess ?? 'workspace',
+    prCheckout: !!wf?.prCheckout,
     steps: (wf?.steps ?? []).map((s) => ({ ...s })),
     triggers: (wf?.triggers ?? [{ id: newStepId('trg'), kind: 'manual' }]).map((t) => ({ ...t })),
   };
+}
+
+/**
+ * What Save sends. Cleared settings are sent as explicit `undefined` so an
+ * update drops them (the host merges the patch over the stored workflow), and
+ * fields that only mean something for some step kinds are dropped from others.
+ */
+export function draftPatch(draft: Draft): NewWorkflow {
+  const agent = (s: WorkflowStep) => s.kind === 'prompt' || s.kind === 'skill';
+  return {
+    name: draft.name.trim(),
+    description: draft.description.trim() || undefined,
+    category: draft.category.trim() || UNCATEGORIZED,
+    enabled: draft.enabled,
+    workspaceId: draft.workspaceId,
+    notify: draft.notify,
+    templateId: draft.templateId,
+    providerId: draft.providerId && draft.modelId ? draft.providerId : undefined,
+    modelId: draft.providerId && draft.modelId ? draft.modelId : undefined,
+    localModelOnly: draft.localModelOnly || undefined,
+    toolAccess: draft.toolAccess === 'workspace' ? undefined : draft.toolAccess,
+    prCheckout: draft.prCheckout || undefined,
+    steps: draft.steps.map((s) => {
+      const { providerId, modelId, allowedTools, args, ...rest } = s;
+      const out: WorkflowStep = { ...rest };
+      if (s.kind === 'skill' && args?.trim()) out.args = args;
+      if (agent(s) && providerId && modelId) Object.assign(out, { providerId, modelId });
+      if (agent(s) && draft.toolAccess === 'allowlist' && allowedTools?.length) out.allowedTools = allowedTools;
+      return out;
+    }),
+    triggers: draft.triggers,
+  };
+}
+
+/** Parse the allowed-tools field: one entry per line or comma, outside parentheses. */
+export function parseAllowedTools(text: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let cur = '';
+  for (const ch of text) {
+    if (ch === '(') depth++;
+    if (ch === ')') depth = Math.max(0, depth - 1);
+    if ((ch === ',' || ch === '\n') && depth === 0) {
+      if (cur.trim()) out.push(cur.trim());
+      cur = '';
+      continue;
+    }
+    cur += ch;
+  }
+  if (cur.trim()) out.push(cur.trim());
+  return out;
 }
 
 export function WorkflowEditor({
@@ -99,7 +174,7 @@ export function WorkflowEditor({
   seed?: WorkflowSeed;
   /** Every workflow, so a `workflow` step can pick a target. */
   workflows: Workflow[];
-  /** Installed skills, so a `skill` step can pick one. */
+  /** Every skill a step can run (`workflow:skillDefs`), so a `skill` step can pick one. */
   skills: SkillDef[];
   onClose: () => void;
   onSave: (patch: NewWorkflow) => Promise<void> | void;
@@ -122,6 +197,11 @@ export function WorkflowEditor({
           workspaceId: seed.workspaceId ?? base.workspaceId,
           notify: seed.notify ?? base.notify,
           templateId: seed.templateId,
+          providerId: seed.providerId ?? base.providerId,
+          modelId: seed.modelId ?? base.modelId,
+          localModelOnly: seed.localModelOnly ?? base.localModelOnly,
+          toolAccess: seed.toolAccess ?? base.toolAccess,
+          prCheckout: seed.prCheckout ?? base.prCheckout,
           steps: seed.steps,
           triggers: seed.triggers,
         }
@@ -137,23 +217,21 @@ export function WorkflowEditor({
     set('triggers', draft.triggers.map((t) => (t.id === id ? { ...t, ...patch } : t)));
 
   const unreachable = useMemo(() => new Set(unreachableSteps(draft.steps)), [draft.steps]);
+  const providers = settings?.providers ?? [];
+  const modelNames = useModelNames(providers);
+  const labelOf = (providerId?: string, modelId?: string) =>
+    providerId && modelId ? modelNames[`${providerId}::${modelId}`] ?? modelId : undefined;
+  const isLocal = (providerId?: string) => {
+    const p = providers.find((x) => x.id === providerId);
+    return !!p && offlineProviderAllowed(p);
+  };
   const canSave = draft.name.trim().length > 0 && draft.steps.length > 0 && !busy;
 
   const save = async () => {
     if (!canSave) return;
     setBusy(true);
     try {
-      await onSave({
-        name: draft.name.trim(),
-        description: draft.description.trim() || undefined,
-        category: draft.category.trim() || UNCATEGORIZED,
-        enabled: draft.enabled,
-        workspaceId: draft.workspaceId,
-        notify: draft.notify,
-        templateId: draft.templateId,
-        steps: draft.steps,
-        triggers: draft.triggers,
-      });
+      await onSave(draftPatch(draft));
       onClose();
     } finally {
       setBusy(false);
@@ -262,6 +340,90 @@ export function WorkflowEditor({
           </label>
         </div>
 
+        {/* How runs execute: model, local-only, tool access */}
+        <div className="mt-5" data-wf-run-settings>
+          <div className="flex items-baseline gap-2">
+            <h3 className="text-[13px] font-semibold">Runs</h3>
+            <span className="text-[11.5px] text-ink-faint">unattended: nobody is there to approve anything</span>
+          </div>
+          <div className="mt-2 grid gap-3 sm:grid-cols-2">
+            <div className="block">
+              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Model</span>
+              <WorkflowModelField
+                providers={providers}
+                providerId={draft.providerId}
+                modelId={draft.modelId}
+                unsetLabel="Default model"
+                localOnly={draft.localModelOnly}
+                onChange={(providerId, modelId) => setDraft((d) => ({ ...d, providerId, modelId }))}
+              />
+              {draft.localModelOnly && !draft.providerId && (
+                <p className="mt-1 text-[11px]" style={{ color: 'var(--warning)' }}>
+                  {isLocal(settings?.defaultProviderId)
+                    ? 'Uses your default model, which is local.'
+                    : 'Your default model is not local, so steps without their own model will be refused. Pick a local model.'}
+                </p>
+              )}
+              {draft.localModelOnly && draft.providerId && !isLocal(draft.providerId) && (
+                <p className="mt-1 text-[11px]" style={{ color: 'var(--warning)' }}>
+                  {labelOf(draft.providerId, draft.modelId)} is not local; runs will refuse it.
+                </p>
+              )}
+            </div>
+            <label className="block">
+              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Tool access</span>
+              <select
+                className="input w-full"
+                data-wf-tool-access
+                value={draft.toolAccess}
+                onChange={(e) => set('toolAccess', e.target.value as WorkflowToolAccess)}
+              >
+                {WORKFLOW_TOOL_ACCESS.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+              </select>
+              <span className="mt-1 block text-[11px] text-ink-faint">
+                {WORKFLOW_TOOL_ACCESS.find((a) => a.id === draft.toolAccess)?.hint}
+              </span>
+            </label>
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                data-wf-local-only
+                checked={draft.localModelOnly}
+                onChange={(e) => set('localModelOnly', e.target.checked)}
+              />
+              <span className="text-[12.5px]">
+                Local models only
+                <span className="block text-[11px] text-ink-faint">
+                  Steps run only on a model server on this computer, with no internet tools or connectors. A cloud model is
+                  refused, never used as a fallback.
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 sm:col-span-2">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                data-wf-pr-checkout
+                checked={draft.prCheckout}
+                onChange={(e) => set('prCheckout', e.target.checked)}
+              />
+              <span className="text-[12.5px]">
+                Check out the pull request
+                <span className="block text-[11px] text-ink-faint">
+                  A run started by a pull request works in a checkout of its head made for that run and removed when it ends;
+                  your own checkout is never touched. A PR from a fork, or from someone who cannot push to the repo, gets
+                  read-only tools: no package manager, build, linter or script runs its code.
+                </span>
+              </span>
+            </label>
+            <p className="text-[11px] text-ink-faint sm:pt-0.5">
+              Approvals are denied automatically in runs: a step that would need one gets the refusal as its tool result and
+              carries on. Shell and action steps you write here still run.
+            </p>
+          </div>
+        </div>
+
         {/* Canvas preview */}
         <div className="mt-5">
           <div className="flex items-baseline gap-2">
@@ -269,7 +431,12 @@ export function WorkflowEditor({
             <span className="text-[11.5px] text-ink-faint">updates as you edit</span>
           </div>
           <div className="mt-2">
-            <WorkflowCanvas steps={draft.steps} selectedId={selectedStep} onSelect={setSelectedStep} />
+            <WorkflowCanvas
+              steps={draft.steps}
+              selectedId={selectedStep}
+              onSelect={setSelectedStep}
+              modelLabel={(st) => labelOf(st.providerId, st.modelId)}
+            />
           </div>
           {unreachable.size > 0 && (
             <p className="mt-2 text-[11.5px]" style={{ color: 'var(--warning)' }}>
@@ -280,7 +447,7 @@ export function WorkflowEditor({
         </div>
 
         {/* Steps */}
-        <div className="mt-5">
+        <div className="mt-5" data-wf-steps>
           <div className="flex items-baseline gap-2">
             <h3 className="text-[13px] font-semibold">Steps</h3>
             <span className="text-[11.5px] text-ink-faint">{draft.steps.length}</span>
@@ -305,6 +472,11 @@ export function WorkflowEditor({
                 skills={skills}
                 unreachable={unreachable.has(step.id)}
                 connectedKinds={connectedKinds}
+                providers={providers}
+                localOnly={draft.localModelOnly}
+                toolAccess={draft.toolAccess}
+                isLocal={isLocal}
+                modelLabel={labelOf}
                 onGoConnectors={() => { onClose(); setView('connectors'); }}
                 onPatch={(patch) => patchStep(step.id, patch)}
                 onRemove={() => removeStep(step.id)}
@@ -361,14 +533,90 @@ export function WorkflowEditor({
   );
 }
 
+/** The skill picker's groups, in the order a step resolves a name. */
+export const SKILL_GROUPS: Array<{ source: NonNullable<SkillDef['source']>; label: string }> = [
+  { source: 'builtin', label: 'Built-in' },
+  { source: 'installed', label: 'Installed' },
+  { source: 'external', label: 'Claude Code skills' },
+  { source: 'plugin', label: 'Plugins' },
+];
+
+/** Where a skill lives, for the picker: a plugin's name and version, else its folder. */
+export function skillSourceLabel(s: SkillDef): string | undefined {
+  const o = s.origin;
+  if (s.source === 'plugin' && o?.plugin) {
+    const at = [o.marketplace && `@${o.marketplace}`, o.version && ` ${o.version}`].filter(Boolean).join('');
+    return `${o.kind === 'command' ? 'Command' : 'Skill'} from ${o.plugin}${at} · ${s.pluginRoot ?? o.dir}`;
+  }
+  return o?.dir;
+}
+
+function SkillStepFields({
+  step,
+  skills,
+  onPatch,
+}: {
+  step: WorkflowStep;
+  skills: SkillDef[];
+  onPatch: (patch: Partial<WorkflowStep>) => void;
+}) {
+  const picked = findWorkflowSkill(skills, step.run);
+  const where = picked && skillSourceLabel(picked);
+  // A skill the list no longer has stays selectable, so opening the editor never changes the step.
+  const missing = step.run && !picked;
+  return (
+    <div className="grid gap-2" data-step-skill>
+      <select className="input w-full text-[12.5px]" value={picked?.id ?? step.run} onChange={(e) => onPatch({ run: e.target.value })}>
+        <option value="">Pick a skill…</option>
+        {missing && <option value={step.run}>{step.run} (not found)</option>}
+        {SKILL_GROUPS.map((g) => {
+          const list = skills.filter((s) => (s.source ?? 'installed') === g.source);
+          if (!list.length) return null;
+          return (
+            <optgroup key={g.source} label={g.label}>
+              {list.map((s) => <option key={s.id} value={s.id}>/{s.name}: {s.description}</option>)}
+            </optgroup>
+          );
+        })}
+      </select>
+      {where && <p className="truncate font-mono text-[10.5px] text-ink-faint" title={where} data-step-skill-source>{where}</p>}
+      {missing && (
+        <p className="text-[11px]" style={{ color: 'var(--warning)' }}>
+          No skill named {step.run} is available here. Install or enable it, or pick another.
+        </p>
+      )}
+      <label className="block">
+        <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-ink-faint">Arguments</span>
+        <input
+          className="input w-full font-mono text-[12px]"
+          data-step-args
+          placeholder={picked?.argumentHint ?? '{{trigger.number}}'}
+          value={step.args ?? ''}
+          onChange={(e) => onPatch({ args: e.target.value || undefined })}
+        />
+        <span className="mt-0.5 block text-[10.5px] text-ink-faint">
+          Fills the skill's $ARGUMENTS ($1, $2… word by word). Templates such as {'{{trigger.number}}'} are filled in when the
+          step runs.
+        </span>
+      </label>
+    </div>
+  );
+}
+
 /** Whether a route survives the removal of step `goneId`. */
 function routeStillValid(t: WorkflowTransition | undefined, goneId: string): boolean {
   return !t || t.goto !== 'step' || t.stepId !== goneId;
 }
 
 function StepEditor({
-  step, index, total, steps, workflows, skills, unreachable, connectedKinds, onGoConnectors, onPatch, onRemove, onMove, onFocus, highlighted,
+  step, index, total, steps, workflows, skills, unreachable, connectedKinds, providers, localOnly, toolAccess, isLocal, modelLabel,
+  onGoConnectors, onPatch, onRemove, onMove, onFocus, highlighted,
 }: {
+  providers: ProviderConfig[];
+  localOnly: boolean;
+  toolAccess: WorkflowToolAccess;
+  isLocal: (providerId?: string) => boolean;
+  modelLabel: (providerId?: string, modelId?: string) => string | undefined;
   step: WorkflowStep;
   index: number;
   total: number;
@@ -386,6 +634,7 @@ function StepEditor({
   highlighted: boolean;
 }) {
   const kindMeta = WORKFLOW_STEP_KINDS.find((k) => k.kind === step.kind);
+  const stepSkill = step.kind === 'skill' ? findWorkflowSkill(skills, step.run) : undefined;
   return (
     <div
       className="card px-3.5 py-3"
@@ -447,12 +696,7 @@ function StepEditor({
             />
           </div>
         )}
-        {step.kind === 'skill' && (
-          <select className="input w-full text-[12.5px]" value={step.run} onChange={(e) => onPatch({ run: e.target.value })}>
-            <option value="">Pick a skill…</option>
-            {skills.map((s) => <option key={s.id} value={s.id}>/{s.name} — {s.description}</option>)}
-          </select>
-        )}
+        {step.kind === 'skill' && <SkillStepFields step={step} skills={skills} onPatch={onPatch} />}
         {step.kind === 'workflow' && (
           <select className="input w-full text-[12.5px]" value={step.run} onChange={(e) => onPatch({ run: e.target.value })}>
             <option value="">Pick a workflow…</option>
@@ -474,6 +718,54 @@ function StepEditor({
             value={step.with ?? ''}
             onChange={(e) => onPatch({ with: e.target.value || undefined })}
           />
+        )}
+        {(step.kind === 'prompt' || step.kind === 'skill') && (
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            <div className="block">
+              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-ink-faint">Model</span>
+              <WorkflowModelField
+                providers={providers}
+                providerId={step.providerId}
+                modelId={step.modelId}
+                unsetLabel="Use workflow model"
+                localOnly={localOnly}
+                onChange={(providerId, modelId) => onPatch({ providerId, modelId })}
+              />
+              {localOnly && step.providerId && !isLocal(step.providerId) && (
+                <p className="mt-1 text-[11px]" style={{ color: 'var(--warning)' }}>
+                  {modelLabel(step.providerId, step.modelId)} is not local; this step will be refused.
+                </p>
+              )}
+            </div>
+            {toolAccess === 'allowlist' && (
+              <label className="block">
+                <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-ink-faint">Allowed tools</span>
+                <textarea
+                  className="input min-h-[36px] w-full resize-y font-mono text-[11.5px]"
+                  data-step-allowed-tools
+                  placeholder={
+                    stepSkill?.allowedTools?.length ? stepSkill.allowedTools.join(', ') : 'Read, Grep, Glob, Bash(gh pr view:*)'
+                  }
+                  defaultValue={(step.allowedTools ?? []).join(', ')}
+                  onBlur={(e) => {
+                    const list = parseAllowedTools(e.target.value);
+                    onPatch({ allowedTools: list.length ? list : undefined });
+                  }}
+                />
+                {step.kind === 'skill' && !step.allowedTools?.length && (
+                  <span className="mt-0.5 block text-[10.5px] text-ink-faint" data-step-skill-tools>
+                    {stepSkill?.allowedTools?.length
+                      ? "Empty runs with the skill's own allowed-tools, shown above. List fewer to narrow them."
+                      : 'This skill lists no allowed-tools: list what it may use, or it runs with none.'}
+                  </span>
+                )}
+                <span className="mt-0.5 block text-[10.5px] text-ink-faint">
+                  Claude Code syntax. Commands match by their words; chaining, substitution and redirection never match. gh and git
+                  stay read-only.
+                </span>
+              </label>
+            )}
+          </div>
         )}
       </div>
 
@@ -660,6 +952,10 @@ function ConnectorTriggerFields({
   const isRepo = trigger.connector === 'github' || trigger.connector === 'gitlab';
   const isChannel = trigger.connector === 'slack' || trigger.connector === 'discord';
   const isGitHub = trigger.connector === 'github';
+  // These read their own endpoints, which need a repo; the PR ones can take drafts.
+  const pollEvent = isGitHub && GITHUB_POLL_EVENTS.some((e) => e.id === trigger.event);
+  const isPrEvent = isGitHub && (trigger.event === 'pr_opened' || trigger.event === 'pr_updated');
+  const eventListId = React.useId();
   return (
     <div className="mt-2 grid gap-2 sm:grid-cols-2">
       <label className="block">
@@ -680,9 +976,17 @@ function ConnectorTriggerFields({
         <input
           className="input w-full text-[12px]"
           placeholder={trigger.connector === 'slack' ? 'message' : 'issue'}
+          list={isGitHub ? eventListId : undefined}
           value={trigger.event ?? ''}
-          onChange={(e) => onPatch({ event: e.target.value || undefined })}
+          onChange={(e) => onPatch({ event: e.target.value || undefined, includeDrafts: undefined })}
         />
+        {isGitHub && (
+          <datalist id={eventListId}>
+            {GITHUB_POLL_EVENTS.map((e) => (
+              <option key={e.id} value={e.id}>{e.label}</option>
+            ))}
+          </datalist>
+        )}
       </label>
       <label className="block">
         <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-ink-faint">Poll every N minutes</span>
@@ -712,10 +1016,20 @@ function ConnectorTriggerFields({
           <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-ink-faint">Repo / project</span>
           <input
             className="input w-full text-[12px]"
-            placeholder="owner/name (any)"
+            placeholder={pollEvent ? 'owner/name (required)' : 'owner/name (any)'}
             value={trigger.repo ?? ''}
             onChange={(e) => onPatch({ repo: e.target.value || undefined })}
           />
+        </label>
+      )}
+      {isPrEvent && (
+        <label className="flex items-center gap-2 sm:col-span-2">
+          <input
+            type="checkbox"
+            checked={!!trigger.includeDrafts}
+            onChange={(e) => onPatch({ includeDrafts: e.target.checked || undefined })}
+          />
+          <span className="text-[11.5px] text-ink-soft">Include draft PRs</span>
         </label>
       )}
       {isGitHub && (
@@ -1037,6 +1351,80 @@ function TriggerEditor({
 
       {trigger.kind === 'webhook' && (
         <WebhookTriggerFields trigger={trigger} slugSource={slugSource} onPatch={onPatch} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Names for every provider's models, loaded once, so labels read "Qwen3 Coder
+ * 30B" rather than a raw id. Missing entries fall back to the id.
+ */
+function useModelNames(providers: ProviderConfig[]): Record<string, string> {
+  const [names, setNames] = useState<Record<string, string>>({});
+  const key = providers.map((p) => p.id).join('|');
+  React.useEffect(() => {
+    let live = true;
+    for (const p of providers.filter((x) => x.enabled !== false)) {
+      void withTimeout(window.nekko.listModels(p.id), MODEL_LIST_TIMEOUT_MS)
+        .then((ms: ModelInfo[]) => {
+          if (!live) return;
+          setNames((prev) => ({ ...prev, ...Object.fromEntries(ms.map((m) => [`${p.id}::${m.id}`, m.name || m.id])) }));
+        }, () => {});
+    }
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return names;
+}
+
+/**
+ * A workflow or step model: the shared model picker (no Auto, which a run
+ * cannot resolve), plus a reset to the inherited model. A local-only workflow
+ * lists only providers that pass the loopback check.
+ */
+export function WorkflowModelField({
+  providers, providerId, modelId, unsetLabel, localOnly, onChange,
+}: {
+  providers: ProviderConfig[];
+  providerId?: string;
+  modelId?: string;
+  unsetLabel: string;
+  localOnly: boolean;
+  onChange: (providerId: string | undefined, modelId: string | undefined) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [models, setModels] = useState<ModelInfo[]>([]);
+  React.useEffect(() => {
+    if (!providerId) { setModels([]); return; }
+    let live = true;
+    void withTimeout(window.nekko.listModels(providerId), MODEL_LIST_TIMEOUT_MS).then((m) => { if (live) setModels(m); }, () => {});
+    return () => { live = false; };
+  }, [providerId]);
+  const filter = useMemo(() => (localOnly ? (p: ProviderConfig) => offlineProviderAllowed(p) : undefined), [localOnly]);
+  const set = !!(providerId && modelId);
+  return (
+    <div className="flex min-w-0 items-center gap-2" data-wf-model-field>
+      <div className="min-w-0 shrink">
+      <ModelPicker
+        providers={providers}
+        providerId={set ? providerId ?? null : null}
+        models={set ? models : []}
+        modelId={set ? modelId ?? null : null}
+        open={open}
+        onOpenChange={setOpen}
+        onProvider={() => {}}
+        onModel={(pid, mid) => onChange(pid, mid)}
+        readOnly
+        allowAuto={false}
+        filterProviders={filter}
+        placeholder={unsetLabel}
+      />
+      </div>
+      {set && (
+        <button className="btn btn-ghost px-1.5! py-1! text-[11.5px]" onClick={() => onChange(undefined, undefined)} title={unsetLabel}>
+          Reset
+        </button>
       )}
     </div>
   );

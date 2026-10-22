@@ -22,10 +22,22 @@ interface ClaudeId {
 }
 
 /** A Claude model id as family + version, or null for anything else. */
+/**
+ * Bedrock names a model `anthropic.claude-…`, or `us.anthropic.claude-…`
+ * through a cross-region inference profile. The part after the provider prefix
+ * is the Claude id the version rules read.
+ */
+export function withoutBedrockPrefix(id: string): string {
+  const at = id.indexOf('anthropic.');
+  if (at < 0) return id;
+  const rest = id.slice(at + 'anthropic.'.length);
+  return rest.startsWith('claude-') ? rest : id;
+}
+
 export function parseClaudeModel(modelId: string | undefined): ClaudeId | null {
   // Gateways prefix the vendor (`anthropic/claude-opus-5`) and the pattern is
-  // anchored, so strip the prefix before reading it.
-  const id = (modelId ?? '').toLowerCase().trim().replace(/^.*\//, '');
+  // anchored, so strip the prefix before reading it. Bedrock's `anthropic.` too.
+  const id = withoutBedrockPrefix((modelId ?? '').toLowerCase().trim().replace(/^.*\//, ''));
   const m = /^claude-(opus|sonnet|haiku|fable|mythos)-(\d+)(?:-(\d{1,2})(?!\d))?/.exec(id);
   if (!m) return null;
   return { family: m[1] as ClaudeId['family'], major: Number(m[2]), minor: Number(m[3] ?? 0) };
@@ -123,6 +135,9 @@ export function guessContextWindow(modelId: string | undefined): number {
   if (!id) return 128_000;
   const claude = claudeContextWindow(id);
   if (claude) return claude;
+  // Claude Code's model aliases (a Claude Agent chat's model): each names the
+  // newest model of its family, and every current one holds 1M.
+  if (id === 'opus' || id === 'sonnet' || id === 'haiku') return 1_000_000;
   if (id.includes('claude')) return 200_000;
   if (id.includes('gemini')) return 1_000_000;
   // Codex subscription generations have a smaller window than the API's

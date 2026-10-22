@@ -25,6 +25,8 @@ import { MonitorsDock } from '../components/MonitorsDock.js';
 import { hasAppChrome } from '../chrome.js';
 import { claimAgent, displaysBridge, isScreenWindow, useDisplays, wallStorageKey, windowKey } from '../displays.js';
 import { ScreensControl } from '../components/ScreensControl.js';
+import { needsProviderSetup } from '../components/providers/providerSetup.js';
+import { reusableEmptyChat, shouldStartFromEmptyWall } from '../emptyWallStart.js';
 
 import { allPanes, type PaneKind } from '../layout.js';
 import {
@@ -418,6 +420,33 @@ export function CommandCenterView() {
     if (agentsOnWall.length === 0) { if (selected) setSelected(null); return; }
     if (!selected || !agentsOnWall.some((p) => p.refId === selected)) setSelected(agentsOnWall.find((p) => p.refId === wall.hero)?.refId ?? agentsOnWall[0].refId);
   }, [agentsOnWall, selected, wall.hero]);
+  // An empty wall is the new-chat screen: Focused on an untouched chat (reused
+  // when one exists, so emptying the wall again never piles up blank chats).
+  // One attempt at a time; a failure is reported once and not retried until
+  // the wall has had a window again.
+  const startingEmpty = useRef(false);
+  const emptyStartFailed = useRef(false);
+  if (paneCount > 0) emptyStartFailed.current = false;
+  useEffect(() => {
+    const { activeModelId, models } = useStore.getState();
+    const providerReady = !needsProviderSetup(providers, activeModelId ?? models[0]?.id);
+    if (startingEmpty.current || emptyStartFailed.current) return;
+    if (!shouldStartFromEmptyWall({ listsReady, hasWindows: paneCount > 0, screenWindow: isScreenWindow, readingCompleted: !!completedId, providerReady })) return;
+    startingEmpty.current = true;
+    void (async () => {
+      const reuse = reusableEmptyChat(sessions);
+      const id = reuse ?? await newChat();
+      // Placed on another screen by the placement preference: that window shows it.
+      // Do not try again here, or every session refresh would make another chat.
+      if (!reuse && !(await keepNewChat(id))) { emptyStartFailed.current = true; return; }
+      setWall((w) => {
+        const opened = openWallPane(w, 'chat', id, aspectRef.current);
+        return { ...opened, hero: id, layout: { ...opened.layout, mode: 'focus' } };
+      });
+      setSelected(id);
+    })().catch((e) => { emptyStartFailed.current = true; reportAddFailure(e); }).finally(() => { startingEmpty.current = false; });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listsReady, paneCount, completedId, providers, sessions]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (useStore.getState().view !== 'command' || document.visibilityState === 'hidden' || !viewRef.current?.getClientRects().length || e.defaultPrevented || e.repeat || e.isComposing) return;

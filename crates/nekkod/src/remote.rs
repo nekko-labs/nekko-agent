@@ -12,29 +12,37 @@
 //! `remote:*` channel goes to the TS host as before.
 
 use crate::hub::Hub;
-use nekko_remote::{Dispatcher, Link, LinkHandle, RELAYED_EVENTS, RelayAgent, RemoteService, Spawn, Verifier};
+use nekko_remote::{
+    Dispatcher, Link, LinkHandle, PhoneDispatcher, PhoneTerminals, RELAYED_EVENTS, RelayAgent, RemoteService, Spawn,
+    Verifier,
+};
 use serde_json::Value;
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 
 pub use nekko_remote::CHANNELS;
 
-/// What the backend is told the daemon owns (`NEKKOD_OWNS`): remote.json and the relay agent.
-pub const OWNS: &str = "remote";
-
 pub struct Remote {
     svc: Option<Arc<RemoteService>>,
-    dispatch: Arc<OnceLock<Dispatcher>>,
+    dispatch: Arc<OnceLock<PhoneDispatcher>>,
+    /// Phones attached to terminals (FA-3), shared by the gate and the relay agent.
+    terminals: Arc<PhoneTerminals>,
 }
 
 impl Remote {
     pub fn new(dir: Option<PathBuf>, hub: Hub) -> Self {
-        let dispatch: Arc<OnceLock<Dispatcher>> = Arc::default();
+        let dispatch: Arc<OnceLock<PhoneDispatcher>> = Arc::default();
+        let terminals = PhoneTerminals::new();
         let svc = dir.map(|d| {
-            let link = HubLink { rt: tokio::runtime::Handle::current(), hub, dispatch: dispatch.clone() };
+            let link = HubLink {
+                rt: tokio::runtime::Handle::current(),
+                hub,
+                dispatch: dispatch.clone(),
+                terminals: terminals.clone(),
+            };
             RemoteService::new(&d, nekko_remote::hello::os_random(), nekko_remote::system_clock(), Box::new(link))
         });
-        Self { svc, dispatch }
+        Self { svc, dispatch, terminals }
     }
 
     pub fn enabled(&self) -> bool {
@@ -43,9 +51,14 @@ impl Remote {
 
     /// How a phone's request runs: through the router, limited to what the
     /// phone access policy allows (`nekko_remote::phone`), with secrets
-    /// stripped from what it returns.
+    /// stripped from what it returns. The gate reads the calling device's
+    /// switches, Change key and activity from the registry (IO-33), and
+    /// shares terminal attachments with the relay agent (FA-3).
     pub fn set_dispatcher(&self, run: Dispatcher) {
-        let _ = self.dispatch.set(nekko_remote::phone::gate(run));
+        // Without a data directory there is no registry and no relay agent to dispatch for.
+        if let Some(svc) = &self.svc {
+            let _ = self.dispatch.set(nekko_remote::phone::gate_shared(run, svc.clone(), self.terminals.clone()));
+        }
     }
 
     /// Reconnect when remote access was left on.
@@ -73,7 +86,8 @@ impl Remote {
 struct HubLink {
     rt: tokio::runtime::Handle,
     hub: Hub,
-    dispatch: Arc<OnceLock<Dispatcher>>,
+    dispatch: Arc<OnceLock<PhoneDispatcher>>,
+    terminals: Arc<PhoneTerminals>,
 }
 
 impl Link for HubLink {
@@ -100,8 +114,8 @@ impl Link for HubLink {
             }
         });
         let dispatch_cell = self.dispatch.clone();
-        let dispatch: Dispatcher = Arc::new(move |channel, args| match dispatch_cell.get() {
-            Some(run) => run(channel, args),
+        let dispatch: PhoneDispatcher = Arc::new(move |who, channel, args| match dispatch_cell.get() {
+            Some(run) => run(who, channel, args),
             None => Box::pin(std::future::ready(Err("the daemon is still starting".to_string()))),
         });
         Arc::new(RelayAgent::spawn(
@@ -113,6 +127,7 @@ impl Link for HubLink {
                 verify,
                 dispatch,
                 events,
+                terminals: self.terminals.clone(),
             },
         ))
     }

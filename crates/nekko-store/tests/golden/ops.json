@@ -9,7 +9,21 @@
     ["queue", "second"],
     ["queue", { "text": "  with media  ", "images": ["img1"], "skill": { "name": "review", "input": "with media" } }],
     ["dequeue", 0],
-    ["truncate", "t2"]
+    ["truncate", "t2"],
+    ["queue", { "text": "from the phone", "clientMessageId": "6f1c2a9e-7b1d-4c35-9a52-2b8f0f6f8d11" }],
+    ["queue", { "text": "from the phone", "clientMessageId": "6f1c2a9e-7b1d-4c35-9a52-2b8f0f6f8d11" }],
+    ["queue", { "text": "  ", "clientMessageId": "blank" }],
+    ["queue", { "text": "bad id", "clientMessageId": "no spaces" }],
+    ["queue", { "text": "with photo", "images": ["img2"], "clientMessageId": "p2" }],
+    ["editQueued", 0, { "expect": "second", "text": "  second, edited  " }],
+    ["editQueued", 0, { "expect": "second", "text": "stale" }],
+    ["editQueued", 1, { "expect": "with media", "text": "a skill" }],
+    ["editQueued", 4, { "expect": "with photo", "text": "   " }],
+    ["editQueued", 1, { "expect": "with media" }],
+    ["editQueued", 9, { "expect": "x" }],
+    ["editQueued", 0, { "text": "no expect" }],
+    ["editQueued", 0.5, { "expect": "second, edited", "text": "half" }],
+    ["editQueued", 1, { "expect": "from the phone", "text": "" }]
   ] },
   { "fixture": "s_extra", "ops": [
     ["setSupporting", ["w1", "w3", "w3", "", "w2"]],
@@ -21,6 +35,7 @@
   ] },
   { "fixture": "s_plain", "ops": [
     ["dequeue", 0],
+    ["editQueued", 0, { "expect": "a", "text": "b" }],
     ["truncate", "no-such-message"],
     ["setSupporting", ["w1"]],
     ["truncate", "a1"]

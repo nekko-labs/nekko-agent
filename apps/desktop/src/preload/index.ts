@@ -16,6 +16,7 @@ import type {
   IndexStatus,
   UpdateInfo,
   TerminalEvent,
+  TerminalViewersEvent,
   OAuthStatus,
   SubscriptionLimits,
 } from '@nekko-agent/shared';
@@ -124,6 +125,8 @@ const api: NekkoApi = {
   cliInstallStatus: () => inv(IpcChannels.cliInstallStatus),
   cliInstall: () => inv(IpcChannels.cliInstall),
   machineReadiness: (language) => inv(IpcChannels.machineReadiness, language),
+  machineProfile: (opts) => inv(IpcChannels.machineProfile, opts),
+  machineRecommendations: (opts) => inv(IpcChannels.machineRecommendations, opts),
   getGpuStats: () => inv(IpcChannels.gpuStats),
   getSystemStats: () => inv(IpcChannels.systemStats),
 
@@ -155,10 +158,12 @@ const api: NekkoApi = {
   pendingInput: () => inv(IpcChannels.chatPending),
   runningSessions: () => inv(IpcChannels.chatRunning),
 
-  listTerminals: () => inv(IpcChannels.terminalsList),
+  listTerminals: (filter) => (filter ? inv(IpcChannels.terminalsList, filter) : inv(IpcChannels.terminalsList)),
   listShells: () => inv(IpcChannels.terminalShells),
   createTerminal: (opts) => inv(IpcChannels.terminalCreate, opts),
-  terminalSnapshot: (id) => inv(IpcChannels.terminalSnapshot, id),
+  terminalSnapshot: (id, opts) => (opts ? inv(IpcChannels.terminalSnapshot, id, opts) : inv(IpcChannels.terminalSnapshot, id)),
+  listSshHosts: () => inv(IpcChannels.sshHosts),
+  openSsh: (alias, opts) => inv(IpcChannels.sshOpen, alias, opts ?? {}),
   updateTerminal: (id, patch) => inv(IpcChannels.terminalUpdate, id, patch),
   writeTerminal: (id, data) => inv(IpcChannels.terminalWrite, id, data),
   resizeTerminal: (id, cols, rows) => inv(IpcChannels.terminalResize, id, cols, rows),
@@ -223,6 +228,12 @@ const api: NekkoApi = {
   readFile: (path) => inv(IpcChannels.fileRead, path),
   writeFile: (path, content) => inv(IpcChannels.fileWrite, path, content),
   listDir: (path) => inv(IpcChannels.dirList, path),
+  listScopedFiles: (root, relPath) => inv(IpcChannels.filesList, root, relPath),
+  searchScopedFiles: (root, query, limit) => inv(IpcChannels.filesSearch, root, query, limit),
+  readScopedFile: (root, relPath, opts) => inv(IpcChannels.filesRead, root, relPath, opts ?? {}),
+  writeScopedFile: (root, relPath, content, opts) => inv(IpcChannels.filesWrite, root, relPath, content, opts),
+  listLogs: () => inv(IpcChannels.logsList),
+  readLog: (id, opts) => inv(IpcChannels.logsRead, id, opts ?? {}),
   fetchRemoteImage: (url) => inv(IpcChannels.imageFetch, url),
 
   listChanges: (sessionId) => inv(IpcChannels.changesList, sessionId),
@@ -234,6 +245,21 @@ const api: NekkoApi = {
   prAction: (url, action) => inv(IpcChannels.prAction, url, action),
   continuePrStack: (sessionId, url) => inv(IpcChannels.prContinueStack, sessionId, url),
   linkPrStack: (sessionId, url) => inv(IpcChannels.prLinkStack, sessionId, url),
+  createPr: (workspaceId, opts) => inv(IpcChannels.prCreate, workspaceId, opts),
+  getPrChecks: (url) => inv(IpcChannels.prChecks, url),
+
+  gitDiff: (workspaceId, opts) => inv(IpcChannels.gitDiff, workspaceId, opts),
+  gitLog: (workspaceId, opts) => inv(IpcChannels.gitLog, workspaceId, opts),
+  gitShow: (workspaceId, sha) => inv(IpcChannels.gitShow, workspaceId, sha),
+  gitBranches: (workspaceId) => inv(IpcChannels.gitBranches, workspaceId),
+  gitCompare: (workspaceId, base, head) => inv(IpcChannels.gitCompare, workspaceId, base, head),
+  gitStage: (workspaceId, paths) => inv(IpcChannels.gitStage, workspaceId, paths),
+  gitUnstage: (workspaceId, paths) => inv(IpcChannels.gitUnstage, workspaceId, paths),
+  gitCommit: (workspaceId, opts) => inv(IpcChannels.gitCommit, workspaceId, opts),
+  gitCommitMessage: (workspaceId) => inv(IpcChannels.gitCommitMessage, workspaceId),
+  gitPush: (workspaceId, opts) => inv(IpcChannels.gitPush, workspaceId, opts),
+  gitSwitch: (workspaceId, branch, opts) => inv(IpcChannels.gitSwitch, workspaceId, branch, opts),
+  gitMergeAbort: (workspaceId) => inv(IpcChannels.gitMergeAbort, workspaceId),
 
   listComments: (path) => inv(IpcChannels.commentsList, path),
   addComment: (path, line, lineText, comment) => inv(IpcChannels.commentAdd, path, line, lineText, comment),
@@ -282,6 +308,7 @@ const api: NekkoApi = {
   runWorkflow: (id) => inv(IpcChannels.workflowRun, id),
   cancelWorkflowRun: (runId) => inv(IpcChannels.workflowCancel, runId),
   listWorkflowRuns: (workflowId) => inv(IpcChannels.workflowRuns, workflowId),
+  listWorkflowSkillDefs: () => inv(IpcChannels.workflowSkillDefs),
   dispatchWorkflowEvent: (event) => inv(IpcChannels.workflowEvent, event),
 
   listConnectors: () => inv(IpcChannels.connectorsList),
@@ -323,14 +350,21 @@ const api: NekkoApi = {
   revokeRemoteDevice: (deviceId) => inv(IpcChannels.remoteRevoke, deviceId),
   renameRemoteDevice: (deviceId, name) => inv(IpcChannels.remoteRename, deviceId, name),
   rotateRemoteSecret: () => inv(IpcChannels.remoteRotate),
+  setRemoteAccess: (deviceId, access) => inv(IpcChannels.remoteSetAccess, deviceId, access),
+  getRemoteActivity: (deviceId) => inv(IpcChannels.remoteActivity, deviceId),
   localRelayStatus: () => inv(IpcChannels.localRelayStatus),
   localRelayStart: () => inv(IpcChannels.localRelayStart),
   localRelayStop: () => inv(IpcChannels.localRelayStop),
+  localRelaySetLan: (on) => inv(IpcChannels.localRelaySetLan, on),
   networkVisibilityStatus: () => inv(IpcChannels.networkVisibilityStatus),
   networkVisibilityStart: () => inv(IpcChannels.networkVisibilityStart),
   networkVisibilityStop: () => inv(IpcChannels.networkVisibilityStop),
 
   getAppInfo: () => inv(IpcChannels.appInfo),
+  getClaudePolicy: () => inv(IpcChannels.claudePolicy),
+  getClaudeCapability: (providerId, capability) => inv(IpcChannels.claudeCapability, providerId, capability),
+  getClaudePlanUsage: (providerId) => inv(IpcChannels.claudePlanUsage, providerId),
+  getClaudeCodeStatus: (providerId) => inv(IpcChannels.claudeCodeStatus, providerId),
   getMcpStatus: () => inv(IpcChannels.mcpStatus),
   detectHypergate: (port?: number) => inv(IpcChannels.mcpHypergate, port),
   connectHypergate: (port?: number) => inv(IpcChannels.mcpHypergateConnect, port),
@@ -370,6 +404,11 @@ const api: NekkoApi = {
     const listener = (_: unknown, e: TerminalEvent) => cb(e);
     bus.on(IpcEvents.terminalEvent, listener);
     return () => bus.removeListener(IpcEvents.terminalEvent, listener);
+  },
+  onTerminalViewers: (cb: (e: TerminalViewersEvent) => void) => {
+    const listener = (_: unknown, e: TerminalViewersEvent) => cb(e);
+    bus.on(IpcEvents.terminalViewers, listener);
+    return () => bus.removeListener(IpcEvents.terminalViewers, listener);
   },
   onChangesUpdated: (cb: (e: { sessionId: string }) => void) => {
     const listener = (_: unknown, e: { sessionId: string }) => cb(e);

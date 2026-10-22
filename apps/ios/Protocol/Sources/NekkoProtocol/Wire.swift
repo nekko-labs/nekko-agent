@@ -30,11 +30,77 @@ public enum Channels {
     /// What the agent changed in a chat, as a capped read-only diff (`PhoneChanges`);
     /// refused unless the computer allows it (`phoneChanges`).
     public static let changesList = "changes:list"
+    /// Change or remove a queued prompt, checked against the text the phone showed.
+    public static let chatEditQueued = "chat:editQueued"
+    /// A new chat with this one's conversation before a message.
+    public static let sessionFork = "session:fork"
+    /// The computer's automations (read only) and Run now on one the owner set up.
+    public static let tasksList = "tasks:list"
+    public static let taskRunNow = "task:runNow"
+    public static let workflowsList = "workflows:list"
+    public static let workflowRun = "workflow:run"
+    /// A chat's pull requests: state and checks, read only.
+    public static let prSessionList = "pr:sessionList"
+    /// Provider usage, and one provider's limits by its id, read only.
+    public static let usageSummary = "usage:summary"
+    public static let limitsGet = "limits:get"
+    /// *Send a test notification*: answered by the computer's relay agent itself,
+    /// so it is not on the phone allowlist (`PUSH_TEST_CHANNEL`) and not in `all`.
+    public static let pushTest = "push:test"
+
+    /// Git on a chat's folder (IO-33 FA-2, `Git.swift`). Reads: status, diffs,
+    /// history, a commit, branches, compare, a PR's checks and diff.
+    public static let workspaceGitStatus = "workspace:gitStatus"
+    public static let gitDiff = "git:diff"
+    public static let gitLog = "git:log"
+    public static let gitShow = "git:show"
+    public static let gitBranches = "git:branches"
+    public static let gitCompare = "git:compare"
+    public static let prChecks = "pr:checks"
+    public static let prDiff = "pr:diff"
+    /// Change actions: signed, so Face ID or the passcode is asked (`ComputersStore.call(change:)`).
+    public static let gitStage = "git:stage"
+    public static let gitUnstage = "git:unstage"
+    public static let gitCommit = "git:commit"
+    /// Spends the computer's model tokens, so it is a Change too.
+    public static let gitCommitMessage = "git:commitMessage"
+    public static let gitPush = "git:push"
+    public static let gitSwitch = "git:switch"
+    public static let gitMergeAbort = "git:mergeAbort"
+    public static let prCreate = "pr:create"
+    public static let prAction = "pr:action"
+
+    /// The change-class channels among these (`PHONE_CHANGE_CHANNELS`).
+    public static let gitChange: Set<String> = [
+        gitStage, gitUnstage, gitCommit, gitCommitMessage, gitPush, gitSwitch, gitMergeAbort, prCreate, prAction,
+    ]
+
+    /// Files in a chat's or saved folder's tree (IO-33 FA-1, `Files.swift`): list,
+    /// search and read; saving is a Change, checked against the hash read.
+    public static let filesList = "files:list"
+    public static let filesSearch = "files:search"
+    public static let filesRead = "files:read"
+    public static let filesWrite = "files:write"
+    /// The computer's app, engine and agent logs, read only and redacted there (FA-5).
+    public static let logsList = "logs:list"
+    public static let logsRead = "logs:read"
+    /// The change-class channels among these.
+    public static let filesChange: Set<String> = [filesWrite]
+    /// Every change-class channel the phone calls (`PHONE_CHANGE_CHANNELS`): signed, so Face ID or the passcode is asked.
+    public static let change: Set<String> = gitChange.union(filesChange).union(terminalChange)
 
     public static let all = [
         settingsGet, settingsUpdate, providersList, modelsList, sessionsSummaries, sessionCreate, sessionGet,
         sessionSetOptions, sessionDelete, voiceStatus, voiceTranscribe, chatSend, chatAbort, chatQueue,
         chatPending, chatAnswer, toolApprove, workspaceList, appInfo, skillsRunnable, changesList,
+        chatEditQueued, sessionFork, tasksList, taskRunNow, workflowsList, workflowRun, prSessionList,
+        usageSummary, limitsGet,
+        workspaceGitStatus, gitDiff, gitLog, gitShow, gitBranches, gitCompare, prChecks, prDiff,
+        gitStage, gitUnstage, gitCommit, gitCommitMessage, gitPush, gitSwitch, gitMergeAbort, prCreate, prAction,
+        filesList, filesSearch, filesRead, filesWrite, logsList, logsRead,
+        // IO-33 FA-3, FA-6 (Terminal.swift).
+        TerminalChannels.list, TerminalChannels.tail, TerminalChannels.sshHosts, TerminalChannels.create, TerminalChannels.sshOpen,
+        TerminalChannels.write, TerminalChannels.resize, TerminalChannels.signal, TerminalChannels.close,
     ]
 }
 
@@ -98,6 +164,8 @@ public struct ChatMessage: Equatable, Sendable {
     public let reasoning: String?
     public let createdAt: Int64?
     public let imageCount: Int
+    /// The user's photos as the computer sent them: small JPEG data URLs, `""` for one it kept back.
+    public var images: [String] = []
     public let skill: (name: String, input: String)?
     public let toolCalls: [ToolCall]
     public let toolResult: ToolResult?
@@ -107,7 +175,7 @@ public struct ChatMessage: Equatable, Sendable {
         a.id == b.id && a.role == b.role && a.content == b.content && a.reasoning == b.reasoning
             && a.createdAt == b.createdAt && a.imageCount == b.imageCount && a.skill?.name == b.skill?.name
             && a.skill?.input == b.skill?.input && a.toolCalls == b.toolCalls && a.toolResult == b.toolResult
-            && a.interrupted == b.interrupted
+            && a.interrupted == b.interrupted && a.images == b.images
     }
 
     public static func from(_ v: JSONValue?) -> ChatMessage? {
@@ -116,7 +184,9 @@ public struct ChatMessage: Equatable, Sendable {
         if let s = v["skill"], let name = s.str("name") { skill = (name, s.str("input") ?? "") }
         return ChatMessage(
             id: id, role: role, content: v.str("content") ?? "", reasoning: v.str("reasoning"),
-            createdAt: v.long("createdAt"), imageCount: v["images"]?.array?.count ?? 0, skill: skill,
+            // The phone's saved copy (`SavedTranscripts`) keeps only how many photos there were.
+            createdAt: v.long("createdAt"), imageCount: v["images"]?.array?.count ?? max(0, Int(v.long("imageCount") ?? 0)),
+            images: v["images"]?.array?.map { $0.string ?? "" } ?? [], skill: skill,
             toolCalls: v["toolCalls"]?.array?.compactMap(ToolCall.from) ?? [],
             toolResult: ToolResult.from(v["toolResult"]), interrupted: v.flag("interrupted"))
     }
@@ -132,8 +202,16 @@ public struct Session: Equatable, Sendable {
     public let messages: [ChatMessage]
     /// Older messages the computer kept back from the phone (only the newest are sent).
     public let omittedMessages: Int
+    /// Queued prompts as the composer shows them (a skill's as `/name input`).
     public let queue: [String]
     public let updatedAt: Int64
+    /// The queue as the computer holds it: what `chat:editQueued` checks against.
+    public var queued: [QueuedPrompt] = []
+    /// The outbox ids this chat has taken (`chat:send` / `chat:queue` with a
+    /// `clientMessageId`): a prompt whose id is here was delivered.
+    public var clientMessageIds: [String] = []
+    /// A turn is running on the computer (`activeRun`): a prompt waits in its queue.
+    public var running = false
 
     public static func from(_ v: JSONValue?) -> Session? {
         guard let v, let id = v.str("id") else { return nil }
@@ -142,9 +220,12 @@ public struct Session: Equatable, Sendable {
             workspaceId: v.str("workspaceId"), mode: v.str("mode"),
             messages: v["messages"]?.array?.compactMap(ChatMessage.from) ?? [],
             omittedMessages: max(0, Int(v.long("omittedMessages") ?? 0)),
-            // Queue entries may be plain strings or {text, images, skill}; the phone shows text.
-            queue: v["queue"]?.array?.compactMap { $0.string ?? $0.str("text") } ?? [],
-            updatedAt: v.long("updatedAt") ?? 0)
+            // Queue entries may be plain strings or {text, images, skill}.
+            queue: QueuedPrompt.list(v["queue"]).map(\.shown),
+            updatedAt: v.long("updatedAt") ?? 0,
+            queued: QueuedPrompt.list(v["queue"]),
+            clientMessageIds: v["clientMessageIds"]?.array?.compactMap(\.string) ?? [],
+            running: v["activeRun"].map { !$0.isNull } ?? false)
     }
 }
 
@@ -272,15 +353,22 @@ public struct PcSettings: Equatable, Sendable {
     public var voiceEnabled: Bool
     /// Whether the computer lets phones read a chat's changes (set on the computer only).
     public var phoneChanges: Bool
+    /// The computer's saved prompts (names and text only), for the composer's `/` menu.
+    public var prompts: [SavedPrompt]
+    /// The computer's automations are paused (set on the computer only).
+    public var automationsPaused: Bool
 
     public init(defaultChatMode: ChatMode? = nil, chatPaneAction: ChatAction? = nil, skipDeleteConfirmation: Bool? = nil,
-                known: Bool = false, voiceEnabled: Bool = false, phoneChanges: Bool = false) {
+                known: Bool = false, voiceEnabled: Bool = false, phoneChanges: Bool = false, prompts: [SavedPrompt] = [],
+                automationsPaused: Bool = false) {
         self.defaultChatMode = defaultChatMode
         self.chatPaneAction = chatPaneAction
         self.skipDeleteConfirmation = skipDeleteConfirmation
         self.known = known
         self.voiceEnabled = voiceEnabled
         self.phoneChanges = phoneChanges
+        self.prompts = prompts
+        self.automationsPaused = automationsPaused
     }
 
     /// What the computer does when a key is unset (shared/settings.ts defaults).
@@ -293,7 +381,8 @@ public struct PcSettings: Equatable, Sendable {
         return PcSettings(defaultChatMode: v.str("defaultChatMode").flatMap(ChatMode.init(rawValue:)),
                           chatPaneAction: v.str("chatPaneAction").flatMap(ChatAction.init(rawValue:)),
                           skipDeleteConfirmation: v["skipDeleteConfirmation"]?.bool, known: true,
-                          voiceEnabled: v["voice"]?.flag("enabled") == true, phoneChanges: v.flag("phoneChanges"))
+                          voiceEnabled: v["voice"]?.flag("enabled") == true, phoneChanges: v.flag("phoneChanges"),
+                          prompts: SavedPrompt.list(v["prompts"]), automationsPaused: v.flag("automationsPaused"))
     }
 
     /// The `settings:update` patch for one change: never more than the phone-settable keys.
@@ -646,20 +735,24 @@ public func skillCall(name: String, input: String) -> JSONValue { ["name": .stri
 
 /// `chat:send` argument (SendOptions): only `PHONE_CHAT_SEND_KEYS`.
 /// `images` are `data:image/jpeg;base64,…` URLs.
+/// `clientMessageId` is the outbox's id for the prompt: the computer answers a
+/// repeat of it without a second turn (exactly-once delivery after a reconnect).
 public func sendOptions(sessionId: String, providerId: String, modelId: String, text: String,
-                        skill: SkillSummary? = nil, images: [String] = []) -> JSONValue {
+                        skill: SkillSummary? = nil, images: [String] = [], clientMessageId: String? = nil) -> JSONValue {
     var o: [String: JSONValue] = ["sessionId": .string(sessionId), "providerId": .string(providerId),
                                   "modelId": .string(modelId), "text": .string(text)]
     if let skill { o["skill"] = skillCall(name: skill.name, input: text) }
     if !images.isEmpty { o["images"] = .array(images.map { .string($0) }) }
+    if let clientMessageId { o["clientMessageId"] = .string(clientMessageId) }
     return .object(o)
 }
 
-/// `chat:queue` prompt: plain text, or `{text, skill, images}`.
-public func queuePrompt(text: String, skill: SkillSummary? = nil, images: [String] = []) -> JSONValue {
-    if skill == nil && images.isEmpty { return .string(text) }
+/// `chat:queue` prompt: plain text, or `{text, skill, images, clientMessageId}`.
+public func queuePrompt(text: String, skill: SkillSummary? = nil, images: [String] = [], clientMessageId: String? = nil) -> JSONValue {
+    if skill == nil && images.isEmpty && clientMessageId == nil { return .string(text) }
     var o: [String: JSONValue] = ["text": .string(text)]
     if let skill { o["skill"] = skillCall(name: skill.name, input: text) }
     if !images.isEmpty { o["images"] = .array(images.map { .string($0) }) }
+    if let clientMessageId { o["clientMessageId"] = .string(clientMessageId) }
     return .object(o)
 }

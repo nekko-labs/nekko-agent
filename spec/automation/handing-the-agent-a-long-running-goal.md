@@ -1,0 +1,11 @@
+---
+title: "Handing the agent a long-running goal"
+area: automation
+split-from: SPEC.md (2026-10-22)
+---
+
+# Handing the agent a long-running goal
+
+The user gives the agent **something to get finished** ("ship the CSV import end to end: parser, validation, tests, docs"), optionally with context and constraints, and the agent works it **plan-first** in three phases: **Plan** (it studies the goal and the workspace, then writes an ordered execution plan of concrete, verifiable steps), **Execute** (it works the plan step by step, marking each step active and then done, with a one-line outcome note, only once verified), and **Iterate** (when reality disagrees, a step fails, new work surfaces, it revises the plan and keeps going until every step is done and the goal is verifiably met). This is deliberately **not a model-testing surface** (that's the Training tab); it's a "work until finished" surface for real work.
+
+The dashboard reads as **mission control, not a chat**: a big **"working for"** clock, live status plus a **phase chip** (planning / executing / verifying / finished), and the **live plan checklist** front and center, each step with its status glyph, note, and a progress bar, alongside a current-step card, goal-shaped stat tiles (plan progress, iterations, attempts, runtime), a **Mission control** card that surfaces the budgets the loop enforces (iteration budget, time budget), and a prominent activity feed of plan milestones, failures, and self-repairs. Course-correcting is a full-width **"Steer the mission"** console (deliberately one nudge at a time, folded into the next iteration, not a back-and-forth chat); the underlying agent transcript is still reachable via a low-key **Transcript** link. Under the hood a goal is **not just one ever-growing chat**: each iteration runs on a **bounded context window** (the last few turns; the brief re-injects the plan every turn), and the loop is **guaranteed to terminate**, the host enforces a turn budget and any time budget, and **detects a stall** (no measurable plan/experiment progress plus a repeating answer) to pause the run and ask for a hint rather than looping for thousands of iterations. Runs survive restarts and resume automatically; resuming a budget-capped run grants a fresh leg.

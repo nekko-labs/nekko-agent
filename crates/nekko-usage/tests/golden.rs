@@ -6,10 +6,9 @@
 //! `JSON.stringify` would, key order included).
 
 use nekko_usage::{
-    LimitsError, Problem, Tokens, UsageFiles, classify_limits_error, describe_anthropic_window, estimate_cost,
-    limits_backoff_ms, merge_windows, parse_anthropic_headers, parse_anthropic_usage_json, parse_chatgpt_usage,
-    parse_openrouter_key, parse_retry_after, quota_history_record, side_usage_record, turn_reply_record,
-    turn_usage_record, usage_summary,
+    LimitsError, Problem, Tokens, UsageFiles, classify_limits_error, estimate_cost, limits_backoff_ms,
+    parse_chatgpt_usage, parse_openrouter_key, parse_retry_after, quota_history_record, side_usage_record,
+    turn_reply_record, turn_usage_record, usage_summary,
 };
 use serde_json::{Value, json};
 use std::path::Path;
@@ -144,22 +143,6 @@ fn log_lines_match() {
 fn limit_parsers_match() {
     let all = expected();
     let now = now(&all);
-    for (i, c) in cases(&all, "/limits/headers").iter().enumerate() {
-        let pairs: Vec<(String, String)> = c["input"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|p| (p[0].as_str().unwrap().into(), p[1].as_str().unwrap().into()))
-            .collect();
-        same(&parse_anthropic_headers(&pairs, now), &c["output"], &format!("headers {i}"));
-    }
-    for (i, c) in cases(&all, "/limits/usageJson").iter().enumerate() {
-        same(
-            &parse_anthropic_usage_json(c["input"].as_object().unwrap(), now),
-            &c["output"],
-            &format!("usage json {i}"),
-        );
-    }
     for (i, c) in cases(&all, "/limits/chatgpt").iter().enumerate() {
         same(&parse_chatgpt_usage(c["input"].as_object().unwrap(), now), &c["output"], &format!("chatgpt {i}"));
     }
@@ -170,10 +153,6 @@ fn limit_parsers_match() {
             Err(e) => json!({ "error": { "kind": e.kind, "status": e.status } }),
         };
         same(&got, &c["output"], &format!("openrouter {i}"));
-    }
-    for (i, c) in cases(&all, "/limits/merge").iter().enumerate() {
-        let got = merge_windows(c["input"]["previous"].as_array().unwrap(), c["input"]["fresh"].as_array().unwrap());
-        same(&Value::Array(got), &c["output"], &format!("merge {i}"));
     }
     for (i, c) in cases(&all, "/limits/retryAfter").iter().enumerate() {
         same(&opt_num(parse_retry_after(c["input"].as_str(), now)), &c["output"], &format!("retry-after {i}"));
@@ -206,9 +185,5 @@ fn limit_parsers_match() {
     for (i, c) in cases(&all, "/limits/backoff").iter().enumerate() {
         let got = limits_backoff_ms(c["input"]["failures"].as_f64().unwrap(), c["input"]["retryAfterMs"].as_f64());
         same(&nekko_usage::num(got), &c["output"], &format!("backoff {i}"));
-    }
-    for (i, c) in cases(&all, "/limits/describe").iter().enumerate() {
-        let got = describe_anthropic_window(c["input"]["period"].as_str().unwrap(), c["input"]["family"].as_str());
-        same(&Value::Object(got), &c["output"], &format!("describe {i}"));
     }
 }

@@ -32,7 +32,7 @@ if (!cargo) {
 }
 
 if (dev) {
-  execFileSync(cargo, ['build', '--profile', 'dev-daemon', '--locked', '-p', 'nekkod'], { cwd: repo, stdio: 'inherit' });
+  execFileSync(cargo, ['build', '--profile', 'dev-daemon', '--locked', '-p', 'nekkod', '--features', 'dev-tools'], { cwd: repo, stdio: 'inherit' });
   process.exit(0);
 }
 

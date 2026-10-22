@@ -9,6 +9,7 @@
 //! only ever sees a whole chat. Where a TS patch assigns `undefined` the key is
 //! removed here, since that is what `JSON.stringify` leaves behind.
 
+use crate::client_ids::{client_message_id_of, has_client_message_id, remember_client_message_ids};
 use crate::{SessionStore, valid_id};
 use nekko_js as js;
 use serde_json::{Map, Value, json};
@@ -27,6 +28,7 @@ const OPTION_KEYS: &[&str] = &[
     "disabledMcpServers",
     "disabledConnectors",
     "offline",
+    "cloudOnly",
     "incognito",
     "executionMode",
     "gitIsolation",
@@ -46,10 +48,10 @@ const OPTION_KEYS: &[&str] = &[
 /// `STARTER_MODES` (packages/shared/src/saved-modes.ts): the saved modes until
 /// the user saves their own. The sessions golden test checks it is the TS list.
 pub const STARTER_MODES: &str = r#"[
-  { "id": "everyday", "name": "Everyday", "icon": "bolt", "options": { "executionMode": "worktree", "mode": "guardrails", "offline": false, "incognito": false, "disabledTools": [], "workMode": "default" } },
-  { "id": "deep-work", "name": "Deep work", "icon": "dial", "options": { "executionMode": "worktree", "mode": "yolo", "offline": false, "incognito": false, "disabledTools": [], "workMode": "best-output", "effort": "high" } },
-  { "id": "private", "name": "Private", "icon": "incognito", "options": { "executionMode": "worktree", "mode": "ask", "offline": false, "incognito": true, "disabledTools": [], "workMode": "default" } },
-  { "id": "untrusted-repo", "name": "Untrusted repo", "icon": "box", "options": { "executionMode": "sandbox", "mode": "ask", "offline": false, "incognito": false, "disabledTools": [], "workMode": "default" } }
+  { "id": "cloud", "name": "Cloud only", "icon": "cloud", "options": { "executionMode": "worktree", "mode": "guardrails", "offline": false, "incognito": false, "disabledTools": [], "workMode": "default", "models": "cloud" } },
+  { "id": "fusion", "name": "Fusion", "icon": "route", "options": { "executionMode": "worktree", "mode": "guardrails", "offline": false, "incognito": false, "disabledTools": [], "workMode": "default", "models": "fusion" } },
+  { "id": "local", "name": "Local only", "icon": "laptop", "options": { "executionMode": "worktree", "mode": "guardrails", "offline": true, "incognito": false, "disabledTools": [], "workMode": "default", "models": "local" } },
+  { "id": "risky-business", "name": "Risky business", "icon": "box", "options": { "executionMode": "sandbox", "mode": "ask", "offline": true, "incognito": false, "disabledTools": [], "workMode": "default" } }
 ]"#;
 
 /// `getExecutionMode(session)`: its own, else unified when Git isolation is off.
@@ -126,6 +128,17 @@ fn apply_mode(s: &mut JsObject, options: &Value) {
             s.set(k, Some(v));
         }
     }
+    // `modelScopePatch`: a new chat has no model yet, so nothing is held back.
+    match get("models").as_ref().and_then(Value::as_str) {
+        Some("cloud") => s.set("cloudOnly", Some(json!(true))),
+        Some("fusion") => {
+            s.set("cloudOnly", Some(json!(false)));
+            s.set("autoModel", Some(json!(true)));
+            s.set("autoProviderSwitch", Some(json!(true)));
+        }
+        Some("local") => s.set("cloudOnly", Some(json!(false))),
+        _ => {}
+    }
 }
 
 /// What a running turn's save takes from disk rather than from memory
@@ -140,6 +153,7 @@ const USER_FIELDS: &[&str] = &[
     "disabledMcpServers",
     "disabledConnectors",
     "offline",
+    "cloudOnly",
     "incognito",
     "executionMode",
     "gitIsolation",
@@ -326,6 +340,16 @@ impl SessionStore {
                 if disk.get("titleAuto") == Some(&Value::Bool(false)) {
                     target.insert("title".into(), disk.get("title").cloned().unwrap_or(Value::Null));
                     target.insert("titleAuto".into(), json!(false));
+                }
+                // Ids a phone queued with meanwhile stay remembered beside this turn's own.
+                if disk.get("clientMessageIds").and_then(Value::as_array).is_some_and(|a| !a.is_empty()) {
+                    let mine: Vec<String> = target
+                        .get("clientMessageIds")
+                        .and_then(Value::as_array)
+                        .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+                        .unwrap_or_default();
+                    let ids = remember_client_message_ids(disk.get("clientMessageIds"), &mine);
+                    target.insert("clientMessageIds".into(), ids);
                 }
                 if let Some((index, item)) = queued {
                     let queue = disk.get("queue").and_then(Value::as_array).cloned().unwrap_or_default();
@@ -889,6 +913,8 @@ impl SessionStore {
 
     /// `queuePrompt`: a blank prompt changes nothing and is not saved.
     pub fn queue(&self, id: &str, input: &Value) -> Result<Option<Value>, String> {
+        // A resend of a prompt this chat already took (a phone's outbox) changes nothing.
+        let client_id = client_message_id_of(input.get("clientMessageId")).map(str::to_string);
         let item = match input {
             Value::String(text) => {
                 let text = js::trim(text).to_string();
@@ -921,10 +947,17 @@ impl SessionStore {
             _ => None,
         };
         self.patch(id, |s| {
+            if has_client_message_id(s.get("clientMessageIds"), client_id.as_deref()) {
+                return false;
+            }
             let Some(item) = item.clone() else { return false };
             let mut q = s.get("queue").and_then(Value::as_array).cloned().unwrap_or_default();
             q.push(item);
             s.insert("queue".into(), Value::Array(q));
+            if let Some(cid) = &client_id {
+                let ids = remember_client_message_ids(s.get("clientMessageIds"), std::slice::from_ref(cid));
+                s.insert("clientMessageIds".into(), ids);
+            }
             true
         })
     }
@@ -939,6 +972,61 @@ impl SessionStore {
             s.insert("queue".into(), Value::Array(kept));
             true
         })
+    }
+
+    /// `editQueuedPrompt`: change or remove the queued prompt at `index`, only
+    /// while it still shows the text the editor saw (`edit.expect`). A missing
+    /// `text`, or a blank one with no photos, removes it; a skill's prompt can
+    /// only be removed. A stale edit changes nothing and is an error.
+    pub fn edit_queued(&self, id: &str, index: &Value, edit: &Value) -> Result<Option<Value>, String> {
+        let stale = || "That queued prompt already started or changed.".to_string();
+        let index = index.as_f64().filter(|i| i.fract() == 0.0 && *i >= 0.0).map(|i| i as usize);
+        let expect = edit.get("expect").and_then(Value::as_str).map(str::to_string);
+        let text = edit.get("text").and_then(Value::as_str).map(|t| js::trim(t).to_string());
+        let mut failure: Option<String> = None;
+        let out = self.patch(id, |s| {
+            let q = s.get("queue").and_then(Value::as_array).cloned().unwrap_or_default();
+            let Some((i, item)) = index.and_then(|i| q.get(i).map(|item| (i, item.clone()))) else {
+                failure = Some(stale());
+                return false;
+            };
+            let shown = item.as_str().or_else(|| item.get("text").and_then(Value::as_str));
+            if expect.is_none() || shown != expect.as_deref() {
+                failure = Some(stale());
+                return false;
+            }
+            let count = |k: &str| item.get(k).and_then(Value::as_array).map_or(0, Vec::len);
+            let photos = count("images") + count("videos");
+            if text.is_some() && item.is_object() && item.get("skill").is_some_and(|v| !v.is_null()) {
+                failure = Some("A skill’s queued prompt can only be removed.".into());
+                return false;
+            }
+            let next: Vec<Value> = match &text {
+                Some(t) if !t.is_empty() || photos > 0 => q
+                    .into_iter()
+                    .enumerate()
+                    .map(|(j, v)| {
+                        if j != i {
+                            return v;
+                        }
+                        match v {
+                            Value::Object(mut o) => {
+                                o.insert("text".into(), json!(t));
+                                Value::Object(o)
+                            }
+                            _ => json!(t),
+                        }
+                    })
+                    .collect(),
+                _ => q.into_iter().enumerate().filter(|(j, _)| *j != i).map(|(_, v)| v).collect(),
+            };
+            s.insert("queue".into(), Value::Array(next));
+            true
+        })?;
+        match failure {
+            Some(e) => Err(e),
+            None => Ok(out),
+        }
     }
 
     /// `applyAutoTitle(id, title)`: land a generated title, unless the user

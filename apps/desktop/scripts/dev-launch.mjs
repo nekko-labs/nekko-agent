@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 // Keep the downloaded runtime untouched: other worktrees may be using it.
 import { createRequire } from 'node:module';
@@ -18,12 +18,26 @@ env.NEKKO_DEV_STOP_FILE = stopFile;
 const readyFile = join(tmpdir(), `nekko-dev-ready-${env.NEKKO_DEV_OWNER}`);
 env.NEKKO_DEV_READY_FILE = readyFile;
 let ownedCache;
+/**
+ * The cached runtime bakes the app icon in, so its ready marker records which
+ * icon it was built from: a new logo rebuilds the copy instead of the taskbar
+ * or Dock keeping the old one.
+ */
+export function runtimeStamp(iconPath, kind) {
+  return `${kind} icon-${createHash('sha256').update(readFileSync(iconPath)).digest('hex').slice(0, 16)}`;
+}
+/** Whether a cached runtime's ready marker matches the stamp it would be built with now. */
+export function runtimeIsCurrent(readyPath, stamp) {
+  try { return readFileSync(readyPath, 'utf8') === stamp; } catch { return false; }
+}
 export function prepareMacBundle() {
 
   const cache = resolve('.dev-runtime', require('electron/package.json').version);
   const bundle = join(cache, 'Nekko Agent.app');
   const ready = join(cache, 'ready-v2');
-  if (!existsSync(ready)) {
+  const stamp = runtimeStamp(resolve('build/icon.png'), 'signed');
+  if (!runtimeIsCurrent(ready, stamp)) {
+    rmSync(cache, { recursive: true, force: true });
     mkdirSync(cache, { recursive: true });
     cpSync(resolve(dirname(electron), '../..'), bundle, { recursive: true, verbatimSymlinks: true });
     const iconset = join(cache, 'Nekko Agent.iconset');
@@ -40,7 +54,7 @@ export function prepareMacBundle() {
     }
     const signed = spawnSync('/usr/bin/codesign', ['--force', '--deep', '--sign', '-', bundle], { stdio: 'inherit' });
     if (signed.status !== 0) throw new Error('Could not sign development bundle');
-    writeFileSync(ready, 'signed');
+    writeFileSync(ready, stamp);
   }
   // LaunchServices makes the app, not the terminal, the responsible process.
   const launcher = join(cache, 'launch.cjs');
@@ -60,7 +74,8 @@ export async function prepareWindowsRuntime() {
   const cache = resolve('.dev-runtime', `${version}-win`);
   const exe = join(cache, 'Nekko Agent.exe');
   const ready = join(cache, 'ready-v1');
-  if (existsSync(ready) && existsSync(exe)) return exe;
+  const stamp = runtimeStamp(resolve('build/icon.ico'), 'patched');
+  if (runtimeIsCurrent(ready, stamp) && existsSync(exe)) return installRuntimeApp(cache, exe);
   rmSync(cache, { recursive: true, force: true });
   mkdirSync(cache, { recursive: true });
   const dist = dirname(electron);
@@ -79,7 +94,22 @@ export async function prepareWindowsRuntime() {
   }
   res.outputResource(pe);
   writeFileSync(exe, Buffer.from(pe.generate()));
-  writeFileSync(ready, 'patched');
+  writeFileSync(ready, stamp);
+  return installRuntimeApp(cache, exe);
+}
+
+/**
+ * Give the runtime an app of its own so a launch without an app path (a
+ * notification click, its Start Menu entry) reopens Nekko Agent rather than
+ * Electron's empty default window. See scripts/dev-runtime-app.cjs. Rewritten
+ * on every run so it follows the launcher and this checkout's path.
+ */
+function installRuntimeApp(cache, exe) {
+  const dir = join(cache, 'resources', 'app');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'nekko-agent-dev-runtime', productName: 'Nekko Agent', private: true, main: 'index.cjs' }));
+  writeFileSync(join(dir, 'target.json'), JSON.stringify({ appDir: resolve('.') }));
+  cpSync(resolve('scripts/dev-runtime-app.cjs'), join(dir, 'index.cjs'));
   return exe;
 }
 

@@ -28,6 +28,12 @@ describe('parseClaudeModel', () => {
     expect(parseClaudeModel('claude-opus-4-20250514')).toEqual({ family: 'opus', major: 4, minor: 0 });
     expect(parseClaudeModel('gpt-5')).toBeNull();
   });
+
+  it('reads Bedrock ids, with or without an inference-profile prefix', () => {
+    expect(parseClaudeModel('anthropic.claude-opus-5-5')).toEqual({ family: 'opus', major: 5, minor: 5 });
+    expect(parseClaudeModel('us.anthropic.claude-haiku-4-5')).toEqual({ family: 'haiku', major: 4, minor: 5 });
+    expect(parseClaudeModel('anthropic.titan-text')).toBeNull();
+  });
 });
 
 describe('claudeContextWindow', () => {
@@ -38,6 +44,15 @@ describe('claudeContextWindow', () => {
     expect(claudeContextWindow('claude-haiku-4-5-20251001')).toBe(200_000);
     expect(claudeContextWindow('claude-sonnet-4-5')).toBe(200_000);
     expect(claudeContextWindow('llama3')).toBeUndefined();
+  });
+});
+
+describe('Claude Code alias context guesses', () => {
+  it('reads the bare aliases a Claude Agent chat runs on as 1M, and nothing else', () => {
+    expect(guessContextWindow('opus')).toBe(1_000_000);
+    expect(guessContextWindow('Sonnet')).toBe(1_000_000);
+    expect(guessContextWindow('haiku')).toBe(1_000_000);
+    expect(guessContextWindow('my-opus')).toBe(128_000);
   });
 });
 

@@ -71,7 +71,11 @@ struct WatchComplicationView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Nekko Agent").font(.caption2.weight(.semibold)).widgetAccentable()
                 Text(snapshot.headline).font(.headline)
-                if let computer = snapshot.computer { Text(computer).font(.caption2).foregroundStyle(.secondary) }
+                if let w = snapshot.waitingBesideHeadline {
+                    Text(w).font(.caption2).foregroundStyle(.secondary)
+                } else if let computer = snapshot.computer {
+                    Text(computer).font(.caption2).foregroundStyle(.secondary)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }

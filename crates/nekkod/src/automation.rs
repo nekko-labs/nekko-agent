@@ -3,8 +3,7 @@
 //! (`workflows:list`, `workflow:*`, `workflows.json`, `workflow-runs.json`,
 //! `workflow-cursors.json`, the schedule and the connector listeners), and
 //! training and goal runs (`training:*`, `training.json`, their turns; a run
-//! chat's tools are answered here too, from turns.rs or, for a turn the host
-//! runs, `training:tool`).
+//! chat's tools are answered here too, from turns.rs or `training:tool`).
 //!
 //! A run's turn goes through the router's `chat:send`, so the daemon admits it
 //! when it admits the UI's turns.
@@ -13,13 +12,11 @@
 //! router (`chat:send`, the same door the UI uses, so the turn's events reach
 //! the UI and the phone as any chat's do). Their chats are made the same way
 //! (`session:create`) and named here. A skill step reads the installed skills
-//! from nekko-workspace (`installed_skill_defs`). Actions and polls are `nekko-connectors`'; shell steps run on
+//! from nekko-workspace (`resolve_skill_defs`). Actions and polls are `nekko-connectors`'; shell steps run on
 //! `nekko-tools`' shell, which kills the whole tree on a timeout.
 //!
-//! Owned only when the daemon knows the data directory; otherwise every one
-//! of these channels goes to the TS host, which then runs its own timers.
+//! Owned only when the daemon knows the data directory.
 
-use crate::backend::Backend;
 use crate::hub::Hub;
 use nekko_automation::tasks::{self, TaskHost, Tasks};
 use nekko_automation::training::{Training, TrainingHost};
@@ -35,18 +32,14 @@ pub use nekko_automation::tasks::CHANNELS as TASK_CHANNELS;
 pub use nekko_automation::training::{CHANNELS as TRAINING_CHANNELS, TOOL_CHANNEL as TRAINING_TOOL};
 pub use nekko_automation::workflows::CHANNELS as WORKFLOW_CHANNELS;
 
-/// What the backend is told the daemon owns (`NEKKOD_OWNS`).
-pub const OWNS: &str = "tasks,workflows,training";
-
-/// How long a service waits on the host for the settings before going without.
-const SETTINGS_WAIT: Duration = Duration::from_secs(10);
-
 type BoxFut<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 /// Runs a channel through the daemon's router.
 pub type Dispatcher = Arc<dyn Fn(String, Vec<Value>) -> BoxFut<'static, Result<Value, String>> + Send + Sync>;
 
 pub struct Automation {
+    /// The data directory, when the daemon knows it.
+    dir: Option<std::path::PathBuf>,
     pub tasks: Option<Arc<Tasks>>,
     pub workflows: Option<Arc<Workflows>>,
     /// Training and goal runs (`training:*`, `training.json`, their turns).
@@ -55,17 +48,13 @@ pub struct Automation {
 }
 
 impl Automation {
-    pub fn new(
-        store: Option<Arc<SessionStore>>,
-        settings: Option<Arc<crate::settings::Settings>>,
-        backend: Arc<Backend>,
-        hub: Hub,
-    ) -> Self {
+    pub fn new(store: Option<Arc<SessionStore>>, settings: Option<Arc<crate::settings::Settings>>, hub: Hub) -> Self {
         let dispatch: Arc<OnceLock<Dispatcher>> = Arc::default();
+        let data_dir = store.as_ref().and_then(|s| s.dir().parent().map(std::path::Path::to_path_buf));
         let (tasks, workflows, training) = match store {
             Some(store) => {
                 let dir = store.dir().parent().map(std::path::Path::to_path_buf).unwrap_or_default();
-                let engine = Arc::new(Engine { store, settings, backend, hub, dispatch: dispatch.clone() });
+                let engine = Arc::new(Engine { store, settings, hub, dispatch: dispatch.clone() });
                 let clock = Tasks::system_clock();
                 let ids: tasks::Ids = Arc::new(tasks::random_uuid);
                 (
@@ -76,7 +65,7 @@ impl Automation {
             }
             None => (None, None, None),
         };
-        Self { tasks, workflows, training, dispatch }
+        Self { dir: data_dir, tasks, workflows, training, dispatch }
     }
 
     /// How a workflow stops a chat (`chat:abort`): through the router.
@@ -90,8 +79,15 @@ impl Automation {
         }
         if let Some(w) = &self.workflows {
             let w = w.clone();
-            // Reconciling reads and writes files: off the async threads.
-            tokio::task::spawn_blocking(move || w.start());
+            let dir = self.dir.clone();
+            // Reconciling reads and writes files: off the async threads. A
+            // PR checkout a stopped run left behind goes first.
+            tokio::task::spawn_blocking(move || {
+                if let Some(dir) = dir {
+                    crate::pr_checkouts::sweep(&dir);
+                }
+                w.start()
+            });
         }
         // Runs that were mid-flight when the last process stopped resume.
         if let Some(t) = &self.training {
@@ -174,21 +170,18 @@ pub(crate) async fn capture_turn_error(
 struct Engine {
     store: Arc<SessionStore>,
     settings: Option<Arc<crate::settings::Settings>>,
-    backend: Arc<Backend>,
     hub: Hub,
     dispatch: Arc<OnceLock<Dispatcher>>,
 }
 
+/// Before main.rs sets the router.
+const NO_ROUTER: &str = "the daemon is still starting";
+
 impl Engine {
     async fn settings(&self) -> Value {
-        if let Some(s) = &self.settings {
-            let store = s.store.clone();
-            return tokio::task::spawn_blocking(move || store.get()).await.unwrap_or(Value::Null);
-        }
-        match tokio::time::timeout(SETTINGS_WAIT, self.backend.call("settings:get", json!([]))).await {
-            Ok(Ok(v)) => v,
-            _ => Value::Null,
-        }
+        let Some(s) = &self.settings else { return Value::Null };
+        let store = s.store.clone();
+        tokio::task::spawn_blocking(move || store.get()).await.unwrap_or(Value::Null)
     }
 
     async fn create_session(
@@ -197,11 +190,9 @@ impl Engine {
         fields: Vec<(&'static str, Value)>,
     ) -> Result<String, String> {
         let ws = workspace_id.unwrap_or(Value::Null);
-        // Through the router (the chat defaults are applied there), the host only before it is set.
-        let created = match self.dispatch.get() {
-            Some(d) => d("session:create".into(), vec![ws]).await?,
-            None => self.backend.call("session:create", json!([ws])).await?,
-        };
+        // Through the router: the chat defaults are applied there.
+        let d = self.dispatch.get().ok_or(NO_ROUTER)?;
+        let created = d("session:create".into(), vec![ws]).await?;
         let id = created.get("id").and_then(Value::as_str).ok_or("the host made no chat")?.to_string();
         let (store, sid) = (self.store.clone(), id.clone());
         tokio::task::spawn_blocking(move || store.assign(&sid, &fields)).await.map_err(|e| e.to_string())??;
@@ -209,24 +200,18 @@ impl Engine {
     }
 
     /// A chat turn through the router (`chat:send`), as the UI sends one:
-    /// admitted and run here, the backend only when no router is set yet.
+    /// admitted and run here.
+    /// Every automation turn is unattended: nobody is watching it start.
     async fn send(&self, opts: Value) -> Result<(), String> {
-        match self.dispatch.get() {
-            Some(d) => d("chat:send".into(), vec![opts]).await.map(|_| ()),
-            None => self.backend.call("chat:send", json!([opts])).await.map(|_| ()),
-        }
+        let opts = crate::claude_policy::mark_unattended(opts);
+        let d = self.dispatch.get().ok_or(NO_ROUTER)?;
+        d("chat:send".into(), vec![opts]).await.map(|_| ())
     }
 
     async fn delete_session(&self, id: String) {
         // Through the router: the chat's command log first, then the chat.
         if let Some(d) = self.dispatch.get() {
             let _ = d("session:delete".into(), vec![json!(id)]).await;
-            return;
-        }
-        // As `session:delete` does: the host's command log first, then the chat.
-        if self.backend.call("sessions:deleteAgentLog", json!([id])).await.is_ok() {
-            let store = self.store.clone();
-            let _ = tokio::task::spawn_blocking(move || store.delete(&id)).await;
         }
     }
 }
@@ -297,6 +282,14 @@ impl WorkflowHost for Engine {
         Box::pin(Engine::settings(self))
     }
 
+    fn update_session(&self, id: &str, fields: Vec<(&'static str, Value)>) -> BoxFut<'_, Result<(), String>> {
+        let (store, sid) = (self.store.clone(), id.to_string());
+        Box::pin(async move {
+            tokio::task::spawn_blocking(move || store.assign(&sid, &fields)).await.map_err(|e| e.to_string())??;
+            Ok(())
+        })
+    }
+
     fn create_session(
         &self,
         workspace_id: Option<Value>,
@@ -326,11 +319,21 @@ impl WorkflowHost for Engine {
         }
     }
 
-    /// The skills a workflow's skill step can run (`listInstalledSkillDefs`).
+    /// The skills a workflow's skill step can run: built-in, installed, other
+    /// tools' `SKILL.md` folders (the user's and the projects') and Claude Code plugins.
     fn skill_defs(&self) -> BoxFut<'_, Vec<Value>> {
         Box::pin(async move {
             let dir = self.store.dir().parent().map(std::path::Path::to_path_buf).unwrap_or_default();
-            tokio::task::spawn_blocking(move || nekko_workspace::skills::installed_skill_defs(&dir))
+            let roots: Vec<String> = Engine::settings(self)
+                .await
+                .get("workspaces")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(|w| w.get("path").and_then(Value::as_str).map(str::to_string))
+                .collect();
+            let home = crate::workspace::home_dir();
+            tokio::task::spawn_blocking(move || nekko_workspace::skills::resolve_skill_defs(&dir, &home, &roots))
                 .await
                 .unwrap_or_default()
         })
@@ -400,6 +403,23 @@ impl WorkflowHost for Engine {
 
     fn next_run(&self, wf: &Value, from: f64) -> Option<f64> {
         nekko_automation::workflow_rules::next_scheduled_run(&chrono::Local, wf, from)
+    }
+
+    fn pr_checkout(&self, folder: &str, number: &str, run_id: &str) -> BoxFut<'_, Result<Value, String>> {
+        let dir = self.store.dir().parent().map(std::path::Path::to_path_buf).unwrap_or_default();
+        let (folder, number, run_id) = (folder.to_string(), number.to_string(), run_id.to_string());
+        Box::pin(async move {
+            tokio::task::spawn_blocking(move || crate::pr_checkouts::make(&dir, &folder, &number, &run_id))
+                .await
+                .map_err(|e| e.to_string())?
+        })
+    }
+
+    fn remove_pr_checkout(&self, checkout: &Value) -> BoxFut<'_, ()> {
+        let checkout = checkout.clone();
+        Box::pin(async move {
+            let _ = tokio::task::spawn_blocking(move || crate::pr_checkouts::remove(&checkout)).await;
+        })
     }
 
     fn resolve_path(&self, root: &str, rel: &str) -> String {

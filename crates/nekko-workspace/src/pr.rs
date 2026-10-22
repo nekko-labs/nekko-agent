@@ -807,4 +807,244 @@ impl Prs {
         }
         Value::Object(out)
     }
+
+    /// `pr:create`: open a PR from `head` (already pushed) with gh in the
+    /// workspace's folder, else the REST API on `slug` with the token. The
+    /// answer carries the new PR's URL and live state.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn create(
+        &self,
+        cwd: &str,
+        head: &str,
+        slug: Option<&str>,
+        title: &str,
+        body: &str,
+        base: Option<&str>,
+        draft: bool,
+        token: Option<&str>,
+    ) -> Value {
+        static URL: OnceLock<Regex> = OnceLock::new();
+        let find_url = |text: &str| {
+            re(&URL, r"https?:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pull\/\d+", "")
+                .find_iter(text)
+                .last()
+                .map(|m| text[m.range()].to_string())
+        };
+        let mut created: Result<String, String> = Err(String::new());
+        let mut via_api = self.gh_missing.load(Ordering::SeqCst);
+        if !via_api {
+            let mut args = vec!["pr", "create", "--title", title, "--body", body, "--head", head];
+            if let Some(b) = base {
+                args.extend(["--base", b]);
+            }
+            if draft {
+                args.push("--draft");
+            }
+            let res = run(&self.gh, &args, Duration::from_secs(60), Some(cwd), 1024 * 1024).await;
+            if res.missing {
+                self.gh_missing.store(true, Ordering::SeqCst);
+                via_api = true;
+            } else if res.ok {
+                created = find_url(&res.stdout).ok_or_else(|| "gh created no PR URL.".to_string());
+            } else {
+                let text = if !res.stderr.is_empty() { &res.stderr } else { &res.stdout };
+                let first: Vec<&str> = js::trim(text).lines().take(4).collect();
+                let text = if first.is_empty() { "gh pr create failed.".to_string() } else { first.join("\n") };
+                created = Err(js::slice16(&text, 400).to_string());
+            }
+        }
+        if via_api {
+            created = match (slug, token) {
+                (Some(slug), Some(token)) => self.api_create(slug, head, title, body, base, draft, token).await,
+                (None, _) => Err("This repository has no GitHub remote.".into()),
+                (_, None) => Err("No gh CLI and no GitHub token configured. Connect GitHub in Connectors, or install and sign in to the gh CLI.".into()),
+            };
+        }
+        let url = match created {
+            Ok(url) => url,
+            Err(message) => return json!({ "ok": false, "message": message }),
+        };
+        self.branch.lock().unwrap_or_else(|e| e.into_inner()).remove(&format!("{cwd}|{head}"));
+        let mut out = Map::new();
+        out.insert("ok".into(), json!(true));
+        out.insert("message".into(), json!(format!("Created {url}")));
+        out.insert("url".into(), json!(url));
+        let pr = self.cached_info(&url, token, true).await;
+        if !pr.is_null() {
+            out.insert("pr".into(), pr);
+        }
+        Value::Object(out)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn api_create(
+        &self,
+        slug: &str,
+        head: &str,
+        title: &str,
+        body: &str,
+        base: Option<&str>,
+        draft: bool,
+        token: &str,
+    ) -> Result<String, String> {
+        let base = match base {
+            Some(b) => b.to_string(),
+            None => self
+                .api_json(&format!("{}/repos/{slug}", self.api), Some(token))
+                .await
+                .and_then(|r| r.get("default_branch").and_then(Value::as_str).map(str::to_string))
+                .ok_or("Could not read the repository's default branch.")?,
+        };
+        let payload = json!({ "title": title, "body": body, "head": head, "base": base, "draft": draft });
+        let res = self
+            .http
+            .post(format!("{}/repos/{slug}/pulls", self.api))
+            .headers(self.headers(Some(token)))
+            .body(payload.to_string())
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+        let status = res.status();
+        let j: Value = res.json().await.unwrap_or(Value::Null);
+        if !status.is_success() {
+            let why = j.get("errors").and_then(Value::as_array).and_then(|e| e.first()).and_then(|e| e.get("message"));
+            let why = why.or_else(|| j.get("message")).and_then(Value::as_str).unwrap_or_default();
+            return Err(format!("Creating the PR failed ({}). {why}", status.as_u16()).trim().to_string());
+        }
+        j.get("html_url").and_then(Value::as_str).map(str::to_string).ok_or_else(|| "GitHub returned no PR URL.".into())
+    }
+
+    /// `pr:checks`: each check on the PR's head commit, and their rollup.
+    pub async fn checks(&self, url: &str, token: Option<&str>) -> Result<Value, String> {
+        let (owner, repo, number) = parse_pr_url(url).ok_or("Not a valid PR URL.")?;
+        let slug = format!("{owner}/{repo}");
+        if !self.gh_missing.load(Ordering::SeqCst) {
+            let n = number.to_string();
+            let res = self
+                .gh_read(&["pr", "checks", &n, "--repo", &slug, "--json", CHECK_FIELDS], Duration::from_secs(20), None)
+                .await;
+            if res.missing {
+                self.gh_missing.store(true, Ordering::SeqCst);
+            } else {
+                // gh exits non-zero while checks fail or wait, with the list still printed.
+                if let Ok(Value::Array(list)) = serde_json::from_str::<Value>(&res.stdout) {
+                    let items: Vec<Value> = list.iter().map(check_from_gh).collect();
+                    return Ok(checks_result(url, items, "gh"));
+                }
+                if res.stderr.contains("no checks reported") {
+                    return Ok(checks_result(url, Vec::new(), "gh"));
+                }
+                if token.is_none() {
+                    let text = if res.stderr.is_empty() { "gh pr checks failed." } else { &res.stderr };
+                    return Err(js::slice16(js::trim(text), 300).to_string());
+                }
+            }
+        }
+        let base = format!("{}/repos/{slug}", self.api);
+        let pr = self.api_json(&format!("{base}/pulls/{number}"), token).await.ok_or("Could not read the PR.")?;
+        let sha =
+            pr.get("head").and_then(|h| h.get("sha")).and_then(Value::as_str).ok_or("The PR has no head commit.")?;
+        let mut items = Vec::new();
+        if let Some(runs) = self.api_json(&format!("{base}/commits/{sha}/check-runs?per_page=100"), token).await {
+            items.extend(runs.get("check_runs").and_then(Value::as_array).into_iter().flatten().map(check_from_run));
+        }
+        if let Some(st) = self.api_json(&format!("{base}/commits/{sha}/status"), token).await {
+            items.extend(st.get("statuses").and_then(Value::as_array).into_iter().flatten().map(check_from_status));
+        }
+        Ok(checks_result(url, items, "api"))
+    }
+}
+
+const CHECK_FIELDS: &str = "name,state,bucket,link,workflow,description,startedAt,completedAt";
+
+fn str_or_null(v: Option<&Value>) -> Value {
+    v.and_then(Value::as_str).filter(|s| !s.is_empty()).map_or(Value::Null, |s| json!(s))
+}
+
+/// One check as `pr:checks` lists it: `state` is gh's bucket (`pass`,
+/// `fail`, `pending`, `skipping`, `cancel`).
+fn check_item(
+    name: &str,
+    state: &str,
+    workflow: Value,
+    link: Value,
+    description: Value,
+    started: Value,
+    done: Value,
+) -> Value {
+    json!({ "name": name, "state": state, "workflow": workflow, "link": link, "description": description, "startedAt": started, "completedAt": done })
+}
+
+fn check_from_gh(c: &Value) -> Value {
+    let bucket = c.get("bucket").and_then(Value::as_str).unwrap_or_default();
+    let state = match bucket {
+        "pass" | "fail" | "pending" | "skipping" | "cancel" => bucket,
+        _ => "pending",
+    };
+    check_item(
+        c.get("name").and_then(Value::as_str).unwrap_or_default(),
+        state,
+        str_or_null(c.get("workflow")),
+        str_or_null(c.get("link")),
+        str_or_null(c.get("description")),
+        str_or_null(c.get("startedAt")),
+        str_or_null(c.get("completedAt")),
+    )
+}
+
+fn check_from_run(c: &Value) -> Value {
+    let status = c.get("status").and_then(Value::as_str).unwrap_or_default();
+    let conclusion = c.get("conclusion").and_then(Value::as_str).unwrap_or_default();
+    let state = if status != "completed" {
+        "pending"
+    } else {
+        match conclusion {
+            "success" => "pass",
+            "skipped" | "neutral" => "skipping",
+            "cancelled" => "cancel",
+            _ => "fail",
+        }
+    };
+    let workflow = c.get("check_suite").and_then(|s| s.get("app")).and_then(|a| a.get("name"));
+    check_item(
+        c.get("name").and_then(Value::as_str).unwrap_or_default(),
+        state,
+        str_or_null(workflow),
+        str_or_null(c.get("html_url")),
+        str_or_null(c.get("output").and_then(|o| o.get("title"))),
+        str_or_null(c.get("started_at")),
+        str_or_null(c.get("completed_at")),
+    )
+}
+
+fn check_from_status(c: &Value) -> Value {
+    let state = match c.get("state").and_then(Value::as_str).unwrap_or_default() {
+        "success" => "pass",
+        "failure" | "error" => "fail",
+        _ => "pending",
+    };
+    check_item(
+        c.get("context").and_then(Value::as_str).unwrap_or_default(),
+        state,
+        Value::Null,
+        str_or_null(c.get("target_url")),
+        str_or_null(c.get("description")),
+        str_or_null(c.get("created_at")),
+        Value::Null,
+    )
+}
+
+/// `{ url, checks, items, source }`: the rollup reads as the PR card's.
+pub fn checks_result(url: &str, items: Vec<Value>, source: &str) -> Value {
+    let has = |s: &str| items.iter().any(|i| i["state"] == s);
+    let rollup = if has("fail") || has("cancel") {
+        "failing"
+    } else if has("pending") {
+        "pending"
+    } else if items.is_empty() {
+        "none"
+    } else {
+        "passing"
+    };
+    json!({ "url": url, "checks": rollup, "items": items, "source": source })
 }

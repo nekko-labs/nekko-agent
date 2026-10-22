@@ -194,6 +194,19 @@ export interface HookRule {
   timeoutMs?: number;
 }
 
+/** A one-time notice the daemon leaves in settings for the UI to show (`AppSettings.notices`). */
+export interface AppNotice {
+  id: string;
+  title: string;
+  body: string;
+  /** Short follow-up lines under the body. */
+  points?: string[];
+  /** Buttons, by id; the renderer maps each id to what it does. */
+  actions?: Array<{ id: string; label: string }>;
+  /** Epoch milliseconds. */
+  createdAt: number;
+}
+
 export interface AppSettings {
   /** Default on: request provider prompt/KV reuse, never store prompts on disk. */
   promptCaching?: boolean;
@@ -229,6 +242,8 @@ export interface AppSettings {
   defaultModelId?: string;
   /** Show the mascot. */
   mascotEnabled: boolean;
+  /** Draw the moving pixel-dot wave behind themes that have one (Lilac, Lavender, Experimental). On unless set to false. */
+  backgroundAnimation?: boolean;
   /** Desktop close button defaults to keeping work alive in the tray. */
   desktopCloseBehavior?: 'tray' | 'shutdown';
   trayCloseHintSeen?: boolean;
@@ -259,6 +274,12 @@ export interface AppSettings {
   /** Contextual UI tips are enabled by default. */
   showTips?: boolean;
   completionTipSeen?: boolean;
+  /**
+   * One-time notices the engine daemon leaves for the UI (for example
+   * `claude-sign-in-changed`, written by crates/nekkod/src/claude_plan.rs).
+   * The renderer shows each once and removes it from the list when dismissed.
+   */
+  notices?: AppNotice[];
   skipDeleteConfirmation?: boolean;
   /**
    * Let paired phones see a read-only diff of the files the agent changed in a
@@ -311,7 +332,7 @@ export interface AppSettings {
   automationsPaused?: boolean;
   /**
    * Lifecycle hooks: your own commands run around the agent's actions, with
-   * the event as JSON on stdin (see packages/host/src/hooks.ts).
+   * the event as JSON on stdin (see crates/nekko-tools/src/hooks.rs).
    */
   hooks?: HookRule[];
   /**

@@ -1,17 +1,18 @@
 // Chat-turn timings through the engine daemon (PF14).
 //
-// Starts nekkod with the desktop TS backend (Electron as Node, so no window)
-// on an isolated temporary data dir, points a provider at a local
+// Starts nekkod on its own, as the desktop app does, on an isolated temporary
+// data dir, points a provider at a local
 // OpenAI-compatible model server you started, and measures from the UI's
 // side of the wire:
 //   - first text: `chat:send` to the first streamed text event;
 //   - gaps between text events (p50/p95/max);
 //   - approval round trip: `tool:approve` sent to that call's `tool_result`
 //     event, and `tool_approval_required` seen to `tool:approve` answered.
-// `--load N` keeps N loops of host work going meanwhile (context previews and
-// model-library scans), the load earlier PF14 entries measured under.
+// `--load N` keeps N loops of engine work going meanwhile (workspace-index
+// searches by default, or context previews and model-library scans), the load
+// earlier PF14 entries measured under.
 //
-//   npm run build:app && cargo build -p nekkod --release
+//   cargo build -p nekkod --release
 //   node scripts/bench-chat-turn.mjs --model-url http://127.0.0.1:18431/v1 --model gemma \
 //     [--runs 3] [--load 8] [--json out.json]
 //
@@ -20,44 +21,34 @@
 //
 // `--usage N` then checks the turns' usage and reply lines landed in the data
 // dir, seeds the usage log to 20,000 records and times N `usage:summary` calls
-// under the same load (the daemon serves it when it owns accounting; pass
-// `--daemon` an older nekkod to time the TS host's).
+// under the same load.
 //
 // `--mcp` adds a loopback MCP server (one tool, `mcp__bench__lookup`) and a
 // third turn per run that calls it with an approval, timed like write_file:
-// `tool:approve` to its `tool_result` (in the daemon when it runs the turn's
-// MCP servers, through the TS host otherwise).
+// `tool:approve` to its `tool_result`.
 //
 // `--spawn` adds a turn per run that delegates to a sub-agent (`spawn_agent`,
 // approved), timed from `tool:approve` to the parent's `tool_result`, which
 // spans the whole child turn.
 //
-// `--tools` adds two turns per run on tools that used to call back into the
-// TS host: `fetch_url` of a loopback page and `start_process` (both asked
+// `--tools` adds two turns per run: `fetch_url` of a loopback page and `start_process` (both asked
 // for, since the chat is in ask mode), timed from `tool:approve` to their
 // `tool_result`.
 //
 // `--hooks` adds a PreToolUse and a PostToolUse hook on write_file (each
-// `echo`), so the write_file approval's timing includes running them (in the
-// daemon when it runs hooks, through the TS host otherwise).
+// `echo`), so the write_file approval's timing includes running them.
 //
 // `--workspace N` times N rounds of the file explorer and workspace index
 // calls (`workspace:index`, `workspace:search`, `workspace:files`, `dir:list`,
 // `file:read`, `workspace:gitStatus` forced, `design:get`) on the 400-file project and the 2,500-file load project, under
-// the same load. The daemon serves them when it owns them; the load then runs
-// the same search in the host through `bench:hostLoad`, so it still keeps the
-// host's event loop busy.
+// the same load.
 //
 // `--fanout N` (#551) streams N chats at once (`--tokens` text events each,
 // default 200) and counts, per UI socket, the agent frames and bytes it
 // receives: N `/api/ws` sockets each subscribed to one chat
 // (`daemon:subscribe`; an older daemon answers it with an error and keeps
-// sending everything) and one that never subscribes. It also counts what the
-// TS backend receives meanwhile (request bytes by channel, `turn:event`
-// among them) and writes on its `/api/events` socket, through
-// scripts/bench-wire-meter.cjs loaded into it, so `--daemon`/`--backend` of
-// an older build measure the same way. Each subscribed socket must see its
-// own chat's whole reply, once.
+// sending everything) and one that never subscribes. Each subscribed socket
+// must see its own chat's whole reply, once.
 //
 // Nothing touches the user's data directory or a running app; every spawned
 // process is ended on exit.
@@ -66,15 +57,11 @@ import { createServer } from 'node:http';
 import { appendFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { createRequire } from 'node:module';
 import { randomBytes } from 'node:crypto';
 
 const args = Object.fromEntries(process.argv.slice(2).reduce((acc, a, i, all) => (a.startsWith('--') ? [...acc, [a.slice(2), all[i + 1]?.startsWith('--') || all[i + 1] === undefined ? 'true' : all[i + 1]]] : acc), []));
 const root = resolve(import.meta.dirname, '..');
-const require = createRequire(join(root, 'apps', 'desktop', 'package.json'));
-const electron = args.electron ?? require('electron');
 const daemonExe = args.daemon ?? join(root, 'target', 'release', process.platform === 'win32' ? 'nekkod.exe' : 'nekkod');
-const backendJs = args.backend ?? join(root, 'apps', 'desktop', 'out', 'main', 'backend.js');
 const runs = Number(args.runs ?? 3);
 const load = Number(args.load ?? 0);
 let modelUrl = args['model-url'] ?? 'http://127.0.0.1:18431/v1';
@@ -163,8 +150,8 @@ const workspace = join(data, 'project');
 mkdirSync(workspace, { recursive: true });
 writeFileSync(join(workspace, 'AGENTS.md'), 'Keep answers short.\n');
 for (let i = 0; i < 400; i++) writeFileSync(join(workspace, `file${i}.ts`), `export const value${i} = ${i};\n`);
-// The load's own project: an index search over it reads every file on the
-// host's event loop (workspace.ts searchWorkspace), a realistic way to keep it busy.
+// The load's own project: an index search over it reads every file, a
+// realistic way to keep the engine busy.
 const loadProject = join(data, 'load-project');
 mkdirSync(loadProject, { recursive: true });
 const filler = 'const nothing = "here";\n'.repeat(80);
@@ -183,13 +170,9 @@ function cleanup() {
 process.on('exit', cleanup);
 process.on('SIGINT', () => process.exit(130));
 
-const meterFile = join(data, 'wire-meter.json');
 function startDaemon() {
-  const env = { ELECTRON_RUN_AS_NODE: '1', NEKKO_BACKEND_DATA_DIR: data, NEKKO_BACKEND_APP: '{}', NEKKO_BACKEND_ORIGINS: '["null"]', NEKKO_BENCH_LOAD: '1' };
-  if (args.fanout) env.NEKKO_BENCH_METER = meterFile;
-  const backendArgs = args.fanout ? ['--require', join(root, 'scripts', 'bench-wire-meter.cjs'), backendJs] : [backendJs];
-  // As the desktop app starts it (engine-process.ts): its host lets the agent drive a browser.
-  const config = { token, allowedOrigins: ['null'], dataDir: data, allowBrowserControl: true, backend: { exe: electron, args: backendArgs, env } };
+  // As the desktop app starts it (engine-process.ts), with no backend.
+  const config = { token, allowedOrigins: ['null'], dataDir: data, allowBrowserControl: true };
   const child = spawn(daemonExe, [], { env: { ...process.env, NEKKOD_CONFIG: JSON.stringify(config) }, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
   children.push(child);
   child.stderr.on('data', (d) => { if (args.verbose) process.stderr.write(d); });
@@ -226,16 +209,8 @@ ws.onmessage = (m) => {
   for (const l of listeners) l(frame.payload, at);
 };
 
-// Wait for the backend: the daemon answers settings itself, so ask it whether
-// its TS backend is up (the host adjusts the engine's provider entry as it starts).
-for (let i = 0; ; i++) {
-  try {
-    if ((await call('daemon:info')).backend === 'ready') { await call('settings:get'); break; }
-  } catch (e) { if (i > 120) throw e; }
-  if (i > 120) throw new Error('the backend never became ready');
-  await new Promise((r) => setTimeout(r, 500));
-}
-// Let the host's startup writes (the engine provider entry) land before ours.
+await call('settings:get');
+// Let the daemon's startup writes (the engine provider entry) land before ours.
 await new Promise((r) => setTimeout(r, 1000));
 await call('settings:update', {
   workspaces: [{ id: 'w1', name: 'project', path: workspace, addedAt: Date.now() }, { id: 'w2', name: 'load', path: loadProject, addedAt: Date.now() }],
@@ -258,8 +233,6 @@ if (load > 0) {
 const info = await call('daemon:info');
 console.log(`daemon owns chat:turn=${info.owned.includes('chat:turn')} load=${load}`);
 
-// The host-side search keeps the host busy whoever serves `workspace:search`.
-const loadSearch = info.owned.includes('workspace:search') ? 'bench:hostLoad' : 'workspace:search';
 let busy = load > 0;
 let loadCalls = 0;
 const loadMs = [];
@@ -267,7 +240,7 @@ async function loadLoop(sessionId) {
   while (busy) {
     const t0 = performance.now();
     const kind = args['load-kind'] ?? 'search';
-    if (kind === 'search') await call(loadSearch, 'w2', 'zzz-no-match').catch(() => {});
+    if (kind === 'search') await call('workspace:search', 'w2', 'zzz-no-match').catch(() => {});
     else await Promise.all([kind !== 'folders' ? call('context:preview', sessionId, []).catch(() => {}) : null, kind !== 'preview' ? call('engine:folders').catch(() => {}) : null]);
     loadMs.push(performance.now() - t0);
     loadCalls++;
@@ -380,10 +353,7 @@ async function fanout(n) {
   const sockets = [];
   for (const sid of sessions) sockets.push(await meteredSocket(sid));
   sockets.push(await meteredSocket(null));
-  await new Promise((r) => setTimeout(r, 500));
-  const meterAt = () => (existsSync(meterFile) ? JSON.parse(readFileSync(meterFile, 'utf8')) : { in: {}, inFrames: {}, out: {}, outWrites: {} });
-  await new Promise((r) => setTimeout(r, 400));
-  const before = meterAt();
+  await new Promise((r) => setTimeout(r, 900));
   for (const s of sockets) s.m.counting = true;
   const t0 = performance.now();
   await Promise.all(sessions.map((sid) => call('chat:send', { sessionId: sid, providerId: 'local', modelId: model, text: `Write about cats, chat ${sid}. Do not use any tools.` })));
@@ -392,8 +362,6 @@ async function fanout(n) {
   for (let i = 0; i < 100 && !allDone(); i++) await new Promise((r) => setTimeout(r, 100));
   await new Promise((r) => setTimeout(r, 1500));
   const elapsed = performance.now() - t0;
-  const after = meterAt();
-  const diff = (a, b) => Object.fromEntries(Object.keys({ ...a, ...b }).map((k) => [k, (b[k] ?? 0) - (a[k] ?? 0)]).filter(([, v]) => v));
   const expected = Array.from({ length: Number(args.tokens ?? 40) }, (_, i) => `tok${i} `).join('');
   const subscribed = sockets.slice(0, n).map((s) => s.m);
   const everything = sockets[n].m;
@@ -405,12 +373,9 @@ async function fanout(n) {
     subscribedAs: subscribed[0].subscribed,
     perSubscribedSocket: { frames: avg((m) => m.frames), bytes: avg((m) => m.bytes), agentFrames: avg((m) => m.agentFrames), agentBytes: avg((m) => m.agentBytes), ownChatFrames: avg((m) => m.ownFrames), replays: avg((m) => m.replays) },
     unsubscribedSocket: { frames: everything.frames, bytes: everything.bytes, agentFrames: everything.agentFrames, agentBytes: everything.agentBytes },
-    backend: { requestBytes: diff(before.in, after.in), requests: diff(before.inFrames, after.inFrames), socketBytesOut: diff(before.out, after.out), socketWrites: diff(before.outWrites, after.outWrites) },
     everyReplyWholeAndOnce: ok,
     elapsedMs: Math.round(elapsed),
   };
-  out.backend.turnEventBytesPerTurn = (out.backend.requestBytes['turn:event'] ?? 0) / n;
-  out.backend.eventsSocketBytesPerTurn = (out.backend.socketBytesOut['/api/events'] ?? 0) / n;
   console.log(JSON.stringify(out, null, 2));
   for (const s of sockets) s.sock.close();
   if (!ok) {

@@ -9,6 +9,10 @@ enum Route: Hashable {
     case settings
     case pair
     case connection
+    case automations
+    case usage
+    case files
+    case logs
 }
 
 struct RootView: View {
@@ -18,6 +22,8 @@ struct RootView: View {
     @Environment(\.palette) private var palette
     @State private var path: [Route] = []
     @State private var selected: Route?
+    /// First run: step 1 was passed with Continue (this launch).
+    @State private var introDone = false
     @Environment(\.horizontalSizeClass) private var size
 
     var body: some View {
@@ -58,6 +64,10 @@ struct RootView: View {
         .sheet(item: Binding(get: { covered ? nil : app.pendingLink.map(LinkBox.init) }, set: { app.pendingLink = $0?.link })) { box in
             ConfirmPairSheet(link: box.link) { path = [] }
         }
+        // First run, step 3: right after the first pairing.
+        .fullScreenCover(isPresented: Binding(get: { app.showNotificationStep && !covered }, set: { if !$0 { app.showNotificationStep = false } })) {
+            NotificationStepView()
+        }
     }
 
     /// A cold launch from the control waits until the computers are loaded.
@@ -73,7 +83,9 @@ struct RootView: View {
         if !store.ready && !(app.prefs.appLock && app.lock.locked) {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity).background(palette.paper)
         } else if store.computers.isEmpty {
-            NavigationStack { WelcomeView() }
+            NavigationStack {
+                if app.prefs.onboarded || introDone { WelcomeView() } else { FirstRunIntroView { introDone = true } }
+            }
         } else if size == .regular {
             // iPad and large landscape: chats in the sidebar, the selected one beside it.
             NavigationSplitView {
@@ -106,6 +118,10 @@ struct RootView: View {
         case .settings: SettingsView()
         case .pair: PairView { path.removeAll() }
         case .connection: ConnectionView()
+        case .automations: AutomationsView()
+        case .usage: UsageView()
+        case .files: FoldersView()
+        case .logs: LogsView()
         }
     }
 
@@ -181,6 +197,27 @@ struct CatMark: View {
     }
 }
 
+/// The phone and the computer speak different protocol versions (IO-32): which side to update.
+struct ProtocolBanner: View {
+    @Environment(ComputersStore.self) private var store
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        if let text = store.protocolCheck.message(computer: store.active?.name ?? "your computer") {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "arrow.triangle.2.circlepath.circle").foregroundStyle(palette.warning)
+                    .accessibilityHidden(true)
+                Text(text).font(.footnote).foregroundStyle(palette.ink).fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .padding(12)
+            .background(palette.warning.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("protocol-banner")
+        }
+    }
+}
+
 /// Connection state for the active computer, with the reason when it isn't online.
 struct ConnectionBanner: View {
     @Environment(AppModel.self) private var app
@@ -191,7 +228,16 @@ struct ConnectionBanner: View {
         if let l = line {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: l.icon).foregroundStyle(l.color)
-                Text(l.text).font(.footnote).foregroundStyle(palette.ink).fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(l.text).font(.footnote).foregroundStyle(palette.ink).fixedSize(horizontal: false, vertical: true)
+                    // iOS doesn't let an app turn the VPN on; this is the shortest way to the switch (TS-4).
+                    if app.offersTailscale {
+                        Button("Open Tailscale") { app.openTailscale() }
+                            .font(.footnote.weight(.semibold))
+                            .accessibilityIdentifier("open-tailscale")
+                            .accessibilityHint("Opens the Tailscale app, or the App Store if it isn’t installed.")
+                    }
+                }
                 Spacer(minLength: 0)
                 if store.conn == .connecting || store.conn == .offline {
                     Button("Retry") { store.reconnect() }.font(.footnote.weight(.semibold))
@@ -204,16 +250,23 @@ struct ConnectionBanner: View {
         }
     }
 
+    /// The outbox, in a sentence: what is written here goes when the computer is back.
+    private var waitingNote: String {
+        let n = store.outbox.count
+        if n == 0 { return "" }
+        return n == 1 ? " 1 prompt waits on this iPhone and goes when it’s back." : " \(n) prompts wait on this iPhone and go when it’s back."
+    }
+
     private var line: (text: String, color: Color, icon: String)? {
         let name = store.active?.name ?? "Your computer"
         switch store.conn {
         case .online, .idle:
             return nil
         case .connecting:
-            if let hint = app.tailnetHint { return (hint, palette.warning, "network.slash") }
-            return ("Connecting to \(name)…" + (store.connDetail.map { " (\($0))" } ?? ""), palette.running, "arrow.triangle.2.circlepath")
+            if let hint = app.tailnetHint { return (hint + waitingNote, palette.warning, "network.slash") }
+            return ("Connecting to \(name)…" + (store.connDetail.map { " (\($0))" } ?? "") + waitingNote, palette.running, "arrow.triangle.2.circlepath")
         case .offline:
-            return ("\(name) is offline. Open Nekko Agent on it, with Remote access on. This phone keeps trying.", palette.warning, "moon.zzz")
+            return ("\(name) is offline. Open Nekko Agent on it, with Remote access on. This phone keeps trying." + waitingNote, palette.warning, "moon.zzz")
         case .denied:
             let why: String
             switch store.denied {

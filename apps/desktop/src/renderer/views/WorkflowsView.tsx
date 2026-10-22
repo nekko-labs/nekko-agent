@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type {
+  SkillDef,
   Workflow,
   WorkflowFilter,
   WorkflowGrouping,
@@ -78,7 +79,10 @@ const isRunnerRun = (r: WorkflowRun): boolean =>
 
 export function WorkflowsView() {
   const pushToast = useStore((s) => s.pushToast);
-  const skills = useStore((s) => s.installedSkillDefs);
+  const installedSkills = useStore((s) => s.installedSkillDefs);
+  /** What a skill step can run: built-in, installs, other tools' and Claude Code plugins' (read when the editor or a template opens). */
+  const [skillDefs, setSkillDefs] = useState<SkillDef[] | null>(null);
+  const skills = skillDefs ?? installedSkills;
   const [snapshot, setSnapshot] = useState<WorkflowsSnapshot>({ workflows: [], runs: [] });
   const [filter, setFilter] = useState<WorkflowFilter>({});
   const [grouping, setGrouping] = useState<WorkflowGrouping>('category');
@@ -97,6 +101,13 @@ export function WorkflowsView() {
     void window.nekko.listWorkflows().then(setSnapshot).catch(() => {});
     return window.nekko.onWorkflowsUpdated(setSnapshot);
   }, []);
+
+  // Re-read each time a sheet opens: a plugin enabled meanwhile shows up.
+  const sheetOpen = !!(creating || editing || setup);
+  useEffect(() => {
+    if (!sheetOpen) return;
+    void window.nekko.listWorkflowSkillDefs?.().then(setSkillDefs).catch(() => {});
+  }, [sheetOpen]);
 
   useEffect(() => {
     if (!workflowFocus) return;
@@ -400,6 +411,7 @@ export function WorkflowsView() {
       {setup && (
         <TemplateSetup
           template={setup}
+          skills={skills}
           onClose={() => setSetup(null)}
           onCustomize={(seed) => { setSetup(null); setCreating({ seed }); }}
           onTurnOn={async (input) => {

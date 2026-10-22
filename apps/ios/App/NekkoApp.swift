@@ -3,12 +3,26 @@ import SwiftUI
 import UIKit
 
 final class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        OutboxRefresh.register()
+        return true
+    }
+
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         MainActor.assumeIsolated { AppModel.shared.didRegister(deviceToken: deviceToken) }
     }
 
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
         // Push is optional: the relay's content-free "finished" pings just won't arrive.
+    }
+
+    /// The relay's silent push after an approval or a question was handled
+    /// elsewhere: remove that chat's needs-you notification (IO-30).
+    func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any]) async
+        -> UIBackgroundFetchResult {
+        guard let tag = userInfo["dismiss"] as? String else { return .noData }
+        await Notifier.dismissNeedsYou(tag: tag)
+        return .newData
     }
 
     /// Only so the Home Screen quick action reaches the app (QuickActionScene).
