@@ -166,7 +166,17 @@ async fn prepare_sub_agent(
     // What the child takes from its parent: its tool policy, and nothing it switched off.
     let mut fields: Vec<(&'static str, Value)> =
         vec![("title", json!(title)), ("providerId", target_provider.clone()), ("modelId", target_model.clone())];
-    for key in ["mode", "disabledTools", "disabledMcpServers", "disabledConnectors", "effort", "offline", "incognito"] {
+    for key in [
+        "mode",
+        "disabledTools",
+        "disabledMcpServers",
+        "disabledConnectors",
+        "effort",
+        "memory",
+        "guidance",
+        "offline",
+        "incognito",
+    ] {
         if let Some(v) = parent.get(key) {
             fields.push((key, v.clone()));
         }

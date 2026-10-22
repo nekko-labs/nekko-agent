@@ -7,6 +7,8 @@
 //!   gets its provenance records and token counts.
 //! - `gather`: what feeds them from disk, from packages/host: guideline files
 //!   in the workspace roots, attached files, and memory notes.
+//! - `rules`: rule folders and subfolder guides beyond the root files, with
+//!   an index for the ones that load on demand (`Session.guidance`).
 //!
 //! Connector fetches and workspace-index search stay in the TS host until the
 //! loop moves; they arrive here as ready snippets.
@@ -20,7 +22,9 @@ pub mod assemble;
 pub mod gather;
 pub mod nodepath;
 pub mod prompt;
+pub mod rules;
 
 pub use assemble::{AssembleInput, Bundle, Item, assemble, render_block};
-pub use gather::{Guideline, collect_attached, collect_guidelines, list_memory, parse_memory};
+pub use gather::{Guideline, MemoryScope, collect_attached, collect_guidelines, list_memory, parse_memory};
 pub use prompt::{PromptContext, Workspace, build_system_prompt};
+pub use rules::{Guidance, ProjectGuidance, collect_rules, project_guidance};

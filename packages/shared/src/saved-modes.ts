@@ -1,8 +1,8 @@
 /**
  * Saved modes: named bundles of a chat's settings (where it runs, worktrees,
  * approvals, internet, incognito, tools, work mode, effort, MCP servers,
- * connectors) that the composer's Mode panel applies in one click. One may be
- * the default for new chats.
+ * connectors, memory, project guidance) that the composer's Mode panel applies in one click. One may be
+ * the default for new chats. Memory and project guidance ride along too.
  *
  * A saved mode is only a shortcut for settings that already exist per chat.
  * It adds no permission of its own: applying one is the same as flipping each
@@ -12,7 +12,7 @@
  * Folders are not part of a mode. They belong to the task, not the way of
  * working, so switching modes never re-wires a chat's folders.
  */
-import type { ChatMode, ExecutionMode, Session } from './chat.js';
+import type { ChatMode, ExecutionMode, GuidanceLevel, ChatMemory, Session } from './chat.js';
 import { getExecutionMode } from './chat.js';
 import { chatEffort } from './chat-scope.js';
 import type { EffortLevel } from './settings.js';
@@ -40,6 +40,10 @@ export interface SavedModeOptions {
   disabledMcpServers?: string[];
   /** Connector kinds switched off for the chat, sorted. Unset (older modes) matches any and changes nothing. */
   disabledConnectors?: string[];
+  /** Which memory notes the chat takes. Unset (older modes) matches any and changes nothing. */
+  memory?: ChatMemory;
+  /** How much project guidance the chat takes. Unset (older modes) matches any and changes nothing. */
+  guidance?: GuidanceLevel;
 }
 
 export interface SavedMode {
@@ -70,7 +74,7 @@ export function defaultSavedMode(settings: ModeSettings | null | undefined): Sav
   return id ? savedModes(settings).find((m) => m.id === id) : undefined;
 }
 
-type ChatSettings = Pick<Session, 'executionMode' | 'gitIsolation' | 'mode' | 'offline' | 'incognito' | 'disabledTools' | 'workMode' | 'effort' | 'disabledMcpServers' | 'disabledConnectors'>;
+type ChatSettings = Pick<Session, 'executionMode' | 'gitIsolation' | 'mode' | 'offline' | 'incognito' | 'disabledTools' | 'workMode' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' | 'memory' | 'guidance'>;
 
 /** A chat's current settings in saved-mode form. */
 export function sessionModeOptions(session: ChatSettings, settings?: ModeSettings | null): SavedModeOptions {
@@ -86,6 +90,8 @@ export function sessionModeOptions(session: ChatSettings, settings?: ModeSetting
     ...(chatEffort(session, settings?.effort) ? { effort: chatEffort(session, settings?.effort) } : {}),
     disabledMcpServers: [...(session.disabledMcpServers ?? [])].sort(),
     disabledConnectors: [...(session.disabledConnectors ?? [])].sort(),
+    memory: session.memory ?? 'all',
+    guidance: session.guidance ?? 'rules',
   };
 }
 
@@ -106,6 +112,8 @@ export function sameModeOptions(a: SavedModeOptions, b: SavedModeOptions): boole
   if (a.effort && b.effort && a.effort !== b.effort) return false;
   if (a.disabledMcpServers && b.disabledMcpServers && !sameList(a.disabledMcpServers, b.disabledMcpServers)) return false;
   if (a.disabledConnectors && b.disabledConnectors && !sameList(a.disabledConnectors, b.disabledConnectors)) return false;
+  if (a.memory && b.memory && a.memory !== b.memory) return false;
+  if (a.guidance && b.guidance && a.guidance !== b.guidance) return false;
   return sameList(a.disabledTools, b.disabledTools);
 }
 
@@ -116,6 +124,8 @@ export function matchSavedMode(modes: SavedMode[], current: SavedModeOptions): S
     effort: m.options.effort ?? current.effort,
     disabledMcpServers: m.options.disabledMcpServers ?? current.disabledMcpServers,
     disabledConnectors: m.options.disabledConnectors ?? current.disabledConnectors,
+    memory: m.options.memory ?? current.memory,
+    guidance: m.options.guidance ?? current.guidance,
   }, current));
 }
 
@@ -136,13 +146,15 @@ export function sessionPatchForMode(options: SavedModeOptions, opts: { cloudMode
     ...(options.effort ? { effort: options.effort } : {}),
     ...(options.disabledMcpServers ? { disabledMcpServers: [...options.disabledMcpServers] } : {}),
     ...(options.disabledConnectors ? { disabledConnectors: [...options.disabledConnectors] } : {}),
+    ...(options.memory ? { memory: options.memory } : {}),
+    ...(options.guidance ? { guidance: options.guidance } : {}),
   };
 }
 
 /** A short line for the rail: where it runs, then anything unusual. */
 export function savedModeSummary(options: SavedModeOptions): string {
   const where = options.executionMode === 'sandbox' ? 'sandbox' : options.executionMode === 'worktree' ? 'worktree' : 'local';
-  return [where, options.mode === 'guardrails' ? '' : options.mode, options.offline ? 'offline' : '', options.incognito ? 'incognito' : '', options.effort === 'normal' ? '' : options.effort ?? ''].filter(Boolean).join(' · ');
+  return [where, options.mode === 'guardrails' ? '' : options.mode, options.offline ? 'offline' : '', options.incognito ? 'incognito' : '', options.effort === 'normal' ? '' : options.effort ?? '', options.memory && options.memory !== 'all' ? `memory ${options.memory}` : '', options.guidance && options.guidance !== 'rules' ? `rules ${options.guidance}` : ''].filter(Boolean).join(' · ');
 }
 
 /** A fresh id for a mode the user is saving, unique among `modes`. */

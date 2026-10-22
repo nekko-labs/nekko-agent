@@ -40,7 +40,9 @@ describe('Mode panel markup', () => {
   it('marks the matching saved mode and the planned settings', () => {
     const out = html();
     expect(out).toMatch(/aria-checked="true"[^>]*data-saved-mode="everyday"/);
-    expect(out.match(/Coming soon/g)).toHaveLength(3);
+    expect(out.match(/Coming soon/g)).toHaveLength(2);
+    expect(out).toMatch(/aria-checked="true"[^>]*data-memory="all"/);
+    expect(out).toMatch(/aria-checked="true"[^>]*data-guidance="rules"/);
     expect(out).toMatch(/data-chat-mode="guardrails"|aria-checked="true"[^>]*data-chat-mode="guardrails"/);
   });
   it('counts MCP servers and connectors this chat sees', () => {

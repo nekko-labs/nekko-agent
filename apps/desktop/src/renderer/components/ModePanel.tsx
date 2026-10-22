@@ -1,6 +1,6 @@
 import React, { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import type { ChatMode, EffortLevel, ExecutionMode, SavedMode, SavedModeIcon, Session, WorkModeId } from '@nekko-agent/shared';
+import type { ChatMode, EffortLevel, ExecutionMode, GuidanceLevel, ChatMemory, SavedMode, SavedModeIcon, Session, WorkModeId } from '@nekko-agent/shared';
 import {
   CONNECTOR_CATALOG, WORK_MODES, chatEffort, defaultSavedMode, getExecutionMode, getSessionWorkspaceIds, getWorkMode, matchSavedMode, newSavedModeId,
   savedModeSummary, savedModes, sessionModeOptions, sessionPatchForMode,
@@ -11,7 +11,7 @@ import { EFFORT_LABEL, effortRungs } from './ChatMetrics.js';
 import { ToolsList, toolCounts, useChatTools } from './ChatControls.js';
 import {
   BoltIcon, BrainIcon, CapIcon, CheckIcon, ChevronIcon, CloseIcon, CompassIcon, CubeIcon, DialIcon, DocTextIcon, EffortBarsIcon,
-  ExternalIcon, FolderIcon, GaugeIcon, GlobeIcon, GlobeOffIcon, HandIcon, IncognitoIcon, LaptopIcon, LockIcon, PlugIcon, PlusIcon,
+  ExternalIcon, FileIcon, FolderIcon, GaugeIcon, ListIcon, GlobeIcon, GlobeOffIcon, HandIcon, IncognitoIcon, LaptopIcon, LockIcon, PlugIcon, PlusIcon,
   RouteIcon, ServerIcon, ShieldCheckIcon, ShieldIcon, SparkleIcon, StarIcon, WorktreeIcon, WrenchIcon, BoltIcon as YoloIcon,
 } from '../icons.js';
 
@@ -19,6 +19,18 @@ const WORKTREE_DOCS = 'https://git-scm.com/docs/git-worktree';
 
 export const SAVED_MODE_GLYPH: Record<SavedModeIcon, (p: { className?: string }) => React.ReactElement> = {
   bolt: BoltIcon, dial: DialIcon, incognito: IncognitoIcon, box: CubeIcon, cap: CapIcon, sparkle: SparkleIcon, shield: ShieldIcon, 'globe-off': GlobeOffIcon,
+};
+
+const MEMORY_DESC: Record<ChatMemory, string> = {
+  all: 'Your global notes and the notes for this chat\'s folders.',
+  project: 'Only the notes for this chat\'s folders.',
+  off: 'No memory notes in this chat.',
+};
+
+const GUIDANCE_DESC: Record<GuidanceLevel, string> = {
+  rules: 'AGENTS.md and its kin, plus the rule folders of Cursor, Claude, Kiro, Windsurf and Copilot. Scoped rules load when they apply.',
+  root: 'Only AGENTS.md, CLAUDE.md and the other guideline files at each folder\'s root.',
+  off: 'No project guidance. For a repository whose instructions you do not trust.',
 };
 
 const APPROVAL_DESC: Record<ChatMode, string> = {
@@ -82,6 +94,14 @@ export function modePanelActions({ session, isCloudModel, onChange, onSandboxSet
     /** This chat's effort; `null` goes back to the app-wide one. */
     async setEffort(effort: EffortLevel | null) {
       try { await patchChat({ effort: effort as EffortLevel }); } catch (e) { toastError(e); }
+    },
+    /** Which memory notes this chat takes. */
+    async setMemory(memory: ChatMemory) {
+      try { await patchChat({ memory }); } catch (e) { toastError(e); }
+    },
+    /** How much project guidance this chat takes. */
+    async setGuidance(guidance: GuidanceLevel) {
+      try { await patchChat({ guidance }); } catch (e) { toastError(e); }
     },
     /** Offer or withhold one MCP server's tools in this chat. It keeps running for other chats. */
     async setMcpServer(id: string, on: boolean) {
@@ -384,7 +404,18 @@ export function ModePanel({
             {flyRow('skills', <SparkleIcon />, 'Skills', workMode.label)}
             <p className="mode-s mode-under">{workMode.id === 'default' ? 'No extra skills. Pick a work mode to bring its skills along.' : `${workMode.description} Applies ${WORK_MODES.find((m) => m.id === workMode.id)!.skills.map((n) => `/${n}`).join(', ')}.`}</p>
             {soon(<DocTextIcon />, 'System prompt', 'Pick a saved prompt per chat and open it to edit.')}
-            {soon(<BrainIcon />, 'Memory', 'Choose what this chat remembers: nothing, this chat, the project, or everything.')}
+            <div className={`mode-row is-stacked ${sandbox ? 'is-disabled' : ''}`}>
+              <span className="mode-ic"><ListIcon /></span>
+              <span className="min-w-0 flex-1"><span className="mode-t">Project rules</span><span className="mode-s">{sandbox ? 'Off in Sandbox, which reads nothing from your folders.' : GUIDANCE_DESC[current.guidance ?? 'rules']}</span></span>
+              {tiles<GuidanceLevel>('Project rules', current.guidance ?? 'rules', [['rules', 'Rules', <ListIcon />, { 'data-guidance': 'rules' }], ['root', 'Root files', <FileIcon />, { 'data-guidance': 'root' }], ['off', 'Off', <CloseIcon />, { 'data-guidance': 'off' }]],
+                (v) => void (!sandbox && actions.setGuidance(v)))}
+            </div>
+            <div className={`mode-row is-stacked ${sandbox || session.incognito ? 'is-disabled' : ''}`}>
+              <span className="mode-ic"><BrainIcon /></span>
+              <span className="min-w-0 flex-1"><span className="mode-t">Memory</span><span className="mode-s">{sandbox ? 'Off in Sandbox.' : session.incognito ? 'Off while incognito: an incognito chat reads no memory notes.' : MEMORY_DESC[current.memory ?? 'all']}</span></span>
+              {tiles<ChatMemory>('Memory', current.memory ?? 'all', [['all', 'Everything', <BrainIcon />, { 'data-memory': 'all' }], ['project', 'Project', <FolderIcon />, { 'data-memory': 'project' }], ['off', 'Off', <CloseIcon />, { 'data-memory': 'off' }]],
+                (v) => void (!sandbox && actions.setMemory(v)))}
+            </div>
           </section>
         </div></div>
       </div>
