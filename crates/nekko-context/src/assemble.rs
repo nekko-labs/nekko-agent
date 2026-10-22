@@ -10,6 +10,8 @@ pub struct AssembleInput<'a> {
     pub attached: Vec<(String, String)>,
     /// Guideline files from the workspace roots: (path, content).
     pub guidelines: Vec<(String, String)>,
+    /// Indexes of the project rules left out of the context: (folder, text).
+    pub rule_indexes: Vec<(String, String)>,
     /// Memory notes, as `parse_memory` returns them.
     pub memory: Vec<Value>,
     /// Connector snippets: (label, origin, body).
@@ -156,6 +158,9 @@ pub fn assemble(input: AssembleInput) -> Bundle {
     }
     for (path, content) in &input.guidelines {
         push("guideline", format!("guideline:{path}"), basename(path), path.clone(), content);
+    }
+    for (root, text) in &input.rule_indexes {
+        push("guideline", format!("guideline:rules:{root}"), "Project rules index".into(), root.clone(), text);
     }
     for (path, content) in &input.attached {
         push("attached-file", format!("file:{path}"), basename(path), path.clone(), content);

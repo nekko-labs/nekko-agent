@@ -98,6 +98,18 @@ describe('saved modes', () => {
     expect(older).not.toHaveProperty('disabledConnectors');
   });
 
+  it('carries memory and project rules, and lets an older mode without them match any', () => {
+    expect(sessionModeOptions({})).toMatchObject({ memory: 'all', guidance: 'rules' });
+    const chat = sessionModeOptions({ executionMode: 'worktree', mode: 'guardrails', cloudOnly: true, memory: 'project', guidance: 'root' });
+    const focused = { id: 'focused', name: 'Focused', icon: 'dial' as const, options: { ...STARTER_MODES[0].options, memory: 'off' as const, guidance: 'root' as const } };
+    expect(matchSavedMode([focused], chat)).toBeUndefined();
+    expect(matchSavedMode([focused], { ...chat, memory: 'off' })?.id).toBe('focused');
+    expect(matchSavedMode(STARTER_MODES, chat)?.id).toBe('cloud');
+    expect(sessionPatchForMode(focused.options)).toMatchObject({ memory: 'off', guidance: 'root' });
+    expect(sessionPatchForMode(STARTER_MODES[0].options)).not.toHaveProperty('memory');
+    expect(savedModeSummary(focused.options)).toBe('worktree · cloud models · memory off · rules root');
+  });
+
   it('summarizes and names modes', () => {
     expect(STARTER_MODES.map((m) => savedModeSummary(m.options))).toEqual(['worktree · cloud models', 'worktree · local + cloud', 'worktree · local models', 'sandbox · ask · no network']);
     expect(savedModeSummary({ ...starter('cloud').options, models: undefined, mode: 'yolo', offline: true, effort: 'high' })).toBe('worktree · yolo · offline · high');

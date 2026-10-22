@@ -105,7 +105,7 @@ What the model sees: Context Inspector, modes, work modes, rules, memory, specs.
 
 - [Context, guardrails & memory (the differentiators)](context/context-guardrails-memory-the-differentiators.md) (5 KB)
 - [Living spec from a conversation](context/living-spec-from-a-conversation.md) (1 KB)
-- [Mode panel and saved modes (2026-10-17)](context/mode-panel-and-saved-modes.md) (5 KB)
+- [Mode panel and saved modes (2026-10-17)](context/mode-panel-and-saved-modes.md) (8 KB)
 - [Privacy Shield: control what a cloud model receives](context/privacy-shield.md) (4 KB)
 - [Seeing exactly what the model gets (Context Inspector)](context/seeing-exactly-what-the-model-gets-context-inspector.md) (2 KB)
 - [Work Modes: a better chat in one click (2026-10-17)](context/work-modes-a-better-chat-in-one-click.md) (3 KB)

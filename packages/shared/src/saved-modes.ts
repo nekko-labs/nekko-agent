@@ -1,7 +1,7 @@
 /**
  * Saved modes: named bundles of a chat's settings (where it runs, worktrees,
  * approvals, internet, incognito, tools, work mode, effort, MCP servers,
- * connectors, where its models run) that the composer's Mode panel applies in one click. One may be
+ * connectors, where its models run, memory, project guidance) that the composer's Mode panel applies in one click. One may be
  * the default for new chats.
  *
  * A saved mode is only a shortcut for settings that already exist per chat.
@@ -12,7 +12,7 @@
  * Folders are not part of a mode. They belong to the task, not the way of
  * working, so switching modes never re-wires a chat's folders.
  */
-import type { ChatMode, ExecutionMode, Session } from './chat.js';
+import type { ChatMode, ExecutionMode, GuidanceLevel, ChatMemory, Session } from './chat.js';
 import { getExecutionMode } from './chat.js';
 import { chatEffort } from './chat-scope.js';
 import type { EffortLevel } from './settings.js';
@@ -54,6 +54,10 @@ export interface SavedModeOptions {
   disabledConnectors?: string[];
   /** Where the chat's models run. Unset (older modes) matches any and changes nothing. */
   models?: ModelScope;
+  /** Which memory notes the chat takes. Unset (older modes) matches any and changes nothing. */
+  memory?: ChatMemory;
+  /** How much project guidance the chat takes. Unset (older modes) matches any and changes nothing. */
+  guidance?: GuidanceLevel;
 }
 
 export interface SavedMode {
@@ -89,7 +93,7 @@ export function defaultSavedMode(settings: ModeSettings | null | undefined): Sav
   return id ? savedModes(settings).find((m) => m.id === id) : undefined;
 }
 
-type ChatSettings = Pick<Session, 'executionMode' | 'gitIsolation' | 'mode' | 'offline' | 'cloudOnly' | 'incognito' | 'disabledTools' | 'workMode' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' | 'autoModel' | 'autoProviderSwitch'>;
+type ChatSettings = Pick<Session, 'executionMode' | 'gitIsolation' | 'mode' | 'offline' | 'cloudOnly' | 'incognito' | 'disabledTools' | 'workMode' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' | 'autoModel' | 'autoProviderSwitch' | 'memory' | 'guidance'>;
 
 /** Where a chat's models run, when its settings pin it; unset when they do not. */
 export function chatModelScope(session: Pick<ChatSettings, 'offline' | 'cloudOnly' | 'autoModel' | 'autoProviderSwitch'>): ModelScope | undefined {
@@ -115,6 +119,8 @@ export function sessionModeOptions(session: ChatSettings, settings?: ModeSetting
     disabledMcpServers: [...(session.disabledMcpServers ?? [])].sort(),
     disabledConnectors: [...(session.disabledConnectors ?? [])].sort(),
     ...(models ? { models } : {}),
+    memory: session.memory ?? 'all',
+    guidance: session.guidance ?? 'rules',
   };
 }
 
@@ -140,6 +146,8 @@ export function sameModeOptions(a: SavedModeOptions, b: SavedModeOptions): boole
   if (a.effort && b.effort && a.effort !== b.effort) return false;
   if (a.disabledMcpServers && b.disabledMcpServers && !sameList(a.disabledMcpServers, b.disabledMcpServers)) return false;
   if (a.disabledConnectors && b.disabledConnectors && !sameList(a.disabledConnectors, b.disabledConnectors)) return false;
+  if (a.memory && b.memory && a.memory !== b.memory) return false;
+  if (a.guidance && b.guidance && a.guidance !== b.guidance) return false;
   return sameList(a.disabledTools, b.disabledTools);
 }
 
@@ -151,6 +159,8 @@ export function matchSavedMode(modes: SavedMode[], current: SavedModeOptions): S
     disabledMcpServers: m.options.disabledMcpServers ?? current.disabledMcpServers,
     disabledConnectors: m.options.disabledConnectors ?? current.disabledConnectors,
     models: m.options.models ?? current.models,
+    memory: m.options.memory ?? current.memory,
+    guidance: m.options.guidance ?? current.guidance,
   }, current));
 }
 
@@ -184,6 +194,8 @@ export function sessionPatchForMode(options: SavedModeOptions, opts: { cloudMode
     ...(options.disabledMcpServers ? { disabledMcpServers: [...options.disabledMcpServers] } : {}),
     ...(options.disabledConnectors ? { disabledConnectors: [...options.disabledConnectors] } : {}),
     ...modelScopePatch(options.models, localModel),
+    ...(options.memory ? { memory: options.memory } : {}),
+    ...(options.guidance ? { guidance: options.guidance } : {}),
   };
 }
 
@@ -202,7 +214,7 @@ export function savedModeSummary(options: SavedModeOptions): string {
   const models = options.models ? MODEL_SCOPE_LABEL[options.models] : '';
   // Local models are offline by definition, and a sandbox has no network.
   const offline = options.offline && options.models !== 'local' ? (options.executionMode === 'sandbox' ? 'no network' : 'offline') : '';
-  return [where, models, options.mode === 'guardrails' ? '' : options.mode, offline, options.incognito ? 'incognito' : '', options.effort === 'normal' ? '' : options.effort ?? ''].filter(Boolean).join(' · ');
+  return [where, models, options.mode === 'guardrails' ? '' : options.mode, offline, options.incognito ? 'incognito' : '', options.effort === 'normal' ? '' : options.effort ?? '', options.memory && options.memory !== 'all' ? `memory ${options.memory}` : '', options.guidance && options.guidance !== 'rules' ? `rules ${options.guidance}` : ''].filter(Boolean).join(' · ');
 }
 
 /** A fresh id for a mode the user is saving, unique among `modes`. */

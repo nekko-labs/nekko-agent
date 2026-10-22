@@ -112,6 +112,7 @@ fn builds_the_turn_context_exactly_as_the_ts_host_does() {
     let bundle = assemble(AssembleInput {
         attached: attached.clone(),
         guidelines: guidelines.iter().map(|g| (g.path.clone(), g.content.clone())).collect(),
+        rule_indexes: Vec::new(),
         memory: memory.clone(),
         connector_snippets: triples("connectorSnippets", "label", "origin", "body"),
         index_snippets: triples("indexSnippets", "relPath", "path", "body"),

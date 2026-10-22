@@ -121,10 +121,21 @@ pub fn preview(
     let mut attached = strings(session.and_then(|s| s.get("attachedPaths")));
     attached.extend(attached_paths.iter().cloned());
     let paths: Vec<String> = workspaces.iter().map(|w| s(w, "path").to_string()).collect();
-    let mut memory = nekko_context::list_memory(data_dir, "global", None);
-    for id in session.map(crate::worktrees::session_workspace_ids).unwrap_or_default() {
-        memory.extend(nekko_context::list_memory(data_dir, "workspace", Some(&id)));
+    let scope = session.map_or(nekko_context::MemoryScope::All, nekko_context::MemoryScope::of_session);
+    let mut memory = Vec::new();
+    if scope.global() {
+        memory.extend(nekko_context::list_memory(data_dir, "global", None));
     }
+    if scope.project() {
+        for id in session.map(crate::worktrees::session_workspace_ids).unwrap_or_default() {
+            memory.extend(nekko_context::list_memory(data_dir, "workspace", Some(&id)));
+        }
+    }
+    let guidance = nekko_context::project_guidance(
+        &paths,
+        &attached,
+        nekko_context::Guidance::from_value(session.and_then(|s| s.get("guidance"))),
+    );
     let messages = session.and_then(|s| s.get("messages")).and_then(Value::as_array).cloned().unwrap_or_default();
     let history = since_compaction(&messages);
     let prefs = session.and_then(|s| s.get("contextPrefs"));
@@ -135,7 +146,8 @@ pub fn preview(
     };
     let bundle = nekko_context::assemble(nekko_context::AssembleInput {
         attached: nekko_context::collect_attached(&attached),
-        guidelines: nekko_context::collect_guidelines(&paths).into_iter().map(|g| (g.path, g.content)).collect(),
+        guidelines: guidance.guidelines,
+        rule_indexes: guidance.indexes,
         memory,
         connector_snippets: connector_snippets.iter().map(triple).collect(),
         index_snippets: Vec::new(),
