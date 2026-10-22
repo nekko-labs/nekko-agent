@@ -744,8 +744,8 @@ impl Turns {
             spec.pointer("/facts/workspaces/0/path").and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| {
                 std::env::current_dir().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default()
             });
-        let hooks = self.settings.as_ref().map(|s| s.get()).and_then(|s| s.get("hooks").cloned()).unwrap_or(json!([]));
-        let rules = nekko_tools::hooks::rules(&hooks);
+        let settings = self.settings.as_ref().map(|s| s.shared());
+        let rules = nekko_tools::hooks::rules(settings.as_ref().and_then(|s| s.get("hooks")).unwrap_or(&json!([])));
         for rule in nekko_tools::hooks::matching_hooks(&rules, "TurnEnd", None) {
             let rule = rule.clone();
             let payload = json!({ "sessionId": session_id, "cwd": cwd, "stop": stop, "event": "TurnEnd" });
@@ -1700,9 +1700,8 @@ impl ToolRunner for TurnTools {
             let rules = match &self.turns.settings {
                 Some(store) => {
                     let store = store.clone();
-                    let hooks =
-                        tokio::task::spawn_blocking(move || store.get()["hooks"].clone()).await.unwrap_or(Value::Null);
-                    nekko_tools::hooks::rules(&hooks)
+                    let settings = tokio::task::spawn_blocking(move || store.shared()).await.ok();
+                    nekko_tools::hooks::rules(settings.as_ref().map_or(&Value::Null, |s| &s["hooks"]))
                 }
                 None => spec_rules.clone(),
             };
