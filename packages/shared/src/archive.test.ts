@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ARCHIVE_RETENTION_DAYS, agentsToAutoComplete, archiveDaysLeft, archiveExpired, autoCompleteDays, isArchived } from './archive.js';
+import { ARCHIVE_RETENTION_DAYS, agentsToAutoComplete, archiveDaysLeft, autoCompleteDays, isArchived } from './archive.js';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -33,12 +33,5 @@ describe('archive retention', () => {
     expect(archiveDaysLeft(at, at + DAY)).toBe(ARCHIVE_RETENTION_DAYS - 1);
     expect(archiveDaysLeft(at, at + (ARCHIVE_RETENTION_DAYS - 1) * DAY + 1)).toBe(1);
     expect(archiveDaysLeft(at, at + ARCHIVE_RETENTION_DAYS * DAY + 5)).toBe(0);
-  });
-
-  it('expires only archived chats past the window', () => {
-    const at = 1_000_000_000_000;
-    expect(archiveExpired({ archivedAt: at }, at + (ARCHIVE_RETENTION_DAYS * DAY) - 1)).toBe(false);
-    expect(archiveExpired({ archivedAt: at }, at + ARCHIVE_RETENTION_DAYS * DAY)).toBe(true);
-    expect(archiveExpired({}, Number.MAX_SAFE_INTEGER)).toBe(false);
   });
 });

@@ -192,70 +192,6 @@ export interface RunStats {
   turns: number;
 }
 
-/** Common ML solving approaches offered as presets on goal runs. */
-export interface ApproachPreset {
-  id: string;
-  label: string;
-  blurb: string;
-  /** Folded into the agent brief when selected. */
-  hint: string;
-}
-
-export const APPROACH_PRESETS: ApproachPreset[] = [
-  {
-    id: 'automl-sweep',
-    label: 'AutoML sweep',
-    blurb: 'Breadth-first: try many model families fast, then double down on winners.',
-    hint: 'Work breadth-first like an AutoML system: quickly try many model families (linear, trees, boosting, kNN, small nets) with sane defaults, compare on one CV metric, then iterate on the top 2-3 families.',
-  },
-  {
-    id: 'feature-first',
-    label: 'Feature engineering first',
-    blurb: 'Invest in the data representation before touching model choice.',
-    hint: 'Prioritize feature engineering: profile the data, handle missingness/outliers, build derived features and encodings, and validate each transformation by its CV delta before exploring model families.',
-  },
-  {
-    id: 'hyperparam-search',
-    label: 'Hyperparameter search',
-    blurb: 'Fix a strong family, then search its configuration space methodically.',
-    hint: 'Pick the strongest baseline family early, then run a methodical hyperparameter search (coarse random search, then fine-grained around the best region). Track every trial as an experiment.',
-  },
-  {
-    id: 'ensemble-stack',
-    label: 'Ensemble & stacking',
-    blurb: 'Combine diverse decent models instead of hunting one perfect model.',
-    hint: 'Build several diverse decent models and combine them (voting, averaging, stacking with a meta-learner). Diversity matters more than individual perfection.',
-  },
-  {
-    id: 'transfer-finetune',
-    label: 'Transfer learning / fine-tune',
-    blurb: 'Start from a pretrained model and adapt it to the task.',
-    hint: 'Start from a suitable pretrained model (Hugging Face) and fine-tune: freeze most layers first, tune the head, then progressively unfreeze if the budget allows. Compare against a classical baseline.',
-  },
-  {
-    id: 'data-centric',
-    label: 'Data-centric iteration',
-    blurb: 'Fix the labels and coverage; the model is rarely the bottleneck.',
-    hint: 'Iterate on the data, not the model: audit label quality, find error clusters, augment or rebalance underrepresented slices, and re-measure. Keep the model fixed while the data improves.',
-  },
-  {
-    id: 'neuro-evolution',
-    label: 'Evolutionary / population search',
-    blurb: 'Maintain a population of candidates, mutate winners, prune losers.',
-    hint: 'Run a population-based search: keep a pool of candidate pipelines, mutate/crossover the best performers each generation, prune the weakest, and record each generation as experiments branching from their parent.',
-  },
-  {
-    id: 'custom',
-    label: 'Custom',
-    blurb: 'No preset. The brief and your hints steer the agent.',
-    hint: '',
-  },
-];
-
-export function getApproach(id?: string): ApproachPreset | undefined {
-  return APPROACH_PRESETS.find((a) => a.id === id);
-}
-
 /** Compare scores respecting the run's metric direction. */
 export function isBetterScore(candidate: number, incumbent: number | undefined, minimize?: boolean): boolean {
   if (incumbent == null) return true;
@@ -308,89 +244,6 @@ export function planProgress(plan: PlanStep[] | undefined): PlanProgress {
   const skipped = steps.filter((s) => s.status === 'skipped').length;
   const current = steps.find((s) => s.status === 'active') ?? steps.find((s) => s.status === 'pending');
   return { total: steps.length, done, skipped, current, ratio: steps.length ? (done + skipped) / steps.length : 0 };
-}
-
-/** Input shape of an `update_plan` tool call. */
-export interface PlanUpdateInput {
-  replace?: boolean;
-  steps?: Array<Record<string, unknown>>;
-}
-
-export interface PlanUpdateResult {
-  plan: PlanStep[];
-  /** True when `steps` replaced the plan outright (initial write or a re-plan). */
-  replaced: boolean;
-  /** Steps that transitioned to done this call. */
-  finished: PlanStep[];
-  /** Steps that transitioned to skipped this call. */
-  skippedNow: PlanStep[];
-}
-
-/**
- * Apply an `update_plan` call to an existing plan: the semantics both writers
- * share: goal-run plans on a TrainingRun and the live `agentPlan` on an
- * ordinary chat session.
- *
- * `replace` rewrites unfinished scope while retaining done/skipped history;
- * otherwise steps upsert by id, falling back to a case-insensitive title match so the model
- * can update a step whose id it forgot. Titles cap at 160 chars, notes at 240,
- * and unknown statuses are ignored rather than rejected.
- */
-export function applyPlanUpdate(
-  current: PlanStep[] | undefined,
-  input: PlanUpdateInput,
-): PlanUpdateResult | { error: string } {
-  const raw = Array.isArray(input.steps) ? input.steps : [];
-  if (!raw.length) return { error: 'Pass at least one step.' };
-
-  const valid: PlanStepStatus[] = ['pending', 'active', 'done', 'skipped'];
-  const now = Date.now();
-  const hadPlan = (current ?? []).length > 0;
-  const replace = input.replace === true || !hadPlan;
-  // Re-planning can replace unfinished scope, never the conversation's settled history.
-  const next: PlanStep[] = (current ?? [])
-    .filter((step) => !replace || step.status === 'done' || step.status === 'skipped')
-    .map((step) => ({ ...step }));
-  const finished: PlanStep[] = [];
-  const skippedNow: PlanStep[] = [];
-
-  const freshId = () => {
-    let n = next.length + 1;
-    while (next.some((s) => s.id === `step_${n}`)) n++;
-    return `step_${n}`;
-  };
-  for (const r of raw) {
-    const title = String(r.title ?? '').trim().slice(0, 160);
-    const id = typeof r.id === 'string' && r.id.trim() ? r.id.trim() : '';
-    const status = typeof r.status === 'string' && valid.includes(r.status as PlanStepStatus)
-      ? (r.status as PlanStepStatus)
-      : undefined;
-    const note = typeof r.note === 'string' && r.note.trim() ? r.note.trim().slice(0, 240) : undefined;
-    let step = id ? next.find((s) => s.id === id) : undefined;
-    // A fresh plan often starts numbering at step_1 again. Do not rename history.
-    if (replace && step && title && step.title.toLowerCase() !== title.toLowerCase()) step = undefined;
-    if (!step && title) step = next.find((s) => s.title.toLowerCase() === title.toLowerCase());
-    if (step) {
-      const was = step.status;
-      if (title) step.title = title;
-      if (status && !(replace && (was === 'done' || was === 'skipped'))) step.status = status;
-      if (note) step.note = note;
-      step.updatedAt = now;
-      if (step.status === 'done' && was !== 'done') finished.push(step);
-      else if (step.status === 'skipped' && was !== 'skipped') skippedNow.push(step);
-    } else if (title) {
-      next.push({ id: id && !next.some((s) => s.id === id) ? id : freshId(), title, status: status ?? 'pending', note, createdAt: now, updatedAt: now });
-    }
-  }
-  if (!next.length) return { error: 'The plan cannot be empty; pass the full step list.' };
-  return { plan: next, replaced: replace, finished, skippedNow };
-}
-
-/** The text an `update_plan` call echoes back so the agent knows each step's id. */
-export function planEcho(plan: PlanStep[]): string {
-  const p = planProgress(plan);
-  const lines = plan.map((s, i) => `${i + 1}. [${s.status}] ${s.id}: ${s.title}`);
-  return `Plan saved (${p.done}/${p.total} done${p.skipped ? `, ${p.skipped} skipped` : ''}):\n${lines.join('\n')}`;
 }
 
 /** A node placed on the idea-maze canvas (column/row grid coordinates). */
@@ -463,13 +316,3 @@ export function formatRuntime(ms: number): string {
   if (h < 48) return h >= 10 ? `${h}h` : `${h}h ${m % 60 ? `${m % 60}m` : ''}`.trim();
   return `${Math.floor(h / 24)}d ${h % 24}h`;
 }
-
-/** Token the agent uses to declare the whole run finished. */
-export const RUN_DONE_TOKEN = '⟦RUN_DONE⟧';
-
-/**
- * Default safety backstop on total agent turns for a run (overridable per run
- * via config.maxTurns). The host stops a run at this cap; resuming grants a
- * fresh leg. Shared so the dashboard can show the budget the loop enforces.
- */
-export const RUN_MAX_TURNS_DEFAULT = 400;

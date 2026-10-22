@@ -1,16 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { IpcChannels } from './ipc.js';
 import {
   PHONE_ALWAYS_DENIED,
   PHONE_CHANNELS,
-  PHONE_SETTINGS_KEYS,
-  PHONE_SETTINGS_VIEW,
   PhoneAccessError,
-  callFromPhone,
-  thumbnailPhoneImages,
   phoneAlwaysDenied,
   phoneChannelAllowed,
-  phoneSettingsUpdate,
   redactPhoneResult,
   phoneSessionView,
   PHONE_SESSION_VIEW,
@@ -105,42 +100,6 @@ describe('settings from a phone', () => {
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', { mode: 'turbo' }]))).toBe('value-invalid');
   });
 
-  it('applies nothing when one key of the patch is refused', async () => {
-    const dispatch = vi.fn(() => SETTINGS);
-    await expect(callFromPhone(dispatch, 'settings:update', [{ chatPaneAction: 'delete', sandboxMode: 'off' }])).rejects.toThrow(PhoneAccessError);
-    await expect(callFromPhone(dispatch, 'settings:update', [{ chatPaneAction: 'delete', defaultChatMode: 'turbo' }])).rejects.toThrow(/value-invalid/);
-    expect(dispatch).not.toHaveBeenCalled();
-  });
-
-  it('keeps the rest of voice when a phone changes one voice field', async () => {
-    const calls: unknown[][] = [];
-    const dispatch = (channel: string, args: unknown[]) => {
-      calls.push([channel, args]);
-      return SETTINGS;
-    };
-    await callFromPhone(dispatch, 'settings:update', [{ voice: { language: 'it' } }]);
-    expect(calls[1]).toEqual(['settings:update', [{ voice: { ...SETTINGS.voice, language: 'it' } }]]);
-  });
-
-  it('never writes a key that is not phone-settable, even when handed one', () => {
-    const patch = phoneSettingsUpdate([['__proto__.polluted', true], ['sandboxMode', 'off'], ['chatPaneAction', 'delete']], {});
-    expect(patch).toEqual({ chatPaneAction: 'delete' });
-    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
-  });
-
-  it('returns a view with no secrets, for get and update alike', async () => {
-    for (const channel of ['settings:get', 'settings:update']) {
-      const args = channel === 'settings:update' ? [{ skipDeleteConfirmation: true }] : [];
-      const view = (await callFromPhone(() => SETTINGS, channel, args)) as Record<string, unknown>;
-      const text = JSON.stringify(view);
-      expect(text).not.toMatch(/secret|sk-|hf_|ghp_|tokenKey|apiKey|providers|guardrails|workspaces|hooks|modelPath|private/);
-      expect(Object.keys(view).sort()).toEqual([...new Set(PHONE_SETTINGS_VIEW.map((p) => p.split('.')[0]))].sort());
-      expect(view.voice).toEqual({ enabled: true, language: 'en' });
-      expect(view.defaultModelId).toBe('m1');
-    }
-    for (const key of PHONE_SETTINGS_KEYS) expect(PHONE_SETTINGS_VIEW as readonly string[]).toContain(key);
-  });
-
   it('strips provider records to id, kind, label and enabled', () => {
     expect(redactPhoneResult('providers:list', SETTINGS.providers)).toEqual([{ id: 'p1', kind: 'anthropic', label: 'Claude', enabled: true }]);
     expect(redactPhoneResult('providers:list', null)).toEqual([]);
@@ -169,60 +128,6 @@ describe('chat options from a phone', () => {
       expect(code(() => screenPhoneCall('chat:send', [{ sessionId: 's', text: 'hi', clientMessageId: bad }]))).toBe('value-invalid');
       expect(code(() => screenPhoneCall('chat:queue', ['s', { text: 'hi', clientMessageId: bad }]))).toBe('value-invalid');
     }
-  });
-
-  it('passes an allowed call through unchanged', async () => {
-    const dispatch = vi.fn(() => ({ id: 's1' }));
-    await expect(callFromPhone(dispatch, 'session:get', ['s1'])).resolves.toEqual({ id: 's1' });
-    expect(dispatch).toHaveBeenCalledWith('session:get', ['s1']);
-  });
-});
-
-describe('skills from a phone', () => {
-  const RUNNABLE = [
-    { name: 'review', description: 'Review the code', category: 'Code quality', source: 'builtin', template: 'Review this carefully.' },
-    { name: 'tidy', description: 'Tidy up', category: 'Imported', source: 'claude', template: 'Use the "tidy" skill below. Its own files are in /Users/me/.claude/skills/tidy.\n\nSteps' },
-  ];
-  const host = () =>
-    vi.fn((channel: string, args: unknown[]) => (channel === 'skills:runnable' ? RUNNABLE : { ok: channel, args }));
-
-  it('lists the skills without templates or folders', async () => {
-    const view = (await callFromPhone(host(), 'skills:runnable', [])) as Array<Record<string, unknown>>;
-    expect(view).toEqual([
-      { name: 'review', description: 'Review the code', category: 'Code quality', source: 'builtin' },
-      { name: 'tidy', description: 'Tidy up', category: 'Imported', source: 'claude' },
-    ]);
-    expect(JSON.stringify(view)).not.toContain('/Users/me');
-    expect(redactPhoneResult('skills:runnable', null)).toEqual([]);
-  });
-
-  it('expands a skill turn on the computer, replacing what the phone sent as text', async () => {
-    const dispatch = host();
-    await callFromPhone(dispatch, 'chat:send', [
-      { sessionId: 's1', providerId: 'p', modelId: 'm', text: 'ignored', skill: { name: 'review', input: ' this file ' } },
-    ]);
-    expect(dispatch).toHaveBeenLastCalledWith('chat:send', [
-      { sessionId: 's1', providerId: 'p', modelId: 'm', text: 'Review this carefully.\n\nthis file', skill: { name: 'review', input: ' this file ' } },
-    ]);
-  });
-
-  it('expands a queued skill turn the same way', async () => {
-    const dispatch = host();
-    await callFromPhone(dispatch, 'chat:queue', ['s1', { text: '', skill: { name: 'tidy', input: '' } }]);
-    expect(dispatch).toHaveBeenLastCalledWith('chat:queue', ['s1', { text: RUNNABLE[1].template, skill: { name: 'tidy', input: '' } }]);
-    await callFromPhone(dispatch, 'chat:queue', ['s1', 'plain']);
-    expect(dispatch).toHaveBeenLastCalledWith('chat:queue', ['s1', 'plain']);
-  });
-
-  it('refuses an unknown or malformed skill, and queue fields a phone may not set', async () => {
-    const dispatch = host();
-    await expect(callFromPhone(dispatch, 'chat:send', [{ sessionId: 's1', text: 'x', skill: { name: 'goal', input: 'x' } }])).rejects.toThrow('skill-unknown');
-    expect(dispatch).not.toHaveBeenCalledWith('chat:send', expect.anything());
-    expect(code(() => screenPhoneCall('chat:send', [{ sessionId: 's', text: '', skill: 'review' }]))).toBe('value-invalid');
-    expect(code(() => screenPhoneCall('chat:send', [{ sessionId: 's', text: '', skill: { name: 'review', input: 1 } }]))).toBe('value-invalid');
-    expect(code(() => screenPhoneCall('chat:send', [{ sessionId: 's', text: '', skill: { name: 'review', template: 'x' } }]))).toBe('value-invalid');
-    expect(code(() => screenPhoneCall('chat:queue', ['s', { text: 'x', attachedPaths: ['/etc'] }]))).toBe('option-denied');
-    expect(code(() => screenPhoneCall('chat:queue', ['s', 5]))).toBe('value-invalid');
   });
 });
 
@@ -294,28 +199,5 @@ describe('a chat as a phone receives it (session:get)', () => {
     expect(v.messages[1].images).toEqual(['']); // past the newest `images`
     expect(v.messages[0].images).toEqual(['']);
     expect(msgs[0].images).toEqual([small]); // the computer's copy is untouched
-  });
-
-  it('thumbnails only the newest photos the phone will get, and callFromPhone uses it', async () => {
-    const seen: string[] = [];
-    const thumb = async (u: string) => { seen.push(u); return u === 'bad' ? Promise.reject(new Error('x')) : `t:${u}`; };
-    const s = { id: 's', messages: [{ id: 'a', role: 'user', content: '', images: ['p1', 'bad'] }, { id: 'b', role: 'assistant', content: 'ok' }] };
-    const out = await thumbnailPhoneImages(s, thumb) as { messages: { images?: string[] }[] };
-    expect(out.messages[0].images).toEqual(['t:p1', '']);
-    expect(seen).toEqual(['bad', 'p1']); // newest first
-    expect(s.messages[0].images).toEqual(['p1', 'bad']);
-    await expect(callFromPhone(() => s, 'session:get', ['s'], async () => 'data:image/jpeg;base64,T')).resolves.toMatchObject({
-      messages: [{ images: ['data:image/jpeg;base64,T', 'data:image/jpeg;base64,T'] }, { content: 'ok' }],
-    });
-  });
-
-  it('is what callFromPhone returns for session:get; other values pass through', async () => {
-    const session = { id: 's1', messages: [{ id: 't', role: 'tool', content: '', toolResult: { toolCallId: 'c', output: 'ok', images: [{ data: 'A' }] } }] };
-    await expect(callFromPhone(() => session, 'session:get', ['s1'])).resolves.toEqual({
-      id: 's1',
-      messages: [{ id: 't', role: 'tool', content: '', toolResult: { toolCallId: 'c', output: 'ok', omittedImages: 1 } }],
-    });
-    expect(phoneSessionView(null)).toBeNull();
-    expect(phoneSessionView({ id: 's1' })).toEqual({ id: 's1' });
   });
 });

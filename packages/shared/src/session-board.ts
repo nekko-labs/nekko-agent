@@ -16,8 +16,6 @@ import type { ChatMessage, PendingInput } from './chat.js';
 
 export type SessionLane = 'needs-you' | 'working' | 'idle';
 
-export const SESSION_LANES: SessionLane[] = ['needs-you', 'working', 'idle'];
-
 export const LANE_META: Record<SessionLane, { title: string; blurb: string; tone: string }> = {
   'needs-you': {
     title: 'Needs you',
@@ -74,15 +72,6 @@ export function sessionLane(input: {
   if (input.running) return { lane: 'working' };
   if (input.stalled ?? isStalled(input.messages ?? [])) return { lane: 'needs-you', blocked: 'interrupted' };
   return { lane: 'idle' };
-}
-
-/**
- * How long a card has been waiting on a person, or 0 when it is not.
- * Lanes sort on this so the thing that has been blocked longest is at the top,
- * which is the opposite of every other list in the app and correct here.
- */
-export function waitingSince(pending: PendingInput | undefined): number {
-  return pending?.question?.askedAt ?? pending?.approval?.requestedAt ?? 0;
 }
 
 /** One side of the exchange, as a card shows it. */

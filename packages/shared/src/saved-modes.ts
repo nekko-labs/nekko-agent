@@ -21,8 +21,6 @@ import type { WorkModeId } from './work-modes.js';
 /** Glyphs a saved mode can wear in the rail; drawn by the renderer. */
 export type SavedModeIcon = 'bolt' | 'dial' | 'incognito' | 'box' | 'cap' | 'sparkle' | 'shield' | 'globe-off' | 'cloud' | 'route' | 'laptop';
 
-export const SAVED_MODE_ICONS: SavedModeIcon[] = ['bolt', 'dial', 'incognito', 'box', 'cap', 'sparkle', 'shield', 'globe-off', 'cloud', 'route', 'laptop'];
-
 /**
  * Where a chat's models run. Each is made of per-chat settings that already
  * exist, so a mode never grants more than flipping them by hand:

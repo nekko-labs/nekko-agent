@@ -18,11 +18,6 @@ export function isRuntimeKind(kind: ProviderKind): kind is RuntimeKind {
   return kind === 'ollama' || kind === 'lmstudio' || kind === 'vllm' || kind === 'llamacpp';
 }
 
-/** The one runtime Nekko Agent runs itself, rather than connects to. */
-export function isManagedRuntime(kind: ProviderKind): boolean {
-  return kind === 'llamacpp';
-}
-
 /**
  * What a runtime can actually do.
  *
@@ -115,17 +110,6 @@ export const RUNTIME_CAPABILITIES: Record<RuntimeKind, RuntimeCapabilities> = {
     canSetCompute: true,
   },
 };
-
-export interface RuntimeDetection {
-  kind: RuntimeKind;
-  /** The server answered a health probe. */
-  running: boolean;
-  /** A CLI or binary we could start it with was found. */
-  installed: boolean;
-  version?: string;
-  /** Why we cannot start it, when `installed` is false. */
-  reason?: string;
-}
 
 export interface ResidentModel {
   id: string;

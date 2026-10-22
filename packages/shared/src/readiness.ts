@@ -14,42 +14,8 @@
  * did not answer", never a guess.
  */
 
-import type { CapacityDevice } from './capacity.js';
-
 /** One job in the concurrently-resident offline stack. */
 export type StackRole = 'runtime' | 'intent' | 'stt' | 'tts';
-
-export const STACK_ROLES: StackRole[] = ['runtime', 'intent', 'stt', 'tts'];
-
-export interface MachineOs {
-  /** Node platform string: 'darwin' | 'win32' | 'linux' | ... */
-  platform: string;
-  /** Kernel/OS release (os.release()). */
-  release: string;
-  /** os.arch(): 'x64' | 'arm64' | ... */
-  arch: string;
-}
-
-export interface MachineFacts {
-  os: MachineOs;
-  /**
-   * Instruction features we could prove (e.g. 'avx2'). `null` means the probe
-   * did not run on this platform, which is a statement about our evidence, not
-   * about the CPU: entries that require a feature are capped at `unverified`
-   * rather than guessed at.
-   */
-  cpuFeatures: string[] | null;
-  /** Compute backends the machine can run: e.g. 'cuda', 'metal', 'vulkan', 'cpu'. */
-  backends: string[];
-  /** GPU memory pools. Never summed together. */
-  devices: CapacityDevice[];
-  /** GPU and CPU share one pool (Apple Silicon). */
-  unified: boolean;
-  systemRamTotalBytes: number;
-  systemRamFreeBytes: number;
-  /** Free space on the install volume; `null` when it could not be probed. */
-  diskFreeBytes: number | null;
-}
 
 /** Hard gates for a catalog entry. An absent field means "no constraint". */
 export interface CatalogRequires {
@@ -103,12 +69,6 @@ export interface CatalogEntry {
   prefersGpu?: boolean;
   requires?: CatalogRequires;
   recommended?: CatalogRecommended;
-}
-
-export interface ReadinessCatalog {
-  /** Whole-catalog data version; bump whenever any entry changes. */
-  version: string;
-  entries: CatalogEntry[];
 }
 
 export type ReadinessVerdict = 'recommended' | 'compatible' | 'insufficient' | 'unverified';

@@ -50,9 +50,6 @@ export interface NewTask {
   condition?: string;
 }
 
-/** Token the agent emits to signal a background "until" condition is satisfied. */
-export const TASK_DONE_TOKEN = '⟦DONE⟧';
-
 /** A human label for a task's schedule/cadence. */
 export function taskCadence(t: AutomationTask): string {
   if (t.kind === 'scheduled') return t.runAt ? `once at ${new Date(t.runAt).toLocaleString()}` : 'once';

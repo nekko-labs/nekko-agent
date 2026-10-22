@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { callFromPhone, phoneChannelAllowed, PhoneAccessError } from './phone-access.js';
-import { hunksOf, lineOps, phoneChangesView, phoneDisplayPath, phoneSecretFile, PHONE_CHANGES_VIEW } from './phone-changes.js';
+import { phoneChannelAllowed } from './phone-access.js';
+import {
+  hunksOf,
+  lineOps,
+  phoneChangesView,
+  phoneDisplayPath,
+  phoneSecretFile,
+  PHONE_CHANGES_VIEW,
+} from './phone-changes.js';
 
 describe('phone Changes view', () => {
   it('diffs a modified file into hunks with context', () => {
@@ -68,35 +75,6 @@ describe('phone Changes view', () => {
 });
 
 describe('changes:list from a phone', () => {
-  const dispatch = (settings: unknown) => {
-    const calls: unknown[] = [];
-    const fn = (ch: string, a: unknown[]) => {
-      calls.push([ch, a]);
-      if (ch === 'settings:get') return settings;
-      return [{ path: '/w/a.txt', original: 'old\n', current: 'new\n' }];
-    };
-    return { calls, fn };
-  };
-
-  it('is refused unless the computer turned it on', async () => {
-    for (const settings of [{}, { phoneChanges: false }, { phoneChanges: 'yes' }, null]) {
-      const d = dispatch(settings);
-      await expect(callFromPhone(d.fn, 'changes:list', ['s1'])).rejects.toThrow(PhoneAccessError);
-      expect(d.calls).toEqual([['settings:get', []]]);
-    }
-  });
-
-  it('returns the projection, never the file contents, when on', async () => {
-    const d = dispatch({ phoneChanges: true });
-    const out = await callFromPhone(d.fn, 'changes:list', ['s1']);
-    expect(out).toEqual({ files: [{ path: 'w/a.txt', status: 'modified', added: 1, removed: 1, hunks: [{ oldStart: 1, newStart: 1, lines: ['-old', '+new'] }] }] });
-    expect(JSON.stringify(out)).not.toContain('"original"');
-  });
-
-  it('needs a chat id', async () => {
-    await expect(callFromPhone(dispatch({ phoneChanges: true }).fn, 'changes:list', [])).rejects.toThrow('value-invalid');
-  });
-
   it('never lets a phone accept changes or read files', () => {
     for (const ch of ['changes:accept', 'changes:acceptAll', 'file:read', 'file:write', 'dir:list']) {
       expect(phoneChannelAllowed(ch), ch).toBe(false);

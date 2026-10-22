@@ -5,21 +5,15 @@ import {
   PHONE_ALWAYS_DENIED,
   PHONE_CHANGE_CHANNELS,
   PHONE_CHANGE_PROOF,
-  PHONE_CHANNELS,
   PHONE_DENIED_FOR_NOW,
   PHONE_DENIED_FOREVER,
-  PHONE_KEY_CHANNEL,
   PHONE_READ_CHANNELS,
-  PHONE_TOKEN_CHANNELS,
   PhoneAccessError,
-  checkPhoneAccess,
   phoneAccessPolicy,
   phoneAlwaysDenied,
   phoneChannelAllowed,
-  phoneChannelClass,
   phoneDeviceAccess,
 } from './phone-access.js';
-import { PUSH_TEST_CHANNEL } from './remote.js';
 
 /** IO-33 foundation: access classes, per-device switches and the denied groups. */
 
@@ -33,53 +27,7 @@ const code = (fn: () => unknown) => {
   return 'ok';
 };
 
-/** What phones could call before IO-33: in neither class, so they decide as before. */
-const BEFORE_IO33 = PHONE_CHANNELS.filter(
-  (c) => !PHONE_READ_CHANNELS.includes(c) && !PHONE_CHANGE_CHANNELS.includes(c) && !PHONE_TOKEN_CHANNELS.includes(c),
-);
-
 describe('phone access classes', () => {
-  it('leaves every channel phones had before IO-33 in neither class', () => {
-    expect(BEFORE_IO33).toHaveLength(30);
-    for (const c of BEFORE_IO33) expect(phoneChannelClass(c), c).toBeNull();
-  });
-
-  it('classes files and logs (FA-1, FA-5): saving is the only Change', () => {
-    for (const c of ['files:list', 'files:search', 'files:read', 'logs:list', 'logs:read']) expect(phoneChannelClass(c), c).toBe('read');
-    expect(phoneChannelClass('files:write')).toBe('change');
-  });
-
-  it('only classes channels a phone may call, each in one class', () => {
-    for (const c of [...PHONE_READ_CHANNELS, ...PHONE_CHANGE_CHANNELS]) {
-      expect((PHONE_CHANNELS as readonly string[]).includes(c), `${c} is classed but not in PHONE_CHANNELS`).toBe(true);
-      expect(phoneAlwaysDenied(c), c).toBe(false);
-    }
-    for (const c of PHONE_READ_CHANNELS) expect(PHONE_CHANGE_CHANNELS.includes(c), c).toBe(false);
-    for (const c of PHONE_TOKEN_CHANNELS) {
-      expect((PHONE_CHANNELS as readonly string[]).includes(c), c).toBe(true);
-      expect(PHONE_CHANGE_CHANNELS.includes(c) || PHONE_READ_CHANNELS.includes(c), c).toBe(false);
-      expect(phoneChannelClass(c), c).toBe('token');
-    }
-  });
-
-  it('refuses a classed call when the device switch is off, and nothing else', () => {
-    // The lists are empty until the feature PRs: check the rule with the
-    // classes the TS reports, so it holds whatever they contain.
-    const all = { read: true, change: true };
-    for (const c of BEFORE_IO33) {
-      expect(code(() => checkPhoneAccess(c, { read: false, change: false })), c).toBe('ok');
-      expect(code(() => checkPhoneAccess(c, all)), c).toBe('ok');
-    }
-    for (const c of PHONE_READ_CHANNELS) {
-      expect(code(() => checkPhoneAccess(c, { read: false, change: true }))).toBe('read-off');
-      expect(code(() => checkPhoneAccess(c, { read: true, change: false }))).toBe('ok');
-    }
-    for (const c of [...PHONE_CHANGE_CHANNELS, ...PHONE_TOKEN_CHANNELS]) {
-      expect(code(() => checkPhoneAccess(c, { read: true, change: false }))).toBe('change-off');
-      expect(code(() => checkPhoneAccess(c, { read: false, change: true }))).toBe('ok');
-    }
-  });
-
   it('reads a device with no switches as everything on', () => {
     expect(phoneDeviceAccess(undefined)).toEqual({ read: true, change: true });
     expect(phoneDeviceAccess({})).toEqual({ read: true, change: true });
@@ -135,13 +83,5 @@ describe('the policy file', () => {
     expect(PHONE_CHANGE_PROOF.maxAgeMs).toBe(5 * 60 * 1000);
     expect(p.keyChannel).toBe('device:registerKey');
     expect(p.activityLimit).toBe(PHONE_ACTIVITY_LIMIT);
-  });
-
-  it('keeps the gate channel out of the allowlist and away from the host channels', () => {
-    // The computer's gate answers it itself, like push:test the relay agent answers.
-    expect((PHONE_CHANNELS as readonly string[]).includes(PHONE_KEY_CHANNEL)).toBe(false);
-    expect(Object.values(IpcChannels)).not.toContain(PHONE_KEY_CHANNEL);
-    expect(PHONE_KEY_CHANNEL).not.toBe(PUSH_TEST_CHANNEL);
-    expect(phoneAlwaysDenied(PHONE_KEY_CHANNEL)).toBe(false);
   });
 });

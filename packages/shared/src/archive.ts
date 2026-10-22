@@ -80,8 +80,3 @@ export function agentsToAutoComplete(
     .filter((s) => typeof s.updatedAt === 'number' && s.updatedAt > 0 && s.updatedAt < cutoff && !busy(s.id))
     .map((s) => s.id);
 }
-
-/** Whether an archived chat has outlived the retention window. */
-export function archiveExpired(s: { archivedAt?: number | null }, now = Date.now()): boolean {
-  return isArchived(s) && now >= archiveDeletesAt(s.archivedAt as number);
-}

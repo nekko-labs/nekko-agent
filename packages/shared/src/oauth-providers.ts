@@ -42,7 +42,3 @@ export function oauthProviderOffered(provider: OAuthProvider): boolean {
   const c = CLAUDE_APPROVED_CLIENT;
   return c.state === 'enabled' && !!c.clientId && !!c.authorizeUrl && !!c.tokenUrl;
 }
-
-/** The refusal a sign-in through an unoffered provider fails with. */
-export const CLAUDE_SIGN_IN_UNAVAILABLE =
-  'Nekko Agent cannot sign in to Claude plans. Use Claude with an API key or a cloud account, or connect Claude Agent to run your installed Claude Code.';

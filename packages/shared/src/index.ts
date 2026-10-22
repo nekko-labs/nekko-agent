@@ -76,7 +76,6 @@ export * from './orchestration.js';
 export * from './insights.js';
 export * from './messaging.js';
 export * from './model-select.js';
-export * from './prompt-plan.js';
 export * from './agent-steps.js';
 export * from './oauth.js';
 export * from './oauth-providers.js';

@@ -13,7 +13,6 @@
  */
 
 import { clientMessageIdOf } from './chat.js';
-import { skillTurnText } from './skills.js';
 import { phoneChangesView, PHONE_CHANGES_VIEW } from './phone-changes.js';
 import {
   PHONE_TERMINAL,
@@ -64,7 +63,6 @@ import {
   PHONE_VIEWS,
   PHONE_WORKFLOW_RUN_VIEW,
   PHONE_WORKFLOW_VIEW,
-  phoneLimitsKey,
   phoneLimitsView,
   phonePromptsView,
   phonePrsView,
@@ -287,16 +285,6 @@ export const PHONE_CHANGE_CHANNELS: readonly string[] = [
  */
 export const PHONE_TOKEN_CHANNELS: readonly string[] = [...PHONE_TERMINAL_TOKEN_CHANNELS];
 
-/** `null`: neither class (no per-device switch applies). `token`: Change level, with a terminal session token. */
-export type PhoneChannelClass = 'read' | 'change' | 'token' | null;
-
-export function phoneChannelClass(channel: string): PhoneChannelClass {
-  if (PHONE_CHANGE_CHANNELS.includes(channel)) return 'change';
-  if (PHONE_TOKEN_CHANNELS.includes(channel)) return 'token';
-  if (PHONE_READ_CHANNELS.includes(channel)) return 'read';
-  return null;
-}
-
 /** A paired phone's switches. Missing means on, so phones paired before IO-33 keep working. */
 export interface PhoneDeviceAccess {
   read: boolean;
@@ -336,16 +324,6 @@ export interface PhoneActivityEntry {
   ok: boolean;
   /** Why it was refused (a `PhoneAccessCode`), or `failed` when the computer's call threw. */
   reason?: string;
-}
-
-/**
- * Whether a device's switches let it call `channel` (the class check the
- * daemon's gate makes after the allowlist), or a `PhoneAccessError`.
- */
-export function checkPhoneAccess(channel: string, access: PhoneDeviceAccess): void {
-  const cls = phoneChannelClass(channel);
-  if (cls === 'read' && !access.read) throw new PhoneAccessError('read-off', channel);
-  if ((cls === 'change' || cls === 'token') && !access.change) throw new PhoneAccessError('change-off', channel);
 }
 
 /**
@@ -449,7 +427,7 @@ export const PHONE_CHAT_MODES = ['ask', 'guardrails', 'yolo'] as const;
  *   characters, with `truncated: true` and the original length;
  * - a message's own photos (`images`, the ones a user attached) as small
  *   thumbnails: the relay agent shrinks them first (`thumbSide` px on the long
- *   side, `thumbnailPhoneImages`), then only the newest `images` of them, each
+ *   side), then only the newest `images` of them, each
  *   at most `thumbChars` long, are kept. Any other photo becomes `''`, so the
  *   phone still knows how many there were.
  * The computer keeps the whole chat; the desktop is where the full detail lives.
@@ -463,12 +441,6 @@ export const PHONE_SESSION_VIEW = { messages: 300, textChars: 4000, images: 40, 
  * Under 10 MB to leave room for the relay envelope.
  */
 export const PHONE_MAX_FRAME_BYTES = 9 * 1024 * 1024;
-
-/** The error a phone gets instead of a reply too large for the relay. */
-export function phoneFrameTooLarge(bytes: number): string {
-  const mb = (bytes / (1024 * 1024)).toFixed(1);
-  return `This reply is too large to send to a phone (${mb} MB). Open it on the computer.`;
-}
 
 export type PhoneAccessCode =
   | 'channel-denied'
@@ -585,8 +557,8 @@ export function checkPhoneSettingsPatch(patch: unknown): Array<[string, unknown]
 /**
  * A phone's call checked against the allowlist and its arguments against the
  * per-channel rules, or a `PhoneAccessError`. A `settings:update` comes back
- * as the checked `settingsPatch`, which `phoneSettingsUpdate` turns into the
- * patch to save.
+ * as the checked `settingsPatch`, which the host turns into the patch to
+ * save.
  */
 export function screenPhoneCall(
   channel: string,
@@ -693,50 +665,6 @@ function phoneSkill(value: unknown): { name: string; input: string } {
     if (key !== 'name' && key !== 'input') throw new PhoneAccessError('value-invalid', 'skill');
   }
   return { name: value.name, input: typeof value.input === 'string' ? value.input : '' };
-}
-
-/**
- * A phone's skill turn as the desktop composer sends it: the computer looks
- * the skill up by name in its own runnable list and sends its template plus
- * the user's input, so the template never has to reach the phone. The phone's
- * `text` is replaced; an unknown skill is refused rather than sent bare.
- */
-function expandPhoneSkill(
-  skill: { name: string; input: string },
-  runnable: unknown,
-  base: Obj,
-): Obj {
-  const list = Array.isArray(runnable) ? runnable : [];
-  const found = list.find((s) => isObj(s) && s.name === skill.name && typeof s.template === 'string') as Obj | undefined;
-  if (!found) throw new PhoneAccessError('skill-unknown', skill.name);
-  return { ...base, text: skillTurnText(found.template as string, skill.input), skill };
-}
-
-const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
-
-/**
- * The patch to save for checked phone settings, given the current settings.
- * Paths that are not phone-settable are dropped here too, so this never
- * writes a key it was not meant to, whatever it is given.
- */
-export function phoneSettingsUpdate(sets: Array<[string, unknown]>, current: unknown): Obj {
-  const patch: Obj = {};
-  for (const [path, value] of sets) {
-    if (!(PHONE_SETTINGS_KEYS as readonly string[]).includes(path)) continue;
-    const [head, sub] = path.split('.', 2);
-    if (UNSAFE_KEYS.has(head) || (sub !== undefined && UNSAFE_KEYS.has(sub))) continue;
-    if (sub === undefined) {
-      patch[head] = value;
-      continue;
-    }
-    // `voice` is saved whole (settings merge one level deep), so keep the rest of it.
-    if (!isObj(patch[head])) {
-      const was = isObj(current) ? current[head] : undefined;
-      patch[head] = isObj(was) ? { ...was } : {};
-    }
-    (patch[head] as Obj)[sub] = value;
-  }
-  return patch;
 }
 
 /** What a phone receives for a channel's result: secrets never leave the computer. */
@@ -866,89 +794,6 @@ export function phoneSessionView(session: unknown): unknown {
   if (own(session, 'queue')) out.queue = phoneQueueView(session.queue);
   if (all.length > keep.length) out.omittedMessages = all.length - keep.length;
   return out;
-}
-
-/** Shrinks one image data URL to a thumbnail, or returns `''` when it can't. */
-export type PhoneThumbnailer = (dataUrl: string) => Promise<string>;
-
-/**
- * The newest photos of a `session:get` result as thumbnails (see
- * `PHONE_SESSION_VIEW`), before `phoneSessionView` picks which to keep. Only
- * messages the phone will receive are touched; the computer's copy is not.
- * A photo the thumbnailer can't read becomes `''`.
- */
-export async function thumbnailPhoneImages(session: unknown, thumb: PhoneThumbnailer): Promise<unknown> {
-  if (!isObj(session) || !Array.isArray(session.messages)) return session;
-  const all = session.messages;
-  const from = Math.max(0, all.length - PHONE_SESSION_VIEW.messages);
-  const messages = all.slice();
-  let room: number = PHONE_SESSION_VIEW.images;
-  for (let i = messages.length - 1; i >= from; i--) {
-    const m = messages[i];
-    if (!isObj(m) || !Array.isArray(m.images) || m.images.length === 0) continue;
-    const imgs: string[] = [];
-    for (let j = m.images.length - 1; j >= 0; j--) {
-      const v = m.images[j];
-      if (room > 0 && typeof v === 'string' && v) {
-        room--;
-        imgs[j] = await thumb(v).catch(() => '');
-      } else imgs[j] = '';
-    }
-    messages[i] = { ...m, images: imgs };
-  }
-  return { ...session, messages };
-}
-
-/**
- * Run a phone's request through the policy: refuse it, or call `dispatch`
- * with the checked arguments and return the redacted result.
- */
-export async function callFromPhone(
-  dispatch: (channel: string, args: unknown[]) => unknown,
-  channel: string,
-  args: unknown[],
-  /** Shrinks a chat's photos for `session:get`; without it they arrive as `''` unless already tiny. */
-  thumb?: PhoneThumbnailer,
-): Promise<unknown> {
-  const { settingsPatch, skill, callArgs: checked } = screenPhoneCall(channel, args);
-  if (channel === 'changes:list') {
-    // Off unless the computer's owner turned it on (Settings → Remote access).
-    const settings = await dispatch('settings:get', []);
-    if (!isObj(settings) || settings.phoneChanges !== true) throw new PhoneAccessError('turned-off', 'changes:list');
-  }
-  let callArgs = checked ?? args;
-  // Only what the computer's own call takes: an id, or nothing.
-  if (channel === 'task:runNow' || channel === 'workflow:run') callArgs = [args[0]];
-  if (channel === 'tasks:list' || channel === 'workflows:list' || channel === 'usage:summary') callArgs = [];
-  if (channel === 'session:fork') callArgs = args[1] == null ? [args[0]] : [args[0], args[1]];
-  if (channel === 'chat:editQueued') callArgs = [args[0], args[1], pick(args[2], PHONE_QUEUE_EDIT_KEYS)];
-  if (channel === 'pr:sessionList') callArgs = [args[0], args[1] === true];
-  if ((PHONE_TERMINAL_CHANNELS as readonly string[]).includes(channel)) callArgs = phoneTerminalCallArgs(channel, args);
-  if (channel === 'terminal:create') {
-    // A new terminal starts in the chat's folder, as the desktop's does: the phone never names a path.
-    const chat = await dispatch('session:get', [(callArgs[0] as Obj).sessionId]);
-    if (isObj(chat) && typeof chat.workspaceId === 'string') callArgs = [{ ...(callArgs[0] as Obj), workspaceId: chat.workspaceId }];
-  }
-  if (channel === 'limits:get') {
-    // The phone names a provider; the computer reads that provider's limits key itself.
-    const key = phoneLimitsKey(await dispatch('providers:list', []), args[0] as string);
-    if (!key) return null;
-    callArgs = [key, false];
-  }
-  if (settingsPatch) {
-    const nested = settingsPatch.some(([path]) => path.includes('.'));
-    const current = nested ? await dispatch('settings:get', []) : undefined;
-    callArgs = [phoneSettingsUpdate(settingsPatch, current)];
-  }
-  if (skill) {
-    const runnable = await dispatch('skills:runnable', []);
-    callArgs = channel === 'chat:send'
-      ? [expandPhoneSkill(skill, runnable, args[0] as Obj), ...args.slice(1)]
-      : [args[0], expandPhoneSkill(skill, runnable, args[1] as Obj), ...args.slice(2)];
-  }
-  const result = await dispatch(channel, callArgs);
-  if (channel === 'session:get' && thumb) return redactPhoneResult(channel, await thumbnailPhoneImages(result, thumb));
-  return redactPhoneResult(channel, result);
 }
 
 /** The policy as data: what `phone-access.json` holds for the Rust gate. */

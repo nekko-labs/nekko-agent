@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { callFromPhone, PhoneAccessError, redactPhoneResult, screenPhoneCall } from './phone-access.js';
+import { PhoneAccessError, redactPhoneResult, screenPhoneCall } from './phone-access.js';
 import { PHONE_FILES_VIEW, phoneFilesSecret } from './phone-files.js';
 
 /** IO-33 FA-1 and FA-5: files and logs from a phone (phone-files.ts). */
@@ -55,21 +55,6 @@ describe('files from a phone', () => {
     const view = redactPhoneResult('logs:read', { id: 'daemon', text, truncated: false }) as Record<string, unknown>;
     expect(view.text).toBe('y'.repeat(PHONE_FILES_VIEW.logTextChars - 1));
     expect(view.truncated).toBe(true);
-  });
-
-  it('runs through callFromPhone with the checked arguments only', async () => {
-    const seen: Array<[string, unknown[]]> = [];
-    const dispatch = (channel: string, args: unknown[]) => {
-      seen.push([channel, args]);
-      return { ok: false, error: 'conflict', hash: HASH, extra: '/abs' };
-    };
-    const out = await callFromPhone(dispatch, 'files:write', [CHAT, 'a.md', 'new', { expectHash: HASH }]);
-    expect(out).toEqual({ ok: false, error: 'conflict', hash: HASH });
-    expect(seen).toEqual([['files:write', [CHAT, 'a.md', 'new', { expectHash: HASH }]]]);
-    await callFromPhone(() => [], 'logs:read', ['app', { tailBytes: 1e9 }]);
-    seen.length = 0;
-    await callFromPhone(dispatch, 'logs:read', ['app', { tailBytes: 1e9, query: 'x' }]);
-    expect(seen).toEqual([['logs:read', ['app', { query: 'x', tailBytes: PHONE_FILES_VIEW.logSearchBytes }]]]);
   });
 
   it('still refuses the desktop absolute-path calls', () => {

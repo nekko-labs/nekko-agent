@@ -190,13 +190,3 @@ export function phoneUsageView(usage: unknown): Obj | null {
     }),
   };
 }
-
-/**
- * The computer's limits key for a provider a phone names by id (the phone
- * never sees keys or token references), or null when it has no limits to read.
- */
-export function phoneLimitsKey(providers: unknown, providerId: string): string | null {
-  const list = Array.isArray(providers) ? providers : [];
-  const found = list.find((p) => isObj(p) && p.id === providerId);
-  return isObj(found) ? limitsKeyFor(found as never) : null;
-}

@@ -119,19 +119,3 @@ export function parseTasks(markdown: string): SpecTask[] {
   }
   return out;
 }
-
-/**
- * Flip the checkbox state of the checklist item on `lineIndex`, returning the
- * rewritten markdown. A no-op (returns the input unchanged) if that line isn't
- * a checklist item.
- */
-export function toggleTaskLine(markdown: string, lineIndex: number): string {
-  const lines = markdown.split('\n');
-  const line = lines[lineIndex];
-  if (line == null) return markdown;
-  const m = TASK_RE.exec(line);
-  if (!m) return markdown;
-  const checked = m[2].toLowerCase() === 'x';
-  lines[lineIndex] = `${m[1]}[${checked ? ' ' : 'x'}] ${m[3]}`;
-  return lines.join('\n');
-}
