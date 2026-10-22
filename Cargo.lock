@@ -1828,7 +1828,6 @@ dependencies = [
 name = "nekko-native"
 version = "0.1.0"
 dependencies = [
- "axum",
  "base64 0.22.1",
  "block2",
  "futures-util",
@@ -1926,7 +1925,6 @@ dependencies = [
  "hkdf",
  "hmac",
  "p256",
- "serde",
  "serde_json",
  "sha2",
  "zeroize",
