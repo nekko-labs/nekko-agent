@@ -136,6 +136,12 @@ async fn prepare_sub_agent(
     if crate::admission::provider_endpoint(&provider).is_none() {
         return Err("Target provider requires a valid HTTP(S) endpoint.".into());
     }
+    if js::truthy(parent.get("cloudOnly")) && !crate::admission::cloud_provider_allowed(&provider) {
+        return Err(
+            "This chat runs on cloud models only, so a sub-agent cannot use a local model. No child was created."
+                .into(),
+        );
+    }
     if explicit_model || default_route.is_some() {
         let pid = target_provider.as_str().unwrap_or_default();
         let listed = crate::providers::list_models_status(ctx, pid).await;
@@ -175,6 +181,7 @@ async fn prepare_sub_agent(
         "memory",
         "guidance",
         "offline",
+        "cloudOnly",
         "incognito",
     ] {
         if let Some(v) = parent.get(key) {

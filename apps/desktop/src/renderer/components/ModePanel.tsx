@@ -1,16 +1,16 @@
 import React, { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import type { ChatMode, EffortLevel, ExecutionMode, GuidanceLevel, ChatMemory, SavedMode, SavedModeIcon, Session, WorkModeId } from '@nekko-agent/shared';
+import type { ChatMode, EffortLevel, ExecutionMode, ModelScope, GuidanceLevel, ChatMemory, SavedMode, SavedModeIcon, Session, WorkModeId } from '@nekko-agent/shared';
 import {
-  CONNECTOR_CATALOG, WORK_MODES, chatEffort, defaultSavedMode, getExecutionMode, getSessionWorkspaceIds, getWorkMode, matchSavedMode, newSavedModeId,
-  savedModeSummary, savedModes, sessionModeOptions, sessionPatchForMode,
+  CONNECTOR_CATALOG, WORK_MODES, chatEffort, chatModelScope, defaultSavedMode, getExecutionMode, getSessionWorkspaceIds, getWorkMode, matchSavedMode, newSavedModeId,
+  modePatchSkips, savedModeSummary, savedModes, sessionModeOptions, sessionPatchForMode,
 } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
 import { addFolderToChat, applyFolderSelection, withExcluded } from '../sessionFolders.js';
 import { EFFORT_LABEL, effortRungs } from './ChatMetrics.js';
 import { ToolsList, toolCounts, useChatTools } from './ChatControls.js';
 import {
-  BoltIcon, BrainIcon, CapIcon, CheckIcon, ChevronIcon, CloseIcon, CompassIcon, CubeIcon, DialIcon, DocTextIcon, EffortBarsIcon,
+  BoltIcon, BrainIcon, CapIcon, CheckIcon, ChevronIcon, CloseIcon, CloudIcon, CompassIcon, CubeIcon, DialIcon, DocTextIcon, EffortBarsIcon,
   ExternalIcon, FileIcon, FolderIcon, GaugeIcon, ListIcon, GlobeIcon, GlobeOffIcon, HandIcon, IncognitoIcon, LaptopIcon, LockIcon, PlugIcon, PlusIcon,
   RouteIcon, ServerIcon, ShieldCheckIcon, ShieldIcon, SparkleIcon, StarIcon, WorktreeIcon, WrenchIcon, BoltIcon as YoloIcon,
 } from '../icons.js';
@@ -19,6 +19,25 @@ const WORKTREE_DOCS = 'https://git-scm.com/docs/git-worktree';
 
 export const SAVED_MODE_GLYPH: Record<SavedModeIcon, (p: { className?: string }) => React.ReactElement> = {
   bolt: BoltIcon, dial: DialIcon, incognito: IncognitoIcon, box: CubeIcon, cap: CapIcon, sparkle: SparkleIcon, shield: ShieldIcon, 'globe-off': GlobeOffIcon,
+  cloud: CloudIcon, route: RouteIcon, laptop: LaptopIcon,
+};
+
+const MODEL_SCOPE_DESC: Record<ModelScope | 'any', string> = {
+  cloud: 'Cloud providers only. A model on this machine is refused.',
+  fusion: 'Auto picks per turn and may move a turn between local and cloud models: never a weaker one, local counts as free.',
+  local: 'Models on this machine only, with the internet off. Nothing leaves your computer.',
+  any: 'Any provider you pick. Choose one to pin where this chat\'s models run.',
+};
+
+/** Why a mode or scope could not be applied as is to a chat on this model. */
+const SKIP_NOTE = {
+  offline: 'This chat is on a cloud model, so the internet stays on. Pick a local model to keep it on this machine.',
+  cloudOnly: 'This chat is on a local model, so Cloud only is not set. Pick a cloud model first.',
+};
+
+/** Tell the open chat pane its model changed (Auto on), as the model picker does. */
+const announceBrain = (s: Session | null) => {
+  if (s) window.dispatchEvent(new CustomEvent('nekko-session-brain', { detail: { id: s.id, session: s } }));
 };
 
 const MEMORY_DESC: Record<ChatMemory, string> = {
@@ -115,14 +134,35 @@ export function modePanelActions({ session, isCloudModel, onChange, onSandboxSet
       if (on) off.delete(kind); else off.add(kind);
       try { await patchChat({ disabledConnectors: [...off].sort() }); } catch (e) { toastError(e); }
     },
+    /**
+     * Pin where this chat's models run, or (`null`) stop pinning. Local needs a
+     * local model and Cloud only a cloud one; the chat is not switched for them.
+     */
+    async setModelScope(scope: ModelScope | null) {
+      const info = (m: string) => useStore.getState().pushToast('info', m);
+      if (scope === 'local' && isCloudModel) { info(SKIP_NOTE.offline); return; }
+      if (scope === 'cloud' && !isCloudModel) { info(SKIP_NOTE.cloudOnly); return; }
+      const now = chatModelScope(session);
+      const patch: Partial<Session> = scope === 'cloud' ? { cloudOnly: true, offline: false }
+        : scope === 'local' ? { offline: true, cloudOnly: false }
+        : scope === 'fusion' ? { offline: false, cloudOnly: false, autoModel: true, autoProviderSwitch: true }
+        : now === 'local' ? { offline: false } : now === 'cloud' ? { cloudOnly: false } : now === 'fusion' ? { autoProviderSwitch: false } : {};
+      try {
+        const next = await patchChat(patch);
+        if (patch.autoModel) announceBrain(next);
+      } catch (e) { toastError(e); }
+    },
     /** Put this chat in a saved mode: one per-chat write, then the sandbox dialog if it needs one. */
     async applyMode(mode: SavedMode) {
       const patch = sessionPatchForMode(mode.options, { cloudModel: isCloudModel });
+      const skipped = modePatchSkips(mode.options, { cloudModel: isCloudModel });
       const intoSandbox = mode.options.executionMode === 'sandbox' && getExecutionMode(session) !== 'sandbox';
       if (intoSandbox) { delete patch.executionMode; delete patch.gitIsolation; delete patch.mode; }
       try {
-        await patchChat(patch);
+        const next = await patchChat(patch);
         lastApplied.set(session.id, mode.id);
+        if (patch.autoModel) announceBrain(next);
+        if (skipped) useStore.getState().pushToast('info', SKIP_NOTE[skipped]);
         if (intoSandbox) onSandboxSetup();
       } catch (e) { toastError(e); }
     },
@@ -289,6 +329,7 @@ export function ModePanel({
     </div>
   );
   const approvals: ChatMode = current.mode;
+  const scope = chatModelScope(session);
 
   return (<>
     <div ref={(el) => { panel.current = el; if (typeof panelRef === 'function') panelRef(el); else if (panelRef) (panelRef as React.MutableRefObject<HTMLDivElement | null>).current = el; }}
@@ -300,6 +341,7 @@ export function ModePanel({
           const isDefault = m.id === defaultId;
           return (
             <div key={m.id} className="mode-rail-item" aria-checked={active?.id === m.id} role="radio" tabIndex={0} data-saved-mode={m.id}
+              title={`${m.name}: ${savedModeSummary(m.options) || 'local'}`}
               onClick={() => void actions.applyMode(m)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void actions.applyMode(m); } }}>
               <span className="mode-glyph"><Glyph /></span>
               <span className="min-w-0 flex-1"><span className="mode-rail-n">{m.name}</span><span className="mode-rail-d">{savedModeSummary(m.options) || 'local'}</span></span>
@@ -352,6 +394,12 @@ export function ModePanel({
             {sandbox && <button className="mode-link" onClick={onSandboxSetup}>Sandbox setup</button>}
 
             <p className="mode-sec mt-3"><DialIcon /> Model</p>
+            <div className="mode-row is-stacked">
+              <span className="mode-ic">{scope === 'cloud' ? <CloudIcon /> : scope === 'local' ? <LaptopIcon /> : <RouteIcon />}</span>
+              <span className="min-w-0 flex-1"><span className="mode-t">Models run</span><span className="mode-s">{MODEL_SCOPE_DESC[scope ?? 'any']}</span></span>
+              {tiles<ModelScope | 'any'>('Models run', scope ?? 'any', [['cloud', 'Cloud only', <CloudIcon />, { 'data-model-scope': 'cloud' }], ['fusion', 'Fusion', <RouteIcon />, { 'data-model-scope': 'fusion' }], ['local', 'Local only', <LaptopIcon />, { 'data-model-scope': 'local' }]],
+                (v) => void actions.setModelScope(v === scope ? null : v as ModelScope))}
+            </div>
             {soon(<RouteIcon />, 'Model router', 'Picks the model for each turn from what the task needs.')}
             <div className="mode-row is-stacked">
               <span className="mode-ic"><GaugeIcon /></span>

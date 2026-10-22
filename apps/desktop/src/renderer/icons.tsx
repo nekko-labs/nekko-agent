@@ -134,6 +134,7 @@ export const SlidersIcon = (p: P) => <S {...p}><path d="M6 4v4m0 4v8M12 4v10m0 4
 export const ControlPanelIcon = (p: P) => <S {...p}><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M8 6v3m0 4v5m8-12v7m0 4v1M6 9h4m4 4h4" /><circle cx="8" cy="11" r="2" /><circle cx="16" cy="15" r="2" /></S>;
 
 /* Mode panel glyphs: one per setting and per option, so the panel scans by shape. */
+export const CloudIcon = (p: P) => (<S {...p}><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.6 9.1 4.7 4.7 0 0 0 7 18.5z" /></S>);
 export const LaptopIcon = (p: P) => (<S {...p}><rect x="4" y="4.5" width="16" height="11" rx="1.5" /><path d="M2 19.5h20" /></S>);
 export const CubeIcon = (p: P) => (<S {...p}><path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7zM3.5 7 12 11.5 20.5 7M12 11.5v10" /></S>);
 export const HandIcon = (p: P) => (<S {...p}><path d="M8 12V5.5a1.5 1.5 0 0 1 3 0V11M11 10.5V4a1.5 1.5 0 0 1 3 0v6.5M14 10.5V5.5a1.5 1.5 0 0 1 3 0V13c0 4.2-2.7 7.5-6.7 7.5-2.4 0-3.9-1.2-5-3L3.4 14.4a1.5 1.5 0 0 1 2.4-1.8L8 15" /></S>);

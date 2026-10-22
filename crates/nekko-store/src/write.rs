@@ -30,6 +30,7 @@ const OPTION_KEYS: &[&str] = &[
     "memory",
     "guidance",
     "offline",
+    "cloudOnly",
     "incognito",
     "executionMode",
     "gitIsolation",
@@ -49,10 +50,10 @@ const OPTION_KEYS: &[&str] = &[
 /// `STARTER_MODES` (packages/shared/src/saved-modes.ts): the saved modes until
 /// the user saves their own. The sessions golden test checks it is the TS list.
 pub const STARTER_MODES: &str = r#"[
-  { "id": "everyday", "name": "Everyday", "icon": "bolt", "options": { "executionMode": "worktree", "mode": "guardrails", "offline": false, "incognito": false, "disabledTools": [], "workMode": "default" } },
-  { "id": "deep-work", "name": "Deep work", "icon": "dial", "options": { "executionMode": "worktree", "mode": "yolo", "offline": false, "incognito": false, "disabledTools": [], "workMode": "best-output", "effort": "high" } },
-  { "id": "private", "name": "Private", "icon": "incognito", "options": { "executionMode": "worktree", "mode": "ask", "offline": false, "incognito": true, "disabledTools": [], "workMode": "default" } },
-  { "id": "untrusted-repo", "name": "Untrusted repo", "icon": "box", "options": { "executionMode": "sandbox", "mode": "ask", "offline": false, "incognito": false, "disabledTools": [], "workMode": "default" } }
+  { "id": "cloud", "name": "Cloud only", "icon": "cloud", "options": { "executionMode": "worktree", "mode": "guardrails", "offline": false, "incognito": false, "disabledTools": [], "workMode": "default", "models": "cloud" } },
+  { "id": "fusion", "name": "Fusion", "icon": "route", "options": { "executionMode": "worktree", "mode": "guardrails", "offline": false, "incognito": false, "disabledTools": [], "workMode": "default", "models": "fusion" } },
+  { "id": "local", "name": "Local only", "icon": "laptop", "options": { "executionMode": "worktree", "mode": "guardrails", "offline": true, "incognito": false, "disabledTools": [], "workMode": "default", "models": "local" } },
+  { "id": "risky-business", "name": "Risky business", "icon": "box", "options": { "executionMode": "sandbox", "mode": "ask", "offline": true, "incognito": false, "disabledTools": [], "workMode": "default" } }
 ]"#;
 
 /// `getExecutionMode(session)`: its own, else unified when Git isolation is off.
@@ -129,6 +130,17 @@ fn apply_mode(s: &mut JsObject, options: &Value) {
             s.set(k, Some(v));
         }
     }
+    // `modelScopePatch`: a new chat has no model yet, so nothing is held back.
+    match get("models").as_ref().and_then(Value::as_str) {
+        Some("cloud") => s.set("cloudOnly", Some(json!(true))),
+        Some("fusion") => {
+            s.set("cloudOnly", Some(json!(false)));
+            s.set("autoModel", Some(json!(true)));
+            s.set("autoProviderSwitch", Some(json!(true)));
+        }
+        Some("local") => s.set("cloudOnly", Some(json!(false))),
+        _ => {}
+    }
 }
 
 /// What a running turn's save takes from disk rather than from memory
@@ -145,6 +157,7 @@ const USER_FIELDS: &[&str] = &[
     "memory",
     "guidance",
     "offline",
+    "cloudOnly",
     "incognito",
     "executionMode",
     "gitIsolation",
