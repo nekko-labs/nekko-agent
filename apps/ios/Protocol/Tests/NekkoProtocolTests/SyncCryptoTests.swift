@@ -64,12 +64,37 @@ final class SyncCryptoTests: XCTestCase {
         XCTAssertEqual(SyncCrypto.base64url(device.publicKeyX963), v["device"]?.str("public"))
         XCTAssertEqual(SyncCrypto.fingerprint(publicKey: device.publicKeyX963), v["device"]?.str("fingerprint"))
 
-        let wrap = try SyncCrypto.wrapKeyring(keyring, account: account, keyId: 1, deviceId: deviceId,
-                                              devicePublic: device.publicKeyX963, ephemeral: eph)
+        let sender = try SyncCrypto.SoftwareKey(rawRepresentation: try d(v["sender"], "private"))
+        let senderId = try XCTUnwrap(v["sender"]?.str("id"))
+        XCTAssertEqual(SyncCrypto.base64url(sender.publicKeyX963), v["sender"]?.str("public"))
+        let wrap = try SyncCrypto.wrapKeyring(keyring, account: account, keyId: 1, recipientId: deviceId, recipientPublic: device.publicKeyX963,
+                                              senderId: senderId, sender: sender, ephemeral: eph)
         XCTAssertEqual(wrap, v["wrap"]?.str("blob"))
-        XCTAssertEqual(try SyncCrypto.unwrapKeyring(key: device, account: account, keyId: 1, deviceId: deviceId, wrap: wrap), keyring)
-        XCTAssertThrowsError(try SyncCrypto.unwrapKeyring(key: device, account: account, keyId: 1, deviceId: "another", wrap: wrap))
-        XCTAssertThrowsError(try SyncCrypto.unwrapKeyring(key: SyncCrypto.SoftwareKey(), account: account, keyId: 1, deviceId: deviceId, wrap: wrap))
+        let open = { (key: SyncAgreementKey, device: String, from: String, fromKey: Data) in
+            try SyncCrypto.unwrapKeyring(key: key, account: account, keyId: 1, deviceId: device, senderId: from, senderPublic: fromKey, wrap: wrap)
+        }
+        XCTAssertEqual(try open(device, deviceId, senderId, sender.publicKeyX963), keyring)
+        XCTAssertThrowsError(try open(device, "another", senderId, sender.publicKeyX963))
+        XCTAssertThrowsError(try open(SyncCrypto.SoftwareKey(), deviceId, senderId, sender.publicKeyX963))
+        // Only as coming from the device that made it: anyone else's key, or another sender id, fails.
+        XCTAssertThrowsError(try open(device, deviceId, senderId, SyncCrypto.SoftwareKey().publicKeyX963))
+        XCTAssertThrowsError(try open(device, deviceId, "dev_other", sender.publicKeyX963))
+
+        // Join codes: the same tag and wrap as the computer makes.
+        let join = try XCTUnwrap(v["join"])
+        let code = try SyncCrypto.JoinCode(text: try XCTUnwrap(join.str("code")).lowercased())
+        XCTAssertEqual(code, try SyncCrypto.JoinCode(bytes: Data(SHA256Seed.bytes("join-code").prefix(10))))
+        XCTAssertEqual(code.text, join.str("code"))
+        let tag = try d(join, "tag")
+        XCTAssertEqual(code.tag(account: account, publicKey: device.publicKeyX963), tag)
+        XCTAssertTrue(code.verifies(account: account, publicKey: device.publicKeyX963, tag: tag))
+        XCTAssertFalse(code.verifies(account: account, publicKey: sender.publicKeyX963, tag: tag), "a swapped key fails")
+        let joinWrap = try SyncCrypto.wrapForJoin(keyring, account: account, keyId: 3, recipientId: deviceId,
+                                                  recipientPublic: device.publicKeyX963, code: code, ephemeral: eph)
+        XCTAssertEqual(joinWrap, join.str("blob"))
+        XCTAssertEqual(try SyncCrypto.unwrapJoin(key: device, account: account, keyId: 3, deviceId: deviceId, code: code, wrap: joinWrap), keyring)
+        XCTAssertThrowsError(try SyncCrypto.unwrapJoin(key: device, account: account, keyId: 3, deviceId: deviceId,
+                                                       code: SyncCrypto.JoinCode.generate(), wrap: joinWrap))
 
         let recovery = try SyncCrypto.RecoveryKey(bytes: try d(v["recovery"], "key"))
         XCTAssertEqual(recovery.text, v["recovery"]?.str("text"))
@@ -102,6 +127,12 @@ final class SyncCryptoTests: XCTestCase {
         XCTAssertThrowsError(try SyncCrypto.RecoveryKey(text: String(chars)))
         XCTAssertThrowsError(try SyncCrypto.RecoveryKey(text: String(key.text.dropLast())))
         XCTAssertThrowsError(try SyncCrypto.RecoveryKey(text: key.text + "0"))
+        // ASCII only, as on the computer: no Unicode case mapping ("ß" would become "SS").
+        XCTAssertThrowsError(try SyncCrypto.RecoveryKey(text: key.text.replacingOccurrences(of: "-", with: "ß")))
+        let code = SyncCrypto.JoinCode.generate()
+        XCTAssertEqual(code.text.count, 19)
+        XCTAssertEqual(try SyncCrypto.JoinCode(text: code.text.lowercased().replacingOccurrences(of: "-", with: " ")), code)
+        XCTAssertThrowsError(try SyncCrypto.JoinCode(text: String(code.text.dropLast())))
     }
 
     func testEveryFlippedBitIsCaughtAndSealsNeverRepeat() throws {

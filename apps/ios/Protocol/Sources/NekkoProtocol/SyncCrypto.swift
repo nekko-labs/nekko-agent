@@ -23,9 +23,11 @@ public protocol SyncAgreementKey {
 ///   fresh 32-byte salt, the account, epoch, collection, object id and
 ///   revision bound as associated data, and the plaintext Padmé-padded;
 /// - the keyring **wrapped** to each device's P-256 key (ECIES; on the iPhone
-///   the private key is a Secure Enclave key) and to the public half of a
-///   P-256 key derived from a 256-bit **recovery
-///   key** the user keeps;
+///   the private key is a Secure Enclave key), authenticated by the sending
+///   device's key, and to the public half of a P-256 key derived from a 256-bit
+///   **recovery key** the user keeps;
+/// - a one-time **join code** for approving a new device, which checks the new
+///   device's key on the approver and the approver on the new device;
 /// - opt-in **donations** sealed to Nekko Labs' offline research key.
 public enum SyncCrypto {
     public static let version = "nekko-sync/v1"
@@ -193,36 +195,162 @@ public enum SyncCrypto {
 
     /// ECIES to a P-256 public key. `ephemeral` is injectable for the shared vectors only.
     public static func seal(to recipient: Data, context: String, plaintext: Data, ephemeral: SoftwareKey = SoftwareKey()) throws -> String {
+        try seal(to: recipient, context: context, plaintext: plaintext, ephemeral: ephemeral, extraIKM: Data(), extraSalt: Data())
+    }
+
+    /// ECIES with extra key material: `extraIKM` follows the ephemeral ECDH
+    /// secret and `extraSalt` the salt (an authenticated wrap passes the
+    /// sender's static secret and public key; a join wrap the join code's key).
+    static func seal(to recipient: Data, context: String, plaintext: Data, ephemeral: SoftwareKey, extraIKM: Data,
+                     extraSalt: Data) throws -> String {
         let peer = try parsePublic(recipient)
         let ephPub = ephemeral.publicKeyX963
         let secret = try ephemeral.sharedSecret(with: peer)
-        let (key, nonce) = keyAndNonce(secret: secret, salt: ephPub + recipient, info: Data(context.utf8))
+        let (key, nonce) = keyAndNonce(ikm: raw(secret) + extraIKM, salt: ephPub + recipient + extraSalt, info: Data(context.utf8))
         let box = try AES.GCM.seal(plaintext, using: key, nonce: nonce, authenticating: Data(context.utf8))
         return base64url(Data([blobVersion]) + ephPub + box.ciphertext + box.tag)
     }
 
     public static func openSealed(key: SyncAgreementKey, context: String, blob: String) throws -> Data {
+        try openSealed(key: key, context: context, blob: blob, extraIKM: Data(), extraSalt: Data())
+    }
+
+    static func openSealed(key: SyncAgreementKey, context: String, blob: String, extraIKM: Data, extraSalt: Data) throws -> Data {
         let raw = try fromBase64url(blob)
         guard raw.count >= 1 + publicKeyLength + tagBytes, raw.first == blobVersion else { throw Failure.malformed }
         let ephPub = raw.subdata(in: 1..<(1 + publicKeyLength))
         guard let peer = try? parsePublic(ephPub) else { throw Failure.malformed }
         let secret = try key.sharedSecret(with: peer)
-        let (k, nonce) = keyAndNonce(secret: secret, salt: ephPub + key.publicKeyX963, info: Data(context.utf8))
+        let (k, nonce) = keyAndNonce(ikm: Self.raw(secret) + extraIKM, salt: ephPub + key.publicKeyX963 + extraSalt,
+                                     info: Data(context.utf8))
         return try open(raw.suffix(from: 1 + publicKeyLength), key: k, nonce: nonce, aad: Data(context.utf8))
     }
 
-    static func wrapContext(account: String, keyId: UInt32, deviceId: String) -> String {
-        "\(version) wrap\n\(account)\n\(keyId)\n\(deviceId)"
+    static func raw(_ secret: SharedSecret) -> Data {
+        secret.withUnsafeBytes { Data($0) }
     }
 
-    public static func wrapKeyring(_ keyring: Keyring, account: String, keyId: UInt32, deviceId: String, devicePublic: Data,
-                                   ephemeral: SoftwareKey = SoftwareKey()) throws -> String {
-        try seal(to: devicePublic, context: wrapContext(account: account, keyId: keyId, deviceId: deviceId),
-                 plaintext: keyring.bytes, ephemeral: ephemeral)
+    static func wrapContext(account: String, keyId: UInt32, recipientId: String, senderId: String) -> String {
+        "\(version) wrap\n\(account)\n\(keyId)\n\(recipientId)\n\(senderId)"
     }
 
-    public static func unwrapKeyring(key: SyncAgreementKey, account: String, keyId: UInt32, deviceId: String, wrap: String) throws -> Keyring {
-        try Keyring(bytes: openSealed(key: key, context: wrapContext(account: account, keyId: keyId, deviceId: deviceId), blob: wrap))
+    /// Wrap a keyring to a device, authenticated by the sending device's own
+    /// key (a static-static ECDH secret in the derivation): only the holder of
+    /// `sender` could have made it, so a device takes keyrings only from
+    /// devices it already trusts.
+    public static func wrapKeyring(_ keyring: Keyring, account: String, keyId: UInt32, recipientId: String, recipientPublic: Data,
+                                   senderId: String, sender: SyncAgreementKey, ephemeral: SoftwareKey = SoftwareKey()) throws -> String {
+        let staticSecret = try raw(sender.sharedSecret(with: parsePublic(recipientPublic)))
+        return try seal(to: recipientPublic, context: wrapContext(account: account, keyId: keyId, recipientId: recipientId, senderId: senderId),
+                        plaintext: keyring.bytes, ephemeral: ephemeral, extraIKM: staticSecret, extraSalt: sender.publicKeyX963)
+    }
+
+    /// Open a wrap made by `senderId`, whose public key comes from this device's own trusted list.
+    public static func unwrapKeyring(key: SyncAgreementKey, account: String, keyId: UInt32, deviceId: String, senderId: String,
+                                     senderPublic: Data, wrap: String) throws -> Keyring {
+        let staticSecret = try raw(key.sharedSecret(with: parsePublic(senderPublic)))
+        return try Keyring(bytes: openSealed(key: key, context: wrapContext(account: account, keyId: keyId, recipientId: deviceId, senderId: senderId),
+                                             blob: wrap, extraIKM: staticSecret, extraSalt: senderPublic))
+    }
+
+    // MARK: Join codes
+
+    /// The one-time code a device asking to join shows, typed on a device that
+    /// already syncs. Its tag (published with the new device's key) lets the
+    /// approver check that key; the keyring is wrapped with a key derived from
+    /// it, so the new device knows the wrap came from someone shown the code.
+    public struct JoinCode: Equatable {
+        let bytes: Data
+        static let textLength = 16
+
+        public init(bytes: Data) throws {
+            guard bytes.count == 10 else { throw Failure.invalid }
+            self.bytes = bytes
+        }
+
+        public static func generate() -> JoinCode { try! JoinCode(bytes: E2E.randomBytes(10)) }
+
+        /// `XXXX-XXXX-XXXX-XXXX`.
+        public var text: String { groups(crockford(bytes), of: 4) }
+
+        /// What the user typed (as leniently as a recovery key; no checksum, a typo fails the tag).
+        public init(text: String) throws {
+            bytes = try decodeCrockford(text, chars: Self.textLength)
+        }
+
+        /// The tag the new device publishes with its key.
+        public func tag(account: String, publicKey: Data) -> Data {
+            let k = derive32(bytes, info: "\(version) join-tag")
+            return Data(HMAC<SHA256>.authenticationCode(for: Data("\(account)\n".utf8) + publicKey, using: SymmetricKey(data: k)))
+        }
+
+        /// Does `tag` bind this code to that key? Constant time.
+        public func verifies(account: String, publicKey: Data, tag: Data) -> Bool {
+            let want = self.tag(account: account, publicKey: publicKey)
+            guard tag.count == want.count else { return false }
+            return zip(want, tag).reduce(UInt8(0)) { $0 | ($1.0 ^ $1.1) } == 0
+        }
+
+        func psk(account: String, deviceId: String) -> Data {
+            derive32(bytes, info: "\(version) join-psk\n\(account)\n\(deviceId)")
+        }
+    }
+
+    static func joinContext(account: String, keyId: UInt32, deviceId: String) -> String {
+        "\(version) join-wrap\n\(account)\n\(keyId)\n\(deviceId)"
+    }
+
+    /// On the approving device: wrap the current keyring to the new device, keyed by the code the user typed.
+    public static func wrapForJoin(_ keyring: Keyring, account: String, keyId: UInt32, recipientId: String, recipientPublic: Data,
+                                   code: JoinCode, ephemeral: SoftwareKey = SoftwareKey()) throws -> String {
+        try seal(to: recipientPublic, context: joinContext(account: account, keyId: keyId, deviceId: recipientId), plaintext: keyring.bytes,
+                 ephemeral: ephemeral, extraIKM: code.psk(account: account, deviceId: recipientId), extraSalt: Data())
+    }
+
+    /// On the new device: open the wrap made with its own code.
+    public static func unwrapJoin(key: SyncAgreementKey, account: String, keyId: UInt32, deviceId: String, code: JoinCode,
+                                  wrap: String) throws -> Keyring {
+        try Keyring(bytes: openSealed(key: key, context: joinContext(account: account, keyId: keyId, deviceId: deviceId), blob: wrap,
+                                      extraIKM: code.psk(account: account, deviceId: deviceId), extraSalt: Data()))
+    }
+
+    /// HKDF-SHA256 with an empty salt, 32 bytes.
+    static func derive32(_ ikm: Data, info: String) -> Data {
+        HKDF<SHA256>.deriveKey(inputKeyMaterial: SymmetricKey(data: ikm), salt: Data(), info: Data(info.utf8), outputByteCount: 32)
+            .withUnsafeBytes { Data($0) }
+    }
+
+    static func groups(_ text: String, of n: Int) -> String {
+        stride(from: 0, to: text.count, by: n).map { i in
+            let a = text.index(text.startIndex, offsetBy: i)
+            return String(text[a..<text.index(a, offsetBy: min(n, text.count - i))])
+        }.joined(separator: "-")
+    }
+
+    /// Exactly `chars` Crockford base32 characters back to bytes: any case,
+    /// dashes and ASCII spaces ignored, O read as 0, I and L as 1. ASCII only,
+    /// so the iPhone reads text exactly as the computer does. The bits after
+    /// the last whole byte must be zero.
+    static func decodeCrockford(_ text: String, chars: Int) throws -> Data {
+        var raw = Data()
+        var acc: UInt32 = 0, bits: UInt32 = 0, n = 0
+        for b in text.utf8 {
+            if b == 0x2d || b == 0x20 || b == 0x09 || b == 0x0a || b == 0x0d { continue }
+            guard b < 0x80 else { throw Failure.malformed }
+            var c = Character(UnicodeScalar(b >= 0x61 && b <= 0x7a ? b - 0x20 : b))
+            if c == "O" { c = "0" } else if c == "I" || c == "L" { c = "1" }
+            guard let v = alphabet.firstIndex(of: c) else { throw Failure.malformed }
+            n += 1
+            guard n <= chars else { throw Failure.malformed }
+            acc = ((acc << 5) | UInt32(v)) & 0xFFFF
+            bits += 5
+            if bits >= 8 {
+                bits -= 8
+                raw.append(UInt8((acc >> bits) & 0xFF))
+            }
+        }
+        guard n == chars, acc & ((1 << bits) - 1) == 0 else { throw Failure.malformed }
+        return raw
     }
 
     // MARK: Recovery key
@@ -267,21 +395,8 @@ public enum SyncCrypto {
 
         /// What the user typed: any case, dashes and spaces ignored, O read as 0, I and L as 1.
         public init(text: String) throws {
-            var raw = Data()
-            var acc: UInt32 = 0, bits: UInt32 = 0, chars = 0
-            for c in text.uppercased() where c != "-" && !c.isWhitespace {
-                let mapped: Character = c == "O" ? "0" : (c == "I" || c == "L") ? "1" : c
-                guard let v = alphabet.firstIndex(of: mapped) else { throw Failure.malformed }
-                chars += 1
-                guard chars <= recoveryTextLength else { throw Failure.malformed }
-                acc = ((acc << 5) | UInt32(v)) & 0xFFFF
-                bits += 5
-                if bits >= 8 {
-                    bits -= 8
-                    raw.append(UInt8((acc >> bits) & 0xFF))
-                }
-            }
-            guard chars == recoveryTextLength, raw.count == 34, acc & ((1 << bits) - 1) == 0 else { throw Failure.malformed }
+            let raw = try decodeCrockford(text, chars: recoveryTextLength)
+            guard raw.count == 34 else { throw Failure.malformed }
             let key = raw.prefix(32)
             guard Data(SHA256.hash(data: key)).prefix(2) == raw.suffix(2) else { throw Failure.checksum }
             bytes = Data(key)
@@ -344,10 +459,6 @@ public enum SyncCrypto {
 
     static func keyAndNonce(ikm: Data, salt: Data, info: Data) -> (SymmetricKey, AES.GCM.Nonce) {
         split(HKDF<SHA256>.deriveKey(inputKeyMaterial: SymmetricKey(data: ikm), salt: salt, info: info, outputByteCount: 44))
-    }
-
-    static func keyAndNonce(secret: SharedSecret, salt: Data, info: Data) -> (SymmetricKey, AES.GCM.Nonce) {
-        split(secret.hkdfDerivedSymmetricKey(using: SHA256.self, salt: salt, sharedInfo: info, outputByteCount: 44))
     }
 
     static func split(_ okm: SymmetricKey) -> (SymmetricKey, AES.GCM.Nonce) {

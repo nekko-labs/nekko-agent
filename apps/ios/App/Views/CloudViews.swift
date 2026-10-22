@@ -12,6 +12,7 @@ struct CloudView: View {
     @State private var error: String?
     @State private var busy = false
     @State private var approving: CloudSync.Device?
+    @State private var approveCode = ""
     @State private var recoveryText = ""
 
     var body: some View {
@@ -46,12 +47,20 @@ struct CloudView: View {
         .navigationTitle("Nekko Cloud")
         .navigationBarTitleDisplayMode(.inline)
         .task { if cloud.signedIn { await run { try await cloud.sync() } } }
-        .confirmationDialog(approving.map { "Approve \($0.label)?" } ?? "", isPresented: Binding(get: { approving != nil }, set: { if !$0 { approving = nil } }),
-                            titleVisibility: .visible, presenting: approving) { d in
-            Button("It shows \(d.fingerprint)") { Task { await run { try await cloud.approve(deviceId: d.id) } } }
-            Button("Cancel", role: .cancel) {}
+        // Approving types the join code the computer shows: it checks the computer's key here, and this iPhone there.
+        .alert(approving.map { "Approve \($0.label)?" } ?? "", isPresented: Binding(get: { approving != nil }, set: { if !$0 { approving = nil } }),
+               presenting: approving) { d in
+            TextField("XXXX-XXXX-XXXX-XXXX", text: $approveCode)
+                .font(.body.monospaced()).textInputAutocapitalization(.characters).autocorrectionDisabled()
+                .accessibilityIdentifier("cloud.approveCode")
+            Button("Approve") {
+                let code = approveCode
+                approveCode = ""
+                Task { await run { try await cloud.approve(deviceId: d.id, code: code) } }
+            }
+            Button("Cancel", role: .cancel) { approveCode = "" }
         } message: { d in
-            Text("Only approve it if it's yours and its screen shows this code: \(d.fingerprint). It will be able to read everything you sync.")
+            Text("Type the code \(d.label) shows. Only approve it if it's yours: it will be able to read everything you sync.")
         }
     }
 
@@ -86,7 +95,7 @@ struct CloudView: View {
         case .needsPlan: return "Sync is part of Nekko Cloud Pro and Team."
         case .notSetUp: return "Open Settings → Sync on your computer and turn it on first."
         case .needsJoin: return "Use your recovery key, or approve this iPhone on a computer."
-        case .awaitingApproval: return "Approve this iPhone in Settings → Sync on a computer."
+        case .awaitingApproval: return "Type this iPhone's code in Settings → Sync on a computer."
         case .idle, .syncing, .error:
             let n = cloud.chats.count
             let when = cloud.lastSyncAt.map { " · synced \($0.formatted(.relative(presentation: .named)))" } ?? ""
@@ -111,17 +120,17 @@ struct CloudView: View {
                 Button("Ask to join") { Task { await run { try await cloud.requestJoin() } } }.disabled(busy)
                     .accessibilityIdentifier("cloud.requestJoin")
             } header: { SectionHeader("Or approve it on a computer") } footer: {
-                Text("This iPhone shows a code; approve it on a computer that already syncs after checking the code matches.").foregroundStyle(palette.inkSoft)
+                Text("This iPhone shows a one-time code; type it on a computer that already syncs.").foregroundStyle(palette.inkSoft)
             }
         case .awaitingApproval:
             Section {
-                Text(cloud.fingerprint ?? "")
+                Text(cloud.joinCode ?? "")
                     .font(.title2.monospaced().weight(.semibold)).frame(maxWidth: .infinity).padding(.vertical, 8)
-                    .accessibilityLabel("Code: \(cloud.fingerprint?.map { String($0) }.joined(separator: " ") ?? "")")
-                    .accessibilityIdentifier("cloud.fingerprint")
+                    .accessibilityLabel("Code: \(cloud.joinCode?.map { String($0) }.joined(separator: " ") ?? "")")
+                    .accessibilityIdentifier("cloud.joinCode")
                 Button("Check now") { Task { await run { try await cloud.sync() } } }.disabled(busy)
             } header: { SectionHeader("This iPhone's code") } footer: {
-                Text("On your computer: Settings → Sync → Devices → Approve. Check it shows the same code.").foregroundStyle(palette.inkSoft)
+                Text("On your computer: Settings → Sync → Devices → Approve, then type this code. It proves to each device that the other is yours; don't share it with anyone else.").foregroundStyle(palette.inkSoft)
             }
         case .idle, .syncing, .error:
             Section {
@@ -148,7 +157,7 @@ struct CloudView: View {
                             Text(d.fingerprint).font(.caption.monospaced()).foregroundStyle(palette.inkFaint)
                         }
                         Spacer()
-                        if !d.trusted && !d.thisDevice {
+                        if !d.trusted && !d.thisDevice && d.askedToJoin {
                             Button("Approve") { approving = d }.buttonStyle(.borderedProminent).controlSize(.small)
                         }
                     }

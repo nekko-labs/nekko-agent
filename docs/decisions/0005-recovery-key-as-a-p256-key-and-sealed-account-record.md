@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: accepted; the account record part superseded by 0007
 date: 2026-10-22
 ---
 
