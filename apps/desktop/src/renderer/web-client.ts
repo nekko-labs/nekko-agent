@@ -255,17 +255,13 @@ function makeWebClient(): NekkoApi {
       return text ? JSON.parse(text) : null;
     };
     let ws: WebSocket | null = null;
-    // Asked once: an older server (or one running the engine in-process) has no such channel.
-    let caps: Promise<{ terminalStream?: boolean; engine?: string } | null> | null = null;
-    const capabilities = () => (caps ??= call('web:capabilities').catch(() => null));
-    // The chats whose agent event stream this page takes (null: every chat's).
-    // Only nekkod narrows a stream; the in-process server sends everything.
+    // The chats whose agent event stream this page takes (null: every chat's);
+    // nekkod narrows the stream to them.
     let narrowTo: string[] | null = null;
-    let daemonEvents = false;
     const connect = () => {
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
       const params = new URLSearchParams();
-      if (daemonEvents && narrowTo) params.set('sessions', narrowTo.join(','));
+      if (narrowTo) params.set('sessions', narrowTo.join(','));
       if (token()) params.set('token', token());
       const q = params.toString() ? `?${params}` : '';
       const socket = new WebSocket(`${proto}://${location.host}/api/events${q}`);
@@ -282,15 +278,12 @@ function makeWebClient(): NekkoApi {
       socket.onclose = () => setTimeout(connect, 1000); // auto-reconnect
     };
     connect();
-    void capabilities().then((c) => { daemonEvents = c?.engine === 'nekkod'; if (daemonEvents) subscribe(narrowTo); });
     subscribe = (ids) => {
       narrowTo = ids ? [...new Set(ids)] : null;
-      if (!daemonEvents || ws?.readyState !== WebSocket.OPEN) return; // sent with the next connect
+      if (ws?.readyState !== WebSocket.OPEN) return; // sent with the next connect
       ws.send(JSON.stringify({ channel: 'daemon:subscribe', args: [narrowTo] }));
     };
-    const daemonTerminals = () => capabilities().then((c) => c?.terminalStream === true);
     openTerminalStream = async (id, handlers) => {
-      if (!(await daemonTerminals())) return null;
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
       const q = token() ? `?token=${encodeURIComponent(token())}` : '';
       return openTerminalSocket(`${proto}://${location.host}/api/term/${encodeURIComponent(id)}${q}`, handlers);
