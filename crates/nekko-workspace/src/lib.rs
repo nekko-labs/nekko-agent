@@ -8,8 +8,7 @@
 //! `workspace.ts` and core's indexer, with JavaScript's rules where they
 //! show in the result (`localeCompare` order, UTF-16 lengths, `String()`
 //! of a missing value, `JSON.stringify(x, null, 2)` layout). Held to the TS
-//! functions by the golden set `packages/host/src/workspace.golden.test.ts`
-//! writes (`tests/golden`).
+//! functions by a frozen golden set (`tests/golden`).
 
 pub mod comments;
 pub mod design;

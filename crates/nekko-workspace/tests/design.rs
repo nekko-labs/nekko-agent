@@ -1,6 +1,6 @@
-//! design.rs against design.ts: `golden/design.json` is written by
-//! packages/host/src/design.golden.test.ts from `golden/design-cases.json`
-//! (the model's answers scripted there, handed to `land` here).
+//! design.rs against design.ts: `golden/design.json` is a frozen record of
+//! the deleted TS functions on `golden/design-cases.json` (the model's
+//! answers scripted there, handed to `land` here).
 
 use nekko_workspace::design;
 use serde_json::{Map, Value, json};

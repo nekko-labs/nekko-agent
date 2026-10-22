@@ -1,7 +1,7 @@
 // Writes the fixture sessions for the summary parity test. Run once when the
 // fixtures need to change: node crates/nekko-store/tests/golden/make-fixtures.mjs
-// The expected summaries are written by the TS test
-// (packages/host/src/session-summary.golden.test.ts, UPDATE_GOLDEN=1).
+// The expected summaries (summaries.json) are a frozen record of the deleted
+// TS behaviour; edit them by hand per docs/runbooks/golden-fixtures.md.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';

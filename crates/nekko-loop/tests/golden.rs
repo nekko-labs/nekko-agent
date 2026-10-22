@@ -1,7 +1,8 @@
 //! The Rust loop helpers against the TS ones.
 //!
-//! `golden/expected.json` is written by `packages/host/src/loop-helpers.golden.test.ts`
-//! (UPDATE_GOLDEN=1) from `golden/cases.json`; this test runs the same cases
+//! `golden/expected.json` is a frozen record of what the deleted TS helpers
+//! gave for `golden/cases.json` (edit it by hand per
+//! docs/runbooks/golden-fixtures.md); this test runs the same cases
 //! through the ports and must match every entry.
 
 use nekko_loop::{

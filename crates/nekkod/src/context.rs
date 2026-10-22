@@ -218,8 +218,8 @@ mod tests {
         }
     }
 
-    /// The same tree and cases as packages/host/src/context-preview.golden.test.ts,
-    /// which writes `expected.json` from the real `previewContext`.
+    /// The same tree and cases the deleted TS `previewContext` ran;
+    /// `expected.json` is a frozen record of what it gave.
     #[test]
     fn every_preview_matches_the_ts_host() {
         let golden = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden/context-preview");

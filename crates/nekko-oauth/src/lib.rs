@@ -9,8 +9,8 @@
 //! store. Token sets keep the TS object literals' key order, with
 //! `undefined` fields left out as `JSON.stringify` leaves them out, so the
 //! file and every value handed back are what the TS host produced.
-//! `tests/golden.rs` holds it to the TS functions
-//! (packages/host/src/oauth.golden.test.ts writes the expected set). The
+//! `tests/golden.rs` holds it to a frozen record of the deleted TS functions.
+//! The
 //! stateful half (pending sessions, loopback listeners, renewal) is
 //! `crates/nekkod/src/oauth.rs`.
 

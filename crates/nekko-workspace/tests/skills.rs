@@ -1,5 +1,5 @@
 //! skills.rs against skills.ts and external-skills.ts: `golden/skills.json`
-//! is written by packages/host/src/skills.golden.test.ts from
+//! is a frozen record of the deleted TS functions on
 //! `golden/skills-cases.json` (and `src/skills-data.json` beside it).
 
 use nekko_workspace::skills;

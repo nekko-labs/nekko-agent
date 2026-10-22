@@ -3,8 +3,8 @@
 //! answer (`parseReplySuggestions` in shared/chat.ts), and the prompt-part
 //! fill request (`fillPrompt`) and its answer (`cleanFill`).
 //!
-//! Held to the TS by `packages/host/src/side-prompts.golden.test.ts`, which
-//! writes `tests/golden/side.json`.
+//! Held to the TS by `tests/golden/side.json`, a frozen record of the deleted
+//! TS functions.
 
 use nekko_js as js;
 use serde_json::{Value, json};

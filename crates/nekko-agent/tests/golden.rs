@@ -1,9 +1,9 @@
 //! The Rust providers against the TS ones.
 //!
-//! `golden/requests.json`, `streams.json` and `models.json` are written by
-//! the real TS providers (packages/core/src/providers/providers.golden.test.ts,
-//! which also fails if they go stale), from the inputs in `golden/*-cases.json`
-//! and `providers.json` (make-fixtures.mjs). Each provider here runs against a
+//! `golden/requests.json`, `streams.json` and `models.json` are a frozen
+//! record of what the deleted TS providers did with the inputs in
+//! `golden/*-cases.json` and `providers.json` (make-fixtures.mjs); edit them
+//! by hand per docs/runbooks/golden-fixtures.md. Each provider here runs against a
 //! fake transport that records what it sends and plays back the same
 //! responses, and must match exactly:
 //!

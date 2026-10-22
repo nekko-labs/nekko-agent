@@ -1,5 +1,6 @@
-//! Exact parity with core's capacity planner, over the golden set
-//! `packages/host/src/runtimes/capacity.golden.test.ts` writes.
+//! Exact parity with core's capacity planner, over `golden/capacity.json`, a
+//! frozen record of the deleted TS behaviour (edit it by hand per
+//! docs/runbooks/golden-fixtures.md).
 
 use nekko_engine::capacity::{
     AutoFitInput, FitRequest, Hardware, ModelFacts, PlanOptions, auto_fit, estimate_overhead_bytes, head_dim_of,

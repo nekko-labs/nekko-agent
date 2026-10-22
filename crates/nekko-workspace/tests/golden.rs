@@ -1,9 +1,9 @@
 //! The Rust ports against the TS functions.
 //!
-//! `golden/expected.json` is written by the real `files.ts`, `memory.ts`,
-//! `comments.ts` and `workspace.ts` (packages/host/src/workspace.golden.test.ts,
-//! which also fails when it goes stale), running `golden/cases.json` over the
-//! tree in `golden/tree.json`. This runs the same cases on the same tree and
+//! `golden/expected.json` is a frozen record of the deleted `files.ts`,
+//! `memory.ts`, `comments.ts` and `workspace.ts` running `golden/cases.json`
+//! over the tree in `golden/tree.json` (edit it by hand per
+//! docs/runbooks/golden-fixtures.md). This runs the same cases on the same tree and
 //! must print the same text, key order included.
 
 use nekko_js as js;

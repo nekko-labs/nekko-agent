@@ -468,8 +468,8 @@ pub fn status(configs: &Value, snapshot: &Value) -> Value {
 mod tests {
     use super::*;
 
-    /// The rows the TS host reports for the same configs and daemon snapshot
-    /// (packages/host/src/mcp-status.golden.test.ts), compared as text so
+    /// The rows the TS host reported for the same configs and daemon snapshot
+    /// (a frozen record in `tests/golden`), compared as text so
     /// key order and left-out keys count.
     #[test]
     fn status_matches_the_ts_host() {

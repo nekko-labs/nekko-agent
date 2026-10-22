@@ -1,7 +1,7 @@
 //! The Rust training engine against the TS one.
 //!
-//! `golden/training.json` is written by
-//! `packages/host/src/training.golden.test.ts` (UPDATE_GOLDEN=1). The same
+//! `golden/training.json` is a frozen record of the deleted TS engine (edit
+//! it by hand per docs/runbooks/golden-fixtures.md). The same
 //! operations run here against a fake engine that behaves like the TS test's
 //! mocks, and `training.json`, every reply, change notice, chat made and turn
 //! sent must come out exactly as the TS wrote them.
