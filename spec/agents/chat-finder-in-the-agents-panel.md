@@ -1,0 +1,30 @@
+---
+title: "Chat finder in the Agents panel (2026-10-16)"
+area: agents
+split-from: SPEC.md (2026-10-22)
+---
+
+# Chat finder in the Agents panel (2026-10-16)
+
+User intent: a search button beside the Agents panel's +, in the same accent and size, opening a popup that lists the latest chats and filters them; rows open their chat; each row shows its age at the far right (days up to 30, then months); searching waits until typing pauses; light and snappy; an X closes it and the search button is the Nekko mark, like the composer's send.
+
+- **Button** `[implemented; renderer-verified in an isolated fixture]`: a magnifier between the view-options sliders and + in the panel header, in the sliders button's format (16px icon, faint ink that darkens on hover or while open). This supersedes the earlier accent-coloured 22px styling shared with +, which the user changed so it matches the filter.
+- **Popup** `[implemented; renderer-verified in an isolated fixture, light and dark]`: portalled under the button so the wall cannot clip it. Opens with **Latest** chats newest first (up to 50), active and completed alike (completed rows say so); incognito chats never appear. Typing filters once input pauses for 1 s (was 1.5 s; see below) (a thin accent line fills during the wait); Enter or the Nekko button searches at once. Every word must match the title, first prompt or latest reply; title matches list first, body matches show the matching snippet. Clicking a row, or Enter on settled results, opens the chat and closes the popup; arrow keys move the highlight. X, Esc or an outside click close it.
+- **Age label**: Today under a day, then 1 day … 30 days, then 1 month, 2 months … (whole 30-day months).
+- **Cost**: the search filters the chat summaries already in the renderer store; no IPC, no host work, no network. Beyond the title it matches only the first prompt and latest reply, which the summaries carry, not full transcripts.
+
+Not verified: packaged app, native window chrome, row-orientation panel, and very large chat histories (thousands of chats) for frame timing.
+
+## Search chats: messages, artifacts, groups, providers and dates
+
+User intent: the search should wait 1000 ms after typing (was 1.5 s); search not only titles and descriptions but whole chats, artifacts, chat groupings (General and each project, as the Agents panel groups them) and providers split by local or cloud; filter by a from–to date range picked in a single calendar view; every result opens its chat; group and provider results show their chats in the same popup to pick from. Responsive without losing accuracy.
+
+- **Debounce** `[implemented; unit + sandbox verified]`: `FINDER_DEBOUNCE_MS = 1000`; the wait line fills in 1 s. Enter or the Nekko button still search at once.
+- **Tabs** `[implemented; sandbox verified, dark and light]`: All, Chats, Messages, Artifacts, Groups, Providers. *Chats* matches titles and descriptions (first prompt, latest reply) only. *Messages* matches the text of every user and assistant message (skill input included; tool output, reasoning, images never). *All* matches title, description, messages and artifact names together, ranked title → description → messages → artifact, newest first in each. *Artifacts* lists documents/pages/designs/data a chat linked or wrote (the Artifacts tab's rules), one row per path owned by the newest chat; a row opens that chat, a hover button opens the file. *Groups* and *Providers* list each group or provider with a count and its chats (5, then Show all); a query naming the group/provider (or "local"/"cloud") keeps all its chats, otherwise only matching chats. Providers sit under Local models (llama.cpp, Ollama, LM Studio, vLLM, or an OpenAI-compatible endpoint on loopback), Cloud models, or Other (removed providers, chats with no model yet).
+- **Matching** `[implemented; unit verified]`: every word must appear (case-insensitive substring), in any order, possibly in different places of the chat. Nothing is sampled or fuzzy-ranked away; rows are capped at 50 for drawing and the true total is shown with a hint to narrow it. Incognito chats never appear.
+- **Accuracy while loading** `[implemented; unit verified]`: titles and descriptions come from the in-memory summaries and answer at once. Message and artifact text comes from a renderer-side transcript index, read through the existing `getSession` channel 6 chats at a time, newest first, only when a search needs it, and kept per chat version (`updatedAt`) for the app session. While it reads, the popup says "Reading chats N of M; results so far", so a partial list is never presented as complete. A chat not yet read can only match on its summary, never a false message hit. No new IPC channel, no disk writes, no network.
+- **Date range** `[implemented; sandbox verified]`: a calendar button opens one month grid; the first click sets *from*, the second *to* (either order), hovering previews the span; presets Today / 7 / 30 / 90 days; Clear and a chip × remove it. Whole local days, inclusive. A chat is in range when it was active in it (created on or before the end, updated on or after the start); message and artifact matches only count messages written inside the range. Esc closes the calendar before the popup.
+- **Opening results** `[implemented; sandbox verified for the request; in-chat landing unverified in the full app]`: every row (chat, message hit, artifact, chat inside a group or provider) opens its chat through the panel's existing open path and closes the popup. A message hit also opens that chat's Find in this chat bar on a matching word (only a word Find in chat's whole-word rule will find), so the reader lands on the match.
+- **Responsive** `[implemented; sandbox verified at 360 px]`: the popup is at most 420 px wide, shrinks to the window, and caps its height to the space below the button.
+
+Not verified: the find-in-chat landing inside the full desktop app (sandbox checks the seed only), packaged app, very large histories (thousands of chats / very long transcripts) for first-search read time and memory.

@@ -1,6 +1,6 @@
 /**
  * The speed contract's budgets, as p95 in milliseconds. The source of truth is
- * the table under "Speed & responsiveness" in SPEC.md; keep the two in step.
+ * the table in spec/platform/speed-responsiveness-the-speed-contract.md; keep the two in step.
  *
  * `target` is the product budget, met on a desktop at 120 Hz (8.3 ms is one
  * frame there). The GitHub `perf` job runs on a 4-vCPU runner with no GPU and a

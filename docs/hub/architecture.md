@@ -1,6 +1,6 @@
 # Architecture
 
-Nekko Agent is one engine and one React UI that run in several places: the desktop app, the self-hosted Local Web UI, Docker and the phone. This page is a map of the code for contributors. The full technical plan, with every decision and task, is in [`TASKS.md`](../../TASKS.md); what the product does and why is in [`SPEC.md`](../../SPEC.md).
+Nekko Agent is one engine and one React UI that run in several places: the desktop app, the self-hosted Local Web UI, Docker and the phone. This page is a map of the code for contributors. The full technical plan, with every decision and task, is in [`TASKS.md`](../../TASKS.md); what the product does and why is in [`spec/`](../../spec/README.md), one file per feature.
 
 ## The big picture
 
@@ -58,4 +58,4 @@ Status: implemented, unit and isolated fixture interaction tested; image/motion 
 
 - Engine behaviour goes in `packages/core` or a Rust crate, so it can be tested without Electron.
 - The desktop app only wires the engine to the window, the file system and the shell.
-- A change to what the product does also updates `SPEC.md`; a change to how it is built updates `TASKS.md`.
+- A change to what the product does also updates its file under `spec/` (and `node scripts/spec-index.mjs` for a new one); a change to how it is built updates `TASKS.md`.
