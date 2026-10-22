@@ -5,7 +5,7 @@
 //! in the TS host, which passes the fresh access token as `config.api_key`
 //! and the ChatGPT account id as `config.account_id`.
 
-use super::{Io, friendly_error};
+use super::{CATALOG_TIMEOUT, Io, friendly_error};
 use crate::http::HttpRequest;
 use crate::js;
 use crate::sse::SseParser;
@@ -254,15 +254,18 @@ impl ChatGptProvider {
     /// The live subscription catalog. The backend filters it by the
     /// `client_version` we report, the account's plan, and active rollouts, so
     /// the answer is exactly the set this sign-in can run — including models
-    /// that did not exist when this build shipped. None on any failure so the
-    /// caller falls back to the curated list.
+    /// that did not exist when this build shipped. None on any failure, or
+    /// after `CATALOG_TIMEOUT`, so the caller falls back to the curated list.
     async fn fetch_catalog(&self) -> Option<Vec<ModelInfo>> {
         let req = self.catalog_request()?;
-        let mut res = self.io.transport.send(&req).await.ok()?;
-        if !res.ok() {
-            return None;
-        }
-        let text = res.text().await;
+        let fetch = async {
+            let mut res = self.io.transport.send(&req).await.ok()?;
+            if !res.ok() {
+                return None;
+            }
+            Some(res.text().await)
+        };
+        let text = tokio::time::timeout(CATALOG_TIMEOUT, fetch).await.ok()??;
         let json: Value = serde_json::from_str(&text).ok()?;
         let rows = json.get("models").and_then(Value::as_array)?;
         let mut scored: Vec<(i64, usize, ModelInfo)> = rows

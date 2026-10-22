@@ -167,3 +167,30 @@ async fn a_stalled_anthropic_catalog_falls_back_after_five_seconds() {
         assert!(models.iter().any(|m| m.id == "claude-opus-5-5"));
     }
 }
+
+fn chatgpt(transport: Arc<dyn Transport>) -> AnyProvider {
+    let config: ProviderConfig = serde_json::from_value(json!({
+        "id": "p", "kind": "chatgpt", "baseUrl": "https://chatgpt.com/backend-api", "apiKey": "k", "accountId": "a",
+        "enabled": true,
+    }))
+    .unwrap();
+    create_provider_with(config, Io { transport, clock: nekko_agent::stream::system_clock() })
+}
+
+/// The ChatGPT catalog is held to the same five seconds.
+#[tokio::test(start_paused = true)]
+async fn a_stalled_chatgpt_catalog_falls_back_after_five_seconds() {
+    let headers_never_come = chatgpt(Arc::new(NeverAnswers));
+    let body_never_ends = chatgpt(Arc::new(Stalling {
+        first: "{\"models\":[",
+        dropped: Arc::new(AtomicBool::new(false)),
+        sends: AtomicUsize::new(0),
+    }));
+
+    for p in [headers_never_come, body_never_ends] {
+        let started = tokio::time::Instant::now();
+        let models = p.list_models().await.unwrap();
+        assert_eq!(started.elapsed(), Duration::from_secs(5));
+        assert!(models.iter().all(|m| m.fallback) && models.iter().any(|m| m.id == "gpt-6.1-sol"));
+    }
+}
