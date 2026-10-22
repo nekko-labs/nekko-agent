@@ -35,7 +35,7 @@ class PairingTest {
         assertNull(Pairing.parse("nekko-agent-pair:?relay=wss://r&room=$room&key=$key%ZZ"))
     }
 
-    /** The shared fixture (packages/host/src/pairing-link.golden.test.ts writes it): every phone parses alike. */
+    /** The shared fixture (packages/shared/src/pairing-link.golden.test.ts writes it): every phone parses alike. */
     @Test fun `parses the shared fixture like the computer, alt routes included`() {
         val cases = kotlinx.serialization.json.Json.parseToJsonElement(javaClass.getResource("/pairing-links.json")!!.readText())
             as kotlinx.serialization.json.JsonArray
