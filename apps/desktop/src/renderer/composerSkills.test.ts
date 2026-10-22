@@ -90,7 +90,7 @@ describe('composer slash trigger', () => {
 
 describe('composer triggers at the caret', () => {
   // `|` marks the caret in each case.
-  const at = (marked: string) => ({ draft: marked.replace('|', ''), caret: marked.indexOf('|') });
+  const at = (marked: string) => ({ draft: marked.replace(/\|/g, ''), caret: marked.indexOf('|') });
 
   it.each([
     ['Fix /| this', '', 4],
