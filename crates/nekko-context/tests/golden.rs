@@ -1,9 +1,10 @@
 //! The Rust context against the TS host's.
 //!
-//! `golden/expected.json` is written by `packages/host/src/context.golden.test.ts`
-//! (UPDATE_GOLDEN=1), which runs the real `collectGuidelines`, `collectAttached`,
-//! `listMemory`, `assembleContext`, `renderContextBlock` and `buildSystemPrompt`
-//! on a tree materialized from `golden/fixtures.json`. This test builds the same
+//! `golden/expected.json` is a frozen record of what the deleted TS
+//! `collectGuidelines`, `collectAttached`, `listMemory`, `assembleContext`,
+//! `renderContextBlock` and `buildSystemPrompt` gave on a tree materialized
+//! from `golden/fixtures.json`; edit it by hand per
+//! docs/runbooks/golden-fixtures.md. This test builds the same
 //! tree, runs the ports, and must produce the same JSON after the same
 //! normalization (the temp root, and backslashes as slashes).
 

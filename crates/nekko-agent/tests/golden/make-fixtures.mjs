@@ -1,8 +1,9 @@
 // Writes the inputs for the provider parity tests. Run when the fixtures
 // need to change: node crates/nekko-agent/tests/golden/make-fixtures.mjs
-// The expected outputs (requests.json, streams.json, models.json) are written
-// by the real TS providers (packages/core/src/providers/providers.golden.test.ts,
-// UPDATE_GOLDEN=1), and crates/nekko-agent/tests/golden.rs holds the port to them.
+// The expected outputs (requests.json, streams.json, models.json) are a frozen
+// record of the deleted TS providers' behaviour: a changed input needs them
+// edited by hand per docs/runbooks/golden-fixtures.md, and
+// crates/nekko-agent/tests/golden.rs holds the port to them.
 //
 // Keys and tokens here are fake; they are recorded verbatim so the tests
 // prove how each one is formatted into its header.

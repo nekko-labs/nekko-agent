@@ -1,6 +1,6 @@
 //! Compaction, image turns and starting a queued prompt against the TS
-//! functions: `golden/variants.json` is written by
-//! `packages/host/src/turn-variants.golden.test.ts` (UPDATE_GOLDEN=1), inputs
+//! functions: `golden/variants.json` is a frozen record of the deleted TS
+//! functions (edit it by hand per docs/runbooks/golden-fixtures.md), inputs
 //! and outputs side by side, and every input must give the same output here,
 //! compared as JSON text so key order counts.
 

@@ -1,7 +1,8 @@
 //! The Rust turn functions against the TS ones.
 //!
-//! `golden/expected.json` is written by `packages/host/src/turn-plan.golden.test.ts`
-//! (UPDATE_GOLDEN=1), inputs and outputs side by side; this test runs every
+//! `golden/expected.json` is a frozen record of the deleted TS functions,
+//! inputs and outputs side by side (edit it by hand per
+//! docs/runbooks/golden-fixtures.md); this test runs every
 //! input through the port and must match the output. Where the result is
 //! saved to a chat file (the transcript, stats, plans, questions) it must
 //! match as text, key order included.

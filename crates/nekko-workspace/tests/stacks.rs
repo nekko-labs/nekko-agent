@@ -1,7 +1,6 @@
-//! stacks.rs against the TS functions: `golden/stacks.json` is written by
-//! packages/host/src/pr-stacks.golden.test.ts, every scenario run through the
-//! real `continuePrStack` / `linkPrStack` with git, GitHub and the chats
-//! scripted. The port must give the same answer and make the same calls, in
+//! stacks.rs against the TS functions: `golden/stacks.json` is a frozen
+//! record of every scenario run through the deleted `continuePrStack` /
+//! `linkPrStack` with git, GitHub and the chats scripted. The port must give the same answer and make the same calls, in
 //! the same order, matched as text.
 
 use futures_util::future::BoxFuture;

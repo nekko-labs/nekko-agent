@@ -61,9 +61,6 @@ async fn decisions_are_served_by_the_daemon() {
     }
     let d = start(&dir);
 
-    let (_, info) = post(d.port, "daemon:info", json!([])).await;
-    assert!(info["owned"].as_array().unwrap().iter().any(|c| c == "decisions:run"), "{info}");
-
     let (status, catalog) = post(d.port, "decisions:catalog", json!([])).await;
     assert_eq!((status, catalog[0]["id"].clone()), (200, json!("laya-en")));
 

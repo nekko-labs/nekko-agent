@@ -1,4 +1,4 @@
-//! Replays the TS library's golden set (`library.golden.test.ts`): the same
+//! Replays the frozen TS library golden set (`golden/library.json`): the same
 //! GGUF headers read the same, the same names get the same modality, the
 //! same fixture tree lists, imports, deletes and reports the same rows, text
 //! for text, and `library.json` ends up the same after every step.

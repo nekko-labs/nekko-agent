@@ -1,8 +1,8 @@
 //! The Rust OAuth functions against the TS ones.
 //!
-//! `golden/expected.json` is written by the real functions in oauth.ts
-//! (packages/host/src/oauth.golden.test.ts, which also fails if it goes
-//! stale) for every case in `golden/cases.json`. Values are compared as
+//! `golden/expected.json` is a frozen record of what the deleted oauth.ts
+//! gave for every case in `golden/cases.json` (edit it by hand per
+//! docs/runbooks/golden-fixtures.md). Values are compared as
 //! `JSON.stringify` text, so key order and number format count, and errors
 //! by message.
 

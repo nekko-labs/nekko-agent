@@ -11,6 +11,7 @@ on:
       - 'crates/nekko-remote/**'
       - 'crates/nekkod/src/remote.rs'
       - 'packages/shared/src/phone-access.ts'
+      - 'packages/shared/src/pairing-link.ts'
       - '.github/workflows/ios-native.yml'
   schedule:
     - cron: '37 */6 * * *'

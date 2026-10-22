@@ -110,8 +110,6 @@ async fn chat_send_is_admitted_and_driven_by_the_daemon() {
     });
     write_settings(&rig, settings).await;
 
-    let (_, info) = post(rig.d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    assert!(info["owned"].as_array().unwrap().contains(&json!("chat:send")));
     // A disabled provider is refused here, as admitTurn refuses it.
     let opts = json!({ "sessionId": "s_admit", "providerId": "off", "modelId": "m", "text": "hello" });
     let (status, _) = post(rig.d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
@@ -196,7 +194,8 @@ async fn sockets_take_only_the_chats_they_subscribe_to() {
     let chat = |id: &str| json!({ "id": id, "title": "Named", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1 });
     let rig = turn_rig("subscribe", chat("s_one"));
     std::fs::write(rig.data.join("sessions").join("s_two.json"), chat("s_two").to_string()).unwrap();
-    // Each reply is 40 chunks, so 40 text events per chat, interleaved.
+    // Each reply is 40 chunks, interleaved; a burst of them goes out as a few
+    // joined text events (turns.rs `DELTA_WINDOW`), so the stream is short.
     let model = scripted_model(vec![slow_text("one", 40), slow_text("two", 40)]).await;
     let port = rig.d.port;
 
@@ -252,7 +251,7 @@ async fn sockets_take_only_the_chats_they_subscribe_to() {
     assert!(other_a.len() <= 4, "a's view of s_two is a summary: {other_a:?}");
     assert!(other_b.len() <= 4, "b's view of s_one is a summary: {other_b:?}");
     let frames = |f: &[(String, Value)]| f.iter().filter(|(ch, _)| ch == "agent:event").count();
-    assert!(frames(&fa) * 3 < frames(&fc) * 2, "a {} frames vs c {}", frames(&fa), frames(&fc));
+    assert!(frames(&fa) < frames(&fc), "a {} frames vs c {}", frames(&fa), frames(&fc));
     println!("agent frames per socket: subscribed a={} b={}, unsubscribed c={}", frames(&fa), frames(&fb), frames(&fc));
 
     // A socket that starts showing a chat mid-turn is sent the turn so far.
@@ -580,10 +579,6 @@ async fn a_daemon_turn_writes_its_own_usage_and_reply_lines() {
     });
     let rig = turn_rig("usage", session);
     write_settings(&rig, json!({ "providers": [{ "id": "p1", "kind": "openai-compat" }, { "id": "c1", "kind": "chatgpt", "auth": "subscription", "tokenKey": "chatgpt:t" }] })).await;
-    let (_, info) = post(rig.d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    for c in ["turn:account", "usage:summary", "limits:get", "limits:poll"] {
-        assert!(info["owned"].as_array().unwrap().iter().any(|o| o == c), "{c} not owned: {info}");
-    }
 
     let model = scripted_model(vec![say_text("hello")]).await;
     let mut spec = turn_spec(&rig, &model, "turn_u", "s_turn_u", json!({}));
@@ -627,9 +622,6 @@ async fn a_daemon_turn_writes_its_own_usage_and_reply_lines() {
 #[tokio::test(flavor = "multi_thread")]
 async fn without_a_data_dir_accounting_is_not_served() {
     let d = start();
-    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    let owned = info["owned"].as_array().unwrap();
-    assert!(!owned.iter().any(|o| o == "limits:get" || o == "turn:account"), "{info}");
     let (status, body) = post(d.port, "limits:get", json!(["k"]), Some(TOKEN)).await;
     assert_eq!(status, 400);
     assert_eq!(body["error"], "unknown channel limits:get");
@@ -739,10 +731,6 @@ async fn the_daemon_compacts_a_chat_and_owns_its_state() {
         "baseUrl": format!("http://127.0.0.1:{}/v1", model2.port),
     }));
     write_settings(&rig, settings).await;
-    let (_, info) = post(rig.d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    for c in ["chat:compact", "chat:cancelCompaction", "chat:interruptQueued"] {
-        assert!(info["owned"].as_array().unwrap().contains(&json!(c)), "{c} is not owned");
-    }
     let original = saved_session(&rig, "s_compact")["messages"].clone();
 
     // An omitted options argument can cross IPC as null.

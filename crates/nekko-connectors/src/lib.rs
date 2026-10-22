@@ -2,7 +2,8 @@
 //! `packages/core/src/connectors`: the reads (`fetch`) that feed chat context
 //! and the Connectors page, the polls workflow listeners run, and the action
 //! runners workflow steps call. Every request and result matches the TS code
-//! (held to it by `packages/core/src/connectors/connectors.golden.test.ts`).
+//! (held to it by `tests/golden/connectors.json`, a frozen record of the
+//! deleted TS code).
 
 pub mod actions;
 pub mod connectors;

@@ -4,10 +4,9 @@
 //! (`packages/host/src/changes.ts`) and the ported tools' `BUILTIN_TOOLS`
 //! specs.
 //!
-//! The agent loop moves to Rust next (PF14) and calls [`execute`] with a
-//! [`ToolContext`] per call. Until then nothing calls this crate at run
-//! time; it is held to the TS behaviour by golden files the TS code writes
-//! (`tests/golden`, see `packages/host/src/agent-tools.golden.test.ts`).
+//! The daemon's agent loop calls [`execute`] with a [`ToolContext`] per
+//! call. It is held to the TS behaviour by frozen golden files
+//! (`tests/golden`, edited by hand per docs/runbooks/golden-fixtures.md).
 //!
 //! Parity is the point, so the TS semantics are ported rather than
 //! approximated: JavaScript regular expressions ([`jsre`]), Node's `path`

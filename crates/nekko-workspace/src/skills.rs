@@ -7,7 +7,8 @@
 //!
 //! The built-in catalog, the built-in skill names and the bundled Vaizer
 //! snapshot come from the TS sources (`skills-data.json`, written by
-//! packages/host/src/skills.golden.test.ts, which fails when it goes stale).
+//! packages/shared's `engine-data.golden.test.ts`, which fails when it goes
+//! stale).
 
 use nekko_js as js;
 use nekko_tools::nodefs;

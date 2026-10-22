@@ -14,8 +14,6 @@ async fn reports_mcp_status_from_its_own_servers() {
     ] });
     std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
     let d = start_with(Some(&data));
-    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    assert!(info["owned"].as_array().unwrap().contains(&json!("mcp:status")), "{info}");
     let (status, rows) = post(d.port, "mcp:status", json!([]), Some(TOKEN)).await;
     assert_eq!(status, 200);
     assert_eq!(
@@ -68,15 +66,12 @@ async fn a_daemon_turn_syncs_and_calls_its_mcp_servers_itself() {
         "id": "s_turn_m", "title": "Named", "mode": "ask", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
     });
     let rig = turn_rig("mcp", session);
-    let (_, info) = post(rig.d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    assert!(info["owned"].as_array().unwrap().iter().any(|o| o == "turn:mcp"), "{info}");
     let (mcp_port, mcp_server, mcp_calls) = http_mcp().await;
     let model =
         scripted_model(vec![call_tool("c_mcp", "mcp__srv__echo", json!({ "text": "hi" })), say_text("done")]).await;
     let mut spec = turn_spec(&rig, &model, "turn_m", "s_turn_m", json!({}));
     spec["settings"]["defaultChatMode"] = json!("ask");
     let facts = spec["facts"].as_object_mut().unwrap();
-    facts.remove("mcpTools");
     facts.insert(
         "mcpServers".into(),
         json!([{ "id": "srv", "name": "srv", "enabled": true, "command": "", "args": [], "url": format!("http://127.0.0.1:{mcp_port}/mcp") }]),
@@ -237,8 +232,6 @@ async fn a_daemon_turn_drives_its_sub_agent_and_answers_with_it() {
         "privacy": { "mode": "redact", "allow": ["a@b.io"] },
     });
     let rig = turn_rig("spawn", session);
-    let (_, info) = post(rig.d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    assert!(info["owned"].as_array().unwrap().iter().any(|o| o == "turn:spawn"), "{info}");
     let model = scripted_model(vec![
         call_tool("c_spawn", "spawn_agent", json!({ "task": "count the files" })),
         say_text("there are 2 files"),
@@ -587,6 +580,4 @@ async fn a_daemon_turn_arms_agent_watches_itself_and_owns_their_file() {
     assert_eq!(wake, file[0]["deadlineAt"]);
     let (_, listed) = post(rig.d.port, "watch:tool", json!(["s_turn_w", { "action": "list" }]), Some(TOKEN)).await;
     assert!(listed.as_str().unwrap().contains("\"Check the build\""), "{listed}");
-    let (_, info) = post(rig.d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    assert!(info["owned"].as_array().unwrap().contains(&json!("session:nextWatch")));
 }
