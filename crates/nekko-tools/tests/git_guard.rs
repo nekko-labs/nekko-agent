@@ -77,9 +77,12 @@ async fn writing_git_config_asks_in_guardrails() {
     let _ = std::fs::remove_dir_all(ws);
 }
 
+/// A command and the environment changes it was given.
+type Ran = (String, Vec<nekko_tools::gitguard::EnvChange>);
+
 /// Records the environment each command would get.
 #[derive(Default)]
-struct Recorder(Mutex<Vec<(String, Vec<(String, Option<String>)>)>>);
+struct Recorder(Mutex<Vec<Ran>>);
 
 impl CommandRunner for Recorder {
     fn run<'a>(&'a self, req: RunRequest<'a>) -> BoxFuture<'a, RunOutcome> {
