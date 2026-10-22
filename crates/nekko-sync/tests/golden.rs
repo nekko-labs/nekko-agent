@@ -9,10 +9,7 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
 fn seed<const N: usize>(name: &str) -> [u8; N] {
-    let d = Sha256::digest(name.as_bytes());
-    let mut out = [0u8; N];
-    out.copy_from_slice(&d[..N]);
-    out
+    Sha256::digest(name.as_bytes())[..N].try_into().expect("a seed is at most 32 bytes")
 }
 
 const ACCOUNT: &str = "6f1c2a8e-3b4d-4e5f-8a9b-0c1d2e3f4a5b";

@@ -49,10 +49,9 @@ impl Keyring {
         if bytes.len() != 64 {
             return Err(Error::Malformed);
         }
-        let mut k = Keyring { enc: [0; 32], id: [0; 32] };
-        k.enc.copy_from_slice(&bytes[..32]);
-        k.id.copy_from_slice(&bytes[32..]);
-        Ok(k)
+        let enc = bytes[..32].try_into().map_err(|_| Error::Malformed)?;
+        let id = bytes[32..].try_into().map_err(|_| Error::Malformed)?;
+        Ok(Keyring { enc, id })
     }
 
     /// `enc ‖ id`, for wrapping and the OS keystore. Zeroize it after use.
