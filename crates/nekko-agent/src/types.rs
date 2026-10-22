@@ -125,6 +125,11 @@ pub struct ModelInfo {
     /// today, and the live-limit layering happens in the UI.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub availability: Option<Value>,
+    /// Served from the shipped catalog rather than a live listing (the live
+    /// one failed, or the provider has none). Never on the wire: the update
+    /// check reads it so an outage doesn't look like the models changing.
+    #[serde(skip)]
+    pub fallback: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

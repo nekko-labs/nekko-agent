@@ -332,6 +332,7 @@ impl ChatGptProvider {
                     provider_id: self.config.id.clone(),
                     name: name.to_string(),
                     context_length: (*ctx > 0).then_some(*ctx),
+                    fallback: true,
                     ..Default::default()
                 })
                 .collect()
