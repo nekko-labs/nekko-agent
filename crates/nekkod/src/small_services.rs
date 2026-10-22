@@ -445,7 +445,7 @@ impl UpdateHost for DaemonSide<'_> {
 
     fn list_models<'a>(&'a self, provider_id: &'a str) -> BoxFuture<'a, Option<Vec<String>>> {
         Box::pin(async move {
-            let models = crate::providers::listed_models(self.ctx, provider_id).await.ok()?;
+            let models = crate::providers::listed_models_fresh(self.ctx, provider_id).await.ok()?;
             if models.iter().any(|m| m.fallback) {
                 return None;
             }
