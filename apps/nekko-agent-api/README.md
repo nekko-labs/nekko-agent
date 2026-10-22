@@ -29,6 +29,15 @@ hostname).
   hides; a filled one gets a fake success. Always answers `202 {ok:true}` on
   valid input, new or repeat, so the form can't reveal who is on the list.
   Browser calls are accepted only from `ALLOWED_ORIGINS`; 5 per IP per hour.
+- `/v1/sync/*`: end-to-end encrypted sync for Pro and Team (see
+  [docs/SYNC-ENCRYPTION.md](../../docs/SYNC-ENCRYPTION.md)). Bearer `nk_` tokens
+  (stored as SHA-256); the service stores only ciphertext, opaque ids and
+  revisions and never holds a key that opens them. Writes need `users.plan` in
+  `pro`/`team` (402 otherwise); reading, revoking and `DELETE /v1/sync` work on
+  any plan. Nothing issues tokens yet: sign-in is still to come.
+- `POST /v1/donations`, `DELETE /v1/donations/:id`: opt-in samples sealed to
+  the offline research key. Unauthenticated, not request-logged, no sender
+  columns; withdrawn with the device's delete token, expired after 180 days.
 - `GET /healthz`: Fly's health check. The machine stops when idle and wakes on
   the next request in about a second; the signup page should call this on load
   so that happens before anyone presses Join.
@@ -41,7 +50,10 @@ hostname).
 - `signups`: one row per email per list (`unique (list, lower(email))`), status
   `pending → invited → joined` or `unsubscribed`, optional `user_id`.
 - `users`: the long-term account record (`unique lower(email)`); a signup that
-  gets let in becomes a user. Nothing writes it yet.
+  gets let in becomes a user. `plan` is `free`, `pro` or `team`. Nothing writes it yet.
+- `api_tokens`, `sync_devices`, `sync_keyrings`, `sync_key_wraps`,
+  `sync_objects`, `sync_usage`: encrypted sync (migration `0002`).
+- `donations`: sealed opt-in samples, with no user, device or IP column.
 
 ## Run it
 

@@ -506,9 +506,23 @@ struct LogDetailView: View {
                     .disabled(loading)
                     .accessibilityIdentifier("log.refresh")
             }
+            ToolbarItem(placement: .primaryAction) {
+                if let shown {
+                    ShareLink(item: LogShare.text(title: log.title, log: shown)) {
+                        Label("Share", systemImage: "square.and.arrow.up")
+                    }
+                    .accessibilityIdentifier("log.share")
+                    .accessibilityHint("What this screen shows, as text, with secrets removed.")
+                }
+            }
         }
         .task { if tail == nil { await load() } }
         .task(id: query) { await search() }
+    }
+
+    /// What *Share* sends: the search results while searching, else the tail.
+    private var shown: LogText? {
+        query.trimmingCharacters(in: .whitespaces).isEmpty ? tail : found
     }
 
     private func tailView(_ t: LogText) -> some View {
