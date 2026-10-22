@@ -134,7 +134,10 @@ mod tests {
         let p = std::env::temp_dir().join(format!("nekko-pr-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&p);
         std::fs::create_dir_all(&p).unwrap();
-        std::fs::canonicalize(p).unwrap()
+        let canonical = std::fs::canonicalize(p).unwrap().to_string_lossy().into_owned();
+        // Windows canonical paths use a verbatim prefix (`\\?\C:\...`) that Git
+        // reads as a network host and refuses to clone from.
+        canonical.strip_prefix(r"\\?\").unwrap_or(&canonical).into()
     }
 
     /// A remote with a PR ref, and the user's clone of it on main.
