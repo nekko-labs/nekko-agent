@@ -754,16 +754,19 @@ impl Turns {
                 nekko_tools::hooks::run_hook(&rule, "TurnEnd", &sid, None, &cwd, &payload).await;
             });
         }
-        let fresh = store.get(&session_id);
-        let linked = fresh.as_ref().is_some_and(|s| {
-            js::truthy(s.get("specLinked")) && !js::truthy(s.get("incognito")) && !js::truthy(s.get("offline"))
-        });
-        if linked && let Some(d) = self.dispatch.get() {
-            let build = d("spec:build".into(), vec![json!(session_id)]);
-            tokio::spawn(async move {
-                let _ = build.await;
+        let Some(d) = self.dispatch.get().cloned() else { return };
+        let store = store.clone();
+        tokio::spawn(async move {
+            // Read off the async workers, and without the transcript.
+            let id = session_id.clone();
+            let fresh = tokio::task::spawn_blocking(move || store.meta(&id)).await.ok().flatten();
+            let linked = fresh.as_ref().is_some_and(|s| {
+                js::truthy(s.get("specLinked")) && !js::truthy(s.get("incognito")) && !js::truthy(s.get("offline"))
             });
-        }
+            if linked {
+                let _ = d("spec:build".into(), vec![json!(session_id)]).await;
+            }
+        });
     }
 
     async fn after_turn(
@@ -1494,6 +1497,16 @@ fn context_block(
     nekko_context::render_block(&bundle)
 }
 
+/// A chat's fields but its transcript, for a reader that never looks at it.
+fn without_messages(session: &Value) -> Value {
+    match session {
+        Value::Object(o) => {
+            Value::Object(o.iter().filter(|(k, _)| *k != "messages").map(|(k, v)| (k.clone(), v.clone())).collect())
+        }
+        other => other.clone(),
+    }
+}
+
 /// `persist()`: save the turn's chat over whatever the user changed on disk
 /// meanwhile (`saveTurnSession`); never an incognito chat.
 async fn persist(store: &Arc<SessionStore>, session: &Arc<Mutex<Value>>, incognito: bool) {
@@ -1948,7 +1961,12 @@ impl TurnTools {
         }
         let session_id = self.shared.session_id.clone();
         let (store, sid) = (self.store.clone(), session_id.clone());
-        let stored = tokio::task::spawn_blocking(move || store.get(&sid)).await.ok().flatten();
+        // The chat as stored, but for its transcript, which a sandbox tool never reads.
+        let stored = tokio::task::spawn_blocking(move || store.meta(&sid))
+            .await
+            .ok()
+            .flatten()
+            .map(nekko_store::Meta::into_value);
         let settings = match &self.turns.settings {
             Some(s) => {
                 let s = s.clone();
@@ -2007,7 +2025,7 @@ impl TurnTools {
             let output = json!({ "ok": false, "code": code, "message": message, "fallbackUsed": false });
             json!({ "toolCallId": id, "output": js::stringify(&output), "isError": true })
         };
-        let session = lock(&self.session).clone();
+        let session = without_messages(&lock(&self.session));
         let spawn_off = session
             .get("disabledTools")
             .and_then(Value::as_array)
@@ -2096,7 +2114,8 @@ impl TurnTools {
             let prepared = match self.turns.dispatch.get().filter(|_| self.turns.store.is_some()) {
                 // Checked, made and admitted here (spawn.rs); the parent's own mode is the child's.
                 Some(d) => {
-                    let mut parent = lock(&self.session).clone();
+                    // The child takes the parent's settings, never its transcript.
+                    let mut parent = without_messages(&lock(&self.session));
                     parent["mode"] = json!(self.mode);
                     let req = json!({
                         "parent": parent, "providerId": self.provider_id, "modelId": self.model_id,

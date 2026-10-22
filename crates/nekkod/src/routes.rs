@@ -153,11 +153,13 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             .and_then(Value::as_str)
             .or_else(|| if channel == "mcp:call" { str_arg(&args, 1) } else { None });
         if let Some(id) = session_id {
-            let store = ctx.sessions.as_ref().ok_or(NO_SESSIONS)?;
-            let session = store.get(id).ok_or("Session not found")?;
-            if session.get("id").and_then(Value::as_str) != Some(id)
-                || !session.get("messages").is_some_and(Value::is_array)
-            {
+            let (store, sid) = (ctx.sessions.clone().ok_or(NO_SESSIONS)?, id.to_string());
+            // Only the chat's own fields are read: its transcript is skipped, off the async workers.
+            let session = tokio::task::spawn_blocking(move || store.meta(&sid))
+                .await
+                .map_err(|e| e.to_string())?
+                .ok_or("Session not found")?;
+            if session.get("id").and_then(Value::as_str) != Some(id) || !session.messages_array {
                 return Err("Cannot verify session execution mode: session not found".into());
             }
             if session.get("executionMode").and_then(Value::as_str) == Some("sandbox") {
