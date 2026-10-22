@@ -83,3 +83,15 @@ describe('childEnv', () => {
   });
 });
 
+describe('DaemonProcess', () => {
+  it('fails at once, with why, when nekkod cannot be spawned at all', async () => {
+    const daemon = new DaemonProcess({ exe: join(scratch(), 'no-such-nekkod'), dataDir: scratch(), restart: false, log: () => {} });
+    daemon.start();
+    const started = Date.now();
+    await expect(daemon.endpoint(10_000)).rejects.toThrow(/could not be started.*ENOENT/);
+    expect(Date.now() - started).toBeLessThan(5000);
+    expect(daemon.pid).toBeUndefined();
+    await daemon.stop();
+  });
+});
+
