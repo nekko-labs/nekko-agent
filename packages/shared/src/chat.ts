@@ -186,6 +186,12 @@ export interface ClaudeCodeContext {
   modelId?: string;
 }
 
+/** `Session.memory`: which memory notes a chat's turns take. */
+export type ChatMemory = 'all' | 'project' | 'off';
+
+/** `Session.guidance`: how much project guidance (AGENTS.md, rule folders) a chat's turns take. */
+export type GuidanceLevel = 'rules' | 'root' | 'off';
+
 export interface Session {
   id: string;
   title: string;
@@ -295,6 +301,19 @@ export interface Session {
   disabledMcpServers?: string[];
   /** Connector kinds whose context this chat's turns do not fetch. */
   disabledConnectors?: string[];
+  /**
+   * Which memory notes this chat's turns take: `all` (global and its
+   * folders'), `project` (its folders' only) or `off`. Unset is `all`. An
+   * incognito chat takes none, whatever this says.
+   */
+  memory?: ChatMemory;
+  /**
+   * How much project guidance this chat's turns take: `rules` (the root
+   * guideline files, always-on rules from the rule folders other agent tools
+   * use, and an index of the scoped and on-demand ones), `root` (the root
+   * files only) or `off`. Unset is `rules`.
+   */
+  guidance?: GuidanceLevel;
   /** Offline: no tool calls, no connectors/internet (local models only). */
   offline?: boolean;
   /**

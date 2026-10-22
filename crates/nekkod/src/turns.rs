@@ -1427,8 +1427,8 @@ fn is_checkpoint(e: &Value) -> bool {
     matches!(str_at(e, "type"), Some("step" | "steered" | "tool_result" | "done" | "error"))
 }
 
-/// The context block a turn sends: attached files, guidelines and memory
-/// from disk, the host's connector and index snippets, and the chat's
+/// The context block a turn sends: attached files, project guidance (at the
+/// chat's `guidance` level) and memory (at its `memory` scope) from disk, the host's connector and index snippets, and the chat's
 /// include and pin choices.
 fn context_block(
     session: &Value,
@@ -1445,10 +1445,17 @@ fn context_block(
     let mut attached = strings(session.get("attachedPaths"));
     attached.extend(strings(opts.get("attachedPaths")));
     let paths: Vec<String> = workspaces.iter().filter_map(|w| str_at(w, "path").map(str::to_string)).collect();
-    let guidelines = nekko_context::collect_guidelines(&paths).into_iter().map(|g| (g.path, g.content)).collect();
+    let guidance = nekko_context::project_guidance(
+        &paths,
+        &attached,
+        nekko_context::Guidance::from_value(session.get("guidance")),
+    );
+    let scope = nekko_context::MemoryScope::of_session(session);
     let mut memory = Vec::new();
-    if let Some(dir) = data_dir {
-        memory.extend(nekko_context::list_memory(dir, "global", None));
+    if let Some(dir) = data_dir.filter(|_| scope.project()) {
+        if scope.global() {
+            memory.extend(nekko_context::list_memory(dir, "global", None));
+        }
         let mut seen = HashSet::new();
         let primary = str_at(session, "workspaceId").map(str::to_string);
         let supporting = strings(session.get("supportingWorkspaceIds")).into_iter().filter(|s| !s.is_empty());
@@ -1475,7 +1482,8 @@ fn context_block(
     let prefs = session.get("contextPrefs");
     let bundle = nekko_context::assemble(nekko_context::AssembleInput {
         attached: nekko_context::collect_attached(&attached),
-        guidelines,
+        guidelines: guidance.guidelines,
+        rule_indexes: guidance.indexes,
         memory,
         connector_snippets: connector,
         index_snippets: index,

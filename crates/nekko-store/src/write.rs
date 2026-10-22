@@ -27,6 +27,8 @@ const OPTION_KEYS: &[&str] = &[
     "effort",
     "disabledMcpServers",
     "disabledConnectors",
+    "memory",
+    "guidance",
     "offline",
     "cloudOnly",
     "incognito",
@@ -123,7 +125,7 @@ fn apply_mode(s: &mut JsObject, options: &Value) {
     s.set("incognito", get("incognito"));
     s.set("disabledTools", Some(get("disabledTools").filter(Value::is_array).unwrap_or(json!([]))));
     s.set("workMode", get("workMode"));
-    for k in ["effort", "disabledMcpServers", "disabledConnectors"] {
+    for k in ["effort", "disabledMcpServers", "disabledConnectors", "memory", "guidance"] {
         if let Some(v) = get(k).filter(|v| js::truthy(Some(v))) {
             s.set(k, Some(v));
         }
@@ -152,6 +154,8 @@ const USER_FIELDS: &[&str] = &[
     "effort",
     "disabledMcpServers",
     "disabledConnectors",
+    "memory",
+    "guidance",
     "offline",
     "cloudOnly",
     "incognito",
@@ -670,6 +674,8 @@ impl SessionStore {
             "effort",
             "disabledMcpServers",
             "disabledConnectors",
+            "memory",
+            "guidance",
         ] {
             if let Some(v) = src.get(key) {
                 s.insert(key.into(), v.clone());

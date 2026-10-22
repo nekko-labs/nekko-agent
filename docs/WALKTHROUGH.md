@@ -89,11 +89,11 @@ Choosing a model in a chat or in **Add window** remembers that model and its pro
 
 A successfully changed **Permissions** mode (Ask, Guardrails or YOLO) becomes the default for new chats. **Effort** is set per chat (a chat that never picked one follows the app default), and the saved **Execution** mode is reused through the existing setup flow. **Incognito** and **Offline** are different: they apply only to the chat where you enable them and are never turned on globally for new windows.
 
-The **Mode** button opens the Mode panel. Saved modes run down its left side; the settings sit in three columns: **Environment** (run on your machine or in a Sandbox, and whether edits go to a separate worktree), **Model** (where this chat's models run, and its effort), **Privacy** (Incognito, internet access, folders, approvals, tools, MCP servers and connectors) and **Approach** (skills). Every setting has a line underneath saying what it does. **Tools**, **MCP servers**, **Connectors** and **Skills** open a list out the panel's side.
+The **Mode** button opens the Mode panel. Saved modes run down its left side; the settings sit in three columns: **Environment** (run on your machine or in a Sandbox, and whether edits go to a separate worktree), **Model** (where this chat's models run, and its effort), **Privacy** (Incognito, internet access, folders, approvals, tools, MCP servers and connectors) and **Approach** (skills, project rules and memory). Every setting has a line underneath saying what it does. **Tools**, **MCP servers**, **Connectors** and **Skills** open a list out the panel's side.
 
 The **MCP servers** and **Connectors** lists switch each one on or off for this chat only. A server switched off here keeps running for your other chats, and a connector switched off here is simply not read for this chat's context. Neither list can turn on a server that is off in Settings or a service that is not connected; links at the bottom go to those pages. Sub-agents a chat starts inherit its effort, servers and connectors.
 
-Click a saved mode to apply all of its settings to the chat at once. Change anything afterwards and the panel offers **Revert** or **Update** for that mode, or **Save mode** to keep the combination under a new name. Click the star beside a mode to start every new chat in it; click it again to go back to your last-used defaults. A mode also remembers the chat's effort, MCP servers and connectors. You start with four modes:
+Click a saved mode to apply all of its settings to the chat at once. Change anything afterwards and the panel offers **Revert** or **Update** for that mode, or **Save mode** to keep the combination under a new name. Click the star beside a mode to start every new chat in it; click it again to go back to your last-used defaults. A mode also remembers the chat's effort, MCP servers, connectors, project rules and memory. You start with four modes:
 
 - **Cloud only**: the chat runs on cloud providers only. Its model menu lists only cloud providers, and the engine refuses a model on this computer.
 - **Fusion**: Auto picks the model for each turn and may move a turn between your local and cloud models. It moves only to a model that is as capable or better, either because it is cheaper (a local model counts as free) or because the current provider's usage limit is spent. The turn says why it moved.
@@ -102,7 +102,15 @@ Click a saved mode to apply all of its settings to the chat at once. Change anyt
 
 **Models run** in the Model column sets the same thing by hand: click *Cloud only*, *Fusion* or *Local only*, and click the highlighted one again to stop pinning. *Local only* needs a local model and *Cloud only* a cloud one; when the chat's model doesn't fit, the panel says so and leaves the setting as it was, so pick the model first. A mode never includes your folders, and applying one that runs in a Sandbox opens the Sandbox setup first.
 
-Under **Approach**, **Skills** holds the work modes: *Default*, *Better review*, *Design* and *Best output*. Picking one changes how the agent works in that chat and brings the matching skills with it (for example Better review applies `/review`, `/security-review` and `/review-council`), so you don't have to remember or type them. A work mode applies to that chat only, costs more tokens and time than Default, and never changes Permissions, tools, Offline or Incognito. Rows marked *Coming soon* (model router, system prompt, memory) are not available yet.
+Under **Approach**, **Skills** holds the work modes: *Default*, *Better review*, *Design* and *Best output*. Picking one changes how the agent works in that chat and brings the matching skills with it (for example Better review applies `/review`, `/security-review` and `/review-council`), so you don't have to remember or type them. A work mode applies to that chat only, costs more tokens and time than Default, and never changes Permissions, tools, Offline or Incognito. Rows marked *Coming soon* (model router, system prompt) are not available yet.
+
+**Project rules** decides how much of a repository's own agent instructions the chat reads:
+
+- *Rules* (the default): the root `AGENTS.md`, `CLAUDE.md`, `.cursorrules`, `.windsurfrules` and `GEMINI.md`, plus the rule folders other agent tools use: `.agents/rules`, `.claude/rules`, `.cursor/rules`, `.kiro/steering`, `.windsurf/rules`, `.github/instructions` and `.github/copilot-instructions.md`. A rule that applies everywhere goes into every turn. A rule scoped to some files (Claude's `paths:`, Cursor's `globs:`, Copilot's `applyTo:`, Kiro's `fileMatchPattern:`, Windsurf's `glob` trigger), a rule with only a description, and an `AGENTS.md` in a subfolder are listed in a short **Project rules index** instead; the agent reads one when it works on matching files, and its full text goes in when you attach a matching file. Manual rules are left out until you attach them.
+- *Root files*: only the root files, as before rules folders were read.
+- *Off*: no project guidance at all, for a repository whose instructions you do not trust.
+
+**Memory** decides which of your memory notes the chat reads: *Everything* (global and this chat's folders), *Project* (only the folders') or *Off*. An incognito chat reads no memory notes whatever this says. Sub-agents inherit both settings.
 
 
 A successfully completed reply should not retain a stale **Reply interrupted** warning. When the final transcript records successful completion, that terminal record takes precedence over missing older tool bookkeeping. Explicit interruption markers, provider failures, and intentional stops remain visible; the app does not rewrite your transcript to dismiss them.
@@ -295,9 +303,11 @@ feature. It shows **exactly what is entering the prompt this turn**, grouped by
 where it came from:
 
 - **Guidelines**: `AGENTS.md` / `CLAUDE.md` / `.cursorrules` detected in your
-  workspace folders
+  workspace folders, rules from `.agents/rules`, `.claude/rules`, `.cursor/rules`
+  and the other rule folders, and a **Project rules index** of the scoped ones
+  (see Project rules in the Mode panel)
 - **Files**: anything you've attached
-- **Memory**: relevant global / per-project notes
+- **Memory**: global / per-project notes, as the chat's Memory setting allows
 - **Connectors**: issues, messages, or docs pulled in from Linear/Slack/etc.
 
 Each item shows a **token estimate**, can be **toggled off** to exclude it, or
@@ -350,8 +360,10 @@ classes, interfaces, types) so the agent and search have a fast map of your code
 
 The **Memory** tab is a simple, durable knowledge base stored as plain markdown.
 Keep **global** memories (preferences, conventions) and **per-project** memories.
-Relevant entries are surfaced in the Context Inspector and injected automatically,
-so Nekko Agent remembers how you like to work across sessions.
+Entries are surfaced in the Context Inspector and injected automatically, so Nekko
+Agent remembers how you like to work across sessions. The Mode panel's **Memory**
+setting limits a chat to its project's notes or to none, and an incognito chat
+reads none.
 
 ---
 

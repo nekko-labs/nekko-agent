@@ -178,6 +178,8 @@ async fn prepare_sub_agent(
         "disabledMcpServers",
         "disabledConnectors",
         "effort",
+        "memory",
+        "guidance",
         "offline",
         "cloudOnly",
         "incognito",

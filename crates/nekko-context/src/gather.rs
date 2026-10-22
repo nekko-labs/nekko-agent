@@ -21,7 +21,7 @@ pub struct Guideline {
 /// `readFileSync(p, 'utf8').slice(0, 20000)`: invalid UTF-8 becomes U+FFFD, a
 /// byte-order mark stays, and the cut is in UTF-16 units. `None` for anything
 /// that is not a readable file.
-fn read_limited(p: &str) -> Option<String> {
+pub(crate) fn read_limited(p: &str) -> Option<String> {
     let meta = std::fs::metadata(p).ok()?;
     if !meta.is_file() {
         return None;
@@ -177,5 +177,50 @@ mod tests {
             (crlf["id"].clone(), crlf["body"].clone()),
             (json!("fallback"), json!("---\r\nid: x\r\n---\r\nbody"))
         );
+    }
+}
+
+/// Which memory notes a chat's turns take (`Session.memory`): every note
+/// (global and its folders'), only its folders', or none. An incognito chat
+/// takes none, whatever it is set to.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum MemoryScope {
+    All,
+    Project,
+    Off,
+}
+
+impl MemoryScope {
+    pub fn of_session(session: &Value) -> Self {
+        if js::truthy(session.get("incognito")) {
+            return Self::Off;
+        }
+        match session.get("memory").and_then(Value::as_str) {
+            Some("project") => Self::Project,
+            Some("off") => Self::Off,
+            _ => Self::All,
+        }
+    }
+
+    pub fn global(self) -> bool {
+        self == Self::All
+    }
+
+    pub fn project(self) -> bool {
+        self != Self::Off
+    }
+}
+
+#[cfg(test)]
+mod scope_tests {
+    use super::*;
+
+    #[test]
+    fn memory_scope_follows_the_chat_and_incognito() {
+        assert_eq!(MemoryScope::of_session(&json!({})), MemoryScope::All);
+        assert_eq!(MemoryScope::of_session(&json!({ "memory": "project" })), MemoryScope::Project);
+        assert_eq!(MemoryScope::of_session(&json!({ "memory": "off" })), MemoryScope::Off);
+        assert_eq!(MemoryScope::of_session(&json!({ "memory": "all", "incognito": true })), MemoryScope::Off);
+        assert!(!MemoryScope::Project.global() && MemoryScope::Project.project());
     }
 }
