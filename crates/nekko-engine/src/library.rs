@@ -314,6 +314,22 @@ fn assign(m: &mut Map<String, Value>, k: &str, v: Option<Value>) {
     }
 }
 
+/// A row described before the KV layout was read gets it once, from its
+/// header; everything else in the row (its name, preset, when it was added)
+/// stays. `true` when the row changed.
+fn add_kv_layout(stored: &mut Map<String, Value>, p: &str) -> bool {
+    if stored.contains_key("kvLayout") || stored.get("readable") != Some(&Value::Bool(true)) {
+        return false;
+    }
+    match gguf::read_metadata(p).and_then(|m| m.kv_layout) {
+        Some(l) => {
+            stored.insert("kvLayout".into(), l.to_value());
+            true
+        }
+        None => false,
+    }
+}
+
 /// Read one file's header into a library row (`describe`).
 fn describe(root: &Root, p: &str, name: Option<&str>, now: f64) -> Map<String, Value> {
     let meta = gguf::read_metadata(p);
@@ -354,6 +370,7 @@ fn describe_with(
     put(&mut m, "kvHeads", meta.and_then(|m| m.kv_heads).map(num));
     put(&mut m, "headDim", meta.and_then(|m| m.head_dim).map(num));
     put(&mut m, "maxContext", meta.and_then(|m| m.max_context).map(num));
+    put(&mut m, "kvLayout", meta.and_then(|m| m.kv_layout).map(|l| l.to_value()));
     m.insert("hasChatTemplate".into(), json!(meta.is_some_and(|m| m.chat_template.is_some())));
     m.insert("readable".into(), json!(meta.is_some()));
     m.insert("addedAt".into(), num(now));
@@ -647,6 +664,7 @@ pub fn list(cfg: &LibraryConfig) -> Result<Vec<Value>, String> {
                     describe(root, &p, name.as_deref(), cfg.now)
                 }
             };
+            dirty |= add_kv_layout(&mut stored, &p);
             let id = claim(&mut stored, &mut seen_ids);
             index.models().insert(id, Value::Object(stored.clone()));
             let mut row = stored;
@@ -942,6 +960,7 @@ pub fn model_facts_for(m: &Value) -> ModelFacts {
         ("kvHeads", "kvHeads"),
         ("headDim", "headDim"),
         ("maxContext", "maxContext"),
+        ("kvLayout", "kvLayout"),
     ] {
         put(&mut facts, to, m.get(from).cloned());
     }
