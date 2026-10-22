@@ -31,7 +31,7 @@ const NYAA: &str =
     "---\nname: nyaa\ndescription: The nyaa review method\n---\n\n# nyaa\n\nRead references/rules.md first.\n";
 
 fn nyaa(home: &Path, version_dir: &str, version: &str) -> PathBuf {
-    let root = home.join(".claude/plugins/cache/nekko-labs/nyaa").join(version_dir);
+    let root = home.join(".claude").join("plugins").join("cache").join("nekko-labs").join("nyaa").join(version_dir);
     write(&root, ".claude-plugin/plugin.json", &json!({ "name": "nyaa", "version": version }).to_string());
     write(&root, "commands/cr.md", CR);
     write(&root, "skills/nyaa/SKILL.md", NYAA);
@@ -62,7 +62,9 @@ fn an_enabled_plugin_lists_its_skills_and_commands() {
     assert!(template.starts_with("Review PR $ARGUMENTS using ${CLAUDE_PLUGIN_ROOT}/"), "{template}");
     assert!(!template.contains("allowed-tools"));
     // A skill points the model at its own folder.
-    assert!(defs[0]["template"].as_str().unwrap().contains(&root.join("skills/nyaa").to_string_lossy().to_string()));
+    assert!(
+        defs[0]["template"].as_str().unwrap().contains(&root.join("skills").join("nyaa").to_string_lossy().to_string())
+    );
 }
 
 #[test]
