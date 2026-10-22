@@ -3267,6 +3267,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 </div>
               </div>
             </div>
+            {/* The footer is hidden while the chat starts clean, but the model
+                is still the user's to pick before the first send. */}
+            {cleanStart && <div className="clean-start-model mt-2 flex justify-center" data-clean-start-model>
+              {modelControls}
+             </div>}
           </div>
         </div>
         )}

@@ -54,4 +54,13 @@ describe('focus mode clean start', () => {
     expect(clean).toContain('class="composer relative"');
     expect(clean).toMatch(/<section class="[^"]*\bclean-start justify-center\b/);
   });
+
+  it('still offers the model and effort under the composer', () => {
+    const clean = renderChatPane(empty(), { cleanStart: true });
+    const normal = renderChatPane(empty(), { cleanStart: false });
+    expect(clean).toContain('data-clean-start-model');
+    expect(clean).toContain('aria-haspopup="listbox"');
+    // Out of the clean start it lives in the footer, not twice.
+    expect(normal).not.toContain('data-clean-start-model');
+  });
 });
