@@ -22,7 +22,7 @@ use serde_json::{Map, Value, json};
 use std::future::Future;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 /// One piece of a streamed model response (`ProviderChunk`).
 #[derive(Clone, Debug, PartialEq)]
@@ -166,10 +166,6 @@ const STALLED: &str =
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 
-fn now_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
-}
-
 fn base36(mut n: u64) -> String {
     const D: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
     let mut out = Vec::new();
@@ -187,7 +183,7 @@ fn base36(mut n: u64) -> String {
 /// `id(prefix)`: `<prefix>_<time base36>_<counter>`.
 fn id(prefix: &str) -> String {
     let n = COUNTER.fetch_add(1, Ordering::Relaxed) + 1;
-    format!("{prefix}_{}_{n}", base36(now_ms()))
+    format!("{prefix}_{}_{n}", base36(nekko_js::now_ms()))
 }
 
 /// A JavaScript number as JSON: whole numbers as integers.
@@ -317,7 +313,7 @@ pub fn is_network_error(message: &str) -> bool {
 /// (`retryDelayMs`).
 pub fn retry_delay(attempt: u32) -> Duration {
     let base = (1_000u64 << attempt.saturating_sub(1).min(5)).min(30_000);
-    let jitter = (now_ms() % 1_000).min(base);
+    let jitter = (nekko_js::now_ms() % 1_000).min(base);
     Duration::from_millis(base + jitter)
 }
 
@@ -339,7 +335,7 @@ impl Turn {
 }
 
 fn user_nudge(content: &str) -> Value {
-    json!({ "id": id("nudge"), "role": "user", "content": content, "createdAt": now_ms() })
+    json!({ "id": id("nudge"), "role": "user", "content": content, "createdAt": nekko_js::now_ms() })
 }
 
 /// `{ reasoning, reasoningSeconds }` when there is reasoning (an absent
@@ -558,7 +554,7 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
                 put_reasoning(&mut m, reasoning, turn.reasoning_seconds);
             }
             m.insert("interrupted".into(), json!(true));
-            m.insert("createdAt".into(), json!(now_ms()));
+            m.insert("createdAt".into(), json!(nekko_js::now_ms()));
             self.opts.history.push(Value::Object(m));
         }
         // A stop the user asked for is not a failure, and doesn't read as one.
@@ -640,7 +636,7 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
                     m.insert("toolCalls".into(), Value::Array(turn.calls.clone()));
                 }
             }
-            m.insert("createdAt".into(), json!(now_ms()));
+            m.insert("createdAt".into(), json!(nekko_js::now_ms()));
             let message_id = m["id"].clone();
             self.opts.history.push(Value::Object(m));
 
@@ -666,7 +662,7 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
                         json!({ "toolCallId": call.get("id").cloned().unwrap_or(Value::Null), "output": format!("Error: {e}"), "isError": true })
                     }
                 };
-                self.opts.history.push(json!({ "id": id("msg"), "role": "tool", "content": "", "toolResult": result, "createdAt": now_ms() }));
+                self.opts.history.push(json!({ "id": id("msg"), "role": "tool", "content": "", "toolResult": result, "createdAt": nekko_js::now_ms() }));
                 self.event("tool_result", json!({ "result": result }));
                 if tripped.is_none() {
                     tripped = loops.push(call, &result);
@@ -707,7 +703,7 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
             let r = if wrap.runaway { trim_runaway(&wrap.reasoning) } else { wrap.reasoning.clone() };
             put_reasoning(&mut m, r, wrap.reasoning_seconds);
         }
-        m.insert("createdAt".into(), json!(now_ms()));
+        m.insert("createdAt".into(), json!(nekko_js::now_ms()));
         let message_id = m["id"].clone();
         self.opts.history.push(Value::Object(m));
         self.event("done", json!({ "messageId": message_id, "stop": "loop", "steps": steps }));

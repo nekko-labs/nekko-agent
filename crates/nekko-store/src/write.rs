@@ -15,7 +15,6 @@ use serde::ser::{Serialize, SerializeMap, Serializer};
 use serde_json::{Map, Value, json};
 use std::path::Path;
 use std::sync::Mutex;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 /// The fields `setSessionOptions` takes (its `Pick<Session, ...>`).
 const OPTION_KEYS: &[&str] = &[
@@ -276,10 +275,6 @@ fn archive_expired(s: &Value, now: f64) -> bool {
     }
 }
 
-fn now_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
-}
-
 fn base36(mut n: u64) -> String {
     const DIGITS: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
     let mut out = Vec::new();
@@ -375,7 +370,7 @@ impl SessionStore {
 
     /// `saveSession`.
     fn save(&self, s: &mut Map<String, Value>) -> Result<(), String> {
-        s.insert("updatedAt".into(), json!(now_ms()));
+        s.insert("updatedAt".into(), json!(nekko_js::now_ms()));
         let id = s.get("id").and_then(Value::as_str).filter(|id| valid_id(id)).ok_or("a session without a valid id")?;
         self.write_text(id, &serde_json::to_string_pretty(s).map_err(|e| e.to_string())?)
     }
@@ -434,7 +429,7 @@ impl SessionStore {
                 if let Some(disk) = &disk {
                     merge_disk(target, disk, None)?;
                 }
-                target.insert("updatedAt".into(), json!(now_ms()));
+                target.insert("updatedAt".into(), json!(nekko_js::now_ms()));
                 if !target.get("id").and_then(Value::as_str).is_some_and(valid_id) {
                     return Err("a session without a valid id".into());
                 }
@@ -475,7 +470,7 @@ impl SessionStore {
         supporting: Option<&Value>,
         settings: &Value,
     ) -> Result<Value, String> {
-        let now = now_ms();
+        let now = nekko_js::now_ms();
         let mut rand = [0u8; 6];
         getrandom::fill(&mut rand).map_err(|e| e.to_string())?;
         let parent = parent_id.and_then(|p| self.get(p)).and_then(|p| p.as_object().cloned());
@@ -677,7 +672,7 @@ impl SessionStore {
 
     /// `purgeExpiredArchives()` at the current time.
     pub fn purge_archived(&self, before_delete: impl Fn(&str) -> Result<(), String>) -> Result<usize, String> {
-        self.purge_archived_with(now_ms() as f64, before_delete)
+        self.purge_archived_with(nekko_js::now_ms() as f64, before_delete)
     }
 
     /// `forkSession(id, beforeMessageId)`: a new chat holding `id`'s
@@ -707,7 +702,7 @@ impl SessionStore {
             } else {
                 None
             };
-        let now = now_ms();
+        let now = nekko_js::now_ms();
         let mut rand = [0u8; 6];
         getrandom::fill(&mut rand).map_err(|e| e.to_string())?;
         let mut s = Map::new();

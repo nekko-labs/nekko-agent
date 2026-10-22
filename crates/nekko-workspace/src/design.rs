@@ -43,16 +43,6 @@ fn save(data_dir: &Path, store: &Value) -> Result<(), String> {
     crate::write_atomic(&file(data_dir)?, js::stringify_pretty(&js::js_order(store.clone()), "  ").as_bytes())
 }
 
-/// `crypto.randomUUID()`.
-pub fn uuid_v4() -> Result<String, String> {
-    let mut b = [0u8; 16];
-    getrandom::fill(&mut b).map_err(|e| e.to_string())?;
-    b[6] = (b[6] & 0x0f) | 0x40;
-    b[8] = (b[8] & 0x3f) | 0x80;
-    let h: String = b.iter().map(|x| format!("{x:02x}")).collect();
-    Ok(format!("{}-{}-{}-{}-{}", &h[..8], &h[8..12], &h[12..16], &h[16..20], &h[20..]))
-}
-
 /// `String(x)` of a key that may be missing.
 fn key_of(v: Option<&Value>) -> String {
     v.map_or_else(|| "undefined".into(), js::display)
@@ -138,7 +128,7 @@ pub fn add_page(
         }
         let content = read["content"].as_str().unwrap_or_default().to_string();
         let Some(folder) = folder else { return Err("Choose an existing project.".into()) };
-        let id = uuid_v4()?;
+        let id = nekko_js::try_uuid()?;
         let directory = path::join(&[folder, "nekko-designs"]);
         nekko_tools::nodefs::mkdir_p(&directory)?;
         let copy = path::join(&[&directory, &format!("import-{id}.html")]);
@@ -163,7 +153,7 @@ pub fn add_page(
     let label = trim_arg(label, "label")?;
     let url_trimmed = trim_arg(url, "url")?;
     let page = json!({
-        "id": uuid_v4()?,
+        "id": nekko_js::try_uuid()?,
         "label": if label.is_empty() { url_text } else { label },
         "url": url_trimmed,
         "notes": [],
@@ -195,7 +185,7 @@ pub fn revise(page: &Value, patch: &Value) -> Result<Value, String> {
     if let (Some(h), Some(old)) = (html, page.get("html"))
         && Some(h) != page.get("html")
     {
-        revisions.push(json!({ "id": uuid_v4()?, "html": old, "createdAt": page.get("updatedAt").cloned().unwrap_or(Value::Null) }));
+        revisions.push(json!({ "id": nekko_js::try_uuid()?, "html": old, "createdAt": page.get("updatedAt").cloned().unwrap_or(Value::Null) }));
     }
     let start = revisions.len().saturating_sub(10);
     let mut out = page.as_object().cloned().unwrap_or_default();
@@ -260,7 +250,9 @@ pub fn add_note(
                     return Ok(p);
                 }
                 let mut notes = p.get("notes").and_then(Value::as_array).cloned().unwrap_or_default();
-                notes.push(json!({ "id": uuid_v4()?, "text": trim_arg(text, "text")?, "createdAt": now_ms() }));
+                notes.push(
+                    json!({ "id": nekko_js::try_uuid()?, "text": trim_arg(text, "text")?, "createdAt": now_ms() }),
+                );
                 Ok(with(&p, "notes", Value::Array(notes)))
             })
             .collect()
@@ -437,7 +429,7 @@ pub fn land(
             nekko_tools::nodefs::mkdir_p(&dir)?;
             let target = match &file_path {
                 Some(f) if js::truthy(Some(f)) => js::display(f),
-                _ => path::join(&[&dir, &format!("{}-{}.html", slug(&label), &uuid_v4()?[..6])]),
+                _ => path::join(&[&dir, &format!("{}-{}.html", slug(&label), &nekko_js::try_uuid()?[..6])]),
             };
             nekko_tools::nodefs::write_utf8(&target, &out)?;
             Ok(json!(target))
@@ -475,7 +467,7 @@ pub fn land(
         }
         None => {
             let mut page = Map::new();
-            page.insert("id".into(), json!(uuid_v4()?));
+            page.insert("id".into(), json!(nekko_js::try_uuid()?));
             page.insert("kind".into(), json!("concept"));
             page.insert("label".into(), json!(label));
             page.insert("url".into(), json!(""));

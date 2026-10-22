@@ -332,7 +332,7 @@ impl WorkflowHost for Engine {
                 .flatten()
                 .filter_map(|w| w.get("path").and_then(Value::as_str).map(str::to_string))
                 .collect();
-            let home = crate::workspace::home_dir();
+            let home = nekko_js::home_dir_string();
             tokio::task::spawn_blocking(move || nekko_workspace::skills::resolve_skill_defs(&dir, &home, &roots))
                 .await
                 .unwrap_or_default()

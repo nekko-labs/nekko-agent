@@ -49,7 +49,7 @@ use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
 
 /// The built-in tools the daemon runs itself (`nekko-tools`).
@@ -68,10 +68,6 @@ const NATIVE: &[&str] = &[
 
 /// Of [`NATIVE`], the background-process tools (`nekko_tools::process`).
 const PROCESS_TOOLS: &[&str] = &["start_process", "read_process", "kill_process"];
-
-fn now_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
-}
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
@@ -130,7 +126,8 @@ impl Pending {
         let mut p = lock(&self.inner);
         let id = str_at(call, "id").unwrap_or_default().to_string();
         p.approvals.insert(id, (session_id.into(), tx));
-        let approval = json!({ "call": call, "reason": reason, "severity": severity, "requestedAt": now_ms() });
+        let approval =
+            json!({ "call": call, "reason": reason, "severity": severity, "requestedAt": nekko_js::now_ms() });
         p.set(session_id, "approval", Some(approval));
         rx
     }
@@ -528,10 +525,10 @@ impl Turns {
         let _ = getrandom::fill(&mut rand);
         let r = u32::from_le_bytes(rand) as u64 ^ n;
         json!({
-            "id": format!("msg_{}_{}", base36(now_ms()), &format!("{:0>6}", base36(r))[..6]),
+            "id": format!("msg_{}_{}", base36(nekko_js::now_ms()), &format!("{:0>6}", base36(r))[..6]),
             "role": "user",
             "content": content,
-            "createdAt": now_ms(),
+            "createdAt": nekko_js::now_ms(),
         })
     }
 
@@ -977,7 +974,7 @@ impl Turns {
         let wake = spec.get("wake") == Some(&Value::Bool(true));
         let mut session_value = loaded;
         if !wake {
-            turn::apply_turn_input(&mut session_value, opts, now_ms());
+            turn::apply_turn_input(&mut session_value, opts, nekko_js::now_ms());
         }
         let session = Arc::new(Mutex::new(session_value));
         let queued = spec.get("queued").filter(|q| !q.is_null()).cloned();
@@ -1014,12 +1011,12 @@ impl Turns {
 
         // On disk while the turn runs, so a restart knows it was cut off.
         if let Some(obj) = lock(&session).as_object_mut() {
-            obj.insert("activeRun".into(), json!({ "startedAt": now_ms() }));
+            obj.insert("activeRun".into(), json!({ "startedAt": nekko_js::now_ms() }));
         }
         persist(&store, &session, incognito).await;
 
         let turn_from = lock(&session).get("messages").and_then(Value::as_array).map_or(0, Vec::len);
-        let started_at = now_ms();
+        let started_at = nekko_js::now_ms();
         let mut identity = Map::new();
         identity.insert("providerId".into(), opts.get("providerId").cloned().unwrap_or(Value::Null));
         identity.insert("modelId".into(), opts.get("modelId").cloned().unwrap_or(Value::Null));
@@ -1417,7 +1414,7 @@ async fn generate_title(
         "provider": facts["provider"],
         "request": {
             "model": opts.get("modelId").cloned().unwrap_or(Value::Null),
-            "messages": [{ "id": "title", "role": "user", "createdAt": now_ms(), "content": content }],
+            "messages": [{ "id": "title", "role": "user", "createdAt": nekko_js::now_ms(), "content": content }],
             "temperature": 0.2,
             "maxOutputTokens": 24,
             "think": false,
@@ -1697,7 +1694,7 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
             }
             // Stats go on the transcript before the checkpoint writes it, so a
             // pane that re-reads the chat on `done` already finds them.
-            let mut finished = f.stats.finish(now_ms() as f64, event.get("steps"), event.get("stop"));
+            let mut finished = f.stats.finish(nekko_js::now_ms() as f64, event.get("steps"), event.get("stop"));
             if let (Some(stats), Some(tally)) = (finished.as_mut(), &f.code_mode) {
                 let calls = stats.get("calls").and_then(Value::as_u64).unwrap_or(0);
                 stats["codeMode"] = tally.summary(calls);
@@ -2452,7 +2449,7 @@ impl TurnTools {
         let Some(disk) = self.disk().await else {
             return error(id, "Session not found; completion was not saved.");
         };
-        let at = disk.get("archivedAt").filter(|v| !v.is_null()).cloned().unwrap_or(json!(now_ms()));
+        let at = disk.get("archivedAt").filter(|v| !v.is_null()).cloned().unwrap_or(json!(nekko_js::now_ms()));
         let (st, sid) = (self.store.clone(), self.shared.session_id.clone());
         let saved = tokio::task::spawn_blocking(move || st.set_options(&sid, &json!({ "archivedAt": at }))).await.ok();
         let Some(Ok(Some(saved))) = saved else {
@@ -2470,12 +2467,12 @@ impl TurnTools {
 
     async fn update_plan(&self, id: &str, input: &Value) -> Value {
         let current = lock(&self.session).get("agentPlan").cloned();
-        let output = match turn::apply_plan_update(current.as_ref(), input, now_ms()) {
+        let output = match turn::apply_plan_update(current.as_ref(), input, nekko_js::now_ms()) {
             turn::PlanOutcome::Applied { plan, .. } => {
                 let echo = turn::plan_echo(&plan);
                 if let Some(obj) = lock(&self.session).as_object_mut() {
                     obj.insert("agentPlan".into(), Value::Array(plan));
-                    obj.insert("updatedAt".into(), json!(now_ms()));
+                    obj.insert("updatedAt".into(), json!(nekko_js::now_ms()));
                 }
                 echo
             }
@@ -2492,10 +2489,11 @@ impl TurnTools {
     async fn ask(&self, call: &Value) -> String {
         let c = turn::catalog::catalog();
         let call_id = str_at(call, "id").unwrap_or_default().to_string();
-        let request = match turn::parse_ask_request(&call_id, call.get("input").unwrap_or(&Value::Null), now_ms()) {
-            Ok(r) => r,
-            Err(e) => return e,
-        };
+        let request =
+            match turn::parse_ask_request(&call_id, call.get("input").unwrap_or(&Value::Null), nekko_js::now_ms()) {
+                Ok(r) => r,
+                Err(e) => return e,
+            };
         let session_id = self.shared.session_id.clone();
         let rx = self.turns.pending.park_question(&session_id, &request);
         self.shared.emit(json!({ "type": "question", "sessionId": session_id, "request": request }));

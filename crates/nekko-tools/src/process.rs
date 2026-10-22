@@ -24,7 +24,7 @@ use std::collections::HashMap;
 use std::process::Stdio;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 use tokio::io::AsyncReadExt;
 use tokio::sync::Notify;
 
@@ -36,10 +36,6 @@ pub const READ_MAX: usize = 60_000;
 pub const READ_WAIT_MAX_MS: f64 = 120_000.0;
 /// Processes one chat may have running at once.
 pub const PROCESS_LIMIT: usize = 8;
-
-fn now_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
-}
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
@@ -126,7 +122,7 @@ impl Processes {
 
     fn next_id(&self) -> String {
         let n = self.counter.fetch_add(1, Ordering::Relaxed) + 1;
-        format!("p_{}_{}", base36(now_ms()), base36(n))
+        format!("p_{}_{}", base36(nekko_js::now_ms()), base36(n))
     }
 
     fn push_output(&self, id: &str, text: &str) {
@@ -145,7 +141,7 @@ impl Processes {
     fn set_exit(&self, id: &str, exit: Exit) {
         if let Some(e) = lock(&self.entries).get_mut(id) {
             e.info.exit = Some(exit);
-            e.info.ended_at = Some(now_ms());
+            e.info.ended_at = Some(nekko_js::now_ms());
         }
         self.wake.notify_waiters();
     }
@@ -191,7 +187,7 @@ impl Processes {
             command: req.command.to_string(),
             cwd: req.cwd.to_string(),
             name: req.name,
-            started_at: now_ms(),
+            started_at: nekko_js::now_ms(),
             exit: None,
             ended_at: None,
         };
@@ -205,7 +201,7 @@ impl Processes {
                 // Node's spawn reports this as an 'error' event after start returns.
                 let message = format!("[could not start: spawn {shell} {}]\n", spawn_code(req.cwd, &e));
                 info.exit = Some(Exit::Code(-1));
-                info.ended_at = Some(now_ms());
+                info.ended_at = Some(nekko_js::now_ms());
                 let units: Vec<u16> = message.encode_utf16().collect();
                 lock(&self.entries)
                     .insert(id.clone(), Entry { info: info.clone(), unread: units.clone(), all: units, tree: None });
@@ -505,7 +501,7 @@ pub async fn run_tool(call: &ToolCall, ctx: &ToolContext, procs: &Arc<Processes>
                 Some(Value::String(id)) if !id.is_empty() => id.clone(),
                 _ => {
                     let list = procs.list(sid);
-                    let now = now_ms();
+                    let now = nekko_js::now_ms();
                     return Ok(ToolResult::ok(
                         call,
                         if list.is_empty() {
@@ -533,7 +529,7 @@ pub async fn run_tool(call: &ToolCall, ctx: &ToolContext, procs: &Arc<Processes>
             };
             match read {
                 Some((info, output, truncated)) if info.session_id == sid => {
-                    let head = describe_process(&info, now_ms());
+                    let head = describe_process(&info, nekko_js::now_ms());
                     let body = if output.is_empty() {
                         "(no new output)".to_string()
                     } else {
@@ -559,7 +555,10 @@ pub async fn run_tool(call: &ToolCall, ctx: &ToolContext, procs: &Arc<Processes>
                 return Ok(ToolResult::err(call, format!("No process {id} in this chat.")));
             };
             if info.exit.is_some() {
-                return Ok(ToolResult::ok(call, format!("{} (already exited)", describe_process(&info, now_ms()))));
+                return Ok(ToolResult::ok(
+                    call,
+                    format!("{} (already exited)", describe_process(&info, nekko_js::now_ms())),
+                ));
             }
             procs.kill(&id);
             Ok(ToolResult::ok(call, format!("Stopping {}.", label(&info))))

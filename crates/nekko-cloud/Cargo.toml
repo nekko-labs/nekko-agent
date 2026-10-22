@@ -12,6 +12,7 @@ axum.workspace = true
 base64 = "0.22"
 futures-util.workspace = true
 getrandom.workspace = true
+nekko-js = { path = "../nekko-js" }
 nekko-store = { path = "../nekko-store" }
 nekko-sync = { path = "../nekko-sync" }
 # native-tls: Nekko Cloud and Supabase are HTTPS. It is the TLS stack reqwest already uses here.

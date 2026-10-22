@@ -473,21 +473,16 @@ fn cut_text(s: &str, n: usize) -> String {
     crate::hello::cut16(s, n).to_string()
 }
 
-/// Length in UTF-16 units, as JavaScript's `s.length`.
-fn len16(s: &str) -> usize {
-    s.encode_utf16().count()
-}
-
 /// `cutInput`: a tool call's input with long string values cut.
 fn cut_input(input: &Value, n: usize) -> (Value, bool) {
     match input {
-        Value::String(s) if len16(s) > n => (json!(cut_text(s, n)), true),
+        Value::String(s) if nekko_js::len16(s) > n => (json!(cut_text(s, n)), true),
         Value::Object(m) => {
             let mut cut = false;
             let mut out = Map::new();
             for (k, v) in m {
                 match v {
-                    Value::String(s) if len16(s) > n => {
+                    Value::String(s) if nekko_js::len16(s) > n => {
                         out.insert(k.clone(), json!(cut_text(s, n)));
                         cut = true;
                     }
@@ -516,9 +511,9 @@ fn phone_message(m: &Value, n: usize) -> Value {
             }
         }
         if let Some(Value::String(o)) = r.get("output")
-            && len16(o) > n
+            && nekko_js::len16(o) > n
         {
-            let full = len16(o);
+            let full = nekko_js::len16(o);
             let cut = cut_text(o, n);
             r.insert("outputChars".into(), json!(full));
             r.insert("output".into(), json!(cut));
@@ -563,7 +558,8 @@ pub fn session_view(session: Value) -> Value {
         let Some(Value::Array(imgs)) = m.get("images") else { continue };
         let mut imgs: Vec<Value> = imgs.iter().map(|v| json!(v.as_str().unwrap_or(""))).collect();
         for v in imgs.iter_mut().rev() {
-            let fits = matches!(v.as_str(), Some(t) if !t.is_empty() && len16(t) <= policy().thumb_chars) && room > 0;
+            let fits = matches!(v.as_str(), Some(t) if !t.is_empty() && nekko_js::len16(t) <= policy().thumb_chars)
+                && room > 0;
             if fits {
                 room -= 1;
             } else {

@@ -27,7 +27,6 @@ pub mod spec;
 pub mod stacks;
 
 use std::path::Path;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Bumped by every finished read a cache keeps, so a caller that waited
 /// behind a read can tell it finished after the caller asked.
@@ -43,9 +42,7 @@ pub(crate) fn next_read() -> u64 {
     READS.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1
 }
 
-pub(crate) fn now_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
-}
+pub(crate) use nekko_js::now_ms;
 
 /// Write to a temp name beside the file and rename it over, so a reader
 /// never sees half a file.

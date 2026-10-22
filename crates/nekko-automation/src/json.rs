@@ -1,19 +1,10 @@
 //! The JavaScript object and file semantics the TS services rely on.
 
-use serde_json::{Map, Value, json};
+use serde_json::{Map, Value};
 use std::path::Path;
 
-/// A number as `JSON.stringify` prints it: integral values without a
-/// fraction, `NaN` and the infinities as `null`.
-pub fn num(n: f64) -> Value {
-    if !n.is_finite() {
-        Value::Null
-    } else if n.fract() == 0.0 && n.abs() < 9.007_199_254_740_992e15 {
-        json!(n as i64)
-    } else {
-        serde_json::Number::from_f64(n).map_or(Value::Null, Value::Number)
-    }
-}
+/// A number as `JSON.stringify` prints it.
+pub use nekko_js::num;
 
 /// `Math.max(a, b)`: `NaN` if either is.
 pub fn js_max(a: f64, b: f64) -> f64 {
@@ -113,6 +104,7 @@ pub fn write_json_private(path: &Path, value: &Value) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn finds_a_whole_phrase_in_any_case() {

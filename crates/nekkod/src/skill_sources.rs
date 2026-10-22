@@ -24,7 +24,7 @@ use serde_json::{Map, Value, json};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 pub const CHANNELS: &[&str] =
     &["skillSources:list", "skillSources:preview", "skillSources:fetch", "skillSources:search"];
@@ -45,10 +45,6 @@ const PROPRIETARY_REASON: &str =
 
 fn re(cell: &'static OnceLock<Regex>, src: &str, flags: &str) -> &'static Regex {
     cell.get_or_init(|| Regex::with_flags(src, flags).expect("skill source pattern compiles"))
-}
-
-fn now_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
 /// `${v}` of a field that may be missing (`undefined`).
@@ -708,7 +704,7 @@ async fn list_skill_sources(gh: &Gh, dir: &Path, refresh: &Value, sources: &Valu
                     if let Some(l) = live.license {
                         entry.insert("license".into(), json!(l));
                     }
-                    entry.insert("fetchedAt".into(), json!(now_ms()));
+                    entry.insert("fetchedAt".into(), json!(nekko_js::now_ms()));
                     cache.insert(key, Value::Object(entry.clone()));
                     dirty = true;
                     item.extend(entry);
@@ -1147,7 +1143,7 @@ mod tests {
     async fn lists_shelves_from_the_cache_until_refreshed() {
         let (base, server) = github(repo_routes()).await;
         let gh = gh_at(&base, None);
-        let dir = std::env::temp_dir().join(format!("nekkod-skill-sources-{}", now_ms()));
+        let dir = std::env::temp_dir().join(format!("nekkod-skill-sources-{}", nekko_js::now_ms()));
         let sources = json!([{ "repo": "o/r", "label": "R", "path": "skills" }, { "repo": "o/gone" }]);
 
         let first = list_skill_sources(&gh, &dir, &Value::Null, &sources).await.unwrap();

@@ -60,19 +60,11 @@ pub const SESSION_TTL_MS: f64 = 10.0 * 60.0 * 1000.0;
 const CHATGPT_CLI_TOKEN_TTL_MS: f64 = 10.0 * 24.0 * 60.0 * 60.0 * 1000.0;
 
 /// `Date.now()`.
-pub fn now_ms() -> f64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as f64).unwrap_or(0.0)
-}
+pub use nekko_js::now_ms_f64 as now_ms;
 
 /// A number as JSON holds it: whole numbers as integers, so the wire
 /// carries `1760000000000`, not `1760000000000.0`.
-pub fn num(n: f64) -> Value {
-    if n.is_finite() && n.fract() == 0.0 && n.abs() < 9_007_199_254_740_992.0 {
-        json!(n as i64)
-    } else {
-        serde_json::Number::from_f64(n).map_or(Value::Null, Value::Number)
-    }
-}
+pub use nekko_js::num;
 
 /// An object literal with JavaScript's `undefined`: every key keeps its
 /// place, and the undefined ones are left out when it becomes JSON.

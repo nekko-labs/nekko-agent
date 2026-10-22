@@ -3,7 +3,7 @@
 //! `tests/golden/capacity.json`. Pure, like the TS: facts in, projection out.
 //! Numbers follow JavaScript's (`NaN` propagates through `Math.max`/`min`).
 
-use crate::{js_round, num, to_fixed};
+use crate::{js_round, num};
 use serde_json::{Map, Value, json};
 
 const GB: f64 = 1024.0 * 1024.0 * 1024.0;
@@ -448,7 +448,7 @@ fn suggest_fixes(
     let format_bytes = |n: f64| {
         let gb = n / GB;
         if gb >= 1.0 {
-            format!("{} GB", to_fixed(gb, 1))
+            format!("{} GB", nekko_js::to_fixed_unsigned_zero(gb, 1))
         } else {
             format!("{} MB", nekko_js::number_to_string(js_round(n / MB)))
         }
@@ -634,7 +634,7 @@ pub fn auto_fit(input: &AutoFitInput) -> Value {
 
     let format_bytes = |n: f64| {
         if n >= GB {
-            format!("{} GB", to_fixed(n / GB, 1))
+            format!("{} GB", nekko_js::to_fixed_unsigned_zero(n / GB, 1))
         } else {
             format!("{} MB", nekko_js::number_to_string(jmax(0.0, js_round(n / MB))))
         }

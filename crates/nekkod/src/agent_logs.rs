@@ -53,10 +53,6 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-fn now_ms() -> f64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as f64).unwrap_or(0.0)
-}
-
 /// `(buffer + data).slice(-MAX_BUFFER)` in UTF-16 units.
 fn keep_tail(text: String) -> String {
     let units = js::len16(&text);
@@ -227,7 +223,7 @@ impl AgentLogs {
                 info.insert("cwd".into(), json!(self.cwd(session.as_ref(), workspace_id)));
                 info.insert("shell".into(), json!("agent"));
                 info.insert("agentSessionId".into(), json!(session_id));
-                info.insert("createdAt".into(), json!(now_ms()));
+                info.insert("createdAt".into(), json!(nekko_js::now_ms_f64()));
                 info.insert("running".into(), json!(true));
                 Term { info, buffer: String::new() }
             });

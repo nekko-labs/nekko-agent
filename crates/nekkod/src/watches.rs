@@ -17,22 +17,9 @@ use serde_json::{Map, Value, json};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 const TICK: Duration = Duration::from_secs(15);
-
-fn now_ms() -> f64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as f64).unwrap_or(0.0)
-}
-
-fn uuid() -> String {
-    let mut b = [0u8; 16];
-    let _ = getrandom::fill(&mut b);
-    b[6] = (b[6] & 0x0f) | 0x40;
-    b[8] = (b[8] & 0x3f) | 0x80;
-    let h: String = b.iter().map(|x| format!("{x:02x}")).collect();
-    format!("{}-{}-{}-{}-{}", &h[0..8], &h[8..12], &h[12..16], &h[16..20], &h[20..32])
-}
 
 /// `parsePrUrl(url)`: whether the text holds a GitHub PR URL.
 pub fn is_pr_url(url: &str) -> bool {
@@ -173,7 +160,7 @@ impl Watches {
     pub fn new(data_dir: PathBuf, store: Arc<SessionStore>, hub: crate::hub::Hub) -> Arc<Self> {
         let dispatch: Arc<std::sync::OnceLock<crate::automation::Dispatcher>> = Arc::default();
         let host = Arc::new(HostSide { store, hub, dispatch: dispatch.clone() });
-        let mut me = Self::with(data_dir.join("agent-watches.json"), host, Arc::new(now_ms));
+        let mut me = Self::with(data_dir.join("agent-watches.json"), host, Arc::new(nekko_js::now_ms_f64));
         Arc::get_mut(&mut me).expect("just made").dispatch = dispatch;
         me
     }
@@ -338,7 +325,7 @@ impl Watches {
         let now = (self.now)();
         let deadline = now + seconds * 1000.0;
         let mut w = Map::new();
-        let id = uuid();
+        let id = nekko_js::uuid();
         w.insert("id".into(), json!(id));
         w.insert("sessionId".into(), json!(session_id));
         w.insert("kind".into(), json!(kind));

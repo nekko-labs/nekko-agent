@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 /// The channels served here when the data directory is known.
 pub const CHANNELS: &[&str] = &["usage:summary", "limits:get", "limits:problem", "limits:poll", "limits:clear"];
@@ -28,10 +28,6 @@ const CHATGPT_BASE: &str = "https://chatgpt.com/backend-api";
 const OPENROUTER_BASE: &str = "https://openrouter.ai/api/v1";
 /// A quota read that takes longer than this is a network failure.
 const READ_TIMEOUT: Duration = Duration::from_secs(30);
-
-fn now_ms() -> f64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as f64).unwrap_or(0.0)
-}
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
@@ -165,7 +161,7 @@ impl Accounts {
 
     /// `recordUsage(turnUsageRecord(...))` for one model call of a turn.
     pub fn turn_usage(&self, opts: &Value, account: &TurnAccount, event: &Value) {
-        let rec = nekko_usage::turn_usage_record(opts, &account.provider, event, now_ms() as u64);
+        let rec = nekko_usage::turn_usage_record(opts, &account.provider, event, nekko_js::now_ms_f64() as u64);
         self.append_line("usage.jsonl", &nekko_js::stringify(&rec), false);
     }
 
@@ -177,8 +173,13 @@ impl Accounts {
 
     pub fn side_usage(&self, provider: &Value, model_id: Option<&Value>, session_id: &str, usage: &[Value]) {
         for item in usage {
-            let rec =
-                nekko_usage::side_usage_record(provider, model_id, Some(&json!(session_id)), item, now_ms() as u64);
+            let rec = nekko_usage::side_usage_record(
+                provider,
+                model_id,
+                Some(&json!(session_id)),
+                item,
+                nekko_js::now_ms_f64() as u64,
+            );
             self.append_line("usage.jsonl", &nekko_js::stringify(&rec), false);
         }
     }
@@ -192,7 +193,14 @@ impl Accounts {
         done: &Value,
         stats: Option<&Value>,
     ) {
-        let reply = nekko_usage::turn_reply_record(opts, account.incognito, started_at, done, stats, now_ms() as u64);
+        let reply = nekko_usage::turn_reply_record(
+            opts,
+            account.incognito,
+            started_at,
+            done,
+            stats,
+            nekko_js::now_ms_f64() as u64,
+        );
         if let Some(r) = reply {
             self.append_line("replies.jsonl", &nekko_js::stringify(&r), false);
         }
@@ -270,7 +278,7 @@ impl Accounts {
     /// provider's `provider:<id>` key. Each response reports every window, so
     /// the snapshot is replaced rather than merged.
     pub fn record_api_headers(&self, key: &str, pairs: &[(String, String)]) -> Option<Value> {
-        let parsed = nekko_usage::parse_anthropic_api_headers(pairs, now_ms());
+        let parsed = nekko_usage::parse_anthropic_api_headers(pairs, nekko_js::now_ms_f64());
         if parsed.get("windows").and_then(Value::as_array).is_none_or(Vec::is_empty) {
             return self.get(key);
         }
@@ -285,7 +293,7 @@ impl Accounts {
         let fresh = |v: &Value| {
             let at = v.get("updatedAt").and_then(Value::as_f64).unwrap_or(f64::NAN);
             let stale = v.get("staleAfterMs").and_then(Value::as_f64).unwrap_or(f64::NAN);
-            at + stale > now_ms()
+            at + stale > nekko_js::now_ms_f64()
         };
         if !refresh && let Some(s) = self.get(key).filter(fresh) {
             return Some(s);
@@ -295,7 +303,7 @@ impl Accounts {
 
     fn record_problem(&self, key: &str, e: &Problem) {
         let LimitsError { kind, status, retry_after_ms } = nekko_usage::classify_limits_error(e);
-        let now = now_ms();
+        let now = nekko_js::now_ms_f64();
         let mut s = lock(&self.state);
         let failures = s.problems.get(key).map_or(0.0, |p| p.failures) + 1.0;
         // A dead sign-in will not fix itself: wait for the user.
@@ -323,7 +331,7 @@ impl Accounts {
         }
         let gate = lock(&self.state).gates.entry(key.to_string()).or_default().clone();
         let _held = gate.lock().await;
-        let now = now_ms();
+        let now = nekko_js::now_ms_f64();
         {
             let s = lock(&self.state);
             if now - s.last_poll.get(key).copied().unwrap_or(0.0) < POLL_INTERVAL_MS {
@@ -359,11 +367,11 @@ impl Accounts {
                     }
                     self.notify(key, next);
                 }
-                lock(&self.state).last_poll.insert(key.to_string(), now_ms());
+                lock(&self.state).last_poll.insert(key.to_string(), nekko_js::now_ms_f64());
                 next.or_else(|| self.get(key))
             }
             Err(e) => {
-                lock(&self.state).last_poll.insert(key.to_string(), now_ms());
+                lock(&self.state).last_poll.insert(key.to_string(), nekko_js::now_ms_f64());
                 self.record_problem(key, &e);
                 self.get(key)
             }
@@ -376,7 +384,7 @@ impl Accounts {
         let usable = |t: &Value| {
             let expires = token_expires_at(t);
             match expires {
-                Some(e) => e - 60_000.0 > now_ms(),
+                Some(e) => e - 60_000.0 > nekko_js::now_ms_f64(),
                 None => !nekko_js::truthy(t.get("refreshToken")),
             }
         };
@@ -416,7 +424,7 @@ impl Accounts {
                     .header("ChatGPT-Account-Id", account);
                 let (status, body) = send(req).await?;
                 let json = body.as_ref().and_then(Value::as_object).ok_or(unreadable(status))?;
-                Ok(Some(nekko_usage::parse_chatgpt_usage(json, now_ms())))
+                Ok(Some(nekko_usage::parse_chatgpt_usage(json, nekko_js::now_ms_f64())))
             }
             Some("openrouter") => read_openrouter(&self.http, &base_for(OPENROUTER_BASE), &access).await.map(Some),
             _ => Ok(None),
@@ -488,7 +496,7 @@ async fn send(req: reqwest::RequestBuilder) -> Result<(u16, Option<Value>), Prob
             429 => LimitsError {
                 kind: "rate_limited",
                 status: Some(429),
-                retry_after_ms: nekko_usage::parse_retry_after(retry.as_deref(), now_ms()),
+                retry_after_ms: nekko_usage::parse_retry_after(retry.as_deref(), nekko_js::now_ms_f64()),
             },
             _ => LimitsError::new("http", Some(status)),
         }));
@@ -500,7 +508,7 @@ async fn send(req: reqwest::RequestBuilder) -> Result<(u16, Option<Value>), Prob
 async fn read_openrouter(http: &reqwest::Client, base: &str, bearer: &str) -> Result<Value, Problem> {
     let url = format!("{}/key", base.trim_end_matches('/'));
     let (status, body) = send(http.get(url).header("Authorization", format!("Bearer {bearer}"))).await?;
-    nekko_usage::parse_openrouter_key(body.as_ref(), status, now_ms()).map_err(Problem::Read)
+    nekko_usage::parse_openrouter_key(body.as_ref(), status, nekko_js::now_ms_f64()).map_err(Problem::Read)
 }
 
 #[cfg(test)]

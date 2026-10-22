@@ -34,7 +34,7 @@ use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 use tokio::sync::{Notify, broadcast, mpsc, oneshot};
 
 /// Scrollback retained per terminal for reattach.
@@ -99,7 +99,12 @@ pub struct TerminalViewer {
 impl TerminalViewer {
     /// A viewer attaching now.
     pub fn new(id: impl Into<String>, kind: impl Into<String>, name: Option<String>) -> Self {
-        Self { id: id.into(), kind: kind.into(), name: name.filter(|n| !n.trim().is_empty()), since: now_ms() }
+        Self {
+            id: id.into(),
+            kind: kind.into(),
+            name: name.filter(|n| !n.trim().is_empty()),
+            since: nekko_js::now_ms(),
+        }
     }
 }
 
@@ -185,14 +190,10 @@ struct Term {
     killer: Mutex<Option<Box<dyn ChildKiller + Send + Sync>>>,
 }
 
-fn now_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
-}
-
 fn new_id() -> String {
     let mut r = [0u8; 4];
     let _ = getrandom::fill(&mut r);
-    format!("term_{}_{}", to_base36(now_ms()), to_base36(u32::from_le_bytes(r) as u64 % 1_000_000))
+    format!("term_{}_{}", to_base36(nekko_js::now_ms()), to_base36(u32::from_le_bytes(r) as u64 % 1_000_000))
 }
 
 fn to_base36(mut n: u64) -> String {
@@ -325,7 +326,7 @@ impl Registry {
             workspace_id: spec.workspace_id,
             cwd: spec.cwd.to_string_lossy().into_owned(),
             shell: spec.shell.path.clone(),
-            created_at: now_ms(),
+            created_at: nekko_js::now_ms(),
             order: None,
             running: true,
             exit_code: None,

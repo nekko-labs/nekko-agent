@@ -19,10 +19,6 @@ const TIMEOUT: Duration = Duration::from_secs(20);
 /// one credential per machine user.
 static CACHE: Mutex<Option<(String, f64)>> = Mutex::new(None);
 
-fn now_ms() -> f64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0.0, |d| d.as_millis() as f64)
-}
-
 /// Where Google's client libraries look for ADC, in their order.
 fn adc_path() -> Option<PathBuf> {
     if let Some(p) = std::env::var_os("GOOGLE_APPLICATION_CREDENTIALS").filter(|p| !p.is_empty()) {
@@ -44,7 +40,7 @@ fn http() -> &'static reqwest::Client {
 /// A fresh access token for Vertex AI, cached until five minutes before it expires.
 pub async fn access_token() -> Result<String, String> {
     if let Some((token, expires)) = CACHE.lock().ok().and_then(|c| c.clone())
-        && now_ms() < expires - EARLY_MS
+        && nekko_js::now_ms_f64() < expires - EARLY_MS
     {
         return Ok(token);
     }
@@ -86,7 +82,7 @@ async fn refresh_user(http: &reqwest::Client, user: &Value) -> Result<(String, f
 fn parse_token(body: &Value) -> Option<(String, f64)> {
     let token = body.get("access_token").and_then(Value::as_str).filter(|t| !t.is_empty())?;
     let secs = body.get("expires_in").and_then(Value::as_f64).unwrap_or(3600.0);
-    Some((token.to_string(), now_ms() + secs * 1000.0))
+    Some((token.to_string(), nekko_js::now_ms_f64() + secs * 1000.0))
 }
 
 /// `gcloud auth application-default print-access-token`, for credentials only
@@ -109,7 +105,7 @@ async fn from_gcloud() -> Result<(String, f64), String> {
     if !out.status.success() || token.is_empty() {
         return Err(no_credentials());
     }
-    Ok((token, now_ms() + 3_600_000.0))
+    Ok((token, nekko_js::now_ms_f64() + 3_600_000.0))
 }
 
 fn no_credentials() -> String {
@@ -124,7 +120,7 @@ mod tests {
 
     #[test]
     fn token_responses_parse_with_their_lifetime() {
-        let before = now_ms();
+        let before = nekko_js::now_ms_f64();
         let (token, expires) = parse_token(&json!({ "access_token": "ya29.x", "expires_in": 3599 })).unwrap();
         assert_eq!(token, "ya29.x");
         assert!(expires >= before + 3_599_000.0 && expires < before + 3_700_000.0);

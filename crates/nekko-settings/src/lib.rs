@@ -274,15 +274,6 @@ fn ensure_private(path: &Path) {
 #[cfg(not(unix))]
 fn ensure_private(_path: &Path) {}
 
-fn uuid() -> String {
-    let mut b = [0u8; 16];
-    let _ = getrandom::fill(&mut b);
-    b[6] = (b[6] & 0x0f) | 0x40;
-    b[8] = (b[8] & 0x3f) | 0x80;
-    let h: String = b.iter().map(|x| format!("{x:02x}")).collect();
-    format!("{}-{}-{}-{}-{}", &h[0..8], &h[8..12], &h[12..16], &h[16..20], &h[20..32])
-}
-
 /// `writeJsonAtomic`: `JSON.stringify(value, null, 2)` to a private temp file
 /// beside the target, flushed to disk, then renamed over it.
 pub fn write_json_atomic(path: &Path, value: &Value) -> std::io::Result<()> {
@@ -290,7 +281,7 @@ pub fn write_json_atomic(path: &Path, value: &Value) -> std::io::Result<()> {
     let dir = path.parent().unwrap_or(Path::new("."));
     std::fs::create_dir_all(dir)?;
     let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("settings.json");
-    let temp = dir.join(format!(".{name}.{}.tmp", uuid()));
+    let temp = dir.join(format!(".{name}.{}.tmp", nekko_js::uuid()));
     let text = nekko_js::stringify_pretty(value, "  ");
     let written = (|| {
         let mut opts = std::fs::OpenOptions::new();
@@ -354,7 +345,7 @@ mod tests {
 
     #[test]
     fn a_store_round_trips_through_its_file() {
-        let dir = std::env::temp_dir().join(format!("nekko-settings-{}", uuid()));
+        let dir = std::env::temp_dir().join(format!("nekko-settings-{}", nekko_js::uuid()));
         let store = SettingsStore::new(&dir);
         let rx = store.subscribe();
         assert_eq!(store.get()["theme"], "system");

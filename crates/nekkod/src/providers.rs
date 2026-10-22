@@ -468,7 +468,7 @@ pub fn is_localhost_url(base_url: &str) -> bool {
 /// `lmsBin()`: LM Studio's own install of the CLI, else whatever is on PATH.
 fn lms_bin() -> PathBuf {
     let name = if cfg!(windows) { "lms.exe" } else { "lms" };
-    let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from);
+    let home = nekko_js::home_dir();
     match home.map(|h| h.join(".lmstudio").join("bin").join(name)) {
         Some(p) if p.exists() => p,
         _ => PathBuf::from("lms"),
