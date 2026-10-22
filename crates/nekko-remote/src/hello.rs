@@ -167,5 +167,6 @@ pub fn cut16(s: &str, n: usize) -> &str {
 }
 
 /// The phone protocol version this computer speaks, sent in the welcome
-/// (`REMOTE_PROTOCOL_VERSION` in packages/shared/src/remote.ts).
-pub const PROTOCOL_VERSION: u64 = 3;
+/// (`REMOTE_PROTOCOL_VERSION` in packages/shared/src/remote.ts). 4 is the
+/// first with relay replay protection (`agent::CHALLENGE_PROTOCOL`).
+pub const PROTOCOL_VERSION: u64 = 4;

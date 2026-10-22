@@ -263,18 +263,69 @@ export const PHONE_ALWAYS_DENIED = {
  * IO-33 access classes. A paired phone's *Read* and *Change* switches
  * (Settings → Remote access → What phones can do, `RemoteDevice.access`)
  * decide whether it may call the channels listed here: a read-class call is
- * refused with `read-off` while Read is off, a change-class call with
- * `change-off` while Change is off. A change-class call also needs a fresh
- * signed proof from the phone (`PHONE_CHANGE_PROOF`) and is written to the
- * device's activity list, allowed or not. A channel here must also be in
- * `PHONE_CHANNELS`. The 30 channels phones had before IO-33 are in neither
- * class and behave as before. Feature PRs (FA-1 to FA-6) fill these.
+ * refused with `read-off` while Read is off, a change-class or agent-class
+ * call with `change-off` while Change is off. A change-class call also needs
+ * a fresh signed proof from the phone (`PHONE_CHANGE_PROOF`); change-class and
+ * agent-class calls are written to the device's activity list, allowed or
+ * not. A channel here must also be in `PHONE_CHANNELS`.
+ *
+ * Every channel in `PHONE_CHANNELS` is in exactly one class (2026-10-22): a
+ * channel in none is refused (`channel-denied`), so a channel added to the
+ * allowlist without a class fails closed instead of reaching the computer
+ * with no switch checked.
  */
+/** Reading the chats and the computer's state the chat screens show (2026-10-22). */
+export const PHONE_CHAT_READ_CHANNELS: readonly string[] = [
+  'changes:list',
+  'chat:pending',
+  'limits:get',
+  'models:list',
+  'pr:sessionList',
+  'providers:list',
+  'session:get',
+  'sessions:summaries',
+  'settings:get',
+  'skills:runnable',
+  'tasks:list',
+  'usage:summary',
+  'voice:status',
+  'workflows:list',
+  'workspace:list',
+];
 export const PHONE_READ_CHANNELS: readonly string[] = [
+  ...PHONE_CHAT_READ_CHANNELS,
   ...PHONE_GIT_READ_CHANNELS,
   ...PHONE_FILES_READ_CHANNELS,
   ...PHONE_TERMINAL_READ_CHANNELS,
 ];
+/**
+ * Change level without a proof per call (2026-10-22): everything that makes
+ * the agent act or changes the computer's settings or chats. Sending,
+ * queueing and editing prompts, stopping a run, approving a tool, answering a
+ * question, making, forking and deleting chats and changing their options,
+ * the phone-settable settings, running an automation and transcribing a voice
+ * prompt. The Change switch applies; each call is written to the activity
+ * list. Raising a chat's mode is the exception that needs a proof
+ * (`PHONE_MODE_PROOF`).
+ */
+export const PHONE_AGENT_CHANNELS: readonly string[] = [
+  'chat:abort',
+  'chat:answer',
+  'chat:editQueued',
+  'chat:queue',
+  'chat:send',
+  'session:create',
+  'session:delete',
+  'session:fork',
+  'session:setOptions',
+  'settings:update',
+  'task:runNow',
+  'tool:approve',
+  'voice:transcribe',
+  'workflow:run',
+];
+/** Any paired phone, whatever its switches: which Nekko Agent version it talks to. */
+export const PHONE_OPEN_CHANNELS: readonly string[] = ['app:info'];
 export const PHONE_CHANGE_CHANNELS: readonly string[] = [
   ...PHONE_GIT_CHANGE_CHANNELS,
   ...PHONE_FILES_CHANGE_CHANNELS,
@@ -287,14 +338,44 @@ export const PHONE_CHANGE_CHANNELS: readonly string[] = [
  */
 export const PHONE_TOKEN_CHANNELS: readonly string[] = [...PHONE_TERMINAL_TOKEN_CHANNELS];
 
-/** `null`: neither class (no per-device switch applies). `token`: Change level, with a terminal session token. */
-export type PhoneChannelClass = 'read' | 'change' | 'token' | null;
+/**
+ * `change`: Change level with a proof per call. `agent`: Change level, no
+ * proof (except a mode raise). `token`: Change level, with a terminal session
+ * token. `open`: no switch. `null`: unclassified, so refused.
+ */
+export type PhoneChannelClass = 'read' | 'change' | 'agent' | 'token' | 'open' | null;
 
 export function phoneChannelClass(channel: string): PhoneChannelClass {
   if (PHONE_CHANGE_CHANNELS.includes(channel)) return 'change';
+  if (PHONE_AGENT_CHANNELS.includes(channel)) return 'agent';
   if (PHONE_TOKEN_CHANNELS.includes(channel)) return 'token';
   if (PHONE_READ_CHANNELS.includes(channel)) return 'read';
+  if (PHONE_OPEN_CHANNELS.includes(channel)) return 'open';
   return null;
+}
+
+/**
+ * Raising a chat's mode from a phone needs a signed Change proof, like saving
+ * a file: `session:setOptions` setting `mode`, and `settings:update` setting
+ * `defaultChatMode`, to a mode later in `rank` than the current one (a chat's
+ * own mode, else the computer's `defaultChatMode`, else `fallback`, as the
+ * engine reads it). Lowering or keeping the mode needs none; a proof on such
+ * a call is ignored.
+ */
+export const PHONE_MODE_PROOF = {
+  channels: ['session:setOptions', 'settings:update'],
+  rank: ['ask', 'guardrails', 'yolo'],
+  fallback: 'guardrails',
+} as const;
+
+/** Whether moving from `current` (a mode, or nothing) to `next` raises the mode. An unknown mode counts as the most permissive. */
+export function phoneRaisesMode(next: unknown, current: unknown): boolean {
+  const rank = (m: unknown) => {
+    const i = (PHONE_MODE_PROOF.rank as readonly unknown[]).indexOf(m);
+    return i < 0 ? PHONE_MODE_PROOF.rank.length : i;
+  };
+  const was = typeof current === 'string' ? current : PHONE_MODE_PROOF.fallback;
+  return typeof next === 'string' && rank(next) > rank(was);
 }
 
 /** A paired phone's switches. Missing means on, so phones paired before IO-33 keep working. */
@@ -344,8 +425,9 @@ export interface PhoneActivityEntry {
  */
 export function checkPhoneAccess(channel: string, access: PhoneDeviceAccess): void {
   const cls = phoneChannelClass(channel);
+  if (cls === null) throw new PhoneAccessError('channel-denied', channel);
   if (cls === 'read' && !access.read) throw new PhoneAccessError('read-off', channel);
-  if ((cls === 'change' || cls === 'token') && !access.change) throw new PhoneAccessError('change-off', channel);
+  if ((cls === 'change' || cls === 'agent' || cls === 'token') && !access.change) throw new PhoneAccessError('change-off', channel);
 }
 
 /**
@@ -432,7 +514,9 @@ export const PHONE_QUEUE_KEYS = ['clientMessageId', 'images', 'skill', 'text'] a
 
 /**
  * Chat modes a phone may choose, for new chats or for one chat. YOLO is
- * included on purpose: the owner decided a paired phone may pick it.
+ * included on purpose: the owner decided a paired phone may pick it. Raising
+ * a mode (to Guardrails from Ask, to YOLO) needs a signed proof
+ * (`PHONE_MODE_PROOF`, decided 2026-10-22).
  */
 export const PHONE_CHAT_MODES = ['ask', 'guardrails', 'yolo'] as const;
 
@@ -958,7 +1042,10 @@ export function phoneAccessPolicy() {
     alwaysDenied: PHONE_ALWAYS_DENIED,
     readChannels: [...PHONE_READ_CHANNELS],
     changeChannels: [...PHONE_CHANGE_CHANNELS],
+    agentChannels: [...PHONE_AGENT_CHANNELS],
+    openChannels: [...PHONE_OPEN_CHANNELS],
     tokenChannels: [...PHONE_TOKEN_CHANNELS],
+    modeProof: { channels: [...PHONE_MODE_PROOF.channels], rank: [...PHONE_MODE_PROOF.rank], fallback: PHONE_MODE_PROOF.fallback },
     terminal: { ...PHONE_TERMINAL, openChannel: PHONE_TERMINAL_OPEN_CHANNEL, leaveChannel: PHONE_TERMINAL_LEAVE_CHANNEL },
     changeProof: { ...PHONE_CHANGE_PROOF },
     keyChannel: PHONE_KEY_CHANNEL,

@@ -12,7 +12,12 @@
 //! (`PhoneCall`) and checks read-class and change-class channels against that
 //! device's switches, a change-class call also against its signed proof
 //! (`proof.rs`), and writes each change-class call to the device's activity.
-//! The channels phones had before are in neither class and decide as before.
+//!
+//! Since 2026-10-22 every channel a phone may call is classed: the chat
+//! screens' reads are read-class, and everything that makes the agent act or
+//! changes settings is agent-class (the Change switch, no proof per call,
+//! logged), except that raising a chat's mode needs a proof (`mode_raise`).
+//! A channel in no class is refused: the gate fails closed.
 
 use crate::socket::{Dispatcher, PhoneCall, PhoneDispatcher};
 use serde_json::{Map, Value, json};
@@ -50,6 +55,15 @@ pub struct Policy {
     /// `PHONE_READ_CHANNELS` / `PHONE_CHANGE_CHANNELS` (IO-33).
     pub read_channels: Vec<String>,
     pub change_channels: Vec<String>,
+    /// `PHONE_AGENT_CHANNELS`: the Change switch, no proof per call.
+    pub agent_channels: Vec<String>,
+    /// `PHONE_OPEN_CHANNELS`: any paired phone.
+    pub open_channels: Vec<String>,
+    /// `PHONE_MODE_PROOF`: the channels that can raise a chat's mode, the
+    /// modes from least to most permissive, and the mode when none is set.
+    pub mode_channels: Vec<String>,
+    pub mode_rank: Vec<String>,
+    pub mode_fallback: String,
     /// `PHONE_CHANGE_PROOF`: how old, and how far ahead, a Change proof may be.
     pub proof_max_age_ms: f64,
     pub proof_max_ahead_ms: f64,
@@ -100,6 +114,12 @@ pub fn policy() -> &'static Policy {
             queue_edit_keys: strings(&v["queueEditKeys"]),
             read_channels: strings(&v["readChannels"]),
             change_channels: strings(&v["changeChannels"]),
+            agent_channels: strings(&v["agentChannels"]),
+            open_channels: strings(&v["openChannels"]),
+            mode_channels: strings(&v["modeProof"]["channels"]),
+            mode_rank: strings(&v["modeProof"]["rank"]),
+            // Missing: every mode counts as a raise, so each needs a proof.
+            mode_fallback: v["modeProof"]["fallback"].as_str().unwrap_or("").to_string(),
             // Missing: no proof is fresh enough, so no Change action runs.
             proof_max_age_ms: v["changeProof"]["maxAgeMs"].as_f64().unwrap_or(0.0),
             proof_max_ahead_ms: v["changeProof"]["maxAheadMs"].as_f64().unwrap_or(0.0),
@@ -732,31 +752,64 @@ pub trait Devices: Send + Sync {
 /// Which IO-33 class a channel is in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Class {
+    /// The Read switch.
     Read,
+    /// The Change switch and a signed proof per call.
     Change,
+    /// The Change switch, no proof (except a mode raise).
+    Agent,
+    /// Any paired phone.
+    Open,
 }
 
-/// The read-class and change-class channels; the policy's in production.
+/// The channels of each class; the policy's in production. A channel in
+/// none is refused.
 #[derive(Debug, Clone, Default)]
 pub struct Classes {
     pub read: Vec<String>,
     pub change: Vec<String>,
+    pub agent: Vec<String>,
+    pub open: Vec<String>,
 }
 
 impl Classes {
     pub fn from_policy() -> Self {
-        Self { read: policy().read_channels.clone(), change: policy().change_channels.clone() }
+        let p = policy();
+        Self {
+            read: p.read_channels.clone(),
+            change: p.change_channels.clone(),
+            agent: p.agent_channels.clone(),
+            open: p.open_channels.clone(),
+        }
     }
 
     pub fn of(&self, channel: &str) -> Option<Class> {
         if has(&self.change, channel) {
             Some(Class::Change)
+        } else if has(&self.agent, channel) {
+            Some(Class::Agent)
         } else if has(&self.read, channel) {
             Some(Class::Read)
+        } else if has(&self.open, channel) {
+            Some(Class::Open)
         } else {
             None
         }
     }
+}
+
+/// Where `mode` stands from least to most permissive; an unknown mode is
+/// above them all (it needs a proof, and the screen refuses it anyway).
+fn mode_rank(mode: &str) -> usize {
+    let rank = &policy().mode_rank;
+    rank.iter().position(|m| m == mode).unwrap_or(rank.len())
+}
+
+/// Whether setting `next` over `current` (a mode, or none set) raises the mode (`phoneRaisesMode`).
+pub fn raises_mode(next: Option<&str>, current: Option<&str>) -> bool {
+    let Some(next) = next else { return false };
+    let was = current.unwrap_or(policy().mode_fallback.as_str());
+    mode_rank(next) > mode_rank(was)
 }
 
 /// The code of a gate refusal's message, or `failed` for any other error.
@@ -790,11 +843,22 @@ impl Gate {
         if let Some(out) = self.terminal_call(&who, &channel, &args).await {
             return out;
         }
-        let Some(class) = self.classes.of(&channel) else { return call(&self.run, channel, args).await };
+        // Fail closed: a channel in no class never reaches the computer.
+        let Some(class) = self.classes.of(&channel) else { return Err(denied("channel-denied", channel).to_string()) };
         if !channel_allowed(&channel) {
             return Err(denied("channel-denied", channel).to_string());
         }
         match class {
+            Class::Open => call(&self.run, channel, args).await,
+            Class::Agent => {
+                if let Err(d) = self.check_agent(&who, &channel, &args).await {
+                    self.record(&who, &channel, Err(d.code.to_string()));
+                    return Err(d.to_string());
+                }
+                let result = call(&self.run, channel.clone(), args).await;
+                self.record(&who, &channel, result.as_ref().map(|_| ()).map_err(|e| reason_of(e)));
+                result
+            }
             Class::Read => {
                 let device = self.devices.device(&who.device_id).ok_or_else(|| denied("device-unknown", &channel));
                 if !device.map_err(|d| d.to_string())?.access.read {
@@ -812,6 +876,66 @@ impl Gate {
                 result
             }
         }
+    }
+
+    /// An agent-class call: a known device with Change on, a call the
+    /// policy's screen accepts, and a signed proof when it raises a chat's mode.
+    async fn check_agent(&self, who: &PhoneCall, channel: &str, args: &Value) -> Result<(), Denied> {
+        let device = self.devices.device(&who.device_id).ok_or_else(|| denied("device-unknown", channel))?;
+        if !device.access.change {
+            return Err(denied("change-off", channel));
+        }
+        let list = args.as_array().cloned().unwrap_or_default();
+        screen(channel, &list)?;
+        if self.mode_raise(channel, &list).await {
+            // Said first, so a phone without a registered key learns it must sign.
+            if who.proof.is_none() {
+                return Err(denied("proof-required", channel));
+            }
+            return self.check_change(who, channel, args);
+        }
+        Ok(())
+    }
+
+    /// Whether a phone's call raises a chat's mode (`PHONE_MODE_PROOF`):
+    /// `session:setOptions` above the chat's mode (its own, else the default),
+    /// `settings:update` above the default. A current mode the computer can't
+    /// say counts as a raise.
+    async fn mode_raise(&self, channel: &str, args: &[Value]) -> bool {
+        if !has(&policy().mode_channels, channel) {
+            return false;
+        }
+        let arg = |i: usize| args.get(i).unwrap_or(&Value::Null);
+        let next = match channel {
+            "session:setOptions" => arg(1).get("mode"),
+            "settings:update" => arg(0).get("defaultChatMode"),
+            _ => None,
+        };
+        let Some(next) = next.and_then(Value::as_str) else { return false };
+        if !raises_mode(Some(next), policy().mode_rank.first().map(String::as_str)) {
+            return false; // the least permissive mode is never a raise
+        }
+        let default = || async {
+            let settings = (self.run)("settings:get".to_string(), json!([])).await.ok()?;
+            Some(settings.get("defaultChatMode").and_then(Value::as_str).map(str::to_string))
+        };
+        let current = match channel {
+            "session:setOptions" => {
+                let Ok(chat) = (self.run)("session:get".to_string(), json!([arg(0)])).await else { return true };
+                match chat.get("mode").and_then(Value::as_str) {
+                    Some(m) => Some(m.to_string()),
+                    None => match default().await {
+                        Some(d) => d,
+                        None => return true,
+                    },
+                }
+            }
+            _ => match default().await {
+                Some(d) => d,
+                None => return true,
+            },
+        };
+        raises_mode(Some(next), current.as_deref())
     }
 
     pub(crate) fn record(&self, who: &PhoneCall, channel: &str, outcome: Result<(), String>) {
@@ -967,8 +1091,19 @@ mod tests {
         })
     }
 
+    /// A registry holding `phone-1` with Read and Change on and no Change key.
+    fn paired() -> Arc<MemDevices> {
+        let devices = Arc::new(MemDevices::default());
+        devices
+            .devices
+            .lock()
+            .unwrap()
+            .insert("phone-1".into(), PhoneDevice { access: DeviceAccess::default(), key: None });
+        devices
+    }
+
     fn run(calls: &Arc<Mutex<Vec<(String, Value)>>>, channel: &str, args: Value) -> Result<Value, String> {
-        let gated = gate(host(calls.clone(), secrets()), Arc::new(MemDevices::default()));
+        let gated = gate(host(calls.clone(), secrets()), paired());
         let who = PhoneCall { device_id: "phone-1".into(), proof: None };
         tokio::runtime::Builder::new_current_thread().build().unwrap().block_on(gated(who, channel.to_string(), args))
     }
@@ -1045,7 +1180,8 @@ mod tests {
             *devices.now.lock().unwrap() = NOW;
             devices.devices.lock().unwrap().insert("phone-1".into(), PhoneDevice { access, key: key.map(public) });
             let calls: Arc<Mutex<Vec<(String, Value)>>> = Arc::default();
-            let classes = Classes { read: vec!["tasks:list".into()], change: vec!["task:runNow".into()] };
+            let classes =
+                Classes { read: vec!["tasks:list".into()], change: vec!["task:runNow".into()], ..Classes::default() };
             let gated = gate_with(host(calls.clone(), secrets()), devices.clone(), classes);
             let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
             Rig { devices, calls, gated, rt }
@@ -1071,9 +1207,9 @@ mod tests {
         fn read_off_refuses_read_class_calls_only() {
             let r = rig(DeviceAccess { read: false, change: true }, None);
             assert_eq!(r.ask("tasks:list", json!([]), None), refused("read-off", "tasks:list"));
-            // The channels phones had before IO-33 are in neither class.
-            assert!(r.ask("sessions:summaries", json!([]), None).is_ok());
-            assert_eq!(r.calls.lock().unwrap().len(), 1);
+            // A channel in no class is refused, whatever the switches (fail closed).
+            assert_eq!(r.ask("sessions:summaries", json!([]), None), refused("channel-denied", "sessions:summaries"));
+            assert!(r.calls.lock().unwrap().is_empty());
             assert!(r.log().is_empty(), "reads are not written to the activity list");
             let r = rig(ON, None);
             assert!(r.ask("tasks:list", json!([]), None).is_ok());
@@ -1172,7 +1308,8 @@ mod tests {
             let devices = Arc::new(MemDevices::default());
             devices.devices.lock().unwrap().insert("phone-1".into(), PhoneDevice { access: ON, key: None });
             let calls: Arc<Mutex<Vec<(String, Value)>>> = Arc::default();
-            let classes = Classes { read: vec!["file:read".into()], change: vec!["file:write".into()] };
+            let classes =
+                Classes { read: vec!["file:read".into()], change: vec!["file:write".into()], ..Classes::default() };
             let gated = gate_with(host(calls.clone(), secrets()), devices.clone(), classes);
             let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
             for c in ["file:read", "file:write"] {
@@ -1329,6 +1466,128 @@ mod tests {
             );
         }
 
+        /// The policy's own classes, a session `s1` in `mode` and the computer's default `default`.
+        fn policy_rig(access: DeviceAccess, key: Option<&SigningKey>, mode: Option<&str>, default: &str) -> Rig {
+            let devices = Arc::new(MemDevices::default());
+            *devices.now.lock().unwrap() = NOW;
+            devices.devices.lock().unwrap().insert("phone-1".into(), PhoneDevice { access, key: key.map(public) });
+            let calls: Arc<Mutex<Vec<(String, Value)>>> = Arc::default();
+            let (seen, mode, default) = (calls.clone(), mode.map(str::to_string), default.to_string());
+            let host: Dispatcher = Arc::new(move |channel: String, args: Value| {
+                seen.lock().unwrap().push((channel.clone(), args));
+                let out = match channel.as_str() {
+                    "session:get" => match &mode {
+                        Some(m) => json!({ "id": "s1", "mode": m, "messages": [] }),
+                        None => json!({ "id": "s1", "messages": [] }),
+                    },
+                    "settings:get" | "settings:update" => json!({ "defaultChatMode": default }),
+                    c => json!({ "ok": c }),
+                };
+                Box::pin(std::future::ready(Ok(out)))
+            });
+            let gated = gate(host, devices.clone());
+            let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
+            Rig { devices, calls, gated, rt }
+        }
+
+        fn ran(r: &Rig, channel: &str) -> usize {
+            r.calls.lock().unwrap().iter().filter(|(c, _)| c == channel).count()
+        }
+
+        #[test]
+        fn every_phone_channel_is_classed() {
+            let classes = Classes::from_policy();
+            let p = policy();
+            for c in &p.channels {
+                assert!(classes.of(c).is_some() || has(&p.terminal.token_channels, c), "{c} is in no class");
+            }
+            for c in ["chat:send", "chat:queue", "tool:approve", "chat:answer", "task:runNow", "workflow:run"] {
+                assert_eq!(classes.of(c), Some(Class::Agent), "{c}");
+            }
+            for c in ["sessions:summaries", "session:get", "settings:get", "chat:pending"] {
+                assert_eq!(classes.of(c), Some(Class::Read), "{c}");
+            }
+        }
+
+        #[test]
+        fn an_unclassed_channel_fails_closed() {
+            // On the allowlist but in no class (a feature PR that forgot to class it): refused.
+            let devices = Arc::new(MemDevices::default());
+            devices.devices.lock().unwrap().insert("phone-1".into(), PhoneDevice { access: ON, key: None });
+            let calls: Arc<Mutex<Vec<(String, Value)>>> = Arc::default();
+            let gated = gate_with(host(calls.clone(), secrets()), devices, Classes::default());
+            let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
+            for c in ["chat:send", "sessions:summaries", "app:info", "settings:update"] {
+                let who = PhoneCall { device_id: "phone-1".into(), proof: None };
+                assert_eq!(rt.block_on(gated(who, c.into(), json!([{}]))), refused("channel-denied", c));
+            }
+            assert!(calls.lock().unwrap().is_empty());
+        }
+
+        #[test]
+        fn change_off_stops_the_agent_and_read_off_hides_the_chats() {
+            let send = json!([{ "sessionId": "s1", "text": "hi" }]);
+            let r = policy_rig(DeviceAccess { read: true, change: false }, None, None, "ask");
+            for (c, args) in [
+                ("chat:send", send.clone()),
+                ("chat:queue", json!(["s1", "hi"])),
+                ("tool:approve", json!(["s1", "tc1", true])),
+                ("chat:answer", json!(["s1", "q1", {}])),
+                ("task:runNow", json!(["t1"])),
+                ("workflow:run", json!(["w1"])),
+                ("session:setOptions", json!(["s1", { "title": "x" }])),
+                ("settings:update", json!([{ "chatPaneAction": "delete" }])),
+            ] {
+                assert_eq!(r.ask(c, args, None), refused("change-off", c));
+            }
+            assert!(r.calls.lock().unwrap().is_empty());
+            assert_eq!(r.log().len(), 8);
+            assert!(r.ask("session:get", json!(["s1"]), None).is_ok(), "Read stays on");
+            assert!(r.ask("app:info", json!([]), None).is_ok());
+            let r = policy_rig(DeviceAccess { read: false, change: true }, None, None, "ask");
+            for c in ["sessions:summaries", "session:get", "settings:get", "chat:pending"] {
+                assert_eq!(r.ask(c, json!(["s1"]), None), refused("read-off", c));
+            }
+            assert!(r.ask("app:info", json!([]), None).is_ok(), "open to any paired phone");
+            assert!(r.ask("chat:send", send, None).is_ok(), "Change stays on");
+            assert_eq!(r.log(), vec![(true, None)], "the send is in the activity, the reads are not");
+        }
+
+        #[test]
+        fn raising_a_mode_needs_a_proof() {
+            let k = signer(15);
+            // The chat has no mode of its own; the computer's default is Guardrails.
+            let r = policy_rig(ON, Some(&k), None, "guardrails");
+            let yolo = json!(["s1", { "mode": "yolo" }]);
+            assert_eq!(
+                r.ask("session:setOptions", yolo.clone(), None),
+                refused("proof-required", "session:setOptions")
+            );
+            assert_eq!(ran(&r, "session:setOptions"), 0);
+            let p = proof(&k, "phone-1", "session:setOptions", &yolo, NOW as i64);
+            assert!(r.ask("session:setOptions", yolo.clone(), Some(p.clone())).is_ok());
+            assert_eq!(ran(&r, "session:setOptions"), 1);
+            // The same proof again is a replay.
+            assert_eq!(r.ask("session:setOptions", yolo, Some(p)), refused("proof-replayed", "session:setOptions"));
+            // Keeping or lowering the mode needs none.
+            for m in ["guardrails", "ask"] {
+                assert!(r.ask("session:setOptions", json!(["s1", { "mode": m }]), None).is_ok(), "{m}");
+            }
+            // The default: Ask to Guardrails is a raise from a computer whose default is Ask.
+            let r = policy_rig(ON, Some(&k), Some("yolo"), "ask");
+            let raise = json!([{ "defaultChatMode": "guardrails" }]);
+            assert_eq!(r.ask("settings:update", raise.clone(), None), refused("proof-required", "settings:update"));
+            let p = proof(&k, "phone-1", "settings:update", &raise, NOW as i64);
+            assert!(r.ask("settings:update", raise, Some(p)).is_ok());
+            // A chat already in YOLO may be set to Guardrails with no proof.
+            assert!(r.ask("session:setOptions", json!(["s1", { "mode": "guardrails" }]), None).is_ok());
+            // A bad mode is refused by the screen, not asked to sign.
+            assert_eq!(
+                r.ask("session:setOptions", json!(["s1", { "mode": "turbo" }]), None),
+                Err("Not allowed from a paired phone (value-invalid): mode".into())
+            );
+        }
+
         #[test]
         fn reads_switches_from_a_device_record() {
             assert_eq!(DeviceAccess::of(&json!({ "id": "p" })), ON);
@@ -1430,11 +1689,23 @@ mod tests {
     }
 
     #[test]
-    fn a_phone_may_pick_yolo() {
+    fn a_phone_may_pick_yolo_with_a_proof() {
+        // The default is Ask here: YOLO is a raise, so a plain call is refused.
         let calls = Arc::default();
-        assert!(run(&calls, "settings:update", json!([{ "defaultChatMode": "yolo" }])).is_ok());
-        assert!(run(&calls, "session:setOptions", json!(["s1", { "mode": "yolo" }])).is_ok());
-        assert_eq!(calls.lock().unwrap().len(), 2);
+        assert_eq!(
+            run(&calls, "settings:update", json!([{ "defaultChatMode": "yolo" }])),
+            Err("Not allowed from a paired phone (proof-required): settings:update".into())
+        );
+        assert_eq!(
+            run(&calls, "session:setOptions", json!(["s1", { "mode": "yolo" }])),
+            Err("Not allowed from a paired phone (proof-required): session:setOptions".into())
+        );
+        // Lowering or keeping the mode needs none.
+        assert!(run(&calls, "settings:update", json!([{ "defaultChatMode": "ask" }])).is_ok());
+        assert!(run(&calls, "session:setOptions", json!(["s1", { "mode": "ask", "title": "t" }])).is_ok());
+        let seen: Vec<String> = calls.lock().unwrap().iter().map(|(c, _)| c.clone()).collect();
+        assert_eq!(seen.iter().filter(|c| *c == "session:setOptions").count(), 1, "{seen:?}");
+        assert_eq!(seen.iter().filter(|c| *c == "settings:update").count(), 1, "{seen:?}");
     }
 
     #[test]

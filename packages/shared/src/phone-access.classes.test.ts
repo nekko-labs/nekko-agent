@@ -8,7 +8,10 @@ import {
   PHONE_CHANNELS,
   PHONE_DENIED_FOR_NOW,
   PHONE_DENIED_FOREVER,
+  PHONE_AGENT_CHANNELS,
   PHONE_KEY_CHANNEL,
+  PHONE_MODE_PROOF,
+  PHONE_OPEN_CHANNELS,
   PHONE_READ_CHANNELS,
   PHONE_TOKEN_CHANNELS,
   PhoneAccessError,
@@ -18,6 +21,7 @@ import {
   phoneChannelAllowed,
   phoneChannelClass,
   phoneDeviceAccess,
+  phoneRaisesMode,
 } from './phone-access.js';
 import { PUSH_TEST_CHANNEL } from './remote.js';
 
@@ -33,15 +37,41 @@ const code = (fn: () => unknown) => {
   return 'ok';
 };
 
-/** What phones could call before IO-33: in neither class, so they decide as before. */
-const BEFORE_IO33 = PHONE_CHANNELS.filter(
-  (c) => !PHONE_READ_CHANNELS.includes(c) && !PHONE_CHANGE_CHANNELS.includes(c) && !PHONE_TOKEN_CHANNELS.includes(c),
-);
+const CLASSES = [PHONE_READ_CHANNELS, PHONE_CHANGE_CHANNELS, PHONE_AGENT_CHANNELS, PHONE_TOKEN_CHANNELS, PHONE_OPEN_CHANNELS];
 
 describe('phone access classes', () => {
-  it('leaves every channel phones had before IO-33 in neither class', () => {
-    expect(BEFORE_IO33).toHaveLength(30);
-    for (const c of BEFORE_IO33) expect(phoneChannelClass(c), c).toBeNull();
+  it('puts every channel a phone may call in exactly one class', () => {
+    for (const c of PHONE_CHANNELS) {
+      expect(CLASSES.filter((list) => list.includes(c)).length, c).toBe(1);
+      expect(phoneChannelClass(c), c).not.toBeNull();
+    }
+  });
+
+  it('fails closed: a channel in no class is refused whatever the switches', () => {
+    for (const c of ['brand:new', 'chat:dequeue', 'session:truncate']) {
+      expect(phoneChannelClass(c), c).toBeNull();
+      expect(code(() => checkPhoneAccess(c, { read: true, change: true })), c).toBe('channel-denied');
+    }
+  });
+
+  it('gates making the agent act on Change and reading the chats on Read (2026-10-22)', () => {
+    for (const c of ['chat:send', 'chat:queue', 'tool:approve', 'chat:answer', 'task:runNow', 'workflow:run', 'session:setOptions', 'settings:update']) {
+      expect(phoneChannelClass(c), c).toBe('agent');
+    }
+    for (const c of ['sessions:summaries', 'session:get', 'settings:get', 'chat:pending']) expect(phoneChannelClass(c), c).toBe('read');
+    expect(phoneChannelClass('app:info')).toBe('open');
+  });
+
+  it('says when a mode change raises the mode', () => {
+    expect(PHONE_MODE_PROOF.rank).toEqual(['ask', 'guardrails', 'yolo']);
+    expect(phoneRaisesMode('yolo', 'guardrails')).toBe(true);
+    expect(phoneRaisesMode('guardrails', 'ask')).toBe(true);
+    expect(phoneRaisesMode('yolo', undefined)).toBe(true);
+    expect(phoneRaisesMode('guardrails', undefined)).toBe(false);
+    expect(phoneRaisesMode('ask', 'yolo')).toBe(false);
+    expect(phoneRaisesMode('yolo', 'yolo')).toBe(false);
+    expect(phoneRaisesMode(undefined, 'ask')).toBe(false);
+    expect(phoneRaisesMode('turbo', 'yolo')).toBe(true);
   });
 
   it('classes files and logs (FA-1, FA-5): saving is the only Change', () => {
@@ -50,7 +80,7 @@ describe('phone access classes', () => {
   });
 
   it('only classes channels a phone may call, each in one class', () => {
-    for (const c of [...PHONE_READ_CHANNELS, ...PHONE_CHANGE_CHANNELS]) {
+    for (const c of [...PHONE_READ_CHANNELS, ...PHONE_CHANGE_CHANNELS, ...PHONE_AGENT_CHANNELS, ...PHONE_OPEN_CHANNELS]) {
       expect((PHONE_CHANNELS as readonly string[]).includes(c), `${c} is classed but not in PHONE_CHANNELS`).toBe(true);
       expect(phoneAlwaysDenied(c), c).toBe(false);
     }
@@ -63,10 +93,8 @@ describe('phone access classes', () => {
   });
 
   it('refuses a classed call when the device switch is off, and nothing else', () => {
-    // The lists are empty until the feature PRs: check the rule with the
-    // classes the TS reports, so it holds whatever they contain.
     const all = { read: true, change: true };
-    for (const c of BEFORE_IO33) {
+    for (const c of PHONE_OPEN_CHANNELS) {
       expect(code(() => checkPhoneAccess(c, { read: false, change: false })), c).toBe('ok');
       expect(code(() => checkPhoneAccess(c, all)), c).toBe('ok');
     }
@@ -74,7 +102,7 @@ describe('phone access classes', () => {
       expect(code(() => checkPhoneAccess(c, { read: false, change: true }))).toBe('read-off');
       expect(code(() => checkPhoneAccess(c, { read: true, change: false }))).toBe('ok');
     }
-    for (const c of [...PHONE_CHANGE_CHANNELS, ...PHONE_TOKEN_CHANNELS]) {
+    for (const c of [...PHONE_CHANGE_CHANNELS, ...PHONE_AGENT_CHANNELS, ...PHONE_TOKEN_CHANNELS]) {
       expect(code(() => checkPhoneAccess(c, { read: true, change: false }))).toBe('change-off');
       expect(code(() => checkPhoneAccess(c, { read: false, change: true }))).toBe('ok');
     }
@@ -131,6 +159,9 @@ describe('the policy file', () => {
     const p = phoneAccessPolicy();
     expect(p.readChannels).toEqual([...PHONE_READ_CHANNELS]);
     expect(p.changeChannels).toEqual([...PHONE_CHANGE_CHANNELS]);
+    expect(p.agentChannels).toEqual([...PHONE_AGENT_CHANNELS]);
+    expect(p.openChannels).toEqual([...PHONE_OPEN_CHANNELS]);
+    expect(p.modeProof).toEqual({ channels: ['session:setOptions', 'settings:update'], rank: ['ask', 'guardrails', 'yolo'], fallback: 'guardrails' });
     expect(p.changeProof).toEqual({ version: 'nekko-change-v1', maxAgeMs: 300_000, maxAheadMs: 60_000 });
     expect(PHONE_CHANGE_PROOF.maxAgeMs).toBe(5 * 60 * 1000);
     expect(p.keyChannel).toBe('device:registerKey');
