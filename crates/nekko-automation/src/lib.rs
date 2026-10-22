@@ -4,6 +4,7 @@
 //! writes (`packages/host/src/*.golden.test.ts`).
 
 pub mod json;
+pub mod skill_steps;
 pub mod tasks;
 pub mod templates;
 pub mod training;

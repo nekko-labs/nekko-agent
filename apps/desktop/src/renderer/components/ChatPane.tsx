@@ -29,7 +29,7 @@ import { chatWelcomeState } from './agent-console/chatWelcome.js';
 import { useAllProviderLimits, useProviderLimits } from '../useLimits.js';
 import { clearDraft, loadDraft, restoredDraftImages, saveDraft } from '../composerDrafts.js';
 import { indentListSelection } from '../composerLists.js';
-import { draftAfterPromptSelection, draftAfterSkillSelection, slashTrigger } from '../composerSkills.js';
+import { atTrigger, fileSelectionEdit, promptSelectionEdit, skillSelectionEdit, slashTrigger, type ComposerEdit } from '../composerSkills.js';
 import {
   ActivityGroup, ApprovalBar, AutoQualityMenu, MessageBubble, ModelPicker,
   ReplyStatus, useElementWidth,
@@ -1873,7 +1873,44 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const summaryType = useStore((st) => st.sessions.find((x) => x.id === sessionId)?.chatType);
   const imageMode = (session ? session.chatType : summaryType) === 'image';
   const canCompose = imageMode || hasProvider;
-  const slashQuery = slashTrigger(draft)?.query.toLowerCase() ?? null;
+  // The `/` and `@` menus read the word that ends at the caret, so they open
+  // mid-draft too. null until the composer reports a caret (then the end of
+  // the draft counts); -1 while a range is selected, which opens neither.
+  const [caret, setCaret] = useState<number | null>(null);
+  const caretAt = caret === null ? draft.length : Math.min(caret, draft.length);
+  const draftNow = useRef(draft);
+  draftNow.current = draft;
+  const composerCaret = useCallback((): number | null => {
+    const el = composerRef.current;
+    const selection = window.getSelection();
+    if (!el || !selection?.rangeCount || !el.contains(selection.anchorNode)) return null;
+    return el.selectionStart === el.selectionEnd ? el.selectionStart : -1;
+  }, []);
+  // Clicks and arrow keys move the caret without an edit. Only a move that
+  // changes what the menus would show re-renders the pane.
+  useEffect(() => {
+    const triggers = (text: string, at: number) => JSON.stringify([slashTrigger(text, at), atTrigger(text, at)]);
+    const onSelection = () => {
+      const next = composerCaret();
+      if (next === null) return;
+      setCaret((prev) => {
+        const text = draftNow.current;
+        const was = prev === null ? text.length : Math.min(prev, text.length);
+        return triggers(text, was) === triggers(text, next) ? prev : next;
+      });
+    };
+    document.addEventListener('selectionchange', onSelection);
+    return () => document.removeEventListener('selectionchange', onSelection);
+  }, [composerCaret]);
+  /** Apply a menu pick's edit and put the caret where it says. */
+  const applyComposerEdit = (edit: ComposerEdit) => {
+    setDraft(edit.text);
+    setCaret(edit.caret);
+    const el = composerRef.current;
+    el?.focus();
+    requestAnimationFrame(() => el?.setSelectionRange(edit.caret, edit.caret));
+  };
+  const slashQuery = slashTrigger(draft, caretAt)?.query.toLowerCase() ?? null;
   const slashMatches =
     slashQuery !== null ? (settings?.prompts ?? []).filter((p) => p.name.toLowerCase().includes(slashQuery)) : [];
   // Skills (standard agent skills + installed marketplace skills) show in the
@@ -1891,7 +1928,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const allSkills = useMemo(() => matchSkills('', installedSkillDefs), [installedSkillDefs]);
   const slashMenuOpen = !menuClosed && (skillMatches.length > 0 || slashMatches.length > 0);
 
-  const atQuery = (draft.match(/(?:^|\s)@([^\s@]*)$/) ?? [])[1] ?? null;
+  const atQuery = atTrigger(draft, caretAt)?.query ?? null;
   const atMatches =
     atQuery !== null ? atFiles.filter((f) => f.relPath.toLowerCase().includes(atQuery.toLowerCase())).slice(0, 8) : [];
   const atMenuOpen = !menuClosed && atQuery !== null && !!session?.workspaceId;
@@ -1926,30 +1963,29 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     skillsFlyTimer.current = window.setTimeout(() => setSkillsHover(false), 140);
   };
 
-  const armSkill = (sk: SkillDef) => {
+  const armSkill = (sk: SkillDef, at = draft.length) => {
     setActiveSkill(sk.kind === 'goal' ? null : sk);
-    setDraft((current) => draftAfterSkillSelection(current, sk));
-    composerRef.current?.focus();
+    applyComposerEdit(skillSelectionEdit(draft, sk, at));
   };
 
   // Pick a slash-menu row by its combined index (skills first, then prompts).
   const pickSlashIndex = (i: number) => {
     if (i < skillMatches.length) {
-      armSkill(skillMatches[i]);
+      armSkill(skillMatches[i], caretAt);
       return;
     }
     const p = slashMatches[i - skillMatches.length];
-    if (p) { setDraft((current) => draftAfterPromptSelection(current, p.body)); composerRef.current?.focus(); }
+    if (p) applyComposerEdit(promptSelectionEdit(draft, p.body, caretAt));
   };
 
   const pickFile = async (f: IndexedFile) => {
     if (!session) return;
     const next = Array.from(new Set([...(session.attachedPaths ?? []), f.path]));
+    const edit = fileSelectionEdit(draft, f.relPath, caretAt);
     await window.nekko.setSessionAttachments(session.id, next);
-    setDraft((d) => d.replace(/(?:^|\s)@([^\s@]*)$/, (full) => (/^\s/.test(full) ? ' ' : '') + '@' + f.relPath + ' '));
+    applyComposerEdit(edit);
     setSession(await window.nekko.getSession(session.id));
     refreshCtx();
-    composerRef.current?.focus();
   };
 
   // Suggestions only count while the reply they were written for is still the
@@ -2905,7 +2941,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                           role="option"
                           aria-selected={i === menuSel}
                           className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left hover:bg-surface-2 ${i === menuSel ? 'bg-surface-2' : ''}`}
-                          onClick={() => armSkill(sk)}
+                          onClick={() => armSkill(sk, caretAt)}
                           onMouseEnter={() => setMenuSel(i)}
                           title={sk.description}
                         >
@@ -3072,7 +3108,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     value={draft}
                     aria-expanded={slashMenuOpen || atMenuOpen}
                     aria-controls={slashMenuOpen ? `slash-menu-${sessionId}` : atMenuOpen ? `at-menu-${sessionId}` : undefined}
-                    onChange={(text) => { setDraft(text); setMenuClosed(false); }}
+                    onChange={(text) => { setDraft(text); setCaret(composerCaret()); setMenuClosed(false); }}
                     onPaste={imageMode ? undefined : onPaste}
                     onKeyDown={onComposerKeyDown}
                     disabled={!canCompose}
@@ -3266,6 +3302,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 </div>
               </div>
             </div>
+            {/* The footer is hidden while the chat starts clean, but the model
+                is still the user's to pick before the first send. */}
+            {cleanStart && <div className="clean-start-model mt-2 flex justify-center" data-clean-start-model>
+              {modelControls}
+             </div>}
           </div>
         </div>
         )}

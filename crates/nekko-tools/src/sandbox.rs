@@ -102,3 +102,29 @@ pub fn assert_in_jail(target: &str, ctx: &ToolContext) -> Result<(), String> {
     let real_target = real_location(target);
     if roots.iter().any(|root| within(&real_location(root), &real_target)) { Ok(()) } else { outside() }
 }
+
+/// Whether `target` is inside one of the read-only roots, on the strings or
+/// once links are followed.
+fn in_read_only(target: &str, ctx: &ToolContext) -> bool {
+    if ctx.read_only_roots.is_empty() {
+        return false;
+    }
+    let real_target = real_location(target);
+    ctx.read_only_roots.iter().any(|r| {
+        let root = native::resolve(&[r]);
+        within(&root, target) || within(&real_location(&root), &real_target)
+    })
+}
+
+/// A read: the jail, or one of the read-only roots.
+pub fn assert_readable(target: &str, ctx: &ToolContext) -> Result<(), String> {
+    if in_read_only(target, ctx) { Ok(()) } else { assert_in_jail(target, ctx) }
+}
+
+/// A write: never into a read-only root, then the jail.
+pub fn assert_writable(target: &str, ctx: &ToolContext) -> Result<(), String> {
+    if in_read_only(target, ctx) {
+        return Err(format!("Read-only: {target} is in a folder this chat may read but not change."));
+    }
+    assert_in_jail(target, ctx)
+}

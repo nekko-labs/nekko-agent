@@ -374,6 +374,8 @@ function makeWebClient(): NekkoApi {
     cliInstallStatus: async () => ({ available: false, installed: false, onPath: false, command: 'npx nekko-agent' }),
     cliInstall: async () => ({ available: false, installed: false, onPath: false, command: 'npx nekko-agent' }),
     machineReadiness: (language) => call(IpcChannels.machineReadiness, language),
+    machineProfile: (opts) => call(IpcChannels.machineProfile, opts),
+    machineRecommendations: (opts) => call(IpcChannels.machineRecommendations, opts),
     getGpuStats: () => call(IpcChannels.gpuStats),
     getSystemStats: () => call(IpcChannels.systemStats),
 
@@ -560,6 +562,7 @@ function makeWebClient(): NekkoApi {
     runWorkflow: (id) => call(IpcChannels.workflowRun, id),
     cancelWorkflowRun: (runId) => call(IpcChannels.workflowCancel, runId),
     listWorkflowRuns: (workflowId) => call(IpcChannels.workflowRuns, workflowId),
+    listWorkflowSkillDefs: () => call(IpcChannels.workflowSkillDefs),
     dispatchWorkflowEvent: (event) => call(IpcChannels.workflowEvent, event),
 
     listConnectors: () => call(IpcChannels.connectorsList),

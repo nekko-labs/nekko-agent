@@ -24,6 +24,11 @@ app.whenReady().then(async () => {
     await run(`(()=>{const el=document.querySelector('${EDITOR}');el.focus();el.setSelectionRange(0,el.value.length)})()`); await sleep(100);
     await win.webContents.insertText(text); await sleep(400);
   };
+  // Type `text` with the caret at `at` in the current draft.
+  const typeAt = async (at, text) => {
+    await run(`document.querySelector('${EDITOR}').setSelectionRange(${at},${at})`); await sleep(150);
+    await win.webContents.insertText(text); await sleep(400);
+  };
   const draft = () => run(`document.querySelector('${EDITOR}').value`);
   const menuOpen = () => run(`!!document.querySelector('${MENU}')`);
   try {
@@ -37,6 +42,9 @@ app.whenReady().then(async () => {
         await type('Help me with this /');
         observed[`nonempty-${theme}-${width}`] = { draft: await draft(), menuOpen: await menuOpen() };
         await capture(`nonempty-${theme}-${width}`);
+        await type('Fix  this'); await typeAt(4, '/');
+        observed[`mid-${theme}-${width}`] = { draft: await draft(), menuOpen: await menuOpen() };
+        await capture(`mid-${theme}-${width}`);
       }
     }
     win.setContentSize(1200, 900); await run("document.documentElement.dataset.theme='light'");
@@ -52,6 +60,17 @@ app.whenReady().then(async () => {
       await check('picked skill is armed', "!!document.querySelector('.skill-pill')");
       await check('menu closes after picking', `!document.querySelector('${MENU}')`);
       await capture('picked-light-1200');
+      await type('Fix  this'); await typeAt(4, '/');
+      await check('slash typed mid-draft opens the menu', `!!document.querySelector('${MENU}')`);
+      await win.webContents.insertText('pl'); await sleep(300);
+      await run(`[...document.querySelectorAll('${MENU} [role=option]')].find(b=>b.textContent.includes('/plan')).click()`); await sleep(400);
+      await check('picking mid-draft removes only the query', `document.querySelector('${EDITOR}').value==='Fix this'`);
+      await check('caret lands where the query was', `document.querySelector('${EDITOR}').selectionStart===4`);
+      await capture('mid-picked-light-1200');
+      await type('Fix this'); await typeAt(4, '/');
+      await check('a slash glued to the next word stays shut', `!document.querySelector('${MENU}')`);
+      await type('Help me with this /'); await typeAt(4, '');
+      await check('moving the caret away closes the menu', `!document.querySelector('${MENU}')`);
       await type('see a/b');
       await check('a slash inside a word does not open the menu', `!document.querySelector('${MENU}')`);
     }

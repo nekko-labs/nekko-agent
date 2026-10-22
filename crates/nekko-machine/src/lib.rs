@@ -3,15 +3,22 @@
 //! `readiness.ts` and core's `evaluateReadiness`). The parsers and the advisor
 //! are held to the TS functions by `tests/golden/machine.json`, which
 //! `packages/host/src/machine.golden.test.ts` writes.
+//!
+//! Also the hardware profile (`machine:profile`, `profile.rs`) and the model
+//! recommendations made against it (`machine:recommendations`, `recommend.rs`).
 
 pub mod parse;
 pub mod probe;
+pub mod profile;
 pub mod readiness;
+pub mod recommend;
 pub mod temps;
 
 pub use parse::{GpuDevice, GpuStats};
 pub use probe::Machine;
+pub use profile::HardwareProfile;
 pub use readiness::{MachineFacts, catalog, evaluate};
+pub use recommend::{Recommendations, bundled_feed, recommend};
 
 use serde_json::Value;
 

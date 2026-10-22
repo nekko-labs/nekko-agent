@@ -158,6 +158,9 @@ pub struct ToolContext {
     /// Relative paths resolve against this (the chat's workspace), then the
     /// first workspace, then the process directory.
     pub default_cwd: Option<String>,
+    /// Folders the file tools may read but never write (a workflow skill's
+    /// own files), whatever the sandbox mode.
+    pub read_only_roots: Vec<String>,
     pub mode: ChatMode,
     /// The chat this call runs for: enables change tracking and the command log.
     pub session_id: Option<String>,
@@ -182,6 +185,7 @@ impl ToolContext {
             guardrails: None,
             workspaces: Vec::new(),
             default_cwd: None,
+            read_only_roots: Vec::new(),
             mode: ChatMode::default(),
             session_id: None,
             approver,

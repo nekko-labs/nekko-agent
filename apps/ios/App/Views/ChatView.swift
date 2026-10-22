@@ -700,9 +700,14 @@ struct Composer: View {
                     HStack {
                         ForEach(promptMatches) { p in
                             Button {
-                                prompt = p
-                                skill = nil
-                                text = ""
+                                // After existing text the prompt's text replaces the `/query`; alone it becomes the chip.
+                                if SlashMenu.trigger(text)?.atStart == false {
+                                    text = SlashMenu.textAfterPrompt(text, promptText: p.text(input: ""))
+                                } else {
+                                    prompt = p
+                                    skill = nil
+                                    text = ""
+                                }
                             } label: {
                                 slashChip("/\(p.name)", p.body, saved: true)
                             }.buttonStyle(.plain)
@@ -711,7 +716,7 @@ struct Composer: View {
                             Button {
                                 skill = s
                                 prompt = nil
-                                text = ""
+                                text = SlashMenu.textAfterSkill(text)
                             } label: {
                                 slashChip("/\(s.name)", s.description, saved: false)
                             }.buttonStyle(.plain)
@@ -845,10 +850,9 @@ struct Composer: View {
         .accessibilityHint(saved ? "A saved prompt from your computer" : "A skill on your computer")
     }
 
-    /// `/fi` → the computer's saved prompts starting with "fi".
+    /// `/fi` → the computer's saved prompts starting with "fi", at the start or after what's typed.
     private var promptMatches: [SavedPrompt] {
-        guard skill == nil, prompt == nil, text.hasPrefix("/"), !text.contains(" ") else { return [] }
-        let q = text.dropFirst().lowercased()
+        guard skill == nil, prompt == nil, let q = SlashMenu.trigger(text)?.query.lowercased() else { return [] }
         return store.pcSettings.prompts.filter { q.isEmpty || $0.name.lowercased().hasPrefix(q) }.prefix(6).map { $0 }
     }
 
@@ -896,10 +900,9 @@ struct Composer: View {
         refusal = d.refusal
     }
 
-    /// `/re` → the computer's skills starting with "re".
+    /// `/re` → the computer's skills starting with "re", at the start or after what's typed.
     private var skillMatches: [SkillSummary] {
-        guard skill == nil, prompt == nil, text.hasPrefix("/"), !text.contains(" ") else { return [] }
-        let q = text.dropFirst().lowercased()
+        guard skill == nil, prompt == nil, let q = SlashMenu.trigger(text)?.query.lowercased() else { return [] }
         return chat.skills.filter { q.isEmpty || $0.name.lowercased().hasPrefix(q) }.prefix(8).map { $0 }
     }
 

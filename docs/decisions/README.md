@@ -9,3 +9,4 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | # | Decision | Status |
 | --- | --- | --- |
 | [0001](0001-split-the-spec-into-feature-files.md) | Split SPEC.md into feature files, AGENTS.md into rules and runbooks | accepted |
+| [0002](0002-bundled-model-feed-with-measured-calibration.md) | Recommend models from a bundled feed, with speeds calibrated on measurements | accepted |
