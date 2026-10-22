@@ -6,6 +6,9 @@ const profile = fs.mkdtempSync(path.join(dir, 'profile-'));
 app.setPath('userData', profile); app.setPath('sessionData', profile);
 const report = { kind, checks: [], errors: [], captures: [] };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// A JS string literal safe to splice into executeJavaScript: JSON plus the characters
+// that could end a script or a line early (CodeQL js/bad-code-sanitization).
+const js = (v) => JSON.stringify(v).replace(/[<>/\u2028\u2029]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
 app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeRequest((r, done) => done({ cancel: !/^(file:|data:|blob:)/.test(r.url) }));
   session.defaultSession.setPermissionRequestHandler((w, p, d) => d(false));
@@ -18,12 +21,12 @@ app.whenReady().then(async () => {
   const capture = async (name, sel) => {
     await settle();
     let rect;
-    if (sel) { const r = await run(`(()=>{const r=document.querySelector(${JSON.stringify(sel)}).getBoundingClientRect();return {x:Math.floor(r.left)-12,y:Math.floor(r.top)-12,width:Math.ceil(r.width)+24,height:Math.ceil(r.height)+24}})()`); rect = r; }
+    if (sel) { const r = await run(`(()=>{const r=document.querySelector(${js(sel)}).getBoundingClientRect();return {x:Math.floor(r.left)-12,y:Math.floor(r.top)-12,width:Math.ceil(r.width)+24,height:Math.ceil(r.height)+24}})()`); rect = r; }
     const img = await win.capturePage(rect, { stayHidden: true }); const file = path.join(dir, name + '.png'); fs.writeFileSync(file, img.toPNG()); report.captures.push(file);
   };
   const check = async (name, s) => { try { report.checks.push({ name, passed: !!(await run(s)) }); } catch (e) { report.checks.push({ name, passed: false, error: String(e) }); } };
-  const click = (sel) => run(`document.querySelector(${JSON.stringify(sel)}).click()`);
-  const inView = (sel) => `(()=>{const r=document.querySelector(${JSON.stringify(sel)}).getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight})()`;
+  const click = (sel) => run(`document.querySelector(${js(sel)}).click()`);
+  const inView = (sel) => `(()=>{const r=document.querySelector(${js(sel)}).getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight})()`;
   const load = async (query) => { await win.loadFile(path.join(dir, 'index.html'), { query }); await settle(); };
   try {
     win.showInactive();
