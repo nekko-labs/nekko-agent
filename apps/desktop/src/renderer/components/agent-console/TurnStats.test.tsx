@@ -29,6 +29,18 @@ describe('reply stats in the transcript', () => {
     expect(html).not.toContain('Reply stats');
   });
 
+  it('says what code mode saved, and spells the estimate out on hover', () => {
+    const codeMode = { toolsWrapped: 42, schemaTokensPerCall: 3_100, schemaTokensSaved: 9_300, resultTokensSaved: 4_800, searchTokens: 260, tokensSaved: 13_840, runs: 2, toolCalls: 7 };
+    expect(turnStatsParts({ ...stats, codeMode })).toContain('≈14k saved by code mode');
+    const html = renderToStaticMarkup(<TurnStatsLine stats={{ ...stats, codeMode }} />);
+    expect(html).toContain('Tool definitions not sent: 9,300 (3,100 a call for 42 tools, 3 calls)');
+    expect(html).toContain('Results kept out of context: 4,800 (7 tool calls in 2 runs)');
+    // A reply where code mode cost more says so only in the detail.
+    const behind = { ...codeMode, schemaTokensPerCall: -40, schemaTokensSaved: -120, resultTokensSaved: 0, tokensSaved: -380 };
+    expect(turnStatsParts({ ...stats, codeMode: behind }).join(' ')).not.toContain('saved');
+    expect(renderToStaticMarkup(<TurnStatsLine stats={{ ...stats, codeMode: behind }} />)).toContain('380 more than a tool list');
+  });
+
   it('renders under a persisted reply and not under a live one', () => {
     const reply: ChatMessage = { id: 'a1', role: 'assistant', content: 'Finished.', createdAt: 1, turnStats: stats };
     expect(renderToStaticMarkup(<MessageBubble message={reply} chronological />)).toContain('High effort');

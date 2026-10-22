@@ -2126,3 +2126,12 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [ ] **T193f** Signed online refresh of the feed, beside the update feed (the Claude policy override's pattern).
 - [ ] **T193g** Record measured tok/s locally after a model runs and prefer it over the feed's figure; opt-in anonymized sharing.
 - [ ] Engine planner (`nekko-engine/src/capacity.rs`): adopt the per-layer KV figures; its uniform formula overstates sliding-window and hybrid models (Gemma 4 12B at 32k: ~51 GB against llama.cpp's 992 MiB).
+
+### T194: Code mode: a chat's tools as code (2026-10-22) · [spec](spec/context/code-mode-tools-as-code.md) · [decision](docs/decisions/0004-code-mode-in-an-embedded-quickjs-sandbox.md)
+- [x] **T194a** `nekko-codemode`: tool specs as TypeScript declarations, `search_tools`, `run_code` in an embedded QuickJS sandbox (no loader, no std, frozen `tools`; timeout, Stop, memory, stack, call and output caps), and the per-reply savings tally. Done: 2026-10-22
+- [x] **T194b** Daemon turn: `Session.toolApproach: 'code'` swaps the wrapped tools for `search_tools` + `run_code`; a script's calls run as `<id>.<n>` through `guarded` (hooks, tool switches, unattended policy, approvals, guardrails); `turnStats.codeMode`; system prompt built from the full tool set. Test: `nekkod/tests/daemon/tools.rs` `a_code_mode_turn_runs_the_models_script_and_asks_for_each_call_it_makes`. Done: 2026-10-22
+- [x] **T194c** `toolApproach` as a user field: store option and turn-save keys, fork, `spawn_agent` inheritance, saved modes (`STARTER_MODES` Local only on by default, both copies; create golden updated). Done: 2026-10-22
+- [x] **T194d** Mode panel Tools flyout: Tool list / Code mode (New) with the docs link; Tools row says `· code mode`; the reply stats line shows *≈N saved by code mode* with the breakdown on hover. Done: 2026-10-22
+- [ ] **T194e** Measure real sessions (local and cloud models, with and without MCP servers) and record them in `docs/perf-history.md`.
+- [ ] **T194f** Hypergate: serve `search_tools` / `run_code` over MCP behind a per-client URL flag, and offer it in Nekko Agent as a third approach when MCP comes through Hypergate (nekko-labs/hypergate).
+- [ ] **T194g** Parallel calls from one script; code mode in sandbox chats; a script's calls as transcript rows; phone allowlist.

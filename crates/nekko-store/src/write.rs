@@ -29,6 +29,7 @@ const OPTION_KEYS: &[&str] = &[
     "disabledConnectors",
     "memory",
     "guidance",
+    "toolApproach",
     "offline",
     "cloudOnly",
     "incognito",
@@ -53,7 +54,7 @@ const OPTION_KEYS: &[&str] = &[
 pub const STARTER_MODES: &str = r#"[
   { "id": "cloud", "name": "Cloud only", "icon": "cloud", "options": { "executionMode": "worktree", "mode": "guardrails", "offline": false, "incognito": false, "disabledTools": [], "workMode": "default", "models": "cloud" } },
   { "id": "fusion", "name": "Fusion", "icon": "route", "options": { "executionMode": "worktree", "mode": "guardrails", "offline": false, "incognito": false, "disabledTools": [], "workMode": "default", "models": "fusion" } },
-  { "id": "local", "name": "Local only", "icon": "laptop", "options": { "executionMode": "worktree", "mode": "guardrails", "offline": true, "incognito": false, "disabledTools": [], "workMode": "default", "models": "local" } },
+  { "id": "local", "name": "Local only", "icon": "laptop", "options": { "executionMode": "worktree", "mode": "guardrails", "offline": true, "incognito": false, "disabledTools": [], "workMode": "default", "models": "local", "toolApproach": "code" } },
   { "id": "risky-business", "name": "Risky business", "icon": "box", "options": { "executionMode": "sandbox", "mode": "ask", "offline": true, "incognito": false, "disabledTools": [], "workMode": "default" } }
 ]"#;
 
@@ -142,6 +143,9 @@ fn apply_mode(s: &mut JsObject, options: &Value) {
         Some("local") => s.set("cloudOnly", Some(json!(false))),
         _ => {}
     }
+    if let Some(v) = get("toolApproach").filter(|v| js::truthy(Some(v))) {
+        s.set("toolApproach", Some(v));
+    }
 }
 
 /// What a running turn's save takes from disk rather than from memory
@@ -157,6 +161,7 @@ const USER_FIELDS: &[&str] = &[
     "disabledConnectors",
     "memory",
     "guidance",
+    "toolApproach",
     "offline",
     "cloudOnly",
     "incognito",
@@ -678,6 +683,7 @@ impl SessionStore {
             "disabledConnectors",
             "memory",
             "guidance",
+            "toolApproach",
         ] {
             if let Some(v) = src.get(key) {
                 s.insert(key.into(), v.clone());
