@@ -366,7 +366,10 @@ async fn a_plugin_skill_reviews_a_pr_in_its_own_checkout() {
     let base = std::env::temp_dir().join(format!("nekkod-plugin-skill-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&base);
     std::fs::create_dir_all(&base).unwrap();
-    let base = std::fs::canonicalize(base).unwrap();
+    let base = std::fs::canonicalize(base).unwrap().to_string_lossy().into_owned();
+    // Windows canonical paths use a verbatim prefix (`\\?\C:\...`) that Git
+    // reads as a network host and refuses to clone from.
+    let base = std::path::PathBuf::from(base.strip_prefix(r"\\?\").unwrap_or(&base));
     let (data, home, remote) = (base.join("data"), base.join("home"), base.join("remote"));
     std::fs::create_dir_all(data.join("sessions")).unwrap();
     // The plugin, enabled in Claude Code's settings.
