@@ -44,17 +44,14 @@ export async function startNekkod({ nekkod, settings, env = {}, root, label = 'n
   mkdirSync(home, { recursive: true });
   if (settings) writeFileSync(join(dataDir, 'settings.json'), JSON.stringify(settings));
   const token = randomBytes(24).toString('hex');
-  const child = spawn(nekkodPath(nekkod), [], {
-    env: {
-      ...process.env,
-      HOME: home,
-      USERPROFILE: home,
-      ...env,
-      NEKKOD_CONFIG: JSON.stringify({ token, dataDir, allowedOrigins: [] }),
-    },
+  const child = spawn(nekkodPath(nekkod), ['--config-stdin'], {
+    env: { ...process.env, HOME: home, USERPROFILE: home, ...env },
     stdio: ['pipe', 'pipe', 'pipe'],
     ...treeOptions,
   });
+  // The config is stdin's first line (never the environment); stdin stays open.
+  child.stdin.on('error', () => {});
+  child.stdin.write(`${JSON.stringify({ token, dataDir, allowedOrigins: [] })}\n`);
   let log = '';
   child.stderr.on('data', (d) => (log = (log + d).slice(-20_000)));
   const port = await new Promise((ok, fail) => {
