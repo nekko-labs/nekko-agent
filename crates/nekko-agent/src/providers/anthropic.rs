@@ -342,6 +342,7 @@ impl AnthropicProvider {
                 provider_id: self.config.id.clone(),
                 name: name.to_string(),
                 context_length: Some(claude_context_window(id).unwrap_or(200_000)),
+                fallback: true,
                 ..Default::default()
             })
             .collect())

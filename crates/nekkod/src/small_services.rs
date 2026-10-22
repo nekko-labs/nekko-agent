@@ -330,7 +330,8 @@ impl StackHost for DaemonStacks<'_> {
 /// [`DaemonSide`] is the real one; the golden replay scripts it.
 pub trait UpdateHost: Send + Sync {
     fn settings<'a>(&'a self) -> BoxFuture<'a, Value>;
-    /// `listModels(id)`: the model ids, or `None` when the call failed.
+    /// `listModels(id)`: the model ids, or `None` when the call failed or the
+    /// provider fell back to its shipped catalog (that is no news either).
     fn list_models<'a>(&'a self, provider_id: &'a str) -> BoxFuture<'a, Option<Vec<String>>>;
     /// `refreshVaizerCatalog()`, or `None` when it failed.
     fn skills_catalog<'a>(&'a self) -> BoxFuture<'a, Option<Value>>;
@@ -444,9 +445,11 @@ impl UpdateHost for DaemonSide<'_> {
 
     fn list_models<'a>(&'a self, provider_id: &'a str) -> BoxFuture<'a, Option<Vec<String>>> {
         Box::pin(async move {
-            let models = crate::providers::list_models(self.ctx, provider_id).await;
-            let list = models.as_array()?;
-            Some(list.iter().map(|m| nekko_js::display(m.get("id").unwrap_or(&Value::Null))).collect())
+            let models = crate::providers::listed_models(self.ctx, provider_id).await.ok()?;
+            if models.iter().any(|m| m.fallback) {
+                return None;
+            }
+            Some(models.into_iter().map(|m| m.id).collect())
         })
     }
 

@@ -216,20 +216,22 @@ pub async fn list_models(ctx: &Ctx, id: &str) -> Value {
 /// `listModelsStatus(providerId)`: `{ models, error? }`, where `error` says why
 /// the list failed. A disabled or unknown provider is `{ models: [] }`.
 pub async fn list_models_status(ctx: &Ctx, id: &str) -> Value {
-    use nekko_agent::Provider;
-    // Checked before resolving, so a disabled subscription is not refreshed either.
-    if find(&providers(ctx).await, id).is_none_or(|p| !is_enabled(p)) {
-        return json!({ "models": [] });
-    }
-
-    let listed = match resolve_provider(ctx, id).await.and_then(|c| build(&c)) {
-        Ok(provider) => provider.list_models().await.map_err(|e| e.to_string()),
-        Err(e) => Err(e),
-    };
-    match listed {
+    match listed_models(ctx, id).await {
         Ok(models) => json!({ "models": serde_json::to_value(models).unwrap_or(json!([])) }),
         Err(e) => json!({ "models": [], "error": e }),
     }
+}
+
+/// The provider's models as it listed them, `fallback` flags included (the
+/// wire drops them). A disabled or unknown provider lists nothing.
+pub async fn listed_models(ctx: &Ctx, id: &str) -> Result<Vec<nekko_agent::ModelInfo>, String> {
+    use nekko_agent::Provider;
+    // Checked before resolving, so a disabled subscription is not refreshed either.
+    if find(&providers(ctx).await, id).is_none_or(|p| !is_enabled(p)) {
+        return Ok(Vec::new());
+    }
+    let provider = resolve_provider(ctx, id).await.and_then(|c| build(&c))?;
+    provider.list_models().await.map_err(|e| e.to_string())
 }
 
 /// How long a provider's reported windows are trusted (`CACHE_MS`, context-window.ts).
