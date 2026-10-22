@@ -429,7 +429,7 @@ pub fn inside(path: &str, roots: &[PathBuf]) -> bool {
 /// - **ask**: every prompt goes to the user.
 /// - **guardrails**: shell commands made only of known read-only commands
 ///   (or ones a user `allow` rule covers) run; edits inside the chat's
-///   folders run; everything else asks (decision 0009).
+///   folders run; everything else asks (decision 0010).
 /// - **yolo**: everything runs except shell commands the rules mark
 ///   high-severity (destructive) and edits outside the chat's folders, which ask.
 /// - **plan**: everything asks.

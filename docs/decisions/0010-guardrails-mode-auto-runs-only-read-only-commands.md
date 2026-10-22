@@ -3,7 +3,7 @@ status: accepted
 date: 2026-10-22
 ---
 
-# 0009. Guardrails mode auto-runs only read-only commands
+# 0010. Guardrails mode auto-runs only read-only commands
 
 ## Context
 
@@ -33,7 +33,8 @@ For the network: `fetch_url` stays auto-allowed in Guardrails for public address
 
 - Prompt-injected text can no longer run code in the default mode without the user seeing the command. The bypasses above are tests (`crates/nekko-tools/src/guardrails.rs`, `crates/nekko-web/tests/fetch_guard.rs`).
 - Guardrails asks more: `npm test`, `cargo build` and every background process now ask unless the user adds an `allow` rule. The approval prompt still reads "Run command"; the Settings rule list and the `guardrails:classify` tester explain why.
-- `fetch_url` no longer uses a system proxy (a proxy would resolve names itself and defeat the check). Users who can only reach the web through a proxy will see fetches fail; revisit with an explicit proxy setting if that is reported.
-- **Not solved here:** a read-only command is only as safe as its configuration. `git` honours repository config (`core.fsmonitor`, `diff.external`, textconv), which an in-workspace file edit (auto-allowed in Guardrails) could set before a `git status`. On Windows, `cmd.exe` searches the current folder before PATH, so a workspace `git.bat` would run for `git`. Both need their own fix (for example running allowlisted commands with a hardened environment).
+- With a proxy configured for the URL (`HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`, read as reqwest reads them), `fetch_url` resolves the host itself to decide local versus public, then sends the request through the proxy. The proxy resolves the name again, so DNS rebinding between the two lookups, and names only the proxy can resolve, are not caught on that path. Without a proxy the check stays pinned in the resolver.
+- **Git configuration** can name programs a read-only git command runs (`core.fsmonitor` on `git status`, `diff.external`, textconv and filter drivers, hooks, the pager). In Guardrails, writing git configuration asks (high severity): anything in a `.git` directory or a `.git` file, a bare repository or worktree gitdir, `$GIT_DIR`, `~/.gitconfig`, the XDG git folder, `$GIT_CONFIG_GLOBAL`; links are followed. An auto-run command that runs git also gets `GIT_CONFIG_COUNT` overrides (`core.fsmonitor=false`, `core.hooksPath` to the null device, `core.pager=cat`), `GIT_PAGER=cat` and no `GIT_EXTERNAL_DIFF`. `diff.external` has no value that disables it (empty makes `git diff` fail, `true` prints an empty diff) and git has no switch for textconv or filter drivers, so those rely on the write gate. Not covered: a git config `include.path` the user already points at a workspace file, and git configuration changed by a command the user approved.
+- **Windows:** every command the agent runs gets `NoDefaultCurrentDirectoryInExePath=1`, so `cmd.exe` does not run a workspace `git.bat` in place of `git`. PowerShell never runs a program from the current folder without `.\`. Commands Claude Code runs are started by Claude Code, not by Nekko, so neither environment change reaches them; the write gate does.
 - If people move to YOLO to escape the prompts, the allowlist is too narrow; widen it with more read-only commands rather than relaxing the reader.
 - Spec: [spec/context/context-guardrails-memory-the-differentiators.md](../../spec/context/context-guardrails-memory-the-differentiators.md).

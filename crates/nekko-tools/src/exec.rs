@@ -258,7 +258,7 @@ async fn bash(call: &ToolCall, ctx: &ToolContext) -> Outcome {
         return Ok(ToolResult::err(call, format!("Blocked by guardrail ({labels}).")));
     }
     // YOLO never prompts; Ask always prompts; Guardrails prompts unless every
-    // command in it is read-only or allowed by a user rule (decision 0009).
+    // command in it is read-only or allowed by a user rule (decision 0010).
     let needs_approval = ctx.mode != ChatMode::Yolo && (asks_everything(ctx) || decision.action == Action::Ask);
     // An auto-run git gets an environment that keeps repo config from running anything.
     let env = if !needs_approval && ctx.mode == ChatMode::Guardrails && runs_git(&command, Dialect::host()) {

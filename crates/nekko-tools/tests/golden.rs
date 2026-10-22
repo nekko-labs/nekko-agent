@@ -12,7 +12,7 @@
 //! The TS writer is deleted, so these files are frozen and a behavior change
 //! edits them by hand. `guardrails.json`'s classifications and bash calls were
 //! re-recorded from this crate when guardrails mode moved to the read-only
-//! allowlist (docs/decisions/0009).
+//! allowlist (docs/decisions/0010).
 
 use nekko_tools::{
     BoxFuture, ChangeTracker, ChatMode, CommandLog, CommandRunner, Dialect, GuardrailRule, RunOutcome, RunRequest,

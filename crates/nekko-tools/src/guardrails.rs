@@ -6,7 +6,7 @@
 //! them, and one that JavaScript would reject is skipped.
 //!
 //! On top of the rules sits the read-only allowlist ([`crate::allowlist`],
-//! decision 0009): a command is `allow` only when every simple command in it
+//! decision 0010): a command is `allow` only when every simple command in it
 //! is a known read-only one or matches a user `allow` rule. Anything else is
 //! `ask`, and a `deny` rule still blocks. The decision is the strongest action
 //! and the highest severity among the matches.

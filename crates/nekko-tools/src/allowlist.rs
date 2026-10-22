@@ -1,4 +1,4 @@
-//! The read-only allowlist behind guardrails mode (decision 0009).
+//! The read-only allowlist behind guardrails mode (decision 0010).
 //!
 //! Guardrails mode auto-runs a shell command only when every command in it is
 //! a known read-only one. The command is split into simple commands on `|`,
