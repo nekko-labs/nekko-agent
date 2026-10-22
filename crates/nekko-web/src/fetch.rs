@@ -12,10 +12,18 @@
 //! compressed reply, so the binary-type message may say `unknown` where Node
 //! named the compressed size; a character reference to a lone surrogate
 //! (`&#xD800;`) reaches the model as U+FFFD instead of an unpaired unit.
+//!
+//! Where it may go: only the public internet unless the caller passes hosts
+//! the user approved ([`crate::netguard`]). Every redirect hop is checked
+//! again, the check runs in the client's own resolver so the address checked
+//! is the address dialed, and no proxy is used. A local or private
+//! destination comes back as [`FetchError::Local`] for the caller to ask about.
 
+use crate::netguard::{self, PublicOnly};
 use nekko_js as js;
 use nekko_tools::Cancel;
 use nekko_tools::jsre::JsRegex;
+use std::collections::HashSet;
 use std::sync::LazyLock;
 use std::time::Duration;
 
@@ -27,6 +35,8 @@ pub const FETCH_MAX_BYTES: usize = 2_000_000;
 pub const FETCH_DEFAULT_CHARS: f64 = 20_000.0;
 /// Ceiling on `max_chars`.
 pub const FETCH_MAX_CHARS: f64 = 100_000.0;
+/// Redirects followed, each one checked (Node's fetch follows 20).
+pub const FETCH_MAX_REDIRECTS: usize = 20;
 
 const USER_AGENT: &str = "Mozilla/5.0 (compatible; NekkoAgent/1.0; +https://nekkoagent.com)";
 
@@ -384,39 +394,108 @@ enum Stop {
     Cancel,
 }
 
-fn client() -> Result<reqwest::Client, String> {
-    static CLIENT: LazyLock<Result<reqwest::Client, String>> = LazyLock::new(|| {
-        reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::limited(20))
-            .user_agent(USER_AGENT)
-            .build()
-            .map_err(|e| e.to_string())
-    });
-    CLIENT.clone()
+/// The client a fetch goes out on: the public-only resolver (with the hosts
+/// the user approved), no proxy (a proxy would resolve names itself), and
+/// redirects followed by hand so each hop is checked.
+fn build_client(allowed: &HashSet<String>) -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .dns_resolver(std::sync::Arc::new(PublicOnly::system().allowing(allowed.clone())))
+        .no_proxy()
+        .redirect(reqwest::redirect::Policy::none())
+        .user_agent(USER_AGENT)
+        .build()
+        .map_err(|e| e.to_string())
+}
+
+fn client(allowed: &HashSet<String>) -> Result<reqwest::Client, String> {
+    static PUBLIC: LazyLock<Result<reqwest::Client, String>> = LazyLock::new(|| build_client(&HashSet::new()));
+    if allowed.is_empty() { PUBLIC.clone() } else { build_client(allowed) }
+}
+
+/// Why `fetch_url` did not return a page.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FetchError {
+    /// `url` (the first URL or a redirect hop) is on this computer or the
+    /// local network, at `host`, and `host` was not approved.
+    Local { url: String, host: String },
+    /// Anything else, worded for the model.
+    Failed(String),
+}
+
+impl From<String> for FetchError {
+    fn from(e: String) -> Self {
+        FetchError::Failed(e)
+    }
+}
+
+impl std::fmt::Display for FetchError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FetchError::Local { url, host } => {
+                write!(f, "Not fetched: {url} is on this computer or the local network ({host}).")
+            }
+            FetchError::Failed(e) => f.write_str(e),
+        }
+    }
 }
 
 /// `fetchUrl(raw, { maxChars, signal })`: GET a URL and reduce it to text.
-pub async fn fetch_url(raw: &str, requested_chars: Option<f64>, cancel: &Cancel) -> Result<FetchedPage, String> {
+///
+/// `allowed_local` names the hosts (as [`netguard::host_key`] writes them)
+/// the user approved reaching on this computer or the local network.
+pub async fn fetch_url(
+    raw: &str,
+    requested_chars: Option<f64>,
+    cancel: &Cancel,
+    allowed_local: &HashSet<String>,
+) -> Result<FetchedPage, FetchError> {
     let url = parse_url(raw)?;
     let max = max_chars(requested_chars);
     let deadline = tokio::time::Instant::now() + FETCH_TIMEOUT;
-    let client = client()?;
-    let request = client
-        .get(url.as_str())
-        .header("accept", "text/html, application/xhtml+xml, text/plain;q=0.9, application/json;q=0.8, */*;q=0.5")
-        .header("accept-language", "en, *;q=0.5")
-        .send();
-    let res = tokio::select! {
-        r = request => r.map_err(|_| format!("Could not fetch {url}: fetch failed"))?,
-        _ = tokio::time::sleep_until(deadline) => {
-            return Err(format!("Fetching {url} took longer than {} s.", FETCH_TIMEOUT.as_secs()));
+    let client = client(allowed_local)?;
+    let mut at = url.clone();
+    let mut hops = 0;
+    let res = loop {
+        if let Some(host) = netguard::local_host(&at).filter(|h| !allowed_local.contains(h)) {
+            return Err(FetchError::Local { url: at.to_string(), host });
         }
-        _ = cancel.cancelled() => return Err(format!("Could not fetch {url}: This operation was aborted")),
+        let request = client
+            .get(at.as_str())
+            .header("accept", "text/html, application/xhtml+xml, text/plain;q=0.9, application/json;q=0.8, */*;q=0.5")
+            .header("accept-language", "en, *;q=0.5")
+            .send();
+        let res = tokio::select! {
+            r = request => match r {
+                Ok(r) => r,
+                Err(e) if netguard::is_blocked(&e) => {
+                    return Err(FetchError::Local { url: at.to_string(), host: netguard::host_key(&at) });
+                }
+                Err(_) => return Err(format!("Could not fetch {url}: fetch failed").into()),
+            },
+            _ = tokio::time::sleep_until(deadline) => {
+                return Err(format!("Fetching {url} took longer than {} s.", FETCH_TIMEOUT.as_secs()).into());
+            }
+            _ = cancel.cancelled() => return Err(format!("Could not fetch {url}: This operation was aborted").into()),
+        };
+        let location = res.headers().get("location").and_then(|v| v.to_str().ok()).filter(|l| !l.is_empty());
+        if let (true, Some(location)) = (matches!(res.status().as_u16(), 301 | 302 | 303 | 307 | 308), location) {
+            if hops >= FETCH_MAX_REDIRECTS {
+                return Err(format!("Could not fetch {url}: redirect count exceeded").into());
+            }
+            let next = at.join(location).map_err(|_| format!("Could not fetch {url}: fetch failed"))?;
+            if next.scheme() != "http" && next.scheme() != "https" {
+                return Err(format!("Could not fetch {url}: fetch failed").into());
+            }
+            at = next;
+            hops += 1;
+            continue;
+        }
+        break res;
     };
     let header = |name: &str| res.headers().get(name).and_then(|v| v.to_str().ok()).map(str::to_string);
     let mut reply = Reply {
         status: res.status().as_u16(),
-        final_url: res.url().to_string(),
+        final_url: at.to_string(),
         content_type: header("content-type"),
         content_length: header("content-length"),
         body: Vec::new(),
@@ -429,12 +508,12 @@ pub async fn fetch_url(raw: &str, requested_chars: Option<f64>, cancel: &Cancel)
         loop {
             let next = tokio::select! {
                 n = stream.next() => n,
-                _ = tokio::time::sleep_until(deadline) => return Err(stop_message(Stop::Timeout)),
-                _ = cancel.cancelled() => return Err(stop_message(Stop::Cancel)),
+                _ = tokio::time::sleep_until(deadline) => return Err(stop_message(Stop::Timeout).into()),
+                _ = cancel.cancelled() => return Err(stop_message(Stop::Cancel).into()),
             };
             match next {
                 None => break,
-                Some(Err(_)) => return Err("terminated".into()),
+                Some(Err(_)) => return Err(FetchError::Failed("terminated".into())),
                 Some(Ok(chunk)) => {
                     let room = FETCH_MAX_BYTES - reply.body.len();
                     reply.body.extend_from_slice(&chunk[..chunk.len().min(room)]);
@@ -445,7 +524,7 @@ pub async fn fetch_url(raw: &str, requested_chars: Option<f64>, cancel: &Cancel)
             }
         }
     }
-    page_from_reply(&url, reply, max)
+    Ok(page_from_reply(&url, reply, max)?)
 }
 
 fn stop_message(stop: Stop) -> String {

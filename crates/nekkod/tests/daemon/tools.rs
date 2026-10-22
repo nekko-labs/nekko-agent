@@ -399,8 +399,15 @@ async fn a_daemon_turn_fetches_pages_and_runs_background_processes_itself() {
     let spec = turn_spec(&rig, &model, "turn_f", "s_turn_f", json!({}));
     let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
     assert_eq!(status, 200);
+    // A local address: one approval, worded as such, even in ask mode.
     let approval = wait_pending(rig.d.port, "s_turn_f", "approval", "c_fetch").await;
-    assert_eq!(approval["reason"], format!("Fetch {url}"));
+    assert_eq!(
+        approval["reason"],
+        format!(
+            "Fetch {url}? 127.0.0.1 is on this computer or your local network, not the public internet. Approve only if you expected the agent to read it."
+        )
+    );
+    assert_eq!(approval["severity"], "medium");
     post(rig.d.port, "tool:approve", json!(["s_turn_f", "c_fetch", true]), Some(TOKEN)).await;
     let approval = wait_pending(rig.d.port, "s_turn_f", "approval", "c_start").await;
     assert_eq!(approval["reason"], "Start a background process");

@@ -69,6 +69,9 @@ const NATIVE: &[&str] = &[
 /// Of [`NATIVE`], the background-process tools (`nekko_tools::process`).
 const PROCESS_TOOLS: &[&str] = &["start_process", "read_process", "kill_process"];
 
+/// `fetch_url`'s answer when the user turns down a local address.
+const LOCAL_FETCH_REFUSED: &str = "Fetch not approved by user: the address is on this computer or the local network.";
+
 fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
@@ -2040,8 +2043,6 @@ impl TurnTools {
         }
     }
 
-    /// `fetch_url` (tools.ts): reading a page is as safe as reading a file,
-    /// so only ask mode or the ask-everything sandbox asks.
     /// A sandbox chat's call (`executeSandboxTool`): anything but the
     /// container's tools is refused without asking; each call asks first (the
     /// live yolo policy aside), then runs in the chat's container, and the
@@ -2090,6 +2091,9 @@ impl TurnTools {
         }
     }
 
+    /// `fetch_url` (tools.ts): reading a public page is as safe as reading a
+    /// file, so only ask mode or the ask-everything sandbox asks; reaching
+    /// this computer or the local network asks in every mode but YOLO.
     async fn fetch_url(&self, call: &Value) -> Value {
         let id = str_at(call, "id").unwrap_or_default();
         let input = call.get("input").cloned().unwrap_or(Value::Null);
@@ -2097,18 +2101,50 @@ impl TurnTools {
             Some(Value::String(u)) if !js::trim(u).is_empty() => u.clone(),
             _ => return error(id, "A URL is required."),
         };
+        // A page on this computer or the local network (a dev server, a
+        // router, the cloud metadata address) is fetched only with the user's
+        // approval, in every mode but YOLO: a page the agent read could have
+        // asked for it. That approval also stands for the plain "Fetch" one.
+        let mut approved = std::collections::HashSet::new();
+        let first_local = nekko_web::fetch::parse_url(&url).ok().and_then(|u| nekko_web::netguard::local_host(&u));
         let asks = self.mode == "ask" || self.sandbox_mode.as_deref() == Some("ask-everything");
-        if asks && !self.turns.request_approval(&self.shared, call, &format!("Fetch {url}"), &json!("low")).await {
+        if let Some(host) = first_local {
+            if !self.approve_local_fetch(call, &url, &host).await {
+                return error(id, LOCAL_FETCH_REFUSED);
+            }
+            approved.insert(host);
+        } else if asks && !self.turns.request_approval(&self.shared, call, &format!("Fetch {url}"), &json!("low")).await
+        {
             return error(id, "Fetch not approved by user.");
         }
         let cancel = nekko_tools::Cancel::new();
         let c2 = cancel.clone();
         self.shared.cancel.on_cancel(move || c2.cancel());
         let max = input.get("max_chars").and_then(Value::as_f64);
-        match nekko_web::fetch_url(&url, max, &cancel).await {
-            Ok(page) => result(id, nekko_web::describe_fetched(&page)),
-            Err(e) => error(id, e),
+        loop {
+            match nekko_web::fetch_url(&url, max, &cancel, &approved).await {
+                Ok(page) => return result(id, nekko_web::describe_fetched(&page)),
+                // A redirect, or a name that resolved, into the local network.
+                Err(nekko_web::FetchError::Local { url: at, host }) => {
+                    if approved.contains(&host) || approved.len() >= 4 {
+                        return error(id, format!("Could not fetch {url}: too many local redirects."));
+                    }
+                    if !self.approve_local_fetch(call, &at, &host).await {
+                        return error(id, LOCAL_FETCH_REFUSED);
+                    }
+                    approved.insert(host);
+                }
+                Err(nekko_web::FetchError::Failed(e)) => return error(id, e),
+            }
         }
+    }
+
+    /// Ask before `fetch_url` reaches `host` on this computer or the local network.
+    async fn approve_local_fetch(&self, call: &Value, url: &str, host: &str) -> bool {
+        let reason = format!(
+            "Fetch {url}? {host} is on this computer or your local network, not the public internet. Approve only if you expected the agent to read it."
+        );
+        self.turns.request_approval(&self.shared, call, &reason, &json!("medium")).await
     }
 
     /// `spawn_agent` (chat.ts `runSubAgent`): ask first when the policy says
