@@ -2113,3 +2113,13 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [x] Add accessible sibling Open controls for observed unambiguous child delegations.
 - [ ] Inspect matching 1200/390 light/dark before/after pixels and publish evidence before landing.
 - [ ] Follow-up: stable persisted spawn-call/child association for navigation after renderer restart (current live association intentionally does not guess).
+
+### T193: Hardware-aware model recommendations (2026-10-22) · [spec](spec/models/hardware-aware-model-recommendations.md) · [decision](docs/decisions/0002-bundled-model-feed-with-measured-calibration.md)
+- [x] **T193a** Hardware profile (`machine:profile`, `nekko-machine/src/profile.rs`): saved in `<data>/machine-profile.json`, reused for a week, re-probed on an engine-build change or `{ refresh: true }`; Apple GPU core count from `ioreg`. Done: 2026-10-22
+- [x] **T193b** Bundled feed (`crates/nekko-machine/src/model-feed.json`) built by `scripts/model-feed.mjs` from `feed/source.json`: sizes from Hugging Face's tree, per-layer KV and bytes per token from GGUF headers read by range request; hardware bandwidth table; per-backend efficiency from measurements (CUDA from the RTX 5090 benchmark; Metal dense and mixture-of-experts measured on the M5 Max). Done: 2026-10-22
+- [x] **T193c** Evaluator (`machine:recommendations`, `recommend.rs`): budget per placement, memory per task context, comfortable-before-tight quant choice, speed target with a fastest-that-fits fallback, speed basis on every figure. Tests: `nekko-machine/tests/recommend.rs` (six reference machines, llama.cpp KV allocation), `nekkod/tests/machine.rs`; live: `scripts/itest-recommendations.mjs`. Done: 2026-10-22
+- [ ] **T193d** Models page: show the picks per task with expected speed and headroom before download; upgrade nudges when the feed changes.
+- [ ] **T193e** Live check on Windows/NVIDIA, Windows/AMD-Vulkan and a CPU-only machine (`node scripts/itest-recommendations.mjs`); measure Vulkan and CPU efficiency (nobody on the team has an AMD card yet).
+- [ ] **T193f** Signed online refresh of the feed, beside the update feed (the Claude policy override's pattern).
+- [ ] **T193g** Record measured tok/s locally after a model runs and prefer it over the feed's figure; opt-in anonymized sharing.
+- [ ] Engine planner (`nekko-engine/src/capacity.rs`): adopt the per-layer KV figures; its uniform formula overstates sliding-window and hybrid models (Gemma 4 12B at 32k: ~51 GB against llama.cpp's 992 MiB).

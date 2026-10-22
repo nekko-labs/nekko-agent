@@ -107,6 +107,8 @@ export const IpcChannels = {
   engineDismissDownload: 'engine:dismissDownload',
 
   machineReadiness: 'machine:readiness',
+  machineProfile: 'machine:profile',
+  machineRecommendations: 'machine:recommendations',
   gpuStats: 'gpu:stats',
   systemStats: 'system:stats',
 
@@ -584,6 +586,13 @@ export interface NekkoApi {
   machineReadiness(
     language?: string,
   ): Promise<import('./readiness.js').ReadinessReport>;
+  /**
+   * This machine's hardware profile: saved and reused for a week, probed
+   * again when the engine build changes or `refresh` is set.
+   */
+  machineProfile(opts?: { refresh?: boolean }): Promise<import('./recommendations.js').HardwareProfile>;
+  /** Which model to run for each task here, with expected speed and memory headroom, before any download. */
+  machineRecommendations(opts?: { refresh?: boolean }): Promise<import('./recommendations.js').Recommendations>;
   /** GPU/VRAM stats for the metrics bar + Command Center (null if unavailable). */
   getGpuStats(): Promise<import('./models.js').GpuStats | null>;
   /** CPU load + RAM use for the monitor surfaces (null if unavailable). */
