@@ -184,6 +184,8 @@ struct SettingsView: View {
                 .disabled(!store.pcSettings.known || store.conn != .online)
             }
             Section {
+                NavigationLink(value: Route.cloud) { Label("Nekko Cloud sync", systemImage: "lock.icloud") }
+                    .accessibilityIdentifier("settings.cloud")
                 NavigationLink(value: Route.computers) { Label("Paired computers", systemImage: "desktopcomputer") }
                 NavigationLink(value: Route.connection) { Label("Connection", systemImage: "antenna.radiowaves.left.and.right") }
                 Picker("Open at launch", selection: $prefs.defaultComputer) {

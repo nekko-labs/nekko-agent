@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Session } from '@nekko-agent/shared';
 import { STARTER_MODES } from '@nekko-agent/shared';
-import { ModePanel, chatModeState, modeButtonLabel, modePanelActions } from './ModePanel.js';
+import { CODE_MODE_DOCS, ModePanel, ToolApproachPicker, chatModeState, modeButtonLabel, modePanelActions } from './ModePanel.js';
 
 const store = vi.hoisted(() => ({
   settings: { defaultChatMode: 'guardrails', gitManagement: { mode: 'worktree' }, effort: 'normal', workspaces: [{ id: 'w1', name: 'agent-nekko', path: '/code/agent-nekko', addedAt: 1 }], mcpServers: [] } as Record<string, any>,
@@ -56,6 +56,24 @@ describe('Mode panel markup', () => {
     expect(out).toContain('1 of 2 on');
     store.settings = { ...store.settings, mcpServers: [], connectors: [] };
   });
+  it('offers code mode beside the tool list, marked new, with a link to what it is', () => {
+    const out = renderToStaticMarkup(<ToolApproachPicker approach="list" sandbox={false} onPick={() => {}} />);
+    expect(out).toMatch(/role="radio" aria-checked="true"[^>]*data-tool-approach="list"/);
+    expect(out).toMatch(/role="radio" aria-checked="false"[^>]*data-tool-approach="code"/);
+    expect(out).toContain('Code mode<span class="mode-badge is-accent">New</span>');
+    expect(out).toContain(`href="${CODE_MODE_DOCS}"`);
+    // The link sits beside the options, never inside a radio button.
+    expect(out).not.toMatch(/<button[^>]*>(?:(?!<\/button>).)*<a /s);
+    const sandboxed = renderToStaticMarkup(<ToolApproachPicker approach="list" sandbox onPick={() => {}} />);
+    expect(sandboxed.match(/disabled=""/g)).toHaveLength(2);
+    expect(sandboxed).toContain('Sandbox chats use the tool list');
+  });
+  it('says on the Tools row when the chat is in code mode', () => {
+    session = { ...base, toolApproach: 'code' } as Session;
+    expect(html()).toContain('0 of 0 on · code mode');
+    session = { ...base, toolApproach: 'code', executionMode: 'sandbox' } as Session;
+    expect(html()).not.toContain('on · code mode');
+  });
   it('follows the chat effort over the app default', () => {
     session = { ...base, effort: 'low' } as Session;
     const out = html();
@@ -90,6 +108,13 @@ describe('Mode panel writes', () => {
     expect(window.nekko.updateSettings).toHaveBeenCalledWith({ defaultExecutionMode: 'unified', gitManagement: { mode: 'shared' } });
     await modePanelActions(d).setExecution('sandbox');
     expect(d.onSandboxSetup).toHaveBeenCalledOnce();
+  });
+  it('sets code mode on this chat only', async () => {
+    const d = deps();
+    await modePanelActions(d).setToolApproach('code');
+    expect(window.nekko.setSessionOptions).toHaveBeenCalledWith('chat', { toolApproach: 'code' });
+    expect(window.nekko.updateSettings).not.toHaveBeenCalled();
+    expect(d.onChange).toHaveBeenCalledWith(expect.objectContaining({ toolApproach: 'code' }));
   });
   it('sets a work mode on this chat only', async () => {
     await modePanelActions(deps()).setWorkMode('better-review');

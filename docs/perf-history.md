@@ -118,6 +118,19 @@ Conditions: Apple M1 Max, 10 cores, 64 GB, macOS 27.0.1; release `nekkod` built 
 | Same, 5.0 MB chat of 40 messages and 10 pictures | 4.76 / 4.50 / 4.50 ms | 4.33 / 4.03 / 4.03 ms |
 
 Why: launch parsed every chat to find the few marked mid-reply; it now byte-searches for `"activeRun"` and parses only matches. Text and reasoning deltas within 16 ms of the last one sent are joined into one event of the same shape, so a fast stream costs a frame per window rather than per chunk; at 15 ms spacing almost nothing joins and each token can wait up to the window's remaining ~1 ms, which is the gap regression. A checkpoint save no longer re-parses the whole chat from disk (only the fields outside the transcript are read back) or clones it to serialize, which halves the save of a long text chat; a picture-heavy chat is mostly long strings that parse and copy cheaply, so its save moved less. The save now also runs without the turn's chat lock held and a `step` is published before its save, but in the 5 MB bench the save is a few ms of a turn dominated by other work, so first text and approve-to-result did not measurably move. Not measured: per-chat write locks (two chats saving at once), sharing frames across sockets, replay outside the hub lock, settings reads without a copy. The save rows come from a throwaway harness linking `nekko-store` from each revision (not committed); the rest from `bench-chat-turn.mjs --ready 8`, `--fanout 4 --tokens 400 --token-ms 1`, `--fanout 4 --tokens 200`, `--runs 8 --history 40 --history-images 10`, and `--runs 8`. A text history of 2,000 messages started a compaction instead (a different workload), so it was not used for turn timings. Source: branch `perf/nekkod-checkpoints`.
+### Code mode: tool definitions per model call (2026-10-22)
+Area: engine daemon
+Result: improvement (definitions only; per-session savings not yet measured)
+Conditions: Linux container; the built-in tool catalog as `turn_tools` offers it to a new chat with no MCP servers; sizes are the JSON of the offered tool specs at the app's ~4 characters a token (`estimateTokens`), not a provider tokenizer
+
+| Metric | Tool list | Code mode |
+|---|---|---|
+| Online chat: tools offered | 18 | 8 (12 behind `run_code`, 6 direct) |
+| Online chat: definitions, tokens per model call | ≈2,664 | ≈1,855 (808 fewer) |
+| Offline / Local only: tools offered | 14 | 6 (10 behind `run_code`, 4 direct) |
+| Offline / Local only: definitions, tokens per model call | ≈1,874 | ≈1,432 (442 fewer) |
+
+Why: code mode replaces the wrapped tools' schemas with `search_tools` and `run_code`, whose description carries a one-line index. The saving grows with every MCP server's tools, since each adds its full schema to the list but one index line to code mode. Not measured yet: results kept out of context in real sessions, and whether models finish tasks in fewer calls (T194e). Source: this PR (T194).
 
 ### #817 agent-browser builds: no forced rebuilds, a dev profile, a per-machine cache (2026-10-19)
 Area: dev build

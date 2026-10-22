@@ -617,6 +617,9 @@ async fn admit(
             "guardrails",
             "defaultChatMode",
             "unattendedQuestionMinutes",
+            "privacyMode",
+            "privacyDisabledKinds",
+            "privacyTerms",
         ],
     );
     spec_settings["providers"] = Value::Array(providers);

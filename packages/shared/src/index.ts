@@ -6,6 +6,7 @@
 export * from './brand-env.js';
 export * from './platform-support.js';
 export * from './voice.js';
+export * from './cloud.js';
 export * from './models.js';
 export * from './model-availability.js';
 export * from './model-capabilities.js';
@@ -35,6 +36,7 @@ export * from './memory.js';
 export * from './workspace.js';
 export * from './files.js';
 export * from './logs.js';
+export * from './privacy.js';
 export * from './design.js';
 export * from './tasks.js';
 export * from './training.js';

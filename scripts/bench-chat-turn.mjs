@@ -302,8 +302,7 @@ if (load > 0) {
     await new Promise((r) => setTimeout(r, 250));
   }
 }
-const info = await call('daemon:info');
-console.log(`daemon owns chat:turn=${info.owned.includes('chat:turn')} load=${load}`);
+console.log(`load=${load}`);
 
 let busy = load > 0;
 let loadCalls = 0;
@@ -500,7 +499,7 @@ try {
     const lines = (f) => (existsSync(join(data, f)) ? readFileSync(join(data, f), 'utf8').trim().split('\n').filter(Boolean) : []);
     const before = { usage: lines('usage.jsonl').length, replies: lines('replies.jsonl').length };
     const first = await call('usage:summary');
-    console.log(`accounted: ${before.usage} usage lines, ${before.replies} reply lines; summary input ${first.totalInput}, output ${first.totalOutput}, replies ${first.replies?.total ?? 0}; daemon owns usage:summary=${info.owned.includes('usage:summary')}`);
+    console.log(`accounted: ${before.usage} usage lines, ${before.replies} reply lines; summary input ${first.totalInput}, output ${first.totalOutput}, replies ${first.replies?.total ?? 0}`);
     const seed = [];
     for (let i = 0; i < 20_000; i++) seed.push(JSON.stringify({ ts: Date.now() - i * 60_000, providerId: 'local', modelId: i % 3 ? 'gemma' : 'claude-sonnet-4-5', inputTokens: 900 + i % 50, cacheReadTokens: i % 7, outputTokens: 120, sessionId: `s_${i % 300}`, auth: i % 5 ? 'apikey' : 'subscription', local: i % 3 !== 0 }));
     appendFileSync(join(data, 'usage.jsonl'), `${seed.join('\n')}\n`);
@@ -533,7 +532,7 @@ try {
       await time('design:get', () => call('design:get', 'w1'));
     }
     results.workspace = Object.fromEntries(Object.entries(timings).map(([k, ms]) => [k, { median: pct(ms, 0.5), p95: pct(ms, 0.95), max: Math.max(...ms) }]));
-    console.log(`workspace calls (daemon owns workspace:search=${info.owned.includes('workspace:search')}):`);
+    console.log('workspace calls:');
     for (const [k, v] of Object.entries(results.workspace)) console.log(`  ${k}: median ${v.median.toFixed(1)} ms, p95 ${v.p95.toFixed(1)} ms, max ${v.max.toFixed(1)} ms`);
   }
   if (args.stats) {
@@ -547,8 +546,8 @@ try {
         ms.push(performance.now() - t0);
         await new Promise((r) => setTimeout(r, 1100)); // past the GPU cache, as a polling meter is
       }
-      results.stats[channel] = { median: pct(ms, 0.5), p95: pct(ms, 0.95), max: Math.max(...ms), daemon: info.owned.includes(channel) };
-      console.log(`${channel}: median ${results.stats[channel].median.toFixed(1)} ms, p95 ${results.stats[channel].p95.toFixed(1)} ms, max ${results.stats[channel].max.toFixed(1)} ms (daemon owns it: ${results.stats[channel].daemon})`);
+      results.stats[channel] = { median: pct(ms, 0.5), p95: pct(ms, 0.95), max: Math.max(...ms) };
+      console.log(`${channel}: median ${results.stats[channel].median.toFixed(1)} ms, p95 ${results.stats[channel].p95.toFixed(1)} ms, max ${results.stats[channel].max.toFixed(1)} ms`);
     }
   }
   busy = false;

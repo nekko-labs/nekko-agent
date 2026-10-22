@@ -29,6 +29,8 @@ pub struct Ctx {
     pub settings: Option<Arc<crate::settings::Settings>>,
     /// Nekko Voice (`voice:*`), when the data directory is known.
     pub voice: Option<Arc<crate::voice::Voice>>,
+    /// Nekko Cloud sign-in and end-to-end encrypted sync (`cloud:*`, `sync:*`), with the data directory.
+    pub cloud: Option<Arc<nekko_cloud::Cloud>>,
     /// Sign-in and tokens.json, when the data directory is known (`oauth:*`).
     pub oauth: Option<Arc<crate::oauth::OAuth>>,
     /// `chat:send` admitted here, when the daemon owns settings, tokens and sessions.
@@ -353,6 +355,9 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             crate::context::route(ctx, c, args).await
         }
         c if crate::side::CHANNELS.contains(&c) && crate::side::owned(ctx) => crate::side::route(ctx, c, &args).await,
+        c if crate::privacy::CHANNELS.contains(&c) && ctx.settings.is_some() => {
+            crate::privacy::route(ctx, c, &args).await
+        }
         "chat:send" if ctx.admission.is_some() => {
             crate::admission::send(ctx, ctx.admission.as_ref().expect("checked"), args).await
         }
@@ -417,6 +422,10 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         c if crate::settings::CHANNELS.contains(&c) && ctx.settings.is_some() => {
             crate::settings::route(ctx.settings.as_ref().expect("checked"), c, &args).await
         }
+        c if nekko_cloud::CHANNELS.contains(&c) && ctx.cloud.is_some() => match &ctx.cloud {
+            Some(cloud) => cloud.route(c, &args).await,
+            None => Err("Nekko Cloud needs the data directory".into()),
+        },
         c if crate::voice::CHANNELS.contains(&c) && ctx.voice.is_some() => match &ctx.voice {
             Some(voice) => voice.route(c, &args).await,
             None => Err("voice needs the data directory".into()),
@@ -570,6 +579,9 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
     if ctx.voice.is_some() {
         all.extend_from_slice(crate::voice::CHANNELS);
     }
+    if ctx.cloud.is_some() {
+        all.extend_from_slice(nekko_cloud::CHANNELS);
+    }
     if ctx.oauth.is_some() {
         all.extend_from_slice(crate::oauth::CHANNELS);
         all.extend_from_slice(crate::providers::CHANNELS);
@@ -591,6 +603,9 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
     }
     if ctx.settings.is_some() && ctx.sessions.is_some() {
         all.extend_from_slice(crate::context::CHANNELS);
+    }
+    if ctx.settings.is_some() {
+        all.extend_from_slice(crate::privacy::CHANNELS);
     }
     all.extend(ctx.workspace.owned());
     if ctx.workspace.data_dir().is_some() {

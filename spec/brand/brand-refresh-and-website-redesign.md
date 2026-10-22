@@ -14,3 +14,15 @@ split-from: SPEC.md (2026-10-22)
 - **Homepage redesign.** Handjet and Space Mono accent fonts, retro sticker buttons, a liquid-glass floating nav and lavender/aqua section bands. A dot-matrix pixel wave canvas replaces the starfield: about 20 fps, moved along by scrolling, paused while the tab is hidden, and held still (still following scroll) under reduced motion.
 - **Media slots.** The product screenshot and feature GIF slots open in a lightbox (Escape, backdrop or Close shuts it and returns focus). They are placeholders until the real media lands.
 - **Beta sign-up section.** An email form hosted by an animated Nekko (idle, watching, eager, confused, celebrate). An invalid email shows the confused state. When the form has an endpoint it POSTs `{ email }` as JSON and shows an error on failure. **Planned, not live:** `data-endpoint` is empty, so today it only shows the thank-you card and sends nothing. Wiring it to the signup backend above is separate work.
+
+## Trust-first homepage: slogan and five demo panels (2026-10-22)
+
+`[implemented; before/after screenshots in the PR; demo videos not yet produced]` The homepage leads with the slogan **"Your personal, local agent you can trust."** and a lede about control: the user chooses the models, chooses what data is used, and sees what is happening. The eight-card "What you can do" grid is replaced by **five promise panels** (`#why-nekko`), modelled on Orca's feature panels: each is one wide card with a copy column (number, headline, paragraph, three points, a link) beside a 16:10 demo slot, sides alternating down the page and stacking media-first on phones.
+
+1. **In control**: model choice per chat, Context Inspector, command approvals and line-by-line review.
+2. **No compromise**: terminal power with the polish of a finished app; CLI and MCP for people who prefer the shell.
+3. **Fast**: "Fast. Really fast. Maybe the fastest." with a bar chart of decode, code edit and four-at-once tokens/s against Ollama and LM Studio, numbers quoted from [docs/benchmarks.md](../../docs/benchmarks.md) (2026-09-30) with the losses named in the note. The chart is static HTML and CSS (no library) and its three colours pass a colour-blindness check.
+4. **Secure**: the Apple-style "even we can't see in" stance: local chats stay on the machine, phone traffic is end-to-end encrypted so the relay carries ciphertext, Privacy Shield and Incognito for cloud models.
+5. **Convenient** (Beta chip): the phone app, pairing, approvals by tap, on-phone models.
+
+The demo slots are the existing `.media` lightbox placeholders with a `data-demo` key per panel; Travis is producing the videos, and each drops in as a `<video>` inside its slot. The page title, meta descriptions and Open Graph text carry the slogan; the structured data is unchanged. Everything below the panels (beta, model server, privacy manifest, editions, roadmap, download) is as before.

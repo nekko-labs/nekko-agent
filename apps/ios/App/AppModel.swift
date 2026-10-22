@@ -17,6 +17,10 @@ final class AppModel {
     let keychain: KeychainStore
     let prefs: Prefs
     let store: ComputersStore
+    /// Nekko Cloud sign-in and end-to-end encrypted sync (its own Keychain service).
+    let cloud: CloudSync
+    private let cloudKeychain: KeychainStore
+    private let cloudKey: CloudDeviceKey
     let lock: AppLock
     let notifier = Notifier()
     let chatLists = ChatListFiles()
@@ -74,6 +78,14 @@ final class AppModel {
         // Change actions (IO-33) are signed in the Secure Enclave behind Face ID or the passcode.
         computers.changeSigner = SecureEnclaveChangeSigner(store: keychain)
         store = computers
+        let cloudKeychain = KeychainStore(service: "com.nekko.native.ios.cloud")
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-uiTestReset") { cloudKeychain.wipe() }
+        #endif
+        let key = CloudDeviceKey(store: cloudKeychain)
+        self.cloudKeychain = cloudKeychain
+        cloudKey = key
+        cloud = CloudSync(api: Self.cloudURL, secrets: cloudKeychain, files: offlineFiles, deviceLabel: deviceName, key: { try key.get() })
         lock = AppLock(enabled: prefs.appLock)
         #if DEBUG
         // What the share extension leaves behind, without driving another app's share sheet.
@@ -357,6 +369,9 @@ final class AppModel {
     /// Settings → Forget everything on this iPhone.
     func forgetEverything() {
         for c in store.computers { store.forget(c.id) }
+        cloud.forgetAll()
+        cloudKey.forget()
+        cloudKeychain.wipe()
         chatLists.removeAll()
         transcriptFiles.removeAll()
         offlineFiles.removeAll()
@@ -365,6 +380,16 @@ final class AppModel {
         activities.endAll()
         prefs.defaultComputer = nil
         prefs.lastModel = [:]
+    }
+
+    /// Nekko Cloud: `NekkoCloudURL` in Info.plist, or `-cloudAPI <url>` (debug builds, for the local dev stack).
+    static var cloudURL: URL {
+        #if DEBUG
+        let args = ProcessInfo.processInfo.arguments
+        if let i = args.firstIndex(of: "-cloudAPI"), i + 1 < args.count, let u = URL(string: args[i + 1]) { return u }
+        #endif
+        let configured = Bundle.main.object(forInfoDictionaryKey: "NekkoCloudURL") as? String
+        return URL(string: configured ?? "") ?? URL(string: "https://nekko-agent-api.fly.dev")!
     }
 
     /// Offer *Open Tailscale* (TS-4): the active computer is on the tailnet and

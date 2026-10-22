@@ -39,7 +39,8 @@
         "incognito": false,
         "disabledTools": [],
         "workMode": "default",
-        "models": "local"
+        "models": "local",
+        "toolApproach": "code"
       }
     },
     {
@@ -1610,7 +1611,8 @@
         "incognito": false,
         "disabledTools": [],
         "workMode": "default",
-        "cloudOnly": false
+        "cloudOnly": false,
+        "toolApproach": "code"
       },
       "idShape": true
     },

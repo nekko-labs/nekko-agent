@@ -12,7 +12,7 @@ split-from: SPEC.md (2026-10-22)
 | --- | --- | --- | --- | --- |
 | **Cloud only** | worktree | Guardrails | cloud | `cloudOnly: true`, internet on |
 | **Fusion** | worktree | Guardrails | local + cloud | `autoModel: true`, `autoProviderSwitch: true`, `cloudOnly: false`, internet on |
-| **Local only** | worktree | Guardrails | local | `offline: true`, `cloudOnly: false` |
+| **Local only** | worktree | Guardrails | local | `offline: true`, `cloudOnly: false`, `toolApproach: 'code'` (code mode, added 2026-10-22; see *Code mode: a chat's tools as code*) |
 | **Risky business** | Sandbox | Ask | any (local recommended) | `executionMode: 'sandbox'`, `offline: true` where the model allows it |
 
 A saved mode gained an optional `models` field (`ModelScope`: `cloud`, `fusion` or `local`). Like effort, a mode saved without it matches any chat and changes nothing; unlike effort, a chat reads as having no scope when none of its settings pins one, so a plain chat matches none of the three model starters. `chatModelScope(session)` reads it back: `offline` is local, else `cloudOnly` is cloud, else Auto with provider switching is fusion. The Mode panel's Model column has a **Models run** row (Cloud only / Fusion / Local only tiles; clicking the highlighted one unpins it) that sets the same fields by hand, so a mode still grants nothing a user could not set themselves. The old starters (Everyday, Deep work, Private, Untrusted repo) are gone for users who never saved a mode; users who saved one already have the old starters copied into `savedModes` and keep them. A star on a removed starter no longer resolves, so new chats fall back to the last-used defaults, as for any deleted mode.
