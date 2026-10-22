@@ -158,7 +158,7 @@ const inPoly = (poly, x, y) => {
   return inside;
 };
 const GW = 92;
-const GH = 44;
+const GH = 48;
 const OY = 0;
 const HX = 52; // head offset on the cat grid
 const HY = 0;
@@ -184,21 +184,22 @@ const paw = (cx, cy, rx = 3, ry = 2.2) => paint((x, y) => ((x - cx) / rx) ** 2 +
 paint((x, y) => inPoly(HEAD, x - HX, y - HY));
 // Body: shoulders under the head (filling the step under the jaw), rising
 // to high hips.
-paint((x, y) => inPoly([[58, 16], [46, 13], [34, 11], [26, 12], [21, 16], [21, 22], [26, 26], [36, 29], [48, 30], [58, 29], [63, 27], [63, 22]], x, y));
+paint((x, y) => inPoly([[58, 17], [46, 15], [34, 13], [26, 14], [22, 17], [22, 21], [26, 24], [36, 27], [48, 28], [58, 27], [63, 26], [63, 22]], x, y));
 // Front legs reach out past the chin, tapered so they read as legs rather
-// than ribbons: the far one higher, the near one lower.
-limb([57, 27], [70, 31], [82, 30], 3.4, 2);
-paw(84, 30);
-limb([51, 29], [64, 37], [77, 38], 3.4, 2);
-paw(79, 38);
+// than ribbons, and low enough to leave a gap under the face: the far one
+// higher, the near one lower.
+limb([57, 26], [68, 36], [82, 36], 3.4, 2);
+paw(84, 36);
+limb([51, 27], [62, 42], [77, 43], 3.4, 2);
+paw(79, 43);
 // Back legs push out behind: far one higher, near one lower.
-limb([25, 19], [19, 21], [13, 21], 3.4, 2);
-paw(12, 21);
-limb([30, 25], [24, 31], [17, 32], 3.4, 2);
-paw(16, 32);
+limb([25, 19], [17, 21], [9, 21], 3.4, 2);
+paw(8, 21);
+limb([30, 24], [21, 32], [12, 34], 3.4, 2);
+paw(11, 34);
 // Tail: back and only a little up off the hips, curling up at the tip, so
 // it stays clear of the copy above.
-limb([22, 14], [12, 13], [6, 8], 2.4, 1.8);
+limb([24, 15], [12, 13], [6, 8], 2.4, 1.8);
 limb([6, 8], [4, 4], [8, 3], 1.8, 1.6);
 const at = (x, y) => y >= 0 && y < GH && x >= 0 && x < GW && mask[y][x];
 const nearEdge = (x, y, want) => {
