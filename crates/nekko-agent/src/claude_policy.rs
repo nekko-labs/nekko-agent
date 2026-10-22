@@ -2,8 +2,8 @@
 //!
 //! The mirror of `packages/shared/src/claude-policy.ts`, which is the source:
 //! `tests/claude_policy.rs` checks this table, its reasons and the auth mapping
-//! against the golden file the TS test writes
-//! (`packages/host/src/claude-policy.golden.test.ts`).
+//! against `tests/golden/claude-policy.json`, a frozen record of the deleted
+//! TS behaviour (edit it by hand per docs/runbooks/golden-fixtures.md).
 //!
 //! Claude on the user's own API key or cloud account keeps every feature.
 //! Claude on a plan only runs through the user's own Claude Code, and some

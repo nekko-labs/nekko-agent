@@ -1,4 +1,4 @@
-//! Replays the TS model-server golden set (`server.golden.test.ts`): the
+//! Replays the frozen TS model-server golden set (`golden/server.json`): the
 //! same command lines, companion files, load-failure sentences and image
 //! requests, and the same policy over the same scripted daemon: what loads,
 //! what is evicted and when, what the router hears and what status reads.

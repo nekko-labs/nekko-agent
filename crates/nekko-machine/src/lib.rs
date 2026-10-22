@@ -1,8 +1,8 @@
 //! Machine probes for the engine daemon: `gpu:stats`, `system:stats` and
 //! `machine:readiness`, ported from the TS host (`gpu.ts`, `system.ts`,
 //! `readiness.ts` and core's `evaluateReadiness`). The parsers and the advisor
-//! are held to the TS functions by `tests/golden/machine.json`, which
-//! `packages/host/src/machine.golden.test.ts` writes.
+//! are held to the TS functions by `tests/golden/machine.json`, a frozen
+//! record of the deleted TS behaviour.
 //!
 //! Also the hardware profile (`machine:profile`, `profile.rs`) and the model
 //! recommendations made against it (`machine:recommendations`, `recommend.rs`).

@@ -66,7 +66,7 @@ pub trait Env: Send + Sync {
     fn now(&self) -> f64;
     /// The clock a log line starts with (`HH:MM:SS`, UTC).
     fn clock(&self) -> String;
-    /// The engine started serving at this address (the host keeps a provider entry pointing at it).
+    /// The engine started serving at this address (the daemon keeps a provider entry pointing at it).
     fn on_serving(&self, base_url: String) -> BoxFuture<()>;
 }
 
@@ -353,7 +353,7 @@ impl ModelServer {
     /// Listen through the daemon and bring the autoload models up (`start`).
     pub async fn start(&self) -> Value {
         if self.state.lock().unwrap().serving {
-            // The host keeps a provider entry pointing at the engine either way.
+            // The daemon keeps a provider entry pointing at the engine either way.
             self.env.on_serving(format!("http://127.0.0.1:{}/v1", text(self.env.settings().get("port")))).await;
             return reply(true, "The engine is already running.");
         }

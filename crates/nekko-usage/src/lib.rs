@@ -5,8 +5,8 @@
 //! from `@nekko-agent/shared`. Everything works on `serde_json::Value` with
 //! JavaScript's rules (missing is `undefined`, arithmetic coerces, `NaN`
 //! prints as `null`, integer-like keys sort first), so a line or a summary
-//! comes out as the TS host would write it. Held to the TS functions by the
-//! golden set `packages/host/src/usage.golden.test.ts` writes.
+//! comes out as the TS host would write it. Held to the TS functions by a
+//! frozen golden set (`tests/golden`).
 
 pub mod date;
 pub mod limits;

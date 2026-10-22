@@ -5,10 +5,9 @@
 //! - [`EngineRouter`]: the one OpenAI-compatible address in front of them, which
 //!   also answers `/v1/decisions` from the daemon's [`Decisions`] service.
 //!
-//! Which model to load with which arguments stays with the TS engine (the
-//! [`Policy`]); this crate owns the processes and the request path, so a
-//! restart of the TS backend neither drops loaded models nor interrupts a
-//! generation in progress.
+//! Which model to load with which arguments is the daemon's model server
+//! policy (the [`Policy`], `nekko_engine::server`); this crate owns the
+//! processes and the request path.
 
 mod router;
 mod supervisor;

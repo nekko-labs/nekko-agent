@@ -2,7 +2,7 @@ package com.nekko.android.voice
 
 /**
  * The recording format the computer's Nekko Voice accepts (`validate_wav` in
- * crates/nekkod/src/voice.rs, `validateVoiceWav` in packages/host/src/engine/voice.ts):
+ * crates/nekkod/src/voice.rs):
  * a 44-byte RIFF header, PCM, mono, 16 kHz, 16-bit little-endian, at most 60 s.
  */
 object Wav {

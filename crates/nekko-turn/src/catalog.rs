@@ -1,7 +1,8 @@
 //! What the TS sources define and a turn needs: every tool spec apart from
 //! MCP's, the default turn wrapper, the orchestration strategies, and the
-//! fixed instructions and answers. Written from the TS by
-//! `packages/host/src/turn-plan.golden.test.ts` (which fails when it is stale).
+//! fixed instructions and answers. Recorded from the deleted TS engine; the
+//! parts whose source is still `packages/shared` are kept current by its
+//! `engine-data.golden.test.ts`.
 
 use serde_json::Value;
 use std::sync::OnceLock;

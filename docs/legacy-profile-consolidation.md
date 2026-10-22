@@ -16,7 +16,7 @@ two old installs, four updater caches and ~4,600 `kotrain-*` temp folders.
 
 | Piece | File | Notes |
 |---|---|---|
-| Detect, merge, verify, clean | `packages/profile/src/legacy-profiles.ts` | Pure functions taking an injected `LegacyEnv`, so every path is testable. Exported as `@nekko-agent/host/legacy-profiles` (no node-pty) for the desktop main bundle, and from the host index for the CLI. |
+| Detect, merge, verify, clean | `packages/profile/src/legacy-profiles.ts` | Pure functions taking an injected `LegacyEnv`, so every path is testable. Exported as `@nekko-agent/profile/legacy-profiles`, which the desktop's main process and the CLI import. |
 | Close / reopen the app | `packages/profile/src/app-control.ts` | Finds the app from `cli-link.json`'s pid, climbs to the window process, closes the tree (`taskkill /T`, forced after a grace period). Never climbs into a shell or dev launcher. |
 | Terminal command | `apps/cli/src/migrate.ts`, wired in `apps/cli/src/run.ts` | `nekko-agent migrate [--dry-run] [--yes] [--keep-old] [--no-restart]`. Runs before `getClient`, which would refuse to open an unmerged root. |
 | Launch prompt | `apps/desktop/src/main/legacyPrompt.ts`, called from `main/index.ts` | Native dialog before the engine starts. "Not now" is deliberately not remembered. |
@@ -59,7 +59,7 @@ changed files is written before the first change; refuse while another Nekko pro
 ```
 git fetch origin && git worktree add .worktrees/legacy-profile-consolidation feat/legacy-profile-consolidation
 cd .worktrees/legacy-profile-consolidation && npm ci --ignore-scripts && npm run build:core
-npm run build -w @nekko-agent/host && npm run build --workspace=apps/cli
+npm run build --workspace=apps/cli
 node apps/cli/dist/index.js migrate --dry-run     # safe: changes nothing
 cd packages/profile && npx vitest run src/legacy-profiles.test.ts src/app-control.test.ts
 ```

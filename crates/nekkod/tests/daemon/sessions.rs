@@ -91,10 +91,6 @@ async fn forks_chats_and_purges_expired_archives_itself() {
     }
     let d = start_with(Some(&data));
 
-    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    for channel in ["session:fork", "sessions:purgeArchived"] {
-        assert!(info["owned"].as_array().unwrap().contains(&json!(channel)), "{channel} is not owned");
-    }
     let (status, fork) = post(d.port, "session:fork", json!(["s_src", "u2"]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{fork}");
     assert_eq!(fork["title"], "Source (split)");
@@ -150,10 +146,6 @@ async fn serves_files_memory_and_comments_itself() {
     std::fs::write(project.join("src").join("a.ts"), "export function a() {}\n").unwrap();
     let d = start_with(Some(&data));
 
-    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    for c in ["file:read", "dir:list", "workspace:search", "memory:save", "comment:add"] {
-        assert!(info["owned"].as_array().unwrap().contains(&json!(c)), "{c} is not owned");
-    }
     let file = project.join("src").join("a.ts").to_string_lossy().into_owned();
     let (status, read) = post(d.port, "file:read", json!([file]), Some(TOKEN)).await;
     assert_eq!(status, 200);
@@ -394,18 +386,12 @@ async fn continues_and_links_pr_stacks_itself() {
         (200, json!({ "ok": false, "message": "This chat was not started from a parent PR." }))
     );
 
-    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    for c in [
-        "pr:continueStack",
-        "pr:linkStack",
-        "data:wipe",
-        "app:info",
-        "updates:check",
-        "workspace:add",
-        "session:watches",
-    ] {
-        assert!(info["owned"].as_array().unwrap().contains(&json!(c)), "{c} not owned");
-    }
+    // The rest of the small services (updates:check has its own test in
+    // settings.rs); the wipe last, as it clears this data directory.
+    assert_served(d.port, "app:info", json!([])).await;
+    assert_served(d.port, "session:watches", json!(["s_src"])).await;
+    assert_served(d.port, "workspace:add", json!([])).await;
+    assert_served(d.port, "data:wipe", json!([])).await;
     drop(d);
     let _ = std::fs::remove_dir_all(&data);
 }
@@ -476,10 +462,6 @@ async fn writes_other_agent_tools_mcp_entries_itself() {
     let h = home.to_string_lossy().to_string();
     let d = start_with_env(Some(&data), json!({}), &[("HOME", Some(&h)), ("USERPROFILE", Some(&h))]);
 
-    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    for c in ["integrations:detect", "integrations:install", "integrations:snippet", "integrations:refresh"] {
-        assert!(info["owned"].as_array().unwrap().iter().any(|o| o == c), "{c} is owned: {info}");
-    }
     let (_, tools) = post(d.port, "integrations:detect", json!([]), Some(TOKEN)).await;
     let ids: Vec<_> = tools
         .as_array()
@@ -539,10 +521,6 @@ async fn scoped_files_and_logs_for_remote_callers() {
     std::fs::write(project.join(".env"), "TOKEN=abc").unwrap();
     std::fs::write(data.join("outside.txt"), "no").unwrap();
     let d = start_with(Some(&data));
-    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    for c in ["files:list", "files:search", "files:read", "files:write", "logs:list", "logs:read"] {
-        assert!(info["owned"].as_array().unwrap().contains(&json!(c)), "{c} is not owned");
-    }
     let folder =
         json!([{ "workspaces": [{ "id": "w1", "name": "project", "path": project.to_string_lossy(), "addedAt": 1 }] }]);
     post(d.port, "settings:update", folder, Some(TOKEN)).await;

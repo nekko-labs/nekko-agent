@@ -3,7 +3,8 @@
 //! `spec:readDocs`, `spec:setMethodology`, `spec:toggleTask`, and the
 //! prompt and landing halves of `spec:build` / `spec:buildDoc` (the model
 //! call is the daemon's). The methodologies come from the TS source
-//! (`spec-data.json`, written by packages/host/src/spec.golden.test.ts).
+//! (`spec-data.json`, written by packages/shared's
+//! `engine-data.golden.test.ts`).
 //!
 //! These read and write the chat's project files (`spec.md`, `tasks.md`...),
 //! never the app's data, and refuse sandbox chats as the host does.

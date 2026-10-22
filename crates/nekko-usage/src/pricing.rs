@@ -1,8 +1,8 @@
 //! `getModelPrice` and `estimateCost` (`packages/shared/src/limits.ts`).
 //!
 //! The price tables are the TS ones, embedded from `pricing.json`, which
-//! `packages/host/src/usage.golden.test.ts` writes from `MODEL_PRICING` and
-//! `MODEL_PRICING_SNAPSHOT` (and fails on when stale).
+//! packages/shared's `engine-data.golden.test.ts` writes from `MODEL_PRICING`
+//! and `MODEL_PRICING_SNAPSHOT` (and fails on when stale).
 
 use serde_json::Value;
 use std::collections::HashMap;

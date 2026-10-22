@@ -2,8 +2,9 @@
 // One-off profile repair for a data folder that already holds duplicates:
 // several provider entries for one subscription account, several folder
 // entries for one path, and servers the user wants to forget. New merges
-// dedupe on their own (legacy-profiles.ts); this applies the same logic to a
-// profile merged before that existed.
+// dedupe on their own (@nekko-agent/profile's legacy-profiles.ts); this
+// applies the same logic to a profile merged before that existed. It imports
+// the package's build, so run `npm run build:core` first.
 //
 //   node scripts/repair-profile.mjs                 dry run (default)
 //   node scripts/repair-profile.mjs --apply         write, after a backup
@@ -17,7 +18,7 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { dedupeProfile, liveInstance } from '../packages/host/dist/legacy-profiles.js';
+import { dedupeProfile, liveInstance } from '@nekko-agent/profile/legacy-profiles';
 
 const argv = process.argv.slice(2);
 const many = (flag) => argv.flatMap((a, i) => (a === flag && argv[i + 1] ? [argv[i + 1]] : []));

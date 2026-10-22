@@ -50,8 +50,7 @@ async fn the_daemon_runs_tasks_and_fires_them_on_time() {
     let model = scripted_model(vec![say_text("Nightly summary.")]).await;
     scripted_p1(&data, &model, json!({}));
     let d = start_with(Some(&data));
-    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    assert!(info["owned"].as_array().unwrap().contains(&json!("tasks:list")), "{info}");
+    assert_served(d.port, "tasks:list", json!([])).await;
 
     let input = json!({ "title": " Nightly ", "kind": "recurring", "prompt": "Summarize", "intervalMs": 3_600_000, "providerId": "p1", "modelId": "m1" });
     let (status, list) = post(d.port, "task:create", json!([input]), Some(TOKEN)).await;
@@ -169,10 +168,7 @@ async fn the_daemon_runs_training_and_goal_runs_and_their_tools_itself() {
     write_settings(&rig, settings).await;
     let mut events = ws(rig.d.port, &format!("/api/events?token={TOKEN}"), None).await.unwrap();
 
-    let (_, info) = post(rig.d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    for c in ["training:list", "training:create", "training:start", "training:hint", "training:tool"] {
-        assert!(info["owned"].as_array().unwrap().contains(&json!(c)), "{c} is not owned: {info}");
-    }
+    assert_served(rig.d.port, "training:list", json!([])).await;
     let input =
         json!({ "kind": "goal", "name": "  CSV importer  ", "goal": "Ship the CSV importer", "workspaceId": "w1" });
     let (status, run) = post(rig.d.port, "training:create", json!([input]), Some(TOKEN)).await;
@@ -302,8 +298,6 @@ async fn the_daemon_runs_workflows_with_shell_prompt_and_webhook() {
     )
     .unwrap();
     let d = start_with(Some(&data));
-    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    assert!(info["owned"].as_array().unwrap().contains(&json!("workflow:run")), "{info}");
     wait_for("the reconcile", || {
         std::fs::read_to_string(data.join("workflow-runs.json")).unwrap_or_default().contains("Interrupted")
     })

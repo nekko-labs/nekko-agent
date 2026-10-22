@@ -7,8 +7,8 @@
 //! servers), the Anthropic Messages API, Ollama's native API, and the ChatGPT
 //! subscription's Codex Responses API. Each builds the exact request its TS
 //! counterpart sends and yields the exact chunk sequence it yields, which
-//! `tests/golden.rs` checks against recordings the TS providers wrote
-//! (`packages/core/src/providers/providers.golden.test.ts`).
+//! `tests/golden.rs` checks against frozen recordings of the deleted TS
+//! providers (edit them by hand per docs/runbooks/golden-fixtures.md).
 //!
 //! What is not here yet, on purpose: OAuth sign-in and token refresh (the
 //! host passes a ready token in the config), connection tests, Ollama model

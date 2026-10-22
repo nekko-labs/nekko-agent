@@ -81,10 +81,6 @@ async fn suggests_replies_and_fills_prompt_parts_on_the_chats_model() {
         std::fs::write(sessions.join(format!("{id}.json")), serde_json::to_vec_pretty(&s).unwrap()).unwrap();
     }
     let d = start_with(Some(&data));
-    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    for channel in ["chat:suggest", "chat:fillPrompt"] {
-        assert!(info["owned"].as_array().unwrap().contains(&json!(channel)), "{channel} is not owned");
-    }
 
     let (status, suggested) = post(d.port, "chat:suggest", json!(["s_side"]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{suggested}");
