@@ -40,7 +40,8 @@ async fn call(d: &Device, channel: &str, args: Value) -> Result<Value, String> {
 async fn sign_in(d: &Device, email: &str) {
     call(d, "cloud:sendCode", json!([email])).await.unwrap();
     let s = call(d, "cloud:verifyCode", json!([email, CODE])).await.unwrap();
-    assert_eq!(s["signedIn"], true, "{s}");
+    // Fixed messages only: the status can hold the join code, so it is never printed.
+    assert!(s["signedIn"] == true, "sign-in didn't finish");
 }
 
 fn chat(id: &str, title: &str, text: &str, updated: f64) -> Value {
@@ -108,7 +109,7 @@ async fn three_devices_sync_end_to_end() {
         .unwrap();
     call(&a, "sync:now", json!([])).await.unwrap();
     let s = a.cloud.status();
-    assert_eq!(s["sync"]["phase"], "idle", "{s}");
+    assert!(s["sync"]["phase"] == "idle", "A isn't up to date");
     assert_eq!(s["sync"]["skipped"]["incognito"], 1);
 
     // The server holds ciphertext only.
@@ -165,7 +166,7 @@ async fn three_devices_sync_end_to_end() {
     assert_eq!(phase(&c), "awaiting-approval");
     call(&a, "sync:approve", json!([pending["id"], code.to_lowercase()])).await.unwrap();
     call(&c, "sync:now", json!([])).await.unwrap();
-    assert_eq!(phase(&c), "idle", "{}", c.cloud.status());
+    assert!(phase(&c) == "idle", "C isn't up to date after approval");
     assert_eq!(c.store.get("s_1_aaa").unwrap()["messages"][0]["content"], "booked the ryokan");
     assert!(c.cloud.status()["sync"]["joinCode"].is_null(), "the code is forgotten once used");
 
