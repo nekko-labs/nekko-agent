@@ -1,9 +1,9 @@
-//! One-shot completions the TS host asks for beside a turn (`provider:complete`):
-//! a chat's title, the suggested replies, a prompt part to fill in.
-//!
-//! The host still builds the prompt and resolves the provider (a subscription
-//! token is refreshed there); the call itself, and its stream, run here on the
-//! Rust providers, so they stay off the TS event loop while a turn streams.
+//! One-shot completions beside a turn: a chat's title, the suggested
+//! replies, a prompt part to fill in, a commit message, a spec or design
+//! draft. The daemon's own services call `complete` (side.rs, turns.rs,
+//! workspace.rs), and `provider:complete` serves the same call over the wire.
+//! The caller builds the prompt and resolves the provider; the call and its
+//! stream run here on the Rust providers.
 
 use nekko_agent::{ChatRequest, Io, Provider, ProviderChunk, ProviderConfig, create_provider_with};
 use serde_json::{Value, json};

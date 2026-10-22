@@ -1,11 +1,10 @@
 //! The model server's policy, run in the daemon (`nekko_engine::server`)
 //! over its own processes and port (`nekko-infer`): `engine:status`,
 //! `engine:settings`, `engine:residentTtl` and `engine:generateImage`, the
-//! router's questions about models it does not have running (answered here
-//! now, no longer by the host), and for the TS engine facade and the runtime
-//! control plane, `engine:start`, `engine:stop`, `engine:load`,
+//! router's questions about models it does not have running, and for the
+//! runtime control plane, `engine:start`, `engine:stop`, `engine:load`,
 //! `engine:unload`, `engine:resident`, `engine:running` and
-//! `engine:loadedIds` (`NEKKOD_OWNS=server`).
+//! `engine:loadedIds`.
 
 use crate::installs::Installs;
 use crate::library::{Library, engine_settings};

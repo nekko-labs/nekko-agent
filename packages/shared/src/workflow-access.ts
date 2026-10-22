@@ -14,8 +14,9 @@
  * - `workspace` (the default, and what a workflow without the field gets):
  *   the normal tool set under the chat's mode, with approvals auto-denied.
  *
- * The daemon's port is crates/nekko-turn/src/workflow_access.rs; the golden
- * cases in packages/host/src/turn-plan.golden.test.ts keep the two the same.
+ * The daemon's port is crates/nekko-turn/src/workflow_access.rs; the shared
+ * cases in crates/nekko-turn/tests/golden/workflow-access.json, checked by
+ * workflow-access.golden.test.ts here and by the crate, keep the two the same.
  */
 
 import { TOOL_CATEGORY_OF } from './tool-categories.js';

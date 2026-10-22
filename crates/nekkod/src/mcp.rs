@@ -1,13 +1,12 @@
 //! MCP servers, run by the daemon (PF14): `mcp:sync`, `mcp:call` and,
 //! with the settings store, `mcp:status`.
 //!
-//! A port of `packages/host/src/mcp.ts`'s client: JSON-RPC 2.0 over the
+//! A port of the deleted TS host's client: JSON-RPC 2.0 over the
 //! newline-delimited stdio of a spawned process, or streamable HTTP when the
 //! config has a `url` (JSON or SSE-framed replies, the server's
-//! `mcp-session-id` echoed back). The servers live here, not in the TS host,
-//! so they survive a host restart and their output is parsed off its event
-//! loop. The host still decides when to sync and still asks for approval
-//! before a call; Hypergate discovery stays there too.
+//! `mcp-session-id` echoed back). A turn syncs the servers its spec lists
+//! (`facts.mcpServers`, turns.rs) and asks for approval before a call under
+//! the chat's mode; Hypergate discovery is `mcp:hypergate`.
 //!
 //! Two things differ from the TS client on purpose: stopping a stdio server
 //! stops its whole process tree (on Windows `npx` runs under `cmd.exe`, and

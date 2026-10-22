@@ -19,7 +19,7 @@ pub struct Ctx {
     pub sessions: Option<Arc<nekko_store::SessionStore>>,
     /// Pending changes the agent's file tools recorded (`changes:*`).
     pub changes: Arc<nekko_tools::ChangeTracker>,
-    /// MCP servers the TS host syncs and calls (`mcp:sync`, `mcp:call`).
+    /// MCP servers, synced and called by turns (and `mcp:sync`, `mcp:call`).
     pub mcp: Arc<crate::mcp::Mcp>,
     /// Whole chat turns (`chat:turn`) and the input they wait on.
     pub turns: Arc<crate::turns::Turns>,

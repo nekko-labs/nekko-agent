@@ -15,7 +15,7 @@ axum = { version = "0.8", features = ["ws"] }
 bytes = "1"
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
 getrandom = "0.3"
-# The collator V8's `localeCompare` uses (root collation), so sorted lists match the TS host's.
+# The collator V8's `localeCompare` uses (root collation), so sorted lists match JavaScript's.
 icu_collator = "2"
 libc = "0.2"
 # Substring search for grep's literal fast path.
@@ -24,7 +24,7 @@ ndarray = "0.17"
 # Pinned: ort 2 is still a release candidate and minor bumps change the API.
 ort = { version = "=2.0.0-rc.13", default-features = false, features = ["std", "ndarray", "download-binaries", "copy-dylibs", "tls-native", "api-22"] }
 portable-pty = "0.9"
-# ECMAScript regular expressions (the TS host's `new RegExp`), matched over UTF-16 like V8 does.
+# ECMAScript regular expressions (JavaScript's `new RegExp`), matched over UTF-16 like V8 does.
 regress = { version = "0.12", features = ["utf16"] }
 reqwest = { version = "0.12", default-features = false, features = ["json"] }
 serde = { version = "1", features = ["derive"] }
