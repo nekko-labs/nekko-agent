@@ -58,7 +58,7 @@ async fn signed_out_end_to_end() {
     let mut mapper = Mapper::new("smoke");
     let mut out = Vec::new();
     let input = TurnInput {
-        content: json!("Reply with the single word: hi"),
+        content: Some(json!("Reply with the single word: hi")),
         cancel: &cancel,
         steering: &steering,
         interrupt_grace: Duration::from_secs(5),

@@ -100,6 +100,7 @@ Full docs in one file: https://nekkoagent.com/llms-full.txt. Each page is also a
 - [Subscription sign-in](https://nekkoagent.com/docs/subscriptions.md): Use your ChatGPT subscription instead of a metered API key, and how Claude works in Nekko Agent.
 - [Usage limits and prices](https://nekkoagent.com/docs/usage-limits.md): Where the usage numbers and price estimates come from, and what they mean.
 - [Phone remote control](https://nekkoagent.com/docs/remote.md): Drive the agent on your computer from your phone, end-to-end encrypted.
+- [Encrypted sync](https://nekkoagent.com/docs/sync-encryption.md): How Pro and Team sync your chats without Nekko Cloud being able to read them.
 - [CLI and MCP](https://nekkoagent.com/docs/cli.md): Use Nekko Agent from the terminal, or as an MCP server inside Claude Code, Codex and Cursor.
 - [Automations](https://nekkoagent.com/docs/automations.md): Ready-made automations, run results and notifications, and pausing them all.
 - [Workflow runs](https://nekkoagent.com/docs/workflows.md): Pick a workflow's model, keep it on local models, and control what its unattended runs may do.

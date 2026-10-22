@@ -218,6 +218,10 @@ struct Shared {
     last_error: Arc<Mutex<Option<String>>>,
     /// A workflow run's chat (`unattended`): nobody is there to answer.
     unattended: Unattended,
+    /// The turn is under way: a Claude Agent turn only once it has the
+    /// chat's Claude Code child (it may wait for a wake-up turn to end), so
+    /// a permission prompt goes to the turn that is reading that child.
+    active: std::sync::atomic::AtomicBool,
 }
 
 /// What an unattended turn tracks: its tool access (`toolAccess`,
@@ -313,6 +317,9 @@ pub struct Turns {
     /// Claude Agent chats' Claude Code children (harness.rs).
     pub harness: Arc<crate::harness::Harness>,
     running: Mutex<HashMap<String, Arc<Shared>>>,
+    /// The last Claude Agent turn's spec and hub by chat, for the turn a
+    /// wake-up of its Claude Code child starts ([`Turns::wake`]).
+    wakes: Mutex<HashMap<String, (Value, Hub)>>,
     pub pending: Pending,
     /// How each queued turn the daemon started as the next of a chain ends,
     /// for a `chat:send` the daemon admitted, which waits for the whole chain.
@@ -332,6 +339,10 @@ pub struct Turns {
 pub type Preparer = Arc<dyn Fn(Value) -> Pin<Box<dyn Future<Output = Option<Value>> + Send>> + Send + Sync>;
 
 static STEER_SEQ: AtomicU64 = AtomicU64::new(0);
+
+/// How long a permission prompt from Claude Code waits for the turn that
+/// reads its child to get under way.
+const WAKE_WAIT: Duration = Duration::from_secs(15);
 
 impl Turns {
     pub fn new(
@@ -360,6 +371,7 @@ impl Turns {
             agent_logs: None,
             harness: crate::harness::Harness::new(),
             running: Mutex::default(),
+            wakes: Mutex::default(),
             pending: Pending::default(),
             chained: Mutex::default(),
             watched: Mutex::default(),
@@ -420,8 +432,22 @@ impl Turns {
         }
     }
 
+    /// The session's turn here: the one under way, else one waiting to start.
     fn by_session(&self, session_id: &str) -> Option<Arc<Shared>> {
-        lock(&self.running).values().find(|s| s.session_id == session_id).cloned()
+        let running = lock(&self.running);
+        let mut waiting = None;
+        for s in running.values().filter(|s| s.session_id == session_id) {
+            if s.active.load(Ordering::SeqCst) {
+                return Some(s.clone());
+            }
+            waiting.get_or_insert_with(|| s.clone());
+        }
+        waiting
+    }
+
+    /// The session's turn that is under way, if any.
+    fn active_by_session(&self, session_id: &str) -> Option<Arc<Shared>> {
+        self.by_session(session_id).filter(|s| s.active.load(Ordering::SeqCst))
     }
 
     /// Keep how a chat's queued turns end while a `chat:send` waits on its chain.
@@ -444,6 +470,17 @@ impl Turns {
         lock(&self.chained).remove(turn_id)
     }
 
+    /// Watch a chat's Claude Code child until the next turn takes it, and
+    /// make what it starts on its own meanwhile a turn ([`Turns::wake`]).
+    fn watch_idle(self: &Arc<Self>, session_id: &str) {
+        let (me, id) = (self.clone(), session_id.to_string());
+        tokio::spawn(async move {
+            if me.harness.idle(&id).await == crate::harness::Idle::Woke {
+                me.wake(&id);
+            }
+        });
+    }
+
     /// `turn:alive`: whether this turn is still being driven here.
     pub fn is_running(&self, turn_id: &str) -> bool {
         lock(&self.running).contains_key(turn_id)
@@ -464,12 +501,16 @@ impl Turns {
         true
     }
 
-    /// `chat:abort`: stop this session's turn here, if it has one.
+    /// `chat:abort`: stop this session's turns here (a Claude Agent chat's
+    /// may have one waiting behind a wake-up), if it has any.
     pub fn abort_session(&self, session_id: &str) -> bool {
-        let Some(shared) = self.by_session(session_id) else { return false };
-        shared.cancel.cancel();
+        let turns: Vec<Arc<Shared>> =
+            lock(&self.running).values().filter(|s| s.session_id == session_id).cloned().collect();
+        for shared in &turns {
+            shared.cancel.cancel();
+        }
         self.pending.release(session_id);
-        true
+        !turns.is_empty()
     }
 
     /// `turn:steer` / `chat:steer`: a user message for this session's running
@@ -527,10 +568,21 @@ impl Turns {
     /// Decided by the chat's live mode (harness::decide); a prompt that needs
     /// a person waits in the chat's approvals like any tool call. Anything
     /// that cannot be decided is denied: permissions fail closed.
-    pub async fn claude_code_approve(&self, token: &str, prompt: &Value) -> Option<Value> {
+    pub async fn claude_code_approve(self: &Arc<Self>, token: &str, prompt: &Value) -> Option<Value> {
         let entry = self.harness.bridge_session(token)?;
         let deny = |message: &str| json!({ "behavior": "deny", "message": message });
-        let Some(shared) = self.by_session(&entry.session_id) else {
+        // Claude Code asks between Nekko turns when a background sub-agent
+        // needs permission: that work becomes a turn of its own to ask in.
+        if self.active_by_session(&entry.session_id).is_none() {
+            self.wake(&entry.session_id);
+        }
+        let mut shared = self.active_by_session(&entry.session_id);
+        let until = tokio::time::Instant::now() + WAKE_WAIT;
+        while shared.is_none() && tokio::time::Instant::now() < until && self.by_session(&entry.session_id).is_some() {
+            tokio::time::sleep(Duration::from_millis(25)).await;
+            shared = self.active_by_session(&entry.session_id);
+        }
+        let Some(shared) = shared else {
             return Some(deny("No Nekko Agent turn is running for this chat, so nothing can approve this."));
         };
         let tool = str_at(prompt, "tool_name").or_else(|| str_at(prompt, "toolName")).unwrap_or_default().to_string();
@@ -589,6 +641,29 @@ impl Turns {
     /// it here, and the last error it reported), with its id: a `spawn_agent`
     /// child the parent turn waits on.
     pub(crate) fn launch(self: &Arc<Self>, hub: Hub, spec: Value) -> Result<(String, Ended), String> {
+        self.launch_turn(hub, spec, false)
+    }
+
+    /// A turn for the work a chat's Claude Code child started on its own
+    /// (a background command or sub-agent finished, or one of them asks for
+    /// permission) while no turn reads it: the last Claude Agent turn's spec,
+    /// with no message. False when the chat has a turn already (that turn
+    /// reads the child next) or never ran one here.
+    pub(crate) fn wake(self: &Arc<Self>, session_id: &str) -> bool {
+        let Some((mut spec, hub)) = lock(&self.wakes).get(session_id).cloned() else { return false };
+        spec["turnId"] = json!(crate::admission::daemon_turn_id());
+        spec["wake"] = json!(true);
+        if let Some(o) = spec.as_object_mut() {
+            o.shift_remove("queued");
+        }
+        if let Some(opts) = spec.get_mut("opts").and_then(Value::as_object_mut) {
+            opts.retain(|k, _| ["sessionId", "providerId", "modelId"].contains(&k.as_str()));
+            opts.insert("text".into(), json!(""));
+        }
+        self.launch_turn(hub, spec, true).is_ok()
+    }
+
+    fn launch_turn(self: &Arc<Self>, hub: Hub, spec: Value, wake: bool) -> Result<(String, Ended), String> {
         let store = self.store.clone().ok_or("chat:turn needs the daemon to know the data directory")?;
         let turn_id = str_at(&spec, "turnId").ok_or("chat:turn needs a turnId")?.to_string();
         let opts = spec.get("opts").cloned().ok_or("chat:turn needs the send options")?;
@@ -596,6 +671,7 @@ impl Turns {
         if !nekko_store::valid_id(&session_id) {
             return Err("Session not found.".into());
         }
+        let claude_code = spec.pointer("/facts/provider/kind").and_then(Value::as_str) == Some("claude-code");
         let (tx, rx) = mpsc::unbounded_channel();
         let shared = Arc::new(Shared {
             session_id,
@@ -605,14 +681,36 @@ impl Turns {
             default_mode: spec.pointer("/settings/defaultChatMode").and_then(Value::as_str).map(str::to_string),
             last_error: Arc::default(),
             unattended: Unattended::default(),
+            active: std::sync::atomic::AtomicBool::new(!claude_code),
         });
-        lock(&self.running).insert(turn_id.clone(), shared.clone());
+        {
+            let mut running = lock(&self.running);
+            if wake && running.values().any(|s| s.session_id == shared.session_id) {
+                return Err("This chat has a turn already.".into());
+            }
+            running.insert(turn_id.clone(), shared.clone());
+        }
+        if claude_code && !wake {
+            lock(&self.wakes).insert(shared.session_id.clone(), (spec.clone(), hub.clone()));
+        }
         let me = self.clone();
         let (ended_tx, ended_rx) = oneshot::channel();
         let id = turn_id.clone();
         tokio::spawn(async move {
-            let summary = me.run_turn(&hub, store.clone(), &spec, &shared, rx).await;
+            // A Claude Agent turn waits for the chat's child (a wake-up turn
+            // may be reading it) before it reads or writes the chat.
+            let slot = if claude_code {
+                let slot = me.harness.take(&shared.session_id).await;
+                shared.active.store(true, Ordering::SeqCst);
+                Some(slot)
+            } else {
+                None
+            };
+            let summary = me.run_turn(&hub, store.clone(), &spec, &shared, rx, slot).await;
             lock(&me.running).remove(&turn_id);
+            if claude_code {
+                me.watch_idle(&shared.session_id);
+            }
             me.pending.release(&shared.session_id);
             let summary = me.after_turn(&hub, &store, &spec, &turn_id, summary).await;
             // The chat's agent terminal stops showing a running command.
@@ -742,6 +840,7 @@ impl Turns {
         spec: &Value,
         shared: &Arc<Shared>,
         rx: mpsc::UnboundedReceiver<Out>,
+        slot: Option<tokio::sync::OwnedMutexGuard<crate::harness::Slot>>,
     ) -> Value {
         let opts = &spec["opts"];
         let settings = &spec["settings"];
@@ -852,9 +951,12 @@ impl Turns {
             return json!({ "early": true });
         }
 
-        // The user's input, saved before the reply starts.
+        // The user's input, saved before the reply starts. A wake-up has none.
+        let wake = spec.get("wake") == Some(&Value::Bool(true));
         let mut session_value = loaded;
-        turn::apply_turn_input(&mut session_value, opts, now_ms());
+        if !wake {
+            turn::apply_turn_input(&mut session_value, opts, now_ms());
+        }
         let session = Arc::new(Mutex::new(session_value));
         let queued = spec.get("queued").filter(|q| !q.is_null()).cloned();
         if let Some(q) = queued {
@@ -926,7 +1028,11 @@ impl Turns {
                 .map(str::to_string)
                 .or_else(|| shared.default_mode.clone())
                 .unwrap_or_else(|| "guardrails".into());
-            self.claude_code_turn(shared, &store, &session, incognito, &workspaces, opts, &mode).await;
+            let slot = match slot {
+                Some(slot) => slot,
+                None => self.harness.take(&session_id).await,
+            };
+            self.claude_code_turn(shared, slot, &store, &session, incognito, &workspaces, opts, &mode, wake).await;
             return self.end_turn(&store, shared, &session, forwarder, incognito).await;
         }
 
@@ -1027,16 +1133,20 @@ impl Turns {
     /// resumed) runs it, and its stream becomes this turn's events and
     /// transcript, checkpointed as a Nekko turn is. Stop and Steer reach it
     /// through the turn's own cancel and steering (nekko_harness::run_turn).
+    /// A `wake` turn writes nothing: it reads what the child started on its
+    /// own, up to its `result`.
     #[allow(clippy::too_many_arguments)]
     async fn claude_code_turn(
         self: &Arc<Self>,
         shared: &Arc<Shared>,
+        mut slot: tokio::sync::OwnedMutexGuard<crate::harness::Slot>,
         store: &Arc<SessionStore>,
         session: &Arc<Mutex<Value>>,
         incognito: bool,
         workspaces: &[Value],
         opts: &Value,
         mode: &str,
+        wake: bool,
     ) {
         use crate::harness::{BRIDGE_SERVER, BRIDGE_TOOL, INTERRUPT_GRACE, Wanted, permission_mode};
         use nekko_harness::{Mapped, Mapper, SessionStart, TurnExit, TurnInput};
@@ -1052,9 +1162,10 @@ impl Turns {
         let fail = |message: &str, history: &[Value]| {
             send(json!({ "type": "error", "sessionId": session_id, "message": message }), history);
         };
-        let Some(user) = history.iter().rev().find(|m| str_at(m, "role") == Some("user")).cloned() else {
+        let user = history.iter().rev().find(|m| str_at(m, "role") == Some("user")).cloned();
+        if user.is_none() && !wake {
             return fail("There is no message to send.", &history);
-        };
+        }
         let paths: Vec<PathBuf> =
             workspaces.iter().filter_map(|w| str_at(w, "path")).filter(|p| !p.is_empty()).map(PathBuf::from).collect();
         let Some((cwd, rest)) = paths.split_first() else {
@@ -1067,10 +1178,12 @@ impl Turns {
             permission_mode: permission_mode(mode),
         };
 
-        // One turn per chat at a time: the slot stays locked until the end.
-        let slot = self.harness.slot(&session_id);
-        let mut slot = slot.lock().await;
+        // One turn per chat at a time: the slot stays taken until the end.
         let reuse = slot.session.as_mut().is_some_and(|s| s.alive() && wanted.matches(&s.spec));
+        if wake && !reuse {
+            // The child that woke is gone or out of date: nothing to read.
+            return;
+        }
         if !reuse {
             slot.session = None;
             let bin = match nekko_harness::locate(None).await {
@@ -1102,7 +1215,7 @@ impl Turns {
         let resumed = matches!(child.spec.session, SessionStart::Resume(_));
         let mut mapper = Mapper::new(session_id.clone());
         let input = TurnInput {
-            content: nekko_harness::user_content(&user),
+            content: if wake { None } else { user.as_ref().map(nekko_harness::user_content) },
             cancel: &shared.cancel,
             steering: &shared.steering,
             interrupt_grace: INTERRUPT_GRACE,

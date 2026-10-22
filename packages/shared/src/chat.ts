@@ -297,6 +297,12 @@ export interface Session {
   disabledConnectors?: string[];
   /** Offline: no tool calls, no connectors/internet (local models only). */
   offline?: boolean;
+  /**
+   * Cloud only: turns run on cloud providers, never a model server on this
+   * machine (see `cloudProviderAllowed`). The opposite of `offline`; a chat is
+   * never both.
+   */
+  cloudOnly?: boolean;
   /** Incognito: don't persist the transcript or touch memory. */
   incognito?: boolean;
   /** Privacy Shield: what this chat hides from a cloud model (see privacy.ts). */

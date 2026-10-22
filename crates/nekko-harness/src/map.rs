@@ -15,6 +15,7 @@
 //! | `system/api_retry` | `retry` |
 //! | `system/permission_denied` | the call's `tool_result` marked `denied` |
 //! | `assistant` with `is_api_error_message` | `error` |
+//! | `command_lifecycle` (a message Nekko wrote, queued / started / completed), its `isReplay` echo | [`Mapped::Command`] |
 //! | `result` | [`Mapped::End`]; then [`Mapper::finish`] gives `usage` + `done`, or `error` |
 //! | main-thread `assistant` `message.usage`, `result.modelUsage[model].contextWindow` | [`TurnEnd::context`] (what the context gauge shows) |
 //! | `result` `terminal_reason: aborted_*` | an interrupted turn, not a failure |
@@ -80,6 +81,9 @@ pub enum Mapped {
     ControlResponse { request_id: String, error: Option<String> },
     /// A control request from Claude Code. Nekko asks for none, so it is declined.
     ControlRequest { request_id: String, subtype: String },
+    /// Where a message Nekko wrote stands (`queued`, `started`, `completed`),
+    /// by the `uuid` it was written with.
+    Command { uuid: String, state: String },
     /// `result`: Claude Code's turn is over.
     End(TurnEnd),
     /// A stdout line that was not JSON (kept for an exit's diagnostics).
@@ -318,6 +322,9 @@ impl Mapper {
                 self.stream_event(v.get("event").unwrap_or(&Value::Null), &mut out)
             }
             Some("assistant") => self.assistant(v, parent, &mut out),
+            // A message Nekko wrote, echoed as Claude Code takes it up.
+            Some("user") if v.get("isReplay") == Some(&Value::Bool(true)) => out
+                .push(Mapped::Command { uuid: str_at(v, "uuid").unwrap_or_default().into(), state: "started".into() }),
             Some("user") => self.user(v, parent, &mut out),
             Some("control_response") => {
                 let r = v.get("response").unwrap_or(&Value::Null);
@@ -331,6 +338,10 @@ impl Mapper {
             Some("control_request") => out.push(Mapped::ControlRequest {
                 request_id: str_at(v, "request_id").unwrap_or_default().into(),
                 subtype: v.pointer("/request/subtype").and_then(Value::as_str).unwrap_or_default().into(),
+            }),
+            Some("command_lifecycle") => out.push(Mapped::Command {
+                uuid: str_at(v, "command_uuid").unwrap_or_default().into(),
+                state: str_at(v, "state").unwrap_or_default().into(),
             }),
             Some("result") => self.result(v, &mut out),
             _ => {}
