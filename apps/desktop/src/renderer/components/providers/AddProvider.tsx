@@ -142,6 +142,9 @@ export function AddProvider({
   const [useApiKey, setUseApiKey] = useState(apiKeyOnly);
   // Free-text ChatGPT model override, for model ids not in the curated list.
   const [customModelId, setCustomModelId] = useState('');
+  // Anthropic workspace for an organization-level API key; a key created
+  // inside a workspace leaves it blank.
+  const [workspaceId, setWorkspaceId] = useState('');
   const oauthProvider = apiKeyOnly ? undefined : SUBSCRIPTION_KINDS[kind];
   // Anthropic's key field waits behind the disclosure only while a Claude sign-in sits beside it.
   const keyBehindSignIn = kind === 'anthropic' && oauthProvider !== undefined;
@@ -154,6 +157,7 @@ export function AddProvider({
     setUseApiKey(false);
     setApiKey('');
     setCustomModelId('');
+    setWorkspaceId('');
   };
 
   const [testing, setTesting] = useState(false);
@@ -186,6 +190,7 @@ export function AddProvider({
     label: label || PROVIDER_DEFAULTS[kind].label,
     baseUrl,
     apiKey: apiKey || undefined,
+    workspaceId: kind === 'anthropic' ? workspaceId.trim() || undefined : undefined,
     enabled: true,
   });
 
@@ -280,6 +285,20 @@ export function AddProvider({
           <label className="col-span-2 text-[12px] font-medium text-ink-soft">
             API key{optionalKey && !PROVIDER_DEFAULTS[kind].needsKey ? ' (optional)' : ''}
             <input className="input mt-1" type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="sk-…" />
+          </label>
+        )}
+        {kind === 'anthropic' && (!keyBehindSignIn || useApiKey) && (
+          <label className="col-span-2 text-[12px] font-medium text-ink-soft">
+            Workspace ID (optional)
+            <input
+              className="input mt-1 text-[12px]"
+              value={workspaceId}
+              onChange={(e) => setWorkspaceId(e.target.value)}
+              placeholder="wrkspc_…"
+            />
+            <span className="mt-1 block font-normal text-ink-faint">
+              Only for an organization-level key. A key created inside a workspace needs none.
+            </span>
           </label>
         )}
         {keyBehindSignIn && (

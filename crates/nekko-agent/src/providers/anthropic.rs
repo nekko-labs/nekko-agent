@@ -127,7 +127,17 @@ impl AnthropicProvider {
             let bearer = format!("Bearer {key}");
             return headers(&[("Content-Type", "application/json"), ("Authorization", &bearer)]);
         }
-        headers(&[("Content-Type", "application/json"), ("x-api-key", key), ("anthropic-version", "2023-06-01")])
+        let mut out =
+            headers(&[("Content-Type", "application/json"), ("x-api-key", key), ("anthropic-version", "2023-06-01")]);
+        if let Some(workspace) = self.workspace_id() {
+            out.push(("anthropic-workspace-id".into(), workspace.into()));
+        }
+        out
+    }
+
+    /// The workspace an organization-level key bills to, when one is set.
+    fn workspace_id(&self) -> Option<&str> {
+        self.config.workspace_id.as_deref().map(js::trim).filter(|w| !w.is_empty())
     }
 
     /// The request `chat` sends with a given sampling shape.
@@ -219,7 +229,10 @@ impl AnthropicProvider {
             match next {
                 Some(n) => shape = n,
                 None => {
-                    let message = format!("anthropic {}: {}", res.status, js::slice16(&text, 200));
+                    let message = match workspace_error(res.status, &text) {
+                        Some(hint) => hint.to_string(),
+                        None => format!("anthropic {}: {}", res.status, js::slice16(&text, 200)),
+                    };
                     return Err(ProviderError::http(res.status, message).into());
                 }
             }
@@ -341,6 +354,15 @@ impl AnthropicProvider {
             })
             .collect())
     }
+}
+
+/// What the user reads when an organization-level key is sent without a
+/// workspace.
+const WORKSPACE_HINT: &str = "This Anthropic API key belongs to your organization, not to a workspace, so Anthropic needs to know which workspace to use. Add the workspace's ID (Claude Console, Settings, Workspaces) in the Workspace ID field of the Anthropic provider, or use a key created inside a workspace.";
+
+/// The hint above when a 400 says the key is not scoped to a workspace.
+fn workspace_error(status: u16, body: &str) -> Option<&'static str> {
+    (status == 400 && body.contains("not scoped to a workspace")).then_some(WORKSPACE_HINT)
 }
 
 /// `data:[^;]+;base64,(.+)` split into media type and payload, or `None`
@@ -470,6 +492,10 @@ fn non_empty_content(content: &Value) -> Option<Value> {
 #[cfg(test)]
 #[path = "anthropic_image_tests.rs"]
 mod image_tests;
+
+#[cfg(test)]
+#[path = "anthropic_workspace_tests.rs"]
+mod workspace_tests;
 
 /// How an event ends the stream early.
 enum End {
