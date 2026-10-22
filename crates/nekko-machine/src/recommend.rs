@@ -256,6 +256,9 @@ pub struct Choice {
     pub owner: String,
     pub repo: String,
     pub quant: String,
+    /// The label `engine:downloadModel` takes for this quant: the catalog's,
+    /// which drops prefixes such as `UD-` (`...-UD-Q4_K_M.gguf` is `Q4_K_M`).
+    pub download_label: String,
     /// Every file to download: the weights (all shards) and the projector when the task needs it.
     pub files: Vec<String>,
     pub download_bytes: f64,
@@ -442,6 +445,7 @@ fn choice(feed: &Feed, task: &Task, model: &Model, quant: &Quant, target: &Targe
         owner: model.owner.clone(),
         repo: model.repo.clone(),
         quant: quant.label.clone(),
+        download_label: download_label(&quant.files[0]),
         files,
         download_bytes: weights,
         memory_bytes: memory.round(),
@@ -452,6 +456,38 @@ fn choice(feed: &Feed, task: &Task, model: &Model, quant: &Quant, target: &Targe
         speed,
         too_slow,
     }
+}
+
+/// The catalog's label for a quant file (`quant_label` in `nekko-engine`'s
+/// `catalog.rs`): shard suffix dropped, then the quant name ending the file
+/// name, upper-cased; the bare name when there is none.
+pub fn download_label(file: &str) -> String {
+    let base = file.rsplit('/').next().unwrap_or(file);
+    let lower = base.to_lowercase();
+    let mut stem = &base[..lower.rfind(".gguf").unwrap_or(base.len())];
+    // `-00001-of-00003`
+    let b = stem.as_bytes();
+    if b.len() > 15 && b[b.len() - 15] == b'-' && stem[stem.len() - 9..].starts_with("-of-") {
+        let digits = |s: &str| s.len() == 5 && s.bytes().all(|c| c.is_ascii_digit());
+        if digits(&stem[stem.len() - 14..stem.len() - 9]) && digits(&stem[stem.len() - 5..]) {
+            stem = &stem[..stem.len() - 15];
+        }
+    }
+    // The last `-`, `_` or `.` segment that names a quant, with what follows it.
+    let is_quant = |tail: &str| {
+        let t = tail.to_uppercase();
+        let numbered = |prefix: &str| {
+            t.strip_prefix(prefix).is_some_and(|r| r.starts_with(|c: char| c.is_ascii_digit()))
+                && t.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_')
+        };
+        numbered("IQ") || numbered("Q") || matches!(t.as_str(), "BF16" | "F16" | "F32") || t.starts_with("MXFP4")
+    };
+    for (i, c) in stem.char_indices() {
+        if matches!(c, '-' | '_' | '.') && is_quant(&stem[i + 1..]) {
+            return stem[i + 1..].to_uppercase();
+        }
+    }
+    stem.to_string()
 }
 
 fn tokens_per_second(o: &Choice) -> f64 {

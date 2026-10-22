@@ -276,8 +276,8 @@ export function ModelLibrary({
 
       {models.length === 0 ? (
         <p className="mt-3 rounded-xl border border-dashed px-4 py-3.5 text-[12.5px] text-ink-faint" style={{ borderColor: 'var(--line)' }}>
-          Nothing here yet. Pick a recommendation below to download one, open <strong>Folders</strong> to point at a
-          folder another app already fills, or add a GGUF you have.
+          Nothing here yet. Download one of the picks for this machine above or a model from the list, open{' '}
+          <strong>Folders</strong> to point at a folder another app already fills, or add a GGUF you have.
         </p>
       ) : visible.length === 0 ? (
         <p className="mt-3 text-[12px] text-ink-faint">
