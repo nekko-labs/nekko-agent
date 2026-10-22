@@ -1,6 +1,7 @@
 //! The real daemon serves the machine channels itself: with no TS backend at
-//! all, `gpu:stats`, `system:stats` and `machine:readiness` still answer, and
-//! `resource:queue` reads its gate from the data directory.
+//! all, `gpu:stats`, `system:stats`, `machine:readiness`, `machine:profile` and
+//! `machine:recommendations` still answer, and `resource:queue` reads its gate
+//! from the data directory.
 
 use serde_json::{Value, json};
 use std::io::{BufRead, BufReader};
@@ -57,7 +58,14 @@ async fn machine_channels_are_served_without_a_backend() {
 
     let (_, info) = post(d.port, "daemon:info", json!([])).await;
     let owned = info["owned"].as_array().unwrap();
-    for c in ["gpu:stats", "system:stats", "machine:readiness", "resource:queue"] {
+    for c in [
+        "gpu:stats",
+        "system:stats",
+        "machine:readiness",
+        "machine:profile",
+        "machine:recommendations",
+        "resource:queue",
+    ] {
         assert!(owned.iter().any(|o| o == c), "{c} in {info}");
     }
 
@@ -82,6 +90,28 @@ async fn machine_channels_are_served_without_a_backend() {
     assert!(report["catalogVersion"].is_string(), "{report}");
     // The data dir's volume was measured.
     assert!(report["combined"]["diskFreeBytes"].as_f64().unwrap() > 0.0, "{report}");
+
+    // The profile is probed once and saved; the next answer is the saved one.
+    let (status, profile) = post(d.port, "machine:profile", json!([])).await;
+    assert_eq!(status, 200, "{profile}");
+    assert_eq!(profile["format"], json!(1), "{profile}");
+    assert!(profile["ramBytes"].as_f64().unwrap() > 0.0, "{profile}");
+    assert!(profile["diskFreeBytes"].as_f64().unwrap() > 0.0, "{profile}");
+    assert!(dir.join("machine-profile.json").is_file());
+    let (_, again) = post(d.port, "machine:profile", json!([])).await;
+    assert_eq!(again["probedAt"], profile["probedAt"], "answered from the saved profile");
+    let (_, fresh) = post(d.port, "machine:profile", json!([{ "refresh": true }])).await;
+    assert!(fresh["probedAt"].as_u64() >= profile["probedAt"].as_u64(), "{fresh}");
+
+    // Whatever this machine is, every task gets a pick from the bundled feed.
+    let (status, recs) = post(d.port, "machine:recommendations", json!([])).await;
+    assert_eq!(status, 200, "{recs}");
+    assert!(recs["feedVersion"].is_string(), "{recs}");
+    let tasks = recs["tasks"].as_array().unwrap();
+    assert_eq!(tasks.len(), 5, "{recs}");
+    for t in tasks {
+        assert!(t["pick"]["modelId"].is_string(), "{t}");
+    }
 
     let (status, body) = post(d.port, "resource:queue", json!(["list", {}])).await;
     assert_eq!((status, body["error"].clone()), (400, json!("Resource queue experiment is disabled")));

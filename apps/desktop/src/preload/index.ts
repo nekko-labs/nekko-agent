@@ -125,6 +125,8 @@ const api: NekkoApi = {
   cliInstallStatus: () => inv(IpcChannels.cliInstallStatus),
   cliInstall: () => inv(IpcChannels.cliInstall),
   machineReadiness: (language) => inv(IpcChannels.machineReadiness, language),
+  machineProfile: (opts) => inv(IpcChannels.machineProfile, opts),
+  machineRecommendations: (opts) => inv(IpcChannels.machineRecommendations, opts),
   getGpuStats: () => inv(IpcChannels.gpuStats),
   getSystemStats: () => inv(IpcChannels.systemStats),
 

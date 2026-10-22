@@ -1,0 +1,1061 @@
+{
+ "format": 1,
+ "version": "2026-10-22.1",
+ "tasks": [
+  {
+   "id": "chat",
+   "label": "Chat",
+   "contextTokens": 16384,
+   "minTokensPerSecond": 20,
+   "candidates": [
+    "qwen3.8-27b",
+    "gpt-oss-120b",
+    "qwen3.6-35b-a3b",
+    "gemma-4-26b-a4b",
+    "gemma-4-12b",
+    "qwen3.5-9b",
+    "gemma-4-e4b",
+    "qwen3.5-4b",
+    "qwen3.5-2b"
+   ]
+  },
+  {
+   "id": "code",
+   "label": "Coding",
+   "contextTokens": 32768,
+   "minTokensPerSecond": 25,
+   "candidates": [
+    "qwen3-coder-next",
+    "devstral-small-2-24b",
+    "qwen3-coder-30b-a3b",
+    "qwen3.5-9b",
+    "qwen3.5-4b"
+   ]
+  },
+  {
+   "id": "router",
+   "label": "Fast routing and classification",
+   "contextTokens": 4096,
+   "minTokensPerSecond": 60,
+   "candidates": [
+    "qwen3.5-2b",
+    "qwen3.5-0.8b"
+   ]
+  },
+  {
+   "id": "embedding",
+   "label": "Embeddings",
+   "contextTokens": 2048,
+   "candidates": [
+    "qwen3-embedding-0.6b",
+    "embeddinggemma-300m",
+    "bge-small-en-v1.5"
+   ]
+  },
+  {
+   "id": "vision",
+   "label": "Vision",
+   "contextTokens": 16384,
+   "minTokensPerSecond": 15,
+   "projector": true,
+   "candidates": [
+    "gemma-4-26b-a4b",
+    "qwen3.5-9b",
+    "gemma-4-12b",
+    "gemma-4-e4b",
+    "qwen3.5-4b"
+   ]
+  }
+ ],
+ "models": [
+  {
+   "id": "gpt-oss-120b",
+   "repo": "ggml-org/gpt-oss-120b-GGUF",
+   "name": "gpt-oss 120B",
+   "owner": "OpenAI",
+   "maxContext": 131072,
+   "geometry": {
+    "layers": 36,
+    "headDim": 64
+   },
+   "kv": {
+    "fullBytesPerToken": 36864,
+    "swaBytesPerToken": 36864,
+    "slidingWindow": 128
+   },
+   "experts": {
+    "total": 128,
+    "used": 4
+   },
+   "quants": [
+    {
+     "label": "MXFP4",
+     "files": [
+      "gpt-oss-120b-MXFP4.gguf"
+     ],
+     "sizeBytes": 63387346208,
+     "bytesPerToken": 3594210048
+    }
+   ]
+  },
+  {
+   "id": "qwen3.8-27b",
+   "repo": "unsloth/Qwen3.8-27B-GGUF",
+   "name": "Qwen3.8 27B",
+   "owner": "Qwen",
+   "maxContext": 262144,
+   "geometry": {
+    "layers": 65,
+    "headDim": 256
+   },
+   "kv": {
+    "fullBytesPerToken": 69632
+   },
+   "quants": [
+    {
+     "label": "Q8_0",
+     "files": [
+      "Qwen3.8-27B-Q8_0.gguf"
+     ],
+     "sizeBytes": 29047086048,
+     "bytesPerToken": 27685228544
+    },
+    {
+     "label": "UD-Q4_K_M",
+     "files": [
+      "Qwen3.8-27B-UD-Q4_K_M.gguf"
+     ],
+     "sizeBytes": 16464440224,
+     "bytesPerToken": 15738281984
+    }
+   ]
+  },
+  {
+   "id": "qwen3.6-35b-a3b",
+   "repo": "unsloth/Qwen3.6-35B-A3B-GGUF",
+   "name": "Qwen3.6 35B A3B",
+   "owner": "Qwen",
+   "maxContext": 262144,
+   "geometry": {
+    "layers": 40,
+    "headDim": 256
+   },
+   "kv": {
+    "fullBytesPerToken": 20480
+   },
+   "experts": {
+    "total": 256,
+    "used": 8
+   },
+   "quants": [
+    {
+     "label": "Q8_0",
+     "files": [
+      "Qwen3.6-35B-A3B-Q8_0.gguf"
+     ],
+     "sizeBytes": 36903140320,
+     "bytesPerToken": 3195832832
+    },
+    {
+     "label": "UD-Q4_K_M",
+     "files": [
+      "Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"
+     ],
+     "sizeBytes": 22134528992,
+     "bytesPerToken": 2626185728
+    }
+   ]
+  },
+  {
+   "id": "gemma-4-26b-a4b",
+   "repo": "unsloth/gemma-4-26B-A4B-it-GGUF",
+   "name": "Gemma 4 26B A4B",
+   "owner": "Google",
+   "maxContext": 262144,
+   "geometry": {
+    "layers": 30,
+    "headDim": 512
+   },
+   "kv": {
+    "fullBytesPerToken": 20480,
+    "swaBytesPerToken": 204800,
+    "slidingWindow": 1024
+   },
+   "experts": {
+    "total": 128,
+    "used": 8
+   },
+   "quants": [
+    {
+     "label": "Q8_0",
+     "files": [
+      "gemma-4-26B-A4B-it-Q8_0.gguf"
+     ],
+     "sizeBytes": 26859861728,
+     "bytesPerToken": 4095248256
+    },
+    {
+     "label": "UD-Q4_K_M",
+     "files": [
+      "gemma-4-26B-A4B-it-UD-Q4_K_M.gguf"
+     ],
+     "sizeBytes": 16947541728,
+     "bytesPerToken": 3475728256
+    }
+   ],
+   "projector": {
+    "file": "mmproj-F16.gguf",
+    "sizeBytes": 1193058784
+   }
+  },
+  {
+   "id": "gemma-4-12b",
+   "repo": "unsloth/gemma-4-12b-it-GGUF",
+   "name": "Gemma 4 12B",
+   "owner": "Google",
+   "maxContext": 262144,
+   "geometry": {
+    "layers": 48,
+    "headDim": 512
+   },
+   "kv": {
+    "fullBytesPerToken": 16384,
+    "swaBytesPerToken": 327680,
+    "slidingWindow": 1024
+   },
+   "quants": [
+    {
+     "label": "Q8_0",
+     "files": [
+      "gemma-4-12b-it-Q8_0.gguf"
+     ],
+     "sizeBytes": 12669647680,
+     "bytesPerToken": 12653823488
+    },
+    {
+     "label": "Q4_K_M",
+     "files": [
+      "gemma-4-12b-it-Q4_K_M.gguf"
+     ],
+     "sizeBytes": 7121861440,
+     "bytesPerToken": 7106037248
+    }
+   ],
+   "projector": {
+    "file": "mmproj-F16.gguf",
+    "sizeBytes": 175115840
+   }
+  },
+  {
+   "id": "qwen3.5-9b",
+   "repo": "unsloth/Qwen3.5-9B-GGUF",
+   "name": "Qwen3.5 9B",
+   "owner": "Qwen",
+   "maxContext": 262144,
+   "geometry": {
+    "layers": 32,
+    "headDim": 256
+   },
+   "kv": {
+    "fullBytesPerToken": 32768
+   },
+   "quants": [
+    {
+     "label": "Q8_0",
+     "files": [
+      "Qwen3.5-9B-Q8_0.gguf"
+     ],
+     "sizeBytes": 9527502048,
+     "bytesPerToken": 8435845120
+    },
+    {
+     "label": "Q4_K_M",
+     "files": [
+      "Qwen3.5-9B-Q4_K_M.gguf"
+     ],
+     "sizeBytes": 5680522464,
+     "bytesPerToken": 5097424896
+    }
+   ],
+   "projector": {
+    "file": "mmproj-F16.gguf",
+    "sizeBytes": 918166080
+   }
+  },
+  {
+   "id": "gemma-4-e4b",
+   "repo": "unsloth/gemma-4-E4B-it-GGUF",
+   "name": "Gemma 4 E4B",
+   "owner": "Google",
+   "maxContext": 131072,
+   "geometry": {
+    "layers": 42,
+    "headDim": 512
+   },
+   "kv": {
+    "fullBytesPerToken": 16384,
+    "swaBytesPerToken": 40960,
+    "slidingWindow": 512
+   },
+   "quants": [
+    {
+     "label": "Q8_0",
+     "files": [
+      "gemma-4-E4B-it-Q8_0.gguf"
+     ],
+     "sizeBytes": 8192953472,
+     "bytesPerToken": 5182393664
+    },
+    {
+     "label": "Q4_K_M",
+     "files": [
+      "gemma-4-E4B-it-Q4_K_M.gguf"
+     ],
+     "sizeBytes": 4977171584,
+     "bytesPerToken": 3023576384
+    }
+   ],
+   "projector": {
+    "file": "mmproj-F16.gguf",
+    "sizeBytes": 990372672
+   }
+  },
+  {
+   "id": "qwen3.5-4b",
+   "repo": "unsloth/Qwen3.5-4B-GGUF",
+   "name": "Qwen3.5 4B",
+   "owner": "Qwen",
+   "maxContext": 262144,
+   "geometry": {
+    "layers": 32,
+    "headDim": 256
+   },
+   "kv": {
+    "fullBytesPerToken": 32768
+   },
+   "quants": [
+    {
+     "label": "Q8_0",
+     "files": [
+      "Qwen3.5-4B-Q8_0.gguf"
+     ],
+     "sizeBytes": 4482403488,
+     "bytesPerToken": 4471435264
+    },
+    {
+     "label": "Q4_K_M",
+     "files": [
+      "Qwen3.5-4B-Q4_K_M.gguf"
+     ],
+     "sizeBytes": 2740937888,
+     "bytesPerToken": 2729969664
+    }
+   ],
+   "projector": {
+    "file": "mmproj-F16.gguf",
+    "sizeBytes": 672423616
+   }
+  },
+  {
+   "id": "qwen3.5-2b",
+   "repo": "unsloth/Qwen3.5-2B-GGUF",
+   "name": "Qwen3.5 2B",
+   "owner": "Qwen",
+   "maxContext": 262144,
+   "geometry": {
+    "layers": 24,
+    "headDim": 256
+   },
+   "kv": {
+    "fullBytesPerToken": 12288
+   },
+   "quants": [
+    {
+     "label": "Q8_0",
+     "files": [
+      "Qwen3.5-2B-Q8_0.gguf"
+     ],
+     "sizeBytes": 2012012800,
+     "bytesPerToken": 2001050880
+    },
+    {
+     "label": "Q4_K_M",
+     "files": [
+      "Qwen3.5-2B-Q4_K_M.gguf"
+     ],
+     "sizeBytes": 1280835840,
+     "bytesPerToken": 1269873920
+    }
+   ]
+  },
+  {
+   "id": "qwen3.5-0.8b",
+   "repo": "ggml-org/Qwen3.5-0.8B-GGUF",
+   "name": "Qwen3.5 0.8B",
+   "owner": "Qwen",
+   "maxContext": 262144,
+   "geometry": {
+    "layers": 25,
+    "headDim": 256
+   },
+   "kv": {
+    "fullBytesPerToken": 14336
+   },
+   "quants": [
+    {
+     "label": "Q8_0",
+     "files": [
+      "Qwen3.5-0.8B-Q8_0.gguf"
+     ],
+     "sizeBytes": 833592096,
+     "bytesPerToken": 822629632
+    }
+   ]
+  },
+  {
+   "id": "qwen3-coder-next",
+   "repo": "lmstudio-community/Qwen3-Coder-Next-GGUF",
+   "name": "Qwen3 Coder Next",
+   "owner": "Qwen",
+   "maxContext": 262144,
+   "geometry": {
+    "layers": 48,
+    "headDim": 256
+   },
+   "kv": {
+    "fullBytesPerToken": 24576
+   },
+   "experts": {
+    "total": 512,
+    "used": 10
+   },
+   "quants": [
+    {
+     "label": "Q8_0",
+     "files": [
+      "Qwen3-Coder-Next-Q8_0-00001-of-00003.gguf",
+      "Qwen3-Coder-Next-Q8_0-00002-of-00003.gguf",
+      "Qwen3-Coder-Next-Q8_0-00003-of-00003.gguf"
+     ],
+     "sizeBytes": 84812058080,
+     "bytesPerToken": 3938528256
+    },
+    {
+     "label": "Q4_K_M",
+     "files": [
+      "Qwen3-Coder-Next-Q4_K_M.gguf"
+     ],
+     "sizeBytes": 48487031968,
+     "bytesPerToken": 2411807744
+    }
+   ]
+  },
+  {
+   "id": "devstral-small-2-24b",
+   "repo": "lmstudio-community/Devstral-Small-2-24B-Instruct-2512-GGUF",
+   "name": "Devstral Small 2 24B",
+   "owner": "Mistral AI",
+   "maxContext": 393216,
+   "geometry": {
+    "layers": 40,
+    "headDim": 128
+   },
+   "kv": {
+    "fullBytesPerToken": 163840
+   },
+   "quants": [
+    {
+     "label": "Q8_0",
+     "files": [
+      "Devstral-Small-2-24B-Instruct-2512-Q8_0.gguf"
+     ],
+     "sizeBytes": 25055307904,
+     "bytesPerToken": 24333864960
+    },
+    {
+     "label": "Q4_K_M",
+     "files": [
+      "Devstral-Small-2-24B-Instruct-2512-Q4_K_M.gguf"
+     ],
+     "sizeBytes": 14334437504,
+     "bytesPerToken": 13948538880
+    }
+   ]
+  },
+  {
+   "id": "qwen3-coder-30b-a3b",
+   "repo": "unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF",
+   "name": "Qwen3 Coder 30B A3B",
+   "owner": "Qwen",
+   "maxContext": 262144,
+   "geometry": {
+    "layers": 48,
+    "headDim": 128
+   },
+   "kv": {
+    "fullBytesPerToken": 98304
+   },
+   "experts": {
+    "total": 128,
+    "used": 8
+   },
+   "quants": [
+    {
+     "label": "Q8_0",
+     "files": [
+      "Qwen3-Coder-30B-A3B-Instruct-Q8_0.gguf"
+     ],
+     "sizeBytes": 32483935392,
+     "bytesPerToken": 3269566464
+    },
+    {
+     "label": "Q4_K_M",
+     "files": [
+      "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf"
+     ],
+     "sizeBytes": 18556689568,
+     "bytesPerToken": 1919596544
+    }
+   ]
+  },
+  {
+   "id": "qwen3-embedding-0.6b",
+   "repo": "Qwen/Qwen3-Embedding-0.6B-GGUF",
+   "name": "Qwen3 Embedding 0.6B",
+   "owner": "Qwen",
+   "maxContext": 32768,
+   "geometry": {
+    "layers": 28,
+    "headDim": 128
+   },
+   "kv": {
+    "fullBytesPerToken": 114688
+   },
+   "quants": [
+    {
+     "label": "Q8_0",
+     "files": [
+      "Qwen3-Embedding-0.6B-Q8_0.gguf"
+     ],
+     "sizeBytes": 639150592,
+     "bytesPerToken": 633205056
+    }
+   ]
+  },
+  {
+   "id": "embeddinggemma-300m",
+   "repo": "ggml-org/embeddinggemma-300M-GGUF",
+   "name": "EmbeddingGemma 300M",
+   "owner": "Google",
+   "maxContext": 2048,
+   "geometry": {
+    "layers": 24,
+    "headDim": 256
+   },
+   "kv": {
+    "fullBytesPerToken": 24576
+   },
+   "quants": [
+    {
+     "label": "Q8_0",
+     "files": [
+      "embeddinggemma-300M-Q8_0.gguf"
+     ],
+     "sizeBytes": 333590944,
+     "bytesPerToken": 327060480
+    }
+   ]
+  },
+  {
+   "id": "bge-small-en-v1.5",
+   "repo": "CompendiumLabs/bge-small-en-v1.5-gguf",
+   "name": "BGE Small (English)",
+   "owner": "BAAI",
+   "maxContext": 512,
+   "geometry": {
+    "layers": 12,
+    "headDim": 32
+   },
+   "kv": {
+    "fullBytesPerToken": 18432
+   },
+   "quants": [
+    {
+     "label": "f16",
+     "files": [
+      "bge-small-en-v1.5-f16.gguf"
+     ],
+     "sizeBytes": 67308128,
+     "bytesPerToken": 66547200
+    }
+   ]
+  }
+ ],
+ "hardware": {
+  "source": "Vendor specifications (NVIDIA, AMD, Intel and Apple product pages)",
+  "gpus": [
+   {
+    "id": "nvidia-rtx-5090",
+    "match": "RTX 5090",
+    "bandwidthGBps": 1792
+   },
+   {
+    "id": "nvidia-rtx-5080",
+    "match": "RTX 5080",
+    "bandwidthGBps": 960
+   },
+   {
+    "id": "nvidia-rtx-5070-ti",
+    "match": "RTX 5070 Ti",
+    "bandwidthGBps": 896
+   },
+   {
+    "id": "nvidia-rtx-5070",
+    "match": "RTX 5070",
+    "bandwidthGBps": 672
+   },
+   {
+    "id": "nvidia-rtx-5060-ti",
+    "match": "RTX 5060 Ti",
+    "bandwidthGBps": 448
+   },
+   {
+    "id": "nvidia-rtx-5060",
+    "match": "RTX 5060",
+    "bandwidthGBps": 448
+   },
+   {
+    "id": "nvidia-rtx-4090",
+    "match": "RTX 4090",
+    "bandwidthGBps": 1008
+   },
+   {
+    "id": "nvidia-rtx-4080-super",
+    "match": "RTX 4080 SUPER",
+    "bandwidthGBps": 736
+   },
+   {
+    "id": "nvidia-rtx-4080",
+    "match": "RTX 4080",
+    "bandwidthGBps": 717
+   },
+   {
+    "id": "nvidia-rtx-4070-ti-super",
+    "match": "RTX 4070 Ti SUPER",
+    "bandwidthGBps": 672
+   },
+   {
+    "id": "nvidia-rtx-4070-ti",
+    "match": "RTX 4070 Ti",
+    "bandwidthGBps": 504
+   },
+   {
+    "id": "nvidia-rtx-4070-super",
+    "match": "RTX 4070 SUPER",
+    "bandwidthGBps": 504
+   },
+   {
+    "id": "nvidia-rtx-4070",
+    "match": "RTX 4070",
+    "bandwidthGBps": 504
+   },
+   {
+    "id": "nvidia-rtx-4060-ti",
+    "match": "RTX 4060 Ti",
+    "bandwidthGBps": 288
+   },
+   {
+    "id": "nvidia-rtx-4060",
+    "match": "RTX 4060",
+    "bandwidthGBps": 272
+   },
+   {
+    "id": "nvidia-rtx-3090-ti",
+    "match": "RTX 3090 Ti",
+    "bandwidthGBps": 1008
+   },
+   {
+    "id": "nvidia-rtx-3090",
+    "match": "RTX 3090",
+    "bandwidthGBps": 936
+   },
+   {
+    "id": "nvidia-rtx-3080-ti",
+    "match": "RTX 3080 Ti",
+    "bandwidthGBps": 912
+   },
+   {
+    "id": "nvidia-rtx-3080-12gb",
+    "match": "RTX 3080",
+    "vramGb": 12,
+    "bandwidthGBps": 912
+   },
+   {
+    "id": "nvidia-rtx-3080",
+    "match": "RTX 3080",
+    "bandwidthGBps": 760
+   },
+   {
+    "id": "nvidia-rtx-3070-ti",
+    "match": "RTX 3070 Ti",
+    "bandwidthGBps": 608
+   },
+   {
+    "id": "nvidia-rtx-3070",
+    "match": "RTX 3070",
+    "bandwidthGBps": 448
+   },
+   {
+    "id": "nvidia-rtx-3060-ti",
+    "match": "RTX 3060 Ti",
+    "bandwidthGBps": 448
+   },
+   {
+    "id": "nvidia-rtx-3060-12gb",
+    "match": "RTX 3060",
+    "vramGb": 12,
+    "bandwidthGBps": 360
+   },
+   {
+    "id": "nvidia-rtx-3060",
+    "match": "RTX 3060",
+    "bandwidthGBps": 240
+   },
+   {
+    "id": "nvidia-rtx-2080-ti",
+    "match": "RTX 2080 Ti",
+    "bandwidthGBps": 616
+   },
+   {
+    "id": "nvidia-rtx-2080-super",
+    "match": "RTX 2080 SUPER",
+    "bandwidthGBps": 496
+   },
+   {
+    "id": "nvidia-rtx-2080",
+    "match": "RTX 2080",
+    "bandwidthGBps": 448
+   },
+   {
+    "id": "nvidia-rtx-2070",
+    "match": "RTX 2070",
+    "bandwidthGBps": 448
+   },
+   {
+    "id": "nvidia-rtx-2060-super",
+    "match": "RTX 2060 SUPER",
+    "bandwidthGBps": 448
+   },
+   {
+    "id": "nvidia-rtx-2060",
+    "match": "RTX 2060",
+    "bandwidthGBps": 336
+   },
+   {
+    "id": "nvidia-gtx-1660-super",
+    "match": "GTX 1660 SUPER",
+    "bandwidthGBps": 336
+   },
+   {
+    "id": "nvidia-gtx-1660-ti",
+    "match": "GTX 1660 Ti",
+    "bandwidthGBps": 288
+   },
+   {
+    "id": "nvidia-gtx-1660",
+    "match": "GTX 1660",
+    "bandwidthGBps": 192
+   },
+   {
+    "id": "nvidia-gtx-1650",
+    "match": "GTX 1650",
+    "bandwidthGBps": 128
+   },
+   {
+    "id": "amd-rx-9070-xt",
+    "match": "RX 9070 XT",
+    "bandwidthGBps": 640
+   },
+   {
+    "id": "amd-rx-9070",
+    "match": "RX 9070",
+    "bandwidthGBps": 640
+   },
+   {
+    "id": "amd-rx-9060-xt",
+    "match": "RX 9060 XT",
+    "bandwidthGBps": 320
+   },
+   {
+    "id": "amd-rx-7900-xtx",
+    "match": "RX 7900 XTX",
+    "bandwidthGBps": 960
+   },
+   {
+    "id": "amd-rx-7900-xt",
+    "match": "RX 7900 XT",
+    "bandwidthGBps": 800
+   },
+   {
+    "id": "amd-rx-7900-gre",
+    "match": "RX 7900 GRE",
+    "bandwidthGBps": 576
+   },
+   {
+    "id": "amd-rx-7800-xt",
+    "match": "RX 7800 XT",
+    "bandwidthGBps": 624
+   },
+   {
+    "id": "amd-rx-7700-xt",
+    "match": "RX 7700 XT",
+    "bandwidthGBps": 432
+   },
+   {
+    "id": "amd-rx-7600",
+    "match": "RX 7600",
+    "bandwidthGBps": 288
+   },
+   {
+    "id": "amd-rx-6950-xt",
+    "match": "RX 6950 XT",
+    "bandwidthGBps": 576
+   },
+   {
+    "id": "amd-rx-6900-xt",
+    "match": "RX 6900 XT",
+    "bandwidthGBps": 512
+   },
+   {
+    "id": "amd-rx-6800",
+    "match": "RX 6800",
+    "bandwidthGBps": 512
+   },
+   {
+    "id": "amd-rx-6750-xt",
+    "match": "RX 6750 XT",
+    "bandwidthGBps": 432
+   },
+   {
+    "id": "amd-rx-6700-xt",
+    "match": "RX 6700 XT",
+    "bandwidthGBps": 384
+   },
+   {
+    "id": "amd-rx-6600-xt",
+    "match": "RX 6600 XT",
+    "bandwidthGBps": 256
+   },
+   {
+    "id": "amd-rx-6600",
+    "match": "RX 6600",
+    "bandwidthGBps": 224
+   },
+   {
+    "id": "intel-arc-b580",
+    "match": "Arc(TM) B580",
+    "bandwidthGBps": 456
+   },
+   {
+    "id": "intel-arc-b570",
+    "match": "Arc(TM) B570",
+    "bandwidthGBps": 380
+   },
+   {
+    "id": "intel-arc-a770-16gb",
+    "match": "Arc(TM) A770",
+    "vramGb": 16,
+    "bandwidthGBps": 560
+   },
+   {
+    "id": "intel-arc-a770",
+    "match": "Arc(TM) A770",
+    "bandwidthGBps": 512
+   },
+   {
+    "id": "intel-arc-a750",
+    "match": "Arc(TM) A750",
+    "bandwidthGBps": 512
+   },
+   {
+    "id": "apple-m5-max-40",
+    "match": "Apple M5 Max",
+    "gpuCores": 40,
+    "bandwidthGBps": 614
+   },
+   {
+    "id": "apple-m5-max",
+    "match": "Apple M5 Max",
+    "bandwidthGBps": 460
+   },
+   {
+    "id": "apple-m5-pro",
+    "match": "Apple M5 Pro",
+    "bandwidthGBps": 307
+   },
+   {
+    "id": "apple-m5",
+    "match": "Apple M5",
+    "bandwidthGBps": 153
+   },
+   {
+    "id": "apple-m4-max-40",
+    "match": "Apple M4 Max",
+    "gpuCores": 40,
+    "bandwidthGBps": 546
+   },
+   {
+    "id": "apple-m4-max",
+    "match": "Apple M4 Max",
+    "bandwidthGBps": 410
+   },
+   {
+    "id": "apple-m4-pro",
+    "match": "Apple M4 Pro",
+    "bandwidthGBps": 273
+   },
+   {
+    "id": "apple-m4",
+    "match": "Apple M4",
+    "bandwidthGBps": 120
+   },
+   {
+    "id": "apple-m3-ultra",
+    "match": "Apple M3 Ultra",
+    "bandwidthGBps": 819
+   },
+   {
+    "id": "apple-m3-max-40",
+    "match": "Apple M3 Max",
+    "gpuCores": 40,
+    "bandwidthGBps": 400
+   },
+   {
+    "id": "apple-m3-max",
+    "match": "Apple M3 Max",
+    "bandwidthGBps": 300
+   },
+   {
+    "id": "apple-m3-pro",
+    "match": "Apple M3 Pro",
+    "bandwidthGBps": 150
+   },
+   {
+    "id": "apple-m3",
+    "match": "Apple M3",
+    "bandwidthGBps": 100
+   },
+   {
+    "id": "apple-m2-ultra",
+    "match": "Apple M2 Ultra",
+    "bandwidthGBps": 800
+   },
+   {
+    "id": "apple-m2-max",
+    "match": "Apple M2 Max",
+    "bandwidthGBps": 400
+   },
+   {
+    "id": "apple-m2-pro",
+    "match": "Apple M2 Pro",
+    "bandwidthGBps": 200
+   },
+   {
+    "id": "apple-m2",
+    "match": "Apple M2",
+    "bandwidthGBps": 100
+   },
+   {
+    "id": "apple-m1-ultra",
+    "match": "Apple M1 Ultra",
+    "bandwidthGBps": 800
+   },
+   {
+    "id": "apple-m1-max",
+    "match": "Apple M1 Max",
+    "bandwidthGBps": 400
+   },
+   {
+    "id": "apple-m1-pro",
+    "match": "Apple M1 Pro",
+    "bandwidthGBps": 200
+   },
+   {
+    "id": "apple-m1",
+    "match": "Apple M1",
+    "bandwidthGBps": 68
+   }
+  ],
+  "cpu": {
+   "id": "cpu-dual-channel",
+   "bandwidthGBps": 50,
+   "note": "Not probed: a dual-channel DDR4-3200 figure (51.2 GB/s) rounded down, the low end of current desktops and laptops."
+  }
+ },
+ "calibration": {
+  "cuda": {
+   "efficiency": 0.52,
+   "basis": [
+    {
+     "hardware": "nvidia-rtx-5090",
+     "file": "lmstudio-community/gemma-4-12B-it-GGUF/gemma-4-12B-it-Q4_K_M.gguf",
+     "bytesPerToken": 7365559808,
+     "tokensPerSecond": 127,
+     "engine": "llama.cpp b11011, no speculative decoding",
+     "date": "2026-09-30",
+     "source": "docs/benchmarks.md (decode, the engine's flags before --spec-default)"
+    }
+   ]
+  },
+  "metal": {
+   "efficiency": 0.6,
+   "basis": [
+    {
+     "hardware": "apple-m5-max-40",
+     "file": "unsloth/gemma-4-12b-it-GGUF/gemma-4-12b-it-Q4_K_M.gguf",
+     "bytesPerToken": 7106037248,
+     "tokensPerSecond": 61.8,
+     "engine": "llama.cpp b11429 (Homebrew), llama-bench -n 128 -r 5",
+     "date": "2026-10-22",
+     "source": "measured for this feed"
+    },
+    {
+     "hardware": "apple-m5-max-40",
+     "file": "unsloth/Qwen3.5-4B-GGUF/Qwen3.5-4B-Q4_K_M.gguf",
+     "bytesPerToken": 2729969664,
+     "tokensPerSecond": 134.5,
+     "engine": "llama.cpp b11429 (Homebrew), llama-bench -n 128 -r 5",
+     "date": "2026-10-22",
+     "source": "measured for this feed"
+    }
+   ]
+  },
+  "vulkan": {
+   "borrowedFrom": "cuda"
+  },
+  "hip": {
+   "borrowedFrom": "cuda"
+  },
+  "cpu": {
+   "borrowedFrom": "cuda"
+  }
+ },
+ "measured": [
+  {
+   "hardware": "apple-m5-max-40",
+   "model": "gemma-4-12b",
+   "quant": "Q4_K_M",
+   "tokensPerSecond": 61.8,
+   "engine": "llama.cpp b11429 (Homebrew), llama-bench -n 128 -r 5",
+   "date": "2026-10-22"
+  },
+  {
+   "hardware": "apple-m5-max-40",
+   "model": "qwen3.5-4b",
+   "quant": "Q4_K_M",
+   "tokensPerSecond": 134.5,
+   "engine": "llama.cpp b11429 (Homebrew), llama-bench -n 128 -r 5",
+   "date": "2026-10-22"
+  }
+ ]
+}

@@ -35,7 +35,7 @@ async fn run(cmd: &Path, args: &[&str], timeout: Duration, combined: bool) -> Op
 }
 
 /// `execFile` that resolves stdout only on success.
-async fn run_ok(cmd: &str, args: &[&str], timeout: Duration) -> Option<String> {
+pub(crate) async fn run_ok(cmd: &str, args: &[&str], timeout: Duration) -> Option<String> {
     match run(Path::new(cmd), args, timeout, false).await? {
         (true, text) => Some(text),
         _ => None,
@@ -144,13 +144,11 @@ fn memory(sys: &mut sysinfo::System) -> (f64, f64) {
 /// record (`<data>/engine/engine.json`), then PATH, as `installedBin` looks.
 pub fn engine_bin(data_dir: Option<&Path>, external: Option<String>) -> Option<PathBuf> {
     let is_file = |p: &Path| std::fs::metadata(p).is_ok_and(|m| m.is_file());
-    let read = |p: PathBuf| -> Option<Value> { serde_json::from_slice(&std::fs::read(p).ok()?).ok() };
     if let Some(p) = external.filter(|p| !p.is_empty()).map(PathBuf::from).filter(|p| is_file(p)) {
         return Some(p);
     }
     if let Some(dir) = data_dir {
-        let managed = read(dir.join("engine").join("engine.json"))
-            .and_then(|r| r.get("binPath").and_then(Value::as_str).map(PathBuf::from));
+        let managed = engine_record(dir).and_then(|r| r.get("binPath").and_then(Value::as_str).map(PathBuf::from));
         if let Some(p) = managed.filter(|p| is_file(p)) {
             return Some(p);
         }
@@ -158,6 +156,11 @@ pub fn engine_bin(data_dir: Option<&Path>, external: Option<String>) -> Option<P
     let path = std::env::var_os("PATH")?;
     std::env::split_paths(&path)
         .find_map(|dir| ["llama-server", "llama-server.exe"].iter().map(|n| dir.join(n)).find(|p| is_file(p)))
+}
+
+/// The managed engine's install record, `<data>/engine/engine.json`.
+pub(crate) fn engine_record(data_dir: &Path) -> Option<Value> {
+    serde_json::from_slice(&std::fs::read(data_dir.join("engine").join("engine.json")).ok()?).ok()
 }
 
 struct Cached<T> {
@@ -196,6 +199,11 @@ impl Machine {
             engine_gpu: tokio::sync::Mutex::new(None),
             cpu: tokio::sync::Mutex::new((sysinfo::System::new(), None)),
         }
+    }
+
+    /// Where the daemon keeps its data, when it knows.
+    pub fn data_dir(&self) -> Option<&Path> {
+        self.data_dir.as_deref()
     }
 
     /// `gpu:stats`: one probe at a time, shared by every caller inside the TTL.

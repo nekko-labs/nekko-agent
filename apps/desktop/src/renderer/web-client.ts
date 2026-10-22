@@ -374,6 +374,8 @@ function makeWebClient(): NekkoApi {
     cliInstallStatus: async () => ({ available: false, installed: false, onPath: false, command: 'npx nekko-agent' }),
     cliInstall: async () => ({ available: false, installed: false, onPath: false, command: 'npx nekko-agent' }),
     machineReadiness: (language) => call(IpcChannels.machineReadiness, language),
+    machineProfile: (opts) => call(IpcChannels.machineProfile, opts),
+    machineRecommendations: (opts) => call(IpcChannels.machineRecommendations, opts),
     getGpuStats: () => call(IpcChannels.gpuStats),
     getSystemStats: () => call(IpcChannels.systemStats),
 
