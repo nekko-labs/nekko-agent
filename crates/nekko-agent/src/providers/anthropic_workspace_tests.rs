@@ -66,10 +66,15 @@ fn chat_sends_the_workspace_only_when_one_is_set() {
         let (p, _) = provider(extra, 200, "");
         assert_eq!(workspace_header(&p.chat_request(&chat_req(), SamplingShape::Effort)), None);
     }
+}
 
-    // A subscription token is not an organization key: no workspace header.
-    let (p, _) = provider(json!({ "auth": "subscription", "workspaceId": "wrkspc_01" }), 200, "");
-    assert_eq!(workspace_header(&p.chat_request(&chat_req(), SamplingShape::Effort)), None);
+#[tokio::test]
+async fn a_subscription_provider_sends_nothing_so_no_workspace_leaks() {
+    // Claude plan sign-in is refused before any request, workspace or not.
+    let (p, wire) = provider(json!({ "auth": "subscription", "workspaceId": "wrkspc_01" }), 200, "");
+    let (_, error) = p.chat(chat_req()).collect().await;
+    assert_eq!(error.expect("the turn is refused").message, CLAUDE_PLAN_REMOVED);
+    assert!(wire.sent.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

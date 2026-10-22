@@ -357,7 +357,7 @@ impl AnthropicProvider {
 }
 
 /// What the user reads when an organization-level key is sent without a
-/// workspace. Kept word for word with `WORKSPACE_HINT` in `anthropic.ts`.
+/// workspace.
 const WORKSPACE_HINT: &str = "This Anthropic API key belongs to your organization, not to a workspace, so Anthropic needs to know which workspace to use. Add the workspace's ID (Claude Console, Settings, Workspaces) in the Workspace ID field of the Anthropic provider, or use a key created inside a workspace.";
 
 /// The hint above when a 400 says the key is not scoped to a workspace.
