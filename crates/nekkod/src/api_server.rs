@@ -426,7 +426,7 @@ async fn upgrade(app: App, req: Request, url: &url::Url, authorized: bool) -> Re
                 ev = rx.recv() => match ev {
                     Ok(ev) => {
                         if !ev.text.starts_with(prefix.as_str()) { continue }
-                        if sink.send(Message::Text(ev.text.as_ref().into())).await.is_err() { break }
+                        if sink.send(Message::Text(ev.text.clone())).await.is_err() { break }
                     }
                     Err(RecvError::Lagged(_)) => {
                         let lagged = json!({ "channel": "daemon:lagged", "payload": null }).to_string();

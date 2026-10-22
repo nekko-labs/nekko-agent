@@ -14,8 +14,10 @@
 //! (`agent:replay`), and a window that connects mid-turn learns which chats
 //! are running (`Hub::status`).
 
+use axum::extract::ws::Utf8Bytes;
+use serde::Serialize;
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
@@ -37,8 +39,9 @@ pub enum Scope {
 
 #[derive(Clone, Debug)]
 pub struct Event {
-    /// The frame exactly as clients receive it.
-    pub text: Arc<str>,
+    /// The frame exactly as clients receive it, shared (not copied) by
+    /// every socket that sends it.
+    pub text: Utf8Bytes,
     /// Output of a daemon-owned terminal. The desktop UI reads that from the
     /// binary terminal stream instead, so its RPC socket skips these.
     pub term_data: bool,
@@ -59,11 +62,12 @@ struct Turn {
     /// Its first event's frame: what a window that connects mid-turn is sent
     /// for a chat it does not show, to mark it running.
     /// None while the turn has only waited (resending a wait would notify again).
-    first: Option<Arc<str>>,
+    first: Option<Utf8Bytes>,
     last: Instant,
     /// For replay: the events, deltas joined, and when each arrived (ms).
-    events: Vec<Value>,
-    at: Vec<u64>,
+    /// Shared, so a replay copies them out of the lock cheaply.
+    events: VecDeque<Arc<Value>>,
+    at: VecDeque<u64>,
     bytes: usize,
     /// Events were dropped from the front to stay under [`REPLAY_MAX_BYTES`].
     truncated: bool,
@@ -150,7 +154,7 @@ impl Hub {
     /// Serialized with `channel` as the first key (serde_json keeps insertion
     /// order, and `channel` is written first), which `?only=` filtering relies on.
     pub fn publish(&self, channel: &str, payload: Value, term_data: bool) {
-        let frame: Arc<str> = serde_json::json!({ "channel": channel, "payload": payload }).to_string().into();
+        let frame: Utf8Bytes = serde_json::json!({ "channel": channel, "payload": payload }).to_string().into();
         if channel == "agent:event" {
             self.publish_agent(frame, &payload);
         } else {
@@ -163,7 +167,7 @@ impl Hub {
     }
 
     /// An agent event: scoped, numbered, and kept while its turn runs.
-    fn publish_agent(&self, text: Arc<str>, payload: &Value) {
+    fn publish_agent(&self, text: Utf8Bytes, payload: &Value) {
         let Some(id) = payload.get("sessionId").and_then(Value::as_str) else {
             let _ = self.tx.send(Event { text, term_data: false, scope: Scope::Global });
             return;
@@ -190,8 +194,8 @@ impl Hub {
                     phase: Phase::Running,
                     first: None,
                     last: Instant::now(),
-                    events: Vec::new(),
-                    at: Vec::new(),
+                    events: VecDeque::new(),
+                    at: VecDeque::new(),
                     bytes: 0,
                     truncated: false,
                 });
@@ -212,15 +216,32 @@ impl Hub {
     /// turns: one `agent:replay` frame per chat that has one, with the
     /// sequence number it covers (the socket skips live events up to it).
     pub fn replay(&self, ids: &[Arc<str>]) -> Vec<(Arc<str>, u64, String)> {
-        let s = self.lock();
-        ids.iter()
-            .filter_map(|id| {
-                let turn = s.turns.get(id)?;
-                let frame = serde_json::json!({
-                    "channel": "agent:replay",
-                    "payload": { "sessionId": id.as_ref(), "events": turn.events, "at": turn.at, "truncated": turn.truncated },
-                });
-                Some((id.clone(), s.seq, frame.to_string()))
+        // Copied out under the lock (the events are shared, so this is cheap),
+        // serialized after it: a replay may be megabytes.
+        let (seq, kept) = {
+            let s = self.lock();
+            let kept: Vec<_> = ids
+                .iter()
+                .filter_map(|id| {
+                    let turn = s.turns.get(id)?;
+                    Some((id.clone(), turn.events.clone(), turn.at.clone(), turn.truncated))
+                })
+                .collect();
+            (s.seq, kept)
+        };
+        kept.into_iter()
+            .map(|(id, events, at, truncated)| {
+                let frame = ReplayFrame {
+                    channel: "agent:replay",
+                    payload: Replay {
+                        session_id: &id,
+                        events: events.iter().map(|e| &**e).collect(),
+                        at: &at,
+                        truncated,
+                    },
+                };
+                let text = serde_json::to_string(&frame).unwrap_or_default();
+                (id, seq, text)
             })
             .collect()
     }
@@ -229,29 +250,46 @@ impl Hub {
     /// not show, as its first event, so it marks the chat running without
     /// that chat's stream. A wait is not resent (it would notify again); the
     /// window reads waits from `chat:pending`, as it always has at start.
-    pub fn status(&self, except: &dyn Fn(&str) -> bool) -> Vec<Arc<str>> {
+    pub fn status(&self, except: &dyn Fn(&str) -> bool) -> Vec<Utf8Bytes> {
         self.lock().turns.iter().filter(|(id, _)| !except(id)).filter_map(|(_, t)| t.first.clone()).collect()
     }
+}
+
+/// An `agent:replay` frame, keyed as clients read it.
+#[derive(Serialize)]
+struct ReplayFrame<'a> {
+    channel: &'static str,
+    payload: Replay<'a>,
+}
+
+#[derive(Serialize)]
+struct Replay<'a> {
+    #[serde(rename = "sessionId")]
+    session_id: &'a str,
+    events: Vec<&'a Value>,
+    at: &'a VecDeque<u64>,
+    truncated: bool,
 }
 
 /// Keep an event for replay, joining a delta onto the one before it.
 fn append(turn: &mut Turn, event_type: &str, payload: &Value) {
     if is_delta(event_type)
-        && let Some(last) = turn.events.last_mut()
+        && let Some(last) = turn.events.back_mut()
         && last.get("type").and_then(Value::as_str) == Some(event_type)
-        && let (Some(Value::String(prev)), Some(delta)) =
-            (last.get_mut("delta"), payload.get("delta").and_then(Value::as_str))
+        && let Some(delta) = payload.get("delta").and_then(Value::as_str)
+        // Copied first only while a replay still holds it.
+        && let Some(Value::String(prev)) = Arc::make_mut(last).get_mut("delta")
     {
         prev.push_str(delta);
         turn.bytes += delta.len();
     } else {
         turn.bytes += approx_size(payload);
-        turn.events.push(payload.clone());
-        turn.at.push(now_ms());
+        turn.events.push_back(Arc::new(payload.clone()));
+        turn.at.push_back(now_ms());
     }
     while turn.bytes > REPLAY_MAX_BYTES && turn.events.len() > 1 {
-        let dropped = turn.events.remove(0);
-        turn.at.remove(0);
+        let Some(dropped) = turn.events.pop_front() else { break };
+        turn.at.pop_front();
         turn.bytes = turn.bytes.saturating_sub(approx_size(&dropped));
         turn.truncated = true;
     }
@@ -341,6 +379,23 @@ mod tests {
         assert_eq!(v["payload"]["at"].as_array().unwrap().len(), 2);
         hub.publish("agent:event", json!({ "type": "done", "sessionId": "s1" }), false);
         assert!(hub.replay(&ids).is_empty());
+    }
+
+    #[test]
+    fn a_replay_taken_is_not_changed_by_the_deltas_after_it() {
+        let hub = Hub::new();
+        let ids: Vec<Arc<str>> = vec!["s1".into()];
+        hub.publish("agent:event", json!({ "type": "text", "sessionId": "s1", "delta": "Hel" }), false);
+        let before = {
+            let s = hub.lock();
+            s.turns["s1"].events.clone()
+        };
+        hub.publish("agent:event", json!({ "type": "text", "sessionId": "s1", "delta": "lo" }), false);
+        assert_eq!(before[0]["delta"], "Hel", "the copy a replay holds keeps its text");
+        let (_, _, frame) = hub.replay(&ids).pop().unwrap();
+        let v: Value = serde_json::from_str(&frame).unwrap();
+        assert_eq!(v["payload"]["events"], json!([{ "type": "text", "sessionId": "s1", "delta": "Hello" }]));
+        assert_eq!(frame.find("\"channel\""), Some(1), "the channel is the first key");
     }
 
     #[test]
