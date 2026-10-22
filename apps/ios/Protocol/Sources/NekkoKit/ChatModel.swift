@@ -133,7 +133,7 @@ public final class ChatModel {
             // Out of reach: the saved copy (if any) says so itself, under "Saved copy from …".
             showSavedCopy()
             if savedAt != nil, !((error as? RelayError)?.fromComputer ?? false) { return }
-            loadError = error.localizedDescription
+            loadError = store.readable(error).localizedDescription
         }
     }
 
@@ -199,7 +199,7 @@ public final class ChatModel {
                 outbox.drop(id)
             } catch let e as RelayError where e.fromComputer {
                 outbox.drop(id)
-                throw e
+                throw store.readable(e)
             } catch {
                 // No answer: the outbox finds out, with the same id, when the computer is back.
                 outbox.endDirect(id)
@@ -239,7 +239,7 @@ public final class ChatModel {
                     // The computer turned it down: the prompt goes back to the composer.
                     outbox.drop(id)
                     if !started { self.unsent = UnsentPrompt(text: text, skill: skill, images: images) }
-                    t.error = e.message
+                    t.error = self.store.readable(e).localizedDescription
                 } else {
                     // No answer (the connection dropped): it may or may not have
                     // arrived. The outbox sends it again with the same id once the
@@ -289,7 +289,7 @@ public final class ChatModel {
         } catch {
             // The computer is still waiting: keep the card so the user can try again.
             if turn.approval == nil { turn.approval = a }
-            throw error
+            throw store.readable(error)
         }
     }
 
@@ -301,7 +301,7 @@ public final class ChatModel {
             _ = try await store.remote().call(Channels.chatAnswer, [.string(sessionId), .string(q.callId), .array(answers.map(\.json))])
         } catch {
             if turn.question == nil { turn.question = q }
-            throw error
+            throw store.readable(error)
         }
     }
 
@@ -329,7 +329,8 @@ public final class ChatModel {
         if let modelId { o["modelId"] = .string(modelId) }
         if let mode { o["mode"] = .string(mode.rawValue) }
         guard !o.isEmpty else { return }
-        _ = try await store.remote().call(Channels.sessionSetOptions, [.string(sessionId), .object(o)])
+        // Raising the mode (fewer approvals) needs Face ID; the computer says when.
+        _ = try await store.call(raising: Channels.sessionSetOptions, [.string(sessionId), .object(o)])
         await reload()
     }
 
@@ -351,7 +352,7 @@ public final class ChatModel {
         } catch {
             // Show the queue as it is now, whatever happened to this edit.
             await reload()
-            throw error
+            throw store.readable(error)
         }
         await reload()
     }

@@ -291,9 +291,11 @@ public final class Outbox {
             let outcome = await deliver(item, c)
             switch outcome {
             case .delivered(let chatId):
+                // As it was last saved (with any note from delivering it).
+                let current = items.first { $0.id == item.id } ?? item
                 items.removeAll { $0.id == item.id }
                 save()
-                onDelivered?(item, chatId)
+                onDelivered?(current, chatId)
             case .refused(let reason):
                 let current = items.first { $0.id == item.id } ?? item
                 drafts.handBack(current.draftKey, current.asDraft(refusal: reason))
@@ -337,7 +339,17 @@ public final class Outbox {
                 // A chat started offline: its model and tool policy (again on a retry, which changes nothing).
                 var o: [String: JSONValue] = ["providerId": .string(spec.providerId), "modelId": .string(spec.modelId)]
                 if let mode = spec.mode { o["mode"] = .string(mode) }
-                _ = try await c.call(Channels.sessionSetOptions, [.string(chatId), .object(o)])
+                do {
+                    _ = try await c.call(Channels.sessionSetOptions, [.string(chatId), .object(o)])
+                } catch let e as RelayError where e.fromComputer && o["mode"] != nil
+                    && PhoneRefusal(e.message)?.code == "proof-required" {
+                    // A mode above the computer's default needs Face ID, which a
+                    // prompt sent from the queue can't ask for: it goes out under
+                    // the computer's default mode instead, and says so.
+                    o["mode"] = nil
+                    _ = try await c.call(Channels.sessionSetOptions, [.string(chatId), .object(o)])
+                    update(item.id) { $0.lastError = Self.modeNotRaised }
+                }
             }
             guard let session = Session.from(try await c.call(Channels.sessionGet, [.string(chatId)])) else {
                 return .refused("This chat was deleted on your computer.")
@@ -414,6 +426,9 @@ public final class Outbox {
     }
 
     static let needsUpdate = "Update Nekko Agent on your computer to send prompts written offline. Send it again from here."
+
+    /// A chat started offline asked for fewer approvals than the computer's default.
+    public static let modeNotRaised = "Sent with your computer’s default approvals: allowing fewer needs Face ID, which a queued prompt can’t ask for. Change it in the chat."
 
     private func update(_ id: String, _ change: (inout OutboxItem) -> Void) {
         guard let i = items.firstIndex(where: { $0.id == id }) else { return }

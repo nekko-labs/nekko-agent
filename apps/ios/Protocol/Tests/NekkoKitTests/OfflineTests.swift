@@ -40,6 +40,8 @@ final class FakeComputer: Caller, @unchecked Sendable {
     var turnsKeepRunning = false
     /// A computer from before exactly-once delivery: its phone gate refuses `clientMessageId`.
     var old = false
+    /// `session:setOptions` setting one of these modes is a raise: refused without a Change proof.
+    var raisedModes: Set<String> = []
     var created = 0
 
     init(chats: [String] = []) {
@@ -68,6 +70,9 @@ final class FakeComputer: Caller, @unchecked Sendable {
             chats[id] = Chat()
             return view(id)
         case Channels.sessionSetOptions:
+            if let mode = args.dropFirst().first?.str("mode"), raisedModes.contains(mode) {
+                throw RelayError("Not allowed from a paired phone (proof-required): \(channel)", fromComputer: true)
+            }
             return .null
         case Channels.chatSend:
             let o = args.first ?? .null
@@ -359,6 +364,21 @@ final class OutboxTests: XCTestCase {
         XCTAssertEqual(pc.lastCall(Channels.sessionSetOptions), ["made-1", ["providerId": "p2", "modelId": "m2", "mode": "ask"]])
         XCTAssertEqual(pc.chat("made-1").prompts, ["new idea"])
         XCTAssertEqual(pc.lastCall(Channels.chatSend)?.first?.str("modelId"), "m2")
+    }
+
+    func testAQueuedNewChatThatCantRaiseItsModeGoesOutUnderTheDefault() async {
+        let pc = FakeComputer()
+        pc.raisedModes = ["yolo"]
+        let o = outbox(pc, drafts: drafts())
+        var delivered: [OutboxItem] = []
+        o.onDelivered = { item, _ in delivered.append(item) }
+        o.add(chatId: nil, text: "go fast", newChat: NewChatSpec(providerId: "p2", modelId: "m2", mode: "yolo"))
+        await o.flush()
+        XCTAssertTrue(o.items.isEmpty)
+        XCTAssertEqual(pc.chat("made-1").prompts, ["go fast"], "the prompt still goes out")
+        XCTAssertEqual(pc.firstCall(Channels.sessionSetOptions), ["made-1", ["providerId": "p2", "modelId": "m2", "mode": "yolo"]])
+        XCTAssertEqual(pc.lastCall(Channels.sessionSetOptions), ["made-1", ["providerId": "p2", "modelId": "m2"]])
+        XCTAssertEqual(delivered.first?.lastError, Outbox.modeNotRaised)
     }
 
     func testARefusedNewChatGoesBackToNewChatWithItsChoices() async {

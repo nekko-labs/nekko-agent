@@ -277,6 +277,8 @@ struct ConnectionBanner: View {
             case .revoked?, .kicked?: why = "\(name) removed this iPhone."
             case .badCode?: why = "That pairing code was already used or expired."
             case .badKey?: why = "The pairing key no longer matches \(name)."
+            case .updateRequired?:
+                return ("Update Nekko Agent on this phone: \(name) no longer accepts older apps.", palette.danger, "lock.slash")
             default: why = "\(name) doesn’t know this iPhone."
             }
             return (why + " Pair again from Settings → Remote access on the computer.", palette.danger, "lock.slash")
