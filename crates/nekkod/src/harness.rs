@@ -258,10 +258,8 @@ impl Harness {
         self.forget(session_id);
         let token = new_token();
         let file = setup.dir.join(format!("{session_id}.mcp.json"));
-        let body =
-            serde_json::to_vec_pretty(&command.mcp_config(&setup.wire_url, &token)).map_err(|e| e.to_string())?;
-        std::fs::create_dir_all(&setup.dir)
-            .and_then(|()| std::fs::write(&file, body))
+        // The file holds the token: owner-only (0600), written atomically.
+        nekko_settings::write_json_atomic(&file, &command.mcp_config(&setup.wire_url, &token))
             .map_err(|e| format!("Could not write the approval bridge's config: {e}"))?;
         lock(&self.bridges).insert(token, BridgeEntry { session_id: session_id.into(), roots: roots.to_vec() });
         Ok(file)
@@ -323,7 +321,9 @@ impl Harness {
 //
 // Claude Code asks for permission through `--permission-prompt-tool
 // mcp__nekko_bridge__approve`: an MCP stdio server (`nekko-agent mcp
-// --bridge <token>`) that nekkod lists in a per-chat `--mcp-config`. Each
+// --bridge`, its token in [`BRIDGE_TOKEN_ENV`], never in argv where any
+// local user could list it) that nekkod lists in a per-chat, owner-only
+// `--mcp-config`. Each
 // call comes back here over the loopback wire (`POST /harness/approve`,
 // authenticated by that chat's bridge token, never the daemon's own), is
 // decided by the chat's mode ([`decide`]) and, when it needs a person, waits
@@ -332,6 +332,8 @@ impl Harness {
 /// The MCP server name and the tool Claude Code is told to ask.
 pub const BRIDGE_SERVER: &str = "nekko_bridge";
 pub const BRIDGE_TOOL: &str = "mcp__nekko_bridge__approve";
+/// The environment variable the bridge server reads its token from.
+pub const BRIDGE_TOKEN_ENV: &str = "NEKKO_BRIDGE_TOKEN";
 
 /// How the daemon starts `nekko-agent mcp --bridge`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -358,9 +360,10 @@ impl BridgeCommand {
     /// The chat's `--mcp-config` document.
     pub fn mcp_config(&self, wire_url: &str, token: &str) -> serde_json::Value {
         let mut args = self.args.clone();
-        args.extend(["mcp".into(), "--bridge".into(), token.into(), "--url".into(), wire_url.into()]);
-        let env: serde_json::Map<String, serde_json::Value> =
+        args.extend(["mcp".into(), "--bridge".into(), "--url".into(), wire_url.into()]);
+        let mut env: serde_json::Map<String, serde_json::Value> =
             self.env.iter().map(|(k, v)| (k.clone(), serde_json::json!(v))).collect();
+        env.insert(BRIDGE_TOKEN_ENV.into(), serde_json::json!(token));
         serde_json::json!({
             "mcpServers": {
                 BRIDGE_SERVER: { "type": "stdio", "command": self.command, "args": args, "env": env }
@@ -598,12 +601,14 @@ mod tests {
                 "C:/app/resources/cli/nekko-agent-cli.cjs",
                 "mcp",
                 "--bridge",
-                "tok",
                 "--url",
                 "http://127.0.0.1:5000"
             ])
         );
         assert_eq!(s["env"]["ELECTRON_RUN_AS_NODE"], "1");
+        // The token travels in the environment, never in argv.
+        assert_eq!(s["env"][BRIDGE_TOKEN_ENV], "tok");
+        assert!(!s["args"].as_array().unwrap().iter().any(|a| a == "tok"));
         let l = BridgeCommand::launcher("C:/bin/nekko-agent.cmd");
         if cfg!(windows) {
             assert_eq!((l.command.as_str(), l.args[0].as_str()), ("cmd", "/c"));
@@ -627,8 +632,14 @@ mod tests {
         });
         let file = h.prepare_bridge("s1", &roots()).unwrap();
         let config: serde_json::Value = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
-        let token = config["mcpServers"][BRIDGE_SERVER]["args"][2].as_str().unwrap().to_string();
+        let token = config["mcpServers"][BRIDGE_SERVER]["env"][BRIDGE_TOKEN_ENV].as_str().unwrap().to_string();
         assert_eq!(h.bridge_session(&token).unwrap().session_id, "s1");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&file).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600, "the config holds the token: owner-only");
+        }
         assert!(h.bridge_session("not-a-token").is_none());
         // A relaunch replaces the token; the old one answers nothing.
         let _ = h.prepare_bridge("s1", &roots()).unwrap();
