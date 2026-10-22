@@ -182,7 +182,7 @@ Architecture, speed contract, distribution, builds and startup.
 Brand, website, onboarding and the mascot.
 
 - [Beta signups and website analytics (2026-10-17)](brand/beta-signups-and-website-analytics.md) (2 KB)
-- [Brand refresh and website redesign (2026-10-18)](brand/brand-refresh-and-website-redesign.md) (2 KB)
+- [Brand refresh and website redesign (2026-10-18)](brand/brand-refresh-and-website-redesign.md) (4 KB)
 - [First-run setup (planned onboarding wizard)](brand/first-run-setup.md) (1 KB)
 - [Local marketing website preview (2026-10-17)](brand/local-marketing-website-preview.md) (1 KB)
 - [Mascot, polish & onboarding](brand/mascot-polish-onboarding.md) (10 KB)
