@@ -95,6 +95,20 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-10
 
+### Code mode: tool definitions per model call (2026-10-22)
+Area: engine daemon
+Result: improvement (definitions only; per-session savings not yet measured)
+Conditions: Linux container; the built-in tool catalog as `turn_tools` offers it to a new chat with no MCP servers; sizes are the JSON of the offered tool specs at the app's ~4 characters a token (`estimateTokens`), not a provider tokenizer
+
+| Metric | Tool list | Code mode |
+|---|---|---|
+| Online chat: tools offered | 18 | 8 (12 behind `run_code`, 6 direct) |
+| Online chat: definitions, tokens per model call | ≈2,664 | ≈1,855 (808 fewer) |
+| Offline / Local only: tools offered | 14 | 6 (10 behind `run_code`, 4 direct) |
+| Offline / Local only: definitions, tokens per model call | ≈1,874 | ≈1,432 (442 fewer) |
+
+Why: code mode replaces the wrapped tools' schemas with `search_tools` and `run_code`, whose description carries a one-line index. The saving grows with every MCP server's tools, since each adds its full schema to the list but one index line to code mode. Not measured yet: results kept out of context in real sessions, and whether models finish tasks in fewer calls (T194e). Source: this PR (T194).
+
 ### #817 agent-browser builds: no forced rebuilds, a dev profile, a per-machine cache (2026-10-19)
 Area: dev build
 Result: improvement

@@ -1,9 +1,9 @@
 ---
-status: accepted; the account record part superseded by 0007
+status: accepted; the account record part superseded by 0008
 date: 2026-10-22
 ---
 
-# 0005. Seal key epochs to the recovery key's public half, and pin trust in a sealed account record
+# 0006. Seal key epochs to the recovery key's public half, and pin trust in a sealed account record
 
 ## Context
 

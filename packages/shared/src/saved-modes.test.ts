@@ -25,13 +25,26 @@ describe('saved modes', () => {
     expect(matchSavedMode(STARTER_MODES, plain)).toBeUndefined();
     expect(matchSavedMode(STARTER_MODES, sessionModeOptions({ executionMode: 'worktree', mode: 'guardrails', cloudOnly: true }))?.id).toBe('cloud');
     expect(matchSavedMode(STARTER_MODES, sessionModeOptions({ executionMode: 'worktree', mode: 'guardrails', autoModel: true, autoProviderSwitch: true }))?.id).toBe('fusion');
-    expect(matchSavedMode(STARTER_MODES, sessionModeOptions({ executionMode: 'worktree', mode: 'guardrails', offline: true }))?.id).toBe('local');
+    expect(matchSavedMode(STARTER_MODES, sessionModeOptions({ executionMode: 'worktree', mode: 'guardrails', offline: true, toolApproach: 'code' }))?.id).toBe('local');
     expect(matchSavedMode(STARTER_MODES, sessionModeOptions({ executionMode: 'worktree', mode: 'ask', cloudOnly: true }))).toBeUndefined();
     // Effort pinned by a mode must match.
     const pinned = { id: 'p', name: 'P', icon: 'dial' as const, options: { ...starter('cloud').options, effort: 'high' as const } };
     const cloud = sessionModeOptions({ executionMode: 'worktree', mode: 'guardrails', cloudOnly: true }, { effort: 'low' });
     expect(matchSavedMode([pinned], cloud)).toBeUndefined();
     expect(matchSavedMode([pinned], { ...cloud, effort: 'high' })?.id).toBe('p');
+  });
+
+  it('runs Local only in code mode, and a mode that sets no approach leaves the chat\'s', () => {
+    expect(starter('local').options.toolApproach).toBe('code');
+    expect(STARTER_MODES.filter((m) => m.options.toolApproach).map((m) => m.id)).toEqual(['local']);
+    expect(sessionModeOptions({}).toolApproach).toBe('list');
+    // An offline chat that still lists its tools has been changed from Local only.
+    expect(matchSavedMode(STARTER_MODES, sessionModeOptions({ executionMode: 'worktree', mode: 'guardrails', offline: true }))).toBeUndefined();
+    expect(sessionPatchForMode(starter('local').options, { cloudModel: false })).toMatchObject({ toolApproach: 'code', offline: true });
+    expect(sessionPatchForMode(starter('cloud').options)).not.toHaveProperty('toolApproach');
+    // Cloud only sets no approach, so a cloud chat in code mode is still in it.
+    expect(matchSavedMode(STARTER_MODES, sessionModeOptions({ executionMode: 'worktree', mode: 'guardrails', cloudOnly: true, toolApproach: 'code' }))?.id).toBe('cloud');
+    expect(savedModeSummary(starter('local').options)).toBe('worktree · local models · code mode');
   });
 
   it('reads where a chat\'s models run', () => {
@@ -111,7 +124,7 @@ describe('saved modes', () => {
   });
 
   it('summarizes and names modes', () => {
-    expect(STARTER_MODES.map((m) => savedModeSummary(m.options))).toEqual(['worktree · cloud models', 'worktree · local + cloud', 'worktree · local models', 'sandbox · ask · no network']);
+    expect(STARTER_MODES.map((m) => savedModeSummary(m.options))).toEqual(['worktree · cloud models', 'worktree · local + cloud', 'worktree · local models · code mode', 'sandbox · ask · no network']);
     expect(savedModeSummary({ ...starter('cloud').options, models: undefined, mode: 'yolo', offline: true, effort: 'high' })).toBe('worktree · yolo · offline · high');
     expect(newSavedModeId('Fusion', STARTER_MODES)).toBe('fusion-2');
     expect(newSavedModeId('  !!  ', [])).toBe('mode');

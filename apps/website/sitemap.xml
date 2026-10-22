@@ -28,6 +28,11 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://nekkoagent.com/docs/code-mode</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://nekkoagent.com/docs/local-models</loc>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>

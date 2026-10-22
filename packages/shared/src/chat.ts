@@ -121,6 +121,8 @@ export interface TurnStats {
   calls: number;
   steps?: number;
   stop?: ReplyStop;
+  /** A code-mode reply's estimated savings over offering the tools as a list. */
+  codeMode?: CodeModeSavings;
 }
 
 /** Per-session Context Inspector preferences (which provenance items the user
@@ -191,6 +193,34 @@ export type ChatMemory = 'all' | 'project' | 'off';
 
 /** `Session.guidance`: how much project guidance (AGENTS.md, rule folders) a chat's turns take. */
 export type GuidanceLevel = 'rules' | 'root' | 'off';
+
+/**
+ * `Session.toolApproach`: how a chat's turns reach their tools. `list` offers
+ * every tool to the model as its own definition. `code` offers `search_tools`
+ * and `run_code` instead: the model writes JavaScript that calls the tools in
+ * a sandbox, so definitions are looked up only when needed and intermediate
+ * results stay out of the context. Unset is `list`.
+ */
+export type ToolApproach = 'list' | 'code';
+
+/** What code mode saved over one reply, in estimated tokens (~4 characters each). */
+export interface CodeModeSavings {
+  /** Tools reached through `run_code` rather than offered one by one. */
+  toolsWrapped: number;
+  /** Definitions not sent on each model call (can be negative with very few tools). */
+  schemaTokensPerCall: number;
+  /** `schemaTokensPerCall` times the reply's model calls. */
+  schemaTokensSaved: number;
+  /** Tool results and arguments the model did not read or write, less what the runs returned. */
+  resultTokensSaved: number;
+  /** What `search_tools` added to the context: code mode's own cost. */
+  searchTokens: number;
+  /** The net: schema plus results, less search. */
+  tokensSaved: number;
+  /** `run_code` runs, and the tool calls they made. */
+  runs: number;
+  toolCalls: number;
+}
 
 export interface Session {
   id: string;
@@ -314,6 +344,8 @@ export interface Session {
    * files only) or `off`. Unset is `rules`.
    */
   guidance?: GuidanceLevel;
+  /** How this chat's turns reach their tools: a tool list, or code mode. Unset is `list`. */
+  toolApproach?: ToolApproach;
   /** Offline: no tool calls, no connectors/internet (local models only). */
   offline?: boolean;
   /**

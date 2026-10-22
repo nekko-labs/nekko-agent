@@ -3,7 +3,7 @@ status: proposed
 date: 2026-10-22
 ---
 
-# 0006. Recover lockouts without a key Nekko Labs can use
+# 0007. Recover lockouts without a key Nekko Labs can use
 
 ## Context
 

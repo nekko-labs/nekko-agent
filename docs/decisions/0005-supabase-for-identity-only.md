@@ -3,7 +3,7 @@ status: accepted
 date: 2026-10-22
 ---
 
-# 0004. Use Supabase Auth for identity only; keep accounts and data in Nekko Cloud
+# 0005. Use Supabase Auth for identity only; keep accounts and data in Nekko Cloud
 
 ## Context
 

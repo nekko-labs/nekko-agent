@@ -1,4 +1,4 @@
--- Trust model v2 (docs/decisions/0007): joining by a typed code.
+-- Trust model v2 (docs/decisions/0008): joining by a typed code.
 --
 -- sync_devices.join_tag: HMAC(code-derived key, account ‖ public key) that a
 --   device asking to join publishes. The approving device recomputes it from the

@@ -170,7 +170,7 @@ The primitives in `crates/nekko-sync` are sound: there is no nonce or key reuse,
 
 ## What was done
 
-Design: [decision 0007](../docs/decisions/0007-authenticated-wraps-and-join-codes.md). Tests: `crates/nekko-cloud/tests/attacks.rs` runs attacks through a proxy that rewrites the real API's answers (`cargo test -p nekko-cloud --test attacks` with `NEKKO_CLOUD_ITEST_URL` against `npm run dev:local`); `apps/nekko-agent-api/src/sync.test.ts` and `account.test.ts` for the server; `CloudSyncTests` for the iPhone (macOS CI).
+Design: [decision 0008](../docs/decisions/0008-authenticated-wraps-and-join-codes.md). Tests: `crates/nekko-cloud/tests/attacks.rs` runs attacks through a proxy that rewrites the real API's answers (`cargo test -p nekko-cloud --test attacks` with `NEKKO_CLOUD_ITEST_URL` against `npm run dev:local`); `apps/nekko-agent-api/src/sync.test.ts` and `account.test.ts` for the server; `CloudSyncTests` for the iPhone (macOS CI).
 
 | Finding | Status | Fix | Test |
 | --- | --- | --- | --- |

@@ -3,7 +3,7 @@ status: accepted
 date: 2026-10-22
 ---
 
-# 0007. Authenticate keyring wraps, approve devices with a join code, and keep one account record per key epoch
+# 0008. Authenticate keyring wraps, approve devices with a join code, and keep one account record per key epoch
 
 ## Context
 
@@ -36,4 +36,4 @@ An internal adversarial review of sync ([reports/crypto-review-internal-2026-10-
 - **Still open, and in the outside review's questions:** a malicious server colluding with a removed device can fork devices that haven't seen a rotation, and can give a device restoring with the recovery key an epoch the removed device made (the recovery wrap has no sender to authenticate). Fork consistency between devices is future work. The id key doesn't rotate.
 - Approving a device means typing 16 characters instead of comparing them. A QR code for phone ↔ computer is a later convenience.
 - `crates/nekko-cloud/tests/attacks.rs` keeps the attacks as tests, through a proxy that rewrites the real API's answers.
-- Supersedes the account-record part of [0005](0005-recovery-key-as-a-p256-key-and-sealed-account-record.md) (one record for the account → one per epoch); the recovery key as a P-256 key pair stands.
+- Supersedes the account-record part of [0006](0006-recovery-key-as-a-p256-key-and-sealed-account-record.md) (one record for the account → one per epoch); the recovery key as a P-256 key pair stands.

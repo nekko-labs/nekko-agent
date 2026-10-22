@@ -1,6 +1,6 @@
 # Outside cryptography review: scope and request for proposal
 
-*Prepared 2026-10-22 for Nekko Labs (Nekko Agent). This is the packet to send to review firms. An internal adversarial review was done first; its findings and fixes are in [crypto-review-internal-2026-10-22.md](crypto-review-internal-2026-10-22.md) and [decision 0007](../docs/decisions/0007-authenticated-wraps-and-join-codes.md). It does not replace this review.*
+*Prepared 2026-10-22 for Nekko Labs (Nekko Agent). This is the packet to send to review firms. An internal adversarial review was done first; its findings and fixes are in [crypto-review-internal-2026-10-22.md](crypto-review-internal-2026-10-22.md) and [decision 0008](../docs/decisions/0008-authenticated-wraps-and-join-codes.md). It does not replace this review.*
 
 ## What we want reviewed
 
