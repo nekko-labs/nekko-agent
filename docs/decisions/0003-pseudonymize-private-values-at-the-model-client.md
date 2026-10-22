@@ -3,7 +3,7 @@ status: accepted
 date: 2026-10-22
 ---
 
-# 0002. Pseudonymize private values at the model-client seam
+# 0003. Pseudonymize private values at the model-client seam
 
 ## Context
 

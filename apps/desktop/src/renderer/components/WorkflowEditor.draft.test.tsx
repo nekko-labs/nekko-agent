@@ -21,7 +21,7 @@ vi.mock('../store.js', () => {
 
 vi.mock('./primitives/index.js', () => ({ Modal: ({ children }: { children: React.ReactNode }) => <div>{children}</div> }));
 
-const { WorkflowEditor, draftPatch, parseAllowedTools, toDraft } = await import('./WorkflowEditor.js');
+const { WorkflowEditor, draftPatch, parseAllowedTools, skillSourceLabel, toDraft } = await import('./WorkflowEditor.js');
 
 const wf: Workflow = {
   id: 'w', name: 'Diagnose', category: 'Build & test', enabled: true, createdAt: 1, updatedAt: 1, triggers: [],
@@ -74,6 +74,60 @@ describe('workflow editor draft', () => {
     expect(html).toContain('is not local; this step will be refused.');
     expect(html).toContain('data-step-allowed-tools');
     expect(html).toContain('Use workflow model');
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps a skill step's arguments and the PR checkout, and drops arguments elsewhere", () => {
+    const d = toDraft({
+      ...wf,
+      prCheckout: true,
+      steps: [
+        { id: 's', name: 'S', kind: 'skill', run: 'nyaa:cr', args: '{{trigger.number}}' },
+        { id: 'p', name: 'P', kind: 'prompt', run: 'x', args: 'stray' },
+      ],
+    });
+    const patch = draftPatch(d);
+    expect(patch.prCheckout).toBe(true);
+    expect(patch.steps![0].args).toBe('{{trigger.number}}');
+    expect(patch.steps![1].args).toBeUndefined();
+    expect('prCheckout' in draftPatch({ ...d, prCheckout: false })).toBe(true);
+    expect(draftPatch({ ...d, prCheckout: false }).prCheckout).toBeUndefined();
+  });
+
+  it("groups the skill picker by source and shows the picked skill's folder, arguments and allowed tools", () => {
+    vi.stubGlobal('window', { nekko: { listModels: async () => [] } });
+    const skills = [
+      { id: 'review', name: 'review', description: 'Review', template: 'x', category: 'Code quality', workflow: { nodes: [], edges: [] }, source: 'builtin' },
+      {
+        id: 'nyaa:cr', name: 'nyaa:cr', description: 'Review a PR', template: 'x', category: 'Imported', workflow: { nodes: [], edges: [] },
+        source: 'plugin', pluginRoot: '/h/.claude/plugins/cache/nekko-labs/nyaa/1.0.0', argumentHint: '<pr-number>',
+        allowedTools: ['Bash(gh:*)', 'Read'],
+        origin: { tool: 'claude-plugin', scope: 'user', dir: '/h/.claude/plugins/cache/nekko-labs/nyaa/1.0.0', plugin: 'nyaa', marketplace: 'nekko-labs', version: '1.0.0', kind: 'command' },
+      },
+    ] as const;
+    const withSkill: Workflow = { ...wf, steps: [{ id: 's', name: 'S', kind: 'skill', run: 'nyaa:cr', args: '{{trigger.number}}' }] };
+    const html = renderToStaticMarkup(
+      <WorkflowEditor workflow={withSkill} workflows={[withSkill]} skills={[...skills] as never} onClose={() => {}} onSave={() => {}} />,
+    );
+    expect(html).toContain('<optgroup label="Built-in">');
+    expect(html).toContain('<optgroup label="Plugins">');
+    expect(html).not.toContain('<optgroup label="Installed">');
+    expect(html).toContain('Command from nyaa@nekko-labs 1.0.0');
+    expect(html).toContain('data-step-args');
+    expect(html).toContain('value="{{trigger.number}}"');
+    // The skill's allowed-tools are the step's until it lists its own.
+    expect(html).toContain('placeholder="Bash(gh:*), Read"');
+    expect(html).toContain('data-step-skill-tools');
+    expect(html).toContain('data-wf-pr-checkout');
+    expect(skillSourceLabel(skills[0] as never)).toBeUndefined();
+    vi.unstubAllGlobals();
+  });
+
+  it('keeps a skill the list no longer has, marked as not found', () => {
+    vi.stubGlobal('window', { nekko: { listModels: async () => [] } });
+    const gone: Workflow = { ...wf, steps: [{ id: 's', name: 'S', kind: 'skill', run: 'old:skill' }] };
+    const html = renderToStaticMarkup(<WorkflowEditor workflow={gone} workflows={[gone]} skills={[]} onClose={() => {}} onSave={() => {}} />);
+    expect(html).toContain('old:skill (not found)');
     vi.unstubAllGlobals();
   });
 });

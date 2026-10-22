@@ -1,6 +1,6 @@
 [package]
 name = "nekko-machine"
-description = "Machine probes for the Nekko Agent engine daemon: GPU and system stats and the offline-stack readiness advisor, as the TS host computes them."
+description = "Machine probes for the Nekko Agent engine daemon: GPU and system stats, the offline-stack readiness advisor, the hardware profile and model recommendations."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 nekko-js = { path = "../nekko-js" }
 regress.workspace = true
+serde.workspace = true
 # Catalog sizes like 6.3 GiB (6764573491.2) must parse to the exact double JavaScript has.
 serde_json = { workspace = true, features = ["float_roundtrip"] }
 sysinfo = { version = "0.39", default-features = false, features = ["system"] }

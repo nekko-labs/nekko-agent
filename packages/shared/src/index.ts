@@ -13,6 +13,7 @@ export * from './media-support.js';
 export * from './trim.js';
 export * from './capacity.js';
 export * from './readiness.js';
+export * from './recommendations.js';
 export * from './runtimes.js';
 export * from './engine.js';
 export * from './decisions.js';

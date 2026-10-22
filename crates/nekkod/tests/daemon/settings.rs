@@ -135,6 +135,78 @@ async fn providers_are_listed_saved_tested_and_asked_for_models_by_the_daemon() 
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_cloud_catalog_is_reused_until_the_key_changes_or_the_update_check_runs() {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let data = std::env::temp_dir().join(format!("nekkod-catalog-{}", std::process::id()));
+    std::fs::create_dir_all(&data).unwrap();
+    // An Anthropic Models API that counts its calls and can be taken down.
+    let calls = Arc::new(AtomicUsize::new(0));
+    let down = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let (c, dn) = (calls.clone(), down.clone());
+    let app = axum::Router::new().route(
+        "/v1/models",
+        axum::routing::get(move || {
+            let (c, dn) = (c.clone(), dn.clone());
+            async move {
+                c.fetch_add(1, Ordering::SeqCst);
+                if dn.load(Ordering::SeqCst) {
+                    return (axum::http::StatusCode::SERVICE_UNAVAILABLE, axum::Json(json!({})));
+                }
+                (axum::http::StatusCode::OK, axum::Json(json!({ "data": [{ "id": "claude-live-1" }] })))
+            }
+        }),
+    );
+    let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}", l.local_addr().unwrap());
+    tokio::spawn(async move { axum::serve(l, app).await.unwrap() });
+    let d = start_with(Some(&data));
+    boot_settled(&data);
+    let ids = |models: &Value| -> Vec<String> {
+        models.as_array().unwrap().iter().map(|m| m["id"].as_str().unwrap().to_string()).collect()
+    };
+
+    let p =
+        json!({ "id": "c1", "kind": "anthropic", "label": "Claude", "baseUrl": base, "apiKey": "k1", "enabled": true });
+    post(d.port, "providers:save", json!([p]), Some(TOKEN)).await;
+    // The chat pane, the picker and the Models page: one request between them.
+    let (_, first) = post(d.port, "models:list", json!(["c1"]), Some(TOKEN)).await;
+    assert_eq!(ids(&first), ["claude-live-1"]);
+    post(d.port, "models:list", json!(["c1"]), Some(TOKEN)).await;
+    let (_, status) = post(d.port, "models:listStatus", json!(["c1"]), Some(TOKEN)).await;
+    assert_eq!(status["models"], first);
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+
+    // A new key is a new catalog.
+    let mut rekeyed = p.clone();
+    rekeyed["apiKey"] = json!("k2");
+    post(d.port, "providers:save", json!([rekeyed]), Some(TOKEN)).await;
+    post(d.port, "models:list", json!(["c1"]), Some(TOKEN)).await;
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+
+    // The update check always asks the provider.
+    post(d.port, "updates:check", json!([]), Some(TOKEN)).await;
+    assert_eq!(calls.load(Ordering::SeqCst), 3);
+    post(d.port, "models:list", json!(["c1"]), Some(TOKEN)).await;
+    assert_eq!(calls.load(Ordering::SeqCst), 3);
+
+    // An outage seen by the update check drops the entry, and the shipped
+    // list it falls back to is never kept: every caller asks again.
+    down.store(true, Ordering::SeqCst);
+    post(d.port, "updates:check", json!([]), Some(TOKEN)).await;
+    assert_eq!(calls.load(Ordering::SeqCst), 4);
+    let (_, shipped) = post(d.port, "models:list", json!(["c1"]), Some(TOKEN)).await;
+    assert!(ids(&shipped).contains(&"claude-opus-5-5".to_string()));
+    assert_eq!(calls.load(Ordering::SeqCst), 5);
+    down.store(false, Ordering::SeqCst);
+    let (_, back) = post(d.port, "models:list", json!(["c1"]), Some(TOKEN)).await;
+    assert_eq!(ids(&back), ["claude-live-1"]);
+    assert_eq!(calls.load(Ordering::SeqCst), 6);
+    drop(d);
+    std::fs::remove_dir_all(data).ok();
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn adds_and_revokes_folders_through_the_daemons_settings() {
     let data = std::env::temp_dir().join(format!("nekkod-folders-{}", std::process::id()));
     let project = data.join("My Project");

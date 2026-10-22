@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import type { NewWorkflow, TemplateNeed, WorkflowNotify, WorkflowTemplate } from '@nekko-agent/shared';
+import type { NewWorkflow, SkillDef, TemplateNeed, WorkflowNotify, WorkflowTemplate } from '@nekko-agent/shared';
 import {
   WORKFLOW_NOTIFY_OPTIONS,
   WORKFLOW_TEMPLATES,
+  templateInputDefault,
   templateInputProblem,
   offlineProviderAllowed,
   templateInputValues,
@@ -11,7 +12,7 @@ import {
 } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
 import { Badge, Modal } from './primitives/index.js';
-import { WorkflowModelField, type WorkflowSeed } from './WorkflowEditor.js';
+import { SKILL_GROUPS, WorkflowModelField, type WorkflowSeed } from './WorkflowEditor.js';
 import { CloseIcon } from '../icons.js';
 import { STATUS } from '../tokens.js';
 
@@ -126,8 +127,13 @@ export function TemplateGallery({
 }
 
 /** A template's starting point for the editor or for creating it outright. */
-export function templateSeed(t: WorkflowTemplate, inputs: Record<string, string> = {}, extra: Partial<WorkflowSeed> = {}): WorkflowSeed {
-  const { steps, triggers } = t.build(templateInputValues(t, inputs));
+export function templateSeed(
+  t: WorkflowTemplate,
+  inputs: Record<string, string> = {},
+  extra: Partial<WorkflowSeed> = {},
+  skills: SkillDef[] = [],
+): WorkflowSeed {
+  const { steps, triggers } = t.build(templateInputValues(t, inputs, skills));
   const blank = t.id === 'blank';
   return {
     name: blank ? '' : t.name,
@@ -137,6 +143,7 @@ export function templateSeed(t: WorkflowTemplate, inputs: Record<string, string>
     templateId: blank ? undefined : t.id,
     localModelOnly: t.localModelOnly,
     toolAccess: t.toolAccess,
+    prCheckout: t.prCheckout,
     steps,
     triggers,
     ...extra,
@@ -145,12 +152,15 @@ export function templateSeed(t: WorkflowTemplate, inputs: Record<string, string>
 
 /** Check, ask, turn on. */
 export function TemplateSetup({
-  template,
+  template: base,
+  skills = [],
   onTurnOn,
   onCustomize,
   onClose,
 }: {
   template: WorkflowTemplate;
+  /** What a skill input can pick (`workflow:skillDefs`). */
+  skills?: SkillDef[];
   onTurnOn: (input: NewWorkflow) => Promise<void>;
   onCustomize: (seed: WorkflowSeed) => void;
   onClose: () => void;
@@ -159,13 +169,19 @@ export function TemplateSetup({
   const [workspaceId, setWorkspaceId] = useState<string | undefined>(undefined);
   const [model, setModel] = useState<ChosenModel>({});
   const env: Env = useTemplateEnv(workspaceId, model);
+  // "Local models only" starts on when a local model is set up; on, the template needs one.
+  const [localChoice, setLocalChoice] = useState<boolean | undefined>(undefined);
+  const localOnly = !!base.offerLocalOnly && (localChoice ?? !!templateLocalModel(env));
+  const template: WorkflowTemplate = localOnly
+    ? { ...base, localModelOnly: true, requires: { ...base.requires, model: false, localModel: true } }
+    : base;
   const [typed, setTyped] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState<Set<string>>(new Set());
   const [notify, setNotify] = useState<WorkflowNotify>(template.notify ?? 'failure');
   const [busy, setBusy] = useState(false);
 
   const needs = templateReadiness(template, env);
-  const values = templateInputValues(template, typed);
+  const values = templateInputValues(template, typed, skills);
   const problems = Object.fromEntries((template.inputs ?? []).map((i) => [i.key, templateInputProblem(i, values[i.key])]));
   const ready = needs.every((n) => n.ok) && Object.values(problems).every((p) => !p) && !busy;
   // A local-only template names its model: the app default may be a cloud one.
@@ -176,7 +192,7 @@ export function TemplateSetup({
     workspaceId: template.requires?.workspace ? env.workspaceId : undefined,
     providerId: localModel?.providerId,
     modelId: localModel?.modelId,
-  });
+  }, skills);
 
   const turnOn = async () => {
     if (!ready) return;
@@ -187,7 +203,7 @@ export function TemplateSetup({
         name: s.name ?? template.name, description: s.description, category: s.category, enabled: true,
         workspaceId: s.workspaceId, notify: s.notify, templateId: s.templateId,
         providerId: s.providerId, modelId: s.modelId, localModelOnly: s.localModelOnly, toolAccess: s.toolAccess,
-        steps: s.steps, triggers: s.triggers,
+        prCheckout: s.prCheckout, steps: s.steps, triggers: s.triggers,
       });
     } finally {
       setBusy(false);
@@ -259,10 +275,48 @@ export function TemplateSetup({
           </section>
         )}
 
+        {base.offerLocalOnly && (
+          <label className="mt-3 flex items-start gap-2" data-template-local-only>
+            <input type="checkbox" className="mt-0.5" checked={localOnly} onChange={(e) => setLocalChoice(e.target.checked)} />
+            <span className="text-[12.5px]">
+              Local models only
+              <span className="block text-[11px] text-ink-faint">
+                The review runs on a model on this computer and never reaches a cloud provider.
+                {!hasLocalProvider && ' No local model is set up yet.'}
+              </span>
+            </span>
+          </label>
+        )}
+
         {(template.inputs ?? []).length > 0 && (
           <section className="mt-4 space-y-3">
             {template.inputs!.map((input) => {
               const problem = touched.has(input.key) ? problems[input.key] : undefined;
+              if (input.kind === 'skill') {
+                const value = values[input.key];
+                const known = skills.some((sk) => sk.id === value);
+                return (
+                  <label key={input.key} className="block" data-template-skill>
+                    <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-faint">{input.label}</span>
+                    <select
+                      className="input w-full"
+                      value={value}
+                      onChange={(e) => setTyped((t) => ({ ...t, [input.key]: e.target.value }))}
+                    >
+                      {!known && value && <option value={value}>/{value}</option>}
+                      {SKILL_GROUPS.map((g) => {
+                        const list = skills.filter((sk) => (sk.source ?? 'installed') === g.source);
+                        return list.length ? (
+                          <optgroup key={g.source} label={g.label}>
+                            {list.map((sk) => <option key={sk.id} value={sk.id}>/{sk.name}</option>)}
+                          </optgroup>
+                        ) : null;
+                      })}
+                    </select>
+                    {input.hint && <span className="mt-1 block text-[11px] text-ink-faint">{input.hint}</span>}
+                  </label>
+                );
+              }
               return (
                 <label key={input.key} className="block">
                   <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-faint">{input.label}</span>
@@ -270,7 +324,7 @@ export function TemplateSetup({
                     className="input w-full"
                     type={input.kind === 'time' ? 'time' : 'text'}
                     placeholder={input.placeholder}
-                    value={typed[input.key] ?? input.default ?? ''}
+                    value={typed[input.key] ?? templateInputDefault(input) ?? ''}
                     onChange={(e) => setTyped((t) => ({ ...t, [input.key]: e.target.value }))}
                     onBlur={() => setTouched((t) => new Set(t).add(input.key))}
                     aria-invalid={!!problem}

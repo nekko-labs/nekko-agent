@@ -107,6 +107,8 @@ export const IpcChannels = {
   engineDismissDownload: 'engine:dismissDownload',
 
   machineReadiness: 'machine:readiness',
+  machineProfile: 'machine:profile',
+  machineRecommendations: 'machine:recommendations',
   gpuStats: 'gpu:stats',
   systemStats: 'system:stats',
 
@@ -293,6 +295,7 @@ export const IpcChannels = {
   workflowRun: 'workflow:run',
   workflowCancel: 'workflow:cancel',
   workflowRuns: 'workflow:runs',
+  workflowSkillDefs: 'workflow:skillDefs',
   /**
    * Feed an external event to the listeners. One door for every transport: the
    * CLI calls it directly, and the Local Web UI's generic `/api/:channel` route
@@ -585,6 +588,13 @@ export interface NekkoApi {
   machineReadiness(
     language?: string,
   ): Promise<import('./readiness.js').ReadinessReport>;
+  /**
+   * This machine's hardware profile: saved and reused for a week, probed
+   * again when the engine build changes or `refresh` is set.
+   */
+  machineProfile(opts?: { refresh?: boolean }): Promise<import('./recommendations.js').HardwareProfile>;
+  /** Which model to run for each task here, with expected speed and memory headroom, before any download. */
+  machineRecommendations(opts?: { refresh?: boolean }): Promise<import('./recommendations.js').Recommendations>;
   /** GPU/VRAM stats for the metrics bar + Command Center (null if unavailable). */
   getGpuStats(): Promise<import('./models.js').GpuStats | null>;
   /** CPU load + RAM use for the monitor surfaces (null if unavailable). */
@@ -914,6 +924,8 @@ export interface NekkoApi {
   cancelWorkflowRun(runId: string): Promise<void>;
   /** Run history, newest first, for one workflow or all of them. */
   listWorkflowRuns(workflowId?: string): Promise<WorkflowRun[]>;
+  /** Every skill a workflow's skill step can run, built-in first, then installs, other tools' and Claude Code plugins'. */
+  listWorkflowSkillDefs(): Promise<import('./skills.js').SkillDef[]>;
   /** Offer an event to every listening workflow; returns the runs it started. */
   dispatchWorkflowEvent(event: WorkflowEvent): Promise<WorkflowRun[]>;
 

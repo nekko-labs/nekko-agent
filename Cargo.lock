@@ -1809,6 +1809,7 @@ dependencies = [
  "libc",
  "nekko-js",
  "regress",
+ "serde",
  "serde_json",
  "sysinfo",
  "tokio",

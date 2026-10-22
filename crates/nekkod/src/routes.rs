@@ -41,7 +41,8 @@ pub struct Ctx {
     pub automation: Arc<crate::automation::Automation>,
     /// Phone remote access (`remote:*`) and the relay agent.
     pub remote: Arc<crate::remote::Remote>,
-    /// GPU and system stats and the readiness advisor (`gpu:stats`, `system:stats`, `machine:readiness`).
+    /// GPU and system stats, the readiness advisor, the hardware profile and model
+    /// recommendations (`gpu:stats`, `system:stats`, `machine:*`).
     pub machine: Arc<nekko_machine::Machine>,
     /// The experimental resource-queue client, when the data directory is known.
     pub resource_queue: Option<Arc<crate::resource_queue::ResourceQueue>>,

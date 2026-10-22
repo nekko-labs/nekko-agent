@@ -125,6 +125,8 @@ const api: NekkoApi = {
   cliInstallStatus: () => inv(IpcChannels.cliInstallStatus),
   cliInstall: () => inv(IpcChannels.cliInstall),
   machineReadiness: (language) => inv(IpcChannels.machineReadiness, language),
+  machineProfile: (opts) => inv(IpcChannels.machineProfile, opts),
+  machineRecommendations: (opts) => inv(IpcChannels.machineRecommendations, opts),
   getGpuStats: () => inv(IpcChannels.gpuStats),
   getSystemStats: () => inv(IpcChannels.systemStats),
 
@@ -307,6 +309,7 @@ const api: NekkoApi = {
   runWorkflow: (id) => inv(IpcChannels.workflowRun, id),
   cancelWorkflowRun: (runId) => inv(IpcChannels.workflowCancel, runId),
   listWorkflowRuns: (workflowId) => inv(IpcChannels.workflowRuns, workflowId),
+  listWorkflowSkillDefs: () => inv(IpcChannels.workflowSkillDefs),
   dispatchWorkflowEvent: (event) => inv(IpcChannels.workflowEvent, event),
 
   listConnectors: () => inv(IpcChannels.connectorsList),
