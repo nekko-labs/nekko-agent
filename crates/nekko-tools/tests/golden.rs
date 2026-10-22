@@ -1,8 +1,7 @@
 //! The Rust tools against the TS ones.
 //!
-//! Every file in `golden/` is written by the real TS code
-//! (packages/host/src/agent-tools.golden.test.ts, which also fails if a file
-//! goes stale). This replays the same calls through [`nekko_tools::execute`]
+//! Every file in `golden/` is a frozen record of the deleted TS code (edit it
+//! by hand per docs/runbooks/golden-fixtures.md). This replays the same calls through [`nekko_tools::execute`]
 //! on the same fixture trees and requires the same results: tool outputs,
 //! approval prompts, the resulting files byte for byte, the pending-changes
 //! records, the command log, the classifier's decisions and the specs. Both

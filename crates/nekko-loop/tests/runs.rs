@@ -1,7 +1,8 @@
 //! The Rust agent loop against the TS one, on scripted model responses.
 //!
-//! `golden/runs.expected.json` is written by `packages/host/src/agent-loop.golden.test.ts`
-//! (UPDATE_GOLDEN=1) from the scenarios in `golden/runs.json`. This test plays
+//! `golden/runs.expected.json` is a frozen record of the deleted TS loop on
+//! the scenarios in `golden/runs.json` (edit it by hand per
+//! docs/runbooks/golden-fixtures.md). This test plays
 //! the same scripts through `run_agent` with a fake client and tool runner and
 //! must produce the same events, transcript and requests after the same
 //! normalization (ids and timestamps).

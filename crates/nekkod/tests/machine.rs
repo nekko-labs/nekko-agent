@@ -56,19 +56,6 @@ async fn machine_channels_are_served_without_a_backend() {
     std::fs::create_dir_all(&dir).unwrap();
     let d = start(&dir);
 
-    let (_, info) = post(d.port, "daemon:info", json!([])).await;
-    let owned = info["owned"].as_array().unwrap();
-    for c in [
-        "gpu:stats",
-        "system:stats",
-        "machine:readiness",
-        "machine:profile",
-        "machine:recommendations",
-        "resource:queue",
-    ] {
-        assert!(owned.iter().any(|o| o == c), "{c} in {info}");
-    }
-
     let (status, sys) = post(d.port, "system:stats", json!([])).await;
     assert_eq!(status, 200, "{sys}");
     if !cfg!(target_os = "macos") {

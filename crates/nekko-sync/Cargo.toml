@@ -16,7 +16,8 @@ hmac = "0.12"
 # P-256 rather than X25519: the iPhone keeps device keys in the Secure Enclave
 # (P-256 only), and Android before API 31 has no X25519.
 p256 = { version = "0.13", default-features = false, features = ["ecdh", "std"] }
-serde = { workspace = true }
-serde_json = { workspace = true }
 sha2 = "0.10"
 zeroize = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+serde_json = { workspace = true }

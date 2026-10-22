@@ -1,5 +1,5 @@
-//! spec.rs against spec.ts: `golden/spec.json` is written by
-//! packages/host/src/spec.golden.test.ts from `golden/spec-cases.json`.
+//! spec.rs against spec.ts: `golden/spec.json` is a frozen record of the
+//! deleted TS functions on `golden/spec-cases.json`.
 
 use nekko_store::SessionStore;
 use nekko_workspace::spec;

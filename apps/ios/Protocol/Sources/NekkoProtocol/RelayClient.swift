@@ -154,7 +154,7 @@ public struct RelayConfig: Sendable {
     }
 }
 
-/// Relay v2 client: the phone side of `packages/host/src/relay.ts`.
+/// Relay v2 client: the phone side of the computer's relay agent (`crates/nekko-remote/src/agent.rs`).
 ///
 /// Connects as `role=client`, then completes the sealed handshake (phone
 /// protocol 4, replay protection):

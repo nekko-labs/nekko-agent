@@ -23,8 +23,6 @@ async fn the_daemon_runs_the_phone_relay_agent() {
     let relay = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let relay_port = relay.local_addr().unwrap().port();
 
-    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    assert!(info["owned"].as_array().unwrap().contains(&json!("remote:status")), "{info}");
     let (_, status) =
         post(d.port, "remote:enable", json!([format!("ws://127.0.0.1:{relay_port}/")]), Some(TOKEN)).await;
     assert_eq!(status["enabled"], true, "{status}");
@@ -531,8 +529,6 @@ async fn the_daemon_runs_the_telegram_bridge() {
     std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
     let d = start_with_config(Some(&data), json!({ "telegramApiUrl": format!("http://127.0.0.1:{}", tg.port) }));
 
-    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    assert!(info["owned"].as_array().unwrap().contains(&json!("messaging:status")), "{info}");
     wait_for("the first long poll", || tg.polls_since(0) >= 1).await;
     let first = &tg.calls("getUpdates")[0];
     assert_eq!(first["offset"], 40, "the poll resumes from the saved offset");

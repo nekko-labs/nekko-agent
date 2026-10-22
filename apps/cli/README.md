@@ -2,8 +2,8 @@
 
 Drive your local Nekko Agent agent from the terminal, or expose it to other tools
 (Claude Code, Codex, any MCP client) so they can trigger agents, make chat
-requests, spin up sessions, and read status. Runs the same engine (`createHost`)
-in-process against your data dir.
+requests, spin up sessions, and read status. Without a running app it starts
+its own private engine (`nekkod`) on your data dir and stops it when it exits.
 
 Current published installation:
 
@@ -28,7 +28,8 @@ node apps/cli/dist/index.js status        # or: npm link, then `nekko-agent stat
 
 ### Where it connects
 
-- **Local (default)**: runs the engine in-process against a data dir: `~/.nekko`
+- **Local (default)**: talks to the running app if there is one, else starts a
+  private `nekkod` on a data dir: `~/.nekko`
   (shared with the web/Docker edition). Set `NEKKO_DATA_DIR` to the desktop app's
   dir to share that instead (`%APPDATA%/Nekko Agent/nekko-agent` on Windows,
   `~/Library/Application Support/Nekko Agent/nekko-agent` on macOS).

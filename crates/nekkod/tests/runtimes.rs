@@ -97,11 +97,6 @@ async fn the_control_plane_runs_in_the_daemon() {
     std::fs::write(dir.join("settings.json"), settings.to_string()).unwrap();
     let d = start(&dir);
 
-    let (_, info) = post(d.port, "daemon:info", json!([])).await;
-    for c in ["runtime:status", "runtime:plan", "model:load", "server:stop", "lms:probe"] {
-        assert!(info["owned"].as_array().unwrap().iter().any(|o| o == c), "{c} in {info}");
-    }
-
     let (status, s) = post(d.port, "runtime:status", json!(["ollama"])).await;
     assert_eq!(status, 200);
     assert_eq!(

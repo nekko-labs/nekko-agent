@@ -269,7 +269,7 @@ final class PairingFixtureTests: XCTestCase {
         let link: Link?
     }
 
-    /// The fixture `packages/host/src/pairing-link.golden.test.ts` writes from
+    /// The fixture `packages/shared/src/pairing-link.golden.test.ts` writes from
     /// the computer's parser: this one must agree on every case.
     func testParsesTheSharedFixtureLikeTheComputer() throws {
         let url = try XCTUnwrap(Bundle.module.url(forResource: "pairing-links", withExtension: "json", subdirectory: "Fixtures"))

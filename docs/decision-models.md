@@ -95,7 +95,7 @@ The test fails fp32 over 1e-3, fp16 over 0.02 and int8 over 0.06, and fp32 or fp
 
 ## The hosted export
 
-The app downloads the exports from a release of this repository, [`decision-models-v1`](https://github.com/nekko-labs/nekko-agent/releases/tag/decision-models-v1). It is never marked the latest release, because the app's updater (`crates/nekkod/src/native.rs`) and the website read `releases/latest`. Assets are named `<checkpoint>.<file>`; `SHA256SUMS` lists all of them, `LICENSE` is upstream's Apache-2.0 license and `NOTICE` says what was changed. The catalog (`DECISION_CATALOG` in `packages/host/src/engine/decisions.ts`, mirrored by the daemon through its golden file) pins every file's size and SHA-256.
+The app downloads the exports from a release of this repository, [`decision-models-v1`](https://github.com/nekko-labs/nekko-agent/releases/tag/decision-models-v1). It is never marked the latest release, because the app's updater (`crates/nekkod/src/native.rs`) and the website read `releases/latest`. Assets are named `<checkpoint>.<file>`; `SHA256SUMS` lists all of them, `LICENSE` is upstream's Apache-2.0 license and `NOTICE` says what was changed. The catalog (`crates/nekkod/src/decision-catalog.json`) pins every file's size and SHA-256.
 
 | checkpoint | upstream (pinned) | fp16 | fp32 | int8 | tokenizer |
 | --- | --- | --- | --- | --- | --- |

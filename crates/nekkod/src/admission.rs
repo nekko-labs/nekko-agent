@@ -23,8 +23,6 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-pub const CHANNELS: &[&str] = &["chat:send", "chat:interruptQueued"];
-
 /// `runWorktreeSetup`'s limit.
 const SETUP_LIMIT: Duration = Duration::from_secs(15 * 60);
 

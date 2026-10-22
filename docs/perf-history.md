@@ -95,6 +95,29 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-10
 
+### nekkod checkpoints, per-chat write locks, launch scan, joined deltas (2026-10-22)
+Area: engine daemon
+Result: mixed (launch, frames and the save itself faster; a turn's end-to-end timings unchanged; text gaps about 0.5 ms longer at 15 ms token spacing)
+Conditions: Apple M1 Max, 10 cores, 64 GB, macOS 27.0.1; release `nekkod` built from `origin/main` (`58989ffb`) and from this branch in the same worktree, run alternately (base, branch) in three rounds; machine shared with other builds (load average 1.6 to 6.2 during the runs). `scripts/bench-chat-turn.mjs --fake`; medians per round, nearest-rank.
+
+| Metric | Before (3 rounds) | After (3 rounds) |
+|---|---|---|
+| Spawn to `NEKKOD_READY`, 500 chats (36.2 MB, 3 marked mid-reply), median of 8 launches | 47.3 / 44.1 / 43.1 ms | 23.5 / 22.9 / 22.6 ms |
+| Same, p95 | 48.8 / 45.7 / 44.3 ms | 23.7 / 24.3 / 23.2 ms |
+| Fanout, 4 chats x 400 tokens 1 ms apart: agent frames per subscribed socket | 412 / 412 / 412 | 45.5 / 46 / 46.5 |
+| Same, bytes per subscribed socket | 42471 / 42471 / 42471 | 7287 / 7335 / 7383 |
+| Same, unsubscribed socket: frames / bytes | 1612 / 165852 (every round) | 146 / 25116, 148 / 25308, 150 / 25500 |
+| Fanout, 4 chats x 200 tokens 15 ms apart: frames per subscribed socket | 212 / 212 / 212 | 201 / 202.75 / 204.5 |
+| 5 MB chat (40 messages, 10 pictures of 512 KB), 8 runs: first text | 44.7 / 41.8 / 44.0 ms | 43.7 / 43.2 / 43.2 ms |
+| Same: `chat:send` to approval prompt | 48.2 / 48.1 / 47.4 ms | 46.7 / 46.5 / 46.1 ms |
+| Same: queue drain (`done` to the follow-up's first text) | 53.6 / 52.5 / 53.4 ms | 50.5 / 49.2 / 49.4 ms |
+| Same: approve to `tool_result` | 16.1 / 9.7 / 9.6 ms | 15.7 / 9.7 / 9.0 ms |
+| Same: text gap p50 / p95 (tokens 15 ms apart) | 17.0 / 18.1, 16.9 / 18.2, 16.9 / 18.0 ms | 17.5 / 19.2, 17.4 / 19.0, 17.4 / 19.2 ms (worse) |
+| Small chat, 8 runs: first text | 7.1 / 6.8 / 7.2 ms | 7.3 / 6.9 / 6.1 ms |
+| One checkpoint save (`save_turn`), 2.2 MB chat of 2,000 text messages, p50 of 60, 3 runs | 4.16 / 4.16 / 4.17 ms | 2.14 / 2.14 / 2.15 ms |
+| Same, 5.0 MB chat of 40 messages and 10 pictures | 4.76 / 4.50 / 4.50 ms | 4.33 / 4.03 / 4.03 ms |
+
+Why: launch parsed every chat to find the few marked mid-reply; it now byte-searches for `"activeRun"` and parses only matches. Text and reasoning deltas within 16 ms of the last one sent are joined into one event of the same shape, so a fast stream costs a frame per window rather than per chunk; at 15 ms spacing almost nothing joins and each token can wait up to the window's remaining ~1 ms, which is the gap regression. A checkpoint save no longer re-parses the whole chat from disk (only the fields outside the transcript are read back) or clones it to serialize, which halves the save of a long text chat; a picture-heavy chat is mostly long strings that parse and copy cheaply, so its save moved less. The save now also runs without the turn's chat lock held and a `step` is published before its save, but in the 5 MB bench the save is a few ms of a turn dominated by other work, so first text and approve-to-result did not measurably move. Not measured: per-chat write locks (two chats saving at once), sharing frames across sockets, replay outside the hub lock, settings reads without a copy. The save rows come from a throwaway harness linking `nekko-store` from each revision (not committed); the rest from `bench-chat-turn.mjs --ready 8`, `--fanout 4 --tokens 400 --token-ms 1`, `--fanout 4 --tokens 200`, `--runs 8 --history 40 --history-images 10`, and `--runs 8`. A text history of 2,000 messages started a compaction instead (a different workload), so it was not used for turn timings. Source: branch `perf/nekkod-checkpoints`.
 ### Code mode: tool definitions per model call (2026-10-22)
 Area: engine daemon
 Result: improvement (definitions only; per-session savings not yet measured)

@@ -6,13 +6,13 @@
 //! host's `store.ts` (`getSettings`, `saveSettings`, `resetSettings`) down to
 //! JavaScript's object spread, property order and `JSON.stringify` output, so
 //! the file and every value handed back are byte for byte what the TS store
-//! produced. `tests/golden.rs` holds it to the TS functions
-//! (packages/host/src/settings.golden.test.ts writes the expected set and the
-//! embedded defaults, and fails when either goes stale).
+//! produced. `tests/golden.rs` holds it to a frozen record of the deleted TS
+//! functions; packages/shared's `engine-data.golden.test.ts` keeps the accents
+//! in the embedded defaults current.
 
 use serde_json::{Map, Value};
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
 /// What the TS host starts from: `defaultSettings()`, `DEFAULT_ACCENT` and
 /// `LEGACY_ACCENTS`, written by the TS golden test.
@@ -186,7 +186,8 @@ pub fn merge(current: &Map<String, Value>, patch: &Value) -> Result<Map<String, 
 /// whole on every change, with every change also published to subscribers.
 pub struct SettingsStore {
     path: PathBuf,
-    cache: Mutex<Option<Map<String, Value>>>,
+    /// Always an object; shared, so a reader that only looks need not copy it.
+    cache: Mutex<Option<Arc<Value>>>,
     changed: tokio::sync::watch::Sender<Value>,
 }
 
@@ -203,7 +204,7 @@ impl SettingsStore {
         &self.path
     }
 
-    fn lock(&self) -> std::sync::MutexGuard<'_, Option<Map<String, Value>>> {
+    fn lock(&self) -> std::sync::MutexGuard<'_, Option<Arc<Value>>> {
         self.cache.lock().unwrap_or_else(|e| e.into_inner())
     }
 
@@ -218,23 +219,26 @@ impl SettingsStore {
         }
     }
 
-    fn current(&self, cache: &mut Option<Map<String, Value>>) -> Map<String, Value> {
-        if cache.is_none() {
-            *cache = Some(self.load());
-        }
-        cache.clone().unwrap_or_default()
+    fn current(&self, cache: &mut Option<Arc<Value>>) -> Arc<Value> {
+        cache.get_or_insert_with(|| Arc::new(Value::Object(self.load()))).clone()
     }
 
     /// `getSettings()`.
     pub fn get(&self) -> Value {
+        (*self.shared()).clone()
+    }
+
+    /// [`get`](Self::get) without the copy, for a reader that only looks.
+    pub fn shared(&self) -> Arc<Value> {
         let mut cache = self.lock();
-        Value::Object(self.current(&mut cache))
+        self.current(&mut cache)
     }
 
     /// `saveSettings(patch)`: the new settings, or what it would throw.
     pub fn update(&self, patch: &Value) -> Result<Value, String> {
         let mut cache = self.lock();
-        let next = merge(&self.current(&mut cache), patch)?;
+        let current = self.current(&mut cache);
+        let next = merge(current.as_object().unwrap_or(&Map::new()), patch)?;
         self.commit(&mut cache, next)
     }
 
@@ -246,9 +250,9 @@ impl SettingsStore {
 
     /// Cache, then write, as the TS store does (a failed write leaves the new
     /// value cached and reports the error).
-    fn commit(&self, cache: &mut Option<Map<String, Value>>, next: Map<String, Value>) -> Result<Value, String> {
-        let value = Value::Object(next.clone());
-        *cache = Some(next);
+    fn commit(&self, cache: &mut Option<Arc<Value>>, next: Map<String, Value>) -> Result<Value, String> {
+        let value = Value::Object(next);
+        *cache = Some(Arc::new(value.clone()));
         write_json_atomic(&self.path, &value).map_err(|e| e.to_string())?;
         self.changed.send_replace(value.clone());
         Ok(value)

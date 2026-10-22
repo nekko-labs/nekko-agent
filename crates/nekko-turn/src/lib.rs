@@ -13,9 +13,9 @@
 //! - `side`: the suggested-replies and prompt-fill side calls;
 //! - `variants`: compaction, image turns and starting a queued prompt at once.
 //!
-//! The tool specs and the fixed text a turn uses come from the TS sources
-//! through `src/catalog.json`, which `turn-plan.golden.test.ts` writes and
-//! checks; `tests/golden.rs` holds every function here to what the TS one
+//! The tool specs and the fixed text a turn uses are in `src/catalog.json`
+//! (packages/shared's `engine-data.golden.test.ts` checks the parts defined
+//! there); `tests/golden.rs` holds every function here to what the TS one
 //! produced, key order included where the result is saved to a chat file.
 
 pub mod ask;

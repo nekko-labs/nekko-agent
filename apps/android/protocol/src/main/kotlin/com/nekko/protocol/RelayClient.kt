@@ -103,8 +103,7 @@ class RelayConfig(
 )
 
 /**
- * Relay v2 client: the phone side of `crates/nekko-remote` (and of
- * `packages/host/src/relay.ts`).
+ * Relay v2 client: the phone side of the computer's relay agent (`crates/nekko-remote/src/agent.rs`).
  *
  * Connects as `role=client`, then waits for the computer: when the relay
  * announces the connection, the computer seals a `{type:'challenge', challenge}`

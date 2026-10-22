@@ -23,11 +23,6 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 /// The channels served here when the data directory is known.
 pub const CHANNELS: &[&str] = &["usage:summary", "limits:get", "limits:problem", "limits:poll", "limits:clear"];
 
-/// What `daemon:info` adds when they are: the channels, and `turn:account`
-/// (a daemon-driven turn writes its own usage and reply lines and limits).
-pub const OWNED: &[&str] =
-    &["usage:summary", "limits:get", "limits:problem", "limits:poll", "limits:clear", "turn:account"];
-
 const POLL_INTERVAL_MS: f64 = 30_000.0;
 const CHATGPT_BASE: &str = "https://chatgpt.com/backend-api";
 const OPENROUTER_BASE: &str = "https://openrouter.ai/api/v1";
@@ -89,14 +84,17 @@ pub struct TurnAccount {
 }
 
 impl TurnAccount {
-    pub fn from_facts(facts: &Value) -> Option<TurnAccount> {
-        let a = facts.get("account").filter(|a| a.is_object())?;
-        Some(TurnAccount {
+    /// The turn's `facts.account`; a spec without one (a test's) counts as
+    /// a non-subscription turn of no known provider kind.
+    pub fn from_facts(facts: &Value) -> TurnAccount {
+        let none = json!({});
+        let a = facts.get("account").filter(|a| a.is_object()).unwrap_or(&none);
+        TurnAccount {
             provider: json!({ "auth": a.get("auth"), "kind": a.get("kind") }),
             token_key: a.get("tokenKey").and_then(Value::as_str).filter(|k| !k.is_empty()).map(str::to_string),
             subscription: a.get("auth").and_then(Value::as_str) == Some("subscription"),
             incognito: a.get("incognito") == Some(&Value::Bool(true)),
-        })
+        }
     }
 }
 
@@ -605,7 +603,7 @@ mod tests {
     fn turn_lines_are_the_hosts() {
         let dir = temp_dir("lines");
         let a = Accounts::new(Some(dir.clone()), Hub::new());
-        let account = TurnAccount::from_facts(&json!({ "account": { "auth": "apikey", "kind": "llamacpp" } })).unwrap();
+        let account = TurnAccount::from_facts(&json!({ "account": { "auth": "apikey", "kind": "llamacpp" } }));
         let opts = json!({ "sessionId": "s", "providerId": "p", "modelId": "m" });
         a.turn_usage(&opts, &account, &json!({ "type": "usage", "inputTokens": 1, "outputTokens": 2 }));
         let line = std::fs::read_to_string(dir.join("usage.jsonl")).unwrap();

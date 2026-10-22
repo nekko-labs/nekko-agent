@@ -46,7 +46,7 @@ function showWindow(): void {
   win.focus();
 }
 
-/** The engine (nekkod, or the TS backend alone); set once the app is ready. */
+/** The engine (nekkod); set once the app is ready. */
 let engine: EngineProcess | null = null;
 /** True once the engine has been stopped for quit, so the second quit goes through. */
 let engineStopped = false;

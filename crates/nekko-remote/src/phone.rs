@@ -2,9 +2,10 @@
 //! `packages/shared/src/phone-access.ts`.
 //!
 //! The lists are not written here. `phone-access.json` is generated from the
-//! TS constants by `packages/host/src/remote.golden.test.ts` (UPDATE_GOLDEN=1),
-//! which fails when it is stale, and the same test records how the TS decides
-//! a set of requests (`tests/golden/phone.json`), which this gate must
+//! TS constants by `packages/shared/src/phone-access.golden.test.ts`
+//! (UPDATE_GOLDEN=1), which fails when it is stale. `tests/golden/phone.json`
+//! is a frozen record of how the deleted TS gate decided a set of requests,
+//! which this gate must
 //! reproduce exactly: the same refusals with the same messages, the same
 //! calls into the host and the same redacted replies.
 //!

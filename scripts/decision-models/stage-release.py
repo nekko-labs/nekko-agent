@@ -6,7 +6,7 @@ For each checkpoint folder under `--exports` (`laya-en`, `laya-multilingual`,
 `laya-typed-decisions`), copies every file to `--stage` as `<checkpoint>.<file>` (assets of one
 GitHub release share a namespace), adds LICENSE and NOTICE, writes `SHA256SUMS`, and prints the
 `variants` / `shared` lists (size and SHA-256 of every file) that
-`packages/host/src/engine/decisions.ts` pins.
+`crates/nekkod/src/decision-catalog.json` pins.
 
 Publish with:
 

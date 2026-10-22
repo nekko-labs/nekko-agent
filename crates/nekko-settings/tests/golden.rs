@@ -1,8 +1,8 @@
 //! The Rust settings store against the TS one.
 //!
-//! `golden/expected.json` is written by the real `getSettings`,
-//! `saveSettings` and `resetSettings` (packages/host/src/settings.golden.test.ts,
-//! which also fails if it goes stale) for every case in `golden/cases.json`.
+//! `golden/expected.json` is a frozen record of what the deleted TS
+//! `getSettings`, `saveSettings` and `resetSettings` gave for every case in
+//! `golden/cases.json` (edit it by hand per docs/runbooks/golden-fixtures.md).
 //! Every returned value must match as text (key order and number format
 //! included) and so must the bytes left in settings.json.
 
@@ -23,7 +23,7 @@ fn every_case_matches_the_ts_store() {
     let cases = read("cases.json");
     let expected = read("expected.json");
     let (cases, expected) = (cases.as_array().unwrap(), expected.as_array().unwrap());
-    assert_eq!(cases.len(), expected.len(), "expected.json is stale; rerun the TS golden test with UPDATE_GOLDEN=1");
+    assert_eq!(cases.len(), expected.len(), "expected.json needs an entry per case (docs/runbooks/golden-fixtures.md)");
     for (i, (case, want)) in cases.iter().zip(expected).enumerate() {
         let name = case["name"].as_str().unwrap();
         assert_eq!(want["name"], case["name"]);

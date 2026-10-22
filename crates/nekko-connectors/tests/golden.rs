@@ -1,8 +1,7 @@
 //! The Rust connectors and actions against the TS ones.
 //!
-//! `golden/connectors.json` is written by
-//! `packages/core/src/connectors/connectors.golden.test.ts` (UPDATE_GOLDEN=1):
-//! each case's scripted responses, the requests the TS code sent (method,
+//! `golden/connectors.json` is a frozen record of the deleted TS code (edit
+//! it by hand per docs/runbooks/golden-fixtures.md): each case's scripted responses, the requests the TS code sent (method,
 //! URL, headers in order, body) and what it returned or threw. The port must
 //! send the same requests and return the same results.
 

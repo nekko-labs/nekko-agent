@@ -3,7 +3,7 @@ import XCTest
 @testable import NekkoProtocol
 
 /// The relay client against an in-memory relay + agent. The fake plays the
-/// agent's side of `packages/host/src/relay.ts` and nekko-remote: it seals a
+/// agent's side of `crates/nekko-remote/src/agent.rs`: it seals a
 /// challenge to each new socket (protocol 4; `challenges = false` plays a
 /// computer from before it), opens sealed frames with the room key, answers
 /// HELLO, checks each request's seq and challenge (re-challenging on a bad

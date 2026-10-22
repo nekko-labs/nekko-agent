@@ -1,7 +1,9 @@
 //! The Rust remote access against the TS code it replaces.
 //!
-//! `golden/*.json` is written by `packages/host/src/remote.golden.test.ts`
-//! (UPDATE_GOLDEN=1). Everything must come out exactly as the TS wrote it:
+//! `golden/*.json` is a frozen record of the deleted TS code (edit it by hand
+//! per docs/runbooks/golden-fixtures.md), apart from `phone-files.json` and
+//! `phone-git.json`, which packages/shared still writes. Everything must come
+//! out exactly as the TS wrote it:
 //! keys, sealed blobs, verdicts, `remote.json` and the relay agent's frames.
 
 use base64::Engine;

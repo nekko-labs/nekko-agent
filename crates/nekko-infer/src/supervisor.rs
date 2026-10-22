@@ -2,10 +2,9 @@
 //! stop it. One per loaded model.
 //!
 //! What to start (binary, arguments, which health route means ready) is the
-//! caller's decision; the TS engine still owns that policy. This module owns
-//! the processes themselves, so they outlive a restart of the TS backend:
-//! a crash there no longer orphans a model server holding VRAM, and requests
-//! keep flowing to it through the router while the backend comes back.
+//! caller's decision (the daemon's model server policy). This module owns the
+//! processes themselves and stops them all on shutdown, so none is left
+//! holding VRAM.
 
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, VecDeque};

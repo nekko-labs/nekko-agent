@@ -29,7 +29,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * The relay client against an in-memory relay + agent. The fake plays the
- * computer's side of `crates/nekko-remote`: it challenges each connection,
+ * computer's side of `crates/nekko-remote/src/agent.rs`: it challenges each connection,
  * opens sealed frames with the room key, answers a HELLO that carries its
  * challenge, checks every request's seq and challenge (re-challenging on a bad
  * one, like the computer), and replies to requests. With [FakeRelay.challenges]
