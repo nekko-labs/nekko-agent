@@ -676,44 +676,22 @@ mod tests {
 
     #[test]
     fn redacts_secrets() {
-        let cases = [
-            ("Authorization: Bearer abcdef0123456789xyz", "Authorization: Bearer [redacted]"),
-            ("OPENAI_API_KEY=sk-proj-abcdefghijklmnop1234", "OPENAI_API_KEY=[redacted]"),
-            ("using sk-ant-api03-abcdefghijklmnopqrstu now", "using [redacted] now"),
-            ("token ghp_abcdefghijklmnopqrstuvwxyz0123 ok", "token [redacted] ok"),
-            ("GITHUB_TOKEN=gho_abcdefghijklmnopqrstuvwx", "GITHUB_TOKEN=[redacted]"),
-            ("{\"password\": \"hunter2\", \"user\": \"bob\"}", "{\"password\": \"[redacted]\", \"user\": \"bob\"}"),
-            ("password=hunter2&next=1", "password=[redacted]&next=1"),
-            ("my_api_key: abc123", "my_api_key: [redacted]"),
-            ("client_secret=xyz", "client_secret=[redacted]"),
-            (
-                "wss://relay.example/agent?room=abc&key=def&v=2",
-                "wss://relay.example/agent?room=[redacted]&key=[redacted]&v=2",
-            ),
-            ("https://user:pa55@github.com/x.git", "https://[redacted]@github.com/x.git"),
-            ("aws AKIAIOSFODNN7EXAMPLE", "aws [redacted]"),
-            ("slack xoxb-1234567890-abcdefghij", "slack [redacted]"),
-            ("hf hf_abcdefghijklmnopqrstuvwxyz", "hf [redacted]"),
-            ("jwt eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N", "jwt [redacted]"),
-            ("hash 0123456789abcdef0123456789abcdef01", "hash [redacted]"),
-            ("blob QWxhZGRpbjpvcGVuIHNlc2FtZQ1234567890abcdefXYZ", "blob [redacted]"),
-            ("-----BEGIN OPENSSH PRIVATE KEY-----", "[redacted] private key"),
-            ("x-api-key: abc", "x-api-key: [redacted]"),
-        ];
-        for (input, want) in cases {
+        // Shared with the iPhone's share button, which redacts again before a log leaves the phone.
+        let golden: serde_json::Value = serde_json::from_str(include_str!("../tests/golden/log-redact.json")).unwrap();
+        for case in golden["cases"].as_array().unwrap() {
+            let (input, want) = (case[0].as_str().unwrap(), case[1].as_str().unwrap());
             assert_eq!(redact(input), want, "{input}");
         }
         // Ordinary lines are left alone.
-        for keep in [
-            "nekkod: listening on 127.0.0.1:4100",
-            "/home/user/projects/nekko-agent/crates/nekkod/src/main.rs:10",
-            "turn finished in 1234 ms, tokens: in 10 out 20",
-            "monkey=banana",
-            "commit 1a2b3c4d",
-            "the keyboard shortcut is Ctrl+K",
-        ] {
+        for keep in golden["keep"].as_array().unwrap() {
+            let keep = keep.as_str().unwrap();
             assert_eq!(redact(keep), keep, "{keep}");
         }
+        let ios: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../apps/ios/Protocol/Tests/NekkoProtocolTests/Fixtures/log-redact.json"
+        ))
+        .unwrap();
+        assert_eq!(ios, golden, "the iPhone's copy of log-redact.json is stale");
     }
 
     fn logs_with(dir: &Path, daemon: &str) -> Logs {
