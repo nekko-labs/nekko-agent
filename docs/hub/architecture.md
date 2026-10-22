@@ -45,10 +45,43 @@ Status: implemented, unit and isolated fixture interaction tested; image/motion 
 | `apps/cli` | The `nekko-agent` CLI and MCP server. |
 | `apps/mobile` | The iOS and Android app (Expo). |
 | `apps/relay-server` | The relay that pairs a phone with a computer. It only ever sees encrypted frames. |
-| `apps/nekko-agent-api/cloud` | Nekko Cloud, the planned hosted edition. |
+| `apps/nekko-agent-api` | Nekko Cloud's API: signups, accounts, encrypted sync. The only part of the project that needs a database. |
 | `apps/website` | nekkoagent.com, including these docs. |
 | `crates/nekkod` | The engine daemon. |
 | `crates/nekko-*` | The daemon's services: chat turns, tools, terminals, inference, remote access, storage, usage and more. |
+
+## Where data lives
+
+Nekko Agent is local-first. Everything you can run yourself works without a database; Postgres is only behind the hosted Nekko Cloud API.
+
+```text
+ your computer                              Nekko Cloud (hosted, optional)
+ ---------------------------------          ------------------------------------
+ desktop / Local Web UI / Docker            apps/relay-server   (stateless,
+   nekkod + TS host                           routes encrypted frames only)
+   chats: <data>/sessions/<id>.json
+   settings, memory, models: files    --->  apps/nekko-agent-api (Fastify, Fly.io)
+   in the local data directory     E2EE         |
+                                   sync         v
+ phone app                                  Postgres (Neon)
+   pairs through the relay                    signups, users, api_tokens,
+                                              sync_* (ciphertext only), donations
+```
+
+| Component | Storage | Database needed? |
+| --- | --- | --- |
+| Desktop app, Local Web UI, Docker | Files in the local data directory (one JSON file per chat, written to a temp name and renamed into place) | No |
+| Relay (`apps/relay-server`) | None: it routes encrypted frames and keeps nothing | No |
+| Nekko Cloud API (`apps/nekko-agent-api`) | Postgres via `DATABASE_URL` | Yes |
+
+### The cloud database
+
+- **Provider.** Production runs on [Neon](https://neon.tech) serverless Postgres, through Neon's pooled connection string. The Neon project sits in `aws-us-east-1`, next to the API's Fly region (`iad`). Any recent Postgres works; Neon is what we run and recommend (see [the API README](../../apps/nekko-agent-api/README.md#database-neon-recommended)).
+- **Scale to zero.** Both the Fly machine and the Neon compute stop when idle. The first query after a quiet spell waits for the compute to wake (well under a second), and the pool's timeouts in `src/db.ts` leave room for that.
+- **What it holds.** Signups and accounts (`signups`, `users`), API tokens stored as SHA-256 hashes, end-to-end encrypted sync (`sync_*`: ciphertext, opaque ids and revisions; the server never holds a key that opens them), and opt-in research samples sealed to an offline key (`donations`, with no user, device or IP column).
+- **Migrations.** Plain SQL in `apps/nekko-agent-api/migrations/NNNN_*.sql`, applied in order on every start inside one transaction under an advisory lock and recorded in `schema_migrations`. No ORM.
+- **Tests.** The API's tests run against PGlite in memory, so contributors never need a database or a Neon account.
+- **Planned.** Account sign-in, billing and the relay's authorization endpoint (`NEKKO_RELAY_AUTHZ_URL`) will live in the same service and database.
 
 ## Build order
 

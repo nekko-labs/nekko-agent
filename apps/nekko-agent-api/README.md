@@ -55,6 +55,26 @@ hostname).
   `sync_objects`, `sync_usage`: encrypted sync (migration `0002`).
 - `donations`: sealed opt-in samples, with no user, device or IP column.
 
+## Database: Neon recommended
+
+Any recent Postgres works, but production runs on [Neon](https://neon.tech) and it
+is what we recommend for anyone running their own copy of this service. It
+scales to zero like the Fly machine, so an idle deployment costs nothing, and
+its branches give each environment its own database.
+
+1. Create a Neon project in `aws-us-east-1` (next to `iad` in `fly.toml`), or
+   with the CLI: `npm i -g neonctl && neonctl auth && neonctl projects create --name nekko-agent-api`.
+2. Copy the **pooled** connection string (host contains `-pooler`) with
+   `sslmode=require`: `neonctl connection-string --pooled`.
+3. Set it as `DATABASE_URL` (see Deploy below). Migrations run on start, so
+   there is nothing else to set up.
+4. Optional: a branch per environment (`neonctl branches create --name staging`)
+   for a staging deploy or for trying a migration against a copy of production.
+
+The service is the only part of Nekko Agent that needs a database; the app,
+the Local Web UI and the relay run without one. See
+[Architecture: where data lives](../../docs/hub/architecture.md#where-data-lives).
+
 ## Run it
 
 ```bash
