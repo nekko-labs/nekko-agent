@@ -38,7 +38,7 @@ export async function fakeGoTrue(app: FastifyInstance, opts: { baseUrl: () => st
 
   app.post("/auth/v1/otp", async (req, reply) => {
     const email = String((req.body as { email?: unknown })?.email ?? "").trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return reply.code(400).send({ msg: "Unable to validate email address: invalid format" });
+    if (!plausibleEmail(email)) return reply.code(400).send({ msg: "Unable to validate email address: invalid format" });
     const code = opts.code ?? String(randomInt(0, 1_000_000)).padStart(6, "0");
     codes.set(email.toLowerCase(), code);
     log(`[fake supabase] sign-in code for ${email}: ${code}`);
@@ -80,4 +80,13 @@ export async function fakeGoTrue(app: FastifyInstance, opts: { baseUrl: () => st
   });
 
   return { jwks };
+}
+
+/** `local@domain.tld` with no spaces, checked without a backtracking regex. */
+function plausibleEmail(email: string): boolean {
+  if (email.length > 320 || /\s/.test(email)) return false;
+  const parts = email.split("@");
+  if (parts.length !== 2 || !parts[0]) return false;
+  const dot = parts[1].lastIndexOf(".");
+  return dot > 0 && dot < parts[1].length - 1;
 }
