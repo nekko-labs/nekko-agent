@@ -72,7 +72,9 @@ pub struct LaunchSpec {
 }
 
 /// The command line, without the binary. Always stream-json both ways with
-/// partial messages (without them text arrives in one block).
+/// partial messages (without them text arrives in one block), and with each
+/// message Nekko writes reported back as Claude Code takes it up
+/// (`command_lifecycle`), so a turn knows which `result` answers it.
 pub fn launch_args(spec: &LaunchSpec) -> Vec<String> {
     let mut a: Vec<String> = [
         "-p",
@@ -82,6 +84,7 @@ pub fn launch_args(spec: &LaunchSpec) -> Vec<String> {
         "stream-json",
         "--verbose",
         "--include-partial-messages",
+        "--replay-user-messages",
     ]
     .iter()
     .map(|s| s.to_string())
@@ -116,9 +119,10 @@ pub fn new_session_id() -> String {
     format!("{}-{}-{}-{}-{}", &h[0..8], &h[8..12], &h[12..16], &h[16..20], &h[20..32])
 }
 
-/// A user message line.
-pub fn user_line(content: Value) -> Value {
-    json!({ "type": "user", "message": { "role": "user", "content": content } })
+/// A user message line. `uuid` comes back in the `command_lifecycle` events
+/// Claude Code reports for it.
+pub fn user_line(content: Value, uuid: &str) -> Value {
+    json!({ "type": "user", "uuid": uuid, "message": { "role": "user", "content": content } })
 }
 
 /// The stream-json interrupt (what the Agent SDK's `interrupt()` sends).
@@ -137,6 +141,12 @@ pub struct Session {
     pid: Option<u32>,
     stdin: Option<ChildStdin>,
     lines: mpsc::UnboundedReceiver<String>,
+    /// A line [`Session::readable`] looked at and left for [`recv`](crate::Transport::recv).
+    peeked: Option<String>,
+    /// Background tasks Claude Code says are running (`background_tasks_changed`).
+    background: usize,
+    /// Whether this child has reported a `command_lifecycle` for a message.
+    reports_commands: bool,
     stderr: Arc<Mutex<VecDeque<String>>>,
     /// Claude Code's session id (`--session-id` / `--resume`).
     pub claude_session_id: String,
@@ -183,7 +193,61 @@ impl Session {
             });
         }
         let claude_session_id = spec.session.id().to_string();
-        Ok(Self { child, pid, stdin, lines, stderr, claude_session_id, spec })
+        Ok(Self {
+            child,
+            pid,
+            stdin,
+            lines,
+            peeked: None,
+            background: 0,
+            reports_commands: false,
+            stderr,
+            claude_session_id,
+            spec,
+        })
+    }
+
+    /// Wait for the next stdout line without taking it; false once the
+    /// process is gone. Cancel-safe, as the channel's receive is.
+    pub async fn readable(&mut self) -> bool {
+        if self.peeked.is_some() {
+            return true;
+        }
+        match self.lines.recv().await {
+            Some(line) => {
+                self.note(&line);
+                self.peeked = Some(line);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Drop the line [`Session::readable`] waited for, when it is only
+    /// bookkeeping ([`is_passive`]) that no turn needs to see.
+    pub fn skip_passive(&mut self) -> bool {
+        if self.peeked.as_deref().is_some_and(is_passive) {
+            self.peeked = None;
+            return true;
+        }
+        false
+    }
+
+    /// Whether Claude Code has background tasks (shell commands, sub-agents)
+    /// still running: ending the process would end them too.
+    pub fn has_background_tasks(&self) -> bool {
+        self.background > 0
+    }
+
+    fn note(&mut self, line: &str) {
+        if !line.contains("background_tasks_changed") {
+            return;
+        }
+        if let Ok(v) = serde_json::from_str::<Value>(line)
+            && v.get("subtype").and_then(Value::as_str) == Some("background_tasks_changed")
+        {
+            self.background = v.get("tasks").and_then(Value::as_array).map_or(0, Vec::len);
+        }
     }
 
     /// Whether the child is still running.
@@ -218,7 +282,20 @@ impl crate::turn::Transport for Session {
     }
 
     async fn recv(&mut self) -> Option<String> {
-        self.lines.recv().await
+        if let Some(line) = self.peeked.take() {
+            return Some(line);
+        }
+        let line = self.lines.recv().await?;
+        self.note(&line);
+        Some(line)
+    }
+
+    fn reports_commands(&self) -> bool {
+        self.reports_commands
+    }
+
+    fn set_reports_commands(&mut self) {
+        self.reports_commands = true;
     }
 
     fn kill(&mut self) {
@@ -239,6 +316,21 @@ impl crate::turn::Transport for Session {
             (None, false) => format!("Claude Code stopped responding:\n{tail}"),
             (None, true) => "Claude Code stopped responding.".into(),
         }
+    }
+}
+
+/// A line Claude Code prints between turns that starts no work of its own:
+/// background-task bookkeeping, rate limits, message lifecycle, or anything
+/// that is not JSON.
+pub fn is_passive(line: &str) -> bool {
+    let Ok(v) = serde_json::from_str::<Value>(line.trim()) else { return true };
+    match v.get("type").and_then(Value::as_str) {
+        Some("command_lifecycle" | "rate_limit_event") => true,
+        Some("system") => matches!(
+            v.get("subtype").and_then(Value::as_str),
+            Some("background_tasks_changed" | "task_started" | "task_updated" | "task_progress")
+        ),
+        _ => false,
     }
 }
 
@@ -296,6 +388,7 @@ mod tests {
                 "stream-json",
                 "--verbose",
                 "--include-partial-messages",
+                "--replay-user-messages",
                 "--session-id",
                 "u-1",
                 "--model",
@@ -350,6 +443,27 @@ mod tests {
             interrupt_line("r1"),
             json!({ "type": "control_request", "request_id": "r1", "request": { "subtype": "interrupt" } })
         );
-        assert_eq!(user_line(json!("hi"))["message"], json!({ "role": "user", "content": "hi" }));
+        let line = user_line(json!("hi"), "u-1");
+        assert_eq!(line["message"], json!({ "role": "user", "content": "hi" }));
+        assert_eq!(line["uuid"], "u-1");
+    }
+
+    #[test]
+    fn bookkeeping_between_turns_is_passive() {
+        for line in [
+            r#"{"type":"system","subtype":"background_tasks_changed","tasks":[]}"#,
+            r#"{"type":"system","subtype":"task_updated","task_id":"b1","patch":{"status":"completed"}}"#,
+            r#"{"type":"command_lifecycle","command_uuid":"u","state":"completed"}"#,
+            "not json",
+        ] {
+            assert!(is_passive(line), "{line}");
+        }
+        for line in [
+            r#"{"type":"system","subtype":"task_notification","task_id":"b1","status":"completed"}"#,
+            r#"{"type":"system","subtype":"init","session_id":"s"}"#,
+            r#"{"type":"assistant","message":{"content":[]}}"#,
+        ] {
+            assert!(!is_passive(line), "{line}");
+        }
     }
 }

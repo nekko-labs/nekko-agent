@@ -12,9 +12,18 @@
 //!
 //! An interrupt's answer is always awaited before anything else is written,
 //! so a late interrupt can never cut off the message that follows it.
+//!
+//! Claude Code also starts turns of its own: when a background command or
+//! sub-agent finishes, it wakes and works with nothing written to it. Such a
+//! turn's output may still be in the pipe when Nekko writes a message, so a
+//! turn ends only at a `result` that comes after Claude Code took the
+//! message up (`command_lifecycle` `started`, or its `isReplay` echo); an
+//! earlier one belongs to the wake-up and is shown as part of this turn. A
+//! turn with no message ([`TurnInput::content`] `None`) is such a wake-up
+//! itself, and ends at the next `result`.
 
 use crate::map::{Mapped, Mapper, Outcome, StopKind, TurnEnd, USER_STOPPED, user_content};
-use crate::session::{control_error_line, interrupt_line, user_line};
+use crate::session::{control_error_line, interrupt_line, new_session_id, user_line};
 use nekko_loop::{Cancel, Steering};
 use serde_json::{Value, json};
 use std::future::Future;
@@ -38,11 +47,18 @@ pub trait Transport: Send {
     fn next_request_id(&mut self) -> String;
     /// What to tell the user when the process went away (exit code, stderr tail).
     fn diagnostics(&mut self) -> String;
+    /// Whether this child reports `command_lifecycle` for the messages it is
+    /// sent (learned from the first one; an older Claude Code may not).
+    fn reports_commands(&self) -> bool {
+        false
+    }
+    fn set_reports_commands(&mut self) {}
 }
 
 pub struct TurnInput<'a> {
-    /// The user's message, as stream-json content ([`user_content`]).
-    pub content: Value,
+    /// The user's message, as stream-json content ([`user_content`]); `None`
+    /// for a turn Claude Code started on its own (a wake-up), which is only read.
+    pub content: Option<Value>,
     pub cancel: &'a Cancel,
     pub steering: &'a Steering,
     /// How long an interrupt may go unanswered before the tree is killed.
@@ -109,10 +125,17 @@ pub async fn run_turn<T: Transport>(
     input: TurnInput<'_>,
     emit: &mut (dyn FnMut(Mapped) + Send),
 ) -> TurnExit {
-    if t.send(user_line(input.content.clone())).await.is_err() {
-        let why = t.diagnostics();
-        mapper.fail(&why).into_iter().for_each(&mut *emit);
-        return TurnExit::Dead;
+    // The message Claude Code has not taken up yet: until it has, a `result`
+    // ends a turn it started on its own.
+    let mut awaiting: Option<String> = None;
+    if let Some(content) = input.content.clone() {
+        let uuid = new_session_id();
+        if t.send(user_line(content, &uuid)).await.is_err() {
+            let why = t.diagnostics();
+            mapper.fail(&why).into_iter().for_each(&mut *emit);
+            return TurnExit::Dead;
+        }
+        awaiting = Some(uuid);
     }
     let mut stop: Option<Stop> = None;
     // A `result` that arrived before its interrupt was answered.
@@ -178,7 +201,7 @@ pub async fn run_turn<T: Transport>(
                     // Claude Code finished but never answered the interrupt;
                     // the turn is over all the same.
                     let kind = stop.take().map(|s| s.kind);
-                    match settle(t, mapper, &input, end, kind, &mut steer, emit).await {
+                    match settle(t, mapper, &input, end, kind, &mut steer, &mut awaiting, emit).await {
                         Some(exit) => return exit,
                         None => continue,
                     }
@@ -233,9 +256,16 @@ pub async fn run_turn<T: Transport>(
                     s.deadline = Instant::now() + input.interrupt_grace;
                     if let Some(end) = ended.take() {
                         let kind = stop.take().map(|s| s.kind);
-                        if let Some(exit) = settle(t, mapper, &input, end, kind, &mut steer, emit).await {
+                        if let Some(exit) = settle(t, mapper, &input, end, kind, &mut steer, &mut awaiting, emit).await
+                        {
                             return exit;
                         }
+                    }
+                }
+                Mapped::Command { uuid, state } => {
+                    t.set_reports_commands();
+                    if awaiting.as_deref() == Some(uuid.as_str()) && state != "queued" {
+                        awaiting = None;
                     }
                 }
                 Mapped::ControlRequest { request_id, subtype } => {
@@ -243,13 +273,21 @@ pub async fn run_turn<T: Transport>(
                     let _ = t.send(control_error_line(&request_id, &why)).await;
                 }
                 Mapped::End(end) => {
+                    if stop.is_none() && awaiting.is_some() && t.reports_commands() {
+                        // A turn Claude Code started on its own ended before it
+                        // took up this one's message: keep reading.
+                        if let Some(u) = &end.usage {
+                            emit(mapper.event("usage", u.clone()));
+                        }
+                        continue;
+                    }
                     if stop.as_ref().is_some_and(|s| !s.acked) {
                         // Wait for the interrupt's answer before writing anything.
                         ended = Some(end);
                         continue;
                     }
                     let kind = stop.take().map(|s| s.kind);
-                    if let Some(exit) = settle(t, mapper, &input, end, kind, &mut steer, emit).await {
+                    if let Some(exit) = settle(t, mapper, &input, end, kind, &mut steer, &mut awaiting, emit).await {
                         return exit;
                     }
                 }
@@ -261,6 +299,7 @@ pub async fn run_turn<T: Transport>(
 
 /// A Claude Code turn ended. With steering waiting (and no Stop), send it as
 /// the next message and keep going (`None`); otherwise end the Nekko turn.
+#[allow(clippy::too_many_arguments)]
 async fn settle<T: Transport>(
     t: &mut T,
     mapper: &mut Mapper,
@@ -268,6 +307,7 @@ async fn settle<T: Transport>(
     end: TurnEnd,
     kind: Option<StopKind>,
     steer: &mut Vec<Value>,
+    awaiting: &mut Option<String>,
     emit: &mut (dyn FnMut(Mapped) + Send),
 ) -> Option<TurnExit> {
     let user_stop = kind == Some(StopKind::User) || input.cancel.is_cancelled();
@@ -300,10 +340,12 @@ async fn settle<T: Transport>(
         emit(Mapped::Message(m));
         emit(mapper.event("steered", json!({ "messageId": id })));
     }
-    if t.send(user_line(content)).await.is_err() {
+    let uuid = new_session_id();
+    if t.send(user_line(content, &uuid)).await.is_err() {
         let why = t.diagnostics();
         mapper.fail(&why).into_iter().for_each(&mut *emit);
         return Some(TurnExit::Dead);
     }
+    *awaiting = Some(uuid);
     None
 }

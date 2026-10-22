@@ -305,6 +305,8 @@ enum Step {
     Line(String),
     /// Hold until this many lines have been written to stdin.
     Gate(usize),
+    /// `command_lifecycle` in this state for the last user message written.
+    Command(&'static str),
     /// The process exits.
     Eof,
 }
@@ -314,11 +316,19 @@ struct Fake {
     sent: Vec<Value>,
     killed: bool,
     next_id: String,
+    /// The child has reported `command_lifecycle` before (an earlier turn).
+    reports: bool,
 }
 
 impl Fake {
     fn new(script: Vec<Step>) -> Self {
-        Self { script: script.into(), sent: Vec::new(), killed: false, next_id: "probe-interrupt-1".into() }
+        Self {
+            script: script.into(),
+            sent: Vec::new(),
+            killed: false,
+            next_id: "probe-interrupt-1".into(),
+            reports: false,
+        }
     }
 }
 
@@ -346,6 +356,15 @@ impl Transport for Fake {
                 }
                 Some(Step::Gate(_)) | None => std::future::pending::<()>().await,
                 Some(Step::Eof) => return None,
+                Some(Step::Command(state)) => {
+                    let state = *state;
+                    self.script.pop_front();
+                    let uuid = self.sent.iter().rev().find(|l| l["type"] == "user").map(|l| l["uuid"].clone());
+                    return Some(
+                        json!({ "type": "command_lifecycle", "command_uuid": uuid, "state": state, "uuid": "lc" })
+                            .to_string(),
+                    );
+                }
                 Some(Step::Line(_)) => {
                     let Some(Step::Line(l)) = self.script.pop_front() else { unreachable!() };
                     return Some(l);
@@ -365,6 +384,14 @@ impl Transport for Fake {
     fn diagnostics(&mut self) -> String {
         "Claude Code exited (exit code: 1).".into()
     }
+
+    fn reports_commands(&self) -> bool {
+        self.reports
+    }
+
+    fn set_reports_commands(&mut self) {
+        self.reports = true;
+    }
 }
 
 fn lines(v: &[String]) -> Vec<Step> {
@@ -378,15 +405,21 @@ async fn drive(
     grace_ms: u64,
     require: Option<&str>,
 ) -> (TurnExit, Vec<Mapped>) {
+    drive_with(fake, Some(json!("hello")), cancel, steering, grace_ms, require).await
+}
+
+async fn drive_with(
+    fake: &mut Fake,
+    content: Option<Value>,
+    cancel: &Cancel,
+    steering: &Steering,
+    grace_ms: u64,
+    require: Option<&str>,
+) -> (TurnExit, Vec<Mapped>) {
     let mut out = Vec::new();
     let mut mapper = Mapper::new("s1");
-    let input = TurnInput {
-        content: json!("hello"),
-        cancel,
-        steering,
-        interrupt_grace: Duration::from_millis(grace_ms),
-        require_mcp: require,
-    };
+    let input =
+        TurnInput { content, cancel, steering, interrupt_grace: Duration::from_millis(grace_ms), require_mcp: require };
     let exit = run_turn(fake, &mut mapper, input, &mut |m| out.push(m)).await;
     (exit, out)
 }
@@ -463,7 +496,8 @@ async fn steering_interrupts_then_sends_the_new_message() {
     assert_eq!(exit, TurnExit::Completed);
     assert_eq!(fake.sent.len(), 3);
     assert_eq!(fake.sent[1]["type"], "control_request");
-    assert_eq!(fake.sent[2], nekko_harness::user_line(json!("Say still-here instead.")));
+    assert_eq!(fake.sent[2]["message"], json!({ "role": "user", "content": "Say still-here instead." }));
+    assert!(fake.sent[2]["uuid"].as_str().is_some_and(|u| u != fake.sent[0]["uuid"]));
     let ev = events(&out);
     let k = kinds(&ev);
     assert_eq!(k.iter().filter(|k| *k == "done").count(), 1);
@@ -530,4 +564,95 @@ async fn control_requests_from_claude_code_are_declined() {
     assert_eq!(fake.sent[1]["type"], "control_response");
     assert_eq!(fake.sent[1]["response"]["subtype"], "error");
     assert_eq!(fake.sent[1]["response"]["request_id"], "cc-1");
+}
+
+/// A plain reply to the message just written, as Claude Code starts it.
+fn reply_lines(text: &str) -> Vec<Step> {
+    let rec = fixture("synthetic/wake-up.jsonl");
+    let mut assistant: Value = serde_json::from_str(&rec[4]).unwrap();
+    assistant["message"]["id"] = json!("msg_reply");
+    assistant["message"]["content"] = json!([{ "type": "text", "text": text }]);
+    let mut result: Value = serde_json::from_str(&rec[5]).unwrap();
+    result["result"] = json!(text);
+    vec![Step::Line(rec[3].clone()), Step::Line(assistant.to_string()), Step::Line(result.to_string())]
+}
+
+#[tokio::test]
+async fn a_wake_up_left_in_the_pipe_does_not_end_the_next_turn() {
+    // Claude Code woke on its own after the last turn, and nobody read it:
+    // its whole turn is in the pipe ahead of the next message.
+    let mut script = lines(&fixture("synthetic/wake-up.jsonl"));
+    script.push(Step::Gate(1));
+    script.extend([Step::Command("queued"), Step::Command("started")]);
+    script.extend(reply_lines("hello back"));
+    script.push(Step::Command("completed"));
+    let mut fake = Fake::new(script);
+    fake.reports = true;
+    let (cancel, steering) = (Cancel::default(), Steering::default());
+    let (exit, out) = drive(&mut fake, &cancel, &steering, 1_000, None).await;
+    assert_eq!(exit, TurnExit::Completed);
+    let ev = events(&out);
+    assert_eq!(kinds(&ev), ["text", "usage", "text", "usage", "done"]);
+    // Both replies are this turn's, and it ends with the one that answers it.
+    let msgs = messages(&out);
+    let texts: Vec<&str> = msgs.iter().filter_map(|m| m["content"].as_str()).collect();
+    assert_eq!(texts, ["The background build finished.", "hello back"]);
+    assert_eq!(ev.last().unwrap()["messageId"], msgs[1]["id"]);
+}
+
+#[tokio::test]
+async fn a_message_taken_up_inside_a_wake_up_ends_with_it() {
+    // Claude Code folds a message written mid-turn into the turn that runs.
+    let rec = fixture("synthetic/wake-up.jsonl");
+    let mut script = lines(&rec[..5]);
+    script.push(Step::Gate(1));
+    script.extend([Step::Command("queued"), Step::Command("started")]);
+    script.extend(lines(&rec[5..]));
+    let mut fake = Fake::new(script);
+    fake.reports = true;
+    let (cancel, steering) = (Cancel::default(), Steering::default());
+    let (exit, out) = drive(&mut fake, &cancel, &steering, 1_000, None).await;
+    assert_eq!(exit, TurnExit::Completed);
+    assert_eq!(kinds(&events(&out)), ["text", "usage", "done"]);
+}
+
+#[tokio::test]
+async fn a_wake_up_turn_writes_nothing_and_ends_at_its_result() {
+    let mut fake = Fake::new(lines(&fixture("synthetic/wake-up.jsonl")));
+    let (cancel, steering) = (Cancel::default(), Steering::default());
+    let (exit, out) = drive_with(&mut fake, None, &cancel, &steering, 1_000, Some("nekko_bridge")).await;
+    assert_eq!(exit, TurnExit::Completed);
+    assert!(fake.sent.is_empty());
+    let ev = events(&out);
+    assert_eq!(kinds(&ev), ["text", "usage", "done"]);
+    assert_eq!(text_of(&ev, "text"), "The background build finished.");
+}
+
+#[tokio::test]
+async fn a_child_learns_it_reports_messages_from_the_first_one() {
+    // A fresh child: nothing can be in the pipe yet, and its first message's
+    // lifecycle tells the next turn it can wait for `started`.
+    let mut script = vec![Step::Gate(1), Step::Command("queued"), Step::Command("started")];
+    script.extend(reply_lines("first"));
+    let mut fake = Fake::new(script);
+    let (cancel, steering) = (Cancel::default(), Steering::default());
+    let (exit, _) = drive(&mut fake, &cancel, &steering, 1_000, None).await;
+    assert_eq!(exit, TurnExit::Completed);
+    assert!(fake.reports);
+    assert!(fake.sent[0]["uuid"].as_str().is_some_and(|u| u.len() == 36));
+
+    // A Claude Code that reports nothing ends at the first `result`, as before.
+    let mut fake = Fake::new(lines(&fixture("synthetic/wake-up.jsonl")));
+    let (exit, out) = drive(&mut fake, &cancel, &steering, 1_000, None).await;
+    assert_eq!(exit, TurnExit::Completed);
+    assert!(!fake.reports);
+    assert_eq!(kinds(&events(&out)), ["text", "usage", "done"]);
+}
+
+#[test]
+fn a_replayed_message_reads_as_started() {
+    let mut m = Mapper::new("s1");
+    let echo =
+        json!({ "type": "user", "message": { "role": "user", "content": "hi" }, "uuid": "u-1", "isReplay": true });
+    assert_eq!(m.map(&echo), [Mapped::Command { uuid: "u-1".into(), state: "started".into() }]);
 }
