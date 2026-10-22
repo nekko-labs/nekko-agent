@@ -48,6 +48,7 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 - [Composer containment and compact subagent activity (2026-10-13)](chat/composer-containment-and-compact-subagent-activity.md) (2 KB)
 - [Composer Markdown editing tools (implemented; isolated interaction checks verified, visual inspection pending)](chat/composer-markdown-editing-tools.md) (2 KB)
 - [Default modes: where the models run (2026-10-22)](chat/default-modes-where-the-models-run.md) (4 KB)
+- [End-to-end encrypted sync for Pro and Team (2026-10-22)](chat/end-to-end-encrypted-sync-for-pro-and-team.md) (4 KB)
 - [Find in this chat (2026-10-16)](chat/find-in-this-chat.md) (3 KB)
 - [Live streaming token rate](chat/live-streaming-token-rate.md) (1 KB)
 - [Muted pending-change badge](chat/muted-pending-change-badge.md) (1 KB)
@@ -155,7 +156,7 @@ Phone remote control and the native iOS and Android apps.
 
 - [Driving your home model from your phone (remote control)](phone/driving-your-home-model-from-your-phone-remote-control.md) (12 KB)
 - [Native Android app (2026-10-11)](phone/native-android-app.md) (40 KB)
-- [Native iOS app (2026-10-16)](phone/native-ios-app.md) (70 KB)
+- [Native iOS app (2026-10-16)](phone/native-ios-app.md) (71 KB)
 - [Native phone implementation decision (2026-10-07)](phone/native-phone-implementation-decision.md) (2 KB)
 - [Your agent in your pocket (the iOS and Android app)](phone/your-agent-in-your-pocket-the-ios-and-android-app.md) (5 KB)
 

@@ -52,6 +52,12 @@
           "description": "Drive the agent on your computer from your phone, end-to-end encrypted."
         },
         {
+          "slug": "sync-encryption",
+          "title": "Encrypted sync",
+          "source": "docs/SYNC-ENCRYPTION.md",
+          "description": "How Pro and Team sync your chats without Nekko Cloud being able to read them."
+        },
+        {
           "slug": "cli",
           "title": "CLI and MCP",
           "source": "docs/CLI.md",
