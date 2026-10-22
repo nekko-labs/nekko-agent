@@ -22,7 +22,8 @@ pub fn fake_claude() {
         .and_then(|p| std::fs::read_to_string(p).ok())
         .and_then(|s| serde_json::from_str::<Value>(&s).ok())
         .map(|c| {
-            let a = &c["mcpServers"]["nekko_bridge"]["args"];
+            let server = &c["mcpServers"]["nekko_bridge"];
+            let a = &server["args"];
             let at = |name: &str| {
                 a.as_array()
                     .and_then(|v| v.iter().position(|x| x == name))
@@ -30,7 +31,7 @@ pub fn fake_claude() {
                     .unwrap_or_default()
                     .to_string()
             };
-            (at("--bridge"), at("--url"))
+            (server["env"]["NEKKO_BRIDGE_TOKEN"].as_str().unwrap_or_default().to_string(), at("--url"))
         })
         .unwrap_or_default();
     let down = token.is_empty() || std::env::var("NEKKOD_TEST_BRIDGE_DOWN").is_ok();

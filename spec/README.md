@@ -104,7 +104,7 @@ Agents panel, monitors, subagents and delegation.
 What the model sees: Context Inspector, modes, work modes, rules, memory, specs.
 
 - [Code mode: a chat's tools as code (2026-10-22)](context/code-mode-tools-as-code.md) (7 KB)
-- [Context, guardrails & memory (the differentiators)](context/context-guardrails-memory-the-differentiators.md) (5 KB)
+- [Context, guardrails & memory (the differentiators)](context/context-guardrails-memory-the-differentiators.md) (11 KB)
 - [Living spec from a conversation](context/living-spec-from-a-conversation.md) (1 KB)
 - [Mode panel and saved modes (2026-10-17)](context/mode-panel-and-saved-modes.md) (8 KB)
 - [Privacy Shield: control what a cloud model receives](context/privacy-shield.md) (4 KB)

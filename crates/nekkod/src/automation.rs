@@ -369,7 +369,7 @@ impl WorkflowHost for Engine {
                 })
             };
             let out = ShellRunner
-                .run(RunRequest { command: &cmd, cwd: &cwd, limits, cancel: &cancel, on_output: &|_| {} })
+                .run(RunRequest { command: &cmd, cwd: &cwd, limits, cancel: &cancel, on_output: &|_| {}, env: &[] })
                 .await;
             timer.abort();
             match out.failure {
