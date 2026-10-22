@@ -45,6 +45,7 @@ const OPTION_KEYS: &[&str] = &[
     "chatType",
     "imageParams",
     "archivedAt",
+    "privacy",
 ];
 
 /// `STARTER_MODES` (packages/shared/src/saved-modes.ts): the saved modes until
@@ -175,6 +176,7 @@ const USER_FIELDS: &[&str] = &[
     "specLinked",
     "queue",
     "archivedAt",
+    "privacy",
 ];
 
 /// `queueItemPayload`: a queued prompt as `{ text, images?, skill? }`.

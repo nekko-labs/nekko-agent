@@ -36,7 +36,7 @@ use crate::decide::DecideService;
 use crate::hub::Hub;
 use crate::mcp::Mcp;
 use nekko_agent::{ProviderConfig, ProviderKind, create_provider};
-use nekko_chat::ProviderClient;
+use nekko_chat::{ProviderClient, ShieldedClient};
 use nekko_js as js;
 use nekko_loop::{Cancel, RunOptions, Steering, ToolRunner, run_agent};
 use nekko_store::SessionStore;
@@ -1036,6 +1036,8 @@ impl Turns {
             return self.end_turn(&store, shared, &session, forwarder, incognito).await;
         }
 
+        // Privacy Shield: a cloud model gets placeholders for private values.
+        let shield = crate::privacy::shield_for(&lock(&session), settings, &facts["provider"]);
         let provider = create_provider(config);
         // An Anthropic API key's own rate limits, read off each response.
         let client = if let Some(key) = str_at(facts, "apiLimitsKey").map(str::to_string) {
@@ -1049,6 +1051,7 @@ impl Turns {
         } else {
             ProviderClient::new(provider)
         };
+        let client = ShieldedClient::new(client, shield.clone());
         let names: HashSet<String> = tools.iter().map(|t| turn::catalog::name(t).to_string()).collect();
         let mode = str_at(&lock(&session), "mode")
             .map(str::to_string)
@@ -1127,6 +1130,13 @@ impl Turns {
         })
         .await;
         drop(runner);
+        // What the shield hid, by kind and never by value, for the engine log.
+        if let Some(shield) = &shield {
+            let counts = shield.lock().unwrap_or_else(|e| e.into_inner()).counts_by_kind();
+            if !counts.is_empty() {
+                crate::logs::note(&format!("privacy shield: replaced {counts:?}"));
+            }
+        }
         self.end_turn(&store, shared, &session, forwarder, incognito).await
     }
 
@@ -1373,6 +1383,7 @@ async fn generate_title(
     }
     let messages = fresh.get("messages").and_then(Value::as_array).cloned().unwrap_or_default();
     let Some(content) = turn::title_prompt(&messages) else { return };
+    let (content, shield) = crate::privacy::guard(&fresh, &spec["settings"], &facts["provider"], &content);
     let request = json!({
         "provider": facts["provider"],
         "request": {
@@ -1398,7 +1409,10 @@ async fn generate_title(
     if out.get("error").is_some() {
         return;
     }
-    let title = turn::clean_title(out.get("text").and_then(Value::as_str).unwrap_or_default());
+    let title = turn::clean_title(&crate::privacy::unguard(
+        &shield,
+        out.get("text").and_then(Value::as_str).unwrap_or_default(),
+    ));
     if title.is_empty() {
         return;
     }

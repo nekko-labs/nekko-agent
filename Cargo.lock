@@ -1700,6 +1700,7 @@ version = "0.1.0"
 dependencies = [
  "nekko-agent",
  "nekko-loop",
+ "nekko-privacy",
  "serde",
  "serde_json",
  "tokio",
@@ -1859,6 +1860,14 @@ dependencies = [
  "serde_json",
  "sha2",
  "url",
+]
+
+[[package]]
+name = "nekko-privacy"
+version = "0.1.0"
+dependencies = [
+ "regress",
+ "serde_json",
 ]
 
 [[package]]
@@ -2052,6 +2061,7 @@ dependencies = [
  "nekko-messaging",
  "nekko-native",
  "nekko-oauth",
+ "nekko-privacy",
  "nekko-remote",
  "nekko-sandbox",
  "nekko-settings",

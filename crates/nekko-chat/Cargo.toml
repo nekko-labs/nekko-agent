@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 nekko-agent = { path = "../nekko-agent" }
 nekko-loop = { path = "../nekko-loop" }
+nekko-privacy = { path = "../nekko-privacy" }
 serde.workspace = true
 serde_json.workspace = true
 

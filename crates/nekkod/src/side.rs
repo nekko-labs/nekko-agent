@@ -84,6 +84,7 @@ async fn complete(
     crate::admission::provider_endpoint(&provider)?;
     let resolved = crate::providers::resolve(ctx, &provider).await.ok()?;
     let resolved = crate::admission::host_provider_config(ctx, &resolved);
+    let (content, shield) = crate::privacy::guard(session, &settings, &provider, &content);
     let request = json!({
         "provider": resolved,
         "request": {
@@ -109,5 +110,5 @@ async fn complete(
     if out.get("error").is_some() {
         return None;
     }
-    Some(out.get("text").and_then(Value::as_str).unwrap_or_default().to_string())
+    Some(crate::privacy::unguard(&shield, out.get("text").and_then(Value::as_str).unwrap_or_default()))
 }

@@ -10,3 +10,4 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | --- | --- | --- |
 | [0001](0001-split-the-spec-into-feature-files.md) | Split SPEC.md into feature files, AGENTS.md into rules and runbooks | accepted |
 | [0002](0002-bundled-model-feed-with-measured-calibration.md) | Recommend models from a bundled feed, with speeds calibrated on measurements | accepted |
+| [0003](0003-pseudonymize-private-values-at-the-model-client.md) | Pseudonymize private values at the model-client seam (Privacy Shield) | accepted |

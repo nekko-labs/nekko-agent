@@ -487,6 +487,7 @@ function makeWebClient(): NekkoApi {
     readScopedFile: (root, relPath, opts) => call(IpcChannels.filesRead, root, relPath, opts ?? {}),
     writeScopedFile: (root, relPath, content, opts) => call(IpcChannels.filesWrite, root, relPath, content, opts),
     listLogs: () => call(IpcChannels.logsList),
+    previewPrivacy: (sessionId, draft) => call(IpcChannels.privacyPreview, sessionId, draft),
     readLog: (id, opts) => call(IpcChannels.logsRead, id, opts ?? {}),
     fetchRemoteImage: (url) => call(IpcChannels.imageFetch, url),
 

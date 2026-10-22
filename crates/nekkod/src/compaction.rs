@@ -226,14 +226,18 @@ async fn run(
     let plan = v::compaction_plan(&messages, window)?;
 
     let config: ProviderConfig = serde_json::from_value(resolved.clone()).map_err(|e| format!("provider: {e}"))?;
+    let settings = crate::settings::current(ctx).await;
+    // One shield for every part of the summary, so a value keeps one placeholder throughout.
+    let shield = crate::privacy::shield_for(&session, &settings, &provider);
     let summary = {
         let calls = SummaryCalls {
+            shield,
             config,
             resolved: resolved.clone(),
             model: model.clone(),
             session_id: session_id.clone(),
             max_output_tokens: v::compaction_sizes(window).1,
-            prompt_caching: crate::settings::current(ctx).await.get("promptCaching") != Some(&json!(false)),
+            prompt_caching: settings.get("promptCaching") != Some(&json!(false)),
             ctx: ctx.clone(),
             job: job.clone(),
         };
@@ -306,6 +310,8 @@ fn land(
 
 /// One compaction's summary calls on the Rust providers.
 struct SummaryCalls {
+    /// Privacy Shield: the chunk goes out redacted, the summary comes back restored.
+    shield: Option<Arc<Mutex<nekko_privacy::Shield>>>,
     config: ProviderConfig,
     resolved: Value,
     model: String,
@@ -325,13 +331,24 @@ impl SummaryCalls {
         let provider = create_provider(self.config.clone());
         let token_key = self.resolved.get("tokenKey").and_then(Value::as_str).map(str::to_string);
         let subscription = self.resolved.get("auth").and_then(Value::as_str) == Some("subscription");
-        let mut user = ChatMessage::new(Role::User, v::summary_prompt(&chunk));
+        let lock_shield = |s: &Arc<Mutex<nekko_privacy::Shield>>| {
+            s.lock().unwrap_or_else(|e| e.into_inner()).redact(&v::summary_prompt(&chunk))
+        };
+        let prompt = match &self.shield {
+            Some(s) => lock_shield(s),
+            None => v::summary_prompt(&chunk),
+        };
+        let system = match &self.shield {
+            Some(_) => format!("{}{}", v::SUMMARY_SYSTEM, nekko_privacy::SYSTEM_NOTE),
+            None => v::SUMMARY_SYSTEM.to_string(),
+        };
+        let mut user = ChatMessage::new(Role::User, prompt);
         user.id = uuid();
         user.extra.insert("createdAt".into(), json!(now_ms()));
         let request = ChatRequest {
             model: self.model.clone(),
             messages: vec![user],
-            system: Some(v::SUMMARY_SYSTEM.into()),
+            system: Some(system),
             // A summary needs no deliberation, and a reasoning model left on its
             // default effort spends minutes per chunk.
             effort: Some(EffortLevel::Low),
@@ -388,7 +405,10 @@ impl SummaryCalls {
                 v::SUMMARY_CALL_TIMEOUT_MS / 60_000
             )),
             Ok(Err(e)) => Err(e),
-            Ok(Ok(())) => Ok(answer),
+            Ok(Ok(())) => Ok(match &self.shield {
+                Some(s) => s.lock().unwrap_or_else(|e| e.into_inner()).restore(&answer),
+                None => answer,
+            }),
         }
     }
 }

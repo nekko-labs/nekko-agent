@@ -42,6 +42,7 @@ mod model_server;
 mod native;
 mod oauth;
 mod pr_checkouts;
+mod privacy;
 mod procgroup;
 mod providers;
 mod remote;

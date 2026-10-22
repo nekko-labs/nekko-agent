@@ -214,6 +214,8 @@ export const IpcChannels = {
   /** The app's, the engine's and each chat's agent logs, redacted (IO-33 FA-5). */
   logsList: 'logs:list',
   logsRead: 'logs:read',
+  /** What Privacy Shield would hide from a cloud model in a chat and its draft. */
+  privacyPreview: 'privacy:preview',
   attachmentImport: 'attachment:import',
   imageFetch: 'image:fetch',
 
@@ -719,7 +721,7 @@ export interface NekkoApi {
   specPath(sessionId: string): Promise<string | null>;
   setSessionOptions(
     id: string,
-    patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'order' | 'mode' | 'disabledTools' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' | 'memory' | 'guidance' | 'offline' | 'cloudOnly' | 'incognito' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'workMode' | 'thinking' | 'providerId' | 'modelId' | 'plan' | 'chatType' | 'imageParams' | 'archivedAt'>>,
+    patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'order' | 'mode' | 'disabledTools' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' | 'memory' | 'guidance' | 'offline' | 'cloudOnly' | 'incognito' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'workMode' | 'thinking' | 'providerId' | 'modelId' | 'plan' | 'chatType' | 'imageParams' | 'archivedAt' | 'privacy'>>,
   ): Promise<Session | null>;
   truncateSession(id: string, messageId: string): Promise<Session | null>;
   /** Delete chats within a window; returns how many were removed. */
@@ -803,6 +805,8 @@ export interface NekkoApi {
   listLogs(): Promise<LogInfo[]>;
   /** A log's redacted tail, or its redacted lines that hold `query`. */
   readLog(id: string, opts?: LogReadOptions): Promise<LogRead>;
+  /** What Privacy Shield would replace before this chat's next request reaches a cloud model. */
+  previewPrivacy(sessionId: string, draft: string): Promise<import('./privacy.js').PrivacyPreview>;
   /**
    * Fetch a remote photo for the chat through the host: public http(s) only,
    * size-capped and type-sniffed, returned as an inert data URL.

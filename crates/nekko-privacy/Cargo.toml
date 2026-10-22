@@ -1,0 +1,12 @@
+[package]
+name = "nekko-privacy"
+description = "Privacy Shield: finds personal data and secrets in what a chat sends a cloud model, swaps them for placeholders, and puts the real values back in what the model returns."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+regress.workspace = true
+serde_json.workspace = true

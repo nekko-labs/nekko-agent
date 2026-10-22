@@ -169,7 +169,8 @@ async fn prepare_sub_agent(
     let title = title.and_then(Value::as_str).map(|t| js::trim(t).to_string()).filter(|t| !t.is_empty());
     let title = title.unwrap_or_else(|| js::slice16(js::trim(&task), 40).to_string());
     let title = if title.is_empty() { "Sub-agent".to_string() } else { title };
-    // What the child takes from its parent: its tool policy, and nothing it switched off.
+    // What the child takes from its parent: its tool policy, nothing it switched
+    // off, and its Privacy Shield (a shielded chat's sub-agents are shielded too).
     let mut fields: Vec<(&'static str, Value)> =
         vec![("title", json!(title)), ("providerId", target_provider.clone()), ("modelId", target_model.clone())];
     for key in [
@@ -183,6 +184,7 @@ async fn prepare_sub_agent(
         "offline",
         "cloudOnly",
         "incognito",
+        "privacy",
     ] {
         if let Some(v) = parent.get(key) {
             fields.push((key, v.clone()));

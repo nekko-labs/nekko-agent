@@ -324,6 +324,8 @@ export interface Session {
   cloudOnly?: boolean;
   /** Incognito: don't persist the transcript or touch memory. */
   incognito?: boolean;
+  /** Privacy Shield: what this chat hides from a cloud model (see privacy.ts). */
+  privacy?: import('./privacy.js').SessionPrivacy;
   /** Pinned to the top of the chat list. */
   pinned?: boolean;
   /** Free-form tags for organizing/filtering chats. */
