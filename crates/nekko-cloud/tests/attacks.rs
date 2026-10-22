@@ -119,7 +119,8 @@ async fn call(d: &Device, channel: &str, args: Value) -> Result<Value, String> {
 async fn sign_in(d: &Device, email: &str) {
     call(d, "cloud:sendCode", json!([email])).await.unwrap();
     let s = call(d, "cloud:verifyCode", json!([email, CODE])).await.unwrap();
-    assert_eq!(s["signedIn"], true, "{s}");
+    // Fixed messages only: the status can hold the join code, so it is never printed.
+    assert!(s["signedIn"] == true, "sign-in didn't finish");
 }
 
 fn chat(id: &str, text: &str, updated: f64) -> Value {
