@@ -161,6 +161,7 @@ Phone remote control and the native iOS and Android apps.
 - [Native Android app (2026-10-11)](phone/native-android-app.md) (40 KB)
 - [Native iOS app (2026-10-16)](phone/native-ios-app.md) (71 KB)
 - [Native phone implementation decision (2026-10-07)](phone/native-phone-implementation-decision.md) (2 KB)
+- [Phone access classes and relay replay protection](phone/phone-access-classes-and-relay-replay-protection.md) (8 KB)
 - [Your agent in your pocket (the iOS and Android app)](phone/your-agent-in-your-pocket-the-ios-and-android-app.md) (5 KB)
 
 ### platform
