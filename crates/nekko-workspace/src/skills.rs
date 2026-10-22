@@ -722,6 +722,16 @@ pub fn split_allowed_tools(value: &str) -> Vec<String> {
     out
 }
 
+/// A canonical path as the user would write it: Windows canonical paths carry
+/// a verbatim prefix (`\\?\C:\...`) that the model and Git do not expect.
+fn shown_path(p: &Path) -> String {
+    let s = p.to_string_lossy();
+    if let Some(unc) = s.strip_prefix(r"\\?\UNC\") {
+        return format!(r"\\{unc}");
+    }
+    s.strip_prefix(r"\\?\").unwrap_or(&s).to_string()
+}
+
 /// A file's text when it sits inside `root` once links are followed, is a
 /// regular file and is no larger than [`MAX_SKILL_BYTES`].
 fn read_contained(file: &Path, root: &Path) -> Option<String> {
@@ -817,9 +827,8 @@ fn plugin_def(
         return None;
     }
     let id = format!("{plugin}:{name}");
-    let root_s = root.to_string_lossy().into_owned();
-    let template =
-        if kind == "skill" { skill_template(&id, Some(&dir.to_string_lossy()), &body) } else { body.clone() };
+    let root_s = shown_path(root);
+    let template = if kind == "skill" { skill_template(&id, Some(&shown_path(dir)), &body) } else { body.clone() };
     let allowed: Vec<String> =
         frontmatter_value(raw, "allowed-tools").map(|v| split_allowed_tools(&v)).unwrap_or_default();
     let mut def = json!({
@@ -832,7 +841,7 @@ fn plugin_def(
         "origin": {
             "tool": "claude-plugin",
             "scope": "user",
-            "dir": dir.to_string_lossy(),
+            "dir": shown_path(dir),
             "plugin": plugin,
             "marketplace": market,
             "version": version,

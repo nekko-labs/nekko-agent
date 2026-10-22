@@ -11,7 +11,9 @@ fn temp(tag: &str) -> PathBuf {
     let p = std::env::temp_dir()
         .join(format!("nekko-plugins-{tag}-{}", b.iter().map(|x| format!("{x:02x}")).collect::<String>()));
     std::fs::create_dir_all(&p).unwrap();
-    std::fs::canonicalize(p).unwrap()
+    // Without Windows' verbatim prefix (`\\?\C:\...`), as the skill defs show paths.
+    let canonical = std::fs::canonicalize(p).unwrap().to_string_lossy().into_owned();
+    canonical.strip_prefix(r"\\?\").unwrap_or(&canonical).into()
 }
 
 fn write(base: &Path, rel: &str, text: &str) {

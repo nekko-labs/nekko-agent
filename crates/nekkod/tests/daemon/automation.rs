@@ -373,7 +373,7 @@ async fn a_plugin_skill_reviews_a_pr_in_its_own_checkout() {
     let (data, home, remote) = (base.join("data"), base.join("home"), base.join("remote"));
     std::fs::create_dir_all(data.join("sessions")).unwrap();
     // The plugin, enabled in Claude Code's settings.
-    let root = home.join(".claude/plugins/cache/nekko-labs/nyaa/1.0.0");
+    let root = home.join(".claude").join("plugins").join("cache").join("nekko-labs").join("nyaa").join("1.0.0");
     for (rel, text) in [
         (".claude-plugin/plugin.json", r#"{"name":"nyaa","version":"1.0.0"}"#),
         (
@@ -441,7 +441,9 @@ async fn a_plugin_skill_reviews_a_pr_in_its_own_checkout() {
     let last = requests.last().unwrap()["messages"].as_array().unwrap().clone();
     let user_text = last.iter().find(|m| m["role"] == "user").unwrap()["content"].to_string();
     assert!(user_text.contains("Review PR 7 following"), "{user_text}");
-    assert!(user_text.contains(&rules.replace('\\', "\\\\")), "{user_text}");
+    // `${CLAUDE_PLUGIN_ROOT}` is the plugin's folder; the rest is the command's own text.
+    let cited = format!("{}/skills/nyaa/references/rules.md", root.to_string_lossy());
+    assert!(user_text.contains(&cited.replace('\\', "\\\\")), "{user_text}");
     assert!(user_text.contains("lint/audit skipped: untrusted PR"), "{user_text}");
     let tool = |id: &str| {
         last.iter().find(|m| m["role"] == "tool" && m["tool_call_id"] == id).map(|m| m["content"].to_string()).unwrap()
