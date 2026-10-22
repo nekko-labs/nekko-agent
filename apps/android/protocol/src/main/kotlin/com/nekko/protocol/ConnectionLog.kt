@@ -79,6 +79,8 @@ object ConnectionAdvice {
                         "That pairing code was used or expired (codes last 10 minutes and work once). Make a new one on $computer."
                     DenyReason.BAD_KEY ->
                         "The pairing key no longer matches $computer, usually because remote access was turned off and on there. Pair again."
+                    DenyReason.UPDATE_REQUIRED ->
+                        "$computer only accepts phones on the newest Nekko Agent. Update this app to connect to it."
                     else -> "$computer doesn’t know this phone. Pair again from Settings → Remote access on the computer."
                 },
             )

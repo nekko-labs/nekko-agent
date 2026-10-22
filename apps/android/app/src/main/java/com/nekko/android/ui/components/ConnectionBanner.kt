@@ -46,6 +46,7 @@ fun deniedCopy(reason: DenyReason?): String = when (reason) {
     DenyReason.UNKNOWN_DEVICE -> "Your computer doesn’t know this phone yet. Scan a pairing QR."
     DenyReason.KICKED -> "Your computer disconnected this phone. Pair it again."
     DenyReason.BAD_KEY -> "The pairing key changed on your computer. Scan a fresh QR."
+    DenyReason.UPDATE_REQUIRED -> "Your computer only accepts phones on the newest Nekko Agent. Update this app to connect to it."
     DenyReason.INVALID, null -> "Pairing failed. Scan a fresh QR on your computer."
 }
 
@@ -55,6 +56,8 @@ fun ConnectionBanner(s: ComputersState, onPair: () -> Unit, onComputers: () -> U
     val active = s.active ?: return
     val p = Nekko.palette
     val denied = s.denied != null || s.conn == RelayState.DENIED
+    // Pairing again can't help an app that is too old for the computer.
+    val repair = denied && s.denied != DenyReason.UPDATE_REQUIRED
     // An address the phone can never reach: say why instead of "Connecting…" forever.
     val hint = RelayHint.problem(active.relayUrl, BuildConfig.DEBUG)
     // A tailnet relay with Tailscale off on this phone: say so (re-read on each state change).
@@ -76,8 +79,8 @@ fun ConnectionBanner(s: ComputersState, onPair: () -> Unit, onComputers: () -> U
             .clip(RoundedCornerShape(12.dp))
             .background(p.surface)
             .border(1.dp, p.line, RoundedCornerShape(12.dp))
-            .clickable(role = Role.Button, onClickLabel = if (denied) "Pair again" else "Manage computers") {
-                if (denied) onPair() else onComputers()
+            .clickable(role = Role.Button, onClickLabel = if (repair) "Pair again" else "Manage computers") {
+                if (repair) onPair() else onComputers()
             }
             .heightIn(min = 48.dp)
             .padding(horizontal = 16.dp, vertical = 12.dp),
@@ -96,7 +99,7 @@ fun ConnectionBanner(s: ComputersState, onPair: () -> Unit, onComputers: () -> U
             }
         }
         Icon(
-            if (denied) Icons.Filled.QrCode2 else Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            if (repair) Icons.Filled.QrCode2 else Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
             tint = p.inkFaint,
             modifier = Modifier.size(18.dp),
