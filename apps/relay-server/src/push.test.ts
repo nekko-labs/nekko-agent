@@ -1,6 +1,19 @@
 import { describe, it, expect } from 'vitest';
 import { generateKeyPairSync, verify as cryptoVerify, createVerify } from 'node:crypto';
-import { activityPayload, makeApnsJwt, makeFcmAssertion } from './push.js';
+import { activityPayload, alertPayload, dismissPayload, makeApnsJwt, makeFcmAssertion } from './push.js';
+
+describe('alert and dismissal payloads', () => {
+  it('carry the kind and the opaque chat tag, never content', () => {
+    expect(alertPayload({ title: 'Nekko needs you', body: 'A tool needs your approval.', kind: 'needs-you', tag: 'a'.repeat(32) })).toEqual({
+      aps: { alert: { title: 'Nekko needs you', body: 'A tool needs your approval.' }, sound: 'default', 'thread-id': 'a'.repeat(32) },
+      kind: 'needs-you',
+      tag: 'a'.repeat(32),
+    });
+    // An older agent's notify: the same body it always had.
+    expect(alertPayload({ title: 't', body: 'b' })).toEqual({ aps: { alert: { title: 't', body: 'b' }, sound: 'default' } });
+    expect(dismissPayload('b'.repeat(32))).toEqual({ aps: { 'content-available': 1 }, dismiss: 'b'.repeat(32) });
+  });
+});
 
 const ecKeyP8 = () =>
   generateKeyPairSync('ec', { namedCurve: 'P-256' }).privateKey.export({ type: 'pkcs8', format: 'pem' }) as string;

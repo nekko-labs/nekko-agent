@@ -2,16 +2,27 @@
 // Any upstream diagnostic macro must never corrupt protocol stdout.
 macro_rules! println { ($($arg:tt)*) => { eprintln!($($arg)*) }; }
 macro_rules! print { ($($arg:tt)*) => { eprint!($($arg)*) }; }
+// Upstream modules serve its CLI and daemon too; only the parts native::actions
+// reaches are live here, so the rest is expected dead code, as in native/mod.rs.
 mod ca_bundle;
+#[allow(dead_code)]
 mod color;
+#[allow(dead_code)]
 mod commands;
+#[allow(dead_code)]
 mod connection;
+#[allow(dead_code)]
 mod flags;
+#[allow(dead_code)]
 mod install;
 mod native;
+#[allow(dead_code)]
 mod output;
+#[allow(dead_code)]
 mod plugins;
+#[allow(dead_code)]
 mod read;
+#[allow(dead_code)]
 mod tls;
 mod validation;
 

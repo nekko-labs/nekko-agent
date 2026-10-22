@@ -40,6 +40,12 @@ pub fn offline_provider_allowed(provider: &Value) -> bool {
     (is_local_kind(kind) || kind == "openai-compat") && (host == "localhost" || host == "[::1]" || loop_v4)
 }
 
+/// `cloudProviderAllowed`: what a cloud-only chat may run on. A local kind is
+/// refused wherever it listens; openai-compat only on a loopback address.
+pub fn cloud_provider_allowed(provider: &Value) -> bool {
+    !is_local_kind(kind(provider)) && !offline_provider_allowed(provider)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -54,5 +60,14 @@ mod tests {
         assert!(!offline_provider_allowed(&p("anthropic", "https://api.anthropic.com")));
         assert!(!offline_provider_allowed(&p("ollama", "http://10.0.0.2:11434")));
         assert!(!offline_provider_allowed(&p("openai", "http://127.0.0.1:1")));
+    }
+
+    #[test]
+    fn cloud_means_not_a_model_server_on_this_machine() {
+        let p = |k: &str, u: &str| json!({ "kind": k, "baseUrl": u });
+        assert!(cloud_provider_allowed(&p("anthropic", "https://api.anthropic.com")));
+        assert!(cloud_provider_allowed(&p("openai-compat", "https://gateway.example.com/v1")));
+        assert!(!cloud_provider_allowed(&p("ollama", "http://10.0.0.2:11434")));
+        assert!(!cloud_provider_allowed(&p("openai-compat", "http://127.0.0.1:1234/v1")));
     }
 }

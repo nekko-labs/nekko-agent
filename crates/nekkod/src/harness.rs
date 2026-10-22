@@ -2,7 +2,8 @@
 //! Code runs the turn and nekkod is the cockpit around it (nekko-harness).
 //!
 //! - One `claude -p` child per chat, kept between turns and reaped after
-//!   [`IDLE_REAP`] without one. The chat stores Claude Code's session id
+//!   [`IDLE_REAP`] without one, unless Claude Code still runs background
+//!   tasks (a reap would end them). The chat stores Claude Code's session id
 //!   (`claudeCodeSessionId`), so the next turn after a reap, a crash or an app
 //!   restart continues the conversation with `--resume`.
 //! - A change of model, permission mode or folders relaunches the child
@@ -10,14 +11,21 @@
 //! - The child inherits the user's environment as it is. Nekko never reads
 //!   Claude Code's credentials and never sets a token or `CLAUDE_CONFIG_DIR`.
 //!
+//! - Between turns the child is watched ([`Harness::idle`]): Claude Code
+//!   wakes on its own when a background command or sub-agent finishes, and
+//!   that work becomes a Nekko turn (turns.rs `wake`), so its permission
+//!   prompts have a turn to wait in and the chat shows it working.
+//!
 //! The turn itself (events, transcript, Stop and Steer) runs in turns.rs
 //! (`claude_code_turn`) over [`nekko_harness::run_turn`].
 
 use nekko_harness::{ClaudeBin, LaunchSpec, PermissionMode, Session, SessionStart};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
+use tokio::sync::{Notify, OwnedMutexGuard};
 
 /// A chat's Claude Code child is ended after this long without a turn.
 pub const IDLE_REAP: Duration = Duration::from_secs(15 * 60);
@@ -38,12 +46,50 @@ pub struct Slot {
     pub last_used: Option<Instant>,
 }
 
+/// The turns waiting for a chat's child, so its idle watch lets go of it.
+#[derive(Default)]
+struct Want {
+    waiting: AtomicUsize,
+    notify: Notify,
+}
+
+/// Counts a turn as waiting until it has the child (or gives up).
+struct Waiting(Arc<Want>);
+
+impl Waiting {
+    fn new(want: Arc<Want>) -> Self {
+        want.waiting.fetch_add(1, Ordering::SeqCst);
+        want.notify.notify_waiters();
+        Self(want)
+    }
+}
+
+impl Drop for Waiting {
+    fn drop(&mut self) {
+        self.0.waiting.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+/// Why [`Harness::idle`] stopped watching a child.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Idle {
+    /// Claude Code started work of its own: its output waits for a turn.
+    Woke,
+    /// A turn wants the child.
+    Yielded,
+    /// The child is gone (exited, reaped, or the chat closed).
+    Gone,
+}
+
+type SlotEntry = (Arc<tokio::sync::Mutex<Slot>>, Arc<Want>);
+
 /// Every Claude Agent chat's child.
 #[derive(Default)]
 pub struct Harness {
     /// By Nekko chat id. The async lock is held for a whole turn, so one chat
-    /// never has two turns writing to the same child.
-    slots: Mutex<HashMap<String, Arc<tokio::sync::Mutex<Slot>>>>,
+    /// never has two turns writing to the same child, and by the idle watch
+    /// between turns, which lets go as soon as a turn asks ([`Harness::take`]).
+    slots: Mutex<HashMap<String, SlotEntry>>,
     /// Bridge tokens: which chat (and its folders) each one answers for.
     bridges: Mutex<HashMap<String, BridgeEntry>>,
     /// Set once at startup: the daemon's loopback URL, how to start the
@@ -119,17 +165,81 @@ impl Harness {
     }
 
     /// The chat's slot (made on first use).
+    #[cfg(test)]
     pub fn slot(&self, session_id: &str) -> Arc<tokio::sync::Mutex<Slot>> {
+        self.entry(session_id).0
+    }
+
+    fn entry(&self, session_id: &str) -> SlotEntry {
         lock(&self.slots).entry(session_id.to_string()).or_default().clone()
+    }
+
+    /// The chat's child for a turn, once the turn before it is over; the
+    /// idle watch lets go of it at once.
+    pub async fn take(&self, session_id: &str) -> OwnedMutexGuard<Slot> {
+        let (slot, want) = self.entry(session_id);
+        let _waiting = Waiting::new(want);
+        slot.lock_owned().await
     }
 
     /// End a chat's child (the chat was deleted, or the daemon is stopping).
     pub async fn close(&self, session_id: &str) {
-        let slot = lock(&self.slots).remove(session_id);
-        if let Some(slot) = slot {
+        let entry = lock(&self.slots).remove(session_id);
+        if let Some((slot, want)) = entry {
+            let _waiting = Waiting::new(want);
             slot.lock().await.session = None;
         }
         self.forget(session_id);
+    }
+
+    /// Watch the chat's child between turns, holding it until Claude Code
+    /// prints something that starts work of its own ([`Idle::Woke`]: the line
+    /// stays for the turn that reads it), a turn asks for it, or it is gone.
+    /// Bookkeeping lines ([`nekko_harness::is_passive`]) are dropped. The
+    /// watch also ends a child idle for [`IDLE_REAP`] with no background
+    /// task, as the reaper does (it skips a watched slot).
+    pub async fn idle(&self, session_id: &str) -> Idle {
+        let Some((slot, want)) = lock(&self.slots).get(session_id).cloned() else { return Idle::Gone };
+        let mut tick = tokio::time::interval(REAP_EVERY);
+        tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        tick.tick().await;
+        enum Next {
+            Yield,
+            Line(bool),
+            Tick,
+        }
+        loop {
+            let notified = want.notify.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+            if want.waiting.load(Ordering::SeqCst) > 0 {
+                return Idle::Yielded;
+            }
+            let mut s = tokio::select! {
+                s = slot.clone().lock_owned() => s,
+                _ = &mut notified => return Idle::Yielded,
+            };
+            let Some(child) = s.session.as_mut() else { return Idle::Gone };
+            let next = tokio::select! {
+                biased;
+                _ = &mut notified => Next::Yield,
+                open = child.readable() => Next::Line(open),
+                _ = tick.tick() => Next::Tick,
+            };
+            match next {
+                Next::Yield => return Idle::Yielded,
+                Next::Line(false) => return Idle::Gone,
+                Next::Line(true) if child.skip_passive() => {}
+                Next::Line(true) => return Idle::Woke,
+                Next::Tick => {
+                    let idle = s.last_used.is_none_or(|t| t.elapsed() >= IDLE_REAP);
+                    if idle && !s.session.as_ref().is_some_and(Session::has_background_tasks) {
+                        s.session = None;
+                        return Idle::Gone;
+                    }
+                }
+            }
+        }
     }
 
     /// Where the bridge comes from (startup).
@@ -170,17 +280,18 @@ impl Harness {
         }
     }
 
-    /// End every child idle longer than `max_idle`. A slot in a turn is
-    /// locked and skipped.
+    /// End every child idle longer than `max_idle` with no background task
+    /// running. A slot in a turn (or watched) is locked and skipped.
     pub fn reap(&self, max_idle: Duration) -> usize {
         let now = Instant::now();
         let slots: Vec<(String, Arc<tokio::sync::Mutex<Slot>>)> =
-            lock(&self.slots).iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+            lock(&self.slots).iter().map(|(k, (v, _))| (k.clone(), v.clone())).collect();
         let mut reaped = 0;
         for (id, slot) in slots {
             let Ok(mut s) = slot.try_lock() else { continue };
             let idle = s.last_used.is_none_or(|t| now.duration_since(t) >= max_idle);
-            if s.session.is_some() && idle {
+            let busy = s.session.as_ref().is_some_and(Session::has_background_tasks);
+            if s.session.is_some() && idle && !busy {
                 s.session = None;
                 reaped += 1;
             }
@@ -532,6 +643,28 @@ mod tests {
         other = w.clone();
         other.permission_mode = PermissionMode::AcceptEdits;
         assert!(!other.matches(&resumed));
+    }
+
+    #[tokio::test]
+    async fn the_idle_watch_lets_a_waiting_turn_have_the_child() {
+        let h = Harness::new();
+        assert_eq!(h.idle("nobody").await, Idle::Gone);
+        let slot = h.slot("s1");
+        // An empty slot has nothing to watch.
+        assert_eq!(h.idle("s1").await, Idle::Gone);
+        let held = slot.clone().lock_owned().await;
+        let take = {
+            let h = h.clone();
+            tokio::spawn(async move { drop(h.take("s1").await) })
+        };
+        let want = lock(&h.slots).get("s1").unwrap().1.clone();
+        while want.waiting.load(Ordering::SeqCst) == 0 {
+            tokio::task::yield_now().await;
+        }
+        assert_eq!(h.idle("s1").await, Idle::Yielded, "a turn is waiting");
+        drop(held);
+        take.await.unwrap();
+        assert_eq!(want.waiting.load(Ordering::SeqCst), 0);
     }
 
     #[tokio::test]

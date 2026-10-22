@@ -15,6 +15,8 @@ extension XCTestCase {
     ///   or covered by other UI (not hittable), for contrast and clipping:
     ///   the audit samples whatever covers them.
     /// - Clipping on the system search field's placeholder.
+    /// - Hit regions of activity indicators (spinners aren't tappable).
+    /// - Contrast and clipping of text partly under the navigation bar or in the home indicator's strip.
     /// - Findings the audit can't attach to an element.
     /// `ignoring`: element labels excluded on this screen, each with its reason at the call site.
     /// `covered`: a pinned, translucent bar; text under it is measured against the
@@ -31,6 +33,11 @@ extension XCTestCase {
         let window = app.windows.firstMatch.frame
         // If the keyboard is still up, what's under it (and its Done bar) isn't what the user sees.
         let keyboard = app.keyboards.firstMatch.exists ? app.keyboards.firstMatch.frame.insetBy(dx: 0, dy: -44) : .null
+        // Text scrolled under the translucent navigation bar, or into the home
+        // indicator's strip, is sampled against the bar: listed, not blocking.
+        let navBar = app.navigationBars.firstMatch.exists ? app.navigationBars.firstMatch.frame : CGRect.null
+        let homeStrip = window.isEmpty ? CGRect.null : CGRect(x: window.minX, y: window.maxY - 34, width: window.width, height: 34)
+        let bars = navBar.union(homeStrip)
 
         var blocking: [String] = [], other: [String] = []
         // XCTest's audit sometimes times out on a busy simulator (code -56), more than once
@@ -42,7 +49,7 @@ extension XCTestCase {
                 try app.performAccessibilityAudit { issue in
                     let line = "\(Self.name(issue.auditType)): \(issue.compactDescription) — \(Self.describe(issue.element))"
                     let ignored = issue.element.map { ignoring.contains($0.label) } ?? false
-                    if !ignored, Self.blocks(issue, in: window, keyboard: keyboard, covered: covered) { blocking.append(line) } else { other.append(line) }
+                    if !ignored, Self.blocks(issue, in: window, keyboard: keyboard, covered: covered, bars: bars) { blocking.append(line) } else { other.append(line) }
                     return true // handled here; reported below
                 }
                 break
@@ -64,7 +71,8 @@ extension XCTestCase {
         }
     }
 
-    private static func blocks(_ issue: XCUIAccessibilityAuditIssue, in window: CGRect, keyboard: CGRect, covered: CGRect) -> Bool {
+    private static func blocks(_ issue: XCUIAccessibilityAuditIssue, in window: CGRect, keyboard: CGRect, covered: CGRect,
+                               bars: CGRect) -> Bool {
         if issue.auditType == .dynamicType { return false }
         // The audit names no element for some findings: nothing to act on, but listed.
         guard let e = issue.element, e.exists else { return false }
@@ -72,10 +80,13 @@ extension XCTestCase {
         if !window.isEmpty, !window.contains(e.frame) { return false }
         if !keyboard.isNull, e.frame.intersects(keyboard) { return false }
         if !covered.isNull, issue.auditType == .contrast || issue.auditType == .textClipped, e.frame.intersects(covered) { return false }
+        if !bars.isNull, issue.auditType == .contrast || issue.auditType == .textClipped, e.frame.intersects(bars) { return false }
         // Covered by other UI (a pinned bar, a card over the transcript): the
         // audit samples whatever is on top, not the element's own colours.
         if issue.auditType == .contrast || issue.auditType == .textClipped, !e.isHittable { return false }
         if issue.auditType == .textClipped, e.elementType == .searchField { return false }
+        // A spinner can't be tapped, so a hit region on it means nothing.
+        if issue.auditType == .hitRegion, e.elementType == .activityIndicator { return false }
         return true
     }
 

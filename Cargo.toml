@@ -34,6 +34,16 @@ tokio = { version = "1", features = ["full"] }
 tokio-tungstenite = "0.27"
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_Security"] }
 
+# Debug and test builds keep file:line in backtraces but drop variable-level
+# debug info, and dependencies carry none. Full debug info made each checkout's
+# target/ tens of GB (mostly .pdb and the incremental cache). For a debugger
+# session: CARGO_PROFILE_DEV_DEBUG=full cargo build.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
 [profile.release]
 lto = "thin"
 codegen-units = 4

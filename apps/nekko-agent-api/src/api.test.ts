@@ -4,24 +4,7 @@ import type { Db } from "./db.js";
 import { migrate } from "./migrate.js";
 import { buildServer } from "./server.js";
 import { parseSignup } from "./signups.js";
-
-/** PGlite behind the same interface; param-less calls go through exec so a migration's many statements run. */
-function pgliteDb(pg: PGlite): Db {
-  const db: Db = {
-    async query(text, params) {
-      if (params?.length) return (await pg.query(text, params)) as never;
-      const results = await pg.exec(text);
-      return { rows: (results.at(-1)?.rows ?? []) as never };
-    },
-    transaction: (fn) => pg.transaction((tx) => fn({ ...db, query: async (text, params) => {
-      if (params?.length) return (await tx.query(text, params)) as never;
-      const results = await tx.exec(text);
-      return { rows: (results.at(-1)?.rows ?? []) as never };
-    } })) as never,
-    close: () => pg.close(),
-  };
-  return db;
-}
+import { pgliteDb } from "./test-db.js";
 
 const ORIGIN = "https://nekkoagent.com";
 let pg: PGlite;
@@ -43,13 +26,15 @@ function post(app: ReturnType<typeof server>, payload: unknown, origin = ORIGIN)
 }
 
 describe("migrations", () => {
-  it("creates users and signups and records itself once", async () => {
+  it("creates every table and records itself once", async () => {
     expect(await migrate(db, undefined, { lock: false })).toEqual([]);
     const { rows } = await db.query<{ table_name: string }>(
       "select table_name from information_schema.tables where table_schema = 'public' order by 1",
       [],
     );
-    expect(rows.map((r) => r.table_name)).toEqual(["schema_migrations", "signups", "users"]);
+    expect(rows.map((r) => r.table_name)).toEqual([
+      "api_tokens", "donations", "schema_migrations", "signups", "sync_devices", "sync_key_wraps", "sync_keyrings", "sync_objects", "sync_usage", "users",
+    ]);
   });
 
   it("treats emails case-insensitively in users", async () => {

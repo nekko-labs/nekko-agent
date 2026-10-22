@@ -45,6 +45,17 @@ async fn serves_session_reads_from_disk_when_it_knows_the_data_dir() {
     assert_eq!((patched["title"].clone(), patched["titleAuto"].clone()), (json!("Named"), json!(false)));
     let (_, queued) = post(d.port, "chat:queue", json!([new_id, "  later  "]), Some(TOKEN)).await;
     assert_eq!(queued["queue"], json!(["later"]));
+    // A phone's queue editor: an edit lands only on the text it showed.
+    let (_, edited) =
+        post(d.port, "chat:editQueued", json!([new_id, 0, { "expect": "later", "text": " sooner " }]), Some(TOKEN))
+            .await;
+    assert_eq!(edited["queue"], json!(["sooner"]));
+    let (status, stale) =
+        post(d.port, "chat:editQueued", json!([new_id, 0, { "expect": "later", "text": "x" }]), Some(TOKEN)).await;
+    assert_eq!(status, 400, "{stale}");
+    assert!(stale.to_string().contains("already started or changed"), "{stale}");
+    let (_, removed) = post(d.port, "chat:editQueued", json!([new_id, 0, { "expect": "sooner" }]), Some(TOKEN)).await;
+    assert_eq!(removed["queue"], json!([]));
     let (_, list) = post(d.port, "sessions:summaries", json!([]), Some(TOKEN)).await;
     assert_eq!(list.as_array().unwrap().len(), 2);
     post(d.port, "session:delete", json!([new_id]), Some(TOKEN)).await;
@@ -516,4 +527,78 @@ async fn writes_other_agent_tools_mcp_entries_itself() {
     assert_eq!(cursor, hand);
     drop(d);
     let _ = std::fs::remove_dir_all(&root);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn scoped_files_and_logs_for_remote_callers() {
+    let data = std::env::temp_dir().join(format!("nekkod-scoped-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    let project = data.join("project");
+    std::fs::create_dir_all(project.join("src")).unwrap();
+    std::fs::write(project.join("src").join("main.rs"), "fn main() {}\n").unwrap();
+    std::fs::write(project.join(".env"), "TOKEN=abc").unwrap();
+    std::fs::write(data.join("outside.txt"), "no").unwrap();
+    let d = start_with(Some(&data));
+    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
+    for c in ["files:list", "files:search", "files:read", "files:write", "logs:list", "logs:read"] {
+        assert!(info["owned"].as_array().unwrap().contains(&json!(c)), "{c} is not owned");
+    }
+    let folder =
+        json!([{ "workspaces": [{ "id": "w1", "name": "project", "path": project.to_string_lossy(), "addedAt": 1 }] }]);
+    post(d.port, "settings:update", folder, Some(TOKEN)).await;
+    let (_, chat) = post(d.port, "session:create", json!(["w1"]), Some(TOKEN)).await;
+    let root = json!({ "sessionId": chat["id"] });
+
+    let (status, listed) = post(d.port, "files:list", json!([root, ""]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{listed}");
+    let names: Vec<_> = listed["entries"].as_array().unwrap().iter().map(|e| e["path"].clone()).collect();
+    assert_eq!(names, [json!("src")]);
+    assert_eq!(listed["hiddenSecrets"], 1);
+    // The same folder by its id; a raw path or an unknown chat is refused.
+    let (_, by_folder) = post(d.port, "files:list", json!([{ "workspaceId": "w1" }, "src"]), Some(TOKEN)).await;
+    assert_eq!(by_folder["entries"][0]["path"], "src/main.rs");
+    for bad in [json!(project.to_string_lossy()), json!({ "sessionId": "nope" }), json!({})] {
+        let (status, body) = post(d.port, "files:list", json!([bad, ""]), Some(TOKEN)).await;
+        assert_ne!(status, 200, "{body}");
+    }
+    let (status, body) = post(d.port, "files:read", json!([root, "../outside.txt"]), Some(TOKEN)).await;
+    assert_ne!(status, 200);
+    assert!(body.to_string().contains("outside-root"), "{body}");
+    let (_, body) = post(d.port, "files:read", json!([root, ".env"]), Some(TOKEN)).await;
+    assert!(body.to_string().contains("secret-file"), "{body}");
+
+    let (_, read) = post(d.port, "files:read", json!([root, "src/main.rs", { "maxBytes": 4096 }]), Some(TOKEN)).await;
+    assert_eq!((read["content"].clone(), read["language"].clone()), (json!("fn main() {}\n"), json!("rust")));
+    let hash = read["hash"].clone();
+    std::fs::write(project.join("src").join("main.rs"), "fn main() { desktop() }\n").unwrap();
+    let (_, refused) =
+        post(d.port, "files:write", json!([root, "src/main.rs", "phone", { "expectHash": hash }]), Some(TOKEN)).await;
+    assert_eq!(refused["error"], "conflict");
+    assert_eq!(std::fs::read_to_string(project.join("src").join("main.rs")).unwrap(), "fn main() { desktop() }\n");
+    let (_, saved) = post(
+        d.port,
+        "files:write",
+        json!([root, "src/main.rs", "phone", { "expectHash": refused["hash"] }]),
+        Some(TOKEN),
+    )
+    .await;
+    assert_eq!(saved["ok"], true, "{saved}");
+    assert_eq!(std::fs::read_to_string(project.join("src").join("main.rs")).unwrap(), "phone");
+    let (_, hits) = post(d.port, "files:search", json!([root, "MAIN", 10]), Some(TOKEN)).await;
+    assert_eq!(hits["hits"][0]["path"], "src/main.rs");
+
+    // The daemon writes its own log, and a read redacts it.
+    let (_, logs) = post(d.port, "logs:list", json!([]), Some(TOKEN)).await;
+    let ids: Vec<_> = logs.as_array().unwrap().iter().map(|l| l["id"].clone()).collect();
+    assert_eq!(ids[..2], [json!("app"), json!("daemon")]);
+    if cfg!(unix) {
+        assert!(logs[1]["size"].as_u64().unwrap() > 0, "{logs}");
+        let (_, tail) = post(d.port, "logs:read", json!(["daemon", { "tailBytes": 4096 }]), Some(TOKEN)).await;
+        assert!(tail["text"].as_str().unwrap().contains("starting"), "{tail}");
+    }
+    std::fs::write(data.join("logs").join("app.log"), "boot\nAuthorization: Bearer abcdefghijkl\n").unwrap();
+    let (_, found) = post(d.port, "logs:read", json!(["app", { "query": "authorization" }]), Some(TOKEN)).await;
+    assert_eq!(found["matches"], json!([{ "line": 2, "text": "Authorization: Bearer [redacted]" }]));
+    drop(d);
+    let _ = std::fs::remove_dir_all(data);
 }

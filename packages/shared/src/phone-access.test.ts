@@ -40,6 +40,8 @@ const SETTINGS = {
   defaultChatMode: 'ask',
   chatPaneAction: 'complete',
   skipDeleteConfirmation: false,
+  automationsPaused: false,
+  prompts: [{ id: 'fix', name: 'fix', body: 'Find and fix the bug.' }],
   sandboxMode: 'workspace',
   providers: [{ id: 'p1', kind: 'anthropic', label: 'Claude', baseUrl: 'https://x', apiKey: 'sk-secret', tokenKey: 'tk', enabled: true }],
   guardrails: [{ id: 'g', pattern: 'rm -rf' }],
@@ -70,7 +72,7 @@ describe('phone channel allowlist', () => {
   it('refuses the dangerous channels and anything unlisted', () => {
     for (const c of [
       'data:wipe', 'settings:reset', 'remote:revoke', 'remote:rotate', 'remote:enable', 'remote:pair',
-      'terminal:create', 'terminal:write', 'terminals:list', 'file:write', 'workspace:addByPath',
+      'terminal:run', 'terminal:update', 'terminals:list:native', 'terminal:attach', 'file:write', 'workspace:addByPath',
       'workspace:remove', 'voice:install', 'voice:uninstall', 'connector:connect', 'connector:disconnect',
       'mcp:status', 'mcp:hypergate:connect', 'providers:save', 'oauth:begin', 'file:read', 'task:create',
       'turn:pending', 'no:such',

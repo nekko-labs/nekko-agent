@@ -333,6 +333,68 @@ public final class ChatModel {
         await reload()
     }
 
+    // MARK: The queue, forks and pull requests
+
+    /// Editing the computer's queue needs the computer: an edit made offline could land after the prompt ran.
+    public static let reconnectToEditQueue = "Reconnect to change the queue. The computer may start the prompt meanwhile."
+
+    /// The queue as the computer holds it, oldest first.
+    public var queuedPrompts: [QueuedPrompt] { session?.queued ?? [] }
+
+    /// Change the queued prompt at `index` before it runs, or remove it (`text` nil). The computer
+    /// refuses when that prompt no longer reads `expect` (it started, or the queue moved).
+    public func editQueued(_ index: Int, expect: String, text: String?) async throws {
+        guard store.conn == .online else { throw RelayError(Self.reconnectToEditQueue) }
+        let edit = QueuedPrompt.edit(expect: expect, text: text)
+        do {
+            _ = try await store.remote().call(Channels.chatEditQueued, [.string(sessionId), .int(Int64(index)), edit])
+        } catch {
+            // Show the queue as it is now, whatever happened to this edit.
+            await reload()
+            throw error
+        }
+        await reload()
+    }
+
+    /// Where a fork from `block` cuts the chat, and what goes back in the new chat's message box.
+    /// A prompt: the new chat ends before it, with that prompt to edit and send (the desktop's split).
+    /// A reply or step: the new chat keeps everything up to the next prompt. Nil while it streams.
+    public func forkPoint(_ block: Block) -> (before: String?, seed: String?)? {
+        // A block shown under its live id (sent from here) is the saved message it was carried to.
+        let id = shownIds.first { $0.value == block.id }?.key ?? block.id
+        guard let messages = session?.messages,
+              let at = messages.firstIndex(where: { $0.id == id || $0.toolCalls.contains { $0.id == id } }) else { return nil }
+        let m = messages[at]
+        if case .user = block, m.role == "user" {
+            return (m.id, m.skill.map { "/\($0.name) \($0.input)".trimmingCharacters(in: .whitespaces) } ?? m.content)
+        }
+        let next = messages[(at + 1)...].first { $0.role == "user" }
+        return (next?.id, nil)
+    }
+
+    /// Fork this chat on the computer from `block` (see `forkPoint`). Returns the new chat's id,
+    /// with the forked prompt already in its message box.
+    public func fork(from block: Block) async throws -> String {
+        guard let point = forkPoint(block) else { throw RelayError("Wait for this reply to finish, then fork.") }
+        var args: [JSONValue] = [.string(sessionId)]
+        if let before = point.before { args.append(.string(before)) }
+        let made = try await store.remote().call(Channels.sessionFork, args)
+        guard let id = made.str("id") else { throw RelayError("Your computer didn’t fork the chat.") }
+        if let seed = point.seed, !seed.isEmpty { store.drafts.set(id, Draft(text: seed)) }
+        store.reloadList()
+        return id
+    }
+
+    /// The pull requests this chat opened, with their state and checks (read only).
+    public func pullRequests(refresh: Bool = false) async throws -> [PullRequest] {
+        PullRequest.list(try await store.remote().call(Channels.prSessionList, [.string(sessionId), .bool(refresh)]))
+    }
+
+    /// A message's photos as the computer sent them (small JPEG data URLs; `""` for one it kept back).
+    public func photos(_ messageId: String) -> [String] {
+        session?.messages.first { $0.id == messageId }?.images ?? []
+    }
+
     // MARK: Projection
 
     /// The session's own model, else the computer's default (never the `__auto__` sentinel).

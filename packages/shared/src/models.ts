@@ -132,6 +132,15 @@ export function offlineProviderAllowed(provider: Pick<ProviderConfig, 'kind' | '
 }
 
 /**
+ * Whether a cloud-only chat may run on a provider: anything that is not a
+ * model server on this machine. A local kind is refused wherever it listens;
+ * openai-compat is refused only on a loopback address.
+ */
+export function cloudProviderAllowed(provider: Pick<ProviderConfig, 'kind' | 'baseUrl'>): boolean {
+  return !isLocalProvider(provider.kind) && !offlineProviderAllowed(provider);
+}
+
+/**
  * A single GPU's memory snapshot (megabytes). Utilization is 0-100 when known.
  */
 export interface GpuDevice {

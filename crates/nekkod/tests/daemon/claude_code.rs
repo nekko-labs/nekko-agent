@@ -55,6 +55,29 @@ pub fn fake_claude() {
     let usage = json!({ "input_tokens": 2, "cache_read_input_tokens": 20_000, "cache_creation_input_tokens": 1_000, "output_tokens": 5 });
     let assistant = |id: &str, content: Value| json!({ "type": "assistant", "message": { "id": id, "role": "assistant", "content": content, "usage": usage }, "parent_tool_use_id": null, "session_id": session });
     let rt = tokio::runtime::Runtime::new().unwrap();
+    // A permission prompt through the bridge, as Claude Code asks it.
+    let ask = |id: &str| -> Value {
+        rt.block_on(async {
+            reqwest::Client::new()
+                .post(format!("{url}/harness/approve"))
+                .bearer_auth(&token)
+                .json(&json!({ "tool_name": "Bash", "input": { "command": "rm -rf build" }, "tool_use_id": id }))
+                .send()
+                .await
+                .unwrap()
+                .json()
+                .await
+                .unwrap()
+        })
+    };
+    let init = || {
+        json!({
+            "type": "system", "subtype": "init", "session_id": session, "model": "claude-opus-5-5",
+            "mcp_servers": [{ "name": "nekko_bridge", "status": bridge }], "claude_code_version": "2.1.303",
+            "apiKeySource": "ANTHROPIC_API_KEY", "cwd": std::env::current_dir().unwrap().to_string_lossy(),
+        })
+    };
+    let replay = args.iter().any(|a| a == "--replay-user-messages");
     let stdin = std::io::stdin();
     let mut lines = stdin.lock().lines();
     while let Some(Ok(line)) = lines.next() {
@@ -66,29 +89,47 @@ pub fn fake_claude() {
             continue;
         }
         let text = msg["message"]["content"].as_str().unwrap_or_default().to_string();
-        out(json!({
-            "type": "system", "subtype": "init", "session_id": session, "model": "claude-opus-5-5",
-            "mcp_servers": [{ "name": "nekko_bridge", "status": bridge }], "claude_code_version": "2.1.284",
-            "apiKeySource": "ANTHROPIC_API_KEY", "cwd": std::env::current_dir().unwrap().to_string_lossy(),
-        }));
-        if text == "run rm" {
+        let lifecycle =
+            |state: &str| json!({ "type": "command_lifecycle", "command_uuid": msg["uuid"], "state": state });
+        if replay && msg["uuid"].is_string() {
+            out(lifecycle("queued"));
+            out(lifecycle("started"));
+        }
+        out(init());
+        if text == "background" {
+            // Start a background command, end the turn, then wake when it
+            // finishes, with nothing written: a turn of Claude Code's own
+            // whose command needs a person to approve it.
+            out(assistant("m_bg", json!([{ "type": "text", "text": "started" }])));
+            out(result("started", "completed"));
+            out(json!({ "type": "system", "subtype": "background_tasks_changed", "tasks": [{ "task_id": "b1" }] }));
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            out(
+                json!({ "type": "system", "subtype": "task_updated", "task_id": "b1", "patch": { "status": "completed" } }),
+            );
+            out(json!({ "type": "system", "subtype": "task_notification", "task_id": "b1", "status": "completed" }));
+            out(json!({ "type": "system", "subtype": "background_tasks_changed", "tasks": [] }));
+            out(init());
+            out(assistant(
+                "m_w1",
+                json!([{ "type": "tool_use", "id": "toolu_wake", "name": "Bash", "input": { "command": "rm -rf build" } }]),
+            ));
+            let decision = ask("toolu_wake");
+            let allowed = decision["behavior"] == "allow";
+            out(json!({ "type": "user", "message": { "role": "user", "content": [{
+                "type": "tool_result", "tool_use_id": "toolu_wake",
+                "content": if allowed { "removed" } else { "denied" }, "is_error": !allowed,
+            }] }, "parent_tool_use_id": null }));
+            let reply = format!("woke: {}", decision["behavior"].as_str().unwrap_or("?"));
+            out(assistant("m_w2", json!([{ "type": "text", "text": reply }])));
+            out(result(&reply, "completed"));
+        } else if text == "run rm" {
             // A prompt only a person may answer in guardrails mode, through the bridge.
             out(assistant(
                 "m1",
                 json!([{ "type": "tool_use", "id": "toolu_rm", "name": "Bash", "input": { "command": "rm -rf build" } }]),
             ));
-            let decision: Value = rt.block_on(async {
-                reqwest::Client::new()
-                    .post(format!("{url}/harness/approve"))
-                    .bearer_auth(&token)
-                    .json(&json!({ "tool_name": "Bash", "input": { "command": "rm -rf build" }, "tool_use_id": "toolu_rm" }))
-                    .send()
-                    .await
-                    .unwrap()
-                    .json()
-                    .await
-                    .unwrap()
-            });
+            let decision = ask("toolu_rm");
             let allowed = decision["behavior"] == "allow";
             out(json!({ "type": "user", "message": { "role": "user", "content": [{
                 "type": "tool_result", "tool_use_id": "toolu_rm",
@@ -363,4 +404,40 @@ async fn a_bridge_that_does_not_connect_stops_claude_code_before_it_acts() {
     assert!(!k.contains(&"tool_call"), "nothing ran: {k:?}");
     let error = all.iter().find(|e| e["type"] == "error").expect("an error");
     assert!(error["message"].as_str().unwrap().contains("did not connect"), "{error}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_wake_up_after_the_turn_is_a_turn_its_prompts_can_wait_in() {
+    let rig = rig("wake", "guardrails", true);
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "ccW", "background")]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    turn_record(&rig, "ccW", "s_cc").await;
+
+    // The background command finished and Claude Code went on by itself: its
+    // prompt waits for the user instead of being refused, and the chat runs.
+    let approval = wait_pending(rig.d.port, "s_cc", "approval", "toolu_wake").await;
+    assert_eq!(approval["call"]["executedBy"], "claude-code");
+    let (_, running) = post(rig.d.port, "chat:running", json!([]), Some(TOKEN)).await;
+    assert_eq!(running, json!(["s_cc"]));
+    let (status, body) = post(rig.d.port, "tool:approve", json!(["s_cc", "toolu_wake", true]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    until("the wake-up turn to end", Duration::from_secs(30), || async {
+        let (_, running) = post(rig.d.port, "chat:running", json!([]), Some(TOKEN)).await;
+        let s = saved(&rig);
+        let last = assistant_texts(&s).last().cloned();
+        (running == json!([]) && s.get("activeRun").is_none() && last.as_deref() == Some("woke: allow")).then_some(())
+    })
+    .await;
+    let s = saved(&rig);
+    let users = s["messages"].as_array().unwrap().iter().filter(|m| m["role"] == "user").count();
+    assert_eq!(users, 1, "a wake-up adds no user message");
+    let events: Vec<Value> = rig.events.lock().unwrap().iter().filter(|e| e["sessionId"] == "s_cc").cloned().collect();
+    assert_eq!(kinds(&events).iter().filter(|k| *k == "done").count(), 2, "{:?}", kinds(&events));
+
+    // The next message is answered by its own reply, not one behind.
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "ccW2", "again")]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    turn_record(&rig, "ccW2", "s_cc").await;
+    let replies = assistant_texts(&saved(&rig));
+    assert!(replies.last().unwrap().ends_with(": again"), "{replies:?}");
 }

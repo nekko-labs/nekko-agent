@@ -1,0 +1,22 @@
+---
+title: "Default modes: where the models run (2026-10-22)"
+area: chat
+split-from: SPEC.md (2026-10-22)
+---
+
+# Default modes: where the models run (2026-10-22)
+
+`[implemented 2026-10-22; shared, Mode panel and store golden tests pass; the daemon's Cloud-only refusal test and visual evidence are on the PR; not yet run in the full desktop app]` **User intent:** the four starter modes should be the four ways Philip actually wants to run a chat: cloud models only, local and cloud fused, local only, and *risky business* (an isolated sandbox with no internet). **What ships:** `STARTER_MODES` (packages/shared/src/saved-modes.ts, mirrored in nekko-store's `STARTER_MODES` and checked by the create golden set) is now:
+
+| Mode | Runs on | Approvals | Models | What it sets |
+| --- | --- | --- | --- | --- |
+| **Cloud only** | worktree | Guardrails | cloud | `cloudOnly: true`, internet on |
+| **Fusion** | worktree | Guardrails | local + cloud | `autoModel: true`, `autoProviderSwitch: true`, `cloudOnly: false`, internet on |
+| **Local only** | worktree | Guardrails | local | `offline: true`, `cloudOnly: false` |
+| **Risky business** | Sandbox | Ask | any (local recommended) | `executionMode: 'sandbox'`, `offline: true` where the model allows it |
+
+A saved mode gained an optional `models` field (`ModelScope`: `cloud`, `fusion` or `local`). Like effort, a mode saved without it matches any chat and changes nothing; unlike effort, a chat reads as having no scope when none of its settings pins one, so a plain chat matches none of the three model starters. `chatModelScope(session)` reads it back: `offline` is local, else `cloudOnly` is cloud, else Auto with provider switching is fusion. The Mode panel's Model column has a **Models run** row (Cloud only / Fusion / Local only tiles; clicking the highlighted one unpins it) that sets the same fields by hand, so a mode still grants nothing a user could not set themselves. The old starters (Everyday, Deep work, Private, Untrusted repo) are gone for users who never saved a mode; users who saved one already have the old starters copied into `savedModes` and keep them. A star on a removed starter no longer resolves, so new chats fall back to the last-used defaults, as for any deleted mode.
+
+**Cloud only** is a new per-chat field, `Session.cloudOnly`, a user field like `offline` (`setSessionOptions`, kept across running turns, inherited by `spawn_agent` children, not copied by fork, as `offline` is not). `cloudProviderAllowed(provider)` (shared/models.ts, `cloud_provider_allowed` in nekko-turn) refuses a local kind wherever it listens and openai-compat on a loopback address. The daemon's admission refuses a cloud-only turn on such a provider with "This chat runs on cloud models only. Pick a cloud model, or turn Cloud only off in the Mode panel." without calling it, and `spawn_agent` refuses to start a child on one. In the renderer the model picker lists only cloud providers and Auto's cross-provider switch never moves a turn onto this machine. **Fusion** is not a new router: it is Auto plus *Follow capacity & cost* (see *Model auto-mode, with profiles*), which already treats local providers as free and never takes a weaker model. A true per-turn local/cloud router stays planned under the Model router row. **Local only** is the existing Offline mode. **Risky business** relies on the sandbox's existing boundary (`--network none`, scoped folders only, host tools, MCP, connectors and delegation denied, Ask forced). Two sandbox chats are told apart by neither approvals nor Offline, so a sandbox chat on a cloud model, which cannot go offline, still matches Risky business. With a cloud model the conversation with that provider is the one thing that leaves the machine; the docs say so.
+
+**Boundary:** applying a mode never switches the chat's model. A cloud-model chat put in Local only keeps its internet, and a local-model chat put in Cloud only is not marked cloud-only; in both cases the panel shows a notice naming the model to pick. A new chat started in a starred mode has no model yet, so it takes the mode whole (the engine then refuses a mismatched first turn with its normal message). **Not yet:** switching the chat to a fitting model when a mode is applied, phone support (`cloudOnly` is not in the phone allowlist), and the automation daemon's own session creation (unchanged: it never applies the default mode).

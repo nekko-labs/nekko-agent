@@ -16,7 +16,7 @@ test('the schedule, main pushes and manual dispatches run every job on every OS'
 });
 
 test('a docs-only change waits for build alone, on the PR and in the queue', () => {
-  const docs = ['SPEC.md', 'docs/guide.md', 'apps/website/index.html'];
+  const docs = ['spec/chat/find-in-this-chat.md', 'docs/guide.md', 'apps/website/index.html'];
   assert.deepEqual(pr(docs), p(none));
   assert.deepEqual(queue(docs), q(none));
 });
@@ -29,6 +29,12 @@ test('a Rust change: Linux daemon on the PR; Linux and Windows daemon plus perf 
 test('a renderer change: Windows capture on the PR; capture and perf in the queue', () => {
   assert.deepEqual(pr(['apps/desktop/src/renderer/App.tsx']), p({ daemon_os: [], capture_os: ['windows-latest'], perf: false }));
   assert.deepEqual(queue(['apps/desktop/src/renderer/App.tsx']), q({ daemon_os: [], capture_os: ['windows-latest'], perf: true }));
+});
+
+test('a native browser patch or build-script change runs Windows capture, which builds it', () => {
+  for (const file of ['vendor/agent-browser/stdio.patch', 'scripts/build-agent-browser.mjs']) {
+    assert.deepEqual(pr([file]), p({ daemon_os: [], capture_os: ['windows-latest'], perf: false }), file);
+  }
 });
 
 test('a desktop main-process change skips perf, which measures the Local Web UI', () => {

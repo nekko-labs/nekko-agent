@@ -25,6 +25,7 @@
 
 use crate::ring::Ring;
 use crate::shells::ShellOption;
+use crate::tail::tail_cut;
 use crate::utf8::Utf8Carry;
 use bytes::Bytes;
 use portable_pty::{ChildKiller, CommandBuilder, MasterPty, PtySize, native_pty_system};
@@ -70,6 +71,36 @@ pub struct TerminalInfo {
     pub running: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exit_code: Option<i32>,
+    /// The chat this terminal was opened for (`terminal:create` / `ssh:open`
+    /// with a `sessionId`), so a phone can list one chat's terminals.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    /// Remote viewers (a paired phone) attached right now; empty means only
+    /// the desktop. The desktop shows a badge while this is non-empty.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub viewers: Vec<TerminalViewer>,
+}
+
+/// A remote viewer of a terminal, as the remote layer names it. Display only:
+/// the desktop badge reads `name`, nothing here grants anything.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalViewer {
+    /// Stable per viewer (a paired device's id); attach and detach key on it.
+    pub id: String,
+    /// What kind of viewer, e.g. `phone`.
+    pub kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// When it attached (ms since the epoch).
+    pub since: u64,
+}
+
+impl TerminalViewer {
+    /// A viewer attaching now.
+    pub fn new(id: impl Into<String>, kind: impl Into<String>, name: Option<String>) -> Self {
+        Self { id: id.into(), kind: kind.into(), name: name.filter(|n| !n.trim().is_empty()), since: now_ms() }
+    }
 }
 
 /// What to launch. Resolution of the shell and working directory (which needs
@@ -77,6 +108,8 @@ pub struct TerminalInfo {
 pub struct CreateSpec {
     pub title: Option<String>,
     pub workspace_id: Option<String>,
+    /// The chat this terminal belongs to, recorded on its info.
+    pub session_id: Option<String>,
     pub cwd: PathBuf,
     pub shell: ShellOption,
     pub cols: u16,
@@ -103,8 +136,19 @@ pub enum StreamMsg {
 /// Registry-wide events, for the JSON `terminal:event` channel.
 #[derive(Clone, Debug)]
 pub enum RegistryEvent {
-    Data { id: String, text: String },
-    Exit { id: String, code: Option<i32> },
+    Data {
+        id: String,
+        text: String,
+    },
+    Exit {
+        id: String,
+        code: Option<i32>,
+    },
+    /// The terminal's remote viewers changed (`terminal:viewers`).
+    Viewers {
+        id: String,
+        viewers: Vec<TerminalViewer>,
+    },
 }
 
 pub struct Snapshot {
@@ -285,6 +329,8 @@ impl Registry {
             order: None,
             running: true,
             exit_code: None,
+            session_id: spec.session_id.filter(|s| !s.is_empty()),
+            viewers: Vec::new(),
         };
 
         match spawn_pty(&spec.shell, &spec.cwd, cols, rows, &spec.env) {
@@ -416,6 +462,69 @@ impl Registry {
         let info = t.info.lock().unwrap().clone();
         let st = t.state.lock().unwrap();
         Some(Snapshot { info, buffer: st.ring.snapshot(), cols: st.cols, rows: st.rows })
+    }
+
+    /// The snapshot with only the last `max_bytes` of scrollback, cut where a
+    /// replay starts cleanly (see [`tail_cut`]). For viewers on a slow link.
+    pub fn tail(&self, id: &str, max_bytes: usize) -> Option<(Snapshot, usize)> {
+        let mut snap = self.snapshot(id)?;
+        let total = snap.buffer.len();
+        let start = tail_cut(&snap.buffer, max_bytes);
+        snap.buffer.drain(..start);
+        Some((snap, total))
+    }
+
+    /// Mark `viewer` as watching terminal `id` (a phone opened it). Attaching
+    /// again with the same viewer id replaces its name and keeps one entry.
+    /// Returns the viewers after the change, or `None` for an unknown terminal.
+    pub fn attach_viewer(&self, id: &str, viewer: TerminalViewer) -> Option<Vec<TerminalViewer>> {
+        let t = self.get(id)?;
+        let viewers = {
+            let mut info = t.info.lock().unwrap();
+            match info.viewers.iter_mut().find(|v| v.id == viewer.id) {
+                Some(v) => {
+                    v.kind = viewer.kind;
+                    v.name = viewer.name;
+                }
+                None => info.viewers.push(viewer),
+            }
+            info.viewers.clone()
+        };
+        let _ = self.events.send(RegistryEvent::Viewers { id: id.to_string(), viewers: viewers.clone() });
+        Some(viewers)
+    }
+
+    /// The viewer left terminal `id`. Returns the viewers after the change,
+    /// or `None` for an unknown terminal. No event when nothing changed.
+    pub fn detach_viewer(&self, id: &str, viewer_id: &str) -> Option<Vec<TerminalViewer>> {
+        let t = self.get(id)?;
+        let (changed, viewers) = {
+            let mut info = t.info.lock().unwrap();
+            let before = info.viewers.len();
+            info.viewers.retain(|v| v.id != viewer_id);
+            (info.viewers.len() != before, info.viewers.clone())
+        };
+        if changed {
+            let _ = self.events.send(RegistryEvent::Viewers { id: id.to_string(), viewers: viewers.clone() });
+        }
+        Some(viewers)
+    }
+
+    /// The viewer left every terminal (its connection dropped). Returns the
+    /// ids of the terminals it was attached to.
+    pub fn detach_viewer_everywhere(&self, viewer_id: &str) -> Vec<String> {
+        let ids: Vec<String> = self
+            .terms
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|t| t.info.lock().unwrap().viewers.iter().any(|v| v.id == viewer_id))
+            .map(|t| t.id.clone())
+            .collect();
+        for id in &ids {
+            self.detach_viewer(id, viewer_id);
+        }
+        ids
     }
 
     pub fn write(&self, id: &str, bytes: &[u8]) {

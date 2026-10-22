@@ -25,6 +25,41 @@ export interface TerminalInfo {
   /** False once the shell process has exited. */
   running: boolean;
   exitCode?: number;
+  /** The chat this terminal was opened for (`createTerminal` / `openSsh` with a `sessionId`). */
+  sessionId?: string;
+  /** Remote viewers (a paired phone) attached right now; absent when none. */
+  viewers?: TerminalViewer[];
+}
+
+/**
+ * A remote viewer of a terminal, as the computer's remote layer names it
+ * (`terminal:attach`). Display only: the desktop shows a badge while any is attached.
+ */
+export interface TerminalViewer {
+  /** Stable per viewer (a paired device's id). */
+  id: string;
+  /** What kind of viewer, e.g. `phone`. */
+  kind: string;
+  name?: string;
+  /** When it attached (ms since the epoch). */
+  since: number;
+}
+
+/** `terminal:viewers`: a terminal's remote viewers changed (the whole list after the change). */
+export interface TerminalViewersEvent {
+  terminalId: string;
+  viewers: TerminalViewer[];
+}
+
+/**
+ * A host alias from the computer's `~/.ssh/config` (`ssh:hosts`). The other
+ * fields are for display; keys and IdentityFile paths are never read out.
+ */
+export interface SshHost {
+  alias: string;
+  hostName?: string;
+  user?: string;
+  port?: number;
 }
 
 /** A shell the host detected as available to launch. */
@@ -49,6 +84,10 @@ export interface TerminalSnapshot {
   buffer: string;
   cols: number;
   rows: number;
+  /** With a `maxBytes` cap (or `terminal:tail`): older scroll-back was left out. */
+  truncated?: boolean;
+  /** With a cap: the size of the whole retained scroll-back, in bytes. */
+  totalBytes?: number;
 }
 
 /** Streaming events emitted by a terminal, mirrored to every renderer. */

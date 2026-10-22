@@ -4,22 +4,63 @@
   "changes:list",
   "chat:abort",
   "chat:answer",
+  "chat:editQueued",
   "chat:pending",
   "chat:queue",
   "chat:send",
+  "files:list",
+  "files:read",
+  "files:search",
+  "files:write",
+  "git:branches",
+  "git:commit",
+  "git:commitMessage",
+  "git:compare",
+  "git:diff",
+  "git:log",
+  "git:mergeAbort",
+  "git:push",
+  "git:show",
+  "git:stage",
+  "git:switch",
+  "git:unstage",
+  "limits:get",
+  "logs:list",
+  "logs:read",
   "models:list",
+  "pr:action",
+  "pr:checks",
+  "pr:create",
+  "pr:diff",
+  "pr:sessionList",
   "providers:list",
   "session:create",
   "session:delete",
+  "session:fork",
   "session:get",
   "session:setOptions",
   "sessions:summaries",
   "settings:get",
   "settings:update",
   "skills:runnable",
+  "ssh:hosts",
+  "ssh:open",
+  "task:runNow",
+  "tasks:list",
+  "terminal:close",
+  "terminal:create",
+  "terminal:resize",
+  "terminal:signal",
+  "terminal:tail",
+  "terminal:write",
+  "terminals:list",
   "tool:approve",
+  "usage:summary",
   "voice:status",
   "voice:transcribe",
+  "workflow:run",
+  "workflows:list",
+  "workspace:gitStatus",
   "workspace:list"
  ],
  "alwaysDenied": {
@@ -34,14 +75,25 @@
    "file:read",
    "file:write",
    "image:fetch",
+   "pr:continueStack",
+   "pr:linkStack",
    "providers:importCliAuth",
    "providers:remove",
    "providers:save",
    "settings:reset",
+   "task:create",
+   "task:delete",
+   "task:update",
    "voice:cancel",
    "voice:install",
    "voice:permission",
    "voice:uninstall",
+   "workflow:cancel",
+   "workflow:create",
+   "workflow:delete",
+   "workflow:duplicate",
+   "workflow:event",
+   "workflow:update",
    "workspace:addByPath",
    "workspace:remove"
   ],
@@ -56,9 +108,79 @@
    "update:"
   ],
   "except": [
-   "remote:status"
+   "remote:status",
+   "ssh:hosts",
+   "ssh:open",
+   "terminal:close",
+   "terminal:create",
+   "terminal:resize",
+   "terminal:signal",
+   "terminal:tail",
+   "terminal:write",
+   "terminals:list"
   ]
  },
+ "readChannels": [
+  "git:branches",
+  "git:compare",
+  "git:diff",
+  "git:log",
+  "git:show",
+  "pr:checks",
+  "pr:diff",
+  "workspace:gitStatus",
+  "files:list",
+  "files:read",
+  "files:search",
+  "logs:list",
+  "logs:read",
+  "ssh:hosts",
+  "terminal:tail",
+  "terminals:list"
+ ],
+ "changeChannels": [
+  "git:commit",
+  "git:commitMessage",
+  "git:mergeAbort",
+  "git:push",
+  "git:stage",
+  "git:switch",
+  "git:unstage",
+  "pr:action",
+  "pr:create",
+  "files:write",
+  "ssh:open",
+  "terminal:close",
+  "terminal:create",
+  "terminal:signal"
+ ],
+ "tokenChannels": [
+  "terminal:resize",
+  "terminal:write"
+ ],
+ "terminal": {
+  "tailBytes": 65536,
+  "writeBytes": 65536,
+  "titleChars": 120,
+  "hosts": 200,
+  "hostChars": 255,
+  "maxCols": 500,
+  "maxRows": 300,
+  "tokenIdleMs": 300000,
+  "tokenMaxMs": 1800000,
+  "eventBytes": 32768,
+  "eventWindowMs": 100,
+  "eventBacklogBytes": 262144,
+  "openChannel": "terminal:open",
+  "leaveChannel": "terminal:leave"
+ },
+ "changeProof": {
+  "version": "nekko-change-v1",
+  "maxAgeMs": 300000,
+  "maxAheadMs": 60000
+ },
+ "keyChannel": "device:registerKey",
+ "activityLimit": 200,
  "settingsKeys": [
   "chatPaneAction",
   "defaultChatMode",
@@ -69,12 +191,14 @@
  "settingsView": [
   "accent",
   "accent2",
+  "automationsPaused",
   "chatPaneAction",
   "defaultChatMode",
   "defaultModelId",
   "defaultProviderId",
   "favoriteModels",
   "phoneChanges",
+  "prompts",
   "skipDeleteConfirmation",
   "theme",
   "themePreset",
@@ -139,6 +263,207 @@
   "totalBytes": 524288,
   "context": 3,
   "diffCells": 4000000
+ },
+ "views": {
+  "textChars": 600,
+  "usageDays": 14,
+  "usageModels": 12
+ },
+ "promptView": [
+  "body",
+  "id",
+  "name"
+ ],
+ "taskView": [
+  "createdAt",
+  "id",
+  "intervalMs",
+  "keepAlive",
+  "kind",
+  "lastResult",
+  "lastRunAt",
+  "lastSessionId",
+  "nextRunAt",
+  "runAt",
+  "runCount",
+  "status",
+  "title"
+ ],
+ "workflowView": [
+  "category",
+  "description",
+  "enabled",
+  "id",
+  "lastRunAt",
+  "lastStatus",
+  "name",
+  "nextRunAt",
+  "runCount"
+ ],
+ "workflowRunView": [
+  "id",
+  "startedAt",
+  "status",
+  "workflowId"
+ ],
+ "prView": [
+  "additions",
+  "changedFiles",
+  "checks",
+  "deletions",
+  "isDraft",
+  "number",
+  "reviewDecision",
+  "state",
+  "title",
+  "url"
+ ],
+ "limitsView": [
+  "creditsState",
+  "planType",
+  "updatedAt"
+ ],
+ "limitWindowView": [
+  "id",
+  "label",
+  "modelFamily",
+  "resetAt",
+  "scope",
+  "status",
+  "usedPercent"
+ ],
+ "queueEditKeys": [
+  "expect",
+  "text"
+ ],
+ "files": {
+  "view": {
+   "entries": 500,
+   "hits": 100,
+   "hitsDefault": 50,
+   "readBytes": 262144,
+   "imageChars": 3145728,
+   "writeBytes": 262144,
+   "pathChars": 1024,
+   "idChars": 200,
+   "queryChars": 200,
+   "logs": 120,
+   "logTailBytes": 262144,
+   "logSearchBytes": 8388608,
+   "logMatches": 500,
+   "logLineChars": 2000,
+   "logTextChars": 262144
+  },
+  "entryView": [
+   "dir",
+   "link",
+   "mtime",
+   "name",
+   "path",
+   "size"
+  ],
+  "fileView": [
+   "editable",
+   "hash",
+   "kind",
+   "language",
+   "markdown",
+   "mime",
+   "mtime",
+   "name",
+   "path",
+   "size",
+   "truncated"
+  ],
+  "writeView": [
+   "error",
+   "hash",
+   "mtime",
+   "ok",
+   "size"
+  ],
+  "logView": [
+   "id",
+   "kind",
+   "sessionId",
+   "size",
+   "title",
+   "updatedAt"
+  ]
+ },
+ "git": {
+  "view": {
+   "files": 100,
+   "linesPerFile": 300,
+   "totalBytes": 262144,
+   "commits": 100,
+   "branches": 200,
+   "checks": 100,
+   "textChars": 4000
+  },
+  "optionKeys": {
+   "diff": [
+    "base",
+    "path",
+    "staged"
+   ],
+   "log": [
+    "limit",
+    "path",
+    "ref",
+    "skip"
+   ],
+   "commit": [
+    "message"
+   ],
+   "push": [
+    "setUpstream"
+   ],
+   "switch": [
+    "create"
+   ],
+   "prCreate": [
+    "base",
+    "body",
+    "draft",
+    "title"
+   ]
+  },
+  "prActions": [
+   "approve",
+   "close",
+   "merge",
+   "reopen"
+  ],
+  "commitView": [
+   "author",
+   "date",
+   "parents",
+   "sha",
+   "short",
+   "subject"
+  ],
+  "branchView": [
+   "ahead",
+   "behind",
+   "current",
+   "date",
+   "gone",
+   "name",
+   "remote",
+   "sha",
+   "subject",
+   "upstream"
+  ],
+  "checkView": [
+   "completedAt",
+   "description",
+   "link",
+   "name",
+   "startedAt",
+   "state",
+   "workflow"
+  ]
  },
  "maxFrameBytes": 9437184
 }

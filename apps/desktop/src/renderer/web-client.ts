@@ -480,6 +480,12 @@ function makeWebClient(): NekkoApi {
     readFile: (path) => call(IpcChannels.fileRead, path),
     writeFile: (path, content) => call(IpcChannels.fileWrite, path, content),
     listDir: (path) => call(IpcChannels.dirList, path),
+    listScopedFiles: (root, relPath) => call(IpcChannels.filesList, root, relPath),
+    searchScopedFiles: (root, query, limit) => call(IpcChannels.filesSearch, root, query, limit),
+    readScopedFile: (root, relPath, opts) => call(IpcChannels.filesRead, root, relPath, opts ?? {}),
+    writeScopedFile: (root, relPath, content, opts) => call(IpcChannels.filesWrite, root, relPath, content, opts),
+    listLogs: () => call(IpcChannels.logsList),
+    readLog: (id, opts) => call(IpcChannels.logsRead, id, opts ?? {}),
     fetchRemoteImage: (url) => call(IpcChannels.imageFetch, url),
 
     listChanges: (sessionId) => call(IpcChannels.changesList, sessionId),
@@ -491,6 +497,21 @@ function makeWebClient(): NekkoApi {
     prAction: (url, action) => call(IpcChannels.prAction, url, action),
     continuePrStack: (sessionId, url) => call(IpcChannels.prContinueStack, sessionId, url),
     linkPrStack: (sessionId, url) => call(IpcChannels.prLinkStack, sessionId, url),
+    createPr: (workspaceId, opts) => call(IpcChannels.prCreate, workspaceId, opts),
+    getPrChecks: (url) => call(IpcChannels.prChecks, url),
+
+    gitDiff: (workspaceId, opts) => call(IpcChannels.gitDiff, workspaceId, opts),
+    gitLog: (workspaceId, opts) => call(IpcChannels.gitLog, workspaceId, opts),
+    gitShow: (workspaceId, sha) => call(IpcChannels.gitShow, workspaceId, sha),
+    gitBranches: (workspaceId) => call(IpcChannels.gitBranches, workspaceId),
+    gitCompare: (workspaceId, base, head) => call(IpcChannels.gitCompare, workspaceId, base, head),
+    gitStage: (workspaceId, paths) => call(IpcChannels.gitStage, workspaceId, paths),
+    gitUnstage: (workspaceId, paths) => call(IpcChannels.gitUnstage, workspaceId, paths),
+    gitCommit: (workspaceId, opts) => call(IpcChannels.gitCommit, workspaceId, opts),
+    gitCommitMessage: (workspaceId) => call(IpcChannels.gitCommitMessage, workspaceId),
+    gitPush: (workspaceId, opts) => call(IpcChannels.gitPush, workspaceId, opts),
+    gitSwitch: (workspaceId, branch, opts) => call(IpcChannels.gitSwitch, workspaceId, branch, opts),
+    gitMergeAbort: (workspaceId) => call(IpcChannels.gitMergeAbort, workspaceId),
 
     listComments: (path) => call(IpcChannels.commentsList, path),
     addComment: (path, line, lineText, comment) => call(IpcChannels.commentAdd, path, line, lineText, comment),
@@ -581,6 +602,8 @@ function makeWebClient(): NekkoApi {
     revokeRemoteDevice: (deviceId) => call(IpcChannels.remoteRevoke, deviceId),
     renameRemoteDevice: (deviceId, name) => call(IpcChannels.remoteRename, deviceId, name),
     rotateRemoteSecret: () => call(IpcChannels.remoteRotate),
+    setRemoteAccess: (deviceId, access) => call(IpcChannels.remoteSetAccess, deviceId, access),
+    getRemoteActivity: (deviceId) => call(IpcChannels.remoteActivity, deviceId),
     // The web and self-hosted editions run on a server: the relay that ships beside
     // them is apps/relay-server itself, so there is nothing for this page to start.
     localRelayStatus: async () => webLocalRelay,

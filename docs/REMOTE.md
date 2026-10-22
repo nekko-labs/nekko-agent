@@ -87,6 +87,47 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > it kept. Like the drafts, the copies are encrypted until the phone is first unlocked, aren't
 > backed up, and are deleted when you forget the computer or a chat is deleted on it.
 >
+> **Beyond the chat** (iPhone): the phone is a remote for the agent, not a second desktop.
+> - **Edit the queue:** a follow-up sent while a reply runs waits under **Queued** with Edit and
+>   Remove. An edit only lands if that prompt hasn't started yet; otherwise nothing changes.
+> - **Fork:** touch and hold a message. On your prompt, **Edit in a new chat** starts a new chat with
+>   the conversation before it and the prompt in the message box; on a reply, **Fork from here**.
+> - **Photos:** tap a photo in a message to see it full screen; **+ → Paste image** adds one from the clipboard.
+> - **Saved prompts:** the prompts you saved on the computer show in `/` and under **+**, run like skills.
+> - **Continue and search:** the list opens with your most recent chat; search finds completed chats too.
+> - **Automations:** **Computers and settings → Automations** lists the computer's tasks and
+>   workflows with how each last went, and **Run now**. You set them up on the computer.
+> - **Pull requests:** a chip shows the chat's pull request and its checks. **Commit these changes**,
+>   **Open a PR** and **Fix the failing checks** send a prompt to the chat, so the agent does the git
+>   work on your computer and asks you before anything that needs approval. Or do it yourself from
+>   the phone (below).
+> - **Git:** **More → Git** in a chat (or the pull request chip → **Git: status, commit, push**)
+>   shows the chat folder's branch, how far it is ahead or behind, and its changed files, staged and
+>   not, each with its diff. Swipe a file to stage or unstage it, or use **Stage all**. Type a commit
+>   message or tap **Write message** to have your computer's model write one for what is staged (it
+>   uses that model's tokens), then **Commit** and **Push** (a new branch is published to its remote
+>   the first time). **History** lists commits with each one's message and files; **Branches**
+>   switches branch or makes a new one; **Compare** shows what one branch has that another doesn't;
+>   **Open a pull request** takes a title, a description, a base branch and Draft. A pull request's
+>   **Checks, files and actions** lists its checks with links, its changed files, and **Approve**,
+>   **Merge**, **Close** or **Reopen**. **Abort merge** shows while a merge stopped on a conflict.
+>   Every one of these changes asks for Face ID or your passcode (once per 5 minutes) and shows in
+>   the phone's *Activity* on the computer.
+> - **Files:** **More → Files** in a chat opens that chat's folder (its worktree when the chat is
+>   isolated); **Computers and settings → Files** lists the computer's saved folders. Tap through
+>   folders, or search by file name. A file opens in monospace with line numbers (Markdown can be
+>   shown formatted, images as pictures); a long file shows its first 256 KB with a note. **Edit**
+>   a text file up to 256 KB and **Save**: Face ID or your passcode is asked (once per 5 minutes)
+>   and the save shows in the phone's *Activity*. If the file changed on the computer after you
+>   opened it, the phone says *Changed on the computer* and you choose **Reload** (your edits are
+>   dropped) or **Save over it**; nothing is overwritten without that choice. Files that may hold
+>   secrets are counted under the list, never shown.
+> - **Logs:** **Computers and settings → Logs** lists the desktop app's log, the engine's log and
+>   each chat's agent run log. A log opens at its newest lines; **Refresh** reads it again, and the
+>   search field shows the matching lines with their line numbers. Read only, with secrets already
+>   replaced by `[redacted]` on the computer.
+> - **Usage and limits:** what each provider plan has used and when it resets, and recent usage. Read only.
+>
 > **All your chats, grouped like the desktop** (Android): the chat list shows every chat on the
 > computer, completed ones included, in the same groups as the desktop's agent sidebar: **General**
 > first, then one group per project folder. Tap a group's name to fold it. Each group lists its
@@ -113,10 +154,11 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > which on many phones sends the audio to Google. **Settings → Dictation** on the phone lets you use
 > only the computer, only the phone, or turn the microphone off.
 >
-> **Skills** (Android): type `/` at the start of a chat's message box to see the skills on your
-> computer: the built-in ones, those you installed from the Marketplace for Nekko Agent, and the
-> ones Nekko Agent found in your Claude Code, Codex or Gemini skill folders. Pick one, add details
-> if you like, and send. Nothing is copied to the phone: the list is read from the computer each
+> **Skills** (Android): type `/` in a chat's message box, at the start or after a space at the end
+> of what you've written, to see the skills on your computer: the built-in ones, those you
+> installed from the Marketplace for Nekko Agent, and the ones Nekko Agent found in your Claude
+> Code, Codex or Gemini skill folders. Pick one, add details if you like, and send. Text you typed
+> before the `/` stays in the box and goes along as the skill's details. Nothing is copied to the phone: the list is read from the computer each
 > time you open a chat, so a skill you install or remove there shows up on the phone right away,
 > and the computer adds the skill's instructions itself, so they never leave it. `/goal` is not
 > offered on the phone, and skills are installed and removed on the computer.
@@ -185,28 +227,110 @@ Your computer decides what a paired phone may ask for, whatever the phone app do
 phone app is not the boundary, your computer is. A phone can use your chats and nothing that
 changes how the computer itself is set up:
 
-- **Allowed:** list, open, start, complete and delete chats; send, queue and stop messages; answer
-  approvals and the agent's questions; pick a model from the computer's providers and a folder from
-  its list; voice status and transcription; and a few settings (below).
+- **Allowed:** list, open, start, fork, complete and delete chats; send, queue, edit or remove
+  queued, and stop messages; answer approvals and the agent's questions; pick a model from the
+  computer's providers and a folder from its list; voice status and transcription; read a chat's
+  pull requests, the computer's automations, its usage and plan limits, and run an automation now;
+  git in a chat's folder and its terminals and SSH (below); a chat's or saved folder's files and the computer's logs (below);
+  and a few settings (below).
 - **Never allowed from a phone:** wiping data or resetting settings, remote access itself (pairing,
-  revoking, rotating the secret), terminals, reading or writing files, accepting or reverting changes, adding or removing folders, installing
+  revoking, rotating the secret), terminals not opened for a chat, files by a path on the computer or outside a chat's or
+  saved folder, creating files, accepting or reverting changes,
+  git outside a chat's own folder, restacking or linking stacked pull requests, making, changing or
+  deleting automations, adding or removing folders, installing
   or removing voice models, connecting or disconnecting connectors, provider keys and sign-ins, MCP
   servers and hooks. Everything not on the allowed list is refused too, with an error that starts
   *Not allowed from a paired phone*.
 - **Settings a phone may change:** the chat mode for new chats (Ask, Guardrails or YOLO), what the chat pane's top-right button does (Complete or Delete),
   whether deleting asks first, and voice on/off and its language. An update that touches any other
   setting is refused as a whole: nothing in it is applied.
-- **Settings a phone can read:** only the theme and accents, the default and starred models, and
-  the settings above. API keys, tokens, provider details, folders, hooks, guardrails and your
+- **Settings a phone can read:** only the theme and accents, the default and starred models, your
+  saved prompts (name and text), whether automations are paused, and the settings above. API keys, tokens, provider details, folders, hooks, guardrails and your
   instructions never leave the computer this way; provider lists arrive as name and type only.
 - **A chat's changes, read only, only if you allow it:** with *Let phones see changes* on (off
   unless you turn it on, in Remote access on the computer), a phone can see a diff of the files the
   agent changed in a chat. Your computer works out the diff and sends only that: short paths, a
   capped number of lines, and files that may hold secrets (`.env`, keys, `.ssh`, `.aws`) counted but
   never shown. A phone still can't accept or revert changes or read any other file.
+- **Git in a chat's folder:** a phone names a chat, never a folder, and your computer runs git in
+  that chat's checkout (its worktree when the chat is isolated); a folder's own id from a phone is
+  refused. Reading (status, diffs, history, branches, compare, a pull request's checks and files)
+  needs *Read*; staging, committing, a model-written message, pushing, switching branch, aborting a
+  merge, opening a pull request and approving, merging, closing or reopening one need *Change* and a
+  fresh signature. What reaches the phone is smaller than the desktop's view: at most 100 files,
+  300 lines of each file's diff and 256 KB of diff per answer. Files that may hold secrets (`.env`,
+  keys, `.ssh`, `.aws`) are listed, so a commit never carries one unseen, but their diff is never
+  sent. Commits show the author's name, not their email; no path on the computer is sent. A
+  pull request is named by its GitHub address only. Pushes never force, and commits never skip
+  hooks or amend.
+- **Files in a chat's or saved folder:** a phone names a chat or a saved folder, never a path on
+  your computer. Paths are relative to that folder, and anything that leaves it (`..`, absolute
+  paths, a link pointing outside) is refused. Listing, searching by name and opening a file need
+  *Read*; saving needs *Change* and a fresh signature. A phone only saves over the version it
+  opened (your computer checks the file's hash) and never creates a file. What reaches the phone is
+  smaller than the desktop's view: at most 500 entries per folder, 100 search results, 256 KB of a
+  file's text and images up to 2 MB; a save is at most 256 KB. Files that may hold secrets
+  (`.env`, keys, `.ssh`, `.aws`, git credentials and `.git/config`) are refused before your computer
+  even looks, and left out of listings and search results (counted, never named).
+- **Logs, read only:** the desktop app's log, the engine's log and each chat's agent run log, with
+  *Read*. A phone gets at most the last 256 KB of a log, or up to 500 matching lines of a search
+  (each cut at 2,000 characters). API keys, tokens, passwords and other secret-looking values are
+  replaced with `[redacted]` before a line leaves the computer, and a search only matches the
+  redacted text.
+- **Terminals and SSH in a chat:** a phone sees only terminals opened for a chat and the agent's
+  command log (read only), never your other terminals, and only one chat's list at a time. Reading
+  a terminal's last 64 KB and the SSH hosts needs *Read*; opening a terminal, starting a new one (in
+  the chat's folder, with your default shell; a phone can't pick a folder or a shell), opening an SSH
+  session, Ctrl-C and closing need *Change* and a fresh signature. Opening hands the phone a token
+  for typing into that terminal only, so it doesn't ask for Face ID on every key: it ends when the
+  phone leaves or disconnects, after 5 minutes without typing and after 30 minutes in any case, and
+  your computer checks the phone's *Change* switch on every keystroke. Output goes only to the
+  phones that opened that terminal, at most 32 KB every tenth of a second (a flood is cut short and
+  the phone reads the end again). The desktop shows *Phone attached* on a terminal while a phone has
+  it open. SSH hosts arrive as alias, host name and port (no user name); SSH runs on your computer
+  with its own keys and config, and nothing about the keys reaches the phone. Running a command
+  without typing it, renaming terminals and listing shells stay off.
 - **One chat's options:** a phone can change a chat's model, title, pin and tags, complete it, and
   switch it between Ask, Guardrails and YOLO, but not its tools, isolation or
   offline/incognito switches. Messages cannot attach files from the computer.
+
+### What phones can do: Read and Change, per phone
+
+Git, files, logs, terminals and SSH are on the iPhone now (above); task boards are coming.
+*Remote access → What phones can do* on the computer lists each paired phone with two switches:
+
+- **Read:** look at files, git status and history, logs and boards.
+- **Change:** edit and save files, commit and push, branch and pull request actions, type in a
+  terminal, edit boards, SSH.
+
+Both are on for every phone, including phones paired before the switches existed. Turn one off and
+your computer refuses those requests from that phone, whatever the phone app does.
+
+**Every change is confirmed on the phone and checked by your computer.** The first time a phone
+makes a change, it creates a key in its Secure Enclave (on iPhone) that only Face ID, Touch ID or
+the passcode can use, and gives your computer the public half. Each change after that is signed
+with the key, and your computer checks the signature before doing anything: a change with no
+signature, a wrong one, one more than 5 minutes old, or one it has already seen is refused. One
+Face ID covers 5 minutes, as for *Allow* from the Lock Screen.
+
+Your computer trusts the first key a phone gives it. A phone that later shows up with a different
+key is refused until you remove it and pair it again. *Forget all computers* on the iPhone deletes
+its key too.
+
+**Activity.** *Activity* under each phone lists every change it made or tried, newest first, with
+why one was refused (Change off, no fresh Face ID or passcode, a changed key). Your computer keeps
+the newest 200 per phone; rotating the secret clears them.
+
+**Revoke** a phone to stop all of it at once. Whatever the switches say, a phone can never reach
+provider keys or other credentials, remote access itself (pairing more devices, revoking,
+rotating), wiping data or resetting settings, or the computer's own sign-in windows, dialogs,
+updater and shell.
+
+### Where the logs live
+
+The logs a phone reads are files you can open yourself: `logs/app.log` and `logs/nekkod.log` in the data folder
+(`~/.nekko-agent` unless you moved it). Each is rotated at 5 MB, and the last three old copies are kept
+(`app.log.1` to `app.log.3`). Windows' engine log holds only start-up lines and crashes for now.
 
 ## Security model, honestly stated
 
@@ -218,7 +342,8 @@ changes how the computer itself is set up:
 | Lost/stolen phone | The Android app asks for the phone's fingerprint, face or screen lock every time it opens. Revoke the phone in Settings: kicked immediately, denied afterward, push token dropped |
 | Revoked device replays old creds | The agent refuses its handshake and unicasts nothing to it; it gets back in only with a fresh one-time pairing code from the computer's owner; rotate the secret for a full cryptographic reset |
 | Malicious relay withholding/reordering | Availability only; it still can't read or forge frames (AES-GCM auth) |
-| Phone asks for something dangerous | Your computer only serves the phone allowlist above (no wipe, settings reset, remote-access changes, terminals, file writes); tool calls run on your machine under your guardrails/sandbox and chat mode |
+| Phone asks for something dangerous | Your computer only serves the phone allowlist above (no wipe, settings reset, remote-access changes, terminals outside a chat, file writes); tool calls run on your machine under your guardrails/sandbox and chat mode |
+| Someone else picks up the phone, or the relay replays a request, to make a change | Each change must be signed by the phone's Secure Enclave key, which needs Face ID or the passcode (one check lasts 5 minutes); your computer checks the signature, its age and that it was not used before, and logs every attempt in the phone's activity |
 
 What the relay does see: connection metadata (IPs, timing, frame sizes), the room code, and, if you
 enable push, device push tokens plus the content-free fact "a run finished". That's the whole list,

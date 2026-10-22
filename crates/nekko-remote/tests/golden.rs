@@ -9,7 +9,7 @@ use nekko_remote::agent::AgentCore;
 use nekko_remote::e2e;
 use nekko_remote::hello::{self, Grant, Random};
 use nekko_remote::service::{Link, LinkHandle, RemoteService, Verifier};
-use nekko_remote::{Out, RELAYED_EVENTS};
+use nekko_remote::{Activity, Devices, Out, PhoneCall, PhoneDevice, RELAYED_EVENTS};
 use serde_json::{Value, json};
 use std::collections::VecDeque;
 use std::path::Path;
@@ -18,6 +18,26 @@ use std::sync::{Arc, Mutex};
 fn golden(name: &str) -> Value {
     let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("golden").join(name);
     serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap()
+}
+
+/// The TS gate these goldens recorded knew no devices (IO-33 came after),
+/// and none of the recorded channels is read- or change-class, so the gate
+/// never asks: any question here fails the test.
+struct NoDevices;
+
+impl Devices for NoDevices {
+    fn device(&self, id: &str) -> Option<PhoneDevice> {
+        panic!("the gate looked up {id} for a channel recorded before IO-33")
+    }
+    fn register_key(&self, id: &str, _key: &str) -> Result<bool, &'static str> {
+        panic!("register_key({id})")
+    }
+    fn record(&self, id: &str, entry: Activity) {
+        panic!("record({id}, {entry:?})")
+    }
+    fn now(&self) -> f64 {
+        0.0
+    }
 }
 
 fn s(v: &Value) -> &str {
@@ -152,7 +172,7 @@ fn the_relay_agent_sends_the_same_frames() {
             for out in core.on_relay(text, &verify) {
                 match out {
                     Out::Send(f) => sent.push(f),
-                    Out::Dispatch { cid, id, channel, args } => {
+                    Out::Dispatch { cid, id, device_id, channel, args, proof } => {
                         // As the daemon runs it: through the phone gate, then the host.
                         let seen = Arc::new(Mutex::new(Vec::new()));
                         let (record, responses) = (seen.clone(), responses.clone());
@@ -169,7 +189,8 @@ fn the_relay_agent_sends_the_same_frames() {
                             };
                             Box::pin(std::future::ready(result))
                         });
-                        let result = rt.block_on(nekko_remote::phone::gate(host)(channel, args));
+                        let gated = nekko_remote::phone::gate(host, Arc::new(NoDevices));
+                        let result = rt.block_on(gated(PhoneCall { device_id, proof }, channel, args));
                         calls.extend(seen.lock().unwrap().drain(..));
                         sent.push(core.reply(&cid, id, result));
                     }
@@ -276,13 +297,14 @@ fn the_phone_gate_decides_as_the_ts_does() {
     let skills = g["skills"].clone();
     let sessions = g["sessions"].clone();
     let changes = g["changes"].clone();
+    let beyond = g["beyond"].clone();
     let cases = g["cases"].as_array().unwrap();
     assert!(cases.len() >= 30);
     let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
     for case in cases {
         let calls: Arc<Mutex<Vec<Value>>> = Arc::default();
-        let (seen, settings, skills, sessions, changes) =
-            (calls.clone(), settings.clone(), skills.clone(), sessions.clone(), changes.clone());
+        let (seen, settings, skills, sessions, changes, beyond) =
+            (calls.clone(), settings.clone(), skills.clone(), sessions.clone(), changes.clone(), beyond.clone());
         let host: nekko_remote::Dispatcher = Arc::new(move |channel: String, args: Value| {
             seen.lock().unwrap().push(json!([channel, args]));
             let out = match channel.as_str() {
@@ -290,14 +312,18 @@ fn the_phone_gate_decides_as_the_ts_does() {
                 "changes:list" => changes.get(args[0].as_str().unwrap_or("")).cloned().unwrap_or(json!([])),
                 "providers:list" => settings["providers"].clone(),
                 "skills:runnable" => skills.clone(),
+                // The channels beyond the chat answer with what the TS fixture holds (task:runNow: nothing).
+                "task:runNow" => Value::Null,
+                c if beyond.get(c).is_some() => beyond[c].clone(),
                 c if c.starts_with("settings:") => settings.clone(),
                 c => json!({ "ok": c }),
             };
             Box::pin(std::future::ready(Ok(out)))
         });
-        let gated = nekko_remote::phone::gate(host);
+        let gated = nekko_remote::phone::gate(host, Arc::new(NoDevices));
         let channel = s(&case["channel"]).to_string();
-        let got = rt.block_on(gated(channel.clone(), case["args"].clone()));
+        let who = PhoneCall { device_id: "phone-1".into(), proof: None };
+        let got = rt.block_on(gated(who, channel.clone(), case["args"].clone()));
         let what = format!("{channel} {}", case["args"]);
         match case.get("error") {
             Some(e) => assert_eq!(got.as_ref().unwrap_err(), s(e), "{what}"),
@@ -337,6 +363,34 @@ fn a_reply_too_large_for_the_relay_becomes_an_error() {
 }
 
 #[test]
+fn files_and_logs_from_a_phone_match_the_ts() {
+    // Written from packages/shared/src/phone-files.ts by phone-files.golden.test.ts.
+    let g = golden("phone-files.json");
+    let screens = g["screens"].as_array().unwrap();
+    assert!(screens.len() >= 40);
+    for c in screens {
+        let channel = s(&c["channel"]);
+        let args = c["args"].as_array().unwrap();
+        let got = nekko_remote::phone::screen(channel, args);
+        let what = format!("{channel} {}", c["args"]);
+        match c.get("error") {
+            Some(e) => assert_eq!(got.err().map(|d| d.to_string()).as_deref(), Some(s(e)), "{what}"),
+            None => {
+                let args = got.unwrap_or_else(|d| panic!("{what}: {d}")).args.map(Value::Array).unwrap_or(Value::Null);
+                assert_eq!(args, c["callArgs"], "{what}");
+            }
+        }
+    }
+    let views = g["views"].as_array().unwrap();
+    assert!(views.len() >= 20);
+    for c in views {
+        let channel = s(&c["channel"]);
+        let got = nekko_remote::phone::redact(channel, c["result"].clone());
+        assert_eq!(got, c["view"], "{channel} {}", c["result"]);
+    }
+}
+
+#[test]
 fn the_relay_route_rule_matches_the_ts() {
     for case in golden("relay-route.json").as_array().unwrap() {
         let url = s(&case["url"]);
@@ -346,5 +400,33 @@ fn the_relay_route_rule_matches_the_ts() {
             case["problem"].as_str(),
             "problem with {url:?}"
         );
+    }
+}
+
+#[test]
+fn git_from_a_phone_matches_the_ts() {
+    // Written from packages/shared/src/phone-git.ts by phone-git.golden.test.ts.
+    let g = golden("phone-git.json");
+    let screens = g["screens"].as_array().unwrap();
+    assert!(screens.len() >= 40);
+    for c in screens {
+        let channel = s(&c["channel"]);
+        let args = c["args"].as_array().unwrap();
+        let got = nekko_remote::phone::screen(channel, args);
+        let what = format!("{channel} {}", c["args"]);
+        match c.get("error") {
+            Some(e) => assert_eq!(got.err().map(|d| d.to_string()).as_deref(), Some(s(e)), "{what}"),
+            None => {
+                let args = got.unwrap_or_else(|d| panic!("{what}: {d}")).args.map(Value::Array).unwrap_or(Value::Null);
+                assert_eq!(args, c["callArgs"], "{what}");
+            }
+        }
+    }
+    let views = g["views"].as_array().unwrap();
+    assert!(views.len() >= 20);
+    for c in views {
+        let channel = s(&c["channel"]);
+        let got = nekko_remote::phone::redact(channel, c["result"].clone());
+        assert_eq!(got, c["view"], "{channel} {}", c["result"]);
     }
 }

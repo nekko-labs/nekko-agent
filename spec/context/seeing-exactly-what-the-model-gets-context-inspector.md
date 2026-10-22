@@ -1,0 +1,9 @@
+---
+title: "Seeing exactly what the model gets (Context Inspector)"
+area: context
+split-from: SPEC.md (2026-10-22)
+---
+
+# Seeing exactly what the model gets (Context Inspector)
+
+A toggleable right-side panel makes context legible. **Sources** lists the folders wired in, attached files, the chat's `SPEC.md` (with Build-from-chat / Live controls), and **Guidelines**: detected guideline files (AGENTS.md/CLAUDE.md) plus memory entries, each with its own enable/disable control. Guidelines sits above the Spec panel; the Spec panel separately offers creation of missing project instruction files rather than showing a second Guidelines section. New chats open without waiting for a full reload of every saved transcript. **Breakdown** is a live view of exactly what's entering the prompt on the next reply (files, guidelines, memory snippets, connector data, index snippets), each item toggleable/pinnable with token counts, plus a context-window headroom bar. Workspace cards refresh estimated transcript use every four seconds while a chat is running. At 95% usage, the chat warns the user and automatically compacts after the current reply finishes. Compaction summarizes older conversation in the same session and shows its progress; while it runs, the user can send the summary to a new chat instead or stop compacting, leaving the original transcript unchanged. `[updated 2026-10-03]` `[updated 2026-10-01]` Between the capacity panel and the resource monitors sits a collapsible **Model settings** group: each model the engine holds in memory, where it runs (GPU, split, or CPU, with the layer count), its footprint and context, and, folded under one click, the settings it runs with (GPU offload, context, KV cache, keep-loaded) and a **Reload** that applies them in place. It answers "is my model on the GPU" beside the chat that is asking, above the meters that would report the consequence, and it exists only while an engine is installed.

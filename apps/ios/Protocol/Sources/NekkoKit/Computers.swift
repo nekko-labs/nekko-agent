@@ -28,7 +28,11 @@ public protocol RemoteConnection: Caller {
     func nudge()
     func reconnect()
     func registerPush(token: String) async throws
+    /// `kinds`: the pushes this phone wants; nil asks for all.
+    func registerPush(token: String, kinds: [String]?) async throws
     func registerActivity(tag: String, token: String) async throws
+    /// Frames from the relay itself (`RelayControl`).
+    func setControlHandler(_ f: (@Sendable (RelayControl) -> Void)?)
     /// The phone moved to another network (`RelayClient.networkChanged`).
     func networkChanged(_ path: NetworkPath)
     /// The network the phone is on, without moving (`RelayClient.setNetworkPath`).
@@ -36,6 +40,8 @@ public protocol RemoteConnection: Caller {
 }
 
 extension RemoteConnection {
+    public func registerPush(token: String, kinds: [String]?) async throws { try await registerPush(token: token) }
+    public func setControlHandler(_ f: (@Sendable (RelayControl) -> Void)?) {}
     /// A connection with one route only has to dial again.
     public func networkChanged(_ path: NetworkPath) { reconnect() }
     public func setNetworkPath(_ path: NetworkPath) {}
@@ -143,6 +149,17 @@ public final class ComputersStore {
     public private(set) var models: [String: [ModelInfo]] = [:]
     public private(set) var modelErrors: [String: String] = [:]
     public private(set) var hostVersion: String?
+    /// The active computer's phone protocol version, once it has welcomed this phone (IO-32).
+    public private(set) var hostProtocol: Int?
+    /// Whether the active computer's relay said it can push to this phone; nil until it says.
+    public private(set) var relayDelivers: Bool?
+    /// The pushes this phone wants (IO-30); nil asks for every kind. Re-registers when it changes.
+    public var pushKinds: [PushKind]? {
+        didSet { if pushKinds != oldValue { registerPushNow() } }
+    }
+    /// An approval or a question was handled somewhere: remove the needs-you
+    /// notification for the chat with this tag (`E2E.activityTag`).
+    public var onDismiss: ((String) -> Void)?
     public private(set) var lastError: String?
     /// The active computer's connection history (memory only, content-free), for the Connection screen.
     public private(set) var connectionLog = ConnectionLog()
@@ -181,6 +198,8 @@ public final class ComputersStore {
     private let offlineFiles: OfflineFiles?
 
     public var active: Computer? { computers.first { $0.id == activeId } }
+    /// Which side to update when the phone and the computer speak different versions.
+    public var protocolCheck: ProtocolCheck { ProtocolCheck.compare(computer: hostProtocol) }
     public var groups: [ChatGroup] { ChatGroup.of(summaries, folders: workspaces) }
     public var needsYouCount: Int { activity.values.filter { $0 == .needsYou }.count }
     public var runningCount: Int { activity.values.filter { $0 == .running }.count }
@@ -201,6 +220,9 @@ public final class ComputersStore {
     private let platform: String
     private let app: String?
     private let probeNetwork: ProbeNetwork
+    /// Signs Change actions (IO-33): the Secure Enclave in the app; nil where there is none.
+    @ObservationIgnored public var changeSigner: ChangeSigner?
+    @ObservationIgnored private var changeCalls: (client: ObjectIdentifier, calls: ChangeCalls)?
 
     private var client: RemoteConnection?
     private var graceTask: Task<Void, Never>?
@@ -208,6 +230,8 @@ public final class ComputersStore {
     private var pump: Task<Void, Never>?
     private var summariesTask: Task<Void, Never>?
     private var listeners: [UUID: (AgentEvent) -> Void] = [:]
+    /// Open terminal screens (IO-33 FA-3): the computer sends only the output of terminals this phone opened.
+    private var terminalListeners: [UUID: (TerminalEvent) -> Void] = [:]
     private var pushToken: String?
     /// Whose drafts and outbox are loaded.
     private var offlineComputer: String?
@@ -269,6 +293,37 @@ public final class ComputersStore {
         return client
     }
 
+    /// A Change action on the active computer (IO-33): signed with this
+    /// phone's key (Face ID or the passcode within the last 5 minutes), the
+    /// key registered on first use. Refusals throw `ChangeRefused` with a
+    /// message to show, e.g. "Changes from this phone are turned off on Studio".
+    public func call(change channel: String, _ args: [JSONValue] = [], timeout: TimeInterval? = nil) async throws -> JSONValue {
+        guard let client else { throw RelayError("Not connected to a computer.") }
+        guard let signer = changeSigner, let caller = client as? ProofCaller else {
+            throw ChangeRefused(code: nil, message: "This phone can’t confirm changes with Face ID or a passcode.")
+        }
+        let id = ObjectIdentifier(client)
+        let calls: ChangeCalls
+        if let cached = changeCalls, cached.client == id {
+            calls = cached.calls
+        } else {
+            calls = ChangeCalls(caller: caller, signer: signer, deviceId: deviceId(), computerName: active?.name ?? "your computer")
+            changeCalls = (id, calls)
+        }
+        return try await calls.call(change: channel, args, timeout: timeout)
+    }
+
+    /// A Read action on the active computer (IO-33): a plain call, with the
+    /// computer's refusals (`read-off`, `channel-denied`, ...) said plainly.
+    public func call(read channel: String, _ args: [JSONValue] = [], timeout: TimeInterval? = nil) async throws -> JSONValue {
+        do {
+            return try await remote().call(channel, args, timeout: timeout)
+        } catch let e as RelayError where e.fromComputer {
+            guard let r = PhoneRefusal(e.message), let m = r.message(computer: active?.name ?? "your computer") else { throw e }
+            throw ChangeRefused(code: r.code, message: m)
+        }
+    }
+
     /// Every `agent:event` from the active computer. Returns an id for `unsubscribe`.
     public func subscribe(_ f: @escaping (AgentEvent) -> Void) -> UUID {
         let id = UUID()
@@ -277,6 +332,15 @@ public final class ComputersStore {
     }
 
     public func unsubscribe(_ id: UUID) { listeners[id] = nil }
+
+    /// Every `terminal:event` from the active computer (`TerminalSession`). Returns an id for `unsubscribeTerminal`.
+    public func subscribeTerminal(_ f: @escaping (TerminalEvent) -> Void) -> UUID {
+        let id = UUID()
+        terminalListeners[id] = f
+        return id
+    }
+
+    public func unsubscribeTerminal(_ id: UUID) { terminalListeners[id] = nil }
 
     // MARK: Pairing
 
@@ -389,7 +453,8 @@ public final class ComputersStore {
         c.setHandlers(
             onStatus: { sink.yield(.status($0)) },
             onEvent: { sink.yield(.event($0, $1)) },
-            onWelcome: { _ in sink.yield(.welcome) })
+            onWelcome: { sink.yield(.welcome($0.protocolVersion)) })
+        c.setControlHandler { sink.yield(.control($0)) }
         // One consumer, in arrival order, on the main actor.
         pump = Task { @MainActor [weak self] in
             for await signal in stream {
@@ -403,7 +468,8 @@ public final class ComputersStore {
     private enum Signal: Sendable {
         case status(RelayStatus)
         case event(String, JSONValue)
-        case welcome
+        case welcome(Int)
+        case control(RelayControl)
     }
 
     private func handle(_ signal: Signal, computerId: String, hadCode: Bool) {
@@ -425,14 +491,23 @@ public final class ComputersStore {
                     await refresh()
                     await outbox.flush()
                 }
-                if let pushToken { Task { try? await client?.registerPush(token: pushToken) } }
+                registerPushNow()
             }
-        case .welcome:
+        case .welcome(let version):
+            hostProtocol = version
             // Enrollment done: the one-time code must never be sent again.
             if hadCode { dropPairCode(computerId) }
+        case .control(.pushRegistered(let delivers)):
+            relayDelivers = delivers
+        case .control(.dismiss(let tag)):
+            onDismiss?(tag)
         case .event(let channel, let payload):
             if channel == Events.appearanceUpdated {
                 appearance = Appearance.from(payload)
+                return
+            }
+            if channel == TerminalChannels.event {
+                if let e = TerminalEvent.from(payload) { for f in terminalListeners.values { f(e) } }
                 return
             }
             guard channel == Events.agentEvent, let e = AgentEvent.from(payload) else { return }
@@ -592,7 +667,27 @@ public final class ComputersStore {
     /// The APNs device token, registered with the relay on every connect.
     public func setPushToken(_ token: String) {
         pushToken = token
-        if conn == .online { Task { try? await client?.registerPush(token: token) } }
+        registerPushNow()
+    }
+
+    private func registerPushNow() {
+        guard conn == .online, let token = pushToken, let c = client else { return }
+        let kinds = pushKinds?.map(\.rawValue)
+        Task { try? await c.registerPush(token: token, kinds: kinds) }
+    }
+
+    /// *Send a test notification* (IO-30): ask the computer, which asks the relay
+    /// to push to this phone. Says which path it took; on `.local` the app
+    /// shows the notification itself. Throws when the computer can't be reached.
+    public func sendTestNotification() async throws -> TestPushResult {
+        let c = try remote()
+        var answered = true
+        do {
+            _ = try await c.call(Channels.pushTest, [], timeout: 15)
+        } catch let e as RelayError where TestPushResult.unknownToComputer(e.message) {
+            answered = false
+        }
+        return TestPushResult.decide(computerAnswered: answered, hasToken: pushToken != nil, relayDelivers: relayDelivers)
     }
 
     /// A Live Activity's push token for `sessionId` (see `RelayClient.registerActivity`).
@@ -721,6 +816,9 @@ public final class ComputersStore {
         return session.id
     }
 
+    /// Re-read the chat list soon (a chat was made or changed from here).
+    public func reloadList() { scheduleSummaries() }
+
     /// Change the computer's phone-settable settings; the reply is what was saved there.
     public func updatePcSettings(_ patch: JSONValue) async throws {
         pcSettings = PcSettings.from(try await remote().call(Channels.settingsUpdate, [patch]))
@@ -746,6 +844,8 @@ public final class ComputersStore {
         // Another computer, or the same one later: its settings are unknown until it answers.
         pcSettings = PcSettings()
         hostVersion = nil
+        hostProtocol = nil
+        relayDelivers = nil
         lastError = nil
     }
 

@@ -2,7 +2,10 @@
 //! for any other.
 
 use crate::hub::Hub;
-use nekko_term::{CreateSpec, Registry, RegistryEvent, UpdatePatch, detect_shells, resolve_shell};
+use nekko_term::{
+    CreateSpec, Registry, RegistryEvent, TAIL_DEFAULT, TAIL_MAX, TerminalViewer, UpdatePatch, detect_shells,
+    resolve_shell,
+};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -138,11 +141,13 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             return Err("Wait for the current reply to finish before changing this chat's Git isolation.".into());
         }
     }
-    if matches!(channel, "terminal:create" | "mcp:call") {
-        if arg(&args, 0).get("executionMode").and_then(Value::as_str) == Some("sandbox") {
+    if matches!(channel, "terminal:create" | "mcp:call" | "ssh:open") {
+        // `ssh:open(alias, opts)` carries its options second.
+        let opts = arg(&args, if channel == "ssh:open" { 1 } else { 0 });
+        if opts.get("executionMode").and_then(Value::as_str) == Some("sandbox") {
             return Err(format!("{channel} cannot execute sandbox work natively; use the host container router"));
         }
-        let session_id = arg(&args, 0)
+        let session_id = opts
             .get("sessionId")
             .and_then(Value::as_str)
             .or_else(|| if channel == "mcp:call" { str_arg(&args, 1) } else { None });
@@ -171,8 +176,15 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             "owned": owned(ctx),
         })),
         "terminals:list" => {
-            let mut all = serde_json::to_value(ctx.terminals.list()).unwrap_or(json!([]));
-            let agent = ctx.turns.agent_logs.as_ref().map(|logs| logs.list()).unwrap_or_default();
+            // `{ sessionId }` narrows it to one chat's terminals and its agent log.
+            let only = arg(&args, 0).get("sessionId").and_then(Value::as_str);
+            let mut native = ctx.terminals.list();
+            let mut agent = ctx.turns.agent_logs.as_ref().map(|logs| logs.list()).unwrap_or_default();
+            if let Some(sid) = only {
+                native.retain(|t| t.session_id.as_deref() == Some(sid));
+                agent.retain(|t| t.get("agentSessionId").and_then(Value::as_str) == Some(sid));
+            }
+            let mut all = serde_json::to_value(native).unwrap_or(json!([]));
             if let Value::Array(list) = &mut all {
                 list.extend(agent);
             }
@@ -181,8 +193,23 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         "terminals:list:native" => Ok(serde_json::to_value(ctx.terminals.list()).unwrap_or(json!([]))),
         "terminal:shells" => Ok(serde_json::to_value(detect_shells()).unwrap_or(json!([]))),
         "terminal:create" => create_terminal(ctx, arg(&args, 0)).await,
-        "terminal:snapshot" | "terminal:update" | "terminal:write" | "terminal:resize" | "terminal:run"
-        | "terminal:signal" | "terminal:close" => {
+        "terminal:snapshot" | "terminal:tail" => {
+            let id = str_arg(&args, 0).unwrap_or_default().to_string();
+            let max = tail_bytes(channel, &args);
+            if is_agent(&id) {
+                let snap = match &ctx.turns.agent_logs {
+                    Some(logs) => logs.route("terminal:snapshot", &id, &args).await?,
+                    None => return Err(NO_SESSIONS.into()),
+                };
+                return Ok(match max {
+                    Some(max) => cap_buffer(snap, max),
+                    None => snap,
+                });
+            }
+            Ok(native_snapshot(&ctx.terminals, &id, max))
+        }
+        "terminal:update" | "terminal:write" | "terminal:resize" | "terminal:run" | "terminal:signal"
+        | "terminal:close" => {
             let id = str_arg(&args, 0).unwrap_or_default().to_string();
             if is_agent(&id) {
                 return match &ctx.turns.agent_logs {
@@ -192,6 +219,16 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             }
             terminal_op(ctx, channel, &id, &args)
         }
+        "terminal:attach" => attach_viewer(&ctx.terminals, str_arg(&args, 0).unwrap_or_default(), arg(&args, 1)),
+        "terminal:detach" => detach_viewer(&ctx.terminals, str_arg(&args, 0), str_arg(&args, 1).unwrap_or_default()),
+        "ssh:hosts" => {
+            let home = home_dir().ok_or("No home folder to read ~/.ssh/config from.")?;
+            let hosts = tokio::task::spawn_blocking(move || nekko_term::read_ssh_hosts(&home))
+                .await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(hosts).unwrap_or(json!([])))
+        }
+        "ssh:open" => open_ssh(ctx, str_arg(&args, 0).unwrap_or_default(), arg(&args, 1)).await,
         "chat:turn" => ctx.turns.start(ctx.hub.clone(), arg(&args, 0).clone()),
         "turn:abort" => Ok(json!(ctx.turns.abort(str_arg(&args, 0).unwrap_or_default()))),
         "turn:alive" => Ok(json!(ctx.turns.is_running(str_arg(&args, 0).unwrap_or_default()))),
@@ -382,6 +419,9 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             None => Err("voice needs the data directory".into()),
         },
         c if ctx.workspace.serves(c) => crate::workspace::route(ctx, c, &args).await,
+        c if crate::logs::CHANNELS.contains(&c) && ctx.workspace.data_dir().is_some() => {
+            crate::logs::route(ctx, c, &args).await
+        }
         c if crate::automation::TASK_CHANNELS.contains(&c) && ctx.automation.owns_tasks() => {
             ctx.automation.route(c, &args).await
         }
@@ -550,6 +590,9 @@ fn owned(ctx: &Ctx) -> Vec<&'static str> {
         all.extend_from_slice(crate::context::CHANNELS);
     }
     all.extend(ctx.workspace.owned());
+    if ctx.workspace.data_dir().is_some() {
+        all.extend_from_slice(crate::logs::CHANNELS);
+    }
     if ctx.automation.owns_tasks() {
         all.extend_from_slice(crate::automation::TASK_CHANNELS);
     }
@@ -653,6 +696,7 @@ pub const OWNED: &[&str] = &[
     "spec:setLinked",
     "chat:queue",
     "chat:dequeue",
+    "chat:editQueued",
     "terminals:list",
     "terminals:list:native",
     "terminal:shells",
@@ -664,6 +708,13 @@ pub const OWNED: &[&str] = &[
     "terminal:run",
     "terminal:signal",
     "terminal:close",
+    "terminal:tail",
+    // Not public (not in channels.json): the remote layer marks a phone as
+    // watching a terminal, so the desktop can show it.
+    "terminal:attach",
+    "terminal:detach",
+    "ssh:hosts",
+    "ssh:open",
     "infer:serve",
     "infer:stopServing",
     "infer:serving",
@@ -680,15 +731,6 @@ pub const OWNED: &[&str] = &[
 fn terminal_op(ctx: &Ctx, channel: &str, id: &str, args: &[Value]) -> Result<Value, String> {
     let reg = &ctx.terminals;
     match channel {
-        "terminal:snapshot" => Ok(match reg.snapshot(id) {
-            Some(s) => json!({
-                "info": s.info,
-                "buffer": String::from_utf8_lossy(&s.buffer),
-                "cols": s.cols,
-                "rows": s.rows,
-            }),
-            None => Value::Null,
-        }),
         "terminal:update" => {
             let patch = arg(args, 1);
             reg.update(
@@ -759,18 +801,130 @@ fn home_dir() -> Option<PathBuf> {
     std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from)
 }
 
+/// The scroll-back cap a snapshot call asks for: `terminal:tail(id, maxBytes?)`
+/// always caps (64 KB unless named, never over `TAIL_MAX`),
+/// `terminal:snapshot(id, { maxBytes })` only when asked.
+fn tail_bytes(channel: &str, args: &[Value]) -> Option<usize> {
+    if channel == "terminal:tail" {
+        let asked = arg(args, 1).as_u64().map(|n| n as usize).unwrap_or(TAIL_DEFAULT);
+        return Some(asked.min(TAIL_MAX));
+    }
+    arg(args, 1).get("maxBytes").and_then(Value::as_u64).map(|n| n as usize)
+}
+
+/// `{ info, buffer, cols, rows }` for a daemon pty, the buffer capped to its
+/// last `max` bytes (with `truncated` and `totalBytes`) when asked.
+fn native_snapshot(reg: &Registry, id: &str, max: Option<usize>) -> Value {
+    let (s, total) = match max {
+        Some(max) => match reg.tail(id, max) {
+            Some((s, total)) => (s, Some(total)),
+            None => return Value::Null,
+        },
+        None => match reg.snapshot(id) {
+            Some(s) => (s, None),
+            None => return Value::Null,
+        },
+    };
+    let mut out = json!({
+        "info": s.info,
+        "buffer": String::from_utf8_lossy(&s.buffer),
+        "cols": s.cols,
+        "rows": s.rows,
+    });
+    if let Some(total) = total {
+        out["truncated"] = json!(s.buffer.len() < total);
+        out["totalBytes"] = json!(total);
+    }
+    out
+}
+
+/// Cap an already-built snapshot's `buffer` (an agent log's) the same way.
+fn cap_buffer(mut snap: Value, max: usize) -> Value {
+    let Some(buffer) = snap.get("buffer").and_then(Value::as_str) else { return snap };
+    let bytes = buffer.as_bytes();
+    let cut = nekko_term::tail_cut(bytes, max);
+    // `tail_cut` never starts inside a UTF-8 character.
+    let tail = String::from_utf8_lossy(&bytes[cut..]).into_owned();
+    let total = bytes.len();
+    snap["truncated"] = json!(cut > 0);
+    snap["totalBytes"] = json!(total);
+    snap["buffer"] = json!(tail);
+    snap
+}
+
+/// `terminal:attach(id, { id, kind?, name? })`: a remote viewer (a phone)
+/// is watching this terminal. Returns the terminal's viewers.
+fn attach_viewer(reg: &Registry, id: &str, viewer: &Value) -> Result<Value, String> {
+    if is_agent(id) {
+        return Err("Agent command logs do not track viewers.".into());
+    }
+    let viewer_id =
+        viewer.get("id").and_then(Value::as_str).filter(|v| !v.is_empty()).ok_or("A viewer needs an id.")?;
+    let kind = viewer.get("kind").and_then(Value::as_str).filter(|k| !k.is_empty()).unwrap_or("phone");
+    let name = viewer.get("name").and_then(Value::as_str).map(|n| n.chars().take(80).collect::<String>());
+    let viewers = reg.attach_viewer(id, TerminalViewer::new(viewer_id, kind, name)).ok_or("Terminal not found")?;
+    Ok(serde_json::to_value(viewers).unwrap_or(json!([])))
+}
+
+/// `terminal:detach(id, viewerId)`: the viewer left that terminal; returns its
+/// viewers. `terminal:detach(null, viewerId)`: it left every terminal (its
+/// connection dropped); returns the ids it was attached to.
+fn detach_viewer(reg: &Registry, id: Option<&str>, viewer_id: &str) -> Result<Value, String> {
+    if viewer_id.is_empty() {
+        return Err("A viewer needs an id.".into());
+    }
+    match id {
+        Some(id) => {
+            let viewers = reg.detach_viewer(id, viewer_id).ok_or("Terminal not found")?;
+            Ok(serde_json::to_value(viewers).unwrap_or(json!([])))
+        }
+        None => Ok(json!(reg.detach_viewer_everywhere(viewer_id))),
+    }
+}
+
+/// `ssh:open(alias, { cols, rows, sessionId?, workspaceId? })`: a terminal
+/// running the system `ssh` to a host alias from `~/.ssh/config`. The alias
+/// must be one the config lists; it is passed as its own argument.
+async fn open_ssh(ctx: &Ctx, alias: &str, opts: &Value) -> Result<Value, String> {
+    let home = home_dir().ok_or("No home folder to read ~/.ssh/config from.")?;
+    let alias = alias.to_string();
+    let found = tokio::task::spawn_blocking(move || {
+        let hosts = nekko_term::read_ssh_hosts(&home);
+        nekko_term::ssh_shell(&hosts, &alias, nekko_term::find_ssh().as_deref()).map(|shell| (shell, home))
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    let (shell, home) = found?;
+    let s = |k: &str| opts.get(k).and_then(Value::as_str).map(str::to_string);
+    let spec = CreateSpec {
+        title: Some(shell.label.clone()),
+        workspace_id: s("workspaceId"),
+        session_id: s("sessionId"),
+        cwd: home,
+        shell,
+        cols: dim(opts, "cols", 80),
+        rows: dim(opts, "rows", 24),
+        env: Vec::new(),
+    };
+    Ok(serde_json::to_value(ctx.terminals.create(spec)).unwrap_or(Value::Null))
+}
+
+fn dim(opts: &Value, key: &str, default: u16) -> u16 {
+    opts.get(key).and_then(Value::as_u64).map(|n| n.clamp(1, 1000) as u16).unwrap_or(default)
+}
+
 async fn create_terminal(ctx: &Ctx, opts: &Value) -> Result<Value, String> {
     let settings = crate::settings::current(ctx).await;
     let s = |k: &str| opts.get(k).and_then(Value::as_str);
-    let dim = |k: &str, d: u16| opts.get(k).and_then(Value::as_u64).map(|n| n.clamp(1, 1000) as u16).unwrap_or(d);
     let shell = resolve_shell(s("shell"), settings.get("defaultShellPath").and_then(Value::as_str));
     let spec = CreateSpec {
         title: s("title").map(str::to_string),
         workspace_id: s("workspaceId").map(str::to_string),
+        session_id: s("sessionId").map(str::to_string),
         cwd: resolve_cwd(&settings, s("workspaceId"), s("cwd")),
         shell,
-        cols: dim("cols", 80),
-        rows: dim("rows", 24),
+        cols: dim(opts, "cols", 80),
+        rows: dim(opts, "rows", 24),
         env: Vec::new(),
     };
     Ok(serde_json::to_value(ctx.terminals.create(spec)).unwrap_or(Value::Null))
@@ -788,6 +942,9 @@ pub fn forward_terminal_events(ctx: &Ctx) {
                 }
                 Ok(RegistryEvent::Exit { id, code }) => {
                     hub.publish("terminal:event", json!({ "type": "exit", "terminalId": id, "code": code }), false)
+                }
+                Ok(RegistryEvent::Viewers { id, viewers }) => {
+                    hub.publish("terminal:viewers", json!({ "terminalId": id, "viewers": viewers }), false)
                 }
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
                 Err(_) => break,
@@ -816,6 +973,7 @@ const SESSION_CHANNELS: &[&str] = &[
     "spec:setLinked",
     "chat:queue",
     "chat:dequeue",
+    "chat:editQueued",
 ];
 
 /// `createSession(workspaceId, parentSessionId, supportingWorkspaceIds)` with
@@ -888,6 +1046,7 @@ async fn session_op(
             "spec:setLinked" => or_null(store.set_spec_linked(id, arg(&args, 1))),
             "chat:queue" => or_null(store.queue(id, arg(&args, 1))),
             "chat:dequeue" => or_null(store.dequeue(id, arg(&args, 1))),
+            "chat:editQueued" => or_null(store.edit_queued(id, arg(&args, 1), arg(&args, 2))),
             other => Err(format!("{other} is not a session channel")),
         }
     })
@@ -923,6 +1082,36 @@ mod tests {
         assert_eq!(merged["s1"], json!({ "sessionId": "s1", "question": { "callId": "q" }, "approval": { "y": 2 } }));
         assert_eq!(merged["s2"]["approval"], json!({ "x": 1 }));
         assert_eq!(merged["s3"]["question"]["callId"], "z");
+    }
+
+    #[test]
+    fn tail_sizes_default_cap_and_stay_optional_for_snapshots() {
+        assert_eq!(tail_bytes("terminal:tail", &[json!("t")]), Some(TAIL_DEFAULT));
+        assert_eq!(tail_bytes("terminal:tail", &[json!("t"), json!(1000)]), Some(1000));
+        assert_eq!(tail_bytes("terminal:tail", &[json!("t"), json!(100_000_000)]), Some(TAIL_MAX));
+        assert_eq!(tail_bytes("terminal:snapshot", &[json!("t")]), None);
+        assert_eq!(tail_bytes("terminal:snapshot", &[json!("t"), json!({ "maxBytes": 10 })]), Some(10));
+    }
+
+    #[test]
+    fn an_agent_log_snapshot_is_capped_on_a_character_boundary() {
+        let snap = json!({ "info": { "id": "agent_s" }, "buffer": "line one\r\nab猫cd", "cols": 80, "rows": 24 });
+        let capped = cap_buffer(snap.clone(), 4);
+        assert_eq!(capped["buffer"], "cd");
+        assert_eq!(capped["truncated"], true);
+        assert_eq!(capped["totalBytes"], "line one\r\nab猫cd".len());
+        let whole = cap_buffer(snap, 1000);
+        assert_eq!((whole["buffer"].clone(), whole["truncated"].clone()), (json!("line one\r\nab猫cd"), json!(false)));
+    }
+
+    #[test]
+    fn viewer_calls_need_an_id_and_skip_agent_logs() {
+        let reg = Registry::new();
+        assert!(attach_viewer(&reg, "agent_s1", &json!({ "id": "d" })).is_err());
+        assert!(attach_viewer(&reg, "term_x", &json!({})).unwrap_err().contains("needs an id"));
+        assert_eq!(attach_viewer(&reg, "term_x", &json!({ "id": "d" })).unwrap_err(), "Terminal not found");
+        assert!(detach_viewer(&reg, None, "").is_err());
+        assert_eq!(detach_viewer(&reg, None, "d").unwrap(), json!([]));
     }
 
     #[test]

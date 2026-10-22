@@ -7,7 +7,9 @@ import UserNotifications
 /// background but still connected, with Allow / Deny right on an approval.
 /// Remote pushes from the relay are content-free ("a run finished") by design;
 /// these local ones are built on the phone from the decrypted event, and say
-/// less when the app lock is on.
+/// less when the app lock is on. Every one, local or pushed, carries its kind
+/// (`PushKind`) and the chat's opaque tag, so a needs-you notification can be
+/// removed once it was handled anywhere (IO-30 dismissal sync).
 @MainActor
 final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     static let approvalCategory = "nekko.approval"
@@ -34,9 +36,10 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     }
 
     func post(_ e: AgentEvent, chatTitle: String, computer: String, hideContent: Bool) {
+        guard let kind = PushKind.of(e) else { return }
         let content = UNMutableNotificationContent()
         content.threadIdentifier = e.sessionId
-        content.userInfo = ["sessionId": e.sessionId]
+        content.userInfo = ["sessionId": e.sessionId, "kind": kind.rawValue, "tag": E2E.activityTag(e.sessionId)]
         content.title = hideContent ? computer : chatTitle
         switch e {
         case .approvalRequired(_, let a):
@@ -65,6 +68,37 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         UNUserNotificationCenter.current().add(req)
     }
 
+    /// *Send a test notification* when the relay can't push: shown by the app, in a second.
+    func postTest(computer: String) {
+        let content = UNMutableNotificationContent()
+        content.title = "Nekko Agent"
+        content.body = "Test notification: \(computer) reached this iPhone."
+        content.sound = .default
+        content.userInfo = ["kind": PushKind.test.rawValue]
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "nekko.test.\(UUID().uuidString)", content: content, trigger: trigger))
+    }
+
+    /// Whether notifications are allowed; asks when it was never asked (only after pairing).
+    func ensurePermission() async -> Bool {
+        switch await UNUserNotificationCenter.current().notificationSettings().authorizationStatus {
+        case .authorized, .provisional, .ephemeral: return true
+        case .notDetermined: return await requestPermission()
+        default: return false
+        }
+    }
+
+    /// The approval or question for this chat was handled (here, on the computer
+    /// or on another device): its needs-you notifications go, local or pushed.
+    nonisolated static func dismissNeedsYou(tag: String) async {
+        let center = UNUserNotificationCenter.current()
+        let ids = await center.deliveredNotifications().filter { n in
+            let info = n.request.content.userInfo
+            return info["tag"] as? String == tag && info["kind"] as? String == PushKind.needsYou.rawValue
+        }.map(\.request.identifier)
+        if !ids.isEmpty { center.removeDeliveredNotifications(withIdentifiers: ids) }
+    }
+
     func clear(sessionId: String) {
         let center = UNUserNotificationCenter.current()
         center.getDeliveredNotifications { list in
@@ -75,8 +109,9 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async
         -> UNNotificationPresentationOptions {
-        // In the app the chat itself shows it.
-        []
+        // A test is the one shown over the app: it was asked for here. Otherwise
+        // the chat itself shows it.
+        notification.request.content.userInfo["kind"] as? String == PushKind.test.rawValue ? [.banner, .list, .sound] : []
     }
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {

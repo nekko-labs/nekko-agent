@@ -1,0 +1,86 @@
+{
+ "note": "IO-33 Change proof test vector, shared by crates/nekko-remote (proof.rs tests) and apps/ios NekkoProtocol (ChangeProofTests). The two copies must stay byte-identical (a Rust test checks). Test key only: the private key is public on purpose.",
+ "version": "nekko-change-v1",
+ "privateKey": "oY01r+fEphfu3jfoCsAPUxuTeRCxDKk8+2w0Q1tLWQI=",
+ "publicKey": "BAR/v8sCAzk1hHTpnnCLIlF1ruz+rF+jQdEeUu/OcjwnZmPysLs7FJ2/VAL5o51uKkNxeTc8jKMMcQno/2Tp6WI=",
+ "deviceId": "phone-1",
+ "channel": "file:write",
+ "ts": 1760000000000,
+ "args": [
+  "s1",
+  {
+   "path": "src/é/ünï.ts",
+   "text": "line1\nline2\t\"q\" \\ </script> \u0001   😀",
+   "expect": "9f86d0",
+   "n": 42,
+   "neg": -7,
+   "zero": 0,
+   "ok": true,
+   "no": false,
+   "none": null,
+   "list": [
+    1,
+    "x",
+    [],
+    {}
+   ],
+   "Z": 1,
+   "a": 2,
+   "é": 3,
+   "ｚ": 4,
+   "😀": 5
+  }
+ ],
+ "canonical": "[\"s1\",{\"Z\":1,\"a\":2,\"expect\":\"9f86d0\",\"list\":[1,\"x\",[],{}],\"n\":42,\"neg\":-7,\"no\":false,\"none\":null,\"ok\":true,\"path\":\"src/é/ünï.ts\",\"text\":\"line1\\u000aline2\\u0009\\\"q\\\" \\\\ </script> \\u0001   😀\",\"zero\":0,\"é\":3,\"ｚ\":4,\"😀\":5}]",
+ "argsSha256": "ecdb55289c755c44eb6d6b948cbe6e48d75a66d5f34681f38698651b4087e18a",
+ "payload": "nekko-change-v1\nphone-1\nfile:write\necdb55289c755c44eb6d6b948cbe6e48d75a66d5f34681f38698651b4087e18a\n1760000000000",
+ "sig": "n6cIXHen3ppEaoVSZPhxP7sjCEYoDPcS6cj6xiXknR23iuVDpQsuQvKo43D8l1z30RaMEts2YPGgV/MCKWCv/A==",
+ "unsignable": [
+  [
+   1.5
+  ],
+  [
+   {
+    "x": 0.25
+   }
+  ],
+  [
+   9007199254740993
+  ]
+ ],
+ "canonicalCases": [
+  {
+   "value": [],
+   "canonical": "[]"
+  },
+  {
+   "value": {},
+   "canonical": "{}"
+  },
+  {
+   "value": [
+    {
+     "b": [
+      true,
+      null
+     ],
+     "a": "x"
+    }
+   ],
+   "canonical": "[{\"a\":\"x\",\"b\":[true,null]}]"
+  },
+  {
+   "value": [
+    "\u001f/"
+   ],
+   "canonical": "[\"\\u001f/\"]"
+  },
+  {
+   "value": [
+    9007199254740992,
+    -9007199254740992
+   ],
+   "canonical": "[9007199254740992,-9007199254740992]"
+  }
+ ]
+}

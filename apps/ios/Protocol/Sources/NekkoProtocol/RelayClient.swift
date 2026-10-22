@@ -23,6 +23,15 @@ public struct WelcomedDevice: Equatable, Sendable {
     public let id: String
     public let name: String
     public let platform: String
+    /// The computer's phone protocol version (`PhoneProtocol`); 1 when it sent none.
+    public var protocolVersion: Int = 1
+
+    public init(id: String, name: String, platform: String, protocolVersion: Int = 1) {
+        self.id = id
+        self.name = name
+        self.platform = platform
+        self.protocolVersion = protocolVersion
+    }
 }
 
 public struct RelayStatus: Equatable, Sendable {
@@ -183,6 +192,7 @@ public final class RelayClient: @unchecked Sendable {
     private var _onStatus: (@Sendable (RelayStatus) -> Void)?
     private var _onEvent: (@Sendable (String, JSONValue) -> Void)?
     private var _onWelcome: (@Sendable (WelcomedDevice) -> Void)?
+    private var _onControl: (@Sendable (RelayControl) -> Void)?
 
     public init(config: RelayConfig, transport: WsTransport, prober: RouteProber? = nil,
                 now: @escaping @Sendable () -> Date = { Date() }) {
@@ -221,6 +231,13 @@ public final class RelayClient: @unchecked Sendable {
         _onStatus = onStatus
         _onEvent = onEvent
         _onWelcome = onWelcome
+        handlerLock.unlock()
+    }
+
+    /// Frames from the relay itself: whether it can push, and dismissals.
+    public func setControlHandler(_ f: (@Sendable (RelayControl) -> Void)?) {
+        handlerLock.lock()
+        _onControl = f
         handlerLock.unlock()
     }
 
@@ -292,13 +309,20 @@ public final class RelayClient: @unchecked Sendable {
     /// Call a host IPC channel. Waits (briefly) for the handshake if needed.
     /// `chat:send` replies only when the whole turn is over: pass hours.
     public func call(_ channel: String, _ args: [JSONValue] = [], timeout: TimeInterval? = nil) async throws -> JSONValue {
+        try await call(channel, args, proof: nil, timeout: timeout)
+    }
+
+    /// `call`, with a signed Change proof beside the args (`ChangeProof`, IO-33).
+    public func call(_ channel: String, _ args: [JSONValue], proof: JSONValue?, timeout: TimeInterval?) async throws -> JSONValue {
         try await awaitReady()
         let id: Int64 = locked {
             let id = nextId
             nextId += 1
             return id
         }
-        let frame: JSONValue = ["type": "req", "id": .int(id), "channel": .string(channel), "args": .array(args)]
+        var fields: [String: JSONValue] = ["type": "req", "id": .int(id), "channel": .string(channel), "args": .array(args)]
+        if let proof { fields["proof"] = proof }
+        let frame = JSONValue.object(fields)
         let limit = timeout ?? config.requestTimeout
         return try await withCheckedThrowingContinuation { (cont: CheckedContinuation<JSONValue, Error>) in
             locked { pending[id] = cont }
@@ -314,11 +338,16 @@ public final class RelayClient: @unchecked Sendable {
 
     /// Hand the relay this phone's push token (content-free "finished" pings).
     /// An unsealed control frame: the relay itself keeps the token.
-    public func registerPush(token: String) async throws {
+    public func registerPush(token: String) async throws { try await registerPush(token: token, kinds: nil) }
+
+    /// `kinds`: the pushes this phone wants (`PushKind` raw values); nil asks for all.
+    /// The relay answers with `RelayControl.pushRegistered`.
+    public func registerPush(token: String, kinds: [String]?) async throws {
         try await awaitReady()
         var frame: JSONValue = ["type": "register-push", "token": .string(token), "platform": .string(config.platform),
                                 "deviceId": .string(config.deviceId)]
         if let app = config.app, case .object(var o) = frame { o["app"] = .string(app); frame = .object(o) }
+        if let kinds, case .object(var o) = frame { o["kinds"] = .array(kinds.map { .string($0) }); frame = .object(o) }
         guard let c = locked({ conn }), c.send(frame.serialized()) else { throw RelayError("Could not reach your computer.") }
     }
 
@@ -474,7 +503,7 @@ public final class RelayClient: @unchecked Sendable {
 
     private func hello() {
         var o: [String: JSONValue] = ["type": "hello", "deviceId": .string(config.deviceId), "name": .string(config.deviceName),
-                                      "platform": .string(config.platform)]
+                                      "platform": .string(config.platform), "protocol": .int(Int64(PhoneProtocol.version))]
         if let code = locked({ pairCode }) { o["pair"] = .string(code) }
         sendSealed(.object(o))
     }
@@ -504,7 +533,7 @@ public final class RelayClient: @unchecked Sendable {
                 hello()
             }
         default:
-            break
+            if let control = RelayControl.parse(env) { emit { $0._onControl?(control) } }
         }
     }
 
@@ -520,7 +549,8 @@ public final class RelayClient: @unchecked Sendable {
             setStatus(RelayStatus(.online))
             startProbes()
             let device = WelcomedDevice(id: d?.str("id") ?? config.deviceId, name: d?.str("name") ?? config.deviceName,
-                                        platform: d?.str("platform") ?? config.platform)
+                                        platform: d?.str("platform") ?? config.platform,
+                                        protocolVersion: PhoneProtocol.of(welcome: frame))
             emit { $0._onWelcome?(device) }
         case "denied":
             deny(.parse(frame.str("reason")))

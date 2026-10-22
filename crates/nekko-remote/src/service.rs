@@ -317,6 +317,63 @@ impl RemoteService {
         Ok(Value::Array(devices))
     }
 
+    /// `remote:setAccess(deviceId, { read?, change? })` (IO-33): a paired
+    /// phone's switches, saved on its record as `access` with both fields.
+    /// Only the desktop calls it: every `remote:` channel is refused from a phone.
+    pub fn set_access(&self, device_id: &Value, patch: &Value) -> Result<Value, String> {
+        let patch = patch.as_object().ok_or("remote:setAccess needs { read?, change? }")?;
+        for (k, v) in patch {
+            if !matches!(k.as_str(), "read" | "change") || !v.is_boolean() {
+                return Err(format!("remote:setAccess: {k} must be read or change, true or false"));
+            }
+        }
+        let _io = lock(&self.io);
+        let cfg = self.load();
+        let mut found = false;
+        let devices: Vec<Value> = Self::devices_of(&cfg)
+            .into_iter()
+            .map(|d| match d {
+                Value::Object(mut m) if m.get("id") == Some(device_id) => {
+                    found = true;
+                    let was = crate::phone::DeviceAccess::of(&Value::Object(m.clone()));
+                    let get = |k: &str, d: bool| patch.get(k).and_then(Value::as_bool).unwrap_or(d);
+                    m.insert(
+                        "access".into(),
+                        json!({ "read": get("read", was.read), "change": get("change", was.change) }),
+                    );
+                    Value::Object(m)
+                }
+                d => d,
+            })
+            .collect();
+        if !found {
+            return Err("remote:setAccess: no device with that id".into());
+        }
+        self.save(&cfg.with("devices", Some(Value::Array(devices.clone()))))?;
+        Ok(Value::Array(devices))
+    }
+
+    fn activity_file(&self) -> PathBuf {
+        self.file.with_file_name("remote-activity.json")
+    }
+
+    /// Every device's activity list (`{ [deviceId]: PhoneActivityEntry[] }`).
+    fn load_activity(&self) -> serde_json::Map<String, Value> {
+        let file = self.activity_file();
+        ensure_private(&file);
+        match std::fs::read(&file).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok()) {
+            Some(Value::Object(m)) => m,
+            _ => serde_json::Map::new(),
+        }
+    }
+
+    /// `remote:activity(deviceId)`: the device's Change actions, oldest first.
+    pub fn activity(&self, device_id: &Value) -> Value {
+        let _io = lock(&self.io);
+        let id = device_id.as_str().unwrap_or_default();
+        self.load_activity().remove(id).filter(Value::is_array).unwrap_or(json!([]))
+    }
+
     pub fn rotate(&self) -> Result<Value, String> {
         let _io = lock(&self.io);
         let prev = self.load();
@@ -325,6 +382,8 @@ impl RemoteService {
         let cfg =
             prev.with("room", Some(json!(room))).with("secret", Some(json!(secret))).with("devices", Some(json!([])));
         self.save(&cfg)?;
+        // Every device is gone, and so is what they did.
+        let _ = std::fs::remove_file(self.activity_file());
         {
             let mut st = lock(&self.state);
             st.grant = None;
@@ -368,8 +427,78 @@ impl RemoteService {
             "remote:revoke" => self.revoke(arg(0)),
             "remote:rename" => self.rename(arg(0), arg(1)),
             "remote:rotate" => self.rotate(),
+            "remote:setAccess" => self.set_access(arg(0), arg(1)),
+            "remote:activity" => Ok(self.activity(arg(0))),
             other => Err(format!("Unknown channel: {other}")),
         }
+    }
+}
+
+/// The registry as the phone gate reads it (IO-33): a device's switches and
+/// Change key from `remote.json`, its activity in `remote-activity.json`
+/// beside it.
+impl crate::phone::Devices for RemoteService {
+    fn device(&self, id: &str) -> Option<crate::phone::PhoneDevice> {
+        let _io = lock(&self.io);
+        let cfg = self.load();
+        let d = Self::devices_of(&cfg)
+            .into_iter()
+            .find(|d| d.get("id").and_then(Value::as_str) == Some(id) && !nekko_js::truthy(d.get("revoked")))?;
+        Some(crate::phone::PhoneDevice {
+            access: crate::phone::DeviceAccess::of(&d),
+            key: d.get("changeKey").and_then(Value::as_str).map(String::from),
+        })
+    }
+
+    fn register_key(&self, id: &str, key: &str) -> Result<bool, &'static str> {
+        let _io = lock(&self.io);
+        let cfg = self.load();
+        let mut devices = Self::devices_of(&cfg);
+        let d = devices
+            .iter_mut()
+            .find(|d| d.get("id").and_then(Value::as_str) == Some(id) && !nekko_js::truthy(d.get("revoked")))
+            .and_then(Value::as_object_mut)
+            .ok_or("device-unknown")?;
+        match d.get("changeKey").and_then(Value::as_str) {
+            Some(k) if k == key => return Ok(false),
+            Some(_) => return Err("key-mismatch"),
+            None => {}
+        }
+        d.insert("changeKey".into(), json!(key));
+        d.insert("changeKeyAt".into(), hello::nekko_num((self.clock)()));
+        self.save(&cfg.with("devices", Some(Value::Array(devices)))).map_err(|_| "device-unknown")?;
+        Ok(true)
+    }
+
+    fn record(&self, id: &str, entry: crate::phone::Activity) {
+        let _io = lock(&self.io);
+        let mut all = self.load_activity();
+        let list = all.entry(id.to_string()).or_insert_with(|| json!([]));
+        if !list.is_array() {
+            *list = json!([]);
+        }
+        if let Value::Array(items) = list {
+            items.push(entry.value());
+            let limit = crate::phone::policy().activity_limit;
+            if items.len() > limit {
+                items.drain(..items.len() - limit);
+            }
+        }
+        // Best effort: a log that can't be written never blocks the call.
+        let _ = write_json_atomic(&self.activity_file(), &Value::Object(all));
+    }
+
+    fn now(&self) -> f64 {
+        (self.clock)()
+    }
+
+    fn name(&self, id: &str) -> Option<String> {
+        let _io = lock(&self.io);
+        let cfg = self.load();
+        Self::devices_of(&cfg)
+            .into_iter()
+            .find(|d| d.get("id").and_then(Value::as_str) == Some(id))
+            .and_then(|d| d.get("name").and_then(Value::as_str).map(String::from))
     }
 }
 
@@ -385,6 +514,8 @@ pub const CHANNELS: &[&str] = &[
     "remote:revoke",
     "remote:rename",
     "remote:rotate",
+    "remote:setAccess",
+    "remote:activity",
 ];
 
 /// `ensurePrivateFile`: owner-only, best effort.
