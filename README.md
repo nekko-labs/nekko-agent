@@ -72,7 +72,7 @@ open. See [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
   with the people you build with.
 - **Hands-free computer control by voice** (planned): local intent and speech
   models, scoped app access, confirmations and a stop control. See the
-  [planned experience](SPEC.md#one-click-setup-for-safe-offline-pc-control-planned).
+  [planned experience](spec/automation/one-click-setup-for-safe-offline-pc-control.md).
 - **Local task runner** (exploring): an alternative to hosted CI for repeat jobs
   such as tests. This is not a claim of GitHub Actions workflow compatibility.
 

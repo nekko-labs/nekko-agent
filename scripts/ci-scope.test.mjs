@@ -16,7 +16,7 @@ test('the schedule, main pushes and manual dispatches run every job on every OS'
 });
 
 test('a docs-only change waits for build alone, on the PR and in the queue', () => {
-  const docs = ['SPEC.md', 'docs/guide.md', 'apps/website/index.html'];
+  const docs = ['spec/chat/find-in-this-chat.md', 'docs/guide.md', 'apps/website/index.html'];
   assert.deepEqual(pr(docs), p(none));
   assert.deepEqual(queue(docs), q(none));
 });

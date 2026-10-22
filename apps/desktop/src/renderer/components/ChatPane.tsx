@@ -14,7 +14,7 @@ import { createPortal } from 'react-dom';
 import { DictationButton } from './DictationButton.js';
 import { decideApproval, type ApprovalScope } from './agent-console/approval-decision.js';
 import type { AgentEvent, AskAnswer, AskRequest, AutoQuality, Session, ContextBundle, IndexedFile, ModelInfo, ProviderConfig, SkillDef, PrInfo, QueuePayload, QueuedPrompt } from '@nekko-agent/shared';
-import { archiveDaysLeft, CLAUDE_CODE_PROVIDER_KIND, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, modelSupportsThinking, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
+import { archiveDaysLeft, CLAUDE_CODE_PROVIDER_KIND, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, modelSupportsThinking, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
 import type { AutoProviderPick, ProviderPool } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { approvalAfterResult } from './ChatPane.approval.js';
@@ -2256,7 +2256,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const buildPools = (cross: Record<string, ModelInfo[]>): ProviderPool[] => [
     ...(homePool ? [homePool] : []),
     ...providers
-      .filter((p) => p.enabled && p.id !== providerId)
+      // A cloud-only chat's Auto never moves a turn onto this machine.
+      .filter((p) => p.enabled && p.id !== providerId && (!session?.cloudOnly || cloudProviderAllowed(p)))
       .map((p) => {
         const key = limitsKeyFor(p);
         return {
@@ -2272,6 +2273,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   ];
 
   const isCloudModel = !providerKind || !isLocalProvider(providerKind);
+  // A cloud-only chat's picker lists cloud providers only (the engine refuses the rest).
+  const cloudOnlyFilter = useMemo(() => (session?.cloudOnly ? cloudProviderAllowed : undefined), [session?.cloudOnly]);
   // Reasoning toggle: offered only for a concrete, reasoning-capable model.
   const selectedModelInfo = modelId && modelId !== AUTO_MODEL_ID ? models.find((m) => m.id === modelId) : undefined;
   const thinkingSupported = !!modelId && modelId !== AUTO_MODEL_ID && modelSupportsThinking({ id: modelId, name: selectedModelInfo?.name });
@@ -2424,6 +2427,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     <div className="flex min-w-0 shrink items-center gap-2 rounded-lg">
     <ModelPicker
       providers={providers}
+      filterProviders={cloudOnlyFilter}
       providerId={providerId}
       models={models}
       modelId={modelId}
@@ -2579,7 +2583,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
 
                   </div>
                   {imageMode && session ? <ImageModeControls session={session} onChange={setSession} busy={streaming} /> :
-                    <ModelPicker providers={providers} providerId={providerId} models={models} modelId={modelId}
+                    <ModelPicker providers={providers} filterProviders={cloudOnlyFilter} providerId={providerId} models={models} modelId={modelId}
                       open={false} onOpenChange={openModelMenu} expanded
                       recent={recentModels}
                       onProvider={setProviderId} onModel={(pid, mid) => { setProviderId(pid); setModelId(mid); setUnavailableModel(null); void window.nekko.setSessionOptions(sessionId, { providerId: pid, modelId: mid, autoModel: mid === AUTO_MODEL_ID }).then((s) => { if (s) { useStore.getState().rememberModel(pid, mid); window.dispatchEvent(new CustomEvent('nekko-session-brain', { detail: { id: sessionId, session: s } })); } }).catch((e) => useStore.getState().pushToast('error', String(e))); }} />}
@@ -3298,6 +3302,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 </div>
               </div>
             </div>
+            {/* The footer is hidden while the chat starts clean, but the model
+                is still the user's to pick before the first send. */}
+            {cleanStart && <div className="clean-start-model mt-2 flex justify-center" data-clean-start-model>
+              {modelControls}
+             </div>}
           </div>
         </div>
         )}

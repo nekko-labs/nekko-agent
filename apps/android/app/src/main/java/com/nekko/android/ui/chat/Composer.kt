@@ -180,7 +180,7 @@ fun Composer(
             }
             if (menu.isNotEmpty()) SkillList(menu) { picked ->
                 skillName = picked.name
-                text = ""
+                text = SkillMenu.afterPick(text)
                 error = null
             }
             skill?.let { SkillChip(it) { skillName = null } }

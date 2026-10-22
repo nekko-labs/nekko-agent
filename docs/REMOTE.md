@@ -94,6 +94,9 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 >   the conversation before it and the prompt in the message box; on a reply, **Fork from here**.
 > - **Photos:** tap a photo in a message to see it full screen; **+ → Paste image** adds one from the clipboard.
 > - **Saved prompts:** the prompts you saved on the computer show in `/` and under **+**, run like skills.
+> - **`/` after what you've typed:** typing `/` after some words (after a space or on a new line)
+>   opens the same menu. Picking a skill keeps your words and adds the skill; picking a saved prompt
+>   puts its text in place of the `/`.
 > - **Continue and search:** the list opens with your most recent chat; search finds completed chats too.
 > - **Automations:** **Computers and settings → Automations** lists the computer's tasks and
 >   workflows with how each last went, and **Run now**. You set them up on the computer.
@@ -154,10 +157,11 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > which on many phones sends the audio to Google. **Settings → Dictation** on the phone lets you use
 > only the computer, only the phone, or turn the microphone off.
 >
-> **Skills** (Android): type `/` at the start of a chat's message box to see the skills on your
-> computer: the built-in ones, those you installed from the Marketplace for Nekko Agent, and the
-> ones Nekko Agent found in your Claude Code, Codex or Gemini skill folders. Pick one, add details
-> if you like, and send. Nothing is copied to the phone: the list is read from the computer each
+> **Skills** (Android): type `/` in a chat's message box, at the start or after a space at the end
+> of what you've written, to see the skills on your computer: the built-in ones, those you
+> installed from the Marketplace for Nekko Agent, and the ones Nekko Agent found in your Claude
+> Code, Codex or Gemini skill folders. Pick one, add details if you like, and send. Text you typed
+> before the `/` stays in the box and goes along as the skill's details. Nothing is copied to the phone: the list is read from the computer each
 > time you open a chat, so a skill you install or remove there shows up on the phone right away,
 > and the computer adds the skill's instructions itself, so they never leave it. `/goal` is not
 > offered on the phone, and skills are installed and removed on the computer.

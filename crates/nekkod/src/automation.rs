@@ -12,7 +12,7 @@
 //! router (`chat:send`, the same door the UI uses, so the turn's events reach
 //! the UI and the phone as any chat's do). Their chats are made the same way
 //! (`session:create`) and named here. A skill step reads the installed skills
-//! from nekko-workspace (`installed_skill_defs`). Actions and polls are `nekko-connectors`'; shell steps run on
+//! from nekko-workspace (`resolve_skill_defs`). Actions and polls are `nekko-connectors`'; shell steps run on
 //! `nekko-tools`' shell, which kills the whole tree on a timeout.
 //!
 //! Owned only when the daemon knows the data directory.
@@ -38,6 +38,8 @@ type BoxFut<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 pub type Dispatcher = Arc<dyn Fn(String, Vec<Value>) -> BoxFut<'static, Result<Value, String>> + Send + Sync>;
 
 pub struct Automation {
+    /// The data directory, when the daemon knows it.
+    dir: Option<std::path::PathBuf>,
     pub tasks: Option<Arc<Tasks>>,
     pub workflows: Option<Arc<Workflows>>,
     /// Training and goal runs (`training:*`, `training.json`, their turns).
@@ -48,6 +50,7 @@ pub struct Automation {
 impl Automation {
     pub fn new(store: Option<Arc<SessionStore>>, settings: Option<Arc<crate::settings::Settings>>, hub: Hub) -> Self {
         let dispatch: Arc<OnceLock<Dispatcher>> = Arc::default();
+        let data_dir = store.as_ref().and_then(|s| s.dir().parent().map(std::path::Path::to_path_buf));
         let (tasks, workflows, training) = match store {
             Some(store) => {
                 let dir = store.dir().parent().map(std::path::Path::to_path_buf).unwrap_or_default();
@@ -62,7 +65,7 @@ impl Automation {
             }
             None => (None, None, None),
         };
-        Self { tasks, workflows, training, dispatch }
+        Self { dir: data_dir, tasks, workflows, training, dispatch }
     }
 
     /// How a workflow stops a chat (`chat:abort`): through the router.
@@ -76,8 +79,15 @@ impl Automation {
         }
         if let Some(w) = &self.workflows {
             let w = w.clone();
-            // Reconciling reads and writes files: off the async threads.
-            tokio::task::spawn_blocking(move || w.start());
+            let dir = self.dir.clone();
+            // Reconciling reads and writes files: off the async threads. A
+            // PR checkout a stopped run left behind goes first.
+            tokio::task::spawn_blocking(move || {
+                if let Some(dir) = dir {
+                    crate::pr_checkouts::sweep(&dir);
+                }
+                w.start()
+            });
         }
         // Runs that were mid-flight when the last process stopped resume.
         if let Some(t) = &self.training {
@@ -309,11 +319,21 @@ impl WorkflowHost for Engine {
         }
     }
 
-    /// The skills a workflow's skill step can run (`listInstalledSkillDefs`).
+    /// The skills a workflow's skill step can run: built-in, installed, other
+    /// tools' `SKILL.md` folders (the user's and the projects') and Claude Code plugins.
     fn skill_defs(&self) -> BoxFut<'_, Vec<Value>> {
         Box::pin(async move {
             let dir = self.store.dir().parent().map(std::path::Path::to_path_buf).unwrap_or_default();
-            tokio::task::spawn_blocking(move || nekko_workspace::skills::installed_skill_defs(&dir))
+            let roots: Vec<String> = Engine::settings(self)
+                .await
+                .get("workspaces")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(|w| w.get("path").and_then(Value::as_str).map(str::to_string))
+                .collect();
+            let home = crate::workspace::home_dir();
+            tokio::task::spawn_blocking(move || nekko_workspace::skills::resolve_skill_defs(&dir, &home, &roots))
                 .await
                 .unwrap_or_default()
         })
@@ -383,6 +403,23 @@ impl WorkflowHost for Engine {
 
     fn next_run(&self, wf: &Value, from: f64) -> Option<f64> {
         nekko_automation::workflow_rules::next_scheduled_run(&chrono::Local, wf, from)
+    }
+
+    fn pr_checkout(&self, folder: &str, number: &str, run_id: &str) -> BoxFut<'_, Result<Value, String>> {
+        let dir = self.store.dir().parent().map(std::path::Path::to_path_buf).unwrap_or_default();
+        let (folder, number, run_id) = (folder.to_string(), number.to_string(), run_id.to_string());
+        Box::pin(async move {
+            tokio::task::spawn_blocking(move || crate::pr_checkouts::make(&dir, &folder, &number, &run_id))
+                .await
+                .map_err(|e| e.to_string())?
+        })
+    }
+
+    fn remove_pr_checkout(&self, checkout: &Value) -> BoxFut<'_, ()> {
+        let checkout = checkout.clone();
+        Box::pin(async move {
+            let _ = tokio::task::spawn_blocking(move || crate::pr_checkouts::remove(&checkout)).await;
+        })
     }
 
     fn resolve_path(&self, root: &str, rel: &str) -> String {

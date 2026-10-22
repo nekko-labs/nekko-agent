@@ -1,224 +1,43 @@
 # Agent workflow
 
-Conventions for any AI agent or human opening PRs in this repo.
+Conventions for any AI agent or human opening PRs in this repo. This file is
+loaded on every turn, so it holds the rules and a map; the procedures live in
+the runbooks it links. Read a runbook before the work it names.
 
-## Keep the primary checkout on main
+## Where things are
 
-The primary project checkout stays on `main`. Do implementation work in a
-separate worktree and branch per chat or task; never switch the primary checkout
-to a feature branch. Start from an up-to-date `main`:
+| Need | Read |
+| --- | --- |
+| What the product does and why | [spec/README.md](spec/README.md): an index of one file per feature. Read [spec/product/](spec/product/) and the files your change touches, never the whole folder. |
+| How it is built, and the task list | [TASKS.md](TASKS.md) (Part 1, Plan; Part 2, Tasks, with stable task IDs) |
+| Why a technical or product choice was made | [docs/decisions/](docs/decisions/README.md) |
+| Landing a change: worktrees, PRs, merge queue, stacks | [docs/runbooks/landing-a-pr.md](docs/runbooks/landing-a-pr.md) |
+| A red check, on your PR or on `main` | [docs/runbooks/failing-checks.md](docs/runbooks/failing-checks.md) |
+| A change to how the app looks or moves | [docs/runbooks/visual-evidence.md](docs/runbooks/visual-evidence.md) |
+| A change that alters a recorded engine behavior | [docs/runbooks/golden-fixtures.md](docs/runbooks/golden-fixtures.md) |
+| The code map | [docs/hub/architecture.md](docs/hub/architecture.md) |
 
-```
-git fetch origin
-git merge --ff-only origin/main
-git worktree add -b <branch> .worktrees/<task> main
-```
+## Landing work
 
-Run edits, tests, commits and PR commands from that task worktree. After merging,
-fast-forward the primary checkout and remove the task worktree and merged branch.
-Inspect dirty files and preserve any unmerged work before cleanup; never force
-remove a worktree just because its PR was squash-merged.
+Full procedure: [docs/runbooks/landing-a-pr.md](docs/runbooks/landing-a-pr.md).
 
-## Always land work as a PR
+- The primary checkout stays on `main`; work in a worktree and branch per task (`git worktree add -b <branch> .worktrees/<task> main`).
+- Every change lands as a PR: commit, push, open it **ready** (not draft) once your own checks pass, and queue it with `gh pr merge --auto` (never with `--squash` or `--admin`). `main` requires the merge queue and one check, `gate`.
+- Split a feature of several hundred lines into a stack (`gh stack`), 2-4 layers.
+- Every PR description has an **Unfinished work / release blockers** section, kept current and read back after publishing. Only a named release blocker keeps a PR in draft.
+- Implementation, verification, evidence and landing are one workflow: do not stop at passing tests and ask to be told to continue.
 
-The default for every change is: commit it to a branch, push, open a PR, and merge it.
-Do not leave finished work sitting uncommitted in a working tree. When several
-in-flight batches share the tree (parallel agents), land them together in one PR
-rather than letting the tree drift further from `main`.
+## Failing checks
 
-```
-# In the task worktree created above, once your own checks pass:
-git add -A   # or a scoped add; never commit .shots/ or other evidence dirs
-git commit -m "..."
-git push -u origin <branch>
-gh pr create --title "..." --body "..."    # ready, not --draft
-gh pr merge --auto                          # queue it; it merges itself when `gate` is green
-```
+Full procedure: [docs/runbooks/failing-checks.md](docs/runbooks/failing-checks.md).
 
-`main` requires the merge queue and one check, `gate`. Do not merge with `--admin`:
-it skips the queue, and the queue is what tests your PR against everything landing
-beside it. The auto-merge workflow also queues every ready PR, so `gh pr merge
---auto` is a belt to its braces. Never add `--squash` (or another method) to it:
-with a method, gh arms classic auto-merge, which waits outside the queue forever.
-The queue's own setting squashes. The auto-merge workflow also runs on every push,
-so a fix to a red PR re-queues itself. Every 15 minutes `queue-sweeper.yml`
-re-queues a ready PR whose `gate` is green but which is not in the queue (once per
-head commit, so a queue ejection by a flake heals and a real one waits for your
-fix), and re-runs a red `gate`'s failed jobs once. To keep a ready PR out of the
-queue, mark it draft or label it `hold`. If you need it queued sooner, `gh pr merge
---auto <n>` once `gate` is green still works.
-
-### Ready, not draft
-
-Open the PR **ready** once your own verification passes (focused tests, and for UI
-changes the evidence below). Do not park it in draft to watch CI: the queue waits
-for CI, merges on green and ejects on red, with nobody watching. Use draft only
-while you are still working, or when a named release blocker holds the PR (see
-below). "CI is still running" is never a reason to stay draft.
-
-If the queue ejects your PR, it comes back with the failing run linked. Diagnose
-it like any red check below, push the fix, and it re-queues.
-
-### Big features: stack them
-
-When a feature is more than one reviewable change (roughly: several hundred lines,
-or a part that can land before the rest), split it into a stack with GitHub's
-stacked-PR CLI instead of one large PR or a chain of drafts:
-
-```
-gh extension install github/gh-stack     # once per machine
-gh stack init                            # first layer, based on main
-# commit layer 1, then:
-gh stack add <next-branch>               # each layer builds on the one below
-gh stack submit                          # one PR per layer, linked as a stack
-gh stack sync                            # after main or a lower layer moves
-gh stack merge --yes                     # queue the stack (or up to a layer)
-```
-
-Each layer is a normal PR: fast-tier CI, ready not draft, its own Unfinished work
-section. Rebasing a lower layer re-runs CI on every layer above it, so keep stacks
-short (2-4 layers) and finish lower layers first. The app's **Continue as stacked
-PR** action creates the same native stacks from an agent chat.
-
-## PR descriptions must record unfinished work
-
-Every PR description includes an explicit **Unfinished work / release blockers**
-section. List incomplete scope, known bugs, unsupported platforms, missing tests
-or visual evidence, and verification limitations with concrete next steps. Write
-"None" only when verified. Keep the section current after each pushed batch;
-notes only in chat, review comments, or local files are not sufficient.
-
-Read back the published description to verify the update succeeded. If publishing
-fails, report the failure and preserve the pending description locally; do not
-claim the notes are published.
-
-An entry in this section is not by itself a reason to stay draft. Residual notes
-(a platform not checked, a tuned pixel offset, a test that already fails on
-`main`) are recorded and the PR lands. Only a **release blocker** holds a PR:
-the change breaks something that worked, a required check is red because of this
-PR, the evidence this repo requires for the change is missing, or the user said
-to wait. Name which one applies when you keep a PR draft.
-
-## Continue through verification and landing
-
-Implementation, verification, evidence publication, and landing are one workflow.
-Do not stop at passing automated tests or opening a draft PR and ask the user to
-request the remaining work again. For UI changes:
-
-1. Run focused automated checks first; arrange base-revision captures before
-   changing visual surfaces (or use a separate unchanged-base sandbox).
-2. Automatically continue into isolated visual and interaction testing. Inspect
-   existing instances first; preserve user-owned apps and data. Reuse a matching
-   agent-owned sandbox or establish a separate profile with external side effects
-   disabled. A user-owned running instance is not itself a blocker.
-3. Capture and inspect matching before/after screenshots and a short recording
-   for motion changes, covering the affected surfaces, themes and viewports below.
-4. Upload evidence to the shared **pr-media** GitHub pre-release series using
-   `scripts/pr-media.mjs`; do not create a per-PR release. Read back the published
-   PR description and verify its media links, not just the local files.
-5. Continue through review and checks, fix failures, and merge when required
-   checks, reviews, evidence and release-blocker requirements are satisfied.
-   Never bypass required reviews, failing checks, or branch protections. The
-   example merge command above is not permission to override these gates.
-6. **Queue it.** Open the PR ready (or `gh pr ready <n>` once verification is
-   done) and let the queue merge it. A draft never merges: the auto-merge
-   workflow only queues ready PRs.
-
-## When a check fails on `main` too
-
-The repo's required check is `gate`, which passes when every job its run needed
-passed. CI runs in three tiers (`scripts/ci-scope.mjs`):
-
-| Tier | When | Runs |
-| --- | --- | --- |
-| PR | every push to a PR | `build`; `daemon` on Linux if Rust or `packages/{host,core,shared}` changed; `capture` on Windows if desktop code or `packages/` changed |
-| Queue | `merge_group` | the PR tier, plus `daemon` on Windows and `perf` when the group changes what it measures |
-| Full | every 6 hours (skipped if `main` has not moved), or `gh workflow run ci.yml --ref <branch>` | every job on every OS, macOS included |
-
-The same goes for every other macOS job (native iOS, the mobile iOS build,
-dev identity, nekkod darwin, decision-model CoreML, CodeQL Swift): scheduled, or
-`ci:macos` on the PR. Add `ci:macos` to a PR that changes macOS-specific code (`cfg(target_os =
-"macos")`, the dev bundle, signing, native capture), and `ci:perf` to one that
-changes a hot path the speed contract measures and wants the numbers before
-queueing. Labels are read when a run starts: add the label, then push. A skipped
-job is not a missing check. A failed 6-hourly run opens or updates the
-`ci-scheduled` issue; whoever lands the next fix to that area clears it.
-
-When one of them is red:
-
-1. Diagnose the failing step. If the failure is in something this PR touches, fix it.
-2. Otherwise compare against `main`: the same job on the merge-base commit, or the
-   most recent full runs (`gh run list --workflow ci.yml --event schedule`). If
-   `main` fails the same way on the same metric, the failure is a baseline problem.
-3. A baseline failure is not this PR's fault, but in the queue it blocks every
-   group that runs that job, so it is the most urgent thing in the repo. Make sure
-   an issue exists (search first, file one if not), then fix it forward or revert
-   the commit that caused it, in its own small PR, before re-queueing yours.
-   Record it in this PR's Unfinished work with the run that proves it. Do not
-   weaken a budget or delete a check to get past it; recalibrating a noisy gate
-   from measured data is a separate, explicit decision (see `docs/perf-history.md`).
-4. A failure that only this PR produces is a release blocker until it is fixed or
-   shown to be runner noise with two matched base/head measurements.
-
-This is the policy the "Bound failed-check investigations" rules below apply to.
-
-Keep verification plan steps pending/active until verified; recording missing
-screenshots in a draft PR does not complete the verification step. Pause only
-for a concrete blocker requiring user input, credentials, permission, or an action
-that cannot safely be performed, or when the user explicitly limits or pauses the
-work. Investigate safe alternatives first and report the attempted checks and
-precise unblock action. Do not risk user data to avoid reporting a blocker.
-
-When waiting on PR checks or other background work, register `agent_watch` before
-ending the turn if available, with a deadline and concrete continuation. Report
-the successfully registered watch id and wake condition; on wake inspect current
-status and re-arm if necessary. If unavailable or registration fails, report that
-limitation and the next manual step. Never use automatic continuation to bypass
-missing authorization, credentials, a user decision, or required human evidence.
-
-## Bound failed-check investigations
-
-- A watch waits for running or queued work, not completed failures. When checks finish red, diagnose the failed step before registering another watch.
-- Carry a cumulative investigation budget across wake-ups. After two wake-ups with no new evidence, or 30 minutes of active investigation without a narrowed cause, stop repeating the same approach. Report the exact blocker, what is proven, and the next distinct experiment or decision needed.
-- Permit one rerun only after a concrete transient cause is identified. A recurring failure requires evidence-driven diagnosis, not rerun-until-green.
-- Measure the failing metric on both unchanged base and head with matching workload, toolchain and runner conditions. A baseline failure is not permission to bypass a gate or silently weaken a budget.
-- Save traces and profiles for the failing metric, together with actual app revisions and commands. Confirm artifacts exist before calling diagnostics complete. CPU profiles alone cannot explain browser layout/paint work.
-- Keep unrelated baseline performance remediation separate when possible. Do not turn a verified small UI fix into speculative optimization work. Present a baseline-repair dependency or explicit policy decision if it blocks landing.
-- State waiting versus blocked accurately. Give a total elapsed scope and a concrete next action, not another unchanged progress message. Never register a watch when no background work can produce new evidence.
+Diagnose the failing step before anything else. A failure `main` also has is a baseline problem: make sure an issue exists and fix it forward in its own PR. Rerun only after naming a concrete transient cause, once. Never weaken a budget or delete a check to get past it. After two wake-ups with no new evidence, or 30 minutes without a narrowed cause, report the blocker and the next distinct experiment.
 
 ## UI changes need visual evidence
 
-Any PR that changes what the app looks like ships the proof in its description:
+Full procedure: [docs/runbooks/visual-evidence.md](docs/runbooks/visual-evidence.md).
 
-- **Before/after screenshots** for every visual change, in a two-column table labeled
-  `Before` / `After`, captured at the same route, viewport, theme, and data. Take the
-  "before" shot from the base branch before applying the change, not from memory.
-- **A short screen recording** (a few seconds, mp4 or gif) whenever the change touches
-  animation, transition, gesture, scroll, or timing. A still frame cannot show motion,
-  so screenshots alone do not cover those changes.
-- Cover every surface the change actually affects: mobile and desktop widths on web,
-  iOS and Android for native, light and dark theme if both shift.
-- Media belongs in the PR description, not in git. Use the shared `pr-media`
-  pre-release series for all screenshots and recordings; never create a release
-  per PR. GitHub caps a release at 1,000 assets, so when the newest release cannot
-  take a PR's whole batch the uploader starts the next one in the series
-  (`pr-media-2`, `pr-media-3`, ...) itself; never create those by hand. Write
-  local image paths in the description, then upload and rewrite them:
-  ```
-  node scripts/pr-media.mjs 305
-  ```
-  The uploader prefixes filenames with `pr-305-`, verifies both the uploaded
-  bytes and public URLs, and replaces matching markdown image paths in the PR
-  body. It discovers local markdown image paths from the description automatically.
-  Pass `owner/repo` as the second argument if needed.
-  Keep basenames unique. Existing assets are immutable: rename changed evidence
-  rather than overwriting it, so historical links stay accurate. Keep `.shots/`
-  untracked and never delete assets still referenced by a PR or issue.
-  The shared releases are evidence storage, not software releases; each must remain
-  a pre-release and must not be marked Latest.
-- If a change has no visual delta (refactor, types, tests, docs, build config), write
-  "no visual change" rather than silently omitting the screenshots. A new screen has no
-  "before": say so instead of skipping the table.
+Before/after screenshots (and a short recording for motion) in the PR description, uploaded with `node scripts/pr-media.mjs <pr>` to the shared `pr-media` pre-releases, never committed. Write "no visual change" when there is none. Verification runs hidden, off-screen and non-focusable, in an isolated profile: never over the user's desktop, never the user's running app.
 
 ## No AI attribution in anything we ship
 
@@ -235,11 +54,11 @@ Nothing about who or what typed it.
 
 ## Use the current product names
 
-Local Web UI (`apps/local-web-ui`, never "web edition"), Model Server in the UI and Local Model Server as the product (never "Nekko Server"), Nekko Cloud (`apps/nekko-agent-api`, never "Nekko Agent Cloud"), and Relay (`apps/relay-server`), which is part of Nekko Cloud. See [SPEC](SPEC.md#products-and-their-names-decided-2026-10-18). Shipped entries in TASKS.md keep the names they shipped with; do not sweep history.
+Local Web UI (`apps/local-web-ui`, never "web edition"), Model Server in the UI and Local Model Server as the product (never "Nekko Server"), Nekko Cloud (`apps/nekko-agent-api`, never "Nekko Agent Cloud"), and Relay (`apps/relay-server`), which is part of Nekko Cloud. See [the spec](spec/product/products-and-their-names.md). Shipped entries in TASKS.md keep the names they shipped with; do not sweep history.
 
 ## Keep the product specification current
 
-For every request that adds a feature, changes user-visible behavior, or settles a product decision, inspect and update SPEC.md in the same PR as the implementation. Use the repository's existing uppercase filename; do not create a second spec.md. Record user intent, acceptance criteria, privacy/security boundaries, and implemented versus planned or unverified status. Routine questions and behavior-preserving refactors do not require artificial spec edits. Mention the spec update (or why none is needed) in the final summary. Never mark a feature shipped solely because code exists.
+For every request that adds a feature, changes user-visible behavior, or settles a product decision, update the feature's file under [spec/](spec/README.md) in the same PR as the implementation. A new feature gets a new file in the area it belongs to, with `title` and `area` frontmatter; then run `node scripts/spec-index.mjs` (CI fails on a stale index). Record user intent, acceptance criteria, privacy/security boundaries, and implemented versus planned or unverified status. A decision that closes off alternatives also gets a record in [docs/decisions/](docs/decisions/README.md). `SPEC.md` at the root is only a pointer now: never write features back into it. Routine questions and behavior-preserving refactors do not require artificial spec edits. Mention the spec update (or why none is needed) in the final summary. Never mark a feature shipped solely because code exists.
 
 ## Keep the docs current
 
@@ -255,17 +74,6 @@ For substantial research, comparisons, architecture, and explanations, provide a
 
 General reporting behavior belongs in the shared system prompt, not a personal memory file. Repository-specific workflow belongs here. Preview changes must retain explicit user consent for local reads, isolate generated HTML from the app, and prevent silent external resource fetching.
 
-## Golden fixtures
+## Keep this file short
 
-The engine is all Rust (`crates/`); the TS engine it was ported from
-(`packages/host`, `packages/core`) is deleted. The golden fixtures under
-`crates/*/tests/golden` were recorded from that TS code and are now frozen: no
-test rewrites them any more, and the `UPDATE_GOLDEN=1` notes in their doc
-comments name writers that no longer exist. A change that alters a recorded
-behaviour (the system prompt in `crates/nekko-context/src/prompt.rs`, a
-provider's request, a store write) edits the fixture by hand in the same
-change, and the PR says why.
-
-## Verification must preserve the user desktop
-
-Routine agent verification must run hidden, with non-focusable windows and isolated profiles. Full viewport/virtualization fixtures may stay mapped off-screen, with showInactive, when hidden rendering changes layout or animation behavior. Never place them over any user monitor. Use capturePage with stayHidden:true for renderer evidence and DOM/CDP interaction rather than OS input. Native-window evidence may use an off-screen, non-focusable owned fixture with showInactive; never position it over the active desktop, minimize/restore user windows, or claim hidden renderer pixels prove OS chrome. Launch child processes with windowsHide:true on Windows. Do not launch the normal app or run foreground native branding/permission tests during local verification. Use a disposable CI desktop for OS focus/permission behavior; local visible verification requires an explicit user request. Timing/motion modes and inspection holds must preserve the same background constraints.
+This file costs tokens on every turn of every agent. Add a rule here only when it applies to most changes; put a procedure in `docs/runbooks/` and a one-line pointer in the table above, and guidance for one part of the tree in an `AGENTS.md` inside that folder.

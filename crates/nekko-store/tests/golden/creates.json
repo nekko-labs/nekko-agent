@@ -1,53 +1,55 @@
 {
   "starterModes": [
     {
-      "id": "everyday",
-      "name": "Everyday",
-      "icon": "bolt",
+      "id": "cloud",
+      "name": "Cloud only",
+      "icon": "cloud",
       "options": {
         "executionMode": "worktree",
         "mode": "guardrails",
         "offline": false,
         "incognito": false,
         "disabledTools": [],
-        "workMode": "default"
+        "workMode": "default",
+        "models": "cloud"
       }
     },
     {
-      "id": "deep-work",
-      "name": "Deep work",
-      "icon": "dial",
+      "id": "fusion",
+      "name": "Fusion",
+      "icon": "route",
       "options": {
         "executionMode": "worktree",
-        "mode": "yolo",
+        "mode": "guardrails",
         "offline": false,
         "incognito": false,
         "disabledTools": [],
-        "workMode": "best-output",
-        "effort": "high"
+        "workMode": "default",
+        "models": "fusion"
       }
     },
     {
-      "id": "private",
-      "name": "Private",
-      "icon": "incognito",
+      "id": "local",
+      "name": "Local only",
+      "icon": "laptop",
       "options": {
         "executionMode": "worktree",
-        "mode": "ask",
-        "offline": false,
-        "incognito": true,
+        "mode": "guardrails",
+        "offline": true,
+        "incognito": false,
         "disabledTools": [],
-        "workMode": "default"
+        "workMode": "default",
+        "models": "local"
       }
     },
     {
-      "id": "untrusted-repo",
-      "name": "Untrusted repo",
+      "id": "risky-business",
+      "name": "Risky business",
       "icon": "box",
       "options": {
         "executionMode": "sandbox",
         "mode": "ask",
-        "offline": false,
+        "offline": true,
         "incognito": false,
         "disabledTools": [],
         "workMode": "default"
@@ -1271,7 +1273,7 @@
           "maxDepth": 2,
           "maxParallel": 4
         },
-        "defaultSavedModeId": "deep-work"
+        "defaultSavedModeId": "fusion"
       },
       "saved": {
         "id": "<id>",
@@ -1282,12 +1284,14 @@
         "messages": [],
         "createdAt": 0,
         "updatedAt": 0,
-        "mode": "yolo",
+        "mode": "guardrails",
         "offline": false,
         "incognito": false,
         "disabledTools": [],
-        "workMode": "best-output",
-        "effort": "high"
+        "workMode": "default",
+        "cloudOnly": false,
+        "autoModel": true,
+        "autoProviderSwitch": true
       },
       "idShape": true
     },
@@ -1431,7 +1435,7 @@
           "maxDepth": 2,
           "maxParallel": 4
         },
-        "defaultSavedModeId": "untrusted-repo"
+        "defaultSavedModeId": "risky-business"
       },
       "saved": {
         "id": "<id>",
@@ -1443,7 +1447,7 @@
         "createdAt": 0,
         "updatedAt": 0,
         "mode": "ask",
-        "offline": false,
+        "offline": true,
         "incognito": false,
         "disabledTools": [],
         "workMode": "default"
@@ -1590,7 +1594,7 @@
           "maxDepth": 2,
           "maxParallel": 4
         },
-        "defaultSavedModeId": "private",
+        "defaultSavedModeId": "local",
         "defaultExecutionMode": "unified"
       },
       "saved": {
@@ -1601,11 +1605,12 @@
         "messages": [],
         "createdAt": 0,
         "updatedAt": 0,
-        "mode": "ask",
-        "offline": false,
-        "incognito": true,
+        "mode": "guardrails",
+        "offline": true,
+        "incognito": false,
         "disabledTools": [],
-        "workMode": "default"
+        "workMode": "default",
+        "cloudOnly": false
       },
       "idShape": true
     },
@@ -2418,7 +2423,7 @@
           "maxDepth": 2,
           "maxParallel": 4
         },
-        "defaultSavedModeId": "deep-work",
+        "defaultSavedModeId": "fusion",
         "savedModes": []
       },
       "saved": {
@@ -2572,7 +2577,7 @@
           "maxDepth": 2,
           "maxParallel": 4
         },
-        "defaultSavedModeId": "deep-work"
+        "defaultSavedModeId": "fusion"
       },
       "saved": {
         "id": "<id>",
@@ -3216,6 +3221,166 @@
         "messages": [],
         "createdAt": 0,
         "updatedAt": 0
+      },
+      "idShape": true
+    },
+    {
+      "settings": {
+        "theme": "system",
+        "promptCaching": true,
+        "accent": "#6d5efc",
+        "sandboxMode": "workspace-jail",
+        "providers": [],
+        "guardrails": [
+          {
+            "id": "rm-rf",
+            "label": "Recursive force delete",
+            "description": "Deleting directories recursively and forcefully (rm -rf, Remove-Item -Recurse -Force).",
+            "pattern": "\\brm\\s+(-[a-z]*\\s+)*-[a-z]*r[a-z]*f|\\brm\\s+(-[a-z]*\\s+)*-[a-z]*f[a-z]*r|Remove-Item\\b.*-Recurse|rmdir\\s+/s",
+            "severity": "high",
+            "action": "ask",
+            "enabled": true
+          },
+          {
+            "id": "disk-write",
+            "label": "Raw disk / device write",
+            "description": "Writing directly to a disk device (dd, mkfs, format).",
+            "pattern": "\\bdd\\s+if=|\\bmkfs\\b|\\bformat\\s+[A-Za-z]:|>\\s*/dev/sd",
+            "severity": "high",
+            "action": "deny",
+            "enabled": true
+          },
+          {
+            "id": "force-push",
+            "label": "Git force push",
+            "description": "Force-pushing can overwrite remote history.",
+            "pattern": "git\\s+push\\b.*(--force\\b|--force-with-lease\\b|\\s-f\\b)",
+            "severity": "medium",
+            "action": "ask",
+            "enabled": true
+          },
+          {
+            "id": "git-reset-hard",
+            "label": "Git hard reset / clean",
+            "description": "Discards uncommitted work irreversibly.",
+            "pattern": "git\\s+reset\\s+--hard|git\\s+clean\\s+-[a-z]*f",
+            "severity": "medium",
+            "action": "ask",
+            "enabled": true
+          },
+          {
+            "id": "curl-pipe-sh",
+            "label": "Pipe download to shell",
+            "description": "Executing a remotely downloaded script (curl|sh, iwr|iex).",
+            "pattern": "(curl|wget)\\b[^|]*\\|\\s*(sudo\\s+)?(ba)?sh|iwr\\b.*\\|\\s*iex|Invoke-Expression",
+            "severity": "high",
+            "action": "ask",
+            "enabled": true
+          },
+          {
+            "id": "privilege-esc",
+            "label": "Privilege escalation",
+            "description": "Running commands as root/admin (sudo, runas).",
+            "pattern": "\\bsudo\\b|\\brunas\\b|Start-Process\\b.*-Verb\\s+RunAs",
+            "severity": "medium",
+            "action": "ask",
+            "enabled": true
+          },
+          {
+            "id": "registry-edit",
+            "label": "Windows registry edit",
+            "description": "Modifying the Windows registry.",
+            "pattern": "\\breg\\s+(add|delete)\\b|Set-ItemProperty\\b.*HK(LM|CU):|New-ItemProperty\\b.*HK",
+            "severity": "medium",
+            "action": "ask",
+            "enabled": true
+          },
+          {
+            "id": "kill-process",
+            "label": "Kill processes broadly",
+            "description": "Killing processes by name or all (killall, pkill, taskkill /F).",
+            "pattern": "\\bkillall\\b|\\bpkill\\b|taskkill\\b.*/F",
+            "severity": "low",
+            "action": "ask",
+            "enabled": true
+          },
+          {
+            "id": "package-global",
+            "label": "Global package install",
+            "description": "Installing packages globally can change the system toolchain.",
+            "pattern": "npm\\s+i(nstall)?\\s+-g\\b|pip\\s+install\\b.*--user\\b|choco\\s+install\\b",
+            "severity": "low",
+            "action": "ask",
+            "enabled": true
+          },
+          {
+            "id": "secret-exfil",
+            "label": "Reading secrets / env files",
+            "description": "Accessing credential stores or .env files.",
+            "pattern": "\\.env\\b|id_rsa\\b|\\.ssh/|credentials\\.json|\\.aws/credentials",
+            "severity": "medium",
+            "action": "ask",
+            "enabled": true
+          }
+        ],
+        "workspaces": [],
+        "connectors": [],
+        "mascotEnabled": true,
+        "showTips": true,
+        "completionTipSeen": false,
+        "skipDeleteConfirmation": false,
+        "prompts": [
+          {
+            "id": "explain",
+            "name": "explain",
+            "body": "Explain how this code works, step by step."
+          },
+          {
+            "id": "review",
+            "name": "review",
+            "body": "Review this code for bugs, edge cases, and possible improvements."
+          },
+          {
+            "id": "test",
+            "name": "test",
+            "body": "Write tests for this code, covering the important edge cases."
+          },
+          {
+            "id": "fix",
+            "name": "fix",
+            "body": "Find and fix the bug. Explain the root cause and the fix."
+          },
+          {
+            "id": "refactor",
+            "name": "refactor",
+            "body": "Refactor this for clarity and simplicity without changing behavior."
+          }
+        ],
+        "favoriteModels": [],
+        "mcpServers": [],
+        "specMethodology": "spec-tasks",
+        "orchestration": {
+          "strategy": "balanced",
+          "maxDepth": 2,
+          "maxParallel": 4
+        },
+        "defaultSavedModeId": "cloud"
+      },
+      "saved": {
+        "id": "<id>",
+        "title": "New chat",
+        "workspaceId": "w1",
+        "executionMode": "worktree",
+        "gitIsolation": true,
+        "messages": [],
+        "createdAt": 0,
+        "updatedAt": 0,
+        "mode": "guardrails",
+        "offline": false,
+        "incognito": false,
+        "disabledTools": [],
+        "workMode": "default",
+        "cloudOnly": true
       },
       "idShape": true
     }

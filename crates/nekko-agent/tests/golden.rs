@@ -335,6 +335,33 @@ async fn every_model_list_maps_exactly_as_the_ts_provider_maps_it() {
 }
 
 #[tokio::test]
+async fn only_a_shipped_catalog_is_flagged_as_the_fallback() {
+    let providers = read("providers.json");
+    let cases = read("model-cases.json");
+    let shipped = [
+        "anthropic-sub-no-catalog",
+        "anthropic-offline-falls-back",
+        "anthropic-401-falls-back",
+        "anthropic-malformed-falls-back",
+        "anthropic-empty-falls-back",
+        "chatgpt-catalog-404-falls-back",
+        "chatgpt-catalog-empty-falls-back",
+        "chatgpt-catalog-wrong-shape-falls-back",
+        "chatgpt-no-account",
+        "chatgpt-custom",
+        "chatgpt-custom-duplicate",
+    ];
+    for c in cases.as_array().unwrap() {
+        let name = c["name"].as_str().unwrap();
+        let transport = FakeTransport::by_url(c["responses"].as_object().unwrap().clone());
+        let provider = provider(&providers[c["provider"].as_str().unwrap()], transport);
+        let Ok(models) = provider.list_models().await else { continue };
+        let flagged = models.iter().any(|m| m.fallback);
+        assert_eq!(flagged, shipped.contains(&name), "fallback flag of {name}");
+    }
+}
+
+#[tokio::test]
 async fn every_connection_test_answers_exactly_as_the_ts_provider_does() {
     let providers = read("providers.json");
     let expected = read("tests.json");

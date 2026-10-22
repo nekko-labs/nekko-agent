@@ -213,7 +213,7 @@ Phase ordering keeps the OSS app shippable throughout.
 - [ ] **P2.4, Packaging/publish**: `npx nekko-agent` bin; website download/run section updated; docs.
 - [ ] **P3.1, Cloud foundation**: accounts/auth, Postgres, entitlements, app.nekkoagent.com shell reusing the same renderer with a cloud transport.
 - [x] **P3.2, Payments**: Stripe Checkout + Portal + signature-verified webhooks → `store.setPlan`; entitlement gating (already existed). Gated on `STRIPE_SECRET_KEY`; live charges need keys. See §4.3.
-- [ ] **P3.3, ZDR + cloud history/files**: retention modes, encrypted storage, sync engine, ZDR badges + audit.
+- [ ] **P3.3, ZDR + cloud history/files**: retention modes, encrypted storage, sync engine, ZDR badges + audit. Superseded for history by end-to-end encryption (decided 2026-10-22, [docs/SYNC-ENCRYPTION.md](docs/SYNC-ENCRYPTION.md)): the server holds ciphertext only, not provider-KMS keys; format, storage API and iPhone crypto implemented, engine and screens pending.
 - [x] **P3.4, Relay + phone**: DONE (T100). Relay v2 (per-device cids, unicast, kick, limits, optional cloud authz gate), agent-side device registry with 10-min single-use pairing codes + rename/revoke/rotate, HELLO handshake over the E2E channel, phone bottom-nav, per-device push tokens, managed relay live at `wss://nekko-agent-relay.fly.dev`, self-host image `ghcr.io/nekko-labs/nekko-agent-relay`. Notably the device registry lives on the AGENT, so revocation shipped without the Cloud account model; the cloud's `/api/relay/authorize` gate exists for making the managed relay a paid perk at launch. See docs/REMOTE.md.
 - [ ] **P3.5, Managed connectors**: pre-registered OAuth apps for Gmail/Drive/Slack/Discord.
 

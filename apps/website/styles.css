@@ -849,12 +849,16 @@ h3 { font-size: 21px; }
 @keyframes np-hop { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-14px); } }
 @keyframes np-twinkle { 50% { opacity: 0.2; } }
 
-/* speech bubble: pixel-edged, Handjet */
+/* speech bubble: pixel-edged, Space Mono */
 .nekko-bubble {
   position: absolute; top: 0; right: 150px; z-index: 2; max-width: 260px;
-  font-family: var(--led); font-size: 20px; line-height: 1.1; color: #17151f;
+  /* Space Mono, not Handjet: Handjet's LED segments leave gaps that line up
+     into a strike-through line at this size on some screens, whatever the
+     weight. Only the bubble changes; the headings keep Handjet. */
+  font-family: var(--retro-mono); font-weight: 400; font-size: 14px; line-height: 1.35; color: #17151f;
   background: #ffffff; border: 2px solid var(--sticker); border-radius: 10px;
   padding: 8px 12px; box-shadow: 3px 3px 0 var(--sticker);
+  text-wrap: balance; /* two even lines, never one word left on its own */
 }
 .nekko-bubble::after { /* a little pixel tail pointing at Nekko */
   content: ''; position: absolute; right: -8px; top: 14px; width: 6px; height: 6px;
@@ -876,7 +880,7 @@ h3 { font-size: 21px; }
   .beta-stage { padding-top: 78px; }
   .nekko-peek { right: 14px; }
   .nekko-peek-svg { width: 88px; height: 83px; }
-  .nekko-bubble { right: 112px; font-size: 17px; max-width: 190px; }
+  .nekko-bubble { right: 112px; font-size: 12.5px; max-width: 190px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .nekko-peek *, .nekko-peek-svg { animation: none !important; transition: none !important; }

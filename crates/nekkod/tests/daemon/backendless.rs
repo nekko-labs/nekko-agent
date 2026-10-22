@@ -331,3 +331,43 @@ async fn reviews_a_repository_change_on_the_default_model_without_tools() {
     drop(d);
     let _ = std::fs::remove_dir_all(&data);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_cloud_only_chat_never_calls_a_model_on_this_machine() {
+    let data = std::env::temp_dir().join(format!("nekkod-cloud-only-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    let workspace = data.join("project");
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    std::fs::create_dir_all(&workspace).unwrap();
+    let chat = json!({ "id": "s_cloud", "title": "Cloud", "workspaceId": "w1", "cloudOnly": true, "executionMode": "unified", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    std::fs::write(data.join("sessions/s_cloud.json"), chat.to_string()).unwrap();
+    let model = scripted_model(vec![say_text("ran locally")]).await;
+    let settings = json!({
+        // A loopback openai-compat server is a model on this machine.
+        "providers": [{ "id": "p1", "kind": "openai-compat", "label": "Local", "enabled": true, "baseUrl": format!("http://127.0.0.1:{}/v1", model.port) }],
+        "workspaces": [{ "id": "w1", "name": "project", "path": workspace.to_string_lossy() }],
+        "defaultChatMode": "yolo",
+    });
+    std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
+    let d = start_with(Some(&data));
+    let mut events = ws(d.port, &format!("/api/events?token={TOKEN}"), None).await.unwrap();
+    let opts = json!({ "sessionId": "s_cloud", "providerId": "p1", "modelId": "synthetic", "text": "hello" });
+    let (status, body) = post(d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    let mut refused = None;
+    while let Some(frame) = next_json(&mut events, Duration::from_secs(5)).await {
+        let ev = if frame["payload"].is_object() { &frame["payload"] } else { &frame };
+        if ev["type"] == "error" && ev["sessionId"] == "s_cloud" {
+            refused = ev["message"].as_str().map(str::to_string);
+            break;
+        }
+    }
+    assert_eq!(
+        refused.as_deref(),
+        Some("This chat runs on cloud models only. Pick a cloud model, or turn Cloud only off in the Mode panel.")
+    );
+    assert!(model.requests.lock().unwrap().is_empty(), "the local model was called");
+    drop(d);
+    model.server.abort();
+    let _ = std::fs::remove_dir_all(&data);
+}

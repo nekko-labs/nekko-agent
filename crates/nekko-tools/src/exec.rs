@@ -9,7 +9,7 @@ use crate::context::{ChatMode, ToolCall, ToolContext, ToolResult};
 use crate::guardrails::{Action, Severity, classify_command, default_guardrails};
 use crate::js;
 use crate::nodefs;
-use crate::sandbox::{asks_everything, assert_in_jail, first_workspace, process_cwd, resolve_path};
+use crate::sandbox::{asks_everything, assert_readable, assert_writable, first_workspace, process_cwd, resolve_path};
 use crate::search::{glob_files, grep_files};
 use serde_json::Value;
 
@@ -64,7 +64,7 @@ fn record_original(ctx: &ToolContext, path: &str) {
 
 fn read_file(call: &ToolCall, ctx: &ToolContext) -> Outcome {
     let p = resolve_path(arg(call, "path"), ctx)?;
-    assert_in_jail(&p, ctx)?;
+    assert_readable(&p, ctx)?;
     if !nodefs::exists(&p) {
         return Ok(ToolResult::err(call, format!("File not found: {p}")));
     }
@@ -122,7 +122,7 @@ fn dirname(p: &str) -> String {
 
 async fn write_file(call: &ToolCall, ctx: &ToolContext) -> Outcome {
     let p = resolve_path(arg(call, "path"), ctx)?;
-    assert_in_jail(&p, ctx)?;
+    assert_writable(&p, ctx)?;
     if asks_everything(ctx) && !approve(call, ctx, &format!("Write {p}"), Severity::Medium).await {
         return Ok(ToolResult::err(call, "Write not approved by user."));
     }
@@ -136,7 +136,7 @@ async fn write_file(call: &ToolCall, ctx: &ToolContext) -> Outcome {
 
 async fn edit_file(call: &ToolCall, ctx: &ToolContext) -> Outcome {
     let p = resolve_path(arg(call, "path"), ctx)?;
-    assert_in_jail(&p, ctx)?;
+    assert_writable(&p, ctx)?;
     if !nodefs::exists(&p) {
         return Ok(ToolResult::err(call, format!("File not found: {p}")));
     }
@@ -167,7 +167,7 @@ async fn edit_file(call: &ToolCall, ctx: &ToolContext) -> Outcome {
 
 fn list_dir(call: &ToolCall, ctx: &ToolContext) -> Outcome {
     let p = resolve_path(arg(call, "path"), ctx)?;
-    assert_in_jail(&p, ctx)?;
+    assert_readable(&p, ctx)?;
     if !nodefs::exists(&p) {
         return Ok(ToolResult::err(call, format!("Directory not found: {p}")));
     }
@@ -182,7 +182,7 @@ fn glob(call: &ToolCall, ctx: &ToolContext) -> Outcome {
     } else {
         ctx.default_cwd.clone().or_else(|| first_workspace(ctx).map(str::to_string)).unwrap_or_else(process_cwd)
     };
-    assert_in_jail(&root, ctx)?;
+    assert_readable(&root, ctx)?;
     if !nodefs::exists(&root) {
         return Ok(ToolResult::err(call, format!("Directory not found: {root}")));
     }
@@ -196,7 +196,7 @@ fn grep(call: &ToolCall, ctx: &ToolContext) -> Outcome {
     } else {
         ctx.default_cwd.clone().or_else(|| first_workspace(ctx).map(str::to_string)).unwrap_or_else(process_cwd)
     };
-    assert_in_jail(&root, ctx)?;
+    assert_readable(&root, ctx)?;
     if !nodefs::exists(&root) {
         return Ok(ToolResult::err(call, format!("Path not found: {root}")));
     }

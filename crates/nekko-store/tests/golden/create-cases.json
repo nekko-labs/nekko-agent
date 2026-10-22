@@ -12,18 +12,19 @@
     { "settings": { "defaultExecutionMode": "unified", "gitManagement": { "mode": "shared" } }, "workspaceId": "w1" },
     { "settings": { "defaultExecutionMode": "sandbox" }, "workspaceId": "w1" },
     { "settings": { "gitManagement": { "mode": "isolated" } } },
-    { "settings": { "defaultSavedModeId": "deep-work" }, "workspaceId": "w1" },
-    { "settings": { "defaultSavedModeId": "untrusted-repo" }, "workspaceId": "w1" },
-    { "settings": { "defaultSavedModeId": "private", "defaultExecutionMode": "unified" } },
+    { "settings": { "defaultSavedModeId": "fusion" }, "workspaceId": "w1" },
+    { "settings": { "defaultSavedModeId": "risky-business" }, "workspaceId": "w1" },
+    { "settings": { "defaultSavedModeId": "local", "defaultExecutionMode": "unified" } },
     { "settings": { "defaultSavedModeId": "missing" }, "workspaceId": "w1" },
     { "settings": { "defaultSavedModeId": "" }, "workspaceId": "w1" },
     { "settings": { "defaultSavedModeId": "mine", "savedModes": [{ "id": "mine", "name": "Mine", "icon": "bolt", "options": { "executionMode": "unified", "mode": "yolo", "offline": true, "incognito": false, "disabledTools": ["bash", "write_file"], "workMode": "default", "disabledMcpServers": ["fs"], "disabledConnectors": [] } }] }, "workspaceId": "w1" },
     { "settings": { "defaultSavedModeId": "partial", "defaultExecutionMode": "unified", "savedModes": [{ "id": "partial", "name": "Partial", "icon": "bolt", "options": { "mode": "ask", "offline": false, "incognito": false, "disabledTools": [], "workMode": "default", "effort": "low" } }] }, "workspaceId": "w1" },
-    { "settings": { "defaultSavedModeId": "deep-work", "savedModes": [] }, "workspaceId": "w1" },
-    { "settings": { "defaultSavedModeId": "deep-work" }, "workspaceId": "w1", "parent": "s_parent_wt" },
+    { "settings": { "defaultSavedModeId": "fusion", "savedModes": [] }, "workspaceId": "w1" },
+    { "settings": { "defaultSavedModeId": "fusion" }, "workspaceId": "w1", "parent": "s_parent_wt" },
     { "settings": {}, "workspaceId": "w1", "parent": "s_parent_wt", "supporting": ["w2"] },
     { "settings": { "defaultExecutionMode": "sandbox" }, "workspaceId": "w1", "parent": "s_parent_unified" },
     { "settings": {}, "parent": "s_parent_null" },
-    { "settings": {}, "workspaceId": "w1", "parent": "s_gone" }
+    { "settings": {}, "workspaceId": "w1", "parent": "s_gone" },
+    { "settings": { "defaultSavedModeId": "cloud" }, "workspaceId": "w1" }
   ]
 }

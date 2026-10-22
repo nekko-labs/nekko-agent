@@ -141,7 +141,7 @@ async fn fail(ctx: &Ctx, session_id: &str, message: &str) -> Result<Value, Strin
 }
 
 /// `newTurnId()`, marked `turn_d`: a turn this daemon admitted, whose queue it runs on.
-fn daemon_turn_id() -> String {
+pub(crate) fn daemon_turn_id() -> String {
     let mut b = [0u8; 4];
     let _ = getrandom::fill(&mut b);
     let hex: String = b.iter().map(|x| format!("{x:02x}")).collect();
@@ -169,8 +169,12 @@ fn is_local(kind: &str) -> bool {
     LOCAL_KINDS.contains(&kind)
 }
 
+/// A cloud-only chat asked to run on a model server on this machine.
+pub(crate) const CLOUD_ONLY_REFUSAL: &str =
+    "This chat runs on cloud models only. Pick a cloud model, or turn Cloud only off in the Mode panel.";
+
 /// `providerEndpoint` and `offlineProviderAllowed`, shared with the workflow engine (nekko-turn).
-pub(crate) use nekko_turn::providers::{offline_provider_allowed, provider_endpoint};
+pub(crate) use nekko_turn::providers::{cloud_provider_allowed, offline_provider_allowed, provider_endpoint};
 
 /// Whether a turn may run on this provider: one with a valid endpoint, or
 /// Claude Agent (`claude-code`), which runs the user's own Claude Code and has
@@ -483,6 +487,9 @@ async fn admit(
             "Offline chat requires a local-compatible provider with a loopback HTTP(S) endpoint.",
         )
         .await;
+    }
+    if nekko_js::truthy(session.get("cloudOnly")) && !cloud_provider_allowed(&provider) {
+        return ended(ctx, &session_id, CLOUD_ONLY_REFUSAL).await;
     }
     if !turn_provider_allowed(&provider) {
         return ended(ctx, &session_id, "Provider requires a valid HTTP(S) endpoint.").await;

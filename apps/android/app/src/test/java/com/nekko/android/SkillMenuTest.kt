@@ -17,8 +17,34 @@ class SkillMenuTest {
         assertEquals("", SkillMenu.query("/"))
         assertEquals("rev", SkillMenu.query("/rev"))
         assertNull(SkillMenu.query("/review this"))
-        assertNull(SkillMenu.query("hello /rev"))
         assertNull(SkillMenu.query(""))
+        assertEquals(SkillMenu.Trigger("pl", 0), SkillMenu.trigger("/pl"))
+    }
+
+    @Test fun `the menu opens on a slash typed after existing text`() {
+        assertEquals(SkillMenu.Trigger("", 18), SkillMenu.trigger("Help me with this /"))
+        assertEquals(SkillMenu.Trigger("pl", 18), SkillMenu.trigger("Help me with this /pl"))
+        assertEquals(SkillMenu.Trigger("", 5), SkillMenu.trigger("line\n/"))
+        assertEquals("rev", SkillMenu.query("hello /rev"))
+        assertEquals("", SkillMenu.query("tab\t/"))
+    }
+
+    @Test fun `a slash inside a word, a url or before more text does not open the menu`() {
+        assertNull(SkillMenu.query("a/b"))
+        assertNull(SkillMenu.query("https://x.com/"))
+        assertNull(SkillMenu.query("Help me / now"))
+        assertNull(SkillMenu.query("Help me /pl "))
+        assertNull(SkillMenu.query("Help me /pl\n"))
+        assertNull(SkillMenu.query("Help me"))
+    }
+
+    @Test fun `picking a skill removes only the slash query`() {
+        assertEquals("", SkillMenu.afterPick("/"))
+        assertEquals("", SkillMenu.afterPick("/pl"))
+        assertEquals("Help me with this ", SkillMenu.afterPick("Help me with this /"))
+        assertEquals("Help me with this ", SkillMenu.afterPick("Help me with this /pl"))
+        assertEquals("line\n", SkillMenu.afterPick("line\n/"))
+        assertEquals("a/b", SkillMenu.afterPick("a/b"))
     }
 
     @Test fun `matches names and descriptions, names starting with the query first`() {
