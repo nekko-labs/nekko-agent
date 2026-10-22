@@ -74,6 +74,7 @@ struct NekkoApp: App {
             RootView()
                 .environment(app)
                 .environment(app.store)
+                .environment(app.cloud)
                 .environment(app.prefs)
                 .modifier(Themed(choice: app.prefs.theme, appearance: app.store.appearance))
                 .onOpenURL { app.handle(url: $0) }

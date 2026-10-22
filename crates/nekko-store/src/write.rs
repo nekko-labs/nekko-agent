@@ -29,6 +29,7 @@ const OPTION_KEYS: &[&str] = &[
     "disabledConnectors",
     "memory",
     "guidance",
+    "toolApproach",
     "offline",
     "cloudOnly",
     "incognito",
@@ -45,6 +46,7 @@ const OPTION_KEYS: &[&str] = &[
     "chatType",
     "imageParams",
     "archivedAt",
+    "privacy",
 ];
 
 /// `STARTER_MODES` (packages/shared/src/saved-modes.ts): the saved modes until
@@ -52,7 +54,7 @@ const OPTION_KEYS: &[&str] = &[
 pub const STARTER_MODES: &str = r#"[
   { "id": "cloud", "name": "Cloud only", "icon": "cloud", "options": { "executionMode": "worktree", "mode": "guardrails", "offline": false, "incognito": false, "disabledTools": [], "workMode": "default", "models": "cloud" } },
   { "id": "fusion", "name": "Fusion", "icon": "route", "options": { "executionMode": "worktree", "mode": "guardrails", "offline": false, "incognito": false, "disabledTools": [], "workMode": "default", "models": "fusion" } },
-  { "id": "local", "name": "Local only", "icon": "laptop", "options": { "executionMode": "worktree", "mode": "guardrails", "offline": true, "incognito": false, "disabledTools": [], "workMode": "default", "models": "local" } },
+  { "id": "local", "name": "Local only", "icon": "laptop", "options": { "executionMode": "worktree", "mode": "guardrails", "offline": true, "incognito": false, "disabledTools": [], "workMode": "default", "models": "local", "toolApproach": "code" } },
   { "id": "risky-business", "name": "Risky business", "icon": "box", "options": { "executionMode": "sandbox", "mode": "ask", "offline": true, "incognito": false, "disabledTools": [], "workMode": "default" } }
 ]"#;
 
@@ -141,6 +143,9 @@ fn apply_mode(s: &mut JsObject, options: &Value) {
         Some("local") => s.set("cloudOnly", Some(json!(false))),
         _ => {}
     }
+    if let Some(v) = get("toolApproach").filter(|v| js::truthy(Some(v))) {
+        s.set("toolApproach", Some(v));
+    }
 }
 
 /// What a running turn's save takes from disk rather than from memory
@@ -156,6 +161,7 @@ const USER_FIELDS: &[&str] = &[
     "disabledConnectors",
     "memory",
     "guidance",
+    "toolApproach",
     "offline",
     "cloudOnly",
     "incognito",
@@ -175,6 +181,7 @@ const USER_FIELDS: &[&str] = &[
     "specLinked",
     "queue",
     "archivedAt",
+    "privacy",
 ];
 
 /// `queueItemPayload`: a queued prompt as `{ text, images?, skill? }`.
@@ -482,6 +489,17 @@ impl SessionStore {
         self.save(target)
     }
 
+    /// Write a chat exactly as given, `updatedAt` included: a chat that arrived
+    /// through end-to-end encrypted sync keeps the time it was last changed
+    /// on the device that changed it. Atomic, like every other write.
+    pub fn put_synced(&self, s: &Value) -> Result<(), String> {
+        let id = s.get("id").and_then(Value::as_str).filter(|id| valid_id(id)).ok_or("a session without a valid id")?;
+        let _guard = self.writes.lock().unwrap_or_else(|e| e.into_inner());
+        std::fs::create_dir_all(&self.dir).map_err(|e| e.to_string())?;
+        let text = serde_json::to_string_pretty(s).map_err(|e| e.to_string())?;
+        write_atomic(&self.path(id), &text).map_err(|e| format!("could not save the chat: {e}"))
+    }
+
     /// `deleteSession`.
     pub fn delete(&self, id: &str) -> Result<(), String> {
         if !valid_id(id) {
@@ -676,6 +694,7 @@ impl SessionStore {
             "disabledConnectors",
             "memory",
             "guidance",
+            "toolApproach",
         ] {
             if let Some(v) = src.get(key) {
                 s.insert(key.into(), v.clone());

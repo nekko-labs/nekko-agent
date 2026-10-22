@@ -931,3 +931,56 @@ h3 { font-size: 21px; }
 
 /* a status chip inside a card's number line (e.g. 08 · ON THE GO  Beta) */
 .mf-num .chip { margin-left: 8px; }
+
+/* ---- why Nekko: five promise panels, each a copy column beside a demo
+       slot, sides alternating down the page. ---- */
+.panels .chapter-lede { margin-bottom: 10px; }
+.panel {
+  display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: clamp(24px, 4vw, 48px);
+  align-items: center; padding: 34px; margin-top: 26px; border-radius: 22px;
+  transition: transform 0.25s, border-color 0.25s;
+}
+.panel:nth-of-type(even) .panel-copy { order: 2; }
+.panel:nth-of-type(even) .panel-media { order: 1; }
+.panel h3 { font-size: 28px; line-height: 1.15; margin: 16px 0 12px; letter-spacing: -0.01em; }
+.panel p { font-size: 15px; }
+.panel-points { list-style: none; margin: 16px 0 0; display: grid; gap: 8px; }
+.panel-points li { position: relative; padding-left: 20px; font-size: 14px; color: var(--muted); }
+.panel-points li::before { content: '■'; position: absolute; left: 0; top: 1px; font-size: 9px; color: var(--lavender); }
+.panel .card-link { margin-top: 20px; }
+.panel .chip { margin-left: 8px; }
+.panel-media { width: 100%; margin: 0; aspect-ratio: 16 / 10; border-radius: 16px; }
+.panel-fast { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); }
+.panels-foot { margin-top: 30px; max-width: 760px; margin-left: auto; margin-right: auto; }
+
+/* the benchmark: three measures, three servers, bars anchored to a baseline
+   at the left; the numbers sit on the bars, the servers are named by a legend
+   and a colour key that also passes a colour-blindness check. */
+.bench { grid-column: 1 / -1; margin-top: 10px; padding-top: 26px; border-top: 1px solid var(--line); }
+.bench-title { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; justify-content: space-between; font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 16px; }
+.bench-legend { display: inline-flex; gap: 14px; letter-spacing: 0.06em; text-transform: none; font-size: 12px; }
+.bench-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.bench-row { display: grid; grid-template-columns: 170px 1fr; gap: 16px; align-items: center; padding: 8px 0; }
+.bench-row + .bench-row { border-top: 1px solid var(--line); }
+.bench-label { font-size: 13.5px; font-weight: 600; }
+.bench-bars { display: grid; gap: 3px; }
+.bar {
+  --v: 50%; position: relative; height: 18px; width: var(--v); min-width: 44px;
+  border-radius: 0 4px 4px 0; display: flex; align-items: center; justify-content: flex-end; padding-right: 7px;
+  transform-origin: left; animation: bar-grow 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.bar b { font-family: var(--mono); font-size: 11.5px; font-weight: 700; color: #fff; }
+.k-nekko { background: #6a5ad0; }
+.k-ollama { background: #1f96a8; }
+.k-lms { background: #c47a2c; }
+.bench .micro { margin-top: 16px; max-width: none; }
+@keyframes bar-grow { from { transform: scaleX(0); } }
+@media (prefers-reduced-motion: reduce) { .bar { animation: none; } }
+@media (max-width: 900px) {
+  .panel, .panel-fast { grid-template-columns: 1fr; padding: 24px; gap: 20px; }
+  .panel .panel-media { order: 1; }
+  .panel .panel-copy { order: 2; }
+  .panel .bench { order: 3; }
+  .panel h3 { font-size: 24px; }
+  .bench-row { grid-template-columns: 1fr; gap: 6px; }
+}

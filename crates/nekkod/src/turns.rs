@@ -36,7 +36,7 @@ use crate::decide::DecideService;
 use crate::hub::Hub;
 use crate::mcp::Mcp;
 use nekko_agent::{ProviderConfig, ProviderKind, create_provider};
-use nekko_chat::ProviderClient;
+use nekko_chat::{ProviderClient, ShieldedClient};
 use nekko_js as js;
 use nekko_loop::{Cancel, RunOptions, Steering, ToolRunner, run_agent};
 use nekko_store::SessionStore;
@@ -909,6 +909,24 @@ impl Turns {
         if sandbox {
             tools.retain(|t| turn::variants::SANDBOX_TOOLS.contains(&turn::catalog::name(t)));
         }
+        // Code mode (`toolApproach: 'code'`): the model gets `search_tools` and
+        // `run_code` in place of the tools code can call (nekko-codemode).
+        let code_mode = if !sandbox && !claude_code && str_at(&loaded, "toolApproach") == Some("code") {
+            let (direct, wrapped) = nekko_codemode::split(std::mem::take(&mut tools));
+            tools = nekko_codemode::offer(direct, &wrapped);
+            (!wrapped.is_empty()).then(|| {
+                let offered: Vec<Value> = tools
+                    .iter()
+                    .filter(|t| {
+                        matches!(turn::catalog::name(t), nekko_codemode::SEARCH_TOOLS | nekko_codemode::RUN_CODE)
+                    })
+                    .cloned()
+                    .collect();
+                Arc::new(CodeMode { tally: Arc::new(nekko_codemode::Tally::new(&wrapped, &offered)), wrapped })
+            })
+        } else {
+            None
+        };
         let workspaces: Vec<Value> = if sandbox {
             turn::variants::sandbox_workspaces(&loaded)
         } else {
@@ -933,9 +951,12 @@ impl Turns {
             .and_then(Value::as_object)
             .map(|m| m.values().map(|w| json!(w.get("notice").map(js::display).unwrap_or_default())).collect())
             .unwrap_or_default();
+        // The prompt's tool-specific instructions follow what the chat can do,
+        // so a tool behind `run_code` keeps them.
+        let prompt_tools: Vec<&Value> = tools.iter().chain(code_mode.iter().flat_map(|c| c.wrapped.iter())).collect();
         let system = turn::turn_system_prompt(&json!({
             "workspaces": workspaces,
-            "tools": tools,
+            "tools": prompt_tools,
             "settings": settings,
             "sandbox": sandbox,
             "executionMode": execution_mode,
@@ -1015,6 +1036,7 @@ impl Turns {
                 incognito,
                 session_id: session_id.clone(),
                 stats: turn::TurnStats::new(identity, started_at as f64),
+                code_mode: code_mode.as_ref().map(|c| c.tally.clone()),
                 turn_from,
                 started_at,
                 last_error: shared.last_error.clone(),
@@ -1034,6 +1056,8 @@ impl Turns {
             return self.end_turn(&store, shared, &session, forwarder, incognito).await;
         }
 
+        // Privacy Shield: a cloud model gets placeholders for private values.
+        let shield = crate::privacy::shield_for(&lock(&session), settings, &facts["provider"]);
         let provider = create_provider(config);
         // An Anthropic API key's own rate limits, read off each response.
         let client = if let Some(key) = str_at(facts, "apiLimitsKey").map(str::to_string) {
@@ -1047,7 +1071,13 @@ impl Turns {
         } else {
             ProviderClient::new(provider)
         };
-        let names: HashSet<String> = tools.iter().map(|t| turn::catalog::name(t).to_string()).collect();
+        let client = ShieldedClient::new(client, shield.clone());
+        // In code mode the tools behind `run_code` are still this chat's tools.
+        let names: HashSet<String> = tools
+            .iter()
+            .chain(code_mode.iter().flat_map(|c| c.wrapped.iter()))
+            .map(|t| turn::catalog::name(t).to_string())
+            .collect();
         let mode = str_at(&lock(&session), "mode")
             .map(str::to_string)
             .or_else(|| shared.default_mode.clone())
@@ -1080,6 +1110,7 @@ impl Turns {
             store: store.clone(),
             session: session.clone(),
             names,
+            code: code_mode,
             native,
             hook_rules: facts.get("hookRules").filter(|r| r.is_array() && !sandbox).map(nekko_tools::hooks::rules),
             hook_cwd: workspaces.first().and_then(|w| str_at(w, "path")).map(str::to_string).unwrap_or_else(|| {
@@ -1125,6 +1156,13 @@ impl Turns {
         })
         .await;
         drop(runner);
+        // What the shield hid, by kind and never by value, for the engine log.
+        if let Some(shield) = &shield {
+            let counts = shield.lock().unwrap_or_else(|e| e.into_inner()).counts_by_kind();
+            if !counts.is_empty() {
+                crate::logs::note(&format!("privacy shield: replaced {counts:?}"));
+            }
+        }
         self.end_turn(&store, shared, &session, forwarder, incognito).await
     }
 
@@ -1371,6 +1409,7 @@ async fn generate_title(
     }
     let messages = fresh.get("messages").and_then(Value::as_array).cloned().unwrap_or_default();
     let Some(content) = turn::title_prompt(&messages) else { return };
+    let (content, shield) = crate::privacy::guard(&fresh, &spec["settings"], &facts["provider"], &content);
     let request = json!({
         "provider": facts["provider"],
         "request": {
@@ -1396,7 +1435,10 @@ async fn generate_title(
     if out.get("error").is_some() {
         return;
     }
-    let title = turn::clean_title(out.get("text").and_then(Value::as_str).unwrap_or_default());
+    let title = turn::clean_title(&crate::privacy::unguard(
+        &shield,
+        out.get("text").and_then(Value::as_str).unwrap_or_default(),
+    ));
     if title.is_empty() {
         return;
     }
@@ -1514,6 +1556,8 @@ struct Forward {
     incognito: bool,
     session_id: String,
     stats: turn::TurnStats,
+    /// A code-mode turn's savings, put on its stats as `codeMode`.
+    code_mode: Option<Arc<nekko_codemode::Tally>>,
     turn_from: usize,
     started_at: u64,
     last_error: Arc<Mutex<Option<String>>>,
@@ -1551,7 +1595,11 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
             }
             // Stats go on the transcript before the checkpoint writes it, so a
             // pane that re-reads the chat on `done` already finds them.
-            let finished = f.stats.finish(now_ms() as f64, event.get("steps"), event.get("stop"));
+            let mut finished = f.stats.finish(now_ms() as f64, event.get("steps"), event.get("stop"));
+            if let (Some(stats), Some(tally)) = (finished.as_mut(), &f.code_mode) {
+                let calls = stats.get("calls").and_then(Value::as_u64).unwrap_or(0);
+                stats["codeMode"] = tally.summary(calls);
+            }
             if let Some(stats) = &finished {
                 let mut s = lock(&f.session);
                 if let Some(Value::Array(messages)) = s.get_mut("messages") {
@@ -1662,6 +1710,8 @@ struct TurnTools {
     store: Arc<SessionStore>,
     session: Arc<Mutex<Value>>,
     names: HashSet<String>,
+    /// Code mode: the tools `run_code` reaches, and what using it saved.
+    code: Option<Arc<CodeMode>>,
     native: Option<ToolContext>,
     /// This turn's hook rules, run here (`facts.hookRules`), and the folder they run in.
     hook_rules: Option<Vec<nekko_tools::hooks::HookRule>>,
@@ -1691,8 +1741,35 @@ fn error(id: &str, output: impl Into<String>) -> Value {
     json!({ "toolCallId": id, "output": output.into(), "isError": true })
 }
 
+/// A code-mode turn's wrapped tools and its running savings.
+struct CodeMode {
+    wrapped: Vec<Value>,
+    tally: Arc<nekko_codemode::Tally>,
+}
+
 impl ToolRunner for TurnTools {
     async fn run(&self, call: &Value) -> Result<Value, String> {
+        if let Some(code) = &self.code {
+            let id = str_at(call, "id").unwrap_or_default();
+            let input = call.get("input").cloned().unwrap_or(json!({}));
+            match str_at(call, "name") {
+                Some(nekko_codemode::SEARCH_TOOLS) => {
+                    let out = nekko_codemode::search(&code.wrapped, &input);
+                    code.tally.searched(&out);
+                    return Ok(result(id, out));
+                }
+                Some(nekko_codemode::RUN_CODE) => return Ok(self.run_code(code, id, &input).await),
+                _ => {}
+            }
+        }
+        self.guarded(call).await
+    }
+}
+
+impl TurnTools {
+    /// A call with this turn's hooks around it: a direct call, or one a
+    /// code-mode script made.
+    async fn guarded(&self, call: &Value) -> Result<Value, String> {
         if let Some(spec_rules) = &self.hook_rules {
             // Re-read per call, so a hook added mid-turn applies to the next tool.
             let rules = match &self.turns.settings {
@@ -1711,9 +1788,47 @@ impl ToolRunner for TurnTools {
         }
         self.inner(call).await
     }
-}
 
-impl TurnTools {
+    /// `run_code`: the script runs on a blocking thread, and each tool call it
+    /// makes comes back here to run as `<id>.<n>` through [`Self::guarded`],
+    /// so approvals, guardrails, hooks and the unattended policy see it as
+    /// they would a direct call. Stop interrupts the script.
+    async fn run_code(&self, code: &CodeMode, id: &str, input: &Value) -> Value {
+        type Ask = (String, Value, std::sync::mpsc::Sender<(String, bool)>);
+        let Some(source) = input.get("code").and_then(Value::as_str).map(str::to_string) else {
+            return error(id, "run_code needs `code`: the body of an async function.");
+        };
+        let names: Vec<String> = code.wrapped.iter().map(|t| turn::catalog::name(t).to_string()).collect();
+        let (tx, mut rx) = mpsc::unbounded_channel::<Ask>();
+        let cancel = self.shared.cancel.clone();
+        let script = tokio::task::spawn_blocking(move || {
+            let ended = || ("The turn ended before this call ran.".to_string(), true);
+            let host: nekko_codemode::run::Call = Box::new(move |name, input| {
+                let (back, answer) = std::sync::mpsc::channel();
+                if tx.send((name.to_string(), input, back)).is_err() {
+                    return ended();
+                }
+                answer.recv().unwrap_or_else(|_| ended())
+            });
+            let limits = nekko_codemode::Limits::default();
+            nekko_codemode::run::run(&source, &names, &limits, Box::new(move || cancel.is_cancelled()), host)
+        });
+        let mut n = 0;
+        while let Some((name, input, back)) = rx.recv().await {
+            n += 1;
+            let nested = json!({ "id": format!("{id}.{n}"), "name": name, "input": input });
+            let out = self.guarded(&nested).await.unwrap_or_else(|e| error(id, e));
+            let _ = back.send((out.get("output").map(js::display).unwrap_or_default(), js::truthy(out.get("isError"))));
+        }
+        match script.await {
+            Ok(outcome) => {
+                code.tally.ran(&outcome);
+                if outcome.is_error { error(id, outcome.output) } else { result(id, outcome.output) }
+            }
+            Err(e) => error(id, format!("run_code failed: {e}")),
+        }
+    }
+
     /// The hooks around a call, run here (hooks.ts `withToolHooks`).
     async fn run_with_hooks(&self, rules: &[nekko_tools::hooks::HookRule], call: &Value) -> Result<Value, String> {
         use nekko_tools::hooks::{post_tool_hooks, pre_tool_hooks};

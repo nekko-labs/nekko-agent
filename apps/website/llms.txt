@@ -95,6 +95,8 @@ Full docs in one file: https://nekkoagent.com/llms-full.txt. Each page is also a
 ### Using Nekko Agent
 
 - [Browser automation](https://nekkoagent.com/docs/browser-automation.md): Chat-owned browser actions, security boundaries and native driver migration status.
+- [Privacy Shield](https://nekkoagent.com/docs/privacy-shield.md): Replace emails, phone numbers, secrets and your own terms with placeholders before a request reaches a cloud model.
+- [Code mode](https://nekkoagent.com/docs/code-mode.md): Let the model write code that calls your tools in a sandbox, so long tool lists and big results cost far fewer tokens.
 - [Running models locally](https://nekkoagent.com/docs/local-models.md): Run models with the built-in engine or a server you already have (Ollama, LM Studio, vLLM).
 - [Subscription sign-in](https://nekkoagent.com/docs/subscriptions.md): Use your ChatGPT subscription instead of a metered API key, and how Claude works in Nekko Agent.
 - [Usage limits and prices](https://nekkoagent.com/docs/usage-limits.md): Where the usage numbers and price estimates come from, and what they mean.

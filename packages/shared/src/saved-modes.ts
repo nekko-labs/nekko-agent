@@ -1,6 +1,6 @@
 /**
  * Saved modes: named bundles of a chat's settings (where it runs, worktrees,
- * approvals, internet, incognito, tools, work mode, effort, MCP servers,
+ * approvals, internet, incognito, tools and how they are reached, work mode, effort, MCP servers,
  * connectors, where its models run, memory, project guidance) that the composer's Mode panel applies in one click. One may be
  * the default for new chats.
  *
@@ -12,7 +12,7 @@
  * Folders are not part of a mode. They belong to the task, not the way of
  * working, so switching modes never re-wires a chat's folders.
  */
-import type { ChatMode, ExecutionMode, GuidanceLevel, ChatMemory, Session } from './chat.js';
+import type { ChatMode, ExecutionMode, GuidanceLevel, ChatMemory, Session, ToolApproach } from './chat.js';
 import { getExecutionMode } from './chat.js';
 import { chatEffort } from './chat-scope.js';
 import type { EffortLevel } from './settings.js';
@@ -58,6 +58,8 @@ export interface SavedModeOptions {
   memory?: ChatMemory;
   /** How much project guidance the chat takes. Unset (older modes) matches any and changes nothing. */
   guidance?: GuidanceLevel;
+  /** How the chat reaches its tools. Unset (older modes) matches any and changes nothing. */
+  toolApproach?: ToolApproach;
 }
 
 export interface SavedMode {
@@ -76,7 +78,7 @@ export interface SavedMode {
 export const STARTER_MODES: SavedMode[] = [
   { id: 'cloud', name: 'Cloud only', icon: 'cloud', options: { executionMode: 'worktree', mode: 'guardrails', offline: false, incognito: false, disabledTools: [], workMode: 'default', models: 'cloud' } },
   { id: 'fusion', name: 'Fusion', icon: 'route', options: { executionMode: 'worktree', mode: 'guardrails', offline: false, incognito: false, disabledTools: [], workMode: 'default', models: 'fusion' } },
-  { id: 'local', name: 'Local only', icon: 'laptop', options: { executionMode: 'worktree', mode: 'guardrails', offline: true, incognito: false, disabledTools: [], workMode: 'default', models: 'local' } },
+  { id: 'local', name: 'Local only', icon: 'laptop', options: { executionMode: 'worktree', mode: 'guardrails', offline: true, incognito: false, disabledTools: [], workMode: 'default', models: 'local', toolApproach: 'code' } },
   { id: 'risky-business', name: 'Risky business', icon: 'box', options: { executionMode: 'sandbox', mode: 'ask', offline: true, incognito: false, disabledTools: [], workMode: 'default' } },
 ];
 
@@ -93,7 +95,7 @@ export function defaultSavedMode(settings: ModeSettings | null | undefined): Sav
   return id ? savedModes(settings).find((m) => m.id === id) : undefined;
 }
 
-type ChatSettings = Pick<Session, 'executionMode' | 'gitIsolation' | 'mode' | 'offline' | 'cloudOnly' | 'incognito' | 'disabledTools' | 'workMode' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' | 'autoModel' | 'autoProviderSwitch' | 'memory' | 'guidance'>;
+type ChatSettings = Pick<Session, 'executionMode' | 'gitIsolation' | 'mode' | 'offline' | 'cloudOnly' | 'incognito' | 'disabledTools' | 'workMode' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' | 'autoModel' | 'autoProviderSwitch' | 'memory' | 'guidance' | 'toolApproach'>;
 
 /** Where a chat's models run, when its settings pin it; unset when they do not. */
 export function chatModelScope(session: Pick<ChatSettings, 'offline' | 'cloudOnly' | 'autoModel' | 'autoProviderSwitch'>): ModelScope | undefined {
@@ -121,6 +123,7 @@ export function sessionModeOptions(session: ChatSettings, settings?: ModeSetting
     ...(models ? { models } : {}),
     memory: session.memory ?? 'all',
     guidance: session.guidance ?? 'rules',
+    toolApproach: session.toolApproach ?? 'list',
   };
 }
 
@@ -148,6 +151,7 @@ export function sameModeOptions(a: SavedModeOptions, b: SavedModeOptions): boole
   if (a.disabledConnectors && b.disabledConnectors && !sameList(a.disabledConnectors, b.disabledConnectors)) return false;
   if (a.memory && b.memory && a.memory !== b.memory) return false;
   if (a.guidance && b.guidance && a.guidance !== b.guidance) return false;
+  if (a.toolApproach && b.toolApproach && a.toolApproach !== b.toolApproach) return false;
   return sameList(a.disabledTools, b.disabledTools);
 }
 
@@ -161,6 +165,7 @@ export function matchSavedMode(modes: SavedMode[], current: SavedModeOptions): S
     models: m.options.models ?? current.models,
     memory: m.options.memory ?? current.memory,
     guidance: m.options.guidance ?? current.guidance,
+    toolApproach: m.options.toolApproach ?? current.toolApproach,
   }, current));
 }
 
@@ -196,6 +201,7 @@ export function sessionPatchForMode(options: SavedModeOptions, opts: { cloudMode
     ...modelScopePatch(options.models, localModel),
     ...(options.memory ? { memory: options.memory } : {}),
     ...(options.guidance ? { guidance: options.guidance } : {}),
+    ...(options.toolApproach ? { toolApproach: options.toolApproach } : {}),
   };
 }
 
@@ -214,7 +220,7 @@ export function savedModeSummary(options: SavedModeOptions): string {
   const models = options.models ? MODEL_SCOPE_LABEL[options.models] : '';
   // Local models are offline by definition, and a sandbox has no network.
   const offline = options.offline && options.models !== 'local' ? (options.executionMode === 'sandbox' ? 'no network' : 'offline') : '';
-  return [where, models, options.mode === 'guardrails' ? '' : options.mode, offline, options.incognito ? 'incognito' : '', options.effort === 'normal' ? '' : options.effort ?? '', options.memory && options.memory !== 'all' ? `memory ${options.memory}` : '', options.guidance && options.guidance !== 'rules' ? `rules ${options.guidance}` : ''].filter(Boolean).join(' · ');
+  return [where, models, options.mode === 'guardrails' ? '' : options.mode, offline, options.incognito ? 'incognito' : '', options.effort === 'normal' ? '' : options.effort ?? '', options.memory && options.memory !== 'all' ? `memory ${options.memory}` : '', options.guidance && options.guidance !== 'rules' ? `rules ${options.guidance}` : '', options.toolApproach === 'code' ? 'code mode' : ''].filter(Boolean).join(' · ');
 }
 
 /** A fresh id for a mode the user is saving, unique among `modes`. */

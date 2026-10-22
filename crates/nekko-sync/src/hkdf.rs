@@ -32,6 +32,17 @@ pub fn key_and_nonce(ikm: &[u8], salt: &[u8], info: &[u8]) -> ([u8; 32], [u8; 12
     (key, nonce)
 }
 
+/// 32 bytes of HKDF-SHA256 output with an empty salt: one HMAC block,
+/// `HMAC(PRK, info ‖ 01)`.
+pub fn derive32(ikm: &[u8], info: &[u8]) -> [u8; 32] {
+    let (mut prk, _) = hkdf::Hkdf::<Sha256>::extract(None, ikm);
+    let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(&prk).expect("HMAC takes any key length");
+    mac.update(info);
+    mac.update(&[1]);
+    prk.zeroize();
+    mac.finalize().into_bytes().into()
+}
+
 pub fn seal(key: &[u8; 32], nonce: &[u8; 12], aad: &[u8], plaintext: &[u8]) -> Vec<u8> {
     Aes256Gcm::new(key.into())
         .encrypt(Nonce::from_slice(nonce), Payload { msg: plaintext, aad })

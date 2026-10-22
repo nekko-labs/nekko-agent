@@ -320,6 +320,12 @@ export interface AppSettings {
    * running unattended; approvals are never answered this way.
    */
   unattendedQuestionMinutes?: number;
+  /** Privacy Shield for chats that do not set their own (default off). See privacy.ts. */
+  privacyMode?: import('./privacy.js').PrivacyMode;
+  /** Kinds of value the shield sends as they are, for chats that do not set their own. */
+  privacyDisabledKinds?: import('./privacy.js').PrivacyKind[];
+  /** The user's own words the shield always hides: a client, a codename, a name. */
+  privacyTerms?: string[];
   /**
    * OS notifications when a chat you are not looking at finishes, fails, or
    * stops for an answer or an approval (default on; `false` switches off).

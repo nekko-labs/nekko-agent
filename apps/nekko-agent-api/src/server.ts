@@ -1,5 +1,6 @@
 import rateLimit from "@fastify/rate-limit";
 import Fastify, { type FastifyInstance } from "fastify";
+import { registerAccount, type SignInConfig } from "./account.js";
 import type { Db } from "./db.js";
 import { registerDonations } from "./donations.js";
 import { parseSignup, recordSignup } from "./signups.js";
@@ -13,6 +14,10 @@ export interface ServerOptions {
   rateLimit?: { max: number; windowMs: number };
   /** Sync requests per IP per window before 429 (token checks included). */
   syncRateLimit?: { max: number; windowMs: number };
+  /** Supabase Auth sign-in; without it the /v1/auth routes answer 503. */
+  signIn?: SignInConfig;
+  /** Sign-in exchanges per IP per window before 429. */
+  authRateLimit?: { max: number; windowMs: number };
   /** Donations per IP per window before 429. */
   donationRateLimit?: { max: number; windowMs: number };
   logger?: boolean;
@@ -77,9 +82,13 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
   // In its own scope so the limiter covers the sync routes only. It also
   // slows anyone guessing tokens, since a 401 counts like any other answer.
   const sync = opts.syncRateLimit ?? { max: 600, windowMs: 60 * 1000 };
+  // Signing in (trading a Supabase session for a device token) gets a tighter
+  // limit of its own; reading the account is as cheap as any sync call.
+  const auth = opts.authRateLimit ?? { max: 30, windowMs: 60 * 1000 };
   app.register(async (scope) => {
     await scope.register(rateLimit, { max: sync.max, timeWindow: sync.windowMs });
     registerSync(scope, opts.db);
+    registerAccount(scope, opts.db, opts.signIn, { max: auth.max, timeWindow: auth.windowMs });
   });
   registerDonations(app, opts.db, opts.donationRateLimit ?? { max: 20, windowMs: 60 * 60 * 1000 });
 

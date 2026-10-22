@@ -34,7 +34,12 @@ hostname).
   (stored as SHA-256); the service stores only ciphertext, opaque ids and
   revisions and never holds a key that opens them. Writes need `users.plan` in
   `pro`/`team` (402 otherwise); reading, revoking and `DELETE /v1/sync` work on
-  any plan. Nothing issues tokens yet: sign-in is still to come.
+  any plan.
+- `GET /v1/auth/config`, `POST /v1/auth/session`, `GET /v1/auth/me`,
+  `DELETE /v1/auth/session`: sign-in. The app signs in to Supabase Auth and
+  trades the access token here for its own `nk_` device token (180 days from
+  last use). Supabase proves identity only; accounts, plans and data stay in
+  this database.
 - `POST /v1/donations`, `DELETE /v1/donations/:id`: opt-in samples sealed to
   the offline research key. Unauthenticated, not request-logged, no sender
   columns; withdrawn with the device's delete token, expired after 180 days.
@@ -50,10 +55,70 @@ hostname).
 - `signups`: one row per email per list (`unique (list, lower(email))`), status
   `pending → invited → joined` or `unsubscribed`, optional `user_id`.
 - `users`: the long-term account record (`unique lower(email)`); a signup that
-  gets let in becomes a user. `plan` is `free`, `pro` or `team`. Nothing writes it yet.
+  gets let in becomes a user. `plan` is `free`, `pro` or `team`; `auth_subject`
+  is the Supabase user id (migration `0003`). First sign-in creates the user, or
+  links the beta signup's user with the same email.
 - `api_tokens`, `sync_devices`, `sync_keyrings`, `sync_key_wraps`,
   `sync_objects`, `sync_usage`: encrypted sync (migration `0002`).
 - `donations`: sealed opt-in samples, with no user, device or IP column.
+
+## Sign-in: Supabase Auth
+
+Supabase is used for identity only (no Supabase database tables). In the
+Supabase project:
+
+1. **Authentication → Providers → Email**: on, with *Confirm email* on. In
+   **Email Templates → Magic Link**, put the code in the message (`{{ .Token }}`):
+   the apps ask for the 6-digit code rather than following a link.
+2. **Providers → Apple, GitHub, Google**: on, each with its client id and secret.
+3. **URL Configuration → Redirect URLs**: add `http://127.0.0.1:*/callback`
+   (the desktop's loopback listener picks a free port) and
+   `nekko-agent://cloud-callback` (the iPhone).
+4. **JWT signing keys**: the default asymmetric keys need nothing more here;
+   the service verifies tokens against the project's JWKS. A project still on
+   the legacy HS256 secret also sets `SUPABASE_JWT_SECRET`.
+
+Then on the service:
+
+```bash
+fly secrets set SUPABASE_URL='https://<project>.supabase.co' SUPABASE_ANON_KEY='<anon or publishable key>'
+```
+
+Without both, the `/v1/auth/*` routes answer 503 and the apps say sign-in isn't switched on.
+
+Setting a plan by hand until Stripe writes it: `update users set plan = 'pro' where lower(email) = lower('…');`
+
+## Local dev stack
+
+`npm run dev:local` runs the whole service on `http://127.0.0.1:4330` with
+Postgres in memory (PGlite; `DEV_DATA_DIR` keeps it in a folder) and a stand-in
+for Supabase Auth on the same port: email codes are printed to the console
+(`DEV_CODE=123456` fixes them), and Apple, GitHub and Google sign in at once as
+`<provider>-dev@example.com`. New accounts start on `DEV_PLAN` (default `pro`).
+Point the desktop at it with `NEKKO_CLOUD_URL=http://127.0.0.1:4330`, the
+iPhone (debug builds) with the `-cloudAPI http://…` launch argument, and the
+engine's end-to-end test with
+`NEKKO_CLOUD_ITEST_URL=http://127.0.0.1:4330 cargo test -p nekko-cloud --test live`.
+
+## Database: Neon recommended
+
+Any recent Postgres works, but production runs on [Neon](https://neon.tech) and it
+is what we recommend for anyone running their own copy of this service. It
+scales to zero like the Fly machine, so an idle deployment costs nothing, and
+its branches give each environment its own database.
+
+1. Create a Neon project in `aws-us-east-1` (next to `iad` in `fly.toml`), or
+   with the CLI: `npm i -g neonctl && neonctl auth && neonctl projects create --name nekko-agent-api`.
+2. Copy the **pooled** connection string (host contains `-pooler`) with
+   `sslmode=require`: `neonctl connection-string --pooled`.
+3. Set it as `DATABASE_URL` (see Deploy below). Migrations run on start, so
+   there is nothing else to set up.
+4. Optional: a branch per environment (`neonctl branches create --name staging`)
+   for a staging deploy or for trying a migration against a copy of production.
+
+The service is the only part of Nekko Agent that needs a database; the app,
+the Local Web UI and the relay run without one. See
+[Architecture: where data lives](../../docs/hub/architecture.md#where-data-lives).
 
 ## Run it
 

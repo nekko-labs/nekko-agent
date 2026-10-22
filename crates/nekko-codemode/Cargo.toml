@@ -1,0 +1,13 @@
+[package]
+name = "nekko-codemode"
+description = "Code mode for a Nekko Agent turn: the model writes JavaScript against typed bindings of the chat's tools, run in an embedded QuickJS sandbox, instead of calling each tool itself."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+nekko-js = { path = "../nekko-js" }
+rquickjs.workspace = true
+serde_json.workspace = true

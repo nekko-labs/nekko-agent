@@ -7,6 +7,8 @@ import { SandboxSetup, SandboxReview } from './SandboxSetup.js';
 import { useStore } from '../store.js';
 import { WrenchIcon, PlaneIcon, IncognitoIcon, PlugIcon, PlusIcon, GlobeIcon, GlobeOffIcon } from '../icons.js';
 import { afterPaint } from '../afterPaint.js';
+import { useFloatingMenu } from './floatingMenu.js';
+import { PrivacyShieldMenu } from './PrivacyShield.js';
 import { toolMatchesQuery, toolPickerLabel } from './toolPresentation.js';
 
 /** Where we point people for hardened, local-first MCP server management. */
@@ -19,35 +21,6 @@ const HYPERGATE_URL = 'https://hypergate.app';
  * for managing servers securely. Server enablement is global (in settings), so
  * turning one on offers its tools to every chat.
  */
-/**
- * Place a menu next to its trigger in a portal, above it when there is more room
- * there. The agent window clips its overflow, so a menu drawn inside its footer
- * would be cut off; this one floats over everything instead.
- */
-function useFloatingMenu(open: boolean, anchor: React.RefObject<HTMLElement | null>, width: number) {
-  const [style, setStyle] = useState<React.CSSProperties>({});
-  useLayoutEffect(() => {
-    if (!open) return;
-    const place = () => {
-      const r = anchor.current?.getBoundingClientRect();
-      if (!r) return;
-      const above = Math.max(0, r.top - 16);
-      const below = Math.max(0, window.innerHeight - r.bottom - 16);
-      const w = Math.min(width, window.innerWidth - 16);
-      setStyle({
-        width: w,
-        left: Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8)),
-        maxHeight: Math.min(360, Math.max(above, below)),
-        ...(above >= below ? { bottom: window.innerHeight - r.top + 6 } : { top: r.bottom + 6 }),
-      });
-    };
-    place();
-    document.addEventListener('scroll', place, true);
-    window.addEventListener('resize', place);
-    return () => { document.removeEventListener('scroll', place, true); window.removeEventListener('resize', place); };
-  }, [open, anchor, width]);
-  return style;
-}
 
 export function McpMenu() {
   const servers = useStore((s) => s.settings?.mcpServers) ?? [];
@@ -392,8 +365,8 @@ const MODE_DESC: Record<ChatMode, string> = {
 
 /**
  * The per-chat execution row of the instrument strip above the composer: how
- * tools run (mode, which tools) on the left, and the two privacy switches
- * (Offline, Incognito) parked on the right behind a hairline divider, so
+ * tools run (mode, which tools) on the left, and the privacy controls
+ * (Offline, Privacy Shield, Incognito) parked on the right behind a hairline divider, so
  * "what this agent may do" reads apart from "what it may reach".
  *
  * The two families look different on purpose: value pickers are bordered fields
@@ -408,8 +381,11 @@ export function ChatControls({
   toolsInWindow = false,
   only,
   modelId,
+  draft,
 }: {
   session: Session | null;
+  /** The message being written, for Privacy Shield's preview. */
+  draft?: string;
   isCloudModel: boolean;
   /** The chat's model, for the effort rungs it offers. */
   modelId?: string;
@@ -529,6 +505,9 @@ export function ChatControls({
           <span className="ctl-dot" />
           <PlaneIcon className="h-3 w-3" /> Offline
         </button>}
+
+        {/* Privacy Shield: what a cloud model may read. */}
+        {session.chatType !== 'image' && <PrivacyShieldMenu session={session} draft={draft} onChange={onChange} />}
 
         {/* Incognito */}
         <button

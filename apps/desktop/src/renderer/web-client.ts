@@ -50,6 +50,7 @@ function makeWebClient(): NekkoApi {
   const trainingCbs = new Set<(r: import('@nekko-agent/shared').TrainingRun[]) => void>();
   const workflowCbs = new Set<(s: import('@nekko-agent/shared').WorkflowsSnapshot) => void>();
   const oauthStatusCbs = new Set<(s: OAuthStatus) => void>();
+  const cloudStatusCbs = new Set<(s: import('@nekko-agent/shared').CloudStatus) => void>();
   const limitsUpdatedCbs = new Set<(e: { tokenKey: string; limits: SubscriptionLimits }) => void>();
   const downloadsUpdatedCbs = new Set<(jobs: import('@nekko-agent/shared').DownloadJob[]) => void>();
   const modelsUpdatedCbs = new Set<(e: { providerId: string }) => void>();
@@ -68,6 +69,7 @@ function makeWebClient(): NekkoApi {
     else if (channel === IpcEvents.trainingUpdated) trainingCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.workflowsUpdated) workflowCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.oauthStatus) oauthStatusCbs.forEach((cb) => cb(payload));
+    else if (channel === IpcEvents.cloudStatus) cloudStatusCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.limitsUpdated) limitsUpdatedCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.downloadsUpdated) downloadsUpdatedCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.modelsUpdated) modelsUpdatedCbs.forEach((cb) => cb(payload));
@@ -317,6 +319,23 @@ function makeWebClient(): NekkoApi {
     runtimePlan: (providerId, modelId, req) => call(IpcChannels.runtimePlan, providerId, modelId, req),
     runtimeAutoFit: (providerId, modelId, budgetFraction, parallelSlots) =>
       call(IpcChannels.runtimeAutoFit, providerId, modelId, budgetFraction, parallelSlots),
+    cloudStatus: () => call(IpcChannels.cloudStatus),
+    cloudRefresh: () => call(IpcChannels.cloudRefresh),
+    cloudSendCode: (email) => call(IpcChannels.cloudSendCode, email),
+    cloudVerifyCode: (email, code) => call(IpcChannels.cloudVerifyCode, email, code),
+    cloudBeginOAuth: (provider) => call(IpcChannels.cloudBeginOAuth, provider),
+    cloudCancelOAuth: () => call(IpcChannels.cloudCancelOAuth),
+    cloudSignOut: () => call(IpcChannels.cloudSignOut),
+    syncTurnOn: () => call(IpcChannels.syncTurnOn),
+    syncConfirmRecoveryKey: (text) => call(IpcChannels.syncConfirmRecoveryKey, text),
+    syncRestore: (text) => call(IpcChannels.syncRestore, text),
+    syncRequestJoin: () => call(IpcChannels.syncRequestJoin),
+    syncApprove: (deviceId, joinCode) => call(IpcChannels.syncApprove, deviceId, joinCode),
+    syncRevoke: (deviceId) => call(IpcChannels.syncRevoke, deviceId),
+    syncNow: () => call(IpcChannels.syncNow),
+    syncSetEnabled: (on) => call(IpcChannels.syncSetEnabled, on),
+    syncSetIncludeLocalOnly: (on) => call(IpcChannels.syncSetIncludeLocalOnly, on),
+    syncDeleteAll: () => call(IpcChannels.syncDeleteAll),
     voiceStatus: () => call(IpcChannels.voiceStatus),
   voiceInstall: () => call(IpcChannels.voiceInstall),
   voiceCancelInstall: () => call(IpcChannels.voiceCancelInstall),
@@ -480,6 +499,7 @@ function makeWebClient(): NekkoApi {
     readScopedFile: (root, relPath, opts) => call(IpcChannels.filesRead, root, relPath, opts ?? {}),
     writeScopedFile: (root, relPath, content, opts) => call(IpcChannels.filesWrite, root, relPath, content, opts),
     listLogs: () => call(IpcChannels.logsList),
+    previewPrivacy: (sessionId, draft) => call(IpcChannels.privacyPreview, sessionId, draft),
     readLog: (id, opts) => call(IpcChannels.logsRead, id, opts ?? {}),
     fetchRemoteImage: (url) => call(IpcChannels.imageFetch, url),
 
@@ -647,6 +667,10 @@ function makeWebClient(): NekkoApi {
     onAgentReplay: (cb) => {
       replayCbs.add(cb);
       return () => replayCbs.delete(cb);
+    },
+    onCloudStatus: (cb) => {
+      cloudStatusCbs.add(cb);
+      return () => cloudStatusCbs.delete(cb);
     },
     onOAuthStatus: (cb) => {
       oauthStatusCbs.add(cb);
