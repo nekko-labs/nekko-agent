@@ -6,7 +6,7 @@ then run chats there, on the computer's models, files and tools. Everything goes
 through the end-to-end encrypted relay; the relay only ever sees ciphertext.
 
 This replaces the Android half of the Expo app in `apps/mobile` (the 2026-10-07
-native decision in [SPEC.md](../../SPEC.md)). Expo stays as the behaviour
+native decision in [the spec](../../spec/README.md)). Expo stays as the behaviour
 reference until this app reaches parity.
 
 ## What works

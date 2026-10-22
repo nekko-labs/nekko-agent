@@ -214,7 +214,7 @@ jobs:
             .shots/e2e/results/
           if-no-files-found: error
 
-  # The speed contract (SPEC.md, "Speed & responsiveness"): headless Chrome over
+  # The speed contract (spec/platform/speed-responsiveness-the-speed-contract.md): headless Chrome over
   # the DevTools protocol against the Local Web UI and a scripted model. Fails
   # when a p95 exceeds its budget; the report is uploaded either way so a
   # regression shows its numbers, not only a red cross. It runs in the merge
