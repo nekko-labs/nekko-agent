@@ -1,6 +1,8 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import type { Db } from "./db.js";
+import { registerDonations } from "./donations.js";
 import { parseSignup, recordSignup } from "./signups.js";
+import { registerSync } from "./sync.js";
 
 export interface ServerOptions {
   db: Db;
@@ -8,6 +10,8 @@ export interface ServerOptions {
   allowedOrigins: string[];
   /** Signups per IP per window before 429. */
   rateLimit?: { max: number; windowMs: number };
+  /** Donations per IP per window before 429. */
+  donationRateLimit?: { max: number; windowMs: number };
   logger?: boolean;
 }
 
@@ -66,6 +70,9 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
     // check whether an address is already on the list.
     return reply.code(202).send({ ok: true });
   });
+
+  registerSync(app, opts.db);
+  registerDonations(app, opts.db, opts.donationRateLimit ?? { max: 20, windowMs: 60 * 60 * 1000 });
 
   return app;
 }

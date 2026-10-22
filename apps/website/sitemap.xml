@@ -43,6 +43,11 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://nekkoagent.com/docs/sync-encryption</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://nekkoagent.com/docs/cli</loc>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>

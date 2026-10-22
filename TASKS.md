@@ -1,10 +1,25 @@
 ---
 status: active
-last-updated: 2026-10-17
+last-updated: 2026-10-22
 owner:
 ---
 
 # Execution Plan, Nekko Agent
+
+## End-to-end encrypted sync, Pro and Team (added 2026-10-22)
+
+Philip asked for "extremely secure" end-to-end encryption for messages stored and synced on the server, Pro and up; Nekko Labs sees nothing unless a user opts in to help improve the app anonymously, and even then it stays encrypted. Design: [docs/SYNC-ENCRYPTION.md](docs/SYNC-ENCRYPTION.md); SPEC "End-to-end encrypted sync for Pro and Team".
+
+- [x] **ES-1, Format and reference implementation.** `crates/nekko-sync`: keyring, per-record HKDF keys with AES-256-GCM, Padmé padding, keyed object ids, ECIES to P-256 device keys, recovery key, sealed donations. Shared vectors `tests/golden/sync-crypto.json` (cross-checked with Node `crypto`).
+- [x] **ES-2, Nekko Cloud storage.** `apps/nekko-agent-api`: `users.plan`, hashed bearer tokens, devices, key epochs, ciphertext objects with revisions and a change sequence, quotas, revocation, delete everything, anonymous donations with delete tokens and 180-day expiry.
+- [x] **ES-3, iPhone crypto.** `NekkoProtocol/SyncCrypto.swift` (+ Secure Enclave key type), `SyncCryptoTests` on the same vectors. Runs on macOS CI only (no Swift toolchain in the cloud sessions).
+- [ ] **ES-4, Cloud sign-in.** Issue `nk_` tokens from a real sign-in (email link or passkey) and Stripe plan updates into `users.plan` (PF14 step 4). Until then nothing can call the sync API.
+- [ ] **ES-5, Sync engine in nekkod.** Record layout (`chat` metadata + immutable `chat-part` chunks), local sync state (last seq, highest revision seen per object to refuse rollbacks), push/pull loop with conflict merge, keyring in the OS keystore, rotation after revocation. RPC channels for the desktop.
+- [ ] **ES-6, Desktop Settings → Sync.** Turn on (creates the keyring, shows the recovery key and asks the user to confirm it), devices with fingerprints and Revoke, storage used, Delete everything synced, the *Help improve* switch.
+- [ ] **ES-7, iPhone sync.** Enrol with the Secure Enclave key (hand-over over the paired relay or fingerprint compare), read synced chats without the computer online, recovery-key entry.
+- [ ] **ES-8, Donations.** Generate the research key offline (never on a server), pin its public half, on-device redaction, the share sheet and withdraw list.
+- [ ] **ES-9, Android port** of the crypto against the same vectors (P-256 via the Keystore; no X25519 needed).
+- [ ] **ES-10, Outside cryptography review** before sync is switched on for any user.
 
 ## Product names (2026-10-18)
 
