@@ -168,12 +168,20 @@ impl Sandboxes {
         Arc::new(Self { runtimes: Mutex::default(), data_dir })
     }
 
-    fn session(&self, ctx: &Ctx, id: &str) -> Result<Value, String> {
-        ctx.sessions.as_ref().and_then(|s| s.get(id)).ok_or_else(|| "Session not found".into())
+    /// The chat as stored, but for its transcript (nothing here reads it),
+    /// read off the async workers.
+    async fn session(&self, ctx: &Ctx, id: &str) -> Result<Value, String> {
+        let (store, id) = (ctx.sessions.clone().ok_or("Session not found")?, id.to_string());
+        tokio::task::spawn_blocking(move || store.meta(&id))
+            .await
+            .ok()
+            .flatten()
+            .map(nekko_store::Meta::into_value)
+            .ok_or_else(|| "Session not found".into())
     }
 
-    fn sandbox_session(&self, ctx: &Ctx, id: &str) -> Result<Value, String> {
-        let s = ctx.sessions.as_ref().and_then(|s| s.get(id));
+    async fn sandbox_session(&self, ctx: &Ctx, id: &str) -> Result<Value, String> {
+        let s = self.session(ctx, id).await.ok();
         match s {
             Some(s) if execution_mode(&s) == "sandbox" => Ok(s),
             _ => Err("Sandbox session required".into()),
@@ -243,8 +251,8 @@ impl Sandboxes {
     }
 
     /// `sandboxStatus(sessionId)`.
-    fn status(&self, ctx: &Ctx, id: &str) -> Result<Value, String> {
-        let s = self.session(ctx, id)?;
+    async fn status(&self, ctx: &Ctx, id: &str) -> Result<Value, String> {
+        let s = self.session(ctx, id).await?;
         let r = lock(&self.runtimes).get(id).cloned();
         let (ready, error) = r
             .as_ref()
@@ -283,7 +291,7 @@ impl Sandboxes {
     }
 
     async fn diff(&self, ctx: &Ctx, id: &str) -> Result<Value, String> {
-        let s = self.sandbox_session(ctx, id)?;
+        let s = self.sandbox_session(ctx, id).await?;
         let r = self.ready(ctx, &s).await?;
         let changes: Vec<Value> = r.sandbox.diff().await?.iter().map(|c| c.json()).collect();
         let changes = Value::Array(changes);
@@ -296,7 +304,7 @@ impl Sandboxes {
 
     /// `executeSandboxTool` after the host's approval (`sandbox:tool`).
     async fn tool(&self, ctx: &Ctx, id: &str, call: &Value) -> Value {
-        let session = self.sandbox_session(ctx, id);
+        let session = self.sandbox_session(ctx, id).await;
         let settings = crate::settings::current(ctx).await;
         self.run_tool(session, &settings, call).await
     }
@@ -368,7 +376,7 @@ impl Sandboxes {
                 if Self::busy(ctx, &id) {
                     return Err("Wait for the current reply to finish before sandbox setup.".into());
                 }
-                self.session(ctx, &id)?;
+                self.session(ctx, &id).await?;
                 let store = ctx.sessions.clone().ok_or("Session not found")?;
                 let image = arg(1).as_str().map(str::to_string).unwrap_or_else(|| js::display(&arg(1)));
                 let (sid, ident) = (id.clone(), uuid());
@@ -381,13 +389,13 @@ impl Sandboxes {
                     return Err(e);
                 }
                 lock(&r.state).ready = true;
-                self.status(ctx, &id)
+                self.status(ctx, &id).await
             }
             "sandbox:cleanup" => {
                 if Self::busy(ctx, &id) {
                     return Err("Wait for the current reply to finish before sandbox cleanup.".into());
                 }
-                let s = self.sandbox_session(ctx, &id)?;
+                let s = self.sandbox_session(ctx, &id).await?;
                 if js::truthy(s.get("activeRun")) || s.pointer("/sandbox/identity") != Some(&arg(1)) {
                     return Err("Sandbox is busy or identity is stale".into());
                 }
@@ -401,7 +409,7 @@ impl Sandboxes {
                 st.error = Some("Sandbox resources deleted. Create a new sandbox chat to resume.".into());
                 Ok(Value::Null)
             }
-            "sandbox:status" => self.status(ctx, &id),
+            "sandbox:status" => self.status(ctx, &id).await,
             "sandbox:diff" => self.diff(ctx, &id).await,
             "sandbox:applyDiff" => {
                 let diff = self.diff(ctx, &id).await?;

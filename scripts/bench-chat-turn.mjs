@@ -50,6 +50,21 @@
 // sending everything) and one that never subscribes. Each subscribed socket
 // must see its own chat's whole reply, once.
 //
+// `--history N` seeds each run's chat with N earlier messages (about 1 KB
+// each) before its first turn, and `--history-images M` adds M pictures of
+// `--image-kb` KB (default 512) among them, so every save a turn makes writes
+// a large transcript. Let pictures carry the bytes: a text history past the
+// model's context starts a compaction, which is a different workload (e.g.
+// `--history 40 --history-images 10` is a 5 MB chat that is not compacted).
+// Each run also reports `chat:send` to the approval prompt (the turn's start
+// and the step before it are saved first).
+// `--token-ms` sets the fake model's spacing between text tokens (default 15).
+//
+// `--ready N` times launch instead: it seeds `--chats` chats (default 500;
+// every 50th holds a `--big-mb` MB picture, default 2, and three are marked
+// mid-reply again before each launch) and starts the daemon N times, timing
+// spawn to its `NEKKOD_READY` line. Nothing else runs.
+//
 // Nothing touches the user's data directory or a running app; every spawned
 // process is ended on exit.
 import { spawn } from 'node:child_process';
@@ -112,7 +127,7 @@ if (args.fake) {
         const n = afterTool ? 3 : text.includes('Give this task a short title') ? 4 : Number(args.tokens ?? 40);
         for (let i = 0; i < n; i++) {
           send({ choices: [{ delta: { content: `tok${i} ` }, finish_reason: null }] });
-          await new Promise((r) => setTimeout(r, 15));
+          await new Promise((r) => setTimeout(r, Number(args['token-ms'] ?? 15)));
         }
         send({ choices: [{ delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 100, completion_tokens: n } });
       }
@@ -187,6 +202,63 @@ function startDaemon() {
   });
 }
 
+/** A stored chat as the daemon writes one, with `n` earlier messages. */
+function seededChat(id, n, { images = 0, imageKb = 512, activeRun = false, updatedAt = Date.now() } = {}) {
+  const messages = [];
+  const every = images > 0 ? Math.max(1, Math.floor(n / images)) : 0;
+  const picture = images > 0 ? `data:image/png;base64,${randomBytes(Math.ceil((imageKb * 1024 * 3) / 4)).toString('base64')}` : '';
+  let pictures = 0;
+  for (let i = 0; i < n; i++) {
+    const user = i % 2 === 0;
+    const m = { id: `msg_seed_${i}`, role: user ? 'user' : 'assistant', content: `${user ? 'Question' : 'Answer'} ${i}: ${'Cats sleep a lot, and then some more. '.repeat(26)}`, createdAt: updatedAt - (n - i) * 1000 };
+    if (user && every && i % every === 0 && pictures < images) {
+      m.images = [picture];
+      pictures++;
+    }
+    messages.push(m);
+  }
+  return { id, title: `Seeded ${id}`, workspaceId: 'w1', executionMode: 'unified', gitIsolation: false, messages, createdAt: updatedAt - n * 1000, updatedAt, ...(activeRun ? { activeRun: { startedAt: updatedAt } } : {}) };
+}
+
+if (args.ready) {
+  // Launch with many chats on disk: spawn to `NEKKOD_READY`, N times.
+  const dir = join(data, 'sessions');
+  mkdirSync(dir, { recursive: true });
+  const chats = Number(args.chats ?? 500);
+  const bigMb = Number(args['big-mb'] ?? 2);
+  let bytes = 0;
+  const marked = [];
+  for (let i = 0; i < chats; i++) {
+    const id = `s_seed${i.toString(36)}_${randomBytes(6).toString('base64url')}`;
+    const big = i % 50 === 0;
+    const chat = seededChat(id, big ? 40 : 30, { images: big ? 1 : 0, imageKb: bigMb * 1024, updatedAt: Date.now() - i * 60_000 });
+    const text = JSON.stringify(chat, null, 2);
+    bytes += text.length;
+    writeFileSync(join(dir, `${id}.json`), text);
+    if (i % 170 === 1) marked.push([id, chat]);
+  }
+  console.log(`seeded ${chats} chats, ${(bytes / 1048576).toFixed(1)} MB, ${marked.length} marked mid-reply before each launch`);
+  const ms = [];
+  try {
+    for (let i = 0; i < Number(args.ready); i++) {
+      for (const [id, chat] of marked) writeFileSync(join(dir, `${id}.json`), JSON.stringify({ ...chat, activeRun: { startedAt: Date.now() } }, null, 2));
+      const t0 = performance.now();
+      await startDaemon();
+      ms.push(performance.now() - t0);
+      const child = children.pop();
+      await new Promise((ok) => { child.once('exit', ok); child.kill('SIGKILL'); });
+    }
+    const out = { chats, megabytes: bytes / 1048576, samples: ms, median: pct(ms, 0.5), p95: pct(ms, 0.95), min: Math.min(...ms), max: Math.max(...ms) };
+    console.log(`time to NEKKOD_READY over ${ms.length} launches: median ${out.median.toFixed(1)} ms, p95 ${out.p95.toFixed(1)} ms, min ${out.min.toFixed(1)} ms, max ${out.max.toFixed(1)} ms`);
+    console.log(`samples: ${ms.map((x) => x.toFixed(1)).join(', ')}`);
+    if (args.json) writeFileSync(args.json, JSON.stringify(out, null, 2));
+  } finally {
+    cleanup();
+    setTimeout(() => { try { rmSync(data, { recursive: true, force: true }); } catch { /* still held */ } process.exit(0); }, 500);
+  }
+  await new Promise(() => {});
+}
+
 const port = await startDaemon();
 const base = `http://127.0.0.1:${port}`;
 async function call(channel, ...a) {
@@ -256,6 +328,13 @@ async function newSession() {
   const s = await call('session:create', 'w1');
   await call('session:setOptions', s.id, { gitIsolation: false });
   await call('session:setOptions', s.id, { title: 'bench', mode: 'ask' });
+  if (args.history) {
+    // Earlier messages written straight into the chat's file, as a long chat would have them.
+    const file = join(data, 'sessions', `${s.id}.json`);
+    const chat = JSON.parse(readFileSync(file, 'utf8'));
+    chat.messages = seededChat(s.id, Number(args.history), { images: Number(args['history-images'] ?? 0), imageKb: Number(args['image-kb'] ?? 512) }).messages;
+    writeFileSync(file, JSON.stringify(chat, null, 2));
+  }
   return s.id;
 }
 
@@ -269,7 +348,7 @@ function turn(sessionId, text, { approve } = {}) {
       if (e.sessionId !== sessionId || e.relayOnly) return;
       if (e.type === 'text') t.texts.push(at);
       if (e.type === 'tool_approval_required' && approve) {
-        const rec = { id: e.call.id, sent: performance.now(), seenAt: at };
+        const rec = { id: e.call.id, sent: performance.now(), seenAt: at, sendToPrompt: at - start };
         t.approvals.push(rec);
         call('tool:approve', sessionId, e.call.id, true).then(() => { rec.seenToAnswered = performance.now() - rec.seenAt; });
       }
@@ -414,7 +493,7 @@ try {
     r.error = r.error ?? fetchTurn?.error ?? processTurn?.error;
     if (spawnTurn?.error) r.error = r.error ?? spawnTurn.error;
     results.runs.push(r);
-    console.log(`run ${i + 1}: first text ${r.firstText?.toFixed(0)} ms, gaps p50 ${pct(r.gaps, 0.5)?.toFixed(1)} p95 ${pct(r.gaps, 0.95)?.toFixed(1)} max ${Math.max(...r.gaps, 0).toFixed(1)} ms,${args.spawn ? ` spawn ${r.spawn.map((a) => `${a.toResult?.toFixed(1)} ms to result`).join(', ') || 'none'},` : ''}${args.tools ? ` fetch_url ${r.fetch.map((a) => `${a.toResult?.toFixed(1)} ms`).join(', ') || 'none'}, start_process ${r.process.map((a) => `${a.toResult?.toFixed(1)} ms`).join(', ') || 'none'},` : ''}${mcpUrl ? ` mcp ${r.mcp.map((a) => `${a.toResult?.toFixed(1)} ms to result`).join(', ') || 'none'},` : ''} approval ${tool.approvals.map((a) => `${a.toResult?.toFixed(1)} ms to result (${a.seenToAnswered.toFixed(1)} ms to answer)`).join(', ') || 'none'}, queue drain ${drain.toFixed(0)} ms${r.error ? `, error: ${r.error}` : ''}`);
+    console.log(`run ${i + 1}: first text ${r.firstText?.toFixed(0)} ms, gaps p50 ${pct(r.gaps, 0.5)?.toFixed(1)} p95 ${pct(r.gaps, 0.95)?.toFixed(1)} max ${Math.max(...r.gaps, 0).toFixed(1)} ms,${args.spawn ? ` spawn ${r.spawn.map((a) => `${a.toResult?.toFixed(1)} ms to result`).join(', ') || 'none'},` : ''}${args.tools ? ` fetch_url ${r.fetch.map((a) => `${a.toResult?.toFixed(1)} ms`).join(', ') || 'none'}, start_process ${r.process.map((a) => `${a.toResult?.toFixed(1)} ms`).join(', ') || 'none'},` : ''}${mcpUrl ? ` mcp ${r.mcp.map((a) => `${a.toResult?.toFixed(1)} ms to result`).join(', ') || 'none'},` : ''} approval ${tool.approvals.map((a) => `${a.toResult?.toFixed(1)} ms to result (${a.seenToAnswered.toFixed(1)} ms to answer, prompt ${a.sendToPrompt.toFixed(1)} ms after send)`).join(', ') || 'none'}, queue drain ${drain.toFixed(0)} ms${r.error ? `, error: ${r.error}` : ''}`);
   }
   if (args.usage) {
     const lines = (f) => (existsSync(join(data, f)) ? readFileSync(join(data, f), 'utf8').trim().split('\n').filter(Boolean) : []);
@@ -481,6 +560,7 @@ try {
     gapMax: Math.max(...all((r) => r.gaps)),
     approvalToResultMedian: pct(all((r) => r.approvals.map((a) => a.toResult)), 0.5),
     approvalAnswerMedian: pct(all((r) => r.approvals.map((a) => a.seenToAnswered)), 0.5),
+    sendToPromptMedian: pct(all((r) => r.approvals.map((a) => a.sendToPrompt)), 0.5),
     mcpToResultMedian: pct(all((r) => (r.mcp ?? []).map((a) => a.toResult)), 0.5),
     fetchToResultMedian: pct(all((r) => (r.fetch ?? []).map((a) => a.toResult)), 0.5),
     processToResultMedian: pct(all((r) => (r.process ?? []).map((a) => a.toResult)), 0.5),

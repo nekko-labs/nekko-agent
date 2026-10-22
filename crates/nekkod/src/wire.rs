@@ -21,7 +21,7 @@ use crate::hub::Scope;
 use crate::routes::{Ctx, route};
 use axum::Router;
 use axum::body::to_bytes;
-use axum::extract::ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade};
+use axum::extract::ws::{CloseFrame, Message, Utf8Bytes, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path, Query, Request, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
@@ -207,7 +207,7 @@ async fn events(
                     Ok(ev) => {
                         if only.as_ref().is_some_and(|p| !ev.text.starts_with(p.as_str())) { continue }
                         if !subs.wants(&ev) { continue }
-                        if sink.send(Message::Text(ev.text.as_ref().into())).await.is_err() { break }
+                        if sink.send(Message::Text(ev.text.clone())).await.is_err() { break }
                     }
                     Err(RecvError::Lagged(_)) => {
                         let lagged = json!({ "channel": "daemon:lagged", "payload": null }).to_string();
@@ -227,7 +227,7 @@ async fn events(
                         subs.set(ids, all);
                         let mut gone = false;
                         for frame in subs.replays(&app.ctx.hub) {
-                            if sink.send(Message::Text(frame.into())).await.is_err() { gone = true; break }
+                            if sink.send(Message::Text(frame)).await.is_err() { gone = true; break }
                         }
                         if gone { break }
                     }
@@ -261,10 +261,10 @@ async fn send_opening<S>(sink: &mut S, subs: &mut Subscription, hub: &crate::hub
 where
     S: futures_util::Sink<Message> + Unpin,
 {
-    let mut frames: Vec<String> = subs.status(hub).iter().map(|t| t.to_string()).collect();
+    let mut frames: Vec<Utf8Bytes> = subs.status(hub);
     frames.extend(subs.replays(hub));
     for frame in frames {
-        if sink.send(Message::Text(frame.into())).await.is_err() {
+        if sink.send(Message::Text(frame)).await.is_err() {
             return false;
         }
     }
@@ -308,20 +308,20 @@ impl Subscription {
     }
 
     /// `agent:replay` frames for the chats just added, noting what they cover.
-    fn replays(&mut self, hub: &crate::hub::Hub) -> Vec<String> {
+    fn replays(&mut self, hub: &crate::hub::Hub) -> Vec<Utf8Bytes> {
         let added = std::mem::take(&mut self.added);
         hub.replay(&added)
             .into_iter()
             .map(|(id, seq, frame)| {
                 self.skip.insert(id, seq);
-                frame
+                Utf8Bytes::from(frame)
             })
             .collect()
     }
 
     /// For a socket narrowed at connect: the running turns of the chats it
     /// does not show (see `send_opening`).
-    fn status(&self, hub: &crate::hub::Hub) -> Vec<Arc<str>> {
+    fn status(&self, hub: &crate::hub::Hub) -> Vec<Utf8Bytes> {
         let Some(ids) = &self.ids else { return Vec::new() };
         hub.status(&|id| ids.contains(id))
     }
@@ -385,8 +385,8 @@ async fn rpc_socket(socket: WebSocket, app: App, term_data: bool, mut subs: Subs
                         subs.set(ids, all);
                         let status = if widened { subs.status(&hub) } else { Vec::new() };
                         let mut failed = false;
-                        for frame in status.iter().map(|t| t.to_string()).chain(subs.replays(&hub)) {
-                            if sink.send(Message::Text(frame.into())).await.is_err() { failed = true; break }
+                        for frame in status.into_iter().chain(subs.replays(&hub)) {
+                            if sink.send(Message::Text(frame)).await.is_err() { failed = true; break }
                         }
                         let reply = json!({ "id": id, "result": true }).to_string();
                         if failed || sink.send(Message::Text(reply.into())).await.is_err() { break }
@@ -397,7 +397,7 @@ async fn rpc_socket(socket: WebSocket, app: App, term_data: bool, mut subs: Subs
                     Ok(ev) => {
                         if ev.term_data && !term_data { continue }
                         if !subs.wants(&ev) { continue }
-                        if sink.send(Message::Text(ev.text.as_ref().into())).await.is_err() { break }
+                        if sink.send(Message::Text(ev.text.clone())).await.is_err() { break }
                     }
                     Err(RecvError::Lagged(_)) => {
                         let lagged = json!({ "channel": "daemon:lagged", "payload": null }).to_string();
@@ -415,13 +415,14 @@ async fn rpc_socket(socket: WebSocket, app: App, term_data: bool, mut subs: Subs
             Message::Close(_) => break,
             _ => continue,
         };
-        let Ok(req) = serde_json::from_str::<Value>(text.as_str()) else {
+        let Ok(mut req) = serde_json::from_str::<Value>(text.as_str()) else {
             continue;
         };
         let id = req.get("id").cloned().unwrap_or(Value::Null);
         let channel = req.get("channel").and_then(Value::as_str).unwrap_or_default().to_string();
-        let args = match req.get("args") {
-            Some(Value::Array(a)) => a.clone(),
+        // Taken out, not copied: a call's arguments can be a whole image.
+        let args = match req.get_mut("args") {
+            Some(Value::Array(a)) => std::mem::take(a),
             _ => Vec::new(),
         };
         if channel == SUBSCRIBE {
