@@ -347,9 +347,14 @@ struct SyncPicture: View {
         func arc(_ a: CGPoint, _ b: CGPoint) -> (Path, (Double) -> CGPoint) {
             let c = CGPoint(x: (a.x + b.x) / 2, y: min(a.y, b.y) - 34 + (b.y - mid.y) * 0.9)
             var p = Path(); p.move(to: a); p.addQuadCurve(to: b, control: c)
-            return (p, { u in
-                let v = 1 - u
-                return CGPoint(x: v * v * a.x + 2 * v * u * c.x + u * u * b.x, y: v * v * a.y + 2 * v * u * c.y + u * u * b.y)
+            return (p, { (t: Double) -> CGPoint in
+                // The quadratic Bézier at t, in CGFloat steps (one long mixed expression times out the type checker).
+                let u = CGFloat(t)
+                let v: CGFloat = 1 - u
+                let wa: CGFloat = v * v, wc: CGFloat = 2 * v * u, wb: CGFloat = u * u
+                let x: CGFloat = wa * a.x + wc * c.x + wb * b.x
+                let y: CGFloat = wa * a.y + wc * c.y + wb * b.y
+                return CGPoint(x: x, y: y)
             })
         }
         var arcs = [arc(CGPoint(x: left.x + 22, y: left.y), CGPoint(x: mid.x - 26, y: mid.y))]
