@@ -106,8 +106,8 @@ const text = (s, cx, y, px, color, gap = 1) => {
 // Copy.
 // Copy goes at the top: a user whose Finder shows the path and status bars
 // loses the bottom ~50px of the window to them.
-text('DRAG THE CAT INTO APPLICATIONS', W / 2, 22, 2, CREAM);
-text("THEN OPEN IT FROM APPLICATIONS. THAT'S IT.", W / 2, 46, 1, SAGE, 1);
+text('DRAG THE CAT INTO APPLICATIONS', W / 2, 16, 2, CREAM);
+text("THEN OPEN IT FROM APPLICATIONS. THAT'S IT.", W / 2, 38, 1, SAGE, 1);
 
 // Ledges the two icons stand on, with the gap between them for the leap.
 const ledge = (cx) => {
@@ -136,7 +136,7 @@ const arcY = (x) => {
 };
 for (let x = arcStart; x <= arcEnd - 10; x += 14) {
   const t = (x - arcStart) / (arcEnd - arcStart);
-  if (t > 0.3 && t < 0.72) continue; // the cat is here
+  if (t > 0.18 && t < 0.84) continue; // the cat is here
   rect(Math.round(x / 2) * 2 - 2, Math.round(arcY(x) / 2) * 2 - 2, 4, 4, SAGE);
 }
 sprite(['#######', '.#####.', '..###..', '...#...'], arcEnd - 7, arcBase - 2, 2, { '#': SAGE });
@@ -157,30 +157,50 @@ const inPoly = (poly, x, y) => {
   }
   return inside;
 };
-const GW = 72;
-const GH = 36;
-const HX = 40; // head offset on the cat grid
+const GW = 92;
+const GH = 48;
+const OY = 0;
+const HX = 52; // head offset on the cat grid
 const HY = 0;
 const mask = Array.from({ length: GH }, () => new Array(GW).fill(false));
-const fill = (x, y, w, h) => {
-  for (let yy = y; yy < y + h; yy++) for (let xx = x; xx < x + w; xx++) if (yy >= 0 && yy < GH && xx >= 0 && xx < GW) mask[yy][xx] = true;
+const paint = (test) => {
+  for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) if (test(x + 0.5, y + 0.5 - OY)) mask[y][x] = true;
 };
-for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) if (inPoly(HEAD, x + 0.5, y + 0.5)) mask[y + HY][x + HX] = true;
-// Body: a short loaf behind the head, stepped at the corners.
-fill(24, 11, 22, 13);
-fill(22, 12, 26, 11);
-fill(20, 13, 28, 9);
-// Front legs reach forward and down from under the chin.
-for (let i = 0; i < 11; i++) fill(42 + i, 20 + i, 6, 1);
-fill(52, 30, 8, 3);
-// Back legs kick out behind.
-for (let i = 0; i < 11; i++) fill(22 - i, 19 + i, 6, 1);
-fill(10, 29, 8, 3);
-// Tail rises from the rump and curls over at the tip.
-for (let i = 0; i < 6; i++) fill(20 - i, 15 - i, 4, 1);
-fill(14, 4, 4, 7);
-fill(15, 2, 7, 3);
-fill(19, 5, 3, 1);
+// A leg or the tail: a stroke along a quadratic curve from a to b via c,
+// thick where it joins the body (r) and tapering to r2.
+const limb = (a, c, b, r, r2 = r) => {
+  const pts = [];
+  for (let t = 0; t <= 1.0001; t += 0.02) {
+    const m = 1 - t;
+    pts.push([m * m * a[0] + 2 * m * t * c[0] + t * t * b[0], m * m * a[1] + 2 * m * t * c[1] + t * t * b[1], r + (r2 - r) * t]);
+  }
+  paint((x, y) => pts.some(([px, py, pr]) => (x - px) ** 2 + (y - py) ** 2 <= pr * pr));
+};
+// A paw: a flat oval at the end of a leg, so it reads as a foot.
+const paw = (cx, cy, rx = 3, ry = 2.2) => paint((x, y) => ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1);
+// Full stretch of a leap: back arched with the hips higher than the
+// shoulders, both front legs reaching ahead under the chin, both back legs
+// pushed out behind, tail streaming back off the hips.
+paint((x, y) => inPoly(HEAD, x - HX, y - HY));
+// Body: shoulders under the head (filling the step under the jaw), rising
+// to high hips.
+paint((x, y) => inPoly([[58, 17], [46, 15], [34, 13], [26, 14], [22, 17], [22, 21], [26, 24], [36, 27], [48, 28], [58, 27], [63, 26], [63, 22]], x, y));
+// Front legs reach out past the chin, tapered so they read as legs rather
+// than ribbons, and low enough to leave a gap under the face: the far one
+// higher, the near one lower.
+limb([57, 26], [68, 36], [82, 36], 3.4, 2);
+paw(84, 36);
+limb([51, 27], [62, 42], [77, 43], 3.4, 2);
+paw(79, 43);
+// Back legs push out behind: far one higher, near one lower.
+limb([25, 19], [17, 21], [9, 21], 3.4, 2);
+paw(8, 21);
+limb([30, 24], [21, 32], [12, 34], 3.4, 2);
+paw(11, 34);
+// Tail: back and only a little up off the hips, curling up at the tip, so
+// it stays clear of the copy above.
+limb([24, 15], [12, 13], [6, 8], 2.4, 1.8);
+limb([6, 8], [4, 4], [8, 3], 1.8, 1.6);
 const at = (x, y) => y >= 0 && y < GH && x >= 0 && x < GW && mask[y][x];
 const nearEdge = (x, y, want) => {
   for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if ((dx || dy) && at(x + dx, y + dy) === want) return true;
@@ -189,7 +209,7 @@ const nearEdge = (x, y, want) => {
 const u = 2; // 1x pixels per grid unit
 const catW = GW * u;
 const catX = Math.round((W / 2 - catW / 2) / 2) * 2;
-const catY = apex - 40;
+const catY = apex - 42;
 for (let y = 0; y < GH; y++)
   for (let x = 0; x < GW; x++) {
     let c;
@@ -198,15 +218,14 @@ for (let y = 0; y < GH; y++)
     if (c !== undefined) rect(catX + x * u, catY + y * u, u, u, c);
   }
 // Face, on the head's own grid.
-const face = (x, y, w, h, c) => rect(catX + (HX + x) * u, catY + (HY + y) * u, w * u, h * u, c);
+const face = (x, y, w, h, c) => rect(catX + (HX + x) * u, catY + (HY + OY + y) * u, w * u, h * u, c);
 face(11, 15, 2, 3, CREAM);
 face(20, 15, 2, 3, CREAM);
 face(15, 20, 2, 1, SAGE);
 
 // Motion streaks behind the cat.
-rect(catX - 4, catY + 34, 14, 2, SAGE);
-rect(catX - 14, catY + 42, 22, 2, SAGE);
-rect(catX - 2, catY + 50, 10, 2, SAGE);
+rect(catX - 2, catY + 26, 12, 2, SAGE);
+rect(catX - 12, catY + 32, 20, 2, SAGE);
 
 await img.write(resolve(build, 'background@2x.png'));
 const one = img.clone().resize({ w: W, h: H, mode: 'nearestNeighbor' });
