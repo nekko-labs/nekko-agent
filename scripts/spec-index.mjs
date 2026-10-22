@@ -1,0 +1,104 @@
+#!/usr/bin/env node
+/**
+ * Keeps spec/README.md's index in step with the files under spec/.
+ *
+ *   node scripts/spec-index.mjs          # rewrite the index
+ *   node scripts/spec-index.mjs --check  # exit 1 if the index is stale (CI)
+ *
+ * Each spec file starts with frontmatter naming its `title` and `area`. The
+ * index lists every file by area, with its size so an agent can tell a short
+ * read from a long one before opening it. Only the text between the
+ * `<!-- index:start -->` and `<!-- index:end -->` markers is generated.
+ */
+import fs from 'node:fs';
+import path from 'node:path';
+
+/** What each area covers, in index order. A new area needs a line here. */
+export const AREAS = {
+  product: 'Vision, users, product names, scope boundaries, open questions and policies.',
+  chat: 'The chat surface: transcript, composer, replies, artifacts, approvals inside a chat.',
+  desktop: 'The desktop shell: wall, windows, navigation rail, layouts, settings.',
+  agents: 'Agents panel, monitors, subagents and delegation.',
+  context: 'What the model sees: Context Inspector, modes, work modes, rules, memory, specs.',
+  models: 'Providers, local models, the Model Server, training.',
+  code: 'Working in a codebase: files, editor, diffs, pull requests, design workspace.',
+  automation: 'Workflows, goals, integrations and tools.',
+  phone: 'Phone remote control and the native iOS and Android apps.',
+  platform: 'Architecture, speed contract, distribution, builds and startup.',
+  brand: 'Brand, website, onboarding and the mascot.',
+};
+
+/** GitHub's heading anchor: lowercased, punctuation dropped, spaces to hyphens. */
+export function slug(title) {
+  return title.toLowerCase().trim().replace(/[^\p{L}\p{N}\p{M}\- _]/gu, '').replace(/ /g, '-');
+}
+
+function front(text) {
+  const m = /^---\n([\s\S]*?)\n---\n/.exec(text);
+  const out = {};
+  for (const line of m?.[1].split('\n') ?? []) {
+    const kv = /^([\w-]+):\s*(.*)$/.exec(line);
+    if (kv) out[kv[1]] = kv[2].startsWith('"') ? JSON.parse(kv[2]) : kv[2];
+  }
+  return out;
+}
+
+function render(root) {
+  const dir = path.join(root, 'spec');
+  const byArea = new Map(Object.keys(AREAS).map((a) => [a, []]));
+  for (const area of fs.readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory())) {
+    for (const name of fs.readdirSync(path.join(dir, area.name)).filter((n) => n.endsWith('.md')).sort()) {
+      const text = fs.readFileSync(path.join(dir, area.name, name), 'utf8');
+      const f = front(text);
+      if (!f.title || f.area !== area.name) throw new Error(`spec/${area.name}/${name}: frontmatter needs title and area: ${area.name}`);
+      if (!byArea.has(area.name)) throw new Error(`spec/${area.name}: unknown area; add it to AREAS in scripts/spec-index.mjs`);
+      byArea.get(area.name).push({ rel: `${area.name}/${name}`, title: f.title, kb: Math.max(1, Math.round(Buffer.byteLength(text) / 1024)) });
+    }
+  }
+  const out = [];
+  for (const [area, list] of byArea) {
+    if (!list.length) continue;
+    out.push(`### ${area}\n\n${AREAS[area]}\n`);
+    for (const f of list.sort((a, b) => a.title.localeCompare(b.title))) out.push(`- [${f.title}](${f.rel}) (${f.kb} KB)`);
+    out.push('');
+  }
+  return out.join('\n').trim();
+}
+
+const START = '<!-- index:start -->', END = '<!-- index:end -->';
+
+const HEAD = `# Spec, Nekko Agent
+
+The source of truth for **what** Nekko Agent does and **why**: one file per feature, grouped by area. How it is built lives in [TASKS.md](../TASKS.md) (Part 1, Plan) and [docs/decisions](../docs/decisions/README.md); how to work in this repo lives in [AGENTS.md](../AGENTS.md).
+
+## How to use this folder
+
+- **Read** [product/](product/) first for vision, users, product names and scope; then only the feature files your change touches. Do not read the whole folder: it is several hundred KB.
+- **Change** the feature's file in the same PR as the code. A new feature gets a new file in its area with \`title\` and \`area\` frontmatter; run \`node scripts/spec-index.mjs\` to update the index below (CI checks it).
+- **Record** user intent, acceptance criteria, privacy and security boundaries, and status (implemented, planned, unverified) inside the feature file. A product decision that closes off alternatives also gets a record in [docs/decisions](../docs/decisions/README.md).
+- **Status words** stay in the text (\`[shipped]\`, \`[implemented 2026-10-17; not yet ...]\`); never mark a feature shipped only because code exists.
+
+## Index
+
+`;
+
+export function writeIndex(root, { check = false } = {}) {
+  const file = path.join(root, 'spec', 'README.md');
+  const current = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : `${HEAD}${START}\n${END}\n`;
+  const s = current.indexOf(START), e = current.indexOf(END);
+  if (s < 0 || e < s) throw new Error('spec/README.md lost its index markers');
+  const next = `${current.slice(0, s + START.length)}\n<!-- Generated by scripts/spec-index.mjs. Do not edit by hand. -->\n\n${render(root)}\n\n${current.slice(e)}`;
+  if (check) return next === current;
+  fs.writeFileSync(file, next);
+  return true;
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+  const check = process.argv.includes('--check');
+  const ok = writeIndex(root, { check });
+  if (!ok) {
+    console.error('spec/README.md index is out of date: run `node scripts/spec-index.mjs`.');
+    process.exit(1);
+  }
+}

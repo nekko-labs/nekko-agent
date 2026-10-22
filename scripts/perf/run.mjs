@@ -5,7 +5,7 @@
  * Drives the Local Web UI (built with `npm run build:web`) in headless Chromium
  * over the DevTools protocol, against a scripted model and a scratch data dir
  * seeded with a 1,000-message chat and a dozen others, and checks the p95 of
- * each interaction against the budgets in SPEC.md ("Speed & responsiveness").
+ * each interaction against the budgets in spec/platform/speed-responsiveness-the-speed-contract.md.
  * By default a run is judged against the CI regression gate (twice the SPEC
  * target, see budgets.mjs); --strict judges against the targets themselves.
  *
