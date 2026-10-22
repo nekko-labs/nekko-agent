@@ -48,12 +48,13 @@ pub fn open(key: &[u8; 32], nonce: &[u8; 12], aad: &[u8], ciphertext: &[u8]) -> 
 mod tests {
     #[test]
     fn matches_the_hkdf_crate() {
-        for (ikm, salt, info) in
-            [(&b"ikm"[..], &b"salt"[..], &b"info"[..]), (&[7u8; 32][..], &[][..], &b"nekko-sync/v1 record"[..])]
-        {
+        // Inputs from the OS, as in real use, plus an empty salt (the ECIES callers never pass one, but HKDF allows it).
+        for salt_len in [0, 32] {
+            let (ikm, salt) = (crate::random::<32>(), crate::random::<32>());
+            let (salt, info) = (&salt[..salt_len], b"nekko-sync/v1 record");
             let mut okm = [0u8; 44];
-            hkdf::Hkdf::<sha2::Sha256>::new(Some(salt), ikm).expand(info, &mut okm).unwrap();
-            let (key, nonce) = super::key_and_nonce(ikm, salt, info);
+            hkdf::Hkdf::<sha2::Sha256>::new(Some(salt), &ikm).expand(info, &mut okm).unwrap();
+            let (key, nonce) = super::key_and_nonce(&ikm, salt, info);
             assert_eq!(&okm[..32], &key);
             assert_eq!(&okm[32..], &nonce);
         }
