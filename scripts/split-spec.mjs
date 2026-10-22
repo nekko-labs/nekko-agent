@@ -188,7 +188,7 @@ function rewriteLinks(map) {
   let changed = 0;
   const unresolved = new Set();
   for (const rel of tracked) {
-    if (rel === 'SPEC.md' || rel.startsWith('spec/') || !/\.(md|mjs|ts|tsx|rs|yml|yaml)$/.test(rel)) continue;
+    if (rel === 'SPEC.md' || rel === 'scripts/split-spec.mjs' || rel.startsWith('spec/') || !/\.(md|mjs|ts|tsx|rs|yml|yaml)$/.test(rel)) continue;
     const full = path.join(ROOT, rel);
     let text;
     try { text = fs.readFileSync(full, 'utf8'); } catch { continue; }

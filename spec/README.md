@@ -47,6 +47,7 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 - [Completion and interruption reconciliation](chat/completion-and-interruption-reconciliation.md) (1 KB)
 - [Composer containment and compact subagent activity (2026-10-13)](chat/composer-containment-and-compact-subagent-activity.md) (2 KB)
 - [Composer Markdown editing tools (implemented; isolated interaction checks verified, visual inspection pending)](chat/composer-markdown-editing-tools.md) (2 KB)
+- [Default modes: where the models run (2026-10-22)](chat/default-modes-where-the-models-run.md) (4 KB)
 - [Find in this chat (2026-10-16)](chat/find-in-this-chat.md) (3 KB)
 - [Live streaming token rate](chat/live-streaming-token-rate.md) (1 KB)
 - [Muted pending-change badge](chat/muted-pending-change-badge.md) (1 KB)
