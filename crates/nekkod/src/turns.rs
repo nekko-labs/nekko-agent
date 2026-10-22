@@ -1055,8 +1055,19 @@ impl Turns {
             .or_else(|| shared.default_mode.clone())
             .unwrap_or_else(|| "guardrails".into());
         // A sandbox turn runs no hooks and no built-in tool here: everything goes to its container.
-        let native =
-            if sandbox { None } else { native_context(self, shared, settings, &workspaces, &mode, &session_id) };
+        let read_only: Vec<String> = lock(&session)
+            .get("readOnlyFolders")
+            .and_then(Value::as_array)
+            .map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect())
+            .unwrap_or_default();
+        let native = if sandbox {
+            None
+        } else {
+            native_context(self, shared, settings, &workspaces, &mode, &session_id).map(|mut ctx| {
+                ctx.read_only_roots = read_only;
+                ctx
+            })
+        };
         let runner = TurnTools {
             sandbox: sandbox.then(|| self.sandboxes.clone()).flatten(),
             // The decision runner the host picked; the local one is this daemon's.

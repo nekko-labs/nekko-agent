@@ -44,6 +44,20 @@ const workflows = [
     triggers: [{ id: 't4', kind: 'connector', connector: 'github', event: 'workflow_run_failed', repo: 'acme/app', pollIntervalMs: 120_000 }],
     createdAt: now - 86_400_000, updatedAt: now - 86_400_000, lastRunAt: now - 12 * min, lastStatus: 'success', runCount: 3,
   },
+  {
+    id: 'w5', name: 'Review new PRs with a skill', category: 'Code review', enabled: true, notify: 'failure', templateId: 'review-prs-with-skill',
+    localModelOnly: true, toolAccess: 'allowlist', prCheckout: true, providerId: 'local', modelId: 'qwen3-4b',
+    description: 'Each new pull request is checked out for the run, reviewed by a skill, and its verdict kept in one comment on the PR.',
+    steps: [
+      { ...step('review', 'Review', 'skill', 'nyaa:cr'), args: '{{trigger.number}}', with: 'Review the pull request that started this run.' },
+      { ...step('comment', 'Comment on the PR', 'action', 'github.upsertPRComment'), params: { repo: '{{trigger.repo}}', number: '{{trigger.number}}', body: '{{steps.review.output}}' } },
+    ],
+    triggers: [
+      { id: 't5', kind: 'connector', connector: 'github', event: 'pr_opened', repo: 'acme/app', pollIntervalMs: 120_000 },
+      { id: 't6', kind: 'connector', connector: 'github', event: 'pr_updated', repo: 'acme/app', pollIntervalMs: 120_000, enabled: false },
+    ],
+    createdAt: now - 86_400_000, updatedAt: now - 86_400_000, lastRunAt: now - 6 * min, lastStatus: 'success', runCount: 2,
+  },
 ];
 const attempt = (stepId: string, status: string, at: number, extra: object = {}) => ({ stepId, status, attempt: 1, startedAt: at, endedAt: at + 20_000, ...extra });
 const runs = [
@@ -90,6 +104,37 @@ runs.push(
     ],
   },
 );
+runs.push(
+  {
+    id: 'r51', workflowId: 'w5', status: 'success', triggerKind: 'connector', triggerLabel: 'GitHub · acme/app · pr_opened · PR #61 opened: Add average()', startedAt: now - 6 * min, endedAt: now - 6 * min + 95_000,
+    steps: [
+      attempt('review', 'success', now - 6 * min, { sessionId: 's51', output: '## nyaa council: PR #61\n\n**Mochi (correctness):** `average()` reads one past the end: the loop runs to `i <= values.length`, so `values[values.length]` is `undefined` and the total becomes `NaN` (src/average.js:4). Use `i < values.length`.\n\n**Tora (dependencies):** `pnpm audit --prod`: no known vulnerabilities.\n\n**Shiro (lint):** `npm run lint` exit 0.\n\n**Verdict:** request changes (1 blocking).' }),
+      attempt('comment', 'success', now - 6 * min + 90_000, { output: 'Posted a comment on acme/app#61 https://github.com/acme/app/pull/61#issuecomment-2' }),
+    ],
+  },
+  {
+    id: 'r52', workflowId: 'w5', status: 'success', triggerKind: 'connector', triggerLabel: 'GitHub · acme/app · pr_opened · PR #60 opened: Fix typo (from a fork)', startedAt: now - 50 * min, endedAt: now - 50 * min + 70_000,
+    steps: [
+      attempt('review', 'success', now - 50 * min, { sessionId: 's52', output: '## nyaa council: PR #60\n\nlint/audit skipped: untrusted PR.\n\n**Mochi:** the typo fix in README.md is correct.\n\n**Verdict:** approve.' }),
+      attempt('comment', 'success', now - 50 * min + 65_000, { output: 'Posted a comment on acme/app#60 https://github.com/acme/app/pull/60#issuecomment-3' }),
+    ],
+  },
+);
+const skillDefs = [
+  ...['research', 'plan', 'review', 'security-review', 'simplify', 'test'].map((n) => ({ id: n, name: n, description: `Built-in ${n}`, template: '', category: 'Code quality', workflow: { nodes: [], edges: [] }, source: 'builtin' })),
+  { id: 'external:claude:user:triage', name: 'triage', description: 'Sort new issues by area and urgency', template: '', category: 'Imported', workflow: { nodes: [], edges: [] }, source: 'external', origin: { tool: 'claude', scope: 'user', dir: '/Users/me/.claude/skills/triage' } },
+  {
+    id: 'nyaa:cr', name: 'nyaa:cr', description: 'nyaa: summon the council of reviewer cats over a PR or the working diff', template: '', category: 'Imported', workflow: { nodes: [], edges: [] },
+    source: 'plugin', pluginRoot: '/Users/me/.claude/plugins/cache/nekko-dojo-skills/nyaa/1.0.0', argumentHint: '[PR number | empty for current branch / working diff]',
+    allowedTools: ['Bash(gh:*)', 'Bash(git:*)', 'Bash(pnpm:*)', 'Bash(npm:*)', 'Read', 'Grep', 'Glob'],
+    origin: { tool: 'claude-plugin', scope: 'user', dir: '/Users/me/.claude/plugins/cache/nekko-dojo-skills/nyaa/1.0.0', plugin: 'nyaa', marketplace: 'nekko-dojo-skills', version: '1.0.0', kind: 'command' },
+  },
+  {
+    id: 'nyaa:nyaa', name: 'nyaa:nyaa', description: 'The nyaa review council', template: '', category: 'Imported', workflow: { nodes: [], edges: [] },
+    source: 'plugin', pluginRoot: '/Users/me/.claude/plugins/cache/nekko-dojo-skills/nyaa/1.0.0', allowedTools: [],
+    origin: { tool: 'claude-plugin', scope: 'user', dir: '/Users/me/.claude/plugins/cache/nekko-dojo-skills/nyaa/1.0.0/skills/nyaa', plugin: 'nyaa', marketplace: 'nekko-dojo-skills', version: '1.0.0', kind: 'skill' },
+  },
+];
 const snapshot = scene === 'empty' || scene === 'local' ? { workflows: [], runs: [] } : { workflows, runs };
 
 // The view reads the store and this bridge; every other call answers nothing.
@@ -97,6 +142,7 @@ const w = window as unknown as { nekko: unknown };
 w.nekko = new Proxy({}, {
   get: (_, k: string) =>
     k === 'listWorkflows' ? () => Promise.resolve(snapshot)
+      : k === 'listWorkflowSkillDefs' ? () => Promise.resolve(skillDefs)
       : k === 'listModels' ? (id: string) => Promise.resolve(id === 'local' ? [{ id: 'qwen3-4b', providerId: 'local', name: 'Qwen3 4B' }] : [])
       : k.startsWith('on') ? () => () => {}
       : () => Promise.resolve(null),
