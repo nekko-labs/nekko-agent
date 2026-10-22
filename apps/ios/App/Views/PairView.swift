@@ -18,6 +18,13 @@ struct WelcomeView: View {
                 Text("Drive Nekko Agent on your computer from this iPhone: follow chats as they stream, approve tools, answer questions and start new work. Everything is end-to-end encrypted between this phone and your computer.")
                     .foregroundStyle(palette.inkSoft)
                 TailscaleGuide()
+                // Synced chats are readable with no computer paired or online.
+                if app.prefs.onboarded {
+                    NavigationLink(value: Route.cloud) {
+                        Label("Read your synced chats with Nekko Cloud", systemImage: "lock.icloud")
+                    }
+                    .accessibilityIdentifier("welcome.cloud")
+                }
             }
             .padding(20)
         }
@@ -33,7 +40,12 @@ struct WelcomeView: View {
             .background(.bar)
         }
         .navigationDestination(for: Route.self) { r in
-            if case .pair = r { PairView {} }
+            switch r {
+            case .pair: PairView {}
+            case .cloud: CloudView()
+            case .syncedChat(let id): SyncedChatView(chatId: id)
+            default: EmptyView()
+            }
         }
         .toolbar {
             if !app.prefs.onboarded {

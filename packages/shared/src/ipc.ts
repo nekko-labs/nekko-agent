@@ -363,6 +363,23 @@ export const IpcChannels = {
   // Host-side refresh checks (Settings → Updates "Check now"): model lists + skills.
   updatesCheck: 'updates:check',
 
+  cloudStatus: 'cloud:status',
+  cloudRefresh: 'cloud:refresh',
+  cloudSendCode: 'cloud:sendCode',
+  cloudVerifyCode: 'cloud:verifyCode',
+  cloudBeginOAuth: 'cloud:beginOAuth',
+  cloudCancelOAuth: 'cloud:cancelOAuth',
+  cloudSignOut: 'cloud:signOut',
+  syncTurnOn: 'sync:turnOn',
+  syncConfirmRecoveryKey: 'sync:confirmRecoveryKey',
+  syncRestore: 'sync:restore',
+  syncRequestJoin: 'sync:requestJoin',
+  syncApprove: 'sync:approve',
+  syncRevoke: 'sync:revoke',
+  syncNow: 'sync:now',
+  syncSetEnabled: 'sync:setEnabled',
+  syncSetIncludeLocalOnly: 'sync:setIncludeLocalOnly',
+  syncDeleteAll: 'sync:deleteAll',
   voiceStatus: 'voice:status',
   voiceInstall: 'voice:install',
   voiceCancelInstall: 'voice:cancel',
@@ -375,6 +392,7 @@ export const IpcChannels = {
 export const IpcEvents = {
   agentEvent: 'agent:event',
   oauthStatus: 'oauth:status',
+  cloudStatus: 'cloud:status',
   indexProgress: 'index:progress',
   updateEvent: 'update:event',
   terminalEvent: 'terminal:event',
@@ -414,6 +432,26 @@ export interface AgentReplay {
 
 /** The typed API the preload bridge exposes as window.nekko. */
 export interface NekkoApi {
+  /** Nekko Cloud sign-in and end-to-end encrypted sync (crates/nekko-cloud). */
+  cloudStatus(): Promise<import('./cloud.js').CloudStatus>;
+  cloudRefresh(): Promise<import('./cloud.js').CloudStatus>;
+  cloudSendCode(email: string): Promise<{ sent: boolean }>;
+  cloudVerifyCode(email: string, code: string): Promise<import('./cloud.js').CloudStatus>;
+  cloudBeginOAuth(provider: import('./cloud.js').CloudOAuthProvider): Promise<{ authUrl: string }>;
+  cloudCancelOAuth(): Promise<import('./cloud.js').CloudStatus>;
+  cloudSignOut(): Promise<import('./cloud.js').CloudStatus>;
+  syncTurnOn(): Promise<import('./cloud.js').SyncTurnOnResult>;
+  syncConfirmRecoveryKey(text: string): Promise<import('./cloud.js').CloudStatus>;
+  syncRestore(text: string): Promise<import('./cloud.js').CloudStatus>;
+  syncRequestJoin(): Promise<{ joinCode: string; status: import('./cloud.js').CloudStatus }>;
+  /** Approve a device that asked to join, with the join code its screen shows. */
+  syncApprove(deviceId: string, joinCode: string): Promise<import('./cloud.js').CloudStatus>;
+  syncRevoke(deviceId: string): Promise<import('./cloud.js').CloudStatus>;
+  syncNow(): Promise<import('./cloud.js').CloudStatus>;
+  syncSetEnabled(on: boolean): Promise<import('./cloud.js').CloudStatus>;
+  syncSetIncludeLocalOnly(on: boolean): Promise<import('./cloud.js').CloudStatus>;
+  syncDeleteAll(): Promise<import('./cloud.js').CloudStatus>;
+  onCloudStatus(cb: (s: import('./cloud.js').CloudStatus) => void): () => void;
   voiceStatus(): Promise<import('./voice.js').VoiceStatus>;
   voiceInstall(): Promise<import('./voice.js').VoiceStatus>;
   voiceCancelInstall(): Promise<void>;
