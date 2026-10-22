@@ -3,7 +3,7 @@ import XCTest
 @testable import NekkoProtocol
 
 /// The relay client against an in-memory relay + agent. The fake plays the
-/// agent's side of `packages/host/src/relay.ts`: it opens sealed frames with
+/// agent's side of `crates/nekko-remote/src/agent.rs`: it opens sealed frames with
 /// the room key, answers HELLO and replies to requests. Same cases as
 /// Android's `RelayClientTest.kt`.
 final class RelayClientTests: XCTestCase {
