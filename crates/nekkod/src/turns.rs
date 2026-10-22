@@ -1514,9 +1514,82 @@ async fn persist(store: &Arc<SessionStore>, session: &Arc<Mutex<Value>>, incogni
         return;
     }
     let (st, sess) = (store.clone(), session.clone());
-    let saved = tokio::task::spawn_blocking(move || st.save_turn(&mut lock(&sess), None)).await;
+    let saved = tokio::task::spawn_blocking(move || st.save_turn_shared(&sess, None)).await;
     if let Ok(Err(e)) = saved {
         eprintln!("nekkod: could not save a running turn's chat: {e}");
+    }
+}
+
+/// A checkpoint: [`persist`] with the transcript at that point, which is
+/// written first and then becomes the chat's (an incognito chat's at once).
+async fn checkpoint(store: Arc<SessionStore>, session: Arc<Mutex<Value>>, messages: Vec<Value>, incognito: bool) {
+    if incognito {
+        if let Some(obj) = lock(&session).as_object_mut() {
+            obj.insert("messages".into(), Value::Array(messages));
+        }
+        return;
+    }
+    let saved = tokio::task::spawn_blocking(move || store.save_turn_shared(&session, Some(messages))).await;
+    if let Ok(Err(e)) = saved {
+        eprintln!("nekkod: could not save a running turn's chat: {e}");
+    }
+}
+
+/// How often a run of text (or reasoning) deltas goes out at most: about a
+/// frame. The first of a run goes at once; those arriving within the window
+/// after it are joined into one event, so a fast provider's small chunks
+/// cost one frame per window for each client, not one per chunk.
+const DELTA_WINDOW: Duration = Duration::from_millis(16);
+
+/// Text and reasoning deltas waiting to go out as one event.
+#[derive(Default)]
+struct Deltas {
+    /// The joined event: `{ type, sessionId, delta }`.
+    held: Option<Value>,
+    /// When the last delta event went out.
+    sent: Option<tokio::time::Instant>,
+}
+
+impl Deltas {
+    /// A plain delta event (nothing but its type, chat and text), which can
+    /// be joined with its neighbours without changing what a client builds.
+    fn joinable(e: &Value) -> bool {
+        matches!(str_at(e, "type"), Some("text" | "reasoning"))
+            && e.as_object().is_some_and(|o| o.len() == 3 && o.contains_key("sessionId"))
+            && e.get("delta").is_some_and(Value::is_string)
+    }
+
+    /// Take a delta: sent now when the window since the last one has passed,
+    /// otherwise joined onto (or, for another kind, sent after) the one held.
+    fn push(&mut self, hub: &Hub, e: Value) {
+        if let Some(held) = &mut self.held {
+            if held.get("type") == e.get("type") && held.get("sessionId") == e.get("sessionId") {
+                if let (Some(Value::String(text)), Some(more)) = (held.get_mut("delta"), e["delta"].as_str()) {
+                    text.push_str(more);
+                }
+                return;
+            }
+            self.flush(hub);
+        }
+        let now = tokio::time::Instant::now();
+        if self.sent.is_none_or(|at| now.duration_since(at) >= DELTA_WINDOW) {
+            self.sent = Some(now);
+            hub.publish("agent:event", e, false);
+        } else {
+            self.held = Some(e);
+        }
+    }
+
+    /// When the held delta is due.
+    fn due(&self) -> Option<tokio::time::Instant> {
+        self.held.as_ref().and(self.sent).map(|at| at + DELTA_WINDOW)
+    }
+
+    fn flush(&mut self, hub: &Hub) {
+        if let Some(e) = self.held.take() {
+            self.sent = Some(tokio::time::Instant::now());
+            hub.publish("agent:event", e, false);
+        }
     }
 }
 
@@ -1534,32 +1607,48 @@ struct Forward {
     last_error: Arc<Mutex<Option<String>>>,
 }
 
-/// The turn's events, in order: checkpoints saved first, then the UI told.
+/// The turn's events, in order. A checkpoint is saved before the UI is told
+/// of it, since a pane may re-read the chat then (on `tool_result`, `done`,
+/// `error` and `steered`); a `step`, which nothing reads back, goes out first
+/// and saves while the events after it (an approval prompt) go out too.
+/// Text and reasoning deltas are joined per [`DELTA_WINDOW`].
 /// Returns how the reply ended (`done.stop`).
 async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option<Value> {
     let mut last_stop = None;
-    while let Some(out) = rx.recv().await {
+    let mut deltas = Deltas::default();
+    // A step's save still being written.
+    let mut saving: Option<tokio::task::JoinHandle<()>> = None;
+    loop {
+        let due = deltas.due();
+        let out = tokio::select! {
+            out = rx.recv() => out,
+            _ = tokio::time::sleep_until(due.unwrap_or_else(tokio::time::Instant::now)), if due.is_some() => {
+                deltas.flush(&f.hub);
+                continue;
+            }
+        };
         let (event, snapshot) = match out {
-            Out::End => break,
-            Out::Event(e) => {
+            None | Some(Out::End) => break,
+            Some(Out::Event(e)) => {
+                deltas.flush(&f.hub);
                 note_error(&f.last_error, &e);
                 f.hub.publish("agent:event", e, false);
                 continue;
             }
-            Out::Loop(e, s) => (e, s),
+            Some(Out::Loop(e, s)) => (e, s),
         };
+        if snapshot.is_none() && Deltas::joinable(&event) {
+            deltas.push(&f.hub, event);
+            continue;
+        }
+        deltas.flush(&f.hub);
         if str_at(&event, "type") == Some("usage") {
             f.stats.add(&event);
             if let Some((accounts, account, opts)) = &f.account {
                 accounts.turn_usage(opts, account, &event);
             }
         }
-        if let Some(snapshot) = snapshot {
-            let mut s = lock(&f.session);
-            if let Some(obj) = s.as_object_mut() {
-                obj.insert("messages".into(), Value::Array(snapshot));
-            }
-        }
+        let mut snapshot = snapshot;
         if str_at(&event, "type") == Some("done") {
             if let Some(stop) = event.get("stop").filter(|v| js::truthy(Some(v))) {
                 last_stop = Some(stop.clone());
@@ -1568,9 +1657,15 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
             // pane that re-reads the chat on `done` already finds them.
             let finished = f.stats.finish(now_ms() as f64, event.get("steps"), event.get("stop"));
             if let Some(stats) = &finished {
-                let mut s = lock(&f.session);
-                if let Some(Value::Array(messages)) = s.get_mut("messages") {
-                    turn::attach_turn_stats(messages, f.turn_from, stats);
+                match &mut snapshot {
+                    Some(messages) => {
+                        turn::attach_turn_stats(messages, f.turn_from, stats);
+                    }
+                    None => {
+                        if let Some(Value::Array(messages)) = lock(&f.session).get_mut("messages") {
+                            turn::attach_turn_stats(messages, f.turn_from, stats);
+                        }
+                    }
                 }
             }
             if let Some((accounts, account, opts)) = &f.account {
@@ -1578,7 +1673,24 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
             }
         }
         if is_checkpoint(&event) {
-            persist(&f.store, &f.session, f.incognito).await;
+            // Saves land in order.
+            if let Some(save) = saving.take() {
+                let _ = save.await;
+            }
+            match snapshot {
+                Some(messages) if str_at(&event, "type") == Some("step") => {
+                    note_error(&f.last_error, &event);
+                    f.hub.publish("agent:event", event, false);
+                    saving = Some(tokio::spawn(checkpoint(f.store.clone(), f.session.clone(), messages, f.incognito)));
+                    continue;
+                }
+                Some(messages) => checkpoint(f.store.clone(), f.session.clone(), messages, f.incognito).await,
+                None => persist(&f.store, &f.session, f.incognito).await,
+            }
+        } else if let Some(messages) = snapshot
+            && let Some(obj) = lock(&f.session).as_object_mut()
+        {
+            obj.insert("messages".into(), Value::Array(messages));
         }
         let steered = str_at(&event, "type") == Some("steered");
         note_error(&f.last_error, &event);
@@ -1587,6 +1699,10 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
             // The steering message is in the transcript now; panes re-read it.
             f.hub.publish("agent:event", json!({ "type": "session_meta", "sessionId": f.session_id }), false);
         }
+    }
+    deltas.flush(&f.hub);
+    if let Some(save) = saving.take() {
+        let _ = save.await;
     }
     last_stop
 }
@@ -2294,6 +2410,33 @@ impl TurnTools {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn a_run_of_deltas_goes_out_first_then_joined_per_window() {
+        let hub = Hub::new();
+        let mut rx = hub.subscribe();
+        let mut d = Deltas::default();
+        let t = |x: &str| json!({ "type": "text", "sessionId": "s", "delta": x });
+        assert!(Deltas::joinable(&t("a")));
+        assert!(!Deltas::joinable(&json!({ "type": "text", "sessionId": "s", "delta": "a", "relayOnly": true })));
+        assert!(!Deltas::joinable(&json!({ "type": "tool_call", "sessionId": "s", "delta": "a" })));
+        for x in ["a", "b", "c"] {
+            d.push(&hub, t(x));
+        }
+        assert!(d.due().is_some(), "what came within the window waits");
+        d.push(&hub, json!({ "type": "reasoning", "sessionId": "s", "delta": "r" }));
+        d.flush(&hub);
+        assert!(d.due().is_none());
+        let mut got = Vec::new();
+        while let Ok(ev) = rx.try_recv() {
+            got.push(serde_json::from_str::<Value>(&ev.text).unwrap()["payload"].clone());
+        }
+        assert_eq!(
+            got,
+            [t("a"), t("bc"), json!({ "type": "reasoning", "sessionId": "s", "delta": "r" })],
+            "same shape, same order, same text"
+        );
+    }
 
     #[tokio::test]
     async fn title_flights_are_session_scoped_and_release_on_cancellation() {

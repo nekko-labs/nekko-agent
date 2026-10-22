@@ -196,7 +196,8 @@ async fn sockets_take_only_the_chats_they_subscribe_to() {
     let chat = |id: &str| json!({ "id": id, "title": "Named", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1 });
     let rig = turn_rig("subscribe", chat("s_one"));
     std::fs::write(rig.data.join("sessions").join("s_two.json"), chat("s_two").to_string()).unwrap();
-    // Each reply is 40 chunks, so 40 text events per chat, interleaved.
+    // Each reply is 40 chunks, interleaved; a burst of them goes out as a few
+    // joined text events (turns.rs `DELTA_WINDOW`), so the stream is short.
     let model = scripted_model(vec![slow_text("one", 40), slow_text("two", 40)]).await;
     let port = rig.d.port;
 
@@ -252,7 +253,7 @@ async fn sockets_take_only_the_chats_they_subscribe_to() {
     assert!(other_a.len() <= 4, "a's view of s_two is a summary: {other_a:?}");
     assert!(other_b.len() <= 4, "b's view of s_one is a summary: {other_b:?}");
     let frames = |f: &[(String, Value)]| f.iter().filter(|(ch, _)| ch == "agent:event").count();
-    assert!(frames(&fa) * 3 < frames(&fc) * 2, "a {} frames vs c {}", frames(&fa), frames(&fc));
+    assert!(frames(&fa) < frames(&fc), "a {} frames vs c {}", frames(&fa), frames(&fc));
     println!("agent frames per socket: subscribed a={} b={}, unsubscribed c={}", frames(&fa), frames(&fb), frames(&fc));
 
     // A socket that starts showing a chat mid-turn is sent the turn so far.
