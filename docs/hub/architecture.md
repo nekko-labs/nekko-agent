@@ -13,14 +13,14 @@ Nekko Agent is one engine and one React UI that run in several places: the deskt
             \                                        /
              \----------- nekkod (Rust) ------------/
                      engine daemon on loopback
-                    /            |              \
-          native services   model servers   TS host (packages/host)
-          (chat, tools,     (llama-server,   for everything not
-           terminals, ...)   routed)          ported to Rust yet
+                       /                  \
+             engine services          model servers
+             (chat, tools,            (llama-server,
+              terminals, ...)          routed)
 ```
 
 - **The UI never shares a process with the agent.** The window talks to `nekkod`, the engine daemon, over a loopback connection with a per-launch token. The agent loop, terminals and model servers run there, so a busy agent cannot freeze the interface.
-- **The engine is moving from TypeScript to Rust.** `nekkod` answers what has been ported natively and passes the rest to the TypeScript host it supervises. Each ported piece has to match the TypeScript behaviour exactly before it takes over.
+- **The engine is all Rust.** `nekkod` answers every engine channel itself. It was ported from a TypeScript engine (`packages/host`, `packages/core`, deleted 2026-10-19); the golden fixtures under `crates/*/tests/golden` are frozen records of that engine's behaviour ([docs/runbooks/golden-fixtures.md](../runbooks/golden-fixtures.md)).
 - **Every edition is the same app.** Desktop, web and Docker run the same engine and the same UI. Only the transport differs: Electron IPC on the desktop, HTTP and WebSocket in the browser.
 
 ## Desktop lifetime and notifications
@@ -29,7 +29,7 @@ Closing the UI already hides it to the tray without stopping the engine. Explici
 
 The 2026-10-13 implementation moves Electron native notifications into main (`apps/desktop/src/main/notifications.ts`), with a direct authenticated engine WebSocket subscription, fresh settings reads per eligible notice, reconnect/backoff and disposal on Quit. Main creates native notices; click delivery uses an encoded session deep link to restore the window and select the chat. Renderer notifications remain for browser editions only, avoiding duplicate Electron delivery. Settings exposes the default-on toggle in its standalone Notifications section.
 
-TS host and Rust usage summaries emit matching per-day session costs, local tokens, avoided costs and model ids. Budget aggregates those UTC buckets for every recorded detail instead of mixing a range with lifetime totals. Utilization's same-token Claude dedupe is display-only and prefers Anthropic, without changing provider routing or storage.
+The engine's usage summaries emit per-day session costs, local tokens, avoided costs and model ids. Budget aggregates those UTC buckets for every recorded detail instead of mixing a range with lifetime totals. Utilization's same-token Claude dedupe is display-only and prefers Anthropic, without changing provider routing or storage.
 
 Status: implemented, unit and isolated fixture interaction tested; image/motion inspection and native toast delivery/click/permissions testing pending. Main currently assumes events are unattended, so focused-visible-chat suppression is a known review issue. Parent owns resolution and landing.
 
@@ -38,24 +38,23 @@ Status: implemented, unit and isolated fixture interaction tested; image/motion 
 | Path | What lives there |
 | --- | --- |
 | `packages/shared` | Types and IPC contracts. Pure, no runtime dependencies. |
-| `packages/core` | The TypeScript engine: providers, agent loop, guardrails, context, indexer, memory, connectors. No Electron imports, unit tested with Vitest. |
-| `packages/host` | Wires the engine to the file system, shell and settings. Shared by every edition. |
+| `packages/profile` | The user's data folder on this machine: where it lives, moving it, older installs' profiles, and the running app. Used by the desktop's main process, the CLI and the Local Web UI. |
 | `apps/desktop` | The Electron app: `src/main` (Node), `src/preload` (the bridge) and `src/renderer` (React). |
 | `apps/local-web-ui` | The self-hosted Local Web UI, also the `npx nekko-agent-local-web-ui` package. |
 | `apps/cli` | The `nekko-agent` CLI and MCP server. |
 | `apps/mobile` | The iOS and Android app (Expo). |
 | `apps/relay-server` | The relay that pairs a phone with a computer. It only ever sees encrypted frames. |
-| `apps/nekko-agent-api/cloud` | Nekko Cloud, the planned hosted edition. |
+| `apps/nekko-agent-api` | Nekko Cloud, the hosted side (its own npm package, deployed to Fly). |
 | `apps/website` | nekkoagent.com, including these docs. |
 | `crates/nekkod` | The engine daemon. |
 | `crates/nekko-*` | The daemon's services: chat turns, tools, terminals, inference, remote access, storage, usage and more. |
 
 ## Build order
 
-`npm run build` builds the Rust daemon, then the TypeScript workspaces in dependency order: `shared`, `core`, `host`, `cli`, `desktop`. `npm run dev` runs a faster variant (the daemon in the incremental `dev-daemon` profile, no production desktop bundle, since electron-vite dev builds its own) and launches the desktop app.
+`npm run build` builds the Rust daemon, then the TypeScript workspaces in dependency order: `shared`, `profile`, `cli`, `desktop`. `npm run dev` runs a faster variant (the daemon in the incremental `dev-daemon` profile, no production desktop bundle, since electron-vite dev builds its own) and launches the desktop app.
 
 ## Where to put new code
 
-- Engine behaviour goes in `packages/core` or a Rust crate, so it can be tested without Electron.
+- Engine behaviour goes in a Rust crate under `crates/`, so it can be tested without Electron.
 - The desktop app only wires the engine to the window, the file system and the shell.
 - A change to what the product does also updates its file under `spec/` (and `node scripts/spec-index.mjs` for a new one); a change to how it is built updates `TASKS.md`.
