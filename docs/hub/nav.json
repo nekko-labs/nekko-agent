@@ -34,6 +34,12 @@
           "description": "Replace emails, phone numbers, secrets and your own terms with placeholders before a request reaches a cloud model."
         },
         {
+          "slug": "code-mode",
+          "title": "Code mode",
+          "source": "docs/code-mode.md",
+          "description": "Let the model write code that calls your tools in a sandbox, so long tool lists and big results cost far fewer tokens."
+        },
+        {
           "slug": "local-models",
           "title": "Running models locally",
           "source": "docs/local-models.md",

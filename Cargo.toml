@@ -27,6 +27,8 @@ portable-pty = "0.9"
 # ECMAScript regular expressions (the TS host's `new RegExp`), matched over UTF-16 like V8 does.
 regress = { version = "0.12", features = ["utf16"] }
 reqwest = { version = "0.12", default-features = false, features = ["json"] }
+# Code mode's sandbox: QuickJS, no loader, no std modules, so its code reaches nothing but the bindings it is given.
+rquickjs = { version = "0.14", default-features = false, features = ["std"] }
 serde = { version = "1", features = ["derive"] }
 # preserve_order: a decision's option order is its meaning (criteria dicts), and Laya's input is the state serialized in the order the caller wrote it.
 serde_json = { version = "1", features = ["preserve_order"] }
