@@ -145,7 +145,7 @@
   }
  },
  "calibration": {
-  "$comment": "Decode tokens/s = efficiency x bandwidth / bytes read per token. A backend's efficiency is the lowest its measurements give (estimates should under-promise); a backend with none borrows another's and the answer says so.",
+  "$comment": "Decode tokens/s = efficiency x bandwidth / bytes read per token. A backend's efficiency is the lowest its measurements give (estimates should under-promise); a backend with none borrows another's and the answer says so. Mixture-of-experts models have their own (moeEfficiency); a backend without one scales its dense efficiency by the MoE-to-dense ratio measured elsewhere, as a borrowed figure.",
   "cuda": {
    "efficiency": 0.52,
    "basis": [
@@ -154,9 +154,11 @@
   },
   "metal": {
    "efficiency": 0.6,
+   "moeEfficiency": 0.46,
    "basis": [
     { "hardware": "apple-m5-max-40", "file": "unsloth/gemma-4-12b-it-GGUF/gemma-4-12b-it-Q4_K_M.gguf", "bytesPerToken": 7106037248, "tokensPerSecond": 61.8, "engine": "llama.cpp b11429 (Homebrew), llama-bench -n 128 -r 5", "date": "2026-10-22", "source": "measured for this feed" },
-    { "hardware": "apple-m5-max-40", "file": "unsloth/Qwen3.5-4B-GGUF/Qwen3.5-4B-Q4_K_M.gguf", "bytesPerToken": 2729969664, "tokensPerSecond": 134.5, "engine": "llama.cpp b11429 (Homebrew), llama-bench -n 128 -r 5", "date": "2026-10-22", "source": "measured for this feed" }
+    { "hardware": "apple-m5-max-40", "file": "unsloth/Qwen3.5-4B-GGUF/Qwen3.5-4B-Q4_K_M.gguf", "bytesPerToken": 2729969664, "tokensPerSecond": 134.5, "engine": "llama.cpp b11429 (Homebrew), llama-bench -n 128 -r 5", "date": "2026-10-22", "source": "measured for this feed" },
+    { "hardware": "apple-m5-max-40", "file": "unsloth/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf", "bytesPerToken": 2626185728, "tokensPerSecond": 108.0, "engine": "llama.cpp b11429 (Homebrew), llama-bench -n 128 -r 5", "date": "2026-10-22", "source": "measured for this feed; mixture of experts, gives moeEfficiency 0.46" }
    ]
   },
   "vulkan": { "borrowedFrom": "cuda" },
@@ -165,6 +167,7 @@
  },
  "measured": [
   { "hardware": "apple-m5-max-40", "model": "gemma-4-12b", "quant": "Q4_K_M", "tokensPerSecond": 61.8, "engine": "llama.cpp b11429 (Homebrew), llama-bench -n 128 -r 5", "date": "2026-10-22" },
-  { "hardware": "apple-m5-max-40", "model": "qwen3.5-4b", "quant": "Q4_K_M", "tokensPerSecond": 134.5, "engine": "llama.cpp b11429 (Homebrew), llama-bench -n 128 -r 5", "date": "2026-10-22" }
+  { "hardware": "apple-m5-max-40", "model": "qwen3.5-4b", "quant": "Q4_K_M", "tokensPerSecond": 134.5, "engine": "llama.cpp b11429 (Homebrew), llama-bench -n 128 -r 5", "date": "2026-10-22" },
+  { "hardware": "apple-m5-max-40", "model": "qwen3.6-35b-a3b", "quant": "UD-Q4_K_M", "tokensPerSecond": 108.0, "engine": "llama.cpp b11429 (Homebrew), llama-bench -n 128 -r 5", "date": "2026-10-22" }
  ]
 }

@@ -39,7 +39,7 @@ The client never searches, scrapes or benchmarks anything to make a recommendati
 Decode tokens/s at the start of a conversation, with where the number came from:
 
 - **Measured:** the same file measured on the same class of hardware. Shown as is.
-- **Estimated:** decode is bound by memory bandwidth, so efficiency × bandwidth ÷ bytes read per token. Bytes per token come from the file: embedding tables are lookups, and a mixture-of-experts model reads only the experts a token is routed to. Each backend's efficiency is the lowest its measurements give, so estimates under-promise.
+- **Estimated:** decode is bound by memory bandwidth, so efficiency × bandwidth ÷ bytes read per token. Bytes per token come from the file: embedding tables are lookups, and a mixture-of-experts model reads only the experts a token is routed to. Each backend's efficiency is the lowest its measurements give, so estimates under-promise. Mixture-of-experts models use bandwidth less well and have their own efficiency: on Metal, Qwen3.6 35B A3B measured 108 tok/s where the dense efficiency would have promised 140 (0.46 against 0.60). A backend with no MoE measurement scales its dense efficiency by that ratio, as a borrowed figure.
 - **Estimated, borrowed:** a backend with no measurement of its own (Vulkan, ROCm/HIP, CPU) uses CUDA's efficiency, and says so. CPU-only machines also use an assumed 50 GB/s (dual-channel DDR4-3200, rounded down), because memory bandwidth is not probed.
 - **None:** a GPU the table does not list (a laptop part, a workstation card) gets no speed rather than a guess, and is still recommended by fit.
 

@@ -1009,6 +1009,7 @@
   },
   "metal": {
    "efficiency": 0.6,
+   "moeEfficiency": 0.46,
    "basis": [
     {
      "hardware": "apple-m5-max-40",
@@ -1027,6 +1028,15 @@
      "engine": "llama.cpp b11429 (Homebrew), llama-bench -n 128 -r 5",
      "date": "2026-10-22",
      "source": "measured for this feed"
+    },
+    {
+     "hardware": "apple-m5-max-40",
+     "file": "unsloth/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf",
+     "bytesPerToken": 2626185728,
+     "tokensPerSecond": 108,
+     "engine": "llama.cpp b11429 (Homebrew), llama-bench -n 128 -r 5",
+     "date": "2026-10-22",
+     "source": "measured for this feed; mixture of experts, gives moeEfficiency 0.46"
     }
    ]
   },
@@ -1054,6 +1064,14 @@
    "model": "qwen3.5-4b",
    "quant": "Q4_K_M",
    "tokensPerSecond": 134.5,
+   "engine": "llama.cpp b11429 (Homebrew), llama-bench -n 128 -r 5",
+   "date": "2026-10-22"
+  },
+  {
+   "hardware": "apple-m5-max-40",
+   "model": "qwen3.6-35b-a3b",
+   "quant": "UD-Q4_K_M",
+   "tokensPerSecond": 108,
    "engine": "llama.cpp b11429 (Homebrew), llama-bench -n 128 -r 5",
    "date": "2026-10-22"
   }

@@ -121,13 +121,41 @@ fn windows_nvidia_runs_the_big_models_on_the_gpu() {
     assert_eq!(r.hardware.backend, "cuda");
     assert_eq!(r.budget.placement, Placement::Gpu);
     assert_eq!(r.budget.bytes, 31.0 * GIB, "32 GB less the display's share");
+    let feed = bundled_feed();
     for t in &r.tasks {
         let p = t.pick.as_ref().unwrap();
         assert_eq!(p.placement, Placement::Gpu, "{}", t.task);
         if let Some(s) = &p.speed {
-            assert_eq!(s.basis, SpeedBasis::Estimated, "{}: CUDA has its own calibration", t.task);
+            let moe = feed.models.iter().find(|m| m.id == p.model_id).unwrap().experts.is_some();
+            // CUDA has its own dense calibration; its MoE figure is scaled by the ratio measured on Metal.
+            let want = if moe { SpeedBasis::EstimatedBorrowed } else { SpeedBasis::Estimated };
+            assert_eq!(s.basis, want, "{} {}", t.task, p.model_id);
         }
     }
+}
+
+#[test]
+fn mixture_of_experts_models_get_their_own_efficiency() {
+    let feed = bundled_feed();
+    let speed = |r: &Recommendations, model: &str, quant: &str| {
+        let o = r.tasks.iter().flat_map(|t| &t.options).find(|o| o.model_id == model && o.quant == quant);
+        o.and_then(|o| o.speed.clone()).unwrap_or_else(|| panic!("{model} {quant}"))
+    };
+    // Metal's MoE efficiency is measured (Qwen3.6 35B A3B at 108 tok/s on a 40-core M5 Max,
+    // where the dense efficiency would have promised 140); its Q8_0 is estimated with it.
+    let m5 = recommend(&apple("Apple M5 Max", 128.0, 40), feed);
+    let estimated = speed(&m5, "qwen3.6-35b-a3b", "Q8_0");
+    let bpt = feed.models.iter().find(|m| m.id == "qwen3.6-35b-a3b").unwrap().quants[0].bytes_per_token;
+    assert_eq!((estimated.tokens_per_second, estimated.basis), ((0.46 * 614e9 / bpt).round(), SpeedBasis::Estimated));
+    // CUDA borrows the MoE-to-dense ratio: 0.52 x 0.46 / 0.6.
+    let cuda = recommend(&rtx_5090(), feed);
+    let s = speed(&cuda, "gemma-4-26b-a4b", "UD-Q4_K_M");
+    let g = feed.models.iter().find(|m| m.id == "gemma-4-26b-a4b").unwrap();
+    let bpt = g.quants.iter().find(|q| q.label == "UD-Q4_K_M").unwrap().bytes_per_token;
+    assert_eq!(
+        (s.tokens_per_second, s.basis),
+        ((0.52 * 0.46 / 0.6 * 1792e9 / bpt).round(), SpeedBasis::EstimatedBorrowed)
+    );
 }
 
 #[test]

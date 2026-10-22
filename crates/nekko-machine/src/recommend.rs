@@ -88,6 +88,8 @@ pub struct Model {
     pub max_context: Option<f64>,
     pub geometry: Geometry,
     pub kv: Kv,
+    /// Present on a mixture-of-experts model.
+    pub experts: Option<Experts>,
     pub quants: Vec<Quant>,
     pub projector: Option<Projector>,
 }
@@ -108,6 +110,13 @@ pub struct Kv {
     pub swa_bytes_per_token: f64,
     #[serde(default)]
     pub sliding_window: f64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Experts {
+    pub total: f64,
+    pub used: f64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -159,6 +168,9 @@ pub struct CpuClass {
 #[serde(rename_all = "camelCase")]
 pub struct Calibration {
     pub efficiency: Option<f64>,
+    /// The same for mixture-of-experts models, which use bandwidth less well
+    /// (routing, many small expert reads).
+    pub moe_efficiency: Option<f64>,
     pub borrowed_from: Option<String>,
 }
 
@@ -308,13 +320,24 @@ fn backend_of(profile: &HardwareProfile) -> String {
 }
 
 /// The efficiency for a backend and whether it is its own.
-fn efficiency(feed: &Feed, backend: &str) -> Option<(f64, bool)> {
+///
+/// A mixture-of-experts model takes the backend's own MoE efficiency, else
+/// its dense one scaled by the MoE-to-dense ratio measured on another backend
+/// (and is then borrowed).
+fn efficiency(feed: &Feed, backend: &str, moe: bool) -> Option<(f64, bool)> {
     let c = feed.calibration.get(backend)?;
-    if let Some(e) = c.efficiency {
+    let dense = match c.efficiency {
+        Some(e) => (e, true),
+        None => (feed.calibration.get(c.borrowed_from.as_deref()?)?.efficiency?, false),
+    };
+    if !moe {
+        return Some(dense);
+    }
+    if let (Some(e), true) = (c.moe_efficiency, dense.1) {
         return Some((e, true));
     }
-    let from = feed.calibration.get(c.borrowed_from.as_deref()?)?;
-    Some((from.efficiency?, false))
+    let ratio = feed.calibration.values().find_map(|o| Some(o.moe_efficiency? / o.efficiency?))?;
+    Some((dense.0 * ratio, false))
 }
 
 /* ----------------------------------------------------------------- memory */
@@ -338,8 +361,8 @@ struct Target {
     budget: f64,
     class_id: Option<String>,
     bandwidth_g_bps: Option<f64>,
-    /// The backend's efficiency, and whether it was measured on this backend.
-    efficiency: Option<(f64, bool)>,
+    /// The backend whose efficiency speeds are estimated with.
+    backend: String,
 }
 
 fn cpu_target(feed: &Feed, profile: &HardwareProfile) -> Target {
@@ -348,7 +371,7 @@ fn cpu_target(feed: &Feed, profile: &HardwareProfile) -> Target {
         budget: (profile.ram_bytes - RAM_RESERVE_BYTES).max(0.0),
         class_id: Some(feed.hardware.cpu.id.clone()),
         bandwidth_g_bps: Some(feed.hardware.cpu.bandwidth_g_bps),
-        efficiency: efficiency(feed, "cpu"),
+        backend: "cpu".into(),
     }
 }
 
@@ -370,7 +393,7 @@ fn gpu_target(feed: &Feed, profile: &HardwareProfile, backend: &str) -> Option<(
         budget,
         class_id: class.map(|c| c.id.clone()),
         bandwidth_g_bps: class.map(|c| c.bandwidth_g_bps),
-        efficiency: efficiency(feed, backend),
+        backend: backend.into(),
     };
     Some((target, gpu.name.clone()))
 }
@@ -382,7 +405,8 @@ fn speed_for(feed: &Feed, target: &Target, model: &Model, quant: &Quant) -> Opti
     {
         return Some(Speed { tokens_per_second: m.tokens_per_second, basis: SpeedBasis::Measured });
     }
-    let (bandwidth, (eff, own)) = (target.bandwidth_g_bps?, target.efficiency?);
+    let bandwidth = target.bandwidth_g_bps?;
+    let (eff, own) = efficiency(feed, &target.backend, model.experts.is_some())?;
     if quant.bytes_per_token <= 0.0 {
         return None;
     }
