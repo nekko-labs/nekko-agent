@@ -2062,6 +2062,8 @@ dependencies = [
  "axum",
  "encoding_rs 0.8.42",
  "futures-util",
+ "http",
+ "hyper-util",
  "nekko-js",
  "nekko-tools",
  "reqwest",

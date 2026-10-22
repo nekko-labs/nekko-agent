@@ -15,8 +15,12 @@
 //!
 //! Where it may go: only the public internet unless the caller passes hosts
 //! the user approved ([`crate::netguard`]). Every redirect hop is checked
-//! again, the check runs in the client's own resolver so the address checked
-//! is the address dialed, and no proxy is used. A local or private
+//! again. Without a proxy the check runs in the client's own resolver, so the
+//! address checked is the address dialed. When the environment or system
+//! names a proxy for the URL, the host is resolved here first to decide, and
+//! the request then goes through the proxy, which resolves the name again:
+//! a name that changes its answer in between (DNS rebinding), or that only
+//! the proxy can resolve, is not caught on that path. A local or private
 //! destination comes back as [`FetchError::Local`] for the caller to ask about.
 
 use crate::netguard::{self, PublicOnly};
@@ -412,6 +416,45 @@ fn client(allowed: &HashSet<String>) -> Result<reqwest::Client, String> {
     if allowed.is_empty() { PUBLIC.clone() } else { build_client(allowed) }
 }
 
+/// The client for URLs a proxy is configured for: reqwest's own proxy
+/// detection, redirects by hand.
+fn proxied_client() -> Result<reqwest::Client, String> {
+    static PROXIED: LazyLock<Result<reqwest::Client, String>> = LazyLock::new(|| {
+        reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .user_agent(USER_AGENT)
+            .build()
+            .map_err(|e| e.to_string())
+    });
+    PROXIED.clone()
+}
+
+/// The proxy settings reqwest reads (`HTTP_PROXY`, `HTTPS_PROXY`,
+/// `ALL_PROXY`, `NO_PROXY`), read the same way.
+fn proxy_matcher() -> &'static hyper_util::client::proxy::matcher::Matcher {
+    static M: LazyLock<hyper_util::client::proxy::matcher::Matcher> =
+        LazyLock::new(hyper_util::client::proxy::matcher::Matcher::from_system);
+    &M
+}
+
+/// A proxy is configured for this URL.
+pub fn uses_proxy(url: &url::Url) -> bool {
+    url.as_str().parse::<http::Uri>().is_ok_and(|uri| proxy_matcher().intercept(&uri).is_some())
+}
+
+/// Before a proxied request: the host's addresses, resolved here, must all be
+/// public unless the user approved the host. A name that does not resolve
+/// here goes to the proxy as it is (only the proxy may know it).
+async fn check_before_proxy(at: &url::Url, allowed: &HashSet<String>) -> Result<(), FetchError> {
+    let Some(url::Host::Domain(name)) = at.host() else { return Ok(()) };
+    match PublicOnly::system().allowing(allowed.clone()).resolve_public(name.to_string()).await {
+        Err(e) if e.downcast_ref::<netguard::Blocked>().is_some() => {
+            Err(FetchError::Local { url: at.to_string(), host: netguard::host_key(at) })
+        }
+        _ => Ok(()),
+    }
+}
+
 /// Why `fetch_url` did not return a page.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FetchError {
@@ -452,13 +495,25 @@ pub async fn fetch_url(
     let url = parse_url(raw)?;
     let max = max_chars(requested_chars);
     let deadline = tokio::time::Instant::now() + FETCH_TIMEOUT;
-    let client = client(allowed_local)?;
+    let pinned = client(allowed_local)?;
     let mut at = url.clone();
     let mut hops = 0;
     let res = loop {
         if let Some(host) = netguard::local_host(&at).filter(|h| !allowed_local.contains(h)) {
             return Err(FetchError::Local { url: at.to_string(), host });
         }
+        let client = if uses_proxy(&at) {
+            tokio::select! {
+                checked = check_before_proxy(&at, allowed_local) => checked?,
+                _ = tokio::time::sleep_until(deadline) => {
+                    return Err(format!("Fetching {url} took longer than {} s.", FETCH_TIMEOUT.as_secs()).into());
+                }
+                _ = cancel.cancelled() => return Err(format!("Could not fetch {url}: This operation was aborted").into()),
+            }
+            proxied_client()?
+        } else {
+            pinned.clone()
+        };
         let request = client
             .get(at.as_str())
             .header("accept", "text/html, application/xhtml+xml, text/plain;q=0.9, application/json;q=0.8, */*;q=0.5")
