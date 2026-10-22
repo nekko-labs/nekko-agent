@@ -94,6 +94,9 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 >   the conversation before it and the prompt in the message box; on a reply, **Fork from here**.
 > - **Photos:** tap a photo in a message to see it full screen; **+ → Paste image** adds one from the clipboard.
 > - **Saved prompts:** the prompts you saved on the computer show in `/` and under **+**, run like skills.
+> - **`/` after what you've typed:** typing `/` after some words (after a space or on a new line)
+>   opens the same menu. Picking a skill keeps your words and adds the skill; picking a saved prompt
+>   puts its text in place of the `/`.
 > - **Continue and search:** the list opens with your most recent chat; search finds completed chats too.
 > - **Automations:** **Computers and settings → Automations** lists the computer's tasks and
 >   workflows with how each last went, and **Run now**. You set them up on the computer.
