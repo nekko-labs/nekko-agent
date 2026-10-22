@@ -72,20 +72,6 @@ async fn serves_the_model_library_and_its_folders_itself() {
         ],
     );
 
-    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    for channel in [
-        "engine:models",
-        "engine:importModel",
-        "engine:deleteModel",
-        "engine:saveModelPreset",
-        "engine:folders",
-        "engine:foldersSave",
-        "engine:autoload",
-        "engine:library",
-    ] {
-        assert!(info["owned"].as_array().unwrap().contains(&json!(channel)), "{channel} is not owned");
-    }
-
     // The first read seeds the folder list with Ollama's store, saved as a setting.
     let (status, models) = post(d.port, "engine:models", json!([]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{models}");
@@ -233,18 +219,6 @@ async fn downloads_models_itself_and_merges_the_hosts_jobs() {
         json!({ "huggingFaceUrl": format!("http://127.0.0.1:{hf}") }),
         &[("HOME", Some(&h)), ("USERPROFILE", Some(&h)), ("OLLAMA_MODELS", None), ("HF_HOME", None)],
     );
-    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    for channel in [
-        "engine:downloadModel",
-        "engine:downloadCompanions",
-        "engine:imageCompanions",
-        "engine:downloadImageCompanions",
-        "engine:downloads",
-        "engine:cancelDownload",
-        "engine:dismissDownload",
-    ] {
-        assert!(info["owned"].as_array().unwrap().contains(&json!(channel)), "{channel} is not owned");
-    }
     let mut events = ws(d.port, &format!("/api/events?token={TOKEN}"), Some("null")).await.unwrap();
 
     // One quantization, with its projector and tokenizer, from the catalog.
@@ -402,12 +376,6 @@ async fn installs_and_removes_the_engine_itself() {
     let (build, name, archive) = engine_archive(&root);
     let gh = fake_github(name, archive).await;
     let d = start_with_env(Some(&data), json!({ "githubApiUrl": format!("http://127.0.0.1:{gh}") }), &[]);
-    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    for channel in
-        ["engine:install", "engine:uninstall", "engine:installPreview", "engine:detect", "engine:installedBin"]
-    {
-        assert!(info["owned"].as_array().unwrap().contains(&json!(channel)), "{channel} is not owned");
-    }
 
     let (_, preview) = post(d.port, "engine:installPreview", json!(["llama", build]), Some(TOKEN)).await;
     assert_eq!(
@@ -499,17 +467,6 @@ async fn runs_the_model_server_itself() {
     });
     std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
     let d = start_with_env(Some(&data), json!({}), &[]);
-    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    for channel in [
-        "engine:status",
-        "engine:settings",
-        "engine:residentTtl",
-        "engine:generateImage",
-        "engine:start",
-        "engine:load",
-    ] {
-        assert!(info["owned"].as_array().unwrap().contains(&json!(channel)), "{channel} is not owned");
-    }
 
     let (status, s) = post(d.port, "engine:status", json!([]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{s}");
@@ -678,8 +635,6 @@ async fn the_daemon_runs_an_image_turn_on_its_model_server() {
     let session = json!({ "id": "s_img", "title": "New chat", "messages": [], "createdAt": 1, "updatedAt": 1 });
     std::fs::write(data.join("sessions/s_img.json"), session.to_string()).unwrap();
     let d = start_with_env(Some(&data), json!({}), &[]);
-    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    assert!(info["owned"].as_array().unwrap().contains(&json!("chat:generateImage")), "{info}");
     let (_, models) = post(d.port, "engine:models", json!([]), Some(TOKEN)).await;
     let row = models.as_array().unwrap().iter().find(|m| m["modality"] == "image").cloned().expect("an image row");
     let id = row["id"].as_str().unwrap().to_string();
@@ -843,8 +798,6 @@ async fn downloads_a_decision_model_from_its_release_through_the_queue_and_check
         json!({ "decisionModelsUrl": release }),
         &[("HOME", Some(&h)), ("USERPROFILE", Some(&h)), ("OLLAMA_MODELS", None), ("HF_HOME", None)],
     );
-    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    assert!(info["owned"].as_array().unwrap().contains(&json!("decisions:download")));
 
     let (status, started) = post(d.port, "decisions:download", json!(["laya-en", "fp16"]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{started}");

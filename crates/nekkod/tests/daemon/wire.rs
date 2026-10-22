@@ -23,7 +23,6 @@ async fn refuses_unknown_channels_and_serves_owned_ones() {
     assert_eq!(list, json!([]));
 
     // Decision models are the daemon's, never forwarded; with none loaded they say so.
-    assert!(info["owned"].as_array().unwrap().iter().any(|c| c == "decide:run"));
     let (status, st) = post(d.port, "decide:status", json!([]), Some(TOKEN)).await;
     assert_eq!((status, st["loaded"].clone()), (200, json!(false)));
     let (status, body) = post(d.port, "decide:run", json!([{ "state": "x", "questions": {} }]), Some(TOKEN)).await;

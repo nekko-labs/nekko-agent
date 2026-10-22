@@ -110,8 +110,6 @@ async fn chat_send_is_admitted_and_driven_by_the_daemon() {
     });
     write_settings(&rig, settings).await;
 
-    let (_, info) = post(rig.d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    assert!(info["owned"].as_array().unwrap().contains(&json!("chat:send")));
     // A disabled provider is refused here, as admitTurn refuses it.
     let opts = json!({ "sessionId": "s_admit", "providerId": "off", "modelId": "m", "text": "hello" });
     let (status, _) = post(rig.d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
@@ -580,10 +578,6 @@ async fn a_daemon_turn_writes_its_own_usage_and_reply_lines() {
     });
     let rig = turn_rig("usage", session);
     write_settings(&rig, json!({ "providers": [{ "id": "p1", "kind": "openai-compat" }, { "id": "c1", "kind": "chatgpt", "auth": "subscription", "tokenKey": "chatgpt:t" }] })).await;
-    let (_, info) = post(rig.d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    for c in ["turn:account", "usage:summary", "limits:get", "limits:poll"] {
-        assert!(info["owned"].as_array().unwrap().iter().any(|o| o == c), "{c} not owned: {info}");
-    }
 
     let model = scripted_model(vec![say_text("hello")]).await;
     let mut spec = turn_spec(&rig, &model, "turn_u", "s_turn_u", json!({}));
@@ -627,9 +621,6 @@ async fn a_daemon_turn_writes_its_own_usage_and_reply_lines() {
 #[tokio::test(flavor = "multi_thread")]
 async fn without_a_data_dir_accounting_is_not_served() {
     let d = start();
-    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    let owned = info["owned"].as_array().unwrap();
-    assert!(!owned.iter().any(|o| o == "limits:get" || o == "turn:account"), "{info}");
     let (status, body) = post(d.port, "limits:get", json!(["k"]), Some(TOKEN)).await;
     assert_eq!(status, 400);
     assert_eq!(body["error"], "unknown channel limits:get");
@@ -739,10 +730,6 @@ async fn the_daemon_compacts_a_chat_and_owns_its_state() {
         "baseUrl": format!("http://127.0.0.1:{}/v1", model2.port),
     }));
     write_settings(&rig, settings).await;
-    let (_, info) = post(rig.d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    for c in ["chat:compact", "chat:cancelCompaction", "chat:interruptQueued"] {
-        assert!(info["owned"].as_array().unwrap().contains(&json!(c)), "{c} is not owned");
-    }
     let original = saved_session(&rig, "s_compact")["messages"].clone();
 
     // An omitted options argument can cross IPC as null.

@@ -33,10 +33,9 @@ async fn stages_writes_a_message_commits_and_reads_history_in_a_saved_folder() {
     let d = start_with(Some(&data));
     let (_, added) = post(d.port, "workspace:addByPath", json!([repo.to_string_lossy()]), Some(TOKEN)).await;
     let id = added[0]["id"].as_str().unwrap().to_string();
-    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    for c in ["git:diff", "git:commit", "git:push", "pr:create", "pr:checks"] {
-        assert!(info["owned"].as_array().unwrap().contains(&json!(c)), "{c}");
-    }
+    // Both refuse before any git or network work: no such folder, no PR URL.
+    assert_served(d.port, "pr:create", json!(["no-such-workspace"])).await;
+    assert_served(d.port, "pr:checks", json!(["not a PR URL"])).await;
 
     std::fs::write(repo.join("a.txt"), "one\ntwo\n").unwrap();
     let (_, status) = post(d.port, "workspace:gitStatus", json!([id]), Some(TOKEN)).await;

@@ -92,17 +92,6 @@ async fn answers_the_channels_electron_main_used_to() {
     // `dialogs: "bridge"`: main draws them, so no real dialog opens in a test.
     let d = native_daemon(&data, &bridge, json!({ "isPackaged": false, "exePath": "x", "dialogs": "bridge" }));
 
-    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    for c in [
-        "dialog:openFiles",
-        "dialog:pickFolder",
-        "shell:openPath",
-        "voice:permission",
-        "update:check",
-        "update:install",
-    ] {
-        assert!(info["owned"].as_array().unwrap().iter().any(|o| o == c), "{c} is the daemon's: {info}");
-    }
     let (status, files) = post(d.port, "dialog:openFiles", json!([]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{files}");
     assert_eq!(files.as_array().unwrap().len(), 2);
@@ -146,8 +135,8 @@ async fn answers_the_channels_electron_main_used_to() {
 
     // Without `native` (the Local Web UI), nothing here is the daemon's.
     let web = start_with(Some(&data));
-    let (_, info) = post(web.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    assert!(!info["owned"].as_array().unwrap().iter().any(|o| o == "update:check"));
+    let (status, body) = post(web.port, "update:check", json!([]), Some(TOKEN)).await;
+    assert_eq!((status, body["error"].clone()), (400, json!("unknown channel update:check")));
     drop(web);
     let _ = std::fs::remove_dir_all(&data);
 }

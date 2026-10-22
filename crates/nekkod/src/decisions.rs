@@ -39,7 +39,9 @@ fn model_files(precision: &str) -> &'static [&'static str] {
 /// `decision-catalog.json`, parsed once.
 fn source() -> &'static Value {
     static S: OnceLock<Value> = OnceLock::new();
-    S.get_or_init(|| serde_json::from_str(include_str!("decision-catalog.json")).expect("decision-catalog.json is valid JSON"))
+    S.get_or_init(|| {
+        serde_json::from_str(include_str!("decision-catalog.json")).expect("decision-catalog.json is valid JSON")
+    })
 }
 
 /// The models the app offers to download (`decision-catalog.json`'s `catalog`).

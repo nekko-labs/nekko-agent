@@ -122,14 +122,11 @@ const until = async (what, fn, ms = 20_000) => {
 
 try {
   let info = null;
-  for (let i = 0; i < 160 && !info?.owned; i++) {
+  for (let i = 0; i < 160 && info?.app !== 'nekkod'; i++) {
     info = await api('daemon:info').catch(() => null);
-    if (!info?.owned) await sleep(250);
+    if (info?.app !== 'nekkod') await sleep(250);
   }
-  if (!info?.owned) throw new Error(`the server never came up:\n${serverOut}`);
-  for (const c of ['chat:compact', 'chat:cancelCompaction', 'chat:interruptQueued', 'chat:generateImage']) {
-    check(`daemon owns ${c}`, info.owned.includes(c));
-  }
+  if (info?.app !== 'nekkod') throw new Error(`the server never came up:\n${serverOut}`);
   // Configure through the API, as the UI does (the daemon writes settings.json).
   await api('providers:save', { id: 'p1', kind: 'openai-compat', label: 'Scripted', baseUrl: modelUrl, enabled: true });
   await api('engine:settings', { port: ENGINE_PORT });
