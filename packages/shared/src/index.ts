@@ -34,6 +34,7 @@ export * from './memory.js';
 export * from './workspace.js';
 export * from './files.js';
 export * from './logs.js';
+export * from './privacy.js';
 export * from './design.js';
 export * from './tasks.js';
 export * from './training.js';

@@ -41,6 +41,7 @@ mod messaging;
 mod model_server;
 mod native;
 mod oauth;
+mod privacy;
 mod procgroup;
 mod providers;
 mod remote;

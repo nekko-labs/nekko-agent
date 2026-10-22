@@ -994,3 +994,63 @@ async fn an_unattended_workflow_turn_denies_approvals_and_follows_its_allowlist(
     let (_, pending) = post(rig.d.port, "chat:pending", json!([]), Some(TOKEN)).await;
     assert!(pending.get("s_turn_u").is_none(), "{pending}");
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn privacy_shield_sends_placeholders_and_keeps_real_values_on_this_computer() {
+    let session = json!({
+        "id": "s_shield", "title": "New chat", "workspaceId": "w1", "createdAt": 1, "updatedAt": 1,
+        "privacy": { "mode": "redact" },
+        "messages": [
+            { "id": "u0", "role": "user", "content": "My email is jane.doe@example.com", "createdAt": 1 },
+            { "id": "a0", "role": "assistant", "content": "Noted.", "createdAt": 2 },
+        ],
+    });
+    let rig = turn_rig("shield", session);
+    let model = scripted_model(vec![
+        call_tool("c_write", "write_file", json!({ "path": "contact.txt", "content": "[PII_EMAIL_1]\n" })),
+        say_text("Saved [PII_EMAIL_1] to contact.txt"),
+    ])
+    .await;
+    let mut spec =
+        turn_spec(&rig, &model, "turn_shield", "s_shield", json!({ "text": "Save my email to contact.txt" }));
+    // A cloud provider (the scripted server stands in for it): only these get a shield.
+    let cloud = json!({
+        "id": "p1", "kind": "openai", "label": "Cloud", "enabled": true, "apiKey": "k",
+        "baseUrl": format!("http://127.0.0.1:{}/v1", model.port),
+    });
+    spec["settings"]["providers"] = json!([cloud]);
+    spec["facts"]["provider"] = cloud;
+    let (status, started) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{started}");
+    let (_, end) = turn_record(&rig, "turn_shield", "s_shield").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+
+    // On the wire: placeholders only, and the note that explains them.
+    let requests = model.requests.lock().unwrap().clone();
+    let wire = serde_json::to_string(&requests).unwrap();
+    assert!(!wire.contains("jane.doe@example.com"), "the email left the computer: {wire}");
+    assert!(wire.contains("[PII_EMAIL_1]"), "{wire}");
+    assert!(wire.contains("## Private values"), "{wire}");
+
+    // On this computer: the tool wrote the real value, and the chat keeps it.
+    let written = std::fs::read_to_string(rig.workspace.join("contact.txt")).unwrap();
+    assert_eq!(written, "jane.doe@example.com\n");
+    let saved = saved_session(&rig, "s_shield");
+    let messages = saved["messages"].as_array().unwrap();
+    assert_eq!(messages[0]["content"], "My email is jane.doe@example.com");
+    assert_eq!(messages.last().unwrap()["content"], "Saved jane.doe@example.com to contact.txt");
+    let call = messages.iter().find_map(|m| m["toolCalls"].as_array().and_then(|c| c.first()).cloned()).unwrap();
+    assert_eq!(call["input"]["content"], "jane.doe@example.com\n");
+
+    // The preview names it, and says the shield is on for this cloud chat.
+    write_settings(&rig, json!({ "providers": [{ "id": "p1", "kind": "openai", "enabled": true, "baseUrl": "https://api.openai.com/v1" }], "defaultProviderId": "p1" })).await;
+    let (status, preview) =
+        post(rig.d.port, "privacy:preview", json!(["s_shield", "cc bob@example.com"]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{preview}");
+    assert_eq!(preview["enabled"], true);
+    assert_eq!(preview["reach"], "cloud");
+    assert_eq!(preview["draft"], "cc [PII_EMAIL_2]");
+    let values: Vec<&str> =
+        preview["findings"].as_array().unwrap().iter().map(|f| f["value"].as_str().unwrap()).collect();
+    assert_eq!(values, ["jane.doe@example.com", "bob@example.com"]);
+}

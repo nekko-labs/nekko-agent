@@ -231,6 +231,7 @@ const api: NekkoApi = {
   readScopedFile: (root, relPath, opts) => inv(IpcChannels.filesRead, root, relPath, opts ?? {}),
   writeScopedFile: (root, relPath, content, opts) => inv(IpcChannels.filesWrite, root, relPath, content, opts),
   listLogs: () => inv(IpcChannels.logsList),
+  previewPrivacy: (sessionId, draft) => inv(IpcChannels.privacyPreview, sessionId, draft),
   readLog: (id, opts) => inv(IpcChannels.logsRead, id, opts ?? {}),
   fetchRemoteImage: (url) => inv(IpcChannels.imageFetch, url),
 

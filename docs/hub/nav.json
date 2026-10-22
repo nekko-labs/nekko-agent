@@ -28,6 +28,12 @@
           "description": "Chat-owned browser actions, security boundaries and native driver migration status."
         },
         {
+          "slug": "privacy-shield",
+          "title": "Privacy Shield",
+          "source": "docs/privacy-shield.md",
+          "description": "Replace emails, phone numbers, secrets and your own terms with placeholders before a request reaches a cloud model."
+        },
+        {
           "slug": "local-models",
           "title": "Running models locally",
           "source": "docs/local-models.md",

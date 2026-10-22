@@ -168,7 +168,8 @@ async fn hypergate_is_found_and_connected_by_the_daemon() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_daemon_turn_drives_its_sub_agent_and_answers_with_it() {
     let session = json!({
-        "id": "s_turn_p", "title": "Named", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
+        "id": "s_turn_p", "title": "Named", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1,
+        "privacy": { "mode": "redact", "allow": ["a@b.io"] },
     });
     let rig = turn_rig("spawn", session);
     let (_, info) = post(rig.d.port, "daemon:info", json!([]), Some(TOKEN)).await;
@@ -192,6 +193,8 @@ async fn a_daemon_turn_drives_its_sub_agent_and_answers_with_it() {
     let child = child_of(&rig, "s_turn_p").expect("the child chat");
     assert_eq!(child["title"], "count the files");
     assert_eq!((child["providerId"].clone(), child["modelId"].clone()), (json!("p1"), json!("synthetic")));
+    // A shielded chat's sub-agent is shielded too.
+    assert_eq!(child["privacy"], json!({ "mode": "redact", "allow": ["a@b.io"] }));
     assert_eq!(child["messages"][0]["content"], "count the files");
     assert_eq!(child["messages"].as_array().unwrap().last().unwrap()["content"], "there are 2 files");
     let parent = saved_session(&rig, "s_turn_p");
