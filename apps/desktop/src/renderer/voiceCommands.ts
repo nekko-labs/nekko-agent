@@ -5,7 +5,8 @@ export type VoiceIntent = { kind: 'dictation'; text: string } | { kind: 'new-ses
 /** Only an explicit leading address can turn dictation into an app action. */
 export function parseVoiceIntent(text: string): VoiceIntent {
   const trimmed = text.trim();
-  const address = /^nekko\b[\s,:.!-]*/i.exec(trimmed);
+  // Recognizers spell the wake word as they hear it: Nekko, Neko, Neco, Necko.
+  const address = /^ne[ck]k?o\b[\s,:.!-]*/i.exec(trimmed);
   if (!address) return { kind: 'dictation', text: trimmed };
   const command = trimmed.slice(address[0].length).toLowerCase().replace(/[.!?]+$/, '').trim();
   if (/^(?:create|start|open)(?: a)? new (?:session|chat|agent)$/.test(command)) return { kind: 'new-session' };
