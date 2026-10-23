@@ -661,6 +661,7 @@ impl Runtimes {
                             .opt("layers", m.get("layers").cloned())
                             .opt("kvHeads", m.get("kvHeads").cloned())
                             .opt("headDim", m.get("headDim").cloned())
+                            .opt("kvLayout", m.get("kvLayout").cloned())
                             .opt("maxContext", m.get("maxContext").cloned())
                             .opt("quantization", m.get("quantization").cloned())
                             .opt("parameterSize", m.get("parameterSize").cloned())

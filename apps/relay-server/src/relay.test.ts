@@ -145,7 +145,7 @@ describe('relay v2 routing', () => {
     await agent.next();
     const dev = '00000000-0000-4000-8000-000000000003';
     const tag = 'a'.repeat(32);
-    c.send({ type: 'register-activity', deviceId: dev, tag, token: 'ab'.repeat(32), app: 'com.nekko.native.ios' });
+    c.send({ type: 'register-activity', deviceId: dev, tag, token: 'ab'.repeat(32), app: 'dev.nekkolabs.nekkoagent' });
     // Malformed registrations are ignored.
     c.send({ type: 'register-activity', deviceId: 'nope', tag, token: 'ab'.repeat(32) });
     c.send({ type: 'register-activity', deviceId: dev, tag: 'short', token: 'ab'.repeat(32) });
@@ -158,8 +158,8 @@ describe('relay v2 routing', () => {
     agent.send({ type: 'activity', tag, phase: 'done' });
     await new Promise((r) => setTimeout(r, 50));
     expect(pushes).toEqual([
-      { token: 'ab'.repeat(32), push: { event: 'update', phase: 'approval', callId: 'tc1', severity: 'high' }, app: 'com.nekko.native.ios' },
-      { token: 'ab'.repeat(32), push: { event: 'end', phase: 'done' }, app: 'com.nekko.native.ios' },
+      { token: 'ab'.repeat(32), push: { event: 'update', phase: 'approval', callId: 'tc1', severity: 'high' }, app: 'dev.nekkolabs.nekkoagent' },
+      { token: 'ab'.repeat(32), push: { event: 'end', phase: 'done' }, app: 'dev.nekkolabs.nekkoagent' },
     ]);
     // Ended: the tag is forgotten and a late update pushes nothing.
     expect(rooms.get('r7')!.activities.has(tag)).toBe(false);

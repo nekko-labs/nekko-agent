@@ -103,3 +103,35 @@ The **Pause all automations** switch in the Workflows header is the kill switch:
 A schedule that came due while paused runs once when you resume. Events that arrived during the
 pause are skipped, not replayed. The setting is shared, so pausing from one window or the web
 edition pauses everywhere.
+
+## While you are using the computer
+
+A scheduled run on a **local model** waits until you are away. It competes with you for the
+GPU, memory and fans otherwise. You count as away when:
+
+- there has been no keyboard, mouse or touch input for 5 minutes;
+- no chat you started is replying, from the app or your phone;
+- the computer is on mains power and not running hot.
+
+A run that has waited 2 hours starts anyway, so nothing is skipped. While it waits, the
+workflow row and the task in the Automations window say **waiting for you to be away**. The run
+that starts says **low priority · waited 2 hr** in its history.
+
+Choose this yourself:
+
+- **Settings → Automations → When automations run** sets it for every automation: **By where
+  the model runs** (the default above), **Only when I'm away**, **Low priority** (runs on time,
+  even while you work, but not on a low battery or a hot computer) or **On time**.
+- **Away after** sets how many minutes without input count as away (5 by default).
+- **When it runs**, in a workflow's editor (under **Runs**) and in a chat's **⚡ Automate**
+  dialog, overrides the setting for that one automation.
+
+What does not wait:
+
+- runs on a **cloud model**, which do not load your computer;
+- pull request, push, Slack, connector and webhook events, which run at once so none is lost;
+- the **Run** button, a task's **Run now** and `nekko-agent workflow run`;
+- goal runs, which you start yourself.
+
+On a machine nobody sits at (Docker, a server), you always count as away. On Linux, Nekko
+reads the desktop's idle hint, which GNOME sets after its own 5-minute delay.

@@ -25,11 +25,9 @@ const ep = arg('ep', process.platform === 'win32' ? 'directml' : process.platfor
 const data = mkdtempSync(join(tmpdir(), 'nekko-decision-itest-'));
 writeFileSync(join(data, 'settings.json'), JSON.stringify({ engine: { modelFolders: [] } }));
 const token = `itest-${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
-const child = spawn(exe, [], {
-  env: { ...process.env, NEKKOD_CONFIG: JSON.stringify({ token, dataDir: data, allowedOrigins: [] }) },
-  stdio: ['pipe', 'pipe', 'inherit'],
-  windowsHide: true,
-});
+const child = spawn(exe, ['--config-stdin'], { stdio: ['pipe', 'pipe', 'inherit'], windowsHide: true });
+child.stdin.on('error', () => {});
+child.stdin.write(`${JSON.stringify({ token, dataDir: data, allowedOrigins: [] })}\n`);
 const killTree = () => {
   if (child.exitCode !== null) return;
   if (process.platform === 'win32') {

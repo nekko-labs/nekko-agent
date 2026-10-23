@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AUTO_COMPLETE_CHOICES, AUTO_COMPLETE_DEFAULT_DAYS, autoCompleteDays, DEFAULT_GUARDRAILS, promptCachingEnabled } from '@nekko-agent/shared';
-import type { AppSettings, ShellOption, ChatMode, ChatWorktreeInfo, GuardrailRule, GuardrailAction, HookEvent, HookRule, McpServerStatus, SandboxMode, TerminalRenderer, UpdateCheckSettings } from '@nekko-agent/shared';
+import { AUTO_COMPLETE_CHOICES, AUTO_COMPLETE_DEFAULT_DAYS, autoCompleteDays, DEFAULT_GUARDRAILS, promptCachingEnabled, RUN_POLICY_OPTIONS } from '@nekko-agent/shared';
+import type { AppSettings, AutomationRunPolicy, ShellOption, ChatMode, ChatWorktreeInfo, GuardrailRule, GuardrailAction, HookEvent, HookRule, McpServerStatus, SandboxMode, TerminalRenderer, UpdateCheckSettings } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store.js';
 import { Badge } from '../components/primitives/index.js';
@@ -226,6 +226,7 @@ export function SettingsView() {
         </section>
 
         <ErrorBoundary label="Notifications"><NotificationsSection settings={settings} update={update} /></ErrorBoundary>
+        <ErrorBoundary label="Automations"><AutomationsSection settings={settings} update={update} /></ErrorBoundary>
 
         {/* Agent loop */}
         <ErrorBoundary label="Agent loop"><AgentLoopSection settings={settings} update={update} /></ErrorBoundary>
@@ -1263,6 +1264,77 @@ export function Toggle({ on, onChange, ...aria }: { on: boolean; onChange: (v: b
         style={{ transform: on ? 'translateX(22px)' : 'translateX(2px)' }}
       />
     </button>
+  );
+}
+
+/**
+ * When scheduled tasks and workflows may run while you use the computer: the
+ * default run policy (each automation can set its own) and how long without
+ * input counts as away (`run_policy.rs`).
+ */
+export function AutomationsSection({ settings, update }: { settings: AppSettings; update: (patch: Partial<AppSettings>) => void }) {
+  const minutes = settings.automationIdleMinutes ?? 5;
+  // Written on blur or Enter; a value out of range snaps back to the saved one.
+  const commit = (input: HTMLInputElement) => {
+    const n = Math.round(Number(input.value));
+    if (Number.isFinite(n) && n >= 1 && n <= 240) {
+      if (n !== minutes) update({ automationIdleMinutes: n });
+    } else {
+      input.value = String(minutes);
+    }
+  };
+  const policy = settings.automationRunPolicy;
+  return (
+    <section id="automations" className="card mt-5 p-5" aria-labelledby="automations-heading" data-settings-automations>
+      <h2 id="automations-heading" className="font-semibold">Automations</h2>
+      <p className="mt-1 text-[12px] text-ink-faint">
+        Scheduled tasks and workflows on a model that runs on this computer compete with you for its GPU, memory and fans.
+        Choose when they may start. Each automation can override this in its editor.
+      </p>
+      <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
+        <div className="min-w-0">
+          <span className="text-[13px]">When automations run</span>
+          <p className="text-[11px] text-ink-faint" data-settings-run-policy-hint>
+            {policy
+              ? RUN_POLICY_OPTIONS.find((o) => o.id === policy)?.hint
+              : 'On a local model, only when you are away (after 2 hours they run anyway). On a cloud model, on time.'}
+          </p>
+        </div>
+        <select
+          className="input w-56 shrink-0"
+          aria-label="When automations run"
+          data-settings-run-policy
+          value={policy ?? ''}
+          onChange={(e) => update({ automationRunPolicy: (e.target.value || null) as AutomationRunPolicy | null })}
+        >
+          <option value="">By where the model runs</option>
+          {RUN_POLICY_OPTIONS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+        </select>
+      </div>
+      <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3">
+        <div className="min-w-0">
+          <span className="text-[13px]">Away after</span>
+          <p className="text-[11px] text-ink-faint">
+            Minutes without keyboard, mouse or touch input, with no chat of yours replying, before you count as away.
+          </p>
+        </div>
+        <span className="flex shrink-0 items-center gap-2 text-[12px] text-ink-faint">
+          <input
+            type="number"
+            min={1}
+            max={240}
+            className="input w-20"
+            aria-label="Away after, in minutes"
+            data-settings-idle-minutes
+            key={minutes}
+            defaultValue={minutes}
+            onBlur={(e) => commit(e.currentTarget)}
+            onKeyDown={(e) => { if (e.key === 'Enter') commit(e.currentTarget); }}
+          />
+          minutes
+        </span>
+      </div>
+    </section>
   );
 }
 

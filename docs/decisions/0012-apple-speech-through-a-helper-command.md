@@ -3,7 +3,7 @@ status: accepted
 date: 2026-10-23
 ---
 
-# 0011. Apple's on-device speech through a helper command
+# 0012. Apple's on-device speech through a helper command
 
 ## Context
 

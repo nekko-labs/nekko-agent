@@ -12,5 +12,5 @@
 mod router;
 mod supervisor;
 
-pub use router::{BoxFuture, Decisions, EngineRouter, Policy, ServeConfig};
+pub use router::{BoxFuture, Decisions, DecodeSample, EngineRouter, Meter, Policy, ServeConfig};
 pub use supervisor::{ChildInfo, Kind, PORT_PLACEHOLDER, SpawnOutcome, SpawnSpec, Supervisor};

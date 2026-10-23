@@ -24,12 +24,14 @@ impl Drop for Daemon {
 fn start(data_dir: &std::path::Path) -> Daemon {
     let config = json!({ "token": TOKEN, "allowedOrigins": ["null"], "dataDir": data_dir });
     let mut child = Command::new(env!("CARGO_BIN_EXE_nekkod"))
-        .env("NEKKOD_CONFIG", config.to_string())
+        .arg("--config-stdin")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
         .spawn()
         .expect("nekkod starts");
+    // The config is the first line of stdin; stdin stays open (its end stops the daemon).
+    std::io::Write::write_all(child.stdin.as_mut().unwrap(), format!("{config}\n").as_bytes()).unwrap();
     let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
     let line = lines.next().expect("a ready line").unwrap();
     let ready: Value = serde_json::from_str(line.strip_prefix("NEKKOD_READY ").expect("ready prefix")).unwrap();
@@ -98,6 +100,24 @@ async fn machine_channels_are_served_without_a_backend() {
     assert_eq!(tasks.len(), 5, "{recs}");
     for t in tasks {
         assert!(t["pick"]["modelId"].is_string(), "{t}");
+    }
+    // The first answer has nothing to compare with: no nudges, and the picks are remembered.
+    assert_eq!(recs["nudges"], json!([]), "{recs}");
+    assert!(dir.join("recommendations-seen.json").is_file());
+    let (status, ok) = post(d.port, "machine:dismissNudge", json!(["code"])).await;
+    assert_eq!((status, ok), (200, json!({ "ok": true })));
+
+    // Whether someone is using this machine: input, power and heat, judged.
+    let (status, act) = post(d.port, "activity:state", json!([])).await;
+    assert_eq!(status, 200, "{act}");
+    assert!(act["idleAfterSeconds"].as_f64().unwrap() > 0.0, "{act}");
+    assert!(act["present"].is_array() && act["strain"].is_array(), "{act}");
+    let (_, strict) = post(d.port, "activity:state", json!([{ "idleAfterSeconds": 1e9 }])).await;
+    assert_eq!(strict["idleAfterSeconds"], json!(1e9), "the threshold asked for: {strict}");
+    // A Mac always has input to read; a Windows runner's service session may not.
+    if cfg!(target_os = "macos") {
+        assert!(act["idleSeconds"].as_f64().unwrap() >= 0.0, "{act}");
+        assert_eq!(act["headless"], json!(false), "{act}");
     }
 
     let (status, body) = post(d.port, "resource:queue", json!(["list", {}])).await;

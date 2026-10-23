@@ -95,6 +95,18 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-10
 
+### A3a Engine router reads each reply's decode speed (2026-10-23)
+Area: engine daemon
+Result: no effect
+Conditions: Apple M5 Max (40-core GPU), macOS, release build; `nekko-infer` router in front of a fake model server streaming 4000 SSE chunks with no pause, then llama-server's `timings` chunk; two routers in one process, one without a meter (the path on `main`) and one with, alternated, median of 15 replies, run three times (`cargo test -p nekko-infer --release --test router -- --ignored --nocapture meter_cost`)
+
+| Metric | Without meter | With meter |
+|---|---|---|
+| 4000-chunk stream through the router, run 1 | 32.25 ms | 31.95 ms (-0.9%) |
+| run 2 | 33.08 ms | 33.32 ms (+0.7%) |
+| run 3 | 32.81 ms | 32.93 ms (+0.3%) |
+
+Why: the meter keeps the last 8 KB of a chat or completion reply and parses `timings` once, after the last byte went to the client; the differences are inside run-to-run noise. A real reply has a few hundred chunks, not 4000. Source: the A3a PR.
 ### nekkod checkpoints, per-chat write locks, launch scan, joined deltas (2026-10-22)
 Area: engine daemon
 Result: mixed (launch, frames and the save itself faster; a turn's end-to-end timings unchanged; text gaps about 0.5 ms longer at 15 ms token spacing)
@@ -975,6 +987,7 @@ speed. Source: [#152](https://github.com/nekko-labs/nekko-agent/pull/152).
 Performance-motivated changes with no recorded numbers. Measure them if they
 are ever revisited.
 
+- nekko/b1-run-policies (2026-10-23) the task scheduler holds a due task it will not fire (paused, or waiting for idle) until its next 15 s look, rather than picking it again on every turn of its loop: before, a task held by "Pause all automations" was re-read with the settings about every 50 ms (the loop's floor) for as long as the pause lasted. CPU and file reads before and after: not measured.
 - fix/wire-parity-ci-cache (2026-10-15) pin `Swatinem/rust-cache` in the required `build` job to the v2.9.2 commit: no behavior change to the cache itself, so no number was taken; the two `build` runs after #555 (38690470032, 38691683502) both started from an empty `ci-build` cache (`No cache found`) at 234 s and 230 s, against 187 s and 220 s uncached before it, so the warm-hit saving is still unmeasured.
 - #476 (2026-10-12) runtime control plane into nekkod: "No latency numbers".
 - #463 (2026-10-12) voice into nekkod (PF14).

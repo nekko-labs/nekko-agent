@@ -55,6 +55,24 @@ describe('workflow editor draft', () => {
     expect(patch.steps![0]).toMatchObject({ providerId: 'cloud', modelId: 'claude' });
   });
 
+  it('saves the run policy, and the default as null so the daemon clears it', () => {
+    expect(draftPatch(toDraft({ ...wf, runPolicy: 'lowPriority' })).runPolicy).toBe('lowPriority');
+    // JSON carries null; an undefined key never reaches the daemon.
+    const cleared = draftPatch(toDraft({ ...wf, runPolicy: null }));
+    expect(cleared.runPolicy).toBeNull();
+    expect(JSON.parse(JSON.stringify(cleared)).runPolicy).toBeNull();
+  });
+
+  it('offers when it runs, defaulting a local workflow to waiting until you are away', () => {
+    const html = renderToStaticMarkup(<WorkflowEditor workflow={wf} workflows={[wf]} skills={[]} onClose={() => {}} onSave={() => {}} />);
+    expect(html).toContain('data-run-policy="true"');
+    expect(html).toContain('Default: Only when I’m away');
+    expect(html).toContain('Its model runs on this computer.');
+    const cloud = { ...wf, providerId: undefined, modelId: undefined, localModelOnly: false, steps: [wf.steps[1]] };
+    const cloudHtml = renderToStaticMarkup(<WorkflowEditor workflow={cloud} workflows={[cloud]} skills={[]} onClose={() => {}} onSave={() => {}} />);
+    expect(cloudHtml).toContain('Default: On time');
+  });
+
   it('defaults an existing workflow to full workspace access and the default model', () => {
     const d = toDraft({ ...wf, providerId: undefined, modelId: undefined, localModelOnly: undefined, toolAccess: undefined });
     expect(d).toMatchObject({ toolAccess: 'workspace', localModelOnly: false, providerId: undefined });

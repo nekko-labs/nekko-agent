@@ -109,6 +109,7 @@ export const IpcChannels = {
   machineReadiness: 'machine:readiness',
   machineProfile: 'machine:profile',
   machineRecommendations: 'machine:recommendations',
+  machineDismissNudge: 'machine:dismissNudge',
   gpuStats: 'gpu:stats',
   systemStats: 'system:stats',
 
@@ -633,6 +634,8 @@ export interface NekkoApi {
   machineProfile(opts?: { refresh?: boolean }): Promise<import('./recommendations.js').HardwareProfile>;
   /** Which model to run for each task here, with expected speed and memory headroom, before any download. */
   machineRecommendations(opts?: { refresh?: boolean }): Promise<import('./recommendations.js').Recommendations>;
+  /** Keep a task's current pick as seen (every task with none), so its upgrade nudge goes. */
+  machineDismissNudge(task?: string): Promise<{ ok: boolean }>;
   /** GPU/VRAM stats for the metrics bar + Command Center (null if unavailable). */
   getGpuStats(): Promise<import('./models.js').GpuStats | null>;
   /** CPU load + RAM use for the monitor surfaces (null if unavailable). */

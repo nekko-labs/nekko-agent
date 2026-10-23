@@ -113,6 +113,10 @@
   {
    "kind": "tasksfile",
    "label": "Tasks file"
+  },
+  {
+   "kind": "floop",
+   "label": "Floop"
   }
  ]
 }
