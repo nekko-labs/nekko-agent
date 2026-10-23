@@ -17,7 +17,7 @@
     "build": "npm run build:nekkod && npm run build:app",
     "build:core": "npm run build -w @nekko-agent/shared && npm run build -w @nekko-agent/profile",
     "build:web": "npm run build:core && npm run build --workspace=apps/cli && npm run build -w @nekko-agent/desktop && npm run build -w @nekko-agent/local-web-ui",
-    "dev": "npm install --no-audit --no-fund && npm run build:dev && npm run dev -w @nekko-agent/desktop",
+    "dev": "npm install --no-save --no-audit --no-fund && npm run build:dev && npm run dev -w @nekko-agent/desktop",
     "local": "npm run build:core && npm run build -w @nekko-agent/desktop && node apps/desktop/scripts/stage-daemon.mjs --local && npm run start -w @nekko-agent/desktop",
     "web": "npm run build:web && npm run start -w @nekko-agent/local-web-ui",
     "docs": "node scripts/build-docs.mjs",
