@@ -75,6 +75,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Navigation panel, media fade and macOS app menu (2026-10-16)](desktop/navigation-panel-media-fade-and-macos-app-menu.md) (2 KB)
 - [New agent window defaults](desktop/new-agent-window-defaults.md) (1 KB)
 - [Search within Settings (desktop)](desktop/search-within-settings-desktop.md) (2 KB)
+- [Settings section nav and phone pairing placement (desktop)](desktop/settings-section-nav.md) (2 KB)
 - [Slim wave rail, tighter Agents spacing, composer snap points](desktop/slim-wave-rail-tighter-agents-spacing-composer-snap-points.md) (4 KB)
 - [Subtle rail and compact board gutters](desktop/subtle-rail-and-compact-board-gutters.md) (1 KB)
 - [Swoop navigation rail (2026-10-17)](desktop/swoop-navigation-rail.md) (2 KB)
