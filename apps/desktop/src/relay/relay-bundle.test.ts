@@ -19,7 +19,12 @@ describe('bundled relay (out/main/relay.js)', () => {
   });
 
   it("leaves ws's optional native helpers to a runtime require", () => {
-    const src = readFileSync(bundle, 'utf8');
+    // ws can land in a shared chunk (out/main/chunks/) when main also bundles it.
+    const entry = readFileSync(bundle, 'utf8');
+    const chunks = [...entry.matchAll(/require\("\.\/(chunks\/[^"]+)"\)/g)].map((m) =>
+      readFileSync(join(dirname(bundle), m[1]), 'utf8'),
+    );
+    const src = [entry, ...chunks].join('\n');
     expect(src).toMatch(/require\(\s*["']bufferutil["']\s*\)/);
   });
 

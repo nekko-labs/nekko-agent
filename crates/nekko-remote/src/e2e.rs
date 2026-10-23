@@ -53,7 +53,7 @@ pub fn seal_with_iv(key: &Key, value: &Value, iv: [u8; 12]) -> String {
 
 /// Seal text that already is `JSON.stringify` output.
 pub fn seal_text(key: &Key, text: &str, iv: [u8; 12]) -> String {
-    let ct = key.0.encrypt(Nonce::from_slice(&iv), text.as_bytes()).unwrap_or_default();
+    let ct = key.0.encrypt(&Nonce::from(iv), text.as_bytes()).unwrap_or_default();
     let mut packed = Vec::with_capacity(12 + ct.len());
     packed.extend_from_slice(&iv);
     packed.extend_from_slice(&ct);
@@ -68,7 +68,7 @@ pub fn open(key: &Key, blob: &str) -> Option<Value> {
         return None;
     }
     let (iv, ct) = packed.split_at(12);
-    let pt = key.0.decrypt(Nonce::from_slice(iv), ct).ok()?;
+    let pt = key.0.decrypt(&Nonce::from(<[u8; 12]>::try_from(iv).ok()?), ct).ok()?;
     serde_json::from_slice(&pt).ok()
 }
 
