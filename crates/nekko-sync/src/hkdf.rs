@@ -1,7 +1,7 @@
 //! HKDF-SHA256 (RFC 5869) and the AES-256-GCM calls built on it.
 
+use aes_gcm::Aes256Gcm;
 use aes_gcm::aead::{Aead, KeyInit, Payload};
-use aes_gcm::{Aes256Gcm, Nonce};
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use zeroize::Zeroize;
@@ -45,13 +45,13 @@ pub fn derive32(ikm: &[u8], info: &[u8]) -> [u8; 32] {
 
 pub fn seal(key: &[u8; 32], nonce: &[u8; 12], aad: &[u8], plaintext: &[u8]) -> Vec<u8> {
     Aes256Gcm::new(key.into())
-        .encrypt(Nonce::from_slice(nonce), Payload { msg: plaintext, aad })
+        .encrypt(nonce.into(), Payload { msg: plaintext, aad })
         .expect("AES-GCM encrypts any input under 64 GiB")
 }
 
 pub fn open(key: &[u8; 32], nonce: &[u8; 12], aad: &[u8], ciphertext: &[u8]) -> Result<Vec<u8>, crate::Error> {
     Aes256Gcm::new(key.into())
-        .decrypt(Nonce::from_slice(nonce), Payload { msg: ciphertext, aad })
+        .decrypt(nonce.into(), Payload { msg: ciphertext, aad })
         .map_err(|_| crate::Error::Unauthentic)
 }
 
