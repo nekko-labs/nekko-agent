@@ -56,6 +56,14 @@ describe('the recommendations block', () => {
     expect(hardwareText(recs.rtx4060)).toBe('NVIDIA GeForce RTX 4060 · Vulkan · 7.0 GB of GPU memory for models');
   });
 
+  it("says when a speed is this machine's own", () => {
+    const r = structuredClone(recs.m5max);
+    const code = r.tasks.find(t => t.task === 'code')!;
+    code.pick!.speed = { tokensPerSecond: 98.4, basis: 'measuredHere', samples: 12 };
+    expect(speedText(code.pick!, code, r.hardware)).toEqual({ text: '98 tok/s here', title: 'The median of your last 12 replies with this file on this machine.' });
+    expect(list(r)).toContain('data-speed-basis="measuredHere"');
+  });
+
   it('matches a downloaded model by its weights file, whatever the folder', () => {
     const p = task(recs.m5max, 'code').pick!;
     expect(isDownloaded(p, [{ path: `D:\\models\\${p.files[0]}` }])).toBe(true);

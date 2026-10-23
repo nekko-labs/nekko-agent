@@ -21,6 +21,7 @@
 //! A backend whose efficiency is borrowed, or hardware not in the table, says
 //! so; a GPU the table does not know gets no figure rather than a guess.
 
+use crate::measured::{LocalSpeeds, machine_key};
 use crate::profile::HardwareProfile;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -236,6 +237,8 @@ pub enum Fit {
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SpeedBasis {
+    /// The median of this machine's own recent replies with this file.
+    MeasuredHere,
     /// Measured on this class of hardware with this file.
     Measured,
     /// From bandwidth, with this backend's measured efficiency.
@@ -249,6 +252,15 @@ pub enum SpeedBasis {
 pub struct Speed {
     pub tokens_per_second: f64,
     pub basis: SpeedBasis,
+    /// How many replies a `measuredHere` figure is the median of.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub samples: Option<usize>,
+}
+
+/// This machine's own measurements, and which machine it is.
+struct Local<'a> {
+    speeds: &'a LocalSpeeds,
+    machine: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -407,12 +419,19 @@ fn gpu_target(feed: &Feed, profile: &HardwareProfile, backend: &str) -> Option<(
     Some((target, gpu.name.clone()))
 }
 
-fn speed_for(feed: &Feed, target: &Target, model: &Model, quant: &Quant) -> Option<Speed> {
+fn speed_for(feed: &Feed, target: &Target, model: &Model, quant: &Quant, local: &Local) -> Option<Speed> {
+    if let Some(here) = quant.files.first().and_then(|f| local.speeds.speed(f, &local.machine)) {
+        return Some(Speed {
+            tokens_per_second: here.tokens_per_second,
+            basis: SpeedBasis::MeasuredHere,
+            samples: Some(here.samples),
+        });
+    }
     if let Some(class) = &target.class_id
         && let Some(m) =
             feed.measured.iter().find(|m| &m.hardware == class && m.model == model.id && m.quant == quant.label)
     {
-        return Some(Speed { tokens_per_second: m.tokens_per_second, basis: SpeedBasis::Measured });
+        return Some(Speed { tokens_per_second: m.tokens_per_second, basis: SpeedBasis::Measured, samples: None });
     }
     let bandwidth = target.bandwidth_g_bps?;
     let (eff, own) = efficiency(feed, &target.backend, model.experts.is_some())?;
@@ -423,10 +442,11 @@ fn speed_for(feed: &Feed, target: &Target, model: &Model, quant: &Quant) -> Opti
     Some(Speed {
         tokens_per_second: tps.round(),
         basis: if own { SpeedBasis::Estimated } else { SpeedBasis::EstimatedBorrowed },
+        samples: None,
     })
 }
 
-fn choice(feed: &Feed, task: &Task, model: &Model, quant: &Quant, target: &Target) -> Choice {
+fn choice(feed: &Feed, task: &Task, model: &Model, quant: &Quant, target: &Target, local: &Local) -> Choice {
     let context = model.max_context.map_or(task.context_tokens, |m| m.min(task.context_tokens));
     let projector = model.projector.as_ref().filter(|_| task.projector);
     let weights = quant.size_bytes + projector.map_or(0.0, |p| p.size_bytes);
@@ -438,7 +458,7 @@ fn choice(feed: &Feed, task: &Task, model: &Model, quant: &Quant, target: &Targe
     } else {
         Fit::TooBig
     };
-    let speed = if task.min_tokens_per_second.is_some() { speed_for(feed, target, model, quant) } else { None };
+    let speed = if task.min_tokens_per_second.is_some() { speed_for(feed, target, model, quant, local) } else { None };
     let too_slow = match (&speed, task.min_tokens_per_second) {
         (Some(s), Some(min)) => s.tokens_per_second < min,
         _ => false,
@@ -517,13 +537,13 @@ fn best_quant(all: &[Choice]) -> Option<&Choice> {
 }
 
 /// Each candidate at the quant to offer, in the task's order.
-fn options(feed: &Feed, task: &Task, target: &Target) -> Vec<Choice> {
+fn options(feed: &Feed, task: &Task, target: &Target, local: &Local) -> Vec<Choice> {
     task.candidates
         .iter()
         .filter_map(|id| feed.models.iter().find(|m| &m.id == id))
         .filter(|m| !task.projector || m.projector.is_some())
         .filter_map(|m| {
-            let all: Vec<Choice> = m.quants.iter().map(|q| choice(feed, task, m, q, target)).collect();
+            let all: Vec<Choice> = m.quants.iter().map(|q| choice(feed, task, m, q, target, local)).collect();
             best_quant(&all).cloned()
         })
         .collect()
@@ -539,7 +559,11 @@ fn choose(options: &[Choice]) -> (Option<Choice>, bool) {
 }
 
 /// `machine:recommendations`: a pick per task for this profile.
-pub fn recommend(profile: &HardwareProfile, feed: &Feed) -> Recommendations {
+///
+/// A quant this machine has run takes its own measured speed (`local`), in
+/// what is shown and in whether it is fast enough for the task.
+pub fn recommend(profile: &HardwareProfile, feed: &Feed, local: &LocalSpeeds) -> Recommendations {
+    let local = Local { speeds: local, machine: machine_key(profile) };
     let backend = backend_of(profile);
     let gpu = if backend == "cpu" { None } else { gpu_target(feed, profile, &backend) };
     let cpu = cpu_target(feed, profile);
@@ -549,11 +573,11 @@ pub fn recommend(profile: &HardwareProfile, feed: &Feed) -> Recommendations {
         .tasks
         .iter()
         .map(|task| {
-            let mut opts = options(feed, task, main);
+            let mut opts = options(feed, task, main, &local);
             let (mut pick, mut slow) = choose(&opts);
             // A discrete GPU too small for every candidate: what runs on the CPU instead.
             if pick.is_none() && main.placement == Placement::Gpu {
-                opts = options(feed, task, &cpu);
+                opts = options(feed, task, &cpu, &local);
                 (pick, slow) = choose(&opts);
             }
             TaskPick {

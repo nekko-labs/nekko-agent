@@ -153,7 +153,7 @@ export function RecommendationList({
       </div>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-ink-faint">
         <span>
-          From the model list shipped with this version ({recs.feedVersion}). Speeds are for the start of a conversation; ~ marks an estimate.
+          From the model list shipped with this version ({recs.feedVersion}). Speeds are for the start of a conversation: ~ marks an estimate, "here" what this machine measured.
         </span>
         <button className="btn btn-ghost py-1 text-[11.5px]" onClick={onRecheck} disabled={checking}>
           {checking ? 'Checking…' : 'Check this machine again'}

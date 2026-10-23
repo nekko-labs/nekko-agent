@@ -30,7 +30,7 @@ pub async fn route(machine: &nekko_machine::Machine, channel: &str, args: &[Valu
         "machine:profile" => serde_json::to_value(machine.profile(refresh(args)).await).map_err(|e| e.to_string()),
         "machine:recommendations" => {
             let profile = machine.profile(refresh(args)).await;
-            let recs = nekko_machine::recommend(&profile, nekko_machine::bundled_feed());
+            let recs = nekko_machine::recommend(&profile, nekko_machine::bundled_feed(), &machine.speeds().snapshot());
             serde_json::to_value(recs).map_err(|e| e.to_string())
         }
         other => Err(format!("{other} is not a machine channel")),

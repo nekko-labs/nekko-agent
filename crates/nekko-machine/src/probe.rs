@@ -178,6 +178,7 @@ pub struct Machine {
     gpu: tokio::sync::Mutex<Option<Cached<Option<GpuStats>>>>,
     engine_gpu: tokio::sync::Mutex<Option<Cached<Option<GpuStats>>>>,
     cpu: tokio::sync::Mutex<(sysinfo::System, Option<Instant>)>,
+    speeds: crate::measured::MeasuredSpeeds,
 }
 
 /// A polling meter reads the GPU at most this often.
@@ -192,13 +193,27 @@ const CPU_PRIME: Duration = Duration::from_millis(200);
 
 impl Machine {
     pub fn new(data_dir: Option<PathBuf>, external_bin: ExternalBin) -> Self {
+        let speeds = crate::measured::MeasuredSpeeds::new(data_dir.as_deref());
         Self {
             data_dir,
             external_bin,
             gpu: tokio::sync::Mutex::new(None),
             engine_gpu: tokio::sync::Mutex::new(None),
             cpu: tokio::sync::Mutex::new((sysinfo::System::new(), None)),
+            speeds,
         }
+    }
+
+    /// The decode speeds measured here.
+    pub fn speeds(&self) -> &crate::measured::MeasuredSpeeds {
+        &self.speeds
+    }
+
+    /// One reply the engine served from the model file at `path`: `predicted_n`
+    /// tokens in `predicted_ms`. `alone` when no other request shared the model.
+    pub async fn record_decode(&self, path: &str, predicted_n: f64, predicted_ms: f64, alone: bool) -> bool {
+        let machine = crate::measured::machine_key(&self.profile(false).await);
+        self.speeds.record(path, &machine, predicted_n, predicted_ms, alone, crate::profile::now_ms())
     }
 
     /// Where the daemon keeps its data, when it knows.

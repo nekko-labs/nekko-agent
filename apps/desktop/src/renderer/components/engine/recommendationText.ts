@@ -22,6 +22,8 @@ export function speedText(
   }
   const n = Math.round(s.tokensPerSecond);
   switch (s.basis) {
+    case 'measuredHere':
+      return { text: `${n} tok/s here`, title: `The median of your last ${s.samples ?? 'few'} replies with this file on this machine.` };
     case 'measured':
       return { text: `${n} tok/s`, title: 'Measured with this exact file on this kind of hardware.' };
     case 'estimated':

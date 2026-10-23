@@ -2,9 +2,16 @@
 //! acceptance criteria name (Windows with NVIDIA, Windows with AMD on Vulkan,
 //! Apple Silicon, CPU only) and the edges between them.
 
+use nekko_machine::measured::LocalSpeeds;
 use nekko_machine::profile::{Cpu, EngineBuild, Gpu, HardwareProfile};
+use nekko_machine::recommend::Feed;
 use nekko_machine::recommend::{Fit, Placement, Recommendations, SpeedBasis, TaskPick, kv_bytes, match_class};
 use nekko_machine::{bundled_feed, recommend};
+
+/// A pick with nothing measured on this machine yet.
+fn rec(p: &HardwareProfile, feed: &Feed) -> Recommendations {
+    recommend(p, feed, &LocalSpeeds::default())
+}
 
 const GIB: f64 = 1024.0 * 1024.0 * 1024.0;
 
@@ -88,7 +95,7 @@ fn prints_the_picks_for_review() {
         ("M5 Max 128 GB", apple("Apple M5 Max", 128.0, 40)),
         ("CPU only, 16 GB", cpu_only()),
     ] {
-        let r = recommend(&p, bundled_feed());
+        let r = rec(&p, bundled_feed());
         eprintln!(
             "\n{name}: {:?} budget {:.1} GiB ({:?})",
             r.hardware.class_id,
@@ -115,7 +122,7 @@ fn prints_the_picks_for_review() {
 
 #[test]
 fn windows_nvidia_runs_the_big_models_on_the_gpu() {
-    let r = recommend(&rtx_5090(), bundled_feed());
+    let r = rec(&rtx_5090(), bundled_feed());
     assert_complete(&r, "5090");
     assert_eq!(r.hardware.class_id.as_deref(), Some("nvidia-rtx-5090"));
     assert_eq!(r.hardware.backend, "cuda");
@@ -143,12 +150,12 @@ fn mixture_of_experts_models_get_their_own_efficiency() {
     };
     // Metal's MoE efficiency is measured (Qwen3.6 35B A3B at 108 tok/s on a 40-core M5 Max,
     // where the dense efficiency would have promised 140); its Q8_0 is estimated with it.
-    let m5 = recommend(&apple("Apple M5 Max", 128.0, 40), feed);
+    let m5 = rec(&apple("Apple M5 Max", 128.0, 40), feed);
     let estimated = speed(&m5, "qwen3.6-35b-a3b", "Q8_0");
     let bpt = feed.models.iter().find(|m| m.id == "qwen3.6-35b-a3b").unwrap().quants[0].bytes_per_token;
     assert_eq!((estimated.tokens_per_second, estimated.basis), ((0.46 * 614e9 / bpt).round(), SpeedBasis::Estimated));
     // CUDA borrows the MoE-to-dense ratio: 0.52 x 0.46 / 0.6.
-    let cuda = recommend(&rtx_5090(), feed);
+    let cuda = rec(&rtx_5090(), feed);
     let s = speed(&cuda, "gemma-4-26b-a4b", "UD-Q4_K_M");
     let g = feed.models.iter().find(|m| m.id == "gemma-4-26b-a4b").unwrap();
     let bpt = g.quants.iter().find(|q| q.label == "UD-Q4_K_M").unwrap().bytes_per_token;
@@ -160,7 +167,7 @@ fn mixture_of_experts_models_get_their_own_efficiency() {
 
 #[test]
 fn windows_amd_on_vulkan_says_its_speed_is_borrowed() {
-    let r = recommend(&rx_7900_xtx(), bundled_feed());
+    let r = rec(&rx_7900_xtx(), bundled_feed());
     assert_complete(&r, "7900 XTX");
     assert_eq!(r.hardware.class_id.as_deref(), Some("amd-rx-7900-xtx"));
     assert_eq!(r.hardware.backend, "vulkan");
@@ -170,7 +177,7 @@ fn windows_amd_on_vulkan_says_its_speed_is_borrowed() {
 
 #[test]
 fn a_small_nvidia_card_on_the_default_vulkan_build_still_gets_a_set() {
-    let r = recommend(&rtx_4060_vulkan(), bundled_feed());
+    let r = rec(&rtx_4060_vulkan(), bundled_feed());
     assert_complete(&r, "4060");
     for t in &r.tasks {
         assert!(t.pick.as_ref().unwrap().memory_bytes <= 7.0 * GIB * 0.9, "{}", t.task);
@@ -179,13 +186,13 @@ fn a_small_nvidia_card_on_the_default_vulkan_build_still_gets_a_set() {
 
 #[test]
 fn apple_silicon_budgets_the_gpu_share_of_unified_memory() {
-    let small = recommend(&apple("Apple M2", 16.0, 10), bundled_feed());
+    let small = rec(&apple("Apple M2", 16.0, 10), bundled_feed());
     assert_complete(&small, "M2 16 GB");
     assert_eq!(small.budget.placement, Placement::Unified);
     assert_eq!(small.budget.bytes, (16.0 * GIB * 2.0 / 3.0).round(), "two thirds up to 36 GB");
     assert_eq!(small.hardware.class_id.as_deref(), Some("apple-m2"));
 
-    let big = recommend(&apple("Apple M5 Max", 128.0, 40), bundled_feed());
+    let big = rec(&apple("Apple M5 Max", 128.0, 40), bundled_feed());
     assert_complete(&big, "M5 Max");
     assert_eq!(big.budget.bytes, 96.0 * GIB, "three quarters above 36 GB");
     assert_eq!(big.hardware.class_id.as_deref(), Some("apple-m5-max-40"));
@@ -202,24 +209,24 @@ fn a_measured_speed_is_used_as_is() {
         let o = task(r, "chat").options.iter().find(|o| o.model_id == "gemma-4-12b").unwrap();
         o.speed.clone().unwrap()
     };
-    let s = speed_of(&recommend(&apple("Apple M5 Max", 128.0, 40), &feed));
+    let s = speed_of(&rec(&apple("Apple M5 Max", 128.0, 40), &feed));
     assert_eq!((s.tokens_per_second, s.basis), (61.8, SpeedBasis::Measured));
     // The same file on a 32-core M5 Max is another class: estimated, never the 40-core measurement.
-    let r32 = recommend(&apple("Apple M5 Max", 128.0, 32), &feed);
+    let r32 = rec(&apple("Apple M5 Max", 128.0, 32), &feed);
     assert_eq!(r32.hardware.class_id.as_deref(), Some("apple-m5-max"));
     assert_eq!(speed_of(&r32).basis, SpeedBasis::Estimated);
 }
 
 #[test]
 fn a_comfortable_smaller_quant_beats_a_bigger_one_at_the_edge() {
-    let r = recommend(&apple("Apple M5 Max", 128.0, 40), bundled_feed());
+    let r = rec(&apple("Apple M5 Max", 128.0, 40), bundled_feed());
     let code = task(&r, "code").pick.as_ref().unwrap();
     assert_eq!((code.model_id.as_str(), code.quant.as_str(), code.fit), ("qwen3-coder-next", "Q4_K_M", Fit::Fits));
 }
 
 #[test]
 fn when_nothing_is_fast_enough_the_pick_is_the_fastest_that_fits() {
-    let r = recommend(&cpu_only(), bundled_feed());
+    let r = rec(&cpu_only(), bundled_feed());
     let code = task(&r, "code");
     assert!(code.below_target_speed);
     let fastest = code
@@ -233,7 +240,7 @@ fn when_nothing_is_fast_enough_the_pick_is_the_fastest_that_fits() {
 
 #[test]
 fn cpu_only_runs_small_models_and_is_honest_about_speed() {
-    let r = recommend(&cpu_only(), bundled_feed());
+    let r = rec(&cpu_only(), bundled_feed());
     assert_complete(&r, "CPU only");
     assert_eq!(r.budget.placement, Placement::Cpu);
     assert_eq!(r.budget.bytes, 12.0 * GIB, "16 GB less the OS and apps");
@@ -251,7 +258,7 @@ fn a_gpu_the_table_does_not_know_gets_no_speed_rather_than_a_guess() {
         &["cuda", "cpu"],
         Some("cuda"),
     );
-    let r = recommend(&laptop, bundled_feed());
+    let r = rec(&laptop, bundled_feed());
     assert_eq!(r.hardware.class_id, None, "a laptop part is not the desktop card");
     let chat = task(&r, "chat");
     assert!(chat.pick.is_some());
@@ -261,7 +268,7 @@ fn a_gpu_the_table_does_not_know_gets_no_speed_rather_than_a_guess() {
 #[test]
 fn a_gpu_too_small_for_everything_falls_back_to_the_cpu() {
     let tiny = machine("win32", 32.0, vec![gpu("NVIDIA GeForce GTX 1650", 0.5)], false, &["cuda", "cpu"], Some("cuda"));
-    let r = recommend(&tiny, bundled_feed());
+    let r = rec(&tiny, bundled_feed());
     let chat = task(&r, "chat").pick.as_ref().unwrap();
     assert_eq!(chat.placement, Placement::Cpu);
 }
@@ -269,7 +276,7 @@ fn a_gpu_too_small_for_everything_falls_back_to_the_cpu() {
 #[test]
 fn a_cpu_engine_build_ignores_the_gpu() {
     let p = machine("win32", 32.0, vec![gpu("NVIDIA GeForce RTX 5090", 32.0)], false, &["cuda", "cpu"], Some("cpu"));
-    let r = recommend(&p, bundled_feed());
+    let r = rec(&p, bundled_feed());
     assert_eq!(r.budget.placement, Placement::Cpu);
     assert_eq!(r.hardware.backend, "cpu");
 }
@@ -336,4 +343,38 @@ fn download_labels_are_the_catalogs() {
             assert!(q.label.to_uppercase().ends_with(&label), "{} {} -> {label}", m.id, q.label);
         }
     }
+}
+
+#[test]
+fn speeds_measured_here_replace_the_estimate_and_move_the_pick() {
+    use nekko_machine::measured::machine_key;
+    let m5 = apple("Apple M5 Max", 128.0, 40);
+    // Only the quant that will be measured, so the row cannot fall back to another one.
+    let mut owned = bundled_feed().clone();
+    owned.models.iter_mut().find(|m| m.id == "qwen3.8-27b").unwrap().quants.retain(|q| q.label == "UD-Q4_K_M");
+    let feed = &owned;
+    let before = rec(&m5, feed);
+    let chat = task(&before, "chat").pick.clone().unwrap();
+    assert_eq!(chat.model_id, "qwen3.8-27b");
+
+    // This machine ran that file three times at about 12 tok/s: under chat's 20.
+    let mut local = LocalSpeeds::default();
+    for tps in [11.0, 12.0, 13.0] {
+        local.add(&format!("/models/{}", chat.files[0]), &machine_key(&m5), tps, 1);
+    }
+    let after = recommend(&m5, feed, &local);
+    let was =
+        task(&after, "chat").options.iter().find(|o| o.model_id == "qwen3.8-27b" && o.quant == chat.quant).unwrap();
+    let s = was.speed.clone().unwrap();
+    assert_eq!((s.tokens_per_second, s.basis, s.samples), (12.0, SpeedBasis::MeasuredHere, Some(3)));
+    assert!(was.too_slow);
+    assert_ne!(
+        task(&after, "chat").pick.as_ref().unwrap().model_id,
+        "qwen3.8-27b",
+        "the next candidate fast enough takes it"
+    );
+
+    // Measured on another machine: the estimate stands.
+    let other = recommend(&rtx_5090(), feed, &local);
+    assert_eq!(task(&other, "chat").pick.as_ref().unwrap().model_id, "qwen3.8-27b");
 }

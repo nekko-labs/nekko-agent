@@ -2137,7 +2137,9 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [ ] Review the editorial ranking in `crates/nekko-machine/feed/source.json` with the UI in front of us (Davide).
 - [ ] **T193e** Live check on Windows/NVIDIA, Windows/AMD-Vulkan and a CPU-only machine (`node scripts/itest-recommendations.mjs`); measure Vulkan and CPU efficiency (nobody on the team has an AMD card yet).
 - [ ] **T193f** Signed online refresh of the feed, beside the update feed (the Claude policy override's pattern).
-- [ ] **T193g** Record measured tok/s locally after a model runs and prefer it over the feed's figure; opt-in anonymized sharing.
+- [x] **T193g** Record measured tok/s locally after a model runs and prefer it over the feed's figure: the router's meter reads llama-server's `timings` (`nekko-infer`), `nekkod/src/speeds.rs` keeps them per weights file and machine (`nekko-machine/src/measured.rs`), the median of 3+ replaces the estimate and the speed target uses it. Done: 2026-10-23
+- [ ] **T193i** Opt-in anonymized sharing of measured speeds to improve the feed: needs an endpoint on Nekko Cloud and a privacy decision (Davide).
+- [ ] Engine planner (`nekko-engine/src/capacity.rs`): adopt the per-layer KV figures; its uniform formula overstates sliding-window and hybrid models (Gemma 4 12B at 32k: ~51 GB against llama.cpp's 992 MiB).
 - [x] Engine planner (`nekko-engine/src/capacity.rs`): KV cache layer by layer from the GGUF tensor table (`KvLayout`), sized as `llama-server` allocates (one-slot loads run four unified sequences; `--parallel N` shares the context). Gemma 4 12B at 32k: 1952 MiB, was 48 GiB. Tests: `nekko-engine/tests/kv_layout.rs` (synthetic headers, fit verdict, and an ignored real-file check against llama.cpp). Done: 2026-10-23
 - [ ] Count hybrid models' recurrent state (50-250 MiB per load) instead of leaving it to the overhead allowance; apply the layout to Ollama models where `/api/show` exposes the tensors.
 
