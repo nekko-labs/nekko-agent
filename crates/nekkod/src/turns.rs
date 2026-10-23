@@ -32,11 +32,11 @@
 //! of the same chain, so `chat:send` answers once the queue is worked through.
 
 use crate::accounts::{Accounts, TurnAccount};
+use crate::chat_client::{ProviderClient, ShieldedClient};
 use crate::decide::DecideService;
 use crate::hub::Hub;
 use crate::mcp::Mcp;
 use nekko_agent::{ProviderConfig, ProviderKind, create_provider};
-use nekko_chat::{ProviderClient, ShieldedClient};
 use nekko_js as js;
 use nekko_loop::{Cancel, RunOptions, Steering, ToolRunner, run_agent};
 use nekko_store::SessionStore;

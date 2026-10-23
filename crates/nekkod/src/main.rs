@@ -13,6 +13,7 @@ mod automation;
 
 mod boot;
 mod catalog;
+mod chat_client;
 mod claude_plan;
 mod claude_policy;
 mod cli_install;
