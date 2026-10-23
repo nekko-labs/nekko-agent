@@ -179,6 +179,7 @@ pub struct Machine {
     engine_gpu: tokio::sync::Mutex<Option<Cached<Option<GpuStats>>>>,
     cpu: tokio::sync::Mutex<(sysinfo::System, Option<Instant>)>,
     speeds: crate::measured::MeasuredSpeeds,
+    activity: std::sync::Arc<crate::activity::Sampler>,
 }
 
 /// A polling meter reads the GPU at most this often.
@@ -201,7 +202,20 @@ impl Machine {
             engine_gpu: tokio::sync::Mutex::new(None),
             cpu: tokio::sync::Mutex::new((sysinfo::System::new(), None)),
             speeds,
+            activity: std::sync::Arc::default(),
         }
+    }
+
+    /// Input, power and heat now (`activity:state`), each from its cache.
+    /// The GPU probe's core temperature (NVIDIA's) wins over the sensors'.
+    pub async fn activity(&self) -> crate::activity::Readings {
+        let sampler = self.activity.clone();
+        let mut r = tokio::task::spawn_blocking(move || sampler.read()).await.unwrap_or_default();
+        let probed = self.gpu_stats().await.into_iter().flat_map(|g| g.devices).filter_map(|d| d.temperature_c);
+        if let Some(c) = probed.reduce(f64::max) {
+            r.gpu_c = Some(c);
+        }
+        r
     }
 
     /// The decode speeds measured here.
