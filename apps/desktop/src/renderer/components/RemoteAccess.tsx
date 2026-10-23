@@ -13,23 +13,10 @@ import { PhoneIcon } from '../icons.js';
  * sees ciphertext. Self-hosting the relay is documented and first-class.
  */
 
-/** Managed relay (free during beta; becomes a Nekko Cloud perk). */
+/** The managed relay, shown to owners as Nekko Cloud. */
 export const MANAGED_RELAY_URL = 'wss://nekko-agent-relay.fly.dev';
 const SELF_HOST_DOCS = 'https://github.com/nekko-labs/nekko-agent/blob/main/docs/REMOTE.md';
 const TAILSCALE_DOWNLOAD = 'https://tailscale.com/download';
-
-/**
- * The relay the field starts with (TASKS.md IO-19 TS-1). A relay the owner
- * chose wins. Otherwise, with Tailscale connected here, the relay on this
- * computer: phones on the tailnet reach it with nothing hosted in between, and
- * the managed host may be gone (PH5). The managed relay is the last resort, and
- * a saved managed URL counts as no choice, since it was only ever the default.
- */
-export function defaultRelay(saved: string | undefined, local: LocalRelayStatus | null): { url: string; local: boolean } {
-  if (saved && saved !== MANAGED_RELAY_URL) return { url: saved, local: false };
-  if (local && local.available !== false && local.tailnetIp && local.url) return { url: local.url, local: true };
-  return { url: saved ?? MANAGED_RELAY_URL, local: false };
-}
 
 /**
  * The address Enable connects to. When it is the default relay on this
@@ -64,7 +51,7 @@ export function pairingAlts(relayUrl: string, local: LocalRelayStatus | null): s
 
 export function RemoteAccess() {
   const [status, setStatus] = useState<RemoteStatus>({ enabled: false });
-  const [relayUrl, setRelayUrl] = useState(MANAGED_RELAY_URL);
+  const [relayUrl, setRelayUrl] = useState('');
   const [busy, setBusy] = useState(false);
   const [grant, setGrant] = useState<PairingGrant | null>(null);
   const [now, setNow] = useState(Date.now());
@@ -73,20 +60,23 @@ export function RemoteAccess() {
   const [renameText, setRenameText] = useState('');
   const [link, setLink] = useState('');
   const [urlProblem, setUrlProblem] = useState<string | undefined>();
-  const editedUrl = useRef(false);
   const [localRelay, setLocalRelay] = useState<LocalRelayStatus | null>(null);
-  const fallback = defaultRelay(status.relayUrl, localRelay);
 
   const refresh = async () => {
     setStatus(await window.nekko.getRemoteStatus());
   };
 
-  // Until the owner types or picks one, the field follows the default: it moves
-  // to this computer's relay when Tailscale connects, and to its MagicDNS name
-  // once that is known.
+  // This computer's relay status, for the Tailscale option and the connection label.
   useEffect(() => {
-    if (!editedUrl.current) setRelayUrl(fallback.url);
-  }, [fallback.url]);
+    let live = true;
+    const load = () => void window.nekko.localRelayStatus?.().then((r) => live && setLocalRelay(r)).catch(() => {});
+    load();
+    const t = setInterval(load, 5000);
+    return () => {
+      live = false;
+      clearInterval(t);
+    };
+  }, []);
 
   useEffect(() => {
     void refresh();
@@ -131,18 +121,18 @@ export function RemoteAccess() {
     else setQr('');
   }, [link]);
 
-  const enable = async () => {
-    if (!relayUrl.trim()) return;
+  /** Turn remote access on through `url`; `local` starts this computer's relay first (Tailscale). */
+  const enable = async (url: string, local = false) => {
+    if (!url.trim()) return;
     // The phone refuses plain ws:// to the open internet; refuse it here first.
-    const problem = relayUrlProblem(relayUrl);
+    const problem = local ? undefined : relayUrlProblem(url);
     setUrlProblem(problem);
     if (problem) return;
     setBusy(true);
     try {
-      const target = await relayToEnable(relayUrl.trim(), fallback, localRelay, () => window.nekko.localRelayStart());
+      const target = await relayToEnable(url.trim(), { url: url.trim(), local }, localRelay, () => window.nekko.localRelayStart());
       if (target.started) setLocalRelay(target.started);
       if (!target.url) return setUrlProblem(target.problem);
-      setRelayUrl(target.url);
       setStatus(await window.nekko.enableRemote(target.url));
     } catch (e) {
       // The computer applies the same rule (and any other refusal) and says why.
@@ -194,61 +184,27 @@ export function RemoteAccess() {
         )}
       </div>
       <p className="mt-1 text-[12px] text-ink-faint">
-        Run and manage your chats, training runs, and goals from your phone. Your device pairs to this
-        machine over an end-to-end encrypted relay (the relay only sees ciphertext); inference and tools
-        keep running here, under this machine's guardrails.
+        Run and manage your chats, training runs, and goals from your phone. Everything is end-to-end encrypted;
+        inference and tools keep running here, under this machine's guardrails. Pick how your phone connects:
       </p>
       {status.error && !status.online && (
         <p className="mt-2 rounded border border-line px-2 py-1.5 text-[12px] text-ink-soft">{status.error}</p>
       )}
 
       {!status.enabled ? (
-        <div className="mt-3 space-y-2">
-          <p className="text-[12.5px]">Turn on remote access to get a QR code for your phone to scan.</p>
-          <div className="flex gap-2">
-            <input
-              className="input py-1.5 text-[13px]"
-              placeholder={`Relay URL, e.g. ${MANAGED_RELAY_URL}`}
-              value={relayUrl}
-              onChange={(e) => {
-                editedUrl.current = true;
-                setUrlProblem(undefined);
-                setRelayUrl(e.target.value);
-              }}
-            />
-            <button className="btn btn-primary py-1.5" onClick={enable} disabled={busy}>
-              {busy ? 'Connecting…' : 'Enable'}
-            </button>
-          </div>
-          {urlProblem && (
-            <p className="text-[12px]" style={{ color: 'var(--danger)' }}>
-              {urlProblem}
-            </p>
-          )}
-          {fallback.local && relayUrl.trim() === fallback.url ? (
-            <p className="text-[11.5px] text-ink-faint" data-shot="tailnet-default">
-              Tailscale is connected, so the default is the relay on this computer: phones on your tailnet connect
-              straight here, and Enable starts it. To use a hosted relay instead, paste its URL.
-            </p>
-          ) : (
-            <p className="text-[11.5px] text-ink-faint">
-              The default is the managed Nekko Agent relay (free during beta). Privacy purists can{' '}
-              <a className="underline" href={SELF_HOST_DOCS} target="_blank" rel="noreferrer">
-                self-host the relay
-              </a>{' '}
-              with one Docker command and paste its URL here.
-            </p>
-          )}
-          <LocalRelayCard
-            onStatus={setLocalRelay}
-            inUse={relayUrl.trim()}
-            onUse={(url) => {
-              editedUrl.current = true;
-              setUrlProblem(undefined);
-              setRelayUrl(url);
-            }}
-          />
-        </div>
+        <PairingChoiceView
+          local={localRelay}
+          busy={busy}
+          problem={urlProblem}
+          relayUrl={relayUrl}
+          onRelayUrl={(url) => {
+            setUrlProblem(undefined);
+            setRelayUrl(url);
+          }}
+          onTailscale={() => localRelay?.url && void enable(localRelay.url, true)}
+          onCloud={() => void enable(MANAGED_RELAY_URL)}
+          onOwnRelay={() => void enable(relayUrl)}
+        />
       ) : (
         <div className="mt-3 space-y-4">
           {/* Paired devices */}
@@ -323,10 +279,10 @@ export function RemoteAccess() {
           </div>
 
           <div className="grid grid-cols-1 gap-1 text-[12.5px] sm:grid-cols-2">
-            <Field label="Relay" value={status.relayUrl!} />
+            <Field label="Connected through" value={connectionName(status.relayUrl!, localRelay)} />
             <Field label="Room" value={status.room!} mono />
           </div>
-          <LocalRelayCard inUse={status.relayUrl} onStatus={setLocalRelay} />
+          {connectionName(status.relayUrl!, localRelay) === 'Tailscale' && <LocalRelayCard inUse={status.relayUrl} onStatus={setLocalRelay} />}
           <NetworkVisibilitySwitch />
           <PhoneChangesSwitch />
           <PhoneAccess devices={active} onChanged={() => void refresh()} />
@@ -342,6 +298,99 @@ export function RemoteAccess() {
         </div>
       )}
     </section>
+  );
+}
+
+/** What the owner calls the connection: Nekko Cloud (the managed relay), Tailscale (this computer's relay), or the URL of their own. */
+export function connectionName(relayUrl: string, local: LocalRelayStatus | null): string {
+  if (relayUrl === MANAGED_RELAY_URL) return 'Nekko Cloud';
+  const here = [local?.tailnetName, local?.tailnetIp].filter(Boolean).map((h) => h!.toLowerCase());
+  if (here.includes(relayHost(relayUrl))) return 'Tailscale';
+  return relayUrl;
+}
+
+/**
+ * Before remote access is on: two ways to connect a phone. Tailscale is free
+ * but needs its app on both ends; Nekko Cloud works anywhere with nothing to
+ * install. Tailscale is hidden where this computer cannot run a relay (the
+ * Local Web UI). Your own relay sits behind a disclosure for self-hosters.
+ */
+export function PairingChoiceView({
+  local,
+  busy,
+  problem,
+  relayUrl,
+  onRelayUrl,
+  onTailscale,
+  onCloud,
+  onOwnRelay,
+}: {
+  local: LocalRelayStatus | null;
+  busy?: boolean;
+  problem?: string;
+  relayUrl: string;
+  onRelayUrl: (url: string) => void;
+  onTailscale: () => void;
+  onCloud: () => void;
+  onOwnRelay: () => void;
+}) {
+  const tailscale = !!local && local.available !== false;
+  const connected = !!local?.tailnetIp && !!local.url;
+  return (
+    <div className="mt-3 space-y-2">
+      <div className={`grid grid-cols-1 gap-2 ${tailscale ? 'sm:grid-cols-2' : ''}`}>
+        {tailscale && (
+          <div data-shot="pair-tailscale" className="flex flex-col rounded-lg border border-line p-3">
+            <div className="flex items-center gap-2">
+              <h3 className="text-[13px] font-medium">Tailscale</h3>
+              <Badge tone="neutral" variant="soft">Free</Badge>
+            </div>
+            <p className="mt-1 flex-1 text-[12px] text-ink-faint">
+              Your phone connects straight to this computer. Needs the Tailscale app on both.
+            </p>
+            {connected ? (
+              <p className="mt-2 flex items-center gap-2 text-[12px] text-ink-soft">
+                <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: 'var(--success)' }} aria-hidden />
+                <span className="truncate">Connected: <span className="font-mono">{local!.tailnetName ?? local!.tailnetIp}</span></span>
+              </p>
+            ) : (
+              <p className="mt-2 text-[12px] text-ink-soft">
+                <a className="underline" href={TAILSCALE_DOWNLOAD} target="_blank" rel="noreferrer">Get Tailscale</a> and sign in on this computer and your phone.
+              </p>
+            )}
+            <button className="btn btn-outline mt-3 self-start py-1.5 text-[12.5px] disabled:opacity-50" onClick={onTailscale} disabled={busy || !connected}>
+              Use Tailscale
+            </button>
+          </div>
+        )}
+        <div data-shot="pair-cloud" className="flex flex-col rounded-lg border border-line p-3">
+          <h3 className="text-[13px] font-medium">Nekko Cloud</h3>
+          <p className="mt-1 flex-1 text-[12px] text-ink-faint">
+            Works anywhere, nothing to install. End-to-end encrypted: Nekko Cloud only passes along messages it can’t read.
+          </p>
+          <button className="btn btn-primary mt-3 self-start py-1.5 text-[12.5px]" onClick={onCloud} disabled={busy}>
+            {busy ? 'Connecting…' : 'Use Nekko Cloud'}
+          </button>
+        </div>
+      </div>
+      {problem && (
+        <p className="text-[12px]" style={{ color: 'var(--danger)' }}>
+          {problem}
+        </p>
+      )}
+      <details className="text-[12px] text-ink-faint">
+        <summary className="cursor-pointer">Use your own relay</summary>
+        <div className="mt-2 flex gap-2">
+          <input className="input py-1.5 text-[13px]" placeholder="wss://relay.example.com" value={relayUrl} onChange={(e) => onRelayUrl(e.target.value)} />
+          <button className="btn btn-outline py-1.5" onClick={onOwnRelay} disabled={busy || !relayUrl.trim()}>
+            Connect
+          </button>
+        </div>
+        <p className="mt-1">
+          <a className="underline" href={SELF_HOST_DOCS} target="_blank" rel="noreferrer">Self-host the relay</a> with one Docker command.
+        </p>
+      </details>
+    </div>
   );
 }
 

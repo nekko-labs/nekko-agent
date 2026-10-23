@@ -22,7 +22,7 @@ app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeRequest((r, done) => done({ cancel: !/^(file:|data:|blob:|devtools:)/.test(r.url) }));
   session.defaultSession.setPermissionRequestHandler((_c, _p, done) => done(false));
   const left = Math.min(...screen.getAllDisplays().map((d) => d.bounds.x));
-  const report = { checks: [], errors: [] };
+  const report = { checks: [], errors: [], measures: {} };
   const check = (name, ok) => report.checks.push({ name, passed: !!ok });
   let win;
   const run = (source) => win.webContents.executeJavaScript(source, true);
@@ -47,6 +47,20 @@ app.whenReady().then(async () => {
       await capture(`settings-top-${width}`);
       const nav = await run(`!!document.querySelector('nav[aria-label="Settings sections"]')`);
       if (nav) {
+        // The jump animates: part way there one frame-batch in, landed on the section top within 400ms.
+        const jump = await run(`new Promise((done) => {
+          const s = document.querySelector('nav[aria-label="Settings sections"]').closest('.overflow-y-auto');
+          const samples = [];
+          const t0 = performance.now();
+          [...document.querySelectorAll('.settings-nav-item')].find((b) => b.textContent.includes('System')).click();
+          const tick = () => { samples.push([Math.round(performance.now() - t0), Math.round(s.scrollTop)]); if (performance.now() - t0 < 400) requestAnimationFrame(tick); else done({ samples, target: Math.round(document.getElementById('settings-system').getBoundingClientRect().top - s.getBoundingClientRect().top) }); };
+          requestAnimationFrame(tick);
+        })`);
+        report.measures[`jump-${width}`] = jump;
+        const end = jump.samples.at(-1)[1];
+        check(`System jump animates through intermediate positions (${width})`, jump.samples.some(([, y]) => y > 0 && y < end));
+        check(`System jump lands on the section within 400ms (${width})`, Math.abs(jump.target) <= 2 || end === (await run(`(() => { const s = document.querySelector('nav[aria-label="Settings sections"]').closest('.overflow-y-auto'); return s.scrollHeight - s.clientHeight; })()`)));
+        check(`System stays highlighted after the jump (${width})`, await run(`document.querySelector('.settings-nav-item[aria-current]')?.textContent.includes('System')`));
         await run(`[...document.querySelectorAll('.settings-nav-item')].find((b) => b.textContent.includes('Phone pairing')).click()`);
         await sleep(1200);
         check(`Phone pairing nav item is current after clicking it (${width})`, await run(`document.querySelector('.settings-nav-item[aria-current]')?.textContent.includes('Phone pairing')`));
