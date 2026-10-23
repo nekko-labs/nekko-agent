@@ -16,3 +16,5 @@ tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
   --window-size=1024,1400 --screenshot="$tmp/raw.png" "file://$tmp/icon.html" 2>/dev/null
 python3 -c "from PIL import Image; Image.open('$tmp/raw.png').convert('RGB').crop((0, 0, 1024, 1024)).save('AppIcon-1024.png')"
 echo "wrote $(pwd)/AppIcon-1024.png"
+# The Watch app needs its own catalog copy; asset catalogs can't share files.
+cp AppIcon-1024.png ../../../Watch/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png
