@@ -79,10 +79,14 @@ app.whenReady().then(async () => {
       report.captures.push(gif);
       // Rapid reversals happen inside the exit delay, not after settling.
       if (current) {
-        for (const [name, selector, panel] of [['Agents','.agent-panel-controls .agent-panel-pill','.wall-agents-presence'],['Monitors','[aria-label="Show the monitors panel"], [aria-label="Hide the monitors panel"]','.monitors-dock']]) {
-          await run(`(async()=>{for(let i=0;i<8;i++){const b=document.querySelector(${JSON.stringify(selector)});if(!b)throw Error('Missing rapid toggle');b.click();await new Promise(r=>setTimeout(r,25))}})()`);
+        for (const name of ['Agents', 'Monitors']) {
+          await run(name === 'Agents'
+            ? "(async()=>{for(let i=0;i<8;i++){const b=document.querySelector('.agent-panel-controls .agent-panel-pill');if(!b)throw Error('Missing rapid toggle');b.click();await new Promise(r=>setTimeout(r,25))}})()"
+            : "(async()=>{for(let i=0;i<8;i++){const b=document.querySelector('[aria-label=\"Show the monitors panel\"], [aria-label=\"Hide the monitors panel\"]');if(!b)throw Error('Missing rapid toggle');b.click();await new Promise(r=>setTimeout(r,25))}})()");
           await sleep(250);
-          await check(name+' rapid toggles settle without stale inert content', `(()=>{const all=[...document.querySelectorAll(${JSON.stringify(panel)})];return all.length<=1 && all.every(e=>!e.inert && e.getAttribute('aria-hidden')!=='true')})()`);
+          await check(name+' rapid toggles settle without stale inert content', name === 'Agents'
+            ? "(()=>{const all=[...document.querySelectorAll('.wall-agents-presence')];return all.length<=1 && all.every(e=>!e.inert && e.getAttribute('aria-hidden')!=='true')})()"
+            : "(()=>{const all=[...document.querySelectorAll('.monitors-dock')];return all.length<=1 && all.every(e=>!e.inert && e.getAttribute('aria-hidden')!=='true')})()");
         }
       }
       win.setContentSize(1400,900);
