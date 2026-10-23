@@ -20,7 +20,7 @@ struct NewChatControl: ControlWidget {
     static let url = URL(string: "nekko-agent://new")!
 
     var body: some ControlWidgetConfiguration {
-        StaticControlConfiguration(kind: "com.nekko.native.ios.new-chat") {
+        StaticControlConfiguration(kind: "dev.nekkolabs.nekkoagent.new-chat") {
             ControlWidgetButton(action: OpenURLIntent(Self.url)) {
                 Label("New chat", systemImage: "square.and.pencil")
             }

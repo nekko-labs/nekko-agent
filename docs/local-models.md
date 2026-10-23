@@ -32,6 +32,22 @@ Nekko's own engine daemon, need the Microsoft Visual C++ Runtime (`MSVCP140.dll`
 the engine before it starts. If an engine still dies for a missing DLL, the error says so
 and links Microsoft's 25 MB redistributable.
 
+**Best for this machine.** The Models page opens on a pick per task (chat, coding, a
+small fast model for routing, embeddings, vision) made for this machine's GPU and memory.
+Each pick says what it costs before you download it: the memory it takes out of what the
+machine has for models, the download size, and the speed to expect at the start of a
+conversation. A speed with no `~` was measured with that file on that kind of hardware, a
+`~` speed is estimated from the hardware's memory bandwidth, and "rough" means the estimate
+was calibrated on a different kind of GPU. Once you have used a model, "here" marks the speed
+your own replies ran at (the median of the last 20), which then also decides whether it is fast
+enough to stay the pick. A GPU we have no figures for gets no speed rather than a guess. When nothing fits that is fast enough for a task, the pick is the fastest
+that fits and says so. The list comes with the app and works offline; **Check this
+machine again** re-reads the hardware after a change. Once you have models the block folds
+to one line. When a new GPU, or a newer version of the list, puts a better model within reach
+than the one you have for a task, a card above it says so ("A better coding model now fits
+your 16 GB GPU") with the model it would replace; **Not now** puts it away until the next
+change.
+
 **Where models come from.** A short curated list answers "what should I run"; search
 covers everything else, straight against Hugging Face with no account. Each model expands
 into its real builds with their real download sizes. Downloads resume after an
@@ -129,7 +145,12 @@ The bar stacks what the model needs against what the device has free:
 - **Weights**, the model's actual size. Taken from what the server reports or the file on
   disk, never computed from a parameter count times a quantization width, which is wrong
   for mixed-precision builds like `Q4_K_M`.
-- **KV cache**, the conversation's memory: `2 x layers x kvHeads x headDim x context x
+- **KV cache**, the conversation's memory. For a model the Nekko engine runs, it is read
+  layer by layer from the file, the way llama.cpp allocates it: the attention layers hold the
+  whole context, a sliding-window layer (Gemma 4, gpt-oss) holds only its window, and the
+  recurrent layers of a hybrid model (Qwen3.5 and later) hold none. For Gemma 4 12B at 32k
+  that is about 2 GB, where counting every layer the same way would say 48 GB. For a server
+  that does not give us the file, it is `2 x layers x kvHeads x headDim x context x
   bytesPerElement x parallelSlots`.
 - **Runtime overhead**, compute buffers and the server's own reserve.
 
@@ -162,10 +183,13 @@ proceed. The estimate can be wrong, and it is your machine.
 Three things push a model off the GPU, in roughly this order of surprise:
 
 1. **Context length.** The KV cache grows linearly with context. Going from 8k to 64k
-   multiplies it eightfold, and past a point the cache is larger than the model.
-2. **Parallel slots.** Every concurrent slot gets its own full KV cache. Raising
+   multiplies it eightfold, and past a point the cache is larger than the model. Models
+   with sliding-window or recurrent layers grow much more slowly.
+2. **Parallel slots.** On Ollama every concurrent slot gets its own full KV cache: raising
    `OLLAMA_NUM_PARALLEL` from 1 to 4 quadruples the cache at the same context, which is
-   why a model that fit yesterday can stop fitting today with nothing else changed.
+   why a model that fit yesterday can stop fitting today with nothing else changed. The
+   Nekko engine shares the context between its slots instead, so more slots cost only the
+   extra sliding windows.
 3. **Something else already resident.** The planner measures against *free* memory, not
    total, so another loaded model counts against you.
 

@@ -178,6 +178,8 @@ pub struct Machine {
     gpu: tokio::sync::Mutex<Option<Cached<Option<GpuStats>>>>,
     engine_gpu: tokio::sync::Mutex<Option<Cached<Option<GpuStats>>>>,
     cpu: tokio::sync::Mutex<(sysinfo::System, Option<Instant>)>,
+    speeds: crate::measured::MeasuredSpeeds,
+    activity: std::sync::Arc<crate::activity::Sampler>,
 }
 
 /// A polling meter reads the GPU at most this often.
@@ -192,13 +194,40 @@ const CPU_PRIME: Duration = Duration::from_millis(200);
 
 impl Machine {
     pub fn new(data_dir: Option<PathBuf>, external_bin: ExternalBin) -> Self {
+        let speeds = crate::measured::MeasuredSpeeds::new(data_dir.as_deref());
         Self {
             data_dir,
             external_bin,
             gpu: tokio::sync::Mutex::new(None),
             engine_gpu: tokio::sync::Mutex::new(None),
             cpu: tokio::sync::Mutex::new((sysinfo::System::new(), None)),
+            speeds,
+            activity: std::sync::Arc::default(),
         }
+    }
+
+    /// Input, power and heat now (`activity:state`), each from its cache.
+    /// The GPU probe's core temperature (NVIDIA's) wins over the sensors'.
+    pub async fn activity(&self) -> crate::activity::Readings {
+        let sampler = self.activity.clone();
+        let mut r = tokio::task::spawn_blocking(move || sampler.read()).await.unwrap_or_default();
+        let probed = self.gpu_stats().await.into_iter().flat_map(|g| g.devices).filter_map(|d| d.temperature_c);
+        if let Some(c) = probed.reduce(f64::max) {
+            r.gpu_c = Some(c);
+        }
+        r
+    }
+
+    /// The decode speeds measured here.
+    pub fn speeds(&self) -> &crate::measured::MeasuredSpeeds {
+        &self.speeds
+    }
+
+    /// One reply the engine served from the model file at `path`: `predicted_n`
+    /// tokens in `predicted_ms`. `alone` when no other request shared the model.
+    pub async fn record_decode(&self, path: &str, predicted_n: f64, predicted_ms: f64, alone: bool) -> bool {
+        let machine = crate::measured::machine_key(&self.profile(false).await);
+        self.speeds.record(path, &machine, predicted_n, predicted_ms, alone, crate::profile::now_ms())
     }
 
     /// Where the daemon keeps its data, when it knows.

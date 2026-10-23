@@ -388,6 +388,7 @@ function makeWebClient(): NekkoApi {
     machineReadiness: (language) => call(IpcChannels.machineReadiness, language),
     machineProfile: (opts) => call(IpcChannels.machineProfile, opts),
     machineRecommendations: (opts) => call(IpcChannels.machineRecommendations, opts),
+    machineDismissNudge: (task) => call(IpcChannels.machineDismissNudge, task ?? null),
     getGpuStats: () => call(IpcChannels.gpuStats),
     getSystemStats: () => call(IpcChannels.systemStats),
 

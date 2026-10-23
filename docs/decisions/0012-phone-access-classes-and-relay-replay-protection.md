@@ -3,7 +3,7 @@ status: accepted
 date: 2026-10-22
 ---
 
-# 0011. Class every phone channel, sign mode raises, and challenge every relay connection
+# 0012. Class every phone channel, sign mode raises, and challenge every relay connection
 
 ## Context
 

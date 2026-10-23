@@ -602,12 +602,16 @@ body {
 }
 .btn:hover, .dl-pick:hover { transform: translate(-1px, -1px); box-shadow: calc(var(--press) + 1px) calc(var(--press) + 1px) 0 var(--sticker); }
 .btn:active, .dl-pick:active { transform: translate(var(--press), var(--press)); box-shadow: 0 0 0 var(--sticker); }
+/* The primary button wears the tertiary colour: hot pink through tangerine to
+   butter yellow, set against the indigo/lavender brand and the aqua/mint
+   washes. Its ink stays dark in every look, so the label always has contrast. */
+:root { --grad-fun: linear-gradient(100deg, #ff7eb6 0%, #ff9f6e 52%, #ffd36b 100%); --btn-ink: #17151f; }
 .btn-primary, .dl-pick {
-  background: linear-gradient(100deg, #b4a6f2 0%, #9d8ce6 100%);
-  color: var(--sticker);
+  background: var(--grad-fun); background-size: 160% 100%; background-position: 0% 0;
+  color: var(--btn-ink);
 }
-.btn-primary:hover, .dl-pick:hover { background: linear-gradient(100deg, #c2b6f6 0%, #a99aeb 100%); }
-.dl-main, .dl-caret { color: var(--sticker); font-weight: 700; }
+.btn-primary:hover, .dl-pick:hover { background-position: 100% 0; }
+.dl-main, .dl-caret { color: var(--btn-ink); font-weight: 700; }
 .dl-main-v { border-left-color: rgba(23, 21, 31, 0.3); }
 .dl-main:hover, .dl-caret:hover { background: rgba(255, 255, 255, 0.18); }
 .dl-main { border-radius: 12px 0 0 12px; }
@@ -700,7 +704,10 @@ body {
 .theme-toggle:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--sticker); }
 .theme-toggle:active { transform: translate(3px, 3px); box-shadow: 0 0 0 var(--sticker); }
 .theme-toggle:focus-visible { outline: 3px solid #9d8ce6; outline-offset: 3px; }
-.theme-toggle .ic-sun { display: none; } /* light: show the moon (go dark) */
+.theme-toggle svg { display: none; }
+.theme-toggle .ic-sun { display: block; } /* dark: next is White */
+:root[data-theme='white'] .theme-toggle .ic-sun { display: none; }
+:root[data-theme='white'] .theme-toggle .ic-drop { display: block; } /* white: next is Colourful */
 @media (max-width: 560px) { .theme-toggle { width: 32px; height: 32px; } }
 
 /* ---- phone menu: below 900px the links fold behind a button; opening it
@@ -750,8 +757,6 @@ body {
 :root[data-theme='colour'] .band-lavender { background: linear-gradient(135deg, rgba(255, 255, 255, 0.45), rgba(214, 205, 250, 0.5)); }
 :root[data-theme='colour'] .band-aqua { background: linear-gradient(135deg, rgba(232, 226, 255, 0.7), rgba(214, 205, 250, 0.6)); }
 :root[data-theme='colour'] .band-blend { background: linear-gradient(120deg, #d6cdfa 0%, #e6e0fd 100%); }
-:root[data-theme='colour'] .btn-primary, :root[data-theme='colour'] .dl-pick { background: linear-gradient(100deg, #ffffff 0%, #f1edff 100%); color: #17151f; }
-:root[data-theme='colour'] .btn-primary:hover, :root[data-theme='colour'] .dl-pick:hover { background: linear-gradient(100deg, #ffffff 0%, #e6e0fd 100%); }
 :root[data-theme='colour'] .btn-ghost { background: #e6e0fd; color: #17151f; }
 :root[data-theme='colour'] .btn-ghost:hover { background: #ffffff; }
 :root[data-theme='colour'] .media { background: linear-gradient(135deg, rgba(255, 255, 255, 0.75), rgba(241, 237, 255, 0.75)); border-color: rgba(23, 21, 31, 0.3); }
@@ -760,8 +765,8 @@ body {
 :root[data-theme='colour'] .grad, :root[data-theme='colour'] .tagline .grad { background: linear-gradient(100deg, #241d5c 0%, #3b2f86 100%); -webkit-background-clip: text; background-clip: text; }
 :root[data-theme='colour'] code { background: rgba(255, 255, 255, 0.55); border-color: rgba(23, 21, 31, 0.15); }
 :root[data-theme='colour'] ::selection { background: rgba(255, 255, 255, 0.6); }
-:root[data-theme='colour'] .theme-toggle .ic-moon { display: none; } /* dark: show the sun (go light) */
-:root[data-theme='colour'] .theme-toggle .ic-sun { display: block; }
+:root[data-theme='colour'] .theme-toggle .ic-sun { display: none; }
+:root[data-theme='colour'] .theme-toggle .ic-moon { display: block; } /* colourful: next is Dark */
 
 /* ---- retro-tech second voice, two faces that share the job:
    Handjet (LED-segment, tall) for the sub-titles people read: the hero
@@ -984,3 +989,110 @@ h3 { font-size: 21px; }
   .panel h3 { font-size: 24px; }
   .bench-row { grid-template-columns: 1fr; gap: 6px; }
 }
+
+/* ---- primary button: custom icon + a three-line sparkle on its top-right
+   corner (the two big download pills carry the sparkle; the nav button is
+   small and sits inside a clipping pill, so it gets the icon only) ---- */
+.btn-ico { flex: none; margin-left: -2px; }
+.dl-main .btn-ico { margin-right: -2px; }
+.dl-sparkle {
+  position: absolute; top: -25px; right: -23px; z-index: 1;
+  width: 24px; height: 24px; overflow: visible; pointer-events: none;
+  fill: none; stroke: var(--sticker); stroke-width: 1.6; stroke-linecap: round;
+}
+/* the three strokes blink in turn, stepped like the pixel mascot */
+.dl-sparkle path { animation: sparkle-blink 2.4s steps(1, end) infinite; }
+.dl-sparkle path:nth-child(2) { animation-delay: 0.3s; }
+.dl-sparkle path:nth-child(3) { animation-delay: 0.6s; }
+@keyframes sparkle-blink { 0%, 55%, 100% { opacity: 1; } 62%, 80% { opacity: 0.12; } }
+@media (max-width: 560px) { .dl-sparkle { right: -17px; } }
+
+/* ---- GitHub mark beside every GitHub link ---- */
+.gh-ico { flex: none; }
+.with-gh, .btn-ghost { display: inline-flex; align-items: center; gap: 8px; }
+.nav-links { align-items: center; }
+.nav-links a.with-gh { gap: 7px; }
+footer a.with-gh { gap: 7px; }
+
+/* ---- Dark look: the default. A deep indigo-black ground, white text, the
+   lavender and aqua washes turned into glows, and the glass nav bar lit up
+   brighter white. The sticker outline flips to a pale lavender so the retro
+   hard shadows still read on the dark; the primary button keeps its ink. ---- */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0d0b18; --bg-2: #181430; --ink: #ffffff; --muted: #c0bad9;
+  --line: rgba(255, 255, 255, 0.14); --accent: #c4b9ff; --accent-2: #d8d0ff;
+  --glass: rgba(255, 255, 255, 0.05);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 14px 34px rgba(0, 0, 0, 0.35);
+  --sticker: #e4defc; --peach-soft: #1d1a36;
+  --mascot-face: transparent; --mascot-line: #e4defc; --mascot-eyes: #e4defc; --ok: #5ee08f;
+}
+:root[data-theme='dark'] body {
+  background:
+    radial-gradient(60% 900px at 12% 0%, rgba(157, 140, 230, 0.26), transparent 70%),
+    radial-gradient(50% 800px at 92% 6%, rgba(138, 228, 242, 0.12), transparent 70%),
+    radial-gradient(50% 900px at 88% 40%, rgba(138, 228, 242, 0.1), transparent 70%),
+    radial-gradient(55% 900px at 8% 58%, rgba(157, 140, 230, 0.16), transparent 70%),
+    radial-gradient(60% 900px at 90% 80%, rgba(165, 249, 223, 0.08), transparent 70%),
+    radial-gradient(60% 800px at 20% 100%, rgba(157, 140, 230, 0.22), transparent 70%),
+    var(--bg);
+}
+:root[data-theme='dark'] ::selection { background: rgba(196, 185, 255, 0.4); }
+:root[data-theme='dark'] .brand-mark { filter: brightness(0) invert(1); }
+:root[data-theme='dark'] .grad,
+:root[data-theme='dark'] .tagline .grad { background: linear-gradient(100deg, #c9bfff 0%, #8ae4f2 100%); -webkit-background-clip: text; background-clip: text; }
+:root[data-theme='dark'] code { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.14); }
+
+/* the top bar: frosted glass lit from within, a bright white rim and sheen */
+:root[data-theme='dark'] .nav {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.12));
+  border-color: rgba(255, 255, 255, 0.85);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 0 22px rgba(255, 255, 255, 0.22),
+    0 8px 30px rgba(157, 140, 230, 0.28),
+    0 1px 3px rgba(0, 0, 0, 0.4);
+}
+:root[data-theme='dark'] .nav::before {
+  background:
+    radial-gradient(120% 90% at 20% -30%, rgba(255, 255, 255, 0.5), transparent 55%),
+    radial-gradient(80% 80% at 90% 130%, rgba(138, 228, 242, 0.2), transparent 60%);
+}
+:root[data-theme='dark'] .nav-links a { color: rgba(255, 255, 255, 0.82); }
+:root[data-theme='dark'] .nav-links a:hover { color: #ffffff; }
+
+/* surfaces */
+:root[data-theme='dark'] .glass,
+:root[data-theme='dark'] .card { background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.12); }
+:root[data-theme='dark'] .band .card { background: #181430; }
+:root[data-theme='dark'] .card:hover { border-color: rgba(196, 185, 255, 0.6); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 18px 44px rgba(157, 140, 230, 0.18); }
+:root[data-theme='dark'] .band-lavender { background: linear-gradient(135deg, rgba(157, 140, 230, 0.16), rgba(255, 255, 255, 0.03)); }
+:root[data-theme='dark'] .band-aqua,
+:root[data-theme='dark'] .band-peach { background: linear-gradient(135deg, rgba(157, 140, 230, 0.14), rgba(138, 228, 242, 0.05)); }
+:root[data-theme='dark'] .band-blend { background: linear-gradient(120deg, rgba(157, 140, 230, 0.2) 0%, rgba(138, 228, 242, 0.06) 100%); }
+:root[data-theme='dark'] .window-mock { border-color: rgba(255, 255, 255, 0.18); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(157, 140, 230, 0.18); }
+:root[data-theme='dark'] .media { background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(157, 140, 230, 0.12)); border-color: rgba(255, 255, 255, 0.24); }
+:root[data-theme='dark'] .media-hero { background: linear-gradient(135deg, #181430, #211b44); }
+:root[data-theme='dark'] .lightbox { background: rgba(5, 4, 12, 0.7); }
+:root[data-theme='dark'] .lightbox-stage > * { background: #181430; }
+:root[data-theme='dark'] .lightbox-stage .media-placeholder { background: linear-gradient(135deg, #181430, #211b44); }
+
+/* buttons, menus, form */
+:root[data-theme='dark'] .btn-ghost { background: #181430; color: var(--ink); }
+:root[data-theme='dark'] .btn-ghost:hover { background: #241e48; color: var(--ink); }
+:root[data-theme='dark'] .dl-menu { background: #181430; }
+:root[data-theme='dark'] .dl-copy { background: rgba(255, 255, 255, 0.05); }
+:root[data-theme='dark'] .dl-copy.done { background: rgba(94, 224, 143, 0.14); }
+:root[data-theme='dark'] .beta-card { background: #181430; }
+:root[data-theme='dark'] .beta-field input { background: #0d0b18; color: #ffffff; }
+:root[data-theme='dark'] .beta-note,
+:root[data-theme='dark'] .beta-done p:last-child { color: var(--muted); }
+:root[data-theme='dark'] .beta-badge { color: #17151f; }
+:root[data-theme='dark'] .nekko-bubble { border-color: #17151f; box-shadow: 3px 3px 0 #17151f; }
+:root[data-theme='dark'] .nekko-bubble::after { background: #17151f; box-shadow: 4px 4px 0 #17151f; }
+
+/* Nekko is a black cat: on the dark look it keeps a pale outline */
+:root[data-theme='dark'] .nekko-peek { --peek-face: #17151f; --peek-line: #e4defc; --peek-eyes: #ffffff; }
+:root[data-theme='dark'] .np-paw-toes { fill: #ffffff; opacity: 0.35; }
+:root[data-theme='dark'] .np-question path { fill: #e4defc; }

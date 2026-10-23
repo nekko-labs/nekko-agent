@@ -199,8 +199,8 @@ export function createPushSender(env: NodeJS.ProcessEnv = process.env): PushSend
   const keyId = env.APNS_KEY_ID;
   const teamId = env.APNS_TEAM_ID;
   const bundleId = env.APNS_BUNDLE_ID ?? 'dev.nekkolabs.nekkoagent';
-  // Other iPhone apps the same APNs key may reach (the native SwiftUI app), named by the phone.
-  const extraApps = new Set((env.APNS_EXTRA_BUNDLE_IDS ?? 'com.nekko.native.ios').split(',').map((s) => s.trim()).filter(Boolean));
+  // Other iPhone apps the same APNs key may reach, named by the phone (none by default).
+  const extraApps = new Set((env.APNS_EXTRA_BUNDLE_IDS ?? '').split(',').map((s) => s.trim()).filter(Boolean));
   const topicFor = (app?: string) => (app && extraApps.has(app) ? app : bundleId);
   const apnsHost = env.APNS_PRODUCTION === '1' ? 'api.push.apple.com' : 'api.sandbox.push.apple.com';
   const apnsReady = !!(keyP8 && keyId && teamId);

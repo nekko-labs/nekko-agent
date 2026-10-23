@@ -69,7 +69,7 @@ pub struct HardwareProfile {
     pub disk_free_bytes: Option<f64>,
 }
 
-fn now_ms() -> u64 {
+pub(crate) fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64)
 }
 

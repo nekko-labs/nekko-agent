@@ -34,6 +34,9 @@ pub struct Admission {
     interrupting: Arc<Mutex<HashSet<String>>>,
     /// `sessionId` and `clientMessageId` of each `chat:send` still running here, so a resend meanwhile is a repeat.
     sending: Arc<Mutex<HashSet<String>>>,
+    /// How many `chat:send`s a person started (not an automation) are being
+    /// admitted or driven here: someone is using the computer (`activity:state`).
+    attended: Arc<std::sync::atomic::AtomicUsize>,
     compactions: Arc<crate::compaction::Compactions>,
     /// The desktop app's host lets the agent drive a browser; the Local Web UI's does not.
     pub allow_browser_control: bool,
@@ -45,6 +48,7 @@ impl Admission {
             pending: Mutex::default(),
             interrupting: Arc::default(),
             sending: Arc::default(),
+            attended: Arc::default(),
             compactions,
             allow_browser_control,
         })
@@ -66,6 +70,17 @@ impl Admission {
         let key = format!("{session_id}\n{client_id}");
         let fresh = self.sending.lock().unwrap_or_else(|e| e.into_inner()).insert(key.clone());
         fresh.then(|| InterruptGuard { set: self.sending.clone(), id: key })
+    }
+
+    /// Count a person's `chat:send` until the guard drops.
+    fn begin_attended(&self) -> AttendedGuard {
+        self.attended.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        AttendedGuard(self.attended.clone())
+    }
+
+    /// Whether a chat a person started is replying here.
+    pub fn attended_running(&self) -> bool {
+        self.attended.load(std::sync::atomic::Ordering::Relaxed) > 0
     }
 
     /// Whether a `chat:send` for this chat is being admitted or driven here.
@@ -109,6 +124,13 @@ struct InterruptGuard {
 impl Drop for InterruptGuard {
     fn drop(&mut self) {
         self.set.lock().unwrap_or_else(|e| e.into_inner()).remove(&self.id);
+    }
+}
+
+struct AttendedGuard(Arc<std::sync::atomic::AtomicUsize>);
+impl Drop for AttendedGuard {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
     }
 }
 
@@ -324,6 +346,7 @@ pub async fn send(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>) -> Result<V
 async fn send_with(ctx: &Ctx, adm: &Arc<Admission>, opts: Value, queued: Option<Value>) -> Result<Value, String> {
     let session_id = s(&opts, "sessionId").to_string();
     let pending = adm.begin(&session_id)?;
+    let _attended = (!crate::claude_policy::is_unattended(&opts)).then(|| adm.begin_attended());
     let result = admit(ctx, adm, opts.clone(), queued, false, &pending.cancel).await?;
     if pending.cancel.is_cancelled() && !matches!(&result, Admit::Ended) {
         stopped(ctx, &session_id).await?;
@@ -758,6 +781,19 @@ fn terminal_text(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_person_s_chat_counts_while_it_runs() {
+        let adm = Admission::new(crate::compaction::Compactions::new(), false);
+        assert!(!adm.attended_running());
+        let one = adm.begin_attended();
+        let two = adm.begin_attended();
+        assert!(adm.attended_running());
+        drop(one);
+        assert!(adm.attended_running(), "the other chat still replies");
+        drop(two);
+        assert!(!adm.attended_running());
+    }
 
     #[test]
     fn offline_needs_a_local_provider_on_a_loopback_address() {

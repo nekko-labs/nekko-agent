@@ -4,9 +4,14 @@
 //! are held to the TS functions by `tests/golden/machine.json`, a frozen
 //! record of the deleted TS behaviour.
 //!
-//! Also the hardware profile (`machine:profile`, `profile.rs`) and the model
-//! recommendations made against it (`machine:recommendations`, `recommend.rs`).
+//! Also the hardware profile (`machine:profile`, `profile.rs`), the decode
+//! speeds measured here (`measured.rs`) and the model recommendations made
+//! against both (`machine:recommendations`, `recommend.rs`), and whether
+//! someone is using the computer (`activity:state`, `activity.rs`).
 
+pub mod activity;
+pub mod measured;
+pub mod nudges;
 pub mod parse;
 pub mod probe;
 pub mod profile;

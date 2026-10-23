@@ -3,6 +3,7 @@ import type { CatalogModel, EngineMemory, EngineSettings, LoadingModel, Resident
 import { ModelLibrary } from './ModelLibrary.js';
 import { ResidentModels } from './ResidentModels.js';
 import { ModelDetail } from './ModelDetail.js';
+import { RecommendedModels } from './RecommendedModels.js';
 import { CheckIcon } from '../../icons.js';
 import { groupModelFamilies, gpuGuidance, type LibraryModel } from './modelFamilies.js';
 
@@ -80,6 +81,8 @@ export function ModelsHome({
   const selectedRepo = repositories.includes(repoId ?? '') ? repoId! : repositories[0];
 
   return (
+    <>
+    <RecommendedModels models={models} onQueued={onChanged} />
     <div className="grid min-w-0 grid-cols-1 gap-5 lg:grid-cols-[minmax(240px,0.8fr)_minmax(0,1.6fr)]">
       <div className="min-w-0 lg:border-r lg:border-line lg:pr-5">
         <input className="input w-full text-[12.5px]" aria-label="Search models" placeholder="Search models and Hugging Face" value={query} onChange={e => setQuery(e.target.value)} spellCheck={false} />
@@ -115,5 +118,6 @@ export function ModelsHome({
         </> : <><p className="py-8 text-[13px] text-ink-faint">Select a model to see its details and variants.</p><ModelLibrary providerId={providerId} models={[]} canLoad={canLoad} onChanged={onChanged} /></>}
       </div>
     </div>
+    </>
   );
 }

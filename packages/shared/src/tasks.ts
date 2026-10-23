@@ -2,6 +2,49 @@
 
 export type TaskKind = 'scheduled' | 'recurring' | 'background';
 export type TaskStatus = 'active' | 'paused' | 'done' | 'error';
+/**
+ * When an automation nobody started just now may run (`run_policy.rs`):
+ * `idle` waits until nobody is using the computer and it is on mains power and
+ * not hot; `lowPriority` runs beside the user but not on a low battery or a hot
+ * machine; `always` runs at once. Absent: the settings' `automationRunPolicy`,
+ * else `idle` on a local model and `always` on a cloud one. A run held two
+ * hours starts anyway, in low priority.
+ */
+export type AutomationRunPolicy = 'idle' | 'lowPriority' | 'always';
+
+/** The run policies as the editors offer them, in order. */
+export const RUN_POLICY_OPTIONS: ReadonlyArray<{ id: AutomationRunPolicy; label: string; hint: string }> = [
+  {
+    id: 'idle',
+    label: 'Only when I’m away',
+    hint: 'Waits until nobody has used this computer for a while, it is plugged in and not running hot. After 2 hours it runs anyway.',
+  },
+  { id: 'lowPriority', label: 'Low priority', hint: 'Runs on time, even while you work, but not on a low battery or a hot computer.' },
+  { id: 'always', label: 'On time', hint: 'Runs on time, whatever you are doing.' },
+];
+
+/**
+ * The policy an automation runs under: its own, else the settings' default,
+ * else `idle` on a local model and `always` on a cloud one (`run_policy.rs`).
+ */
+export function effectiveRunPolicy(
+  own: AutomationRunPolicy | null | undefined,
+  settings: { automationRunPolicy?: AutomationRunPolicy | null } | null | undefined,
+  local: boolean,
+): AutomationRunPolicy {
+  return own ?? settings?.automationRunPolicy ?? (local ? 'idle' : 'always');
+}
+
+export function runPolicyLabel(p: AutomationRunPolicy): string {
+  return RUN_POLICY_OPTIONS.find((o) => o.id === p)?.label ?? p;
+}
+
+/** How the run policy let a run start, for its row: "low priority · waited 2 hr". */
+export function runPolicyNote(lowPriority: boolean | undefined, waitedMs: number | undefined): string | undefined {
+  const parts = [lowPriority ? 'low priority' : '', waitedMs && waitedMs >= 60_000 ? `waited ${formatInterval(waitedMs)}` : ''];
+  return parts.filter(Boolean).join(' · ') || undefined;
+}
+
 /** How long a background agent stays alive. */
 export type KeepAlive = 'forever' | 'until';
 
@@ -24,6 +67,7 @@ export interface AutomationTask {
   keepAlive?: KeepAlive;
   /** background + keepAlive 'until': the stop condition (advisory, agent-judged). */
   condition?: string;
+  runPolicy?: AutomationRunPolicy;
 
   status: TaskStatus;
   createdAt: number;
@@ -34,6 +78,12 @@ export interface AutomationTask {
   lastSessionId?: string;
   /** Snippet of the last assistant answer, for the dashboard. */
   lastResult?: string;
+  /** Due, but held back by the run policy since then (epoch ms). */
+  waitingSince?: number;
+  /** The last run started beside the user, or after the wait cap. */
+  lastRunLowPriority?: boolean;
+  /** How long the last run waited for the policy, when it did. */
+  lastRunWaitedMs?: number;
 }
 
 /** Fields accepted when creating a task. */
@@ -48,6 +98,7 @@ export interface NewTask {
   intervalMs?: number;
   keepAlive?: KeepAlive;
   condition?: string;
+  runPolicy?: AutomationRunPolicy;
 }
 
 /** Token the agent emits to signal a background "until" condition is satisfied. */
