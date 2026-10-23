@@ -10,6 +10,7 @@ struct ComputersView: View {
     @State private var renaming: Computer?
     @State private var name = ""
     @State private var forgetting: Computer?
+    @State private var acting: Computer?
 
     var body: some View {
         List {
@@ -17,7 +18,8 @@ struct ComputersView: View {
                 ForEach(store.computers) { c in
                     // A button, so VoiceOver says what tapping does; the connected
                     // computer isn't torn down and reconnected by a tap.
-                    Button { if c.id != store.activeId { store.connect(c.id) } } label: {
+                    // A tap offers everything that can be done to this computer.
+                    Button { acting = c } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
                                 Text(c.name).font(.body.weight(.medium)).foregroundStyle(palette.ink)
@@ -34,7 +36,7 @@ struct ComputersView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(c.id == store.activeId ? .isSelected : [])
-                    .accessibilityHint(c.id == store.activeId ? "" : "Connects to this computer")
+                    .accessibilityHint("Shows what you can do with this computer")
                     .swipeActions {
                         Button(role: .destructive) { forgetting = c } label: { Label("Forget", systemImage: "trash") }
                         Button { name = c.name; renaming = c } label: { Label("Rename", systemImage: "pencil") }
@@ -58,10 +60,14 @@ struct ComputersView: View {
             Button("Cancel", role: .cancel) {}
             Button("Save") { if let c = renaming { store.rename(c.id, to: name) } }
         }
-        .confirmationDialog("Forget \(forgetting?.name ?? "this computer")?", isPresented: Binding(get: { forgetting != nil }, set: { if !$0 { forgetting = nil } }),
-                            titleVisibility: .visible) {
-            Button("Forget", role: .destructive) { if let c = forgetting { app.forget(c.id) } }
+        .confirmationDialog(acting?.name ?? "", isPresented: Binding(get: { acting != nil }, set: { if !$0 { acting = nil } }),
+                            titleVisibility: .visible, presenting: acting) { c in
+            if c.id != store.activeId { Button("Connect") { store.connect(c.id) } }
+            Button("Rename") { name = c.name; renaming = c }
+            if c.id != app.prefs.defaultComputer { Button("Open at launch") { app.prefs.defaultComputer = c.id } }
+            Button("Forget…", role: .destructive) { forgetting = c }
         }
+        .forgetDialog($forgetting)
     }
 }
 
@@ -208,6 +214,28 @@ struct SettingsView: View {
         .navigationTitle("Settings")
         .confirmationDialog("Forget all computers and keys?", isPresented: $confirmWipe, titleVisibility: .visible) {
             Button("Forget everything", role: .destructive) { app.forgetEverything() }
+        }
+    }
+}
+
+extension View {
+    /// Confirm, then forget a computer on this iPhone (its pairing keys and saved chats).
+    func forgetDialog(_ computer: Binding<Computer?>) -> some View {
+        modifier(ForgetDialog(computer: computer))
+    }
+}
+
+private struct ForgetDialog: ViewModifier {
+    @Binding var computer: Computer?
+    @Environment(AppModel.self) private var app
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog("Forget \(computer?.name ?? "this computer")?",
+                                   isPresented: Binding(get: { computer != nil }, set: { if !$0 { computer = nil } }),
+                                   titleVisibility: .visible, presenting: computer) { c in
+            Button("Forget", role: .destructive) { app.forget(c.id) }
+        } message: { _ in
+            Text("This iPhone deletes its pairing keys and saved chats for it. To stop the computer accepting this phone, remove it in Settings → Remote access there too.")
         }
     }
 }
