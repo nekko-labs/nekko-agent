@@ -13,7 +13,7 @@ pub const MODEL_ALIASES: &[(&str, &str)] =
     &[("opus", "Claude Opus"), ("sonnet", "Claude Sonnet"), ("haiku", "Claude Haiku")];
 
 /// What a direct chat on this provider answers.
-pub const NOT_A_MODEL_API: &str = "Claude Agent chats run in your installed Claude Code, not through a model API.";
+pub const NOT_A_MODEL_API: &str = "Claude subscription chats run in your installed Claude Code, not through a model API.";
 
 #[derive(Clone)]
 pub struct ClaudeCodeProvider {
@@ -48,7 +48,7 @@ impl ClaudeCodeProvider {
     /// Whether Claude Code is installed and signed in is nekkod's check
     /// (`claude auth status`); there is no endpoint to test here.
     pub async fn test(&self) -> TestResult {
-        TestResult::ok("Claude Agent uses your installed Claude Code.")
+        TestResult::ok("Your Claude subscription runs through your installed Claude Code.")
     }
 }
 

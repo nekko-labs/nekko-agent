@@ -97,7 +97,7 @@ fn family_rank(id: &str) -> usize {
 }
 
 /// What a provider saved with `auth: subscription` answers with.
-pub const CLAUDE_PLAN_REMOVED: &str = "Claude plan sign-in is no longer available in Nekko Agent. Add an Anthropic API key to this provider, or connect Claude Agent to use your plan through Claude Code.";
+pub const CLAUDE_PLAN_REMOVED: &str = "Claude plan sign-in is no longer available in Nekko Agent. Add an Anthropic API key to this provider, or choose Claude, then Subscription, to use your plan through Claude Code.";
 
 #[derive(Clone)]
 pub struct AnthropicProvider {

@@ -877,7 +877,7 @@ impl Turns {
         // own tools, so none of Nekko's tools or MCP servers are set up.
         let claude_code = facts.pointer("/provider/kind").and_then(Value::as_str) == Some("claude-code");
         if claude_code && sandbox {
-            return early("Claude Agent chats run Claude Code on this computer, so they cannot use a sandbox.");
+            return early("Claude subscription chats run Claude Code on this computer, so they cannot use a sandbox.");
         }
         if js::truthy(loaded.get("unattended")) {
             shared.unattended.on.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -1225,7 +1225,7 @@ impl Turns {
         let paths: Vec<PathBuf> =
             workspaces.iter().filter_map(|w| str_at(w, "path")).filter(|p| !p.is_empty()).map(PathBuf::from).collect();
         let Some((cwd, rest)) = paths.split_first() else {
-            return fail("A Claude Agent chat needs a workspace folder to run in.", &history);
+            return fail("A Claude subscription chat needs a workspace folder to run in.", &history);
         };
         // The provider's Claude Code account. Its sessions live in its own
         // folder, so one saved under another account (the chat switched) is

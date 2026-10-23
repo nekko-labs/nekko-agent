@@ -291,6 +291,10 @@ pub async fn code_status_route(ctx: &crate::routes::Ctx, args: &[Value]) -> Resu
                 "authMethod": s.auth_method,
                 "apiProvider": s.api_provider,
                 "auth": auth.as_str(),
+                "email": s.email,
+                "orgId": s.org_id,
+                "orgName": s.org_name,
+                "subscriptionType": s.subscription_type,
             }))
         }
         Err(message) => Ok(json!({ "installed": true, "version": bin.version, "loggedIn": false, "message": message })),
