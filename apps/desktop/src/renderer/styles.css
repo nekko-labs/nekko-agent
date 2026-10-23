@@ -713,7 +713,7 @@
   transition: clip-path var(--rail-close-ms) var(--rail-ease) var(--rail-close-delay);
   & path {
     d: var(--rail-rest);
-    fill: color-mix(in srgb, color-mix(in srgb, var(--accent) 8%, var(--paper)) 62%, transparent);
+    fill: color-mix(in srgb, color-mix(in srgb, var(--accent) 8%, var(--paper)) 88%, transparent);
     /* Twice the hairline: the clip keeps only the inner half. */
     stroke: color-mix(in srgb, var(--ink) 9%, transparent);
     stroke-width: 2px;
@@ -800,7 +800,7 @@
   }
   & .rail-backdrop path {
     d: var(--rail-open);
-    fill: color-mix(in srgb, color-mix(in srgb, var(--accent) 6%, var(--surface)) 55%, transparent);
+    fill: color-mix(in srgb, color-mix(in srgb, var(--accent) 6%, var(--surface)) 88%, transparent);
     transition:
       d var(--rail-open-ms) var(--rail-ease) var(--rail-open-delay),
       fill var(--rail-open-ms) ease var(--rail-open-delay);
