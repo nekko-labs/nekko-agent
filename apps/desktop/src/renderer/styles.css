@@ -2627,12 +2627,22 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 /* Focused: a new agent fades in as its prompt view. */
 .command-wall-layout[data-wall-layout='focus'] .command-wall-window[data-wall-hero][data-wall-entering] > .panel { animation: focus-new-agent-in 320ms cubic-bezier(.22, 1, .36, 1) both; }
 @keyframes focus-new-agent-in { from { opacity: 0; transform: scale(.985); } to { opacity: 1; transform: none; } }
+/* The hero it replaces stays drawn over it, collapses onto the new composer's box
+   (CommandWall measures --collapse-inset; the fallback is a centred composer) and dissolves. */
+.command-wall-window[data-wall-parked][data-wall-leaving] { content-visibility: visible; z-index: 3; }
+.command-wall-window[data-wall-leaving] > .panel { animation: focus-collapse-into-composer 380ms cubic-bezier(.4, 0, .2, 1) both; }
+@keyframes focus-collapse-into-composer {
+  from { clip-path: inset(0 round var(--pane-radius)); opacity: 1; }
+  55% { opacity: .9; }
+  to { clip-path: inset(var(--collapse-inset, 40% max(24px, calc(50% - 360px)) 40%) round 18px); opacity: 0; }
+}
 /* Focused: after the first send, the centred composer expands into the full
    chat. The window's chat body grows out of the composer's place. */
 [data-chat-expanding] > section { animation: composer-expand-in 420ms cubic-bezier(.22, 1, .36, 1) both; transform-origin: 50% 70%; }
 @keyframes composer-expand-in { from { opacity: .35; transform: scale(.92, .55); border-radius: 18px; } 60% { opacity: 1; } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) {
-  .command-wall-layout[data-wall-layout='focus'] .command-wall-window[data-wall-entering] > .panel, [data-chat-expanding] > section { animation: none; }
+  .command-wall-layout[data-wall-layout='focus'] .command-wall-window[data-wall-entering] > .panel, .command-wall-window[data-wall-leaving] > .panel, [data-chat-expanding] > section { animation: none; }
+  .command-wall-window[data-wall-parked][data-wall-leaving] { content-visibility: hidden; }
 }
 .command-wall-layout[data-wall-layout='focus'] .composer, .command-wall-layout[data-wall-layout='focus'] .composer:focus-within { box-shadow: none; }
 /* The All/Agents/Terminals filter shares this frame exactly. It used to be

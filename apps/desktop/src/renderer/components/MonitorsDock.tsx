@@ -18,6 +18,7 @@ import './monitorsDock.css';
 import type { OAuthStatus } from '@nekko-agent/shared';
 import { SubscriptionSignIn } from './SubscriptionSignIn.js';
 import { SUBSCRIPTION_KINDS, reconnectProviderConfig } from './providers/AddProvider.js';
+import { usePanelPresence } from '../usePanelPresence.js';
 import { dockMinimizeTransition } from './dockMinimize.js';
 
 const MONITOR_ICONS = { automations: GearIcon, utilization: ListIcon, budget: MoneyIcon, insights: BrainIcon, hardware: ServerIcon, localModels: CubeIcon };
@@ -37,23 +38,6 @@ export interface MonitorsDockProps {
 }
 
 const DEFAULT_DOCK_WIDTH = 368;
-
-/** Retain outgoing content only for its CSS transition; reopening cancels removal. */
-export function usePanelPresence(show: boolean) {
-  const [retained, setRetained] = useState(show);
-  useLayoutEffect(() => {
-    if (show) { setRetained(true); return; }
-    const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
-    if (motion.matches) { setRetained(false); return; }
-    const finish = () => setRetained(false);
-    const timer = setTimeout(finish, 140);
-    const changed = () => { if (motion.matches) finish(); };
-    motion.addEventListener?.('change', changed);
-    return () => { clearTimeout(timer); motion.removeEventListener?.('change', changed); };
-  }, [show]);
-  return show || retained;
-}
-
 
 /**
  * The dock's show/hide button: an icon (the agent panel's pill, mirrored), with

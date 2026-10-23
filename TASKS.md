@@ -1,6 +1,6 @@
 ---
 status: active
-last-updated: 2026-10-22
+last-updated: 2026-10-23
 owner:
 ---
 
@@ -113,7 +113,8 @@ PRs sat in draft waiting on CI. Run history showed the cause: Linux and Windows 
 See [SPEC](spec/desktop/focused-mode-transitions-calmer-focus-ring-and-layout-controls.md).
 
 - [x] ✅ 2026-10-17 `CommandWall.tsx` marks panes added after mount as entering (Focus only) and `styles.css` fades the hero in; `ChatPane.tsx` plays `composer-expand-in` once when clean start ends on send; calmer Focus ring mix; Monitors dock header; Grid removed from the toolbar into `WallLayoutSettings.tsx`, Dynamic uses `BoltIcon`. Tests: `focusTransitions.test.ts`, `WallLayoutSettings.test.tsx`. Evidence: `apps/desktop/scripts/focus-transitions-sandbox.cjs` via `agent-window-controls-integration.cjs` (`NEKKO_CONTROLS_SANDBOX`, `NEKKO_TEST_REVISION=main` for before).
-- [ ] Check both animations in a packaged desktop build and at narrow widths.
+- [x] ✅ 2026-10-23 The replaced hero collapses onto the new composer and dissolves: `CommandWall.tsx` marks it `data-wall-leaving` while parked and measures `--collapse-inset` from the new window's `.composer`; `styles.css` draws it (`content-visibility: visible`) and plays `focus-collapse-into-composer`. Tests: `focusTransitions.test.tsx`; sandbox checks added to `focus-transitions-sandbox.cjs`, and the baseline archive now includes `apps/desktop/src/displayWindows.ts`.
+- [ ] Check all three animations in a packaged desktop build and at narrow widths.
 
 ## Flaky daemon integration tests (added 2026-10-17)
 
