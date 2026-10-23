@@ -10,6 +10,9 @@ publish.workspace = true
 [dependencies]
 encoding_rs = "0.8"
 futures-util.workspace = true
+# The proxy matcher reqwest itself uses, to know when a fetch goes through a proxy.
+http = "1"
+hyper-util = { version = "0.1", features = ["client-proxy"] }
 nekko-js = { path = "../nekko-js" }
 nekko-tools = { path = "../nekko-tools" }
 reqwest = { workspace = true, features = ["native-tls", "gzip", "brotli", "deflate", "stream"] }
