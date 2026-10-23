@@ -13,7 +13,8 @@ pub const MODEL_ALIASES: &[(&str, &str)] =
     &[("opus", "Claude Opus"), ("sonnet", "Claude Sonnet"), ("haiku", "Claude Haiku")];
 
 /// What a direct chat on this provider answers.
-pub const NOT_A_MODEL_API: &str = "Claude subscription chats run in your installed Claude Code, not through a model API.";
+pub const NOT_A_MODEL_API: &str =
+    "Claude subscription chats run in your installed Claude Code, not through a model API.";
 
 #[derive(Clone)]
 pub struct ClaudeCodeProvider {
