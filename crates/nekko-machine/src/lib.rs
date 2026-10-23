@@ -11,6 +11,7 @@
 
 pub mod activity;
 pub mod measured;
+pub mod nudges;
 pub mod parse;
 pub mod probe;
 pub mod profile;

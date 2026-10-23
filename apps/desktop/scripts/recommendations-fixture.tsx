@@ -13,6 +13,7 @@ const GB = 1024 ** 3;
 const MEMORY: Record<string, { budgetBytes: number; kind: 'vram' | 'unified' | 'ram' }> = {
   m5max: { budgetBytes: 128 * GB, kind: 'unified' },
   'm5max-here': { budgetBytes: 128 * GB, kind: 'unified' },
+  rtx4080upgrade: { budgetBytes: 16 * GB, kind: 'vram' },
   rtx4060: { budgetBytes: 8 * GB, kind: 'vram' },
   cpu: { budgetBytes: 16 * GB, kind: 'ram' },
 };
@@ -29,9 +30,11 @@ const status = () => ({
   running: true, startedAt: Date.now() - 3_600_000, resident: [], loading: [], log: [], port: 11500, settings, memory: MEMORY[machine],
 });
 const downloads: string[] = [];
+const dismissed: string[] = [];
 const bridge: any = {
   engineStatus: async () => status(), engineModels: async () => library, engineDownloads: async () => [], engineCatalog: async () => catalog,
   listModelFolders: async () => [], getAppInfo: async () => ({ version: '0.0.0-fixture', platform: 'darwin' }),
+  machineDismissNudge: async () => { dismissed.push('all'); return { ok: true }; },
   machineRecommendations: async () => {
     if (machine !== 'm5max-here') return (data as any)[machine];
     // The coding pick after a dozen replies on this machine.
@@ -53,7 +56,7 @@ function Fixture() {
     useStore.setState({ view: 'modelserver', providers: [provider], models: [], activeProviderId: null, sessions: [], terminals: [], workspaces: [], activeWorkspaceId: null, activeSessionId: null, activeProjectId: null, settings: { providers: [provider], workspaceFolders: [], workspaces: [], monitors: {}, theme: 'dark', experimental: {}, agent: {}, ui: {} }, activeSkillBySession: {}, prsBySession: {}, installedSkillDefs: [], contextPanelOpen: false } as any);
     setEpoch((e) => e + 1);
   };
-  Object.assign(window, { integration: { reset, downloads, data } });
+  Object.assign(window, { integration: { reset, downloads, dismissed, data } });
   React.useEffect(reset, []);
   return <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }} className="bg-paper" key={epoch}>
     <main style={{ flex: 1, minHeight: 0 }}><ModelServerView /></main>

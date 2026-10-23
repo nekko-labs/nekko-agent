@@ -101,8 +101,25 @@ export interface Recommendations {
     classId: string | null;
     bandwidthGBps: number | null;
     backend: string;
+    /** The device's memory: the GPU's (unified memory on Apple Silicon), or RAM without one. */
+    memoryBytes: number;
   };
   /** What a model may use: the roomiest GPU less the display's share, the GPU share of unified memory, or RAM less the OS's. */
   budget: { bytes: number; placement: RecommendationPlacement };
   tasks: TaskRecommendation[];
+  /**
+   * A task whose pick moved past the model the user has for it: the machine
+   * changed (`hardware`) or a newer list ranks a better one (`feed`). Only
+   * upgrades, only once: dismissing one keeps its pick as seen.
+   */
+  nudges: UpgradeNudge[];
+}
+
+export interface UpgradeNudge {
+  task: RecommendationTask;
+  label: string;
+  reason: 'hardware' | 'feed';
+  /** The model the user has for this task now. */
+  haveModelId: string;
+  haveName: string;
 }

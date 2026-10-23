@@ -209,6 +209,8 @@ pub struct HardwareMatch {
     pub class_id: Option<String>,
     pub bandwidth_g_bps: Option<f64>,
     pub backend: String,
+    /// The memory the device has: the GPU's (unified memory on Apple Silicon), or RAM without one.
+    pub memory_bytes: f64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
@@ -598,6 +600,10 @@ pub fn recommend(profile: &HardwareProfile, feed: &Feed, local: &LocalSpeeds) ->
             class_id: main.class_id.clone(),
             bandwidth_g_bps: main.bandwidth_g_bps,
             backend: if main.placement == Placement::Cpu { "cpu".into() } else { backend },
+            memory_bytes: match main.placement {
+                Placement::Gpu => profile.gpus.iter().map(|g| g.vram_bytes).fold(0.0, f64::max),
+                Placement::Unified | Placement::Cpu => profile.ram_bytes,
+            },
         },
         budget: Budget { bytes: main.budget.round(), placement: main.placement },
         tasks,

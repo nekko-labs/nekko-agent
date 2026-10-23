@@ -63,3 +63,20 @@ export function isDownloaded(option: RecommendedOption, models: Pick<LocalModel,
   const weights = base(option.files[0] ?? '');
   return !!weights && models.some(m => base(m.path) === weights);
 }
+
+/** "16 GB GPU", "96 GB of unified memory", "64 GB of RAM": the machine as a nudge names it. */
+export function deviceText(recs: Recommendations): string {
+  const gb = `${Math.round(recs.hardware.memoryBytes / 1024 ** 3)} GB`;
+  return recs.budget.placement === 'gpu' ? `${gb} GPU` : recs.budget.placement === 'unified' ? `${gb} of unified memory` : `${gb} of RAM`;
+}
+
+/** The nudge card's title: one task names it, several are "better models". */
+export function nudgeTitle(recs: Recommendations): string {
+  const n = recs.nudges;
+  const hardware = n.some(x => x.reason === 'hardware');
+  if (n.length === 1) {
+    const what = `A better ${n[0].label.toLowerCase()} model`;
+    return hardware ? `${what} now fits your ${deviceText(recs)}` : `${what} is in this version's list for your ${deviceText(recs)}`;
+  }
+  return hardware ? `Better models now fit your ${deviceText(recs)}` : `Better models in this version's list for your ${deviceText(recs)}`;
+}

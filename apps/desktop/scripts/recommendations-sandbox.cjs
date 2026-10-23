@@ -55,6 +55,17 @@ app.whenReady().then(async () => {
       await capture('m5max-measured-here-dark');
       await check('measured here: says so', "document.querySelector('[data-recommendation=\"code\"] [data-speed-basis=\"measuredHere\"]')?.textContent==='98 tok/s here'");
     }
+    if (!base) {
+      // A new GPU, with the 8 GB card's coding pick already downloaded.
+      const upgradeHave = await run('integration.data.rtx4080upgradeHave');
+      await fresh('rtx4080upgrade', [{ id: 'chat/' + upgradeHave.split('/').pop(), name: 'Qwen3.5 4B', path: upgradeHave, format: 'gguf', sizeBytes: 2.7e9, quantization: 'Q4_K_M', loaded: false, readable: true }]);
+      await sleep(1500); await run(toModels); await sleep(500);
+      await capture('rtx4080-upgrade-nudge-dark');
+      await check('upgrade: one card over the folded block', "!!document.querySelector('[data-upgrade-nudges]') && document.querySelector('[data-recommendations]').open===false");
+      await check('upgrade: titled for the new GPU', "document.querySelector('[data-upgrade-nudges]').innerText.includes('Better models now fit your 16 GB GPU')");
+      await run("[...document.querySelectorAll('[data-upgrade-nudges] button')].find(b=>b.textContent.trim()==='Not now').click()"); await sleep(400);
+      await check('upgrade: Not now dismisses it', "!document.querySelector('[data-upgrade-nudges]') && integration.dismissed.length===1");
+    }
     await fresh('cpu'); await sleep(1500); await run(toModels); await sleep(500);
     await capture('fresh-cpu-only-dark');
     if (!base) {
