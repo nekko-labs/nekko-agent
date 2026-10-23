@@ -9,7 +9,6 @@ publish.workspace = true
 
 [dependencies]
 base64 = "0.22"
-getrandom.workspace = true
 nekko-js = { path = "../nekko-js" }
 nekko-settings = { path = "../nekko-settings" }
 serde_json.workspace = true

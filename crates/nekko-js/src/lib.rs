@@ -12,6 +12,7 @@
 
 use serde_json::Value;
 
+pub mod fs;
 pub mod host;
 pub use host::{home_dir, home_dir_string, now_ms, now_ms_f64, try_uuid, uuid};
 

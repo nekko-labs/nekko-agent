@@ -555,12 +555,8 @@ impl Index {
         nodefs::mkdir_p(&cfg.models_dir)?;
         let text = nekko_js::stringify_pretty(&nekko_js::js_order(Value::Object(self.doc.clone())), "  ");
         let target = cfg.index_path();
-        let tmp = format!("{target}.{}.tmp", std::process::id());
-        std::fs::write(&tmp, text).map_err(|e| e.to_string())?;
-        std::fs::rename(&tmp, &target).map_err(|e| {
-            let _ = std::fs::remove_file(&tmp);
-            e.to_string()
-        })
+        nekko_js::fs::atomic_write(std::path::Path::new(&target), text.as_bytes(), Default::default())
+            .map_err(|e| e.to_string())
     }
 }
 

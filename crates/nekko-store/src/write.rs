@@ -302,26 +302,11 @@ fn base64url(bytes: &[u8]) -> String {
     out
 }
 
-/// Write whole or not at all, as `writeAtomic` in sessions.ts does.
+/// Write whole or not at all, as `writeAtomic` in sessions.ts does. Not
+/// flushed to disk: this is every save of a chat, and a crash costs at most
+/// the last one.
 fn write_atomic(file: &Path, text: &str) -> std::io::Result<()> {
-    let tmp = file.with_extension(format!("json.{}.tmp", std::process::id()));
-    std::fs::write(&tmp, text)?;
-    let mut attempt = 0;
-    loop {
-        match std::fs::rename(&tmp, file) {
-            Ok(()) => return Ok(()),
-            // Windows refuses a rename over a file another process holds open
-            // without delete sharing; that clears in moments.
-            Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied && attempt < 20 => {
-                attempt += 1;
-                std::thread::sleep(std::time::Duration::from_millis(5 * attempt));
-            }
-            Err(e) => {
-                let _ = std::fs::remove_file(&tmp);
-                return Err(e);
-            }
-        }
-    }
+    nekko_js::fs::atomic_write(file, text.as_bytes(), Default::default())
 }
 
 // Inject the timezone for deterministic parity tests without process-global TZ.

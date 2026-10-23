@@ -533,37 +533,6 @@ fn ensure_private(path: &Path) {
 /// file beside the target, flushed to disk, then renamed over it, so a crash
 /// never leaves half a config. The temp file is removed if anything fails.
 pub fn write_json_atomic(path: &Path, value: &Value) -> std::io::Result<()> {
-    use std::io::Write;
-    let dir = path.parent().unwrap_or(Path::new("."));
-    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("file");
-    // Not the service's random source: the TS host names its temp files with
-    // `randomUUID`, which never draws on the source codes and keys come from.
-    let mut tag = [0u8; 16];
-    let _ = getrandom::fill(&mut tag);
-    let tag: String = tag.iter().map(|b| format!("{b:02x}")).collect();
-    let temp = dir.join(format!(".{name}.{tag}.tmp"));
-    let result = (|| {
-        let mut opts = std::fs::OpenOptions::new();
-        opts.write(true).create(true).truncate(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            opts.mode(0o600);
-        }
-        let mut f = opts.open(&temp)?;
-        f.write_all(nekko_js::stringify_pretty(value, "  ").as_bytes())?;
-        f.sync_all()?;
-        drop(f);
-        ensure_private(&temp);
-        std::fs::rename(&temp, path)
-    })();
-    if result.is_err() {
-        let _ = std::fs::remove_file(&temp);
-    }
-    result?;
-    if let Ok(d) = std::fs::File::open(dir) {
-        let _ = d.sync_all();
-    }
-    ensure_private(path);
-    Ok(())
+    let opts = nekko_js::fs::AtomicWrite { mode: nekko_js::fs::Mode::Private, fsync: true, create_dir: false };
+    nekko_js::fs::atomic_write(path, nekko_js::stringify_pretty(value, "  ").as_bytes(), opts)
 }

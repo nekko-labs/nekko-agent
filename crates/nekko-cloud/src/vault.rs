@@ -74,30 +74,11 @@ impl FileVault {
     }
 
     fn write(&self, map: &BTreeMap<String, String>) -> Result<(), String> {
-        if let Some(dir) = self.path.parent() {
-            std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-        }
-        let tmp = self.path.with_extension("json.tmp");
         let text = serde_json::to_vec_pretty(map).map_err(|e| e.to_string())?;
-        write_private(&tmp, &text).map_err(|e| format!("could not save the cloud keys: {e}"))?;
-        std::fs::rename(&tmp, &self.path).map_err(|e| format!("could not save the cloud keys: {e}"))
+        // Readable by its owner only.
+        nekko_js::fs::atomic_write(&self.path, &text, nekko_js::fs::AtomicWrite::PRIVATE)
+            .map_err(|e| format!("could not save the cloud keys: {e}"))
     }
-}
-
-/// Create or replace a file readable by its owner only.
-fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    use std::io::Write;
-    let _ = std::fs::remove_file(path);
-    let mut opts = std::fs::OpenOptions::new();
-    opts.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        opts.mode(0o600);
-    }
-    let mut f = opts.open(path)?;
-    f.write_all(bytes)?;
-    f.sync_all()
 }
 
 impl Vault for FileVault {

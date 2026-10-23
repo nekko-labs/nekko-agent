@@ -47,14 +47,5 @@ pub(crate) use nekko_js::now_ms;
 /// Write to a temp name beside the file and rename it over, so a reader
 /// never sees half a file.
 pub(crate) fn write_atomic(file: &Path, bytes: &[u8]) -> Result<(), String> {
-    let mut rand = [0u8; 6];
-    getrandom::fill(&mut rand).map_err(|e| e.to_string())?;
-    let suffix: String = rand.iter().map(|b| format!("{b:02x}")).collect();
-    let name = file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    let tmp = file.with_file_name(format!(".{name}.{suffix}.tmp"));
-    std::fs::write(&tmp, bytes).map_err(|e| e.to_string())?;
-    std::fs::rename(&tmp, file).map_err(|e| {
-        let _ = std::fs::remove_file(&tmp);
-        e.to_string()
-    })
+    nekko_js::fs::atomic_write(file, bytes, Default::default()).map_err(|e| e.to_string())
 }

@@ -1958,7 +1958,6 @@ name = "nekko-sandbox"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
- "getrandom 0.3.4",
  "libc",
  "nekko-js",
  "nekko-settings",
@@ -1972,7 +1971,6 @@ dependencies = [
 name = "nekko-settings"
 version = "0.1.0"
 dependencies = [
- "getrandom 0.3.4",
  "nekko-js",
  "serde_json",
  "tokio",

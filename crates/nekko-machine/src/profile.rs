@@ -93,9 +93,7 @@ pub fn still_current(saved: &HardwareProfile, engine: &Option<EngineBuild>, now:
 }
 
 fn write_atomic(path: &Path, text: &str) -> std::io::Result<()> {
-    let tmp = path.with_extension(format!("json.{}.tmp", std::process::id()));
-    std::fs::write(&tmp, text)?;
-    std::fs::rename(&tmp, path)
+    nekko_js::fs::atomic_write(path, text.as_bytes(), Default::default())
 }
 
 impl Machine {
