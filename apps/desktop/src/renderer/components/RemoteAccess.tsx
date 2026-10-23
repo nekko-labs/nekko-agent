@@ -185,7 +185,7 @@ export function RemoteAccess() {
       </div>
       <p className="mt-1 text-[12px] text-ink-faint">
         Run and manage your chats, training runs, and goals from your phone. Everything is end-to-end encrypted;
-        inference and tools keep running here, under this machine's guardrails. Pick how your phone connects:
+        inference and tools keep running here, under this machine's guardrails.{!status.enabled && ' Pick how your phone connects:'}
       </p>
       {status.error && !status.online && (
         <p className="mt-2 rounded border border-line px-2 py-1.5 text-[12px] text-ink-soft">{status.error}</p>
