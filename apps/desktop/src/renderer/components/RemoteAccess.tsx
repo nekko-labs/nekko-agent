@@ -49,6 +49,17 @@ export async function relayToEnable(
 }
 
 /**
+ * Where a pairing link points. An http origin (Local Web UI) opens this same UI on
+ * the phone, unless it is loopback (the desktop app under Vite in dev, or the web UI
+ * opened on this computer): on the phone that is the phone itself, so the link uses
+ * the app's own scheme instead.
+ */
+export function pairingBase(loc: { protocol: string; hostname: string; origin: string }): string {
+  const loopback = /^(localhost|127\.|\[::1\]$)/.test(loc.hostname);
+  return loc.protocol.startsWith('http') && !loopback ? loc.origin + '/' : 'nekko-agent-pair:';
+}
+
+/**
  * The extra routes a pairing link carries (TASKS.md IO-20): when remote access
  * uses the relay on this computer (by MagicDNS name or tailnet address, same
  * port) and that relay also listens on the LAN, its LAN addresses. A phone on
@@ -121,8 +132,7 @@ export function RemoteAccess() {
     }
     void window.nekko.getRemotePairing().then((p) => {
       if (!p) return setLink('');
-      const base = location.protocol.startsWith('http') ? location.origin + '/' : 'nekko-agent-pair:';
-      setLink(pairingLink(base, { ...p, pair: liveGrant.code, alts: pairingAlts(p.relayUrl, localRelay) }));
+      setLink(pairingLink(pairingBase(location), { ...p, pair: liveGrant.code, alts: pairingAlts(p.relayUrl, localRelay) }));
     });
   }, [status.enabled, liveGrant?.code, alts]);
 
@@ -265,16 +275,19 @@ export function RemoteAccess() {
                 {qr && <img src={qr} alt="Pairing QR" width={132} height={132} className="rounded-lg border border-line" />}
                 <div className="min-w-0">
                   <div className="text-[12px]">
-                    Scan from the Nekko Agent app (or open the link in your phone's browser). One device,{' '}
+                    Scan with your phone's camera to connect. One device,{' '}
                     <span className="font-mono font-medium">{Math.floor(secsLeft / 60)}:{String(secsLeft % 60).padStart(2, '0')}</span>{' '}
                     left.
                   </div>
-                  <code className="mt-1 block break-all rounded-lg px-2 py-1.5 font-mono text-[11px]" style={{ background: 'var(--surface-2)' }}>
-                    {link}
-                  </code>
-                  <button className="btn btn-outline mt-2 py-1 text-[12px]" onClick={() => navigator.clipboard?.writeText(link)}>
-                    Copy link
-                  </button>
+                  <details className="mt-1">
+                    <summary className="cursor-pointer text-[12px] text-ink-faint">Can’t scan? Show the link</summary>
+                    <code className="mt-1 block break-all rounded-lg px-2 py-1.5 font-mono text-[11px]" style={{ background: 'var(--surface-2)' }}>
+                      {link}
+                    </code>
+                    <button className="btn btn-outline mt-2 py-1 text-[12px]" onClick={() => navigator.clipboard?.writeText(link)}>
+                      Copy link
+                    </button>
+                  </details>
                 </div>
               </div>
             )}
