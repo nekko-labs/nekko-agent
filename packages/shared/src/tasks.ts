@@ -2,6 +2,16 @@
 
 export type TaskKind = 'scheduled' | 'recurring' | 'background';
 export type TaskStatus = 'active' | 'paused' | 'done' | 'error';
+/**
+ * When an automation nobody started just now may run (`run_policy.rs`):
+ * `idle` waits until nobody is using the computer and it is on mains power and
+ * not hot; `lowPriority` runs beside the user but not on a low battery or a hot
+ * machine; `always` runs at once. Absent: the settings' `automationRunPolicy`,
+ * else `idle` on a local model and `always` on a cloud one. A run held two
+ * hours starts anyway, in low priority.
+ */
+export type AutomationRunPolicy = 'idle' | 'lowPriority' | 'always';
+
 /** How long a background agent stays alive. */
 export type KeepAlive = 'forever' | 'until';
 
@@ -24,6 +34,7 @@ export interface AutomationTask {
   keepAlive?: KeepAlive;
   /** background + keepAlive 'until': the stop condition (advisory, agent-judged). */
   condition?: string;
+  runPolicy?: AutomationRunPolicy;
 
   status: TaskStatus;
   createdAt: number;
@@ -34,6 +45,12 @@ export interface AutomationTask {
   lastSessionId?: string;
   /** Snippet of the last assistant answer, for the dashboard. */
   lastResult?: string;
+  /** Due, but held back by the run policy since then (epoch ms). */
+  waitingSince?: number;
+  /** The last run started beside the user, or after the wait cap. */
+  lastRunLowPriority?: boolean;
+  /** How long the last run waited for the policy, when it did. */
+  lastRunWaitedMs?: number;
 }
 
 /** Fields accepted when creating a task. */
@@ -48,6 +65,7 @@ export interface NewTask {
   intervalMs?: number;
   keepAlive?: KeepAlive;
   condition?: string;
+  runPolicy?: AutomationRunPolicy;
 }
 
 /** Token the agent emits to signal a background "until" condition is satisfied. */

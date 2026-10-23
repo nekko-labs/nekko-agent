@@ -337,6 +337,13 @@ export interface AppSettings {
    */
   automationsPaused?: boolean;
   /**
+   * The run policy for tasks and workflows that set none. Absent: wait for
+   * idle on a local model, run at once on a cloud one.
+   */
+  automationRunPolicy?: import('./tasks.js').AutomationRunPolicy;
+  /** Minutes without input before the user counts as away (default 5). */
+  automationIdleMinutes?: number;
+  /**
    * Lifecycle hooks: your own commands run around the agent's actions, with
    * the event as JSON on stdin (see crates/nekko-tools/src/hooks.rs).
    */

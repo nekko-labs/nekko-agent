@@ -103,3 +103,25 @@ The **Pause all automations** switch in the Workflows header is the kill switch:
 A schedule that came due while paused runs once when you resume. Events that arrived during the
 pause are skipped, not replayed. The setting is shared, so pausing from one window or the web
 edition pauses everywhere.
+
+## While you are using the computer
+
+A scheduled run on a **local model** waits until you are away. It competes with you for the
+GPU, memory and fans otherwise. You count as away when:
+
+- there has been no keyboard, mouse or touch input for 5 minutes;
+- no chat you started is replying, from the app or your phone;
+- the computer is on mains power and not running hot.
+
+A run that has waited 2 hours starts anyway, so nothing is skipped. Its run record marks it as
+low priority, with how long it waited.
+
+What does not wait:
+
+- runs on a **cloud model**, which do not load your computer;
+- pull request, push, Slack, connector and webhook events, which run at once so none is lost;
+- the **Run** button, a task's **Run now** and `nekko-agent workflow run`;
+- goal runs, which you start yourself.
+
+On a machine nobody sits at (Docker, a server), you always count as away. On Linux, Nekko
+reads the desktop's idle hint, which GNOME sets after its own 5-minute delay.

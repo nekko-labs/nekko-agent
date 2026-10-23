@@ -9,16 +9,25 @@ use serde_json::Value;
 
 pub const CHANNELS: &[&str] = &["activity:state"];
 
-/// The signals now, judged against the default idle threshold.
-pub async fn state(ctx: &Ctx) -> Activity {
+/// The signals now, judged against `idle_after` seconds.
+pub async fn state(ctx: &Ctx, idle_after: f64) -> Activity {
     let readings = ctx.machine.activity().await;
     let chat = ctx.admission.as_ref().is_some_and(|a| a.attended_running());
-    activity::assess(&readings, chat, activity::IDLE_AFTER_SECS)
+    activity::assess(&readings, chat, idle_after)
 }
 
-pub async fn route(ctx: &Ctx, channel: &str) -> Result<Value, String> {
+/// `activity:state({ idleAfterSeconds }?)`: the threshold given, else the
+/// automations' (`automationIdleMinutes`).
+pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, String> {
     match channel {
-        "activity:state" => serde_json::to_value(state(ctx).await).map_err(|e| e.to_string()),
+        "activity:state" => {
+            let given = args.first().and_then(|o| o.get("idleAfterSeconds")).and_then(Value::as_f64);
+            let idle_after = match given.filter(|s| s.is_finite() && *s > 0.0) {
+                Some(s) => s,
+                None => nekko_automation::run_policy::idle_after_secs(&crate::settings::current(ctx).await),
+            };
+            serde_json::to_value(state(ctx, idle_after).await).map_err(|e| e.to_string())
+        }
         other => Err(format!("{other} is not an activity channel")),
     }
 }

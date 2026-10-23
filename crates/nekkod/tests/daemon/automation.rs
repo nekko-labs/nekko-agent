@@ -3,12 +3,15 @@
 use crate::common::*;
 
 /// Settings whose provider `p1` is a scripted model (`m1`), written before the daemon starts.
+/// It listens on loopback, so it is a local model: automations run whatever
+/// the person at this machine is doing (`automationRunPolicy`), unless a test says otherwise.
 fn scripted_p1(data: &std::path::Path, model: &ScriptedModel, extra: Value) -> Value {
     let mut settings = json!({
         "providers": [{ "id": "p1", "kind": "openai-compat", "label": "Scripted", "enabled": true, "baseUrl": format!("http://127.0.0.1:{}/v1", model.port) }],
         "defaultProviderId": "p1",
         "defaultModelId": "m1",
         "defaultChatMode": "yolo",
+        "automationRunPolicy": "always",
     });
     for (k, v) in extra.as_object().cloned().unwrap_or_default() {
         settings[k] = v;
@@ -124,6 +127,38 @@ async fn a_scheduled_task_fires_when_it_is_due_not_a_tick_later() {
     // The TS scheduler looked every 15 s, so a task fired up to 15 s late.
     assert!((0.0..1_000.0).contains(&late), "fired {late} ms after it was due");
     eprintln!("scheduled task fired {late} ms after its runAt");
+    drop(d);
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+/// A task on a local model waits while someone uses the computer, by the
+/// daemon's own reading of it. With an idle threshold no one reaches, a machine
+/// with input to read is always in use; a headless one (a Linux runner) is idle.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_local_task_waits_while_someone_uses_the_computer() {
+    let data = std::env::temp_dir().join(format!("nekkod-tasks-idle-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    let model = scripted_model(vec![say_text("Ran while idle.")]).await;
+    scripted_p1(&data, &model, json!({ "automationRunPolicy": null, "automationIdleMinutes": 1e9 }));
+    let d = start_with(Some(&data));
+    let (_, activity) = post(d.port, "activity:state", json!([]), Some(TOKEN)).await;
+    assert_eq!(activity["idleAfterSeconds"], json!(6e10), "the settings' threshold: {activity}");
+
+    let input = json!({ "title": "Local", "kind": "recurring", "prompt": "Summarize", "intervalMs": 3_600_000, "providerId": "p1", "modelId": "m1" });
+    post(d.port, "task:create", json!([input]), Some(TOKEN)).await;
+    if activity["headless"] == json!(true) {
+        wait_for("the fire on an idle machine", || read_tasks(&data)[0]["runCount"] == json!(1)).await;
+    } else {
+        wait_for("the task waiting", || read_tasks(&data)[0]["waitingSince"].is_number()).await;
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        assert_eq!(read_tasks(&data)[0]["runCount"], json!(0), "held: {}", read_tasks(&data));
+        // Run now is a person asking: it goes at once.
+        let id = read_tasks(&data)[0]["id"].as_str().unwrap().to_string();
+        post(d.port, "task:runNow", json!([id]), Some(TOKEN)).await;
+        wait_for("the manual run", || read_tasks(&data)[0]["runCount"] == json!(1)).await;
+        assert!(read_tasks(&data)[0].get("waitingSince").is_none(), "{}", read_tasks(&data));
+    }
     drop(d);
     let _ = std::fs::remove_dir_all(&data);
 }
