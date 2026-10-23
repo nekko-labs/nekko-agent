@@ -10,7 +10,7 @@ area: automation
 Three pieces, in order:
 
 1. **B1: when** (signals and per-automation policies), this page.
-2. **B2: how to yield** (preemption within about a second of the user's return), planned.
+2. **B2: how to yield** (preemption within about a second of the user's return), below.
 3. **B3: what stays loaded** (a small routing model kept warm, the large one evicted under memory pressure, and a monitor chip such as "Background: paused, you're active"), planned.
 
 ## Activity signals `[implemented, unit- and daemon-tested; live-checked on macOS only]`
@@ -78,3 +78,35 @@ Acceptance:
 - **How a run started:** "low priority · waited 2 hr" on a task's last run, a workflow run's header and its history entry.
 - **Evidence:** `apps/desktop/scripts/automations-integration.cjs` renders these surfaces with synthetic data in a hidden, non-focusable window, in dark and light.
 - **Not built yet:** a live "Background: paused, you're active" chip in the monitor (B3).
+
+## Stepping aside while running (B2) `[implemented, unit- and daemon-tested; measured on macOS]`
+
+A run that started keeps checking, and steps aside if the computer stops being free. The model stays loaded, and the run carries on from where it stood.
+
+- **How a run says it:** the automation's `chat:send` carries `background`, decided when the run starts (`run_policy::running_mode`):
+  - `idle` for "Only when I'm away";
+  - `lowPriority` for "Low priority", a run past the 2-hour cap, or an event run held by the policy;
+  - nothing for "Always", a manual run, or a host that cannot tell whether anyone is here.
+- **Only on a local model:** the daemon gates the turn only when its provider runs on this computer (the `localModelOnly` test). Cloud turns never pause.
+- **When it steps aside:**
+  - `idle`: someone uses the computer (input within the idle threshold, or a chat of theirs replying), or the machine is on battery, low on battery or hot;
+  - `lowPriority`: a chat of the person's is replying on a local model, or the battery is low, or the machine is hot. Typing alone does not pause it.
+- **How:**
+  - The turn's model client (nekko-chat's `YieldingClient`) looks before each model call and every 200 ms while one streams.
+  - It closes the call's connection, which stops llama-server's generation, and ends the call with "Paused while someone uses this computer".
+  - The loop drops what that call had streamed and sends it again from the same point. That costs no retry attempt and no backoff.
+  - The next call waits until the gate opens.
+  - Tools already running finish; only model calls wait.
+- **What you see:** the run's chat shows "Paused until this computer is free", the rail note says why, and the status reads "Paused".
+  - `background:state` and the `background:updated` event count background turns, paused ones and the commonest reason (`active`, `chat`, `battery`, `lowBattery`, `hot`), ready for the monitor chip (B3).
+- **Measured (M5 Max, Qwen3.5 4B and Gemma 4 12B, `docs/perf-history.md`):**
+  - Generation stops 22 to 35 ms after the hang-up.
+  - Resuming with the model loaded re-reads 1 to 4 prompt tokens in 16 to 26 ms.
+  - Unloading instead would cost 0.8 to 1.2 s of load and 0.9 to 2.6 s of prompt.
+  - The time from real input to the stop is bounded by design, not measured: about 0.4 s on macOS and Windows, about 1.2 s on Linux.
+
+Acceptance:
+- **Client:** a yielding call stops and is sent again without spending an attempt, and Stop is not a yield (`nekko-chat/tests/yielding.rs`, `nekko-loop/tests/retry.rs`).
+- **Daemon:** the real daemon pauses a low-priority task while a person's chat replies on the same loopback model, then finishes it with no trace of the stopped reply (`nekkod/tests/daemon/automation.rs`).
+
+**Not built:** unloading the model when a pause lasts (B3, residency), and lighter launches (fewer GPU layers or threads) for low priority.

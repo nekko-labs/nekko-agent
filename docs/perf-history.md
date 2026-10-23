@@ -95,6 +95,27 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-10
 
+### B2 Background replies pause for the user instead of unloading the model (2026-10-23)
+Area: local inference
+Result: improvement (a design choice made on measurements: pause, not unload)
+Conditions: Apple M5 Max (40-core GPU, 128 GB), macOS, the app's engine llama-server b11224 with the engine's own flags (32k context, `--cache-reuse 256`, `--no-cache-idle-slots`), behind the nekko-infer router. Prompt of 3,267 tokens (Qwen3.5 4B Q4_K_M) / 3,269 (Gemma 4 12B Q4_K_M), page cache warm. Yield and paused resume: 7 samples each; unloaded resume: 5. `crates/nekko-infer/tests/yield_cost.rs`.
+
+| Metric | Qwen3.5 4B | Gemma 4 12B |
+|---|---|---|
+| Yield: client hangs up mid-reply → no slot generating (median) | 22.1 ms | 35.0 ms |
+| Resume, model kept loaded: prompt tokens processed again | 4 | 1 |
+| Resume, model kept loaded: prompt time (median) | 16.0 ms | 26.3 ms |
+| Resume after unloading: load (median) | 806 ms | 1208 ms |
+| Resume after unloading: prompt tokens processed again | 3,267 | 3,269 |
+| Resume after unloading: prompt time (median) | 911 ms | 2634 ms |
+| Resume after unloading: total to first token (median) | 1724 ms | 3850 ms |
+
+Gate cost (`crates/nekko-machine/tests/activity.rs`, `read_cost`): one look at the input past its 200 ms cache, median of 20, 7.2 µs (min 2.5 µs). The temperature read inside it runs every 10 s and took up to 105 ms (sysinfo's sensors), off the async threads. The first whole reading took 107.65 ms.
+
+Not measured: the time from the user's real return to the stop. By design it is at most one 200 ms gate poll plus the 200 ms input cache on macOS and Windows (1 s cache on Linux, where input is a `loginctl` spawn), plus the hang-up above.
+
+Why: a yielded request only needs its connection closed; llama-server keeps the prompt in the slot, so the resumed request re-reads 1 to 4 tokens instead of the whole prompt, and no reload is paid. Source: the B2 PR.
+
 ### A3a Engine router reads each reply's decode speed (2026-10-23)
 Area: engine daemon
 Result: no effect

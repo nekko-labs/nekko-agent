@@ -458,6 +458,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             crate::machine::route(&ctx.machine, ctx.library.as_ref(), c, &args).await
         }
         c if crate::activity::CHANNELS.contains(&c) => crate::activity::route(ctx, c, &args).await,
+        c if crate::background::CHANNELS.contains(&c) => Ok(ctx.turns.background_state()),
         "resource:queue" => match &ctx.resource_queue {
             Some(queue) => queue.route(&args).await,
             None => Err(NO_SESSIONS.into()),

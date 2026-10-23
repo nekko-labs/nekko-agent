@@ -2,8 +2,8 @@
 //! (`stream_with_retry`), as the TS loop does in `streamWithRetry`.
 
 use nekko_loop::{
-    Cancel, ChatRequest, Chunk, ChunkStream, MAX_NETWORK_STREAM_ATTEMPTS, ModelClient, RunOptions, ToolRunner,
-    is_network_error, is_transient_error, retry_delay, run_agent,
+    Cancel, ChatRequest, Chunk, ChunkStream, MAX_NETWORK_STREAM_ATTEMPTS, MAX_STREAM_ATTEMPTS, ModelClient, RunOptions,
+    ToolRunner, YIELDED, is_network_error, is_transient_error, retry_delay, run_agent,
 };
 use serde_json::{Value, json};
 use std::collections::VecDeque;
@@ -200,4 +200,24 @@ async fn gives_up_on_the_network_after_the_long_window() {
     assert_eq!(*client.calls.lock().unwrap(), MAX_NETWORK_STREAM_ATTEMPTS as usize);
     assert_eq!(events.last().unwrap()["type"], "error");
     assert_eq!(history.last().unwrap()["interrupted"], json!(true));
+}
+
+/// A background turn that steps aside for the user more often than any
+/// failure budget allows still finishes, from where it stood, with no wait.
+#[tokio::test(start_paused = true)]
+async fn a_yield_for_the_user_is_sent_again_without_spending_an_attempt() {
+    let yields = MAX_STREAM_ATTEMPTS as usize + 3;
+    let client = Flaky { failures: Mutex::new(vec![YIELDED.into(); yields]), calls: Mutex::new(0) };
+    let mut history = vec![json!({ "id": "u1", "role": "user", "content": "hi", "createdAt": 1 })];
+    let mut events = Vec::new();
+    let started = tokio::time::Instant::now();
+    run_agent(opts(&mut history, Cancel::default()), &client, &NoTools, &mut |e, _| events.push(e)).await;
+    assert_eq!(*client.calls.lock().unwrap(), yields + 1);
+    let retries: Vec<&Value> = events.iter().filter(|e| e["type"] == "retry").collect();
+    assert_eq!(retries.len(), yields);
+    assert!(retries.iter().all(|r| r["paused"] == json!(true) && r["delayMs"] == json!(0) && r["attempt"] == json!(1)));
+    assert_eq!(started.elapsed(), Duration::ZERO, "no backoff: the client holds the next call");
+    assert_eq!(events.last().unwrap()["type"], "done");
+    // The partial text of each yielded attempt is gone.
+    assert_eq!(history.last().unwrap()["content"], json!("Hello"));
 }
