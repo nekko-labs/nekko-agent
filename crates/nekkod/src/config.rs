@@ -1,9 +1,12 @@
 //! Launch configuration.
 //!
-//! Read from the `NEKKOD_CONFIG` environment variable (JSON) or from the file
-//! named by `--config <path>`, never from ordinary arguments: the config holds
-//! the bearer token, and a process's arguments are visible to every other user
-//! on the machine.
+//! Read as the first line of stdin (`--config-stdin`, what every launcher
+//! uses) or from the file named by `--config <path>`, never from ordinary
+//! arguments or the environment: the config holds the bearer token, a
+//! process's arguments are visible to every other user on the machine, and
+//! its initial environment to any process of the same user (`ps eww`), the
+//! commands the agent runs included. Stdin stays open after that line: its
+//! end is the shutdown signal (`exit_on_stdin_close`).
 
 use serde::Deserialize;
 
@@ -128,15 +131,18 @@ pub fn load() -> anyhow::Result<Config> {
         if a == "--config" {
             let path = args.next().ok_or_else(|| anyhow::anyhow!("--config needs a path"))?;
             raw = Some(std::fs::read_to_string(path)?);
+        } else if a == "--config-stdin" {
+            let mut line = String::new();
+            std::io::stdin().read_line(&mut line)?;
+            raw = Some(line);
         } else if a == "--version" {
             println!("nekkod {}", env!("CARGO_PKG_VERSION"));
             std::process::exit(0);
         }
     }
-    let raw = match raw {
-        Some(r) => r,
-        None => std::env::var("NEKKOD_CONFIG").map_err(|_| anyhow::anyhow!("set NEKKOD_CONFIG or pass --config"))?,
-    };
+    let raw = raw.ok_or_else(|| {
+        anyhow::anyhow!("pass --config-stdin (and write the config as the first line of stdin) or --config <path>")
+    })?;
     let cfg: Config = serde_json::from_str(&raw)?;
     if cfg.token.len() < 16 {
         anyhow::bail!("token must be at least 16 characters");

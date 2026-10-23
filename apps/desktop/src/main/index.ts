@@ -542,7 +542,7 @@ app.whenReady().then(async () => {
     notificationSessions.set(event.sender.id, visibleNotificationSession(report));
     notificationViews.set(event.sender.id, visibleNotificationView(report));
   });
-  registerIpc(engine);
+  registerIpc(engine, (sender) => applicationWindows.has(sender.id));
   setWindowStateDir(dataDir);
   registerTitleBarOverlaySync();
   // A link that launched the app is already on this process's command line

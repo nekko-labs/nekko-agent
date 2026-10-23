@@ -20,9 +20,11 @@
   <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
   <true/>
 
-  <!-- @lydell/node-pty ships a prebuilt .node that lives outside the asar
-       (see asarUnpack in electron-builder.yml) and is dlopen'd at runtime.
-       Library validation would refuse to load it. -->
+  <!-- Originally for @lydell/node-pty's prebuilt .node, which is gone:
+       terminals run in nekkod (Rust) and electron-builder.yml has no
+       asarUnpack any more. Kept until someone confirms on a notarized build
+       that nothing the app or the inheriting nekkod loads still needs it
+       (a follow-up, not a change to make blind). -->
   <key>com.apple.security.cs.disable-library-validation</key>
   <true/>
 

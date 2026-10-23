@@ -124,6 +124,9 @@ export interface DaemonOptions {
 const READY = 'NEKKOD_READY ';
 const MAX_BACKOFF_MS = 5000;
 const HEALTHY_RUN_MS = 30_000;
+const KILL_AFTER_TERM_MS = 3000;
+/** nekkod's exit code when another daemon holds the data directory's lock (crates/nekkod/src/datalock.rs). */
+export const LOCKED_EXIT = 3;
 
 /**
  * One supervised nekkod. Restarts it with backoff when it dies; `stop()` closes its stdin, which is its shutdown
@@ -184,12 +187,18 @@ export class DaemonProcess {
       signIn: this.opts.signIn ?? false,
       autoStartEngine: this.opts.autoStartEngine ?? true,
     };
-    const child = spawn(this.opts.exe, [], {
-      env: { ...childEnv(), NEKKOD_CONFIG: JSON.stringify(config) },
+    const child = spawn(this.opts.exe, ['--config-stdin'], {
+      env: childEnv(),
       stdio: ['pipe', 'pipe', 'inherit'],
       windowsHide: true,
     });
     this.child = child;
+    // The config (and its token) goes in as stdin's first line, never the
+    // environment, which any process of this user can read. Stdin then stays
+    // open: its end is the daemon's shutdown signal. A child that never
+    // started fails the write; the 'error' below reports it.
+    child.stdin?.on('error', () => {});
+    child.stdin?.write(`${JSON.stringify(config)}\n`);
     const startedAt = Date.now();
 
     createInterface({ input: child.stdout! }).on('line', (line) => {
@@ -212,30 +221,48 @@ export class DaemonProcess {
         this.log(`[nekko-agent] nekkod printed an unreadable ready line`);
       }
     });
-    child.on('error', (err) => this.log(`[nekko-agent] nekkod: ${err.message}`));
-    child.on('exit', (code, signal) => {
+    let exited = false;
+    const onExit = (code: number | null, signal: NodeJS.Signals | null, spawnError?: string) => {
+      if (exited) return;
+      exited = true;
       if (this.child === child) {
         this.child = null;
         this.current = null;
       }
       if (this.stopping) return;
+      const why = spawnError
+        ? `could not be started (${spawnError})`
+        : code === LOCKED_EXIT
+          ? `found another nekkod already running on ${this.opts.dataDir}; stop the other Nekko Agent app, CLI or Local Web UI using it`
+          : `exited (${signal ?? code})`;
       if (this.opts.restart === false) {
         this.stopping = true;
         for (const w of this.waiters.splice(0)) {
           clearTimeout(w.timer);
-          w.reject(new Error(`nekkod exited (${signal ?? code}) before it was ready`));
+          w.reject(new Error(`nekkod ${why} before it was ready`));
         }
         return;
       }
       if (Date.now() - startedAt > HEALTHY_RUN_MS) this.backoff = 500;
-      this.log(`[nekko-agent] nekkod exited (${signal ?? code}); restarting in ${this.backoff}ms`);
+      this.log(`[nekko-agent] nekkod ${why}; restarting in ${this.backoff}ms`);
       this.restarts += 1;
       this.restartTimer = setTimeout(() => this.start(), this.backoff);
       this.backoff = Math.min(this.backoff * 2, MAX_BACKOFF_MS);
+    };
+    child.on('exit', (code, signal) => onExit(code, signal));
+    child.on('error', (err) => {
+      this.log(`[nekko-agent] nekkod: ${err.message}`);
+      // A binary that could not be spawned (ENOENT, EACCES) emits 'error'
+      // and never 'exit': treat it as an exit, or nothing restarts and
+      // every caller waits out its timeout.
+      if (child.pid === undefined) onExit(null, null, err.message);
     });
   }
 
-  /** Close its stdin, then kill it if it has not exited within `graceMs`. */
+  /**
+   * Close its stdin, SIGTERM it if it has not exited within `graceMs` (which
+   * also cuts its own shutdown short), and SIGKILL it if even that lingers.
+   */
   stop(graceMs = 8000): Promise<void> {
     if (this.stopPromise) return this.stopPromise;
     this.stopping = true;
@@ -249,9 +276,11 @@ export class DaemonProcess {
     const child = this.child;
     if (!child || child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
     this.stopPromise = new Promise<void>((done) => {
-      const timer = setTimeout(() => child.kill('SIGKILL'), graceMs);
+      const term = setTimeout(() => child.kill('SIGTERM'), graceMs);
+      const kill = setTimeout(() => child.kill('SIGKILL'), graceMs + KILL_AFTER_TERM_MS);
       child.once('exit', () => {
-        clearTimeout(timer);
+        clearTimeout(term);
+        clearTimeout(kill);
         done();
       });
       child.stdin?.end();

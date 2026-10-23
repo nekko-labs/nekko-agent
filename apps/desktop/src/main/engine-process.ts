@@ -45,10 +45,22 @@ export interface EngineOptions {
   origins: string[];
   /** Where the Electron main bundle lives (`out/main`), next to `relay.js`. */
   mainDir: string;
+  /**
+   * How long a started daemon has to print `NEKKOD_READY` before it is
+   * killed and restarted. Longer than nekkod's own wait for the data
+   * directory's lock (10 s), which a predecessor still shutting down holds.
+   */
+  readyTimeoutMs?: number;
 }
 
 const DAEMON_READY = 'NEKKOD_READY ';
 const MAX_BACKOFF_MS = 5000;
+const READY_TIMEOUT_MS = 30_000;
+/** After SIGTERM (which also cuts nekkod's own shutdown short), how long before SIGKILL. */
+const KILL_AFTER_TERM_MS = 3000;
+/** nekkod's exit code when another daemon holds the data directory (crates/nekkod/src/datalock.rs). */
+export const LOCKED_EXIT = 3;
+const LOCKED_REASON = 'Another Nekko engine is already running on this data folder (the nekko-agent CLI, the Local Web UI, or another copy of the app). Quit it, then restart Nekko service from the tray.';
 
 /**
  * The daemon binary: packaged resources, an explicit override, or a local cargo
@@ -159,13 +171,26 @@ export class EngineProcess {
     // (local API server, CLI install, webhook listener, local relay, network
     // visibility) included, from what `native` tells it about the app.
     const config = { token: this.token, allowedOrigins: this.opts.origins, dataDir: this.opts.dataDir, allowBrowserControl: true, appVersion: this.opts.app.version, edition: 'desktop', native: nativeConfig(this.opts.app, process.env, this.opts.mainDir), ...(this.opts.browserBridge ? { browserBridge: this.opts.browserBridge } : {}) };
-    const child = spawn(daemon, [], {
-      env: { ...process.env, NEKKOD_CONFIG: JSON.stringify(config) },
+    // The config (with its token) is stdin's first line, never the
+    // environment: a process's initial environment is readable by any
+    // process of the same user (`ps eww`), the agent's commands included.
+    // Stdin then stays open; closing it is the shutdown signal.
+    const child = spawn(daemon, ['--config-stdin'], {
+      env: process.env,
       stdio: ['pipe', 'pipe', 'inherit'],
       windowsHide: true,
     });
     this.child = child;
+    child.stdin?.on('error', () => {});
+    child.stdin?.write(`${JSON.stringify(config)}\n`);
     const startedAt = Date.now();
+    // A daemon that starts but never says it is listening (wedged before
+    // its ready line) is killed; the exit below restarts it with backoff.
+    const readyTimer = setTimeout(() => {
+      if (this.child !== child || this.stopping || this.current) return;
+      console.error(`engine: nekkod did not become ready in ${this.opts.readyTimeoutMs ?? READY_TIMEOUT_MS}ms; restarting it`);
+      this.terminate(child);
+    }, this.opts.readyTimeoutMs ?? READY_TIMEOUT_MS);
 
     const lines = createInterface({ input: child.stdout! });
     lines.on('line', (line) => {
@@ -177,6 +202,7 @@ export class EngineProcess {
       }
       try {
         const { port } = JSON.parse(line.slice(at + marker.length)) as { port: number };
+        clearTimeout(readyTimer);
         this.current = { url: `http://127.0.0.1:${port}`, token: this.token };
         const waiting = this.waiters;
         this.waiters = [];
@@ -186,14 +212,30 @@ export class EngineProcess {
       }
     });
 
-    child.on('error', (err) => console.error(`engine: ${err.message}`));
+    child.on('error', (err) => {
+      console.error(`engine: ${err.message}`);
+      // A binary that could not be spawned at all (EACCES, ENOENT) emits
+      // 'error' and 'close' but never 'exit'. Restarting cannot fix it:
+      // report it as the reason, and the tray's Restart tries again.
+      if (child.pid !== undefined || this.child !== child) return;
+      clearTimeout(readyTimer);
+      this.child = null;
+      this.current = null;
+      if (!this.stopping) this.fail(`Nekko service could not be started (${err.message}). Reinstall Nekko Agent, or check that ${daemon} can be run, then restart Nekko service from the tray.`);
+    });
     child.on('exit', (code, signal) => {
+      clearTimeout(readyTimer);
+      if (this.child !== child) return;
       this.current = null;
       this.child = null;
       if (this.stopping) return;
       if (Date.now() - startedAt > 30_000) this.backoff = 500;
       if (isMissingDllExit(code)) {
         this.fail('Nekko service could not start: Windows could not load a DLL it needs, usually the Microsoft Visual C++ Runtime. Reinstall Nekko Agent, or install the Visual C++ Redistributable, then restart Nekko service from the tray.');
+        return;
+      }
+      if (code === LOCKED_EXIT) {
+        this.fail(LOCKED_REASON);
         return;
       }
       console.error(`engine: nekkod exited (${signal ?? code}); restarting in ${this.backoff}ms`);
@@ -211,7 +253,20 @@ export class EngineProcess {
     waiting.forEach(w => { clearTimeout(w.timer); w.reject(new Error(reason)); });
   }
 
-  /** Close its stdin (the shutdown signal), then kill it if it lingers. */
+  /** SIGTERM (nekkod shuts down gracefully, ending its children), then SIGKILL if that lingers. */
+  private terminate(child: ChildProcess): void {
+    child.kill('SIGTERM');
+    const kill = setTimeout(() => { if (child.exitCode === null && !child.signalCode) child.kill('SIGKILL'); }, KILL_AFTER_TERM_MS);
+    kill.unref?.();
+    child.once('exit', () => clearTimeout(kill));
+  }
+
+  /**
+   * Close its stdin (the shutdown signal), SIGTERM it if it lingers (which
+   * also cuts nekkod's own shutdown short), then SIGKILL it. Resolves once it
+   * has exited, so a restart never races the old daemon for the data
+   * directory's lock.
+   */
   stop(graceMs = 6000): Promise<void> {
     if (this.stopPromise) return this.stopPromise;
     this.stopping = true;
@@ -223,10 +278,8 @@ export class EngineProcess {
     const child = this.child;
     if (!child || child.exitCode !== null) return Promise.resolve();
     this.stopPromise = new Promise<void>((resolveStop, reject) => {
-      const timer = setTimeout(() => {
-        child.kill();
-      }, graceMs);
-      const deadline = setTimeout(() => reject(new Error('Nekko service did not stop. Restart was cancelled to avoid duplicate processes.')), graceMs + 5000);
+      const timer = setTimeout(() => this.terminate(child), graceMs);
+      const deadline = setTimeout(() => reject(new Error('Nekko service did not stop. Restart was cancelled to avoid duplicate processes.')), graceMs + KILL_AFTER_TERM_MS + 5000);
       child.once('exit', () => {
         clearTimeout(timer);
         clearTimeout(deadline);
