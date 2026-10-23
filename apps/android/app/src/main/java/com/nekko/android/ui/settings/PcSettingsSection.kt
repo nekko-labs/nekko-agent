@@ -74,6 +74,9 @@ fun PcSettingsSection(deps: SettingsDeps) {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                // pcSettings only changes on the computer's reply, so a refused change (raising the
+                // mode needs a confirmation this phone can't sign yet) leaves the old choice selected.
+                // The repository's remote has already reworded refusals into what to do.
                 error = e.message?.takeIf { it.isNotBlank() } ?: "${active.name} didn’t save that."
             } finally {
                 busy = false

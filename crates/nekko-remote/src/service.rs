@@ -95,6 +95,9 @@ impl RemoteService {
                     .with("room", get("room"))
                     .with("secret", get("secret"))
                     .with("devices", or(get("devices"), json!([])))
+                    // Relay replay protection: phones from before protocol 4
+                    // are welcomed unless this is `false` (one release).
+                    .with("acceptLegacyPhones", get("acceptLegacyPhones"))
             }
         }
     }
@@ -111,14 +114,51 @@ impl RemoteService {
         st.grant.clone().filter(|g| g.expires_at > (self.clock)())
     }
 
-    /// The HELLO check the agent runs for every connection.
+    /// Whether phones from before relay replay protection are still welcomed
+    /// (`acceptLegacyPhones` in remote.json; missing means yes, for one release).
+    fn accepts_legacy(cfg: &JsObj) -> bool {
+        cfg.get("acceptLegacyPhones") != Some(&Value::Bool(false))
+    }
+
+    /// The HELLO check the agent runs for every connection. The agent has
+    /// already checked a protocol 4 HELLO's challenge; an older phone's HELLO
+    /// (legacy: no challenge, no request counter) is refused with
+    /// `update-required` when the owner turned legacy phones off, and
+    /// otherwise welcomed, logged and marked on the device (`legacyProtocol`,
+    /// and once in its activity) so the owner sees which phone to update.
     pub fn verify(&self, hello_frame: &Value) -> Value {
         let _io = lock(&self.io);
         let cfg = self.load();
+        let legacy =
+            hello_frame.as_object().is_some_and(|h| crate::agent::hello_protocol(h) < crate::agent::CHALLENGE_PROTOCOL);
+        let known = |cfg: &JsObj| -> Option<Value> {
+            let id = hello_frame.get("deviceId")?;
+            Self::devices_of(cfg).into_iter().find(|d| d.get("id") == Some(id) && !nekko_js::truthy(d.get("revoked")))
+        };
+        if legacy && !Self::accepts_legacy(&cfg) {
+            if let Some(d) = known(&cfg) {
+                let id = d.get("id").map(nekko_js::display).unwrap_or_default();
+                eprintln!(
+                    "nekkod: refused phone {id}: its app predates relay replay protection (acceptLegacyPhones is off)"
+                );
+                self.record_locked(&id, self.legacy_entry(false));
+            }
+            return json!({ "type": "denied", "reason": "update-required" });
+        }
+        let was_legacy = known(&cfg).is_some_and(|d| d.get("legacyProtocol") == Some(&Value::Bool(true)));
         let mut st = lock(&self.state);
         let verdict =
             hello::verify_hello(&Self::devices_of(&cfg), hello_frame, self.live_grant(&st).as_ref(), (self.clock)());
         if let Verdict::Welcome { device, enrolled } = &verdict {
+            let mut device = device.clone();
+            if let Some(o) = device.as_object_mut() {
+                if legacy {
+                    o.insert("legacyProtocol".into(), json!(true));
+                } else {
+                    o.remove("legacyProtocol");
+                }
+            }
+            let device = &device;
             let id = device.get("id").cloned();
             let mut devices: Vec<Value> =
                 Self::devices_of(&cfg).into_iter().filter(|d| d.get("id") != id.as_ref()).collect();
@@ -131,8 +171,25 @@ impl RemoteService {
             if *enrolled {
                 st.grant = None; // single use
             }
+            if legacy {
+                let id = id.as_ref().map(nekko_js::display).unwrap_or_default();
+                eprintln!("nekkod: phone {id} connected with an app that predates relay replay protection");
+                if !was_legacy {
+                    self.record_locked(&id, self.legacy_entry(true));
+                }
+            }
         }
         verdict.reply()
+    }
+
+    /// The activity entry for a legacy phone's HELLO, welcomed or refused.
+    fn legacy_entry(&self, ok: bool) -> crate::phone::Activity {
+        crate::phone::Activity {
+            at: (self.clock)(),
+            channel: LEGACY_HELLO.to_string(),
+            ok,
+            reason: Some("legacy-protocol".into()),
+        }
     }
 
     fn verifier(&self) -> Verifier {
@@ -472,6 +529,29 @@ impl crate::phone::Devices for RemoteService {
 
     fn record(&self, id: &str, entry: crate::phone::Activity) {
         let _io = lock(&self.io);
+        self.record_locked(id, entry);
+    }
+
+    fn now(&self) -> f64 {
+        (self.clock)()
+    }
+
+    fn name(&self, id: &str) -> Option<String> {
+        let _io = lock(&self.io);
+        let cfg = self.load();
+        Self::devices_of(&cfg)
+            .into_iter()
+            .find(|d| d.get("id").and_then(Value::as_str) == Some(id))
+            .and_then(|d| d.get("name").and_then(Value::as_str).map(String::from))
+    }
+}
+
+/// The activity channel a legacy phone's HELLO is written under.
+pub const LEGACY_HELLO: &str = "relay:hello";
+
+impl RemoteService {
+    /// Append to a device's activity, the io lock already held.
+    fn record_locked(&self, id: &str, entry: crate::phone::Activity) {
         let mut all = self.load_activity();
         let list = all.entry(id.to_string()).or_insert_with(|| json!([]));
         if !list.is_array() {
@@ -486,19 +566,6 @@ impl crate::phone::Devices for RemoteService {
         }
         // Best effort: a log that can't be written never blocks the call.
         let _ = write_json_atomic(&self.activity_file(), &Value::Object(all));
-    }
-
-    fn now(&self) -> f64 {
-        (self.clock)()
-    }
-
-    fn name(&self, id: &str) -> Option<String> {
-        let _io = lock(&self.io);
-        let cfg = self.load();
-        Self::devices_of(&cfg)
-            .into_iter()
-            .find(|d| d.get("id").and_then(Value::as_str) == Some(id))
-            .and_then(|d| d.get("name").and_then(Value::as_str).map(String::from))
     }
 }
 

@@ -77,4 +77,24 @@ class MiscTest {
         assertTrue(copy.contains("Pair a device"))
         assertTrue(copy.contains("Rotate secret"))
     }
+
+    @Test
+    fun `a phone too old for the computer is told to update, not to pair again`() {
+        val copy = com.nekko.android.ui.components.deniedCopy(com.nekko.protocol.DenyReason.UPDATE_REQUIRED)
+        assertTrue(copy.contains("Update this app"))
+        assertEquals(com.nekko.protocol.DenyReason.UPDATE_REQUIRED, com.nekko.protocol.DenyReason.parse("update-required"))
+    }
+
+    @Test
+    fun `only phone refusals are reworded, keeping the code`() {
+        val raw = com.nekko.protocol.RelayException("Not allowed from a paired phone (change-off): chat:send")
+        val plain = com.nekko.android.data.PlainRefusals.reword(raw, "Studio")
+        assertEquals("Changes from this phone are turned off on Studio. Turn them on in Remote access → What phones can do.", plain.message)
+        assertEquals("change-off", plain.refusal?.code)
+        val other = com.nekko.protocol.RelayException("no such session")
+        assertTrue(com.nekko.android.data.PlainRefusals.reword(other, "Studio") === other)
+        // A code this app has no words for keeps the computer's message.
+        val unknown = com.nekko.protocol.RelayException("Not allowed from a paired phone (key-mismatch): chat:send")
+        assertTrue(com.nekko.android.data.PlainRefusals.reword(unknown, "Studio") === unknown)
+    }
 }

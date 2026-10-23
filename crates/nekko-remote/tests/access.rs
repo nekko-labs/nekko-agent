@@ -145,7 +145,7 @@ fn the_gate_reads_the_registry_and_writes_the_activity() {
         seen.lock().unwrap().push(channel);
         Box::pin(std::future::ready(Ok(Value::Null)))
     });
-    let classes = Classes { read: vec![], change: vec!["task:runNow".into()] };
+    let classes = Classes { change: vec!["task:runNow".into()], ..Classes::default() };
     let gated = nekko_remote::phone::gate_with(host, svc.clone(), classes);
     let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
     let k = SigningKey::from_slice(&[3u8; 32]).unwrap();

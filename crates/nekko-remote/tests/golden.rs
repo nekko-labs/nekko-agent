@@ -22,20 +22,21 @@ fn golden(name: &str) -> Value {
     serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap()
 }
 
-/// The TS gate these goldens recorded knew no devices (IO-33 came after),
-/// and none of the recorded channels is read- or change-class, so the gate
-/// never asks: any question here fails the test.
-struct NoDevices;
+/// The TS gate these goldens recorded knew no devices (IO-33 came after).
+/// Every channel a phone may call is classed now, so the gate asks: every
+/// paired phone here has Read and Change on and no Change key, as a phone
+/// paired before IO-33 has. No recorded call needs a proof.
+struct AllOn;
 
-impl Devices for NoDevices {
-    fn device(&self, id: &str) -> Option<PhoneDevice> {
-        panic!("the gate looked up {id} for a channel recorded before IO-33")
+impl Devices for AllOn {
+    fn device(&self, _id: &str) -> Option<PhoneDevice> {
+        Some(PhoneDevice { access: nekko_remote::DeviceAccess::default(), key: None })
     }
     fn register_key(&self, id: &str, _key: &str) -> Result<bool, &'static str> {
         panic!("register_key({id})")
     }
-    fn record(&self, id: &str, entry: Activity) {
-        panic!("record({id}, {entry:?})")
+    fn record(&self, _id: &str, entry: Activity) {
+        assert!(entry.ok, "a recorded call was refused: {entry:?}");
     }
     fn now(&self) -> f64 {
         0.0
@@ -135,7 +136,9 @@ fn the_relay_agent_sends_the_same_frames() {
     // those to the port in order, and its output must match byte for byte.
     let ivs: Arc<Mutex<VecDeque<[u8; 12]>>> = Arc::default();
     let feed = ivs.clone();
-    let mut core = AgentCore::new(key.clone(), Box::new(move || feed.lock().unwrap().pop_front().expect("an IV")));
+    // A challenge (which the TS agent never sent) is sealed with a fresh IV.
+    let mut core =
+        AgentCore::new(key.clone(), Box::new(move || feed.lock().unwrap().pop_front().unwrap_or_else(e2e::random_iv)));
     let verify = |hello: &Value| -> Value {
         let id = hello.get("deviceId").and_then(Value::as_str).unwrap_or("");
         if id == "phone-1" || id == "phone-2" {
@@ -171,7 +174,19 @@ fn the_relay_agent_sends_the_same_frames() {
         let input = &step["input"];
         let mut sent = Vec::new();
         if let Some(text) = input.get("relay").and_then(Value::as_str) {
-            for out in core.on_relay(text, &verify) {
+            let mut outs = core.on_relay(text, &verify);
+            if text.contains(r#""type":"client-open""#) {
+                // Relay replay protection: each connection the relay announces
+                // is sealed a challenge first (the TS agent sent nothing). The
+                // recorded phones are legacy, so nothing else changes.
+                let Some(Out::Send(first)) = (!outs.is_empty()).then(|| outs.remove(0)) else {
+                    panic!("step {i}: no challenge")
+                };
+                let f: Value = serde_json::from_str(&first).unwrap();
+                let opened = e2e::open(&key, s(&serde_json::from_str::<Value>(s(&f["data"])).unwrap()["enc"])).unwrap();
+                assert_eq!(opened["type"], "challenge", "step {i}");
+            }
+            for out in outs {
                 match out {
                     Out::Send(f) => sent.push(f),
                     Out::Dispatch { cid, id, device_id, channel, args, proof } => {
@@ -191,7 +206,7 @@ fn the_relay_agent_sends_the_same_frames() {
                             };
                             Box::pin(std::future::ready(result))
                         });
-                        let gated = nekko_remote::phone::gate(host, Arc::new(NoDevices));
+                        let gated = nekko_remote::phone::gate(host, Arc::new(AllOn));
                         let result = rt.block_on(gated(PhoneCall { device_id, proof }, channel, args));
                         calls.extend(seen.lock().unwrap().drain(..));
                         sent.push(core.reply(&cid, id, result));
@@ -251,6 +266,60 @@ impl LinkHandle for FakeHandle {
     }
 }
 
+/// A recorded HELLO as a protocol 4 phone sends it (an object only).
+fn as_current(hello: &Value) -> Value {
+    let mut h = hello.clone();
+    if let Some(o) = h.as_object_mut() {
+        o.insert("protocol".into(), json!(4));
+    }
+    h
+}
+
+#[test]
+fn a_legacy_phone_is_marked_and_can_be_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let svc = RemoteService::new(
+        dir.path(),
+        counter_random(),
+        Arc::new(|| 1_760_000_000_000.0),
+        Box::new(FakeLink { kicked: Arc::default() }),
+    );
+    let file = dir.path().join("remote.json");
+    let device = json!({ "id": "p1", "name": "Old phone", "platform": "ios", "createdAt": 1, "lastSeenAt": 1 });
+    std::fs::write(&file, json!({ "enabled": false, "devices": [device] }).to_string()).unwrap();
+    let devices = |file: &Path| -> Value {
+        serde_json::from_str::<Value>(&std::fs::read_to_string(file).unwrap()).unwrap()["devices"][0].clone()
+    };
+    let activity = |svc: &RemoteService| svc.route("remote:activity", &[json!("p1")]).unwrap();
+    // On by default: welcomed, marked, and written to the activity once.
+    for _ in 0..2 {
+        let reply = svc.verify(&json!({ "type": "hello", "deviceId": "p1", "protocol": 3 }));
+        assert_eq!(reply["type"], "welcome", "{reply}");
+    }
+    assert_eq!(devices(&file)["legacyProtocol"], json!(true));
+    let log = activity(&svc);
+    assert_eq!(log.as_array().unwrap().len(), 1, "{log}");
+    assert_eq!(log[0]["channel"], "relay:hello");
+    assert_eq!(log[0]["ok"], true);
+    assert_eq!(log[0]["reason"], "legacy-protocol");
+    // The app updated: the mark goes.
+    svc.verify(&json!({ "type": "hello", "deviceId": "p1", "protocol": 4 }));
+    assert!(devices(&file).get("legacyProtocol").is_none());
+    // The owner turned legacy phones off.
+    let mut cfg: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    cfg["acceptLegacyPhones"] = json!(false);
+    std::fs::write(&file, cfg.to_string()).unwrap();
+    let reply = svc.verify(&json!({ "type": "hello", "deviceId": "p1" }));
+    assert_eq!(reply, json!({ "type": "denied", "reason": "update-required" }));
+    let log = activity(&svc);
+    assert_eq!(log[1]["ok"], false);
+    assert_eq!(log[1]["reason"], "legacy-protocol");
+    // The setting survives the registry's own writes.
+    svc.verify(&json!({ "type": "hello", "deviceId": "p1", "protocol": 4 }));
+    let cfg: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    assert_eq!(cfg["acceptLegacyPhones"], json!(false));
+}
+
 #[test]
 fn remote_json_and_replies_match_across_operations() {
     let g = golden("service.json");
@@ -276,7 +345,11 @@ fn remote_json_and_replies_match_across_operations() {
                 std::fs::write(&file, s(&ops[i]["file"])).unwrap();
                 Value::Null
             }
-            "hello" => svc.verify(&args[0]),
+            // The TS phones in this record predate relay replay protection;
+            // read them as protocol 4 phones whose challenge the agent already
+            // checked, so the registry is the one the TS wrote. The legacy
+            // path has its own test (`a_legacy_phone_is_marked_and_can_be_refused`).
+            "hello" => svc.verify(&as_current(&args[0])),
             "pair" => svc.pair(),
             other => svc.route(&format!("remote:{other}"), args).unwrap_or_else(|e| json!({ "error": e })),
         };
@@ -322,10 +395,11 @@ fn the_phone_gate_decides_as_the_ts_does() {
             };
             Box::pin(std::future::ready(Ok(out)))
         });
-        let gated = nekko_remote::phone::gate(host, Arc::new(NoDevices));
+        // The screening and redaction the TS recorded, under the access
+        // classes (tested in phone.rs): `phone::call` is what the gate runs
+        // once a call's class lets it through.
         let channel = s(&case["channel"]).to_string();
-        let who = PhoneCall { device_id: "phone-1".into(), proof: None };
-        let got = rt.block_on(gated(who, channel.clone(), case["args"].clone()));
+        let got = rt.block_on(nekko_remote::phone::call(&host, channel.clone(), case["args"].clone()));
         let what = format!("{channel} {}", case["args"]);
         match case.get("error") {
             Some(e) => assert_eq!(got.as_ref().unwrap_err(), s(e), "{what}"),
@@ -431,4 +505,67 @@ fn git_from_a_phone_matches_the_ts() {
         let got = nekko_remote::phone::redact(channel, c["result"].clone());
         assert_eq!(got, c["view"], "{channel} {}", c["result"]);
     }
+}
+
+#[test]
+fn the_relay_handshake_matches_the_phones() {
+    // relay-handshake.json is shared with the iPhone and Android protocol
+    // tests: the same challenge, HELLO and requests on all three sides.
+    let g = golden("relay-handshake.json");
+    let key = e2e::derive_key(s(&g["secret"]), s(&g["room"]));
+    let hex: String = key.raw().iter().map(|b| format!("{b:02x}")).collect();
+    assert_eq!(hex, s(&g["key"]));
+    let nonce: Vec<u8> = (0..s(&g["challenge"]["nonceBytes"]).len() / 2)
+        .map(|i| u8::from_str_radix(&s(&g["challenge"]["nonceBytes"])[i * 2..i * 2 + 2], 16).unwrap())
+        .collect();
+    // The fixture's nonce first, then fresh ones (a re-challenge is never the same).
+    let first = Mutex::new(Some(nonce));
+    let random: Random = Arc::new(move |buf: &mut [u8]| match first.lock().unwrap().take() {
+        Some(n) => buf.copy_from_slice(&n),
+        None => getrandom_fill(buf),
+    });
+    let blob = s(&g["challenge"]["blob"]).to_string();
+    let iv = iv_of(&blob);
+    let mut core = AgentCore::new(key.clone(), Box::new(move || iv)).with_random(random);
+    let device = s(&g["device"]["deviceId"]).to_string();
+    let verify = move |h: &Value| json!({ "type": "welcome", "device": { "id": h["deviceId"] } });
+    // The challenge, byte for byte.
+    let out = core.on_relay(&json!({ "type": "client-open", "cid": "c1" }).to_string(), &verify);
+    let want = json!({ "type": "d", "cid": "c1", "data": json!({ "enc": blob }).to_string() }).to_string();
+    assert_eq!(out, vec![Out::Send(want)]);
+    same(&e2e::open(&key, &blob).unwrap(), &g["challenge"]["frame"], "challenge frame");
+    let send = |core: &mut AgentCore, v: &Value| {
+        let data = json!({ "enc": e2e::seal_with_iv(&key, v, e2e::random_iv()) }).to_string();
+        core.on_relay(&json!({ "type": "c", "cid": "c1", "data": data }).to_string(), &verify)
+    };
+    // The phone's HELLO is welcomed, then its two requests run in order.
+    assert_eq!(g["hello"]["protocol"], json!(g["protocol"]));
+    let welcome = send(&mut core, &g["hello"]);
+    assert_eq!(welcome.len(), 1, "{welcome:?}");
+    assert_eq!(core.connected_devices(), vec![device.clone()]);
+    for r in g["requests"].as_array().unwrap() {
+        match send(&mut core, r).as_slice() {
+            [Out::Dispatch { channel, args, device_id, .. }] => {
+                assert_eq!(channel, s(&r["channel"]));
+                assert_eq!(args, &r["args"]);
+                assert_eq!(device_id, &device);
+            }
+            other => panic!("{r}: {other:?}"),
+        }
+    }
+    // Replayed, the second request is dropped and the phone is challenged again.
+    let replay = send(&mut core, &g["requests"][1]);
+    assert!(matches!(replay.as_slice(), [Out::Send(_)]), "{replay:?}");
+    assert!(core.connected_devices().is_empty());
+    // The same HELLO again (its challenge is spent) is not welcomed either.
+    send(&mut core, &g["hello"]);
+    assert!(core.connected_devices().is_empty());
+    // A phone from before protocol 4 is the verifier's call.
+    assert!(g["legacyHello"].get("challenge").is_none());
+    send(&mut core, &g["legacyHello"]);
+    assert_eq!(core.connected_devices(), vec![device]);
+}
+
+fn getrandom_fill(buf: &mut [u8]) {
+    (hello::os_random())(buf)
 }

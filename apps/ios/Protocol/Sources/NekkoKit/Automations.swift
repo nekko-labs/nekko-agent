@@ -39,7 +39,7 @@ public final class AutomationsModel {
             started = []
             error = nil
         } catch {
-            self.error = error.localizedDescription
+            self.error = store.readable(error).localizedDescription
         }
         loaded = true
     }
@@ -56,7 +56,11 @@ public final class AutomationsModel {
 
     private func runNow(_ id: String, _ call: (RemoteConnection) async throws -> Void) async throws {
         guard store.conn == .online else { throw RelayError("Reconnect to run it. Run now is never sent later.") }
-        try await call(try store.remote())
+        do {
+            try await call(try store.remote())
+        } catch {
+            throw store.readable(error)
+        }
         started.insert(id)
         // The run takes a while to finish; read the list again a few times so its result shows.
         Task { @MainActor [weak self] in
@@ -120,7 +124,7 @@ public final class UsageModel {
             }
             limits = found
         } catch {
-            self.error = error.localizedDescription
+            self.error = store.readable(error).localizedDescription
         }
         loaded = true
     }

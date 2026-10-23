@@ -295,21 +295,31 @@ changes how the computer itself is set up:
   without typing it, renaming terminals and listing shells stay off.
 - **One chat's options:** a phone can change a chat's model, title, pin and tags, complete it, and
   switch it between Ask, Guardrails and YOLO, but not its tools, isolation or
-  offline/incognito switches. Messages cannot attach files from the computer.
+  offline/incognito switches. Messages cannot attach files from the computer. Moving a chat (or the
+  default for new chats) to a mode with fewer approvals, Ask to Guardrails or anything to YOLO, is
+  confirmed on the phone like any other change: Face ID or the passcode on the iPhone. Android can't
+  confirm changes yet, so there you change the mode on the computer.
 
 ### What phones can do: Read and Change, per phone
 
 Git, files, logs, terminals and SSH are on the iPhone now (above); task boards are coming.
 *Remote access → What phones can do* on the computer lists each paired phone with two switches:
 
-- **Read:** look at files, git status and history, logs and boards.
-- **Change:** edit and save files, commit and push, branch and pull request actions, type in a
+- **Read:** see your chats and their messages, settings, models, automations, usage and limits, and
+  look at files, git status and history, logs and boards.
+- **Change:** send and queue prompts, stop a run, approve tools, answer questions, start, fork,
+  delete and change chats, change the phone-settable settings, run an automation, transcribe a voice
+  prompt; edit and save files, commit and push, branch and pull request actions, type in a
   terminal, edit boards, SSH.
 
 Both are on for every phone, including phones paired before the switches existed. Turn one off and
-your computer refuses those requests from that phone, whatever the phone app does.
+your computer refuses those requests from that phone, whatever the phone app does: with Change off a
+phone can watch but can't make the agent do anything, and with Read off it sees nothing. Every
+request a phone can make is in one of the two; anything else is refused.
 
-**Every change is confirmed on the phone and checked by your computer.** The first time a phone
+**File, git, terminal and SSH changes, and moving a chat to Guardrails or YOLO, are confirmed on
+the phone and checked by your computer.** (Sending a prompt or approving a tool needs only the Change
+switch, so it doesn't ask for Face ID each time.) The first time a phone
 makes a change, it creates a key in its Secure Enclave (on iPhone) that only Face ID, Touch ID or
 the passcode can use, and gives your computer the public half. Each change after that is signed
 with the key, and your computer checks the signature before doing anything: a change with no
@@ -320,9 +330,15 @@ Your computer trusts the first key a phone gives it. A phone that later shows up
 key is refused until you remove it and pair it again. *Forget all computers* on the iPhone deletes
 its key too.
 
-**Activity.** *Activity* under each phone lists every change it made or tried, newest first, with
-why one was refused (Change off, no fresh Face ID or passcode, a changed key). Your computer keeps
-the newest 200 per phone; rotating the secret clears them.
+**Activity.** *Activity* under each phone lists every change it made or tried, prompts and approvals
+included, newest first, with why one was refused (Change off, no fresh Face ID or passcode, a changed
+key). Your computer keeps the newest 200 per phone; rotating the secret clears them.
+
+**Older phone apps.** Phone apps from before relay replay protection (below) still connect for one
+release. Your computer writes it to its log, shows *Older app: update it on the phone* next to that
+phone and adds one *Connected with an older app* line to its activity. To refuse them now, set
+`"acceptLegacyPhones": false` in `remote.json` in the data folder; such a phone is then told to
+update its app.
 
 **Revoke** a phone to stop all of it at once. Whatever the switches say, a phone can never reach
 provider keys or other credentials, remote access itself (pairing more devices, revoking,
@@ -346,6 +362,7 @@ The logs a phone reads are files you can open yourself: `logs/app.log` and `logs
 | Revoked device replays old creds | The agent refuses its handshake and unicasts nothing to it; it gets back in only with a fresh one-time pairing code from the computer's owner; rotate the secret for a full cryptographic reset |
 | Malicious relay withholding/reordering | Availability only; it still can't read or forge frames (AES-GCM auth) |
 | Phone asks for something dangerous | Your computer only serves the phone allowlist above (no wipe, settings reset, remote-access changes, terminals outside a chat, file writes); tool calls run on your machine under your guardrails/sandbox and chat mode |
+| Someone records the relay's traffic and plays it back | Every connection starts with a fresh random challenge from your computer that the phone's sealed hello must answer, once; every request after it carries that challenge and a number that only goes up. A replayed hello or request is dropped and never runs. (Phone apps from before this are accepted for one release, see *Older phone apps*.) |
 | Someone else picks up the phone, or the relay replays a request, to make a change | Each change must be signed by the phone's Secure Enclave key, which needs Face ID or the passcode (one check lasts 5 minutes); your computer checks the signature, its age and that it was not used before, and logs every attempt in the phone's activity |
 
 What the relay does see: connection metadata (IPs, timing, frame sizes), the room code, and, if you

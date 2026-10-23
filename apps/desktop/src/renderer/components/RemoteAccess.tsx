@@ -620,6 +620,8 @@ export function activityReason(reason: string | undefined): string {
       return 'Refused: the phone’s key changed (pair it again)';
     case 'failed':
       return 'Failed on this computer';
+    case 'legacy-protocol':
+      return 'Refused: update the app on the phone';
     default:
       return `Refused (${reason})`;
   }
@@ -627,7 +629,10 @@ export function activityReason(reason: string | undefined): string {
 
 /** What a channel name means, for the activity list. */
 function activityAction(channel: string): string {
-  return channel === PHONE_KEY_CHANNEL ? 'Set up Face ID for changes' : channel;
+  if (channel === PHONE_KEY_CHANNEL) return 'Set up Face ID for changes';
+  // The daemon writes this when a phone connects with an app from before relay replay protection.
+  if (channel === 'relay:hello') return 'Connected with an older app';
+  return channel;
 }
 
 /**
@@ -696,10 +701,11 @@ export function PhoneAccessView({
     <div data-shot="phone-access" className="rounded-md border border-line p-3">
       <div className="text-[13px] font-medium">What phones can do</div>
       <p className="mt-0.5 text-[12px] text-ink-faint">
-        <span className="font-medium text-ink-soft">Read</span>: look at files, git, logs and boards.{' '}
-        <span className="font-medium text-ink-soft">Change</span>: edit and save files, commit and push, type in
-        terminals. Each change needs Face ID or the passcode on the phone within the last 5 minutes and is listed here.
-        Revoke a phone to stop everything.
+        <span className="font-medium text-ink-soft">Read</span>: see chats, files, git, logs and boards.{' '}
+        <span className="font-medium text-ink-soft">Change</span>: send prompts, approve tools, run automations, edit
+        and save files, commit and push, type in terminals. File, git and terminal changes, and switching a chat to
+        Guardrails or YOLO, need Face ID or the passcode on the phone within the last 5 minutes. Every change is listed
+        here. Revoke a phone to stop everything.
       </p>
       <ul className="mt-2 divide-y divide-line rounded-lg border border-line">
         {devices.map((d) => {
@@ -709,7 +715,12 @@ export function PhoneAccessView({
           return (
             <li key={d.id} className="px-3 py-2 text-[12.5px]" data-device={d.id}>
               <div className="flex flex-wrap items-center gap-3">
-                <span className="min-w-0 flex-1 truncate font-medium">{d.name}</span>
+                <span className="min-w-0 flex-1 truncate font-medium">
+                  {d.name}
+                  {d.legacyProtocol && (
+                    <span className="ml-2 text-[11.5px] font-normal text-ink-faint">Older app: update it on the phone</span>
+                  )}
+                </span>
                 <label className="flex items-center gap-1.5 text-ink-soft">
                   Read
                   <Toggle value={access.read} onChange={(v) => onSet(d.id, { read: v })} disabled={busyId === d.id} label={`Read from ${d.name}`} />

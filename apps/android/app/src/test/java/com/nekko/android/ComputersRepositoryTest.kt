@@ -472,6 +472,32 @@ class ComputersRepositoryTest {
     }
 
     @Test
+    fun `raising the mode without a proof is refused in plain words and the old mode stays`() = runTest {
+        val remotes = FakeRemotes { c ->
+            when (c.channel) {
+                Channels.SETTINGS_GET -> buildJsonObject { put("defaultChatMode", "ask"); put("chatPaneAction", "complete") }
+                Channels.SETTINGS_UPDATE -> throw com.nekko.protocol.RelayException("Not allowed from a paired phone (proof-required): settings:update")
+                Channels.CHANGES_LIST -> throw com.nekko.protocol.RelayException("Not allowed from a paired phone (read-off): changes:list")
+                else -> FakeRemotes.defaultAnswer(c)
+            }
+        }
+        val repo = repo(remotes = remotes)
+        repo.pair(link)
+        remotes.last.goOnline()
+        runCurrent()
+        val name = repo.state.value.active!!.name
+        val e = runCatching {
+            repo.updatePcSettings(com.nekko.protocol.PcSettings.patch(mode = com.nekko.protocol.PcSettings.ChatMode.YOLO))
+        }.exceptionOrNull() as com.nekko.protocol.RelayException
+        assertEquals("Switching to Guardrails or YOLO needs a confirmation this phone can’t give yet. Change the mode on $name.", e.message)
+        assertEquals("proof-required", e.refusal?.code)
+        assertEquals(com.nekko.protocol.PcSettings.ChatMode.ASK, repo.state.value.pcSettings.defaultChatMode)
+        // A read refused by the computer's switch says where to turn it on, for every caller.
+        val read = runCatching { repo.caller.call(Channels.CHANGES_LIST, JsonPrimitive("s1")) }.exceptionOrNull()
+        assertEquals("Reading from this phone is turned off on $name. Turn it on in Remote access → What phones can do.", read?.message)
+    }
+
+    @Test
     fun `complete archives and keeps the chat as completed, restore brings it back, delete removes it`() = runTest {
         val remotes = FakeRemotes { c ->
             if (c.channel == Channels.SESSIONS_SUMMARIES) buildJsonArray {

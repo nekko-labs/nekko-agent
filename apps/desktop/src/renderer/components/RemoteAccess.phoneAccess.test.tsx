@@ -75,5 +75,16 @@ describe('What phones can do', () => {
     expect(activityReason('key-mismatch')).toContain('pair it again');
     expect(activityReason('failed')).toBe('Failed on this computer');
     expect(activityReason('value-invalid')).toBe('Refused (value-invalid)');
+    expect(activityReason('legacy-protocol')).toBe('Refused: update the app on the phone');
+  });
+
+  it('marks a phone still on an app from before relay replay protection', () => {
+    expect(html([phone('p1')])).not.toContain('Older app');
+    const out = html([phone('p1', { legacyProtocol: true })], {
+      activity: { p1: [{ at: NOW - 5_000, channel: 'relay:hello', ok: true, reason: 'legacy-protocol' }] },
+      openId: 'p1',
+    });
+    expect(out).toContain('Older app: update it on the phone');
+    expect(out).toContain('Connected with an older app');
   });
 });

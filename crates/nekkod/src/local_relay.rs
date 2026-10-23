@@ -131,6 +131,11 @@ pub fn ready_line(out: &str) -> Option<(Option<u16>, Vec<String>)> {
 }
 
 /// The address phones dial: the MagicDNS name when known (Android needs one), else the tailnet IP.
+///
+/// Plain `ws://`: everything a phone and the agent say is sealed end to end
+/// (AES-256-GCM under the pairing secret), and since phone protocol 4 a
+/// recorded HELLO or request can't be replayed either: the agent challenges
+/// each connection and requests carry a rising `seq` (nekko-remote `agent.rs`).
 pub fn local_relay_url(name: Option<&str>, ip: &str, port: u16) -> String {
     format!("ws://{}:{port}", name.unwrap_or(ip))
 }

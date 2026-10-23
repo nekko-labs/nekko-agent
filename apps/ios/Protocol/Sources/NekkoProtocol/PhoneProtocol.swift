@@ -3,9 +3,12 @@ import Foundation
 /// The phone protocol version (IO-32): sent in the HELLO, compared with the
 /// computer's in its welcome (`REMOTE_PROTOCOL_VERSION` in
 /// packages/shared/src/remote.ts, `PROTOCOL_VERSION` in nekko-remote). A
-/// computer from before the field counts as 1.
+/// computer from before the field counts as 1. Version 4 adds the relay
+/// challenge (replay protection, see `RelayClient`).
 public enum PhoneProtocol {
-    public static let version = 3
+    public static let version = 4
+    /// What a HELLO says to a computer that never challenged this phone (from before version 4).
+    public static let legacyVersion = 3
 
     /// What the welcome says, or 1 for a computer that sends nothing.
     public static func of(welcome frame: JSONValue) -> Int {
