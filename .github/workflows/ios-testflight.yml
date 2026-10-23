@@ -21,9 +21,9 @@ name: iOS TestFlight
 # Owner-side, once, before the first run (TASKS IO-7):
 #   - create the app record in App Store Connect with the bundle id below
 #     (Apple's API cannot create apps);
-#   - answer export compliance for the build in App Store Connect
-#     (ITSAppUsesNonExemptEncryption is deliberately not set: the app does its
-#     own AES-GCM end-to-end encryption, which is a legal call, not a default).
+#   - export compliance is answered in Info.plist (ITSAppUsesNonExemptEncryption
+#     false: every cipher is Apple's own, CryptoKit and URLSession); revisit it if
+#     the app ever bundles a crypto library of its own.
 #
 # Build number: the run number plus an offset, so every upload is unique and
 # increasing. The marketing version comes from apps/ios/project.yml.
@@ -167,6 +167,6 @@ jobs:
             echo "- Version $version, build $((BUILD_NUMBER + 100)), commit \`${GITHUB_SHA::7}\`"
             echo "- Team ${TEAM_ID:-unknown}; bundle id dev.nekkolabs.nekkoagent"
             [ -n "$NOTES" ] && echo "- What to test: $NOTES"
-            echo "- After processing, add the build to a TestFlight group in App Store Connect and answer export compliance."
+            echo "- After processing, add the build to a TestFlight group in App Store Connect."
           } >> "$GITHUB_STEP_SUMMARY"
           rm -f "${API_KEY_PATH:-}"
