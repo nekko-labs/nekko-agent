@@ -129,7 +129,12 @@ The bar stacks what the model needs against what the device has free:
 - **Weights**, the model's actual size. Taken from what the server reports or the file on
   disk, never computed from a parameter count times a quantization width, which is wrong
   for mixed-precision builds like `Q4_K_M`.
-- **KV cache**, the conversation's memory: `2 x layers x kvHeads x headDim x context x
+- **KV cache**, the conversation's memory. For a model the Nekko engine runs, it is read
+  layer by layer from the file, the way llama.cpp allocates it: the attention layers hold the
+  whole context, a sliding-window layer (Gemma 4, gpt-oss) holds only its window, and the
+  recurrent layers of a hybrid model (Qwen3.5 and later) hold none. For Gemma 4 12B at 32k
+  that is about 2 GB, where counting every layer the same way would say 48 GB. For a server
+  that does not give us the file, it is `2 x layers x kvHeads x headDim x context x
   bytesPerElement x parallelSlots`.
 - **Runtime overhead**, compute buffers and the server's own reserve.
 
@@ -162,10 +167,13 @@ proceed. The estimate can be wrong, and it is your machine.
 Three things push a model off the GPU, in roughly this order of surprise:
 
 1. **Context length.** The KV cache grows linearly with context. Going from 8k to 64k
-   multiplies it eightfold, and past a point the cache is larger than the model.
-2. **Parallel slots.** Every concurrent slot gets its own full KV cache. Raising
+   multiplies it eightfold, and past a point the cache is larger than the model. Models
+   with sliding-window or recurrent layers grow much more slowly.
+2. **Parallel slots.** On Ollama every concurrent slot gets its own full KV cache: raising
    `OLLAMA_NUM_PARALLEL` from 1 to 4 quadruples the cache at the same context, which is
-   why a model that fit yesterday can stop fitting today with nothing else changed.
+   why a model that fit yesterday can stop fitting today with nothing else changed. The
+   Nekko engine shares the context between its slots instead, so more slots cost only the
+   extra sliding windows.
 3. **Something else already resident.** The planner measures against *free* memory, not
    total, so another loaded model counts against you.
 

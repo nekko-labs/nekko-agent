@@ -2136,7 +2136,8 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [ ] **T193e** Live check on Windows/NVIDIA, Windows/AMD-Vulkan and a CPU-only machine (`node scripts/itest-recommendations.mjs`); measure Vulkan and CPU efficiency (nobody on the team has an AMD card yet).
 - [ ] **T193f** Signed online refresh of the feed, beside the update feed (the Claude policy override's pattern).
 - [ ] **T193g** Record measured tok/s locally after a model runs and prefer it over the feed's figure; opt-in anonymized sharing.
-- [ ] Engine planner (`nekko-engine/src/capacity.rs`): adopt the per-layer KV figures; its uniform formula overstates sliding-window and hybrid models (Gemma 4 12B at 32k: ~51 GB against llama.cpp's 992 MiB).
+- [x] Engine planner (`nekko-engine/src/capacity.rs`): KV cache layer by layer from the GGUF tensor table (`KvLayout`), sized as `llama-server` allocates (one-slot loads run four unified sequences; `--parallel N` shares the context). Gemma 4 12B at 32k: 1952 MiB, was 48 GiB. Tests: `nekko-engine/tests/kv_layout.rs` (synthetic headers, fit verdict, and an ignored real-file check against llama.cpp). Done: 2026-10-23
+- [ ] Count hybrid models' recurrent state (50-250 MiB per load) instead of leaving it to the overhead allowance; apply the layout to Ollama models where `/api/show` exposes the tensors.
 
 ### T194: Code mode: a chat's tools as code (2026-10-22) · [spec](spec/context/code-mode-tools-as-code.md) · [decision](docs/decisions/0004-code-mode-in-an-embedded-quickjs-sandbox.md)
 - [x] **T194a** `nekko-codemode`: tool specs as TypeScript declarations, `search_tools`, `run_code` in an embedded QuickJS sandbox (no loader, no std, frozen `tools`; timeout, Stop, memory, stack, call and output caps), and the per-reply savings tally. Done: 2026-10-22
