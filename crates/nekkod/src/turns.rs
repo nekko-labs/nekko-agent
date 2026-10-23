@@ -2032,6 +2032,7 @@ impl TurnTools {
         }
         match name {
             "set_chat_title" => return Ok(self.set_title(id, &input).await),
+            "remember" => return Ok(self.remember(id, &input).await),
             "complete_session" => return Ok(self.complete(id, &input).await),
             "ask_user" => return Ok(result(id, self.ask(call).await)),
             "update_plan" if !self.training => return Ok(self.update_plan(id, &input).await),
@@ -2479,6 +2480,25 @@ impl TurnTools {
         persist(&self.store, &self.session, self.incognito).await;
         self.meta();
         result(id, "Chat title updated.")
+    }
+
+    /// `remember`: a global memory note. The chat's memory card reads the
+    /// call's title and body and this result's first word after "Memory".
+    async fn remember(&self, id: &str, input: &Value) -> Value {
+        let dir = self.turns.data_dir.clone().or_else(|| self.store.dir().parent().map(PathBuf::from));
+        let Some(dir) = dir else { return error(id, "Memory is unavailable here; nothing was saved.") };
+        let text = |k: &str| input.get(k).and_then(Value::as_str).unwrap_or_default().to_string();
+        let (title, body) = (text("title"), text("body"));
+        let saved = tokio::task::spawn_blocking(move || nekko_workspace::memory::remember(&dir, &title, &body))
+            .await
+            .unwrap_or_else(|e| Err(e.to_string()));
+        match saved {
+            Ok((note, updated)) => {
+                let action = if updated { "updated" } else { "added" };
+                result(id, format!("Memory {action}: {}", js::display(&note["title"])))
+            }
+            Err(e) => error(id, format!("Memory was not saved: {e}")),
+        }
     }
 
     async fn complete(&self, id: &str, input: &Value) -> Value {

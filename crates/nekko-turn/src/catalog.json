@@ -790,7 +790,8 @@
   "ask_user": "agent",
   "decide": "agent",
   "report_experiment": "agent",
-  "report_artifact": "agent"
+  "report_artifact": "agent",
+  "remember": "agent"
  },
  "offlineBlockedTools": [
   "delegation_targets",

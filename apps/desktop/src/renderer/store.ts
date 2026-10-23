@@ -173,6 +173,8 @@ interface UiState {
   completionTipSessionId: string | null;
   /** A workflow run to show when the Workflows view opens (a notification click). */
   workflowFocus: { workflowId: string; runId: string } | null;
+  /** A memory note's title to open when the Memory view shows (a chat's memory card). */
+  memoryFocus: string | null;
   settings: AppSettings | null;
   view: View;
   /**
@@ -588,6 +590,7 @@ let completionTipPending = false;
 export const useStore = create<UiState>((set, get) => ({
   completionTipSessionId: null,
   workflowFocus: null,
+  memoryFocus: null,
   settings: null,
   view: 'command',
   sessions: [],
