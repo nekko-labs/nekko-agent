@@ -4788,6 +4788,14 @@
   "name": "fit: an overflow with nothing to elide ends the reply",
   "events": [
    {
+    "type": "retry",
+    "sessionId": "s1",
+    "attempt": 1,
+    "maxAttempts": 5,
+    "delayMs": 0,
+    "reason": "The model's context window is too small for its tools: replying without them"
+   },
+   {
     "type": "error",
     "sessionId": "s1",
     "message": "anthropic 400: prompt is too long: 210000 tokens > 200000 maximum"
@@ -4809,6 +4817,19 @@
      "read_file",
      "bash"
     ],
+    "messages": [
+     {
+      "id": "u0",
+      "role": "user",
+      "content": "Do the thing",
+      "createdAt": 0
+     }
+    ]
+   },
+   {
+    "model": "test-model",
+    "system": "SYSTEM",
+    "tools": [],
     "messages": [
      {
       "id": "u0",

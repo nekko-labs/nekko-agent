@@ -43,6 +43,25 @@ pub fn is_context_overflow(message: &str) -> bool {
     NEEDLES.iter().any(|n| lower.contains(n))
 }
 
+/// A context overflow said in the user's terms: the window the model was
+/// loaded with, what this chat needed and the fix, when the server's error
+/// carries the numbers (llama.cpp and LM Studio: `n_ctx`, `n_prompt_tokens`);
+/// else the error as it came. Still an overflow by `is_context_overflow`.
+pub fn overflow_message(message: &str) -> String {
+    let number = |key: &str| -> Option<u64> {
+        let at = message.find(&format!("\"{key}\":"))? + key.len() + 3;
+        let digits: String = message[at..].trim_start().chars().take_while(char::is_ascii_digit).collect();
+        digits.parse().ok()
+    };
+    let (Some(window), Some(needed)) = (number("n_ctx"), number("n_prompt_tokens")) else {
+        return message.to_string();
+    };
+    format!(
+        "The model is loaded with a {window}-token context window, and this chat needs {needed} tokens. \
+         Reload the model with a larger context length (16384 or more) in your model server, then send again."
+    )
+}
+
 /// `elidedToolOutput`.
 pub fn elided_tool_output(chars: usize) -> String {
     format!(
@@ -147,5 +166,17 @@ mod tests {
         assert!(is_context_overflow("the request exceeds the available context size, try increasing it"));
         assert!(!is_context_overflow("429 rate limit: too many tokens per min"));
         assert!(!is_context_overflow("fetch failed"));
+    }
+
+    #[test]
+    fn an_overflow_with_numbers_says_the_window_and_the_fix() {
+        let raw = r#"Model stream failed: Engine protocol predict request returned 400: {"error":{"code":400,"message":"request (10510 tokens) exceeds the available context size (8192 tokens), try increasing it","type":"exceed_context_size_error","n_prompt_tokens":10510,"n_ctx":8192}}"#;
+        let said = overflow_message(raw);
+        assert!(
+            said.starts_with("The model is loaded with a 8192-token context window, and this chat needs 10510 tokens.")
+        );
+        assert!(is_context_overflow(&said));
+        let plain = "anthropic 400: prompt is too long";
+        assert_eq!(overflow_message(plain), plain);
     }
 }

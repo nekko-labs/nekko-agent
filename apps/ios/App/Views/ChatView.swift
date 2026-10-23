@@ -36,7 +36,9 @@ struct ChatView: View {
         }
         .background(palette.paper)
         .navigationBarTitleDisplayMode(.inline)
-        .keyboardDoneButton()
+        // No keyboard toolbar here: on iOS 26 its Done floats over the
+        // composer's send button. Scrolling or tapping the transcript puts
+        // the keyboard away, and the message box has a VoiceOver action for it.
         .task(id: sessionId) {
             // Coming back to the same chat (a pushed screen popped) keeps the
             // model and what has streamed so far; start() re-subscribes and re-reads.
@@ -111,6 +113,7 @@ struct ChatView: View {
                 .frame(minHeight: geo.size.height, alignment: .bottom)
             }
             .scrollDismissesKeyboard(.interactively)
+            .simultaneousGesture(TapGesture().onEnded { hideKeyboard() })
             .defaultScrollAnchor(.bottom)
           }
             // Follow streamed output only while the reader is at the end, and
@@ -751,6 +754,7 @@ struct Composer: View {
                     .lineLimit(1...6)
                     .accessibilityIdentifier("chat.message")
                     .focused($focused)
+                    .accessibilityAction(named: "Hide keyboard") { focused = false }
                     .padding(.horizontal, 12).padding(.vertical, 8)
                     .background(palette.surface, in: RoundedRectangle(cornerRadius: 20))
                     .overlay(RoundedRectangle(cornerRadius: 20).stroke(palette.line))
