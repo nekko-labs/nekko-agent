@@ -2077,6 +2077,16 @@
 .settings-search-btn:disabled { opacity: .4; cursor: default; }
 .settings-search-pop .settings-search-btn { height: 24px; width: 24px; }
 .settings-search-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* Settings: left section nav (a wrapping row on narrow windows) and the groups it jumps to. */
+.settings-nav { display: flex; flex-wrap: wrap; gap: 2px; }
+@media (min-width: 768px) { .settings-nav { position: sticky; top: 0; align-self: flex-start; flex-direction: column; flex-wrap: nowrap; width: 168px; flex-shrink: 0; padding-top: 24px; } }
+.settings-nav-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px; font-size: 13px; color: var(--ink-soft); text-align: left; }
+.settings-nav-item:hover { background: var(--surface-2); color: var(--ink); }
+.settings-nav-item[aria-current] { background: var(--accent-soft); color: var(--ink); font-weight: 500; }
+.settings-nav-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.settings-group { scroll-margin-top: 16px; padding-top: 24px; }
+.settings-group + .settings-group { margin-top: 40px; border-top: 1px solid var(--line); }
+.settings-group-title { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); }
 .settings-search-pop { position: fixed; z-index: 60; transform: translateY(-4px); display: flex; align-items: center; gap: 8px; width: 320px; padding: 6px 6px 6px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: 0 8px 24px rgba(0,0,0,.25); }
 .settings-search-input { flex: 1; min-width: 0; background: transparent; font-size: 13px; color: var(--ink); }
 .settings-search-input, .settings-search-input:focus, .settings-search-input:focus-visible { outline: none; box-shadow: none; }
