@@ -2053,11 +2053,6 @@
      {
       "throw": "anthropic 400: prompt is too long: 210000 tokens > 200000 maximum"
      }
-    ],
-    [
-     {
-      "throw": "anthropic 400: prompt is too long: 210000 tokens > 200000 maximum"
-     }
     ]
    ]
   },

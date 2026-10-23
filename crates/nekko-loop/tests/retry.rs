@@ -224,7 +224,9 @@ impl ModelClient for SmallWindow {
 }
 
 fn with_tools<'a>(history: &'a mut Vec<Value>) -> RunOptions<'a> {
-    let tool = json!({ "name": "read_file", "description": "Read a file.", "parameters": { "type": "object" } });
+    // About 10k tokens of definitions: more than an 8k window holds.
+    let tool =
+        json!({ "name": "read_file", "description": "Read a file. ".repeat(160), "parameters": { "type": "object" } });
     RunOptions { tools: vec![tool; 20], ..opts(history, Cancel::default()) }
 }
 
@@ -251,4 +253,20 @@ async fn a_window_too_small_even_without_tools_says_how_to_fix_it() {
     let message = error["message"].as_str().unwrap();
     assert!(message.starts_with("The model is loaded with a 8192-token context window"), "{message}");
     assert!(!message.contains("{\"error\""), "{message}");
+}
+
+#[tokio::test]
+async fn a_window_that_is_not_small_keeps_its_tools_for_compaction() {
+    // Overflowing without saying the window, on a model guessed at 128k: left to compaction.
+    let client = Flaky {
+        failures: Mutex::new(vec!["This model's maximum context length is 8192 tokens".into()]),
+        calls: Mutex::new(0),
+    };
+    let mut history = vec![json!({ "id": "u1", "role": "user", "content": "Hello", "createdAt": 1 })];
+    let mut events = Vec::new();
+    let run = RunOptions { context_window: Some(128_000.0), ..with_tools(&mut history) };
+    run_agent(run, &client, &NoTools, &mut |e, _| events.push(e)).await;
+    assert_eq!(*client.calls.lock().unwrap(), 1);
+    assert_eq!(events.iter().filter(|e| e["type"] == "retry").count(), 0);
+    assert_eq!(events.last().unwrap()["type"], "error");
 }

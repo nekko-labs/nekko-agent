@@ -11,7 +11,8 @@
 //! TS shapes (`AgentEvent`, `ChatMessage`), as JSON.
 
 use crate::fit::{
-    ELIDE_ALL, apply_elision, elidable, elision_for, is_context_overflow, overflow_message, prompt_units,
+    ELIDE_ALL, FIT_TARGET, apply_elision, elidable, elision_for, is_context_overflow, overflow_message, prompt_units,
+    reported_window,
 };
 use crate::history::{
     as_seen_by_chat_model, from_latest_compaction, latest_compaction_index, window_history, without_images,
@@ -521,15 +522,18 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
                         attempt = 1;
                         continue;
                     }
-                    // Still too big, and mostly the system prompt and the tool
-                    // definitions (a model loaded with a small window, on the
-                    // first message): answer without tools rather than not at
-                    // all. A long conversation is left to compaction instead.
+                    // Still too big, and the system prompt and tool definitions
+                    // alone fill most of a small window (a local model loaded
+                    // with 8k): answer without tools rather than not at all. A
+                    // long conversation, or a window that is not small, is left
+                    // to compaction instead.
                     let (fixed, conversation, sent_tools) = self.sent_units;
+                    let window = reported_window(&e).or(self.opts.context_window);
                     if !self.opts.cancel.is_cancelled()
                         && !self.toolless
                         && sent_tools
                         && fixed >= conversation
+                        && window.is_some_and(|w| fixed as f64 / 4.0 > w * FIT_TARGET)
                         && is_context_overflow(&e)
                     {
                         self.toolless = true;
