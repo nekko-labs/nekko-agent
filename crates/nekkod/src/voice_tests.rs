@@ -135,7 +135,21 @@ async fn installs_a_verified_runtime_and_model() {
         (json!(true), json!(1), json!(false))
     );
     let keys: Vec<&str> = s.as_object().unwrap().keys().map(String::as_str).collect();
-    assert_eq!(keys, ["runtimePath", "modelPath", "installed", "installing", "progress", "running", "supported", "engine", "apple", "whisper"]);
+    assert_eq!(
+        keys,
+        [
+            "runtimePath",
+            "modelPath",
+            "installed",
+            "installing",
+            "progress",
+            "running",
+            "supported",
+            "engine",
+            "apple",
+            "whisper"
+        ]
+    );
     assert_eq!(s["whisper"], json!({ "installed": true, "installing": false, "progress": 1 }));
     assert_eq!((s["engine"].clone(), s["apple"]["supported"].clone()), (json!("whisper"), json!(false)));
     let vdir = r.dir.join("data").join("voice");
@@ -219,7 +233,10 @@ fn apple_rig(name: &str, settings: Value, supported: bool) -> (Arc<Voice>, PathB
 async fn apple_is_the_default_engine_where_it_is_supported() {
     let (voice, log) = apple_rig("default", json!({ "voice": { "language": "en-GB" } }), true);
     let s = voice.status().await;
-    assert_eq!((s["engine"].clone(), s["installed"].clone(), s["installing"].clone()), (json!("apple"), json!(true), json!(false)));
+    assert_eq!(
+        (s["engine"].clone(), s["installed"].clone(), s["installing"].clone()),
+        (json!("apple"), json!(true), json!(false))
+    );
     assert_eq!(s["apple"], json!({ "supported": true, "installed": true, "locale": "en-US", "installing": false }));
     assert_eq!(std::fs::read_to_string(&log).unwrap(), "status en-GB\n");
     // Polled again within the TTL: the helper is not run a second time.

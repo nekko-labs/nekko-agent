@@ -68,7 +68,10 @@ impl Default for Sources {
                 )
             }),
             model: (MODEL_URL.to_string(), MODEL_HASH.to_string()),
-            speech_helper: std::env::var_os("NEKKO_SPEECH_PATH").map(PathBuf::from).or(beside_exe).filter(|p| is_file(p)),
+            speech_helper: std::env::var_os("NEKKO_SPEECH_PATH")
+                .map(PathBuf::from)
+                .or(beside_exe)
+                .filter(|p| is_file(p)),
         }
     }
 }
@@ -321,8 +324,11 @@ impl Voice {
         };
         let supported = self.sources.runtime.is_some() || str_of(self.voice().get("runtimePath")).is_some();
         let st = lock(&self.state);
-        let (installing, error) =
-            if engine == "apple" { (st.apple.installing, st.apple.error.clone()) } else { (st.installing, st.error.clone()) };
+        let (installing, error) = if engine == "apple" {
+            (st.apple.installing, st.apple.error.clone())
+        } else {
+            (st.installing, st.error.clone())
+        };
         let mut o = Map::new();
         if let Some(r) = runtime {
             o.insert("runtimePath".into(), json!(r));
@@ -338,7 +344,8 @@ impl Voice {
         o.insert("supported".into(), json!(supported));
         o.insert("engine".into(), json!(engine));
         o.insert("apple".into(), apple);
-        let mut whisper = json!({ "installed": whisper_installed, "installing": st.installing, "progress": crate_num(st.progress) });
+        let mut whisper =
+            json!({ "installed": whisper_installed, "installing": st.installing, "progress": crate_num(st.progress) });
         if let Some(e) = &st.error {
             whisper["error"] = json!(e);
         }
