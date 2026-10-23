@@ -248,6 +248,15 @@ the message itself). That removes the message with the picture and anything afte
 the chat answers again. You can then ask again without the picture, or switch to a model
 with vision input.
 
+## Dictation models
+
+The microphone in the message box turns speech into draft text on this computer; nothing is sent anywhere. The speech models it can use sit under **Models → System models** (the same rows are in **Settings → Dictation** and in the microphone's own setup popover), each with one action: **Use**, **Install language pack** or **Download**, and **Remove** or **Uninstall**.
+
+- **Apple speech** on macOS 26 and later: the recognizer built into the Mac. The language pack for your recognition language is often already installed, so the first click on the microphone just asks which engine to use. It is the default on a Mac that has it.
+- **Whisper Tiny English** (Nekko Voice) on Windows and Linux: a 32 MB model plus the whisper.cpp runtime, downloaded once and loaded on demand.
+
+Say "Nekko, open settings" (or "Nekko, new chat") and the app shows the command for confirmation instead of typing it.
+
 ## What is not here yet
 
 Browsing and downloading models from inside the app, and a bundled inference engine so a

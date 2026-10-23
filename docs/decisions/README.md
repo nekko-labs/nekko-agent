@@ -17,3 +17,4 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | [0007](0007-lockout-recovery-without-a-vendor-key.md) | Recover lockouts without a key Nekko Labs can use | proposed |
 | [0008](0008-authenticated-wraps-and-join-codes.md) | Authenticate keyring wraps, approve devices with a join code, one account record per key epoch | accepted |
 | [0010](0010-guardrails-mode-auto-runs-only-read-only-commands.md) | Guardrails mode auto-runs only read-only commands; fetch_url asks before reaching the local network | accepted |
+| [0011](0011-apple-speech-through-a-helper-command.md) | Dictation on Apple's on-device recognizer through a helper command beside the daemon | accepted |
