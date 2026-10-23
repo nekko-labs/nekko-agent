@@ -20,8 +20,9 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 
 ## Pairing a phone
 
-1. On your computer: **Settings → Remote access → Enable** (the managed relay is prefilled; or
-   paste your self-hosted relay URL), then **Pair a device**.
+1. On your computer: **Settings → Phone pairing** (second in the left-hand list), then in **Remote access**
+   click **Enable** (the managed relay is prefilled; or paste your self-hosted relay URL), then
+   **Pair a device**. The QR appears right under the button.
 2. On your phone: scan the QR in the Nekko Agent app (**Computers → Pair a computer**), or with the
    phone's camera app, which hands the `nekko-agent-pair:` link to the Nekko Agent app. Without the
    app, the pairing link also opens the web app in a browser over the relay, but it is limited to

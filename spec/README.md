@@ -66,7 +66,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Command Center panel design parity (2026-10-06)](desktop/command-center-panel-design-parity.md) (7 KB)
 - [Composer and desktop rail regression fixes (2026-10-07)](desktop/composer-and-desktop-rail-regression-fixes.md) (3 KB)
 - [Empty wall opens the new-chat screen; glass prism composer (2026-10-18)](desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md) (2 KB)
-- [Focused mode transitions, calmer focus ring and layout controls (2026-10-17)](desktop/focused-mode-transitions-calmer-focus-ring-and-layout-controls.md) (2 KB)
+- [Focused mode transitions, calmer focus ring and layout controls (2026-10-17)](desktop/focused-mode-transitions-calmer-focus-ring-and-layout-controls.md) (4 KB)
 - [Grid model selection and chat-mode menus (2026-10-07)](desktop/grid-model-selection-and-chat-mode-menus.md) (1 KB)
 - [Inline agent-window creation](desktop/inline-agent-window-creation.md) (3 KB)
 - [Minimize agent windows](desktop/minimize-agent-windows.md) (1 KB)
@@ -75,6 +75,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Navigation panel, media fade and macOS app menu (2026-10-16)](desktop/navigation-panel-media-fade-and-macos-app-menu.md) (2 KB)
 - [New agent window defaults](desktop/new-agent-window-defaults.md) (1 KB)
 - [Search within Settings (desktop)](desktop/search-within-settings-desktop.md) (2 KB)
+- [Settings section nav and phone pairing placement (desktop)](desktop/settings-section-nav.md) (2 KB)
 - [Slim wave rail, tighter Agents spacing, composer snap points](desktop/slim-wave-rail-tighter-agents-spacing-composer-snap-points.md) (4 KB)
 - [Subtle rail and compact board gutters](desktop/subtle-rail-and-compact-board-gutters.md) (1 KB)
 - [Swoop navigation rail (2026-10-17)](desktop/swoop-navigation-rail.md) (2 KB)
@@ -104,7 +105,7 @@ Agents panel, monitors, subagents and delegation.
 What the model sees: Context Inspector, modes, work modes, rules, memory, specs.
 
 - [Code mode: a chat's tools as code (2026-10-22)](context/code-mode-tools-as-code.md) (7 KB)
-- [Context, guardrails & memory (the differentiators)](context/context-guardrails-memory-the-differentiators.md) (11 KB)
+- [Context, guardrails & memory (the differentiators)](context/context-guardrails-memory-the-differentiators.md) (12 KB)
 - [Floop task connector](context/floop-task-connector.md) (2 KB)
 - [Living spec from a conversation](context/living-spec-from-a-conversation.md) (1 KB)
 - [Mode panel and saved modes (2026-10-17)](context/mode-panel-and-saved-modes.md) (8 KB)
@@ -117,11 +118,12 @@ What the model sees: Context Inspector, modes, work modes, rules, memory, specs.
 
 Providers, local models, the Model Server, training.
 
+- [Accounts and switching (2026-10-23)](models/accounts-and-switching.md) (4 KB)
 - [Anthropic image-dimension rejection prevention and continuation](models/anthropic-image-dimension-rejection-prevention-and-continuation.md) (1 KB)
 - [First-agent provider setup](models/first-agent-provider-setup.md) (2 KB)
 - [Hardware-aware model recommendations](models/hardware-aware-model-recommendations.md) (11 KB)
 - [Model training & goals (the data-scientist agent)](models/model-training-goals-the-data-scientist-agent.md) (4 KB)
-- [Models & providers](models/models-providers.md) (39 KB)
+- [Models & providers](models/models-providers.md) (40 KB)
 - [Prompt caching across providers (2026-10-07)](models/prompt-caching-across-providers.md) (7 KB)
 - [Running a model with nothing else installed](models/running-a-model-with-nothing-else-installed.md) (28 KB)
 - [Server, model browser and desktop tray](models/server-model-browser-and-desktop-tray.md) (5 KB)
@@ -140,6 +142,7 @@ Working in a codebase: files, editor, diffs, pull requests, design workspace.
 - [Editing, reviewing & previewing, without leaving the app](code/editing-reviewing-previewing-without-leaving-the-app.md) (2 KB)
 - [Files, editor & visual surfaces (IDE-like, "stay in the app")](code/files-editor-visual-surfaces-ide-like-stay-in-the-app.md) (6 KB)
 - [In-chat pull requests](code/in-chat-pull-requests.md) (1 KB)
+- [Issue per change and work tracking preferences](code/issue-per-change.md) (2 KB)
 - [Repository review integration](code/repository-review-integration.md) (1 KB)
 - [Rich responses, reports, and design workspace](code/rich-responses-reports-and-design-workspace.md) (21 KB)
 - [Working in a codebase](code/working-in-a-codebase.md) (4 KB)
@@ -187,7 +190,7 @@ Brand, website, onboarding and the mascot.
 
 - [Beta signups and website analytics (2026-10-17)](brand/beta-signups-and-website-analytics.md) (2 KB)
 - [Brand refresh and website redesign (2026-10-18)](brand/brand-refresh-and-website-redesign.md) (6 KB)
-- [First-run setup (planned onboarding wizard)](brand/first-run-setup.md) (1 KB)
+- [First-run setup (planned onboarding wizard)](brand/first-run-setup.md) (2 KB)
 - [Local marketing website preview (2026-10-17)](brand/local-marketing-website-preview.md) (1 KB)
 - [Mascot, polish & onboarding](brand/mascot-polish-onboarding.md) (10 KB)
 

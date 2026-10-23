@@ -111,6 +111,29 @@ pub fn save(data_dir: &Path, entry: &Value) -> Result<Vec<Value>, String> {
     Ok(list(data_dir, entry.get("scope"), entry.get("workspaceId")))
 }
 
+/// The agent's `remember` tool: a global note under `title`, updating the one
+/// already titled that (ignoring case) so a corrected fact replaces the old one
+/// rather than sitting beside it. Returns the saved note and whether it existed.
+pub fn remember(data_dir: &Path, title: &str, body: &str) -> Result<(Value, bool), String> {
+    let (title, body) = (title.trim(), body.trim());
+    if title.is_empty() || body.is_empty() {
+        return Err("remember needs a nonblank title and body.".into());
+    }
+    let existing = list(data_dir, Some(&Value::from("global")), None)
+        .into_iter()
+        .find(|m| m["title"].as_str().is_some_and(|t| t.trim().eq_ignore_ascii_case(title)));
+    let updated = existing.is_some();
+    let now = now_ms();
+    let mut note = existing.unwrap_or_else(
+        || serde_json::json!({ "id": format!("m_{now}"), "scope": "global", "tags": [], "createdAt": now }),
+    );
+    note["title"] = Value::from(title);
+    note["body"] = Value::from(body);
+    save(data_dir, &note)?;
+    note["updatedAt"] = Value::from(now);
+    Ok((note, updated))
+}
+
 /// `deleteMemory(id)`: a note that is not there is not an error.
 pub fn delete(data_dir: &Path, id: Option<&Value>) -> Result<(), String> {
     let file = file_of(data_dir, &show(id))?;
@@ -132,6 +155,21 @@ mod tests {
             serialize(e.as_object().unwrap()).unwrap(),
             "---\nid: m1\nscope: global\ntitle: \"a: b\"\ntags: [x, , 2]\ncreatedAt: 1\nupdatedAt: 2\n---\n\nhi\n"
         );
+    }
+
+    #[test]
+    fn remember_adds_then_updates_by_title() {
+        let dir = std::env::temp_dir().join(format!("nekko-remember-{}", now_ms()));
+        let (first, updated) = remember(&dir, "Preferred name", "Philip").unwrap();
+        assert!(!updated);
+        let (second, updated) = remember(&dir, " preferred NAME ", "Phil").unwrap();
+        assert!(updated);
+        assert_eq!(second["id"], first["id"]);
+        let notes = list(&dir, Some(&json!("global")), None);
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0]["body"], "Phil");
+        assert!(remember(&dir, "x", "  ").is_err());
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

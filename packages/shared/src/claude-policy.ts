@@ -214,7 +214,21 @@ export interface ClaudeCodeAuthStatus {
 export interface ClaudeProviderLike {
   kind: string;
   auth?: string;
-  claudeCode?: { authSource?: string };
+  claudeCode?: { authSource?: string; account?: string };
+}
+
+/**
+ * A second Claude Code account's name, as nekkod accepts it
+ * (`nekko_harness::is_account_name`): 1 to 32 of a-z, 0-9 and "-", not
+ * starting or ending with "-". It picks the folder `~/.claude-<name>`.
+ */
+export function isClaudeAccountName(name: string): boolean {
+  return /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/.test(name);
+}
+
+/** "Work (Acme)" → "work-acme": a typed account label as an account name, or "" when nothing usable is left. */
+export function claudeAccountName(label: string): string {
+  return label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+/, '').slice(0, 32).replace(/-+$/, '');
 }
 
 const API_KEY_METHODS = ['api_key', 'apikey', 'api_key_helper', 'apikeyhelper'];

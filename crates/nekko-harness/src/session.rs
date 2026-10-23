@@ -69,6 +69,9 @@ pub struct LaunchSpec {
     pub permission_prompt_tool: Option<String>,
     /// The chat's other workspaces.
     pub add_dirs: Vec<PathBuf>,
+    /// `CLAUDE_CONFIG_DIR` for a second Claude Code account; `None` runs on
+    /// the user's default login.
+    pub config_dir: Option<PathBuf>,
 }
 
 /// The command line, without the binary. Always stream-json both ways with
@@ -164,6 +167,9 @@ impl Session {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
+        if let Some(dir) = &spec.config_dir {
+            cmd.env("CLAUDE_CONFIG_DIR", dir);
+        }
         let mut child = cmd.spawn()?;
         let pid = child.id();
         let stdin = child.stdin.take();
@@ -372,6 +378,7 @@ mod tests {
             mcp_config: Some("C:/data/harness/s1.mcp.json".into()),
             permission_prompt_tool: Some("mcp__nekko_bridge__approve".into()),
             add_dirs: vec!["D:/other".into()],
+            config_dir: None,
         }
     }
 

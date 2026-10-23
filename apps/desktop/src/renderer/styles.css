@@ -293,16 +293,10 @@
 }
 
 @utility create-tile {
-  @apply grid h-8 w-8 shrink-0 place-items-center rounded-lg;
-  background: color-mix(in srgb, var(--row-tone, var(--accent)) 16%, transparent);
+  /* Bare glyph in the row's hue: tiles behind each icon made a three-row menu
+     read like a launcher grid. */
+  @apply grid h-4 w-4 shrink-0 place-items-center;
   color: var(--row-tone, var(--accent));
-}
-
-@utility create-tile-brand {
-  /* The one tile that is the brand itself rather than a tint of a status color. */
-  background: var(--brand-grad);
-  color: var(--on-accent);
-  box-shadow: 0 2px 10px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 @utility plan-step {
@@ -679,11 +673,11 @@
   --rail-gap: 7px;           /* gap between rows */
   --rail-ease: cubic-bezier(0.32, 0.72, 0, 1);   /* quick start, long soft settle */
   --rail-slide: cubic-bezier(0.3, 1.25, 0.5, 1); /* the active tile: a hint of spring */
-  --rail-open-ms: 340ms;
-  --rail-close-ms: 260ms;
+  --rail-open-ms: 180ms;
+  --rail-close-ms: 160ms;
   --rail-slide-ms: 340ms;
   --rail-open-delay: 50ms;   /* hover intent: sweeping past never opens it */
-  --rail-close-delay: 120ms; /* and a brief slip out never snaps it shut */
+  --rail-close-delay: 60ms; /* and a brief slip out never snaps it shut */
 
   width: var(--rail-w-rest);
   padding-inline: 6px;
@@ -705,9 +699,8 @@
   min-height: 0;
 }
 
-/* Frosted glass: the svg box blurs what is behind it, clipped to the same
-   outline the path draws (both animate together), so the shape is unchanged.
-   The path paints a translucent tint and a hairline edge on top. */
+/* One synchronized outline and clip, with a tinted fill instead of a
+   backdrop blur that repaints the workspace during every morph frame. */
 .rail-backdrop {
   position: absolute;
   left: -6px;                 /* x = 0 is the window wall */
@@ -716,7 +709,7 @@
   overflow: visible;
   pointer-events: none;
   clip-path: var(--rail-rest);
-  backdrop-filter: blur(18px) saturate(1.6);
+  backdrop-filter: none;
   transition: clip-path var(--rail-close-ms) var(--rail-ease) var(--rail-close-delay);
   & path {
     d: var(--rail-rest);
@@ -789,7 +782,7 @@
   pointer-events: none;
   opacity: 0;
   transform: translateX(-6px);
-  filter: blur(2px);
+  filter: none;
   transition:
     opacity 120ms ease var(--rail-close-delay),
     transform 200ms var(--rail-ease) var(--rail-close-delay),
@@ -816,9 +809,9 @@
     opacity: 1;
     transform: none;
     filter: none;
-    /* Labels arrive as the edge passes them, top row first, 14ms apart. */
-    transition-duration: 180ms, 270ms, 180ms;
-    transition-delay: calc(var(--rail-open-delay) + 85ms + var(--n, 0) * 14ms);
+    /* Reveal together only once the expansion is nearly complete. */
+    transition-duration: 100ms, 100ms, 100ms;
+    transition-delay: calc(var(--rail-open-delay) + var(--rail-open-ms) - 20ms);
   }
 }
 
@@ -2077,6 +2070,16 @@
 .settings-search-btn:disabled { opacity: .4; cursor: default; }
 .settings-search-pop .settings-search-btn { height: 24px; width: 24px; }
 .settings-search-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* Settings: left section nav (a wrapping row on narrow windows) and the groups it jumps to. */
+.settings-nav { display: flex; flex-wrap: wrap; gap: 2px; }
+@media (min-width: 768px) { .settings-nav { position: sticky; top: 0; align-self: flex-start; flex-direction: column; flex-wrap: nowrap; width: 168px; flex-shrink: 0; padding-top: 24px; } }
+.settings-nav-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px; font-size: 13px; color: var(--ink-soft); text-align: left; }
+.settings-nav-item:hover { background: var(--surface-2); color: var(--ink); }
+.settings-nav-item[aria-current] { background: var(--accent-soft); color: var(--ink); font-weight: 500; }
+.settings-nav-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.settings-group { scroll-margin-top: 16px; padding-top: 24px; }
+.settings-group + .settings-group { margin-top: 40px; border-top: 1px solid var(--line); }
+.settings-group-title { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); }
 .settings-search-pop { position: fixed; z-index: 60; transform: translateY(-4px); display: flex; align-items: center; gap: 8px; width: 320px; padding: 6px 6px 6px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: 0 8px 24px rgba(0,0,0,.25); }
 .settings-search-input { flex: 1; min-width: 0; background: transparent; font-size: 13px; color: var(--ink); }
 .settings-search-input, .settings-search-input:focus, .settings-search-input:focus-visible { outline: none; box-shadow: none; }
@@ -2628,12 +2631,22 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 /* Focused: a new agent fades in as its prompt view. */
 .command-wall-layout[data-wall-layout='focus'] .command-wall-window[data-wall-hero][data-wall-entering] > .panel { animation: focus-new-agent-in 320ms cubic-bezier(.22, 1, .36, 1) both; }
 @keyframes focus-new-agent-in { from { opacity: 0; transform: scale(.985); } to { opacity: 1; transform: none; } }
+/* The hero it replaces stays drawn over it, collapses onto the new composer's box
+   (CommandWall measures --collapse-inset; the fallback is a centred composer) and dissolves. */
+.command-wall-window[data-wall-parked][data-wall-leaving] { content-visibility: visible; z-index: 3; }
+.command-wall-window[data-wall-leaving] > .panel { animation: focus-collapse-into-composer 380ms cubic-bezier(.4, 0, .2, 1) both; }
+@keyframes focus-collapse-into-composer {
+  from { clip-path: inset(0 round var(--pane-radius)); opacity: 1; }
+  55% { opacity: .9; }
+  to { clip-path: inset(var(--collapse-inset, 40% max(24px, calc(50% - 360px)) 40%) round 18px); opacity: 0; }
+}
 /* Focused: after the first send, the centred composer expands into the full
    chat. The window's chat body grows out of the composer's place. */
 [data-chat-expanding] > section { animation: composer-expand-in 420ms cubic-bezier(.22, 1, .36, 1) both; transform-origin: 50% 70%; }
 @keyframes composer-expand-in { from { opacity: .35; transform: scale(.92, .55); border-radius: 18px; } 60% { opacity: 1; } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) {
-  .command-wall-layout[data-wall-layout='focus'] .command-wall-window[data-wall-entering] > .panel, [data-chat-expanding] > section { animation: none; }
+  .command-wall-layout[data-wall-layout='focus'] .command-wall-window[data-wall-entering] > .panel, .command-wall-window[data-wall-leaving] > .panel, [data-chat-expanding] > section { animation: none; }
+  .command-wall-window[data-wall-parked][data-wall-leaving] { content-visibility: hidden; }
 }
 .command-wall-layout[data-wall-layout='focus'] .composer, .command-wall-layout[data-wall-layout='focus'] .composer:focus-within { box-shadow: none; }
 /* The All/Agents/Terminals filter shares this frame exactly. It used to be
@@ -2698,6 +2711,8 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 .claude-setup-state code { font-size: 12px; padding: 1px 5px; border-radius: 5px; background: var(--surface); }
 .claude-setup-state[data-state="ready"] strong { color: var(--success); }
 .claude-setup-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.claude-account { display: flex; flex-wrap: wrap; gap: 6px; }
+.claude-account code, .claude-setup code { font-size: 11.5px; padding: 1px 5px; border-radius: 5px; background: var(--surface); }
 .claude-why { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .claude-why:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
 .claude-reason { font-size: 12px; color: var(--ink-soft); }
@@ -3071,3 +3086,11 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
   .mode-col:last-child { border-top: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .mode-switch, .mode-switch::after, .mode-chev { transition: none; } }
+
+/* Focus is a workspace, not a framed window inside another window. */
+.command-wall-layout[data-wall-layout='focus'] .command-wall-window > .panel {
+  border: 0; border-radius: 0; box-shadow: none !important;
+  --panel-ring-width: 0px !important;
+}
+.command-wall-layout[data-wall-layout='focus'] .command-wall-window > .panel::after { display: none; }
+.command-wall-layout[data-wall-layout='focus'] [data-pane-title-strip] { display: none; }

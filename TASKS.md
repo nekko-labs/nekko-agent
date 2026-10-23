@@ -12,6 +12,15 @@ Philip found the Experimental Dark versions overwhelming: one hue on the ground,
 
 - [x] **XD-1, New Dark tokens (2026-10-23).** All seven `x-*-dark` presets in `styles.css` and `themes.ts` (tokens and swatches) rebuilt on a 60 / 30 / 10 split: hue-tinted near-black windows, deepened ground, near-white text, partner colour as accent only. Held by `contrast.test.ts`.
 
+## Issue per change (added 2026-10-23)
+
+Philip asked for agent chats to file a project-management issue for each feature or change and link the PR to it, by default, with quick toggles (first-run and Settings) for whether the user's prompt, screenshots or other context go into the ticket. Spec: [spec/code/issue-per-change.md](spec/code/issue-per-change.md).
+
+- [x] **IP-1, Prompt default and preferences (2026-10-23).** Base prompt bullet in `nekko-context`; `work_tracking` in `nekko-turn/src/plan.rs` turns `projectManagement` / `pullRequests` settings into a preferences block (turn prompt and Context Inspector preview); goldens updated by hand (+208 tokens).
+- [x] **IP-2, Settings and first run (2026-10-23).** `WorkTrackingToggles` (tri-state includes: unset means ask), Settings > Project management and Pull requests sections, onboarding **Work tracking** step saved on Next.
+- [x] **IP-3, Repo guidance (2026-10-23).** AGENTS.md rule and the landing runbook's "Start from an issue".
+- [ ] **IP-4, Live check** that a chat in the packaged app files and links an issue on a real repository.
+
 ## Floop task connector (added 2026-10-22)
 
 Philip asked for Nekko Agent to work in Floop, Nekko Labs' tracker for people and agents. Spec: [spec/context/floop-task-connector.md](spec/context/floop-task-connector.md); docs page `docs/floop.md`.
@@ -119,7 +128,8 @@ PRs sat in draft waiting on CI. Run history showed the cause: Linux and Windows 
 See [SPEC](spec/desktop/focused-mode-transitions-calmer-focus-ring-and-layout-controls.md).
 
 - [x] ✅ 2026-10-17 `CommandWall.tsx` marks panes added after mount as entering (Focus only) and `styles.css` fades the hero in; `ChatPane.tsx` plays `composer-expand-in` once when clean start ends on send; calmer Focus ring mix; Monitors dock header; Grid removed from the toolbar into `WallLayoutSettings.tsx`, Dynamic uses `BoltIcon`. Tests: `focusTransitions.test.ts`, `WallLayoutSettings.test.tsx`. Evidence: `apps/desktop/scripts/focus-transitions-sandbox.cjs` via `agent-window-controls-integration.cjs` (`NEKKO_CONTROLS_SANDBOX`, `NEKKO_TEST_REVISION=main` for before).
-- [ ] Check both animations in a packaged desktop build and at narrow widths.
+- [x] ✅ 2026-10-23 The replaced hero collapses onto the new composer and dissolves: `CommandWall.tsx` marks it `data-wall-leaving` while parked and measures `--collapse-inset` from the new window's `.composer`; `styles.css` draws it (`content-visibility: visible`) and plays `focus-collapse-into-composer`. Tests: `focusTransitions.test.tsx`; sandbox checks added to `focus-transitions-sandbox.cjs`, and the baseline archive now includes `apps/desktop/src/displayWindows.ts`.
+- [ ] Check all three animations in a packaged desktop build and at narrow widths.
 
 ## Flaky daemon integration tests (added 2026-10-17)
 
@@ -709,6 +719,9 @@ Anthropic's rules (code.claude.com/docs/en/legal-and-compliance) do not let a th
 - [ ] CL4: Claude Code harness provider (`crates/nekko-harness`), permission bridge, Claude policy table and approval-ready gates, limits UX, then the removal of the subscription sign-in with its startup migration and a CI compliance check. Added: 2026-10-19. In progress: the engine half (H1 to H3) is built and tested (`nekko-harness`: locate, `claude auth status`, one `claude -p` per chat, stream-json mapping, Stop by interrupt, Steer as interrupt-then-send; nekkod dispatch for `claude-code` with `--resume` and the 15-minute reap; the `nekko-agent mcp --bridge` approval bridge with mode mapping, failing closed). Not user-facing until the provider card (H4). Still needs a live run on a signed-in Claude Code. The removal, startup migration and CI compliance check (H6, H7) are built and tested in #797, which lands right after the setup UI (#807).
 - [ ] CL5: Claude policy table (`CLAUDE_POLICY`, TS + Rust mirror with a golden parity test), reason copy and generated comparison table, signed `claudePolicy` override verified with Ed25519 (release key still a placeholder), unattended-run gate at nekkod admission plus `nekko_tools`, `context_note` and plan-usage gate points, `claude:*` channels for the renderer, and the dev-only `NEKKO_CLAUDE_POLICY_PREVIEW` (nekkod `dev-tools` feature) with an "Example data" plan-usage fixture. Added: 2026-10-19. See SPEC.md, Claude policy. Remaining: Philip sets the release signing key; the harness (CL4) and UI call the gates.
 - [ ] CL6: Claude Agent UI: a Claude Agent provider choice (terminal glyph, not Anthropic's mark) beside Claude on a key or cloud; setup states from the new `claude:codeStatus` route (not installed, signed out, ready, with how it is signed in); "Open Claude Code to sign in" runs `claude` in a Nekko terminal so sign-in stays in Claude Code; the comparison table and the "What works with a Claude plan?" sheet generated from the policy; the reason line and disabled Create when scheduling a Claude Agent on a plan; "usage shown in Claude Code" in the capacity panel. nekkod now records `claude auth status` for a Claude Agent at its first admission, so policy rows match the setup panel. Headless fixture `apps/desktop/scripts/claude-agent-fixture.tsx` + `claude-agent-capture.mjs`. Added: 2026-10-19.
+- [x] CL7: Several accounts in one window, and switching between them, for every provider. An **Account** row in the model picker moves a chat to the same model on another account of its vendor (same provider kind; local servers excluded). Claude Agent gets named second accounts: `claudeCode.account` on the provider, which nekkod maps to `CLAUDE_CONFIG_DIR=~/.claude-<name>` (`nekko_harness::account_config_dir`, name checked `[a-z0-9-]{1,32}`, never a path) for the turn's child, `claude auth status` and the sign-in terminal (`terminal:create` `claudeAccount`). A chat switching account starts a new Claude Code session (`claudeCodeAccount` saved beside `claudeCodeSessionId`). Auto's Follow capacity & cost never overflows onto a Claude Agent. Docs page `docs/accounts.md` with diagrams and Anthropic's rules. Spec: [spec/models/accounts-and-switching.md](spec/models/accounts-and-switching.md). Decision: [0014](docs/decisions/0014-claude-agent-accounts-through-claude-config-dir.md). Added and done: 2026-10-23. Verified with unit tests, a daemon end-to-end test on a fake `claude` (separate folders, no cross-account resume), and renderer tests; not yet against two live signed-in Claude Code accounts.
+- [ ] CL8: Live check of CL7 against two signed-in Claude Code accounts on macOS and Windows (keychain entry per config folder on macOS). Added: 2026-10-23.
+- [ ] CL9: Claude Agent chats on another computer (Claude Code over SSH, approvals and transcript in this window). Today only an SSH terminal reaches another machine. Added: 2026-10-23.
 
 ### Page recovery and startup appearance (2026-10-12)
 
@@ -2163,6 +2176,12 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [ ] **T195d** Live check of the signals on Windows and on a Linux GNOME/KDE desktop.
 - [ ] **T195e** B2: preemption within ~1 s of the user's return (stop vs throttle llama-server, measured; `docs/perf-history.md`).
 - [ ] **T195f** B3: model residency (routing model kept warm, large model evicted under memory pressure) and the monitor's background chip.
+
+### T196: The agent remembers what it learns about you (2026-10-23) · [spec](spec/context/context-guardrails-memory-the-differentiators.md)
+- [x] **T196a** `remember` tool (`nekko-turn` `plan.rs`): offered only where the chat reads global memory, not to sub-agents or goal runs; a global note per fact, replaced by title (`nekko_workspace::memory::remember`, unit-tested); daemon handler in `turns.rs`. Golden tool lists and workflow-access cases gain the name. Done: 2026-10-23
+- [x] **T196b** Memory card in the chat (`MemoryCard.tsx`, under the activity group): added/updated, title, body, and a link that opens the Memory tab on the note (or Settings while the tab is off). Done: 2026-10-23
+- [ ] **T196c** Try it against real local and cloud models: does each save only durable facts, and reuse titles instead of piling up duplicates?
+- [ ] **T196d** An undo on the card, and cards for saves made inside code-mode scripts.
 
 ### T194: Code mode: a chat's tools as code (2026-10-22) · [spec](spec/context/code-mode-tools-as-code.md) · [decision](docs/decisions/0004-code-mode-in-an-embedded-quickjs-sandbox.md)
 - [x] **T194a** `nekko-codemode`: tool specs as TypeScript declarations, `search_tools`, `run_code` in an embedded QuickJS sandbox (no loader, no std, frozen `tools`; timeout, Stop, memory, stack, call and output caps), and the per-reply savings tally. Done: 2026-10-22

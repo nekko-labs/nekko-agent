@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionSummary } from '@nekko-agent/shared';
 import type { Workspace } from '../store.js';
-import { unopenedChats } from './unopenedChats.js';
+import { sidebarWorkspaces, unopenedChats } from './unopenedChats.js';
 
 const chat = (id: string, extra: Partial<SessionSummary> = {}) => ({
   id, title: id, createdAt: 1, updatedAt: 1, ...extra,
@@ -42,5 +42,28 @@ describe('unopenedChats', () => {
   it('keeps orphaned and archived-parent children reachable', () => {
     const sessions = [chat('parent', { archivedAt: 100 }), chat('child', { parentSessionId: 'parent' }), chat('orphan', { parentSessionId: 'missing' })];
     expect(unopenedChats(sessions, []).map((s) => s.id)).toEqual(['child', 'orphan']);
+  });
+});
+
+
+describe('sidebarWorkspaces', () => {
+  it('does not promote nested subagents to full rows when their transcripts are opened', () => {
+    const workspaces = [workspace('parent'), workspace('child-1'), workspace('child-2'), workspace('ordinary')];
+    const nested = new Set(['child-1', 'child-2']);
+    expect(sidebarWorkspaces(workspaces, nested).map((w) => w.anchor.refId)).toEqual(['parent', 'ordinary']);
+    expect(workspaces).toHaveLength(4);
+  });
+
+  it('retains terminal workspaces and children without a rendered parent', () => {
+    const terminal = { ...workspace('terminal'), anchor: { kind: 'terminal' as const, refId: 'terminal' } };
+    expect(sidebarWorkspaces([workspace('orphan'), workspace('finished'), terminal], new Set(['terminal']))
+      .map((w) => w.anchor.refId)).toEqual(['orphan', 'finished', 'terminal']);
+  });
+
+  it('excludes nested children from both open and saved rows when the parent workspace is closed', () => {
+    const sessions = [chat('parent'), chat('child', { parentSessionId: 'parent' })];
+    const nested = new Set(['child']);
+    expect(sidebarWorkspaces([workspace('child')], nested)).toEqual([]);
+    expect(unopenedChats(sessions, [workspace('child')], nested).map((s) => s.id)).toEqual(['parent']);
   });
 });

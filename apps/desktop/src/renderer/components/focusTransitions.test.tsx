@@ -26,6 +26,10 @@ describe('Focused mode transitions', () => {
   it('fades a newly added Focus hero in, and expands the composer into the chat once', () => {
     expect(cssRule(styles, `${FOCUS_WINDOW}[data-wall-hero][data-wall-entering] > .panel`).animation).toMatch(/^focus-new-agent-in /);
     expect(hasKeyframes(styles, 'focus-new-agent-in')).toBe(true);
+    // The hero it replaces is drawn while parked, collapses onto the composer's box and dissolves.
+    expect(cssRule(styles, '.command-wall-window[data-wall-parked][data-wall-leaving]')['content-visibility']).toBe('visible');
+    expect(cssRule(styles, '.command-wall-window[data-wall-leaving] > .panel').animation).toMatch(/^focus-collapse-into-composer /);
+    expect(hasKeyframes(styles, 'focus-collapse-into-composer')).toBe(true);
     expect(cssRule(styles, '[data-chat-expanding] > section').animation).toMatch(/^composer-expand-in /);
     expect(hasKeyframes(styles, 'composer-expand-in')).toBe(true);
     // A chat that is not leaving a clean start is not expanding.
@@ -38,9 +42,12 @@ describe('Focused mode transitions', () => {
   // renders, which a server render never runs.
   it('marks only a hero added after mount, and expands after the first send (source pin)', () => {
     const wall = readFileSync(new URL('./CommandWall.tsx', import.meta.url), 'utf8');
-    expect(wall).toMatch(/if \(state\.layout\.mode !== 'focus'\) enteringPane\.current = null;/);
+    expect(wall).toMatch(/if \(state\.layout\.mode !== 'focus'\) enteringPane\.current = leavingPane\.current = null;/);
     expect(wall).toMatch(/if \(seenPanes\.current\) for \(const id of ids\)/);
     expect(wall).toMatch(/data-wall-entering=\{\(entering && state\.layout\.mode === 'focus' && hero\) \|\| undefined\}/);
+    expect(wall).toMatch(/leavingPane\.current = lastFocusHero\.current && lastFocusHero\.current !== id/);
+    expect(wall).toMatch(/const leaving = leavingPane\.current === pane\.id && parked;/);
+    expect(wall).toMatch(/from\.style\.setProperty\('--collapse-inset'/);
     const pane = readFileSync(new URL('./ChatPane.tsx', import.meta.url), 'utf8');
     expect(pane).toMatch(/if \(wasCleanStart\.current && !cleanStart && cleanStartWanted && !welcomeState\.welcome\) setExpanding\(true\);/);
   });
@@ -48,6 +55,7 @@ describe('Focused mode transitions', () => {
   it('turns both animations off for reduced motion', () => {
     const reduced = (selector: string) => cssRule(styles, selector, { media: 'prefers-reduced-motion: reduce' });
     expect(reduced(`${FOCUS_WINDOW}[data-wall-entering] > .panel`).animation).toBe('none');
+    expect(reduced('.command-wall-window[data-wall-leaving] > .panel').animation).toBe('none');
     expect(reduced('[data-chat-expanding] > section').animation).toBe('none');
   });
 

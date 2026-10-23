@@ -22,4 +22,5 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | [0011](0011-background-automations-wait-for-idle-on-local-models.md) | Background automations on a local model wait for idle; a waiting run starts after a cap | accepted |
 | [0012](0012-phone-access-classes-and-relay-replay-protection.md) | Class every phone channel, sign mode raises, and challenge every relay connection | accepted |
 | [0013](0013-apple-speech-through-a-helper-command.md) | Dictation on Apple's on-device recognizer through a helper command beside the daemon | accepted |
+| [0014](0014-claude-agent-accounts-through-claude-config-dir.md) | Give each Claude Agent account its own Claude Code folder through `CLAUDE_CONFIG_DIR` | accepted |
 | [0015](0015-experimental-dark-themes-use-a-60-30-10-split.md) | Build the Experimental Dark themes on a 60 / 30 / 10 split with near-black panels | accepted |

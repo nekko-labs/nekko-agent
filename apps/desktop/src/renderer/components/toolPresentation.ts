@@ -23,6 +23,7 @@ export const TOOL_LABELS: Readonly<Record<string, string>> = {
   agent_watch: 'Schedule a follow-up',
   set_chat_title: 'Name this chat',
   complete_session: 'Mark this chat complete',
+  remember: 'Remember something about you',
 };
 
 function humanize(name: string): string {
