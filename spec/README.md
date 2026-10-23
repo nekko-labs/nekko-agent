@@ -141,7 +141,7 @@ Working in a codebase: files, editor, diffs, pull requests, design workspace.
 - [Files, editor & visual surfaces (IDE-like, "stay in the app")](code/files-editor-visual-surfaces-ide-like-stay-in-the-app.md) (6 KB)
 - [In-chat pull requests](code/in-chat-pull-requests.md) (1 KB)
 - [Repository review integration](code/repository-review-integration.md) (1 KB)
-- [Rich responses, reports, and design workspace](code/rich-responses-reports-and-design-workspace.md) (20 KB)
+- [Rich responses, reports, and design workspace](code/rich-responses-reports-and-design-workspace.md) (21 KB)
 - [Working in a codebase](code/working-in-a-codebase.md) (4 KB)
 
 ### automation
@@ -174,7 +174,7 @@ Architecture, speed contract, distribution, builds and startup.
 - [Build storage maintenance](platform/build-storage-maintenance.md) (3 KB)
 - [Development macOS identity](platform/development-macos-identity.md) (2 KB)
 - [Distribution & platforms](platform/distribution-platforms.md) (10 KB)
-- [How it's built: the window and the engine daemon](platform/how-its-built-the-window-and-the-engine-daemon.md) (25 KB)
+- [How it's built: the window and the engine daemon](platform/how-its-built-the-window-and-the-engine-daemon.md) (26 KB)
 - [Noninteractive shell input and bounded stop cleanup](platform/noninteractive-shell-input-and-bounded-stop-cleanup.md) (1 KB)
 - [Page recovery and startup appearance (2026-10-12)](platform/page-recovery-and-startup-appearance.md) (2 KB)
 - [Speed & responsiveness (the speed contract)](platform/speed-responsiveness-the-speed-contract.md) (12 KB)

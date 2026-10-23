@@ -1470,15 +1470,15 @@
   }
 
   [data-theme='dark'][data-preset='x-blueberry-dark'] {
-    --paper: #253b8f;
-    --win: #344997;
-    --surface: #344997;
-    --surface-2: #42559e;
-    --ink: #fff9e9;
-    --ink-soft: #dedfe4;
-    --ink-faint: #929abc;
-    --line: #505f9a;
-    --on-accent: #253b8f;
+    --paper: #1b2c6a;
+    --win: #11141b;
+    --surface: #11141b;
+    --surface-2: #1a1e27;
+    --ink: #f2f3f6;
+    --ink-soft: #d5d7dd;
+    --ink-faint: #a7abb3;
+    --line: #2d333f;
+    --on-accent: #11141b;
     --merged-ink: #fef0c8;
     --merged-wash: rgba(254, 240, 200, 0.14);
     --merged-wash-soft: rgba(254, 240, 200, 0.06);
@@ -1518,15 +1518,15 @@
   }
 
   [data-theme='dark'][data-preset='x-raspberry-dark'] {
-    --paper: #ae1550;
-    --win: #b3255c;
-    --surface: #b3255c;
-    --surface-2: #b93467;
-    --ink: #f3f9fe;
-    --ink-soft: #faf5f8;
-    --ink-faint: #d087a7;
-    --line: #b84173;
-    --on-accent: #ae1550;
+    --paper: #5d102a;
+    --win: #1a1113;
+    --surface: #1a1113;
+    --surface-2: #261b1d;
+    --ink: #f6f2f3;
+    --ink-soft: #dcd5d6;
+    --ink-faint: #b2a8a9;
+    --line: #3e2e31;
+    --on-accent: #1a1113;
     --merged-ink: #f6fbfe;
     --merged-wash: rgba(224, 241, 253, 0.14);
     --merged-wash-soft: rgba(224, 241, 253, 0.06);
@@ -1567,14 +1567,14 @@
 
   [data-theme='dark'][data-preset='x-cyber-dark'] {
     --paper: #02313b;
-    --win: #19444d;
-    --surface: #19444d;
-    --surface-2: #2d545d;
-    --ink: #d2fff3;
-    --ink-soft: #b1d6d0;
-    --ink-faint: #6a9897;
-    --line: #1e5a5c;
-    --on-accent: #02313b;
+    --win: #0b1618;
+    --surface: #0b1618;
+    --surface-2: #142024;
+    --ink: #f1f4f5;
+    --ink-soft: #d2d9db;
+    --ink-faint: #a3adb0;
+    --line: #25363b;
+    --on-accent: #0b1618;
     --merged-ink: #8efee0;
     --merged-wash: rgba(142, 254, 224, 0.14);
     --merged-wash-soft: rgba(142, 254, 224, 0.06);
@@ -1614,15 +1614,15 @@
   }
 
   [data-theme='dark'][data-preset='x-quantum-dark'] {
-    --paper: #193cb2;
-    --win: #294ab7;
-    --surface: #294ab7;
-    --surface-2: #3756bc;
-    --ink: #f1fbff;
-    --ink-soft: #dee6f6;
-    --ink-faint: #859cd8;
-    --line: #4061c1;
-    --on-accent: #193cb2;
+    --paper: #172d6a;
+    --win: #10141b;
+    --surface: #10141b;
+    --surface-2: #1a1e27;
+    --ink: #f2f3f6;
+    --ink-soft: #d5d7dd;
+    --ink-faint: #a7abb3;
+    --line: #2d333f;
+    --on-accent: #10141b;
     --merged-ink: #ddf6fe;
     --merged-wash: rgba(221, 246, 254, 0.14);
     --merged-wash-soft: rgba(221, 246, 254, 0.06);
@@ -1662,15 +1662,15 @@
   }
 
   [data-theme='dark'][data-preset='x-clay-dark'] {
-    --paper: #6b352a;
-    --win: #754339;
-    --surface: #754339;
-    --surface-2: #7f5046;
-    --ink: #fff9db;
-    --ink-soft: #ebe1d4;
-    --ink-faint: #b59783;
-    --line: #895b43;
-    --on-accent: #6b352a;
+    --paper: #542116;
+    --win: #1a110f;
+    --surface: #1a110f;
+    --surface-2: #261b19;
+    --ink: #f6f2f2;
+    --ink-soft: #ddd6d4;
+    --ink-faint: #b2a8a6;
+    --line: #3e2f2b;
+    --on-accent: #1a110f;
     --merged-ink: #fff1a6;
     --merged-wash: rgba(255, 241, 166, 0.14);
     --merged-wash-soft: rgba(255, 241, 166, 0.06);
@@ -1711,14 +1711,14 @@
 
   [data-theme='dark'][data-preset='x-forest-dark'] {
     --paper: #18251d;
-    --win: #2d3931;
-    --surface: #2d3931;
-    --surface-2: #404a44;
-    --ink: #e2ffc7;
-    --ink-soft: #b3cba0;
-    --ink-faint: #7d9272;
-    --line: #38512e;
-    --on-accent: #18251d;
+    --win: #2a332d;
+    --surface: #2a332d;
+    --surface-2: #343f38;
+    --ink: #f1f4f2;
+    --ink-soft: #d3d9d5;
+    --ink-faint: #a5ada8;
+    --line: #48574d;
+    --on-accent: #0e1611;
     --merged-ink: #b7ff72;
     --merged-wash: rgba(183, 255, 114, 0.14);
     --merged-wash-soft: rgba(183, 255, 114, 0.06);
@@ -1759,14 +1759,14 @@
 
   [data-theme='dark'][data-preset='x-inkberry-dark'] {
     --paper: #1a0b2e;
-    --win: #2f2141;
-    --surface: #2f2141;
-    --surface-2: #413552;
-    --ink: #ffe2db;
-    --ink-soft: #c6acb0;
-    --ink-faint: #8d7785;
-    --line: #482d46;
-    --on-accent: #1a0b2e;
+    --win: #242129;
+    --surface: #242129;
+    --surface-2: #2f2c36;
+    --ink: #f4f3f6;
+    --ink-soft: #d8d6dc;
+    --ink-faint: #aca9b1;
+    --line: #45414f;
+    --on-accent: #15121a;
     --merged-ink: #ffb7a5;
     --merged-wash: rgba(255, 183, 165, 0.14);
     --merged-wash-soft: rgba(255, 183, 165, 0.06);
