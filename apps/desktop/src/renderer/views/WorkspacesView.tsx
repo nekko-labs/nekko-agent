@@ -30,7 +30,7 @@ import { COMPLETION_ROW_ATTR, completeWithExit, findCompletionRow } from '../com
 import { ContextMenu, ContextAction } from '../components/ContextMenu.js';
 import { ModelPicker } from '../components/agent-console/ModelPicker.js';
 import { selectWorkspaceRows } from './workspaceSelection.js';
-import { unopenedChats } from './unopenedChats.js';
+import { sidebarWorkspaces, unopenedChats } from './unopenedChats.js';
 import { completedDate, completedInGroup } from './completedChats.js';
 import { leftGroup, moveGroupBefore } from './groupDrag.js';
 import { AgentPanelViewMenu } from '../components/AgentPanelViewMenu.js';
@@ -543,11 +543,11 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
 
   // Closing a workspace only closes its windows, not the saved conversation.
   // Keep those chats reachable without reopening every transcript at startup.
-  const savedChats = useMemo(() => {
-    const visibleChildIds = new Set(workspaces.flatMap((w) => w.anchor.kind === 'chat'
-      ? (childrenOf.get(w.anchor.refId) ?? []).map((s) => s.id) : []));
-    return unopenedChats(sessions, workspaces, visibleChildIds);
-  }, [sessions, workspaces, childrenOf]);
+  const visibleChildIds = useMemo(() => new Set(sessions
+    .filter((s) => !s.archivedAt && !s.parentSessionId)
+    .flatMap((s) => (childrenOf.get(s.id) ?? []).map((kid) => kid.id))), [sessions, childrenOf]);
+  const savedChats = useMemo(() => unopenedChats(sessions, workspaces, visibleChildIds), [sessions, workspaces, visibleChildIds]);
+  const listedWorkspaces = useMemo(() => sidebarWorkspaces(workspaces, visibleChildIds), [workspaces, visibleChildIds]);
 
   const toggleCollapse = (id: string) =>
     setCollapsed((c) => { const n = new Set(c); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -577,7 +577,7 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
    */
   const bucketEntries = (key: string): Entry[] =>
     [
-      ...workspaces.filter((w) => projectOf(w) === key).map((w): Entry => ({ key: w.id, w, s: sessionOf(w), t: terminalOf(w) })),
+      ...listedWorkspaces.filter((w) => projectOf(w) === key).map((w): Entry => ({ key: w.id, w, s: sessionOf(w), t: terminalOf(w) })),
       ...savedChats.filter((s) => chatGroupOf(s) === key).map((s): Entry => ({ key: CHAT_KEY + s.id, w: null, s, t: null })),
     ]
       .map((e) => ({ e, order: e.s?.order ?? e.t?.order, at: e.s ? -e.s.updatedAt : e.t?.createdAt ?? 0 }))
