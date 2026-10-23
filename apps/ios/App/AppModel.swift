@@ -78,7 +78,7 @@ final class AppModel {
         // Change actions (IO-33) are signed in the Secure Enclave behind Face ID or the passcode.
         computers.changeSigner = SecureEnclaveChangeSigner(store: keychain)
         store = computers
-        let cloudKeychain = KeychainStore(service: "com.nekko.native.ios.cloud")
+        let cloudKeychain = KeychainStore(service: "dev.nekkolabs.nekkoagent.cloud")
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("-uiTestReset") { cloudKeychain.wipe() }
         #endif

@@ -26,7 +26,7 @@ struct StatusSnapshot: Codable, Equatable {
         return w
     }
 
-    static let appGroup = "group.com.nekko.native.ios"
+    static let appGroup = "group.dev.nekkolabs.nekkoagent"
     static let key = "widget.status"
     static let kind = "NekkoStatus"
 

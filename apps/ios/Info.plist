@@ -20,7 +20,7 @@
     <key>UIApplicationShortcutItems</key>
     <array>
         <dict>
-            <key>UIApplicationShortcutItemType</key><string>com.nekko.native.ios.new-chat</string>
+            <key>UIApplicationShortcutItemType</key><string>dev.nekkolabs.nekkoagent.new-chat</string>
             <key>UIApplicationShortcutItemTitle</key><string>New chat</string>
             <key>UIApplicationShortcutItemIconType</key><string>UIApplicationShortcutIconTypeCompose</string>
         </dict>
@@ -34,7 +34,7 @@
     </array>
     <key>NSSupportsLiveActivities</key><true/>
     <key>UIBackgroundModes</key><array><string>remote-notification</string><string>fetch</string></array>
-    <key>BGTaskSchedulerPermittedIdentifiers</key><array><string>com.nekko.native.ios.outbox</string></array>
+    <key>BGTaskSchedulerPermittedIdentifiers</key><array><string>dev.nekkolabs.nekkoagent.outbox</string></array>
     <key>NSCameraUsageDescription</key><string>Scan the pairing code your computer shows in Settings → Remote access.</string>
     <key>NSFaceIDUsageDescription</key><string>Unlock Nekko Agent and confirm changes it makes on your computer.</string>
     <key>NSMicrophoneUsageDescription</key><string>Dictate a message. The recording is turned into text and then deleted.</string>

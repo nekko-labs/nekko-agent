@@ -165,7 +165,7 @@ jobs:
           {
             echo "### iOS TestFlight upload"
             echo "- Version $version, build $((BUILD_NUMBER + 100)), commit \`${GITHUB_SHA::7}\`"
-            echo "- Team ${TEAM_ID:-unknown}; bundle id com.nekko.native.ios"
+            echo "- Team ${TEAM_ID:-unknown}; bundle id dev.nekkolabs.nekkoagent"
             [ -n "$NOTES" ] && echo "- What to test: $NOTES"
             echo "- After processing, add the build to a TestFlight group in App Store Connect and answer export compliance."
           } >> "$GITHUB_STEP_SUMMARY"
