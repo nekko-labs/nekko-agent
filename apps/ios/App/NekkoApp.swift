@@ -68,6 +68,9 @@ struct NekkoApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @Environment(\.scenePhase) private var phase
     @State private var app = AppModel.shared
+    /// The opening animation, once per launch. UI tests turn it off (`-splash NO`, or a `-uiTestReset` run).
+    @State private var splash = UserDefaults.standard.object(forKey: "splash") as? Bool
+        ?? !ProcessInfo.processInfo.arguments.contains("-uiTestReset")
 
     var body: some Scene {
         WindowGroup {
@@ -79,6 +82,7 @@ struct NekkoApp: App {
                 .modifier(Themed(choice: app.prefs.theme, appearance: app.store.appearance))
                 .onOpenURL { app.handle(url: $0) }
                 .task { app.start() }
+                .overlay { if splash { SplashView { splash = false } } }
         }
         .onChange(of: phase) { _, p in
             switch p {

@@ -2200,3 +2200,8 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [x] **T197c** Relay on this computer stays up: `supervise` (crates/nekkod/src/local_relay.rs) holds the child's stdin, which `Child::wait` used to close at once. Test: `a_supervised_child_keeps_its_stdin_until_stopped`. Done: 2026-10-23
 - [x] **T197d** Pairing card countdown: a large *Expires in m:ss* pill (amber under a minute) instead of "One device, m:ss left". Done: 2026-10-23
 - [x] **T197e** *Let phones see changes* on by default (`phoneChanges: true` in nekko-settings defaults; settings golden updated). Done: 2026-10-23
+
+### T198: iPhone icon and opening animation (2026-10-23) · [spec](SPEC.md)
+- [x] **T198a** App icon on iPhone and Watch: the brand-refresh gradient tile (`apps/ios/App/Assets.xcassets/AppIcon.appiconset/icon.svg`, from `apps/desktop/build/icon.svg` without its rounded clip). Done: 2026-10-23
+- [x] **T198b** Opening animation: `Splash.swift` plays the desktop splash from `SplashCells.swift` (generated alongside `splashCells.ts`); lavender launch screen; Reduce Motion fades; `-splash NO` for UI tests. Done: 2026-10-23
+- [x] **T198c** UI test: Forget and Rename on the Computers screen (`ComputersTests`). Done: 2026-10-23
