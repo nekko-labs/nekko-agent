@@ -45,4 +45,4 @@ export function oauthProviderOffered(provider: OAuthProvider): boolean {
 
 /** The refusal a sign-in through an unoffered provider fails with. */
 export const CLAUDE_SIGN_IN_UNAVAILABLE =
-  'Nekko Agent cannot sign in to Claude plans. Use Claude with an API key or a cloud account, or connect Claude Agent to run your installed Claude Code.';
+  'Nekko Agent cannot sign in to Claude plans. Use Claude with an API key or a cloud account, or choose Claude, then Subscription, to run your installed Claude Code.';

@@ -43,7 +43,7 @@ export function accountEmailOf(provider: ProviderConfig, emails: Record<string, 
   return provider.tokenKey ? emails[provider.tokenKey] : undefined;
 }
 
-/** "Anthropic (Claude) · davide@example.com", or just the label without an email. */
+/** "Claude API · davide@example.com", or just the label without an email. */
 export function providerDisplayName(provider: ProviderConfig, emails: Record<string, string>): string {
   const email = accountEmailOf(provider, emails);
   return email ? `${provider.label} · ${email}` : provider.label;

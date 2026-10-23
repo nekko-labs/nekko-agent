@@ -1,8 +1,8 @@
 //! Whether Claude Code is signed in, from `claude auth status` alone.
 //!
 //! Nekko never reads Claude Code's config directory or credentials: the CLI's
-//! own status command is the supported check, and it says only whether the
-//! user is signed in and with what kind of credential.
+//! own status command is the supported check: whether the user is signed in,
+//! with what kind of credential, and for a plan login, which account.
 
 use crate::locate::{ClaudeBin, PROBE_TIMEOUT, command};
 use serde_json::Value;
@@ -19,6 +19,14 @@ pub struct AuthStatus {
     pub api_provider: Option<String>,
     /// Where an API key came from (`ANTHROPIC_API_KEY`), when it is one.
     pub api_key_source: Option<String>,
+    /// Who a plan login belongs to, as the CLI prints it (never a credential):
+    /// lets the setup panel tell two Claude accounts apart and refuse the same
+    /// login twice.
+    pub email: Option<String>,
+    pub org_id: Option<String>,
+    pub org_name: Option<String>,
+    /// `pro`, `max`, `team`, `enterprise`.
+    pub subscription_type: Option<String>,
 }
 
 /// Parse the status JSON. `exit_ok` is false when the command exited
@@ -34,6 +42,10 @@ pub fn parse_auth_status(stdout: &str, exit_ok: bool) -> Result<AuthStatus, Stri
         auth_method: s("authMethod").unwrap_or_else(|| "unknown".into()),
         api_provider: s("apiProvider"),
         api_key_source: s("apiKeySource"),
+        email: s("email"),
+        org_id: s("orgId"),
+        org_name: s("orgName"),
+        subscription_type: s("subscriptionType"),
     })
 }
 
@@ -70,6 +82,18 @@ mod tests {
         assert!(s.logged_in);
         assert_eq!(s.auth_method, "api_key");
         assert_eq!(s.api_key_source.as_deref(), Some("ANTHROPIC_API_KEY"));
+    }
+
+    #[test]
+    fn a_plan_login_reports_who_it_is() {
+        let s = parse_auth_status(
+            r#"{"loggedIn":true,"authMethod":"claude.ai","apiProvider":"firstParty","email":"me@example.com","orgId":"o1","orgName":"Me","subscriptionType":"max"}"#,
+            true,
+        )
+        .unwrap();
+        assert_eq!(s.email.as_deref(), Some("me@example.com"));
+        assert_eq!(s.org_id.as_deref(), Some("o1"));
+        assert_eq!(s.subscription_type.as_deref(), Some("max"));
     }
 
     #[test]
