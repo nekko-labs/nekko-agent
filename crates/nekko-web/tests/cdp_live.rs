@@ -36,7 +36,7 @@ async fn existing_mode_drives_a_real_chromium() {
     let _ = std::fs::remove_dir_all(&profile);
     std::fs::create_dir_all(&profile).unwrap();
     let child = std::process::Command::new(exe)
-        .args(["--headless=new", "--remote-debugging-port=0", "--no-first-run", "--disable-gpu", "about:blank"])
+        .args(["--headless=new", "--remote-debugging-port=0", "--no-first-run", "--disable-gpu", "--use-mock-keychain", "about:blank"])
         .arg(format!("--user-data-dir={}", profile.display()))
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
