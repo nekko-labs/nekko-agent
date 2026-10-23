@@ -6,6 +6,7 @@
 
 use crate::locate::{ClaudeBin, PROBE_TIMEOUT, command};
 use serde_json::Value;
+use std::path::Path;
 
 /// `claude auth status`, as Nekko uses it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -36,9 +37,14 @@ pub fn parse_auth_status(stdout: &str, exit_ok: bool) -> Result<AuthStatus, Stri
     })
 }
 
-/// Run `claude auth status --json` with the user's environment as it is.
-pub async fn auth_status(bin: &ClaudeBin) -> Result<AuthStatus, String> {
+/// Run `claude auth status --json` with the user's environment as it is,
+/// for the account whose config directory is `config_dir` (`None`: the
+/// default login).
+pub async fn auth_status(bin: &ClaudeBin, config_dir: Option<&Path>) -> Result<AuthStatus, String> {
     let mut cmd = command(&bin.path);
+    if let Some(dir) = config_dir {
+        cmd.env("CLAUDE_CONFIG_DIR", dir);
+    }
     cmd.args(["auth", "status", "--json"]).stdin(std::process::Stdio::null());
     let out = tokio::time::timeout(PROBE_TIMEOUT, cmd.output())
         .await

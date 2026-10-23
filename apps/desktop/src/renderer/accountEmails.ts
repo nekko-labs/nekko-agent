@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { ProviderConfig } from '@nekko-agent/shared';
+import { isLocalProvider } from '@nekko-agent/shared';
 
 /**
  * The email each signed-in provider uses, so two accounts on one vendor (a
@@ -46,4 +47,22 @@ export function accountEmailOf(provider: ProviderConfig, emails: Record<string, 
 export function providerDisplayName(provider: ProviderConfig, emails: Record<string, string>): string {
   const email = accountEmailOf(provider, emails);
   return email ? `${provider.label} · ${email}` : provider.label;
+}
+
+/**
+ * The accounts a chat can switch between: every enabled provider of the same
+ * kind as `current` (two ChatGPT plans, two Anthropic keys, two Claude Agent
+ * logins), `current` included, in the order they are listed. Local model
+ * servers are machines, not accounts, so they never get a switcher. Fewer
+ * than two means there is nothing to switch to.
+ */
+export function accountSiblings(providers: ProviderConfig[], current: ProviderConfig | undefined): ProviderConfig[] {
+  if (!current || isLocalProvider(current.kind)) return [];
+  const same = providers.filter((p) => p.kind === current.kind && (p.enabled !== false || p.id === current.id));
+  return same.length > 1 ? same : [];
+}
+
+/** An account's short name for the switcher: its email, else its label. */
+export function accountShortName(provider: ProviderConfig, emails: Record<string, string>): string {
+  return accountEmailOf(provider, emails) ?? provider.label;
 }

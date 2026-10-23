@@ -211,3 +211,12 @@
 .monitors-dock__local-model .monitors-dock__metric-row strong { text-align: left; flex: 1; }
 .monitors-dock__local-model .monitors-dock__note { margin-top: 0; }
 .monitors-dock__local-model button.monitors-dock__text-button { flex-shrink: 0; }
+
+/* Keep the dock alive during exit so a second toggle reverses from here. */
+.monitors-dock { --dock-enter-x: 10px; --dock-enter-y: 0px; opacity: 1; transform: translate(0, 0); transition: opacity 140ms ease-out, transform 140ms ease-out; }
+.monitors-dock[data-dock-side='left'] { --dock-enter-x: -10px; }
+.monitors-dock[data-dock-side='top'] { --dock-enter-x: 0px; --dock-enter-y: -10px; }
+.monitors-dock[data-dock-side='bottom'] { --dock-enter-x: 0px; --dock-enter-y: 10px; }
+.monitors-dock[data-panel-open='false'] { opacity: 0; transform: translate(var(--dock-enter-x), var(--dock-enter-y)); pointer-events: none; }
+@starting-style { .monitors-dock[data-panel-open='true'] { opacity: 0; transform: translate(var(--dock-enter-x), var(--dock-enter-y)); } }
+@media (prefers-reduced-motion: reduce) { .monitors-dock { transition: none; transform: none; } }

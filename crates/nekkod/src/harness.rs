@@ -7,9 +7,13 @@
 //!   (`claudeCodeSessionId`), so the next turn after a reap, a crash or an app
 //!   restart continues the conversation with `--resume`.
 //! - A change of model, permission mode or folders relaunches the child
-//!   (with `--resume`): those are launch flags.
-//! - The child inherits the user's environment as it is. Nekko never reads
-//!   Claude Code's credentials and never sets a token or `CLAUDE_CONFIG_DIR`.
+//!   (with `--resume`): those are launch flags. A change of Claude Code
+//!   account relaunches it too, as a new Claude Code session, since the old
+//!   one lives in the other account's folder (turns.rs).
+//! - The child inherits the user's environment as it is, plus
+//!   `CLAUDE_CONFIG_DIR` when the provider names a second Claude Code account
+//!   ([`provider_account`]). Nekko never reads Claude Code's credentials and
+//!   never sets a token.
 //!
 //! - Between turns the child is watched ([`Harness::idle`]): Claude Code
 //!   wakes on its own when a background command or sub-agent finishes, and
@@ -133,6 +137,14 @@ pub struct Wanted {
     pub add_dirs: Vec<PathBuf>,
     pub model: Option<String>,
     pub permission_mode: PermissionMode,
+    /// The provider's Claude Code account folder; `None` for the default login.
+    pub config_dir: Option<PathBuf>,
+}
+
+/// The Claude Code account a Claude Agent provider names
+/// (`claudeCode.account`), `None` for the user's default login.
+pub fn provider_account(provider: &serde_json::Value) -> Option<&str> {
+    provider.pointer("/claudeCode/account").and_then(serde_json::Value::as_str).filter(|a| !a.is_empty())
 }
 
 impl Wanted {
@@ -142,6 +154,7 @@ impl Wanted {
             && spec.add_dirs == self.add_dirs
             && spec.model == self.model
             && spec.permission_mode == self.permission_mode
+            && spec.config_dir == self.config_dir
     }
 
     /// The launch, continuing `stored` when the chat has one.
@@ -159,6 +172,7 @@ impl Wanted {
             mcp_config: None,
             permission_prompt_tool: None,
             add_dirs: self.add_dirs.clone(),
+            config_dir: self.config_dir.clone(),
         }
     }
 }
@@ -533,6 +547,7 @@ mod tests {
             add_dirs: vec![],
             model: Some("opus".into()),
             permission_mode: PermissionMode::Default,
+            config_dir: None,
         }
     }
 
@@ -706,6 +721,17 @@ mod tests {
         other = w.clone();
         other.permission_mode = PermissionMode::AcceptEdits;
         assert!(!other.matches(&resumed));
+        other = w.clone();
+        other.config_dir = Some("/home/u/.claude-work".into());
+        assert!(!other.matches(&resumed));
+        assert_eq!(other.launch(bin(), None).config_dir, other.config_dir);
+    }
+
+    #[test]
+    fn provider_account_reads_claude_code_account() {
+        assert_eq!(provider_account(&serde_json::json!({ "claudeCode": { "account": "work" } })), Some("work"));
+        assert_eq!(provider_account(&serde_json::json!({ "claudeCode": { "account": "" } })), None);
+        assert_eq!(provider_account(&serde_json::json!({ "kind": "claude-code" })), None);
     }
 
     #[tokio::test]

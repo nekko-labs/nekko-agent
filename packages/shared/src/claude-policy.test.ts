@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  claudeAccountName,
+  isClaudeAccountName,
   CLAUDE_AUTHS,
   CLAUDE_AWAITING_REASON,
   CLAUDE_CAPABILITIES,
@@ -102,5 +104,19 @@ describe('reportedClaudeCodeContext', () => {
     expect(reportedClaudeCodeContext({ modelId: 'opus', claudeCodeContext })).toEqual({ used: 21_002, window: 1_000_000 });
     expect(reportedClaudeCodeContext({ modelId: 'opus', claudeCodeContext }, 'sonnet')).toBeUndefined();
     expect(reportedClaudeCodeContext({ modelId: 'opus' })).toBeUndefined();
+  });
+});
+
+describe('Claude Code account names', () => {
+  // Same cases as nekko_harness::account::tests::names, so both sides agree.
+  it('accepts what nekkod accepts', () => {
+    for (const ok of ['work', 'a', 'client-2', 'x'.repeat(32)]) expect(isClaudeAccountName(ok)).toBe(true);
+    for (const bad of ['', 'Work', '-a', 'a-', 'a/b', '..', 'a b', 'ä', 'x'.repeat(33)]) expect(isClaudeAccountName(bad)).toBe(false);
+  });
+  it('turns a typed label into a valid name, or nothing', () => {
+    expect(claudeAccountName('Work (Acme)')).toBe('work-acme');
+    expect(claudeAccountName('  Client A  ')).toBe('client-a');
+    expect(claudeAccountName('ÄÖ')).toBe('');
+    expect(isClaudeAccountName(claudeAccountName('a'.repeat(31) + ' b'))).toBe(true);
   });
 });

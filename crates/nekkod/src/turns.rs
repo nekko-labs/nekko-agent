@@ -1066,7 +1066,7 @@ impl Turns {
                 incognito,
                 &workspaces,
                 opts,
-                &config.id,
+                &facts["provider"],
                 &mode,
                 wake,
             )
@@ -1200,11 +1200,11 @@ impl Turns {
         incognito: bool,
         workspaces: &[Value],
         opts: &Value,
-        provider_id: &str,
+        provider: &Value,
         mode: &str,
         wake: bool,
     ) {
-        use crate::harness::{BRIDGE_SERVER, BRIDGE_TOOL, INTERRUPT_GRACE, Wanted, permission_mode};
+        use crate::harness::{BRIDGE_SERVER, BRIDGE_TOOL, INTERRUPT_GRACE, Wanted, permission_mode, provider_account};
         use nekko_harness::{Mapped, Mapper, SessionStart, TurnExit, TurnInput};
 
         let session_id = shared.session_id.clone();
@@ -1227,11 +1227,25 @@ impl Turns {
         let Some((cwd, rest)) = paths.split_first() else {
             return fail("A Claude Agent chat needs a workspace folder to run in.", &history);
         };
+        // The provider's Claude Code account. Its sessions live in its own
+        // folder, so one saved under another account (the chat switched) is
+        // not resumed: the next launch starts a new Claude Code session.
+        let account = provider_account(provider).map(str::to_string);
+        let config_dir = match nekko_harness::account_config_dir(account.as_deref()) {
+            Ok(dir) => dir,
+            Err(e) => return fail(&e, &history),
+        };
         let wanted = Wanted {
             cwd: cwd.clone(),
             add_dirs: rest.to_vec(),
             model: str_at(opts, "modelId").filter(|m| !js::trim(m).is_empty()).map(str::to_string),
             permission_mode: permission_mode(mode),
+            config_dir,
+        };
+        let same_account = |s: &Value| str_at(s, "claudeCodeAccount") == account.as_deref();
+        let set_account = |obj: &mut serde_json::Map<String, Value>| match &account {
+            Some(a) => obj.insert("claudeCodeAccount".into(), json!(a)),
+            None => obj.shift_remove("claudeCodeAccount"),
         };
 
         // One turn per chat at a time: the slot stays taken until the end.
@@ -1246,7 +1260,10 @@ impl Turns {
                 Ok(bin) => bin,
                 Err(e) => return fail(&e, &history),
             };
-            let stored = str_at(&lock(session), "claudeCodeSessionId").map(str::to_string);
+            let stored = {
+                let s = lock(session);
+                str_at(&s, "claudeCodeSessionId").filter(|_| same_account(&s)).map(str::to_string)
+            };
             let mut spec = wanted.launch(bin, stored.as_deref());
             // Every permission prompt goes to Nekko through the bridge; with
             // no bridge Claude Code does not start (fail closed).
@@ -1259,6 +1276,7 @@ impl Turns {
                 // Saved before the launch, so a crash mid-turn still resumes.
                 if let Some(obj) = lock(session).as_object_mut() {
                     obj.insert("claudeCodeSessionId".into(), json!(id));
+                    set_account(obj);
                 }
                 persist(store, session, incognito).await;
             }
@@ -1286,7 +1304,9 @@ impl Turns {
                 seen = Some(init.session_id);
                 model = init.model.or(model.take());
             }
-            Mapped::PlanUsage(event) => self.harness.note_plan_usage(provider_id, &event),
+            Mapped::PlanUsage(event) => {
+                self.harness.note_plan_usage(str_at(provider, "id").unwrap_or_default(), &event)
+            }
             Mapped::Unparsed(line) => eprintln!("nekkod: Claude Code printed a non-JSON line: {line}"),
             _ => {}
         })
@@ -1307,6 +1327,7 @@ impl Turns {
                     Some(id) => obj.insert("claudeCodeSessionId".into(), json!(id)),
                     None => obj.shift_remove("claudeCodeSessionId"),
                 };
+                set_account(obj);
             }
             changed = true;
         }

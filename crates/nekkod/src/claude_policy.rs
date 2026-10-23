@@ -266,18 +266,29 @@ impl ClaudePolicyStore {
 }
 
 /// The settings provider `id`.
-/// `claude:codeStatus(providerId?)`: whether the user's own Claude Code is
-/// installed and how it is signed in, for the Claude Agent setup states. It
-/// runs `claude --version` and `claude auth status`, never reads Claude Code's
-/// credentials, and records the status for `providerId` so the policy rows its
-/// turns get match what the user sees.
+/// `claude:codeStatus(providerId?, account?)`: whether the user's own Claude
+/// Code is installed and how it is signed in, for the Claude Agent setup
+/// states. It runs `claude --version` and `claude auth status`, never reads
+/// Claude Code's credentials, and records the status for `providerId` so the
+/// policy rows its turns get match what the user sees. The Claude Code
+/// account is the saved provider's, or `account` before one is saved (the
+/// setup panel); neither means the default login.
 pub async fn code_status_route(ctx: &crate::routes::Ctx, args: &[Value]) -> Result<Value, String> {
     let provider_id = args.first().and_then(Value::as_str).filter(|id| !id.is_empty());
+    let saved = match provider_id {
+        Some(id) => provider(ctx, id).await.ok(),
+        None => None,
+    };
+    let account = match &saved {
+        Some(p) => crate::harness::provider_account(p).map(str::to_string),
+        None => args.get(1).and_then(Value::as_str).filter(|a| !a.is_empty()).map(str::to_string),
+    };
+    let config_dir = nekko_harness::account_config_dir(account.as_deref())?;
     let bin = match nekko_harness::locate(None).await {
         Ok(bin) => bin,
         Err(message) => return Ok(json!({ "installed": false, "message": message })),
     };
-    match nekko_harness::auth_status(&bin).await {
+    match nekko_harness::auth_status(&bin, config_dir.as_deref()).await {
         Ok(s) => {
             let status = json!({ "loggedIn": s.logged_in, "authMethod": s.auth_method, "apiProvider": s.api_provider });
             if let Some(id) = provider_id {

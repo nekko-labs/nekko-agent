@@ -4,6 +4,7 @@ import { pairingLink, phoneDeviceAccess, PHONE_KEY_CHANNEL, relayHost, relayUrlP
 import { Badge } from './primitives/index.js';
 import { Toggle } from './primitives/Toggle.js';
 import { useStore } from '../store.js';
+import { PhoneIcon } from '../icons.js';
 
 /**
  * Settings card for phone remote control: expose this machine over a relay,
@@ -184,7 +185,7 @@ export function RemoteAccess() {
   return (
     <section className="card mt-5 p-5">
       <div className="flex items-center gap-2">
-        <span className="text-base">📱</span>
+        <PhoneIcon className="h-4 w-4" />
         <h2 className="font-semibold">Remote access</h2>
         {status.enabled && (
           <Badge tone={status.online ? 'success' : 'warning'} variant="solid">
@@ -203,6 +204,7 @@ export function RemoteAccess() {
 
       {!status.enabled ? (
         <div className="mt-3 space-y-2">
+          <p className="text-[12.5px]">Turn on remote access to get a QR code for your phone to scan.</p>
           <div className="flex gap-2">
             <input
               className="input py-1.5 text-[13px]"
@@ -249,23 +251,33 @@ export function RemoteAccess() {
         </div>
       ) : (
         <div className="mt-3 space-y-4">
-          <div className="grid grid-cols-1 gap-1 text-[12.5px] sm:grid-cols-2">
-            <Field label="Relay" value={status.relayUrl!} />
-            <Field label="Room" value={status.room!} mono />
-          </div>
-          <LocalRelayCard inUse={status.relayUrl} onStatus={setLocalRelay} />
-          <NetworkVisibilitySwitch />
-          <PhoneChangesSwitch />
-          <PhoneAccess devices={active} onChanged={() => void refresh()} />
-
           {/* Paired devices */}
-          <div>
+          <div data-shot="phone-pairing">
             <div className="flex items-center justify-between">
               <h3 className="text-[13px] font-medium">Paired devices</h3>
-              <button className="btn btn-primary py-1 text-[12px]" onClick={pair}>
+              <button className="btn btn-primary py-1.5 text-[12.5px]" onClick={pair}>
                 + Pair a device
               </button>
             </div>
+            {/* Pairing QR (short-lived, single-use) */}
+            {liveGrant && link && (
+              <div className="mt-2 flex flex-col items-start gap-3 rounded-lg border border-line p-3 sm:flex-row sm:items-center">
+                {qr && <img src={qr} alt="Pairing QR" width={132} height={132} className="rounded-lg border border-line" />}
+                <div className="min-w-0">
+                  <div className="text-[12px]">
+                    Scan from the Nekko Agent app (or open the link in your phone's browser). One device,{' '}
+                    <span className="font-mono font-medium">{Math.floor(secsLeft / 60)}:{String(secsLeft % 60).padStart(2, '0')}</span>{' '}
+                    left.
+                  </div>
+                  <code className="mt-1 block break-all rounded-lg px-2 py-1.5 font-mono text-[11px]" style={{ background: 'var(--surface-2)' }}>
+                    {link}
+                  </code>
+                  <button className="btn btn-outline mt-2 py-1 text-[12px]" onClick={() => navigator.clipboard?.writeText(link)}>
+                    Copy link
+                  </button>
+                </div>
+              </div>
+            )}
             {active.length === 0 ? (
               <p className="mt-2 text-[12px] text-ink-faint">
                 Nothing paired yet. Hit “Pair a device” and scan the QR from your phone.
@@ -310,25 +322,14 @@ export function RemoteAccess() {
             )}
           </div>
 
-          {/* Pairing QR (short-lived, single-use) */}
-          {liveGrant && link && (
-            <div className="flex flex-col items-start gap-3 rounded-lg border border-line p-3 sm:flex-row sm:items-center">
-              {qr && <img src={qr} alt="Pairing QR" width={132} height={132} className="rounded-lg border border-line" />}
-              <div className="min-w-0">
-                <div className="text-[12px]">
-                  Scan from the Nekko Agent app (or open the link in your phone's browser). One device,{' '}
-                  <span className="font-mono font-medium">{Math.floor(secsLeft / 60)}:{String(secsLeft % 60).padStart(2, '0')}</span>{' '}
-                  left.
-                </div>
-                <code className="mt-1 block break-all rounded-lg px-2 py-1.5 font-mono text-[11px]" style={{ background: 'var(--surface-2)' }}>
-                  {link}
-                </code>
-                <button className="btn btn-outline mt-2 py-1 text-[12px]" onClick={() => navigator.clipboard?.writeText(link)}>
-                  Copy link
-                </button>
-              </div>
-            </div>
-          )}
+          <div className="grid grid-cols-1 gap-1 text-[12.5px] sm:grid-cols-2">
+            <Field label="Relay" value={status.relayUrl!} />
+            <Field label="Room" value={status.room!} mono />
+          </div>
+          <LocalRelayCard inUse={status.relayUrl} onStatus={setLocalRelay} />
+          <NetworkVisibilitySwitch />
+          <PhoneChangesSwitch />
+          <PhoneAccess devices={active} onChanged={() => void refresh()} />
 
           <div className="flex flex-wrap gap-2">
             <button className="btn btn-ghost py-1.5 text-[12px]" onClick={disable} disabled={busy}>
