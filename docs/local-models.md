@@ -43,7 +43,10 @@ your own replies ran at (the median of the last 20), which then also decides whe
 enough to stay the pick. A GPU we have no figures for gets no speed rather than a guess. When nothing fits that is fast enough for a task, the pick is the fastest
 that fits and says so. The list comes with the app and works offline; **Check this
 machine again** re-reads the hardware after a change. Once you have models the block folds
-to one line.
+to one line. When a new GPU, or a newer version of the list, puts a better model within reach
+than the one you have for a task, a card above it says so ("A better coding model now fits
+your 16 GB GPU") with the model it would replace; **Not now** puts it away until the next
+change.
 
 **Where models come from.** A short curated list answers "what should I run"; search
 covers everything else, straight against Hugging Face with no account. Each model expands

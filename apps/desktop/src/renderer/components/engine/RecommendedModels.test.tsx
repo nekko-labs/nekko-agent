@@ -1,13 +1,13 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import type { Recommendations } from '@nekko-agent/shared';
-import { RecommendationList } from './RecommendedModels.js';
-import { hardwareText, isDownloaded, speedText } from './recommendationText.js';
+import { RecommendationList, UpgradeNudges } from './RecommendedModels.js';
+import { hardwareText, isDownloaded, nudgeTitle, speedText } from './recommendationText.js';
 // What the daemon answers for four reference machines (`machine:recommendations`
 // over the bundled feed), with each task's alternatives left out.
 import fixture from './recommendations.fixture.json';
 
-const recs = fixture as unknown as Record<'m5max' | 'rtx4060' | 'cpu' | 'laptop', Recommendations>;
+const recs = fixture as unknown as Record<'m5max' | 'rtx4060' | 'cpu' | 'laptop' | 'rtx4080upgrade', Recommendations>;
 const list = (r: Recommendations, models: { path: string }[] = [], open = true) =>
   renderToStaticMarkup(<RecommendationList recs={r} models={models} open={open} onDownload={vi.fn()} onRecheck={vi.fn()} />);
 const task = (r: Recommendations, id: string) => r.tasks.find(t => t.task === id)!;
@@ -68,5 +68,21 @@ describe('the recommendations block', () => {
     const p = task(recs.m5max, 'code').pick!;
     expect(isDownloaded(p, [{ path: `D:\\models\\${p.files[0]}` }])).toBe(true);
     expect(isDownloaded(p, [{ path: '/m/other-Q4_K_M.gguf' }])).toBe(false);
+  });
+
+  it('names an upgrade to a new GPU, with the model each pick replaces', () => {
+    const r = recs.rtx4080upgrade;
+    expect(nudgeTitle(r)).toBe('Better models now fit your 16 GB GPU');
+    const html = renderToStaticMarkup(<UpgradeNudges recs={r} onDownload={vi.fn()} onDismiss={vi.fn()} />);
+    for (const t of ['chat', 'code', 'vision']) expect(html).toContain(`data-upgrade-nudge="${t}"`);
+    expect(html).toContain('instead of Qwen3.5 4B');
+    expect(html).toContain('Not now');
+    const one = { ...r, nudges: r.nudges.filter(n => n.task === 'code') };
+    expect(nudgeTitle(one)).toBe('A better coding model now fits your 16 GB GPU');
+    expect(nudgeTitle({ ...one, nudges: [{ ...one.nudges[0], reason: 'feed' }] })).toBe("A better coding model is in this version's list for your 16 GB GPU");
+  });
+
+  it('says nothing without an upgrade', () => {
+    expect(renderToStaticMarkup(<UpgradeNudges recs={recs.m5max} onDownload={vi.fn()} onDismiss={vi.fn()} />)).toBe('');
   });
 });

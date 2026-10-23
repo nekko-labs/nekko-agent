@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { LocalModel, Recommendations, TaskRecommendation } from '@nekko-agent/shared';
 import { CheckIcon, ChevronIcon } from '../../icons.js';
 import { formatBytes } from '../runtimes/verdict.js';
-import { fitText, hardwareText, isDownloaded, memoryText, speedText } from './recommendationText.js';
+import { fitText, hardwareText, isDownloaded, memoryText, nudgeTitle, speedText } from './recommendationText.js';
 
 /**
  * "What should I run here", answered per task before anything is downloaded.
@@ -14,7 +14,9 @@ import { fitText, hardwareText, isDownloaded, memoryText, speedText } from './re
  * the machine has, and the speed to expect, labelled by how sure it is.
  *
  * Open on a machine with nothing downloaded, where it is the question; folded
- * to its summary once there are models, where it is a second opinion.
+ * to its summary once there are models, where it is a second opinion. An
+ * upgrade (a new GPU, or a newer list, ranking a better model above the one
+ * the user has) is said above it, folded or not.
  */
 export function RecommendedModels({ models, onQueued }: { models: LocalModel[]; onQueued: () => void }) {
   const [recs, setRecs] = useState<Recommendations | null>(null);
@@ -43,18 +45,81 @@ export function RecommendedModels({ models, onQueued }: { models: LocalModel[]; 
     if (res.ok) onQueued();
   };
 
+  const dismiss = () => {
+    // Every task's current pick is kept as seen, so the card goes and stays gone.
+    void window.nekko.machineDismissNudge().catch(() => undefined);
+    setRecs(r => (r ? { ...r, nudges: [] } : r));
+  };
+
   // Nothing to say rather than a broken box: the rest of the page still works.
   if (failed || !recs) return null;
   return (
-    <RecommendationList
-      recs={recs}
-      models={models}
-      open={open}
-      checking={checking}
-      queued={queued}
-      onDownload={download}
-      onRecheck={() => load(true)}
-    />
+    <>
+      <UpgradeNudges recs={recs} queued={queued} onDownload={download} onDismiss={dismiss} />
+      <RecommendationList
+        recs={recs}
+        models={models}
+        open={open}
+        checking={checking}
+        queued={queued}
+        onDownload={download}
+        onRecheck={() => load(true)}
+      />
+    </>
+  );
+}
+
+/** "A better coding model now fits your 16 GB GPU", with the model it would replace. */
+export function UpgradeNudges({
+  recs,
+  queued = {},
+  onDownload,
+  onDismiss,
+}: {
+  recs: Recommendations;
+  queued?: Record<string, string>;
+  onDownload: (task: TaskRecommendation) => void;
+  onDismiss: () => void;
+}) {
+  const rows = (recs.nudges ?? [])
+    .map(n => ({ n, t: recs.tasks.find(t => t.task === n.task) }))
+    .filter((x): x is { n: (typeof recs.nudges)[number]; t: TaskRecommendation } => !!x.t?.pick);
+  if (!rows.length) return null;
+  return (
+    <div
+      className="mb-3 rounded-xl border p-3.5"
+      style={{ borderColor: 'color-mix(in srgb, var(--accent) 35%, var(--line))', background: 'color-mix(in srgb, var(--accent) 7%, transparent)' }}
+      role="status"
+      data-upgrade-nudges
+    >
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-[13px] font-semibold">{nudgeTitle(recs)}</p>
+        <button className="btn btn-ghost py-0.5 text-[11.5px] text-ink-faint" onClick={onDismiss}>
+          Not now
+        </button>
+      </div>
+      <div className="mt-1.5 space-y-1.5">
+        {rows.map(({ n, t }) => {
+          const p = t.pick!;
+          const state = queued[t.task];
+          return (
+            <div key={n.task} className="flex flex-wrap items-center gap-x-2 gap-y-1" data-upgrade-nudge={n.task}>
+              <span className="w-[118px] shrink-0 text-[11.5px] text-ink-faint">{t.label}</span>
+              <span className="min-w-0 flex-1 text-[12px]">
+                <span className="font-medium">{p.name}</span> <span className="text-ink-faint">{p.quant} · {formatBytes(p.downloadBytes)} download, instead of {n.haveName}</span>
+              </span>
+              {state ? (
+                <span className="text-[12px] text-ink-faint">{state}</span>
+              ) : (
+                <button className="btn btn-outline py-0.5 text-[11.5px]" onClick={() => onDownload(t)}>
+                  Download
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

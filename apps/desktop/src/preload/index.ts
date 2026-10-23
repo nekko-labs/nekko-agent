@@ -144,6 +144,7 @@ const api: NekkoApi = {
   machineReadiness: (language) => inv(IpcChannels.machineReadiness, language),
   machineProfile: (opts) => inv(IpcChannels.machineProfile, opts),
   machineRecommendations: (opts) => inv(IpcChannels.machineRecommendations, opts),
+  machineDismissNudge: (task) => inv(IpcChannels.machineDismissNudge, task ?? null),
   getGpuStats: () => inv(IpcChannels.gpuStats),
   getSystemStats: () => inv(IpcChannels.systemStats),
 

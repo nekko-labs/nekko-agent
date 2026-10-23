@@ -101,6 +101,11 @@ async fn machine_channels_are_served_without_a_backend() {
     for t in tasks {
         assert!(t["pick"]["modelId"].is_string(), "{t}");
     }
+    // The first answer has nothing to compare with: no nudges, and the picks are remembered.
+    assert_eq!(recs["nudges"], json!([]), "{recs}");
+    assert!(dir.join("recommendations-seen.json").is_file());
+    let (status, ok) = post(d.port, "machine:dismissNudge", json!(["code"])).await;
+    assert_eq!((status, ok), (200, json!({ "ok": true })));
 
     let (status, body) = post(d.port, "resource:queue", json!(["list", {}])).await;
     assert_eq!((status, body["error"].clone()), (400, json!("Resource queue experiment is disabled")));

@@ -5,7 +5,8 @@
    "device": "Apple M5 Max (40-core GPU)",
    "classId": "apple-m5-max-40",
    "bandwidthGBps": 614.0,
-   "backend": "metal"
+   "backend": "metal",
+   "memoryBytes": 137438953472.0
   },
   "budget": {
    "bytes": 103079215104.0,
@@ -155,7 +156,8 @@
     "belowTargetSpeed": false,
     "options": []
    }
-  ]
+  ],
+  "nudges": []
  },
  "rtx4060": {
   "feedVersion": "2026-10-22.1",
@@ -163,7 +165,8 @@
    "device": "NVIDIA GeForce RTX 4060",
    "classId": "nvidia-rtx-4060",
    "bandwidthGBps": 272.0,
-   "backend": "vulkan"
+   "backend": "vulkan",
+   "memoryBytes": 8589934592.0
   },
   "budget": {
    "bytes": 7516192768.0,
@@ -313,7 +316,8 @@
     "belowTargetSpeed": false,
     "options": []
    }
-  ]
+  ],
+  "nudges": []
  },
  "cpu": {
   "feedVersion": "2026-10-22.1",
@@ -321,7 +325,8 @@
    "device": null,
    "classId": "cpu-dual-channel",
    "bandwidthGBps": 50.0,
-   "backend": "cpu"
+   "backend": "cpu",
+   "memoryBytes": 17179869184.0
   },
   "budget": {
    "bytes": 12884901888.0,
@@ -471,7 +476,8 @@
     "belowTargetSpeed": true,
     "options": []
    }
-  ]
+  ],
+  "nudges": []
  },
  "laptop": {
   "feedVersion": "2026-10-22.1",
@@ -479,7 +485,8 @@
    "device": "NVIDIA GeForce RTX 4070 Laptop GPU",
    "classId": null,
    "bandwidthGBps": null,
-   "backend": "cuda"
+   "backend": "cuda",
+   "memoryBytes": 8589934592.0
   },
   "budget": {
    "bytes": 7516192768.0,
@@ -617,6 +624,190 @@
     "belowTargetSpeed": false,
     "options": []
    }
+  ],
+  "nudges": []
+ },
+ "rtx4080upgrade": {
+  "feedVersion": "2026-10-22.1",
+  "hardware": {
+   "device": "NVIDIA GeForce RTX 4080",
+   "classId": "nvidia-rtx-4080",
+   "bandwidthGBps": 717.0,
+   "backend": "vulkan",
+   "memoryBytes": 17179869184.0
+  },
+  "budget": {
+   "bytes": 16106127360.0,
+   "placement": "gpu"
+  },
+  "tasks": [
+   {
+    "task": "chat",
+    "label": "Chat",
+    "minTokensPerSecond": 20.0,
+    "pick": {
+     "modelId": "gemma-4-12b",
+     "name": "Gemma 4 12B",
+     "owner": "Google",
+     "repo": "unsloth/gemma-4-12b-it-GGUF",
+     "quant": "Q4_K_M",
+     "downloadLabel": "Q4_K_M",
+     "files": [
+      "gemma-4-12b-it-Q4_K_M.gguf"
+     ],
+     "downloadBytes": 7121861440.0,
+     "memoryBytes": 8967355200.0,
+     "headroomBytes": 7138772160.0,
+     "contextTokens": 16384.0,
+     "placement": "gpu",
+     "fit": "fits",
+     "speed": {
+      "tokensPerSecond": 52.0,
+      "basis": "estimatedBorrowed"
+     },
+     "tooSlow": false
+    },
+    "belowTargetSpeed": false,
+    "options": []
+   },
+   {
+    "task": "code",
+    "label": "Coding",
+    "minTokensPerSecond": 25.0,
+    "pick": {
+     "modelId": "qwen3.5-9b",
+     "name": "Qwen3.5 9B",
+     "owner": "Qwen",
+     "repo": "unsloth/Qwen3.5-9B-GGUF",
+     "quant": "Q8_0",
+     "downloadLabel": "Q8_0",
+     "files": [
+      "Qwen3.5-9B-Q8_0.gguf"
+     ],
+     "downloadBytes": 9527502048.0,
+     "memoryBytes": 11138114784.0,
+     "headroomBytes": 4968012576.0,
+     "contextTokens": 32768.0,
+     "placement": "gpu",
+     "fit": "fits",
+     "speed": {
+      "tokensPerSecond": 44.0,
+      "basis": "estimatedBorrowed"
+     },
+     "tooSlow": false
+    },
+    "belowTargetSpeed": false,
+    "options": []
+   },
+   {
+    "task": "router",
+    "label": "Fast routing and classification",
+    "minTokensPerSecond": 60.0,
+    "pick": {
+     "modelId": "qwen3.5-2b",
+     "name": "Qwen3.5 2B",
+     "owner": "Qwen",
+     "repo": "unsloth/Qwen3.5-2B-GGUF",
+     "quant": "Q8_0",
+     "downloadLabel": "Q8_0",
+     "files": [
+      "Qwen3.5-2B-Q8_0.gguf"
+     ],
+     "downloadBytes": 2012012800.0,
+     "memoryBytes": 2431443200.0,
+     "headroomBytes": 13674684160.0,
+     "contextTokens": 4096.0,
+     "placement": "gpu",
+     "fit": "fits",
+     "speed": {
+      "tokensPerSecond": 186.0,
+      "basis": "estimatedBorrowed"
+     },
+     "tooSlow": false
+    },
+    "belowTargetSpeed": false,
+    "options": []
+   },
+   {
+    "task": "embedding",
+    "label": "Embeddings",
+    "minTokensPerSecond": null,
+    "pick": {
+     "modelId": "qwen3-embedding-0.6b",
+     "name": "Qwen3 Embedding 0.6B",
+     "owner": "Qwen",
+     "repo": "Qwen/Qwen3-Embedding-0.6B-GGUF",
+     "quant": "Q8_0",
+     "downloadLabel": "Q8_0",
+     "files": [
+      "Qwen3-Embedding-0.6B-Q8_0.gguf"
+     ],
+     "downloadBytes": 639150592.0,
+     "memoryBytes": 1171827200.0,
+     "headroomBytes": 14934300160.0,
+     "contextTokens": 2048.0,
+     "placement": "gpu",
+     "fit": "fits",
+     "speed": null,
+     "tooSlow": false
+    },
+    "belowTargetSpeed": false,
+    "options": []
+   },
+   {
+    "task": "vision",
+    "label": "Vision",
+    "minTokensPerSecond": 15.0,
+    "pick": {
+     "modelId": "qwen3.5-9b",
+     "name": "Qwen3.5 9B",
+     "owner": "Qwen",
+     "repo": "unsloth/Qwen3.5-9B-GGUF",
+     "quant": "Q8_0",
+     "downloadLabel": "Q8_0",
+     "files": [
+      "Qwen3.5-9B-Q8_0.gguf",
+      "mmproj-F16.gguf"
+     ],
+     "downloadBytes": 10445668128.0,
+     "memoryBytes": 11519409952.0,
+     "headroomBytes": 4586717408.0,
+     "contextTokens": 16384.0,
+     "placement": "gpu",
+     "fit": "fits",
+     "speed": {
+      "tokensPerSecond": 44.0,
+      "basis": "estimatedBorrowed"
+     },
+     "tooSlow": false
+    },
+    "belowTargetSpeed": false,
+    "options": []
+   }
+  ],
+  "nudges": [
+   {
+    "task": "chat",
+    "label": "Chat",
+    "reason": "hardware",
+    "haveModelId": "qwen3.5-4b",
+    "haveName": "Qwen3.5 4B"
+   },
+   {
+    "task": "code",
+    "label": "Coding",
+    "reason": "hardware",
+    "haveModelId": "qwen3.5-4b",
+    "haveName": "Qwen3.5 4B"
+   },
+   {
+    "task": "vision",
+    "label": "Vision",
+    "reason": "hardware",
+    "haveModelId": "qwen3.5-4b",
+    "haveName": "Qwen3.5 4B"
+   }
   ]
- }
+ },
+ "rtx4080upgradeHave": "/fixture/models/chat/Qwen3.5-4B-Q4_K_M.gguf"
 }
