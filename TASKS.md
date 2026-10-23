@@ -2192,3 +2192,7 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [ ] **T194e** Measure real sessions (local and cloud models, with and without MCP servers) and record them in `docs/perf-history.md`.
 - [ ] **T194f** Hypergate: serve `search_tools` / `run_code` over MCP behind a per-client URL flag, and offer it in Nekko Agent as a third approach when MCP comes through Hypergate (nekko-labs/hypergate).
 - [ ] **T194g** Parallel calls from one script; code mode in sandbox chats; a script's calls as transcript rows; phone allowlist.
+
+### T197: Pairing QR that a phone can open (2026-10-23) · [spec](SPEC.md)
+- [x] **T197a** `pairingBase` in `RemoteAccess.tsx`: a loopback http origin gets `nekko-agent-pair:`, not `http://localhost…/`, which the phone's camera opened as its own localhost. Test: `RemoteAccess.pairingBase.test.tsx`. Done: 2026-10-23
+- [x] **T197b** Pairing card: QR plus one line; the link and Copy link moved under *Can't scan? Show the link*. Done: 2026-10-23
