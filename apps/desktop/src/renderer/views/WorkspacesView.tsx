@@ -181,13 +181,13 @@ function CreateRow({
 }) {
   return (
     <button
-      className="create-row flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left"
+      className="create-row flex w-full items-center gap-2 rounded-md px-2 py-1 text-left"
       style={{ '--row-tone': tone } as React.CSSProperties}
       title={title}
       onClick={onClick}
     >
       <span className="create-tile">{icon}</span>
-      <span className="min-w-0 flex-1 text-[13px] font-medium leading-snug">{label}</span>
+      <span className="min-w-0 flex-1 whitespace-nowrap text-[13px] font-medium leading-snug">{label}</span>
     </button>
   );
 }
@@ -777,25 +777,23 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
             <div
               ref={newMenuPopRef}
               data-new-agent-menu
-              className="card fixed z-[1000] w-64 p-1.5 shadow-lg"
+              className="card fixed z-[1000] w-max min-w-48 p-1 shadow-lg"
               style={{ background: 'var(--paper)', top: newMenuPos.top, left: newMenuPos.left }}
               onMouseEnter={openNewMenu}
               onMouseLeave={closeNewMenuSoon}
             >
               {/* The hero row. Everything else in this menu opens a window; this
-                  one starts the work, so it gets the brand gradient and the rest
+                  one starts the work, so it gets the brand wash and the rest
                   get a hue apiece rather than four identical grey lines. */}
               <button
-                className="create-row create-row-hero flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left"
+                className="create-row create-row-hero flex w-full items-center gap-2 rounded-md px-2 py-1 text-left"
+                title="A fresh chat, with room for windows around it"
                 onClick={() => { closeNewMenu(); void Promise.resolve(newChat()).catch((e: Error) => useStore.getState().pushToast('error', `Could not start an agent: ${e.message}`)); }}
               >
-                <span className="create-tile create-tile-brand">
+                <span className="create-tile">
                   <NekkoAvatar size={16} stationary eyes={false} />
                 </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[13px] font-semibold">Agent</span>
-                  <span className="block text-[11px] text-ink-faint">A fresh chat, with room for windows around it</span>
-                </span>
+                <span className="min-w-0 flex-1 text-[13px] font-semibold leading-snug">Agent</span>
                 <kbd className="kbd">{SHORTCUTS.newAgent.label}</kbd>
               </button>
 
