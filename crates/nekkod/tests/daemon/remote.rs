@@ -19,7 +19,7 @@ async fn the_daemon_runs_the_phone_relay_agent() {
     let data = std::env::temp_dir().join(format!("nekkod-remote-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&data);
     std::fs::create_dir_all(&data).unwrap();
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
     let relay = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let relay_port = relay.local_addr().unwrap().port();
 
@@ -285,7 +285,7 @@ async fn a_phone_attaches_to_a_chat_terminal_over_the_relay() {
     let data = std::env::temp_dir().join(format!("nekkod-remote-term-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&data);
     std::fs::create_dir_all(data.join("sessions")).unwrap();
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
     let relay = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let relay_port = relay.local_addr().unwrap().port();
     post(d.port, "remote:enable", json!([format!("ws://127.0.0.1:{relay_port}/")]), Some(TOKEN)).await;
@@ -483,7 +483,7 @@ async fn the_daemon_runs_the_telegram_bridge() {
         "messaging": { "telegram": { "enabled": true, "botToken": "123:TEST", "allowedChatIds": ["42"] } },
     });
     std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
-    let d = start_with_config(Some(&data), json!({ "telegramApiUrl": format!("http://127.0.0.1:{}", tg.port) }));
+    let d = start_with_config(&data, json!({ "telegramApiUrl": format!("http://127.0.0.1:{}", tg.port) }));
 
     wait_for("the first long poll", || tg.polls_since(0) >= 1).await;
     let first = &tg.calls("getUpdates")[0];

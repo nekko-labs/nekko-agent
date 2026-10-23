@@ -35,8 +35,8 @@ impl Engine {
     }
 }
 
-/// The model server's answers, from the daemon's own policy once it runs it
-/// (no data directory, no model server).
+/// The model server's answers, from the daemon's own policy once it is set
+/// at startup.
 struct ServerPolicy {
     server: Arc<std::sync::OnceLock<Arc<nekko_engine::server::ModelServer>>>,
 }

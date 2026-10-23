@@ -30,7 +30,7 @@ async fn stages_writes_a_message_commits_and_reads_history_in_a_saved_folder() {
     git(&repo, &["add", "."]);
     git(&repo, &["commit", "-q", "-m", "First"]);
     let model = scripted_model(vec![say_text("```\nSay two things\n\nThe file now has a second line.\n```")]).await;
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
     let (_, added) = post(d.port, "workspace:addByPath", json!([repo.to_string_lossy()]), Some(TOKEN)).await;
     let id = added[0]["id"].as_str().unwrap().to_string();
     // Both refuse before any git or network work: no such folder, no PR URL.

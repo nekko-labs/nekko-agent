@@ -166,7 +166,7 @@ pub fn preview(
 }
 
 pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, String> {
-    let store = ctx.sessions.clone().ok_or("context needs the data directory")?;
+    let store = ctx.sessions.clone();
     let sid = args.first().and_then(Value::as_str).unwrap_or_default().to_string();
     if channel == "context:setPrefs" {
         let prefs = args.get(1).cloned().unwrap_or(Value::Null);

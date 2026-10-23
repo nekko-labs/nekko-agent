@@ -12,7 +12,7 @@ async fn serves_session_reads_from_disk_when_it_knows_the_data_dir() {
         { "id": "a", "role": "assistant", "content": "", "images": ["data:x"], "generated": { "width": 8, "height": 8, "seed": 3 }, "createdAt": 2 },
     ] });
     std::fs::write(sessions.join("s_one.json"), serde_json::to_vec_pretty(&chat).unwrap()).unwrap();
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
 
     let (status, list) = post(d.port, "sessions:summaries", json!([]), Some(TOKEN)).await;
     assert_eq!(status, 200);
@@ -89,7 +89,7 @@ async fn forks_chats_and_purges_expired_archives_itself() {
         let s = json!({ "id": id, "title": id, "updatedAt": 1, "messages": [], "archivedAt": archived });
         std::fs::write(sessions.join(format!("{id}.json")), serde_json::to_vec(&s).unwrap()).unwrap();
     }
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
 
     let (status, fork) = post(d.port, "session:fork", json!(["s_src", "u2"]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{fork}");
@@ -125,7 +125,7 @@ async fn a_command_log_that_cannot_be_removed_retains_json_for_delete_and_clear(
     }))
     .unwrap();
     std::fs::write(&path, &bytes).unwrap();
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
     for (channel, args) in [("session:delete", json!(["callback_fail"])), ("sessions:clear", json!(["all"]))] {
         let (status, body) = post(d.port, channel, args, Some(TOKEN)).await;
         assert_eq!(status, 400, "{channel}: {body}");
@@ -144,7 +144,7 @@ async fn serves_files_memory_and_comments_itself() {
     let project = data.join("project");
     std::fs::create_dir_all(project.join("src")).unwrap();
     std::fs::write(project.join("src").join("a.ts"), "export function a() {}\n").unwrap();
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
 
     let file = project.join("src").join("a.ts").to_string_lossy().into_owned();
     let (status, read) = post(d.port, "file:read", json!([file]), Some(TOKEN)).await;
@@ -326,7 +326,7 @@ async fn continues_and_links_pr_stacks_itself() {
         "providerId": "p", "modelId": "m", "mode": "ask", "disabledTools": ["browser"], "messages": [], "createdAt": 1, "updatedAt": 1 });
     std::fs::write(data.join("sessions/s_src.json"), source.to_string()).unwrap();
     let d = start_with_env(
-        Some(&data),
+        &data,
         json!({ "githubApiUrl": format!("http://127.0.0.1:{gh}") }),
         &[
             ("NEKKO_GH_PATH", Some("nekko-no-such-gh")),
@@ -416,7 +416,7 @@ async fn wipes_the_data_it_owns_and_answers_the_small_services() {
         std::fs::create_dir_all(data.join(p).parent().unwrap()).unwrap();
         std::fs::write(data.join(p), text).unwrap();
     }
-    let d = start_with_config(Some(&data), json!({ "appVersion": "9.8.7", "edition": "desktop" }));
+    let d = start_with_config(&data, json!({ "appVersion": "9.8.7", "edition": "desktop" }));
     post(d.port, "settings:update", json!([{ "theme": "light" }]), Some(TOKEN)).await;
 
     // session:watches: what the transcript shows, never the prompt.
@@ -460,7 +460,7 @@ async fn writes_other_agent_tools_mcp_entries_itself() {
     let hand = json!({ "mcpServers": { "nekko-agent": { "command": "node", "args": ["dist/index.js", "mcp"] } } });
     std::fs::write(home.join(".cursor/mcp.json"), hand.to_string()).unwrap();
     let h = home.to_string_lossy().to_string();
-    let d = start_with_env(Some(&data), json!({}), &[("HOME", Some(&h)), ("USERPROFILE", Some(&h))]);
+    let d = start_with_env(&data, json!({}), &[("HOME", Some(&h)), ("USERPROFILE", Some(&h))]);
 
     let (_, tools) = post(d.port, "integrations:detect", json!([]), Some(TOKEN)).await;
     let ids: Vec<_> = tools
@@ -520,7 +520,7 @@ async fn scoped_files_and_logs_for_remote_callers() {
     std::fs::write(project.join("src").join("main.rs"), "fn main() {}\n").unwrap();
     std::fs::write(project.join(".env"), "TOKEN=abc").unwrap();
     std::fs::write(data.join("outside.txt"), "no").unwrap();
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
     let folder =
         json!([{ "workspaces": [{ "id": "w1", "name": "project", "path": project.to_string_lossy(), "addedAt": 1 }] }]);
     post(d.port, "settings:update", folder, Some(TOKEN)).await;

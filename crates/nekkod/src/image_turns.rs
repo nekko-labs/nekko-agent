@@ -72,9 +72,7 @@ impl ImageTurns {
         let session_id = opts.get("sessionId").and_then(Value::as_str).unwrap_or_default().to_string();
         let say = |event: Value| ctx.hub.publish("agent:event", event, false);
         let fail = |message: &str| say(json!({ "type": "error", "sessionId": session_id, "message": message }));
-        let (Some(store), Some(server)) = (ctx.sessions.clone(), ctx.server.clone()) else {
-            return Err("Image generation needs the data directory".into());
-        };
+        let (store, server) = (ctx.sessions.clone(), ctx.server.clone());
         let (st, id) = (store.clone(), session_id.clone());
         let session = tokio::task::spawn_blocking(move || st.get(&id)).await.map_err(|e| e.to_string())?;
         let Some(mut session) = session else {

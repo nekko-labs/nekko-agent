@@ -15,28 +15,28 @@ pub struct Ctx {
     pub terminals: Arc<Registry>,
     pub hub: Hub,
     pub engine: Arc<crate::engine::Engine>,
-    /// Session reads (`nekko-store`), when the data directory is known.
-    pub sessions: Option<Arc<nekko_store::SessionStore>>,
+    /// Session reads and writes (`nekko-store`).
+    pub sessions: Arc<nekko_store::SessionStore>,
     /// Pending changes the agent's file tools recorded (`changes:*`).
     pub changes: Arc<nekko_tools::ChangeTracker>,
-    /// MCP servers, synced and called by turns (and `mcp:sync`, `mcp:call`).
+    /// MCP servers, synced and called by turns (and `mcp:status`, `mcp:call`).
     pub mcp: Arc<crate::mcp::Mcp>,
-    /// Whole chat turns (`chat:turn`) and the input they wait on.
+    /// Whole chat turns and the input they wait on.
     pub turns: Arc<crate::turns::Turns>,
     /// Usage, reply and limit accounting (`usage:summary`, `limits:*`).
     pub accounts: Arc<crate::accounts::Accounts>,
-    /// settings.json, when the data directory is known (`settings:*`).
-    pub settings: Option<Arc<crate::settings::Settings>>,
-    /// Nekko Voice (`voice:*`), when the data directory is known.
-    pub voice: Option<Arc<crate::voice::Voice>>,
-    /// Nekko Cloud sign-in and end-to-end encrypted sync (`cloud:*`, `sync:*`), with the data directory.
-    pub cloud: Option<Arc<nekko_cloud::Cloud>>,
-    /// Sign-in and tokens.json, when the data directory is known (`oauth:*`).
-    pub oauth: Option<Arc<crate::oauth::OAuth>>,
-    /// `chat:send` admitted here, when the daemon owns settings, tokens and sessions.
-    pub admission: Option<Arc<crate::admission::Admission>>,
-    /// The model catalog, when the daemon has the settings store (for the Hugging Face token).
-    pub catalog: Option<Arc<nekko_engine::catalog::Catalog>>,
+    /// settings.json (`settings:*`).
+    pub settings: Arc<crate::settings::Settings>,
+    /// Nekko Voice (`voice:*`).
+    pub voice: Arc<crate::voice::Voice>,
+    /// Nekko Cloud sign-in and end-to-end encrypted sync (`cloud:*`, `sync:*`).
+    pub cloud: Arc<nekko_cloud::Cloud>,
+    /// Sign-in and tokens.json (`oauth:*`).
+    pub oauth: Arc<crate::oauth::OAuth>,
+    /// `chat:send`: checks, provisions and starts a turn.
+    pub admission: Arc<crate::admission::Admission>,
+    /// The model catalog (with the settings store, for the Hugging Face token).
+    pub catalog: Arc<nekko_engine::catalog::Catalog>,
     /// Files, memory, comments and the workspace index (`workspace:*`, `file:*`).
     pub workspace: Arc<crate::workspace::Workspace>,
     /// Automation tasks and their scheduler (`tasks:*`, `task:*`).
@@ -46,23 +46,23 @@ pub struct Ctx {
     /// GPU and system stats, the readiness advisor, the hardware profile and model
     /// recommendations (`gpu:stats`, `system:stats`, `machine:*`).
     pub machine: Arc<nekko_machine::Machine>,
-    /// The experimental resource-queue client, when the data directory is known.
-    pub resource_queue: Option<Arc<crate::resource_queue::ResourceQueue>>,
-    /// Sandbox chats' containers (sandbox.rs), with a data directory.
-    pub sandboxes: Option<Arc<crate::sandbox::Sandboxes>>,
-    /// The runtime control plane, with the settings store.
-    pub runtimes: Option<Arc<nekko_engine::runtimes::Runtimes>>,
-    /// The model library and its folders (`engine:models`...), with the settings store.
-    pub library: Option<Arc<crate::library::Library>>,
-    /// Model downloads (`engine:downloadModel`...), with the library and the catalog.
-    pub downloads: Option<Arc<crate::downloads::ModelDownloads>>,
-    /// The runtime installers (`engine:install`...), with the downloads.
-    pub installs: Option<Arc<crate::installs::Installs>>,
-    /// The model server's policy (`engine:status`...), with the installers.
-    pub server: Option<Arc<crate::model_server::Server>>,
-    /// Chats being compacted (`chat:compact`), the daemon's when it admits turns.
+    /// The experimental resource-queue client.
+    pub resource_queue: Arc<crate::resource_queue::ResourceQueue>,
+    /// Sandbox chats' containers (sandbox.rs).
+    pub sandboxes: Arc<crate::sandbox::Sandboxes>,
+    /// The runtime control plane.
+    pub runtimes: Arc<nekko_engine::runtimes::Runtimes>,
+    /// The model library and its folders (`engine:models`...).
+    pub library: Arc<crate::library::Library>,
+    /// Model downloads (`engine:downloadModel`...).
+    pub downloads: Arc<crate::downloads::ModelDownloads>,
+    /// The runtime installers (`engine:install`...).
+    pub installs: Arc<crate::installs::Installs>,
+    /// The model server's policy (`engine:status`...).
+    pub server: Arc<crate::model_server::Server>,
+    /// Chats being compacted (`chat:compact`).
     pub compactions: Arc<crate::compaction::Compactions>,
-    /// Image-generation turns (`chat:generateImage`), with the model server.
+    /// Image-generation turns (`chat:generateImage`).
     pub image_turns: Arc<crate::image_turns::ImageTurns>,
     /// What `app:info` reports, and the desktop bridge `workspace:add` opens the picker through.
     pub app: Arc<AppCtx>,
@@ -71,12 +71,14 @@ pub struct Ctx {
     /// The Claude policy: the shipped table, a verified signed override, and
     /// the dev-only preview (`claude:*`, and the gates the Claude paths call).
     pub claude_policy: Arc<crate::claude_policy::ClaudePolicyStore>,
-    /// The messaging bridges (`messaging:status`), with a data directory.
-    pub messaging: Option<Arc<crate::messaging::Messaging>>,
-    /// What Electron main used to answer (dialogs, shell, microphone, updater), for the desktop app.
+    /// The messaging bridges (`messaging:status`).
+    pub messaging: Arc<crate::messaging::Messaging>,
+    /// What Electron main used to answer (dialogs, shell, microphone, updater).
+    /// Only the desktop app: it needs `config.native` and the browser bridge.
     pub native: Option<Arc<crate::native::Native>>,
     /// What the TS desktop backend used to serve (the local API server, CLI install, the
-    /// webhook listener, the local relay, network visibility), for the desktop app.
+    /// webhook listener, the local relay, network visibility). Only the desktop
+    /// app: it needs `config.native`.
     pub desktop: Option<Arc<crate::desktop::Desktop>>,
 }
 
@@ -88,22 +90,6 @@ pub struct AppCtx {
     pub bridge: Option<(String, String)>,
     /// Where the decision models' release is (`config.decisionModelsUrl`); absent, the pinned one.
     pub decision_models_url: Option<String>,
-}
-
-/// The small services (small_services.rs) are the daemon's with a data
-/// directory, the settings and the sessions.
-fn owns_small_services(ctx: &Ctx) -> bool {
-    ctx.sessions.is_some() && ctx.settings.is_some()
-}
-
-/// `chat:compact` and `chat:cancelCompaction` are the daemon's when it admits turns.
-fn owns_compaction(ctx: &Ctx) -> bool {
-    ctx.sessions.is_some() && ctx.settings.is_some() && ctx.admission.is_some()
-}
-
-/// `chat:generateImage` is the daemon's when it runs the model server and admits turns.
-fn owns_image_turns(ctx: &Ctx) -> bool {
-    ctx.server.is_some() && owns_compaction(ctx)
 }
 
 /// Terminals whose ids start with this are the read-only agent command logs
@@ -123,14 +109,6 @@ fn is_agent(id: &str) -> bool {
 }
 
 pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, String> {
-    // With no data directory there are no chats to make or set up.
-    if ctx.sessions.is_none()
-        && (channel == "session:create"
-            || (channel == "session:setOptions"
-                && ["executionMode", "sandbox", "gitIsolation"].iter().any(|key| arg(&args, 1).get(*key).is_some())))
-    {
-        return Err(NO_SESSIONS.into());
-    }
     if channel == "session:create" {
         return create_session(ctx, arg(&args, 0).as_str(), None, None).await;
     }
@@ -138,8 +116,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         && ["executionMode", "gitIsolation"].iter().any(|key| arg(&args, 1).get(*key).is_some())
     {
         let id = str_arg(&args, 0).unwrap_or_default();
-        let busy = ctx.turns.running_sessions().iter().any(|s| s == id)
-            || ctx.admission.as_ref().is_some_and(|a| a.is_admitting(id));
+        let busy = ctx.turns.running_sessions().iter().any(|s| s == id) || ctx.admission.is_admitting(id);
         if busy {
             return Err("Wait for the current reply to finish before changing this chat's Git isolation.".into());
         }
@@ -155,7 +132,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             .and_then(Value::as_str)
             .or_else(|| if channel == "mcp:call" { str_arg(&args, 1) } else { None });
         if let Some(id) = session_id {
-            let (store, sid) = (ctx.sessions.clone().ok_or(NO_SESSIONS)?, id.to_string());
+            let (store, sid) = (ctx.sessions.clone(), id.to_string());
             // Only the chat's own fields are read: its transcript is skipped, off the async workers.
             let session = tokio::task::spawn_blocking(move || store.meta(&sid))
                 .await
@@ -183,7 +160,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             // `{ sessionId }` narrows it to one chat's terminals and its agent log.
             let only = arg(&args, 0).get("sessionId").and_then(Value::as_str);
             let mut native = ctx.terminals.list();
-            let mut agent = ctx.turns.agent_logs.as_ref().map(|logs| logs.list()).unwrap_or_default();
+            let mut agent = ctx.turns.agent_logs.list();
             if let Some(sid) = only {
                 native.retain(|t| t.session_id.as_deref() == Some(sid));
                 agent.retain(|t| t.get("agentSessionId").and_then(Value::as_str) == Some(sid));
@@ -201,10 +178,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             let id = str_arg(&args, 0).unwrap_or_default().to_string();
             let max = tail_bytes(channel, &args);
             if is_agent(&id) {
-                let snap = match &ctx.turns.agent_logs {
-                    Some(logs) => logs.route("terminal:snapshot", &id, &args).await?,
-                    None => return Err(NO_SESSIONS.into()),
-                };
+                let snap = ctx.turns.agent_logs.route("terminal:snapshot", &id, &args).await?;
                 return Ok(match max {
                     Some(max) => cap_buffer(snap, max),
                     None => snap,
@@ -216,10 +190,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         | "terminal:close" => {
             let id = str_arg(&args, 0).unwrap_or_default().to_string();
             if is_agent(&id) {
-                return match &ctx.turns.agent_logs {
-                    Some(logs) => logs.route(channel, &id, &args).await,
-                    None => Err(NO_SESSIONS.into()),
-                };
+                return ctx.turns.agent_logs.route(channel, &id, &args).await;
             }
             terminal_op(ctx, channel, &id, &args)
         }
@@ -267,17 +238,13 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         "chat:steer" => {
             let sid = str_arg(&args, 0).unwrap_or_default().to_string();
             let content = nekko_js::trim(str_arg(&args, 1).unwrap_or_default()).to_string();
-            if !content.is_empty()
-                && ctx.turns.steer(&sid, crate::turns::Turns::steering_message(&content))
-                && let Some(store) = &ctx.sessions
-            {
-                let store = store.clone();
+            let store = ctx.sessions.clone();
+            if !content.is_empty() && ctx.turns.steer(&sid, crate::turns::Turns::steering_message(&content)) {
                 return tokio::task::spawn_blocking(move || store.get(&sid).unwrap_or(Value::Null))
                     .await
                     .map_err(|e| e.to_string());
             }
             // Nothing running to steer: the text waits for after the turn, as `steerChat` queued it.
-            let Some(store) = ctx.sessions.clone() else { return Ok(Value::Null) };
             if content.is_empty() {
                 return tokio::task::spawn_blocking(move || store.get(&sid).unwrap_or(Value::Null))
                     .await
@@ -332,141 +299,81 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         }
         "mcp:call" => Ok(ctx.mcp.call(arg(&args, 0)).await),
         // Internal: a `spawn_agent` call checked, its child made and its turn admitted (spawn.rs).
-        "turn:spawnPrepare" if ctx.sessions.is_some() => Ok(crate::spawn::prepare(ctx, arg(&args, 0)).await),
+        "turn:spawnPrepare" => Ok(crate::spawn::prepare(ctx, arg(&args, 0)).await),
         // Internal: one PR's live state, for an agent watch's snapshot (watches.rs).
         "watch:prInfo" => Ok(crate::workspace::pr_info(ctx, str_arg(&args, 0).unwrap_or_default()).await),
         // `mcpStatus`: sync the configured servers here, then report them.
-        "mcp:status" if ctx.settings.is_some() => {
+        "mcp:status" => {
             let settings = crate::settings::current(ctx).await;
             let configs = settings.get("mcpServers").filter(|v| v.is_array()).cloned().unwrap_or(json!([]));
             let snapshot = ctx.mcp.sync(&configs).await;
             Ok(crate::mcp::status(&configs, &snapshot))
         }
         "provider:complete" => crate::sideband::complete(arg(&args, 0)).await,
-        c if crate::accounts::CHANNELS.contains(&c) && ctx.accounts.enabled() => ctx.accounts.route(c, &args).await,
-        // The daemon's settings store says where the data directory is.
-        c if crate::decisions::CHANNELS.contains(&c) && ctx.settings.is_some() => {
-            let data_dir =
-                ctx.settings.as_ref().and_then(|s| s.store.path().parent().map(Path::to_path_buf)).unwrap_or_default();
-            crate::decisions::route(ctx, &data_dir, c, &args).await
+        c if crate::accounts::CHANNELS.contains(&c) => ctx.accounts.route(c, &args).await,
+        c if crate::decisions::CHANNELS.contains(&c) => {
+            crate::decisions::route(ctx, ctx.workspace.data_dir(), c, &args).await
         }
-        c if crate::context::CHANNELS.contains(&c) && ctx.settings.is_some() && ctx.sessions.is_some() => {
-            crate::context::route(ctx, c, args).await
-        }
-        c if crate::side::CHANNELS.contains(&c) && crate::side::owned(ctx) => crate::side::route(ctx, c, &args).await,
-        c if crate::privacy::CHANNELS.contains(&c) && ctx.settings.is_some() => {
-            crate::privacy::route(ctx, c, &args).await
-        }
-        "chat:send" if ctx.admission.is_some() => {
-            crate::admission::send(ctx, ctx.admission.as_ref().expect("checked"), args).await
-        }
-        "chat:interruptQueued" if ctx.admission.is_some() => {
-            crate::admission::interrupt_queued(ctx, ctx.admission.as_ref().expect("checked"), args).await
-        }
-        c if crate::compaction::CHANNELS.contains(&c) && owns_compaction(ctx) => {
-            ctx.compactions.clone().route(ctx, c, &args).await
-        }
-        "chat:generateImage" if owns_image_turns(ctx) => ctx.image_turns.generate(ctx, arg(&args, 0)).await,
-        c if crate::worktrees::CHANNELS.contains(&c) && ctx.settings.is_some() && ctx.sessions.is_some() => {
-            crate::worktrees::route(ctx, c, &args).await
-        }
-        c if crate::providers::CHANNELS.contains(&c) && ctx.oauth.is_some() => {
-            crate::providers::route(ctx, c, &args).await
-        }
-        c if crate::oauth::CHANNELS.contains(&c) && ctx.oauth.is_some() => {
-            ctx.oauth.as_ref().expect("checked").route(c, &args).await
-        }
-        c if crate::model_server::CHANNELS.contains(&c) && ctx.server.is_some() => {
-            ctx.server.clone().expect("checked").route(c, &args).await
-        }
-        c if crate::installs::CHANNELS.contains(&c) && ctx.installs.is_some() => {
-            ctx.installs.clone().expect("checked").route(c, &args).await
-        }
-        c if crate::downloads::CHANNELS.contains(&c) && ctx.downloads.is_some() => {
-            ctx.downloads.clone().expect("checked").route(c, &args).await
-        }
-        c if crate::library::CHANNELS.contains(&c) && ctx.library.is_some() => {
-            ctx.library.clone().expect("checked").route(c, &args).await
-        }
-        c if crate::catalog::CHANNELS.contains(&c) && ctx.catalog.is_some() => {
-            crate::catalog::route(ctx.catalog.as_ref().expect("checked"), c, &args).await
-        }
+        c if crate::context::CHANNELS.contains(&c) => crate::context::route(ctx, c, args).await,
+        c if crate::side::CHANNELS.contains(&c) => crate::side::route(ctx, c, &args).await,
+        c if crate::privacy::CHANNELS.contains(&c) => crate::privacy::route(ctx, c, &args).await,
+        "chat:send" => crate::admission::send(ctx, &ctx.admission, args).await,
+        "chat:interruptQueued" => crate::admission::interrupt_queued(ctx, &ctx.admission, args).await,
+        c if crate::compaction::CHANNELS.contains(&c) => ctx.compactions.clone().route(ctx, c, &args).await,
+        "chat:generateImage" => ctx.image_turns.generate(ctx, arg(&args, 0)).await,
+        c if crate::worktrees::CHANNELS.contains(&c) => crate::worktrees::route(ctx, c, &args).await,
+        c if crate::providers::CHANNELS.contains(&c) => crate::providers::route(ctx, c, &args).await,
+        c if crate::oauth::CHANNELS.contains(&c) => ctx.oauth.route(c, &args).await,
+        c if crate::model_server::CHANNELS.contains(&c) => ctx.server.clone().route(c, &args).await,
+        c if crate::installs::CHANNELS.contains(&c) => ctx.installs.clone().route(c, &args).await,
+        c if crate::downloads::CHANNELS.contains(&c) => ctx.downloads.clone().route(c, &args).await,
+        c if crate::library::CHANNELS.contains(&c) => ctx.library.clone().route(c, &args).await,
+        c if crate::catalog::CHANNELS.contains(&c) => crate::catalog::route(&ctx.catalog, c, &args).await,
         c if crate::tooling::CHANNELS.contains(&c) => crate::tooling::route(ctx, c, &args).await,
         // An `agent_watch` call outside a turn.
-        "watch:tool" if ctx.turns.watches.is_some() => {
-            let w = ctx.turns.watches.clone().expect("checked");
-            w.tool(str_arg(&args, 0).unwrap_or_default(), arg(&args, 1))
-                .await
-                .map(Value::String)
-                .or_else(|e| Ok(json!({ "error": e })))
-        }
-        "session:nextWatch" if ctx.turns.watches.is_some() => {
-            Ok(ctx.turns.watches.as_ref().expect("checked").next_wake_at(str_arg(&args, 0).unwrap_or_default()))
-        }
-        "session:watches" if ctx.turns.watches.is_some() => {
-            Ok(ctx.turns.watches.as_ref().expect("checked").views(str_arg(&args, 0).unwrap_or_default()))
-        }
+        "watch:tool" => ctx
+            .turns
+            .watches
+            .tool(str_arg(&args, 0).unwrap_or_default(), arg(&args, 1))
+            .await
+            .map(Value::String)
+            .or_else(|e| Ok(json!({ "error": e }))),
+        "session:nextWatch" => Ok(ctx.turns.watches.next_wake_at(str_arg(&args, 0).unwrap_or_default())),
+        "session:watches" => Ok(ctx.turns.watches.views(str_arg(&args, 0).unwrap_or_default())),
         c if crate::native::CHANNELS.contains(&c) && ctx.native.is_some() => {
             ctx.native.clone().expect("checked").route(ctx, c, &args).await
         }
         c if crate::desktop::CHANNELS.contains(&c) && ctx.desktop.is_some() => {
             ctx.desktop.clone().expect("checked").route(ctx, c, &args).await
         }
-        c if crate::small_services::CHANNELS.contains(&c) && owns_small_services(ctx) => {
-            crate::small_services::route(ctx, c, &args).await
-        }
-        c if crate::sandbox::CHANNELS.contains(&c) && ctx.sandboxes.is_some() => {
-            ctx.sandboxes.clone().expect("checked").route(ctx, c, &args).await
-        }
-        c if crate::settings::CHANNELS.contains(&c) && ctx.settings.is_some() => {
-            crate::settings::route(ctx.settings.as_ref().expect("checked"), c, &args).await
-        }
-        c if nekko_cloud::CHANNELS.contains(&c) && ctx.cloud.is_some() => match &ctx.cloud {
-            Some(cloud) => cloud.route(c, &args).await,
-            None => Err("Nekko Cloud needs the data directory".into()),
-        },
-        c if crate::voice::CHANNELS.contains(&c) && ctx.voice.is_some() => match &ctx.voice {
-            Some(voice) => voice.route(c, &args).await,
-            None => Err("voice needs the data directory".into()),
-        },
-        c if ctx.workspace.serves(c) => crate::workspace::route(ctx, c, &args).await,
-        c if crate::logs::CHANNELS.contains(&c) && ctx.workspace.data_dir().is_some() => {
-            crate::logs::route(ctx, c, &args).await
-        }
-        c if crate::automation::TASK_CHANNELS.contains(&c) && ctx.automation.owns_tasks() => {
-            ctx.automation.route(c, &args).await
-        }
-        c if crate::automation::WORKFLOW_CHANNELS.contains(&c) && ctx.automation.owns_workflows() => {
-            ctx.automation.route(c, &args).await
-        }
-        c if (crate::automation::TRAINING_CHANNELS.contains(&c) || c == crate::automation::TRAINING_TOOL)
-            && ctx.automation.owns_training() =>
+        c if crate::small_services::CHANNELS.contains(&c) => crate::small_services::route(ctx, c, &args).await,
+        c if crate::sandbox::CHANNELS.contains(&c) => ctx.sandboxes.clone().route(ctx, c, &args).await,
+        c if crate::settings::CHANNELS.contains(&c) => crate::settings::route(&ctx.settings, c, &args).await,
+        c if nekko_cloud::CHANNELS.contains(&c) => ctx.cloud.route(c, &args).await,
+        c if crate::voice::CHANNELS.contains(&c) => ctx.voice.route(c, &args).await,
+        c if crate::workspace::serves(c) => crate::workspace::route(ctx, c, &args).await,
+        c if crate::logs::CHANNELS.contains(&c) => crate::logs::route(ctx, c, &args).await,
+        c if crate::automation::TASK_CHANNELS.contains(&c)
+            || crate::automation::WORKFLOW_CHANNELS.contains(&c)
+            || crate::automation::TRAINING_CHANNELS.contains(&c)
+            || c == crate::automation::TRAINING_TOOL =>
         {
             ctx.automation.route(c, &args).await
         }
-        c if crate::connectors::CHANNELS.contains(&c) && crate::connectors::owned(ctx) => {
-            crate::connectors::route(ctx, c, &args).await
-        }
-        c if crate::remote::CHANNELS.contains(&c) && ctx.remote.enabled() => ctx.remote.route(c, &args).await,
-        c if crate::messaging::CHANNELS.contains(&c) && ctx.messaging.is_some() => {
-            ctx.messaging.as_ref().expect("checked").route(c)
-        }
-        c if crate::runtimes::CHANNELS.contains(&c) && ctx.runtimes.is_some() => {
-            crate::runtimes::route(ctx, ctx.runtimes.as_ref().expect("checked"), c, &args).await
-        }
+        c if crate::connectors::CHANNELS.contains(&c) => crate::connectors::route(ctx, c, &args).await,
+        c if crate::remote::CHANNELS.contains(&c) => ctx.remote.route(c, &args).await,
+        c if crate::messaging::CHANNELS.contains(&c) => ctx.messaging.route(c),
+        c if crate::runtimes::CHANNELS.contains(&c) => crate::runtimes::route(ctx, &ctx.runtimes, c, &args).await,
         c if crate::machine::CHANNELS.contains(&c) => crate::machine::route(&ctx.machine, c, &args).await,
-        "resource:queue" => match &ctx.resource_queue {
-            Some(queue) => queue.route(&args).await,
-            None => Err(NO_SESSIONS.into()),
-        },
-        c if SESSION_CHANNELS.contains(&c) && ctx.sessions.is_some() => {
+        "resource:queue" => ctx.resource_queue.route(&args).await,
+        c if SESSION_CHANNELS.contains(&c) => {
             // A deleted Claude Agent chat's Claude Code child goes with it.
             if c == "session:delete"
                 && let Some(id) = args.first().and_then(Value::as_str)
             {
                 ctx.turns.harness.close(id).await;
             }
-            session_op(ctx.sessions.clone().expect("checked"), ctx.turns.agent_logs.clone(), channel, args).await
+            session_op(ctx.sessions.clone(), ctx.turns.agent_logs.clone(), channel, args).await
         }
         _ => {
             if let Some(r) = crate::engine::route(&ctx.engine, channel, &args).await {
@@ -479,7 +386,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
                 return r;
             }
             // The Local Web UI's GitHub review (repository_review.rs).
-            if channel == "repository:review" && ctx.settings.is_some() {
+            if channel == "repository:review" {
                 return crate::repository_review::review(ctx, arg(&args, 0)).await;
             }
             Err(format!("unknown channel {channel}"))
@@ -487,15 +394,10 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
     }
 }
 
-/// What a channel that needs the data directory says without one.
-const NO_SESSIONS: &str = "this needs the daemon to know the data directory";
-
 /// `chat:abort`: stop the daemon's turn at once (and its image turn and its
 /// admission) and the chat's dev servers.
 pub async fn stop_chat(ctx: &Ctx, session_id: &str) -> Result<Value, String> {
-    if let Some(admission) = &ctx.admission {
-        admission.abort(session_id);
-    }
+    ctx.admission.abort(session_id);
     ctx.image_turns.abort(session_id);
     ctx.turns.abort_session(session_id);
     // A dev server the agent started belongs to the work it was doing.
@@ -762,8 +664,7 @@ pub fn forward_terminal_events(ctx: &Ctx) {
     });
 }
 
-/// The channels `nekko-store` serves when the daemon knows the data dir.
-/// Running-turn checkpoints still stay with the TS host (PF14).
+/// The channels `nekko-store` serves.
 const SESSION_CHANNELS: &[&str] = &[
     "sessions:summaries",
     "sessions:list",
@@ -795,7 +696,7 @@ pub async fn create_session(
     parent_id: Option<&str>,
     supporting: Option<Value>,
 ) -> Result<Value, String> {
-    let store = ctx.sessions.clone().ok_or("session:create needs the data directory")?;
+    let store = ctx.sessions.clone();
     let settings = crate::settings::current(ctx).await;
     if let Some(w) = workspace_id.filter(|w| !w.is_empty()) {
         let known = settings
@@ -812,26 +713,18 @@ pub async fn create_session(
         .map_err(|e| e.to_string())?
 }
 
-/// `deleteAgentLog` for a chat being removed, from a blocking caller.
-pub fn delete_agent_log(logs: Option<&crate::agent_logs::AgentLogs>, id: &str) -> Result<(), String> {
-    match logs {
-        Some(logs) => logs.delete_blocking(id),
-        None => Ok(()),
-    }
-}
-
 /// Session reads and the UI's own writes, off the async threads: a listing
 /// reads every changed chat file, and one image chat can be tens of megabytes.
 async fn session_op(
     store: Arc<nekko_store::SessionStore>,
-    logs: Option<Arc<crate::agent_logs::AgentLogs>>,
+    logs: Arc<crate::agent_logs::AgentLogs>,
     channel: &str,
     args: Vec<Value>,
 ) -> Result<Value, String> {
     let channel = channel.to_string();
     tokio::task::spawn_blocking(move || {
         let id = str_arg(&args, 0).unwrap_or_default();
-        let delete_log = |id: &str| delete_agent_log(logs.as_deref(), id);
+        let delete_log = |id: &str| logs.delete_blocking(id);
         let or_null = |r: Result<Option<Value>, String>| r.map(|v| v.unwrap_or(Value::Null));
         match channel.as_str() {
             "sessions:summaries" => Ok(Value::Array(store.summaries())),

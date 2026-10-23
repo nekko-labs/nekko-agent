@@ -7,9 +7,6 @@
 //! hears from the hub, the daemon's and the host's merged. It used to live in
 //! the TS host, which dispatched into its own copies of services the daemon
 //! now owns (sessions, tasks) and so wrote their files beside the daemon.
-//!
-//! Owned only when the daemon knows the data directory; otherwise every
-//! `remote:*` channel goes to the TS host as before.
 
 use crate::hub::Hub;
 use nekko_remote::{
@@ -23,30 +20,25 @@ use std::sync::{Arc, OnceLock};
 pub use nekko_remote::CHANNELS;
 
 pub struct Remote {
-    svc: Option<Arc<RemoteService>>,
+    svc: Arc<RemoteService>,
     dispatch: Arc<OnceLock<PhoneDispatcher>>,
     /// Phones attached to terminals (FA-3), shared by the gate and the relay agent.
     terminals: Arc<PhoneTerminals>,
 }
 
 impl Remote {
-    pub fn new(dir: Option<PathBuf>, hub: Hub) -> Self {
+    pub fn new(dir: PathBuf, hub: Hub) -> Self {
         let dispatch: Arc<OnceLock<PhoneDispatcher>> = Arc::default();
         let terminals = PhoneTerminals::new();
-        let svc = dir.map(|d| {
-            let link = HubLink {
-                rt: tokio::runtime::Handle::current(),
-                hub,
-                dispatch: dispatch.clone(),
-                terminals: terminals.clone(),
-            };
-            RemoteService::new(&d, nekko_remote::hello::os_random(), nekko_remote::system_clock(), Box::new(link))
-        });
+        let link = HubLink {
+            rt: tokio::runtime::Handle::current(),
+            hub,
+            dispatch: dispatch.clone(),
+            terminals: terminals.clone(),
+        };
+        let svc =
+            RemoteService::new(&dir, nekko_remote::hello::os_random(), nekko_remote::system_clock(), Box::new(link));
         Self { svc, dispatch, terminals }
-    }
-
-    pub fn enabled(&self) -> bool {
-        self.svc.is_some()
     }
 
     /// How a phone's request runs: through the router, limited to what the
@@ -55,28 +47,22 @@ impl Remote {
     /// switches, Change key and activity from the registry (IO-33), and
     /// shares terminal attachments with the relay agent (FA-3).
     pub fn set_dispatcher(&self, run: Dispatcher) {
-        // Without a data directory there is no registry and no relay agent to dispatch for.
-        if let Some(svc) = &self.svc {
-            let _ = self.dispatch.set(nekko_remote::phone::gate_shared(run, svc.clone(), self.terminals.clone()));
-        }
+        let _ = self.dispatch.set(nekko_remote::phone::gate_shared(run, self.svc.clone(), self.terminals.clone()));
     }
 
     /// Reconnect when remote access was left on.
     pub fn start(&self) {
-        if let Some(svc) = self.svc.clone() {
-            // Reads remote.json: off the async threads.
-            tokio::task::spawn_blocking(move || svc.start_if_enabled());
-        }
+        let svc = self.svc.clone();
+        // Reads remote.json: off the async threads.
+        tokio::task::spawn_blocking(move || svc.start_if_enabled());
     }
 
     pub fn stop(&self) {
-        if let Some(svc) = &self.svc {
-            svc.stop();
-        }
+        self.svc.stop();
     }
 
     pub async fn route(&self, channel: &str, args: &[Value]) -> Result<Value, String> {
-        let Some(svc) = self.svc.clone() else { return Err(format!("{channel}: no data directory")) };
+        let svc = self.svc.clone();
         let (channel, args) = (channel.to_string(), args.to_vec());
         tokio::task::spawn_blocking(move || svc.route(&channel, &args)).await.map_err(|e| e.to_string())?
     }

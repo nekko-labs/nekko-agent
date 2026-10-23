@@ -8,7 +8,7 @@ use nekko_settings::SettingsStore;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
-/// The channels served here while the daemon knows the data directory.
+/// The channels served here.
 pub const CHANNELS: &[&str] = &["settings:get", "settings:update", "settings:reset"];
 
 /// The settings store, and the hub a change is announced on.
@@ -95,17 +95,15 @@ pub async fn route(s: &Arc<Settings>, channel: &str, args: &[Value]) -> Result<V
     }
 }
 
-/// The current settings, or `null` without a data directory.
+/// The current settings.
 pub async fn current(ctx: &Ctx) -> Value {
-    let Some(s) = &ctx.settings else { return Value::Null };
-    let store = s.store.clone();
+    let store = ctx.settings.store.clone();
     blocking(move || store.get()).await.unwrap_or(Value::Null)
 }
 
 /// Save a patch as `saveSettings` would, from a daemon service.
 pub async fn update(ctx: &Ctx, patch: Value) -> Result<Value, String> {
-    let s = ctx.settings.as_ref().ok_or("settings need the daemon to know the data directory")?;
-    route(s, "settings:update", &[patch]).await
+    route(&ctx.settings, "settings:update", &[patch]).await
 }
 
 #[cfg(test)]

@@ -8,8 +8,6 @@
 //! poll throttle, one poll at a time per key, why the last read failed and
 //! the backoff before the next. A sign-in is renewed by the daemon's own
 //! OAuth service (`oauth.rs`, tokens.json's single writer).
-//!
-//! Owned only when the daemon knows the data directory.
 
 use crate::hub::Hub;
 use nekko_usage::{LimitsError, Problem};
@@ -20,7 +18,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-/// The channels served here when the data directory is known.
+/// The channels served here.
 pub const CHANNELS: &[&str] = &["usage:summary", "limits:get", "limits:problem", "limits:poll", "limits:clear"];
 
 const POLL_INTERVAL_MS: f64 = 30_000.0;
@@ -99,7 +97,7 @@ impl TurnAccount {
 }
 
 pub struct Accounts {
-    dir: Option<PathBuf>,
+    dir: PathBuf,
     hub: Hub,
     http: reqwest::Client,
     state: Mutex<State>,
@@ -110,14 +108,9 @@ pub struct Accounts {
 }
 
 impl Accounts {
-    pub fn new(dir: Option<PathBuf>, hub: Hub) -> Self {
+    pub fn new(dir: PathBuf, hub: Hub) -> Self {
         let http = reqwest::Client::builder().timeout(READ_TIMEOUT).build().unwrap_or_default();
         Self { dir, hub, http, state: Mutex::default(), append: Mutex::new(()), oauth: std::sync::OnceLock::new() }
-    }
-
-    /// Whether this daemon owns accounting (it knows the data directory).
-    pub fn enabled(&self) -> bool {
-        self.dir.is_some()
     }
 
     pub async fn route(self: &Arc<Self>, channel: &str, args: &[Value]) -> Result<Value, String> {
@@ -125,7 +118,7 @@ impl Accounts {
         let key = arg(0).as_str().unwrap_or_default().to_string();
         match channel {
             "usage:summary" => {
-                let dir = self.dir.clone().ok_or("usage:summary needs the data directory")?;
+                let dir = self.dir.clone();
                 tokio::task::spawn_blocking(move || nekko_usage::usage_summary(&nekko_usage::UsageFiles::read(&dir)))
                     .await
                     .map_err(|e| e.to_string())?
@@ -141,13 +134,13 @@ impl Accounts {
         }
     }
 
-    fn file(&self, name: &str) -> Option<PathBuf> {
-        self.dir.as_ref().map(|d| d.join(name))
+    fn file(&self, name: &str) -> PathBuf {
+        self.dir.join(name)
     }
 
     /// `appendFileSync(path, line + '\n')`; failures are not fatal, as in TS.
     fn append_line(&self, name: &str, line: &str, private: bool) {
-        let Some(path) = self.file(name) else { return };
+        let path = self.file(name);
         let _guard = lock(&self.append);
         let mut opts = std::fs::OpenOptions::new();
         opts.create(true).append(true);
@@ -207,8 +200,8 @@ impl Accounts {
     }
 
     fn settings(&self) -> Value {
-        self.file("settings.json")
-            .and_then(|p| std::fs::read(p).ok())
+        std::fs::read(self.file("settings.json"))
+            .ok()
             .and_then(|b| serde_json::from_slice(&b).ok())
             .unwrap_or(Value::Null)
     }
@@ -218,10 +211,8 @@ impl Accounts {
     }
 
     fn token(&self, key: &str) -> Option<Value> {
-        let tokens: Value = self
-            .file("tokens.json")
-            .and_then(|p| std::fs::read(p).ok())
-            .and_then(|b| serde_json::from_slice(&b).ok())?;
+        let tokens: Value =
+            std::fs::read(self.file("tokens.json")).ok().and_then(|b| serde_json::from_slice(&b).ok())?;
         tokens.get(key).filter(|t| t.is_object()).cloned()
     }
 
@@ -515,7 +506,7 @@ mod tests {
     }
 
     fn accounts(dir: &std::path::Path) -> Arc<Accounts> {
-        Arc::new(Accounts::new(Some(dir.to_path_buf()), Hub::new()))
+        Arc::new(Accounts::new(dir.to_path_buf(), Hub::new()))
     }
 
     fn pairs(list: &[(&str, &str)]) -> Vec<(String, String)> {
@@ -602,7 +593,7 @@ mod tests {
     #[test]
     fn turn_lines_are_the_hosts() {
         let dir = temp_dir("lines");
-        let a = Accounts::new(Some(dir.clone()), Hub::new());
+        let a = Accounts::new(dir.clone(), Hub::new());
         let account = TurnAccount::from_facts(&json!({ "account": { "auth": "apikey", "kind": "llamacpp" } }));
         let opts = json!({ "sessionId": "s", "providerId": "p", "modelId": "m" });
         a.turn_usage(&opts, &account, &json!({ "type": "usage", "inputTokens": 1, "outputTokens": 2 }));

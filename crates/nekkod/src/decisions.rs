@@ -670,12 +670,10 @@ pub async fn route(
         default_models,
         TYPESAFE_URL.into(),
     );
-    if let Some(downloads) = &ctx.downloads {
-        // Where the release is: the config's `decisionModelsUrl` (tests serve one on loopback),
-        // else the pinned GitHub release.
-        let base = ctx.app.decision_models_url.clone().unwrap_or_else(release_url);
-        d = d.with_downloads(Arc::new(downloads.queue()), base);
-    }
+    // Where the release is: the config's `decisionModelsUrl` (tests serve one on loopback),
+    // else the pinned GitHub release.
+    let base = ctx.app.decision_models_url.clone().unwrap_or_else(release_url);
+    d = d.with_downloads(Arc::new(ctx.downloads.queue()), base);
     d.route(channel, args).await
 }
 

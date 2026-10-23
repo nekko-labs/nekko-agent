@@ -25,7 +25,7 @@ async fn adds_a_folder_from_the_desktop_picker_through_the_bridge() {
     let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let bridge = format!("http://127.0.0.1:{}/", l.local_addr().unwrap().port());
     tokio::spawn(async move { axum::serve(l, app).await.unwrap() });
-    let d = start_with_config(Some(&data), json!({ "browserBridge": { "url": bridge, "token": "bridge-token" } }));
+    let d = start_with_config(&data, json!({ "browserBridge": { "url": bridge, "token": "bridge-token" } }));
 
     let (status, added) = post(d.port, "workspace:add", json!([]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{added}");
@@ -71,7 +71,7 @@ async fn fake_shell_bridge(answers: Value) -> (String, std::sync::Arc<std::sync:
 
 fn native_daemon(data: &std::path::Path, bridge: &str, native: Value) -> Daemon {
     start_with_config(
-        Some(data),
+        data,
         json!({ "appVersion": "0.8.1", "edition": "desktop", "browserBridge": { "url": bridge, "token": "bridge-token" }, "native": native }),
     )
 }
@@ -134,7 +134,7 @@ async fn answers_the_channels_electron_main_used_to() {
     drop(d);
 
     // Without `native` (the Local Web UI), nothing here is the daemon's.
-    let web = start_with(Some(&data));
+    let web = start_with(&data);
     let (status, body) = post(web.port, "update:check", json!([]), Some(TOKEN)).await;
     assert_eq!((status, body["error"].clone()), (400, json!("unknown channel update:check")));
     drop(web);

@@ -280,7 +280,7 @@ async fn ended(ctx: &Ctx, session_id: &str, message: &str) -> Result<Admit, Stri
 /// parent's `spawn` callback): admitted like any chat's, never with the
 /// browser. `None` when it cannot start; its chat was told why.
 pub async fn admit_child(ctx: &Ctx, opts: Value) -> Result<Option<Value>, String> {
-    let adm = ctx.admission.clone().ok_or("Sub-agents need the daemon to admit turns.")?;
+    let adm = ctx.admission.clone();
     let pending = adm.begin(s(&opts, "sessionId"))?;
     match admit(ctx, &adm, opts, None, false, &pending.cancel).await? {
         Admit::Spec(mut spec) => {
@@ -305,7 +305,8 @@ pub async fn send(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>) -> Result<V
         },
         None => None,
     };
-    if let (Some(cid), Some(store)) = (&client_id, ctx.sessions.clone()) {
+    if let Some(cid) = &client_id {
+        let store = ctx.sessions.clone();
         let id = s(&opts, "sessionId").to_string();
         let session = tokio::task::spawn_blocking(move || store.get(&id)).await.map_err(|e| e.to_string())?;
         let ids = session.as_ref().and_then(|v| v.get("clientMessageIds"));
@@ -354,13 +355,9 @@ pub async fn interrupt_queued(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>)
     let session_id = args.first().and_then(Value::as_str).unwrap_or_default().to_string();
     let index = args.get(1).cloned().unwrap_or(Value::Null);
     let brain = args.get(2).cloned().unwrap_or(Value::Null);
-    let store = ctx.sessions.clone().ok_or("Session not found.")?;
-    let (st, id) = (store.clone(), session_id.clone());
+    let (st, id) = (ctx.sessions.clone(), session_id.clone());
     let session = tokio::task::spawn_blocking(move || st.get(&id)).await.map_err(|e| e.to_string())?;
     let session = session.ok_or("Session not found.")?;
-    if crate::worktrees::execution_mode(&session) == "sandbox" && ctx.sandboxes.is_none() {
-        return Err(NO_SANDBOXES.into());
-    }
     let index = nekko_turn::variants::queued_index_valid(&session, &index).ok_or("Queued prompt not found.")?;
     if adm.interrupting(&session_id) {
         return Err("A queued prompt is already starting.".into());
@@ -410,9 +407,6 @@ pub async fn admit_queued(ctx: &Ctx, adm: &Arc<Admission>, payload: &Value) -> O
     }
 }
 
-/// A sandbox chat on a daemon with no containers (no data directory).
-const NO_SANDBOXES: &str = "Sandbox chats need the daemon to know the data directory.";
-
 /// `admitTurn` and `buildDaemonTurn`: check, provision and describe a turn.
 async fn admit(
     ctx: &Ctx,
@@ -423,15 +417,12 @@ async fn admit(
     cancel: &Cancel,
 ) -> Result<Admit, String> {
     let session_id = s(&opts, "sessionId").to_string();
-    let store = ctx.sessions.clone().ok_or("chat:send needs the data directory")?;
+    let store = ctx.sessions.clone();
     let session = {
         let (st, id) = (store.clone(), session_id.clone());
         tokio::task::spawn_blocking(move || st.get(&id)).await.map_err(|e| e.to_string())?
     };
     let sandbox = session.as_ref().is_some_and(|s| crate::worktrees::execution_mode(s) == "sandbox");
-    if sandbox && ctx.sandboxes.is_none() {
-        return Err(NO_SANDBOXES.into());
-    }
     // A chained queued prompt was admitted by the host without this check; so it stays.
     if !chained && adm.is_compacting(&session_id) {
         return ended(ctx, &session_id, "This chat is being compacted. Wait or move to a new chat.").await;

@@ -171,7 +171,7 @@ impl Sandboxes {
     /// The chat as stored, but for its transcript (nothing here reads it),
     /// read off the async workers.
     async fn session(&self, ctx: &Ctx, id: &str) -> Result<Value, String> {
-        let (store, id) = (ctx.sessions.clone().ok_or("Session not found")?, id.to_string());
+        let (store, id) = (ctx.sessions.clone(), id.to_string());
         tokio::task::spawn_blocking(move || store.meta(&id))
             .await
             .ok()
@@ -377,7 +377,7 @@ impl Sandboxes {
                     return Err("Wait for the current reply to finish before sandbox setup.".into());
                 }
                 self.session(ctx, &id).await?;
-                let store = ctx.sessions.clone().ok_or("Session not found")?;
+                let store = ctx.sessions.clone();
                 let image = arg(1).as_str().map(str::to_string).unwrap_or_else(|| js::display(&arg(1)));
                 let (sid, ident) = (id.clone(), uuid());
                 let s = tokio::task::spawn_blocking(move || store.configure_sandbox(&sid, &image, &ident, now_ms()))

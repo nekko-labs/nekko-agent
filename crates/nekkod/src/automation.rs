@@ -14,8 +14,6 @@
 //! (`session:create`) and named here. A skill step reads the installed skills
 //! from nekko-workspace (`resolve_skill_defs`). Actions and polls are `nekko-connectors`'; shell steps run on
 //! `nekko-tools`' shell, which kills the whole tree on a timeout.
-//!
-//! Owned only when the daemon knows the data directory.
 
 use crate::hub::Hub;
 use nekko_automation::tasks::{self, TaskHost, Tasks};
@@ -38,34 +36,26 @@ type BoxFut<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 pub type Dispatcher = Arc<dyn Fn(String, Vec<Value>) -> BoxFut<'static, Result<Value, String>> + Send + Sync>;
 
 pub struct Automation {
-    /// The data directory, when the daemon knows it.
-    dir: Option<std::path::PathBuf>,
-    pub tasks: Option<Arc<Tasks>>,
-    pub workflows: Option<Arc<Workflows>>,
+    /// The data directory.
+    dir: std::path::PathBuf,
+    pub tasks: Arc<Tasks>,
+    pub workflows: Arc<Workflows>,
     /// Training and goal runs (`training:*`, `training.json`, their turns).
-    pub training: Option<Arc<Training>>,
+    pub training: Arc<Training>,
     dispatch: Arc<OnceLock<Dispatcher>>,
 }
 
 impl Automation {
-    pub fn new(store: Option<Arc<SessionStore>>, settings: Option<Arc<crate::settings::Settings>>, hub: Hub) -> Self {
+    pub fn new(store: Arc<SessionStore>, settings: Arc<crate::settings::Settings>, hub: Hub) -> Self {
         let dispatch: Arc<OnceLock<Dispatcher>> = Arc::default();
-        let data_dir = store.as_ref().and_then(|s| s.dir().parent().map(std::path::Path::to_path_buf));
-        let (tasks, workflows, training) = match store {
-            Some(store) => {
-                let dir = store.dir().parent().map(std::path::Path::to_path_buf).unwrap_or_default();
-                let engine = Arc::new(Engine { store, settings, hub, dispatch: dispatch.clone() });
-                let clock = Tasks::system_clock();
-                let ids: tasks::Ids = Arc::new(tasks::random_uuid);
-                (
-                    Some(Tasks::new(&dir, engine.clone(), clock.clone(), ids.clone())),
-                    Some(Workflows::new(&dir, engine.clone(), clock.clone(), ids.clone())),
-                    Some(Training::new(&dir, engine, clock, ids)),
-                )
-            }
-            None => (None, None, None),
-        };
-        Self { dir: data_dir, tasks, workflows, training, dispatch }
+        let dir = store.dir().parent().map(std::path::Path::to_path_buf).unwrap_or_default();
+        let engine = Arc::new(Engine { store, settings, hub, dispatch: dispatch.clone() });
+        let clock = Tasks::system_clock();
+        let ids: tasks::Ids = Arc::new(tasks::random_uuid);
+        let tasks = Tasks::new(&dir, engine.clone(), clock.clone(), ids.clone());
+        let workflows = Workflows::new(&dir, engine.clone(), clock.clone(), ids.clone());
+        let training = Training::new(&dir, engine, clock, ids);
+        Self { dir, tasks, workflows, training, dispatch }
     }
 
     /// How a workflow stops a chat (`chat:abort`): through the router.
@@ -74,49 +64,28 @@ impl Automation {
     }
 
     pub fn start(&self) {
-        if let Some(t) = &self.tasks {
-            t.start();
-        }
-        if let Some(w) = &self.workflows {
-            let w = w.clone();
-            let dir = self.dir.clone();
-            // Reconciling reads and writes files: off the async threads. A
-            // PR checkout a stopped run left behind goes first.
-            tokio::task::spawn_blocking(move || {
-                if let Some(dir) = dir {
-                    crate::pr_checkouts::sweep(&dir);
-                }
-                w.start()
-            });
-        }
+        self.tasks.start();
+        let w = self.workflows.clone();
+        let dir = self.dir.clone();
+        // Reconciling reads and writes files: off the async threads. A
+        // PR checkout a stopped run left behind goes first.
+        tokio::task::spawn_blocking(move || {
+            crate::pr_checkouts::sweep(&dir);
+            w.start()
+        });
         // Runs that were mid-flight when the last process stopped resume.
-        if let Some(t) = &self.training {
-            t.start();
-        }
-    }
-
-    pub fn owns_training(&self) -> bool {
-        self.training.is_some()
-    }
-
-    pub fn owns_tasks(&self) -> bool {
-        self.tasks.is_some()
-    }
-
-    pub fn owns_workflows(&self) -> bool {
-        self.workflows.is_some()
+        self.training.start();
     }
 
     pub async fn route(&self, channel: &str, args: &[Value]) -> Result<Value, String> {
-        match (&self.tasks, &self.workflows) {
-            (Some(t), _) if TASK_CHANNELS.contains(&channel) => t.route(channel, args).await,
-            (_, Some(w)) if WORKFLOW_CHANNELS.contains(&channel) => w.route(channel, args).await,
-            _ => match &self.training {
-                Some(t) if TRAINING_CHANNELS.contains(&channel) || channel == TRAINING_TOOL => {
-                    t.route(channel, args).await
-                }
-                _ => Err(format!("{channel} is not served here")),
-            },
+        if TASK_CHANNELS.contains(&channel) {
+            self.tasks.route(channel, args).await
+        } else if WORKFLOW_CHANNELS.contains(&channel) {
+            self.workflows.route(channel, args).await
+        } else if TRAINING_CHANNELS.contains(&channel) || channel == TRAINING_TOOL {
+            self.training.route(channel, args).await
+        } else {
+            Err(format!("{channel} is not served here"))
         }
     }
 }
@@ -169,7 +138,7 @@ pub(crate) async fn capture_turn_error(
 /// The engine as tasks and workflows see it.
 struct Engine {
     store: Arc<SessionStore>,
-    settings: Option<Arc<crate::settings::Settings>>,
+    settings: Arc<crate::settings::Settings>,
     hub: Hub,
     dispatch: Arc<OnceLock<Dispatcher>>,
 }
@@ -179,8 +148,7 @@ const NO_ROUTER: &str = "the daemon is still starting";
 
 impl Engine {
     async fn settings(&self) -> Value {
-        let Some(s) = &self.settings else { return Value::Null };
-        let store = s.store.clone();
+        let store = self.settings.store.clone();
         tokio::task::spawn_blocking(move || store.get()).await.unwrap_or(Value::Null)
     }
 

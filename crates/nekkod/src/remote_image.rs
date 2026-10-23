@@ -50,8 +50,7 @@ const LOCAL: &str = "Images from this computer or the local network are not load
 const ACCEPT: &str = "image/avif,image/webp,image/png,image/jpeg,image/gif;q=0.9,*/*;q=0.1";
 const USER_AGENT: &str = "Mozilla/5.0 (compatible; NekkoAgent/1.0; +https://nekkoagent.com)";
 
-/// `image:fetch` and `attachment:import`; None for any other channel, and for
-/// `attachment:import` when the daemon does not know the data directory.
+/// `image:fetch` and `attachment:import`; None for any other channel.
 pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Option<Result<Value, String>> {
     match channel {
         "image:fetch" => {
@@ -63,8 +62,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Option<Result<Va
             Some(fetch_remote_image(&raw).await.map(|img| img.to_json()).map_err(|e| e.message))
         }
         "attachment:import" => {
-            let store = ctx.sessions.as_ref()?;
-            let data_dir = store.dir().parent()?.to_string_lossy().into_owned();
+            let data_dir = ctx.workspace.data_dir().to_string_lossy().into_owned();
             Some(attachment_import(data_dir, args).await)
         }
         _ => None,

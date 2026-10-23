@@ -8,8 +8,7 @@
 //! too. Claude sign-in is refused while its approved-client slot is empty. The requests, the responses' meaning and the
 //! file format are `nekko-oauth`'s (held to oauth.ts by a golden set); this is
 //! the stateful half of oauth.ts: pending sessions and their expiry, the
-//! listeners, one renewal at a time per token. Owned while the daemon knows
-//! the data directory. In the Local Web UI (`signIn: false`) the channels give
+//! listeners, one renewal at a time per token. In the Local Web UI (`signIn: false`) the channels give
 //! the same refusal the web backend gave.
 
 use crate::hub::Hub;
@@ -527,7 +526,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let hub = Hub::new();
-        let accounts = Arc::new(crate::accounts::Accounts::new(Some(dir.clone()), hub.clone()));
+        let accounts = Arc::new(crate::accounts::Accounts::new(dir.clone(), hub.clone()));
         let settings = Arc::new(nekko_settings::SettingsStore::new(&dir));
         (OAuth::new(dir.clone(), settings, accounts, hub, true, endpoints), dir)
     }

@@ -256,7 +256,7 @@ fn rig_env(name: &str, mode: &str, cli: bool, extra: &[(&str, Option<&str>)]) ->
     let mut env: Vec<(&str, Option<&str>)> =
         vec![("PATH", Some(&path)), ("CLAUDE_CONFIG_DIR", Some(&config)), ("ANTHROPIC_API_KEY", None)];
     env.extend_from_slice(extra);
-    let d = start_with_env(Some(&data), json!({}), &env);
+    let d = start_with_env(&data, json!({}), &env);
     let events = record_events(d.port);
     Rig { t: TurnRig { data, workspace, d, events }, bin }
 }

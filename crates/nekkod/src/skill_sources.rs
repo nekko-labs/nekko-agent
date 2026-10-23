@@ -77,18 +77,13 @@ fn as_text<'a>(v: Option<&'a Value>, name: &str, method: &str) -> Result<&'a str
     }
 }
 
-/// The data directory, from the daemon's settings store.
-fn data_dir(ctx: &Ctx) -> Option<PathBuf> {
-    ctx.settings.as_ref().and_then(|s| s.store.path().parent().map(Path::to_path_buf))
-}
-
-/// The skill-sources channels, when the daemon owns the settings (and so
-/// knows the data directory the cache lives in); `None` for any other channel.
+/// The skill-sources channels (their cache lives in the data directory);
+/// `None` for any other channel.
 pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Option<Result<Value, String>> {
     if !CHANNELS.contains(&channel) {
         return None;
     }
-    let dir = data_dir(ctx)?;
+    let dir = ctx.workspace.data_dir().to_path_buf();
     let settings = crate::settings::current(ctx).await;
     let gh = Gh::new(API_BASE, RAW_BASE, github_token(&settings, |k| std::env::var(k).ok()));
     let arg = args.first();

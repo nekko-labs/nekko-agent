@@ -49,7 +49,7 @@ async fn the_daemon_runs_tasks_and_fires_them_on_time() {
     std::fs::create_dir_all(data.join("sessions")).unwrap();
     let model = scripted_model(vec![say_text("Nightly summary.")]).await;
     scripted_p1(&data, &model, json!({}));
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
     assert_served(d.port, "tasks:list", json!([])).await;
 
     let input = json!({ "title": " Nightly ", "kind": "recurring", "prompt": "Summarize", "intervalMs": 3_600_000, "providerId": "p1", "modelId": "m1" });
@@ -101,7 +101,7 @@ async fn a_task_cut_short_by_a_restart_fires_again() {
         r#"[{"id":"t1","title":"Cut short","kind":"recurring","prompt":"Again","providerId":"p1","modelId":"m1","status":"active","createdAt":5,"runCount":2,"lastRunAt":9,"lastSessionId":"s_old"}]"#,
     )
     .unwrap();
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
     wait_for("the fire after restart", || read_tasks(&data)[0]["runCount"] == json!(3)).await;
     // runCount is saved before the asynchronous turn runs; its reply lands in the old chat.
     wait_for("the restarted task's reply", || replies(&data, "s_old") == ["Again, done."]).await;
@@ -114,7 +114,7 @@ async fn a_scheduled_task_fires_when_it_is_due_not_a_tick_later() {
     let data = std::env::temp_dir().join(format!("nekkod-tasks-due-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&data);
     std::fs::create_dir_all(data.join("sessions")).unwrap();
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as f64;
     let run_at = now + 2_000.0;
     let input = json!({ "title": "Soon", "kind": "scheduled", "prompt": "p", "runAt": run_at, "providerId": "p1", "modelId": "m1" });
@@ -267,7 +267,7 @@ async fn a_running_training_run_resumes_when_the_daemon_starts() {
         r#"[{"id":"r1","kind":"training","name":"Old","goal":"g","status":"running","config":{},"sessionId":"s_run","experiments":[],"hints":[],"log":[],"createdAt":1,"updatedAt":1,"startedAt":1,"turns":3}]"#,
     )
     .unwrap();
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
     wait_for("the resumed run", || read_runs(&data)[0]["status"] == json!("failed")).await;
     let run = read_runs(&data)[0].clone();
     let log: Vec<&str> = run["log"].as_array().unwrap().iter().map(|l| l["text"].as_str().unwrap()).collect();
@@ -297,7 +297,7 @@ async fn the_daemon_runs_workflows_with_shell_prompt_and_webhook() {
         r#"[{"id":"old","workflowId":"gone","status":"running","triggerKind":"manual","startedAt":1,"steps":[]}]"#,
     )
     .unwrap();
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
     wait_for("the reconcile", || {
         std::fs::read_to_string(data.join("workflow-runs.json")).unwrap_or_default().contains("Interrupted")
     })
@@ -408,7 +408,7 @@ async fn a_plugin_skill_reviews_a_pr_in_its_own_checkout() {
     .await;
     scripted_p1(&data, &model, json!({ "workspaces": [{ "id": "w1", "path": user }] }));
     let h = home.to_string_lossy().into_owned();
-    let d = start_with_env(Some(&data), json!({}), &[("HOME", Some(&h)), ("USERPROFILE", Some(&h))]);
+    let d = start_with_env(&data, json!({}), &[("HOME", Some(&h)), ("USERPROFILE", Some(&h))]);
 
     let (_, defs) = post(d.port, "workflow:skillDefs", json!([]), Some(TOKEN)).await;
     let cr = defs.as_array().unwrap().iter().find(|s| s["id"] == "nyaa:cr").cloned().expect("nyaa:cr is listed");

@@ -13,7 +13,7 @@ async fn reports_mcp_status_from_its_own_servers() {
         { "id": "off", "name": "Off", "enabled": false, "command": "nope", "args": [] },
     ] });
     std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
     let (status, rows) = post(d.port, "mcp:status", json!([]), Some(TOKEN)).await;
     assert_eq!(status, 200);
     assert_eq!(
@@ -195,7 +195,7 @@ async fn hypergate_is_found_and_connected_by_the_daemon() {
     std::fs::create_dir_all(&data).unwrap();
     let mine = json!({ "id": "fs", "name": "Files", "command": "npx", "args": [], "enabled": false });
     std::fs::write(data.join("settings.json"), json!({ "mcpServers": [mine] }).to_string()).unwrap();
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
     let (_, found) = post(d.port, "mcp:hypergate", json!([port]), Some(TOKEN)).await;
     assert_eq!(found["version"], "9.9");
     assert_eq!(found["port"], port);
@@ -437,7 +437,7 @@ async fn a_daemon_turn_runs_its_tool_hooks_itself() {
         { "id": "h2", "event": "PostToolUse", "name": "note", "matcher": "read_file", "command": post_cmd },
     ]);
     // The daemon writes settings.json and re-reads the hooks from it per call;
-    // the spec's copy is only for a daemon without a data directory.
+    // the spec's `hookRules` only says that hooks run in this turn.
     let (status, _) = post(rig.d.port, "settings:update", json!([{ "hooks": rules }]), Some(TOKEN)).await;
     assert_eq!(status, 200);
     let mut spec = turn_spec(&rig, &model, "turn_h", "s_turn_h", json!({}));
@@ -465,7 +465,7 @@ async fn classifies_commands_and_lists_tools_without_the_host() {
     let data = std::env::temp_dir().join(format!("nekkod-tooling-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&data);
     std::fs::create_dir_all(&data).unwrap();
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
     let (status, decision) = post(d.port, "guardrails:classify", json!(["rm -rf /"]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{decision}");
     assert_eq!(decision["action"], "ask", "{decision}");
