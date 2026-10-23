@@ -19,6 +19,7 @@ import { hasAppChrome } from '../chrome.js';
 import { ServiceLoadState } from '../components/ServiceLoadState.js';
 import { ErrorBoundary } from '../components/ErrorBoundary.js';
 import { SettingsSearch } from '../components/SettingsSearch.js';
+import { ProjectManagementToggles, PullRequestToggles } from '../components/WorkTrackingToggles.js';
 import { WallLayoutSettings } from './WallLayoutSettings.js';
 import { DesktopBehaviorSection, FunSection } from './DesktopBehaviorSections.js';
 
@@ -360,6 +361,8 @@ export function SettingsView() {
             </SettingsGroup>
             <SettingsGroup id="tools">
               <ErrorBoundary label="Git management"><GitManagementSection settings={settings} update={update} /></ErrorBoundary>
+              <ErrorBoundary label="Project management"><ProjectManagementSection settings={settings} update={update} /></ErrorBoundary>
+              <ErrorBoundary label="Pull requests"><PullRequestsSection settings={settings} update={update} /></ErrorBoundary>
               {/* Terminal */}
               <ErrorBoundary label="Terminal"><TerminalSection settings={settings} update={update} /></ErrorBoundary>
               {/* MCP servers */}
@@ -893,6 +896,26 @@ function McpSection({
           );
         })}
       </div>
+    </section>
+  );
+}
+
+export function ProjectManagementSection({ settings, update }: { settings: AppSettings; update: (patch: Partial<AppSettings>) => void }) {
+  return (
+    <section className="card mt-5 p-5">
+      <h2 className="font-semibold">Project management</h2>
+      <p className="mt-1 text-[12px] text-ink-faint">How agent chats track their work. A change bound for a PR gets an issue first, and the PR links to it.</p>
+      <ProjectManagementToggles value={settings.projectManagement} onChange={(projectManagement) => update({ projectManagement })} />
+    </section>
+  );
+}
+
+export function PullRequestsSection({ settings, update }: { settings: AppSettings; update: (patch: Partial<AppSettings>) => void }) {
+  return (
+    <section className="card mt-5 p-5">
+      <h2 className="font-semibold">Pull requests</h2>
+      <p className="mt-1 text-[12px] text-ink-faint">What goes into the PRs agent chats open. Secrets and unrelated images are never included.</p>
+      <PullRequestToggles value={settings.pullRequests} onChange={(pullRequests) => update({ pullRequests })} />
     </section>
   );
 }

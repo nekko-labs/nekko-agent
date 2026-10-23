@@ -13,7 +13,7 @@ User intent: find the QR code that links a phone without hunting through one lon
   - Phone pairing: Remote access, then Sync.
   - Agents: Chat modes, Agent loop, Hooks, Spec-driven development, Agent orchestration, Delegation routes, Automations.
   - Safety: Sandbox, Guardrails.
-  - Tools: Git management, Terminal, MCP servers.
+  - Tools: Git management, Project management, Pull requests, Terminal, MCP servers.
   - System: Updates, Developer, Experimental, Backup & restore, Data & privacy.
 - Phone pairing is second in the list on purpose, so the QR is one click from opening Settings.
 - In Remote access, **Paired devices** and **+ Pair a device** come first once remote access is on, and the pairing QR opens directly under the button, above the device list. Relay details, the local relay, network visibility, phone changes and phone access follow. Before remote access is on, the card says that turning it on gives a QR code for the phone to scan.

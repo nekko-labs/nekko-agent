@@ -488,23 +488,46 @@ export function CommandWall({
   // hero. Panes present at mount (a restored wall) never animate.
   const seenPanes = useRef<Set<string> | null>(null);
   const enteringPane = useRef<string | null>(null);
+  // The hero it replaces collapses onto the new composer and dissolves into it.
+  const leavingPane = useRef<string | null>(null);
+  const leavingFor = useRef<string | null>(null);
+  const lastFocusHero = useRef<string | null>(null);
   {
     const ids = allPanes(state.root).map((p) => p.id);
-    if (state.layout.mode !== 'focus') enteringPane.current = null;
-    else if (seenPanes.current) for (const id of ids) if (!seenPanes.current.has(id)) enteringPane.current = id;
+    if (state.layout.mode !== 'focus') enteringPane.current = leavingPane.current = null;
+    else if (seenPanes.current) for (const id of ids) if (!seenPanes.current.has(id)) {
+      enteringPane.current = id;
+      leavingFor.current = id;
+      leavingPane.current = lastFocusHero.current && lastFocusHero.current !== id && ids.includes(lastFocusHero.current) ? lastFocusHero.current : null;
+    }
     seenPanes.current = new Set(ids);
   }
+  // Aim the collapse at the new window's composer (both windows share the hero box).
+  const aimedLeaving = useRef<string | null>(null);
+  // Re-renders the parked window once its collapse ends, so it stops being drawn.
+  const [, setLeft] = useState(0);
+  useLayoutEffect(() => {
+    const leaving = leavingPane.current;
+    if (!leaving || aimedLeaving.current === leaving) return;
+    aimedLeaving.current = leaving;
+    const from = document.querySelector<HTMLElement>(`[data-wall-pane="${CSS.escape(leaving)}"]`);
+    const composer = document.querySelector<HTMLElement>(`[data-wall-pane="${CSS.escape(enteringPane.current ?? '')}"] .composer`);
+    if (!from || !composer) return; // the CSS fallback aims at a centred composer-sized box
+    const a = from.getBoundingClientRect(), b = composer.getBoundingClientRect();
+    from.style.setProperty('--collapse-inset', `${b.top - a.top}px ${a.right - b.right}px ${a.bottom - b.bottom}px ${b.left - a.left}px`);
+  });
   // Leaving Focus, the parked windows jump to their places instead of sliding
   // there from under the hero: a dozen full-size windows animating down at
   // once rastered every one of them whole (hundreds of MB of tiles, kept).
   // Only the hero slides, as it did before windows were parked.
-  const lastFocusHero = useRef<string | null>(null);
   const prevMode = useRef(state.layout.mode);
   const leavingFocus = prevMode.current === 'focus' && state.layout.mode !== 'focus';
   const [unparked, setUnparked] = useState<string | null | undefined>(undefined);
   const snapping = leavingFocus || unparked !== undefined;
   const snapHero = leavingFocus ? lastFocusHero.current : unparked;
   if (state.layout.mode === 'focus') lastFocusHero.current = geometry.hero;
+  // Switching hero again mid-collapse drops it, so it never replays when parked later.
+  if (leavingPane.current && geometry.hero !== leavingFor.current) leavingPane.current = aimedLeaving.current = null;
   useLayoutEffect(() => {
     const left = prevMode.current === 'focus' && state.layout.mode !== 'focus';
     prevMode.current = state.layout.mode;
@@ -613,8 +636,9 @@ export function CommandWall({
     const subagents = session ? childrenOf.get(session.id) : undefined;
     const snap = snapping && pane.id !== snapHero;
     const entering = enteringPane.current === pane.id;
+    const leaving = leavingPane.current === pane.id && parked;
     const deps = [
-      entering,
+      entering, leaving,
       pane, title, session, terminal, project?.name, projects.length > 1, status?.label, status?.live, needsYou, agentStatus,
       flashing, selected, n, box?.x, box?.y, box?.width, box?.height, parked, hero, focusedChat, folded, showCompanions,
       inDeck, fullSurface, density, logsOpen, snap, workspaces, dragging, state.layout.mode, state.root, subagents, running, pending,
@@ -630,7 +654,11 @@ export function CommandWall({
         data-wall-deck={inDeck || undefined}
         data-wall-hero={hero || undefined}
         data-wall-entering={(entering && state.layout.mode === 'focus' && hero) || undefined}
-        onAnimationEnd={entering ? (e) => { if (e.animationName === 'focus-new-agent-in' && enteringPane.current === pane.id) enteringPane.current = null; } : undefined}
+        data-wall-leaving={leaving || undefined}
+        onAnimationEnd={entering || leaving ? (e) => {
+          if (e.animationName === 'focus-new-agent-in' && enteringPane.current === pane.id) enteringPane.current = null;
+          if (e.animationName === 'focus-collapse-into-composer' && leavingPane.current === pane.id) { leavingPane.current = aimedLeaving.current = null; e.currentTarget.style.removeProperty('--collapse-inset'); setLeft((n) => n + 1); }
+        } : undefined}
         data-wall-pane={pane.id}
         data-grid-cell={`${pane.kind}:${pane.refId}`}
         data-wall-selected={selected || undefined}

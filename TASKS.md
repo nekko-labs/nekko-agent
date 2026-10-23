@@ -1,10 +1,19 @@
 ---
 status: active
-last-updated: 2026-10-22
+last-updated: 2026-10-23
 owner:
 ---
 
 # Execution Plan, Nekko Agent
+
+## Issue per change (added 2026-10-23)
+
+Philip asked for agent chats to file a project-management issue for each feature or change and link the PR to it, by default, with quick toggles (first-run and Settings) for whether the user's prompt, screenshots or other context go into the ticket. Spec: [spec/code/issue-per-change.md](spec/code/issue-per-change.md).
+
+- [x] **IP-1, Prompt default and preferences (2026-10-23).** Base prompt bullet in `nekko-context`; `work_tracking` in `nekko-turn/src/plan.rs` turns `projectManagement` / `pullRequests` settings into a preferences block (turn prompt and Context Inspector preview); goldens updated by hand (+208 tokens).
+- [x] **IP-2, Settings and first run (2026-10-23).** `WorkTrackingToggles` (tri-state includes: unset means ask), Settings > Project management and Pull requests sections, onboarding **Work tracking** step saved on Next.
+- [x] **IP-3, Repo guidance (2026-10-23).** AGENTS.md rule and the landing runbook's "Start from an issue".
+- [ ] **IP-4, Live check** that a chat in the packaged app files and links an issue on a real repository.
 
 ## Floop task connector (added 2026-10-22)
 
@@ -113,7 +122,8 @@ PRs sat in draft waiting on CI. Run history showed the cause: Linux and Windows 
 See [SPEC](spec/desktop/focused-mode-transitions-calmer-focus-ring-and-layout-controls.md).
 
 - [x] ✅ 2026-10-17 `CommandWall.tsx` marks panes added after mount as entering (Focus only) and `styles.css` fades the hero in; `ChatPane.tsx` plays `composer-expand-in` once when clean start ends on send; calmer Focus ring mix; Monitors dock header; Grid removed from the toolbar into `WallLayoutSettings.tsx`, Dynamic uses `BoltIcon`. Tests: `focusTransitions.test.ts`, `WallLayoutSettings.test.tsx`. Evidence: `apps/desktop/scripts/focus-transitions-sandbox.cjs` via `agent-window-controls-integration.cjs` (`NEKKO_CONTROLS_SANDBOX`, `NEKKO_TEST_REVISION=main` for before).
-- [ ] Check both animations in a packaged desktop build and at narrow widths.
+- [x] ✅ 2026-10-23 The replaced hero collapses onto the new composer and dissolves: `CommandWall.tsx` marks it `data-wall-leaving` while parked and measures `--collapse-inset` from the new window's `.composer`; `styles.css` draws it (`content-visibility: visible`) and plays `focus-collapse-into-composer`. Tests: `focusTransitions.test.tsx`; sandbox checks added to `focus-transitions-sandbox.cjs`, and the baseline archive now includes `apps/desktop/src/displayWindows.ts`.
+- [ ] Check all three animations in a packaged desktop build and at narrow widths.
 
 ## Flaky daemon integration tests (added 2026-10-17)
 
@@ -2157,6 +2167,12 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [ ] **T195d** Live check of the signals on Windows and on a Linux GNOME/KDE desktop.
 - [ ] **T195e** B2: preemption within ~1 s of the user's return (stop vs throttle llama-server, measured; `docs/perf-history.md`).
 - [ ] **T195f** B3: model residency (routing model kept warm, large model evicted under memory pressure) and the monitor's background chip.
+
+### T196: The agent remembers what it learns about you (2026-10-23) · [spec](spec/context/context-guardrails-memory-the-differentiators.md)
+- [x] **T196a** `remember` tool (`nekko-turn` `plan.rs`): offered only where the chat reads global memory, not to sub-agents or goal runs; a global note per fact, replaced by title (`nekko_workspace::memory::remember`, unit-tested); daemon handler in `turns.rs`. Golden tool lists and workflow-access cases gain the name. Done: 2026-10-23
+- [x] **T196b** Memory card in the chat (`MemoryCard.tsx`, under the activity group): added/updated, title, body, and a link that opens the Memory tab on the note (or Settings while the tab is off). Done: 2026-10-23
+- [ ] **T196c** Try it against real local and cloud models: does each save only durable facts, and reuse titles instead of piling up duplicates?
+- [ ] **T196d** An undo on the card, and cards for saves made inside code-mode scripts.
 
 ### T194: Code mode: a chat's tools as code (2026-10-22) · [spec](spec/context/code-mode-tools-as-code.md) · [decision](docs/decisions/0004-code-mode-in-an-embedded-quickjs-sandbox.md)
 - [x] **T194a** `nekko-codemode`: tool specs as TypeScript declarations, `search_tools`, `run_code` in an embedded QuickJS sandbox (no loader, no std, frozen `tools`; timeout, Stop, memory, stack, call and output caps), and the per-reply savings tally. Done: 2026-10-22

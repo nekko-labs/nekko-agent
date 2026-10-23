@@ -13,7 +13,7 @@ async function main() {
   if (process.env.NEKKO_TEST_REVISION) {
     const source = path.join(out, 'base-source'); fs.mkdirSync(source, { recursive: true });
     const zip = path.join(out, 'base.zip');
-    cp.execFileSync('git', ['archive', '--format=zip', `--output=${zip}`, process.env.NEKKO_TEST_REVISION, 'apps/desktop/src/renderer', 'packages/shared/src'], { cwd: repo });
+    cp.execFileSync('git', ['archive', '--format=zip', `--output=${zip}`, process.env.NEKKO_TEST_REVISION, 'apps/desktop/src/renderer', 'apps/desktop/src/displayWindows.ts', 'packages/shared/src'], { cwd: repo });
     // Windows has bsdtar (which reads zip) but often no python3.
     if (process.platform === 'win32') cp.execFileSync('tar', ['-xf', zip, '-C', source]);
     else cp.execFileSync('python3', ['-c', 'import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])', zip, source]);

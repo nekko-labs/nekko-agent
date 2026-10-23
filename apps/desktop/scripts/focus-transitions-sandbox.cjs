@@ -35,6 +35,7 @@ app.whenReady().then(async () => {
     for (let i = 0; i < count; i++) { fs.writeFileSync(path.join(dir, String(i).padStart(3, '0') + '.png'), await shot()); await sleep(gap); }
     const mp4 = path.join(runDir, name + '.mp4');
     const r = cp.spawnSync('ffmpeg', ['-y', '-framerate', '10', '-i', path.join(dir, '%03d.png'), '-vf', 'scale=1120:-2,pad=ceil(iw/2)*2:ceil(ih/2)*2', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', mp4], { encoding: 'utf8', windowsHide: true });
+    if (r.error?.code === 'ENOENT') return; // no ffmpeg here: the frames stay as PNGs
     if (r.status !== 0) throw Error(r.stderr); report.captures.push(mp4);
   };
   const focusWall = theme => run(`(() => {
@@ -66,12 +67,16 @@ app.whenReady().then(async () => {
       await blankNewChats();
       if (theme === 'dark') await slow(0.1);
       await run(`document.querySelector('[aria-label="New agent"]').click()`);
+      // The old hero collapses onto the new composer while the new window fades in under it.
+      const leaving = await run(`(() => { const w = document.querySelector('.command-wall-window[data-wall-leaving]'); return w && { pane: w.dataset.gridCell, inset: w.style.getPropertyValue('--collapse-inset'), drawn: getComputedStyle(w).contentVisibility, anim: getComputedStyle(w.firstElementChild).animationName }; })()`);
+      if (!base) check(theme + ': old hero collapses onto the new composer', !!leaving && /existing/.test(leaving.pane) && /px/.test(leaving.inset) && leaving.drawn === 'visible' && leaving.anim === 'focus-collapse-into-composer', leaving);
       if (theme === 'dark') await frames('new-agent-motion', 26, 40); else await sleep(700);
       if (theme === 'dark') await slow(1);
       await until('!!document.querySelector("[data-clean-start-greeting]")');
       const after = await run(`({ mode: document.querySelector('[data-wall-layout]')?.dataset.wallLayout, hero: document.querySelector('.command-wall-window[data-wall-hero]')?.dataset.gridCell, clean: !!document.querySelector('[data-clean-start-greeting]') })`);
       check(theme + ': New agent stays Focused on the new chat prompt', after.mode === 'focus' && /fresh-/.test(after.hero || '') && after.clean, after);
       await sleep(600); await capture(`new-agent-${theme}-1400`);
+      if (!base) check(theme + ': collapse ends and the old hero parks', await run('!document.querySelector("[data-wall-leaving]")'), {});
       // Type into the centred composer: it stays the prompt view while typing.
       await run(`(() => { const ed = document.querySelector('[data-clean-start] .composer [contenteditable], [data-clean-start] .composer textarea'); ed.focus(); if (ed.tagName === 'TEXTAREA') { const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set; set.call(ed, 'Tidy up the release notes'); ed.dispatchEvent(new Event('input', { bubbles: true })); } else { document.execCommand('insertText', false, 'Tidy up the release notes'); } })()`);
       await sleep(400);
