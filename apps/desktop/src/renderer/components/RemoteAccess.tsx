@@ -274,10 +274,16 @@ export function RemoteAccess() {
               <div className="mt-2 flex flex-col items-start gap-3 rounded-lg border border-line p-3 sm:flex-row sm:items-center">
                 {qr && <img src={qr} alt="Pairing QR" width={132} height={132} className="rounded-lg border border-line" />}
                 <div className="min-w-0">
-                  <div className="text-[12px]">
-                    Scan with your phone's camera to connect. One device,{' '}
-                    <span className="font-mono font-medium">{Math.floor(secsLeft / 60)}:{String(secsLeft % 60).padStart(2, '0')}</span>{' '}
-                    left.
+                  <div className="text-[13px] font-medium">Scan with your phone's camera to connect.</div>
+                  <div
+                    className="mt-2 inline-flex items-baseline gap-2 rounded-full px-3 py-1"
+                    style={{ background: 'var(--surface-2)' }}
+                    aria-label={`Code expires in ${Math.floor(secsLeft / 60)} minutes ${secsLeft % 60} seconds`}
+                  >
+                    <span className="text-[11px] text-ink-faint">Expires in</span>
+                    <span className={`font-mono text-[20px] font-semibold tabular-nums ${secsLeft < 60 ? 'text-amber-500' : ''}`}>
+                      {Math.floor(secsLeft / 60)}:{String(secsLeft % 60).padStart(2, '0')}
+                    </span>
                   </div>
                   <details className="mt-1">
                     <summary className="cursor-pointer text-[12px] text-ink-faint">Can’t scan? Show the link</summary>
@@ -552,7 +558,7 @@ function Field({ label, value, mono }: { label: string; value: string; mono?: bo
 
 /**
  * Whether paired phones may see the files the agent changed in a chat
- * (`phoneChanges`, off unless set). Read only: a phone can never accept or
+ * (`phoneChanges`, on by default). Read only: a phone can never accept or
  * revert changes, read other files or open terminals, and files that may hold
  * secrets are counted, not shown.
  */

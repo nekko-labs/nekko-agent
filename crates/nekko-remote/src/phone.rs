@@ -616,7 +616,7 @@ pub async fn call(run: &Dispatcher, channel: String, args: Value) -> Result<Valu
     let mut screened = screen(&channel, &args).map_err(|d| d.to_string())?;
     let args = screened.args.take().unwrap_or(args);
     if channel == "changes:list" {
-        // Off unless the computer's owner turned it on (Settings → Remote access).
+        // The computer's setting (Settings → Remote access), on by default; the owner can turn it off.
         let settings = run("settings:get".to_string(), json!([])).await?;
         if settings.get("phoneChanges") != Some(&Value::Bool(true)) {
             return Err(denied("turned-off", "changes:list").to_string());
