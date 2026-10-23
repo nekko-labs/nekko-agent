@@ -144,7 +144,7 @@ Working in a codebase: files, editor, diffs, pull requests, design workspace.
 - [In-chat pull requests](code/in-chat-pull-requests.md) (1 KB)
 - [Issue per change and work tracking preferences](code/issue-per-change.md) (2 KB)
 - [Repository review integration](code/repository-review-integration.md) (1 KB)
-- [Rich responses, reports, and design workspace](code/rich-responses-reports-and-design-workspace.md) (20 KB)
+- [Rich responses, reports, and design workspace](code/rich-responses-reports-and-design-workspace.md) (21 KB)
 - [Working in a codebase](code/working-in-a-codebase.md) (4 KB)
 
 ### automation

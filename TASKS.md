@@ -6,6 +6,12 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Calmer Experimental Dark themes (added 2026-10-23)
+
+Philip found the Experimental Dark versions overwhelming: one hue on the ground, the panels and the text. Spec: [Experimental themes](spec/code/rich-responses-reports-and-design-workspace.md#experimental-themes); why: [decision 0015](docs/decisions/0015-experimental-dark-themes-use-a-60-30-10-split.md); issue #896.
+
+- [x] **XD-1, New Dark tokens (2026-10-23).** All seven `x-*-dark` presets in `styles.css` and `themes.ts` (tokens and swatches) rebuilt on a 60 / 30 / 10 split: hue-tinted near-black windows, deepened ground, near-white text, partner colour as accent only. Held by `contrast.test.ts`.
+
 ## Issue per change (added 2026-10-23)
 
 Philip asked for agent chats to file a project-management issue for each feature or change and link the PR to it, by default, with quick toggles (first-run and Settings) for whether the user's prompt, screenshots or other context go into the ticket. Spec: [spec/code/issue-per-change.md](spec/code/issue-per-change.md).
