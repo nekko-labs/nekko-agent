@@ -61,6 +61,12 @@ const BRAND: Record<ConnectorKind, { color: string; path: string; fillRule?: 'ev
     color: '#7B68EE',
     path: 'M2 18.439l3.69-2.828c1.961 2.56 4.044 3.739 6.363 3.739 2.307 0 4.33-1.166 6.203-3.704L22 18.405C19.298 22.065 15.941 24 12.053 24 8.178 24 4.788 22.078 2 18.439zM12.04 6.15l-6.568 5.66-3.036-3.52L12.055 0l9.543 8.296-3.05 3.509z',
   },
+  // Floop's loop mark: two arcs chasing each other, people (orange) and agents.
+  floop: {
+    color: '#FF7A3D',
+    fillRule: 'evenodd',
+    path: 'M12 2a10 10 0 0 1 9.95 9h-3.03A7 7 0 0 0 12 5V2zm-1 3.07A7 7 0 0 0 5.08 13H2.05A10 10 0 0 1 11 2.05v3.02zM12 22a10 10 0 0 1-9.95-9h3.03A7 7 0 0 0 12 19v3zm1-3.07A7 7 0 0 0 18.92 11h3.03A10 10 0 0 1 13 21.95v-3.02z',
+  },
   // No brand: a checked box for a local Markdown task list.
   tasksfile: {
     color: 'var(--ink-soft)',
