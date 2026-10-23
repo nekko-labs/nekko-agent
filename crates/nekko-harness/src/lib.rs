@@ -13,8 +13,9 @@
 //! - read, copy or store Claude Code's credentials (the config directory's
 //!   credential file, the keychain). Sign-in status comes from
 //!   `claude auth status` only;
-//! - set `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_AUTH_TOKEN` or
-//!   `CLAUDE_CONFIG_DIR`: the child inherits the user's environment unchanged;
+//! - set `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_AUTH_TOKEN`: the child
+//!   inherits the user's environment, plus `CLAUDE_CONFIG_DIR` only when the
+//!   provider names a second Claude Code account ([`account_config_dir`]);
 //! - patch or wrap the binary, or pass `--system-prompt`, `--bare`,
 //!   `--dangerously-skip-permissions` or the `bypassPermissions` mode. The
 //!   permission modes this crate can express ([`PermissionMode`]) leave no way
@@ -29,12 +30,14 @@
 //!   interrupt, a process-tree kill only as the fallback) and Steer
 //!   (interrupt, then send).
 
+mod account;
 mod auth;
 mod locate;
 mod map;
 mod session;
 mod turn;
 
+pub use account::{MAX_ACCOUNT_LEN, account_config_dir, is_account_name};
 pub use auth::{AuthStatus, auth_status, parse_auth_status};
 pub use locate::{ClaudeBin, MIN_VERSION, locate, parse_version, pick_windows_candidate};
 pub use map::{Init, Mapped, Mapper, Outcome, ReportedContext, StopKind, TurnEnd, USER_STOPPED, user_content};

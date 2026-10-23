@@ -280,3 +280,16 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 @media (prefers-reduced-motion: reduce) {
   .agent-panel-group, .agent-panel-row > .agent-panel-group { transition: none; }
 }
+
+/* Presence changes are reversible CSS transitions, never queued animations. */
+.wall-agents-presence { display: flex; flex: 0 0 auto; min-height: 0; max-height: 100%; opacity: 1; transform: translateX(0); transition: opacity 140ms ease-out, transform 140ms ease-out; }
+.wall-agents-presence[data-orientation='horizontal'] { width: 100%; }
+.wall-agents-presence > .agent-panel-host { min-height: 0; max-height: 100%; }
+.wall-agents-presence > .agent-panel-host > aside { min-height: 0; max-height: 100%; }
+.wall-agents-presence[data-panel-open='false'] { opacity: 0; transform: translateX(-10px); pointer-events: none; }
+.wall-agents-presence[data-orientation='horizontal'][data-panel-open='false'] { transform: translateY(-10px); }
+@starting-style {
+  .wall-agents-presence[data-panel-open='true'] { opacity: 0; transform: translateX(-10px); }
+  .wall-agents-presence[data-orientation='horizontal'][data-panel-open='true'] { transform: translateY(-10px); }
+}
+@media (prefers-reduced-motion: reduce) { .wall-agents-presence { transition: none; transform: none; } }

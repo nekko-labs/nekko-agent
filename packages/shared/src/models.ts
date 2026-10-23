@@ -49,6 +49,12 @@ export interface ProviderConfig {
   discovered?: boolean;
   /** Free-text model id override, currently used by the ChatGPT provider. */
   customModelId?: string;
+  /**
+   * Claude Agent only. `account` names a second Claude Code login: nekkod runs
+   * Claude Code with `CLAUDE_CONFIG_DIR=~/.claude-<account>` (see
+   * `isClaudeAccountName`). Absent: the user's default Claude Code login.
+   */
+  claudeCode?: { authSource?: string; account?: string };
   /** Host-only assertion for a trusted managed llama.cpp endpoint. Never trust persisted input. */
   managedCachePrompt?: boolean;
   enabled: boolean;

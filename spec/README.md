@@ -66,7 +66,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Command Center panel design parity (2026-10-06)](desktop/command-center-panel-design-parity.md) (7 KB)
 - [Composer and desktop rail regression fixes (2026-10-07)](desktop/composer-and-desktop-rail-regression-fixes.md) (3 KB)
 - [Empty wall opens the new-chat screen; glass prism composer (2026-10-18)](desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md) (2 KB)
-- [Focused mode transitions, calmer focus ring and layout controls (2026-10-17)](desktop/focused-mode-transitions-calmer-focus-ring-and-layout-controls.md) (3 KB)
+- [Focused mode transitions, calmer focus ring and layout controls (2026-10-17)](desktop/focused-mode-transitions-calmer-focus-ring-and-layout-controls.md) (4 KB)
 - [Grid model selection and chat-mode menus (2026-10-07)](desktop/grid-model-selection-and-chat-mode-menus.md) (1 KB)
 - [Inline agent-window creation](desktop/inline-agent-window-creation.md) (3 KB)
 - [Minimize agent windows](desktop/minimize-agent-windows.md) (1 KB)
@@ -118,11 +118,12 @@ What the model sees: Context Inspector, modes, work modes, rules, memory, specs.
 
 Providers, local models, the Model Server, training.
 
+- [Accounts and switching (2026-10-23)](models/accounts-and-switching.md) (4 KB)
 - [Anthropic image-dimension rejection prevention and continuation](models/anthropic-image-dimension-rejection-prevention-and-continuation.md) (1 KB)
 - [First-agent provider setup](models/first-agent-provider-setup.md) (2 KB)
 - [Hardware-aware model recommendations](models/hardware-aware-model-recommendations.md) (11 KB)
 - [Model training & goals (the data-scientist agent)](models/model-training-goals-the-data-scientist-agent.md) (4 KB)
-- [Models & providers](models/models-providers.md) (39 KB)
+- [Models & providers](models/models-providers.md) (40 KB)
 - [Prompt caching across providers (2026-10-07)](models/prompt-caching-across-providers.md) (7 KB)
 - [Running a model with nothing else installed](models/running-a-model-with-nothing-else-installed.md) (28 KB)
 - [Server, model browser and desktop tray](models/server-model-browser-and-desktop-tray.md) (5 KB)
