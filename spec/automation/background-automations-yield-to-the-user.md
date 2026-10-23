@@ -38,22 +38,34 @@ Readings are cached: input for 0.5 s, so B2 can react within a second; temperatu
 
 **Privacy.** The signals are read and judged on the device and never leave it. `activity:state` reports durations and states, never which app or window is in front.
 
-## Run policies `[planned: B1, next layer]`
+## Run policies `[implemented for tasks and workflows, unit- and daemon-tested; UI planned]`
 
-Each task, workflow and goal run has a policy, and a global default sets the policy for new ones:
+Each task and workflow can carry a policy (`runPolicy`). The settings' `automationRunPolicy` sets it for those that carry none. The idle threshold is `automationIdleMinutes`, 5 by default.
 
-- **Only when I'm idle:** wait until the user is away and no chat of theirs is replying.
-- **Low priority:** run even while the user is active. In B1 this is only the policy. Running with fewer threads, fewer GPU layers and a smaller context comes with B2.
-- **Always:** today's behaviour.
+- **Only when I'm idle** (`idle`): wait until the user is away and no chat of theirs is replying, the machine is on mains power, and it is not hot.
+- **Low priority** (`lowPriority`): run even while the user is active, but not on a low battery or a hot machine. In B1 this is only the policy. Running with fewer threads, fewer GPU layers and a smaller context comes with B2.
+- **Always** (`always`): today's behaviour.
 
-The default is **Only when I'm idle for automations on a local model** (the built-in engine, or a provider on a loopback address, as `localModelOnly` judges it). Automations on a cloud model default to **Always**: they do not load this machine, and they keep today's behaviour.
+The default is **Only when I'm idle for automations on a local model** (the built-in engine, or a provider on a loopback address, as `localModelOnly` judges it). A workflow counts as local when it is `localModelOnly`, or when its own model or any step's model is local. Automations on a cloud model default to **Always**: they do not load this machine, and they keep today's behaviour.
 
-**A waiting run is never dropped silently.** A scheduled run that is still waiting for idle after a cap (2 hours) starts anyway, in low priority, and the run shows "waited for idle". Manual runs ("Run now", the CLI) always start at once. "Pause all automations" still overrides everything.
+**A waiting run is never dropped silently.** A scheduled run that is still waiting for idle 2 hours after it came due starts anyway, in low priority:
 
-Acceptance: a synthetic activity signal (a test source in place of the OS reading) holds a due run while the user is active and releases it when they go idle, for tasks, workflows and goal runs.
+- **Tasks:** while held, the task carries `waitingSince`. The run that starts records `lastRunLowPriority` and `lastRunWaitedMs`.
+- **Workflows:** a held workflow carries `waitingSince`. The run records `lowPriority` and `waitedMs`.
+- **Rechecks:** a held task is looked at again once per scheduler tick (15 s). Before this change, a due task held by "Pause all automations" was rechecked on every turn of the scheduler loop, about every 50 ms.
+
+**What never waits:**
+- **Workflow runs started by an event** (pull request, push, Slack, connector, webhook) start at once, marked low priority when the policy would have held them. There is no queue to keep them in, and dropping an event would lose work.
+- **Manual runs** ("Run now", the Run button, the CLI) always start at once.
+- **Goal runs.** A person starts them, and their time budget would run out while they waited.
+- "Pause all automations" still overrides everything.
+
+Acceptance:
+- **Tested:** a synthetic activity source in place of the OS reading holds a due task and a due scheduled workflow while the user is active, and releases them when the user is away (`nekko-automation/tests/tasks.rs`, `tests/workflows.rs`). The cap and the cloud default are tested too.
+- **End to end:** the real daemon holds a local task on a machine whose input it can read (`nekkod/tests/daemon/automation.rs`).
 
 ## Settings and UI `[planned: B1, last layer]`
 
-- A policy selector on each task, workflow and goal run.
+- A policy selector on each task and workflow.
 - The global default and the idle threshold in Settings.
 - The waiting state on the run ("Waiting for you to be away").

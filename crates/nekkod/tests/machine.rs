@@ -112,6 +112,8 @@ async fn machine_channels_are_served_without_a_backend() {
     assert_eq!(status, 200, "{act}");
     assert!(act["idleAfterSeconds"].as_f64().unwrap() > 0.0, "{act}");
     assert!(act["present"].is_array() && act["strain"].is_array(), "{act}");
+    let (_, strict) = post(d.port, "activity:state", json!([{ "idleAfterSeconds": 1e9 }])).await;
+    assert_eq!(strict["idleAfterSeconds"], json!(1e9), "the threshold asked for: {strict}");
     // A Mac always has input to read; a Windows runner's service session may not.
     if cfg!(target_os = "macos") {
         assert!(act["idleSeconds"].as_f64().unwrap() >= 0.0, "{act}");
