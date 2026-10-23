@@ -1304,6 +1304,9 @@ impl Turns {
                 seen = Some(init.session_id);
                 model = init.model.or(model.take());
             }
+            Mapped::PlanUsage(event) => {
+                self.harness.note_plan_usage(str_at(provider, "id").unwrap_or_default(), &event)
+            }
             Mapped::Unparsed(line) => eprintln!("nekkod: Claude Code printed a non-JSON line: {line}"),
             _ => {}
         })

@@ -86,6 +86,10 @@ pub enum Mapped {
     Command { uuid: String, state: String },
     /// `result`: Claude Code's turn is over.
     End(TurnEnd),
+    /// Plan usage Claude Code reported itself: a `rate_limit_event`, or an
+    /// assistant message carrying `/usage`'s `usage_report`. The raw event,
+    /// for `nekko_usage::parse_claude_code_usage`.
+    PlanUsage(Value),
     /// A stdout line that was not JSON (kept for an exit's diagnostics).
     Unparsed(String),
 }
@@ -321,7 +325,13 @@ impl Mapper {
             Some("stream_event") if parent.is_none() => {
                 self.stream_event(v.get("event").unwrap_or(&Value::Null), &mut out)
             }
-            Some("assistant") => self.assistant(v, parent, &mut out),
+            Some("assistant") => {
+                if v.get("usage_report").is_some_and(Value::is_object) {
+                    out.push(Mapped::PlanUsage(v.clone()));
+                }
+                self.assistant(v, parent, &mut out)
+            }
+            Some("rate_limit_event") => out.push(Mapped::PlanUsage(v.clone())),
             // A message Nekko wrote, echoed as Claude Code takes it up.
             Some("user") if v.get("isReplay") == Some(&Value::Bool(true)) => out
                 .push(Mapped::Command { uuid: str_at(v, "uuid").unwrap_or_default().into(), state: "started".into() }),
@@ -711,5 +721,18 @@ mod tests {
             "a\nb"
         );
         assert_eq!(result_text(None), "");
+    }
+
+    #[test]
+    fn plan_usage_is_handed_up_raw() {
+        let mut m = Mapper::new("s");
+        let event =
+            json!({ "type": "rate_limit_event", "rate_limit_info": { "status": "allowed", "utilization": 0.3 } });
+        assert_eq!(m.map(&event), vec![Mapped::PlanUsage(event.clone())]);
+        let report = json!({ "type": "assistant", "message": { "id": "m1", "content": [] },
+            "usage_report": { "rate_limits": { "limits": [] } } });
+        assert!(m.map(&report).contains(&Mapped::PlanUsage(report.clone())));
+        let plain = json!({ "type": "assistant", "message": { "id": "m2", "content": [] } });
+        assert!(!m.map(&plain).iter().any(|o| matches!(o, Mapped::PlanUsage(_))));
     }
 }
