@@ -8,6 +8,8 @@ import { WelcomeStep } from './WelcomeStep.js';
 import { ProvidersStep } from './ProvidersStep.js';
 import { IntegrationsStep } from './IntegrationsStep.js';
 import { DoneStep } from './DoneStep.js';
+import { WorkTrackingStep } from './WorkTrackingStep.js';
+import { ProjectManagementToggles } from '../WorkTrackingToggles.js';
 import { ONBOARDING_STEPS, wizardTransition, type WizardState } from './onboardingMachine.js';
 
 // The step components and the store read browser globals at import time;
@@ -289,7 +291,7 @@ describe('onboarding state machine', () => {
   });
 
   it('completes with done on finish', () => {
-    const { state, complete } = wizardTransition({ index: 4, steps: { theme: 'done' } } as WizardState, { type: 'finish' });
+    const { state, complete } = wizardTransition({ index: ONBOARDING_STEPS.length - 1, steps: { theme: 'done' } } as WizardState, { type: 'finish' });
     expect(complete).toBe(true);
     expect(state.steps['done']).toBe('done');
   });
@@ -301,14 +303,14 @@ describe('onboarding state machine', () => {
   });
 
   it('keeps the final step outcome on skip from the last step', () => {
-    const { state, complete } = wizardTransition({ index: 4, steps: {} } as WizardState, { type: 'skipStep' });
+    const { state, complete } = wizardTransition({ index: ONBOARDING_STEPS.length - 1, steps: {} } as WizardState, { type: 'skipStep' });
     expect(complete).toBe(true);
     expect(state.steps['done']).toBe('skipped');
   });
 
   it('does not leave an incomplete outcome map after skipping forward and finishing', () => {
     let state = initial;
-    state = wizardTransition(state, { type: 'goTo', to: 4 }).state;
+    state = wizardTransition(state, { type: 'goTo', to: ONBOARDING_STEPS.length - 1 }).state;
     expect(state.steps['welcome']).toBe('skipped');
     expect(state.steps['theme']).toBe('skipped');
     expect(state.steps['providers']).toBe('skipped');
@@ -319,5 +321,34 @@ describe('onboarding state machine', () => {
     for (const s of ONBOARDING_STEPS) {
       expect(finished.steps[s.id]).toBeDefined();
     }
+  });
+});
+
+describe('work tracking', () => {
+  const checkbox = (html: string, label: string) => html.match(new RegExp(`<input[^>]*aria-label="${label}"[^>]*>`))?.[0] ?? '';
+
+  it('asks with issues and PR links on and every include opt-in', () => {
+    mockStoreState.settings = null;
+    const html = renderToStaticMarkup(<WorkTrackingStep />);
+    expect(checkbox(html, 'File an issue for each change')).toContain('checked');
+    expect(checkbox(html, 'Link each PR to its issue')).toContain('checked');
+    expect(checkbox(html, 'Include my prompt in issues')).not.toContain('checked');
+    expect(checkbox(html, 'Include my screenshots in PR descriptions')).not.toContain('checked');
+    // The step itself is the question, so it never shows the "asks later" note.
+    expect(html).not.toContain('Nekko asks the first time');
+  });
+
+  it('starts from saved choices on a replay', () => {
+    mockStoreState.settings = { projectManagement: { createIssue: false }, pullRequests: { includeScreenshots: true } } as unknown as AppSettings;
+    const html = renderToStaticMarkup(<WorkTrackingStep />);
+    expect(checkbox(html, 'File an issue for each change')).not.toContain('checked');
+    expect(checkbox(html, 'Include my screenshots in PR descriptions')).toContain('checked');
+    mockStoreState.settings = null;
+  });
+
+  it('marks unanswered includes in Settings as asked the first time', () => {
+    const html = renderToStaticMarkup(<ProjectManagementToggles value={{ includePrompt: false }} onChange={() => {}} />);
+    expect(html.match(/Nekko asks the first time/g)).toHaveLength(2);
+    expect(checkbox(html, 'File an issue for each change')).toContain('checked');
   });
 });

@@ -6,6 +6,15 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Issue per change (added 2026-10-23)
+
+Philip asked for agent chats to file a project-management issue for each feature or change and link the PR to it, by default, with quick toggles (first-run and Settings) for whether the user's prompt, screenshots or other context go into the ticket. Spec: [spec/code/issue-per-change.md](spec/code/issue-per-change.md).
+
+- [x] **IP-1, Prompt default and preferences (2026-10-23).** Base prompt bullet in `nekko-context`; `work_tracking` in `nekko-turn/src/plan.rs` turns `projectManagement` / `pullRequests` settings into a preferences block (turn prompt and Context Inspector preview); goldens updated by hand (+208 tokens).
+- [x] **IP-2, Settings and first run (2026-10-23).** `WorkTrackingToggles` (tri-state includes: unset means ask), Settings > Project management and Pull requests sections, onboarding **Work tracking** step saved on Next.
+- [x] **IP-3, Repo guidance (2026-10-23).** AGENTS.md rule and the landing runbook's "Start from an issue".
+- [ ] **IP-4, Live check** that a chat in the packaged app files and links an issue on a real repository.
+
 ## Floop task connector (added 2026-10-22)
 
 Philip asked for Nekko Agent to work in Floop, Nekko Labs' tracker for people and agents. Spec: [spec/context/floop-task-connector.md](spec/context/floop-task-connector.md); docs page `docs/floop.md`.
