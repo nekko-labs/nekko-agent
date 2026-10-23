@@ -297,12 +297,13 @@ fn hardware_names_match_the_most_specific_row() {
 #[test]
 fn the_kv_cache_matches_what_llama_cpp_allocates() {
     // llama-server b11429 at 32768 context, one slot, f16 (2026-10-22):
-    // Gemma 4 12B holds 512 MiB on its 8 global layers and 480 MiB on its 40
-    // sliding-window layers (1536 cells); Qwen3.5 4B holds 1024 MiB on its 8
+    // Gemma 4 12B holds 512 MiB on its 8 global layers and 1440 MiB on its 40
+    // sliding-window layers (4608 cells: the four sequences llama-server runs
+    // when the engine passes no --parallel); Qwen3.5 4B holds 1024 MiB on its 8
     // attention layers and none on its recurrent ones.
     let feed = bundled_feed();
     let kv = |id: &str| &feed.models.iter().find(|m| m.id == id).unwrap().kv;
-    assert_eq!(kv_bytes(kv("gemma-4-12b"), 32768.0), (512.0 + 480.0) * 1024.0 * 1024.0);
+    assert_eq!(kv_bytes(kv("gemma-4-12b"), 32768.0), (512.0 + 1440.0) * 1024.0 * 1024.0);
     assert_eq!(kv_bytes(kv("qwen3.5-4b"), 32768.0), 1024.0 * 1024.0 * 1024.0);
 }
 

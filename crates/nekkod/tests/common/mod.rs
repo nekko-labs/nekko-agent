@@ -58,12 +58,14 @@ pub fn start_with_env(data_dir: Option<&std::path::Path>, extra: Value, env: &[(
         };
     }
     let mut child = cmd
-        .env("NEKKOD_CONFIG", config.to_string())
+        .arg("--config-stdin")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
         .spawn()
         .expect("nekkod starts");
+    // The config is the first line of stdin; stdin stays open (its end stops the daemon).
+    std::io::Write::write_all(child.stdin.as_mut().unwrap(), format!("{config}\n").as_bytes()).unwrap();
     let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
     let line = lines.next().expect("a ready line").unwrap();
     let ready: Value = serde_json::from_str(line.strip_prefix("NEKKOD_READY ").expect("ready prefix")).unwrap();
@@ -80,6 +82,13 @@ pub async fn post(port: u16, channel: &str, args: Value, token: Option<&str>) ->
     let res = req.send().await.unwrap();
     let status = res.status().as_u16();
     (status, res.json().await.unwrap_or(Value::Null))
+}
+
+/// Calls `channel` and asserts the daemon routed it: whatever it answers, it
+/// is not `unknown channel`.
+pub async fn assert_served(port: u16, channel: &str, args: Value) {
+    let (status, body) = post(port, channel, args, Some(TOKEN)).await;
+    assert_ne!(body["error"], format!("unknown channel {channel}"), "{channel}: {status} {body}");
 }
 
 pub type Socket = tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
@@ -281,7 +290,7 @@ pub fn turn_spec(rig: &TurnRig, model: &ScriptedModel, turn_id: &str, session_id
         "settings": { "providers": [provider], "defaultChatMode": "yolo", "unattendedQuestionMinutes": 0 },
         "facts": {
             "workspaces": [{ "id": "w1", "name": "project", "path": rig.workspace.to_string_lossy() }],
-            "mcpTools": [], "decide": false,
+            "decide": false,
             "connectorSnippets": [], "indexSnippets": [],
             "platform": "win32", "temperature": 0.7, "effort": "normal", "statsEffort": "normal",
             "promptCaching": true, "provider": provider, "headers": false,

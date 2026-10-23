@@ -112,8 +112,6 @@ process.on('SIGINT', async () => { await cleanup(); process.exit(130); });
  * chat onto it before the page loads and opens them from there.
  */
 let WALL_IDS = [];
-/** Which engine the Local Web UI runs on ('nekkod' or 'ts'), for the terminal note. */
-let ENGINE = 'ts';
 /** The wall as `commandWall.ts` saves it: a column of rows of four chat windows, no panels, auto-add off. */
 const wallState = (ids) => {
   let seq = 0;
@@ -717,7 +715,7 @@ function resultsOf(latency, frames) {
         ? { skipped: latency.term.skipped }
         : {
           samples: latency.term.samples,
-          note: `the Local Web UI's terminal: ${ENGINE === 'nekkod' ? "nekkod's pty, output over its /api/term socket" : "the TS host's pty, output over the event bus"}, drawn by the pane's xterm; the echo itself reached the page at p50 ${summarize(latency.term.echo ?? []).p50 ?? '-'} ms`,
+          note: `the Local Web UI's terminal: nekkod's pty, output over its /api/term socket, drawn by the pane's xterm; the echo itself reached the page at p50 ${summarize(latency.term.echo ?? []).p50 ?? '-'} ms`,
         },
     stream_frame_work: frames
       ? { samples: frames.work, note: `${frames.frames} frames over ${CFG.traceSeconds}s at ${CFG.tokensPerSecond} tok/s, main thread ${Math.round(frames.busyFraction * 100)}% busy (${frames.source})${frames.tracedWhileStreaming ? '' : '; WARNING: the reply finished mid-trace'}` }
@@ -759,9 +757,6 @@ async function main() {
     if (!up) await sleep(250);
   }
   if (!up) throw new Error(`Local Web UI did not start:\n${serverLog.slice(-2000)}`);
-  // The server runs behind nekkod when it finds one (a cargo build in this checkout).
-  ENGINE = await api('web:capabilities').then((r) => (r.ok ? r.json() : null)).then((c) => c?.engine ?? 'ts', () => 'ts');
-  log(`engine: ${ENGINE}`);
 
   const only = opt('only', null);
   const strict = flag('strict');

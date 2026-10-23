@@ -1,5 +1,5 @@
-//! git.rs and pr.rs against the TS functions: `golden/git-pr.json` is written
-//! by packages/host/src/git-pr.golden.test.ts from `golden/git-pr-cases.json`.
+//! git.rs and pr.rs against the TS functions: `golden/git-pr.json` is a frozen
+//! record of the deleted TS functions on `golden/git-pr-cases.json`.
 
 use nekko_workspace::{git, pr};
 use serde_json::{Map, Value, json};

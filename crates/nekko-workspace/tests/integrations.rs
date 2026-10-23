@@ -1,5 +1,5 @@
-//! integrations.rs against integrations.ts: `golden/integrations.json` is
-//! written by packages/host/src/integrations.golden.test.ts from
+//! integrations.rs against integrations.ts: `golden/integrations.json` is a
+//! frozen record of the deleted TS functions on
 //! `golden/integrations-cases.json`.
 
 use nekko_workspace::integrations;

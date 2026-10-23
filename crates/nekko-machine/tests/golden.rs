@@ -1,5 +1,6 @@
-//! Exact parity with the TS host's probes and readiness advisor, over the
-//! golden set `packages/host/src/machine.golden.test.ts` writes.
+//! Exact parity with the TS host's probes and readiness advisor, over
+//! `golden/machine.json`, a frozen record of the deleted TS behaviour (edit it
+//! by hand per docs/runbooks/golden-fixtures.md).
 
 use nekko_machine::parse::{
     cpuinfo_features, gpu_backends, ioreg_stats, listed_to_stats, mac_memory_used_mb, parse_list_devices,

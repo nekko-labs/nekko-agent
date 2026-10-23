@@ -4,7 +4,7 @@ import SwiftUI
 
 final class KeychainStoreTests: XCTestCase {
     func testRoundTripsOverwritesAndDeletes() {
-        let s = KeychainStore(service: "com.nekko.native.ios.tests.\(UUID().uuidString)")
+        let s = KeychainStore(service: "dev.nekkolabs.nekkoagent.tests.\(UUID().uuidString)")
         defer { s.wipe() }
         XCTAssertNil(s.get("k"))
         s.set("k", "one")
@@ -116,7 +116,7 @@ final class DeepLinkTests: XCTestCase {
         app.newChatRequested = false
         // The Home Screen quick action opens the same link; an unknown type does nothing.
         XCTAssertEqual(QuickAction.url(for: QuickAction.newChat)?.absoluteString, "nekko-agent://new")
-        XCTAssertNil(QuickAction.url(for: "com.nekko.native.ios.other"))
+        XCTAssertNil(QuickAction.url(for: "dev.nekkolabs.nekkoagent.other"))
         XCTAssertTrue(QuickAction.perform(QuickAction.newChat))
         XCTAssertTrue(app.newChatRequested)
         app.newChatRequested = false
@@ -256,7 +256,7 @@ final class SavedListNoteTests: XCTestCase {
 @MainActor
 final class OfflinePrefsTests: XCTestCase {
     func testOnForANewInstallAndOffWhenTheUserTurnedThemOff() throws {
-        let suite = "com.nekko.native.ios.tests.prefs.\(UUID().uuidString)"
+        let suite = "dev.nekkolabs.nekkoagent.tests.prefs.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let fresh = Prefs(defaults: defaults)

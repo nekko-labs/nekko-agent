@@ -26,7 +26,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * The relay client against an in-memory relay + agent. The fake plays the
- * agent's side of `packages/host/src/relay.ts`: it opens sealed frames with the
+ * agent's side of `crates/nekko-remote/src/agent.rs`: it opens sealed frames with the
  * room key, answers HELLO, and replies to requests.
  */
 class RelayClientTest {

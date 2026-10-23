@@ -24,7 +24,28 @@ export function turnStatsParts(stats: TurnStats, names: TurnStatsNames = {}): st
   parts.push(`${fmtTok(stats.outputTokens)} out`);
   if (tps > 0) parts.push(`${formatRate(tps)} tok/s`);
   parts.push(`${Math.max(1, Math.round(stats.wallMs / 1000))}s`);
+  const saved = codeModeSaved(stats);
+  if (saved) parts.push(saved);
   return parts;
+}
+
+/** "≈12k saved by code mode", when a code-mode reply came out ahead. */
+export function codeModeSaved(stats: TurnStats): string | null {
+  const c = stats.codeMode;
+  return c && c.tokensSaved > 0 ? `≈${fmtTok(c.tokensSaved)} saved by code mode` : null;
+}
+
+/** Where a code-mode reply's estimate comes from, for the hover title. */
+function codeModeTitle(stats: TurnStats): string | null {
+  const c = stats.codeMode;
+  if (!c) return null;
+  const n = (v: number) => Math.round(v).toLocaleString();
+  return [
+    `Code mode (estimated, ~4 characters a token): ${c.tokensSaved >= 0 ? `${n(c.tokensSaved)} saved` : `${n(-c.tokensSaved)} more than a tool list`}`,
+    `  Tool definitions not sent: ${n(c.schemaTokensSaved)} (${n(c.schemaTokensPerCall)} a call for ${c.toolsWrapped} tools, ${stats.calls} call${stats.calls === 1 ? '' : 's'})`,
+    `  Results kept out of context: ${n(c.resultTokensSaved)} (${c.toolCalls} tool call${c.toolCalls === 1 ? '' : 's'} in ${c.runs} run${c.runs === 1 ? '' : 's'})`,
+    `  Tool lookups: −${n(c.searchTokens)}`,
+  ].join('\n');
 }
 
 /** Exact counts for the hover title. */
@@ -36,6 +57,7 @@ export function turnStatsTitle(stats: TurnStats): string {
     `Input: ${stats.inputTokens.toLocaleString()} new${cache ? ` + ${(stats.cacheReadTokens ?? 0).toLocaleString()} cache read + ${(stats.cacheWriteTokens ?? 0).toLocaleString()} cache write` : ''}`,
     `Output: ${stats.outputTokens.toLocaleString()}`,
     `${stats.calls} model call${stats.calls === 1 ? '' : 's'}${stats.steps ? `, ${stats.steps} tool step${stats.steps === 1 ? '' : 's'}` : ''}`,
+    codeModeTitle(stats),
   ].filter(Boolean).join('\n');
 }
 

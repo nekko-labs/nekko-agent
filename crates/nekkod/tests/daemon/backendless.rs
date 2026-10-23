@@ -32,9 +32,11 @@ async fn runs_chats_and_answers_the_busy_checks_with_no_backend() {
 
     let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
     assert!(info.get("backend").is_none(), "no backend to report: {info}");
-    for c in ["chat:send", "chat:compact", "chat:suggest", "chat:generateImage"] {
-        assert!(info["owned"].as_array().unwrap().contains(&json!(c)), "{c} is owned: {info}");
+    // Served here even with nothing to forward to (chat:send runs below).
+    for c in ["chat:compact", "chat:suggest"] {
+        assert_served(d.port, c, json!(["s_none"])).await;
     }
+    assert_served(d.port, "chat:generateImage", json!([{ "sessionId": "s_none" }])).await;
     // A channel nothing here serves is unknown, not a missing backend.
     let (status, body) = post(d.port, "no:suchChannel", json!([]), Some(TOKEN)).await;
     assert!(status >= 400, "{status}");
@@ -53,7 +55,6 @@ async fn runs_chats_and_answers_the_busy_checks_with_no_backend() {
     let (status, shelves) = post(d.port, "skillSources:list", json!([false]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{shelves}");
     assert!(shelves.as_array().is_some_and(|s| !s.is_empty()), "{shelves}");
-    assert!(info["owned"].as_array().unwrap().contains(&json!("skillSources:list")), "{info}");
 
     // A whole turn, its tool included, admitted and run here.
     let opts = json!({ "sessionId": "s_solo", "providerId": "p1", "modelId": "synthetic", "text": "write a note" });

@@ -15,6 +15,12 @@ const GRAPH_CONTEXT_CAP: f64 = 8192.0;
 const MAX_SUGGESTIONS: usize = 3;
 const MIN_CONTEXT: f64 = 512.0;
 const CONTEXT_STOPS: [f64; 7] = [131072.0, 65536.0, 32768.0, 16384.0, 8192.0, 4096.0, 2048.0];
+/// llama.cpp's default `--ubatch-size`: a sliding-window layer holds its window plus one micro-batch.
+const UBATCH_TOKENS: f64 = 512.0;
+/// The sequences `llama-server` serves when it is not given `--parallel`
+/// (`n_parallel = auto`, one unified cache), which is how the engine starts a
+/// one-slot load.
+const AUTO_SEQUENCES: f64 = 4.0;
 
 /// `Math.max(a, b)`: `NaN` if either is.
 pub fn jmax(a: f64, b: f64) -> f64 {
@@ -31,6 +37,45 @@ fn truthy(n: Option<f64>) -> bool {
     n.is_some_and(|n| n != 0.0 && !n.is_nan())
 }
 
+/// The KV cache a GGUF really keeps, read layer by layer from its tensors
+/// (`gguf.rs`), in cache elements (keys plus values) per token of context.
+///
+/// The uniform `layers x kvHeads x headDim` overstates modern models several
+/// times over: a recurrent layer of a hybrid model keeps no cache, a
+/// sliding-window layer stops growing at its window, and layers that share
+/// another's cache add nothing. Gemma 4 12B at 32k: 992 MiB in llama.cpp,
+/// about 51 GB by the uniform formula.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct KvLayout {
+    /// Elements per token on the full-attention layers.
+    pub full_per_token: f64,
+    /// Elements per token on the sliding-window layers.
+    pub sliding_per_token: f64,
+    /// Their window, in tokens (0 when there are none).
+    pub sliding_window: f64,
+}
+
+impl KvLayout {
+    pub fn from_value(v: &Value) -> Option<Self> {
+        let n = |k: &str| v.get(k).and_then(Value::as_f64);
+        Some(Self {
+            full_per_token: n("fullPerToken")?,
+            sliding_per_token: n("slidingPerToken").unwrap_or(0.0),
+            sliding_window: n("slidingWindow").unwrap_or(0.0),
+        })
+    }
+
+    pub fn to_value(&self) -> Value {
+        let mut o = Map::new();
+        o.insert("fullPerToken".into(), num(self.full_per_token));
+        if self.sliding_per_token > 0.0 {
+            o.insert("slidingPerToken".into(), num(self.sliding_per_token));
+            o.insert("slidingWindow".into(), num(self.sliding_window));
+        }
+        Value::Object(o)
+    }
+}
+
 /// What we know about a model, normalized across runtimes (`ModelFacts`).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ModelFacts {
@@ -40,6 +85,9 @@ pub struct ModelFacts {
     pub kv_heads: Option<f64>,
     pub head_dim: Option<f64>,
     pub max_context: Option<f64>,
+    /// Read from the GGUF when the engine holds the file; preferred over the
+    /// uniform geometry above, and sized as `llama-server` allocates.
+    pub kv_layout: Option<KvLayout>,
 }
 
 impl ModelFacts {
@@ -52,6 +100,7 @@ impl ModelFacts {
             kv_heads: n("kvHeads"),
             head_dim: n("headDim"),
             max_context: n("maxContext"),
+            kv_layout: v.get("kvLayout").and_then(KvLayout::from_value),
         }
     }
 }
@@ -144,7 +193,32 @@ pub fn kv_bytes_per_element(dtype: &str) -> f64 {
 }
 
 /// `kvCacheBytes`: `None` when the geometry is unknown.
+///
+/// With a layout read from the file, as `llama-server` allocates it: the
+/// full-attention layers hold the whole context once, however many slots
+/// share it. Sliding-window layers hold a window per sequence: with one slot
+/// the engine passes no `--parallel`, so the server runs four sequences over
+/// one unified cache (`4 x window + ubatch` cells); with `--parallel N` each
+/// slot keeps `window + ubatch` of its `context / N`. Checked against
+/// llama-server b11429 on Gemma 4 12B at 32k: 1440 MiB of window cache
+/// unified, 960 MiB with two slots.
+///
+/// Otherwise the uniform estimate, with a full cache per slot, which is what
+/// Ollama allocates (`num_ctx` per parallel request).
 pub fn kv_cache_bytes(facts: &ModelFacts, req: &FitRequest) -> Option<f64> {
+    if let Some(l) = &facts.kv_layout {
+        let slots = jmax(1.0, req.parallel_slots);
+        let ctx = jmax(0.0, req.context_tokens);
+        let window_cells = if l.sliding_window <= 0.0 {
+            ctx
+        } else if slots <= 1.0 {
+            jmin(ctx, AUTO_SEQUENCES * l.sliding_window + UBATCH_TOKENS)
+        } else {
+            slots * jmin((ctx / slots).floor(), l.sliding_window + UBATCH_TOKENS)
+        };
+        let elements = l.full_per_token * ctx + l.sliding_per_token * window_cells;
+        return Some(elements * kv_bytes_per_element(&req.kv_cache_dtype));
+    }
     if !truthy(facts.layers) || !truthy(facts.kv_heads) || !truthy(facts.head_dim) {
         return None;
     }

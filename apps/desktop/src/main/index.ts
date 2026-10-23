@@ -46,7 +46,7 @@ function showWindow(): void {
   win.focus();
 }
 
-/** The engine (nekkod, or the TS backend alone); set once the app is ready. */
+/** The engine (nekkod); set once the app is ready. */
 let engine: EngineProcess | null = null;
 /** True once the engine has been stopped for quit, so the second quit goes through. */
 let engineStopped = false;
@@ -542,7 +542,7 @@ app.whenReady().then(async () => {
     notificationSessions.set(event.sender.id, visibleNotificationSession(report));
     notificationViews.set(event.sender.id, visibleNotificationView(report));
   });
-  registerIpc(engine);
+  registerIpc(engine, (sender) => applicationWindows.has(sender.id));
   setWindowStateDir(dataDir);
   registerTitleBarOverlaySync();
   // A link that launched the app is already on this process's command line

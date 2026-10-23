@@ -11,6 +11,7 @@ import { DEFAULT_SPEC_METHODOLOGY, SPEC_METHODOLOGIES, ORCHESTRATION_STRATEGIES,
 import { ShieldIcon, SunIcon, TrashIcon, RobotIcon, WandIcon } from '../icons.js';
 import { VoiceSettings } from '../components/VoiceSettings.js';
 import { RemoteAccess } from '../components/RemoteAccess.js';
+import { SyncSettings } from '../components/cloud/SyncSettings.js';
 import { DelegationRouteSettings } from '../components/DelegationRouteSettings.js';
 import { useT, LANGUAGES } from '../i18n.js';
 import { loadWallState, saveWallState, toWallSetting } from '../commandWall.js';
@@ -32,7 +33,7 @@ const ACTION_COLORS: Record<GuardrailAction, string> = { allow: 'var(--success)'
 
 const CHAT_MODES: Array<{ value: ChatMode; label: string; desc: string }> = [
   { value: 'ask', label: 'Ask', desc: 'Confirm every file write and command before it runs.' },
-  { value: 'guardrails', label: 'Guardrails', desc: 'Run freely, but ask/deny per your guardrail rules.' },
+  { value: 'guardrails', label: 'Guardrails', desc: 'Edit files and run read-only commands (ls, cat, rg, git status) freely; ask before any other command.' },
   { value: 'yolo', label: 'YOLO', desc: 'Run everything without confirming (deny rules still block).' },
 ];
 
@@ -306,6 +307,9 @@ export function SettingsView() {
 
         {/* MCP servers */}
         <ErrorBoundary label="MCP servers"><McpSection settings={settings} update={update} reload={reload} /></ErrorBoundary>
+
+        {/* Nekko Cloud sign-in and end-to-end encrypted sync */}
+        <ErrorBoundary label="Sync"><SyncSettings /></ErrorBoundary>
 
         {/* Remote access (relay) */}
         <ErrorBoundary label="Remote access"><RemoteAccess /></ErrorBoundary>
@@ -1068,7 +1072,7 @@ function GuardrailsSection({
         </button>
       </div>
       <p className="mt-1 text-[12px] text-ink-faint">
-        Protections for risky commands. Set each to allow, ask, or deny, or edit the rule set directly as JSON. The dot marks each rule's default.
+        In Guardrails mode only read-only commands (ls, cat, rg, git status and the like) run without asking. These rules add to that: an allow rule lets matching commands run too (your test or build command, say), ask always asks, and deny blocks in every mode. Edit them here or as JSON. The dot marks each rule's default.
       </p>
 
       {jsonMode ? (

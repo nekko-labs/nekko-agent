@@ -182,7 +182,8 @@ export const PHONE_DENIED_FOREVER: PhoneDeniedGroup = {
     'providers:save',
     'settings:reset',
   ],
-  prefixes: ['dialog:', 'oauth:', 'remote:', 'shell:', 'update:'],
+  // `cloud:` / `sync:`: the computer's Nekko Cloud token and sync keys. A phone signs in to Nekko Cloud itself.
+  prefixes: ['cloud:', 'dialog:', 'oauth:', 'remote:', 'shell:', 'sync:', 'update:'],
 };
 
 /**

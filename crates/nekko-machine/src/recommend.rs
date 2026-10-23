@@ -38,6 +38,9 @@ const PICK_SHARE: f64 = 0.9;
 const COMFORT_SHARE: f64 = 0.75;
 /// llama.cpp's default micro-batch: a sliding-window layer holds its window plus one.
 const UBATCH_TOKENS: f64 = 512.0;
+/// The sequences `llama-server` serves when the engine starts a one-slot load
+/// (no `--parallel`), each with its own window over one unified cache.
+const AUTO_SEQUENCES: f64 = 4.0;
 /// The planner's compute-buffer allowance (`estimate_overhead_bytes` in `nekko-engine`).
 const OVERHEAD_FLOOR_BYTES: f64 = 256.0 * MIB;
 const GRAPH_CONTEXT_CAP: f64 = 8192.0;
@@ -345,9 +348,12 @@ fn efficiency(feed: &Feed, backend: &str, moe: bool) -> Option<(f64, bool)> {
 
 /* ----------------------------------------------------------------- memory */
 
-/// KV cache bytes at `context` tokens.
+/// KV cache bytes at `context` tokens, as the engine loads a model (one slot:
+/// `llama-server`'s four unified sequences), the same figure as the engine
+/// planner's `kv_cache_bytes`.
 pub fn kv_bytes(kv: &Kv, context: f64) -> f64 {
-    let swa_tokens = if kv.sliding_window > 0.0 { context.min(kv.sliding_window + UBATCH_TOKENS) } else { context };
+    let swa_tokens =
+        if kv.sliding_window > 0.0 { context.min(AUTO_SEQUENCES * kv.sliding_window + UBATCH_TOKENS) } else { context };
     kv.full_bytes_per_token * context + kv.swa_bytes_per_token * swa_tokens
 }
 

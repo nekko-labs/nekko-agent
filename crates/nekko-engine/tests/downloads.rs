@@ -1,4 +1,4 @@
-//! Replays the TS downloads golden set (`downloads.golden.test.ts`): the
+//! Replays the frozen TS downloads golden set (`golden/downloads.json`): the
 //! queue over the same scripted server leaves the same jobs, requests and
 //! files, and the plans fetch the same things, text for text.
 

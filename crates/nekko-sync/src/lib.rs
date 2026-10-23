@@ -31,7 +31,12 @@
 //!   data, so the server can't move a record to another object, account or
 //!   revision. Plaintext is padded (Padmé) so sizes leak little.
 //! - [`wrap_keyring`] / [`unwrap_keyring`]: ECIES over P-256 to a device's
-//!   public key (the iPhone's lives in the Secure Enclave).
+//!   public key (the iPhone's lives in the Secure Enclave), authenticated by
+//!   the sending device's key, so a device takes a keyring only from a device
+//!   it already trusts.
+//! - [`JoinCode`], [`wrap_for_join`] / [`unwrap_join`]: approving a new
+//!   device with a one-time code the user types, which checks the new
+//!   device's key on the approver and the approver on the new device.
 //! - [`RecoveryKey`]: 256 random bits printed as Crockford base32 with a
 //!   checksum. It is the only way back in if every device is lost; there is no
 //!   password, so there is nothing for the server to brute-force.
@@ -43,6 +48,7 @@
 mod b64;
 mod donation;
 mod hkdf;
+mod join;
 mod pad;
 mod record;
 mod recovery;
@@ -50,12 +56,13 @@ mod wrap;
 
 pub use b64::{decode as b64_decode, encode as b64_encode};
 pub use donation::{DONATION_VERSION, Donation, seal_donation, seal_donation_with};
+pub use join::{JoinCode, unwrap_join, wrap_for_join, wrap_for_join_with};
 pub use pad::{frame, padme, unframe};
 pub use record::{Keyring, OBJECT_ID_LEN, object_id, open_record, record_aad, seal_record, seal_record_with};
 pub use recovery::{RecoveryKey, open_recovery, seal_recovery, seal_recovery_with};
 pub use wrap::{
-    DeviceKey, PUBLIC_KEY_LEN, fingerprint, open_sealed, seal_to, seal_to_with, unwrap_keyring, wrap_keyring,
-    wrap_keyring_with,
+    DeviceKey, PUBLIC_KEY_LEN, Recipient, fingerprint, open_sealed, seal_to, seal_to_with, unwrap_keyring,
+    wrap_keyring, wrap_keyring_with,
 };
 
 /// The first part of every label and associated-data string: bumped only with

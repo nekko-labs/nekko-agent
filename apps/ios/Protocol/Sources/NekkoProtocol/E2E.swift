@@ -64,7 +64,7 @@ public enum E2E {
 
     /// The relay-visible tag of a chat's Live Activity: the first 32 hex digits
     /// of sha256("nekko-activity:" + session id), as the computer computes it
-    /// (`activityTag` in packages/host/src/relay.ts, `activity_tag` in nekko-remote).
+    /// (`activity_tag` in crates/nekko-remote).
     public static func activityTag(_ sessionId: String) -> String {
         toHex(Data(SHA256.hash(data: Data("nekko-activity:\(sessionId)".utf8)).prefix(16)))
     }

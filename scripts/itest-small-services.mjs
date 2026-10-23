@@ -151,14 +151,11 @@ const timed = async (n, fn) => {
 
 try {
   let info = null;
-  for (let i = 0; i < 160 && !info?.owned; i++) {
+  for (let i = 0; i < 160 && info?.app !== 'nekkod'; i++) {
     info = await api('daemon:info').catch(() => null);
-    if (!info?.owned) await sleep(250);
+    if (info?.app !== 'nekkod') await sleep(250);
   }
-  if (!info?.owned) throw new Error(`the server never came up:\n${serverOut}`);
-  for (const c of ['pr:continueStack', 'pr:linkStack', 'data:wipe', 'app:info', 'updates:check', 'workspace:add', 'session:watches']) {
-    check(`daemon owns ${c}`, info.owned.includes(c));
-  }
+  if (info?.app !== 'nekkod') throw new Error(`the server never came up:\n${serverOut}`);
   await api('providers:save', { id: 'p1', kind: 'openai-compat', label: 'Scripted', baseUrl: modelUrl, enabled: true });
   await api('workspace:addByPath', clone);
   const ws = (await api('workspace:list'))[0];

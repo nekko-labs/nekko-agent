@@ -9,7 +9,7 @@ import UniformTypeIdentifiers
 /// comes to the front and opens New chat with it, editable. Nothing is sent
 /// from here, and the extension never connects to the computer.
 final class ShareViewController: UIViewController {
-    static let appGroup = "group.com.nekko.native.ios"
+    static let appGroup = "group.dev.nekkolabs.nekkoagent"
 
     private let model = ShareModel()
     private lazy var inbox = ShareInbox(defaults: UserDefaults(suiteName: Self.appGroup) ?? .standard)

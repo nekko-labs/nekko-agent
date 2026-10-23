@@ -1,7 +1,8 @@
 //! The Rust workflow engine against the TS one.
 //!
-//! `golden/workflow-rules.json` and `golden/workflows.json` are written by
-//! `packages/host/src/workflows.golden.test.ts` (UPDATE_GOLDEN=1). The rules
+//! `golden/workflow-rules.json` and `golden/workflows.json` are a frozen
+//! record of the deleted TS engine (edit them by hand per
+//! docs/runbooks/golden-fixtures.md). The rules
 //! must give the same answers; the engine, driven through the same operations
 //! against a fake daemon that behaves like the TS test's mocks, must leave the
 //! same files and make the same chats, turns, shell calls and actions.

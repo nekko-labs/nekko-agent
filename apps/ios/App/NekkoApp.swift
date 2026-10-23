@@ -40,7 +40,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 /// the iPhone side of Android's launcher shortcut. It opens the same
 /// `nekko-agent://new` link as the Control Center control; nothing is sent.
 enum QuickAction {
-    static let newChat = "com.nekko.native.ios.new-chat"
+    static let newChat = "dev.nekkolabs.nekkoagent.new-chat"
 
     /// The link a quick action opens, or nil for one this version doesn't know.
     static func url(for type: String) -> URL? {
@@ -74,6 +74,7 @@ struct NekkoApp: App {
             RootView()
                 .environment(app)
                 .environment(app.store)
+                .environment(app.cloud)
                 .environment(app.prefs)
                 .modifier(Themed(choice: app.prefs.theme, appearance: app.store.appearance))
                 .onOpenURL { app.handle(url: $0) }

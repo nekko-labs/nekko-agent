@@ -25,12 +25,14 @@ bytes.workspace = true
 futures-util.workspace = true
 # The computer's name and addresses, for "Visible on this network" and the local relay.
 gethostname = "1"
+nekko-cloud = { path = "../nekko-cloud" }
 if-addrs = "0.13"
 getrandom.workspace = true
 icu_normalizer = "2"
 nekko-agent = { path = "../nekko-agent" }
 nekko-automation = { path = "../nekko-automation" }
 nekko-chat = { path = "../nekko-chat" }
+nekko-codemode = { path = "../nekko-codemode" }
 nekko-privacy = { path = "../nekko-privacy" }
 nekko-connectors = { path = "../nekko-connectors" }
 nekko-context = { path = "../nekko-context" }

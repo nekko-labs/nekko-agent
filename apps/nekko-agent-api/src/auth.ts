@@ -19,14 +19,19 @@ const TOKEN = /^nk_[A-Za-z0-9_-]{43}$/;
 
 const hash = (token: string) => createHash("sha256").update(token).digest();
 
+/** How long a token lasts after its last use. */
+export const TOKEN_IDLE_DAYS = 180;
+
 /**
- * Issues a bearer token for a user. Only its SHA-256 is stored, so a database
- * leak doesn't hand out sessions. The sign-in flow that calls this is not
- * built yet (accounts are PF14 step 4); tests and an operator script use it.
+ * Issues a bearer token for a user (one per signed-in device). Only its
+ * SHA-256 is stored, so a database leak doesn't hand out sessions.
  */
-export async function issueToken(db: Db, userId: string): Promise<string> {
+export async function issueToken(db: Db, userId: string, label: string | null = null): Promise<string> {
   const token = `nk_${randomBytes(32).toString("base64url")}`;
-  await db.query("insert into api_tokens (user_id, token_hash) values ($1, $2)", [userId, hash(token)]);
+  await db.query(
+    `insert into api_tokens (user_id, token_hash, label, expires_at) values ($1, $2, $3, now() + make_interval(days => ${TOKEN_IDLE_DAYS}))`,
+    [userId, hash(token), label],
+  );
   return token;
 }
 
@@ -36,9 +41,11 @@ export async function authenticate(db: Db, req: FastifyRequest): Promise<Caller 
   const token = header?.startsWith("Bearer ") ? header.slice(7).trim() : "";
   if (!TOKEN.test(token)) return null;
   const { rows } = await db.query<{ id: string; user_id: string; plan: Plan; device_id: string | null }>(
-    `update api_tokens t set last_used_at = date_trunc('hour', now())
+    `update api_tokens t set last_used_at = date_trunc('hour', now()),
+            expires_at = now() + make_interval(days => ${TOKEN_IDLE_DAYS})
        from users u
       where t.token_hash = $1 and t.revoked_at is null and u.id = t.user_id
+        and (t.expires_at is null or t.expires_at > now())
       returning t.id, t.user_id, u.plan, t.device_id`,
     [hash(token)],
   );

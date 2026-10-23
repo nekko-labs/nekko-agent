@@ -48,7 +48,8 @@ pub const CHANNELS: &[&str] = &[
     "training:hint",
 ];
 
-/// The run tools a turn the host runs sends here (`training:tool`).
+/// The run tools as a channel (`training:tool`); a daemon-driven turn calls
+/// them directly.
 pub const TOOL_CHANNEL: &str = "training:tool";
 
 /// What a run needs from the rest of the engine.

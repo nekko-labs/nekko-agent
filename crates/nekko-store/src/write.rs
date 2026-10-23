@@ -4,16 +4,17 @@
 //!
 //! Each is a read-modify-write of one file, saved the way `saveSession` saves:
 //! `updatedAt` set to now, `JSON.stringify(s, null, 2)` layout, written to a
-//! temp name and renamed over the file. The TS agent loop still writes the same
-//! files for its own turns (PF14), atomically too, so either side's reader
-//! only ever sees a whole chat. Where a TS patch assigns `undefined` the key is
-//! removed here, since that is what `JSON.stringify` leaves behind.
+//! temp name and renamed over the file, so a reader only ever sees a whole
+//! chat. Where a TS patch assigns `undefined` the key is removed here, since
+//! that is what `JSON.stringify` leaves behind.
 
 use crate::client_ids::{client_message_id_of, has_client_message_id, remember_client_message_ids};
-use crate::{SessionStore, valid_id};
+use crate::{Meta, SessionStore, valid_id};
 use nekko_js as js;
+use serde::ser::{Serialize, SerializeMap, Serializer};
 use serde_json::{Map, Value, json};
 use std::path::Path;
+use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// The fields `setSessionOptions` takes (its `Pick<Session, ...>`).
@@ -29,6 +30,7 @@ const OPTION_KEYS: &[&str] = &[
     "disabledConnectors",
     "memory",
     "guidance",
+    "toolApproach",
     "offline",
     "cloudOnly",
     "incognito",
@@ -53,7 +55,7 @@ const OPTION_KEYS: &[&str] = &[
 pub const STARTER_MODES: &str = r#"[
   { "id": "cloud", "name": "Cloud only", "icon": "cloud", "options": { "executionMode": "worktree", "mode": "guardrails", "offline": false, "incognito": false, "disabledTools": [], "workMode": "default", "models": "cloud" } },
   { "id": "fusion", "name": "Fusion", "icon": "route", "options": { "executionMode": "worktree", "mode": "guardrails", "offline": false, "incognito": false, "disabledTools": [], "workMode": "default", "models": "fusion" } },
-  { "id": "local", "name": "Local only", "icon": "laptop", "options": { "executionMode": "worktree", "mode": "guardrails", "offline": true, "incognito": false, "disabledTools": [], "workMode": "default", "models": "local" } },
+  { "id": "local", "name": "Local only", "icon": "laptop", "options": { "executionMode": "worktree", "mode": "guardrails", "offline": true, "incognito": false, "disabledTools": [], "workMode": "default", "models": "local", "toolApproach": "code" } },
   { "id": "risky-business", "name": "Risky business", "icon": "box", "options": { "executionMode": "sandbox", "mode": "ask", "offline": true, "incognito": false, "disabledTools": [], "workMode": "default" } }
 ]"#;
 
@@ -142,6 +144,9 @@ fn apply_mode(s: &mut JsObject, options: &Value) {
         Some("local") => s.set("cloudOnly", Some(json!(false))),
         _ => {}
     }
+    if let Some(v) = get("toolApproach").filter(|v| js::truthy(Some(v))) {
+        s.set("toolApproach", Some(v));
+    }
 }
 
 /// What a running turn's save takes from disk rather than from memory
@@ -157,6 +162,7 @@ const USER_FIELDS: &[&str] = &[
     "disabledConnectors",
     "memory",
     "guidance",
+    "toolApproach",
     "offline",
     "cloudOnly",
     "incognito",
@@ -190,6 +196,72 @@ fn queue_payload(item: &Value) -> Value {
 /// `queueItemsEqual`: the same payload, as `JSON.stringify` prints it.
 fn queue_items_equal(a: &Value, b: &Value) -> bool {
     js::stringify(&queue_payload(a)) == js::stringify(&queue_payload(b))
+}
+
+/// What `saveTurnSession` takes from the chat on disk into the one a turn
+/// holds (see [`SessionStore::save_turn`]).
+fn merge_disk(target: &mut Map<String, Value>, disk: &Meta, queued: Option<(usize, &Value)>) -> Result<(), String> {
+    for key in USER_FIELDS {
+        match disk.get(key) {
+            Some(v) => {
+                target.insert((*key).into(), v.clone());
+            }
+            None => {
+                target.shift_remove(*key);
+            }
+        }
+    }
+    if disk.get("titleAuto") == Some(&Value::Bool(false)) {
+        target.insert("title".into(), disk.get("title").cloned().unwrap_or(Value::Null));
+        target.insert("titleAuto".into(), json!(false));
+    }
+    // Ids a phone queued with meanwhile stay remembered beside this turn's own.
+    if disk.get("clientMessageIds").and_then(Value::as_array).is_some_and(|a| !a.is_empty()) {
+        let mine: Vec<String> = target
+            .get("clientMessageIds")
+            .and_then(Value::as_array)
+            .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+            .unwrap_or_default();
+        let ids = remember_client_message_ids(disk.get("clientMessageIds"), &mine);
+        target.insert("clientMessageIds".into(), ids);
+    }
+    if let Some((index, item)) = queued {
+        let queue = disk.get("queue").and_then(Value::as_array).cloned().unwrap_or_default();
+        match queue.get(index) {
+            Some(on_disk) if queue_items_equal(on_disk, item) => {}
+            _ => return Err("Queued prompt changed before it could start.".into()),
+        }
+        let rest: Vec<Value> = queue.into_iter().enumerate().filter(|(i, _)| *i != index).map(|(_, v)| v).collect();
+        target.insert("queue".into(), Value::Array(rest));
+    }
+    Ok(())
+}
+
+/// A chat to write, its transcript (when given) apart from its other fields:
+/// serialized exactly as the whole object would be, with `messages` in its
+/// place among them (or last, when the fields have no such key).
+struct Chat<'a> {
+    fields: &'a Map<String, Value>,
+    messages: Option<&'a [Value]>,
+}
+
+impl Serialize for Chat<'_> {
+    fn serialize<S: Serializer>(&self, ser: S) -> Result<S::Ok, S::Error> {
+        let Some(messages) = self.messages else { return self.fields.serialize(ser) };
+        let placed = self.fields.contains_key("messages");
+        let mut map = ser.serialize_map(Some(self.fields.len() + usize::from(!placed)))?;
+        for (k, v) in self.fields {
+            if k == "messages" {
+                map.serialize_entry(k, messages)?;
+            } else {
+                map.serialize_entry(k, v)?;
+            }
+        }
+        if !placed {
+            map.serialize_entry("messages", messages)?;
+        }
+        map.end()
+    }
 }
 
 /// `ARCHIVE_RETENTION_DAYS` in shared/archive.ts, in milliseconds.
@@ -305,20 +377,24 @@ impl SessionStore {
     fn save(&self, s: &mut Map<String, Value>) -> Result<(), String> {
         s.insert("updatedAt".into(), json!(now_ms()));
         let id = s.get("id").and_then(Value::as_str).filter(|id| valid_id(id)).ok_or("a session without a valid id")?;
-        std::fs::create_dir_all(&self.dir).map_err(|e| e.to_string())?;
-        let text = serde_json::to_string_pretty(&Value::Object(s.clone())).map_err(|e| e.to_string())?;
-        write_atomic(&self.path(id), &text).map_err(|e| format!("could not save the chat: {e}"))
+        self.write_text(id, &serde_json::to_string_pretty(s).map_err(|e| e.to_string())?)
     }
 
-    /// Read, change, save; `None` when there is no such chat. Writes made here
-    /// are serialized, so two UI patches never lose one another.
+    fn write_text(&self, id: &str, text: &str) -> Result<(), String> {
+        std::fs::create_dir_all(&self.dir).map_err(|e| e.to_string())?;
+        write_atomic(&self.path(id), text).map_err(|e| format!("could not save the chat: {e}"))
+    }
+
+    /// Read, change, save; `None` when there is no such chat. Writes to one
+    /// chat are serialized, so two UI patches never lose one another.
     fn patch(&self, id: &str, change: impl FnOnce(&mut Map<String, Value>) -> bool) -> Result<Option<Value>, String> {
-        let _guard = self.writes.lock().unwrap_or_else(|e| e.into_inner());
-        let Some(Value::Object(mut s)) = self.get(id) else { return Ok(None) };
-        if change(&mut s) {
-            self.save(&mut s)?;
-        }
-        Ok(Some(Value::Object(s)))
+        self.with_chat(id, || {
+            let Some(Value::Object(mut s)) = self.get(id) else { return Ok(None) };
+            if change(&mut s) {
+                self.save(&mut s)?;
+            }
+            Ok(Some(Value::Object(s)))
+        })
     }
 
     /// `saveTurnSession(s, queued)`: save a chat a running turn holds in
@@ -330,48 +406,56 @@ impl SessionStore {
     pub fn save_turn(&self, s: &mut Value, queued: Option<(usize, &Value)>) -> Result<(), String> {
         let Value::Object(target) = s else { return Err("a session that is not an object".into()) };
         let id = target.get("id").and_then(Value::as_str).unwrap_or_default().to_string();
-        let _guard = self.writes.lock().unwrap_or_else(|e| e.into_inner());
-        match self.get(&id) {
-            Some(Value::Object(disk)) => {
-                for key in USER_FIELDS {
-                    match disk.get(*key) {
-                        Some(v) => {
-                            target.insert((*key).into(), v.clone());
-                        }
-                        None => {
-                            target.shift_remove(*key);
-                        }
-                    }
-                }
-                if disk.get("titleAuto") == Some(&Value::Bool(false)) {
-                    target.insert("title".into(), disk.get("title").cloned().unwrap_or(Value::Null));
-                    target.insert("titleAuto".into(), json!(false));
-                }
-                // Ids a phone queued with meanwhile stay remembered beside this turn's own.
-                if disk.get("clientMessageIds").and_then(Value::as_array).is_some_and(|a| !a.is_empty()) {
-                    let mine: Vec<String> = target
-                        .get("clientMessageIds")
-                        .and_then(Value::as_array)
-                        .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
-                        .unwrap_or_default();
-                    let ids = remember_client_message_ids(disk.get("clientMessageIds"), &mine);
-                    target.insert("clientMessageIds".into(), ids);
-                }
-                if let Some((index, item)) = queued {
-                    let queue = disk.get("queue").and_then(Value::as_array).cloned().unwrap_or_default();
-                    match queue.get(index) {
-                        Some(on_disk) if queue_items_equal(on_disk, item) => {}
-                        _ => return Err("Queued prompt changed before it could start.".into()),
-                    }
-                    let rest: Vec<Value> =
-                        queue.into_iter().enumerate().filter(|(i, _)| *i != index).map(|(_, v)| v).collect();
-                    target.insert("queue".into(), Value::Array(rest));
-                }
+        self.with_chat(&id, || {
+            // Only the user's fields are read back, so the transcript on disk is skipped.
+            match self.meta(&id) {
+                Some(disk) => merge_disk(target, &disk, queued)?,
+                None if queued.is_some() => return Err("Session not found.".into()),
+                None => {}
             }
-            _ if queued.is_some() => return Err("Session not found.".into()),
-            _ => {}
+            self.save(target)
+        })
+    }
+
+    /// [`save_turn`](Self::save_turn) (no queue entry) for a chat a running
+    /// turn shares behind `session`'s lock, which is held only to merge in
+    /// what the user changed and to copy out the fields around the
+    /// transcript, never while the file is serialized or written. With
+    /// `messages`, that transcript is written and then becomes the chat's
+    /// (moved in, not copied); without, the chat's own is copied out.
+    pub fn save_turn_shared(&self, session: &Mutex<Value>, messages: Option<Vec<Value>>) -> Result<(), String> {
+        let lock = || session.lock().unwrap_or_else(|e| e.into_inner());
+        let id = lock().get("id").and_then(Value::as_str).unwrap_or_default().to_string();
+        let result = self.with_chat(&id, || {
+            let disk = self.meta(&id);
+            let head = {
+                let mut s = lock();
+                let Value::Object(target) = &mut *s else { return Err("a session that is not an object".into()) };
+                if let Some(disk) = &disk {
+                    merge_disk(target, disk, None)?;
+                }
+                target.insert("updatedAt".into(), json!(now_ms()));
+                if !target.get("id").and_then(Value::as_str).is_some_and(valid_id) {
+                    return Err("a session without a valid id".into());
+                }
+                match &messages {
+                    // The transcript's place, kept empty: filled in as it is written.
+                    Some(_) => target
+                        .iter()
+                        .map(|(k, v)| (k.clone(), if k == "messages" { Value::Null } else { v.clone() }))
+                        .collect::<Map<String, Value>>(),
+                    None => target.clone(),
+                }
+            };
+            let doc = Chat { fields: &head, messages: messages.as_deref() };
+            self.write_text(&id, &serde_json::to_string_pretty(&doc).map_err(|e| e.to_string())?)
+        });
+        if let Some(m) = messages
+            && let Some(obj) = lock().as_object_mut()
+        {
+            obj.insert("messages".into(), Value::Array(m));
         }
-        self.save(target)
+        result
     }
 
     /// `createSession(workspaceId)`.
@@ -437,8 +521,8 @@ impl SessionStore {
             }
         }
         let mut s = s.into_map();
-        let _guard = self.writes.lock().unwrap_or_else(|e| e.into_inner());
-        self.save(&mut s)?;
+        let id = s.get("id").and_then(Value::as_str).unwrap_or_default().to_string();
+        self.with_chat(&id, || self.save(&mut s))?;
         Ok(Value::Object(s))
     }
 
@@ -480,8 +564,20 @@ impl SessionStore {
     /// `saveSession(s)`: write the chat as it is (no merge with the disk), `s` updated to what was written.
     pub fn save_whole(&self, s: &mut Value) -> Result<(), String> {
         let Value::Object(target) = s else { return Err("a session that is not an object".into()) };
-        let _guard = self.writes.lock().unwrap_or_else(|e| e.into_inner());
-        self.save(target)
+        let id = target.get("id").and_then(Value::as_str).unwrap_or_default().to_string();
+        self.with_chat(&id, || self.save(target))
+    }
+
+    /// Write a chat exactly as given, `updatedAt` included: a chat that arrived
+    /// through end-to-end encrypted sync keeps the time it was last changed
+    /// on the device that changed it. Atomic, like every other write.
+    pub fn put_synced(&self, s: &Value) -> Result<(), String> {
+        let id = s.get("id").and_then(Value::as_str).filter(|id| valid_id(id)).ok_or("a session without a valid id")?;
+        self.with_chat(id, || {
+            std::fs::create_dir_all(&self.dir).map_err(|e| e.to_string())?;
+            let text = serde_json::to_string_pretty(s).map_err(|e| e.to_string())?;
+            write_atomic(&self.path(id), &text).map_err(|e| format!("could not save the chat: {e}"))
+        })
     }
 
     /// `deleteSession`.
@@ -489,11 +585,10 @@ impl SessionStore {
         if !valid_id(id) {
             return Ok(());
         }
-        let _guard = self.writes.lock().unwrap_or_else(|e| e.into_inner());
-        match std::fs::remove_file(self.path(id)) {
+        self.with_chat(id, || match std::fs::remove_file(self.path(id)) {
             Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.to_string()),
             _ => Ok(()),
-        }
+        })
     }
 
     /// `clearSessions`: local calendar boundaries, inclusive on updatedAt.
@@ -518,9 +613,10 @@ impl SessionStore {
         cutoff: f64,
         before_delete: impl Fn(&str) -> Result<(), String>,
     ) -> Result<usize, String> {
-        let _guard = self.writes.lock().unwrap_or_else(|e| e.into_inner());
+        // Every chat's writes held; the transcripts are not needed to choose.
+        let _all = self.all.write().unwrap_or_else(|e| e.into_inner());
         let mut count = 0;
-        for session in self.list() {
+        for session in self.list_meta() {
             let updated = js::to_number(session.get("updatedAt"));
             if !all
                 && !matches!(
@@ -559,9 +655,10 @@ impl SessionStore {
         now: f64,
         before_delete: impl Fn(&str) -> Result<(), String>,
     ) -> Result<usize, String> {
-        let _guard = self.writes.lock().unwrap_or_else(|e| e.into_inner());
+        // Every chat's writes held; the transcripts are not needed to choose.
+        let _all = self.all.write().unwrap_or_else(|e| e.into_inner());
         let mut count = 0;
-        for session in self.list() {
+        for session in self.list_meta() {
             if !archive_expired(&session, now) {
                 continue;
             }
@@ -594,7 +691,10 @@ impl SessionStore {
     /// `gitIsolation`) are always overwritten from the source, so the fork
     /// needs no settings.
     pub fn fork(&self, id: &str, before_message_id: &Value) -> Result<Option<Value>, String> {
-        let _guard = self.writes.lock().unwrap_or_else(|e| e.into_inner());
+        self.with_chat(id, || self.fork_held(id, before_message_id))
+    }
+
+    fn fork_held(&self, id: &str, before_message_id: &Value) -> Result<Option<Value>, String> {
         let Some(src) = self.get(id) else { return Ok(None) };
         let Some(src) = src.as_object() else { return Ok(None) };
         let messages = src.get("messages");
@@ -678,6 +778,7 @@ impl SessionStore {
             "disabledConnectors",
             "memory",
             "guidance",
+            "toolApproach",
         ] {
             if let Some(v) = src.get(key) {
                 s.insert(key.into(), v.clone());

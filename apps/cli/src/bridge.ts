@@ -1,7 +1,9 @@
 import { VERSION } from './version.js';
 
 /**
- * The Claude Agent approval bridge: `nekko-agent mcp --bridge <token> --url <nekkod>`.
+ * The Claude Agent approval bridge: `nekko-agent mcp --bridge --url <nekkod>`, with
+ * the chat's bridge token in `NEKKO_BRIDGE_TOKEN` (never in argv, which any local
+ * user can list).
  *
  * nekkod starts the user's own Claude Code with `--permission-prompt-tool
  * mcp__nekko_bridge__approve` and a per-chat `--mcp-config` that runs this

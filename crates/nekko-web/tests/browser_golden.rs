@@ -1,7 +1,7 @@
 //! The Rust `browser` (dedicated mode) and `capture` tools against the TS
-//! ones: `golden/browser.json` is written by
-//! packages/host/src/browser-capture.golden.test.ts, which runs the real
-//! `executeTool` against a scripted desktop bridge. Same cases here, the same
+//! ones: `golden/browser.json` is a frozen record of the deleted TS
+//! `executeTool` against a scripted desktop bridge (edit it by hand per
+//! docs/runbooks/golden-fixtures.md). Same cases here, the same
 //! normalization (`<ROOT>` for the project, `<OUT>` for its parent, `/`).
 
 use nekko_tools::{BoxFuture, Cancel, ChatMode, SandboxMode, ToolCall, ToolContext, Workspace, approver_fn};

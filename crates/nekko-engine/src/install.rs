@@ -669,7 +669,11 @@ impl Installer {
                     vec![
                         s("-NoProfile"),
                         s("-Command"),
-                        format!("Expand-Archive -LiteralPath '{archive}' -DestinationPath '{dest}' -Force"),
+                        format!(
+                            "Expand-Archive -LiteralPath '{}' -DestinationPath '{}' -Force",
+                            ps_single_quoted(archive),
+                            ps_single_quoted(dest)
+                        ),
                     ],
                 ),
             ]
@@ -751,4 +755,30 @@ fn find_server_binary(dir: &str, depth: u32, names: &[&str]) -> Option<String> {
         }
     }
     None
+}
+
+/// `s` for the inside of a PowerShell single-quoted string: every quote
+/// doubled. PowerShell also closes a single-quoted string on the curly
+/// quotes U+2018 to U+201B, so those are doubled too.
+fn ps_single_quoted(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        if matches!(c, '\'' | '\u{2018}' | '\u{2019}' | '\u{201A}' | '\u{201B}') {
+            out.push(c);
+        }
+        out.push(c);
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ps_single_quoted;
+
+    #[test]
+    fn powershell_paths_cannot_close_their_quotes() {
+        assert_eq!(ps_single_quoted(r"C:\Users\me\x.zip"), r"C:\Users\me\x.zip");
+        assert_eq!(ps_single_quoted("a'; Remove-Item -Recurse ~; '"), "a''; Remove-Item -Recurse ~; ''");
+        assert_eq!(ps_single_quoted("o\u{2019}brien"), "o\u{2019}\u{2019}brien");
+    }
 }
