@@ -93,3 +93,28 @@ describe('model chip name priority', () => {
     expect(out).toContain('ctl-caret shrink-0');
   });
 });
+
+describe('account switcher', () => {
+  const gpt = (id: string, tokenKey: string) => ({ id, kind: 'chatgpt' as const, label: 'ChatGPT', enabled: true, baseUrl: 'http://localhost', auth: 'subscription' as const, tokenKey });
+  const base = { expanded: true, open: true, modelId: 'gpt-6', models: [{ id: 'gpt-6', providerId: 'a', name: 'GPT 6' }], onOpenChange: () => {}, onProvider: () => {}, onModel: () => {} };
+  it('lists each account of the current vendor by its email, the current one checked', () => {
+    emails.byToken = { 'chatgpt:a': 'me@home.example', 'chatgpt:b': 'me@work.example' };
+    try {
+      const out = renderToStaticMarkup(<ModelPicker {...base} providers={[gpt('a', 'chatgpt:a'), gpt('b', 'chatgpt:b')]} providerId="a" />);
+      expect(out).toContain('data-account-switcher');
+      expect(out).toMatch(/aria-checked="true"[^>]*>me@home\.example</);
+      expect(out).toMatch(/aria-checked="false"[^>]*>me@work\.example</);
+      expect(out).toContain('Use GPT 6 on me@work.example');
+    } finally { emails.byToken = {}; }
+  });
+  it('shows no switcher with a single account', () => {
+    const out = renderToStaticMarkup(<ModelPicker {...base} providers={[gpt('a', 'chatgpt:a')]} providerId="a" />);
+    expect(out).not.toContain('data-account-switcher');
+  });
+  it('says a Claude Agent switch starts a new Claude Code conversation', () => {
+    const cc = (id: string, label: string, account?: string) => ({ id, kind: 'claude-code' as const, label, enabled: true, baseUrl: '', ...(account ? { claudeCode: { account } } : {}) });
+    const out = renderToStaticMarkup(<ModelPicker {...base} modelId="opus" models={[{ id: 'opus', providerId: 'cc', name: 'Opus' }]} providers={[cc('cc', 'Claude Agent'), cc('ccw', 'Claude Agent · Work', 'work')]} providerId="cc" />);
+    expect(out).toContain('Claude Agent · Work');
+    expect(out).toContain('new Claude Code conversation');
+  });
+});

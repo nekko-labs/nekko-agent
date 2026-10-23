@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useId, useState } from 'react';
 import type { ClaudeCapability, ClaudeCapabilityStatus, ClaudeCodeStatus, ClaudePolicy } from '@nekko-agent/shared';
-import { CLAUDE_PLAN_SHEET, CLAUDE_POLICY, claudeComparisonTable } from '@nekko-agent/shared';
+import { CLAUDE_PLAN_SHEET, CLAUDE_POLICY, claudeAccountName, claudeComparisonTable } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
 import { CloseIcon } from '../../icons.js';
 import { Modal } from '../primitives/index.js';
@@ -12,17 +12,17 @@ import { Modal } from '../primitives/index.js';
  */
 
 /** How the user's Claude Code is set up, re-read whenever the window regains focus. */
-export function useClaudeCodeStatus(providerId?: string): { status: ClaudeCodeStatus | null; checking: boolean; refresh: () => void } {
+export function useClaudeCodeStatus(providerId?: string, account?: string): { status: ClaudeCodeStatus | null; checking: boolean; refresh: () => void } {
   const [status, setStatus] = useState<ClaudeCodeStatus | null>(null);
   const [checking, setChecking] = useState(false);
   const refresh = useCallback(() => {
     setChecking(true);
     window.nekko
-      .getClaudeCodeStatus(providerId)
+      .getClaudeCodeStatus(providerId, account)
       .then(setStatus)
       .catch((e) => setStatus({ installed: false, message: String(e) }))
       .finally(() => setChecking(false));
-  }, [providerId]);
+  }, [providerId, account]);
   useEffect(() => {
     refresh();
     window.addEventListener('focus', refresh);
@@ -151,13 +151,35 @@ export function claudeAuthLabel(status: ClaudeCodeStatus): string {
   return status.authMethod;
 }
 
+/** Which Claude Code login a new Claude Agent uses: the default one, or a named second account. */
+export interface ClaudeAgentAccount {
+  /** Account name (`work`), `undefined` for the default login. */
+  account?: string;
+  /** What the user typed, kept for the provider's label ("Claude Agent · Work"). */
+  label?: string;
+}
+
 /**
  * The Claude Agent setup states: not installed, installed but signed out, and
  * ready. Sign-in happens in Claude Code (a Nekko terminal runs `claude`, where
- * the user types /login); Nekko only reads `claude auth status`.
+ * the user types /login); Nekko only reads `claude auth status`. A second
+ * Claude Code account gets its own folder (`~/.claude-<name>`), signed in the
+ * same way; Nekko never opens it.
  */
-export function ClaudeAgentSetup({ onSave, saving }: { onSave: () => void; saving: boolean }) {
-  const { status, checking, refresh } = useClaudeCodeStatus();
+export function ClaudeAgentSetup({ onSave, saving, initialAccount }: { onSave: (account: ClaudeAgentAccount) => void; saving: boolean; initialAccount?: string }) {
+  const [another, setAnother] = useState(initialAccount !== undefined);
+  const [typed, setTyped] = useState(initialAccount ?? '');
+  const name = claudeAccountName(typed);
+  const account = another ? name || undefined : undefined;
+  // Another account with no usable name yet: nothing to check or save.
+  const unnamed = another && !name;
+  // Each check runs `claude auth status`, so wait for the typing to settle.
+  const [checked, setChecked] = useState(account);
+  useEffect(() => {
+    const t = setTimeout(() => setChecked(account), 400);
+    return () => clearTimeout(t);
+  }, [account]);
+  const { status, checking, refresh } = useClaudeCodeStatus(undefined, checked);
   const signIn = useStore((s) => s.openClaudeCodeSignIn);
   return (
     <div className="claude-setup col-span-2" aria-live="polite">
@@ -165,7 +187,24 @@ export function ClaudeAgentSetup({ onSave, saving }: { onSave: () => void; savin
       <p className="mt-0.5 text-[12px] text-ink-faint">
         Sign-in happens in Claude Code, not in Nekko. Nekko never sees your Claude login. <ClaudeWhyLink label="What works with a Claude plan?" />
       </p>
-      <div className="claude-setup-state mt-3" data-state={!status ? 'checking' : !status.installed ? 'missing' : status.loggedIn ? 'ready' : 'signed-out'}>
+      <div className="claude-account mt-3" role="radiogroup" aria-label="Claude Code account">
+        <button type="button" role="radio" aria-checked={!another} className={`btn ${another ? 'btn-ghost' : 'btn-outline'}`} onClick={() => setAnother(false)}>
+          My usual Claude Code login
+        </button>
+        <button type="button" role="radio" aria-checked={another} className={`btn ${another ? 'btn-outline' : 'btn-ghost'}`} onClick={() => setAnother(true)}>
+          Another account
+        </button>
+      </div>
+      {another && (
+        <label className="mt-2 block text-[12px] font-medium text-ink-soft">
+          Account name
+          <input className="input mt-1" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="Work" maxLength={40} />
+          <span className="mt-1 block text-[11px] font-normal text-ink-faint">
+            {name ? <>Claude Code keeps this login in <code>~/.claude-{name}</code>. It is a separate sign-in, so you can use a work and a personal account side by side.</> : 'A short name, like Work or Client A.'}
+          </span>
+        </label>
+      )}
+      {unnamed ? null : <div className="claude-setup-state mt-3" data-state={!status ? 'checking' : !status.installed ? 'missing' : status.loggedIn ? 'ready' : 'signed-out'}>
         {!status ? (
           <span className="text-[12px] text-ink-faint">Looking for Claude Code…</span>
         ) : !status.installed ? (
@@ -182,7 +221,7 @@ export function ClaudeAgentSetup({ onSave, saving }: { onSave: () => void; savin
             <strong>Claude Code {status.version} is installed, but not signed in</strong>
             <span>Open it, type <code>/login</code>, and finish signing in with Anthropic.</span>
             <div className="claude-setup-actions">
-              <button className="btn btn-primary" onClick={() => void signIn()}>Open Claude Code to sign in</button>
+              <button className="btn btn-primary" onClick={() => void signIn(account)}>Open Claude Code to sign in</button>
               <button className="btn btn-ghost" onClick={refresh} disabled={checking}>{checking ? 'Checking…' : 'Check again'}</button>
             </div>
           </>
@@ -191,12 +230,12 @@ export function ClaudeAgentSetup({ onSave, saving }: { onSave: () => void; savin
             <strong>Signed in to Claude Code {status.version}</strong>
             <span>Using {claudeAuthLabel(status)}.</span>
             <div className="claude-setup-actions">
-              <button className="btn btn-primary" onClick={onSave} disabled={saving}>{saving ? 'Adding…' : 'Add Claude Agent'}</button>
+              <button className="btn btn-primary" onClick={() => onSave({ account, label: account ? typed.trim() : undefined })} disabled={saving}>{saving ? 'Adding…' : account ? `Add ${typed.trim()}` : 'Add Claude Agent'}</button>
               <button className="btn btn-ghost" onClick={refresh} disabled={checking}>{checking ? 'Checking…' : 'Check again'}</button>
             </div>
           </>
         )}
-      </div>
+      </div>}
       <div className="mt-4">
         <ClaudeComparison />
       </div>

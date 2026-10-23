@@ -2708,6 +2708,8 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 .claude-setup-state code { font-size: 12px; padding: 1px 5px; border-radius: 5px; background: var(--surface); }
 .claude-setup-state[data-state="ready"] strong { color: var(--success); }
 .claude-setup-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.claude-account { display: flex; flex-wrap: wrap; gap: 6px; }
+.claude-account code, .claude-setup code { font-size: 11.5px; padding: 1px 5px; border-radius: 5px; background: var(--surface); }
 .claude-why { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .claude-why:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
 .claude-reason { font-size: 12px; color: var(--ink-soft); }
