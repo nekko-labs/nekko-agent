@@ -19,3 +19,4 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | [0008](0008-authenticated-wraps-and-join-codes.md) | Authenticate keyring wraps, approve devices with a join code, one account record per key epoch | accepted |
 | [0009](0009-daemon-config-on-stdin-and-a-child-record.md) | Pass nekkod's config on stdin; track its children in one record rather than per spawn site | accepted |
 | [0010](0010-guardrails-mode-auto-runs-only-read-only-commands.md) | Guardrails mode auto-runs only read-only commands; fetch_url asks before reaching the local network | accepted |
+| [0011](0011-background-automations-wait-for-idle-on-local-models.md) | Background automations on a local model wait for idle; a waiting run starts after a cap | accepted |

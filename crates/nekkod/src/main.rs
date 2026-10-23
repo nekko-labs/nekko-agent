@@ -8,6 +8,7 @@
 //! directory (`datalock.rs`): a second exits with code 3.
 
 mod accounts;
+mod activity;
 mod admission;
 mod agent_logs;
 mod api_server;

@@ -43,7 +43,12 @@ fn pick(r: &Recommendations, task: &str) -> (String, String) {
 #[test]
 fn a_new_gpu_nudges_the_tasks_where_a_better_model_now_fits() {
     let old = rec(&pc("NVIDIA GeForce RTX 4060", 8.0));
-    let seen = Seen { format: 1, feed_version: old.feed_version.clone(), machine: "NVIDIA GeForce RTX 4060|cuda".into(), picks: picks_of(&old) };
+    let seen = Seen {
+        format: 1,
+        feed_version: old.feed_version.clone(),
+        machine: "NVIDIA GeForce RTX 4060|cuda".into(),
+        picks: picks_of(&old),
+    };
     // They downloaded what the 8 GB card was offered for coding.
     let (code_model, code_quant) = pick(&old, "code");
     let have = vec![file(&code_model, &code_quant)];
@@ -78,7 +83,10 @@ fn no_nudge_when_nothing_changed_or_the_new_pick_is_not_better() {
     let small = rec(&pc("NVIDIA GeForce RTX 4060", 8.0));
     let seen = Seen { format: 1, feed_version: big.feed_version.clone(), machine: "big".into(), picks: picks_of(&big) };
     let (bm, bq) = pick(&big, "code");
-    assert!(nudges(&small, bundled_feed(), &seen, "small", &[file(&bm, &bq)]).is_empty(), "a step down is not an upgrade");
+    assert!(
+        nudges(&small, bundled_feed(), &seen, "small", &[file(&bm, &bq)]).is_empty(),
+        "a step down is not an upgrade"
+    );
 }
 
 #[test]

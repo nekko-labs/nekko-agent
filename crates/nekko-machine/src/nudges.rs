@@ -120,7 +120,13 @@ pub fn write_seen(data_dir: &Path, seen: &Seen) {
 }
 
 /// The nudges for this answer. The first answer ever only remembers its picks.
-pub fn nudges_for(data_dir: &Path, recs: &Recommendations, feed: &Feed, machine: &str, have_files: &[String]) -> Vec<Nudge> {
+pub fn nudges_for(
+    data_dir: &Path,
+    recs: &Recommendations,
+    feed: &Feed,
+    machine: &str,
+    have_files: &[String],
+) -> Vec<Nudge> {
     match read_seen(data_dir) {
         Some(seen) => nudges(recs, feed, &seen, machine, have_files),
         None => {

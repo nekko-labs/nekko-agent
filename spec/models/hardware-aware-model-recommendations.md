@@ -5,7 +5,7 @@ area: models
 
 # Hardware-aware model recommendations
 
-**What it is for.** A fresh install should be able to say "on this machine, run these", per task, with the speed to expect and the memory left over, before the user downloads anything. Today the Models page opens on a short curated list with a rough fit chip per model; it does not know which of them suits *this* machine best, or how fast any of them will be. This is part A of local-model scheduling: recommendations from the hardware. Part B (activity-aware background automations: idle detection, preemption, residency) is separate work.
+**What it is for.** A fresh install should be able to say "on this machine, run these", per task, with the speed to expect and the memory left over, before the user downloads anything. Today the Models page opens on a short curated list with a rough fit chip per model; it does not know which of them suits *this* machine best, or how fast any of them will be. This is part A of local-model scheduling: recommendations from the hardware. Part B (activity-aware background automations: idle detection, preemption, residency) is [Background automations yield to the user](../automation/background-automations-yield-to-the-user.md).
 
 **Tasks.** Chat, coding, a small fast model for routing and classification, embeddings, and vision. Image generation is not in the first feed: it is measured in seconds per image on a different runtime (stable-diffusion.cpp), not tokens per second, and will get its own rows.
 

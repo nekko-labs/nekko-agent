@@ -107,6 +107,17 @@ async fn machine_channels_are_served_without_a_backend() {
     let (status, ok) = post(d.port, "machine:dismissNudge", json!(["code"])).await;
     assert_eq!((status, ok), (200, json!({ "ok": true })));
 
+    // Whether someone is using this machine: input, power and heat, judged.
+    let (status, act) = post(d.port, "activity:state", json!([])).await;
+    assert_eq!(status, 200, "{act}");
+    assert!(act["idleAfterSeconds"].as_f64().unwrap() > 0.0, "{act}");
+    assert!(act["present"].is_array() && act["strain"].is_array(), "{act}");
+    // A Mac always has input to read; a Windows runner's service session may not.
+    if cfg!(target_os = "macos") {
+        assert!(act["idleSeconds"].as_f64().unwrap() >= 0.0, "{act}");
+        assert_eq!(act["headless"], json!(false), "{act}");
+    }
+
     let (status, body) = post(d.port, "resource:queue", json!(["list", {}])).await;
     assert_eq!((status, body["error"].clone()), (400, json!("Resource queue experiment is disabled")));
 
