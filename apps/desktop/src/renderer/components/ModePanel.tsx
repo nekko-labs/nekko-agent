@@ -61,7 +61,7 @@ const GUIDANCE_DESC: Record<GuidanceLevel, string> = {
 
 const APPROVAL_DESC: Record<ChatMode, string> = {
   ask: 'Asks before every file write and command.',
-  guardrails: 'Runs freely; asks or blocks per your guardrail rules.',
+  guardrails: 'Edits files and runs read-only commands freely; asks before any other command.',
   yolo: 'Never asks (deny rules still block). Pair it with a sandbox or worktree.',
 };
 
