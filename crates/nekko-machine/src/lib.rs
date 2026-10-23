@@ -6,8 +6,10 @@
 //!
 //! Also the hardware profile (`machine:profile`, `profile.rs`), the decode
 //! speeds measured here (`measured.rs`) and the model recommendations made
-//! against both (`machine:recommendations`, `recommend.rs`).
+//! against both (`machine:recommendations`, `recommend.rs`), and whether
+//! someone is using the computer (`activity:state`, `activity.rs`).
 
+pub mod activity;
 pub mod measured;
 pub mod parse;
 pub mod probe;
