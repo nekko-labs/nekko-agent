@@ -12,6 +12,39 @@ export type TaskStatus = 'active' | 'paused' | 'done' | 'error';
  */
 export type AutomationRunPolicy = 'idle' | 'lowPriority' | 'always';
 
+/** The run policies as the editors offer them, in order. */
+export const RUN_POLICY_OPTIONS: ReadonlyArray<{ id: AutomationRunPolicy; label: string; hint: string }> = [
+  {
+    id: 'idle',
+    label: 'Only when I’m away',
+    hint: 'Waits until nobody has used this computer for a while, it is plugged in and not running hot. After 2 hours it runs anyway.',
+  },
+  { id: 'lowPriority', label: 'Low priority', hint: 'Runs on time, even while you work, but not on a low battery or a hot computer.' },
+  { id: 'always', label: 'On time', hint: 'Runs on time, whatever you are doing.' },
+];
+
+/**
+ * The policy an automation runs under: its own, else the settings' default,
+ * else `idle` on a local model and `always` on a cloud one (`run_policy.rs`).
+ */
+export function effectiveRunPolicy(
+  own: AutomationRunPolicy | null | undefined,
+  settings: { automationRunPolicy?: AutomationRunPolicy | null } | null | undefined,
+  local: boolean,
+): AutomationRunPolicy {
+  return own ?? settings?.automationRunPolicy ?? (local ? 'idle' : 'always');
+}
+
+export function runPolicyLabel(p: AutomationRunPolicy): string {
+  return RUN_POLICY_OPTIONS.find((o) => o.id === p)?.label ?? p;
+}
+
+/** How the run policy let a run start, for its row: "low priority · waited 2 hr". */
+export function runPolicyNote(lowPriority: boolean | undefined, waitedMs: number | undefined): string | undefined {
+  const parts = [lowPriority ? 'low priority' : '', waitedMs && waitedMs >= 60_000 ? `waited ${formatInterval(waitedMs)}` : ''];
+  return parts.filter(Boolean).join(' · ') || undefined;
+}
+
 /** How long a background agent stays alive. */
 export type KeepAlive = 'forever' | 'until';
 

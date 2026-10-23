@@ -543,8 +543,8 @@ export interface Workflow {
    * untrusted PR (fork head, or an author who cannot push) gets read-only tools.
    */
   prCheckout?: boolean;
-  /** When a scheduled run may start; events never wait (see `AutomationRunPolicy`). */
-  runPolicy?: import('./tasks.js').AutomationRunPolicy;
+  /** When a scheduled run may start; events never wait (see `AutomationRunPolicy`). `null`: the settings' default. */
+  runPolicy?: import('./tasks.js').AutomationRunPolicy | null;
   createdAt: number;
   updatedAt: number;
 
@@ -583,7 +583,7 @@ export interface NewWorkflow {
   localModelOnly?: boolean;
   toolAccess?: import('./workflow-access.js').WorkflowToolAccess;
   prCheckout?: boolean;
-  runPolicy?: import('./tasks.js').AutomationRunPolicy;
+  runPolicy?: import('./tasks.js').AutomationRunPolicy | null;
 }
 
 /** Categories offered in the editor. Any string is valid; these are the nudge. */
