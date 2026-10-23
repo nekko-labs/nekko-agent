@@ -127,6 +127,7 @@ Providers, local models, the Model Server, training.
 - [Server, model browser and desktop tray](models/server-model-browser-and-desktop-tray.md) (5 KB)
 - [Setting up a local model](models/setting-up-a-local-model.md) (5 KB)
 - [Signing in with a subscription (planned)](models/signing-in-with-a-subscription.md) (2 KB)
+- [System models: dictation on Apple's recognizer or Whisper](models/system-speech-models.md) (4 KB)
 - [Training a model while you watch (Training tab)](models/training-a-model-while-you-watch-training-tab.md) (2 KB)
 
 ### code

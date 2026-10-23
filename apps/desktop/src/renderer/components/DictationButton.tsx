@@ -47,7 +47,9 @@ export function DictationButton({ sessionId, onText }: { sessionId: string; onTe
   };
   useEffect(() => {
     if (!voice?.enabled && recognition.current) { recognition.current.abort(); recognition.current = null; setState('idle'); }
-  }, [voice?.enabled]);
+    // Choosing an engine in the setup popover is the whole setup: close it.
+    if (voice?.enabled && setup) setSetup(false);
+  }, [voice?.enabled, setup]);
   const toggle = async () => {
     if (recognition.current) { void finish(); return; }
     if (state !== 'idle') return;

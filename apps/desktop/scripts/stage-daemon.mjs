@@ -10,7 +10,7 @@
 // incremental) and stages nothing, because a development app runs the newest
 // build straight out of target/ (findDaemon in engine-process.ts).
 import { execFileSync, spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -31,8 +31,31 @@ if (!cargo) {
   process.exit(1);
 }
 
+// Apple's on-device speech recognizer, reached through a small Swift command
+// staged beside nekkod (crates/nekkod/speech/nekko-speech.swift, served by
+// crates/nekkod/src/voice.rs). macOS only; without swiftc the daemon reports
+// Apple speech as unsupported and dictation falls back to Nekko Voice.
+function stageSpeechHelper(dirs) {
+  if (process.platform !== 'darwin') return;
+  const source = join(repo, 'crates', 'nekkod', 'speech', 'nekko-speech.swift');
+  const out = join(dirs[0], 'nekko-speech');
+  const fresh = existsSync(out) && statSync(out).mtimeMs >= statSync(source).mtimeMs;
+  if (!fresh) {
+    const target = `${process.arch === 'arm64' ? 'arm64' : 'x86_64'}-apple-macos13`;
+    const args = ['-O', '-target', target, '-framework', 'Speech', '-framework', 'AVFoundation', source, '-o', out];
+    const built = spawnSync('xcrun', ['swiftc', ...args], { cwd: repo, stdio: 'inherit' });
+    if (built.status !== 0) {
+      console.warn('swiftc failed or is missing: Apple speech will be unavailable in this build');
+      return;
+    }
+  }
+  for (const dir of dirs.slice(1)) copyFileSync(out, join(dir, 'nekko-speech'));
+  console.log(`staged nekko-speech -> ${dirs.join(', ')}`);
+}
+
 if (dev) {
   execFileSync(cargo, ['build', '--profile', 'dev-daemon', '--locked', '-p', 'nekkod', '--features', 'dev-tools'], { cwd: repo, stdio: 'inherit' });
+  stageSpeechHelper([join(repo, 'target', 'dev-daemon')]);
   process.exit(0);
 }
 
@@ -47,6 +70,7 @@ const dest = join(here, '..', 'resources', 'bin');
 mkdirSync(dest, { recursive: true });
 copyFileSync(built, join(dest, exe));
 console.log(`staged ${exe} -> ${join(dest, exe)}`);
+stageSpeechHelper([dirname(built), dest]);
 
 // The decision-model runtime (ONNX Runtime, statically linked into nekkod) loads the CUDA
 // provider libraries from next to the executable on a Linux build with `--features cuda`. The
