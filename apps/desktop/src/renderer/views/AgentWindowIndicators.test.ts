@@ -55,8 +55,9 @@ describe('agent window indicators', () => {
     expect(controls).toContain('const locked = cloudModel && !blocked;');
     expect(controls).toContain('disabled={locked}');
   });
-  it('drops the Continue work box from the wall composer', () => {
-    expect(pane).toContain("{!imageMode && surface !== 'composer' && (canContinueReply || canContinueWork) && !streaming && (");
+  it('has no Continue work suggestion row in the composer', () => {
+    expect(pane).not.toContain('canContinueWork');
+    expect(pane).not.toContain("'Continue work'");
   });
 });
 

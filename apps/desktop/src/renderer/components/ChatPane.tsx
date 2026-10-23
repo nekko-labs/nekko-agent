@@ -45,7 +45,7 @@ import { MarkdownEditor, type MarkdownEditorElement } from './agent-console/Mark
 import { MarkdownSandbox } from './Markdown.js';
 import { CompactionSummary } from './agent-console/CompactionSummary.js';
 import { promptHistory, recallPrompt, type HistoryCursor } from './agent-console/promptHistory.js';
-import { PERSISTED_INTERRUPTION, shouldShowPersistedInterruption, reconcileInterruptionNotice, describeInterruption, suggestedReplyClassName } from './agent-console/interruption.js';
+import { PERSISTED_INTERRUPTION, shouldShowPersistedInterruption, reconcileInterruptionNotice, describeInterruption } from './agent-console/interruption.js';
 import { cutPrompt, messageCuts, type MessageCuts } from './agent-console/messageCut.js';
 
 import { estimateRowHeight, toTranscriptRows, transcriptBeforeLiveTurn, type TranscriptRow } from './agent-console/transcript.js';
@@ -1870,10 +1870,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     if (errorNotice || dismissedInterruption === lastMsgId) return;
     if (interrupted) setErrorNotice(PERSISTED_INTERRUPTION);
   }, [session, streaming, held, errorNotice, lastMsgId, dismissedInterruption, question]);
-  const canContinueWork = !streaming && !held && !session?.activeRun && !errorNotice &&
-    session?.messages.at(-1)?.role === 'assistant' && hasResumableProgress(session.messages);
-  // Suppress suggestions while recovery actions are visible.
-  const suggestedOptions = errorNotice ? [] : liveSuggestions?.options ?? [];
 
   // The model's single most likely next message, shown as the composer's
   // placeholder while the box is empty; ArrowRight types it in.
@@ -2782,20 +2778,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   )}
                 </div>
               )}
-            {/* Recovery is separate from the placeholder suggestion. The wall
-                composer shows no "Continue work" box: the window's error banner
-                carries Retry when a turn actually stopped. */}
-            {!imageMode && surface !== 'composer' && (canContinueReply || canContinueWork) && !streaming && (
-              <div className="flex items-center border-b border-line px-3 py-2.5">
-                <button
-                  className={canContinueReply ? suggestedReplyClassName : 'btn btn-outline py-1 text-[12px]'}
-                  title={canContinueReply ? 'Continue this reply, keeping the work already done' : 'Ask the agent to continue any remaining work from this conversation'}
-                  onClick={() => canContinueReply ? void resumeRun() : void send('Continue the remaining work from this conversation. Preserve what is already done; if the task is complete or blocked, explain that instead of repeating it.')}
-                >
-                  {canContinueReply ? 'Retry' : 'Continue work'}
-                </button>
-              </div>
-            )}
 
                 {/* Attachments ride inside the composer, at the top, separated by
                     a hairline. Floated above it they covered the instrument

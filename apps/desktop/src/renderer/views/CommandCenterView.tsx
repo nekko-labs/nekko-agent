@@ -291,7 +291,10 @@ export function CommandCenterView() {
   };
   /** A window from the toolbar, with no side pointed at: beside the biggest window. */
   const addFromToolbar = async (kind: PaneKind, refId?: string) => {
-    const ref = refId ?? (kind === 'chat' ? await newChat() : kind === 'terminal' ? await newTerminal() : kind);
+    // In Focused mode a new agent starts project-less, so it sits under
+    // "General" in the agents panel until a folder / project is chosen.
+    const focused = wall.layout.mode === 'focus';
+    const ref = refId ?? (kind === 'chat' ? await newChat(focused ? { kind: 'chat', chatType: 'multimodal' } : undefined, focused ? undefined : activeProjectId ?? undefined) : kind === 'terminal' ? await newTerminal() : kind);
     setWall((w) => openWallPane(w, kind, ref, aspectRef.current));
     if (kind === 'chat') setSelected(ref);
   };

@@ -741,7 +741,7 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
                     className={`h-3 w-3 shrink-0 text-ink-faint transition-transform duration-200 ${isCollapsed ? '' : 'rotate-90'}`}
                     viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
                   ><path d="M9 6l6 6-6 6" /></svg>
-                  <span className="truncate text-[11px] font-semibold uppercase tracking-wider text-ink-faint">{b.name}</span>
+                  <span className="truncate text-[12px] font-semibold uppercase tracking-wider text-accent" data-agent-group-title>{b.name}</span>
                   {isCollapsed && items.length > 0 && (
                     <span className="ml-1 shrink-0 rounded-full bg-surface-2 px-1.5 text-[10px] tabular-nums text-ink-faint">
                       {items.length}
