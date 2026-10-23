@@ -61,6 +61,7 @@ targets:
         PRODUCT_NAME: NekkoWatch
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Nekko Agent
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_WKCompanionAppBundleIdentifier: dev.nekkolabs.nekkoagent
         SKIP_INSTALL: YES
         TARGETED_DEVICE_FAMILY: "4"
