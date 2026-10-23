@@ -104,7 +104,7 @@ Agents panel, monitors, subagents and delegation.
 What the model sees: Context Inspector, modes, work modes, rules, memory, specs.
 
 - [Code mode: a chat's tools as code (2026-10-22)](context/code-mode-tools-as-code.md) (7 KB)
-- [Context, guardrails & memory (the differentiators)](context/context-guardrails-memory-the-differentiators.md) (11 KB)
+- [Context, guardrails & memory (the differentiators)](context/context-guardrails-memory-the-differentiators.md) (12 KB)
 - [Floop task connector](context/floop-task-connector.md) (2 KB)
 - [Living spec from a conversation](context/living-spec-from-a-conversation.md) (1 KB)
 - [Mode panel and saved modes (2026-10-17)](context/mode-panel-and-saved-modes.md) (8 KB)
@@ -174,7 +174,7 @@ Architecture, speed contract, distribution, builds and startup.
 - [Build storage maintenance](platform/build-storage-maintenance.md) (3 KB)
 - [Development macOS identity](platform/development-macos-identity.md) (2 KB)
 - [Distribution & platforms](platform/distribution-platforms.md) (10 KB)
-- [How it's built: the window and the engine daemon](platform/how-its-built-the-window-and-the-engine-daemon.md) (25 KB)
+- [How it's built: the window and the engine daemon](platform/how-its-built-the-window-and-the-engine-daemon.md) (26 KB)
 - [Noninteractive shell input and bounded stop cleanup](platform/noninteractive-shell-input-and-bounded-stop-cleanup.md) (1 KB)
 - [Page recovery and startup appearance (2026-10-12)](platform/page-recovery-and-startup-appearance.md) (2 KB)
 - [Speed & responsiveness (the speed contract)](platform/speed-responsiveness-the-speed-contract.md) (12 KB)

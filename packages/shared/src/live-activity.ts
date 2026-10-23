@@ -231,6 +231,7 @@ const TOOL_VERBS: Record<string, string> = {
   update_plan: 'Planning',
   report_experiment: 'Recording',
   report_artifact: 'Recording',
+  remember: 'Remembering',
   start_process: 'Starting',
   read_process: 'Checking',
   kill_process: 'Stopping',

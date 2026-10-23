@@ -2158,6 +2158,12 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [ ] **T195e** B2: preemption within ~1 s of the user's return (stop vs throttle llama-server, measured; `docs/perf-history.md`).
 - [ ] **T195f** B3: model residency (routing model kept warm, large model evicted under memory pressure) and the monitor's background chip.
 
+### T196: The agent remembers what it learns about you (2026-10-23) · [spec](spec/context/context-guardrails-memory-the-differentiators.md)
+- [x] **T196a** `remember` tool (`nekko-turn` `plan.rs`): offered only where the chat reads global memory, not to sub-agents or goal runs; a global note per fact, replaced by title (`nekko_workspace::memory::remember`, unit-tested); daemon handler in `turns.rs`. Golden tool lists and workflow-access cases gain the name. Done: 2026-10-23
+- [x] **T196b** Memory card in the chat (`MemoryCard.tsx`, under the activity group): added/updated, title, body, and a link that opens the Memory tab on the note (or Settings while the tab is off). Done: 2026-10-23
+- [ ] **T196c** Try it against real local and cloud models: does each save only durable facts, and reuse titles instead of piling up duplicates?
+- [ ] **T196d** An undo on the card, and cards for saves made inside code-mode scripts.
+
 ### T194: Code mode: a chat's tools as code (2026-10-22) · [spec](spec/context/code-mode-tools-as-code.md) · [decision](docs/decisions/0004-code-mode-in-an-embedded-quickjs-sandbox.md)
 - [x] **T194a** `nekko-codemode`: tool specs as TypeScript declarations, `search_tools`, `run_code` in an embedded QuickJS sandbox (no loader, no std, frozen `tools`; timeout, Stop, memory, stack, call and output caps), and the per-reply savings tally. Done: 2026-10-22
 - [x] **T194b** Daemon turn: `Session.toolApproach: 'code'` swaps the wrapped tools for `search_tools` + `run_code`; a script's calls run as `<id>.<n>` through `guarded` (hooks, tool switches, unattended policy, approvals, guardrails); `turnStats.codeMode`; system prompt built from the full tool set. Test: `nekkod/tests/daemon/tools.rs` `a_code_mode_turn_runs_the_models_script_and_asks_for_each_call_it_makes`. Done: 2026-10-22

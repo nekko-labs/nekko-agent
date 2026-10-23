@@ -85,6 +85,13 @@ pub fn turn_tools(input: &Value) -> Vec<Value> {
     if !incognito && !parent && !training && !disabled.contains("complete_session") {
         tools.push(c.complete_session.clone());
     }
+    if !parent
+        && !training
+        && !disabled.contains("remember")
+        && nekko_context::MemoryScope::of_session(session).global()
+    {
+        tools.push(remember_tool());
+    }
     if training {
         tools.push(c.report_experiment.clone());
         tools.push(c.report_artifact.clone());
@@ -96,6 +103,25 @@ pub fn turn_tools(input: &Value) -> Vec<Value> {
         tools.push(c.decide.clone());
     }
     tools
+}
+
+/// The `remember` tool: the agent saves what it learns about the user as a
+/// global memory note. Offered only where the chat reads global memory, so
+/// incognito and memory-off chats never write it.
+fn remember_tool() -> Value {
+    serde_json::json!({
+        "name": "remember",
+        "description": "Save something you learned about the user to long-term memory so future chats know it: who they are, their preferences, how they like to work, people and projects they mention. Save durable facts only, never secrets, credentials or things that only matter to this chat. One fact per note with a short title; to correct a note, reuse its exact title (shown as \"# Memory: <title>\" in your context) and it is replaced. The user sees a card each time you save.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "title": { "type": "string", "description": "Short name for the fact, e.g. \"Preferred name\"." },
+                "body": { "type": "string", "description": "The fact, in a sentence or two of plain language." }
+            },
+            "required": ["title", "body"],
+            "additionalProperties": false
+        }
+    })
 }
 
 /// `toolAllowedOffline(name)`: not an online or MCP tool, and not an agent
