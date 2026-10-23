@@ -78,8 +78,8 @@ describe('compact board and navigation spacing', () => {
     // Open buttons: 198 - 6 inset - 16 right padding = the 176px row.
     expect(198 - 6 - 16).toBe(188 - 12);
     expect(cssRule(styles, `${OPEN} .rail-backdrop path`).d).toBe('var(--rail-open)');
-    expect(cssRule(styles, '.rail-backdrop path').fill).toBe(cssValue('color-mix(in srgb, color-mix(in srgb, var(--accent) 8%, var(--paper)) 62%, transparent)'));
-    expect(cssRule(styles, `${OPEN} .rail-backdrop path`).fill).toBe(cssValue('color-mix(in srgb, color-mix(in srgb, var(--accent) 6%, var(--surface)) 55%, transparent)'));
+    expect(cssRule(styles, '.rail-backdrop path').fill).toBe(cssValue('color-mix(in srgb, color-mix(in srgb, var(--accent) 8%, var(--paper)) 88%, transparent)'));
+    expect(cssRule(styles, `${OPEN} .rail-backdrop path`).fill).toBe(cssValue('color-mix(in srgb, color-mix(in srgb, var(--accent) 6%, var(--surface)) 88%, transparent)'));
   });
 
   it('clips the tinted outline without a per-frame backdrop blur', () => {
