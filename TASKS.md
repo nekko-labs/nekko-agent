@@ -2197,3 +2197,6 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 ### T197: Pairing QR that a phone can open (2026-10-23) · [spec](SPEC.md)
 - [x] **T197a** `pairingBase` in `RemoteAccess.tsx`: a loopback http origin gets `nekko-agent-pair:`, not `http://localhost…/`, which the phone's camera opened as its own localhost. Test: `RemoteAccess.pairingBase.test.tsx`. Done: 2026-10-23
 - [x] **T197b** Pairing card: QR plus one line; the link and Copy link moved under *Can't scan? Show the link*. Done: 2026-10-23
+- [x] **T197c** Relay on this computer stays up: `supervise` (crates/nekkod/src/local_relay.rs) holds the child's stdin, which `Child::wait` used to close at once. Test: `a_supervised_child_keeps_its_stdin_until_stopped`. Done: 2026-10-23
+- [x] **T197d** Pairing card countdown: a large *Expires in m:ss* pill (amber under a minute) instead of "One device, m:ss left". Done: 2026-10-23
+- [x] **T197e** *Let phones see changes* on by default (`phoneChanges: true` in nekko-settings defaults; settings golden updated). Done: 2026-10-23
