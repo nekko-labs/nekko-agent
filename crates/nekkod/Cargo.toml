@@ -17,10 +17,10 @@ dev-tools = []
 [dependencies]
 # Verifies the signed claudePolicy document (claude_policy.rs).
 ed25519-dalek = "2"
-chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
+chrono.workspace = true
 anyhow.workspace = true
 axum.workspace = true
-base64 = "0.22"
+base64.workspace = true
 bytes.workspace = true
 futures-util.workspace = true
 # The computer's name and addresses, for "Visible on this network" and the local relay.

@@ -10,7 +10,7 @@ publish.workspace = true
 [dependencies]
 # WebCrypto's AES-256-GCM and PBKDF2-SHA256, the phone apps' E2E layer.
 aes-gcm = "0.10"
-base64 = "0.22"
+base64.workspace = true
 futures-util.workspace = true
 getrandom.workspace = true
 # Thumbnails of a chat's photos for a phone (the same decoder nekko-agent uses).

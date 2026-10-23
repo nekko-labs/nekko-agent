@@ -9,7 +9,7 @@ publish.workspace = true
 
 [dependencies]
 axum.workspace = true
-base64 = "0.22"
+base64.workspace = true
 futures-util.workspace = true
 getrandom.workspace = true
 nekko-js = { path = "../nekko-js" }

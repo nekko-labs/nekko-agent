@@ -8,7 +8,7 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
-base64 = "0.22"
+base64.workspace = true
 nekko-js = { path = "../nekko-js" }
 nekko-settings = { path = "../nekko-settings" }
 serde_json.workspace = true
