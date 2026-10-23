@@ -64,8 +64,17 @@ Acceptance:
 - **Tested:** a synthetic activity source in place of the OS reading holds a due task and a due scheduled workflow while the user is active, and releases them when the user is away (`nekko-automation/tests/tasks.rs`, `tests/workflows.rs`). The cap and the cloud default are tested too.
 - **End to end:** the real daemon holds a local task on a machine whose input it can read (`nekkod/tests/daemon/automation.rs`).
 
-## Settings and UI `[planned: B1, last layer]`
+## Settings and UI `[implemented, unit-tested; isolated renderer evidence]`
 
-- A policy selector on each task and workflow.
-- The global default and the idle threshold in Settings.
-- The waiting state on the run ("Waiting for you to be away").
+- **When it runs** (`RunPolicyField`), in the workflow editor's Runs section and in the ⚡ Automate dialog.
+  - The unset choice reads "Default: …", resolved as the daemon would: own policy, then the setting, then by where the model runs.
+  - Saving the default sends `null`, not `undefined`, so the JSON that reaches the daemon clears it.
+  - Tasks have no editor after creation; the policy is set when the task is made.
+- **Settings → Automations:** "When automations run" (`automationRunPolicy`; "By where the model runs" is `null`) and "Away after" (`automationIdleMinutes`, 1 to 240, default 5).
+- **The waiting state:**
+  - A held task's status in the Automations window reads "waiting for you to be away" instead of "due now".
+  - A held workflow's row has a "waiting for you to be away" badge.
+  - Tooltips say when it came due, that it runs after 2 hours anyway, and that Run starts it now.
+- **How a run started:** "low priority · waited 2 hr" on a task's last run, a workflow run's header and its history entry.
+- **Evidence:** `apps/desktop/scripts/automations-integration.cjs` renders these surfaces with synthetic data in a hidden, non-focusable window, in dark and light.
+- **Not built yet:** a live "Background: paused, you're active" chip in the monitor (B3).

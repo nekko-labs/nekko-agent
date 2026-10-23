@@ -338,9 +338,9 @@ export interface AppSettings {
   automationsPaused?: boolean;
   /**
    * The run policy for tasks and workflows that set none. Absent: wait for
-   * idle on a local model, run at once on a cloud one.
+   * idle on a local model, run at once on a cloud one. `null` clears it.
    */
-  automationRunPolicy?: import('./tasks.js').AutomationRunPolicy;
+  automationRunPolicy?: import('./tasks.js').AutomationRunPolicy | null;
   /** Minutes without input before the user counts as away (default 5). */
   automationIdleMinutes?: number;
   /**

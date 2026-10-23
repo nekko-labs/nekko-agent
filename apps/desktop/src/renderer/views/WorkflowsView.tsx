@@ -21,6 +21,7 @@ import {
   listenerLabel,
   runDurationMs,
   runOutcome,
+  runPolicyNote,
   stepSummary,
   triggerLabel,
 } from '@nekko-agent/shared';
@@ -573,6 +574,16 @@ function WorkflowRow({
 
         <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-ink-faint">
           {!live && last && isRunnerRun(last) && <Badge tone="info" title="Fired by an external event">runner</Badge>}
+          {!live && wf.waitingSince && (
+            <span data-workflow-waiting>
+              <Badge
+                tone="info"
+                title={`Its schedule came due ${relative(wf.waitingSince)}. It runs once nobody is using this computer, or after 2 hours. Run starts it now.`}
+              >
+                waiting for you to be away
+              </Badge>
+            </span>
+          )}
           {live
             ? 'running now'
             : last
@@ -666,6 +677,7 @@ function WorkflowDetail({ wf, runs, live, focusRunId }: { wf: Workflow; runs: Wo
             <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
               This run · {STATUS_TONE[shownRun.status].label}
               {shownRun.status !== 'running' && ` in ${formatDuration(runDurationMs(shownRun))}`} · {relative(shownRun.startedAt)}
+              {runPolicyNote(shownRun.lowPriority, shownRun.waitedMs) && ` · ${runPolicyNote(shownRun.lowPriority, shownRun.waitedMs)}`}
             </p>
             {outcome.failed && (
               <div className="mb-2 rounded-lg border px-2.5 py-2" style={{ borderColor: STATUS.danger }} data-run-failure>
@@ -744,6 +756,7 @@ function WorkflowDetail({ wf, runs, live, focusRunId }: { wf: Workflow; runs: Wo
                         {STATUS_TONE[r.status].label}
                         {r.status !== 'running' && ` · ${formatDuration(runDurationMs(r))}`}
                         {failedAt && ` · at ${failedAt}`}
+                        {runPolicyNote(r.lowPriority, r.waitedMs) && <span data-run-policy-note>{` · ${runPolicyNote(r.lowPriority, r.waitedMs)}`}</span>}
                       </span>
                     </span>
                     <span className="shrink-0 font-mono text-[10px] text-ink-faint">{relative(r.startedAt)}</span>

@@ -113,8 +113,18 @@ GPU, memory and fans otherwise. You count as away when:
 - no chat you started is replying, from the app or your phone;
 - the computer is on mains power and not running hot.
 
-A run that has waited 2 hours starts anyway, so nothing is skipped. Its run record marks it as
-low priority, with how long it waited.
+A run that has waited 2 hours starts anyway, so nothing is skipped. While it waits, the
+workflow row and the task in the Automations window say **waiting for you to be away**. The run
+that starts says **low priority · waited 2 hr** in its history.
+
+Choose this yourself:
+
+- **Settings → Automations → When automations run** sets it for every automation: **By where
+  the model runs** (the default above), **Only when I'm away**, **Low priority** (runs on time,
+  even while you work, but not on a low battery or a hot computer) or **On time**.
+- **Away after** sets how many minutes without input count as away (5 by default).
+- **When it runs**, in a workflow's editor (under **Runs**) and in a chat's **⚡ Automate**
+  dialog, overrides the setting for that one automation.
 
 What does not wait:
 
