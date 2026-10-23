@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useStore } from '../src/renderer/store';
 import { putCachedSession, __resetSessionCache } from '../src/renderer/sessionCache';
+import { RailBackdrop } from '../src/renderer/components/RailBackdrop';
 import { TitleBar } from '../src/renderer/components/TitleBar';
 import { UpdateProvider } from '../src/renderer/components/UpdateBanner';
 import { CommandCenterView } from '../src/renderer/views/CommandCenterView';
@@ -89,6 +90,6 @@ function Fixture() {
     __setWall: (commandWall: any) => { useStore.setState({ settings: { ...useStore.getState().settings, commandWall } } as any); setEpoch(e => e + 1); },
     __work: () => listeners.forEach(fn => fn({ type: 'text', sessionId: 'existing', delta: 'Working on it' })),
   });
-  return <main style={{ height: '100vh', display: 'flex', flexDirection: 'column' }} key={epoch}><TitleBar /><div style={{ flex: 1, minHeight: 0 }}>{route === 'command' ? <CommandCenterView /> : <WorkspacesView />}</div></main>;
+  return <main style={{ height: '100vh', display: 'flex', flexDirection: 'column' }} key={epoch}><TitleBar /><div style={{ flex: 1, minHeight: 0 }}>{route === 'command' ? <div style={{display:'flex',height:'100%'}}>{new URLSearchParams(location.search).has('nav') && <nav style={{width:52,position:'relative',flexShrink:0}}><div className="rail absolute inset-y-0 left-0 flex flex-col py-4"><div className="rail-space-before" /><div className="rail-group"><RailBackdrop /><div className="rail-destinations"><span className="rail-indicator" style={{'--i':0} as React.CSSProperties} />{['Agents','Projects','Models','Settings'].map((label,i)=><button key={label} className="nav-item" style={{'--n':i} as React.CSSProperties}><span aria-hidden="true">◇</span><span className="rail-label">{label}</span></button>)}</div></div><div className="rail-space-after" /></div></nav>}<div style={{flex:1,minWidth:0}}><CommandCenterView /></div></div> : <WorkspacesView />}</div></main>;
 }
 createRoot(document.getElementById('root')!).render(<UpdateProvider><Fixture /></UpdateProvider>);

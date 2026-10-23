@@ -245,6 +245,7 @@ export function PaneFrame({
           e.stopPropagation();
           setMenu({ x: e.clientX, y: e.clientY });
         }}
+        data-pane-title-strip=""
         title="Drag to move this window"
       >
         {icon}

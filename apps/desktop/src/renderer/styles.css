@@ -679,11 +679,11 @@
   --rail-gap: 7px;           /* gap between rows */
   --rail-ease: cubic-bezier(0.32, 0.72, 0, 1);   /* quick start, long soft settle */
   --rail-slide: cubic-bezier(0.3, 1.25, 0.5, 1); /* the active tile: a hint of spring */
-  --rail-open-ms: 340ms;
-  --rail-close-ms: 260ms;
+  --rail-open-ms: 180ms;
+  --rail-close-ms: 160ms;
   --rail-slide-ms: 340ms;
   --rail-open-delay: 50ms;   /* hover intent: sweeping past never opens it */
-  --rail-close-delay: 120ms; /* and a brief slip out never snaps it shut */
+  --rail-close-delay: 60ms; /* and a brief slip out never snaps it shut */
 
   width: var(--rail-w-rest);
   padding-inline: 6px;
@@ -705,9 +705,8 @@
   min-height: 0;
 }
 
-/* Frosted glass: the svg box blurs what is behind it, clipped to the same
-   outline the path draws (both animate together), so the shape is unchanged.
-   The path paints a translucent tint and a hairline edge on top. */
+/* One synchronized outline and clip, with a tinted fill instead of a
+   backdrop blur that repaints the workspace during every morph frame. */
 .rail-backdrop {
   position: absolute;
   left: -6px;                 /* x = 0 is the window wall */
@@ -716,7 +715,7 @@
   overflow: visible;
   pointer-events: none;
   clip-path: var(--rail-rest);
-  backdrop-filter: blur(18px) saturate(1.6);
+  backdrop-filter: none;
   transition: clip-path var(--rail-close-ms) var(--rail-ease) var(--rail-close-delay);
   & path {
     d: var(--rail-rest);
@@ -789,7 +788,7 @@
   pointer-events: none;
   opacity: 0;
   transform: translateX(-6px);
-  filter: blur(2px);
+  filter: none;
   transition:
     opacity 120ms ease var(--rail-close-delay),
     transform 200ms var(--rail-ease) var(--rail-close-delay),
@@ -816,9 +815,9 @@
     opacity: 1;
     transform: none;
     filter: none;
-    /* Labels arrive as the edge passes them, top row first, 14ms apart. */
-    transition-duration: 180ms, 270ms, 180ms;
-    transition-delay: calc(var(--rail-open-delay) + 85ms + var(--n, 0) * 14ms);
+    /* Reveal together only once the expansion is nearly complete. */
+    transition-duration: 100ms, 100ms, 100ms;
+    transition-delay: calc(var(--rail-open-delay) + var(--rail-open-ms) - 20ms);
   }
 }
 
@@ -3091,3 +3090,11 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
   .mode-col:last-child { border-top: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .mode-switch, .mode-switch::after, .mode-chev { transition: none; } }
+
+/* Focus is a workspace, not a framed window inside another window. */
+.command-wall-layout[data-wall-layout='focus'] .command-wall-window > .panel {
+  border: 0; border-radius: 0; box-shadow: none !important;
+  --panel-ring-width: 0px !important;
+}
+.command-wall-layout[data-wall-layout='focus'] .command-wall-window > .panel::after { display: none; }
+.command-wall-layout[data-wall-layout='focus'] [data-pane-title-strip] { display: none; }
