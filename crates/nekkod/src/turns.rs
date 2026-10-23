@@ -1058,7 +1058,19 @@ impl Turns {
                 Some(slot) => slot,
                 None => self.harness.take(&session_id).await,
             };
-            self.claude_code_turn(shared, slot, &store, &session, incognito, &workspaces, opts, &mode, wake).await;
+            self.claude_code_turn(
+                shared,
+                slot,
+                &store,
+                &session,
+                incognito,
+                &workspaces,
+                opts,
+                &config.id,
+                &mode,
+                wake,
+            )
+            .await;
             return self.end_turn(&store, shared, &session, forwarder, incognito).await;
         }
 
@@ -1188,6 +1200,7 @@ impl Turns {
         incognito: bool,
         workspaces: &[Value],
         opts: &Value,
+        provider_id: &str,
         mode: &str,
         wake: bool,
     ) {
@@ -1273,6 +1286,7 @@ impl Turns {
                 seen = Some(init.session_id);
                 model = init.model.or(model.take());
             }
+            Mapped::PlanUsage(event) => self.harness.note_plan_usage(provider_id, &event),
             Mapped::Unparsed(line) => eprintln!("nekkod: Claude Code printed a non-JSON line: {line}"),
             _ => {}
         })

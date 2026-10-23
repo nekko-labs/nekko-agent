@@ -96,6 +96,10 @@ pub struct Harness {
     /// bridge (`None`: no CLI to run it, so every launch fails closed), and
     /// where the per-chat MCP configs are written.
     bridge: OnceLock<BridgeSetup>,
+    /// Plan usage each Claude Agent provider's Claude Code last reported in its
+    /// own stream (`rate_limit_event`, `/usage`), by provider id. Shown only
+    /// where the `usage_limits` policy row allows (`claude:planUsage`).
+    plan_usage: Mutex<HashMap<String, serde_json::Value>>,
 }
 
 #[derive(Debug, Clone)]
@@ -162,6 +166,20 @@ impl Wanted {
 impl Harness {
     pub fn new() -> Arc<Self> {
         Arc::new(Self::default())
+    }
+
+    /// Fold one plan-usage event from a provider's Claude Code into what it last reported.
+    pub fn note_plan_usage(&self, provider_id: &str, event: &serde_json::Value) {
+        let mut all = lock(&self.plan_usage);
+        let now = nekko_oauth::now_ms() as f64;
+        if let Some(next) = nekko_usage::parse_claude_code_usage(event, all.get(provider_id), now) {
+            all.insert(provider_id.to_string(), next);
+        }
+    }
+
+    /// What a provider's Claude Code last reported about plan usage, if anything.
+    pub fn plan_usage(&self, provider_id: &str) -> Option<serde_json::Value> {
+        lock(&self.plan_usage).get(provider_id).cloned()
     }
 
     /// The chat's slot (made on first use).

@@ -15,6 +15,7 @@
  */
 
 import type { ClaudeCodeContext } from './chat.js';
+import type { SubscriptionLimits } from './limits.js';
 
 /** How the Claude behind a provider is paid for. */
 export type ClaudeAuth = 'api_key' | 'cloud' | 'subscription' | 'unknown';
@@ -376,11 +377,6 @@ export type ClaudeCapabilityStatus =
   | { claude: true; auth: ClaudeAuth; state: ClaudeRowState; reason: ClaudeReasonId | null; message: string | null };
 
 /**
- * `claude:planUsage(providerId)`: there is no sanctioned source of plan usage,
- * so this is `none` with the reason; the dev-only preview answers `example`
- * and the UI renders `claudePlanUsageExample()` with its label.
- */
-/**
  * `claude:codeStatus(providerId?)`: whether the user's own Claude Code is
  * installed and how it is signed in (from `claude --version` and `claude auth
  * status`; Nekko never reads its credentials). `auth` is the policy row it maps
@@ -391,4 +387,15 @@ export type ClaudeCodeStatus =
   | { installed: true; version: string; loggedIn: false; authMethod?: string; apiProvider?: string | null; auth?: ClaudeAuth; message?: string }
   | { installed: true; version: string; loggedIn: true; authMethod: string; apiProvider?: string | null; auth: ClaudeAuth };
 
-export type ClaudePlanUsageStatus = { source: 'none'; message: string } | { source: 'example'; label: string };
+/**
+ * `claude:planUsage(providerId)`: `claude-code` is the plan usage the user's
+ * own Claude Code last printed in its documented stream output
+ * (`rate_limit_event`, `/usage`'s `usage_report`), answered only where the
+ * `usage_limits` row allows it; otherwise `none` with the reason. The dev-only
+ * preview answers `example` and the UI renders `claudePlanUsageExample()`
+ * with its label.
+ */
+export type ClaudePlanUsageStatus =
+  | { source: 'none'; message: string }
+  | { source: 'example'; label: string }
+  | { source: 'claude-code'; limits: SubscriptionLimits };
