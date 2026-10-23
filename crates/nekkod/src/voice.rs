@@ -3,13 +3,19 @@
 //! its lifetime (started on the first transcription, stopped when idle) and
 //! the transcriptions themselves. A port of `packages/host/src/engine/voice.ts`;
 //! the daemon is the only writer of `<data>/voice` when it serves these.
+//!
+//! On macOS 26+ the default engine is Apple's on-device recognizer instead,
+//! reached through `nekko-speech` (crates/nekkod/speech/nekko-speech.swift),
+//! a one-shot command staged beside the daemon: no download, no server to
+//! keep alive, and the language packs belong to the OS. `settings.voice.engine`
+//! picks `apple` or `whisper`; the status answers for whichever is active.
 
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::Notify;
 
 pub const CHANNELS: &[&str] =
@@ -46,10 +52,13 @@ const NOTICE: &str = "Nekko Voice uses Whisper Tiny.en Q5_1 (OpenAI) and whisper
 pub struct Sources {
     pub runtime: Option<(String, String, String)>,
     pub model: (String, String),
+    /// The `nekko-speech` command (Apple's recognizer); `None` where it was not staged.
+    pub speech_helper: Option<PathBuf>,
 }
 
 impl Default for Sources {
     fn default() -> Self {
+        let beside_exe = std::env::current_exe().ok().and_then(|e| Some(e.parent()?.join("nekko-speech")));
         Self {
             runtime: build().map(|(name, hash)| {
                 (
@@ -59,6 +68,10 @@ impl Default for Sources {
                 )
             }),
             model: (MODEL_URL.to_string(), MODEL_HASH.to_string()),
+            speech_helper: std::env::var_os("NEKKO_SPEECH_PATH")
+                .map(PathBuf::from)
+                .or(beside_exe)
+                .filter(|p| is_file(p)),
         }
     }
 }
@@ -112,7 +125,19 @@ struct State {
     progress: f64,
     error: Option<String>,
     busy: bool,
+    apple: AppleState,
 }
+
+/// Apple's recognizer: installing is the language pack download; the helper's
+/// `status` answer is kept for a few seconds because the UI polls every second.
+#[derive(Default)]
+struct AppleState {
+    installing: bool,
+    error: Option<String>,
+    cached: Option<(Instant, String, Value)>,
+}
+
+const APPLE_STATUS_TTL: Duration = Duration::from_secs(5);
 
 struct Server {
     child: tokio::process::Child,
@@ -208,10 +233,87 @@ impl Voice {
         (runtime, model)
     }
 
-    /// `voice:status`, keys in the TS object's order.
+    fn language(&self) -> String {
+        str_of(self.voice().get("language")).unwrap_or_else(|| "en".into())
+    }
+
+    /// Run `nekko-speech` once and parse its one JSON line; a failure is its `error`.
+    async fn helper(&self, args: &[&str], timeout: Duration) -> Result<Value, String> {
+        let path = self.sources.speech_helper.as_ref().ok_or("Apple speech is not part of this build.")?;
+        let mut cmd = tokio::process::Command::new(path);
+        cmd.args(args).stdin(std::process::Stdio::null()).kill_on_drop(true);
+        hide(&mut cmd);
+        let out = tokio::time::timeout(timeout, cmd.output())
+            .await
+            .map_err(|_| "Apple speech did not answer in time.".to_string())?
+            .map_err(|e| format!("Could not run nekko-speech: {e}"))?;
+        let text = String::from_utf8_lossy(&out.stdout);
+        let parsed: Option<Value> = text.lines().rev().find_map(|l| serde_json::from_str(l).ok());
+        match parsed {
+            Some(v) if out.status.success() => Ok(v),
+            Some(v) => Err(str_of(v.get("error")).unwrap_or_else(|| "Apple speech failed.".into())),
+            None => Err(format!("Apple speech failed: {}", String::from_utf8_lossy(&out.stderr).trim())),
+        }
+    }
+
+    /// Apple's recognizer for the current language: supported, installed, installing, error.
+    async fn apple_status(&self) -> Value {
+        let lang = self.language();
+        let fresh = lock(&self.state)
+            .apple
+            .cached
+            .as_ref()
+            .filter(|(at, l, _)| *l == lang && at.elapsed() < APPLE_STATUS_TTL)
+            .map(|(_, _, v)| v.clone());
+        let mut status = match fresh {
+            Some(v) => v,
+            None => {
+                let v = match self.sources.speech_helper {
+                    None => json!({ "supported": false, "installed": false }),
+                    Some(_) => self
+                        .helper(&["status", &lang], Duration::from_secs(10))
+                        .await
+                        .unwrap_or_else(|e| json!({ "supported": false, "installed": false, "reason": e })),
+                };
+                lock(&self.state).apple.cached = Some((Instant::now(), lang, v.clone()));
+                v
+            }
+        };
+        let st = lock(&self.state);
+        status["installing"] = json!(st.apple.installing);
+        if let Some(e) = &st.apple.error {
+            status["error"] = json!(e);
+        }
+        status
+    }
+
+    fn forget_apple_status(&self) {
+        lock(&self.state).apple.cached = None;
+    }
+
+    /// The active engine: the settings' choice, else Apple wherever it is supported.
+    async fn engine(&self) -> &'static str {
+        match str_of(self.voice().get("engine")).as_deref() {
+            Some("apple") => "apple",
+            Some("whisper") => "whisper",
+            _ => {
+                if nekko_js::truthy(self.apple_status().await.get("supported")) {
+                    "apple"
+                } else {
+                    "whisper"
+                }
+            }
+        }
+    }
+
+    /// `voice:status`, keys in the TS object's order; `installed`, `installing`
+    /// and `error` speak for the active engine, `apple` for Apple's alone.
     pub async fn status(&self) -> Value {
         let (runtime, model) = self.paths();
-        let installed = runtime.as_deref().is_some_and(|r| is_file(Path::new(r))) && is_file(Path::new(&model));
+        let apple = self.apple_status().await;
+        let engine = self.engine().await;
+        let whisper_installed = runtime.as_deref().is_some_and(|r| is_file(Path::new(r))) && is_file(Path::new(&model));
+        let installed = if engine == "apple" { nekko_js::truthy(apple.get("installed")) } else { whisper_installed };
         let running = {
             let mut server = self.server.lock().await;
             let alive = server.as_mut().is_some_and(|s| matches!(s.child.try_wait(), Ok(None)));
@@ -222,24 +324,84 @@ impl Voice {
         };
         let supported = self.sources.runtime.is_some() || str_of(self.voice().get("runtimePath")).is_some();
         let st = lock(&self.state);
+        let (installing, error) = if engine == "apple" {
+            (st.apple.installing, st.apple.error.clone())
+        } else {
+            (st.installing, st.error.clone())
+        };
         let mut o = Map::new();
         if let Some(r) = runtime {
             o.insert("runtimePath".into(), json!(r));
         }
         o.insert("modelPath".into(), json!(model));
         o.insert("installed".into(), json!(installed));
-        o.insert("installing".into(), json!(st.installing));
+        o.insert("installing".into(), json!(installing));
         o.insert("progress".into(), crate_num(st.progress));
-        if let Some(e) = &st.error {
+        if let Some(e) = error {
             o.insert("error".into(), json!(e));
         }
         o.insert("running".into(), json!(running));
         o.insert("supported".into(), json!(supported));
+        o.insert("engine".into(), json!(engine));
+        o.insert("apple".into(), apple);
+        let mut whisper =
+            json!({ "installed": whisper_installed, "installing": st.installing, "progress": crate_num(st.progress) });
+        if let Some(e) = &st.error {
+            whisper["error"] = json!(e);
+        }
+        o.insert("whisper".into(), whisper);
         Value::Object(o)
     }
 
+    /// `voice:install apple`: the language pack download, in the background.
+    async fn install_apple(self: &Arc<Self>) -> Result<Value, String> {
+        {
+            let mut st = lock(&self.state);
+            if !st.apple.installing {
+                st.apple.installing = true;
+                st.apple.error = None;
+                let me = self.clone();
+                tokio::spawn(async move {
+                    let lang = me.language();
+                    let result = me.helper(&["install", &lang], Duration::from_secs(1800)).await;
+                    let mut st = lock(&me.state);
+                    st.apple.installing = false;
+                    st.apple.error = result.err();
+                    st.apple.cached = None;
+                });
+            }
+        }
+        Ok(self.status().await)
+    }
+
+    async fn uninstall_apple(&self) -> Result<Value, String> {
+        if lock(&self.state).apple.installing {
+            return Err("Wait for the language pack download to finish.".into());
+        }
+        let lang = self.language();
+        self.helper(&["uninstall", &lang], Duration::from_secs(60)).await?;
+        self.forget_apple_status();
+        Ok(Value::Null)
+    }
+
+    /// Apple's recognizer reads a file: the recording is written beside the
+    /// install, transcribed by one helper run, and removed.
+    async fn transcribe_apple(&self, audio: Vec<u8>) -> Result<Value, String> {
+        let io = |e: std::io::Error| e.to_string();
+        tokio::fs::create_dir_all(&self.dir).await.map_err(io)?;
+        let path = self.dir.join(format!("dictation-{:x}.wav", rand_u64()));
+        tokio::fs::write(&path, &audio).await.map_err(io)?;
+        let lang = self.language();
+        let result = self.helper(&["transcribe", &path.to_string_lossy(), &lang], Duration::from_secs(120)).await;
+        let _ = tokio::fs::remove_file(&path).await;
+        Ok(json!(result?.get("text").and_then(Value::as_str).map(nekko_js::trim).unwrap_or_default()))
+    }
+
     /// `voice:install`: starts the download in the background and answers at once.
-    pub async fn install(self: &Arc<Self>) -> Result<Value, String> {
+    pub async fn install(self: &Arc<Self>, engine: Option<&str>) -> Result<Value, String> {
+        if engine == Some("apple") {
+            return self.install_apple().await;
+        }
         if lock(&self.state).installing {
             return Ok(self.status().await);
         }
@@ -349,7 +511,10 @@ impl Voice {
         }
     }
 
-    pub async fn uninstall(&self) -> Result<Value, String> {
+    pub async fn uninstall(&self, engine: Option<&str>) -> Result<Value, String> {
+        if engine == Some("apple") {
+            return self.uninstall_apple().await;
+        }
         {
             let st = lock(&self.state);
             if st.installing || st.busy {
@@ -376,6 +541,11 @@ impl Voice {
                 return Err("Voice transcription is already running.".into());
             }
             st.busy = true;
+        }
+        if self.engine().await == "apple" {
+            let result = self.transcribe_apple(audio).await;
+            lock(&self.state).busy = false;
+            return result;
         }
         let generation = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
         let result = self.transcribe_inner(audio).await;
@@ -429,7 +599,7 @@ impl Voice {
         let endpoint = server.as_ref().map(|s| s.endpoint.clone()).unwrap_or_default();
         drop(server);
 
-        let language = str_of(voice.get("language")).unwrap_or_else(|| "en".into());
+        let language = self.language();
         let boundary = format!("----nekkovoice{:x}", rand_u64());
         let mut body = Vec::new();
         let field = |body: &mut Vec<u8>, name: &str, value: &str| {
@@ -469,12 +639,12 @@ impl Voice {
     pub async fn route(self: &Arc<Self>, channel: &str, args: &[Value]) -> Result<Value, String> {
         match channel {
             "voice:status" => Ok(self.status().await),
-            "voice:install" => self.install().await,
+            "voice:install" => self.install(args.first().and_then(Value::as_str)).await,
             "voice:cancel" => {
                 self.cancel();
                 Ok(Value::Null)
             }
-            "voice:uninstall" => self.uninstall().await,
+            "voice:uninstall" => self.uninstall(args.first().and_then(Value::as_str)).await,
             "voice:transcribe" => self.transcribe(args.first().unwrap_or(&Value::Null)).await,
             "voice:stop" => {
                 self.stop().await;

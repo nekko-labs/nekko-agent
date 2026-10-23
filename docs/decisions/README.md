@@ -21,3 +21,4 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | [0010](0010-guardrails-mode-auto-runs-only-read-only-commands.md) | Guardrails mode auto-runs only read-only commands; fetch_url asks before reaching the local network | accepted |
 | [0011](0011-background-automations-wait-for-idle-on-local-models.md) | Background automations on a local model wait for idle; a waiting run starts after a cap | accepted |
 | [0012](0012-phone-access-classes-and-relay-replay-protection.md) | Class every phone channel, sign mode raises, and challenge every relay connection | accepted |
+| [0013](0013-apple-speech-through-a-helper-command.md) | Dictation on Apple's on-device recognizer through a helper command beside the daemon | accepted |

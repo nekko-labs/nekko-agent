@@ -454,9 +454,9 @@ export interface NekkoApi {
   syncDeleteAll(): Promise<import('./cloud.js').CloudStatus>;
   onCloudStatus(cb: (s: import('./cloud.js').CloudStatus) => void): () => void;
   voiceStatus(): Promise<import('./voice.js').VoiceStatus>;
-  voiceInstall(): Promise<import('./voice.js').VoiceStatus>;
+  voiceInstall(engine?: import('./voice.js').VoiceEngine): Promise<import('./voice.js').VoiceStatus>;
   voiceCancelInstall(): Promise<void>;
-  voiceUninstall(): Promise<void>;
+  voiceUninstall(engine?: import('./voice.js').VoiceEngine): Promise<void>;
   voiceTranscribe(wav: number[]): Promise<string>;
   voicePermission(action?: 'status' | 'request' | 'settings'): Promise<import('./voice.js').VoicePermission>;
   getSettings(): Promise<AppSettings>;
