@@ -108,6 +108,7 @@ Full docs in one file: https://nekkoagent.com/llms-full.txt. Each page is also a
 - [Local CI runner](https://nekkoagent.com/docs/local-ci-runner.md): Run a GitHub or GitLab repo's builds and tests on your own machine.
 - [Decision models](https://nekkoagent.com/docs/decision-models.md): Typed questions answered with calibrated probabilities, in one forward pass.
 - [Local inference benchmarks](https://nekkoagent.com/docs/benchmarks.md): How fast the engine runs a model compared with Ollama and LM Studio.
+- [Floop tasks](https://nekkoagent.com/docs/floop.md): Show your team's Floop tasks in Nekko Agent and let the agent pick up, update and finish them.
 
 ### Contributing
 

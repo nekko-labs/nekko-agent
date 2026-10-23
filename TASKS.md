@@ -6,6 +6,14 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Floop task connector (added 2026-10-22)
+
+Philip asked for Nekko Agent to work in Floop, Nekko Labs' tracker for people and agents. Spec: [spec/context/floop-task-connector.md](spec/context/floop-task-connector.md); docs page `docs/floop.md`.
+
+- [x] **FL-1, Catalog and read (2026-10-22).** `floop` in `CONNECTOR_CATALOG` (tasks) and the automation catalog; `nekko-connectors` `floop_fetch` (server URL + bearer token, https or localhost); four golden cases; connector card fields, help and icon.
+- [x] **FL-2, Agent write-back via MCP (2026-10-22).** No connector writes: Floop's own MCP server (`floop mcp --profile nekko-agent`) under Settings → MCP servers covers claim, notes, done and hand-to-a-person, through the normal tool approvals. Checked with `nekkod`'s MCP client against production.
+- [ ] **FL-3, Live check in the packaged app** against a production Floop once a release includes FL-1.
+
 ## End-to-end encrypted sync, Pro and Team (added 2026-10-22)
 
 Philip asked for "extremely secure" end-to-end encryption for messages stored and synced on the server, Pro and up; Nekko Labs sees nothing unless a user opts in to help improve the app anonymously, and even then it stays encrypted. Design: [docs/SYNC-ENCRYPTION.md](docs/SYNC-ENCRYPTION.md); SPEC "End-to-end encrypted sync for Pro and Team".

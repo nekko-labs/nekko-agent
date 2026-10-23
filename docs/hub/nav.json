@@ -104,6 +104,12 @@
           "title": "Local inference benchmarks",
           "source": "docs/benchmarks.md",
           "description": "How fast the engine runs a model compared with Ollama and LM Studio."
+        },
+        {
+          "slug": "floop",
+          "title": "Floop tasks",
+          "source": "docs/floop.md",
+          "description": "Show your team's Floop tasks in Nekko Agent and let the agent pick up, update and finish them."
         }
       ]
     },

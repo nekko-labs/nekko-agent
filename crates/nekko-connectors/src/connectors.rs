@@ -75,6 +75,7 @@ pub async fn fetch(
         "todoist" => todoist_fetch(http, token, query).await,
         "clickup" => clickup_fetch(http, token, query, settings).await,
         "tasksfile" => tasks_file_fetch(query, settings),
+        "floop" => floop_fetch(http, token, query, settings).await,
         "gmail" => {
             let url = format!(
                 "https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=20{}",
@@ -808,7 +809,7 @@ pub async fn snippets(
     }
 }
 
-// ---- Task systems (Trello, Asana, Todoist, ClickUp, a local tasks file) ----
+// ---- Task systems (Trello, Asana, Todoist, ClickUp, Floop, a local tasks file) ----
 
 fn truthy(v: Option<&Value>) -> bool {
     nekko_js::truthy(v)
@@ -937,6 +938,60 @@ async fn todoist_fetch(http: &dyn Http, token: &str, query: Option<&str>) -> Res
         })
         .collect();
     Ok(matching(items, query))
+}
+
+/// A Floop server (github.com/nekko-labs/floop): the token owner's open tasks, people's and
+/// agents' alike, newest work first as the server orders them. `settings.url` is the server.
+async fn floop_fetch(
+    http: &dyn Http,
+    token: &str,
+    query: Option<&str>,
+    settings: Option<&Value>,
+) -> Result<Value, String> {
+    let site = setting(settings, "url").trim_end_matches('/').to_string();
+    if site.is_empty() {
+        return Err("Floop needs the server URL as well as the token.".into());
+    }
+    let u = js::parse_url(&site).ok_or_else(|| format!("Floop server \"{site}\" isn't a valid URL."))?;
+    let local = matches!(u.hostname.as_str(), "localhost" | "127.0.0.1" | "[::1]");
+    if u.protocol != "https:" && !(local && u.protocol == "http:") {
+        return Err("Floop server URL must be https.".into());
+    }
+    let search = query.map(|q| format!("&q={}", encode_uri_component(q))).unwrap_or_default();
+    let url = format!("{site}/api/v1/items?assignee=me&open=true&limit=100{search}");
+    let auth = format!("Bearer {token}");
+    let res = send(http, Request::get(url, &[("Authorization", &auth), ("Accept", "application/json")])).await?;
+    ok_or(&res, "Floop")?;
+    let json = js::parse_json(&res.body)?;
+    Ok(Value::Array(
+        arr(Some(&json))
+            .iter()
+            .map(|t| {
+                let status = match or_empty(t.get("status")).as_str() {
+                    "in_progress" => "in progress",
+                    "in_review" => "in review",
+                    "blocked" => "blocked",
+                    "backlog" => "backlog",
+                    _ => "to do",
+                };
+                let stream = if or_empty(t.get("stream")) == "agent" { "agent task" } else { "task" };
+                let project = or_empty(t.get("project").and_then(|p| p.get("name")));
+                let subtitle = if project.is_empty() {
+                    format!("Floop {stream} \u{b7} {status}")
+                } else {
+                    format!("Floop {stream} \u{b7} {status} \u{b7} {project}")
+                };
+                let number = string(t.get("number"));
+                obj(vec![
+                    ("id", Some(json!(number.clone()))),
+                    ("title", Some(json!(format!("#{number} {}", or_empty(t.get("title")))))),
+                    ("subtitle", Some(json!(subtitle))),
+                    ("url", Some(json!(format!("{site}/items/{number}")))),
+                    ("body", Some(json!(or_empty(t.get("body"))))),
+                ])
+            })
+            .collect(),
+    ))
 }
 
 async fn clickup_fetch(
