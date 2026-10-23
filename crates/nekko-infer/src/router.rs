@@ -11,6 +11,11 @@
 //! whether load-on-demand is on); once it reports the model loaded, the
 //! request goes through.
 //!
+//! A [`Meter`], when given, hears how fast each text reply decoded: the
+//! `timings` llama-server ends a reply with (the body, or the last streamed
+//! chunk), read from the tail of what already passed through, so the bytes
+//! the client gets are not touched or held back.
+//!
 //! Decisions (`/v1/decisions`, `/v1/systemone`) are the one exception to
 //! proxying: the decision model runs inside the daemon, so those requests are
 //! answered by the [`Decisions`] service behind the same auth and CORS.
@@ -55,6 +60,29 @@ pub trait Decisions: Send + Sync + 'static {
     fn decide(&self, body: Value) -> BoxFuture<Result<Value, (u16, String)>>;
 }
 
+/// How fast one reply decoded, from llama-server's `timings`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DecodeSample {
+    /// Tokens generated.
+    pub predicted_n: f64,
+    pub predicted_ms: f64,
+    /// Prompt tokens processed (not counting the cached prefix).
+    pub prompt_n: f64,
+    /// Requests in flight on the same model when it finished, this one included:
+    /// more than one shares the GPU, so its speed is not the model's.
+    pub concurrent: usize,
+}
+
+/// Hears each text reply's decode speed. Called once per reply that ended
+/// with `timings`, after its last byte went to the client; never for one the
+/// client hung up on.
+pub trait Meter: Send + Sync + 'static {
+    fn decoded(&self, model_id: String, sample: DecodeSample);
+}
+
+/// The tail of a reply kept for its `timings`: llama-server's last chunk is well under this.
+const METER_TAIL: usize = 8 * 1024;
+
 /// A decision request is JSON text plus a 50,000-character state; 2 MB is `laya-serve`'s cap.
 const DECISION_BODY_LIMIT: usize = 2 * 1024 * 1024;
 
@@ -86,6 +114,7 @@ pub struct EngineRouter {
     supervisor: Arc<Supervisor>,
     policy: Arc<dyn Policy>,
     decisions: Option<Arc<dyn Decisions>>,
+    meter: Option<Arc<dyn Meter>>,
     running: Mutex<Option<Running>>,
 }
 
@@ -94,13 +123,20 @@ struct Shared {
     supervisor: Arc<Supervisor>,
     policy: Arc<dyn Policy>,
     decisions: Option<Arc<dyn Decisions>>,
+    meter: Option<Arc<dyn Meter>>,
     config: Arc<ServeConfig>,
     http: hyper_util::client::legacy::Client<hyper_util::client::legacy::connect::HttpConnector, Body>,
 }
 
 impl EngineRouter {
     pub fn new(supervisor: Arc<Supervisor>, policy: Arc<dyn Policy>) -> Self {
-        Self { supervisor, policy, decisions: None, running: Mutex::new(None) }
+        Self { supervisor, policy, decisions: None, meter: None, running: Mutex::new(None) }
+    }
+
+    /// Tell `meter` how fast each text reply decoded.
+    pub fn with_meter(mut self, meter: Arc<dyn Meter>) -> Self {
+        self.meter = Some(meter);
+        self
     }
 
     /// Serve decisions from `decisions` as well. Without it the decision routes answer 409.
@@ -148,6 +184,7 @@ impl EngineRouter {
             supervisor: self.supervisor.clone(),
             policy: self.policy.clone(),
             decisions: self.decisions.clone(),
+            meter: self.meter.clone(),
             config: Arc::new(config.clone()),
             http: hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new()).build_http(),
         };
@@ -277,7 +314,15 @@ async fn route(s: Shared, req: Request) -> Response {
         }
     };
     let guard = child.begin();
-    proxy(&s, child.port, format!("/v1{bare}"), &parts.method, &parts.headers, body, guard).await
+    let meter = s.meter.clone().filter(|_| matches!(*endpoint, "chat/completions" | "completions"));
+    let res = proxy(&s, child.port, format!("/v1{bare}"), &parts.method, &parts.headers, body, guard).await;
+    match meter {
+        Some(meter) => {
+            let (parts, body) = res.into_parts();
+            Response::from_parts(parts, Body::new(Metered { inner: body, tail: Vec::new(), meter, child: Some(child) }))
+        }
+        None => res,
+    }
 }
 
 /// A decision request, answered in-process by the loaded decision model rather than proxied.
@@ -397,6 +442,69 @@ where
     }
 }
 
+/// A reply on its way to the client, keeping its last few KB to read `timings` from at the end.
+struct Metered {
+    inner: Body,
+    tail: Vec<u8>,
+    meter: Arc<dyn Meter>,
+    /// Taken when the reply ends, so it is reported once.
+    child: Option<Arc<crate::supervisor::Child>>,
+}
+
+impl HttpBody for Metered {
+    type Data = Bytes;
+    type Error = axum::Error;
+
+    fn poll_frame(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Result<Frame<Bytes>, axum::Error>>> {
+        let polled = Pin::new(&mut self.inner).poll_frame(cx);
+        match &polled {
+            Poll::Ready(Some(Ok(frame))) => {
+                if let Some(data) = frame.data_ref() {
+                    let keep = data.len().min(METER_TAIL);
+                    self.tail.extend_from_slice(&data[data.len() - keep..]);
+                    if self.tail.len() > METER_TAIL {
+                        let cut = self.tail.len() - METER_TAIL;
+                        self.tail.drain(..cut);
+                    }
+                }
+            }
+            Poll::Ready(None) => {
+                if let Some(child) = self.child.take()
+                    && let Some(mut sample) = timings(&self.tail)
+                {
+                    sample.concurrent = child.active_requests();
+                    self.meter.decoded(child.model_id.clone(), sample);
+                }
+            }
+            _ => {}
+        }
+        polled
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.inner.is_end_stream()
+    }
+
+    fn size_hint(&self) -> SizeHint {
+        self.inner.size_hint()
+    }
+}
+
+/// The last `"timings":{...}` in a reply's tail.
+fn timings(tail: &[u8]) -> Option<DecodeSample> {
+    const KEY: &[u8] = b"\"timings\":";
+    let at = tail.windows(KEY.len()).rposition(|w| w == KEY)? + KEY.len();
+    let t: Value = serde_json::Deserializer::from_slice(&tail[at..]).into_iter::<Value>().next()?.ok()?;
+    let n = |k: &str| t.get(k).and_then(Value::as_f64);
+    let sample = DecodeSample {
+        predicted_n: n("predicted_n")?,
+        predicted_ms: n("predicted_ms")?,
+        prompt_n: n("prompt_n").unwrap_or(0.0),
+        concurrent: 0,
+    };
+    (sample.predicted_n > 0.0 && sample.predicted_ms > 0.0).then_some(sample)
+}
+
 fn pick_model(body: &[u8]) -> Option<String> {
     let v: Value = serde_json::from_slice(body).ok()?;
     v.get("model").and_then(Value::as_str).filter(|m| !m.is_empty()).map(str::to_string)
@@ -448,5 +556,29 @@ mod tests {
         let mut x = HeaderMap::new();
         x.insert("x-api-key", HeaderValue::from_static("secret-key"));
         assert!(authorized(&x, "secret-key"));
+    }
+}
+
+#[cfg(test)]
+mod meter_tests {
+    use super::timings;
+
+    #[test]
+    fn reads_the_last_timings_in_a_tail() {
+        let sse = br#"data: {"choices":[{"delta":{"content":"a \"timings\": in text"}}]}
+
+data: {"choices":[{"finish_reason":"length","index":0,"delta":{}}],"object":"chat.completion.chunk","timings":{"cache_n":10,"prompt_n":4,"prompt_ms":14.2,"predicted_n":64,"predicted_ms":485.4,"predicted_per_second":129.8}}
+
+data: [DONE]
+
+"#;
+        let s = timings(sse).unwrap();
+        assert_eq!((s.predicted_n, s.predicted_ms, s.prompt_n), (64.0, 485.4, 4.0));
+        let plain = br#"{"choices":[],"timings":{"prompt_n":14,"predicted_n":64,"predicted_ms":480.2}}"#;
+        assert_eq!(timings(plain).unwrap().predicted_n, 64.0);
+        assert!(timings(b"data: [DONE]").is_none());
+        assert!(timings(br#"{"timings":{"predicted_n":0,"predicted_ms":0}}"#).is_none());
+        // Cut off mid-object: no sample rather than a wrong one.
+        assert!(timings(br#"{"timings":{"predicted_n":64,"predicted_m"#).is_none());
     }
 }

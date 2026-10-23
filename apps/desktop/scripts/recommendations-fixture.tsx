@@ -12,6 +12,7 @@ const provider = { id: 'nekko-engine', kind: 'openai-compatible', baseUrl: 'http
 const GB = 1024 ** 3;
 const MEMORY: Record<string, { budgetBytes: number; kind: 'vram' | 'unified' | 'ram' }> = {
   m5max: { budgetBytes: 128 * GB, kind: 'unified' },
+  'm5max-here': { budgetBytes: 128 * GB, kind: 'unified' },
   rtx4060: { budgetBytes: 8 * GB, kind: 'vram' },
   cpu: { budgetBytes: 16 * GB, kind: 'ram' },
 };
@@ -31,7 +32,13 @@ const downloads: string[] = [];
 const bridge: any = {
   engineStatus: async () => status(), engineModels: async () => library, engineDownloads: async () => [], engineCatalog: async () => catalog,
   listModelFolders: async () => [], getAppInfo: async () => ({ version: '0.0.0-fixture', platform: 'darwin' }),
-  machineRecommendations: async () => (data as any)[machine],
+  machineRecommendations: async () => {
+    if (machine !== 'm5max-here') return (data as any)[machine];
+    // The coding pick after a dozen replies on this machine.
+    const r = structuredClone((data as any).m5max);
+    r.tasks.find((t: any) => t.task === 'code').pick.speed = { tokensPerSecond: 98.4, basis: 'measuredHere', samples: 12 };
+    return r;
+  },
   engineDownloadModel: async (repo: string, label: string) => { downloads.push(`${repo} ${label}`); return { ok: true, message: 'Queued', jobId: 'job-1' }; },
   updateSettings: async (patch: any) => ({ ...useStore.getState().settings, ...patch }),
 };

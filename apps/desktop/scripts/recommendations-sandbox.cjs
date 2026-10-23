@@ -50,6 +50,11 @@ app.whenReady().then(async () => {
         await check(`${theme}: one row per task`, "document.querySelectorAll('[data-recommendation]').length===5");
       }
     }
+    if (!base) {
+      await fresh('m5max-here'); await sleep(1500); await run(toModels); await sleep(500);
+      await capture('m5max-measured-here-dark');
+      await check('measured here: says so', "document.querySelector('[data-recommendation=\"code\"] [data-speed-basis=\"measuredHere\"]')?.textContent==='98 tok/s here'");
+    }
     await fresh('cpu'); await sleep(1500); await run(toModels); await sleep(500);
     await capture('fresh-cpu-only-dark');
     if (!base) {

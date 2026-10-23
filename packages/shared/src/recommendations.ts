@@ -48,12 +48,13 @@ export type RecommendationPlacement = 'gpu' | 'unified' | 'cpu';
 export type RecommendationFit = 'fits' | 'tight' | 'tooBig';
 
 /**
+ * - `measuredHere`: the median of this machine's own recent replies with this file.
  * - `measured`: measured on this class of hardware with this exact file.
  * - `estimated`: from memory bandwidth, with this backend's measured efficiency.
  * - `estimatedBorrowed`: from memory bandwidth, with an efficiency measured on
  *   another backend; the roughest figure, and the UI should say so.
  */
-export type SpeedBasis = 'measured' | 'estimated' | 'estimatedBorrowed';
+export type SpeedBasis = 'measuredHere' | 'measured' | 'estimated' | 'estimatedBorrowed';
 
 export interface RecommendedOption {
   modelId: string;
@@ -75,7 +76,7 @@ export interface RecommendedOption {
   placement: RecommendationPlacement;
   fit: RecommendationFit;
   /** Decode tokens/s at the start of a conversation; absent where unknown or not what the task waits on. */
-  speed: { tokensPerSecond: number; basis: SpeedBasis } | null;
+  speed: { tokensPerSecond: number; basis: SpeedBasis; /** Replies a `measuredHere` figure is the median of. */ samples?: number } | null;
   /** Slower than the task's minimum. */
   tooSlow: boolean;
 }

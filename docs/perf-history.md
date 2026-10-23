@@ -95,6 +95,18 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-10
 
+### A3a Engine router reads each reply's decode speed (2026-10-23)
+Area: engine daemon
+Result: no effect
+Conditions: Apple M5 Max (40-core GPU), macOS, release build; `nekko-infer` router in front of a fake model server streaming 4000 SSE chunks with no pause, then llama-server's `timings` chunk; two routers in one process, one without a meter (the path on `main`) and one with, alternated, median of 15 replies, run three times (`cargo test -p nekko-infer --release --test router -- --ignored --nocapture meter_cost`)
+
+| Metric | Without meter | With meter |
+|---|---|---|
+| 4000-chunk stream through the router, run 1 | 32.25 ms | 31.95 ms (-0.9%) |
+| run 2 | 33.08 ms | 33.32 ms (+0.7%) |
+| run 3 | 32.81 ms | 32.93 ms (+0.3%) |
+
+Why: the meter keeps the last 8 KB of a chat or completion reply and parses `timings` once, after the last byte went to the client; the differences are inside run-to-run noise. A real reply has a few hundred chunks, not 4000. Source: the A3a PR.
 ### nekkod checkpoints, per-chat write locks, launch scan, joined deltas (2026-10-22)
 Area: engine daemon
 Result: mixed (launch, frames and the save itself faster; a turn's end-to-end timings unchanged; text gaps about 0.5 ms longer at 15 ms token spacing)

@@ -12,7 +12,9 @@ const FAKE_ENV: &str = "NEKKO_INFER_FAKE_SERVER";
 /// Not a test of its own: with the env var set, this process is a model
 /// server on the port in its args. `/health` says "loading" for the first
 /// 600 ms, then "ok"; chat completions stream five SSE chunks 100 ms apart;
-/// a request for model `crash` makes it exit.
+/// a request for model `crash` makes it exit. A model named `timed...` ends
+/// its stream with llama-server's `timings` chunk; `bench...` streams 4000
+/// chunks with no pause, then `timings`.
 #[test]
 fn fake_model_server() {
     if std::env::var(FAKE_ENV).is_err() {
@@ -43,9 +45,11 @@ fn fake_model_server() {
                     if body.0["model"] == "crash" {
                         std::process::exit(3);
                     }
+                    let model = body.0["model"].as_str().unwrap_or_default().to_string();
+                    let bench = model.starts_with("bench");
                     let (tx, rx) = tokio::sync::mpsc::channel::<Result<bytes::Bytes, std::io::Error>>(8);
                     tokio::spawn(async move {
-                        for i in 0..5 {
+                        for i in 0..(if bench { 4000 } else { 5 }) {
                             let chunk = format!(
                                 "data: {}\n\n",
                                 json!({ "choices": [{ "delta": { "content": format!("t{i}") } }] })
@@ -53,7 +57,14 @@ fn fake_model_server() {
                             if tx.send(Ok(chunk.into())).await.is_err() {
                                 return;
                             }
-                            tokio::time::sleep(Duration::from_millis(100)).await;
+                            if !bench {
+                                tokio::time::sleep(Duration::from_millis(100)).await;
+                            }
+                        }
+                        if model.starts_with("timed") || bench {
+                            let last = json!({ "choices": [{ "finish_reason": "stop", "delta": {} }],
+                                "timings": { "prompt_n": 12, "prompt_ms": 30.0, "predicted_n": 5, "predicted_ms": 500.0 } });
+                            let _ = tx.send(Ok(format!("data: {last}\n\n").into())).await;
                         }
                         let _ = tx.send(Ok("data: [DONE]\n\n".into())).await;
                     });
@@ -320,4 +331,108 @@ async fn a_model_server_that_dies_is_forgotten() {
         assert!(Instant::now() < deadline, "a dead model server stayed listed");
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
+}
+
+/// Collects what the router reports.
+#[derive(Default)]
+struct Samples(std::sync::Mutex<Vec<(String, nekko_infer::DecodeSample)>>);
+
+impl nekko_infer::Meter for Samples {
+    fn decoded(&self, model_id: String, sample: nekko_infer::DecodeSample) {
+        self.0.lock().unwrap().push((model_id, sample));
+    }
+}
+
+async fn serve_metered(meter: Option<Arc<Samples>>) -> (Arc<Supervisor>, EngineRouter, u16) {
+    let sup = Arc::new(Supervisor::new());
+    let loader = Arc::new(Loader { sup: sup.clone(), loads: AtomicUsize::new(0) });
+    let mut router = EngineRouter::new(sup.clone(), loader);
+    if let Some(m) = meter {
+        router = router.with_meter(m);
+    }
+    let port = free_port();
+    router.serve(ServeConfig { port, host: "127.0.0.1".into(), api_key: None, cors_origins: vec![] }).await.unwrap();
+    (sup, router, port)
+}
+
+fn free_port() -> u16 {
+    std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port()
+}
+
+async fn chat(port: u16, model: &str) -> String {
+    reqwest::Client::new()
+        .post(format!("http://127.0.0.1:{port}/v1/chat/completions"))
+        .json(&json!({ "model": model, "stream": true, "messages": [] }))
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn tells_the_meter_how_fast_each_reply_decoded() {
+    let samples = Arc::new(Samples::default());
+    let (sup, router, port) = serve_metered(Some(samples.clone())).await;
+    let body = chat(port, "timed-a").await;
+    // The client gets every byte, timings included, unchanged.
+    assert!(body.contains("\"timings\"") && body.ends_with("data: [DONE]\n\n"), "{body}");
+    let got = samples.0.lock().unwrap().clone();
+    assert_eq!(got.len(), 1, "{got:?}");
+    assert_eq!(got[0].0, "timed-a");
+    assert_eq!(
+        (got[0].1.predicted_n, got[0].1.predicted_ms, got[0].1.prompt_n, got[0].1.concurrent),
+        (5.0, 500.0, 12.0, 1)
+    );
+
+    // A reply without timings is not a sample.
+    chat(port, "m-plain").await;
+    assert_eq!(samples.0.lock().unwrap().len(), 1);
+
+    // Two at once on one model: each says it shared the model.
+    samples.0.lock().unwrap().clear();
+    let (a, b) = tokio::join!(chat(port, "timed-a"), chat(port, "timed-a"));
+    assert!(a.contains("timings") && b.contains("timings"));
+    let got = samples.0.lock().unwrap().clone();
+    assert_eq!(got.len(), 2);
+    assert!(got.iter().any(|(_, s)| s.concurrent == 2), "{got:?}");
+    router.stop();
+    sup.kill_all();
+}
+
+/// Throughput through the router with and without a meter, the same binary,
+/// alternating runs. `cargo test -p nekko-infer --release --test router -- --ignored --nocapture meter_cost`
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "a measurement, not a check"]
+async fn meter_cost() {
+    let samples = Arc::new(Samples::default());
+    let (sup_a, plain, port_a) = serve_metered(None).await;
+    let (sup_b, metered, port_b) = serve_metered(Some(samples.clone())).await;
+    // Load both before timing anything.
+    chat(port_a, "bench-a").await;
+    chat(port_b, "bench-b").await;
+    let mut times: [Vec<f64>; 2] = [Vec::new(), Vec::new()];
+    for _ in 0..15 {
+        for (i, (port, model)) in [(port_a, "bench-a"), (port_b, "bench-b")].iter().enumerate() {
+            let t = Instant::now();
+            let body = chat(*port, model).await;
+            times[i].push(t.elapsed().as_secs_f64() * 1000.0);
+            assert!(body.len() > 200_000);
+        }
+    }
+    let median = |v: &mut Vec<f64>| {
+        v.sort_by(f64::total_cmp);
+        v[v.len() / 2]
+    };
+    let (a, b) = (median(&mut times[0]), median(&mut times[1]));
+    println!(
+        "4000-chunk stream, median of 15: without meter {a:.2} ms, with meter {b:.2} ms ({:+.1}%)",
+        (b - a) / a * 100.0
+    );
+    assert_eq!(samples.0.lock().unwrap().len(), 16);
+    plain.stop();
+    metered.stop();
+    sup_a.kill_all();
+    sup_b.kill_all();
 }

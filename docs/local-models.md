@@ -38,8 +38,9 @@ Each pick says what it costs before you download it: the memory it takes out of 
 machine has for models, the download size, and the speed to expect at the start of a
 conversation. A speed with no `~` was measured with that file on that kind of hardware, a
 `~` speed is estimated from the hardware's memory bandwidth, and "rough" means the estimate
-was calibrated on a different kind of GPU. A GPU we have no figures for gets no speed rather
-than a guess. When nothing fits that is fast enough for a task, the pick is the fastest
+was calibrated on a different kind of GPU. Once you have used a model, "here" marks the speed
+your own replies ran at (the median of the last 20), which then also decides whether it is fast
+enough to stay the pick. A GPU we have no figures for gets no speed rather than a guess. When nothing fits that is fast enough for a task, the pick is the fastest
 that fits and says so. The list comes with the app and works offline; **Check this
 machine again** re-reads the hardware after a change. Once you have models the block folds
 to one line.

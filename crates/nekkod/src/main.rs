@@ -62,6 +62,7 @@ mod sideband;
 mod skill_sources;
 mod small_services;
 mod spawn;
+mod speeds;
 mod tooling;
 mod turns;
 mod voice;
@@ -237,6 +238,9 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     let machine =
         Arc::new(nekko_machine::Machine::new(cfg.data_dir.clone().map(std::path::PathBuf::from), Box::new(engine_bin)));
     let library = settings.clone().map(|s| library::Library::new(s, machine.clone(), engine.clone()));
+    if let Some(library) = &library {
+        let _ = engine.speeds.sink.set(speeds::Speeds::new(machine.clone(), library.clone()));
+    }
     let model_downloads = library.clone().zip(catalog.clone()).map(|(library, catalog)| {
         let fetch =
             downloads::Rebased(nekko_engine::download::HttpFetch(reqwest::Client::new()), cfg.hugging_face_url.clone());
