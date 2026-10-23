@@ -32,6 +32,18 @@ Nekko's own engine daemon, need the Microsoft Visual C++ Runtime (`MSVCP140.dll`
 the engine before it starts. If an engine still dies for a missing DLL, the error says so
 and links Microsoft's 25 MB redistributable.
 
+**Best for this machine.** The Models page opens on a pick per task (chat, coding, a
+small fast model for routing, embeddings, vision) made for this machine's GPU and memory.
+Each pick says what it costs before you download it: the memory it takes out of what the
+machine has for models, the download size, and the speed to expect at the start of a
+conversation. A speed with no `~` was measured with that file on that kind of hardware, a
+`~` speed is estimated from the hardware's memory bandwidth, and "rough" means the estimate
+was calibrated on a different kind of GPU. A GPU we have no figures for gets no speed rather
+than a guess. When nothing fits that is fast enough for a task, the pick is the fastest
+that fits and says so. The list comes with the app and works offline; **Check this
+machine again** re-reads the hardware after a change. Once you have models the block folds
+to one line.
+
 **Where models come from.** A short curated list answers "what should I run"; search
 covers everything else, straight against Hugging Face with no account. Each model expands
 into its real builds with their real download sizes. Downloads resume after an

@@ -318,3 +318,22 @@ fn every_candidate_is_in_the_feed() {
         }
     }
 }
+
+#[test]
+fn download_labels_are_the_catalogs() {
+    use nekko_machine::recommend::download_label;
+    assert_eq!(download_label("Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"), "Q4_K_M");
+    assert_eq!(download_label("gemma-4-12b-it-Q4_K_M.gguf"), "Q4_K_M");
+    assert_eq!(download_label("Qwen3-Coder-Next-Q8_0-00001-of-00003.gguf"), "Q8_0");
+    assert_eq!(download_label("gpt-oss-120b-MXFP4.gguf"), "MXFP4");
+    assert_eq!(download_label("bge-small-en-v1.5-f16.gguf"), "F16");
+    assert_eq!(download_label("Q8_0/big-Q8_0-00001-of-00003.gguf"), "Q8_0");
+    assert_eq!(download_label("weird-name.gguf"), "weird-name");
+    // Every pick in the feed downloads under a label the catalog gives it.
+    for m in &bundled_feed().models {
+        for q in &m.quants {
+            let label = download_label(&q.files[0]);
+            assert!(q.label.to_uppercase().ends_with(&label), "{} {} -> {label}", m.id, q.label);
+        }
+    }
+}

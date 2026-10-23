@@ -62,6 +62,8 @@ export interface RecommendedOption {
   /** Hugging Face repo, `owner/name`. */
   repo: string;
   quant: string;
+  /** The label `engineDownloadModel(repo, label)` takes: the catalog's, without prefixes such as `UD-`. */
+  downloadLabel: string;
   /** Every file to download: the weights (all shards) and the image projector when the task needs one. */
   files: string[];
   downloadBytes: number;
