@@ -3,8 +3,8 @@
 //! up to `Number.MAX_SAFE_INTEGER`) and its `compare` (main version, then
 //! prerelease identifiers, numeric ones numerically and below alphanumeric
 //! ones; build metadata ignored). Held to node-semver by
-//! `tests/golden/semver.json`, which `semver.golden.test.ts` writes from the
-//! real package.
+//! `tests/golden/semver.json`, a frozen record of what the real package
+//! answered (edit it by hand per docs/runbooks/golden-fixtures.md).
 
 use std::cmp::Ordering;
 

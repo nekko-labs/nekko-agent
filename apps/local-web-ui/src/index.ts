@@ -21,9 +21,6 @@ const CLI_SUBCOMMANDS = new Set([
   'skills', 'tools', 'models', 'train', 'help', 'version',
 ]);
 
-/** Answered by this server itself: what the page may expect of the transport. */
-const CAPABILITIES_CHANNEL = 'web:capabilities';
-
 const SCRIPT = fileURLToPath(import.meta.url);
 const __dirname = dirname(SCRIPT);
 
@@ -117,13 +114,12 @@ async function main() {
     allowedHosts: ALLOWED_HOSTS,
     allowedOrigins: ALLOWED_ORIGINS,
   };
-  const capabilities = { engine: 'nekkod', terminalStream: true };
 
   const app = Fastify({ bodyLimit: 25 * 1024 * 1024 });
   app.addHook('onRequest', createApiSecurityHook(security));
 
   // Outside /api, so a container health check needs no token. Says nothing private.
-  app.get('/health', async () => ({ ok: true, engine: capabilities.engine, daemon: { ready: daemon.ready, restarts: daemon.restarts } }));
+  app.get('/health', async () => ({ ok: true, engine: 'nekkod', daemon: { ready: daemon.ready, restarts: daemon.restarts } }));
 
   // The engine is nekkod: forward calls, splice sockets.
   const call = async (channel: string, args: unknown[]) => {
@@ -147,7 +143,6 @@ async function main() {
   const reviewRepository = (input: RepositoryReviewInput) => call('repository:review', [input]) as Promise<RepositoryReviewVerdict>;
   app.post<{ Params: { channel: string }; Body: { args?: unknown[] } }>('/api/:channel', async (req, reply) => {
     const channel = req.params.channel;
-    if (channel === CAPABILITIES_CHANNEL) return reply.send(capabilities);
     let up;
     try {
       up = await daemon.endpoint();

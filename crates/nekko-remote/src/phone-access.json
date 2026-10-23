@@ -98,11 +98,13 @@
    "workspace:remove"
   ],
   "prefixes": [
+   "cloud:",
    "dialog:",
    "mcp:",
    "oauth:",
    "remote:",
    "shell:",
+   "sync:",
    "terminal:",
    "terminals:",
    "update:"

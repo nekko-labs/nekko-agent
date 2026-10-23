@@ -4,10 +4,9 @@
 //! (`packages/host/src/changes.ts`) and the ported tools' `BUILTIN_TOOLS`
 //! specs.
 //!
-//! The agent loop moves to Rust next (PF14) and calls [`execute`] with a
-//! [`ToolContext`] per call. Until then nothing calls this crate at run
-//! time; it is held to the TS behaviour by golden files the TS code writes
-//! (`tests/golden`, see `packages/host/src/agent-tools.golden.test.ts`).
+//! The daemon's agent loop calls [`execute`] with a [`ToolContext`] per
+//! call. It is held to the TS behaviour by frozen golden files
+//! (`tests/golden`, edited by hand per docs/runbooks/golden-fixtures.md).
 //!
 //! Parity is the point, so the TS semantics are ported rather than
 //! approximated: JavaScript regular expressions ([`jsre`]), Node's `path`
@@ -17,10 +16,12 @@
 //! process trees and can be cancelled; strings are never cut inside a
 //! surrogate pair).
 
+mod allowlist;
 mod bash;
 mod changes;
 mod context;
 mod exec;
+pub mod gitguard;
 mod guardrails;
 pub mod hooks;
 mod js;
@@ -32,7 +33,8 @@ mod sandbox;
 mod search;
 mod spec;
 
-pub use bash::{BashLimits, CommandRunner, Failure, RunOutcome, RunRequest, ShellRunner, shell};
+pub use allowlist::Dialect;
+pub use bash::{BashLimits, CommandRunner, Failure, RunOutcome, RunRequest, ShellRunner, platform_env, shell};
 pub use changes::{ChangeTracker, FileChange};
 pub use context::{
     Approver, BoxFuture, Cancel, ChatMode, CommandLog, SandboxMode, ToolCall, ToolContext, ToolResult, Workspace,
@@ -40,7 +42,8 @@ pub use context::{
 };
 pub use exec::execute;
 pub use guardrails::{
-    Action, GuardrailDecision, GuardrailMatch, GuardrailRule, Severity, classify_command, default_guardrails,
+    Action, GuardrailDecision, GuardrailMatch, GuardrailRule, NOT_READ_ONLY, SHELL_SYNTAX, Severity, classify_command,
+    classify_command_in, default_guardrails,
 };
 pub use nodefs::code_name as node_error_code;
 pub use process::{Processes, describe_process};

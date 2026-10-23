@@ -4,6 +4,6 @@
 <dict>
     <!-- The watch complication reads the snapshot the watch app keeps (counts only). -->
     <key>com.apple.security.application-groups</key>
-    <array><string>group.com.nekko.native.ios</string></array>
+    <array><string>group.dev.nekkolabs.nekkoagent</string></array>
 </dict>
 </plist>

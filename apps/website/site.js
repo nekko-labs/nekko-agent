@@ -419,19 +419,30 @@
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !box.hidden) shut(); });
 })();
 
-// ---- white / colourful toggle: white by default, remembered once chosen ----
+// ---- look switch: Dark by default, then White, then Colourful. The choice is
+//      remembered once made; the icon shows where the next click goes. ----
 (() => {
   const btn = document.querySelector('.theme-toggle');
   if (!btn) return;
   const root = document.documentElement;
-  // a toggle button: pressed means the Colourful look is on
-  const sync = () => btn.setAttribute('aria-pressed', String(root.dataset.theme === 'colour'));
+  const LOOKS = ['dark', 'white', 'colour'];
+  const NAME = { dark: 'Dark', white: 'White', colour: 'Colourful' };
+  const THEME_COLOR = { dark: '#0d0b18', white: '#f3effe', colour: '#9d8ce6' };
+  const current = () => (LOOKS.includes(root.dataset.theme) ? root.dataset.theme : 'dark');
+  const sync = () => {
+    const now = current();
+    const next = LOOKS[(LOOKS.indexOf(now) + 1) % LOOKS.length];
+    btn.setAttribute('aria-label', `${NAME[now]} look. Switch to the ${NAME[next]} look`);
+    btn.title = `Switch to the ${NAME[next]} look`;
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.content = THEME_COLOR[now];
+  };
   sync();
   btn.addEventListener('click', () => {
-    const colour = root.dataset.theme !== 'colour';
-    if (colour) root.dataset.theme = 'colour'; else delete root.dataset.theme;
+    const next = LOOKS[(LOOKS.indexOf(current()) + 1) % LOOKS.length];
+    root.dataset.theme = next;
     sync();
-    try { localStorage.setItem('nekko-theme', colour ? 'colour' : 'white'); } catch (e) { /* private mode: the choice lasts this page only */ }
+    try { localStorage.setItem('nekko-theme', next); } catch (e) { /* private mode: the choice lasts this page only */ }
   });
 })();
 
@@ -530,7 +541,7 @@
 //      The grid is pinned to the page, so it scrolls with the content, and
 //      scrolling also pushes the wave along. Brand gradient (indigo to
 //      lavender, left to right) on the white version, white on the colourful
-//      one. ~20 fps, pauses when the tab is hidden, and holds still (but
+//      one, and lavender to aqua on the dark one. ~20 fps, pauses when the tab is hidden, and holds still (but
 //      still follows the scroll) for reduced-motion visitors. ----
 (() => {
   const c = document.getElementById('pixelwave');
@@ -546,11 +557,11 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.imageSmoothingEnabled = false;
   };
-  const colour = () => document.documentElement.dataset.theme === 'colour';
+  const look = () => document.documentElement.dataset.theme;
   const draw = () => {
     const sy = window.scrollY;
     const push = sy / 260; // scrolling moves the wave
-    const white = colour();
+    const theme = look();
     ctx.clearRect(0, 0, W, H);
     const y0 = -(sy % CELL);
     for (let y = y0; y < H; y += CELL) {
@@ -560,9 +571,13 @@
         const a = Math.max(0, w) ** 3 * 0.34;
         if (a < 0.025) continue;
         const s = a > 0.18 ? 3 : 2;
-        if (white) ctx.fillStyle = `rgba(255,255,255,${(a * 1.6).toFixed(3)})`;
-        else {
-          const k = x / W; // 0 = indigo #453A92, 1 = lavender #9D8CE6
+        const k = x / W;
+        if (theme === 'colour') ctx.fillStyle = `rgba(255,255,255,${(a * 1.6).toFixed(3)})`;
+        else if (theme === 'dark') {
+          // 0 = lavender #9D8CE6, 1 = aqua #8AE4F2: glowing dots on the dark ground
+          ctx.fillStyle = `rgba(${Math.round(157 - 19 * k)},${Math.round(140 + 88 * k)},${Math.round(230 + 12 * k)},${(a * 1.1).toFixed(3)})`;
+        } else {
+          // 0 = indigo #453A92, 1 = lavender #9D8CE6
           ctx.fillStyle = `rgba(${Math.round(69 + 88 * k)},${Math.round(58 + 82 * k)},${Math.round(146 + 84 * k)},${a.toFixed(3)})`;
         }
         ctx.fillRect(Math.round(x + (CELL - s) / 2), Math.round(y + (CELL - s) / 2), s, s);

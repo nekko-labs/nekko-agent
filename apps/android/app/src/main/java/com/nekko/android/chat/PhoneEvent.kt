@@ -23,8 +23,8 @@ enum class PhoneEvent {
 
     companion object {
         /**
-         * The error message of a turn the user stopped mid-call: `packages/core/src/agent/loop.ts`
-         * and `crates/nekko-loop/src/run.rs` both report it as exactly this.
+         * The error message of a turn the user stopped mid-call: `crates/nekko-loop/src/run.rs`
+         * reports it as exactly this.
          */
         const val STOPPED = "Stopped"
 

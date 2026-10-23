@@ -24,12 +24,14 @@ impl Drop for Daemon {
 fn start(data_dir: &std::path::Path) -> Daemon {
     let config = json!({ "token": TOKEN, "allowedOrigins": ["null"], "dataDir": data_dir });
     let mut child = Command::new(env!("CARGO_BIN_EXE_nekkod"))
-        .env("NEKKOD_CONFIG", config.to_string())
+        .arg("--config-stdin")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
         .spawn()
         .expect("nekkod starts");
+    // The config is the first line of stdin; stdin stays open (its end stops the daemon).
+    std::io::Write::write_all(child.stdin.as_mut().unwrap(), format!("{config}\n").as_bytes()).unwrap();
     let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
     let line = lines.next().expect("a ready line").unwrap();
     let ready: Value = serde_json::from_str(line.strip_prefix("NEKKOD_READY ").expect("ready prefix")).unwrap();
@@ -55,19 +57,6 @@ async fn machine_channels_are_served_without_a_backend() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let d = start(&dir);
-
-    let (_, info) = post(d.port, "daemon:info", json!([])).await;
-    let owned = info["owned"].as_array().unwrap();
-    for c in [
-        "gpu:stats",
-        "system:stats",
-        "machine:readiness",
-        "machine:profile",
-        "machine:recommendations",
-        "resource:queue",
-    ] {
-        assert!(owned.iter().any(|o| o == c), "{c} in {info}");
-    }
 
     let (status, sys) = post(d.port, "system:stats", json!([])).await;
     assert_eq!(status, 200, "{sys}");

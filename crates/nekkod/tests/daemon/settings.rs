@@ -9,8 +9,6 @@ async fn settings_are_the_daemons_to_write_when_it_knows_the_data_dir() {
     std::fs::write(data.join("settings.json"), r#"{"theme":"dark","maxSteps":3}"#).unwrap();
     let d = start_with(Some(&data));
 
-    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    assert!(info["owned"].as_array().unwrap().contains(&json!("settings:update")));
     let (status, got) = post(d.port, "settings:get", json!([]), Some(TOKEN)).await;
     assert_eq!(status, 200);
     assert_eq!(got["theme"], "dark");
@@ -277,8 +275,6 @@ async fn the_daemon_keeps_and_reads_connectors() {
     let _ = std::fs::remove_dir_all(&data);
     std::fs::create_dir_all(&data).unwrap();
     let d = start_with(Some(&data));
-    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    assert!(info["owned"].as_array().unwrap().contains(&json!("connector:fetch")), "{info}");
     let (_, missing) = post(d.port, "connector:fetch", json!(["teams"]), Some(TOKEN)).await;
     assert_eq!(missing["error"], "Connector not connected", "{missing}");
     let hook = json!({ "webhookUrl": "https://acme.webhook.office.com/x" });

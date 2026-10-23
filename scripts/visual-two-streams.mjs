@@ -56,8 +56,6 @@ try {
   let up = false;
   for (let i = 0; i < 160 && !up; i++) { try { up = !!(await api('settings:get')); } catch { await sleep(250); } }
   if (!up) throw new Error(`server did not start:\n${serverLog.slice(-2000)}`);
-  const caps = await api('web:capabilities');
-  console.log(`[${LABEL}] engine ${caps?.engine}`);
 
   const browser = await launchBrowser({ port: cdpPort, width: 1600, height: 1000, vsync: true });
   cleanups.push(() => browser.close());

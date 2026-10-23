@@ -10,7 +10,7 @@ import { relayUrlProblem } from './relay-route.js';
  * The phone parsers follow this one exactly: the iPhone's `Pairing.swift`,
  * Android's `Pairing.kt` and the Expo app's `pairing.ts`, held together by the
  * fixture `apps/ios/Protocol/Tests/NekkoProtocolTests/Fixtures/pairing-links.json`
- * (written by `packages/host/src/pairing-link.golden.test.ts`). A link without `alt` is the old link and
+ * (written by `pairing-link.golden.test.ts` beside this file). A link without `alt` is the old link and
  * parses as before; an `alt` that fails the PH1 rule (`relayUrlProblem`) is
  * dropped, never the whole link.
  */

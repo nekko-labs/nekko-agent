@@ -1,0 +1,33 @@
+[package]
+name = "nekko-cloud"
+description = "Nekko Cloud for the engine daemon: sign-in through Supabase Auth, the device token, and end-to-end encrypted chat sync (Pro and Team) on top of nekko-sync. The server only ever receives ciphertext."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+axum.workspace = true
+base64 = "0.22"
+futures-util.workspace = true
+getrandom.workspace = true
+nekko-store = { path = "../nekko-store" }
+nekko-sync = { path = "../nekko-sync" }
+# native-tls: Nekko Cloud and Supabase are HTTPS. It is the TLS stack reqwest already uses here.
+reqwest = { workspace = true, features = ["native-tls"] }
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.10"
+tokio.workspace = true
+zeroize = "1"
+
+# The OS keystore holds the device key, the keyrings and the token on macOS
+# (Keychain) and Windows (Credential Manager). Linux keeps them in a 0600 file
+# beside tokens.json: Secret Service needs a desktop session and D-Bus, which
+# headless installs don't have.
+[target.'cfg(any(target_os = "macos", windows))'.dependencies]
+keyring = { version = "3", features = ["apple-native", "windows-native"] }
+
+[dev-dependencies]
+tempfile = "3"

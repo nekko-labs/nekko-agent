@@ -1,8 +1,9 @@
 //! The decision-model service (`decisions:*`), served from the daemon: the
 //! catalog, the installed and user-added Laya exports, loading them into the
-//! daemon's own decide service, and TypeSafe's hosted Jev over HTTPS. A port of
-//! `packages/host/src/engine/decisions.ts`, held to it by
-//! `tests/golden/decisions.json` (which `decisions.golden.test.ts` writes).
+//! daemon's own decide service, and TypeSafe's hosted Jev over HTTPS. The
+//! catalog and its release URL live in `decision-catalog.json` beside this
+//! file. `tests/golden/decisions.json` is a frozen record of the deleted TS
+//! service's replies; edit it by hand per docs/runbooks/golden-fixtures.md.
 //! The user's export folders are saved through the daemon's settings store.
 
 use nekko_infer::BoxFuture;
@@ -35,13 +36,17 @@ fn model_files(precision: &str) -> &'static [&'static str] {
     }
 }
 
-/// `DECISION_CATALOG`, as the TS exports it (recorded in the golden set).
-pub fn catalog() -> &'static Value {
-    static C: OnceLock<Value> = OnceLock::new();
-    C.get_or_init(|| {
-        let golden: Value = serde_json::from_str(include_str!("../tests/golden/decisions.json")).unwrap_or(Value::Null);
-        golden.get("catalog").cloned().unwrap_or_else(|| json!([]))
+/// `decision-catalog.json`, parsed once.
+fn source() -> &'static Value {
+    static S: OnceLock<Value> = OnceLock::new();
+    S.get_or_init(|| {
+        serde_json::from_str(include_str!("decision-catalog.json")).expect("decision-catalog.json is valid JSON")
     })
+}
+
+/// The models the app offers to download (`decision-catalog.json`'s `catalog`).
+pub fn catalog() -> &'static Value {
+    source().get("catalog").expect("decision-catalog.json has a catalog")
 }
 
 /// The local decision model: the daemon's decide service (a stand-in in tests).
@@ -129,15 +134,10 @@ pub fn to_fixed(x: f64, digits: usize) -> String {
     if negative && body.chars().any(|c| c != '0' && c != '.') { format!("-{body}") } else { body }
 }
 
-/// Where the catalog's files are fetched from, as the TS exports it
-/// (`DECISION_RELEASE_URL`, recorded in the golden set).
+/// Where the catalog's files are fetched from (`decision-catalog.json`'s
+/// `releaseUrl`).
 pub fn release_url() -> String {
-    static U: OnceLock<String> = OnceLock::new();
-    U.get_or_init(|| {
-        let golden: Value = serde_json::from_str(include_str!("../tests/golden/decisions.json")).unwrap_or(Value::Null);
-        golden.get("releaseUrl").and_then(Value::as_str).unwrap_or_default().to_string()
-    })
-    .clone()
+    source().get("releaseUrl").and_then(Value::as_str).expect("decision-catalog.json has a releaseUrl").to_string()
 }
 
 /// One file of a catalog model to fetch (the TS `DownloadRequest` it starts).

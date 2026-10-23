@@ -7,8 +7,6 @@ use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-pub const CHANNELS: &[&str] = &["resource:queue"];
-
 const TIMEOUT: Duration = Duration::from_secs(15);
 const MAX_RESPONSE_UNITS: usize = 2_000_000;
 

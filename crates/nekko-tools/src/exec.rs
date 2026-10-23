@@ -4,9 +4,11 @@
 //! Every handler returns `Err(message)` where the TS code would throw; that
 //! becomes an error result carrying the message, as the TS `catch` does.
 
+use crate::allowlist::{Dialect, runs_git};
 use crate::bash::{Failure, RunRequest};
 use crate::context::{ChatMode, ToolCall, ToolContext, ToolResult};
-use crate::guardrails::{Action, Severity, classify_command, default_guardrails};
+use crate::gitguard::{hardened_git_env, touches_git_config};
+use crate::guardrails::{Action, NOT_READ_ONLY, Severity, classify_command, default_guardrails};
 use crate::js;
 use crate::nodefs;
 use crate::sandbox::{asks_everything, assert_readable, assert_writable, first_workspace, process_cwd, resolve_path};
@@ -50,6 +52,18 @@ async fn approve(call: &ToolCall, ctx: &ToolContext, reason: &str, severity: Sev
         ok = ctx.approver.approve(call, reason, severity) => ok,
         _ = ctx.cancel.cancelled() => false,
     }
+}
+
+/// Whether a write or edit to `p` may go ahead: asked in ask mode and the
+/// ask-everything sandbox, and in every mode but YOLO when `p` is where git
+/// reads configuration from (its config can name programs that a later
+/// auto-run `git status` would run; decision 0010).
+async fn write_approved(call: &ToolCall, ctx: &ToolContext, p: &str, verb: &str) -> bool {
+    if ctx.mode != ChatMode::Yolo && touches_git_config(p) {
+        let reason = format!("{verb} {p}: git configuration, which can name programs git runs");
+        return approve(call, ctx, &reason, Severity::High).await;
+    }
+    !asks_everything(ctx) || approve(call, ctx, &format!("{verb} {p}"), Severity::Medium).await
 }
 
 fn session(ctx: &ToolContext) -> Option<&str> {
@@ -123,7 +137,7 @@ fn dirname(p: &str) -> String {
 async fn write_file(call: &ToolCall, ctx: &ToolContext) -> Outcome {
     let p = resolve_path(arg(call, "path"), ctx)?;
     assert_writable(&p, ctx)?;
-    if asks_everything(ctx) && !approve(call, ctx, &format!("Write {p}"), Severity::Medium).await {
+    if !write_approved(call, ctx, &p, "Write").await {
         return Ok(ToolResult::err(call, "Write not approved by user."));
     }
     record_original(ctx, &p);
@@ -140,7 +154,7 @@ async fn edit_file(call: &ToolCall, ctx: &ToolContext) -> Outcome {
     if !nodefs::exists(&p) {
         return Ok(ToolResult::err(call, format!("File not found: {p}")));
     }
-    if asks_everything(ctx) && !approve(call, ctx, &format!("Edit {p}"), Severity::Medium).await {
+    if !write_approved(call, ctx, &p, "Edit").await {
         return Ok(ToolResult::err(call, "Edit not approved by user."));
     }
     let cur = nodefs::read_utf8(&p)?;
@@ -231,13 +245,27 @@ async fn bash(call: &ToolCall, ctx: &ToolContext) -> Outcome {
         }
     };
     let decision = classify_command(&command, rules);
-    let labels = decision.matches.iter().map(|m| m.label.as_str()).collect::<Vec<_>>().join(", ");
+    // "Not a read-only command" says nothing the prompt's own wording does not.
+    let labels = decision
+        .matches
+        .iter()
+        .filter(|m| m.rule_id != NOT_READ_ONLY)
+        .map(|m| m.label.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
     // A deny guardrail is a hard floor in every mode (even YOLO).
     if decision.action == Action::Deny {
         return Ok(ToolResult::err(call, format!("Blocked by guardrail ({labels}).")));
     }
-    // YOLO never prompts; Ask always prompts; Guardrails prompts on ask-rules.
+    // YOLO never prompts; Ask always prompts; Guardrails prompts unless every
+    // command in it is read-only or allowed by a user rule (decision 0010).
     let needs_approval = ctx.mode != ChatMode::Yolo && (asks_everything(ctx) || decision.action == Action::Ask);
+    // An auto-run git gets an environment that keeps repo config from running anything.
+    let env = if !needs_approval && ctx.mode == ChatMode::Guardrails && runs_git(&command, Dialect::host()) {
+        hardened_git_env()
+    } else {
+        Vec::new()
+    };
     if needs_approval {
         let reason = if labels.is_empty() { "Run command" } else { labels.as_str() };
         if !approve(call, ctx, reason, decision.severity).await {
@@ -268,6 +296,7 @@ async fn bash(call: &ToolCall, ctx: &ToolContext) -> Outcome {
                     limits: ctx.limits,
                     cancel: &ctx.cancel,
                     on_output: &mirror,
+                    env: &env,
                 })
                 .await
         }

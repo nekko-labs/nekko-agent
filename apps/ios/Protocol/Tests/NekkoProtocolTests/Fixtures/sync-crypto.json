@@ -119,16 +119,27 @@
     "private": "g0FCXK_t6dJLBZmu_f3v8cFSbtdbByF-uZv4wLdJi4E",
     "public": "BJp4HKbQVafzDQyf-Hk2xzn2gW719ecrS5RkBLChqDsqwZ-EKUXqK_ZaoWSbKwL_eYVMjV7PzUA4YuipfqZsccE"
   },
+  "sender": {
+    "id": "dev_51de",
+    "private": "CjZ7ks8LA339iZYO6DLVb3_BUWgbtB5TaQ53b1eGmYo",
+    "public": "BCjxEbDORMS-dYGwe8qTGfFzSvmqzC0zIdaYpWESfcZixagOMQrAvkaFNqHMboPo-sSuRRU6CNXXKfdnztNMS6A"
+  },
   "wrap": {
     "keyId": 1,
-    "blob": "AQSaeBym0FWn8w0Mn_h5Nsc59oFu9fXnK0uUZASwoag7KsGfhClF6iv2WqFkmysC_3mFTI1ez81AOGLoqX6mbHHBSdzbu7mGd1Rq5Ma1gSa6vG5qEr0OIL6ejTb-EoSL68T_6pNB621nc9zpLPPlV7wx-D2zL0CC6X_eFANsZx7zvij3_y0PqqFaPTkod7S1IQM"
+    "blob": "AQSaeBym0FWn8w0Mn_h5Nsc59oFu9fXnK0uUZASwoag7KsGfhClF6iv2WqFkmysC_3mFTI1ez81AOGLoqX6mbHHB27Y2rTcy3sdTQCCV6sOtCbGFzK-nMtVge1Tl8uSxN03TQJA99VJskvIjc-gSMlYJAe6XPEkuTFFNBzmfwsBD-5dr87B-ej6kftxUCxOOnv4"
+  },
+  "join": {
+    "code": "Z36C-EH8M-8AFR-1JX6",
+    "tag": "NLgqGebBHT91Ayy55spVEt1Rz1CnqilZmKxPeCsSuqA",
+    "keyId": 3,
+    "blob": "AQSaeBym0FWn8w0Mn_h5Nsc59oFu9fXnK0uUZASwoag7KsGfhClF6iv2WqFkmysC_3mFTI1ez81AOGLoqX6mbHHBcjiSe3_C7wYy_zZoPzbGRUENV77rfn67PgXDsdpkcL0MgWLsqBkJ7Khwvz3mHOl0Bp5BGhpv5wbTQvxx76IrX1W8jYsM9WTP2nOmb0naR7s"
   },
   "recovery": {
     "key": "jFhTeFE_X3ouFFbuVAQmBf24kDkr7O-t0qsYD9Avs0E",
     "text": "HHC56-Y2H7X-FQMBG-MAVQ5-81160-QYVH4-1S5FP-EZBEJ-NCC0Z-M1FPD-0YHJ0",
+    "public": "BEyhcGU2IZRMmVgqXru4SO1hA1bPMXYiYvscMlpEPoNO5D-mrWYKW-CQUZxcNCzE3aomiW-1PcX2jMnzupcI_sA",
     "keyId": 1,
-    "salt": "Qo2OZCYY7KeIo69QCdobm-rrJ5oT4mf0e0CdlNVV9FY",
-    "blob": "AUKNjmQmGOyniKOvUAnaG5vq6yeaE-Jn9HtAnZTVVfRWtARXvBK4wms97kLQaiveVTPyGaRp_i6zHCRtj2YUqhC6GKBviEEBiQeUz1oW7rOWKJEjZV03Spwms8EgaBw4-x5vnyRxPIH15VZvyqlcNdU"
+    "blob": "AQSaeBym0FWn8w0Mn_h5Nsc59oFu9fXnK0uUZASwoag7KsGfhClF6iv2WqFkmysC_3mFTI1ez81AOGLoqX6mbHHBkjYXV-cIg6I1c2x0Fg8QN0cZgrYO2s0Uo0j1QeInfE2Mqken_c8HB2uxzK4PbHDnVY2gYA8SmIu2lxzFpOLFeUSFtzUTg08ycDZWiHBW5dY"
   },
   "donation": {
     "researchPrivate": "ZvYtGAfTgho4ZfJXO2nHS-Az8TQSQKyGH-_G1DC_9eA",

@@ -50,6 +50,7 @@ function makeWebClient(): NekkoApi {
   const trainingCbs = new Set<(r: import('@nekko-agent/shared').TrainingRun[]) => void>();
   const workflowCbs = new Set<(s: import('@nekko-agent/shared').WorkflowsSnapshot) => void>();
   const oauthStatusCbs = new Set<(s: OAuthStatus) => void>();
+  const cloudStatusCbs = new Set<(s: import('@nekko-agent/shared').CloudStatus) => void>();
   const limitsUpdatedCbs = new Set<(e: { tokenKey: string; limits: SubscriptionLimits }) => void>();
   const downloadsUpdatedCbs = new Set<(jobs: import('@nekko-agent/shared').DownloadJob[]) => void>();
   const modelsUpdatedCbs = new Set<(e: { providerId: string }) => void>();
@@ -68,6 +69,7 @@ function makeWebClient(): NekkoApi {
     else if (channel === IpcEvents.trainingUpdated) trainingCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.workflowsUpdated) workflowCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.oauthStatus) oauthStatusCbs.forEach((cb) => cb(payload));
+    else if (channel === IpcEvents.cloudStatus) cloudStatusCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.limitsUpdated) limitsUpdatedCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.downloadsUpdated) downloadsUpdatedCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.modelsUpdated) modelsUpdatedCbs.forEach((cb) => cb(payload));
@@ -255,17 +257,13 @@ function makeWebClient(): NekkoApi {
       return text ? JSON.parse(text) : null;
     };
     let ws: WebSocket | null = null;
-    // Asked once: an older server (or one running the engine in-process) has no such channel.
-    let caps: Promise<{ terminalStream?: boolean; engine?: string } | null> | null = null;
-    const capabilities = () => (caps ??= call('web:capabilities').catch(() => null));
-    // The chats whose agent event stream this page takes (null: every chat's).
-    // Only nekkod narrows a stream; the in-process server sends everything.
+    // The chats whose agent event stream this page takes (null: every chat's);
+    // nekkod narrows the stream to them.
     let narrowTo: string[] | null = null;
-    let daemonEvents = false;
     const connect = () => {
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
       const params = new URLSearchParams();
-      if (daemonEvents && narrowTo) params.set('sessions', narrowTo.join(','));
+      if (narrowTo) params.set('sessions', narrowTo.join(','));
       if (token()) params.set('token', token());
       const q = params.toString() ? `?${params}` : '';
       const socket = new WebSocket(`${proto}://${location.host}/api/events${q}`);
@@ -282,15 +280,12 @@ function makeWebClient(): NekkoApi {
       socket.onclose = () => setTimeout(connect, 1000); // auto-reconnect
     };
     connect();
-    void capabilities().then((c) => { daemonEvents = c?.engine === 'nekkod'; if (daemonEvents) subscribe(narrowTo); });
     subscribe = (ids) => {
       narrowTo = ids ? [...new Set(ids)] : null;
-      if (!daemonEvents || ws?.readyState !== WebSocket.OPEN) return; // sent with the next connect
+      if (ws?.readyState !== WebSocket.OPEN) return; // sent with the next connect
       ws.send(JSON.stringify({ channel: 'daemon:subscribe', args: [narrowTo] }));
     };
-    const daemonTerminals = () => capabilities().then((c) => c?.terminalStream === true);
     openTerminalStream = async (id, handlers) => {
-      if (!(await daemonTerminals())) return null;
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
       const q = token() ? `?token=${encodeURIComponent(token())}` : '';
       return openTerminalSocket(`${proto}://${location.host}/api/term/${encodeURIComponent(id)}${q}`, handlers);
@@ -324,6 +319,23 @@ function makeWebClient(): NekkoApi {
     runtimePlan: (providerId, modelId, req) => call(IpcChannels.runtimePlan, providerId, modelId, req),
     runtimeAutoFit: (providerId, modelId, budgetFraction, parallelSlots) =>
       call(IpcChannels.runtimeAutoFit, providerId, modelId, budgetFraction, parallelSlots),
+    cloudStatus: () => call(IpcChannels.cloudStatus),
+    cloudRefresh: () => call(IpcChannels.cloudRefresh),
+    cloudSendCode: (email) => call(IpcChannels.cloudSendCode, email),
+    cloudVerifyCode: (email, code) => call(IpcChannels.cloudVerifyCode, email, code),
+    cloudBeginOAuth: (provider) => call(IpcChannels.cloudBeginOAuth, provider),
+    cloudCancelOAuth: () => call(IpcChannels.cloudCancelOAuth),
+    cloudSignOut: () => call(IpcChannels.cloudSignOut),
+    syncTurnOn: () => call(IpcChannels.syncTurnOn),
+    syncConfirmRecoveryKey: (text) => call(IpcChannels.syncConfirmRecoveryKey, text),
+    syncRestore: (text) => call(IpcChannels.syncRestore, text),
+    syncRequestJoin: () => call(IpcChannels.syncRequestJoin),
+    syncApprove: (deviceId, joinCode) => call(IpcChannels.syncApprove, deviceId, joinCode),
+    syncRevoke: (deviceId) => call(IpcChannels.syncRevoke, deviceId),
+    syncNow: () => call(IpcChannels.syncNow),
+    syncSetEnabled: (on) => call(IpcChannels.syncSetEnabled, on),
+    syncSetIncludeLocalOnly: (on) => call(IpcChannels.syncSetIncludeLocalOnly, on),
+    syncDeleteAll: () => call(IpcChannels.syncDeleteAll),
     voiceStatus: () => call(IpcChannels.voiceStatus),
   voiceInstall: () => call(IpcChannels.voiceInstall),
   voiceCancelInstall: () => call(IpcChannels.voiceCancelInstall),
@@ -655,6 +667,10 @@ function makeWebClient(): NekkoApi {
     onAgentReplay: (cb) => {
       replayCbs.add(cb);
       return () => replayCbs.delete(cb);
+    },
+    onCloudStatus: (cb) => {
+      cloudStatusCbs.add(cb);
+      return () => cloudStatusCbs.delete(cb);
     },
     onOAuthStatus: (cb) => {
       oauthStatusCbs.add(cb);

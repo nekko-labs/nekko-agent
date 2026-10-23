@@ -22,9 +22,10 @@ node apps/cli/dist/index.js status
 ```
 
 Use `nekko-agent` after a global install or linking the built package, or invoke
-the bundled binary from `apps/cli/dist/index.js`. Without `--url`, the CLI runs
-an in-process host
-against `~/.nekko` (override with `NEKKO_DATA_DIR`). To drive a Local Web UI,
+the bundled binary from `apps/cli/dist/index.js`. Without `--url`, the CLI talks
+to the running app if there is one, else starts a private `nekkod` (the engine
+daemon) against `~/.nekko` (override with `NEKKO_DATA_DIR`) and stops it when it
+exits. To drive a Local Web UI,
 use:
 
 ```bash

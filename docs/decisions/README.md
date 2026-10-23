@@ -12,3 +12,10 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | [0002](0002-bundled-model-feed-with-measured-calibration.md) | Recommend models from a bundled feed, with speeds calibrated on measurements | accepted |
 | [0003](0003-size-the-kv-cache-per-layer-as-llama-server-allocates.md) | Size the KV cache per layer, as llama-server allocates it | accepted |
 | [0003](0003-pseudonymize-private-values-at-the-model-client.md) | Pseudonymize private values at the model-client seam (Privacy Shield) | accepted |
+| [0004](0004-code-mode-in-an-embedded-quickjs-sandbox.md) | Run code mode's scripts in an embedded QuickJS sandbox, calling back through the turn's own tool path | accepted |
+| [0005](0005-supabase-for-identity-only.md) | Use Supabase Auth for identity only; keep accounts and data in Nekko Cloud | accepted |
+| [0006](0006-recovery-key-as-a-p256-key-and-sealed-account-record.md) | Seal key epochs to the recovery key's public half; pin trust in a sealed account record | accepted; account record superseded by 0008 |
+| [0007](0007-lockout-recovery-without-a-vendor-key.md) | Recover lockouts without a key Nekko Labs can use | proposed |
+| [0008](0008-authenticated-wraps-and-join-codes.md) | Authenticate keyring wraps, approve devices with a join code, one account record per key epoch | accepted |
+| [0009](0009-daemon-config-on-stdin-and-a-child-record.md) | Pass nekkod's config on stdin; track its children in one record rather than per spawn site | accepted |
+| [0010](0010-guardrails-mode-auto-runs-only-read-only-commands.md) | Guardrails mode auto-runs only read-only commands; fetch_url asks before reaching the local network | accepted |

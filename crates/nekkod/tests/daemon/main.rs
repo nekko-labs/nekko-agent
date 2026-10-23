@@ -15,6 +15,7 @@ mod claude_policy;
 mod desktop;
 mod engine;
 mod git;
+mod lifecycle;
 mod native;
 mod remote;
 mod sandbox;

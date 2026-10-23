@@ -1,8 +1,8 @@
 //! The Rust summarizer against the TS one.
 //!
-//! `golden/summaries.json` is written by the real `summarizeSession`
-//! (packages/host/src/session-summary.golden.test.ts, which also fails if it
-//! goes stale), from the fixtures in `golden/sessions` (make-fixtures.mjs).
+//! `golden/summaries.json` is a frozen record of what the deleted TS
+//! `summarizeSession` gave for the fixtures in `golden/sessions`
+//! (make-fixtures.mjs); edit it by hand per docs/runbooks/golden-fixtures.md.
 //! Every summary must match exactly: key order included, since the renderer
 //! may be handed either side's output.
 
@@ -179,12 +179,20 @@ fn a_running_turn_saves_exactly_as_save_turn_session_does() {
         serde_json::from_str(&std::fs::read_to_string(golden().join("turn-saves.json")).unwrap()).unwrap();
     let cases = file["cases"].as_array().unwrap();
     assert!(cases.len() >= 8);
-    for c in cases {
+    // Each case three ways: `save_turn`, and `save_turn_shared` with the
+    // transcript passed apart and with it copied out of the shared chat.
+    for (c, mode) in cases.iter().flat_map(|c| (0..3).map(move |m| (c, m))) {
+        if mode > 0 && c.get("queued").is_some() {
+            continue;
+        }
         let name = c["name"].as_str().unwrap();
         let fixture = c["fixture"].as_str().unwrap();
         let want = &file["expected"][name];
-        let data =
-            std::env::temp_dir().join(format!("nekko-turn-save-{}-{}", std::process::id(), name.replace(' ', "_")));
+        let data = std::env::temp_dir().join(format!(
+            "nekko-turn-save-{}-{mode}-{}",
+            std::process::id(),
+            name.replace(' ', "_")
+        ));
         std::fs::create_dir_all(data.join("sessions")).unwrap();
         let path = data.join("sessions").join(format!("{fixture}.json"));
         std::fs::copy(golden().join("sessions").join(format!("{fixture}.json")), &path).unwrap();
@@ -212,18 +220,30 @@ fn a_running_turn_saves_exactly_as_save_turn_session_does() {
             }
         }
         let queued = c.get("queued").map(|q| (q["index"].as_u64().unwrap() as usize, &q["item"]));
-        let error = store.save_turn(&mut copy, queued).err();
-        assert_eq!(error.map(Value::String).unwrap_or(Value::Null), want["error"], "{name}: error");
+        let error = match mode {
+            0 => store.save_turn(&mut copy, queued).err(),
+            _ => {
+                let messages = (mode == 1).then(|| match copy.as_object_mut().unwrap().get_mut("messages") {
+                    Some(m) => std::mem::take(m.as_array_mut().unwrap()),
+                    None => Vec::new(),
+                });
+                let shared = std::sync::Mutex::new(copy);
+                let error = store.save_turn_shared(&shared, messages).err();
+                copy = shared.into_inner().unwrap();
+                error
+            }
+        };
+        assert_eq!(error.map(Value::String).unwrap_or(Value::Null), want["error"], "{name} ({mode}): error");
         // A save that failed leaves the fixture as checked out, which may have CRLF line ends.
         let written = std::fs::read_to_string(&path).ok().map(|t| normalize(&t.replace("\r\n", "\n")));
-        assert_eq!(written.map(Value::String).unwrap_or(Value::Null), want["written"], "{name}: file");
-        assert_eq!(Value::String(normalize(&pretty(&copy))), want["memory"], "{name}: memory");
+        assert_eq!(written.map(Value::String).unwrap_or(Value::Null), want["written"], "{name} ({mode}): file");
+        assert_eq!(Value::String(normalize(&pretty(&copy))), want["memory"], "{name} ({mode}): memory");
         std::fs::remove_dir_all(data).ok();
     }
 }
 
 /// A fork's new id and save times, the top-level lines only
-/// (`normalizeFork` in session-fork.golden.test.ts).
+/// (`normalizeFork` in the deleted TS fork test).
 fn normalize_fork(text: &str) -> String {
     let mut seen = [false; 3];
     text.lines()

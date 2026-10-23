@@ -79,6 +79,23 @@ const api: NekkoApi = {
   runtimePlan: (providerId, modelId, req) => inv(IpcChannels.runtimePlan, providerId, modelId, req),
   runtimeAutoFit: (providerId, modelId, budgetFraction, parallelSlots) =>
     inv(IpcChannels.runtimeAutoFit, providerId, modelId, budgetFraction, parallelSlots),
+  cloudStatus: () => inv(IpcChannels.cloudStatus),
+  cloudRefresh: () => inv(IpcChannels.cloudRefresh),
+  cloudSendCode: (email) => inv(IpcChannels.cloudSendCode, email),
+  cloudVerifyCode: (email, code) => inv(IpcChannels.cloudVerifyCode, email, code),
+  cloudBeginOAuth: (provider) => inv(IpcChannels.cloudBeginOAuth, provider),
+  cloudCancelOAuth: () => inv(IpcChannels.cloudCancelOAuth),
+  cloudSignOut: () => inv(IpcChannels.cloudSignOut),
+  syncTurnOn: () => inv(IpcChannels.syncTurnOn),
+  syncConfirmRecoveryKey: (text) => inv(IpcChannels.syncConfirmRecoveryKey, text),
+  syncRestore: (text) => inv(IpcChannels.syncRestore, text),
+  syncRequestJoin: () => inv(IpcChannels.syncRequestJoin),
+  syncApprove: (deviceId, joinCode) => inv(IpcChannels.syncApprove, deviceId, joinCode),
+  syncRevoke: (deviceId) => inv(IpcChannels.syncRevoke, deviceId),
+  syncNow: () => inv(IpcChannels.syncNow),
+  syncSetEnabled: (on) => inv(IpcChannels.syncSetEnabled, on),
+  syncSetIncludeLocalOnly: (on) => inv(IpcChannels.syncSetIncludeLocalOnly, on),
+  syncDeleteAll: () => inv(IpcChannels.syncDeleteAll),
   voiceStatus: () => inv(IpcChannels.voiceStatus),
   voiceInstall: () => inv(IpcChannels.voiceInstall),
   voiceCancelInstall: () => inv(IpcChannels.voiceCancelInstall),
@@ -385,6 +402,11 @@ const api: NekkoApi = {
     const listener = (_: unknown, r: AgentReplay) => cb(r);
     bus.on(AGENT_REPLAY, listener);
     return () => bus.removeListener(AGENT_REPLAY, listener);
+  },
+  onCloudStatus: (cb) => {
+    const listener = (_: unknown, s: import('@nekko-agent/shared').CloudStatus) => cb(s);
+    bus.on(IpcEvents.cloudStatus, listener);
+    return () => bus.removeListener(IpcEvents.cloudStatus, listener);
   },
   onOAuthStatus: (cb: (s: OAuthStatus) => void) => {
     const listener = (_: unknown, s: OAuthStatus) => cb(s);

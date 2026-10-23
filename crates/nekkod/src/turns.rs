@@ -69,6 +69,9 @@ const NATIVE: &[&str] = &[
 /// Of [`NATIVE`], the background-process tools (`nekko_tools::process`).
 const PROCESS_TOOLS: &[&str] = &["start_process", "read_process", "kill_process"];
 
+/// `fetch_url`'s answer when the user turns down a local address.
+const LOCAL_FETCH_REFUSED: &str = "Fetch not approved by user: the address is on this computer or the local network.";
+
 fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
@@ -744,8 +747,8 @@ impl Turns {
             spec.pointer("/facts/workspaces/0/path").and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| {
                 std::env::current_dir().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default()
             });
-        let hooks = self.settings.as_ref().map(|s| s.get()).and_then(|s| s.get("hooks").cloned()).unwrap_or(json!([]));
-        let rules = nekko_tools::hooks::rules(&hooks);
+        let settings = self.settings.as_ref().map(|s| s.shared());
+        let rules = nekko_tools::hooks::rules(settings.as_ref().and_then(|s| s.get("hooks")).unwrap_or(&json!([])));
         for rule in nekko_tools::hooks::matching_hooks(&rules, "TurnEnd", None) {
             let rule = rule.clone();
             let payload = json!({ "sessionId": session_id, "cwd": cwd, "stop": stop, "event": "TurnEnd" });
@@ -754,16 +757,19 @@ impl Turns {
                 nekko_tools::hooks::run_hook(&rule, "TurnEnd", &sid, None, &cwd, &payload).await;
             });
         }
-        let fresh = store.get(&session_id);
-        let linked = fresh.as_ref().is_some_and(|s| {
-            js::truthy(s.get("specLinked")) && !js::truthy(s.get("incognito")) && !js::truthy(s.get("offline"))
-        });
-        if linked && let Some(d) = self.dispatch.get() {
-            let build = d("spec:build".into(), vec![json!(session_id)]);
-            tokio::spawn(async move {
-                let _ = build.await;
+        let Some(d) = self.dispatch.get().cloned() else { return };
+        let store = store.clone();
+        tokio::spawn(async move {
+            // Read off the async workers, and without the transcript.
+            let id = session_id.clone();
+            let fresh = tokio::task::spawn_blocking(move || store.meta(&id)).await.ok().flatten();
+            let linked = fresh.as_ref().is_some_and(|s| {
+                js::truthy(s.get("specLinked")) && !js::truthy(s.get("incognito")) && !js::truthy(s.get("offline"))
             });
-        }
+            if linked {
+                let _ = d("spec:build".into(), vec![json!(session_id)]).await;
+            }
+        });
     }
 
     async fn after_turn(
@@ -881,18 +887,16 @@ impl Turns {
             });
         }
 
-        // MCP: a host that hands over the server list (`turn:mcp`) leaves the
-        // sync and the calls to this daemon; an older one sends the tool specs.
-        // A sandbox chat has none.
+        // MCP: this daemon syncs and calls the turn's servers
+        // (`facts.mcpServers`, which admission always sends). A sandbox chat,
+        // a Claude Code chat and an offline one have none.
         let own_mcp = facts.get("mcpServers").filter(|s| s.is_array() && !sandbox && !claude_code).cloned();
         let mcp_tools = match &own_mcp {
-            _ if sandbox || claude_code => json!([]),
             Some(configs) if !js::truthy(loaded.get("offline")) => {
                 let any = configs.as_array().is_some_and(|a| a.iter().any(|c| c.get("enabled") == Some(&json!(true))));
                 if any { self.mcp.sync(configs).await["specs"].clone() } else { self.mcp.snapshot()["specs"].clone() }
             }
-            Some(_) => json!([]),
-            None => facts.get("mcpTools").cloned().unwrap_or(json!([])),
+            _ => json!([]),
         };
         // The turn's composition: tools, context from disk, the system prompt.
         let tool_input = json!({
@@ -911,6 +915,24 @@ impl Turns {
         if sandbox {
             tools.retain(|t| turn::variants::SANDBOX_TOOLS.contains(&turn::catalog::name(t)));
         }
+        // Code mode (`toolApproach: 'code'`): the model gets `search_tools` and
+        // `run_code` in place of the tools code can call (nekko-codemode).
+        let code_mode = if !sandbox && !claude_code && str_at(&loaded, "toolApproach") == Some("code") {
+            let (direct, wrapped) = nekko_codemode::split(std::mem::take(&mut tools));
+            tools = nekko_codemode::offer(direct, &wrapped);
+            (!wrapped.is_empty()).then(|| {
+                let offered: Vec<Value> = tools
+                    .iter()
+                    .filter(|t| {
+                        matches!(turn::catalog::name(t), nekko_codemode::SEARCH_TOOLS | nekko_codemode::RUN_CODE)
+                    })
+                    .cloned()
+                    .collect();
+                Arc::new(CodeMode { tally: Arc::new(nekko_codemode::Tally::new(&wrapped, &offered)), wrapped })
+            })
+        } else {
+            None
+        };
         let workspaces: Vec<Value> = if sandbox {
             turn::variants::sandbox_workspaces(&loaded)
         } else {
@@ -935,9 +957,12 @@ impl Turns {
             .and_then(Value::as_object)
             .map(|m| m.values().map(|w| json!(w.get("notice").map(js::display).unwrap_or_default())).collect())
             .unwrap_or_default();
+        // The prompt's tool-specific instructions follow what the chat can do,
+        // so a tool behind `run_code` keeps them.
+        let prompt_tools: Vec<&Value> = tools.iter().chain(code_mode.iter().flat_map(|c| c.wrapped.iter())).collect();
         let system = turn::turn_system_prompt(&json!({
             "workspaces": workspaces,
-            "tools": tools,
+            "tools": prompt_tools,
             "settings": settings,
             "sandbox": sandbox,
             "executionMode": execution_mode,
@@ -1004,9 +1029,9 @@ impl Turns {
         if let Some(e) = facts.get("statsEffort").filter(|v| !v.is_null()) {
             identity.insert("effort".into(), e.clone());
         }
-        // The host sends its accounting facts when this daemon keeps the logs
-        // (`turn:account`); an older host leaves them out and accounts itself.
-        let account = TurnAccount::from_facts(facts).filter(|_| self.accounts.enabled());
+        // This daemon accounts every turn when it keeps the logs (admission
+        // always sends `facts.account`).
+        let account = self.accounts.enabled().then(|| TurnAccount::from_facts(facts));
         let forwarder = tokio::spawn(forward(
             rx,
             Forward {
@@ -1017,6 +1042,7 @@ impl Turns {
                 incognito,
                 session_id: session_id.clone(),
                 stats: turn::TurnStats::new(identity, started_at as f64),
+                code_mode: code_mode.as_ref().map(|c| c.tally.clone()),
                 turn_from,
                 started_at,
                 last_error: shared.last_error.clone(),
@@ -1052,7 +1078,12 @@ impl Turns {
             ProviderClient::new(provider)
         };
         let client = ShieldedClient::new(client, shield.clone());
-        let names: HashSet<String> = tools.iter().map(|t| turn::catalog::name(t).to_string()).collect();
+        // In code mode the tools behind `run_code` are still this chat's tools.
+        let names: HashSet<String> = tools
+            .iter()
+            .chain(code_mode.iter().flat_map(|c| c.wrapped.iter()))
+            .map(|t| turn::catalog::name(t).to_string())
+            .collect();
         let mode = str_at(&lock(&session), "mode")
             .map(str::to_string)
             .or_else(|| shared.default_mode.clone())
@@ -1085,6 +1116,7 @@ impl Turns {
             store: store.clone(),
             session: session.clone(),
             names,
+            code: code_mode,
             native,
             hook_rules: facts.get("hookRules").filter(|r| r.is_array() && !sandbox).map(nekko_tools::hooks::rules),
             hook_cwd: workspaces.first().and_then(|w| str_at(w, "path")).map(str::to_string).unwrap_or_else(|| {
@@ -1508,6 +1540,16 @@ fn context_block(
     nekko_context::render_block(&bundle)
 }
 
+/// A chat's fields but its transcript, for a reader that never looks at it.
+fn without_messages(session: &Value) -> Value {
+    match session {
+        Value::Object(o) => {
+            Value::Object(o.iter().filter(|(k, _)| *k != "messages").map(|(k, v)| (k.clone(), v.clone())).collect())
+        }
+        other => other.clone(),
+    }
+}
+
 /// `persist()`: save the turn's chat over whatever the user changed on disk
 /// meanwhile (`saveTurnSession`); never an incognito chat.
 async fn persist(store: &Arc<SessionStore>, session: &Arc<Mutex<Value>>, incognito: bool) {
@@ -1515,9 +1557,82 @@ async fn persist(store: &Arc<SessionStore>, session: &Arc<Mutex<Value>>, incogni
         return;
     }
     let (st, sess) = (store.clone(), session.clone());
-    let saved = tokio::task::spawn_blocking(move || st.save_turn(&mut lock(&sess), None)).await;
+    let saved = tokio::task::spawn_blocking(move || st.save_turn_shared(&sess, None)).await;
     if let Ok(Err(e)) = saved {
         eprintln!("nekkod: could not save a running turn's chat: {e}");
+    }
+}
+
+/// A checkpoint: [`persist`] with the transcript at that point, which is
+/// written first and then becomes the chat's (an incognito chat's at once).
+async fn checkpoint(store: Arc<SessionStore>, session: Arc<Mutex<Value>>, messages: Vec<Value>, incognito: bool) {
+    if incognito {
+        if let Some(obj) = lock(&session).as_object_mut() {
+            obj.insert("messages".into(), Value::Array(messages));
+        }
+        return;
+    }
+    let saved = tokio::task::spawn_blocking(move || store.save_turn_shared(&session, Some(messages))).await;
+    if let Ok(Err(e)) = saved {
+        eprintln!("nekkod: could not save a running turn's chat: {e}");
+    }
+}
+
+/// How often a run of text (or reasoning) deltas goes out at most: about a
+/// frame. The first of a run goes at once; those arriving within the window
+/// after it are joined into one event, so a fast provider's small chunks
+/// cost one frame per window for each client, not one per chunk.
+const DELTA_WINDOW: Duration = Duration::from_millis(16);
+
+/// Text and reasoning deltas waiting to go out as one event.
+#[derive(Default)]
+struct Deltas {
+    /// The joined event: `{ type, sessionId, delta }`.
+    held: Option<Value>,
+    /// When the last delta event went out.
+    sent: Option<tokio::time::Instant>,
+}
+
+impl Deltas {
+    /// A plain delta event (nothing but its type, chat and text), which can
+    /// be joined with its neighbours without changing what a client builds.
+    fn joinable(e: &Value) -> bool {
+        matches!(str_at(e, "type"), Some("text" | "reasoning"))
+            && e.as_object().is_some_and(|o| o.len() == 3 && o.contains_key("sessionId"))
+            && e.get("delta").is_some_and(Value::is_string)
+    }
+
+    /// Take a delta: sent now when the window since the last one has passed,
+    /// otherwise joined onto (or, for another kind, sent after) the one held.
+    fn push(&mut self, hub: &Hub, e: Value) {
+        if let Some(held) = &mut self.held {
+            if held.get("type") == e.get("type") && held.get("sessionId") == e.get("sessionId") {
+                if let (Some(Value::String(text)), Some(more)) = (held.get_mut("delta"), e["delta"].as_str()) {
+                    text.push_str(more);
+                }
+                return;
+            }
+            self.flush(hub);
+        }
+        let now = tokio::time::Instant::now();
+        if self.sent.is_none_or(|at| now.duration_since(at) >= DELTA_WINDOW) {
+            self.sent = Some(now);
+            hub.publish("agent:event", e, false);
+        } else {
+            self.held = Some(e);
+        }
+    }
+
+    /// When the held delta is due.
+    fn due(&self) -> Option<tokio::time::Instant> {
+        self.held.as_ref().and(self.sent).map(|at| at + DELTA_WINDOW)
+    }
+
+    fn flush(&mut self, hub: &Hub) {
+        if let Some(e) = self.held.take() {
+            self.sent = Some(tokio::time::Instant::now());
+            hub.publish("agent:event", e, false);
+        }
     }
 }
 
@@ -1530,48 +1645,76 @@ struct Forward {
     incognito: bool,
     session_id: String,
     stats: turn::TurnStats,
+    /// A code-mode turn's savings, put on its stats as `codeMode`.
+    code_mode: Option<Arc<nekko_codemode::Tally>>,
     turn_from: usize,
     started_at: u64,
     last_error: Arc<Mutex<Option<String>>>,
 }
 
-/// The turn's events, in order: checkpoints saved first, then the UI told.
+/// The turn's events, in order. A checkpoint is saved before the UI is told
+/// of it, since a pane may re-read the chat then (on `tool_result`, `done`,
+/// `error` and `steered`); a `step`, which nothing reads back, goes out first
+/// and saves while the events after it (an approval prompt) go out too.
+/// Text and reasoning deltas are joined per [`DELTA_WINDOW`].
 /// Returns how the reply ended (`done.stop`).
 async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option<Value> {
     let mut last_stop = None;
-    while let Some(out) = rx.recv().await {
+    let mut deltas = Deltas::default();
+    // A step's save still being written.
+    let mut saving: Option<tokio::task::JoinHandle<()>> = None;
+    loop {
+        let due = deltas.due();
+        let out = tokio::select! {
+            out = rx.recv() => out,
+            _ = tokio::time::sleep_until(due.unwrap_or_else(tokio::time::Instant::now)), if due.is_some() => {
+                deltas.flush(&f.hub);
+                continue;
+            }
+        };
         let (event, snapshot) = match out {
-            Out::End => break,
-            Out::Event(e) => {
+            None | Some(Out::End) => break,
+            Some(Out::Event(e)) => {
+                deltas.flush(&f.hub);
                 note_error(&f.last_error, &e);
                 f.hub.publish("agent:event", e, false);
                 continue;
             }
-            Out::Loop(e, s) => (e, s),
+            Some(Out::Loop(e, s)) => (e, s),
         };
+        if snapshot.is_none() && Deltas::joinable(&event) {
+            deltas.push(&f.hub, event);
+            continue;
+        }
+        deltas.flush(&f.hub);
         if str_at(&event, "type") == Some("usage") {
             f.stats.add(&event);
             if let Some((accounts, account, opts)) = &f.account {
                 accounts.turn_usage(opts, account, &event);
             }
         }
-        if let Some(snapshot) = snapshot {
-            let mut s = lock(&f.session);
-            if let Some(obj) = s.as_object_mut() {
-                obj.insert("messages".into(), Value::Array(snapshot));
-            }
-        }
+        let mut snapshot = snapshot;
         if str_at(&event, "type") == Some("done") {
             if let Some(stop) = event.get("stop").filter(|v| js::truthy(Some(v))) {
                 last_stop = Some(stop.clone());
             }
             // Stats go on the transcript before the checkpoint writes it, so a
             // pane that re-reads the chat on `done` already finds them.
-            let finished = f.stats.finish(now_ms() as f64, event.get("steps"), event.get("stop"));
+            let mut finished = f.stats.finish(now_ms() as f64, event.get("steps"), event.get("stop"));
+            if let (Some(stats), Some(tally)) = (finished.as_mut(), &f.code_mode) {
+                let calls = stats.get("calls").and_then(Value::as_u64).unwrap_or(0);
+                stats["codeMode"] = tally.summary(calls);
+            }
             if let Some(stats) = &finished {
-                let mut s = lock(&f.session);
-                if let Some(Value::Array(messages)) = s.get_mut("messages") {
-                    turn::attach_turn_stats(messages, f.turn_from, stats);
+                match &mut snapshot {
+                    Some(messages) => {
+                        turn::attach_turn_stats(messages, f.turn_from, stats);
+                    }
+                    None => {
+                        if let Some(Value::Array(messages)) = lock(&f.session).get_mut("messages") {
+                            turn::attach_turn_stats(messages, f.turn_from, stats);
+                        }
+                    }
                 }
             }
             if let Some((accounts, account, opts)) = &f.account {
@@ -1579,7 +1722,24 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
             }
         }
         if is_checkpoint(&event) {
-            persist(&f.store, &f.session, f.incognito).await;
+            // Saves land in order.
+            if let Some(save) = saving.take() {
+                let _ = save.await;
+            }
+            match snapshot {
+                Some(messages) if str_at(&event, "type") == Some("step") => {
+                    note_error(&f.last_error, &event);
+                    f.hub.publish("agent:event", event, false);
+                    saving = Some(tokio::spawn(checkpoint(f.store.clone(), f.session.clone(), messages, f.incognito)));
+                    continue;
+                }
+                Some(messages) => checkpoint(f.store.clone(), f.session.clone(), messages, f.incognito).await,
+                None => persist(&f.store, &f.session, f.incognito).await,
+            }
+        } else if let Some(messages) = snapshot
+            && let Some(obj) = lock(&f.session).as_object_mut()
+        {
+            obj.insert("messages".into(), Value::Array(messages));
         }
         let steered = str_at(&event, "type") == Some("steered");
         note_error(&f.last_error, &event);
@@ -1588,6 +1748,10 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
             // The steering message is in the transcript now; panes re-read it.
             f.hub.publish("agent:event", json!({ "type": "session_meta", "sessionId": f.session_id }), false);
         }
+    }
+    deltas.flush(&f.hub);
+    if let Some(save) = saving.take() {
+        let _ = save.await;
     }
     last_stop
 }
@@ -1678,6 +1842,8 @@ struct TurnTools {
     store: Arc<SessionStore>,
     session: Arc<Mutex<Value>>,
     names: HashSet<String>,
+    /// Code mode: the tools `run_code` reaches, and what using it saved.
+    code: Option<Arc<CodeMode>>,
     native: Option<ToolContext>,
     /// This turn's hook rules, run here (`facts.hookRules`), and the folder they run in.
     hook_rules: Option<Vec<nekko_tools::hooks::HookRule>>,
@@ -1707,16 +1873,42 @@ fn error(id: &str, output: impl Into<String>) -> Value {
     json!({ "toolCallId": id, "output": output.into(), "isError": true })
 }
 
+/// A code-mode turn's wrapped tools and its running savings.
+struct CodeMode {
+    wrapped: Vec<Value>,
+    tally: Arc<nekko_codemode::Tally>,
+}
+
 impl ToolRunner for TurnTools {
     async fn run(&self, call: &Value) -> Result<Value, String> {
+        if let Some(code) = &self.code {
+            let id = str_at(call, "id").unwrap_or_default();
+            let input = call.get("input").cloned().unwrap_or(json!({}));
+            match str_at(call, "name") {
+                Some(nekko_codemode::SEARCH_TOOLS) => {
+                    let out = nekko_codemode::search(&code.wrapped, &input);
+                    code.tally.searched(&out);
+                    return Ok(result(id, out));
+                }
+                Some(nekko_codemode::RUN_CODE) => return Ok(self.run_code(code, id, &input).await),
+                _ => {}
+            }
+        }
+        self.guarded(call).await
+    }
+}
+
+impl TurnTools {
+    /// A call with this turn's hooks around it: a direct call, or one a
+    /// code-mode script made.
+    async fn guarded(&self, call: &Value) -> Result<Value, String> {
         if let Some(spec_rules) = &self.hook_rules {
             // Re-read per call, so a hook added mid-turn applies to the next tool.
             let rules = match &self.turns.settings {
                 Some(store) => {
                     let store = store.clone();
-                    let hooks =
-                        tokio::task::spawn_blocking(move || store.get()["hooks"].clone()).await.unwrap_or(Value::Null);
-                    nekko_tools::hooks::rules(&hooks)
+                    let settings = tokio::task::spawn_blocking(move || store.shared()).await.ok();
+                    nekko_tools::hooks::rules(settings.as_ref().map_or(&Value::Null, |s| &s["hooks"]))
                 }
                 None => spec_rules.clone(),
             };
@@ -1727,9 +1919,47 @@ impl ToolRunner for TurnTools {
         }
         self.inner(call).await
     }
-}
 
-impl TurnTools {
+    /// `run_code`: the script runs on a blocking thread, and each tool call it
+    /// makes comes back here to run as `<id>.<n>` through [`Self::guarded`],
+    /// so approvals, guardrails, hooks and the unattended policy see it as
+    /// they would a direct call. Stop interrupts the script.
+    async fn run_code(&self, code: &CodeMode, id: &str, input: &Value) -> Value {
+        type Ask = (String, Value, std::sync::mpsc::Sender<(String, bool)>);
+        let Some(source) = input.get("code").and_then(Value::as_str).map(str::to_string) else {
+            return error(id, "run_code needs `code`: the body of an async function.");
+        };
+        let names: Vec<String> = code.wrapped.iter().map(|t| turn::catalog::name(t).to_string()).collect();
+        let (tx, mut rx) = mpsc::unbounded_channel::<Ask>();
+        let cancel = self.shared.cancel.clone();
+        let script = tokio::task::spawn_blocking(move || {
+            let ended = || ("The turn ended before this call ran.".to_string(), true);
+            let host: nekko_codemode::run::Call = Box::new(move |name, input| {
+                let (back, answer) = std::sync::mpsc::channel();
+                if tx.send((name.to_string(), input, back)).is_err() {
+                    return ended();
+                }
+                answer.recv().unwrap_or_else(|_| ended())
+            });
+            let limits = nekko_codemode::Limits::default();
+            nekko_codemode::run::run(&source, &names, &limits, Box::new(move || cancel.is_cancelled()), host)
+        });
+        let mut n = 0;
+        while let Some((name, input, back)) = rx.recv().await {
+            n += 1;
+            let nested = json!({ "id": format!("{id}.{n}"), "name": name, "input": input });
+            let out = self.guarded(&nested).await.unwrap_or_else(|e| error(id, e));
+            let _ = back.send((out.get("output").map(js::display).unwrap_or_default(), js::truthy(out.get("isError"))));
+        }
+        match script.await {
+            Ok(outcome) => {
+                code.tally.ran(&outcome);
+                if outcome.is_error { error(id, outcome.output) } else { result(id, outcome.output) }
+            }
+            Err(e) => error(id, format!("run_code failed: {e}")),
+        }
+    }
+
     /// The hooks around a call, run here (hooks.ts `withToolHooks`).
     async fn run_with_hooks(&self, rules: &[nekko_tools::hooks::HookRule], call: &Value) -> Result<Value, String> {
         use nekko_tools::hooks::{post_tool_hooks, pre_tool_hooks};
@@ -1939,8 +2169,6 @@ impl TurnTools {
         }
     }
 
-    /// `fetch_url` (tools.ts): reading a page is as safe as reading a file,
-    /// so only ask mode or the ask-everything sandbox asks.
     /// A sandbox chat's call (`executeSandboxTool`): anything but the
     /// container's tools is refused without asking; each call asks first (the
     /// live yolo policy aside), then runs in the chat's container, and the
@@ -1963,7 +2191,12 @@ impl TurnTools {
         }
         let session_id = self.shared.session_id.clone();
         let (store, sid) = (self.store.clone(), session_id.clone());
-        let stored = tokio::task::spawn_blocking(move || store.get(&sid)).await.ok().flatten();
+        // The chat as stored, but for its transcript, which a sandbox tool never reads.
+        let stored = tokio::task::spawn_blocking(move || store.meta(&sid))
+            .await
+            .ok()
+            .flatten()
+            .map(nekko_store::Meta::into_value);
         let settings = match &self.turns.settings {
             Some(s) => {
                 let s = s.clone();
@@ -1989,6 +2222,9 @@ impl TurnTools {
         }
     }
 
+    /// `fetch_url` (tools.ts): reading a public page is as safe as reading a
+    /// file, so only ask mode or the ask-everything sandbox asks; reaching
+    /// this computer or the local network asks in every mode but YOLO.
     async fn fetch_url(&self, call: &Value) -> Value {
         let id = str_at(call, "id").unwrap_or_default();
         let input = call.get("input").cloned().unwrap_or(Value::Null);
@@ -1996,18 +2232,50 @@ impl TurnTools {
             Some(Value::String(u)) if !js::trim(u).is_empty() => u.clone(),
             _ => return error(id, "A URL is required."),
         };
+        // A page on this computer or the local network (a dev server, a
+        // router, the cloud metadata address) is fetched only with the user's
+        // approval, in every mode but YOLO: a page the agent read could have
+        // asked for it. That approval also stands for the plain "Fetch" one.
+        let mut approved = std::collections::HashSet::new();
+        let first_local = nekko_web::fetch::parse_url(&url).ok().and_then(|u| nekko_web::netguard::local_host(&u));
         let asks = self.mode == "ask" || self.sandbox_mode.as_deref() == Some("ask-everything");
-        if asks && !self.turns.request_approval(&self.shared, call, &format!("Fetch {url}"), &json!("low")).await {
+        if let Some(host) = first_local {
+            if !self.approve_local_fetch(call, &url, &host).await {
+                return error(id, LOCAL_FETCH_REFUSED);
+            }
+            approved.insert(host);
+        } else if asks && !self.turns.request_approval(&self.shared, call, &format!("Fetch {url}"), &json!("low")).await
+        {
             return error(id, "Fetch not approved by user.");
         }
         let cancel = nekko_tools::Cancel::new();
         let c2 = cancel.clone();
         self.shared.cancel.on_cancel(move || c2.cancel());
         let max = input.get("max_chars").and_then(Value::as_f64);
-        match nekko_web::fetch_url(&url, max, &cancel).await {
-            Ok(page) => result(id, nekko_web::describe_fetched(&page)),
-            Err(e) => error(id, e),
+        loop {
+            match nekko_web::fetch_url(&url, max, &cancel, &approved).await {
+                Ok(page) => return result(id, nekko_web::describe_fetched(&page)),
+                // A redirect, or a name that resolved, into the local network.
+                Err(nekko_web::FetchError::Local { url: at, host }) => {
+                    if approved.contains(&host) || approved.len() >= 4 {
+                        return error(id, format!("Could not fetch {url}: too many local redirects."));
+                    }
+                    if !self.approve_local_fetch(call, &at, &host).await {
+                        return error(id, LOCAL_FETCH_REFUSED);
+                    }
+                    approved.insert(host);
+                }
+                Err(nekko_web::FetchError::Failed(e)) => return error(id, e),
+            }
         }
+    }
+
+    /// Ask before `fetch_url` reaches `host` on this computer or the local network.
+    async fn approve_local_fetch(&self, call: &Value, url: &str, host: &str) -> bool {
+        let reason = format!(
+            "Fetch {url}? {host} is on this computer or your local network, not the public internet. Approve only if you expected the agent to read it."
+        );
+        self.turns.request_approval(&self.shared, call, &reason, &json!("medium")).await
     }
 
     /// `spawn_agent` (chat.ts `runSubAgent`): ask first when the policy says
@@ -2022,7 +2290,7 @@ impl TurnTools {
             let output = json!({ "ok": false, "code": code, "message": message, "fallbackUsed": false });
             json!({ "toolCallId": id, "output": js::stringify(&output), "isError": true })
         };
-        let session = lock(&self.session).clone();
+        let session = without_messages(&lock(&self.session));
         let spawn_off = session
             .get("disabledTools")
             .and_then(Value::as_array)
@@ -2111,7 +2379,8 @@ impl TurnTools {
             let prepared = match self.turns.dispatch.get().filter(|_| self.turns.store.is_some()) {
                 // Checked, made and admitted here (spawn.rs); the parent's own mode is the child's.
                 Some(d) => {
-                    let mut parent = lock(&self.session).clone();
+                    // The child takes the parent's settings, never its transcript.
+                    let mut parent = without_messages(&lock(&self.session));
                     parent["mode"] = json!(self.mode);
                     let req = json!({
                         "parent": parent, "providerId": self.provider_id, "modelId": self.model_id,
@@ -2290,6 +2559,33 @@ impl TurnTools {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn a_run_of_deltas_goes_out_first_then_joined_per_window() {
+        let hub = Hub::new();
+        let mut rx = hub.subscribe();
+        let mut d = Deltas::default();
+        let t = |x: &str| json!({ "type": "text", "sessionId": "s", "delta": x });
+        assert!(Deltas::joinable(&t("a")));
+        assert!(!Deltas::joinable(&json!({ "type": "text", "sessionId": "s", "delta": "a", "relayOnly": true })));
+        assert!(!Deltas::joinable(&json!({ "type": "tool_call", "sessionId": "s", "delta": "a" })));
+        for x in ["a", "b", "c"] {
+            d.push(&hub, t(x));
+        }
+        assert!(d.due().is_some(), "what came within the window waits");
+        d.push(&hub, json!({ "type": "reasoning", "sessionId": "s", "delta": "r" }));
+        d.flush(&hub);
+        assert!(d.due().is_none());
+        let mut got = Vec::new();
+        while let Ok(ev) = rx.try_recv() {
+            got.push(serde_json::from_str::<Value>(&ev.text).unwrap()["payload"].clone());
+        }
+        assert_eq!(
+            got,
+            [t("a"), t("bc"), json!({ "type": "reasoning", "sessionId": "s", "delta": "r" })],
+            "same shape, same order, same text"
+        );
+    }
 
     #[tokio::test]
     async fn title_flights_are_session_scoped_and_release_on_cancellation() {

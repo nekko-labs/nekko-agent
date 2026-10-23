@@ -8,7 +8,7 @@ import Security
 final class KeychainStore: SecureStore, @unchecked Sendable {
     private let service: String
 
-    init(service: String = "com.nekko.native.ios.pairing") { self.service = service }
+    init(service: String = "dev.nekkolabs.nekkoagent.pairing") { self.service = service }
 
     private func query(_ key: String) -> [String: Any] {
         [kSecClass as String: kSecClassGenericPassword,

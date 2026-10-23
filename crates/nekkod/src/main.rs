@@ -1,8 +1,11 @@
 //! `nekkod`, the Nekko Agent engine daemon.
 //!
-//! Started by the desktop app with a JSON config in `NEKKOD_CONFIG` (see
-//! `config.rs`). Prints one line, `NEKKOD_READY {"port":N,"pid":P}`, once it
-//! is listening; everything else goes to stderr. Exits when its stdin closes.
+//! Started by the desktop app with `--config-stdin` and a JSON config as the
+//! first line of its stdin (see `config.rs`). Prints one line,
+//! `NEKKOD_READY {"port":N,"pid":P}`, once it is listening; everything else
+//! goes to stderr. Shuts down when its stdin closes or on SIGTERM, SIGHUP or
+//! Ctrl-C, ending everything it started (`procgroup.rs`). One daemon per data
+//! directory (`datalock.rs`): a second exits with code 3.
 
 mod accounts;
 mod admission;
@@ -20,6 +23,7 @@ mod compaction;
 mod config;
 mod connectors;
 mod context;
+mod datalock;
 mod decide;
 mod decisions;
 mod desktop;
@@ -88,17 +92,33 @@ fn main() -> std::process::ExitCode {
             return std::process::ExitCode::from(2);
         }
     };
-    // The token must not leak into the environment of every shell we start.
-    // SAFETY: no other thread exists yet.
-    unsafe { std::env::remove_var("NEKKOD_CONFIG") };
+    // One daemon per data directory, held until the process ends.
+    let _lock = match cfg.data_dir.as_deref().map(|d| datalock::acquire(std::path::Path::new(d), LOCK_WAIT)) {
+        Some(Err(e)) => {
+            eprintln!("nekkod: {e}");
+            return std::process::ExitCode::from(datalock::LOCKED_EXIT);
+        }
+        Some(Ok(f)) => Some(f),
+        None => None,
+    };
     // `<dataDir>/logs/nekkod.log` (logs.rs): stderr teed to a rotating file,
     // held until main returns so the last lines are copied out.
     let _daemon_log = cfg.data_dir.as_ref().and_then(|d| logs::start_daemon_log(&std::path::Path::new(d).join("logs")));
     logs::note(&format!("nekkod {} starting, pid {}", env!("CARGO_PKG_VERSION"), std::process::id()));
     procgroup::init();
+    // What a predecessor killed outright left running goes first; then keep
+    // our own record for the next one.
+    if let Some(d) = &cfg.data_dir {
+        let run = procgroup::run_dir(std::path::Path::new(d));
+        procgroup::reap_leftovers(&run);
+        procgroup::track(&run);
+    }
 
     let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("tokio runtime");
-    match rt.block_on(run(cfg)) {
+    let result = rt.block_on(run(cfg));
+    // Whatever the shutdown above did not stop (or a failed start left).
+    procgroup::sweep(SWEEP_GRACE);
+    match result {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("nekkod: {e}");
@@ -107,7 +127,20 @@ fn main() -> std::process::ExitCode {
     }
 }
 
+/// How long a second daemon waits for the data directory's lock: long
+/// enough for a predecessor that is shutting down to finish.
+const LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
+/// Open connections get this long to finish once shutdown starts.
+const DRAIN: std::time::Duration = std::time::Duration::from_secs(2);
+/// A shutdown that takes longer than this is cut short (children ended, exit 1).
+const SHUTDOWN_DEADLINE: std::time::Duration = std::time::Duration::from_secs(8);
+/// Children still running at the end get this long after SIGTERM before SIGKILL.
+const SWEEP_GRACE: std::time::Duration = std::time::Duration::from_millis(1500);
+
 async fn run(cfg: config::Config) -> anyhow::Result<()> {
+    // Before anything starts children: SIGTERM and SIGHUP stop the daemon
+    // gracefully instead of killing it with them still running.
+    let signals = Signals::new()?;
     let listener = tokio::net::TcpListener::bind(&cfg.listen).await?;
     let port = listener.local_addr()?.port();
 
@@ -152,6 +185,30 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     let catalog = settings.as_deref().map(|s| catalog::new(s, cfg.hugging_face_url.clone()));
     let automation = Arc::new(automation::Automation::new(sessions.clone(), settings.clone(), hub.clone()));
     let remote = Arc::new(remote::Remote::new(cfg.data_dir.clone().map(std::path::PathBuf::from), hub.clone()));
+    // Nekko Cloud sign-in and end-to-end encrypted sync, with the data directory.
+    // A chat a turn is running in is never overwritten from the cloud; the turns
+    // are known once the context below is built.
+    let running: Arc<std::sync::OnceLock<Arc<turns::Turns>>> = Arc::default();
+    let cloud = match (&cfg.data_dir, &sessions) {
+        (Some(d), Some(store)) => {
+            let dir = std::path::PathBuf::from(d).join("cloud");
+            let publish_hub = hub.clone();
+            let busy = running.clone();
+            Some(nekko_cloud::Cloud::new(nekko_cloud::Options {
+                vault: nekko_cloud::vault::default_vault(&dir),
+                dir,
+                api_url: std::env::var("NEKKO_CLOUD_URL")
+                    .ok()
+                    .filter(|u| !u.is_empty())
+                    .unwrap_or_else(|| "https://nekko-agent-api.fly.dev".into()),
+                device_label: gethostname::gethostname().to_string_lossy().chars().take(40).collect(),
+                sessions: store.clone(),
+                publish: Arc::new(move |status| publish_hub.publish(nekko_cloud::EVENT, status, false)),
+                busy: Arc::new(move |id| busy.get().is_some_and(|t| t.running_sessions().iter().any(|s| s == id))),
+            }))
+        }
+        _ => None,
+    };
     // The messaging bridges, with the data directory (and so the settings and sessions).
     let messaging = match (&cfg.data_dir, &settings, &sessions) {
         (Some(d), Some(s), Some(store)) => {
@@ -265,6 +322,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             ))
         }),
         voice: voice.clone(),
+        cloud: cloud.clone(),
         catalog,
         workspace: Arc::new(workspace::Workspace::new(
             cfg.data_dir.clone().map(std::path::PathBuf::from),
@@ -296,6 +354,10 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             _ => None,
         },
     };
+    let _ = running.set(ctx.turns.clone());
+    if let Some(cloud) = &cloud {
+        cloud.start(std::time::Duration::from_secs(60));
+    }
     routes::forward_terminal_events(&ctx);
     if let Some(adm) = ctx.admission.clone() {
         let c = ctx.clone();
@@ -395,7 +457,33 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         out.flush()?;
     }
 
-    axum::serve(listener, router).with_graceful_shutdown(shutdown_signal(cfg.exit_on_stdin_close)).await?;
+    // Serve until told to stop; open connections (the UI's sockets) then get
+    // a moment to finish, and cleanup goes ahead either way.
+    let (drain_tx, drain_rx) = tokio::sync::oneshot::channel::<()>();
+    let serve = axum::serve(listener, router).with_graceful_shutdown(async {
+        let _ = drain_rx.await;
+    });
+    let mut serve = std::pin::pin!(std::future::IntoFuture::into_future(serve));
+    let mut signals = signals;
+    tokio::select! {
+        r = &mut serve => r?,
+        why = shutdown_signal(cfg.exit_on_stdin_close, &mut signals) => {
+            logs::note(&format!("nekkod: shutting down ({why})"));
+            // A second signal, or a shutdown that hangs, ends it hard.
+            tokio::spawn(async move {
+                let why = signals.next().await;
+                procgroup::hard_exit(&format!("{why} during shutdown"));
+            });
+            std::thread::spawn(|| {
+                std::thread::sleep(SHUTDOWN_DEADLINE);
+                procgroup::hard_exit("shutdown took too long");
+            });
+            let _ = drain_tx.send(());
+            if tokio::time::timeout(DRAIN, &mut serve).await.is_err() {
+                eprintln!("nekkod: open connections did not close; shutting down anyway");
+            }
+        }
+    }
 
     if let Some(d) = &after.desktop {
         d.shutdown(&after).await;
@@ -418,8 +506,46 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Resolves when the app that started us is gone (stdin closed) or on Ctrl-C.
-async fn shutdown_signal(watch_stdin: bool) {
+/// The signals that stop the daemon: Ctrl-C everywhere, SIGTERM and SIGHUP on Unix.
+struct Signals {
+    #[cfg(unix)]
+    term: tokio::signal::unix::Signal,
+    #[cfg(unix)]
+    hup: tokio::signal::unix::Signal,
+}
+
+impl Signals {
+    fn new() -> std::io::Result<Self> {
+        #[cfg(unix)]
+        {
+            use tokio::signal::unix::{SignalKind, signal};
+            Ok(Self { term: signal(SignalKind::terminate())?, hup: signal(SignalKind::hangup())? })
+        }
+        #[cfg(not(unix))]
+        Ok(Self {})
+    }
+
+    /// The next one, by name.
+    async fn next(&mut self) -> &'static str {
+        #[cfg(unix)]
+        {
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => "SIGINT",
+                _ = self.term.recv() => "SIGTERM",
+                _ = self.hup.recv() => "SIGHUP",
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = tokio::signal::ctrl_c().await;
+            "Ctrl-C"
+        }
+    }
+}
+
+/// Resolves when the app that started us is gone (stdin closed) or on a
+/// stop signal, with which.
+async fn shutdown_signal(watch_stdin: bool, signals: &mut Signals) -> &'static str {
     let stdin_closed = async {
         if !watch_stdin {
             return std::future::pending::<()>().await;
@@ -439,7 +565,7 @@ async fn shutdown_signal(watch_stdin: bool) {
         let _ = rx.await;
     };
     tokio::select! {
-        _ = stdin_closed => {}
-        _ = tokio::signal::ctrl_c() => {}
+        _ = stdin_closed => "stdin closed",
+        why = signals.next() => why,
     }
 }

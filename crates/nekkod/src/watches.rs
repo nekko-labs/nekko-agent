@@ -19,9 +19,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-/// The channels served here.
-pub const CHANNELS: &[&str] = &["session:nextWatch", "session:watches", "watch:tool"];
-
 const TICK: Duration = Duration::from_secs(15);
 
 fn now_ms() -> f64 {

@@ -4,8 +4,8 @@
 //! summary passes, the edit and the new chat), an image-generation turn (the
 //! transcript edits, the request, the stage labels and the replies), and
 //! starting a queued prompt at once. `tests/variants.rs` holds every function
-//! here to the TS one as text (`golden/variants.json`, written by
-//! `turn-variants.golden.test.ts`).
+//! here to the TS one as text (`golden/variants.json`, a frozen record of the
+//! deleted TS functions).
 //!
 //! Strings are measured and cut in UTF-16 code units, as JavaScript does.
 

@@ -25,7 +25,7 @@ targets:
         excludes: ["*.entitlements"]
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.nekko.native.ios
+        PRODUCT_BUNDLE_IDENTIFIER: dev.nekkolabs.nekkoagent
         PRODUCT_NAME: NekkoNative
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: Info.plist
@@ -57,11 +57,11 @@ targets:
     settings:
       base:
         CODE_SIGN_ENTITLEMENTS: Watch/NekkoWatch.entitlements
-        PRODUCT_BUNDLE_IDENTIFIER: com.nekko.native.ios.watchkitapp
+        PRODUCT_BUNDLE_IDENTIFIER: dev.nekkolabs.nekkoagent.watchkitapp
         PRODUCT_NAME: NekkoWatch
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Nekko Agent
-        INFOPLIST_KEY_WKCompanionAppBundleIdentifier: com.nekko.native.ios
+        INFOPLIST_KEY_WKCompanionAppBundleIdentifier: dev.nekkolabs.nekkoagent
         SKIP_INSTALL: YES
         TARGETED_DEVICE_FAMILY: "4"
   NekkoWatchWidgets:
@@ -75,7 +75,7 @@ targets:
       - path: App/Shared/WatchStatus.swift
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.nekko.native.ios.watchkitapp.widgets
+        PRODUCT_BUNDLE_IDENTIFIER: dev.nekkolabs.nekkoagent.watchkitapp.widgets
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: WatchWidgets/Info.plist
         APPLICATION_EXTENSION_API_ONLY: YES
@@ -91,7 +91,7 @@ targets:
       - path: App/Shared
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.nekko.native.ios.widgets
+        PRODUCT_BUNDLE_IDENTIFIER: dev.nekkolabs.nekkoagent.widgets
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: Widgets/Info.plist
         APPLICATION_EXTENSION_API_ONLY: YES
@@ -104,7 +104,7 @@ targets:
         excludes: ["Info.plist", "*.entitlements"]
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.nekko.native.ios.share
+        PRODUCT_BUNDLE_IDENTIFIER: dev.nekkolabs.nekkoagent.share
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: Share/Info.plist
         APPLICATION_EXTENSION_API_ONLY: YES

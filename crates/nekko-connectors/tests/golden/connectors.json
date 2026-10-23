@@ -1793,6 +1793,128 @@
    "replies": [],
    "requests": [],
    "error": "Pick the Markdown file that holds your tasks."
+  },
+  {
+   "kind": "floop",
+   "token": "flp_t",
+   "query": "launch post",
+   "settings": {
+    "url": " https://floop.example.com/ "
+   },
+   "replies": [
+    {
+     "json": [
+      {
+       "number": 12,
+       "title": "Draft the launch post",
+       "status": "in_progress",
+       "stream": "human",
+       "body": "For LinkedIn",
+       "project": {
+        "key": "BRAND",
+        "name": "Brand and launch site"
+       }
+      },
+      {
+       "number": 40,
+       "title": "Tidy the launch post links",
+       "status": "todo",
+       "stream": "agent",
+       "body": null,
+       "project": null
+      }
+     ]
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "https://floop.example.com/api/v1/items?assignee=me&open=true&limit=100&q=launch%20post",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer flp_t"
+      ],
+      [
+       "Accept",
+       "application/json"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "result": [
+    {
+     "id": "12",
+     "title": "#12 Draft the launch post",
+     "subtitle": "Floop task · in progress · Brand and launch site",
+     "url": "https://floop.example.com/items/12",
+     "body": "For LinkedIn"
+    },
+    {
+     "id": "40",
+     "title": "#40 Tidy the launch post links",
+     "subtitle": "Floop agent task · to do",
+     "url": "https://floop.example.com/items/40",
+     "body": ""
+    }
+   ]
+  },
+  {
+   "kind": "floop",
+   "token": "flp_t",
+   "settings": {},
+   "replies": [],
+   "requests": [],
+   "error": "Floop needs the server URL as well as the token."
+  },
+  {
+   "kind": "floop",
+   "token": "flp_t",
+   "settings": {
+    "url": "http://floop.example.com"
+   },
+   "replies": [],
+   "requests": [],
+   "error": "Floop server URL must be https."
+  },
+  {
+   "kind": "floop",
+   "token": "flp_t",
+   "settings": {
+    "url": "http://localhost:4310"
+   },
+   "replies": [
+    {
+     "status": 401,
+     "json": {
+      "error": {
+       "code": "unauthorized",
+       "message": "That token is not valid."
+      }
+     }
+    }
+   ],
+   "requests": [
+    {
+     "method": "GET",
+     "url": "http://localhost:4310/api/v1/items?assignee=me&open=true&limit=100",
+     "headers": [
+      [
+       "Authorization",
+       "Bearer flp_t"
+      ],
+      [
+       "Accept",
+       "application/json"
+      ]
+     ],
+     "body": null,
+     "redirect": null
+    }
+   ],
+   "error": "Floop 401"
   }
  ],
  "polls": [

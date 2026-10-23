@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { pairingLink, parsePairingLink } from '@nekko-agent/shared';
+import { pairingLink, parsePairingLink } from './pairing-link.js';
 
 const ROOM = '0123456789abcdef';
 const KEY = '00112233445566778899aabbccddeeff';

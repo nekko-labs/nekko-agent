@@ -1,9 +1,8 @@
 //! The Rust bridge against the TS one.
 //!
-//! `golden/bridge.json` is written by
-//! `packages/host/src/messaging.golden.test.ts` (UPDATE_GOLDEN=1), which runs
-//! the real `createMessagingService` and `TelegramApi` over a scripted Bot
-//! API and a fake host. The same script runs here through [`Bridge`] with a
+//! `golden/bridge.json` is a frozen record of the deleted TS
+//! `createMessagingService` and `TelegramApi` over a scripted Bot API and a
+//! fake host (edit it by hand per docs/runbooks/golden-fixtures.md). The same script runs here through [`Bridge`] with a
 //! harness that behaves like the TS test's fakes (the Bot API answering at
 //! once, the long poll waiting for the script, virtual timers), and every
 //! Telegram request, long poll, host call, state file and status must come out

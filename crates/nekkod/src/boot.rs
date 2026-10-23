@@ -59,7 +59,8 @@ pub fn start(ctx: &Ctx, auto_start_engine: bool) {
 /// message is the user's or already says so) and loses the marker.
 pub fn reconcile_interrupted(store: &nekko_store::SessionStore) -> usize {
     let mut marked = 0;
-    for session in store.list() {
+    // Only a chat whose file has the key can carry it: the rest are never parsed.
+    for session in store.list_containing("\"activeRun\"") {
         if !nekko_js::truthy(session.get("activeRun")) {
             continue;
         }

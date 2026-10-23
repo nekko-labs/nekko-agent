@@ -25,12 +25,14 @@ impl Drop for Daemon {
 fn start(data_dir: &std::path::Path) -> Daemon {
     let config = json!({ "token": TOKEN, "allowedOrigins": ["null"], "dataDir": data_dir });
     let mut child = Command::new(env!("CARGO_BIN_EXE_nekkod"))
-        .env("NEKKOD_CONFIG", config.to_string())
+        .arg("--config-stdin")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
         .spawn()
         .expect("nekkod starts");
+    // The config is the first line of stdin; stdin stays open (its end stops the daemon).
+    std::io::Write::write_all(child.stdin.as_mut().unwrap(), format!("{config}\n").as_bytes()).unwrap();
     let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
     let line = lines.next().expect("a ready line").unwrap();
     let ready: Value = serde_json::from_str(line.strip_prefix("NEKKOD_READY ").expect("ready prefix")).unwrap();
@@ -98,9 +100,6 @@ async fn a_transcription_runs_the_speech_server_in_the_daemon() {
     let settings = json!({ "voice": { "enabled": true, "runtimePath": runtime, "modelPath": model, "language": "ja", "threads": 3, "idleSeconds": 10 } });
     std::fs::write(dir.join("settings.json"), settings.to_string()).unwrap();
     let d = start(&dir);
-
-    let (_, info) = post(d.port, "daemon:info", json!([])).await;
-    assert!(info["owned"].as_array().unwrap().iter().any(|c| c == "voice:transcribe"), "{info}");
 
     let (status, s) = post(d.port, "voice:status", json!([])).await;
     assert_eq!(status, 200);

@@ -14,8 +14,6 @@ async fn reports_mcp_status_from_its_own_servers() {
     ] });
     std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
     let d = start_with(Some(&data));
-    let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    assert!(info["owned"].as_array().unwrap().contains(&json!("mcp:status")), "{info}");
     let (status, rows) = post(d.port, "mcp:status", json!([]), Some(TOKEN)).await;
     assert_eq!(status, 200);
     assert_eq!(
@@ -68,15 +66,12 @@ async fn a_daemon_turn_syncs_and_calls_its_mcp_servers_itself() {
         "id": "s_turn_m", "title": "Named", "mode": "ask", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
     });
     let rig = turn_rig("mcp", session);
-    let (_, info) = post(rig.d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    assert!(info["owned"].as_array().unwrap().iter().any(|o| o == "turn:mcp"), "{info}");
     let (mcp_port, mcp_server, mcp_calls) = http_mcp().await;
     let model =
         scripted_model(vec![call_tool("c_mcp", "mcp__srv__echo", json!({ "text": "hi" })), say_text("done")]).await;
     let mut spec = turn_spec(&rig, &model, "turn_m", "s_turn_m", json!({}));
     spec["settings"]["defaultChatMode"] = json!("ask");
     let facts = spec["facts"].as_object_mut().unwrap();
-    facts.remove("mcpTools");
     facts.insert(
         "mcpServers".into(),
         json!([{ "id": "srv", "name": "srv", "enabled": true, "command": "", "args": [], "url": format!("http://127.0.0.1:{mcp_port}/mcp") }]),
@@ -111,6 +106,71 @@ async fn a_daemon_turn_syncs_and_calls_its_mcp_servers_itself() {
         .unwrap()
         .clone();
     assert_eq!(result["toolResult"]["output"], "echo: hi");
+    mcp_server.abort();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_code_mode_turn_runs_the_models_script_and_asks_for_each_call_it_makes() {
+    let session = json!({
+        "id": "s_turn_cm", "title": "Named", "mode": "ask", "toolApproach": "code", "workspaceId": "w1",
+        "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("codemode", session);
+    let (mcp_port, mcp_server, mcp_calls) = http_mcp().await;
+    let script = "const out = [];\nfor (const text of ['one', 'two']) out.push(await tools.mcp__srv__echo({ text }));\nreturn out.join('|');";
+    let model = scripted_model(vec![
+        call_tool("c_find", "search_tools", json!({ "query": "echo" })),
+        call_tool("c_code", "run_code", json!({ "code": script })),
+        say_text("done"),
+    ])
+    .await;
+    let mut spec = turn_spec(&rig, &model, "turn_cm", "s_turn_cm", json!({}));
+    spec["settings"]["defaultChatMode"] = json!("ask");
+    let facts = spec["facts"].as_object_mut().unwrap();
+    facts.remove("mcpTools");
+    facts.insert(
+        "mcpServers".into(),
+        json!([{ "id": "srv", "name": "srv", "enabled": true, "command": "", "args": [], "url": format!("http://127.0.0.1:{mcp_port}/mcp") }]),
+    );
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+
+    // Each call the script makes is asked about as a direct call would be.
+    for nested in ["c_code.1", "c_code.2"] {
+        let approval = wait_pending(rig.d.port, "s_turn_cm", "approval", nested).await;
+        assert_eq!(approval["reason"], "Call mcp__srv__echo");
+        let (status, _) = post(rig.d.port, "tool:approve", json!(["s_turn_cm", nested, true]), Some(TOKEN)).await;
+        assert_eq!(status, 200);
+    }
+    let (_, end) = turn_record(&rig, "turn_cm", "s_turn_cm").await;
+    assert_eq!(end["stop"], "complete", "{end}");
+
+    // The model saw search_tools and run_code, not the tools behind them.
+    let tools: Vec<String> = model.requests.lock().unwrap()[0]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["function"]["name"].as_str().unwrap().to_string())
+        .collect();
+    assert!(tools.contains(&"run_code".to_string()) && tools.contains(&"search_tools".to_string()), "{tools:?}");
+    assert!(!tools.iter().any(|t| t == "mcp__srv__echo" || t == "read_file" || t == "bash"), "{tools:?}");
+    assert!(tools.contains(&"update_plan".to_string()), "{tools:?}");
+    assert_eq!(mcp_calls.lock().unwrap().len(), 2);
+
+    let saved = saved_session(&rig, "s_turn_cm");
+    let messages = saved["messages"].as_array().unwrap();
+    let output = |id: &str| {
+        messages.iter().find(|m| m["role"] == "tool" && m["toolResult"]["toolCallId"] == id).unwrap()["toolResult"]
+            ["output"]
+            .clone()
+    };
+    assert!(output("c_find").as_str().unwrap().contains("tools.mcp__srv__echo(input?: Record<string, any>)"));
+    assert_eq!(output("c_code"), "echo: one|echo: two");
+    let stats = messages.iter().rev().find(|m| m["role"] == "assistant").unwrap()["turnStats"]["codeMode"].clone();
+    assert_eq!((stats["runs"].clone(), stats["toolCalls"].clone()), (json!(1), json!(2)), "{stats}");
+    assert!(stats["toolsWrapped"].as_u64().unwrap() > 5, "{stats}");
+    assert!(stats["schemaTokensPerCall"].as_i64().unwrap() > 0, "{stats}");
+    assert!(stats["searchTokens"].as_u64().unwrap() > 0, "{stats}");
     mcp_server.abort();
 }
 
@@ -172,8 +232,6 @@ async fn a_daemon_turn_drives_its_sub_agent_and_answers_with_it() {
         "privacy": { "mode": "redact", "allow": ["a@b.io"] },
     });
     let rig = turn_rig("spawn", session);
-    let (_, info) = post(rig.d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    assert!(info["owned"].as_array().unwrap().iter().any(|o| o == "turn:spawn"), "{info}");
     let model = scripted_model(vec![
         call_tool("c_spawn", "spawn_agent", json!({ "task": "count the files" })),
         say_text("there are 2 files"),
@@ -334,8 +392,15 @@ async fn a_daemon_turn_fetches_pages_and_runs_background_processes_itself() {
     let spec = turn_spec(&rig, &model, "turn_f", "s_turn_f", json!({}));
     let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
     assert_eq!(status, 200);
+    // A local address: one approval, worded as such, even in ask mode.
     let approval = wait_pending(rig.d.port, "s_turn_f", "approval", "c_fetch").await;
-    assert_eq!(approval["reason"], format!("Fetch {url}"));
+    assert_eq!(
+        approval["reason"],
+        format!(
+            "Fetch {url}? 127.0.0.1 is on this computer or your local network, not the public internet. Approve only if you expected the agent to read it."
+        )
+    );
+    assert_eq!(approval["severity"], "medium");
     post(rig.d.port, "tool:approve", json!(["s_turn_f", "c_fetch", true]), Some(TOKEN)).await;
     let approval = wait_pending(rig.d.port, "s_turn_f", "approval", "c_start").await;
     assert_eq!(approval["reason"], "Start a background process");
@@ -522,6 +587,4 @@ async fn a_daemon_turn_arms_agent_watches_itself_and_owns_their_file() {
     assert_eq!(wake, file[0]["deadlineAt"]);
     let (_, listed) = post(rig.d.port, "watch:tool", json!(["s_turn_w", { "action": "list" }]), Some(TOKEN)).await;
     assert!(listed.as_str().unwrap().contains("\"Check the build\""), "{listed}");
-    let (_, info) = post(rig.d.port, "daemon:info", json!([]), Some(TOKEN)).await;
-    assert!(info["owned"].as_array().unwrap().contains(&json!("session:nextWatch")));
 }

@@ -45,7 +45,7 @@ RUN npm prune --omit=dev
 FROM node:22-trixie-slim AS runtime
 WORKDIR /app
 # tini as PID 1: it forwards `docker stop`'s SIGTERM to the server (which stops
-# nekkod, which stops its backend and terminals) and reaps any orphaned shell.
+# nekkod, which stops its terminals) and reaps any orphaned shell.
 # libssl3: nekkod links OpenSSL dynamically (Node's own is static).
 RUN apt-get update \
     && apt-get install -y --no-install-recommends tini libssl3 ca-certificates \

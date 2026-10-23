@@ -28,7 +28,7 @@ async function main() {
   const endpoint = await engine.endpoint();
   const info = await engine.call('daemon:info');
   results.mode = 'daemon';
-  check('Real engine is nekkod', () => assert.ok(Array.isArray(info?.owned) && endpoint.url.startsWith('http://127.0.0.1:')));
+  check('Real engine is nekkod', () => assert.ok(info?.app === 'nekkod' && endpoint.url.startsWith('http://127.0.0.1:')));
   const settings = await engine.call(C.settingsGet);
   check('Backend reads isolated settings with optional services disabled', () => {
     assert.equal(settings.apiServer.enabled, false);

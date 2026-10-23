@@ -181,6 +181,7 @@ async fn prepare_sub_agent(
         "effort",
         "memory",
         "guidance",
+        "toolApproach",
         "offline",
         "cloudOnly",
         "incognito",

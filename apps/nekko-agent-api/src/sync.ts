@@ -15,9 +15,10 @@ export const SYNC_QUOTA: Record<Plan, number> = { free: 0, pro: 5 * 2 ** 30, tea
 export const MAX_OBJECT_BYTES = 1024 * 1024;
 const MAX_PUSH = 200;
 const MAX_PULL = 500;
-// Exact sizes from crates/nekko-sync: version, salt or ephemeral key, 64-byte keyring, GCM tag.
+// Exact sizes from crates/nekko-sync: version, ephemeral key, 64-byte keyring, GCM tag. The
+// recovery wrap is sealed to the recovery key's public half the same way.
 const WRAP_BYTES = 1 + 65 + 64 + 16;
-const RECOVERY_BYTES = 1 + 32 + 64 + 16;
+const RECOVERY_BYTES = WRAP_BYTES;
 // version, salt, the smallest padded frame (256), tag.
 const MIN_OBJECT_BYTES = 1 + 32 + 256 + 16;
 
@@ -55,6 +56,25 @@ const wire = (r: ObjectRow) => ({
   seq: Number(r.seq),
 });
 
+/** A token counts as a fresh sign-in this long after it was issued (deleting everything without keys). */
+const FRESH_SIGN_IN_MS = 10 * 60 * 1000;
+
+/**
+ * Is the caller a device that holds this epoch's keys (it has a wrap)? The
+ * routes that change keys, devices or everything at once need one. This stops
+ * someone who can only sign in to the account; the clients' own checks are
+ * what stop a malicious server.
+ */
+async function keyed(db: Db, caller: Caller, keyId: number): Promise<boolean> {
+  if (!caller.deviceId) return false;
+  const { rows } = await db.query(
+    `select 1 from sync_key_wraps w join sync_devices d on d.id = w.device_id
+      where w.user_id = $1 and w.key_id = $2 and w.device_id = $3 and d.revoked_at is null`,
+    [caller.userId, keyId, caller.deviceId],
+  );
+  return rows.length === 1;
+}
+
 async function currentKeyId(db: Db, userId: string): Promise<number | null> {
   const { rows } = await db.query<{ k: number | null }>("select max(key_id) as k from sync_keyrings where user_id = $1", [userId]);
   return rows[0]?.k ?? null;
@@ -79,8 +99,8 @@ export function registerSync(app: FastifyInstance, db: Db): void {
     const caller = await guard(req, reply, false);
     if (!caller) return;
     const [devices, usage, keyId] = await Promise.all([
-      db.query<{ id: string; label: string; public_key: Buffer; created_at: Date; revoked_at: Date | null }>(
-        "select id, label, public_key, created_at, revoked_at from sync_devices where user_id = $1 order by created_at",
+      db.query<{ id: string; label: string; public_key: Buffer; join_tag: Buffer | null; created_at: Date; revoked_at: Date | null }>(
+        "select id, label, public_key, join_tag, created_at, revoked_at from sync_devices where user_id = $1 order by created_at",
         [caller.userId],
       ),
       db.query<{ bytes: string }>("select bytes from sync_usage where user_id = $1", [caller.userId]),
@@ -96,6 +116,7 @@ export function registerSync(app: FastifyInstance, db: Db): void {
         id: d.id,
         label: d.label,
         publicKey: Buffer.from(d.public_key).toString("base64url"),
+        joinTag: d.join_tag ? Buffer.from(d.join_tag).toString("base64url") : null,
         createdAt: d.created_at,
         revokedAt: d.revoked_at,
       })),
@@ -103,27 +124,36 @@ export function registerSync(app: FastifyInstance, db: Db): void {
     };
   });
 
-  // A device registers its public key; the calling token becomes that device's.
+  // A device registers its public key; the calling token becomes that
+  // device's. Registering the same key again binds a new token to it (after
+  // signing in again), and a device asking to join sends its join tag.
   app.post("/v1/sync/devices", async (req, reply) => {
     const caller = await guard(req, reply, true);
     if (!caller) return;
     const body = (req.body ?? {}) as Record<string, unknown>;
     const publicKey = bytes(body.publicKey, 65);
     const label = typeof body.label === "string" ? body.label.trim().replace(/\s+/g, " ") : "";
+    const joinTag = body.joinTag === undefined || body.joinTag === null ? null : bytes(body.joinTag, 32);
     if (!publicKey || publicKey[0] !== 4) return reply.code(400).send({ error: "publicKey must be a 65-byte uncompressed P-256 key" });
     if (!label || label.length > 40) return reply.code(400).send({ error: "label must be 1 to 40 characters" });
-    if (caller.deviceId) return reply.code(409).send({ error: "token-has-device", deviceId: caller.deviceId });
+    if (body.joinTag !== undefined && body.joinTag !== null && !joinTag) return reply.code(400).send({ error: "joinTag must be 32 bytes" });
     return db.transaction(async (tx) => {
+      if (caller.deviceId) {
+        const { rows } = await tx.query<{ public_key: Buffer }>("select public_key from sync_devices where id = $1", [caller.deviceId]);
+        if (!rows[0] || !Buffer.from(rows[0].public_key).equals(publicKey)) {
+          return reply.code(409).send({ error: "token-has-device", deviceId: caller.deviceId });
+        }
+      }
       const { rows } = await tx.query<{ id: string; revoked_at: Date | null }>(
-        `insert into sync_devices (user_id, public_key, label) values ($1, $2, $3)
-         on conflict (user_id, public_key) do update set label = sync_devices.label
+        `insert into sync_devices (user_id, public_key, label, join_tag) values ($1, $2, $3, $4)
+         on conflict (user_id, public_key) do update set join_tag = coalesce(excluded.join_tag, sync_devices.join_tag)
          returning id, revoked_at`,
-        [caller.userId, publicKey, label],
+        [caller.userId, publicKey, label, joinTag],
       );
       // A revoked key stays revoked: a device comes back only with a new key.
       if (rows[0].revoked_at) return reply.code(403).send({ error: "device-revoked" });
       await tx.query("update api_tokens set device_id = $1 where id = $2", [rows[0].id, caller.tokenId]);
-      return reply.code(201).send({ deviceId: rows[0].id });
+      return reply.code(caller.deviceId ? 200 : 201).send({ deviceId: rows[0].id });
     });
   });
 
@@ -134,6 +164,10 @@ export function registerSync(app: FastifyInstance, db: Db): void {
     if (!caller) return;
     const { id } = req.params as { id: string };
     if (!UUID.test(id)) return reply.code(404).send({ error: "not-found" });
+    const current = await currentKeyId(db, caller.userId);
+    if (id !== caller.deviceId && current !== null && !(await keyed(db, caller, current))) {
+      return reply.code(403).send({ error: "needs-synced-device" });
+    }
     return db.transaction(async (tx) => {
       const { rows } = await tx.query<{ id: string }>(
         "update sync_devices set revoked_at = coalesce(revoked_at, now()) where id = $1 and user_id = $2 returning id",
@@ -147,7 +181,7 @@ export function registerSync(app: FastifyInstance, db: Db): void {
   });
 
   // A new key epoch: the keyring wrapped to the recovery key and to devices.
-  app.put("/v1/sync/keyrings/:keyId", async (req, reply) => {
+  app.put("/v1/sync/keyrings/:keyId", { bodyLimit: 256 * 1024 }, async (req, reply) => {
     const caller = await guard(req, reply, true);
     if (!caller) return;
     const keyId = Number((req.params as { keyId: string }).keyId);
@@ -167,9 +201,15 @@ export function registerSync(app: FastifyInstance, db: Db): void {
       await tx.query("select pg_advisory_xact_lock(hashtext($1))", [`sync:${caller.userId}`]);
       const current = (await currentKeyId(tx, caller.userId)) ?? 0;
       if (keyId !== current + 1) return reply.code(409).send({ error: "key-epoch", currentKeyId: current || null });
+      // The first epoch comes from a registered device that wraps it to itself;
+      // every later one only from a device that holds the current one.
+      const allowed = current === 0
+        ? !!caller.deviceId && parsed.some((w) => w.deviceId === caller.deviceId)
+        : await keyed(tx, caller, current);
+      if (!allowed) return reply.code(403).send({ error: "needs-synced-device" });
       await tx.query("insert into sync_keyrings (user_id, key_id, recovery_wrap) values ($1, $2, $3)", [caller.userId, keyId, recovery]);
       for (const w of parsed) {
-        const ok = await insertWrap(tx, caller.userId, keyId, w.deviceId, w.wrap);
+        const ok = (await insertWrap(tx, caller.userId, keyId, w.deviceId, w.wrap)) === "ok";
         if (!ok) throw Object.assign(new Error("unknown device"), { statusCode: 400 });
       }
       return reply.code(201).send({ keyId });
@@ -179,7 +219,9 @@ export function registerSync(app: FastifyInstance, db: Db): void {
     });
   });
 
-  // An existing device adds a wrap for a newly enrolled one.
+  // A device that holds the current epoch adds a wrap for one it approved,
+  // or a device that restored with the recovery key wraps the epoch to
+  // itself. Only to the current epoch, and never over an existing wrap.
   app.put("/v1/sync/keyrings/:keyId/wraps/:deviceId", async (req, reply) => {
     const caller = await guard(req, reply, true);
     if (!caller) return;
@@ -187,10 +229,17 @@ export function registerSync(app: FastifyInstance, db: Db): void {
     const keyId = Number(rawKey);
     const wrap = bytes((req.body as Record<string, unknown> | undefined)?.wrap, WRAP_BYTES);
     if (!isPositiveInt(keyId, 1_000_000) || !UUID.test(deviceId) || !wrap) return reply.code(400).send({ error: "bad wrap" });
-    const exists = await db.query("select 1 from sync_keyrings where user_id = $1 and key_id = $2", [caller.userId, keyId]);
-    if (!exists.rows.length) return reply.code(404).send({ error: "not-found" });
-    if (!(await insertWrap(db, caller.userId, keyId, deviceId, wrap))) return reply.code(400).send({ error: "unknown-device" });
-    return reply.code(204).send();
+    return db.transaction(async (tx) => {
+      await tx.query("select pg_advisory_xact_lock(hashtext($1))", [`sync:${caller.userId}`]);
+      const current = await currentKeyId(tx, caller.userId);
+      if (current === null || keyId > current) return reply.code(404).send({ error: "not-found" });
+      if (keyId !== current) return reply.code(409).send({ error: "key-epoch", currentKeyId: current });
+      if (deviceId !== caller.deviceId && !(await keyed(tx, caller, keyId))) return reply.code(403).send({ error: "needs-synced-device" });
+      const result = await insertWrap(tx, caller.userId, keyId, deviceId, wrap);
+      if (result === "unknown-device") return reply.code(400).send({ error: "unknown-device" });
+      if (result === "exists") return reply.code(409).send({ error: "wrap-exists" });
+      return reply.code(204).send();
+    });
   });
 
   app.get("/v1/sync/keyrings/:keyId", async (req, reply) => {
@@ -235,6 +284,9 @@ export function registerSync(app: FastifyInstance, db: Db): void {
     return db.transaction(async (tx) => {
       await tx.query("select pg_advisory_xact_lock(hashtext($1))", [`sync:${caller.userId}`]);
       const keyId = await currentKeyId(tx, caller.userId);
+      if (keyId === null || !(await keyed(tx, caller, keyId))) {
+        throw Object.assign(new Error("needs-synced-device"), { statusCode: 403 });
+      }
       const results: Record<string, unknown>[] = [];
       let delta = 0;
       for (const o of parsed) {
@@ -274,8 +326,24 @@ export function registerSync(app: FastifyInstance, db: Db): void {
       return { results };
     }).catch((e: { statusCode?: number }) => {
       if (e.statusCode === 413) return reply.code(413).send({ error: "quota", limit: SYNC_QUOTA[caller.plan] });
+      if (e.statusCode === 403) return reply.code(403).send({ error: "needs-synced-device" });
       throw e;
     });
+  });
+
+  // One object, out of feed order (a device reads a new epoch's account
+  // record before it takes that epoch's keyring).
+  app.get("/v1/sync/objects/:collection/:objectId", async (req, reply) => {
+    const caller = await guard(req, reply, false);
+    if (!caller) return;
+    const { collection, objectId } = req.params as { collection: string; objectId: string };
+    if (!COLLECTION.test(collection) || !OBJECT_ID.test(objectId)) return reply.code(404).send({ error: "not-found" });
+    const { rows } = await db.query<ObjectRow>(
+      "select collection, object_id, revision, key_id, blob, seq from sync_objects where user_id = $1 and collection = $2 and object_id = $3",
+      [caller.userId, collection, objectId],
+    );
+    if (!rows.length) return reply.code(404).send({ error: "not-found" });
+    return wire(rows[0]);
   });
 
   // Changes after a sequence number, oldest first.
@@ -297,10 +365,19 @@ export function registerSync(app: FastifyInstance, db: Db): void {
   });
 
   // Delete everything synced: objects, keyrings, wraps and devices. The
-  // account itself stays. Works on any plan.
+  // account itself stays. Works on any plan, from a device that holds the
+  // keys, or (someone locked out who wants to start over) right after a
+  // fresh sign-in.
   app.delete("/v1/sync", async (req, reply) => {
     const caller = await guard(req, reply, false);
     if (!caller) return;
+    const current = await currentKeyId(db, caller.userId);
+    if (current !== null && !(await keyed(db, caller, current))) {
+      const { rows } = await db.query<{ created_at: Date }>("select created_at from api_tokens where id = $1", [caller.tokenId]);
+      if (!rows[0] || Date.now() - new Date(rows[0].created_at).getTime() > FRESH_SIGN_IN_MS) {
+        return reply.code(403).send({ error: "needs-fresh-sign-in" });
+      }
+    }
     await db.transaction(async (tx) => {
       await tx.query("delete from sync_objects where user_id = $1", [caller.userId]);
       await tx.query("delete from sync_keyrings where user_id = $1", [caller.userId]);
@@ -312,13 +389,14 @@ export function registerSync(app: FastifyInstance, db: Db): void {
   });
 }
 
-async function insertWrap(db: Db, userId: string, keyId: number, deviceId: string, wrap: Buffer): Promise<boolean> {
+async function insertWrap(db: Db, userId: string, keyId: number, deviceId: string, wrap: Buffer): Promise<"ok" | "exists" | "unknown-device"> {
+  const live = await db.query("select 1 from sync_devices where id = $1 and user_id = $2 and revoked_at is null", [deviceId, userId]);
+  if (!live.rows.length) return "unknown-device";
   const { rows } = await db.query(
-    `insert into sync_key_wraps (user_id, key_id, device_id, wrap)
-     select $1, $2, d.id, $4 from sync_devices d where d.id = $3 and d.user_id = $1 and d.revoked_at is null
-     on conflict (user_id, key_id, device_id) do update set wrap = excluded.wrap
+    `insert into sync_key_wraps (user_id, key_id, device_id, wrap) values ($1, $2, $3, $4)
+     on conflict (user_id, key_id, device_id) do nothing
      returning device_id`,
     [userId, keyId, deviceId, wrap],
   );
-  return rows.length === 1;
+  return rows.length === 1 ? "ok" : "exists";
 }

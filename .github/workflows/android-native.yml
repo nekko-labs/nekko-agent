@@ -13,6 +13,7 @@ on:
       - 'packages/shared/src/e2e.ts'
       - 'packages/shared/src/remote.ts'
       - 'packages/shared/src/ipc.ts'
+      - 'packages/shared/src/pairing-link.ts'
       - '.github/workflows/android-native.yml'
   push:
     branches: [main]

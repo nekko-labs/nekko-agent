@@ -3,7 +3,7 @@ import XCTest
 @testable import NekkoProtocol
 
 /// The relay client against an in-memory relay + agent. The fake plays the
-/// agent's side of `packages/host/src/relay.ts`: it opens sealed frames with
+/// agent's side of `crates/nekko-remote/src/agent.rs`: it opens sealed frames with
 /// the room key, answers HELLO and replies to requests. Same cases as
 /// Android's `RelayClientTest.kt`.
 final class RelayClientTests: XCTestCase {
@@ -483,7 +483,7 @@ final class RelayClientTests: XCTestCase {
     func testRegistersALiveActivityUnderItsTag() async throws {
         let relay = FakeRelay(key: key, known: ["dev-1"])
         var cfg = RelayConfig(relayUrl: "wss://relay.test", room: "abcd1234", key: "k", keyBytes: key, deviceId: "dev-1", deviceName: "iPhone")
-        cfg.app = "com.nekko.native.ios"
+        cfg.app = "dev.nekkolabs.nekkoagent"
         let c = RelayClient(config: cfg, transport: relay)
         c.connect()
         try await c.registerActivity(tag: E2E.activityTag("s1"), token: "ab12")
@@ -491,8 +491,8 @@ final class RelayClientTests: XCTestCase {
         let regs = relay.sync { relay.registrations }
         XCTAssertEqual(regs.first?.str("type"), "register-activity")
         XCTAssertEqual(regs.first?.str("tag"), "7536af24f84b356f893a72f0def58cce")
-        XCTAssertEqual(regs.first?.str("app"), "com.nekko.native.ios")
-        XCTAssertEqual(regs.last?.str("app"), "com.nekko.native.ios")
+        XCTAssertEqual(regs.first?.str("app"), "dev.nekkolabs.nekkoagent")
+        XCTAssertEqual(regs.last?.str("app"), "dev.nekkolabs.nekkoagent")
         c.close()
     }
 

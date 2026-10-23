@@ -1,6 +1,6 @@
 import React, { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import type { ChatMode, EffortLevel, ExecutionMode, ModelScope, GuidanceLevel, ChatMemory, SavedMode, SavedModeIcon, Session, WorkModeId } from '@nekko-agent/shared';
+import type { ChatMode, EffortLevel, ExecutionMode, ModelScope, GuidanceLevel, ChatMemory, SavedMode, SavedModeIcon, Session, ToolApproach, WorkModeId } from '@nekko-agent/shared';
 import {
   CONNECTOR_CATALOG, WORK_MODES, chatEffort, chatModelScope, defaultSavedMode, getExecutionMode, getSessionWorkspaceIds, getWorkMode, matchSavedMode, newSavedModeId,
   modePatchSkips, savedModeSummary, savedModes, sessionModeOptions, sessionPatchForMode,
@@ -10,12 +10,19 @@ import { addFolderToChat, applyFolderSelection, withExcluded } from '../sessionF
 import { EFFORT_LABEL, effortRungs } from './ChatMetrics.js';
 import { ToolsList, toolCounts, useChatTools } from './ChatControls.js';
 import {
-  BoltIcon, BrainIcon, CapIcon, CheckIcon, ChevronIcon, CloseIcon, CloudIcon, CompassIcon, CubeIcon, DialIcon, DocTextIcon, EffortBarsIcon,
+  BoltIcon, BrainIcon, CapIcon, CheckIcon, CodeIcon, ChevronIcon, CloseIcon, CloudIcon, CompassIcon, CubeIcon, DialIcon, DocTextIcon, EffortBarsIcon,
   ExternalIcon, FileIcon, FolderIcon, GaugeIcon, ListIcon, GlobeIcon, GlobeOffIcon, HandIcon, IncognitoIcon, LaptopIcon, LockIcon, PlugIcon, PlusIcon,
   RouteIcon, ServerIcon, ShieldCheckIcon, ShieldIcon, SparkleIcon, StarIcon, WorktreeIcon, WrenchIcon, BoltIcon as YoloIcon,
 } from '../icons.js';
 
 const WORKTREE_DOCS = 'https://git-scm.com/docs/git-worktree';
+export const CODE_MODE_DOCS = 'https://nekkoagent.com/docs/code-mode';
+
+/** The two ways a chat's tools reach the model, as the Tools flyout offers them. */
+const TOOL_APPROACHES: Array<{ id: ToolApproach; label: string; description: string; isNew?: boolean }> = [
+  { id: 'list', label: 'Tool list', description: 'Every tool is offered by name with its full definition, on every model call, and every result comes back through the model.' },
+  { id: 'code', label: 'Code mode', isNew: true, description: 'The model writes JavaScript that calls your tools in a sandbox. It looks up a tool\'s definition only when it needs it, and only what the code returns reaches the model, so long tool lists and big results cost far fewer tokens. Each call is still approved and guarded.' },
+];
 
 export const SAVED_MODE_GLYPH: Record<SavedModeIcon, (p: { className?: string }) => React.ReactElement> = {
   bolt: BoltIcon, dial: DialIcon, incognito: IncognitoIcon, box: CubeIcon, cap: CapIcon, sparkle: SparkleIcon, shield: ShieldIcon, 'globe-off': GlobeOffIcon,
@@ -54,7 +61,7 @@ const GUIDANCE_DESC: Record<GuidanceLevel, string> = {
 
 const APPROVAL_DESC: Record<ChatMode, string> = {
   ask: 'Asks before every file write and command.',
-  guardrails: 'Runs freely; asks or blocks per your guardrail rules.',
+  guardrails: 'Edits files and runs read-only commands freely; asks before any other command.',
   yolo: 'Never asks (deny rules still block). Pair it with a sandbox or worktree.',
 };
 
@@ -121,6 +128,10 @@ export function modePanelActions({ session, isCloudModel, onChange, onSandboxSet
     /** How much project guidance this chat takes. */
     async setGuidance(guidance: GuidanceLevel) {
       try { await patchChat({ guidance }); } catch (e) { toastError(e); }
+    },
+    /** A tool list, or code mode, for this chat's turns. */
+    async setToolApproach(toolApproach: ToolApproach) {
+      try { await patchChat({ toolApproach }); } catch (e) { toastError(e); }
     },
     /** Offer or withhold one MCP server's tools in this chat. It keeps running for other chats. */
     async setMcpServer(id: string, on: boolean) {
@@ -265,8 +276,13 @@ export function ModePanel({
     </div>
   );
 
+  const approach: ToolApproach = sandbox ? 'list' : session.toolApproach ?? 'list';
   const flyBody = (f: Fly) => f === 'tools'
-    ? <ToolsList session={session} onChange={onChange} tools={tools} />
+    ? <>
+        <ToolApproachPicker approach={approach} sandbox={sandbox} onPick={(a) => void actions.setToolApproach(a)} />
+        <p className="mode-group">{approach === 'code' ? 'Tools code can call' : 'Tools'}</p>
+        <ToolsList session={session} onChange={onChange} tools={tools} />
+      </>
     : f === 'mcp'
       ? <>
           {sandbox ? <p className="mode-note">MCP is unavailable in Sandbox.</p>
@@ -442,7 +458,7 @@ export function ModePanel({
               {tiles<ChatMode>('Approvals', approvals, [['ask', 'Ask', <HandIcon />, { 'data-chat-mode': 'ask' }], ['guardrails', 'Guardrails', <ShieldCheckIcon />, { 'data-chat-mode': 'guardrails' }], ['yolo', 'YOLO', <YoloIcon />, { 'data-chat-mode': 'yolo' }]],
                 (v) => void (!sandbox && actions.setApprovals(v)))}
             </div>
-            {flyRow('tools', <WrenchIcon />, 'Tools', `${toolsOn} of ${toolsUsable} on`)}
+            {flyRow('tools', <WrenchIcon />, 'Tools', `${toolsOn} of ${toolsUsable} on${approach === 'code' ? ' · code mode' : ''}`)}
             {flyRow('mcp', <ServerIcon />, 'MCP servers', sandbox ? 'Off in Sandbox' : session.offline ? 'Off while offline' : `${mcpOn} of ${mcpServers.length} on`)}
             {flyRow('connectors', <PlugIcon />, 'Connectors', sandbox ? 'Off in Sandbox' : session.offline ? 'Off while offline' : `${connectorsOn} of ${connected.length} on`)}
           </section>
@@ -477,6 +493,29 @@ export function ModePanel({
       document.body,
     )}
   </>);
+}
+
+/**
+ * The Tools flyout's choice of how tools reach the model: a tool list, or
+ * code mode (new). A sandbox chat keeps the list.
+ */
+export function ToolApproachPicker({ approach, sandbox, onPick }: { approach: ToolApproach; sandbox: boolean; onPick: (a: ToolApproach) => void }) {
+  return (
+    <div role="radiogroup" aria-label="How tools reach the model" data-tool-approaches>
+      <p className="mode-group">How tools reach the model</p>
+      {TOOL_APPROACHES.map((a) => (
+        <button key={a.id} role="radio" aria-checked={approach === a.id} disabled={sandbox} data-tool-approach={a.id} className="mode-opt disabled:cursor-not-allowed disabled:opacity-50" onClick={() => onPick(a.id)}>
+          <span className="mode-opt-ic">{a.id === 'code' ? <CodeIcon /> : <ListIcon />}</span>
+          <span className="min-w-0 flex-1">
+            <span className="mode-t">{a.label}{a.isNew && <span className="mode-badge is-accent">New</span>}{approach === a.id && <CheckIcon className="h-3.5 w-3.5 text-accent" />}</span>
+            <span className="mode-s">{a.description}</span>
+          </span>
+        </button>
+      ))}
+      <a className="mode-link block" href={CODE_MODE_DOCS} data-code-mode-docs onClick={(e) => { e.preventDefault(); void window.nekko.openPath(CODE_MODE_DOCS); }}>What's code mode, and what does it save? <ExternalIcon className="inline h-2.5 w-2.5" /></a>
+      {sandbox && <p className="mode-note">Sandbox chats use the tool list: their few tools run in the container.</p>}
+    </div>
+  );
 }
 
 /** The Mode button's label: the saved mode this chat is in, or Custom. */
