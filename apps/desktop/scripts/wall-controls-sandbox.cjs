@@ -44,10 +44,67 @@ app.whenReady().then(async () => {
   try {
     await win.loadFile(path.join(out, 'index.html'));
     // macOS can move resized mapped windows back onto a display; keep this fixture hidden.
-    if (!process.env.NEKKO_COMPOSER_ROW && !process.env.NEKKO_FOCUS_ADD && (process.platform !== 'darwin' || !process.env.NEKKO_GRID_BUGS)) win.showInactive();
+    if (!process.env.NEKKO_FOCUSED_MOTION && !process.env.NEKKO_COMPOSER_ROW && !process.env.NEKKO_FOCUS_ADD && (process.platform !== 'darwin' || !process.env.NEKKO_GRID_BUGS)) win.showInactive();
     await sleep(900);
     await check('mounted full CommandCenterView', "(document.body.textContent.includes('Agents') || document.body.textContent.includes('Command Center')) && !!document.querySelector('[data-command-wall]')");
     const current = !process.env.NEKKO_TEST_REVISION;
+    if (process.env.NEKKO_FOCUSED_MOTION) {
+      const tag = current ? 'after' : 'before';
+      await win.loadFile(path.join(out, 'index.html'), { search: 'nav' }); await sleep(900);
+      for (const theme of ['light', 'dark']) for (const width of [1400, 760]) {
+        win.setContentSize(width, 900);
+        await run(`document.documentElement.dataset.theme='${theme}'`);
+        await run("document.dispatchEvent(new KeyboardEvent('keydown',{code:'Digit1',key:'1',ctrlKey:true,shiftKey:true,bubbles:true}))");
+        await sleep(700);
+        await check('focused wall mounted', "!!document.querySelector('[data-wall-layout=focus]')");
+        if (current) await check('focused frame has no ring', "(()=>{const p=document.querySelector('.command-wall-window > .panel');return getComputedStyle(p).boxShadow==='none' && getComputedStyle(p).borderTopWidth==='0px' && getComputedStyle(p,'::after').display==='none'})()");
+        if (current) await check('focused title strips hidden', "[...document.querySelectorAll('[data-pane-title-strip]')].every(e=>getComputedStyle(e).display==='none')");
+        await capture(`focused-motion-${tag}-${theme}-${width}`);
+      }
+      const frames = path.join(runDir, 'motion'); fs.mkdirSync(frames);
+      const started = Date.now(); const samples = [];
+      for (let i=0; i<36; i++) {
+        if ([3,12,18,26].includes(i)) await run("document.querySelector('.agent-panel-pill')?.click()");
+        if ([6,21].includes(i)) await run("document.querySelector('[aria-label=\"Show monitors\"]')?.click()");
+        if ([9,24].includes(i)) await run("document.querySelector('[aria-label=\"Hide monitors\"]')?.click()");
+        const name=String(i).padStart(3,'0')+'.png';
+        fs.writeFileSync(path.join(frames,name),(await win.capturePage(undefined,{stayHidden:true})).toPNG());
+        samples.push({file:name,elapsedMs:Date.now()-started}); await sleep(45);
+      }
+      fs.writeFileSync(path.join(runDir,'motion-times.json'),JSON.stringify(samples,null,2));
+      const python = process.env.NEKKO_GIF_PYTHON;
+      if (!python) throw Error('Set NEKKO_GIF_PYTHON to a Python interpreter with Pillow');
+      const gif = path.join(runDir, `focused-motion-${tag}.gif`);
+      require('node:child_process').execFileSync(python, ['-c', "from PIL import Image; import json,sys,pathlib; p=pathlib.Path(sys.argv[1]); ts=json.loads((p/'motion-times.json').read_text()); frames=[Image.open(p/'motion'/x['file']).convert('RGB') for x in ts]; durations=[max(20,ts[i+1]['elapsedMs']-x['elapsedMs']) if i+1<len(ts) else 100 for i,x in enumerate(ts)]; frames[0].save(sys.argv[2],save_all=True,append_images=frames[1:],duration=durations,loop=0)", runDir, gif]);
+      report.captures.push(gif);
+      // Rapid reversals happen inside the exit delay, not after settling.
+      if (current) {
+        for (const [name, selector, panel] of [['Agents','.agent-panel-controls .agent-panel-pill','.wall-agents-presence'],['Monitors','[aria-label="Show the monitors panel"], [aria-label="Hide the monitors panel"]','.monitors-dock']]) {
+          await run(`(async()=>{for(let i=0;i<8;i++){const b=document.querySelector(${JSON.stringify(selector)});if(!b)throw Error('Missing rapid toggle');b.click();await new Promise(r=>setTimeout(r,25))}})()`);
+          await sleep(250);
+          await check(name+' rapid toggles settle without stale inert content', `(()=>{const all=[...document.querySelectorAll(${JSON.stringify(panel)})];return all.length<=1 && all.every(e=>!e.inert && e.getAttribute('aria-hidden')!=='true')})()`);
+        }
+      }
+      win.setContentSize(1400,900);
+      const navFrames=path.join(runDir,'nav-motion');fs.mkdirSync(navFrames);
+      for(const theme of ['light','dark']) {
+        await run(`document.documentElement.dataset.theme='${theme}'`);
+        win.webContents.sendInputEvent({type:'mouseMove',x:700,y:850});await capture(`nav-${tag}-${theme}-rest`);
+        const point=await run("(()=>{const r=document.querySelector('.nav-item').getBoundingClientRect();return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}})()");
+        win.webContents.sendInputEvent({type:'mouseMove',...point});
+        const samples=[];const started=Date.now();
+        for(let i=0;i<12;i++){const name=`${theme}-${String(i).padStart(3,'0')}.png`;fs.writeFileSync(path.join(navFrames,name),(await win.capturePage(undefined,{stayHidden:true})).toPNG());samples.push({file:name,elapsedMs:Date.now()-started});await sleep(35);}
+        await check('navigation labels visible '+theme,"[...document.querySelectorAll('.rail-label')].every(e=>getComputedStyle(e).opacity==='1')");
+        await capture(`nav-${tag}-${theme}-open`);
+        fs.writeFileSync(path.join(runDir,`nav-${theme}-times.json`),JSON.stringify(samples));
+        const navGif=path.join(runDir,`nav-${tag}-${theme}.gif`);
+        require('node:child_process').execFileSync(python,['-c',"from PIL import Image; import json,sys,pathlib; p=pathlib.Path(sys.argv[1]); ts=json.loads((p/sys.argv[2]).read_text()); frames=[Image.open(p/'nav-motion'/x['file']).convert('RGB') for x in ts]; durations=[max(20,ts[i+1]['elapsedMs']-x['elapsedMs']) if i+1<len(ts) else 400 for i,x in enumerate(ts)]; frames[0].save(sys.argv[3],save_all=True,append_images=frames[1:],duration=durations,loop=0)",runDir,`nav-${theme}-times.json`,navGif]);
+        report.captures.push(navGif);
+      }
+      report.background={hidden:!win.isVisible(),focused:win.isFocused()};
+      report.success=!win.isVisible()&&!win.isFocused()&&!report.errors.length;
+      fs.writeFileSync(path.join(runDir,'report.json'),JSON.stringify(report,null,2)); app.quit(); return;
+    }
     if (process.env.NEKKO_COMPOSER_EVIDENCE) {
       // The wall composer with a selected agent: the bar above it, its top
       // controls strip and its bottom bar, in both themes at two widths.

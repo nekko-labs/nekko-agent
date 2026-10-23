@@ -21,7 +21,7 @@ import { agentStatusOfLane } from '../components/WorkspaceCard.js';
 import { BLOCKED_META, LANE_META, sessionLane } from '@nekko-agent/shared';
 import { type Vitals } from '../components/InsightsBox.js';
 import { ContextMenu, ContextAction } from '../components/ContextMenu.js';
-import { MonitorsDock } from '../components/MonitorsDock.js';
+import { MonitorsDock, usePanelPresence } from '../components/MonitorsDock.js';
 import { hasAppChrome } from '../chrome.js';
 import { claimAgent, displaysBridge, isScreenWindow, useDisplays, wallStorageKey, windowKey } from '../displays.js';
 import { ScreensControl } from '../components/ScreensControl.js';
@@ -416,6 +416,7 @@ export function CommandCenterView() {
   }, [focusRequest, listsReady, sessions, setWall]);
   const agentsOnWall = useMemo(() => wallAgents(wall.root), [wall.root]);
   const panel = readAgentPanel(wall.agentPanel);
+  const agentsPresent = usePanelPresence(panel.show);
   useEffect(() => {
     if (agentsOnWall.length === 0) { if (selected) setSelected(null); return; }
     if (!selected || !agentsOnWall.some((p) => p.refId === selected)) setSelected(agentsOnWall.find((p) => p.refId === wall.hero)?.refId ?? agentsOnWall[0].refId);
@@ -557,13 +558,13 @@ export function CommandCenterView() {
         }} />
       <div className="wall-workspace" data-dock-side={wall.dock.side}>
         <MonitorsDock state={wall} setState={setWall} tasks={tasks} running={running} now={now} sessions={sessions} providers={providers} usage={usage} vitals={vitals} onOpenChat={openChat} onOpenModels={() => setView('models')} />
-        <div className="wall-agent-workspace" data-tabs={panel.show && panel.orientation === 'horizontal' ? 'top' : 'left'}>
+        <div className="wall-agent-workspace" data-tabs={agentsPresent && panel.orientation === 'horizontal' ? 'top' : 'left'}>
       {!panel.show && <div className="agent-panel-collapsed" data-orientation={panel.orientation}>
         <AgentPanelControls show={false} orientation={panel.orientation}
           onToggle={() => setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), show: true } }))}
           onOrientation={(orientation) => setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), orientation } }))} />
       </div>}
-      {panel.show && <AgentSidebar onCreate={async (kind, projectId, shell) => {
+      {agentsPresent && <div className="wall-agents-presence" data-orientation={panel.orientation} data-panel-open={panel.show} inert={!panel.show} aria-hidden={!panel.show}><AgentSidebar onCreate={async (kind, projectId, shell) => {
         const id = kind === 'terminal' ? await newTerminal(projectId, shell) : await newChat({ kind: 'chat', chatType: kind === 'image' ? 'image' : 'multimodal' }, projectId);
         await addFromToolbar(kind === 'terminal' ? 'terminal' : 'chat', id, true);
         setCompletedId(null);
@@ -579,7 +580,7 @@ export function CommandCenterView() {
       }} onOpenTerminal={(id) => { setCompletedId(null); void addFromToolbar('terminal', id); }}
         orientation={panel.orientation}
         onOrientation={(orientation) => setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), orientation } }))}
-        onClosePanel={() => setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), show: false } }))} />}
+        onClosePanel={() => setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), show: false } }))} /></div>}
       <div className="wall-column">
       {!completedId && wall.layout.mode !== 'focus' && wall.composer.side === 'top' && composerRow}
       {completedId ? <div className="panel panel-ring flex min-h-0 flex-1 flex-col overflow-hidden"><button className="btn btn-ghost self-start" onClick={() => setCompletedId(null)}>Back to active agents</button><ChatPane key={completedId} sessionId={completedId} readOnly /></div> : <CommandWall
