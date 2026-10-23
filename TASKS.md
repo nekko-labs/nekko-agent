@@ -2205,3 +2205,6 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [x] **T198a** App icon on iPhone and Watch: the brand-refresh gradient tile (`apps/ios/App/Assets.xcassets/AppIcon.appiconset/icon.svg`, from `apps/desktop/build/icon.svg` without its rounded clip). Done: 2026-10-23
 - [x] **T198b** Opening animation: `Splash.swift` plays the desktop splash from `SplashCells.swift` (generated alongside `splashCells.ts`); lavender launch screen; Reduce Motion fades; `-splash NO` for UI tests. Done: 2026-10-23
 - [x] **T198c** UI test: Forget and Rename on the Computers screen (`ComputersTests`). Done: 2026-10-23
+
+### T199: Forget a computer where you look for it (2026-10-23) · [spec](SPEC.md)
+- [x] **T199a** iPhone: the computer menu's entries open Connect / Forget…; a tap on a row in Computers opens Connect, Rename, Open at launch, Forget…; one shared Forget confirmation (`forgetDialog`). Test: `ComputersTests.testRenameAndForgetAComputer`. Done: 2026-10-23
