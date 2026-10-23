@@ -25,6 +25,13 @@ describe('Claude Agent', () => {
     expect(html).not.toContain('<input');
   });
 
+  it('names a second account\'s own Claude Code folder, still with no credential field', () => {
+    const html = renderToStaticMarkup(<ClaudeAgentSetup onSave={() => {}} saving={false} initialAccount="Work (Acme)" />);
+    expect(html).toContain('aria-checked="true"');
+    expect(html).toContain('~/.claude-work-acme');
+    expect(html).not.toContain('type="password"');
+  });
+
   it('names how Claude Code is signed in, in plain words', () => {
     const base = { installed: true as const, version: '2.1.284', loggedIn: true as const };
     expect(claudeAuthLabel({ ...base, authMethod: 'api_key', auth: 'api_key' })).toBe('an Anthropic API key');

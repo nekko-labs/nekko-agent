@@ -11,6 +11,8 @@ To use Claude in Nekko Agent:
 - **Claude with an API key** - Add an Anthropic provider with your own Console API key. Every Nekko Agent feature works, billed per token to your Anthropic account.
 - **Claude Agent** (coming with the same release) - Nekko Agent runs the Claude Code you already have installed. You sign in inside Claude Code itself, with your plan, an API key or a cloud account; Nekko Agent never sees that sign-in and never reads Claude Code's credentials.
 
+You can add more than one Claude Agent, each signed in to a different Claude Code account. See [Accounts and switching](accounts.md) for how, and for what Anthropic's terms allow with several Claude accounts.
+
 ## How it works
 
 The OAuth service in the engine daemon (`crates/nekkod/src/oauth.rs`) runs the sign-in flow:
@@ -23,7 +25,7 @@ The daemon keeps the actual tokens in `tokens.json` inside the data directory. A
 
 ## More than one account
 
-You can sign in more than one ChatGPT plan, for example a personal plan and a work one. Each gets its own provider, its own token and its own usage limits. To tell them apart, the app shows the email each one is signed in as next to its name, as in `ChatGPT · you@example.com`, in the model picker, the Utilization panel and the Capacity list.
+The model picker switches a chat between your accounts in one click; see [Accounts and switching](accounts.md). You can sign in more than one ChatGPT plan, for example a personal plan and a work one. Each gets its own provider, its own token and its own usage limits. To tell them apart, the app shows the email each one is signed in as next to its name, as in `ChatGPT · you@example.com`, in the model picker, the Utilization panel and the Capacity list.
 
 The email comes from the ChatGPT `id_token`, stays in `tokens.json` next to the token, and is not part of a settings export. A plan signed in before this was added shows no email until you sign it in again. API keys and OpenRouter keys carry no email, so they show just the provider name.
 

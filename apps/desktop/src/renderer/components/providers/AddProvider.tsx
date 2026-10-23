@@ -5,7 +5,7 @@ import { useStore } from '../../store.js';
 import { SubscriptionSignIn } from '../SubscriptionSignIn.js';
 import { ProviderChoices } from './ProviderChoices.js';
 import { CheckIcon } from '../../icons.js';
-import { ClaudeAgentSetup } from '../claude/ClaudeAgent.js';
+import { ClaudeAgentSetup, type ClaudeAgentAccount } from '../claude/ClaudeAgent.js';
 
 /** Provider kinds offered by the generic add form, local servers first. */
 export const ADD_PROVIDER_KINDS: ProviderKind[] = [
@@ -206,11 +206,19 @@ export function AddProvider({
 
   // Claude Agent has nothing to test from here: its setup panel reads Claude
   // Code's own status, and Nekko never holds a credential for it.
-  const saveClaudeAgent = async () => {
+  const saveClaudeAgent = async ({ account, label: accountLabel }: ClaudeAgentAccount) => {
     setTesting(true);
     try {
-      await window.nekko.saveProvider({ id: `claude-code-${Date.now().toString(36)}`, kind: 'claude-code', label: label || PROVIDER_DEFAULTS['claude-code'].label, baseUrl: '', enabled: true });
-      pushToast('success', 'Claude Agent added.');
+      const base = label || PROVIDER_DEFAULTS['claude-code'].label;
+      await window.nekko.saveProvider({
+        id: `claude-code-${Date.now().toString(36)}`,
+        kind: 'claude-code',
+        label: account ? `${base} · ${accountLabel || account}` : base,
+        baseUrl: '',
+        enabled: true,
+        ...(account ? { claudeCode: { account } } : {}),
+      });
+      pushToast('success', account ? `Claude Agent (${accountLabel || account}) added.` : 'Claude Agent added.');
       onDone();
     } catch (error) {
       setResult({ ok: false, message: `Could not save connection: ${String(error)}` });
@@ -237,7 +245,7 @@ export function AddProvider({
         {!fixedKind && (
           <div className="col-span-2"><ProviderChoices value={kind} onPick={pick} /></div>
         )}
-        {kind === 'claude-code' ? <ClaudeAgentSetup onSave={() => void saveClaudeAgent()} saving={testing} /> : <>
+        {kind === 'claude-code' ? <ClaudeAgentSetup onSave={(a) => void saveClaudeAgent(a)} saving={testing} /> : <>
         <details className="col-span-2">
           <summary className="cursor-pointer text-[12px] text-ink-soft">Connection settings{ oauthProvider ? ' (optional)' : ' — server address and name'}</summary>
           <div className="mt-3 grid grid-cols-2 gap-3">

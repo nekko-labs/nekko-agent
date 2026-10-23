@@ -43,6 +43,11 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://nekkoagent.com/docs/accounts</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://nekkoagent.com/docs/usage-limits</loc>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
