@@ -108,6 +108,8 @@ export const IpcChannels = {
 
   machineReadiness: 'machine:readiness',
   machineProfile: 'machine:profile',
+  /** One phone-safe read for a computer's page: version, hardware, live stats, the model server (2026-10-24). */
+  machineSummary: 'machine:summary',
   machineRecommendations: 'machine:recommendations',
   machineDismissNudge: 'machine:dismissNudge',
   gpuStats: 'gpu:stats',

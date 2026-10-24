@@ -7,6 +7,8 @@ enum Route: Hashable {
     case chat(String)
     case newChat
     case computers
+    /// One paired computer's page: round trip, models, providers, hardware, connection.
+    case computer(String)
     case settings
     case pair
     case connection
@@ -128,6 +130,7 @@ struct RootView: View {
         case .chat(let id): ChatView(sessionId: id)
         case .newChat: NewChatView(path: $path, opened: { id in open(.chat(id)) })
         case .computers: ComputersView()
+        case .computer(let id): ComputerDetailView(computerId: id)
         case .settings: SettingsView()
         case .pair: PairView { path.removeAll() }
         case .connection: ConnectionView()

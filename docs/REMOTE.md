@@ -65,6 +65,12 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > counts, a glyph beside each chat for what it is doing, and the computer as a pill above the
 > list that opens the computer menu.
 >
+> Tapping a computer in **Computers** opens its page: the round trip the phone measures (with a
+> sparkline), the model server and its loaded models, uptime, today's spend, the models of every
+> enabled provider, the providers, the hardware (chip, memory, GPUs with temperatures, backends,
+> free disk) and the connection. The computer sends this as one read, `machine:summary`, built
+> without paths or addresses; an older computer says it cannot.
+>
 > The Android app's **Settings** also has a **Computers** row, which opens the list of paired
 > computers (rename, switch, forget, pair another), and an **About** section with the installed
 > version and the open-source licenses of the app and the libraries it ships.
