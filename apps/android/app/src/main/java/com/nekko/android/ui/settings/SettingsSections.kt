@@ -35,5 +35,6 @@ val SettingsSections: List<SettingsSection> = listOf(
     { PcSettingsSection(it) },
     { ThisComputerSection(it) },
     { ComputersSection(it) },
+    { FeedbackSection(it) },
     { AboutSection(it) },
 )

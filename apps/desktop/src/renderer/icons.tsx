@@ -27,6 +27,10 @@ export const MoneyIcon = (p: P) => (
 export const ChatIcon = (p: P) => (
   <S {...p}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></S>
 );
+/** A speech bubble with a mark: Send feedback. */
+export const FeedbackIcon = (p: P) => (
+  <S {...p}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /><path d="M12 7v4M12 14h.01" /></S>
+);
 export const FolderIcon = (p: P) => (
   <S {...p}><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></S>
 );

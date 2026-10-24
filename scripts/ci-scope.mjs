@@ -3,7 +3,7 @@
 // - pull_request (fast tier): `build`, plus the daemon on Linux and capture on
 //   Windows when the PR touches what they test. Feedback in about 8 minutes.
 //   The `ci:macos` / `ci:perf` labels opt a PR into those jobs (labels are read
-//   when a run starts: add the label, then push or dispatch).
+//   when a run starts; adding one re-runs CI).
 // - merge_group (queue tier): what must hold before anything reaches main. Adds
 //   the Windows daemon and the speed contract, path-gated like the PR tier. A
 //   group's file list is its diff against main, so a skipped job is one that no
