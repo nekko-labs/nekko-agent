@@ -741,7 +741,7 @@ public final class CloudSync {
 
         public static func from(_ v: JSONValue?) -> MachineScope {
             MachineScope(repos: (v?["repos"]?.array ?? []).compactMap(\.string),
-                         privacyShield: v?["privacyShield"]?.bool ?? true, memory: v?.flag("memory"), syncBack: v?["syncBack"]?.bool ?? true)
+                         privacyShield: v?["privacyShield"]?.bool ?? true, memory: v?.flag("memory") ?? false, syncBack: v?["syncBack"]?.bool ?? true)
         }
 
         public var json: JSONValue {
@@ -753,7 +753,7 @@ public final class CloudSync {
     /// The relay Nekko Cloud's machines meet the phone on.
     public private(set) var machinesRelay: String?
     /// Machine id → the paired computer's id on this iPhone (kept in the Keychain beside the token).
-    public private(set) var machineLinks: [String: String] = Self.decodeLinks(nil)
+    public private(set) var machineLinks: [String: String] = [:]
 
     private static func decodeLinks(_ raw: String?) -> [String: String] {
         guard let raw, let v = try? JSONValue.parse(raw), let o = v.object else { return [:] }
@@ -787,7 +787,7 @@ public final class CloudSync {
     public func createMachine(name: String, region: String, scope: MachineScope) async throws -> (machine: Machine, link: PairingLink) {
         let body: JSONValue = .object(["name": .string(name), "region": .string(region), "scope": scope.json])
         let v = try await request("POST", path("/v1/machines"), json: body, token: token())
-        guard let m = Machine.from(v["machine"]), let raw = v.str("pairingLink"), let link = PairingLink.parse(raw) else {
+        guard let m = Machine.from(v["machine"]), let raw = v.str("pairingLink"), let link = Pairing.parse(raw) else {
             throw CloudError(message: "Nekko Cloud didn’t answer with a machine to pair.")
         }
         machines.append(m)
