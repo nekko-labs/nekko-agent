@@ -93,3 +93,11 @@ describe('model chip name priority', () => {
     expect(out).toContain('ctl-caret shrink-0');
   });
 });
+
+it('renders four accessible icon filters and disables Fusion when Auto is not allowed', () => {
+  const html = renderToStaticMarkup(<ModelPicker expanded open providers={[]} providerId={null} modelId={null} models={[]} allowAuto={false} onOpenChange={() => {}} onProvider={() => {}} onModel={() => {}} />);
+  expect(html).toContain('aria-label="Model source"');
+  for (const label of ['All', 'Fusion', 'Cloud', 'Local']) expect(html).toContain(`</svg>${label}</button>`);
+  expect(html).toMatch(/disabled="" title="Auto routing is not available here"/);
+  expect(html).toContain('aria-pressed="true"');
+});

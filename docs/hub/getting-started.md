@@ -130,3 +130,11 @@ Hover over the sidebar **+** to choose **Agent**, **Create or Edit Photos and Vi
 When a tool needs permission, its approval card appears in the chat window, not the separate wall composer. An unrelated tool finishing does not dismiss that request. Read the exact input before choosing Approve or Deny.
 
 For an identified subagent, **Open ↗** beside its activity row opens the child chat using the existing workspace navigation. The chevron still expands task details separately. If the app cannot safely associate a delegation with one child (including older activity after a restart), use the Agent Monitor subagent list instead; the row does not guess which chat to open.
+
+### Quickly filter the model picker
+
+At the top of the model picker, use **All**, **Fusion**, **Cloud**, or **Local**.
+All shows every available model and Auto; Fusion shows Auto routing; Cloud and
+Local narrow the list to those providers, including favorites and your default.
+Filtering does not select a model or change the chat's mode. Fusion is unavailable
+where Auto routing is not supported, such as a fixed-model workflow step.
