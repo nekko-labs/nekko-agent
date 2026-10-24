@@ -92,19 +92,16 @@ jobs:
       - name: Validate plists
         run: |
           plutil -lint apps/ios/Info.plist apps/ios/Widgets/Info.plist apps/ios/App/NekkoNative.entitlements apps/ios/Widgets/NekkoWidgets.entitlements apps/ios/Share/Info.plist apps/ios/Share/NekkoShare.entitlements apps/ios/App/PrivacyInfo.xcprivacy apps/ios/Watch/PrivacyInfo.xcprivacy apps/ios/Watch/NekkoWatch.entitlements apps/ios/WatchWidgets/Info.plist apps/ios/WatchWidgets/NekkoWatchWidgets.entitlements apps/ios/WatchWidgets/PrivacyInfo.xcprivacy
-      # Booting takes 1-3 minutes; it runs behind the Xcode build below, and gives a
-      # fresh device time to settle before the UI tests (IO-17). Only beside the
-      # build: beside `swift test` and the cargo build it made them 4.7x and 2.7x
-      # slower (run 40132995453), and beside the relay itest nekkod never became
-      # ready (run 40136579251).
-      - name: Start the simulator booting
+      # Created, not booted: the build below needs its id. Booting it in the
+      # background slowed whatever ran beside it (`swift test` 4.7x, the cargo build
+      # 2.7x, the Xcode build 2.5x; nekkod failed to start beside the relay itest)
+      # and saved about 17 s overall (runs 40132995453, 40136579251, 40138086476).
+      - name: Create the simulator
         run: |
           RUNTIME=$(xcrun simctl list runtimes -j | ruby -rjson -e 'puts JSON.parse(STDIN.read)["runtimes"].select { |r| r["isAvailable"] && r["identifier"].include?("iOS") }.last.fetch("identifier")')
           TYPE=$(xcrun simctl list devicetypes -j | ruby -rjson -e 't = JSON.parse(STDIN.read)["devicetypes"].map { |d| d["identifier"] }; puts(t.select { |i| i =~ /iPhone-1[5-9]-Pro$/ }.last || t.select { |i| i.include?("iPhone") }.last)')
-          DEVICE=$(xcrun simctl create Nekko-CI "$TYPE" "$RUNTIME")
-          echo "DEVICE=$DEVICE" >> "$GITHUB_ENV"
-          nohup xcrun simctl boot "$DEVICE" > "$RUNNER_TEMP/boot.log" 2>&1 &
-      # One build for the bundle checks and every test run below: for the booting
+          echo "DEVICE=$(xcrun simctl create Nekko-CI "$TYPE" "$RUNTIME")" >> "$GITHUB_ENV"
+      # One build for the bundle checks and every test run below: for the test
       # device's architecture only, ad-hoc signed as the UI tests need.
       - name: Build the app and its tests for the simulator
         working-directory: apps/ios
@@ -143,7 +140,7 @@ jobs:
           set -euo pipefail
           mkdir -p evidence
           trap 'xcrun simctl shutdown "$DEVICE" || true; xcrun simctl delete "$DEVICE" || true; kill ${NEKKO_ITEST_PIDS:-} 2>/dev/null || true' EXIT
-          # Booted in the background since the job's start; bootstatus boots it if that failed.
+          xcrun simctl boot "$DEVICE"
           xcrun simctl bootstatus "$DEVICE" -b
           xcrun simctl status_bar "$DEVICE" override --time 9:41 --batteryState charged --batteryLevel 100 || true
           COMMON=(-project NekkoNative.xcodeproj -scheme NekkoNative -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="")
