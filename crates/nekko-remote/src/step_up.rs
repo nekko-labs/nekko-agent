@@ -9,7 +9,8 @@
 //!   signature }`, unpadded base64url): `clientDataJSON.type` is
 //!   `webauthn.get`, its challenge one this computer issued to this caller,
 //!   live and unused, its origin one `security.json` allows; the
-//!   authenticator data's rpIdHash is SHA-256 of the computer's rpId, user
+//!   authenticator data's rpIdHash is SHA-256 of the credential's own rpId
+//!   when it has one (registered from a browser), else the computer's; user
 //!   presence is set (user verification is recorded), the signature counter
 //!   rises unless both it and the stored one are zero (otherwise the
 //!   credential is flagged *possibly cloned*), and the DER ES256 signature
@@ -45,6 +46,11 @@ pub struct Limits {
     pub totp_lock_ms: f64,
     pub guarded_channels: Vec<String>,
     pub never_guarded: Vec<String>,
+    /// `STEP_UP_DESKTOP_GUARDED`: each desktop action class and its channels (SK-4).
+    pub desktop_guarded: Vec<(String, Vec<String>)>,
+    pub min_methods: usize,
+    pub recovery_count: usize,
+    pub recovery_length: usize,
 }
 
 impl Limits {
@@ -69,6 +75,21 @@ impl Limits {
             totp_lock_ms: n("/totp/lockMs"),
             guarded_channels: strings("/phoneGuarded/channels"),
             never_guarded: strings("/neverGuarded"),
+            desktop_guarded: v
+                .pointer("/desktopGuarded")
+                .and_then(Value::as_object)
+                .map(|m| {
+                    m.iter()
+                        .map(|(action, list)| {
+                            let list = list.as_array().map(|a| a.iter().filter_map(Value::as_str).map(String::from));
+                            (action.clone(), list.map(Iterator::collect).unwrap_or_default())
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
+            min_methods: n("/minMethods") as usize,
+            recovery_count: n("/recovery/count") as usize,
+            recovery_length: n("/recovery/length") as usize,
         }
     }
 }
@@ -216,6 +237,43 @@ pub fn base32_decode(text: &str) -> Option<Vec<u8>> {
     Some(out)
 }
 
+/// RFC 4648 base32, no padding (`base32Encode`).
+pub fn base32_encode(bytes: &[u8]) -> String {
+    let (mut bits, mut value, mut out) = (0u32, 0u32, String::new());
+    for b in bytes {
+        value = ((value << 8) | u32::from(*b)) & 0xffff;
+        bits += 8;
+        while bits >= 5 {
+            out.push(BASE32[((value >> (bits - 5)) & 31) as usize] as char);
+            bits -= 5;
+        }
+    }
+    if bits > 0 {
+        out.push(BASE32[((value << (5 - bits)) & 31) as usize] as char);
+    }
+    out
+}
+
+/// A fresh TOTP secret: 20 random bytes (160 bits, RFC 4226's advice), base32.
+pub fn new_totp_secret() -> String {
+    let mut buf = [0u8; 20];
+    getrandom::fill(&mut buf).expect("the OS random source is available");
+    base32_encode(&buf)
+}
+
+/// Fresh recovery codes (`newRecoveryCodes`): `xxxxx-xxxxx`, lowercase base32.
+pub fn new_recovery_codes(count: usize, length: usize) -> Vec<String> {
+    (0..count)
+        .map(|_| {
+            let mut buf = [0u8; 7];
+            getrandom::fill(&mut buf).expect("the OS random source is available");
+            let s: String = base32_encode(&buf).to_lowercase().chars().take(length).collect();
+            let half = s.len() / 2;
+            format!("{}-{}", &s[..half], &s[half..])
+        })
+        .collect()
+}
+
 /// The code for one time step (HOTP over the step, HMAC-SHA-1).
 pub fn totp_at(secret: &[u8], step: i64, digits: u32) -> String {
     use hmac::{Hmac, Mac};
@@ -300,6 +358,11 @@ pub fn check(state: &mut Value, issued: &mut [Issued], now: f64, step_up: Option
     }) else {
         return Outcome::invalid("credential");
     };
+    // A credential registered from a browser surface (the desktop's ceremony
+    // window, the Local Web UI) is bound to that page's host, since WebAuthn
+    // in a browser only accepts a domain as the relying-party id (SK-4): it
+    // records its own `rpId`, and the computer's applies to the rest.
+    let rp_id = cred.get("rpId").and_then(Value::as_str).map_or(rp_id, String::from);
     let Some(client) = std::str::from_utf8(&cdj).ok().and_then(|s| serde_json::from_str::<Value>(s).ok()) else {
         return Outcome::invalid("clientData");
     };
@@ -461,10 +524,57 @@ mod tests {
     }
 
     #[test]
+    fn base32_round_trips_and_new_codes_look_like_the_ts_ones() {
+        assert_eq!(base32_encode(b"12345678901234567890"), "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ");
+        assert_eq!(base32_decode(&base32_encode(&[0xff, 1, 2])).unwrap(), vec![0xff, 1, 2]);
+        assert_eq!(base32_decode(&new_totp_secret()).unwrap().len(), 20);
+        let codes = new_recovery_codes(10, 10);
+        assert_eq!(codes.len(), 10);
+        assert!(codes.iter().all(|c| c.len() == 11 && c.as_bytes()[5] == b'-'), "{codes:?}");
+    }
+
+    #[test]
     fn recovery_codes_work_once() {
         let mut s = json!({ "recoveryHashes": [hash_recovery_code("abcde-fghij")] });
         assert!(use_recovery_code(&mut s, "ABCDE FGHIJ"));
         assert!(!use_recovery_code(&mut s, "abcde-fghij"));
+    }
+
+    #[test]
+    fn a_credential_with_its_own_rp_id_is_checked_against_it() {
+        use p256::ecdsa::{DerSignature, SigningKey, signature::Signer};
+        let key = SigningKey::from_slice(&[5; 32]).unwrap();
+        let point = key.verifying_key().to_encoded_point(false);
+        let id = to_b64url(&[1; 16]);
+        let challenge = to_b64url(&[7; 18]);
+        let assert = |rp_id: &str, counter: u32| {
+            let mut auth = Sha256::digest(rp_id.as_bytes()).to_vec();
+            auth.push(0x05);
+            auth.extend(counter.to_be_bytes());
+            let cdj = json!({ "type": "webauthn.get", "challenge": challenge, "origin": "http://localhost:1440" })
+                .to_string();
+            let mut signed = auth.clone();
+            signed.extend_from_slice(&Sha256::digest(cdj.as_bytes()));
+            let sig: DerSignature = key.sign(&signed);
+            json!({ "credentialId": id, "authenticatorData": to_b64url(&auth),
+                "clientDataJSON": to_b64url(cdj.as_bytes()), "signature": to_b64url(sig.as_bytes()) })
+        };
+        let state = |rp: Option<&str>| {
+            let mut c = json!({ "id": id, "publicKey": to_b64url(point.as_bytes()), "counter": 0, "name": "Key",
+                "kind": "security-key", "addedAt": 1 });
+            if let Some(rp) = rp {
+                c["rpId"] = json!(rp);
+            }
+            json!({ "version": 1, "enabled": true, "rpId": "nekko-computer:x", "origins": ["http://localhost:1440"],
+                "credentials": [c], "totp": null, "recoveryHashes": [] })
+        };
+        let book = || vec![Issued { challenge: challenge.clone(), issued_at: 0.0, used: false }];
+        let ok = check(&mut state(Some("localhost")), &mut book(), 1.0, Some(&assert("localhost", 1)));
+        assert_eq!(ok.result, "ok");
+        let wrong = check(&mut state(Some("localhost")), &mut book(), 1.0, Some(&assert("nekko-computer:x", 1)));
+        assert_eq!(wrong.why, Some("rpId"), "the credential's own id, not the computer's");
+        let old = check(&mut state(None), &mut book(), 1.0, Some(&assert("nekko-computer:x", 1)));
+        assert_eq!(old.result, "ok", "without one, the computer's");
     }
 
     #[test]
