@@ -121,7 +121,7 @@ The managed edition. Everything the OSS app does, plus convenience that only a h
 5. **ZDR guarantee**: an always-available zero-data-retention mode (§4.4).
 6. Managed connectors (OAuth apps pre-registered for Gmail/Drive/Slack/etc., so users don't register their own).
 
-> Local execution stays local. Cloud never runs your shell/filesystem tools on our servers, those always execute on *your* paired machine (desktop or self-hosted agent). The cloud is a sync + relay + billing layer.
+> Local execution stays local. Cloud never runs tools on *your* paired machine's behalf anywhere but on that machine (desktop or self-hosted agent); for it, the cloud is a sync + relay + billing layer. `[revised 2026-10-24, decision 0017]` A **Nekko Cloud machine** is a separate, per-user sandboxed machine the phone pairs with like any computer; it runs tools in its own jail with a scope the phone sets (repositories, providers, Privacy Shield on, nothing from the user's computers by default). See [spec/phone/nekko-cloud-machines.md](spec/phone/nekko-cloud-machines.md).
 
 ### 4.2 Accounts & auth
 - Email + OAuth (Google/GitHub) sign-in. Sessions via short-lived JWT + refresh token.
