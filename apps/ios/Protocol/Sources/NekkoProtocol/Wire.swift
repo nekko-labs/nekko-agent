@@ -37,6 +37,10 @@ public enum Channels {
     public static let appInfo = "app:info"
     /// SK-2: a single-use step-up challenge (read class).
     public static let securityChallenge = "security:challenge"
+    /// SK-3 safety exits (agent class, never refused for Change off).
+    public static let appQuit = "app:quit"
+    public static let deviceSignOut = "device:signOut"
+    public static let remoteStop = "remote:stop"
     /// Names and descriptions only, never templates.
     public static let skillsRunnable = "skills:runnable"
     /// What the agent changed in a chat, as a capped read-only diff (`PhoneChanges`);
@@ -108,7 +112,7 @@ public enum Channels {
         sessionSetOptions, sessionDelete, voiceStatus, voiceTranscribe, chatSend, chatAbort, chatQueue,
         chatPending, chatAnswer, toolApprove, workspaceList, appInfo, skillsRunnable, changesList,
         chatEditQueued, sessionFork, tasksList, taskRunNow, workflowsList, workflowRun, prSessionList,
-        usageSummary, limitsGet, sessionWatches, machineSummary, monitorSummary, securityChallenge,
+        usageSummary, limitsGet, sessionWatches, machineSummary, monitorSummary, securityChallenge, appQuit, deviceSignOut, remoteStop,
         providersSealKey, providersSaveSealed, providersSetEnabled,
         workspaceGitStatus, gitDiff, gitLog, gitShow, gitBranches, gitCompare, prChecks, prDiff,
         gitStage, gitUnstage, gitCommit, gitCommitMessage, gitPush, gitSwitch, gitMergeAbort, prCreate, prAction,

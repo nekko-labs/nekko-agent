@@ -360,6 +360,10 @@ export const IpcChannels = {
   appInfo: 'app:info',
   /** SK-2: a single-use step-up challenge; from a phone the daemon's gate answers it (step-up.ts). */
   securityChallenge: 'security:challenge',
+  /** SK-3 safety exits, phone only: the daemon's phone gate answers them (phone-access.ts). */
+  appQuit: 'app:quit',
+  deviceSignOut: 'device:signOut',
+  remoteStop: 'remote:stop',
   // The Claude policy nekkod enforces, and why a feature is off (claude-policy.ts).
   claudePolicy: 'claude:policy',
   claudeCapability: 'claude:capability',

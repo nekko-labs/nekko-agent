@@ -580,5 +580,6 @@ async fn shutdown_signal(watch_stdin: bool, signals: &mut Signals) -> &'static s
     tokio::select! {
         _ = stdin_closed => "stdin closed",
         why = signals.next() => why,
+        _ = small_services::QUIT.notified() => "app:quit from a phone",
     }
 }

@@ -195,3 +195,74 @@ fn the_gate_reads_the_registry_and_writes_the_activity() {
     let err = ask("task:runNow", args.clone(), sign("task:runNow", &args, NOW as i64 + 2)).unwrap_err();
     assert_eq!(err, "Not allowed from a paired phone (device-unknown): task:runNow");
 }
+
+/// A link that remembers what the registry asked of it (SK-3).
+#[derive(Default)]
+struct Recorder {
+    said: Arc<Mutex<Vec<String>>>,
+}
+
+impl Link for Recorder {
+    fn connect(&self, _: &str, _: &str, _: &str, _: Verifier) -> Arc<dyn LinkHandle> {
+        self.said.lock().unwrap().push("connect".into());
+        Arc::new(Recorder { said: self.said.clone() })
+    }
+}
+
+impl LinkHandle for Recorder {
+    fn stop(&self) {
+        self.said.lock().unwrap().push("stop".into());
+    }
+    fn kick_device(&self, id: &str) {
+        self.said.lock().unwrap().push(format!("kick {id}"));
+    }
+    fn connected_devices(&self) -> Vec<String> {
+        vec!["phone-1".into(), "phone-2".into()]
+    }
+    fn is_online(&self) -> bool {
+        true
+    }
+    fn last_error(&self) -> Option<String> {
+        None
+    }
+}
+
+fn recorded() -> (tempfile::TempDir, Arc<RemoteService>, Arc<Mutex<Vec<String>>>) {
+    let (dir, _) = registry();
+    let link = Recorder::default();
+    let said = link.said.clone();
+    let random: Random = Arc::new(|b: &mut [u8]| b.fill(7));
+    let svc = RemoteService::new(dir.path(), random, Arc::new(|| NOW), Box::new(link));
+    svc.start_if_enabled();
+    (dir, svc, said)
+}
+
+#[test]
+fn signing_out_from_the_phone_revokes_and_kicks_it() {
+    let (dir, svc, said) = recorded();
+    svc.sign_out("phone-1").unwrap();
+    let d = &saved(&dir)["devices"][0];
+    assert_eq!(d["revoked"], json!(true));
+    assert_eq!(d["signedOutAt"].as_f64(), Some(NOW));
+    assert_eq!(*said.lock().unwrap(), ["connect", "kick phone-1"]);
+    assert!(svc.device("phone-1").is_none(), "denied as revoked from now on");
+}
+
+#[test]
+fn stopping_from_the_phone_turns_remote_off_and_says_who() {
+    let (dir, svc, said) = recorded();
+    svc.stop_remote("phone-1").unwrap();
+    assert_eq!(*said.lock().unwrap(), ["connect", "kick phone-1", "kick phone-2", "stop"]);
+    let cfg = saved(&dir);
+    assert_eq!(cfg["enabled"], json!(false));
+    assert_eq!(cfg["stoppedBy"]["deviceId"], "phone-1");
+    assert_eq!(cfg["stoppedBy"]["name"], "iPhone");
+    assert_eq!(cfg["stoppedBy"]["at"].as_f64(), Some(NOW));
+    let status = svc.route("remote:status", &[]).unwrap();
+    assert_eq!(status["enabled"], json!(false));
+    assert_eq!(status["stoppedBy"]["name"], "iPhone", "the desktop's banner reads it here");
+    // The desktop's switch turns it on again, and the banner goes.
+    svc.route("remote:enable", &[json!("wss://relay.example")]).unwrap();
+    assert!(saved(&dir).get("stoppedBy").is_none());
+    assert!(svc.route("remote:status", &[]).unwrap().get("stoppedBy").is_none());
+}

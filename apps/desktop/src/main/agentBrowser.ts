@@ -39,6 +39,8 @@ export interface ShellBridge {
   nativeWindow(): string | null;
   dialog(kind: ShellDialog, options: Record<string, unknown>): Promise<unknown>;
   quitForUpdate(): void;
+  /** The app's normal quit: `app:quit` from a phone the owner allowed to (SK-3, `quitFromPhone`). */
+  quit?(): void;
 }
 
 
@@ -276,6 +278,10 @@ export async function startAgentBrowser(options: {
       if (input.tool === 'pickFolder') {
         if (!options.pickFolder) throw new Error('No folder picker here.');
         reply(200, { path: await options.pickFolder() }); return;
+      }
+      if (input.tool === 'quit') {
+        if (!options.shell?.quit) throw new Error('No window shell here.');
+        options.shell.quit(); reply(200, { ok: true }); return;
       }
       if (input.tool === 'nativeWindow' || input.tool === 'dialog' || input.tool === 'quitForUpdate') {
         if (!options.shell) throw new Error('No window shell here.');

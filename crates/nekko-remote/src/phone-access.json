@@ -1,6 +1,7 @@
 {
  "channels": [
   "app:info",
+  "app:quit",
   "changes:list",
   "chat:abort",
   "chat:answer",
@@ -8,6 +9,7 @@
   "chat:pending",
   "chat:queue",
   "chat:send",
+  "device:signOut",
   "files:list",
   "files:read",
   "files:search",
@@ -39,6 +41,7 @@
   "providers:saveSealed",
   "providers:sealKey",
   "providers:setEnabled",
+  "remote:stop",
   "security:challenge",
   "session:create",
   "session:delete",
@@ -118,6 +121,7 @@
   ],
   "except": [
    "remote:status",
+   "remote:stop",
    "ssh:hosts",
    "ssh:open",
    "terminal:close",
@@ -186,6 +190,9 @@
   "terminal:signal"
  ],
  "agentChannels": [
+  "app:quit",
+  "device:signOut",
+  "remote:stop",
   "chat:abort",
   "chat:answer",
   "chat:editQueued",
@@ -200,6 +207,11 @@
   "tool:approve",
   "voice:transcribe",
   "workflow:run"
+ ],
+ "safetyExits": [
+  "app:quit",
+  "device:signOut",
+  "remote:stop"
  ],
  "openChannels": [
   "app:info"
