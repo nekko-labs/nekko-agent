@@ -38,15 +38,6 @@ jobs:
           [ -n "$x" ] && sudo xcode-select -s "$x/Contents/Developer"
           xcodebuild -version
           swift --version
-      # Booting takes 1-3 minutes; it runs behind the package tests and builds below,
-      # and gives a fresh device time to settle before the UI tests (IO-17).
-      - name: Start the simulator booting
-        run: |
-          RUNTIME=$(xcrun simctl list runtimes -j | ruby -rjson -e 'puts JSON.parse(STDIN.read)["runtimes"].select { |r| r["isAvailable"] && r["identifier"].include?("iOS") }.last.fetch("identifier")')
-          TYPE=$(xcrun simctl list devicetypes -j | ruby -rjson -e 't = JSON.parse(STDIN.read)["devicetypes"].map { |d| d["identifier"] }; puts(t.select { |i| i =~ /iPhone-1[5-9]-Pro$/ }.last || t.select { |i| i.include?("iPhone") }.last)')
-          DEVICE=$(xcrun simctl create Nekko-CI "$TYPE" "$RUNTIME")
-          echo "DEVICE=$DEVICE" >> "$GITHUB_ENV"
-          nohup xcrun simctl boot "$DEVICE" > "$RUNNER_TEMP/boot.log" 2>&1 &
       # Dark costs a second live journey (about 5 minutes), so a PR runs it only when
       # it changes colours (scripts/ios-theme-scope.mjs) or carries `ci:theme`.
       - name: Appearances to verify
@@ -77,6 +68,17 @@ jobs:
         with:
           shared-key: phone-itest
       - run: cargo build -p nekkod --locked
+      # Booting takes 1-3 minutes; it runs behind the itest and the Xcode build below,
+      # and gives a fresh device time to settle before the UI tests (IO-17). Not
+      # earlier: booting beside `swift test` and the cargo build made them 4.7x and
+      # 2.7x slower on the 3-core runner (run 40132995453).
+      - name: Start the simulator booting
+        run: |
+          RUNTIME=$(xcrun simctl list runtimes -j | ruby -rjson -e 'puts JSON.parse(STDIN.read)["runtimes"].select { |r| r["isAvailable"] && r["identifier"].include?("iOS") }.last.fetch("identifier")')
+          TYPE=$(xcrun simctl list devicetypes -j | ruby -rjson -e 't = JSON.parse(STDIN.read)["devicetypes"].map { |d| d["identifier"] }; puts(t.select { |i| i =~ /iPhone-1[5-9]-Pro$/ }.last || t.select { |i| i.include?("iPhone") }.last)')
+          DEVICE=$(xcrun simctl create Nekko-CI "$TYPE" "$RUNTIME")
+          echo "DEVICE=$DEVICE" >> "$GITHUB_ENV"
+          nohup xcrun simctl boot "$DEVICE" > "$RUNNER_TEMP/boot.log" 2>&1 &
       - name: Phone ↔ relay ↔ computer over URLSessionTransport
         run: apps/ios/scripts/itest.sh
       - name: Install XcodeGen
