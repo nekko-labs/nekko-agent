@@ -8,7 +8,7 @@ import { UpdateProgress, useUpdater } from '../components/UpdateBanner.js';
 import { ThemePresetPicker } from '../components/ThemePresetPicker.js';
 import { pixelWaveFor } from '../components/PixelWaveBackground.js';
 import { DEFAULT_SPEC_METHODOLOGY, SPEC_METHODOLOGIES, ORCHESTRATION_STRATEGIES, DEFAULT_ORCHESTRATION, MAX_OUTPUT_TOKENS_DEFAULT, MAX_OUTPUT_TOKENS_RANGE, clampMaxOutputTokens, ONBOARDING_VERSION, updateChecks, DEFAULT_TURN_WRAPPER } from '@nekko-agent/shared';
-import { GearIcon, PhoneIcon, ShieldIcon, SunIcon, TrashIcon, RobotIcon, WandIcon, WrenchIcon } from '../icons.js';
+import { GearIcon, PhoneIcon, ShieldIcon, SlidersIcon, SunIcon, TrashIcon, RobotIcon, WandIcon, WrenchIcon } from '../icons.js';
 import { VoiceSettings } from '../components/VoiceSettings.js';
 import { RemoteAccess } from '../components/RemoteAccess.js';
 import { SyncSettings } from '../components/cloud/SyncSettings.js';
@@ -22,6 +22,7 @@ import { SettingsSearch } from '../components/SettingsSearch.js';
 import { ProjectManagementToggles, PullRequestToggles } from '../components/WorkTrackingToggles.js';
 import { WallLayoutSettings } from './WallLayoutSettings.js';
 import { DesktopBehaviorSection, FunSection } from './DesktopBehaviorSections.js';
+import { StyleSection } from './StyleSection.js';
 
 const SANDBOX_OPTS: Array<{ value: SandboxMode; label: string; desc: string }> = [
   { value: 'workspace-jail', label: 'Workspace jail', desc: 'File access is confined to your added folders.' },
@@ -42,6 +43,7 @@ const CHAT_MODES: Array<{ value: ChatMode; label: string; desc: string }> = [
 export const SETTINGS_GROUPS = [
   { id: 'general', label: 'General', icon: SunIcon },
   { id: 'phone', label: 'Phone pairing', icon: PhoneIcon },
+  { id: 'style', label: 'Style', icon: SlidersIcon },
   { id: 'agents', label: 'Agents', icon: RobotIcon },
   { id: 'safety', label: 'Safety', icon: ShieldIcon },
   { id: 'tools', label: 'Tools', icon: WrenchIcon },
@@ -262,6 +264,9 @@ export function SettingsView() {
               <ErrorBoundary label="Remote access"><RemoteAccess /></ErrorBoundary>
               {/* Nekko Cloud sign-in and end-to-end encrypted sync */}
               <ErrorBoundary label="Sync"><SyncSettings /></ErrorBoundary>
+            </SettingsGroup>
+            <SettingsGroup id="style">
+              <ErrorBoundary label="Style"><StyleSection settings={settings} update={update} /></ErrorBoundary>
             </SettingsGroup>
             <SettingsGroup id="agents">
               {/* Chat modes */}

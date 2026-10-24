@@ -6,6 +6,15 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Universal fonts and Settings > Style (added 2026-10-24)
+
+Philip asked for the app's text to use the website's two fonts everywhere, and for a Style area to change font size and family, with an easy way to add fonts by dropping them in a folder. Spec: [Style](spec/desktop/style-fonts-and-text-size.md).
+
+- [x] **ST-1, Bundled website fonts (2026-10-24).** `@fontsource-variable/inter-tight` and `/jetbrains-mono` imported in `main.tsx`; `--font-sans` / `--font-mono` point at them and `body` reads `--font-sans`.
+- [x] **ST-2, Settings > Style (2026-10-24).** `StyleSection.tsx`: text size (`textScale`, root `zoom`), interface and code font (`fontSans`, `fontMono`), applied in `applyTheme`.
+- [x] **ST-3, Fonts folder (2026-10-24).** `fonts:list` in `crates/nekkod/src/settings.rs` (creates `<data>/fonts`, returns font files base64); `loadCustomFonts` registers them with `FontFace`; Open folder, Reload and docs link; [docs page](docs/fonts-and-text.md).
+- [ ] **ST-4, Packaged-build check** of the bundled fonts and the folder on macOS and Windows.
+
 ## iPhone languages, themes and New chat choices (added 2026-10-23)
 
 Philip asked for the phone to match the desktop's languages and themes (with a limited fall icon for Spooky) and for New chat to pick the effort and, for a local model, the computer. Spec: [iPhone languages, themes and New chat choices](spec/phone/iphone-languages-themes-and-new-chat-choices.md); issue #941.

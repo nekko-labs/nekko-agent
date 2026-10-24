@@ -176,6 +176,7 @@ export const IpcChannels = {
   sessionsPurgeArchived: 'sessions:purgeArchived',
   sessionFork: 'session:fork',
   settingsReset: 'settings:reset',
+  fontsList: 'fonts:list',
   dataWipe: 'data:wipe',
   toolsList: 'tools:list',
 
@@ -774,6 +775,8 @@ export interface NekkoApi {
   forkSession(id: string, beforeMessageId?: string): Promise<Session | null>;
   /** Reset all settings to defaults (keeps chats). */
   resetSettings(): Promise<AppSettings>;
+  /** The fonts folder (created if missing) and the font files in it, base64 (Settings > Style). */
+  listFonts(): Promise<{ dir: string; fonts: { family: string; file: string; data: string }[] }>;
   /** Delete everything: chats, settings, memory, and usage. */
   wipeAllData(): Promise<AppSettings>;
   listTools(): Promise<Array<{ name: string; description: string }>>;

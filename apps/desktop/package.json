@@ -31,6 +31,8 @@
     "test:browser": "node ../../scripts/build-agent-browser.mjs --dev && node --test ../../scripts/agent-browser-native.test.mjs && node scripts/browser-automation-smoke.mjs"
   },
   "dependencies": {
+    "@fontsource-variable/inter-tight": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
     "@nekko-agent/profile": "*",
     "@nekko-agent/shared": "*",
     "@xterm/addon-fit": "^0.11.0",
