@@ -9,7 +9,6 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | # | Decision | Status |
 | --- | --- | --- |
 | [0001](0001-split-the-spec-into-feature-files.md) | Split SPEC.md into feature files, AGENTS.md into rules and runbooks | accepted |
-| [0021](0021-opt-in-reports-sent-by-the-engine.md) | Opt-in usage and crash reports, sent by the engine with an allow-list and scrubbing; no PostHog SDK | accepted |
 | [0002](0002-bundled-model-feed-with-measured-calibration.md) | Recommend models from a bundled feed, with speeds calibrated on measurements | accepted |
 | [0003](0003-size-the-kv-cache-per-layer-as-llama-server-allocates.md) | Size the KV cache per layer, as llama-server allocates it | accepted |
 | [0003](0003-pseudonymize-private-values-at-the-model-client.md) | Pseudonymize private values at the model-client seam (Privacy Shield) | accepted |
@@ -30,3 +29,4 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | [0018](0018-the-computer-is-the-relying-party-for-step-up.md) | The computer is the relying party for hardware keys and step-up; safety exits are never guarded | proposed |
 | [0019](0019-folding-phones-get-panes-not-a-new-app.md) | Folding phones get posture-driven panes in the existing apps, not a tablet app or a device list | proposed |
 | [0020](0020-one-network-switch-enforced-in-the-engine.md) | One network switch for every connection, enforced in the engine; All connections off is offline except loopback | accepted |
+| [0021](0021-opt-in-reports-sent-by-the-engine.md) | Opt-in usage and crash reports, sent by the engine with an allow-list and scrubbing; no PostHog SDK | accepted |
