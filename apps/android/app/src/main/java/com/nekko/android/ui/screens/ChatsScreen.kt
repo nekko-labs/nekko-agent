@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Computer
+import androidx.compose.material.icons.filled.Monitor
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Warning
@@ -66,6 +67,7 @@ import com.nekko.android.ui.components.Notice
 import com.nekko.android.ui.components.Pill
 import com.nekko.android.ui.components.SectionHeader
 import com.nekko.android.ui.components.Tone
+import com.nekko.android.ui.panes.PaneSlot
 import com.nekko.android.ui.security.rememberSafetyExits
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.android.util.ago
@@ -86,6 +88,10 @@ fun ChatsScreen(
     onPair: () -> Unit,
     onComputers: () -> Unit,
     onSettings: () -> Unit,
+    /** The Monitors row at the bottom of the list (the computer's hardware, running chats, what needs you). */
+    onMonitors: (() -> Unit)? = null,
+    /** Set when the list is one of an open folding phone's two panes: its header actions. */
+    pane: PaneSlot? = null,
 ) {
     val s by repo.state.collectAsStateWithLifecycle()
     val p = Nekko.palette
@@ -185,6 +191,7 @@ fun ChatsScreen(
                     IconButton(onClick = onSettings) {
                         Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = p.inkSoft)
                     }
+                    pane?.actions?.invoke(this)
                 },
             )
         },
@@ -281,6 +288,8 @@ fun ChatsScreen(
                             }
                         }
                     }
+                    // Monitors, as on an open folding phone's pane: so the feature is not foldable-only.
+                    if (onMonitors != null) item(key = "monitors") { MonitorsRow(onMonitors) }
                 }
             }
         }
@@ -347,6 +356,33 @@ private fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> U
                 null -> Unit
             }
         }
+    }
+}
+
+/** The last row of the list: the computer's Monitors. */
+@Composable
+private fun MonitorsRow(onClick: () -> Unit) {
+    val p = Nekko.palette
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 16.dp)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(
+            Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(p.surface2),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Filled.Monitor, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(16.dp))
+        }
+        Column(Modifier.weight(1f)) {
+            Text("Monitors", style = MaterialTheme.typography.titleMedium, color = p.ink)
+            Text("Hardware, running chats, what needs you", style = MaterialTheme.typography.bodySmall, color = p.inkSoft)
+        }
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = p.inkFaint)
     }
 }
 

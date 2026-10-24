@@ -34,6 +34,38 @@ import com.nekko.android.ui.screens.PairScreen
 import com.nekko.android.ui.screens.SettingsScreen
 import com.nekko.android.ui.settings.LicensesScreen
 import com.nekko.android.ui.settings.SettingsDeps
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import com.nekko.android.data.PaneLayouts
+import com.nekko.android.monitors.MonitorsViewModel
+import com.nekko.android.ui.panes.PaneChatChoice
+import com.nekko.android.ui.panes.PaneLabels
+import com.nekko.android.ui.panes.PaneSlot
+import com.nekko.android.ui.panes.PanesHost
+import com.nekko.android.ui.panes.PanesViewModel
+import com.nekko.android.ui.panes.WindowPosture
+import com.nekko.android.ui.panes.rememberWindowPosture
+import com.nekko.android.ui.screens.MonitorsScreen
+import com.nekko.android.ui.theme.Nekko
+import com.nekko.android.util.plainText
+import com.nekko.protocol.Activity
+import com.nekko.protocol.PaneContent
+import com.nekko.protocol.PaneMode
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.StateFlow
 
 object Routes {
@@ -44,6 +76,7 @@ object Routes {
     const val COMPUTERS = "computers"
     const val SETTINGS = "settings"
     const val LICENSES = "settings/licenses"
+    const val MONITORS = "monitors"
 
     fun chat(id: String) = "chat/${Uri.encode(id)}"
     fun pair(link: String? = null) = if (link == null) "pair" else "pair?link=${Uri.encode(link)}"
@@ -60,6 +93,30 @@ fun NekkoNavHost(
     onLinkHandled: () -> Unit,
     nav: NavHostController = rememberNavController(),
 ) {
+    // Folding phones: closed is today's one-column app; open shows two panes (PanesHost).
+    val window = rememberWindowPosture()
+    val mode = window.mode
+    val panes: PanesViewModel = viewModel(key = "panes") { PanesViewModel(PaneLayouts(phonePrefs)) }
+    // The panes follow the active computer; collected in an effect so composition never reads StateFlow.value.
+    LaunchedEffect(repo) { repo.state.map { it.activeId }.distinctUntilChanged().collect { panes.attach(it) } }
+    LaunchedEffect(mode) {
+        val was = panes.onMode(mode)
+        // Closing the phone returns to the one-column app on the pane that had the keyboard.
+        if (was != null && was != PaneMode.ONE && mode == PaneMode.ONE && nav.currentDestination?.route == Routes.CHATS) {
+            val l = panes.layout.value
+            when (val c = l[l.zoomed ?: l.focused]) {
+                is PaneContent.Chat -> c.id?.let { nav.navigate(Routes.chat(it)) }
+                PaneContent.Monitors -> nav.navigate(Routes.MONITORS)
+                PaneContent.Chats -> Unit
+            }
+        }
+    }
+    val paneLayout by panes.layout.collectAsStateWithLifecycle()
+    // A chat or Monitors that left both panes stops listening; one that only moved keeps its state.
+    LaunchedEffect(paneLayout.first.key, paneLayout.second.key) {
+        panes.stores.keepOnly(setOf(paneLayout.first.key, paneLayout.second.key))
+    }
+
     val link by incomingLink.collectAsStateWithLifecycle()
     LaunchedEffect(link) {
         when (val l = link) {
@@ -74,6 +131,10 @@ fun NekkoNavHost(
 
     NavHost(navController = nav, startDestination = Routes.CHATS) {
         composable(Routes.CHATS) {
+            if (mode != PaneMode.ONE) {
+                Panes(window, panes, repo, phonePrefs, shareInbox, nav)
+                return@composable
+            }
             ChatsScreen(
                 repo = repo,
                 onOpenChat = { nav.navigate(Routes.chat(it)) },
@@ -81,10 +142,35 @@ fun NekkoNavHost(
                 onPair = { nav.navigate(Routes.pair()) },
                 onComputers = { nav.navigate(Routes.COMPUTERS) },
                 onSettings = { nav.navigate(Routes.SETTINGS) },
+                onMonitors = { nav.navigate(Routes.MONITORS) },
             )
+        }
+        composable(Routes.MONITORS) {
+            if (mode != PaneMode.ONE) {
+                // Opened (or the phone unfolded) on Monitors: it joins the panes beside the chat.
+                LaunchedEffect(Unit) {
+                    panes.update { l ->
+                        if (l.first == PaneContent.Monitors || l.second == PaneContent.Monitors) l
+                        else l.replace(if (l[l.focused] is PaneContent.Chat) l.focused.other else l.focused, PaneContent.Monitors)
+                    }
+                    nav.onMain { backToChats() }
+                }
+                return@composable
+            }
+            val vm = viewModel(key = "monitors") { MonitorsViewModel(repo) }
+            MonitorsScreen(vm = vm, repo = repo, onOpenChat = { nav.navigate(Routes.chat(it)) }, onBack = { nav.popBackStack() })
         }
         composable(Routes.CHAT, arguments = listOf(navArgument("id") { type = NavType.StringType })) { entry ->
             val id = entry.arguments?.getString("id").orEmpty()
+            if (mode != PaneMode.ONE) {
+                // A chat opened from a link, New chat, or the closed phone as it unfolds: into a chat pane.
+                LaunchedEffect(id) {
+                    val running = repo.state.value.activity.keys
+                    panes.update(running) { it.open(id) }
+                    nav.onMain { backToChats() }
+                }
+                return@composable
+            }
             val context = LocalContext.current
             val vm = viewModel(key = "chat:$id") { ChatViewModel(id, repo, AndroidMic(context), phonePrefs) }
             // Text shared into a chat that was just created; taken once, never sent by itself.
@@ -142,6 +228,118 @@ fun NekkoNavHost(
                 onBack = { nav.popBackStack() },
                 onPair = { nav.navigate(Routes.pair()) },
             )
+        }
+    }
+}
+
+/**
+ * The open folding phone's two panes (spec/phone/folding-phones-two-chats-and-monitors.md):
+ * each pane holds the chat list, Monitors or a chat, the same screens as the closed
+ * phone with the pane's header actions added. Two chat panes are two ChatViewModels,
+ * each with its own ChatController, on the one connection the repository holds.
+ */
+@Composable
+private fun Panes(
+    window: WindowPosture,
+    panes: PanesViewModel,
+    repo: ComputersRepository,
+    phonePrefs: PhonePrefs,
+    shareInbox: ShareInbox,
+    nav: NavHostController,
+) {
+    val layout by panes.layout.collectAsStateWithLifecycle()
+    val tip by panes.tip.collectAsStateWithLifecycle()
+    val s by repo.state.collectAsStateWithLifecycle()
+    val noteDismissed by phonePrefs.flow(PaneLayouts.FOLDABLE_NOTE_DISMISSED).collectAsStateWithLifecycle()
+    val dictationOn by phonePrefs.flow(Dictation.ENABLED).collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val running = s.activity.keys
+    val waiting = remember(s.activity) { s.activity.filterValues { it == Activity.NEEDS_YOU }.keys }
+    val titles = remember(s.summaries) { s.summaries.associate { it.id to plainText(it.title).ifEmpty { "New chat" } } }
+    val chats = remember(s.summaries) {
+        s.summaries.filter { it.archivedAt == null }.sortedByDescending { it.updatedAt }.map { PaneChatChoice(it.id, titles.getValue(it.id)) }
+    }
+    val labels = remember(titles) {
+        PaneLabels { c ->
+            when (c) {
+                PaneContent.Chats -> "Chats"
+                PaneContent.Monitors -> "Monitors"
+                is PaneContent.Chat -> c.id?.let(titles::get) ?: "Chat"
+            }
+        }
+    }
+    PanesHost(
+        window = window,
+        layout = layout,
+        onChange = { change -> panes.update(running, change) },
+        labels = labels,
+        chats = chats,
+        waiting = waiting,
+        tip = tip,
+        onTakeTip = panes::takeTip,
+        onDismissTip = panes::dismissTip,
+        noteDismissed = noteDismissed,
+        onDismissNote = { phonePrefs.set(PaneLayouts.FOLDABLE_NOTE_DISMISSED, true) },
+    ) { slot ->
+        when (val c = slot.content) {
+            PaneContent.Chats -> ChatsScreen(
+                repo = repo,
+                onOpenChat = slot.open,
+                onNewChat = { nav.navigate(Routes.NEW) },
+                onPair = { nav.navigate(Routes.pair()) },
+                onComputers = { nav.navigate(Routes.COMPUTERS) },
+                onSettings = { nav.navigate(Routes.SETTINGS) },
+                onMonitors = { panes.update(running) { l -> if (l[slot.side.other] == PaneContent.Monitors) l else l.replace(slot.side.other, PaneContent.Monitors) } },
+                pane = slot,
+            )
+            PaneContent.Monitors -> {
+                val vm = viewModel(viewModelStoreOwner = panes.stores.owner(c.key), key = c.key) { MonitorsViewModel(repo) }
+                MonitorsScreen(vm = vm, repo = repo, onOpenChat = slot.open, pane = slot)
+            }
+            is PaneContent.Chat -> {
+                val id = c.id
+                if (id == null) {
+                    EmptyChatPane(slot, onNewChat = { nav.navigate(Routes.NEW) })
+                } else {
+                    val vm = viewModel(viewModelStoreOwner = panes.stores.owner(c.key), key = c.key) {
+                        ChatViewModel(id, repo, AndroidMic(context), phonePrefs)
+                    }
+                    // Text shared into a chat that was just created; taken once, never sent by itself.
+                    val draft = remember(id) { shareInbox.takeDraft(id) }
+                    ChatScreen(vm = vm, initialDraft = draft, dictationOn = dictationOn, onBack = slot.back, pane = slot)
+                }
+            }
+        }
+    }
+}
+
+/** A chat pane with nothing picked yet: say how to fill it. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EmptyChatPane(slot: PaneSlot, onNewChat: () -> Unit) {
+    val p = Nekko.palette
+    Scaffold(
+        containerColor = p.paper,
+        topBar = {
+            TopAppBar(
+                title = { Text("Chat", style = MaterialTheme.typography.titleMedium) },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
+                actions = slot.actions,
+            )
+        },
+    ) { padding ->
+        Column(
+            Modifier.fillMaxSize().padding(padding).padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                "Open a chat from the list, or pick one with Replace with… above.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = p.inkSoft,
+                textAlign = TextAlign.Center,
+            )
+            OutlinedButton(onClick = onNewChat) { Text("New chat") }
         }
     }
 }
