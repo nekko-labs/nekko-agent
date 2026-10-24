@@ -10,6 +10,7 @@ struct ComputerDetailView: View {
     let computerId: String
     @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
+    @Environment(CloudSync.self) private var cloud
     @Environment(\.palette) private var palette
     @State private var model: MachineModel?
     @State private var renaming = false
@@ -98,6 +99,9 @@ struct ComputerDetailView: View {
                     if !s.backends.isEmpty { LabeledContent("Backends", value: s.backends.joined(separator: ", ")) }
                     if let free = s.diskFreeBytes { LabeledContent("Free for models", value: bytes(free)) }
                 } header: { SectionTitle("Hardware") }
+            }
+            if let machine = cloud.machine(forComputer: computerId) {
+                CloudMachineSections(machine: machine, computerId: computerId)
             }
             Section {
                 NavigationLink(value: Route.connection) {
@@ -456,6 +460,94 @@ struct AddProviderSheet: View {
                 Haptics.tap()
                 await done()
             }
+        }
+    }
+}
+
+/// A Nekko Cloud machine's own sections on its computer page: the machine,
+/// and what the cloud may see (decision 0017), each change a call to Nekko Cloud.
+struct CloudMachineSections: View {
+    let machine: CloudSync.Machine
+    let computerId: String
+    @Environment(CloudSync.self) private var cloud
+    @Environment(ComputersStore.self) private var store
+    @Environment(\.palette) private var palette
+    @Environment(\.dismiss) private var dismiss
+    @State private var repo = ""
+    @State private var busy = false
+    @State private var error: String?
+    @State private var confirmDelete = false
+
+    var body: some View {
+        Section {
+            LabeledContent("State", value: machine.state.capitalized)
+            LabeledContent("Region", value: machine.region.uppercased())
+            LabeledContent("Hours this month", value: "\(machine.hoursUsed.formatted(.number.precision(.fractionLength(1)))) of \(Int(machine.hoursIncluded))")
+            LabeledContent("Sandbox", value: "Jailed · no LAN · stops when idle")
+            if machine.state == "running" {
+                Button { run { try await cloud.stopMachine(machine) } } label: { Label("Stop", systemImage: "stop.circle") }.disabled(busy)
+            } else {
+                Button { run { try await cloud.startMachine(machine); store.connect(computerId) } } label: { Label("Start", systemImage: "play.circle") }.disabled(busy)
+            }
+        } header: { SectionTitle("Nekko Cloud machine") } footer: {
+            Text("Stopping keeps its disk; the chat stays readable from the synced copy.").foregroundStyle(palette.inkSoft)
+        }
+        Section {
+            ForEach(machine.scope.repos, id: \.self) { r in
+                Text(r).font(.body.monospaced()).foregroundStyle(palette.ink)
+                    .swipeActions { Button(role: .destructive) { setScope { $0.repos.removeAll { $0 == r } } } label: { Label("Remove", systemImage: "trash") } }
+            }
+            HStack {
+                TextField("owner/repo", text: $repo).autocorrectionDisabled().textInputAutocapitalization(.never).font(.body.monospaced())
+                    .accessibilityIdentifier("cloud.repo")
+                Button("Allow") {
+                    let r = repo.trimmingCharacters(in: .whitespaces)
+                    guard r.contains("/") else { return }
+                    setScope { if !$0.repos.contains(r) { $0.repos.append(r) } }
+                    repo = ""
+                }
+                .disabled(busy || !repo.contains("/"))
+            }
+            Toggle("Privacy Shield on every cloud model request", isOn: Binding(get: { machine.scope.privacyShield }, set: { v in setScope { $0.privacyShield = v } }))
+                .disabled(busy)
+            Toggle("Memory, rules and prompts from my computers", isOn: Binding(get: { machine.scope.memory }, set: { v in setScope { $0.memory = v } }))
+                .disabled(busy)
+            Toggle("Sync chats back to my account", isOn: Binding(get: { machine.scope.syncBack }, set: { v in setScope { $0.syncBack = v } }))
+                .disabled(busy)
+            if let error { Text(error).font(.footnote).foregroundStyle(palette.danger) }
+        } header: { SectionTitle("What the cloud may see") } footer: {
+            Text("Only what is listed here reaches the machine: these repositories, your own provider keys (sealed to it), and nothing from your computers unless you turn it on. A change applies when the machine next starts.")
+                .foregroundStyle(palette.inkSoft)
+        }
+        Section {
+            Button(role: .destructive) { confirmDelete = true } label: { Label("Stop and delete this machine", systemImage: "trash") }
+                .disabled(busy)
+                .confirmationDialog("Delete this machine?", isPresented: $confirmDelete, titleVisibility: .visible) {
+                    Button("Delete", role: .destructive) {
+                        run {
+                            try await cloud.deleteMachine(machine)
+                            store.forget(computerId)
+                            dismiss()
+                        }
+                    }
+                } message: {
+                    Text("Its disk and its pairing go with it. Synced chats stay on your account.")
+                }
+        }
+    }
+
+    private func setScope(_ change: (inout CloudSync.MachineScope) -> Void) {
+        var scope = machine.scope
+        change(&scope)
+        run { try await cloud.setScope(machine, scope) }
+    }
+
+    private func run(_ work: @escaping () async throws -> Void) {
+        busy = true
+        error = nil
+        Task {
+            do { try await work() } catch { self.error = error.localizedDescription }
+            busy = false
         }
     }
 }

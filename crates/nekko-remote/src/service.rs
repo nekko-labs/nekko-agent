@@ -321,8 +321,22 @@ impl RemoteService {
     }
 
     pub fn pair(&self) -> Value {
-        let grant =
-            Grant { code: hello::new_pairing_code(&self.random, 8), expires_at: (self.clock)() + PAIRING_TTL_MS };
+        self.pair_with(&Value::Null)
+    }
+
+    /// `remote:pair [code]`: a one-time pairing code, random unless the caller
+    /// brings one (a Nekko Cloud machine's, minted by Nekko Cloud and handed to
+    /// the phone in its pairing link). A preset code must be 8 to 16 characters
+    /// of the pairing alphabet; anything else is ignored and a random one is made.
+    pub fn pair_with(&self, preset: &Value) -> Value {
+        let preset = preset
+            .as_str()
+            .filter(|c| (8..=16).contains(&c.len()) && c.bytes().all(|b| b.is_ascii_uppercase() || b.is_ascii_digit()));
+        let code = match preset {
+            Some(c) => c.to_string(),
+            None => hello::new_pairing_code(&self.random, 8),
+        };
+        let grant = Grant { code, expires_at: (self.clock)() + PAIRING_TTL_MS };
         let v = grant.value();
         lock(&self.state).grant = Some(grant);
         v
@@ -479,7 +493,7 @@ impl RemoteService {
             "remote:disable" => self.disable(),
             "remote:status" => Ok(self.status()),
             "remote:pairing" => Ok(self.pairing()),
-            "remote:pair" => Ok(self.pair()),
+            "remote:pair" => Ok(self.pair_with(arg(0))),
             "remote:devices" => Ok(self.devices()),
             "remote:revoke" => self.revoke(arg(0)),
             "remote:rename" => self.rename(arg(0), arg(1)),
@@ -633,4 +647,25 @@ pub fn write_json_atomic(path: &Path, value: &Value) -> std::io::Result<()> {
     }
     ensure_private(path);
     Ok(())
+}
+
+#[cfg(test)]
+mod pair_tests {
+    use super::*;
+
+    #[test]
+    fn a_preset_pairing_code_is_kept_only_when_it_fits_the_alphabet() {
+        let keep = |v: &Value| {
+            v.as_str()
+                .filter(|c| {
+                    (8..=16).contains(&c.len()) && c.bytes().all(|b| b.is_ascii_uppercase() || b.is_ascii_digit())
+                })
+                .map(str::to_string)
+        };
+        assert_eq!(keep(&json!("ABCD2345")), Some("ABCD2345".into()));
+        assert_eq!(keep(&json!("abcd2345")), None, "lowercase is not the pairing alphabet");
+        assert_eq!(keep(&json!("SHORT")), None);
+        assert_eq!(keep(&json!("TOOLONGTOOLONGTOOLONG")), None);
+        assert_eq!(keep(&Value::Null), None);
+    }
 }
