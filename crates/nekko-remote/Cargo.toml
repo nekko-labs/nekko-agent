@@ -20,6 +20,9 @@ pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
 # Numbers must parse to the exact double JavaScript has, or a re-sealed frame differs.
 serde_json = { workspace = true, features = ["float_roundtrip"] }
 sha2 = "0.10"
+# TOTP (RFC 6238, HMAC-SHA-1) for step-up (SK-2).
+hmac = "0.12"
+sha1 = "0.10"
 # Verifies the ECDSA P-256 proof a phone signs for a Change action (IO-33).
 p256 = { version = "0.13", default-features = false, features = ["ecdsa", "std"] }
 tokio.workspace = true

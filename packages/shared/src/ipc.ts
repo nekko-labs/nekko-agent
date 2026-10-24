@@ -350,6 +350,8 @@ export const IpcChannels = {
   networkVisibilityStop: 'networkVisibility:stop',
 
   appInfo: 'app:info',
+  /** SK-2: a single-use step-up challenge; from a phone the daemon's gate answers it (step-up.ts). */
+  securityChallenge: 'security:challenge',
   // The Claude policy nekkod enforces, and why a feature is off (claude-policy.ts).
   claudePolicy: 'claude:policy',
   claudeCapability: 'claude:capability',

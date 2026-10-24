@@ -156,7 +156,11 @@ fn the_gate_reads_the_registry_and_writes_the_activity() {
         json!({ "ts": ts, "sig": b64(&sig.to_bytes()) })
     };
     let ask = |channel: &str, args: Value, proof: Value| {
-        rt.block_on(gated(PhoneCall { device_id: "phone-1".into(), proof: Some(proof) }, channel.into(), args))
+        rt.block_on(gated(
+            PhoneCall { device_id: "phone-1".into(), proof: Some(proof), step_up: None },
+            channel.into(),
+            args,
+        ))
     };
     // First Change: register the key (signed by it), then run.
     let key = json!([b64(k.verifying_key().to_encoded_point(false).as_bytes())]);

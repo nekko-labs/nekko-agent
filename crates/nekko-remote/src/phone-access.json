@@ -34,6 +34,7 @@
   "pr:diff",
   "pr:sessionList",
   "providers:list",
+  "security:challenge",
   "session:create",
   "session:delete",
   "session:fork",
@@ -155,7 +156,8 @@
   "logs:read",
   "ssh:hosts",
   "terminal:tail",
-  "terminals:list"
+  "terminals:list",
+  "security:challenge"
  ],
  "changeChannels": [
   "git:commit",
@@ -535,5 +537,65 @@
    "workflow"
   ]
  },
- "maxFrameBytes": 9437184
+ "maxFrameBytes": 9437184,
+ "stepUp": {
+  "challenge": {
+   "channel": "security:challenge",
+   "bytes": 18,
+   "ttlMs": 120000
+  },
+  "coverMs": 300000,
+  "clientType": "webauthn.get",
+  "totp": {
+   "periodS": 30,
+   "digits": 6,
+   "window": 1,
+   "algorithm": "SHA-1",
+   "maxWrong": 5,
+   "lockMs": 60000
+  },
+  "recovery": {
+   "count": 10,
+   "length": 10
+  },
+  "minMethods": 2,
+  "phoneGuarded": {
+   "channels": [
+    "session:setOptions",
+    "settings:update"
+   ]
+  },
+  "desktopGuarded": {
+   "modeRaise": [
+    "session:setOptions",
+    "settings:update"
+   ],
+   "remoteAccess": [
+    "remote:enable",
+    "remote:attach"
+   ],
+   "pairing": [
+    "remote:pair",
+    "remote:rotate"
+   ],
+   "phoneAccess": [
+    "remote:setAccess"
+   ],
+   "providerKeys": [
+    "providers:save",
+    "providers:remove",
+    "providers:importCliAuth",
+    "providers:revealKey"
+   ],
+   "stepUpOff": [
+    "security:disable",
+    "security:removeMethod"
+   ]
+  },
+  "neverGuarded": [
+   "app:quit",
+   "device:signOut",
+   "remote:stop"
+  ]
+ }
 }

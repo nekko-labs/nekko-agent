@@ -15,19 +15,17 @@
  * Uses WebCrypto only (browser and Node 20+), like `e2e.ts`.
  */
 
-import { PHONE_MODE_PROOF } from './phone-access.js';
-
 // ---- the guarded actions ----
 
 /**
  * A guarded action from a phone: raising a chat's mode or the default mode
- * (`PHONE_MODE_PROOF`: `session:setOptions` setting `mode`, `settings:update`
+ * (`PHONE_MODE_PROOF`, the same channels, held equal by a test: `session:setOptions` setting `mode`, `settings:update`
  * setting `defaultChatMode`, to a more permissive mode). The computer checks
  * the Change proof first, then the step-up, when `security.json` has
  * `enabled: true`. Every other phone channel keeps today's rules.
  */
 export const STEP_UP_PHONE_GUARDED = {
-  modeRaise: { channels: PHONE_MODE_PROOF.channels, keys: { 'session:setOptions': 'mode', 'settings:update': 'defaultChatMode' } },
+  modeRaise: { channels: ['session:setOptions', 'settings:update'], keys: { 'session:setOptions': 'mode', 'settings:update': 'defaultChatMode' } },
 } as const;
 
 /**
@@ -435,7 +433,8 @@ export async function checkStepUp(state: SecurityState, issued: StepUpIssued[], 
   }
   if (!ok) return out('step-up-invalid', { why: 'signature' });
   const counter = ((authData[33] << 24) >>> 0) + (authData[34] << 16) + (authData[35] << 8) + authData[36];
-  if (!(counter === 0 && cred.counter === 0) && counter <= cred.counter) {
+  const stored = typeof cred.counter === 'number' ? cred.counter : Infinity;
+  if (!(counter === 0 && stored === 0) && counter <= stored) {
     cred.cloned = true;
     return out('step-up-invalid', { why: 'counter', cloned: cred.id });
   }
