@@ -11,9 +11,12 @@ name: CI
 #
 # macOS runs on the schedule rather than per change: the Team plan runs 5 macOS
 # jobs at once across every workflow, and per-PR macOS jobs queued 50-100
-# minutes. `ci:macos` / `ci:perf` labels opt a single PR in.
+# minutes. `ci:macos` / `ci:perf` labels opt a single PR in; with `ci:macos`,
+# `gate` also waits for the macOS runs the label turns on in other workflows
+# (scripts/ci-label-gate.mjs). Adding a label re-runs CI so it takes effect.
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
   merge_group:
   schedule:
     - cron: '17 */6 * * *'
@@ -353,10 +356,16 @@ jobs:
   # the skipped ones were skipped on purpose, so branch protection and the merge
   # queue need not know which jobs a change runs. A scheduled run that fails
   # opens (or comments on) one `ci-scheduled` issue, so nobody has to watch it.
+  #
+  # With `ci:macos` it also waits (up to about 3 hours: macOS runners queue) for
+  # the label's runs in other workflows, so nothing queues a PR before they are
+  # green. In the queue it fails a group holding a draft, a `hold` PR, or a
+  # `ci:macos` PR without green runs, which ejects it (#1002).
   gate:
     needs: [scope, build, daemon, capture, perf]
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 190
     steps:
       - name: Every needed job passed
         env:
@@ -367,6 +376,23 @@ jobs:
             echo 'A required job failed or was cancelled.' >&2
             exit 1
           fi
+      - uses: actions/checkout@v7
+        if: github.event_name == 'merge_group' || contains(github.event.pull_request.labels.*.name, 'ci:macos')
+        with:
+          sparse-checkout: scripts
+      - name: The macOS runs ci:macos turned on passed
+        if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:macos')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/ci-label-gate.mjs pr --sha "$SHA"
+      - name: Every PR in the group is ready, not held, and its macOS runs passed
+        if: github.event_name == 'merge_group'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE: ${{ github.event.merge_group.base_sha }}
+          HEAD: ${{ github.event.merge_group.head_sha }}
+        run: node scripts/ci-label-gate.mjs queue --base "$BASE" --head "$HEAD"
       - name: File the scheduled failure
         if: failure() && github.event_name == 'schedule'
         env:
