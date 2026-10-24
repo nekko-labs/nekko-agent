@@ -57,6 +57,9 @@ mod remote_image;
 mod repository_review;
 mod resource_queue;
 mod routes;
+// The runner supervisor that calls into it lands with the VM pool (T211, T212).
+#[allow(dead_code)]
+mod runner;
 mod runtimes;
 mod sandbox;
 mod security;
