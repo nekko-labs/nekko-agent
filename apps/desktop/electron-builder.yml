@@ -93,6 +93,8 @@ mac:
     # Required for the QR pairing scanner (QrScanner.tsx → getUserMedia).
     # Without it macOS kills the process instead of prompting.
     NSCameraUsageDescription: Nekko Agent uses the camera to scan the pairing QR code shown by the Nekko Agent mobile app.
+    # Desktops (Spaces): switching sends Mission Control's shortcuts through System Events.
+    NSAppleEventsUsageDescription: Nekko Agent switches you to another desktop by pressing Mission Control's shortcuts for you, when you turn on a desktop or ask by voice.
 # The drag-to-install window: a pixel Nekko leaping from the app to the
 # Applications folder. The art comes from scripts/gen-dmg-art.mjs, whose
 # APP_X / APPS_X / ICON_Y match the two icon positions here; the labels sit on

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { startVoiceCapture } from '../voiceCapture.js';
 import { VoiceSettings } from './VoiceSettings.js';
 import { parseVoiceIntent, type VoiceIntent } from '../voiceCommands.js';
+import { displaysBridge } from '../displays.js';
 import { useStore } from '../store.js';
 
 export function DictationButton({ sessionId, onText }: { sessionId: string; onText: (text: string) => void }) {
@@ -26,6 +27,11 @@ export function DictationButton({ sessionId, onText }: { sessionId: string; onTe
       if (intent.kind === 'new-session') await useStore.getState().newChat();
       else if (intent.kind === 'complete-session') await useStore.getState().archiveChat(sessionId);
       else if (intent.kind === 'navigate') useStore.getState().setView(intent.view);
+      else if (intent.kind === 'go') {
+        const result = displaysBridge ? await displaysBridge.go(intent.target) : 'not-found';
+        if (result === 'needs-access') throw new Error('Switching desktops needs the Accessibility permission: turn on Switch me there in the Agents Screens menu.');
+        if (result === 'not-found') throw new Error(`There is no ${intent.target.kind} ${'n' in intent.target ? intent.target.n : 'that way'}.`);
+      }
       setPending(null);
     } catch (e) { setError((e as Error).message); }
     finally { if (mounted.current) setBusy(false); }
@@ -41,6 +47,8 @@ export function DictationButton({ sessionId, onText }: { sessionId: string; onTe
       if (!mounted.current || !text || !useStore.getState().settings?.voice?.enabled) return;
       const intent = voice?.commandsEnabled === false ? { kind: 'dictation' as const, text } : parseVoiceIntent(text);
       if (intent.kind === 'dictation') textCallback.current(intent.text);
+      // Switching desktops or screens is harmless and undone by saying it again, so it runs without a confirm.
+      else if (intent.kind === 'go') void execute(intent);
       else setPending(intent);
     } catch (e) { if (mounted.current) setError((e as Error).message); }
     finally { if (mounted.current) { setState('idle'); setInterim(''); } }
