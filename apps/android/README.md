@@ -27,6 +27,19 @@ reference until this app reaches parity.
   is shown or approvable, recents stay blank (`FLAG_SECURE`), and after a restart
   the relay doesn't connect until the first unlock.
 
+- **Step-up (unverified on hardware):** when the computer answers a mode raise
+  with `step-up-required`, a sheet asks for a security key or passkey
+  (Credential Manager) or a one-time code and sends the call again with
+  `stepUp`. Android is expected to refuse the computer's `nekko-computer:`
+  relying-party id (no Digital Asset Links), so in practice the code is the
+  way in today; the sheet says so. Raises also need the Change proof, which
+  this app can't sign yet (AN-30). *Settings → Security* lists the computer's
+  methods by kind.
+- **Safety exits:** *Settings → This computer* and the connection banner's ⋮:
+  *Sign out this phone* (forgets the computer now, tells it now or at the next
+  start), *Stop remote access on the computer*, and *Quit Nekko Agent on the
+  computer* (confirmed, only when the computer allows it).
+
 - **New chat defaults:** *Settings → New chats* sets the computer to connect
   to at start and a model per computer, on the phone only; a model the
   computer no longer offers falls back to its default with a notice.

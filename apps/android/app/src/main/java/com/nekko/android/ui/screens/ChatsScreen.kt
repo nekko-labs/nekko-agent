@@ -66,6 +66,7 @@ import com.nekko.android.ui.components.Notice
 import com.nekko.android.ui.components.Pill
 import com.nekko.android.ui.components.SectionHeader
 import com.nekko.android.ui.components.Tone
+import com.nekko.android.ui.security.rememberSafetyExits
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.android.util.ago
 import com.nekko.android.util.plainText
@@ -89,6 +90,8 @@ fun ChatsScreen(
     val s by repo.state.collectAsStateWithLifecycle()
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
+    // The banner's ⋮: sign out this phone, stop remote access, quit (SK-8).
+    val exits = rememberSafetyExits(repo)
     var pulling by remember { mutableStateOf(false) }
     val active = s.active
     // Long-press on a chat: the computer's own action (Complete or Delete) for it.
@@ -214,7 +217,7 @@ fun ChatsScreen(
                 modifier = Modifier.fillMaxSize().padding(padding),
             ) {
                 LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
-                    item(key = "banner") { ConnectionBanner(s, onPair = onPair, onComputers = onComputers) }
+                    item(key = "banner") { ConnectionBanner(s, onPair = onPair, onComputers = onComputers, exits = exits) }
                     s.savedListAt?.let { at ->
                         item(key = "saved-list") {
                             Text(
