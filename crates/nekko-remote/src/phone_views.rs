@@ -181,7 +181,9 @@ pub fn machine(summary: &Value, view: &[String], resident_view: &[String]) -> Va
         let resident: Vec<Value> = engine
             .get("resident")
             .and_then(Value::as_array)
-            .map(|list| list.iter().filter(|m| m.is_object()).map(|m| Value::Object(pick_keys(m, resident_view))).collect())
+            .map(|list| {
+                list.iter().filter(|m| m.is_object()).map(|m| Value::Object(pick_keys(m, resident_view))).collect()
+            })
             .unwrap_or_default();
         engine.insert("resident".into(), Value::Array(resident));
         o.insert("engine".into(), Value::Object(engine));

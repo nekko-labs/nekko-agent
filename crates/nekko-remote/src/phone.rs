@@ -489,7 +489,9 @@ pub fn redact(channel: &str, result: Value) -> Value {
         "task:runNow" => Value::Null,
         "pr:sessionList" => crate::phone_views::prs(&result, &policy().views),
         "session:watches" => crate::phone_views::watches(&result, &policy().watch_view, policy().views.text_chars),
-        "machine:summary" => crate::phone_views::machine(&result, &policy().machine_view, &policy().machine_resident_view),
+        "machine:summary" => {
+            crate::phone_views::machine(&result, &policy().machine_view, &policy().machine_resident_view)
+        }
         "usage:summary" => crate::phone_views::usage(&result, &policy().views),
         "limits:get" => crate::phone_views::limits(&result, &policy().views),
         c if policy().terminal.is_terminal(c) => crate::phone_terminal::result(c, &result),
