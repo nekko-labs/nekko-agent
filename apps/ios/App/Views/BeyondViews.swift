@@ -12,10 +12,8 @@ struct ContinueCard: View {
     var body: some View {
         Button(action: open) {
             HStack(alignment: .center, spacing: 12) {
-                Image(systemName: "arrow.uturn.forward.circle.fill").font(.title2).foregroundStyle(palette.accent)
-                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Continue").font(.caption.weight(.semibold)).foregroundStyle(palette.accent)
+                    Text("Continue").font(.caption2.weight(.bold)).foregroundStyle(palette.accent).textCase(.uppercase).kerning(0.6)
                     Text(title).font(.body.weight(.semibold)).foregroundStyle(palette.ink)
                         .fixedSize(horizontal: false, vertical: true)
                     if let preview {
@@ -23,13 +21,14 @@ struct ContinueCard: View {
                     }
                 }
                 Spacer(minLength: 4)
-                if activity == .running {
-                    ProgressView().controlSize(.small).accessibilityLabel("Working")
-                }
-                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(palette.inkFaint)
+                if activity == .running { RunningDots().accessibilityLabel("Working") }
+                Image(systemName: "arrow.right").font(.footnote.weight(.bold)).foregroundStyle(palette.onAccent)
+                    .frame(width: 32, height: 32).background(palette.accent, in: Circle())
                     .accessibilityHidden(true)
             }
-            .padding(.vertical, 6)
+            .padding(.horizontal, 14).padding(.vertical, 12)
+            // The one tinted block on the list, as the desktop's active row.
+            .background(palette.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -288,6 +287,24 @@ private struct LimitBar: View {
 }
 
 /// A list section's title in the palette's secondary ink: the system grey only nearly passed contrast on the paper background.
+/// A group heading as the desktop's Agents panel draws them since #940: larger,
+/// in the accent, with the active and done counts on the right.
+struct GroupHeading: View {
+    let text: String
+    let count: String
+    @Environment(\.palette) private var palette
+    init(_ text: String, count: String = "") { self.text = text; self.count = count }
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(text).font(.subheadline.weight(.bold)).foregroundStyle(palette.accent).textCase(nil)
+            Spacer(minLength: 8)
+            if !count.isEmpty { Text(count).font(.caption).foregroundStyle(palette.inkFaint).textCase(nil) }
+        }
+        .padding(.top, 6)
+        .accessibilityElement(children: .combine)
+    }
+}
+
 struct SectionTitle: View {
     let text: String
     @Environment(\.palette) private var palette
