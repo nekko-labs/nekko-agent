@@ -15,6 +15,12 @@ split-from: SPEC.md (2026-10-22)
 - Dragging cards into order works only when grouped by project in manual order, the one arrangement where that order is what the panel shows; projects can be dragged only when grouped by project. Group header **+** and terminal buttons appear only in project grouping.
 - The choice is a per-window preference in `localStorage` (`nekko.agentPanelView`), like the panel width; invalid saved values fall back field by field. No host calls, storage schema, permissions or network use change.
 
+## Group header hierarchy
+
+Implemented: project, status, date and Completed group labels use the theme's primary accent color and 13px semibold uppercase text, with accent disclosure chevrons. Vertical groups have 16px of separation and 6px between each heading and its contents, so headings stand apart from agent-card metadata. Horizontal groups retain their existing column alignment. Collapsing, project actions, drag/drop, and ungrouped lists are unchanged. No new storage, network access or permissions.
+
+Verification: regression tests and isolated matching light/dark renderer captures cover the hierarchy; packaged-app verification remains separate.
+
 ## Cards that need you, and the model line (2026-10-23)
 
 `[implemented; unit-tested; verified in the hidden layout-evidence fixture with before/after captures in both themes; packaged desktop app not checked]`
