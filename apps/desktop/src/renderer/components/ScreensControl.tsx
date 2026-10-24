@@ -59,7 +59,9 @@ export function ScreensControl() {
   if (!displaysBridge || !state) return null;
   return <ScreensMenu state={state} open={open} busy={busy} rootRef={ref}
     onHover={(over) => { clearTimeout(closeTimer.current); if (over) setOpen(true); else closeTimer.current = setTimeout(() => setOpen(false), 180); }}
-    onToggleOpen={() => setOpen((v) => !v)}
+    // Hover has usually opened it already, so a click must not toggle it shut;
+    // Escape or a click outside closes it.
+    onToggleOpen={() => { clearTimeout(closeTimer.current); setOpen(true); }}
     onToggle={async (d) => {
       setBusy(true);
       try { setState(await displaysBridge!.toggle(d.id, !d.enabled, prefersReducedMotion())); }

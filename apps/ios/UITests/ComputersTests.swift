@@ -1,8 +1,9 @@
 import XCTest
 
 final class ComputersTests: XCTestCase {
-    /// A paired computer can be renamed and forgotten from a tap on its row in
-    /// Computers, and forgotten from the computer menu on the chats screen.
+    /// A paired computer can be renamed and forgotten from its page (a tap on
+    /// its row in Computers opens it, Edit holds both), and forgotten from the
+    /// computer menu on the chats screen.
     func testRenameAndForgetAComputer() {
         let app = XCUIApplication()
         app.launchArguments = ["-appLock", "NO", "-onboarded", "YES", "-uiTestReset", "YES"]
@@ -17,8 +18,8 @@ final class ComputersTests: XCTestCase {
         // The row opens the computer's page; Rename and Forget live in its Edit menu.
         row.tap()
         let edit = app.buttons["computer.edit"]
-        XCTAssertTrue(edit.waitForExistence(timeout: 5), "the computer page's Edit menu")
-        tapByFrame(edit, in: app)
+        XCTAssertTrue(edit.waitForExistence(timeout: 5), "the computer's page")
+        tapBarButton(edit, in: app)
         app.buttons["Rename"].tap()
         let name = app.alerts.textFields.firstMatch
         XCTAssertTrue(name.waitForExistence(timeout: 5))
@@ -27,12 +28,14 @@ final class ComputersTests: XCTestCase {
         let renamed = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "Studio")).firstMatch
         XCTAssertTrue(renamed.waitForExistence(timeout: 5), "Rename saved")
 
-        tapByFrame(edit, in: app)
+        tapBarButton(edit, in: app)
         app.buttons["Forget…"].tap()
         confirmForget(app)
-        XCTAssertTrue(app.staticTexts["This computer was forgotten"].waitForExistence(timeout: 5), "the page says the computer is gone")
-        app.buttons["Computers"].firstMatch.tap()
-        XCTAssertTrue(row.waitForNonExistence(timeout: 5), "Forget from the computer page removed the computer")
+        // Forgetting the only computer leaves the app with nothing paired: the
+        // page either says so or the stack unwinds to the pairing invitation.
+        let gone = app.buttons["Pair with your computer"].waitForExistence(timeout: 10)
+            || app.staticTexts["This computer was forgotten"].exists
+        XCTAssertTrue(gone, "Forget from the computer page removed the only computer")
 
         // From the computer menu on the chats screen.
         app.terminate()
@@ -70,20 +73,19 @@ final class ComputersTests: XCTestCase {
     private func openMenu(_ app: XCUIApplication) {
         let m = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Computers and settings")).firstMatch
         XCTAssertTrue(m.waitForExistence(timeout: 10))
-        tapByFrame(m, in: app)
+        tapBarButton(m, in: app)
     }
 
-    /// Tap a navigation bar menu button by coordinate once it has a real frame. A plain
-    /// tap() asks XCTest to scroll it to visible first, which fails with hit point
-    /// {-1, -1} for toolbar menus (the computer page's Edit menu too).
-    private func tapByFrame(_ e: XCUIElement, in app: XCUIApplication) {
+    /// The same for any navigation bar button, such as the computer page's Edit
+    /// menu, which XCTest also fails to "scroll to visible".
+    private func tapBarButton(_ button: XCUIElement, in app: XCUIApplication) {
         let deadline = Date().addingTimeInterval(10)
         while Date() < deadline {
-            let f = e.frame
-            if e.exists, !f.isEmpty, app.frame.contains(CGPoint(x: f.midX, y: f.midY)) { break }
+            let f = button.frame
+            if button.exists, !f.isEmpty, app.frame.contains(CGPoint(x: f.midX, y: f.midY)) { break }
             RunLoop.current.run(until: Date().addingTimeInterval(0.25))
         }
-        e.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        button.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
     }
 
     private func confirmForget(_ app: XCUIApplication) {
