@@ -237,6 +237,18 @@ jobs:
           # that wraps it, so this is the artifact to validate.
           xcrun stapler validate "$app"
           spctl --assess --type execute --verbose=4 "$app"
+          # Only nekko-vm may create VMs (scripts/sign-mac.cjs): it must carry the
+          # virtualization entitlement, and the app and nekkod must not.
+          ents() { codesign -d --entitlements - --xml "$1" 2>/dev/null; }
+          ents "$app/Contents/Resources/bin/nekko-vm" | grep -q com.apple.security.virtualization
+          if ents "$app" | grep -q com.apple.security.virtualization; then
+            echo 'The app bundle carries the virtualization entitlement.' >&2
+            exit 1
+          fi
+          if ents "$app/Contents/Resources/bin/nekkod" | grep -q com.apple.security.virtualization; then
+            echo 'nekkod carries the virtualization entitlement.' >&2
+            exit 1
+          fi
 
       - name: Verify the signed installer
         if: runner.os == 'Windows' && env.AZURE_SIGNING_CLIENT_ID != ''
