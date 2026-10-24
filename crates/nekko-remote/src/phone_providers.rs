@@ -129,7 +129,10 @@ pub fn screen_save(request: &Value) -> Result<(), Refusal> {
         return Err(refused("option-denied", k.clone()));
     }
     let id = text(o, "id").unwrap_or("");
-    if id.is_empty() || id.len() > ID_MAX || !id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_') {
+    if id.is_empty()
+        || id.len() > ID_MAX
+        || !id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_')
+    {
         return Err(refused("value-invalid", "id"));
     }
     let kind = text(o, "kind").unwrap_or("");
@@ -146,7 +149,10 @@ pub fn screen_save(request: &Value) -> Result<(), Refusal> {
         }
     }
     match o.get("sealedKey") {
-        Some(Value::String(b)) if !b.is_empty() && b.len() <= BLOB_MAX && b.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_' || c == b'=') => {}
+        Some(Value::String(b))
+            if !b.is_empty()
+                && b.len() <= BLOB_MAX
+                && b.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_' || c == b'=') => {}
         Some(_) => return Err(refused("value-invalid", "sealedKey")),
         None if CLOUD_KINDS.contains(&kind) => return Err(refused("value-invalid", "sealedKey")),
         None => {}
@@ -169,7 +175,8 @@ pub fn sealed_provider(request: &Value, key: &DeviceKey) -> Result<Value, String
     out.insert("label".into(), json!(text(o, "label").expect("screened").trim()));
     out.insert("baseUrl".into(), json!(text(o, "baseUrl").unwrap_or(default_base_url(kind))));
     if let Some(blob) = text(o, "sealedKey") {
-        let bytes = open_sealed(key, CONTEXT, blob).map_err(|_| "The key was sealed for another computer, or arrived damaged. Try again.".to_string())?;
+        let bytes = open_sealed(key, CONTEXT, blob)
+            .map_err(|_| "The key was sealed for another computer, or arrived damaged. Try again.".to_string())?;
         let api_key = String::from_utf8(bytes).map_err(|_| "The key isn’t text.".to_string())?;
         let api_key = api_key.trim();
         if api_key.is_empty() || api_key.len() > KEY_MAX || api_key.chars().any(char::is_control) {
@@ -241,11 +248,19 @@ mod tests {
         let key = DeviceKey::generate();
         let blob = seal_to(&key.public(), CONTEXT, b" sk-ant-secret-123 ").unwrap();
         let saved = sealed_provider(&request("anthropic", Some(&blob)), &key).unwrap();
-        assert_eq!(saved, json!({ "id": "claude-phone", "kind": "anthropic", "label": "Anthropic", "baseUrl": "https://api.anthropic.com", "apiKey": "sk-ant-secret-123", "enabled": true }));
+        assert_eq!(
+            saved,
+            json!({ "id": "claude-phone", "kind": "anthropic", "label": "Anthropic", "baseUrl": "https://api.anthropic.com", "apiKey": "sk-ant-secret-123", "enabled": true })
+        );
         // The view of a save answer carries models and ok, nothing of the provider.
-        let view = result_view(&json!({ "ok": true, "models": [{ "id": "m1", "name": "Model 1", "contextLength": 8 }, { "name": "no id" }], "provider": saved }));
+        let view = result_view(
+            &json!({ "ok": true, "models": [{ "id": "m1", "name": "Model 1", "contextLength": 8 }, { "name": "no id" }], "provider": saved }),
+        );
         assert_eq!(view, json!({ "ok": true, "models": [{ "id": "m1", "name": "Model 1" }] }));
-        assert_eq!(result_view(&json!({ "ok": false, "message": "401 from the provider" })), json!({ "ok": false, "message": "401 from the provider" }));
+        assert_eq!(
+            result_view(&json!({ "ok": false, "message": "401 from the provider" })),
+            json!({ "ok": false, "message": "401 from the provider" })
+        );
         assert_eq!(result_view(&Value::Null), json!({ "ok": false }));
     }
 
@@ -268,15 +283,41 @@ mod tests {
         assert!(ok(&request("ollama", None)), "a local kind needs no key");
         assert!(ok(&json!({ "id": "o", "kind": "ollama", "label": "x", "baseUrl": "http://localhost:11434" })));
         assert_eq!(screen_save(&request("anthropic", None)).unwrap_err().detail, "sealedKey");
-        assert_eq!(screen_save(&json!({ "id": "Bad Id", "kind": "openai", "label": "x", "sealedKey": "AQ" })).unwrap_err().detail, "id");
+        assert_eq!(
+            screen_save(&json!({ "id": "Bad Id", "kind": "openai", "label": "x", "sealedKey": "AQ" }))
+                .unwrap_err()
+                .detail,
+            "id"
+        );
         assert_eq!(screen_save(&json!({ "id": "x", "kind": "chatgpt", "label": "x" })).unwrap_err().detail, "kind");
-        assert_eq!(screen_save(&json!({ "id": "x", "kind": "openai", "label": "  ", "sealedKey": "AQ" })).unwrap_err().detail, "label");
-        assert_eq!(screen_save(&json!({ "id": "x", "kind": "openai", "label": "x", "sealedKey": "AQ", "apiKey": "sk" })).unwrap_err().code, "option-denied");
+        assert_eq!(
+            screen_save(&json!({ "id": "x", "kind": "openai", "label": "  ", "sealedKey": "AQ" })).unwrap_err().detail,
+            "label"
+        );
+        assert_eq!(
+            screen_save(&json!({ "id": "x", "kind": "openai", "label": "x", "sealedKey": "AQ", "apiKey": "sk" }))
+                .unwrap_err()
+                .code,
+            "option-denied"
+        );
         for url in ["http://api.openai.com/v1", "https://user:pw@host/v1", "ftp://x", "https://x y", "https://"] {
-            assert_eq!(screen_save(&json!({ "id": "x", "kind": "openai", "label": "x", "sealedKey": "AQ", "baseUrl": url })).unwrap_err().detail, "baseUrl", "{url}");
+            assert_eq!(
+                screen_save(&json!({ "id": "x", "kind": "openai", "label": "x", "sealedKey": "AQ", "baseUrl": url }))
+                    .unwrap_err()
+                    .detail,
+                "baseUrl",
+                "{url}"
+            );
         }
-        assert!(ok(&json!({ "id": "x", "kind": "openai-compat", "label": "x", "baseUrl": "http://192.168.1.5:8080/v1" })));
-        assert_eq!(screen_save(&json!({ "id": "x", "kind": "openai", "label": "x", "sealedKey": "not base64url!" })).unwrap_err().detail, "sealedKey");
+        assert!(ok(
+            &json!({ "id": "x", "kind": "openai-compat", "label": "x", "baseUrl": "http://192.168.1.5:8080/v1" })
+        ));
+        assert_eq!(
+            screen_save(&json!({ "id": "x", "kind": "openai", "label": "x", "sealedKey": "not base64url!" }))
+                .unwrap_err()
+                .detail,
+            "sealedKey"
+        );
         assert_eq!(screen_save(&json!("nope")).unwrap_err().detail, "provider");
     }
 

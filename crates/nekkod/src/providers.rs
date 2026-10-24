@@ -111,7 +111,8 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
                 return Ok(json!({ "ok": false, "message": message }));
             }
             let id = config.get("id").and_then(Value::as_str).unwrap_or_default().to_string();
-            let mut list: Vec<Value> = providers(ctx).await.into_iter().filter(|x| x.get("id") != config.get("id")).collect();
+            let mut list: Vec<Value> =
+                providers(ctx).await.into_iter().filter(|x| x.get("id") != config.get("id")).collect();
             list.push(config);
             save(ctx, list).await?;
             Ok(phone_providers::save_result(&list_models(ctx, &id).await))

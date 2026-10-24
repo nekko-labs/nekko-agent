@@ -125,7 +125,14 @@ pub async fn summary(ctx: &crate::routes::Ctx) -> Value {
 /// The summary from its parts. `hardware` is the profile without its probe
 /// bookkeeping; `engine` keeps the server's state and its resident models by
 /// id and name (never their files), and counts what is loading.
-pub fn summary_value(info: &Value, profile: &Value, live: &Value, gpu: &Value, engine: &Value, uptime_ms: u64) -> Value {
+pub fn summary_value(
+    info: &Value,
+    profile: &Value,
+    live: &Value,
+    gpu: &Value,
+    engine: &Value,
+    uptime_ms: u64,
+) -> Value {
     let mut out = Map::new();
     for k in ["version", "platform", "edition"] {
         if let Some(v) = info.get(k) {
@@ -135,7 +142,10 @@ pub fn summary_value(info: &Value, profile: &Value, live: &Value, gpu: &Value, e
     out.insert("uptimeMs".into(), json!(uptime_ms));
     let hardware = match profile.as_object() {
         Some(o) => Value::Object(
-            o.iter().filter(|(k, _)| !matches!(k.as_str(), "format" | "probedAt")).map(|(k, v)| (k.clone(), v.clone())).collect(),
+            o.iter()
+                .filter(|(k, _)| !matches!(k.as_str(), "format" | "probedAt"))
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
         ),
         None => Value::Null,
     };
@@ -205,8 +215,11 @@ mod summary_tests {
         assert!(s["hardware"].get("format").is_none() && s["hardware"].get("probedAt").is_none());
         assert_eq!(s["live"]["memUsedMB"], 61000);
         assert_eq!(s["gpu"]["usedMB"], 15000);
-        assert_eq!(s["engine"], json!({ "running": true, "startedAt": 1_000, "resident": [{ "id": "qwen3", "name": "Qwen3 Coder", "contextTokens": 32768 }],
-            "loading": 1, "memory": { "totalMB": 131072, "kind": "unified" } }));
+        assert_eq!(
+            s["engine"],
+            json!({ "running": true, "startedAt": 1_000, "resident": [{ "id": "qwen3", "name": "Qwen3 Coder", "contextTokens": 32768 }],
+            "loading": 1, "memory": { "totalMB": 131072, "kind": "unified" } })
+        );
         let text = s.to_string();
         assert!(!text.contains("/Users") && !text.contains("secret-looking") && !text.contains("1441"));
         let empty = summary_value(&json!({}), &Value::Null, &Value::Null, &Value::Null, &Value::Null, 0);
