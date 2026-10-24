@@ -57,7 +57,7 @@ export interface LiveRun {
   reasoningMs: number;
   /** Set while reasoning is streaming, so the pane can show the thinking dot. */
   reasoningStartedAt: number;
-  /** The folded step rail, shared with the Command Center's cards. */
+  /** The folded step rail, shared with the Agent board's cards. */
   activity: LiveActivity;
   /**
    * Where the current model call started: the blocks, text and reasoning as

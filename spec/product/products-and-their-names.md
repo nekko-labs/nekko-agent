@@ -11,5 +11,6 @@ split-from: SPEC.md (2026-10-22)
 - **Local Model Server**: the model server Nekko Agent runs on your computer (llama.cpp and the other runtimes, the library, downloads). The app calls its page **Model Server**.
 - **Nekko Cloud**: the hosted side. Its code project is `apps/nekko-agent-api` (Fly app `nekko-agent-api`): beta signups today; accounts, plans and billing are a parked module (`apps/nekko-agent-api/cloud`, off and not deployed). It will own user auth and permissions for Relay. Planned address: `api.nekkoagent.com`.
 - **Relay**: the phone-to-computer pipe, part of Nekko Cloud but a separate service (`apps/relay-server`, Fly app `nekko-agent-relay`). Self-hosting it, or running it on your own computer, stays possible.
+- **Agent board** (renamed 2026-10-24, was Command Center): the wall of live agent and terminal windows,. The rail and the page title say **Agents**. In code it is still the `command` view (`CommandCenterView`, `CommandWall`, `command-wall-*` classes, the saved `commandWall` settings), so saved walls carry over untouched.
 
-Older entries below may use the names from when they shipped: the web edition (Local Web UI), Nekko Server (Model Server), Nekko Agent Cloud (Nekko Cloud).
+Older entries below may use the names from when they shipped: the web edition (Local Web UI), Nekko Server (Model Server), Nekko Agent Cloud (Nekko Cloud), Command Center (Agent board).

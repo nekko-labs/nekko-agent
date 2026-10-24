@@ -18,7 +18,7 @@ const Svg = ({ children, className }: { children: React.ReactNode } & P) => (
   </svg>
 );
 
-/** Command Center — a military HUD / radar scope (sweep, rings, crosshair, blips). */
+/** Agent board — a military HUD / radar scope (sweep, rings, crosshair, blips). */
 export const CommandHudIcon = (p: P) => (
   <Svg {...p}>
     <circle cx="12" cy="12" r="9.2" stroke="#10b981" strokeWidth="1.5" opacity="0.35" />
