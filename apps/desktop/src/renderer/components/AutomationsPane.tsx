@@ -61,7 +61,7 @@ function taskState(t: AutomationTask, running: Set<string>, now: number): { labe
 }
 
 /**
- * The automations window on the Command Center wall: what fired, what's
+ * The automations window on the Agent board wall: what fired, what's
  * planned next, what's parked. The window's strip names it, so the body
  * starts straight at the count and the rows.
  */

@@ -304,6 +304,9 @@ interface UiState {
   toggleContextPanel: () => void;
   togglePlanRail: (sessionId: string) => void;
   applyTheme: () => void;
+  /** Settings > Style: the user's fonts folder and the families loaded from it. */
+  customFonts: { dir: string; families: string[] } | null;
+  loadCustomFonts: () => Promise<void>;
 
   refreshTerminals: () => Promise<void>;
   newTerminal: (workspaceId?: string, shell?: string) => Promise<void>;
@@ -336,7 +339,7 @@ interface UiState {
   openDiffPane: (sessionId: string) => void;
   /**
    * Give a chat a companion window (Changes, Browser or Files) in its own
-   * workspace, where the Command Center shows it under the chat's window.
+   * workspace, where the Agent board shows it under the chat's window.
    * Unlike the open*Pane actions this stays on the current view. Returns false
    * when the chat's workspace has no room left to split.
    */
@@ -459,7 +462,7 @@ function focusPane(s: UiState, workspaceId: string, paneId: string): Partial<UiS
  * Open a window in the workspace you are looking at, beside the one you are
  * looking at — the same place a tab used to appear, except the chat stays on
  * screen next to it. With no workspace open yet the window becomes one of its
- * own, so an action from the Command Center or a deep link always lands
+ * own, so an action from the Agent board or a deep link always lands
  * somewhere.
  */
 function openInActive(s: UiState, pane: WbPane): Partial<UiState> {
@@ -588,6 +591,13 @@ export function addCreatedSession(s: Session): void {
 // Reserve the first-completion tip while its persistent seen flag is being saved.
 let completionTipPending = false;
 
+/** The faces loaded from the fonts folder, dropped on the next reload. */
+const loadedFontFaces: FontFace[] = [];
+
+/** Settings > Style's interface scale, in percent: 100 unless a sane number was saved. */
+export const textScaleOf = (v: number | undefined): number =>
+  typeof v === 'number' && Number.isFinite(v) ? Math.min(150, Math.max(80, Math.round(v))) : 100;
+
 export const useStore = create<UiState>((set, get) => ({
   completionTipSessionId: null,
   workflowFocus: null,
@@ -705,7 +715,7 @@ export const useStore = create<UiState>((set, get) => ({
   },
   setMascotMood: (m) => set({ mascotMood: m }),
   // A destination that's been hidden can't be navigated to: land on the
-  // Command Center instead of a dead end.
+  // Agent board instead of a dead end.
   setView: (v) => set((s) => ({ view: viewEnabled(v, s.settings) ? v : 'command' })),
   setOnboardingOpen: (open) => set({ onboardingOpen: open }),
 
@@ -718,6 +728,7 @@ export const useStore = create<UiState>((set, get) => ({
       const onboardingOpen = autoOpenOnboarding && !isScreenWindow ? shouldAutoOpenOnboarding(settings) : get().onboardingOpen;
       set({ settings, onboardingOpen, settingsLoaded: true, settingsError: null });
       get().applyTheme();
+      void get().loadCustomFonts();
       if (!get().activeProviderId && settings.defaultProviderId) {
         set({ activeProviderId: settings.defaultProviderId, activeModelId: settings.defaultModelId ?? null });
       }
@@ -885,11 +896,47 @@ export const useStore = create<UiState>((set, get) => ({
     else if (preset?.accent2) root.style.setProperty('--accent-2', preset.accent2);
     else root.style.removeProperty('--accent-2');
 
+    // Settings > Style. A chosen family falls back to the bundled one.
+    const family = (name: string | undefined, fallback: string) =>
+      !name ? '' : name === 'system-ui' || name === 'ui-monospace' ? `${name}, ${fallback}` : `"${name.replace(/["\\]/g, '')}", ${fallback}`;
+    const sans = family(settings?.fontSans, "'Inter Tight Variable', system-ui, sans-serif");
+    const mono = family(settings?.fontMono, "'JetBrains Mono Variable', ui-monospace, monospace");
+    if (sans) root.style.setProperty('--font-sans', sans);
+    else root.style.removeProperty('--font-sans');
+    if (mono) root.style.setProperty('--font-mono', mono);
+    else root.style.removeProperty('--font-mono');
+    const scale = textScaleOf(settings?.textScale);
+    root.style.zoom = scale === 100 ? '' : `${scale}%`;
+
     // The native window buttons sit in our title bar, so they have to follow
     // the theme with everything else.
     syncTitleBarOverlay();
     // The next launch's splash shows before settings load, so it reads these.
     if (get().settingsLoaded) rememberSplashColours([accent ?? preset?.accent, ...(preset?.swatch ?? [])]);
+  },
+
+  customFonts: null,
+  loadCustomFonts: async () => {
+    try {
+      const { dir, fonts } = await window.nekko.listFonts();
+      for (const face of loadedFontFaces) document.fonts.delete(face);
+      loadedFontFaces.length = 0;
+      const families: string[] = [];
+      for (const f of fonts) {
+        try {
+          const bytes = Uint8Array.from(atob(f.data), (c) => c.charCodeAt(0));
+          const face = await new FontFace(f.family, bytes).load();
+          document.fonts.add(face);
+          loadedFontFaces.push(face);
+          if (!families.includes(f.family)) families.push(f.family);
+        } catch {
+          /* not a font the browser can read; leave it out of the list */
+        }
+      }
+      set({ customFonts: { dir, families } });
+    } catch {
+      /* an older engine without fonts:list */
+    }
   },
 
   refreshTerminals: async () => {

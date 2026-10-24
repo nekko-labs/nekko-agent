@@ -22,6 +22,12 @@
       "title": "Using Nekko Agent",
       "pages": [
         {
+          "slug": "fonts-and-text",
+          "title": "Fonts and text",
+          "source": "docs/fonts-and-text.md",
+          "description": "Text size, the interface and code fonts, and adding your own fonts."
+        },
+        {
           "slug": "browser-automation",
           "title": "Browser automation",
           "source": "docs/browser-automation.md",

@@ -79,7 +79,7 @@ function layoutShortcutLabel(mode: 'focus' | 'grid') {
 }
 
 /**
- * The Command Center: every agent and terminal as a live window on one wall,
+ * The Agent board: every agent and terminal as a live window on one wall,
  * arranged in the same split tree the Agent tab uses, with the automations
  * list and the insights box as windows among them. The windows are the same
  * chat and terminal panes the Agent tab shows, so work gets handled here, not

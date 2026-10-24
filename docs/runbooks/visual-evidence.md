@@ -12,8 +12,11 @@ Any PR that changes what the app looks like ships the proof in its description:
 - **A short screen recording** (a few seconds, mp4 or gif) whenever the change touches
   animation, transition, gesture, scroll, or timing. A still frame cannot show motion,
   so screenshots alone do not cover those changes.
+- Use the default Nekko Agent theme for screenshots and recordings. A separate
+  light/dark theme pair is not required; keep before/after captures in that same
+  default theme.
 - Cover every surface the change actually affects: mobile and desktop widths on web,
-  iOS and Android for native, light and dark theme if both shift.
+  iOS and Android for native.
 - Media belongs in the PR description, not in git. Use the shared `pr-media`
   pre-release series for all screenshots and recordings; never create a release
   per PR. GitHub caps a release at 1,000 assets, so when the newest release cannot
