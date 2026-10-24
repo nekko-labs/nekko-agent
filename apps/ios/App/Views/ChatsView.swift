@@ -358,6 +358,10 @@ struct ComputerMenu: View {
             }
             .padding(.horizontal, 10).padding(.vertical, 5)
             .background(palette.surface2, in: Capsule())
+            // One element with one label: the name inside the pill must not be read
+            // (or matched by the UI tests) as a second label beside the menu's own.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Computers and settings, \(stateName(store.conn))")
         }
         .accessibilityLabel("Computers and settings, \(stateName(store.conn))")
         .accessibilityIdentifier("chats.menu")
