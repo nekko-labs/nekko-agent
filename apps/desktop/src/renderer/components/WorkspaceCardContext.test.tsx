@@ -75,3 +75,27 @@ describe('workspace card context readout', () => {
     expect(chat.match(/if \(!publishesContext\) return;/g)?.length).toBe(2);
   });
 });
+
+describe('workspace card model line and attention', () => {
+  const render = (props: Partial<React.ComponentProps<typeof WorkspaceCard>> = {}) => renderToStaticMarkup(
+    <WorkspaceCard workspace={null} session={{ ...session, modelId: 'claude-opus-5-5' } as SessionSummary} terminal={null} status={undefined}
+      isActive={false} now={0} projects={[]} onOpen={() => {}} onClose={() => {}} {...props} />,
+  );
+
+  it('names the model alone, with its provider as optional subtext under it', () => {
+    state.providers = [{ id: 'p', label: 'Claude', kind: 'anthropic' }];
+    const html = render();
+    expect(html).toContain('Opus 5.5');
+    expect(html).toContain('<span class="min-w-0 truncate">Opus 5.5</span>');
+    expect(html).toMatch(/data-card-provider[^>]*>Claude</);
+    expect(render({ showProvider: false })).not.toContain('data-card-provider');
+    state.providers = [];
+  });
+
+  it('highlights a card waiting on you like the active one', () => {
+    expect(render()).not.toContain('bg-accent-soft');
+    expect(render({ status: 'input' })).toContain('bg-accent-soft');
+    expect(render({ status: 'error' })).toContain('bg-accent-soft');
+    expect(render({ status: 'input' })).toContain('var(--attention)');
+  });
+});

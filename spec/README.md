@@ -35,7 +35,7 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 
 - [Automatic title requests during queued turns (2026-10-13)](chat/automatic-title-requests-during-queued-turns.md) (1 KB)
 - [Background notification and panel batch (2026-10-13)](chat/background-notification-and-panel-batch.md) (8 KB)
-- [Chat & cowork (unified surface)](chat/chat-cowork-unified-surface.md) (71 KB)
+- [Chat & cowork (unified surface)](chat/chat-cowork-unified-surface.md) (72 KB)
 - [Chat actions and persistent reply measurements](chat/chat-actions-and-persistent-reply-measurements.md) (23 KB)
 - [Chat artifact cards and session-local documents](chat/chat-artifact-cards-and-session-local-documents.md) (4 KB)
 - [Chat chrome and composer refinement (implemented; desktop verification pending)](chat/chat-chrome-and-composer-refinement.md) (3 KB)
@@ -91,7 +91,7 @@ Agents panel, monitors, subagents and delegation.
 
 - [Agent activity and panel polish](agents/agent-activity-and-panel-polish.md) (39 KB)
 - [Agent Monitor Project group, hardware temperatures and multi-monitor Dynamic mode (2026-10-18)](agents/agent-monitor-project-group-hardware-temperatures-and-multi-moni.md) (5 KB)
-- [Agent panel view options (2026-10-17)](agents/agent-panel-view-options.md) (2 KB)
+- [Agent panel view options (2026-10-17)](agents/agent-panel-view-options.md) (3 KB)
 - [Agents dashboard simplification (2026-10-06)](agents/agents-dashboard-simplification.md) (2 KB)
 - [Approval retention and delegation navigation](agents/approval-retention-and-delegation-navigation.md) (1 KB)
 - [Chat finder in the Agents panel (2026-10-16)](agents/chat-finder-in-the-agents-panel.md) (6 KB)

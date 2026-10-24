@@ -1261,6 +1261,8 @@
     --success: #3aa870;
     --danger: #d24738;
     --warning: #c9871f;
+    /* An agent waiting on you: orange, louder than a warning chip. */
+    --attention: #e8701a;
     --info: #3f7fb8;
     --neutral: #8a8f98;
     --running: #3b82f6;
@@ -1316,6 +1318,7 @@
     --success: #4ec98a;
     --danger: #e0574a;
     --warning: #e0a44a;
+    --attention: #f58a3a;
     --info: #5b9dd9;
     --neutral: #8a8f98;
     --running: #60a5fa;
