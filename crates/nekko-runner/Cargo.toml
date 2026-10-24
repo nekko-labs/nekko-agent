@@ -1,6 +1,6 @@
 [package]
 name = "nekko-runner"
-description = "CI runner logic for the Nekko Agent engine daemon: runner settings, slot and CPU budgets and the 2-VM cap, as pure functions with no I/O."
+description = "CI runner logic for the Nekko Agent engine daemon: runner settings, slot and CPU budgets and the 2-VM cap, the gates and priority modes, keep awake, and guest egress rules, as pure functions with no I/O."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

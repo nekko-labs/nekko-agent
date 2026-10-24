@@ -1,5 +1,7 @@
 //! CI runner logic: pure decisions with no I/O, so every rule is testable on
-//! any machine. Later modules (gates, keep-awake, egress) join this list.
+//! any machine. `settings` and `slots` size the runner, `gates` decides take,
+//! hold, drain or stop, `awake` decides whether to hold the Mac awake, and
+//! `egress` decides which addresses a guest may connect to.
 
 pub mod awake;
 pub mod egress;
