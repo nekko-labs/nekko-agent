@@ -33,8 +33,12 @@ pub enum Thermal {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Signals {
-    /// Seconds since the last input; `None` when unknown, which counts as not active.
+    /// Seconds since the last input. `None` means there is no input device to
+    /// read (a headless Mac), which counts as not active. The supervisor must
+    /// never map a read error to `None`; a NaN counts as active.
     pub idle_seconds: Option<f64>,
+    /// The user's own CPU use, a 30-second average supplied by the supervisor.
+    /// A NaN counts as busy.
     pub user_cpu_pct: f64,
     pub memory: Pressure,
     pub thermal: Thermal,
@@ -79,8 +83,11 @@ pub enum Decision {
     StopNow(Vec<Reason>),
 }
 
-/// `running`: a job is in this slot now. Reasons are collected, not
+/// `running`: a job is in this slot now. Every comparison is written in the
+/// failing direction, so a NaN sensor value counts as unsafe. Reasons are collected, not
 /// short-circuited, so the UI can list everything that is in the way.
+// The negated comparisons are deliberate: `!(x >= floor)` is true for NaN.
+#[allow(clippy::neg_cmp_op_on_partial_ord)]
 pub fn evaluate(s: &RunnerSettings, sig: &Signals, running: bool) -> Decision {
     let mode = s.priority;
     let grace_secs = match mode {
@@ -99,7 +106,7 @@ pub fn evaluate(s: &RunnerSettings, sig: &Signals, running: bool) -> Decision {
         (sig.low_power_mode, Reason::LowPowerMode),
         (sig.memory == Pressure::Critical, Reason::MemoryCritical),
         (sig.thermal == Thermal::Critical, Reason::ThermalCritical),
-        (sig.free_disk_gb < f64::from(s.disk_floor_gb), Reason::DiskFloor),
+        (!(sig.free_disk_gb >= f64::from(s.disk_floor_gb)), Reason::DiskFloor),
     ]
     .into_iter()
     .filter_map(|(hit, r)| hit.then_some(r))
@@ -119,7 +126,7 @@ pub fn evaluate(s: &RunnerSettings, sig: &Signals, running: bool) -> Decision {
         Priority::Balanced => 80.0,
         Priority::RunnerFirst => 50.0,
     };
-    let below_floor = sig.battery_pct.is_none_or(|p| p <= battery_floor);
+    let below_floor = sig.battery_pct.is_none_or(|p| !(p > battery_floor));
     let battery = sig.on_battery && (s.only_on_power || below_floor);
     let soft: Vec<Reason> = [
         (!sig.in_schedule, Reason::Schedule),
@@ -137,8 +144,8 @@ pub fn evaluate(s: &RunnerSettings, sig: &Signals, running: bool) -> Decision {
     }
 
     // 4. Mode activity rules.
-    let active = sig.idle_seconds.is_some_and(|i| i < ACTIVE_INPUT_SECS);
-    let busy = sig.user_cpu_pct > BUSY_CPU_PCT;
+    let active = sig.idle_seconds.is_some_and(|i| !(i >= ACTIVE_INPUT_SECS));
+    let busy = !(sig.user_cpu_pct <= BUSY_CPU_PCT);
     let mem = sig.memory == Pressure::Warning;
     let hot = sig.thermal == Thermal::Serious;
     let mut why = Vec::new();

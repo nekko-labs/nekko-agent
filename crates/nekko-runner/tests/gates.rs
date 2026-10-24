@@ -243,3 +243,34 @@ fn drain_serializes_camel_case_fields() {
         serde_json::json!({ "drain": { "graceSecs": 120, "why": ["userBusy"] } })
     );
 }
+
+#[test]
+fn nan_free_disk_counts_as_below_the_floor() {
+    let sig = Signals { free_disk_gb: f64::NAN, ..quiet() };
+    assert_eq!(evaluate(&with(Balanced), &sig, true), Decision::StopNow(vec![Reason::DiskFloor]));
+}
+
+#[test]
+fn free_disk_exactly_at_the_floor_is_fine() {
+    let sig = Signals { free_disk_gb: 25.0, ..quiet() };
+    assert_eq!(evaluate(&with(Balanced), &sig, false), Decision::Take);
+}
+
+#[test]
+fn nan_cpu_counts_as_busy() {
+    let sig = Signals { user_cpu_pct: f64::NAN, ..quiet() };
+    assert_eq!(evaluate(&with(DoNotDisturb), &sig, false), Decision::Hold(vec![Reason::UserBusy]));
+}
+
+#[test]
+fn nan_battery_counts_as_below_the_floor() {
+    let sig = Signals { on_battery: true, battery_pct: Some(f64::NAN), ..quiet() };
+    let s = RunnerSettings { only_on_power: false, ..with(Balanced) };
+    assert_eq!(evaluate(&s, &sig, false), Decision::Hold(vec![Reason::OnBattery]));
+}
+
+#[test]
+fn nan_idle_counts_as_active() {
+    let sig = Signals { idle_seconds: Some(f64::NAN), ..quiet() };
+    assert_eq!(evaluate(&with(DoNotDisturb), &sig, false), Decision::Hold(vec![Reason::UserActive]));
+}
