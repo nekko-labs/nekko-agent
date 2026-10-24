@@ -109,8 +109,36 @@ pub struct Accounts {
     pub oauth: std::sync::OnceLock<std::sync::Weak<crate::oauth::OAuth>>,
 }
 
+/// `quota-history.jsonl` lines kept, by age (#1035). Nothing reads older ones back.
+const QUOTA_HISTORY_DAYS: f64 = 30.0;
+
+/// Drop quota-history lines older than [`QUOTA_HISTORY_DAYS`]. A line without
+/// a readable time is kept. Rewritten through a temporary file, at startup only.
+fn prune_quota_history(path: &std::path::Path, now_ms: f64) {
+    let Ok(text) = std::fs::read_to_string(path) else { return };
+    let cutoff = now_ms - QUOTA_HISTORY_DAYS * 86_400_000.0;
+    let kept: Vec<&str> = text
+        .lines()
+        .filter(|l| {
+            let at = serde_json::from_str::<Value>(l).ok().and_then(|v| v.get("timestamp").and_then(Value::as_f64));
+            at.is_none_or(|t| t >= cutoff)
+        })
+        .collect();
+    if kept.len() == text.lines().count() {
+        return;
+    }
+    let tmp = path.with_extension("jsonl.tmp");
+    let body: String = kept.iter().map(|l| format!("{l}\n")).collect();
+    if std::fs::write(&tmp, body).is_ok() {
+        let _ = std::fs::rename(&tmp, path);
+    }
+}
+
 impl Accounts {
     pub fn new(dir: Option<PathBuf>, hub: Hub) -> Self {
+        if let Some(d) = &dir {
+            prune_quota_history(&d.join("quota-history.jsonl"), nekko_oauth::now_ms());
+        }
         let http = reqwest::Client::builder().timeout(READ_TIMEOUT).build().unwrap_or_default();
         Self { dir, hub, http, state: Mutex::default(), append: Mutex::new(()), oauth: std::sync::OnceLock::new() }
     }
@@ -508,6 +536,26 @@ async fn read_openrouter(http: &reqwest::Client, base: &str, bearer: &str) -> Re
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn quota_history_keeps_thirty_days() {
+        let d = std::env::temp_dir().join(format!("nekko-quota-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        let p = d.join("quota-history.jsonl");
+        let day = 86_400_000.0;
+        let now = 100.0 * day;
+        std::fs::write(
+            &p,
+            format!("{{\"timestamp\":{}}}\n{{\"timestamp\":{}}}\nnot json\n", now - 40.0 * day, now - day),
+        )
+        .unwrap();
+        super::prune_quota_history(&p, now);
+        let kept = std::fs::read_to_string(&p).unwrap();
+        assert_eq!(kept.lines().count(), 2, "{kept}");
+        assert!(kept.contains(&format!("{}", now - day)) && kept.contains("not json"));
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
     use super::*;
 
     fn temp_dir(name: &str) -> PathBuf {
