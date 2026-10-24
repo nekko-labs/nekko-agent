@@ -63,6 +63,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 
 - [Agent board header spacing](desktop/command-center-header-spacing.md) (12 KB)
 - [Agent board panel design parity (2026-10-06)](desktop/command-center-panel-design-parity.md) (7 KB)
+- [Agent board: pick up and drop windows](desktop/agent-board-pick-up-and-drop.md) (3 KB)
 - [Agent window controls refresh (2026-10-15)](desktop/agent-window-controls-refresh.md) (6 KB)
 - [Composer and desktop rail regression fixes (2026-10-07)](desktop/composer-and-desktop-rail-regression-fixes.md) (3 KB)
 - [Empty wall opens the new-chat screen; glass prism composer (2026-10-18)](desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md) (2 KB)
