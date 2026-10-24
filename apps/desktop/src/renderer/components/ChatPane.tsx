@@ -2619,19 +2619,25 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   const tone = interruption.paused ? 'var(--warning)' : 'var(--danger)';
                   return (
                   <div
-                    className="fade-in flex flex-wrap items-center gap-2.5 rounded-xl border px-3 py-2 text-[12px]"
+                    className="fade-in flex flex-col gap-2 rounded-xl border px-3 py-2 text-[12px]"
                     style={{
                       borderColor: `color-mix(in srgb, ${tone} 35%, transparent)`,
                       background: `color-mix(in srgb, ${tone} 7%, transparent)`,
                     }}
                     role="alert"
                   >
-                    <span className="shrink-0 font-medium" style={{ color: tone }}>
-                      {interruption.title}
-                    </span>
-                    <span className="min-w-0 basis-48 flex-1 text-ink-soft">
-                      {interruption.detail} Retrying sends approximately {ctx ? ctxUsed.toLocaleString() : 'an unavailable number of'} input context tokens. Provider caching and billing vary.
-                    </span>
+                    {/* Message on top, actions underneath: beside a long
+                        message the buttons wrapped into a ragged column. */}
+                    <div className="flex items-start gap-2.5">
+                      <span className="min-w-0 flex-1 text-ink-soft">
+                        <span className="mr-1.5 font-medium" style={{ color: tone }}>{interruption.title}</span>
+                        {interruption.detail} Retrying sends approximately {ctx ? ctxUsed.toLocaleString() : 'an unavailable number of'} input context tokens. Provider caching and billing vary.
+                      </span>
+                      <button className="shrink-0 rounded-sm p-0.5 text-ink-faint hover:text-ink" title="Dismiss" onClick={() => { setDismissedInterruption(lastMsgId ?? null); setErrorNotice(null); }}>
+                        <CloseIcon className="h-3 w-3" />
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 empty:hidden">
                     {session?.messages.some((m) => m.role === 'user') && (
                       <button className="btn btn-primary shrink-0 px-2.5 py-0.5 text-[11px]"
                         title="Retry using the saved conversation and work" onClick={() => void resumeRun()}>
@@ -2645,9 +2651,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                         Delete last message
                       </button>
                     )}
-                    <button className="shrink-0 rounded-sm p-0.5 text-ink-faint hover:text-ink" title="Dismiss" onClick={() => { setDismissedInterruption(lastMsgId ?? null); setErrorNotice(null); }}>
-                      <CloseIcon className="h-3 w-3" />
-                    </button>
+                    </div>
                   </div>
                   );
                 })()}
