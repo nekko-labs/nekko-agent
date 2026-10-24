@@ -503,8 +503,11 @@ final class LiveRelayTests: XCTestCase {
         connectionMenu(app, "online").waitForExistence(timeout: seconds)
     }
 
+    /// The computer pill reads "Computers and settings, <state>", where the state
+    /// is the localized `stateName` ("Online", "Computer offline"), so match the
+    /// end of the label without regard to case (#831).
     private func connectionMenu(_ app: XCUIApplication, _ state: String) -> XCUIElement {
-        app.buttons.matching(NSPredicate(format: "label == %@", "Computers and settings, \(state)")).firstMatch
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label ENDSWITH[c] %@", "Computers and settings", state)).firstMatch
     }
 
     /// `GET <NEKKO_ITEST_RELAY_CTL>/stop` or `/start` (apps/ios/scripts/relay-ctl.mjs): kill or restart the relay.
