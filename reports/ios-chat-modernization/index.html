@@ -605,9 +605,7 @@ table.spec th { font-size: 11px; text-transform: uppercase; letter-spacing: .06e
   function set(mode) {
     if (mode === 'system') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', mode);
     Object.keys(btns).forEach(function (k) { btns[k].setAttribute('aria-pressed', String(k === mode)); });
-    try { localStorage.setItem('nekko-ios-theme', mode); } catch (e) {}
   }
   Object.keys(btns).forEach(function (k) { btns[k].addEventListener('click', function () { set(k); }); });
-  try { var saved = localStorage.getItem('nekko-ios-theme'); if (saved && btns[saved]) set(saved); } catch (e) {}
 })();
 </script>
