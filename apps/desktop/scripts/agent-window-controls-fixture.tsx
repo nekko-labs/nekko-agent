@@ -6,7 +6,7 @@ import { putCachedSession, __resetSessionCache } from '../src/renderer/sessionCa
 import { TitleBar } from '../src/renderer/components/TitleBar';
 import { UpdateProvider } from '../src/renderer/components/UpdateBanner';
 import { CommandCenterView } from '../src/renderer/views/CommandCenterView';
-import { WorkspacesView } from '../src/renderer/views/WorkspacesView';
+import { StoreSidebar } from './store-sidebar';
 import { DEFAULT_WALL_STATE } from '../src/renderer/commandWall';
 import { summarizeSession, type FileChange } from '@nekko-agent/shared';
 import '../src/renderer/styles.css';
@@ -83,7 +83,7 @@ function Fixture() {
     const el=document.querySelector(selector);if(!el)throw Error('Missing '+selector);
     if(scroll)el.scrollIntoView({block:'nearest',inline:'nearest'});
     const r=el.getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2};
-  }, providerKind: (kind: string) => { const providers=[{...provider,kind}]; useStore.setState({providers,settings:{...useStore.getState().settings,providers}} as any); }, blank: () => { sessionStorage.setItem('fixture-record', JSON.stringify({...makeSession('existing'), providerId: undefined, modelId: undefined, messages: []})); reset(); }, noProgress: () => { const s=makeSession('existing'); s.messages=s.messages.slice(0,1); sessionStorage.setItem('fixture-record',JSON.stringify(s)); reset(); }, contextBundle, fail: () => listeners.forEach(fn=>fn({type:'error',sessionId:'existing',message:'Synthetic request failed'})), ask: () => { const request = {callId:'ask-fixture',askedAt:Date.now(),questions:[{id:'choice',header:'Choice',question:'Which verification path?',options:[{label:'Focused tests'},{label:'Full suite'}]}]}; pending={existing:{question:request}}; listeners.forEach(fn=>fn({type:'question',sessionId:'existing',request})); }, calls, failures, dock: (side: 'top' | 'bottom') => { const settings=useStore.getState().settings!;useStore.setState({settings:{...settings,commandWall:{...settings.commandWall!,composer:{...DEFAULT_WALL_STATE.composer,side}}}});setEpoch(e=>e+1); }, route: (next: string) => { useStore.setState({ view: next === 'command' ? 'command' : 'chat' }); setRoute(next); }, state: () => useStore.getState(), records: () => records,
+  }, providerKind: (kind: string) => { const providers=[{...provider,kind}]; useStore.setState({providers,settings:{...useStore.getState().settings,providers}} as any); }, blank: () => { sessionStorage.setItem('fixture-record', JSON.stringify({...makeSession('existing'), providerId: undefined, modelId: undefined, messages: []})); reset(); }, noProgress: () => { const s=makeSession('existing'); s.messages=s.messages.slice(0,1); sessionStorage.setItem('fixture-record',JSON.stringify(s)); reset(); }, contextBundle, fail: () => listeners.forEach(fn=>fn({type:'error',sessionId:'existing',message:'Synthetic request failed'})), ask: () => { const request = {callId:'ask-fixture',askedAt:Date.now(),questions:[{id:'choice',header:'Choice',question:'Which verification path?',options:[{label:'Focused tests'},{label:'Full suite'}]}]}; pending={existing:{question:request}}; listeners.forEach(fn=>fn({type:'question',sessionId:'existing',request})); }, calls, failures, dock: (side: 'top' | 'bottom') => { const settings=useStore.getState().settings!;useStore.setState({settings:{...settings,commandWall:{...settings.commandWall!,composer:{...DEFAULT_WALL_STATE.composer,side}}}});setEpoch(e=>e+1); }, route: (next: string) => { useStore.setState({ view: 'command' }); setRoute(next); }, state: () => useStore.getState(), records: () => records,
     // Apply a theme preset the way Settings does, with the plan panel open.
     theme: (patch: any) => { useStore.setState({ settings: { ...useStore.getState().settings, ...patch }, planRailOpen: true } as any); useStore.getState().applyTheme(); } } });
   React.useEffect(reset, []);
@@ -93,7 +93,7 @@ function Fixture() {
     __setWall: (commandWall: any) => { useStore.setState({ settings: { ...useStore.getState().settings, commandWall } } as any); setEpoch(e => e + 1); },
     __work: () => listeners.forEach(fn => fn({ type: 'text', sessionId: 'existing', delta: 'Working on it' })),
   });
-  return <main style={{ height: '100vh', display: 'flex', flexDirection: 'column' }} key={epoch}><TitleBar /><div style={{ flex: 1, minHeight: 0 }}>{route === 'command' ? <CommandCenterView /> : <WorkspacesView />}</div></main>;
+  return <main style={{ height: '100vh', display: 'flex', flexDirection: 'column' }} key={epoch}><TitleBar /><div style={{ flex: 1, minHeight: 0 }}>{route === 'command' ? <CommandCenterView /> : <StoreSidebar />}</div></main>;
 }
 createRoot(document.getElementById('root')!).render(<UpdateProvider><Fixture /></UpdateProvider>);
 

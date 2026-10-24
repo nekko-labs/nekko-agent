@@ -6,6 +6,12 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Chat page removed (added 2026-10-24)
+
+Philip asked to remove the old Chat page: the pre-board view of workspaces (one agent list on the left, one workspace's split windows in the middle, the context panel on the right), hidden since 2026-10-06 behind Settings > Developer > Show Chat workspace. Spec: [Agents dashboard simplification](spec/agents/agents-dashboard-simplification.md). #963
+
+- [x] **T202, remove the Chat page (2026-10-24).** The `chat` view, its rail and phone tab, palette entry, i18n key, nav icon and Developer toggle (`developer.chat`) are gone. `WorkspacesView.tsx` keeps only `AgentSidebar`, the board's agent list; the full-page canvas, empty state and pane rendering went with the page. Every route that led there (notifications and deep links, Open chat buttons, new terminals, voice "show agents") lands on the Agent board, which is where they already ended when the toggle was off. The store's never-shown completed-chat reader (`archiveOpen`, `archivedViewId`) is removed; `openChatPane`, workspaces and `layout.ts` stay because the board uses them. Fixtures that showed the page now show the store-backed list (`scripts/store-sidebar.tsx`); the e2e step that checked the page is dropped.
+
 ## Universal fonts and Settings > Style (added 2026-10-24)
 
 Philip asked for the app's text to use the website's two fonts everywhere, and for a Style area to change font size and family, with an easy way to add fonts by dropping them in a folder. Spec: [Style](spec/desktop/style-fonts-and-text-size.md).
