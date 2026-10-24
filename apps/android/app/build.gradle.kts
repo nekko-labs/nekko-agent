@@ -64,6 +64,9 @@ dependencies {
     // App lock: the system fingerprint / face / screen-lock prompt. BiometricPrompt needs a FragmentActivity.
     implementation(libs.androidx.biometric)
     implementation(libs.androidx.fragment.ktx)
+    // Step-up (SK-7): security keys and passkeys through Credential Manager.
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

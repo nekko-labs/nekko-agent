@@ -145,6 +145,24 @@ describe('settings from a phone', () => {
     expect(redactPhoneResult('providers:list', SETTINGS.providers)).toEqual([{ id: 'p1', kind: 'anthropic', label: 'Claude', enabled: true }]);
     expect(redactPhoneResult('providers:list', null)).toEqual([]);
   });
+
+  it("lists a chat's watches without their continuation prompt (session:watches)", () => {
+    expect(screenPhoneCall('session:watches', ['s1'])).toEqual({});
+    expect(() => screenPhoneCall('session:watches', [''])).toThrow(PhoneAccessError);
+    const watch = { id: 'w1', kind: 'pr', url: 'https://github.com/o/r/pull/5', status: 'active', deadlineAt: 10, nextPollAt: 5, pending: false, failures: 1, lastError: 'x'.repeat(700), prompt: 'secret continuation', sessionId: 's1' };
+    const [view] = redactPhoneResult('session:watches', [watch, 'junk', null]) as Record<string, unknown>[];
+    expect(view).toEqual({ id: 'w1', kind: 'pr', url: 'https://github.com/o/r/pull/5', status: 'active', deadlineAt: 10, nextPollAt: 5, pending: false, failures: 1, lastError: 'x'.repeat(600) });
+    expect(redactPhoneResult('session:watches', null)).toEqual([]);
+  });
+
+  it("projects a computer's summary to the pinned keys (machine:summary)", () => {
+    const raw = { version: '0.9.3', platform: 'darwin', edition: 'desktop', uptimeMs: 5, hardware: { cpu: { cores: 16 } }, live: { cpuPct: 1 }, gpu: { usedMB: 1 },
+      engine: { running: true, startedAt: 1, resident: [{ id: 'm', name: 'M', contextTokens: 8, path: '/Users/me/m.gguf' }, 'junk'], loading: 0, memory: { totalMB: 1 } }, extra: 'dropped' };
+    expect(redactPhoneResult('machine:summary', raw)).toEqual({ version: '0.9.3', platform: 'darwin', edition: 'desktop', uptimeMs: 5, hardware: { cpu: { cores: 16 } }, live: { cpuPct: 1 }, gpu: { usedMB: 1 },
+      engine: { running: true, startedAt: 1, resident: [{ id: 'm', name: 'M', contextTokens: 8 }], loading: 0, memory: { totalMB: 1 } } });
+    expect(redactPhoneResult('machine:summary', null)).toBeNull();
+    expect(screenPhoneCall('machine:summary', [])).toEqual({});
+  });
 });
 
 describe('chat options from a phone', () => {

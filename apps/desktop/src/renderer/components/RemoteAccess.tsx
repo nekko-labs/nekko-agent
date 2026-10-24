@@ -167,7 +167,7 @@ export function RemoteAccess() {
     void refresh();
   };
   const rotate = async () => {
-    if (!confirm('Rotate the pairing secret? Every paired device is removed and must pair again with a fresh QR.')) return;
+    if (!confirm('Sign out all phones? The room is re-keyed: every paired device is removed and must pair again with a fresh QR.')) return;
     setGrant(null);
     setStatus(await window.nekko.rotateRemoteSecret());
   };
@@ -310,8 +310,8 @@ export function RemoteAccess() {
             <button className="btn btn-ghost py-1.5 text-[12px]" onClick={disable} disabled={busy}>
               Disable remote access
             </button>
-            <button className="btn btn-ghost py-1.5 text-[12px]" title="New secret; all devices must re-pair" onClick={rotate}>
-              Rotate secret…
+            <button className="btn btn-ghost py-1.5 text-[12px]" title="Re-keys the room with a new secret; every phone must pair again" onClick={rotate}>
+              Sign out all phones…
             </button>
           </div>
         </div>

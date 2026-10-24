@@ -68,8 +68,12 @@ struct NekkoApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @Environment(\.scenePhase) private var phase
     @State private var app = AppModel.shared
-    /// The opening animation, once per launch. UI tests turn it off (`-splash NO`, or a `-uiTestReset` run).
-    @State private var splash = UserDefaults.standard.object(forKey: "splash") as? Bool
+    /// The opening animation: in full at launch, its dissolve on every return to the app.
+    @State private var splash: SplashView.Kind? = Self.splashOn ? .launch : nil
+    /// Each showing of the animation, so a finished one never clears a newer one.
+    @State private var splashRun = 0
+    /// UI tests turn it off (`-splash NO`, or a `-uiTestReset` run).
+    private static let splashOn = UserDefaults.standard.object(forKey: "splash") as? Bool
         ?? !ProcessInfo.processInfo.arguments.contains("-uiTestReset")
 
     private var spooky: Bool { Prefs.preset(app.prefs.theme, computer: app.store.appearance)?.isSpooky == true }
@@ -84,7 +88,15 @@ struct NekkoApp: App {
                 .modifier(Themed(choice: app.prefs.theme, appearance: app.store.appearance))
                 .onOpenURL { app.handle(url: $0) }
                 .task { app.start() }
-                .overlay { if splash { SplashView { splash = false } } }
+                .overlay {
+                    if let kind = splash {
+                        let run = splashRun
+                        SplashView(kind: kind, ready: phase == .active && !(app.prefs.appLock && app.lock.locked)) {
+                            if splashRun == run { splash = nil }
+                        }
+                        .id(run)
+                    }
+                }
                 .task(id: spooky) { SpookyIcon.sync(spooky: spooky) }
         }
         .onChange(of: phase) { _, p in
@@ -93,7 +105,13 @@ struct NekkoApp: App {
                 app.didBecomeActive()
                 // The season may have ended since the last open.
                 SpookyIcon.sync(spooky: spooky)
-            case .background: app.didEnterBackground()
+            case .background:
+                app.didEnterBackground()
+                // Put the cat up while away, so the return opens on it rather than flashing the list first.
+                if Self.splashOn {
+                    splashRun += 1
+                    splash = .resume
+                }
             default: break
             }
         }

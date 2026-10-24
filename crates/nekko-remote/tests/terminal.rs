@@ -147,7 +147,7 @@ const ON: DeviceAccess = DeviceAccess { read: true, change: true };
 
 impl Rig {
     fn ask(&self, device: &str, channel: &str, args: Value, proof: Option<Value>) -> Result<Value, String> {
-        let who = PhoneCall { device_id: device.into(), proof };
+        let who = PhoneCall { device_id: device.into(), proof, step_up: None };
         self.rt.block_on((self.gated)(who, channel.to_string(), args))
     }
     /// A change-class call with a fresh signed proof.

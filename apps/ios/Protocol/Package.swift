@@ -28,7 +28,7 @@ let package = Package(
         .target(name: "NekkoProtocol", dependencies: cryptoDeps),
         // The app's state (computers, connection, chats) without UIKit/SwiftUI, so it is tested here too.
         .target(name: "NekkoKit", dependencies: ["NekkoProtocol"]),
-        .testTarget(name: "NekkoKitTests", dependencies: ["NekkoKit"], linkerSettings: kitLinker),
+        .testTarget(name: "NekkoKitTests", dependencies: ["NekkoKit"], resources: [.copy("Fixtures")], linkerSettings: kitLinker),
         .testTarget(name: "NekkoProtocolTests", dependencies: ["NekkoProtocol"], resources: [.copy("Fixtures")]),
     ]
 )

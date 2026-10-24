@@ -108,10 +108,14 @@ export const IpcChannels = {
 
   machineReadiness: 'machine:readiness',
   machineProfile: 'machine:profile',
+  /** One phone-safe read for a computer's page: version, hardware, live stats, the model server (2026-10-24). */
+  machineSummary: 'machine:summary',
   machineRecommendations: 'machine:recommendations',
   machineDismissNudge: 'machine:dismissNudge',
   gpuStats: 'gpu:stats',
   systemStats: 'system:stats',
+  /** The phone's Monitors pane (FD-1): answered by the phone gate from the other monitor, chat and automation reads. */
+  monitorSummary: 'monitor:summary',
 
   sessionsList: 'sessions:list',
   sessionNextWatch: 'session:nextWatch',
@@ -350,6 +354,12 @@ export const IpcChannels = {
   networkVisibilityStop: 'networkVisibility:stop',
 
   appInfo: 'app:info',
+  /** SK-2: a single-use step-up challenge; from a phone the daemon's gate answers it (step-up.ts). */
+  securityChallenge: 'security:challenge',
+  /** SK-3 safety exits, phone only: the daemon's phone gate answers them (phone-access.ts). */
+  appQuit: 'app:quit',
+  deviceSignOut: 'device:signOut',
+  remoteStop: 'remote:stop',
   // The Claude policy nekkod enforces, and why a feature is off (claude-policy.ts).
   claudePolicy: 'claude:policy',
   claudeCapability: 'claude:capability',
@@ -382,6 +392,9 @@ export const IpcChannels = {
   syncSetEnabled: 'sync:setEnabled',
   syncSetIncludeLocalOnly: 'sync:setIncludeLocalOnly',
   syncDeleteAll: 'sync:deleteAll',
+  // Send feedback (crates/nekkod/src/feedback.rs): no sign-in needed.
+  feedbackInfo: 'feedback:info',
+  feedbackSend: 'feedback:send',
   voiceStatus: 'voice:status',
   voiceInstall: 'voice:install',
   voiceCancelInstall: 'voice:cancel',
@@ -442,6 +455,10 @@ export interface NekkoApi {
   cloudBeginOAuth(provider: import('./cloud.js').CloudOAuthProvider): Promise<{ authUrl: string }>;
   cloudCancelOAuth(): Promise<import('./cloud.js').CloudStatus>;
   cloudSignOut(): Promise<import('./cloud.js').CloudStatus>;
+  /** Send feedback: the app facts the sheet may share (app, version, OS, CPU type; nothing identifying). */
+  feedbackInfo(): Promise<import('./feedback.js').FeedbackAppInfo>;
+  /** Send feedback's quick note to Nekko Cloud, with the facts above only when `includeAppInfo`. */
+  feedbackSend(message: string, includeAppInfo: boolean): Promise<{ ok: true }>;
   syncTurnOn(): Promise<import('./cloud.js').SyncTurnOnResult>;
   syncConfirmRecoveryKey(text: string): Promise<import('./cloud.js').CloudStatus>;
   syncRestore(text: string): Promise<import('./cloud.js').CloudStatus>;

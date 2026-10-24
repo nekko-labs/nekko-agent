@@ -27,12 +27,15 @@ pub struct Remote {
     dispatch: Arc<OnceLock<PhoneDispatcher>>,
     /// Phones attached to terminals (FA-3), shared by the gate and the relay agent.
     terminals: Arc<PhoneTerminals>,
+    /// `security.json` beside `remote.json`: step-up on guarded phone calls (SK-2).
+    security: Option<PathBuf>,
 }
 
 impl Remote {
     pub fn new(dir: Option<PathBuf>, hub: Hub) -> Self {
         let dispatch: Arc<OnceLock<PhoneDispatcher>> = Arc::default();
         let terminals = PhoneTerminals::new();
+        let security = dir.clone();
         let svc = dir.map(|d| {
             let link = HubLink {
                 rt: tokio::runtime::Handle::current(),
@@ -42,7 +45,7 @@ impl Remote {
             };
             RemoteService::new(&d, nekko_remote::hello::os_random(), nekko_remote::system_clock(), Box::new(link))
         });
-        Self { svc, dispatch, terminals }
+        Self { svc, dispatch, terminals, security }
     }
 
     pub fn enabled(&self) -> bool {
@@ -57,7 +60,13 @@ impl Remote {
     pub fn set_dispatcher(&self, run: Dispatcher) {
         // Without a data directory there is no registry and no relay agent to dispatch for.
         if let Some(svc) = &self.svc {
-            let _ = self.dispatch.set(nekko_remote::phone::gate_shared(run, svc.clone(), self.terminals.clone()));
+            let security = self.security.as_deref().map(|d| {
+                Arc::new(nekko_remote::step_up::SecurityFile::in_dir(d))
+                    as Arc<dyn nekko_remote::step_up::SecurityStore>
+            });
+            let classes = nekko_remote::phone::Classes::from_policy();
+            let gate = nekko_remote::phone::gate_secured(run, svc.clone(), classes, self.terminals.clone(), security);
+            let _ = self.dispatch.set(gate);
         }
     }
 

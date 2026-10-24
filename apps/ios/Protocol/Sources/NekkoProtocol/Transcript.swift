@@ -8,11 +8,12 @@ public enum ToolStatus: Sendable, Equatable { case running, waiting, ok, error }
 public enum Block: Equatable, Sendable, Identifiable {
     case user(id: String, text: String, at: Int64?, images: Int)
     case assistant(id: String, text: String, reasoning: String?, streaming: Bool, interrupted: Bool)
-    case tool(id: String, name: String, label: String, status: ToolStatus, output: String?)
+    /// `input` is the call's arguments, for rows that read more than the label (watches, subagents).
+    case tool(id: String, name: String, label: String, status: ToolStatus, output: String?, input: [String: JSONValue])
 
     public var id: String {
         switch self {
-        case .user(let id, _, _, _), .assistant(let id, _, _, _, _), .tool(let id, _, _, _, _): return id
+        case .user(let id, _, _, _), .assistant(let id, _, _, _, _), .tool(let id, _, _, _, _, _): return id
         }
     }
 
@@ -21,7 +22,7 @@ public enum Block: Equatable, Sendable, Identifiable {
         switch self {
         case .user(_, let text, let at, let images): return .user(id: id, text: text, at: at, images: images)
         case .assistant(_, let text, let r, let s, let i): return .assistant(id: id, text: text, reasoning: r, streaming: s, interrupted: i)
-        case .tool(_, let name, let label, let status, let output): return .tool(id: id, name: name, label: label, status: status, output: output)
+        case .tool(_, let name, let label, let status, let output, let input): return .tool(id: id, name: name, label: label, status: status, output: output, input: input)
         }
     }
 
@@ -70,13 +71,13 @@ public enum Transcript {
                 }
                 for call in m.toolCalls {
                     toolIndex[call.id] = out.count
-                    out.append(.tool(id: call.id, name: call.name, label: toolLabel(call), status: .ok, output: nil))
+                    out.append(.tool(id: call.id, name: call.name, label: toolLabel(call), status: .ok, output: nil, input: call.input))
                 }
             case "tool":
                 guard let r = m.toolResult, let i = toolIndex[r.toolCallId],
-                      case .tool(let id, let name, let label, _, _) = out[i] else { continue }
+                      case .tool(let id, let name, let label, _, _, let input) = out[i] else { continue }
                 out[i] = .tool(id: id, name: name, label: label, status: r.isError ? .error : .ok,
-                               output: clip(r.output, full: r.outputChars, images: r.omittedImages))
+                               output: clip(r.output, full: r.outputChars, images: r.omittedImages), input: input)
             default:
                 continue
             }
@@ -94,7 +95,7 @@ public enum Transcript {
             return appendStream(t) { text, reasoning in (text, (reasoning ?? "") + delta) }
         case .toolCall(_, let call):
             t.running = true
-            t.blocks = settle(t.blocks) + [.tool(id: call.id, name: call.name, label: toolLabel(call), status: .running, output: nil)]
+            t.blocks = settle(t.blocks) + [.tool(id: call.id, name: call.name, label: toolLabel(call), status: .running, output: nil, input: call.input)]
         case .approvalRequired(_, let approval):
             t.running = true
             t.approval = approval
@@ -102,8 +103,8 @@ public enum Transcript {
         case .toolResult(_, let r):
             if t.approval?.call.id == r.toolCallId { t.approval = nil }
             t.blocks = t.blocks.map { b in
-                if case .tool(let id, let name, let label, _, _) = b, id == r.toolCallId {
-                    return .tool(id: id, name: name, label: label, status: r.isError ? .error : .ok, output: clip(r.output))
+                if case .tool(let id, let name, let label, _, _, let input) = b, id == r.toolCallId {
+                    return .tool(id: id, name: name, label: label, status: r.isError ? .error : .ok, output: clip(r.output), input: input)
                 }
                 return b
             }
@@ -160,15 +161,15 @@ public enum Transcript {
     }
 
     private static func upsertTool(_ blocks: [Block], _ call: ToolCall, _ status: ToolStatus) -> [Block] {
-        if blocks.contains(where: { if case .tool(let id, _, _, _, _) = $0 { return id == call.id } else { return false } }) {
+        if blocks.contains(where: { if case .tool(let id, _, _, _, _, _) = $0 { return id == call.id } else { return false } }) {
             return blocks.map { b in
-                if case .tool(let id, let name, let label, _, let output) = b, id == call.id {
-                    return .tool(id: id, name: name, label: label, status: status, output: output)
+                if case .tool(let id, let name, let label, _, let output, let input) = b, id == call.id {
+                    return .tool(id: id, name: name, label: label, status: status, output: output, input: input)
                 }
                 return b
             }
         }
-        return settle(blocks) + [.tool(id: call.id, name: call.name, label: toolLabel(call), status: status, output: nil)]
+        return settle(blocks) + [.tool(id: call.id, name: call.name, label: toolLabel(call), status: status, output: nil, input: call.input)]
     }
 
     /// Saved transcript + live overlay without duplicates. Only this turn's
@@ -188,20 +189,20 @@ public enum Transcript {
         var toolIds = Set<String>()
         var replies = Set<String>()
         for b in turn {
-            if case .tool(let id, _, _, _, _) = b { toolIds.insert(id) }
+            if case .tool(let id, _, _, _, _, _) = b { toolIds.insert(id) }
             if case .assistant(_, let text, _, _, _) = b { replies.insert(trim(text)) }
         }
         var liveTools: [String: Block] = [:]
-        for b in live { if case .tool(let id, _, _, _, _) = b { liveTools[id] = b } }
+        for b in live { if case .tool(let id, _, _, _, _, _) = b { liveTools[id] = b } }
         let extra = live.filter { b in
             switch b {
             case .user: return false
-            case .tool(let id, _, _, _, _): return !toolIds.contains(id)
+            case .tool(let id, _, _, _, _, _): return !toolIds.contains(id)
             case .assistant(_, let text, _, _, _): return trim(text).isEmpty || !replies.contains(trim(text))
             }
         }
         let mergedTurn = turn.map { b -> Block in
-            if case .tool(let id, _, _, _, _) = b, let l = liveTools[id] { return l }
+            if case .tool(let id, _, _, _, _, _) = b, let l = liveTools[id] { return l }
             return b
         }
         return head + mergedTurn + extra
@@ -247,7 +248,7 @@ public enum Transcript {
     static let toolVerbs = [
         "read_file": "Read", "write_file": "Write", "edit_file": "Edit", "list_dir": "List",
         "glob": "Find", "grep": "Search", "bash": "Run", "web_fetch": "Fetch",
-        "web_search": "Search the web for", "spawn_agent": "Delegate", "ask_user": "Ask",
+        "web_search": "Search the web for", "spawn_agent": "Delegate", "ask_user": "Ask", "agent_watch": "Watch",
     ]
 
     static func oneLine(_ s: String, _ max: Int) -> String {

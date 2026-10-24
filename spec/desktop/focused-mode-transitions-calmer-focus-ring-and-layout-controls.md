@@ -29,3 +29,24 @@ The navigation outline and its lower tail share the same short timing; labels
 reveal together near the end of expansion, without stagger or text blur. Its
 translucent tint no longer applies a backdrop blur during shape morphing.
 No profile data or external permissions change.
+
+## Subtle focus surface and push panels (2026-10-24)
+
+Implemented and verified with 25 focused tests, desktop typecheck and production build, plus hidden macOS Electron light/dark 1400px/760px captures and sampled motion frames. Mid-transition layout width and rapid reversal checks pass. Packaged builds and other platforms remain unverified:
+- Focused chat surfaces use 35% theme-paper tint over the workspace, with 24px
+  rounded corners. The existing native CSS squircle enhancement remains; no SVG
+  mask, blur or JavaScript corner rendering is added. Unsupported renderers use
+  ordinary rounded corners. No measured frame-time claim is made.
+- Agents and Monitors slide from their edge while their layout space expands or
+  collapses over 220ms, pushing the chat toward the middle. Horizontal panel
+  configurations use vertical motion. Exit retention matches the CSS duration;
+  outgoing panels remain inert and hidden to assistive technology. Reduced
+  motion skips transitions and exit retention.
+- The left navigation is a rounded, approximately 90%-height surface, using
+  theme paper darkened with 8% black at 97% opacity. Expansion and a single label
+  opacity reveal replace SVG path/clip morphing and geometry observation.
+  Hover, visible keyboard focus and pin all open the same panel. No new setting,
+  network request, profile access or permission is introduced.
+- Acceptance: matched light/dark 1400px and 760px captures, simple navigation
+  reveal, panel enter/exit and rapid reversal checks, focused tests, typecheck
+  and production build. Packaged builds and non-macOS platforms remain unverified.
