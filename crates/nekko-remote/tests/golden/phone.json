@@ -2402,6 +2402,100 @@
    "updatedAt": 8,
    "staleAfterMs": 60000,
    "account": "me@example.com"
+  },
+  "system:stats": {
+   "cpuPct": 42.5,
+   "cpuCores": 16,
+   "cpuModel": "AMD Ryzen 9 7950X",
+   "memUsedMB": 20000,
+   "memTotalMB": 65536,
+   "temps": {
+    "cpuC": 71,
+    "memoryC": 48
+   }
+  },
+  "gpu:stats": {
+   "source": "nvidia-smi",
+   "devices": [
+    {
+     "name": "NVIDIA GeForce RTX 4090",
+     "memoryTotalMB": 24564,
+     "memoryUsedMB": 9000,
+     "utilizationPct": 87,
+     "temperatureC": 66
+    },
+    {
+     "name": "NVIDIA GeForce RTX 3060",
+     "memoryTotalMB": 12288,
+     "memoryUsedMB": 100,
+     "utilizationPct": 3,
+     "temperatureC": 70
+    }
+   ],
+   "totalMB": 36852,
+   "usedMB": 9100,
+   "freeMB": 27752
+  },
+  "chat:running": [
+   "s1",
+   "s2",
+   "s1",
+   "gone"
+  ],
+  "sessions:summaries": [
+   {
+    "id": "s1",
+    "title": "Fix the build",
+    "workspaceId": "w1",
+    "firstUserText": "Run the tests in /Users/me/app",
+    "activeRun": {
+     "startedAt": 9000000000000000
+    }
+   },
+   {
+    "id": "s2",
+    "title": "héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 "
+   },
+   {
+    "id": "s3",
+    "title": "Idle"
+   }
+  ],
+  "chat:pending": {
+   "s1": {
+    "sessionId": "s1",
+    "approval": {
+     "call": {
+      "id": "tc1",
+      "name": "bash",
+      "input": {
+       "command": "rm -rf /Users/me/app"
+      }
+     },
+     "reason": "Runs a shell command",
+     "severity": "high",
+     "requestedAt": 500
+    }
+   },
+   "s3": {
+    "sessionId": "s3",
+    "question": {
+     "callId": "q1",
+     "askedAt": 300,
+     "questions": [
+      {
+       "id": "x",
+       "header": "Auth",
+       "question": "Which auth method?",
+       "options": [
+        {
+         "label": "OAuth"
+        }
+       ]
+      }
+     ]
+    }
+   }
   }
  },
  "cases": [
@@ -2517,9 +2611,25 @@
      []
     ]
    ],
-   "result": {
-    "ok": "sessions:summaries"
-   }
+   "result": [
+    {
+     "id": "s1",
+     "title": "Fix the build",
+     "workspaceId": "w1",
+     "firstUserText": "Run the tests in /Users/me/app",
+     "activeRun": {
+      "startedAt": 9000000000000000
+     }
+    },
+    {
+     "id": "s2",
+     "title": "héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 "
+    },
+    {
+     "id": "s3",
+     "title": "Idle"
+    }
+   ]
   },
   {
    "channel": "session:get",
@@ -6927,6 +7037,222 @@
    ],
    "calls": [],
    "error": "Not allowed from a paired phone (channel-denied): dir:list"
+  },
+  {
+   "channel": "monitor:summary",
+   "args": [],
+   "calls": [
+    [
+     "system:stats",
+     []
+    ],
+    [
+     "gpu:stats",
+     []
+    ],
+    [
+     "chat:running",
+     []
+    ],
+    [
+     "sessions:summaries",
+     []
+    ],
+    [
+     "chat:pending",
+     []
+    ],
+    [
+     "tasks:list",
+     []
+    ],
+    [
+     "workflows:list",
+     []
+    ]
+   ],
+   "result": {
+    "hardware": {
+     "cpu": {
+      "loadPct": 42.5,
+      "cores": 16,
+      "tempC": 71
+     },
+     "memory": {
+      "usedMB": 20000,
+      "totalMB": 65536,
+      "tempC": 48
+     },
+     "gpu": {
+      "memoryUsedMB": 9100,
+      "memoryTotalMB": 36852,
+      "loadPct": 87,
+      "tempC": 70
+     }
+    },
+    "running": [
+     {
+      "id": "s1",
+      "title": "Fix the build",
+      "step": "approval",
+      "elapsedMs": 0
+     },
+     {
+      "id": "s2",
+      "title": "héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 hél",
+      "step": "working"
+     },
+     {
+      "id": "gone",
+      "title": "",
+      "step": "working"
+     }
+    ],
+    "needsYou": [
+     {
+      "sessionId": "s3",
+      "title": "Idle",
+      "kind": "question",
+      "callId": "q1",
+      "label": "Which auth method?",
+      "count": 1,
+      "since": 300
+     },
+     {
+      "sessionId": "s1",
+      "title": "Fix the build",
+      "kind": "approval",
+      "callId": "tc1",
+      "risk": "high",
+      "label": "bash",
+      "since": 500
+     }
+    ],
+    "automations": [
+     {
+      "kind": "task",
+      "id": "t1",
+      "name": "Nightly",
+      "nextRunAt": 3
+     },
+     {
+      "kind": "workflow",
+      "id": "w1",
+      "name": "Review PRs",
+      "nextRunAt": 4
+     }
+    ]
+   }
+  },
+  {
+   "channel": "monitor:summary",
+   "args": [
+    {
+     "deep": true
+    }
+   ],
+   "calls": [
+    [
+     "system:stats",
+     []
+    ],
+    [
+     "gpu:stats",
+     []
+    ],
+    [
+     "chat:running",
+     []
+    ],
+    [
+     "sessions:summaries",
+     []
+    ],
+    [
+     "chat:pending",
+     []
+    ],
+    [
+     "tasks:list",
+     []
+    ],
+    [
+     "workflows:list",
+     []
+    ]
+   ],
+   "result": {
+    "hardware": {
+     "cpu": {
+      "loadPct": 42.5,
+      "cores": 16,
+      "tempC": 71
+     },
+     "memory": {
+      "usedMB": 20000,
+      "totalMB": 65536,
+      "tempC": 48
+     },
+     "gpu": {
+      "memoryUsedMB": 9100,
+      "memoryTotalMB": 36852,
+      "loadPct": 87,
+      "tempC": 70
+     }
+    },
+    "running": [
+     {
+      "id": "s1",
+      "title": "Fix the build",
+      "step": "approval",
+      "elapsedMs": 0
+     },
+     {
+      "id": "s2",
+      "title": "héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 héllo 😀 hél",
+      "step": "working"
+     },
+     {
+      "id": "gone",
+      "title": "",
+      "step": "working"
+     }
+    ],
+    "needsYou": [
+     {
+      "sessionId": "s3",
+      "title": "Idle",
+      "kind": "question",
+      "callId": "q1",
+      "label": "Which auth method?",
+      "count": 1,
+      "since": 300
+     },
+     {
+      "sessionId": "s1",
+      "title": "Fix the build",
+      "kind": "approval",
+      "callId": "tc1",
+      "risk": "high",
+      "label": "bash",
+      "since": 500
+     }
+    ],
+    "automations": [
+     {
+      "kind": "task",
+      "id": "t1",
+      "name": "Nightly",
+      "nextRunAt": 3
+     },
+     {
+      "kind": "workflow",
+      "id": "w1",
+      "name": "Review PRs",
+      "nextRunAt": 4
+     }
+    ]
+   }
   }
  ]
 }

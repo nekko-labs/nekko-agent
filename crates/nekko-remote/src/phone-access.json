@@ -29,6 +29,7 @@
   "logs:read",
   "machine:summary",
   "models:list",
+  "monitor:summary",
   "pr:action",
   "pr:checks",
   "pr:create",
@@ -130,6 +131,7 @@
   "limits:get",
   "machine:summary",
   "models:list",
+  "monitor:summary",
   "pr:sessionList",
   "providers:list",
   "session:get",
@@ -418,6 +420,21 @@
   "scope",
   "status",
   "usedPercent"
+ ],
+ "monitorView": {
+  "running": 20,
+  "needsYou": 20,
+  "automations": 10,
+  "labelChars": 120
+ },
+ "monitorSources": [
+  "system:stats",
+  "gpu:stats",
+  "chat:running",
+  "sessions:summaries",
+  "chat:pending",
+  "tasks:list",
+  "workflows:list"
  ],
  "queueEditKeys": [
   "expect",
