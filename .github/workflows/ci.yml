@@ -3,7 +3,9 @@ name: CI
 # Three tiers (scripts/ci-scope.mjs decides which jobs each run needs):
 #
 #   pull_request   fast feedback: build, Linux daemon, Windows capture, gated by
-#                  the paths the PR touches. About 8 minutes.
+#                  the paths the PR touches. About 8 minutes. A change only to
+#                  the native phone apps (apps/ios, apps/android) skips them all:
+#                  its own workflows test it.
 #   merge_group    the merge queue: adds the Windows daemon and the speed
 #                  contract for the queued group, before anything reaches main.
 #   schedule       every 6 hours, and before the nightly release: every job on
@@ -39,6 +41,7 @@ jobs:
   scope:
     runs-on: ubuntu-latest
     outputs:
+      build: ${{ steps.scope.outputs.build }}
       daemon_os: ${{ steps.scope.outputs.daemon_os }}
       capture_os: ${{ steps.scope.outputs.capture_os }}
       perf: ${{ steps.scope.outputs.perf }}
@@ -46,8 +49,11 @@ jobs:
       run: ${{ steps.fresh.outputs.run }}
     steps:
       - uses: actions/checkout@v7
-        with:
-          sparse-checkout: scripts
+      # Here rather than in `build`, so it holds every change, `build` or not:
+      # Claude sign-in, Claude credential reads and Claude plan limits must not
+      # come back (Anthropic's third-party rules).
+      - name: Claude compliance check
+        run: node scripts/check-claude-compliance.mjs
       - name: Skip a scheduled run when main has not moved
         id: fresh
         env:
@@ -85,7 +91,7 @@ jobs:
 
   build:
     needs: scope
-    if: needs.scope.outputs.run == 'true'
+    if: needs.scope.outputs.run == 'true' && needs.scope.outputs.build == 'true'
     runs-on: ubuntu-latest
     # Each job's timeout is about 3x its slowest green run, so a hung test fails
     # `gate` instead of holding it pending for GitHub's 6-hour default (#796's
@@ -97,10 +103,6 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      # First, and before anything is installed: Claude sign-in, Claude credential
-      # reads and Claude plan limits must not come back (Anthropic's third-party rules).
-      - name: Claude compliance check
-        run: node scripts/check-claude-compliance.mjs
       - run: npm ci
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
