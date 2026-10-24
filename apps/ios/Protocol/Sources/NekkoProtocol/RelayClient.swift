@@ -166,7 +166,7 @@ public struct RelayConfig: Sendable {
 ///    `{type:'hello', deviceId, name, platform, protocol: 4, challenge, pair?}`
 ///    (the one-time pairing code only while enrolling).
 /// 3. After the welcome every request is `{type:'req', id, seq, challenge,
-///    channel, args, proof?}`: `seq` starts at 1 after each welcome and goes up
+///    channel, args, proof?, stepUp?}`: `seq` starts at 1 after each welcome and goes up
 ///    by one per request, and `challenge` is the nonce the welcomed HELLO
 ///    answered. The computer drops a request with a stale seq or the wrong
 ///    challenge and challenges the connection again, so a recorded frame
@@ -352,6 +352,13 @@ public final class RelayClient: @unchecked Sendable {
 
     /// `call`, with a signed Change proof beside the args (`ChangeProof`, IO-33).
     public func call(_ channel: String, _ args: [JSONValue], proof: JSONValue?, timeout: TimeInterval?) async throws -> JSONValue {
+        try await call(channel, args, proof: proof, stepUp: nil, timeout: timeout)
+    }
+
+    /// `call`, with a Change proof and a step-up (`StepUpProof.json`, SK-6)
+    /// beside the args, both inside the sealed frame.
+    public func call(_ channel: String, _ args: [JSONValue], proof: JSONValue?, stepUp: JSONValue?,
+                     timeout: TimeInterval?) async throws -> JSONValue {
         try await awaitReady()
         let id: Int64 = locked {
             let id = nextId
@@ -360,6 +367,7 @@ public final class RelayClient: @unchecked Sendable {
         }
         var fields: [String: JSONValue] = ["type": "req", "id": .int(id), "channel": .string(channel), "args": .array(args)]
         if let proof { fields["proof"] = proof }
+        if let stepUp { fields["stepUp"] = stepUp }
         let limit = timeout ?? config.requestTimeout
         return try await withCheckedThrowingContinuation { (cont: CheckedContinuation<JSONValue, Error>) in
             locked { pending[id] = cont }

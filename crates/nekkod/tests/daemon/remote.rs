@@ -590,7 +590,9 @@ async fn a_phone_raises_a_mode_with_a_security_key_and_stops_remote_access() {
     let c = &res["result"];
     assert_eq!(c["required"], true, "{res}");
     assert_eq!(c["methods"], json!(["security-key", "totp"]), "{res}");
-    assert_eq!(c.as_object().map(|o| o.len()), Some(4), "nothing else about the methods: {res}");
+    // The relying-party id rides along so the phone's FIDO2 client can name it (SK-6); it is no secret.
+    assert_eq!(c["rpId"], RP_ID, "{res}");
+    assert_eq!(c.as_object().map(|o| o.len()), Some(5), "nothing else about the methods: {res}");
     assert!(!res.to_string().contains("YubiKey"), "no method names reach a phone: {res}");
     let challenge = c["challenge"].as_str().expect("a challenge").to_string();
 
