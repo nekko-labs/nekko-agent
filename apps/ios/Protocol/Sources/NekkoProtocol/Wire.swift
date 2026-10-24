@@ -667,8 +667,12 @@ public struct WorkspaceFolder: Equatable, Sendable, Identifiable {
 public struct AppInfo: Equatable, Sendable {
     public let version: String?
     public let platform: String?
+    /// The owner lets a phone quit Nekko Agent there (SK-3, `app:quit`); false from older computers.
+    public var quitFromPhone = false
 
-    public static func from(_ v: JSONValue?) -> AppInfo { AppInfo(version: v?.str("version"), platform: v?.str("platform")) }
+    public static func from(_ v: JSONValue?) -> AppInfo {
+        AppInfo(version: v?.str("version"), platform: v?.str("platform"), quitFromPhone: v?.flag("quitFromPhone") ?? false)
+    }
 }
 
 public struct VoiceInstall: Equatable, Sendable {
