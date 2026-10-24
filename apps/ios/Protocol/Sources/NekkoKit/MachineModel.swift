@@ -122,7 +122,7 @@ public final class MachineModel {
         return usage?.days.first { $0.date == day }
     }
 
-    static func dayKey(_ ms: Int64) -> String {
+    nonisolated static func dayKey(_ ms: Int64) -> String {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.timeZone = TimeZone(identifier: "UTC")
