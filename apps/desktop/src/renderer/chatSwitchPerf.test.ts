@@ -15,7 +15,7 @@ describe('guarded wall selection', () => {
   for (const mode of ['focus', 'grid', 'fixed'] as const) {
     it(`keeps the tree and no-ops a reselect in ${mode}`, () => {
       const root = tileTree([wallPane('chat', 'a'), wallPane('chat', 'b')]);
-      const state = { ...DEFAULT_WALL_STATE, root, hero: 'a', layout: { ...DEFAULT_WALL_STATE.layout, mode } };
+      const state = { ...DEFAULT_WALL_STATE, root, hero: 'a', layout: { ...DEFAULT_WALL_STATE.layout, mode: mode === 'fixed' ? 'grid' as const : mode, fixedGrid: mode === 'fixed' } };
       const next = openWallPane(state, 'chat', 'b');
       expect(next.root).toBe(root);
       expect(next.hero).toBe('b');

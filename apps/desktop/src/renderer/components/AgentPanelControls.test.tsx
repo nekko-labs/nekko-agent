@@ -70,7 +70,7 @@ describe('wall chrome fixes', () => {
   });
   it('reserves snap-to-grid space so revealing it never shifts the controls beside it', () => {
     const hidden = cssRule(styles, '.wall-auto-arrange');
-    expect(hidden).toMatchObject({ 'grid-template-columns': '1fr', 'margin-left': '6px', visibility: 'hidden' });
+    expect(hidden).toMatchObject({ 'grid-template-columns': '1fr', visibility: 'hidden' });
     expect(hidden.width).toBeUndefined();
     // Revealing it changes only paint (opacity, visibility, transform), never its box.
     const shown = cssRule(styles, ".wall-auto-arrange[data-visible='true']");

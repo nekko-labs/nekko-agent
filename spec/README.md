@@ -67,7 +67,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Agent window controls refresh (2026-10-15)](desktop/agent-window-controls-refresh.md) (6 KB)
 - [Composer and desktop rail regression fixes (2026-10-07)](desktop/composer-and-desktop-rail-regression-fixes.md) (3 KB)
 - [Empty wall opens the new-chat screen; glass prism composer (2026-10-18)](desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md) (2 KB)
-- [Focused mode transitions, calmer focus ring and layout controls (2026-10-17)](desktop/focused-mode-transitions-calmer-focus-ring-and-layout-controls.md) (5 KB)
+- [Focused mode transitions, calmer focus ring and layout controls (2026-10-17)](desktop/focused-mode-transitions-calmer-focus-ring-and-layout-controls.md) (7 KB)
 - [Grid model selection and chat-mode menus (2026-10-07)](desktop/grid-model-selection-and-chat-mode-menus.md) (1 KB)
 - [Inline agent-window creation](desktop/inline-agent-window-creation.md) (3 KB)
 - [Minimize agent windows](desktop/minimize-agent-windows.md) (1 KB)
@@ -92,7 +92,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 Agents panel, monitors, subagents and delegation.
 
 - [Agent activity and panel polish](agents/agent-activity-and-panel-polish.md) (39 KB)
-- [Agent Monitor Project group, hardware temperatures and multi-monitor Dynamic mode (2026-10-18)](agents/agent-monitor-project-group-hardware-temperatures-and-multi-moni.md) (5 KB)
+- [Agent Monitor Project group, hardware temperatures and multi-monitor Dynamic mode (2026-10-18)](agents/agent-monitor-project-group-hardware-temperatures-and-multi-moni.md) (6 KB)
 - [Agent panel view options (2026-10-17)](agents/agent-panel-view-options.md) (4 KB)
 - [Agents dashboard simplification (2026-10-06)](agents/agents-dashboard-simplification.md) (3 KB)
 - [Approval retention and delegation navigation](agents/approval-retention-and-delegation-navigation.md) (1 KB)
