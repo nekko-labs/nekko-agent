@@ -46,6 +46,8 @@ public enum Channels {
     /// Provider usage, and one provider's limits by its id, read only.
     public static let usageSummary = "usage:summary"
     public static let limitsGet = "limits:get"
+    /// The folding-phone Monitors pane's one capped read (FD-1): hardware, working chats, what waits on you, next automations.
+    public static let monitorSummary = "monitor:summary"
     /// *Send a test notification*: answered by the computer's relay agent itself,
     /// so it is not on the phone allowlist (`PUSH_TEST_CHANNEL`) and not in `all`.
     public static let pushTest = "push:test"
@@ -96,7 +98,7 @@ public enum Channels {
         sessionSetOptions, sessionDelete, voiceStatus, voiceTranscribe, chatSend, chatAbort, chatQueue,
         chatPending, chatAnswer, toolApprove, workspaceList, appInfo, skillsRunnable, changesList,
         chatEditQueued, sessionFork, tasksList, taskRunNow, workflowsList, workflowRun, prSessionList,
-        usageSummary, limitsGet, sessionWatches,
+        usageSummary, limitsGet, sessionWatches, monitorSummary,
         workspaceGitStatus, gitDiff, gitLog, gitShow, gitBranches, gitCompare, prChecks, prDiff,
         gitStage, gitUnstage, gitCommit, gitCommitMessage, gitPush, gitSwitch, gitMergeAbort, prCreate, prAction,
         filesList, filesSearch, filesRead, filesWrite, logsList, logsRead,
