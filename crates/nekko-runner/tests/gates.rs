@@ -234,3 +234,12 @@ fn reasons_serialize_camel_case() {
     assert_eq!(serde_json::to_value(Reason::MemoryWarning).unwrap(), "memoryWarning");
     assert_eq!(serde_json::to_value(Decision::Take).unwrap(), "take");
 }
+
+#[test]
+fn drain_serializes_camel_case_fields() {
+    let d = Decision::Drain { grace_secs: 120, why: vec![Reason::UserBusy] };
+    assert_eq!(
+        serde_json::to_value(d).unwrap(),
+        serde_json::json!({ "drain": { "graceSecs": 120, "why": ["userBusy"] } })
+    );
+}

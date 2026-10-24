@@ -71,7 +71,7 @@ pub enum Reason {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum Decision {
     Take,
     Hold(Vec<Reason>),
