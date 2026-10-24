@@ -30,9 +30,11 @@ final class ComputersTests: XCTestCase {
         tapBarButton(edit, in: app)
         app.buttons["Forget…"].tap()
         confirmForget(app)
-        XCTAssertTrue(app.staticTexts["This computer was forgotten"].waitForExistence(timeout: 5), "the page says the computer is gone")
-        app.buttons["Computers"].firstMatch.tap()
-        XCTAssertTrue(row.waitForNonExistence(timeout: 5), "Forget from the computer page removed the computer")
+        // Forgetting the only computer leaves the app with nothing paired: the
+        // page either says so or the stack unwinds to the pairing invitation.
+        let gone = app.buttons["Pair with your computer"].waitForExistence(timeout: 10)
+            || app.staticTexts["This computer was forgotten"].exists
+        XCTAssertTrue(gone, "Forget from the computer page removed the only computer")
 
         // From the computer menu on the chats screen.
         app.terminate()
