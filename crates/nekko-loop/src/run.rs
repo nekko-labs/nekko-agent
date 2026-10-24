@@ -10,7 +10,10 @@
 //! responses the TS test replays. Events and the transcript it appends are the
 //! TS shapes (`AgentEvent`, `ChatMessage`), as JSON.
 
-use crate::fit::{ELIDE_ALL, apply_elision, elidable, elision_for, is_context_overflow};
+use crate::fit::{
+    ELIDE_ALL, FIT_TARGET, apply_elision, elidable, elision_for, is_context_overflow, overflow_message, prompt_units,
+    reported_window,
+};
 use crate::history::{
     as_seen_by_chat_model, from_latest_compaction, latest_compaction_index, window_history, without_images,
 };
@@ -362,6 +365,13 @@ struct Loop<'o, 'a, C, T, E> {
     squeezed: bool,
     /// Elidable tool outputs in the last request (`sentEligible`).
     sent_eligible: usize,
+    /// The prompt overflowed on the system prompt and tool definitions rather
+    /// than the conversation (a small local window): the rest of the run is
+    /// sent without tools.
+    toolless: bool,
+    /// The last request's size in UTF-16 units, its fixed part (system prompt
+    /// and tools) and its conversation, and whether it carried tools.
+    sent_units: (usize, usize, bool),
 }
 
 impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '_, C, T, E> {
@@ -390,10 +400,12 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
             .map(|m| if blind { without_images(&m) } else { m })
             .collect();
         messages.extend(extra);
-        let tools = if send_tools { self.opts.tools.clone() } else { Vec::new() };
+        let tools = if send_tools && !self.toolless { self.opts.tools.clone() } else { Vec::new() };
         self.elided = elision_for(&self.opts.system, &tools, &messages, self.opts.context_window, self.elided);
         self.sent_eligible = elidable(&messages).len();
         let messages = apply_elision(messages, self.elided);
+        self.sent_units =
+            (prompt_units(&self.opts.system, &tools, &[]), prompt_units("", &[], &messages), !tools.is_empty());
         let req = ChatRequest {
             model: self.opts.model.clone(),
             messages,
@@ -509,6 +521,37 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
                         );
                         attempt = 1;
                         continue;
+                    }
+                    // Still too big, and the system prompt and tool definitions
+                    // alone fill most of a small window (a local model loaded
+                    // with 8k): answer without tools rather than not at all. A
+                    // long conversation, or a window that is not small, is left
+                    // to compaction instead.
+                    let (fixed, conversation, sent_tools) = self.sent_units;
+                    let window = reported_window(&e).or(self.opts.context_window);
+                    if !self.opts.cancel.is_cancelled()
+                        && !self.toolless
+                        && sent_tools
+                        && fixed >= conversation
+                        && window.is_some_and(|w| fixed as f64 / 4.0 > w * FIT_TARGET)
+                        && is_context_overflow(&e)
+                    {
+                        self.toolless = true;
+                        *turn = before;
+                        self.event(
+                            "retry",
+                            json!({
+                                "attempt": attempt,
+                                "maxAttempts": MAX_STREAM_ATTEMPTS,
+                                "delayMs": 0,
+                                "reason": "The model's context window is too small for its tools: replying without them",
+                            }),
+                        );
+                        attempt = 1;
+                        continue;
+                    }
+                    if is_context_overflow(&e) {
+                        return Err(overflow_message(&e));
                     }
                     let max_attempts =
                         if is_network_error(&e) { MAX_NETWORK_STREAM_ATTEMPTS } else { MAX_STREAM_ATTEMPTS };
@@ -723,7 +766,19 @@ pub async fn run_agent<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) 
     tools: &T,
     emit: &mut E,
 ) {
-    Loop { opts: &mut opts, client, tools, emit, elided: 0, squeezed: false, sent_eligible: 0 }.run().await;
+    Loop {
+        opts: &mut opts,
+        client,
+        tools,
+        emit,
+        elided: 0,
+        squeezed: false,
+        sent_eligible: 0,
+        toolless: false,
+        sent_units: (0, 0, false),
+    }
+    .run()
+    .await;
 }
 
 #[cfg(test)]

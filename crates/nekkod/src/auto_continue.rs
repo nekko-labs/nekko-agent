@@ -93,7 +93,10 @@ impl<D: Deps> AutoContinue<D> {
     pub fn on_event(self: &Arc<Self>, e: &Value) -> Option<tokio::task::JoinHandle<()>> {
         let id = e.get("sessionId").and_then(Value::as_str)?.to_string();
         match e.get("type").and_then(Value::as_str)? {
-            "error" if overflow(e) => self.run(id, Work::Overflow),
+            "error" if overflow(e) => {
+                let message = nekko_js::display(e.get("message").unwrap_or(&Value::Null));
+                self.run(id, Work::Overflow(message))
+            }
             "done" => {
                 lock(&self.continues).remove(&id);
                 self.run(id, Work::Reply)
@@ -109,7 +112,7 @@ impl<D: Deps> AutoContinue<D> {
         let me = self.clone();
         Some(tokio::spawn(async move {
             match work {
-                Work::Overflow => me.after_overflow(&id).await,
+                Work::Overflow(message) => me.after_overflow(&id, &message).await,
                 Work::Reply => me.after_reply(&id).await,
             }
             lock(&me.busy).remove(&id);
@@ -136,7 +139,7 @@ impl<D: Deps> AutoContinue<D> {
         true
     }
 
-    async fn after_overflow(&self, id: &str) {
+    async fn after_overflow(&self, id: &str, overflow_message: &str) {
         let used = lock(&self.continues).get(id).copied().unwrap_or(0);
         if used >= MAX_AUTO_CONTINUES {
             self.deps.notify(json!({
@@ -146,7 +149,11 @@ impl<D: Deps> AutoContinue<D> {
             }));
             return;
         }
-        if !self.settled(id).await || self.compactable(id).await.is_none() {
+        if !self.settled(id).await {
+            return;
+        }
+        let Some(session) = self.compactable(id).await else { return };
+        if overhead_overflow(overflow_message, &session) {
             return;
         }
         lock(&self.continues).insert(id.to_string(), used + 1);
@@ -189,8 +196,21 @@ impl<D: Deps> AutoContinue<D> {
 }
 
 enum Work {
-    Overflow,
+    /// With the error's message.
+    Overflow(String),
     Reply,
+}
+
+/// The overflow is the system prompt and tools, not the conversation: the
+/// error names the prompt size (a local server's `n_prompt_tokens`) and the
+/// transcript is under half of it. A summary would free almost nothing, so
+/// the chat is left with the error, which says to load the model with a
+/// larger window. (Compacting a two-message chat on an 8k window used to fail
+/// with "the conversation changed during compaction" as its title landed.)
+fn overhead_overflow(message: &str, session: &Value) -> bool {
+    let Some((_, needed)) = nekko_loop::fit::overflow_sizes(message) else { return false };
+    let messages = session.get("messages").and_then(Value::as_array).map(Vec::as_slice).unwrap_or_default();
+    (nekko_turn::variants::estimate_transcript_tokens(messages) as f64) < needed as f64 / 2.0
 }
 
 /// An `error` event that says the prompt no longer fits (`isContextOverflowError`).
@@ -371,6 +391,23 @@ mod tests {
         ac.on_event(&json!({ "type": "done", "sessionId": "s1" })).unwrap().await.unwrap();
         ac.on_event(&overflow_event()).unwrap().await.unwrap();
         assert_eq!(log(&fake).last().unwrap(), sent);
+    }
+
+    #[tokio::test]
+    async fn an_overflow_on_the_prompt_and_tools_alone_is_not_compacted() {
+        // About 100 tokens of chat against a 10,510-token prompt: the rest is the system prompt and tools.
+        let (fake, ac) = rig(0);
+        for message in [
+            r#"Model stream failed: Engine protocol predict request returned 400: {"error":{"code":400,"message":"request (10510 tokens) exceeds the available context size (8192 tokens), try increasing it","type":"exceed_context_size_error","n_prompt_tokens":10510,"n_ctx":8192}}"#,
+            "The model is loaded with a 8192-token context window, and this chat needs 10510 tokens. Reload the model with a larger context length (16384 or more) in your model server, then send again.",
+        ] {
+            ac.on_event(&json!({ "type": "error", "sessionId": "s1", "message": message })).unwrap().await.unwrap();
+        }
+        assert!(log(&fake).is_empty(), "{:?}", log(&fake));
+        // A conversation that is most of the prompt is still compacted.
+        let message = "The model is loaded with a 8192-token context window, and this chat needs 150 tokens. Reload the model with a larger context length (16384 or more) in your model server, then send again.";
+        ac.on_event(&json!({ "type": "error", "sessionId": "s1", "message": message })).unwrap().await.unwrap();
+        assert_eq!(log(&fake)[0], "compact s1");
     }
 
     #[tokio::test]

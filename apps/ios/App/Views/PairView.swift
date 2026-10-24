@@ -13,7 +13,7 @@ struct WelcomeView: View {
             VStack(alignment: .leading, spacing: 18) {
                 // First run, step 2 of 3 (IO-31).
                 if !app.prefs.onboarded { StepLabel(step: 2).padding(.top, 8) }
-                CatMark().frame(width: 56, height: 56).foregroundStyle(palette.accent).padding(.top, 24)
+                BrandTile().frame(width: 64, height: 64).padding(.top, 24)
                 Text("Your agent, in your pocket").font(.largeTitle.weight(.bold)).foregroundStyle(palette.ink)
                 Text("Drive Nekko Agent on your computer from this iPhone: follow chats as they stream, approve tools, answer questions and start new work. Everything is end-to-end encrypted between this phone and your computer.")
                     .foregroundStyle(palette.inkSoft)
