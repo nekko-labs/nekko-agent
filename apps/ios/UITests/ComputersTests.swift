@@ -9,7 +9,7 @@ final class ComputersTests: XCTestCase {
         app.launch()
 
         pair(app)
-        menu(app).tap()
+        openMenu(app)
         app.buttons["Computers"].tap()
         let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "relay.example.com")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5))
@@ -32,7 +32,7 @@ final class ComputersTests: XCTestCase {
         app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "YES"]
         app.launch()
         pair(app)
-        menu(app).tap()
+        openMenu(app)
         let computer = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "computer")).element(boundBy: 0)
         XCTAssertTrue(computer.waitForExistence(timeout: 5))
         computer.tap()
@@ -51,12 +51,25 @@ final class ComputersTests: XCTestCase {
         field.typeText("relay=wss://relay.example.com&room=a1b2c3d4e5f60718&key=00112233445566778899aabbccddeeff")
         app.buttons["Pair"].tap()
         if app.buttons["Not now"].waitForExistence(timeout: 3) { app.buttons["Not now"].tap() }
+        // Onboarded, pairing asks iOS for notifications straight away; answer it here
+        // rather than inside the next tap's interruption handling.
+        let allow = XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons["Allow"]
+        if allow.waitForExistence(timeout: 4) { allow.tap() }
     }
 
-    private func menu(_ app: XCUIApplication) -> XCUIElement {
+    /// The computer menu, tapped by coordinate once it has a real frame: XCTest
+    /// can't "scroll to" this navigation bar button (hit point {-1, -1}), as
+    /// LiveRelayTests found for the same button.
+    private func openMenu(_ app: XCUIApplication) {
         let m = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Computers and settings")).firstMatch
         XCTAssertTrue(m.waitForExistence(timeout: 10))
-        return m
+        let deadline = Date().addingTimeInterval(10)
+        while Date() < deadline {
+            let f = m.frame
+            if m.exists, !f.isEmpty, app.frame.contains(CGPoint(x: f.midX, y: f.midY)) { break }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        }
+        m.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
     }
 
     private func confirmForget(_ app: XCUIApplication) {
