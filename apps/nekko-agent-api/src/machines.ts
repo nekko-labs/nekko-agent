@@ -176,7 +176,8 @@ export function registerMachines(app: FastifyInstance, db: Db, opts: MachinesOpt
 
     // Minted here, handed out once: the key to the machine's environment and the phone's link; only its hash stays.
     const room = newRoom();
-    const key = b64(24);
+    // Hex, as the phone's pairing-link parser requires (the desktop's keys are hex too).
+    const key = randomBytes(16).toString("hex");
     const pair = newPairCode();
     const access = `nkm_${b64(32)}`;
     const { rows } = await db.query<MachineRow>(

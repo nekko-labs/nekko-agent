@@ -58,7 +58,7 @@ describe("machines", () => {
     expect(body.machine.state).toBe("running");
     expect(body.machine.scope).toEqual({ ...DEFAULT_SCOPE, repos: ["nekko-labs/nekko-agent"] });
     expect(body.machine.egress).toContain("github.com");
-    expect(body.pairingLink).toMatch(/^nekko-agent-pair:\?relay=wss%3A%2F%2Frelay\.test&room=[a-z0-9]{20}&key=[A-Za-z0-9_-]{32}&pair=[A-Z2-9]{8}$/);
+    expect(body.pairingLink).toMatch(/^nekko-agent-pair:\?relay=wss%3A%2F%2Frelay\.test&room=[a-z0-9]{20}&key=[0-9a-f]{32}&pair=[A-Z2-9]{8}$/);
     // The machine got the same room, key and code in its environment, and the scope.
     const [, spec] = [...driver.machines.values()].map((m) => [m.state, m.spec] as const)[0];
     expect(spec.env.NEKKO_ROOM).toBe(body.machine.room);

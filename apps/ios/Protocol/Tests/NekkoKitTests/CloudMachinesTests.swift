@@ -29,10 +29,10 @@ final class CloudMachinesTests: XCTestCase {
                 answer = (200, .object(["machines": .array(machines), "relayUrl": .string("wss://relay.test"), "hoursIncluded": .int(40)]))
             case ("POST", "/v1/machines"):
                 let m: JSONValue = .object(["id": .string("m-1"), "name": b["name"] ?? .string("Nekko Cloud"), "region": b["region"] ?? .string("nrt"),
-                                            "state": .string("running"), "room": .string("abcdefgh12345678abcd"), "scope": b["scope"] ?? .object([:]),
+                                            "state": .string("running"), "room": .string("abcdef0123456789abcd"), "scope": b["scope"] ?? .object([:]),
                                             "hoursUsed": .double(0), "hoursIncluded": .int(40)])
                 machines.append(m)
-                answer = (201, .object(["machine": m, "pairingLink": .string("nekko-agent-pair:?relay=wss%3A%2F%2Frelay.test&room=abcdefgh12345678abcd&key=KEYKEYKEYKEYKEYKEYKEYKEYKEYKEYKE&pair=ABCD2345"), "pairingCode": .string("ABCD2345")]))
+                answer = (201, .object(["machine": m, "pairingLink": .string("nekko-agent-pair:?relay=wss%3A%2F%2Frelay.test&room=abcdef0123456789abcd&key=0123456789abcdef0123456789abcdef&pair=ABCD2345"), "pairingCode": .string("ABCD2345")]))
             case ("PUT", "/v1/machines/m-1/scope"):
                 var m = machines[0].object ?? [:]
                 m["scope"] = b
@@ -71,7 +71,7 @@ final class CloudMachinesTests: XCTestCase {
         XCTAssertEqual(made.machine.id, "m-1")
         XCTAssertEqual(made.machine.scope.repos, ["nekko-labs/nekko-agent"])
         XCTAssertTrue(made.machine.scope.privacyShield)
-        XCTAssertEqual(made.link.room, "abcdefgh12345678abcd")
+        XCTAssertEqual(made.link.room, "abcdef0123456789abcd")
         XCTAssertEqual(made.link.pair, "ABCD2345")
         XCTAssertEqual(made.link.relayUrl, "wss://relay.test")
         let sent = http.calls.first { $0.0 == "POST" && $0.1 == "/v1/machines" }?.2
