@@ -5,7 +5,7 @@ area: platform
 
 # Hardware keys, step-up on phone and desktop, and remote sign-out (2026-10-24)
 
-`[planned 2026-10-24; nothing implemented yet]` Asked for by Philip on 2026-10-24: support for hardware keys and other MFA on both the phone and the desktop, and a way to log out or shut down the remote device app for safety. Decision record: [docs/decisions/0018-the-computer-is-the-relying-party-for-step-up.md](../../docs/decisions/0018-the-computer-is-the-relying-party-for-step-up.md). Tasks: SK-1 to SK-12 in [TASKS.md](../../TASKS.md). Builds on the signed Change proof (IO-33) and the phone access classes in [phone-access-classes-and-relay-replay-protection.md](../phone/phone-access-classes-and-relay-replay-protection.md).
+`[in progress 2026-10-24: SK-1 implemented (shared constants, security.json shape, TS verifier, golden step-up.json; unit-tested); no client UI yet]` Asked for by Philip on 2026-10-24: support for hardware keys and other MFA on both the phone and the desktop, and a way to log out or shut down the remote device app for safety. Decision record: [docs/decisions/0018-the-computer-is-the-relying-party-for-step-up.md](../../docs/decisions/0018-the-computer-is-the-relying-party-for-step-up.md). Tasks: SK-1 to SK-12 in [TASKS.md](../../TASKS.md). Builds on the signed Change proof (IO-33) and the phone access classes in [phone-access-classes-and-relay-replay-protection.md](../phone/phone-access-classes-and-relay-replay-protection.md).
 
 ## User intent
 
