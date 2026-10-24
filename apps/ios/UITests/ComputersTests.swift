@@ -37,7 +37,10 @@ final class ComputersTests: XCTestCase {
         app.launch()
         pair(app)
         openMenu(app)
-        let computer = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "computer")).element(boundBy: 0)
+        // Not the connection banner's "More for My computer" menu (SK-8), which shows while
+        // relay.example.com can't be reached and can match first.
+        let computer = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND identifier != %@", "computer", "banner.menu"))
+            .element(boundBy: 0)
         XCTAssertTrue(computer.waitForExistence(timeout: 5))
         computer.tap()
         app.buttons["Forget…"].tap()

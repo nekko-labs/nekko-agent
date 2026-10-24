@@ -18,6 +18,8 @@ enum Route: Hashable {
     case logs
     case cloud
     case syncedChat(String)
+    /// Settings → Security: the active computer's step-up (SK-6).
+    case security
 }
 
 struct RootView: View {
@@ -76,6 +78,9 @@ struct RootView: View {
             .fullScreenCover(isPresented: Binding(get: { app.showNotificationStep && !covered }, set: { if !$0 { app.showNotificationStep = false } })) {
                 NotificationStepView()
             }
+            // SK-6 / SK-8: the step-up sheet, and the safety exits' confirmations.
+            .stepUpSheet()
+            .safetyExitDialogs()
     }
 
     /// A cold launch from the control waits until the computers are loaded.
@@ -140,6 +145,7 @@ struct RootView: View {
         case .logs: LogsView()
         case .cloud: CloudView()
         case .syncedChat(let id): SyncedChatView(chatId: id)
+        case .security: SecuritySettingsView()
         }
     }
 
@@ -330,7 +336,18 @@ struct ConnectionBanner: View {
                 Spacer(minLength: 0)
                 if store.conn == .connecting || store.conn == .offline {
                     Button("Retry") { store.reconnect() }.font(.footnote.weight(.semibold))
+                } else if store.conn == .denied, store.safetyExit?.computerId == store.activeId, let id = store.activeId {
+                    // Remote access turned back on at the computer: dial again.
+                    Button("Try again") { store.connect(id) }.font(.footnote.weight(.semibold))
                 }
+                // The safety exits, reachable while the computer can't be (SK-8).
+                Menu {
+                    SafetyExitItems()
+                } label: {
+                    Image(systemName: "ellipsis.circle").foregroundStyle(palette.inkSoft)
+                }
+                .accessibilityLabel("More for \(store.active?.name ?? "this computer")")
+                .accessibilityIdentifier("banner.menu")
             }
             .padding(12)
             .background(l.color.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
@@ -348,6 +365,18 @@ struct ConnectionBanner: View {
 
     private var line: (text: String, color: Color, icon: String)? {
         let name = store.active?.name ?? "Your computer"
+        // This iPhone ended the connection itself (SK-8): say so, not "removed this iPhone".
+        if let exit = store.safetyExit, exit.computerId == store.activeId, store.conn != .online {
+            let time = Date(timeIntervalSince1970: Double(exit.at) / 1000).formatted(date: .omitted, time: .shortened)
+            switch exit.kind {
+            case .stoppedRemote:
+                return ("You stopped remote access on \(name) from this iPhone at \(time). Turn it on again at the computer, then try again here.",
+                        palette.warning, "wifi.slash")
+            case .quit:
+                return ("You quit Nekko Agent on \(name) from this iPhone at \(time). Open it again at the computer; this phone keeps trying.",
+                        palette.warning, "power")
+            }
+        }
         switch store.conn {
         case .online, .idle:
             return nil
