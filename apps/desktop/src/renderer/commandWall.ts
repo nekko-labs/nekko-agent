@@ -483,11 +483,17 @@ export function sanitizeWallLayout(raw: unknown): WallLayout {
   const dimension = (n: unknown, fallback: number) => typeof n === 'number' && Number.isFinite(n)
     ? Math.min(6, Math.max(1, Math.round(n))) : fallback;
   return {
-    mode: value.mode === 'focus' || value.mode === 'fixed' ? value.mode : 'grid',
+    mode: value.mode === 'focus' ? 'focus' : 'grid',
     cols: dimension(value.cols, DEFAULT_WALL_LAYOUT.cols),
     rows: dimension(value.rows, DEFAULT_WALL_LAYOUT.rows),
+    // Grid was a third layout mode until 2026-10-24; a wall saved in it opens as Dynamic with Fixed grid on.
+    fixedGrid: value.fixedGrid === true || value.mode === 'fixed',
   };
 }
+
+/** How the wall is drawn: Focused, free-form Dynamic, or Dynamic with Fixed grid on (`fixed`). */
+export type WallArrangement = 'focus' | 'grid' | 'fixed';
+export const wallArrangement = (layout: WallLayout): WallArrangement => (layout.mode === 'grid' && layout.fixedGrid ? 'fixed' : layout.mode);
 
 /** Keep saved entries once, then append missing monitors so none are lost on migration. */
 export function normalizeMonitorOrder(raw: unknown): MonitorKey[] {

@@ -26,8 +26,9 @@ const a: WbPane = { id: 'a', kind: 'chat', refId: 'chat-a' };
 const b: WbPane = { id: 'b', kind: 'chat', refId: 'chat-b' };
 const t: WbPane = { id: 't', kind: 'terminal', refId: 'term' };
 const root: WbSplit = { id: 'split', dir: 'row', children: [a, b, t], sizes: [0.5, 0.3, 0.2] };
-const state = (patch: Partial<CommandWallState> = {}): CommandWallState => ({ ...DEFAULT_WALL_STATE, root, layout: { mode: 'grid', cols: 3, rows: 2 }, folded: {}, ...patch });
-const layout = (mode: 'grid' | 'focus' | 'fixed') => ({ mode, cols: 2, rows: 1 });
+const state = (patch: Partial<CommandWallState> = {}): CommandWallState => ({ ...DEFAULT_WALL_STATE, root, layout: { mode: 'grid', cols: 3, rows: 2, fixedGrid: false }, folded: {}, ...patch });
+/** `fixed` is Dynamic with Fixed grid on. */
+const layout = (mode: 'grid' | 'focus' | 'fixed', cols = 2, rows = 1) => ({ mode: mode === 'fixed' ? 'grid' as const : mode, cols, rows, fixedGrid: mode === 'fixed' });
 
 function wall(s: CommandWallState, addContent?: React.ReactNode) {
   return <CommandWall state={s} setState={vi.fn()} sessions={[]} terminals={[]} running={new Set()} pending={{}} childrenOf={new Map()} projects={[]} flash={null} selectedId={null} onSelect={vi.fn()} onAspect={vi.fn()} onOpenChat={vi.fn()} onOpenTerminal={vi.fn()} onNewChat={vi.fn()} onNewTerminal={vi.fn()} onAddWindow={vi.fn()} addContent={addContent} />;
@@ -41,7 +42,7 @@ describe('command wall geometry', () => {
   });
   it.each(['grid', 'fixed'] as const)('fits %s windows into the space remaining above the composer', (mode) => {
     const before = JSON.stringify(root);
-    const g = commandWallGeometry(state({ layout: { mode, cols: 3, rows: 2 } }), 2400, 600);
+    const g = commandWallGeometry(state({ layout: layout(mode, 3, 2) }), 2400, 600);
     expect(g.stageHeight).toBeLessThanOrEqual(600);
     for (const pane of g.panes.values()) expect(pane.y + pane.height).toBeLessThanOrEqual(600);
     expect(JSON.stringify(root)).toBe(before);
@@ -163,7 +164,7 @@ describe('command wall geometry', () => {
 
   it('lists the unfilled Grid squares for placeholders, and none in Dynamic or on a phone', () => {
     // Three windows in a 3×2 Grid leave the bottom row empty.
-    const g = commandWallGeometry(state({ layout: { mode: 'fixed', cols: 3, rows: 2 } }), 1000, 700);
+    const g = commandWallGeometry(state({ layout: layout('fixed', 3, 2) }), 1000, 700);
     expect(g.empty).toHaveLength(3);
     expect(g.empty.every((r) => r.y > 0 && r.width > 0 && r.height > 0)).toBe(true);
     for (const cell of g.empty) for (const pane of g.panes.values()) {
@@ -172,8 +173,8 @@ describe('command wall geometry', () => {
       expect(overlapW > 0 && overlapH > 0).toBe(false);
     }
     expect(commandWallGeometry(state(), 1000, 700).empty).toEqual([]);
-    expect(commandWallGeometry(state({ layout: { mode: 'fixed', cols: 3, rows: 2 } }), 400, 700).empty).toEqual([]);
-    const html = renderToStaticMarkup(wall(state({ layout: { mode: 'fixed', cols: 3, rows: 2 } })));
+    expect(commandWallGeometry(state({ layout: layout('fixed', 3, 2) }), 400, 700).empty).toEqual([]);
+    const html = renderToStaticMarkup(wall(state({ layout: layout('fixed', 3, 2) })));
     expect(html).not.toContain('data-wall-empty-cell'); // unmeasured: nothing drawn yet
   });
 
