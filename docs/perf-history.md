@@ -1003,6 +1003,8 @@ speed. Source: [#152](https://github.com/nekko-labs/nekko-agent/pull/152).
 
 ## Unmeasured
 
+- Focus surface refinement (2026-10-24): removed navigation SVG path/clip animation and ResizeObservers, retaining only width and text-opacity reveal. Focus corners reuse native CSS squircle with rounded fallback, without added masks or blur. CPU/GPU/frame times before and after: not measured. No zero-cost or smoothness claim; collect matched renderer traces to quantify the effect.
+
 - Focused panel motion: navigation morph shortened to 180/160 ms and backdrop/text blur removed. These are configured durations, not measured frame times. Before and after CPU, GPU, energy and frame-time cost: not measured. Collect matched renderer traces before claiming a performance improvement.
 
 - **Native agent-browser default feasibility (2026-10-17).** Candidate `agent-browser@0.39.1` (native Rust, Chrome), Nekko base `2f81bfc0`, Windows / Node `v24.1.0`. Migration blocked before runtime edits: the native command daemon accepts unauthenticated loopback JSON outside Nekko's approval bridge. Two diagnostic clients received `success: true` for `session_info` without credentials; these are security probes, not performance samples. No browser was launched. **Before: not measured. After: not measured.** No latency, memory, warm/cold distribution or speedup is established. Playwright remains explicitly required. [Exact provenance, raw outputs, reproduction and matched benchmark acceptance criteria](../reports/agent-browser/feasibility.md). Next: secure native command IPC, then collect at least 20 interleaved cold/warm samples with the same browser revision, viewport, theme and synthetic fixture before claiming any effect.

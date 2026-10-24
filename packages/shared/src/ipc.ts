@@ -108,10 +108,14 @@ export const IpcChannels = {
 
   machineReadiness: 'machine:readiness',
   machineProfile: 'machine:profile',
+  /** One phone-safe read for a computer's page: version, hardware, live stats, the model server (2026-10-24). */
+  machineSummary: 'machine:summary',
   machineRecommendations: 'machine:recommendations',
   machineDismissNudge: 'machine:dismissNudge',
   gpuStats: 'gpu:stats',
   systemStats: 'system:stats',
+  /** The phone's Monitors pane (FD-1): answered by the phone gate from the other monitor, chat and automation reads. */
+  monitorSummary: 'monitor:summary',
 
   sessionsList: 'sessions:list',
   sessionNextWatch: 'session:nextWatch',

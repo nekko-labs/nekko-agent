@@ -454,6 +454,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         c if crate::runtimes::CHANNELS.contains(&c) && ctx.runtimes.is_some() => {
             crate::runtimes::route(ctx, ctx.runtimes.as_ref().expect("checked"), c, &args).await
         }
+        crate::machine::SUMMARY => Ok(crate::machine::summary(ctx).await),
         c if crate::machine::CHANNELS.contains(&c) => {
             crate::machine::route(&ctx.machine, ctx.library.as_ref(), c, &args).await
         }

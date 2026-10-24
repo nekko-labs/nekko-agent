@@ -36,6 +36,9 @@ pub struct Policy {
     pub provider_view: Vec<String>,
     /// `session:watches`: the fields of a watch a phone receives (`PHONE_WATCH_VIEW`).
     pub watch_view: Vec<String>,
+    /// `machine:summary`: its top-level keys and the resident model fields (`PHONE_MACHINE_VIEW`).
+    pub machine_view: Vec<String>,
+    pub machine_resident_view: Vec<String>,
     pub skill_view: Vec<String>,
     pub queue_keys: Vec<String>,
     pub session_option_keys: Vec<String>,
@@ -106,6 +109,8 @@ pub fn policy() -> &'static Policy {
             settings_view: strings(&v["settingsView"]),
             provider_view: strings(&v["providerView"]),
             watch_view: strings(&v["watchView"]),
+            machine_view: strings(&v["machineView"]),
+            machine_resident_view: strings(&v["machineResidentView"]),
             skill_view: strings(&v["skillView"]),
             queue_keys: strings(&v["queueKeys"]),
             session_option_keys: strings(&v["sessionOptionKeys"]),
@@ -490,6 +495,9 @@ pub fn redact(channel: &str, result: Value) -> Value {
         "task:runNow" => Value::Null,
         "pr:sessionList" => crate::phone_views::prs(&result, &policy().views),
         "session:watches" => crate::phone_views::watches(&result, &policy().watch_view, policy().views.text_chars),
+        "machine:summary" => {
+            crate::phone_views::machine(&result, &policy().machine_view, &policy().machine_resident_view)
+        }
         "usage:summary" => crate::phone_views::usage(&result, &policy().views),
         "limits:get" => crate::phone_views::limits(&result, &policy().views),
         c if policy().terminal.is_terminal(c) => crate::phone_terminal::result(c, &result),
@@ -638,6 +646,15 @@ pub async fn call(run: &Dispatcher, channel: String, args: Value) -> Result<Valu
         if settings.get("phoneChanges") != Some(&Value::Bool(true)) {
             return Err(denied("turned-off", "changes:list").to_string());
         }
+    }
+    if channel == "monitor:summary" {
+        // Answered from what the computer already reads for its own Monitors dock; the phone's arguments are ignored.
+        let mut sources = Map::new();
+        for source in &policy().views.monitor_sources {
+            sources.insert(source.clone(), run(source.clone(), json!([])).await?);
+        }
+        let now = crate::service::system_clock()();
+        return Ok(crate::phone_views::monitor(&sources, now, &policy().views));
     }
     // Only what the computer's own call takes: an id, or nothing.
     let first = args.first().cloned().unwrap_or(Value::Null);
@@ -1217,6 +1234,22 @@ pub fn gate_secured(
 #[cfg(test)]
 mod tests {
 
+    /// `machine:summary` (2026-10-24): no arguments; the view pins the top-level
+    /// keys and the resident model fields.
+    #[test]
+    fn redacts_a_machine_summary() {
+        assert!(screen("machine:summary", &[]).is_ok());
+        let raw = json!({ "version": "0.9.3", "platform": "darwin", "edition": "desktop", "uptimeMs": 5, "hardware": { "cpu": { "cores": 16 } },
+            "live": { "cpuPct": 1 }, "gpu": { "usedMB": 1 },
+            "engine": { "running": true, "startedAt": 1, "resident": [{ "id": "m", "name": "M", "contextTokens": 8, "path": "/Users/me/m.gguf" }, "junk"], "loading": 0, "memory": { "totalMB": 1 } },
+            "extra": "dropped" });
+        let want = json!({ "version": "0.9.3", "platform": "darwin", "edition": "desktop", "uptimeMs": 5, "hardware": { "cpu": { "cores": 16 } },
+            "live": { "cpuPct": 1 }, "gpu": { "usedMB": 1 },
+            "engine": { "running": true, "startedAt": 1, "resident": [{ "id": "m", "name": "M", "contextTokens": 8 }], "loading": 0, "memory": { "totalMB": 1 } } });
+        assert_eq!(redact("machine:summary", raw), want);
+        assert_eq!(redact("machine:summary", Value::Null), Value::Null);
+    }
+
     /// `session:watches` (2026-10-24): a chat id is required; the view keeps the
     /// `PHONE_WATCH_VIEW` fields, never the continuation prompt, and cuts `lastError`.
     #[test]
@@ -1697,7 +1730,7 @@ mod tests {
             for c in ["chat:send", "chat:queue", "tool:approve", "chat:answer", "task:runNow", "workflow:run"] {
                 assert_eq!(classes.of(c), Some(Class::Agent), "{c}");
             }
-            for c in ["sessions:summaries", "session:get", "settings:get", "chat:pending"] {
+            for c in ["sessions:summaries", "session:get", "settings:get", "chat:pending", "monitor:summary"] {
                 assert_eq!(classes.of(c), Some(Class::Read), "{c}");
             }
         }
@@ -1738,7 +1771,7 @@ mod tests {
             assert!(r.ask("session:get", json!(["s1"]), None).is_ok(), "Read stays on");
             assert!(r.ask("app:info", json!([]), None).is_ok());
             let r = policy_rig(DeviceAccess { read: false, change: true }, None, None, "ask");
-            for c in ["sessions:summaries", "session:get", "settings:get", "chat:pending"] {
+            for c in ["sessions:summaries", "session:get", "settings:get", "chat:pending", "monitor:summary"] {
                 assert_eq!(r.ask(c, json!(["s1"]), None), refused("read-off", c));
             }
             assert!(r.ask("app:info", json!([]), None).is_ok(), "open to any paired phone");

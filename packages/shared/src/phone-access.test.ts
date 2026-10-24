@@ -154,6 +154,15 @@ describe('settings from a phone', () => {
     expect(view).toEqual({ id: 'w1', kind: 'pr', url: 'https://github.com/o/r/pull/5', status: 'active', deadlineAt: 10, nextPollAt: 5, pending: false, failures: 1, lastError: 'x'.repeat(600) });
     expect(redactPhoneResult('session:watches', null)).toEqual([]);
   });
+
+  it("projects a computer's summary to the pinned keys (machine:summary)", () => {
+    const raw = { version: '0.9.3', platform: 'darwin', edition: 'desktop', uptimeMs: 5, hardware: { cpu: { cores: 16 } }, live: { cpuPct: 1 }, gpu: { usedMB: 1 },
+      engine: { running: true, startedAt: 1, resident: [{ id: 'm', name: 'M', contextTokens: 8, path: '/Users/me/m.gguf' }, 'junk'], loading: 0, memory: { totalMB: 1 } }, extra: 'dropped' };
+    expect(redactPhoneResult('machine:summary', raw)).toEqual({ version: '0.9.3', platform: 'darwin', edition: 'desktop', uptimeMs: 5, hardware: { cpu: { cores: 16 } }, live: { cpuPct: 1 }, gpu: { usedMB: 1 },
+      engine: { running: true, startedAt: 1, resident: [{ id: 'm', name: 'M', contextTokens: 8 }], loading: 0, memory: { totalMB: 1 } } });
+    expect(redactPhoneResult('machine:summary', null)).toBeNull();
+    expect(screenPhoneCall('machine:summary', [])).toEqual({});
+  });
 });
 
 describe('chat options from a phone', () => {
