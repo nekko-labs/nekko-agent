@@ -2529,7 +2529,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         </ChatHeader>
         )}
 
-        {/* Preserve the wall plan-change pin. An open question takes precedence. */}}
+        {/* Preserve the wall plan-change pin. An open question takes precedence. */}
         {surface === 'transcript' && planChangeOpen && !question && (
           <div className="agent-question-pin shrink-0" role="region" aria-label="Change the agent's plan">
             <div className="agent-question-pin-body"><PlanChangePrompt running={streaming} onSend={(change) => { void sendPlanChange(change); }} onCancel={() => setPlanChangeOpen(false)} /></div>
