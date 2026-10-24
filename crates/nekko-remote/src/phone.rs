@@ -1019,8 +1019,11 @@ impl Gate {
     }
 
     /// `security:challenge` (read class): a fresh single-use challenge for
-    /// this device, whether a step-up is needed, and the kinds of method
-    /// registered, never their ids or names.
+    /// this device, whether a step-up is needed, the kinds of method
+    /// registered (never their ids or names), and the computer's
+    /// relying-party id, which a phone's FIDO2 client must name to ask a key
+    /// or passkey for an assertion (SK-6; `nekko-computer:<installId>`, not a
+    /// secret: the rpIdHash of every assertion already carries it).
     fn challenge(&self, who: &PhoneCall) -> Value {
         let limits = &policy().step_up;
         let now = self.devices.now();
@@ -1039,6 +1042,7 @@ impl Gate {
             "expiresAt": crate::hello::nekko_num(now + limits.challenge_ttl_ms),
             "required": crate::step_up::enabled(&state),
             "methods": crate::step_up::method_kinds(&state),
+            "rpId": state.get("rpId").cloned().unwrap_or(Value::Null),
         })
     }
 
@@ -1939,7 +1943,8 @@ mod tests {
                 assert_eq!(c["required"], json!(true));
                 assert_eq!(c["methods"], json!(["security-key", "totp"]));
                 assert_eq!(c["expiresAt"].as_f64(), Some(NOW + 120_000.0));
-                assert_eq!(c.as_object().unwrap().len(), 4, "a phone learns nothing else: {c}");
+                assert_eq!(c["rpId"], json!(RP), "the phone's FIDO2 client names it (SK-6)");
+                assert_eq!(c.as_object().unwrap().len(), 5, "a phone learns nothing else: {c}");
                 let a = assert_with(&s.fido, c["challenge"].as_str().unwrap(), 1);
                 assert!(s.raise(Some(a.clone())).is_ok());
                 assert_eq!(ran(&s.r, YOLO), 1);
