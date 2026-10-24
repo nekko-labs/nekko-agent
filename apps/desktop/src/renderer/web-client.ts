@@ -326,6 +326,8 @@ function makeWebClient(): NekkoApi {
     cloudBeginOAuth: (provider) => call(IpcChannels.cloudBeginOAuth, provider),
     cloudCancelOAuth: () => call(IpcChannels.cloudCancelOAuth),
     cloudSignOut: () => call(IpcChannels.cloudSignOut),
+    feedbackInfo: () => call(IpcChannels.feedbackInfo),
+    feedbackSend: (message, includeAppInfo) => call(IpcChannels.feedbackSend, message, includeAppInfo),
     syncTurnOn: () => call(IpcChannels.syncTurnOn),
     syncConfirmRecoveryKey: (text) => call(IpcChannels.syncConfirmRecoveryKey, text),
     syncRestore: (text) => call(IpcChannels.syncRestore, text),

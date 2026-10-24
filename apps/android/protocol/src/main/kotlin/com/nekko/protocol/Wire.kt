@@ -52,11 +52,23 @@ object Channels {
     const val CHANGES_LIST = "changes:list"
     /** The Monitors pane: hardware, running chats, what needs the owner, next automations ([MonitorSummary]); read class. */
     const val MONITOR_SUMMARY = "monitor:summary"
+    /** SK-7: a single-use step-up challenge and the kinds of method registered ([StepUpChallenge]). Read class. */
+    const val SECURITY_CHALLENGE = StepUp.CHALLENGE_CHANNEL
+    /**
+     * SK-3 safety exits: agent class, but no switch, proof or step-up gates
+     * them (decision 0018). Sign this phone out (the computer revokes and
+     * kicks it), turn remote access off on the computer, quit Nekko Agent
+     * there (refused `quit-disabled` unless `app:info` says `quitFromPhone`).
+     */
+    const val DEVICE_SIGN_OUT = "device:signOut"
+    const val REMOTE_STOP = "remote:stop"
+    const val APP_QUIT = "app:quit"
 
     val ALL = listOf(
         SETTINGS_GET, SETTINGS_UPDATE, SESSION_DELETE, VOICE_STATUS, VOICE_TRANSCRIBE, PROVIDERS_LIST, MODELS_LIST, SESSIONS_SUMMARIES, SESSION_CREATE, SESSION_GET,
         SESSION_SET_OPTIONS, CHAT_SEND, CHAT_ABORT, CHAT_QUEUE, CHAT_PENDING, CHAT_ANSWER, TOOL_APPROVE,
         WORKSPACE_LIST, APP_INFO, SKILLS_RUNNABLE, CHANGES_LIST, MONITOR_SUMMARY,
+        SECURITY_CHALLENGE, DEVICE_SIGN_OUT, REMOTE_STOP, APP_QUIT,
     )
 }
 
@@ -544,9 +556,14 @@ data class WorkspaceFolder(val id: String, val name: String) {
     }
 }
 
-data class AppInfo(val version: String?, val platform: String?) {
+/**
+ * `app:info`. [quitFromPhone] is the computer's *Quit from a phone* switch
+ * (SK-3): only then does the phone offer *Quit Nekko Agent on the computer*.
+ * Absent (an older computer) reads as off.
+ */
+data class AppInfo(val version: String?, val platform: String?, val quitFromPhone: Boolean = false) {
     companion object {
-        fun from(e: JsonElement?): AppInfo = e.obj().let { AppInfo(it?.str("version"), it?.str("platform")) }
+        fun from(e: JsonElement?): AppInfo = e.obj().let { AppInfo(it?.str("version"), it?.str("platform"), it?.bool("quitFromPhone") == true) }
     }
 }
 

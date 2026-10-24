@@ -56,8 +56,13 @@ data class WelcomedDevice(val id: String, val name: String, val platform: String
 
 data class RelayStatus(val state: RelayState, val detail: String? = null, val denied: DenyReason? = null)
 
-/** A call failed. [refusal] is set when the computer refused the channel from a phone. */
-class RelayException(message: String, val refusal: PhoneRefusal? = null) : Exception(message)
+/**
+ * A call failed. [refusal] is set when the computer refused the channel from a phone.
+ * [afterSend] is set when the request went out and then the connection dropped or
+ * the reply never came: the computer may have acted on it (a safety exit that kicks
+ * every phone ends exactly that way).
+ */
+class RelayException(message: String, val refusal: PhoneRefusal? = null, val afterSend: Boolean = false) : Exception(message)
 
 /** A minimal WebSocket the client drives; [OkHttpTransport] in production, fakes in tests. */
 interface WsTransport {
@@ -234,7 +239,18 @@ class RelayClient(
      * Same as [call] with an explicit reply timeout. `chat:send` only replies
      * when the whole turn is over, so it gets hours rather than two minutes.
      */
-    suspend fun callWithTimeout(timeoutMs: Long, channel: String, vararg args: JsonElement): JsonElement {
+    suspend fun callWithTimeout(timeoutMs: Long, channel: String, vararg args: JsonElement): JsonElement =
+        send(timeoutMs, channel, JsonArray(args.toList()), stepUp = null)
+
+    /**
+     * A guarded call again with a step-up (SK-7): `stepUp` rides beside the
+     * request's other fields inside the sealed frame, so the relay can neither
+     * read nor strip it. The computer checks it after the Change proof.
+     */
+    suspend fun callWithStepUp(stepUp: StepUpProof, channel: String, vararg args: JsonElement): JsonElement =
+        send(config.requestTimeoutMs, channel, JsonArray(args.toList()), stepUp)
+
+    private suspend fun send(timeoutMs: Long, channel: String, args: JsonArray, stepUp: StepUpProof?): JsonElement {
         val id = nextId.getAndIncrement()
         val deferred = CompletableDeferred<JsonElement>()
         // The computer may re-challenge between the welcome and the send: wait for it again.
@@ -243,7 +259,7 @@ class RelayClient(
         while (true) {
             awaitReady()
             pending[id] = deferred
-            sent = sendRequest(id, channel, JsonArray(args.toList()))
+            sent = sendRequest(id, channel, args, stepUp)
             if (sent == SendResult.SENT) break
             pending.remove(id)
             if (sent == SendResult.FAILED || ++tries >= SEND_ATTEMPTS) break
@@ -252,7 +268,7 @@ class RelayClient(
         return try {
             withTimeout(timeoutMs) { deferred.await() }
         } catch (_: TimeoutCancellationException) {
-            throw RelayException("$channel: timed out")
+            throw RelayException("$channel: timed out", afterSend = true)
         } finally {
             pending.remove(id)
         }
@@ -287,7 +303,7 @@ class RelayClient(
     private enum class SendResult { SENT, NOT_READY, FAILED }
 
     /** Seal and send one request with the next seq; NOT_READY when the handshake is not done. */
-    private fun sendRequest(id: Long, channel: String, args: JsonArray): SendResult = synchronized(sendLock) {
+    private fun sendRequest(id: Long, channel: String, args: JsonArray, stepUp: StepUpProof?): SendResult = synchronized(sendLock) {
         val c: WsConnection
         val n: Long
         val challenge: String?
@@ -301,6 +317,7 @@ class RelayClient(
             put("type", "req"); put("id", id); put("seq", n)
             challenge?.let { put("challenge", it) }
             put("channel", channel); put("args", args)
+            stepUp?.let { put("stepUp", it.toJson()) }
         }
         val env = buildJsonObject { put("enc", E2E.seal(config.keyBytes, frame)) }
         if (c.send(env.toString())) SendResult.SENT else SendResult.FAILED
@@ -546,7 +563,7 @@ class RelayClient(
     private fun failPending(message: String) {
         val all = pending.values.toList()
         pending.clear()
-        all.forEach { it.completeExceptionally(RelayException(message)) }
+        all.forEach { it.completeExceptionally(RelayException(message, afterSend = true)) }
     }
 
     private fun setStatus(s: RelayStatus) {
