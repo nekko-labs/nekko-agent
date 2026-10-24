@@ -73,12 +73,20 @@ struct ChatView: View {
                             .font(.footnote).foregroundStyle(palette.inkFaint).frame(maxWidth: .infinity)
                     }
                     if !chat.ready { ProgressView().frame(maxWidth: .infinity).padding(.top, 40) }
-                    ForEach(chat.blocks) { b in
-                        BlockView(block: b, photos: b.isPrompt ? chat.photos(b.id) : []) { i in
-                            viewing = PhotoSet(photos: chat.photos(b.id), index: i)
+                    ForEach(TranscriptRow.of(chat.blocks)) { row in
+                        switch row {
+                        case .block(let b):
+                            BlockView(block: b, chat: chat, photos: b.isPrompt ? chat.photos(b.id) : []) { i in
+                                viewing = PhotoSet(photos: chat.photos(b.id), index: i)
+                            }
+                            .id(b.id)
+                            .contextMenu { blockMenu(chat, b) }
+                        case .agents(let blocks):
+                            // Consecutive delegations read as one group, as on the desktop.
+                            SubagentGroup(blocks: blocks, chat: chat)
+                                .id(row.id)
+                                .contextMenu { if let first = blocks.first { blockMenu(chat, first) } }
                         }
-                        .id(b.id)
-                        .contextMenu { blockMenu(chat, b) }
                     }
                     // Prompts written here that the computer doesn't have yet.
                     ForEach(chat.waiting) { item in
@@ -332,34 +340,68 @@ func modeName(_ m: PcSettings.ChatMode) -> String {
     }
 }
 
+/// The transcript's rows: each block on its own, except a run of delegations,
+/// which is one group with a header and its children.
+enum TranscriptRow: Identifiable {
+    case block(Block)
+    case agents([Block])
+
+    var id: String {
+        switch self {
+        case .block(let b): return b.id
+        case .agents(let blocks): return "agents-" + (blocks.first?.id ?? "")
+        }
+    }
+
+    static func of(_ blocks: [Block]) -> [TranscriptRow] {
+        var out: [TranscriptRow] = []
+        var run: [Block] = []
+        func flush() {
+            if run.count == 1 { out.append(.block(run[0])) } else if !run.isEmpty { out.append(.agents(run)) }
+            run = []
+        }
+        for b in blocks {
+            if case .tool(_, let name, _, _, _, _) = b, name == AgentRows.subagentTool { run.append(b) } else { flush(); out.append(.block(b)) }
+        }
+        flush()
+        return out
+    }
+}
+
 struct BlockView: View {
     let block: Block
+    /// The chat, for rows that read more than the block (watch chips, subagent children). Nil in previews.
+    var chat: ChatModel? = nil
     /// A prompt's photos as the computer sent them (small copies; `""` for one it kept back).
     var photos: [String] = []
     var openPhoto: (Int) -> Void = { _ in }
     @Environment(\.palette) private var palette
-    @State private var expanded = false
     @State private var showReasoning = false
 
     var body: some View {
         switch block {
-        case .user(_, let text, _, let images):
-            HStack {
-                Spacer(minLength: 48)
-                VStack(alignment: .trailing, spacing: 4) {
-                    // No text selection here: touch and hold opens the menu (Copy, Edit in a new chat).
-                    Text(text).foregroundStyle(palette.userInk)
-                    if photos.contains(where: { !$0.isEmpty }) {
-                        PhotoStrip(photos: photos, open: openPhoto)
-                    } else if images > 0 {
-                        Label(images == 1 ? "1 image" : "\(images) images", systemImage: "photo").font(.caption2).foregroundStyle(palette.userInk.opacity(0.8))
+        case .user(_, let text, let at, let images):
+            if images == 0, let wake = AgentRows.parseWake(text) {
+                // A watch's wake-up is a step of the run, not something the user typed.
+                WatchWakeRow(wake: wake, content: text, at: at)
+            } else {
+                HStack {
+                    Spacer(minLength: 48)
+                    VStack(alignment: .trailing, spacing: 4) {
+                        // No text selection here: touch and hold opens the menu (Copy, Edit in a new chat).
+                        Text(text).foregroundStyle(palette.userInk)
+                        if photos.contains(where: { !$0.isEmpty }) {
+                            PhotoStrip(photos: photos, open: openPhoto)
+                        } else if images > 0 {
+                            Label(images == 1 ? "1 image" : "\(images) images", systemImage: "photo").font(.caption2).foregroundStyle(palette.userInk.opacity(0.8))
+                        }
                     }
+                    .padding(.horizontal, 14).padding(.vertical, 10)
+                    .background(palette.userBubble, in: RoundedRectangle(cornerRadius: 18))
                 }
-                .padding(.horizontal, 14).padding(.vertical, 10)
-                .background(palette.userBubble, in: RoundedRectangle(cornerRadius: 18))
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(images > 0 ? "You: \(text), with \(images == 1 ? "1 image" : "\(images) images")" : "You: \(text)")
             }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(images > 0 ? "You: \(text), with \(images == 1 ? "1 image" : "\(images) images")" : "You: \(text)")
         case .assistant(_, let text, let reasoning, let streaming, let interrupted):
             VStack(alignment: .leading, spacing: 6) {
                 if let reasoning, !reasoning.isEmpty {
@@ -372,57 +414,16 @@ struct BlockView: View {
                 if !text.isEmpty { MarkdownText(text: text).foregroundStyle(palette.ink) }
                 if interrupted { Label("Interrupted", systemImage: "pause.circle").font(.caption).foregroundStyle(palette.warning) }
             }
-        case .tool(_, _, let label, let status, let output):
-            VStack(alignment: .leading, spacing: 6) {
-                Button {
-                    if output != nil { withAnimation(.snappy) { expanded.toggle() } }
-                } label: {
-                    HStack(spacing: 8) {
-                        statusIcon(status)
-                        // Two lines collapsed: one line truncated even short commands by a fraction of a point.
-                        Text(label).font(.footnote.monospaced()).foregroundStyle(palette.inkSoft).lineLimit(expanded ? nil : 2)
-                            .multilineTextAlignment(.leading)
-                        Spacer(minLength: 0)
-                        if output != nil { Image(systemName: expanded ? "chevron.up" : "chevron.down").font(.caption2).foregroundStyle(palette.inkFaint) }
-                    }
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("\(label), \(statusName(status))")
-                .accessibilityValue(output == nil ? "" : (expanded ? "Output shown" : "Output hidden"))
-                .accessibilityHint(output == nil ? "" : "Shows or hides the output")
-                if expanded, let output {
-                    let split = Transcript.splitNotes(output)
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        Text(split.0.isEmpty ? "(no output)" : split.0).font(.caption.monospaced()).foregroundStyle(palette.ink)
-                            .textSelection(.enabled).fixedSize(horizontal: true, vertical: false).padding(10)
-                    }
-                    .frame(maxHeight: 280)
-                    .background(palette.code, in: RoundedRectangle(cornerRadius: 8))
-                    ForEach(split.1, id: \.self) { Text($0).font(.caption2).foregroundStyle(palette.inkFaint) }
-                }
+        case .tool(_, let name, let label, let status, let output, let input):
+            // The agent's work, drawn as the desktop draws it: no fill, no stroke, one line each.
+            switch name {
+            case AgentRows.watchTool:
+                WatchRow(input: input, status: status, output: output, watches: chat?.watches ?? [])
+            case AgentRows.subagentTool:
+                if let chat { SubagentRow(input: input, status: status, output: output, chat: chat) } else { ToolRow(label: label, status: status, output: output) }
+            default:
+                ToolRow(label: label, status: status, output: output)
             }
-            .padding(10)
-            .background(palette.surface, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(palette.line))
-            .accessibilityElement(children: .combine)
-        }
-    }
-
-    private func statusName(_ s: ToolStatus) -> String {
-        switch s {
-        case .running: return String(localized: "running")
-        case .waiting: return String(localized: "waiting for you")
-        case .ok: return String(localized: "done")
-        case .error: return String(localized: "failed")
-        }
-    }
-
-    @ViewBuilder private func statusIcon(_ s: ToolStatus) -> some View {
-        switch s {
-        case .running: ProgressView().controlSize(.mini)
-        case .waiting: Image(systemName: "hand.raised.fill").foregroundStyle(palette.warning)
-        case .ok: Image(systemName: "checkmark.circle.fill").foregroundStyle(palette.success)
-        case .error: Image(systemName: "xmark.octagon.fill").foregroundStyle(palette.danger)
         }
     }
 }
@@ -468,8 +469,8 @@ struct ApprovalCard: View {
             .disabled(busy)
         }
         .padding(14)
-        .background(palette.surface, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(color.opacity(0.5)))
+        // A card, because it needs you; tinted by its risk rather than outlined.
+        .background { RoundedRectangle(cornerRadius: 16).fill(palette.surface).overlay(RoundedRectangle(cornerRadius: 16).fill(color.opacity(0.09))) }
         // The haptic comes from AppModel, per the user's vibration setting; VoiceOver gets told here.
         .onAppear { AccessibilityNotification.Announcement("Approval needed: \(Transcript.toolLabel(approval.call))").post() }
     }
@@ -539,8 +540,7 @@ struct QuestionCard: View {
                 .disabled(!ready || busy)
         }
         .padding(14)
-        .background(palette.surface, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(palette.accent.opacity(0.4)))
+        .background { RoundedRectangle(cornerRadius: 16).fill(palette.surface).overlay(RoundedRectangle(cornerRadius: 16).fill(palette.accent.opacity(0.07))) }
     }
 
     private var ready: Bool { !request.questions.contains { (picked[$0.id] ?? []).isEmpty } }

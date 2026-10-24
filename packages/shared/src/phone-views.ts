@@ -152,6 +152,25 @@ export function phoneWorkflowsView(snapshot: unknown): Obj[] {
   });
 }
 
+/**
+ * A chat's durable watches as a phone sees them (`session:watches`, 2026-10-24):
+ * what each watches, when it wakes and how that went, so the phone's rows
+ * can show the same live chip as the desktop. The continuation prompt is not
+ * a field of the view (the desktop channel never returns it either; the
+ * transcript holds it in the arming call). `lastError` is cut to `textChars`.
+ */
+export const PHONE_WATCH_VIEW = ['id', 'kind', 'url', 'status', 'deadlineAt', 'nextPollAt', 'pending', 'failures', 'lastError'] as const;
+
+/** `session:watches` for a phone: each watch picked to `PHONE_WATCH_VIEW`, anything that is not an object dropped. */
+export function phoneWatchesView(result: unknown): Obj[] {
+  if (!Array.isArray(result)) return [];
+  return result.filter(isObj).map((w) => {
+    const view = pickKeys(w, PHONE_WATCH_VIEW);
+    cutField(view, 'lastError');
+    return view;
+  });
+}
+
 export function phonePrsView(prs: unknown): Obj[] {
   return Array.isArray(prs) ? prs.filter(isObj).map((p) => pickKeys(p, PHONE_PR_VIEW)) : [];
 }
