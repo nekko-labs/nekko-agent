@@ -64,7 +64,7 @@ None can stop sleep when the lid closes on battery, when Low Power Mode turns on
 
 - **macOS slots:** at most **2** VMs at once per Mac, counting macOS VMs started by other apps. Default 1.
 - **Linux slots:** default 0. Not counted against the macOS limit.
-- **Memory:** 8 GB per VM; total runner memory 50% of RAM by default, at most 75%. Slots that do not fit are greyed out with the reason.
+- **Memory:** 8 GB per VM; total runner memory 50% of RAM (fixed in P1; a configurable cap of at most 75% comes later). Slots that do not fit are greyed out with the reason.
 - **CPU per VM:** 4 / 6 / all but 2 by mode.
 - **Disk:** image disk budget 150 GB; free disk floor 25 GB (below it no new VM starts and running ones stop).
 - **Max job time:** 2 h. The VM is destroyed at the limit whatever the provider's timeout.
@@ -142,13 +142,13 @@ A CI runners section in the Workflows tab: a first-visit card with Connect GitHu
 ## Phases `[planned]`
 
 - **P0, pilot on our own CI** (internal use only): a docked Mac runs jobs for this repo's own CI, with a picker job that falls back to a hosted runner, trusted events only. Uses Tart internally, never shipped (see the decision record).
-- **P1, one Mac, GitHub, local only:** supervisor, the `nekko-vm` helper, VM lifecycle, scopes, caches, the security-update gate, the network filter, GitHub App connect, JIT configs, the CI section with on/off, slots and memory.
-- **P2, conditions and modes:** the gate chain, the three modes, drain and grace, Linux slots, audit log, menu bar indicator.
+- **P1, one Mac, GitHub, local only:** supervisor, the gate chain, the three priority modes, drain and grace, keep awake, the `nekko-vm` helper, VM lifecycle, scopes, caches, the security-update gate, the network filter, GitHub App connect, JIT configs, the audit log, the CI section with on/off, slots and memory, and the menu bar indicator. Total runner memory is a fixed 50% of RAM in P1.
+- **P2, more of one Mac:** Linux slots, a configurable runner memory cap (up to 75%), and the in-app image builder from Apple's restore image.
 - **P3, Buildkite and GitLab.**
 - **P4, Nekko Cloud fleet:** presence, picker endpoint, JIT broker, fleet view.
 - **P5, other hosts** if asked.
 
-## Open questions
+## Open questions `[planned]`
 
 - Mirroring golden images between fleet Macs (which Mac builds, discovery, behavior when it is offline).
 - Default cache cap per scope and eviction when the disk budget is tight.
