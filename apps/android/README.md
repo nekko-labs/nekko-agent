@@ -54,6 +54,11 @@ reference until this app reaches parity.
   re-read every time a chat opens. The computer adds each skill's instructions
   itself; the phone only ever sees names and descriptions. No `/goal`.
 
+- **Send feedback:** *Settings → Feedback* copies a prompt for your own coding
+  agent to file a GitHub issue, sends a quick note to Nekko Labs through Nekko
+  Cloud (app, version, OS and CPU type only when *Include app info* is on), or
+  opens GitHub issues.
+
 **Not yet:** models on the phone, push notifications, Markdown rendering,
 files other than photos, thumbnails of sent photos, Play Store release. See `TASKS.md` → *Native Android app*.
 
