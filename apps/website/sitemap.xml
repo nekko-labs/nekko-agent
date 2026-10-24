@@ -63,6 +63,16 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://nekkoagent.com/docs/protect-this-computer-with-a-security-key</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://nekkoagent.com/docs/two-chats-on-a-folding-phone</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://nekkoagent.com/docs/sync-encryption</loc>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
