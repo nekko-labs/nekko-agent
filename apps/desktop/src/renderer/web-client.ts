@@ -2,6 +2,9 @@ import { AGENT_REPLAY, IpcChannels, IpcEvents, deriveKey, seal, open, withApiSer
 import type { AgentReplay, LocalRelayStatus, NetworkVisibilityStatus, AppSettings, AgentEvent, IndexStatus, NekkoApi, AppInfo, ClaudeCapabilityStatus, ClaudeCodeStatus, ClaudePlanUsageStatus, ClaudePolicyStatus, UpdateInfo, TerminalEvent, OAuthStatus, SubscriptionLimits } from '@nekko-agent/shared';
 import { readBrandKey } from './brandStorage.js';
 import { openTerminalSocket } from './terminal-socket.js';
+import { withStepUpRetry, type StepUpHandler } from '../stepUpRetry.js';
+import { runWebAuthnCeremony } from '../webauthnCeremony.js';
+import { webAuthnUnavailableReason } from './secureContext.js';
 
 /**
  * Browser transport for the web/Docker editions: implements the same NekkoApi
@@ -291,6 +294,11 @@ function makeWebClient(): NekkoApi {
       return openTerminalSocket(`${proto}://${location.host}/api/term/${encodeURIComponent(id)}${q}`, handlers);
     };
   }
+
+  // A guarded call refused `step-up-required` opens the page's step-up sheet and runs again once confirmed (SK-5).
+  let stepUpHandler: StepUpHandler | null = null;
+  const transport = call;
+  call = (channel, ...args) => withStepUpRetry(() => transport(channel, ...args), () => stepUpHandler);
 
   return {
     getSettings: () => call(IpcChannels.settingsGet),
@@ -632,6 +640,25 @@ function makeWebClient(): NekkoApi {
     networkVisibilityStatus: async () => webVisibility,
     networkVisibilityStart: async () => webVisibility,
     networkVisibilityStop: async () => webVisibility,
+    // Settings → Security over the Local Web UI's socket (SK-5): the same channels as the desktop.
+    securityStatus: () => call(IpcChannels.securityStatus),
+    securityChallenge: () => call(IpcChannels.securityChallenge),
+    securityConfirm: (action, proof) => call(IpcChannels.securityConfirm, action, proof),
+    securityRegisterBegin: (kind) => call(IpcChannels.securityRegisterBegin, kind),
+    securityRegisterKey: (input) => call(IpcChannels.securityRegisterKey, input),
+    securityTotpBegin: () => call(IpcChannels.securityTotpBegin),
+    securityTotpConfirm: (code) => call(IpcChannels.securityTotpConfirm, code),
+    securityEnable: () => call(IpcChannels.securityEnable),
+    securityDisable: (proof) => call(IpcChannels.securityDisable, proof),
+    securityRemoveMethod: (id, proof) => call(IpcChannels.securityRemoveMethod, id, proof),
+    securityRecoveryCodes: () => call(IpcChannels.securityRecoveryCodes),
+    // In a browser WebAuthn runs in this page, bound to its own host: it needs a secure context.
+    webAuthnCeremony: async (request) => {
+      const why = webAuthnUnavailableReason(window);
+      if (why) return { ok: false, error: why };
+      return runWebAuthnCeremony({ ...request, rpId: location.hostname }, navigator.credentials as never);
+    },
+    setStepUpHandler: (handler) => { stepUpHandler = handler; },
 
     // Local Web UI: "update" = the server got a newer build since this tab
     // loaded; we just suggest a refresh (no installer to run in the browser).

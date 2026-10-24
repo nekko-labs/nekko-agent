@@ -24,6 +24,8 @@ import { AGENT_REPLAY, IpcChannels, IpcEvents } from '@nekko-agent/shared';
 import { ENGINE_ENDPOINT_CHANNEL, PICK_FOLDER_CHANNEL, SERVICE_CONTROL_CHANNEL } from '../engineChannels.js';
 import { createEngineSocket, type Listener } from './engine-socket.js';
 import { MAIN_EVENTS } from './routing.js';
+import { withStepUpRetry, type StepUpHandler } from '../stepUpRetry.js';
+import { WEBAUTHN_CEREMONY_CHANNEL } from '../webauthnCeremony.js';
 import {
   TITLEBAR_HEIGHT,
   TITLEBAR_OVERLAY_CHANNEL,
@@ -38,7 +40,11 @@ import {
 // Every call goes to the engine's socket (see `routing.ts`).
 const engine = createEngineSocket((operation) => ipcRenderer.invoke(ENGINE_ENDPOINT_CHANNEL, operation));
 
-const inv = (channel: string, ...args: unknown[]): Promise<any> => engine.call(channel, args);
+/** The page's step-up sheet (SK-4), set by the renderer through `setStepUpHandler`. */
+let stepUpHandler: StepUpHandler | null = null;
+
+/** A call to the engine; a guarded one refused `step-up-required` opens the sheet and runs again once confirmed. */
+const inv = (channel: string, ...args: unknown[]): Promise<any> => withStepUpRetry(() => engine.call(channel, args), () => stepUpHandler);
 
 /** Events: main's few from `ipcRenderer`, the rest from the engine. */
 const bus = {
@@ -381,6 +387,20 @@ const api: NekkoApi = {
   networkVisibilityStatus: () => inv(IpcChannels.networkVisibilityStatus),
   networkVisibilityStart: () => inv(IpcChannels.networkVisibilityStart),
   networkVisibilityStop: () => inv(IpcChannels.networkVisibilityStop),
+  // Settings → Security (SK-4): the engine verifies; WebAuthn runs in main's loopback ceremony window.
+  securityStatus: () => inv(IpcChannels.securityStatus),
+  securityChallenge: () => inv(IpcChannels.securityChallenge),
+  securityConfirm: (action, proof) => inv(IpcChannels.securityConfirm, action, proof),
+  securityRegisterBegin: (kind) => inv(IpcChannels.securityRegisterBegin, kind),
+  securityRegisterKey: (input) => inv(IpcChannels.securityRegisterKey, input),
+  securityTotpBegin: () => inv(IpcChannels.securityTotpBegin),
+  securityTotpConfirm: (code) => inv(IpcChannels.securityTotpConfirm, code),
+  securityEnable: () => inv(IpcChannels.securityEnable),
+  securityDisable: (proof) => inv(IpcChannels.securityDisable, proof),
+  securityRemoveMethod: (id, proof) => inv(IpcChannels.securityRemoveMethod, id, proof),
+  securityRecoveryCodes: () => inv(IpcChannels.securityRecoveryCodes),
+  webAuthnCeremony: (request) => ipcRenderer.invoke(WEBAUTHN_CEREMONY_CHANNEL, request),
+  setStepUpHandler: (handler) => { stepUpHandler = handler; },
 
   getAppInfo: () => inv(IpcChannels.appInfo),
   getClaudePolicy: () => inv(IpcChannels.claudePolicy),
