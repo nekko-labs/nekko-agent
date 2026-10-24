@@ -1108,7 +1108,7 @@ mod tests {
     #[test]
     fn screens_sealed_provider_setup() {
         let good = json!({ "id": "claude-phone", "kind": "anthropic", "label": "Anthropic", "sealedKey": "AQID" });
-        assert!(screen("providers:saveSealed", &[good.clone()]).is_ok());
+        assert!(screen("providers:saveSealed", std::slice::from_ref(&good)).is_ok());
         assert_eq!(
             screen("providers:saveSealed", &[good.clone(), json!(1)]).map(|_| ()),
             Err(denied("option-denied", "extra argument"))
