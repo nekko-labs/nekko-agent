@@ -43,6 +43,10 @@ pub struct Ctx {
     pub automation: Arc<crate::automation::Automation>,
     /// Phone remote access (`remote:*`) and the relay agent.
     pub remote: Arc<crate::remote::Remote>,
+    /// Settings → Security and the step-up check on the desktop's and the
+    /// Local Web UI's guarded calls (`security:*`, SK-4/SK-5). Reached from the
+    /// wire only (wire.rs), never through `route`, so a phone cannot call it.
+    pub security: Arc<crate::security::Security>,
     /// GPU and system stats, the readiness advisor, the hardware profile and model
     /// recommendations (`gpu:stats`, `system:stats`, `machine:*`).
     pub machine: Arc<nekko_machine::Machine>,

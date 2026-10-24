@@ -474,6 +474,18 @@ fn security_json(rp_id: &str, k: &p256::ecdsa::SigningKey, credential: &[u8], na
     })
 }
 
+/// Turns step-up on or off in `security.json`, keeping everything the daemon
+/// wrote (counters, rate limit). The desktop's own guarded calls (remote:enable,
+/// remote:attach, remote:pair, remote:setAccess) ask for a step-up too (SK-4),
+/// so these tests set the computer up with it off, as an owner does before
+/// turning it on, and test the phone gate with it on.
+fn set_step_up(data: &std::path::Path, on: bool) {
+    let path = data.join("security.json");
+    let mut v: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    v["enabled"] = json!(on);
+    std::fs::write(&path, v.to_string()).unwrap();
+}
+
 /// A software FIDO2 authenticator's assertion for `challenge` on `rp_id`:
 /// the authenticator data (rpIdHash, flags UP and UV, `counter`), the client
 /// data a WebAuthn caller writes, and the signature over both (SK-11).
@@ -520,6 +532,7 @@ async fn a_phone_raises_a_mode_with_a_security_key_and_stops_remote_access() {
     let security = security_json(RP_ID, &fido, &credential, "YubiKey 5 NFC");
     std::fs::write(data.join("security.json"), security.to_string()).unwrap();
     let d = start_with(Some(&data));
+    set_step_up(&data, false);
     let relay = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let relay_port = relay.local_addr().unwrap().port();
     post(d.port, "remote:enable", json!([format!("ws://127.0.0.1:{relay_port}/")]), Some(TOKEN)).await;
@@ -547,6 +560,7 @@ async fn a_phone_raises_a_mode_with_a_security_key_and_stops_remote_access() {
             }
         }
     }
+    set_step_up(&data, true);
     // A chat in Ask; the phone will raise it to YOLO.
     post(d.port, "settings:update", json!([{ "defaultChatMode": "ask" }]), Some(TOKEN)).await;
     let (_, chat) = post(d.port, "session:create", json!([]), Some(TOKEN)).await;
@@ -626,10 +640,12 @@ async fn a_phone_raises_a_mode_with_a_security_key_and_stops_remote_access() {
     // phone-2 has Change off: it may still stop remote access (a safety exit,
     // no proof, no step-up). Every phone is kicked and the agent hangs up
     // within a second.
+    set_step_up(&data, false);
     post(d.port, "remote:setAccess", json!(["phone-2", { "change": false }]), Some(TOKEN)).await;
     let started = Instant::now();
     agent.send(client("c2", json!({ "type": "req", "id": 6, "channel": "remote:stop", "args": [] }))).await.unwrap();
     let mut kicked = Vec::new();
+    let mut push_removed = Vec::new();
     let hung_up = tokio::time::timeout(Duration::from_secs(1), async {
         loop {
             match agent.next().await {
@@ -638,6 +654,9 @@ async fn a_phone_raises_a_mode_with_a_security_key_and_stops_remote_access() {
                     // The relay closes each kicked phone with 4001 (apps/relay-server).
                     if f["type"] == "kick" {
                         kicked.push(f["cid"].as_str().unwrap().to_string());
+                    }
+                    if f["type"] == "push-remove" {
+                        push_removed.push(f["deviceId"].clone());
                     }
                 }
                 Some(Ok(Message::Close(_))) | None | Some(Err(_)) => break,
@@ -649,6 +668,8 @@ async fn a_phone_raises_a_mode_with_a_security_key_and_stops_remote_access() {
     assert!(hung_up.is_ok(), "the agent was still up after {:?}", started.elapsed());
     kicked.sort();
     assert_eq!(kicked, ["c1", "c2"], "every phone was kicked");
+    // Disconnected, not signed out: each phone keeps its push token.
+    assert!(push_removed.is_empty(), "remote:stop dropped push for {push_removed:?}");
     let (_, status) = post(d.port, "remote:status", json!([]), Some(TOKEN)).await;
     assert_eq!(status["enabled"], false, "{status}");
     assert_eq!(status["stoppedBy"]["deviceId"], "phone-2", "{status}");
@@ -686,6 +707,7 @@ impl Machine {
         std::fs::create_dir_all(data.join("sessions")).unwrap();
         std::fs::write(data.join("security.json"), security.to_string()).unwrap();
         let d = start_with(Some(&data));
+        set_step_up(&data, false);
         let relay = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let url = format!("ws://127.0.0.1:{}/", relay.local_addr().unwrap().port());
         let (room, secret) = (format!("room-{name}"), format!("pair-key-{name}"));
@@ -716,6 +738,7 @@ impl Machine {
                 break;
             }
         }
+        set_step_up(&m.data, true);
         post(m.d.port, "settings:update", json!([{ "defaultChatMode": "ask" }]), Some(TOKEN)).await;
         let (_, chat) = post(m.d.port, "session:create", json!([]), Some(TOKEN)).await;
         m.sid = chat["id"].as_str().expect("a chat id").to_string();

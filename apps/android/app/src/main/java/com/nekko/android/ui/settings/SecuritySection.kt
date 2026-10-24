@@ -40,13 +40,15 @@ import com.nekko.android.ui.theme.Nekko
 /**
  * Settings → Security. Turning the lock on is free; turning it off asks for
  * the same fingerprint / face / screen lock first, so someone holding an
- * unlocked phone cannot quietly remove it.
+ * unlocked phone cannot quietly remove it. Below it, the computer's step-up
+ * methods by kind (SK-7, [StepUpMethodsCard]).
  */
 @Composable
-fun SecuritySection(@Suppress("UNUSED_PARAMETER") deps: SettingsDeps) {
+fun SecuritySection(deps: SettingsDeps) {
+    SectionHeader("Security")
     // The lock belongs to the app, not to Settings; MainActivity provides it.
-    val lock = LocalAppLock.current ?: return
-    AppLockCard(lock)
+    LocalAppLock.current?.let { AppLockCard(it) }
+    StepUpMethodsCard(deps)
 }
 
 @Composable
@@ -75,7 +77,6 @@ private fun AppLockCard(lock: AppLock) {
         }
     }
 
-    SectionHeader("Security")
     Column(Modifier.padding(horizontal = 16.dp)) {
         NCard {
             Row(

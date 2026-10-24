@@ -140,6 +140,14 @@ impl LinkHandle for RelayAgent {
         }
     }
 
+    fn disconnect_device(&self, device_id: &str) {
+        let core = &mut lock(&self.shared.core);
+        if let Some(core) = core.as_mut() {
+            let frames = core.disconnect_device(device_id);
+            self.shared.send_all(frames);
+        }
+    }
+
     fn connected_devices(&self) -> Vec<String> {
         lock(&self.shared.core).as_ref().map(AgentCore::connected_devices).unwrap_or_default()
     }

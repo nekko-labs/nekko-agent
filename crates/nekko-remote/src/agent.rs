@@ -558,14 +558,21 @@ impl AgentCore {
 
     /// Revocation: kick the device's live connections and drop its push token.
     pub fn kick_device(&mut self, device_id: &str) -> Vec<String> {
-        let mut out: Vec<String> = self
-            .welcomed()
+        let mut out = self.disconnect_device(device_id);
+        out.push(frame(json!({ "type": "push-remove", "deviceId": device_id })));
+        out
+    }
+
+    /// Kick the device's live connections and keep its push token, so the
+    /// phone is still told about chats when remote access comes back
+    /// (`remote:stop`). Only an intentional disconnect (revoke, sign out)
+    /// drops push.
+    pub fn disconnect_device(&self, device_id: &str) -> Vec<String> {
+        self.welcomed()
             .into_iter()
             .filter(|cid| self.conns[cid].device.as_deref() == Some(device_id))
             .map(|cid| frame(json!({ "type": "kick", "cid": cid })))
-            .collect();
-        out.push(frame(json!({ "type": "push-remove", "deviceId": device_id })));
-        out
+            .collect()
     }
 
     /// Device ids with a welcomed live connection, each once.

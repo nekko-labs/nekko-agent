@@ -6,6 +6,7 @@ import com.nekko.protocol.RelayException
 import com.nekko.protocol.RelayClient
 import com.nekko.protocol.RelayConfig
 import com.nekko.protocol.RelayStatus
+import com.nekko.protocol.StepUpProof
 import com.nekko.protocol.WelcomedDevice
 import com.nekko.protocol.WsTransport
 import kotlinx.coroutines.CoroutineScope
@@ -29,6 +30,13 @@ interface Remote : Caller {
     fun nudge()
     /** The phone changed network: drop the socket and dial again now. */
     fun reconnect()
+
+    /**
+     * A guarded call again with a step-up beside it in the sealed request
+     * (SK-7). Connections that can't carry one refuse plainly.
+     */
+    suspend fun callWithStepUp(stepUp: StepUpProof, channel: String, vararg args: JsonElement): JsonElement =
+        throw RelayException("This connection can’t send a confirmation.")
 }
 
 fun interface RemoteFactory {
@@ -46,6 +54,8 @@ class RelayRemote(private val client: RelayClient) : Remote {
     override suspend fun call(channel: String, vararg args: JsonElement) = client.call(channel, *args)
     override suspend fun callWithTimeout(timeoutMs: Long, channel: String, vararg args: JsonElement) =
         client.callWithTimeout(timeoutMs, channel, *args)
+    override suspend fun callWithStepUp(stepUp: StepUpProof, channel: String, vararg args: JsonElement) =
+        client.callWithStepUp(stepUp, channel, *args)
 }
 
 /** Production factory: one OkHttp transport shared by every connection. */
@@ -66,6 +76,9 @@ class PlainRefusals(private val inner: Remote, private val computer: () -> Strin
 
     override suspend fun callWithTimeout(timeoutMs: Long, channel: String, vararg args: JsonElement): JsonElement =
         plain { inner.callWithTimeout(timeoutMs, channel, *args) }
+
+    override suspend fun callWithStepUp(stepUp: StepUpProof, channel: String, vararg args: JsonElement): JsonElement =
+        plain { inner.callWithStepUp(stepUp, channel, *args) }
 
     private inline fun plain(block: () -> JsonElement): JsonElement = try {
         block()
