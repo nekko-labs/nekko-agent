@@ -19,7 +19,7 @@ type Side = 'bottom' | 'top' | 'left' | 'right';
  * short delay and at once on keyboard focus, hides on leave, blur, click and
  * Escape, and is linked to the control with `aria-describedby`.
  */
-export function HoverTip({ label, side = 'bottom', children }: { label: string; side?: Side; children: React.ReactElement }) {
+export function HoverTip({ label, side = 'bottom', children, multiline = false }: { label: string; side?: Side; children: React.ReactElement; multiline?: boolean }) {
   const id = useId();
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
@@ -72,7 +72,7 @@ export function HoverTip({ label, side = 'bottom', children }: { label: string; 
   return <>
     {trigger}
     {open && typeof document !== 'undefined' && createPortal(
-      <div ref={tip} id={id} role="tooltip" className="hover-tip" data-side={side}
+      <div ref={tip} id={id} role="tooltip" className={`hover-tip${multiline ? ' hover-tip-multiline' : ''}`} data-side={side}
         style={pos ? { left: pos.left, top: pos.top } : { left: -9999, top: -9999, visibility: 'hidden' }}>
         {label}
       </div>,

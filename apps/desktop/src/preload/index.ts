@@ -212,6 +212,7 @@ const api: NekkoApi = {
   purgeExpiredArchives: () => inv(IpcChannels.sessionsPurgeArchived),
   forkSession: (id, beforeMessageId) => inv(IpcChannels.sessionFork, id, beforeMessageId),
   resetSettings: () => inv(IpcChannels.settingsReset),
+  listFonts: () => inv(IpcChannels.fontsList),
   wipeAllData: () => inv(IpcChannels.dataWipe),
   listTools: () => inv(IpcChannels.toolsList),
 

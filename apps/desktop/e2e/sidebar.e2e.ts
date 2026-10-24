@@ -153,11 +153,5 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1200, 400])
       await called(`(c) => c.method === 'cleanup' && c.id === 'completed'`);
       await expect(page.getByText('Back to active agents')).toHaveCount(0);
     });
-
-    await test.step('the Chat page does not own the sidebar', async () => {
-      await page.evaluate(`integration.route('workspace')`);
-      await expect(page.locator('[data-sidebar-group]')).toHaveCount(0);
-      await shot(`chat-${theme}-${width}`);
-    });
   });
 }

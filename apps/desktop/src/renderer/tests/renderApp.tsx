@@ -12,7 +12,7 @@ import type { AppSettings } from '@nekko-agent/shared';
  * `liveStore` before calling this; the stubs are `vi.doMock`ed here, so App is
  * imported fresh per call.
  */
-const VIEWS = ['WorkspacesView', 'DesignBoardView', 'ArtifactsView', 'SkillsView', 'TrainingView', 'WorkflowsView', 'CommandCenterView', 'ModelsView', 'ModelServerView', 'ConnectorsView', 'MemoryView', 'SettingsView', 'OnboardingView'];
+const VIEWS = ['DesignBoardView', 'ArtifactsView', 'SkillsView', 'TrainingView', 'WorkflowsView', 'CommandCenterView', 'ModelsView', 'ModelServerView', 'ConnectorsView', 'MemoryView', 'SettingsView', 'OnboardingView'];
 const CHROME: Array<[string, string]> = [
   ['AboutNekko', 'AboutNekko'], ['UpdateBanner', 'UpdateBanner'], ['RelayPairing', 'RelayPairing'], ['CommandPalette', 'CommandPalette'],
   ['DeepLink', 'DeepLinkListener'], ['Toasts', 'Toasts'], ['TitleBar', 'TitleBar'], ['ResourceMonitor', 'ResourceHud'], ['AutumnBackground', 'AutumnBackground'],

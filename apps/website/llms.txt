@@ -94,6 +94,7 @@ Full docs in one file: https://nekkoagent.com/llms-full.txt. Each page is also a
 
 ### Using Nekko Agent
 
+- [Fonts and text](https://nekkoagent.com/docs/fonts-and-text.md): Text size, the interface and code fonts, and adding your own fonts.
 - [Browser automation](https://nekkoagent.com/docs/browser-automation.md): Chat-owned browser actions, security boundaries and native driver migration status.
 - [Privacy Shield](https://nekkoagent.com/docs/privacy-shield.md): Replace emails, phone numbers, secrets and your own terms with placeholders before a request reaches a cloud model.
 - [Code mode](https://nekkoagent.com/docs/code-mode.md): Let the model write code that calls your tools in a sandbox, so long tool lists and big results cost far fewer tokens.

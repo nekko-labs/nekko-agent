@@ -26,7 +26,6 @@ import { UpdateBanner } from './components/UpdateBanner.js';
 import { AppNotices } from './components/AppNotices.js';
 import { RelayPairing } from './components/RelayPairing.js';
 import { DeepLinkListener } from './components/DeepLink.js';
-import { WorkspacesView } from './views/WorkspacesView.js';
 import { DesignBoardView } from './views/DesignBoardView.js';
 import { ArtifactsView } from './views/ArtifactsView.js';
 import { SkillsView } from './views/SkillsView.js';
@@ -42,7 +41,6 @@ import { OnboardingView } from './views/OnboardingView.js';
 import { ClaudePlanSheet } from './components/claude/ClaudeAgent.js';
 import {
   ArtifactsColorIcon,
-  CommandHudIcon,
   SkillsColorIcon,
   TrainingColorIcon,
   WorkflowsColorIcon,
@@ -60,7 +58,6 @@ const AgentCatIcon = (_p: { className?: string }) => <NekkoAvatar size={22} stat
 
 const NAV: Array<{ view: View; labelKey: string; Icon: (p: { className?: string }) => React.JSX.Element }> = [
   { view: 'command', labelKey: 'nav.command', Icon: AgentCatIcon },
-  { view: 'chat', labelKey: 'nav.chat', Icon: CommandHudIcon },
   { view: 'artifacts', labelKey: 'nav.artifacts', Icon: ArtifactsColorIcon },
   { view: 'skills', labelKey: 'nav.skills', Icon: SkillsColorIcon },
   { view: 'training', labelKey: 'nav.training', Icon: TrainingColorIcon },
@@ -74,7 +71,7 @@ const NAV: Array<{ view: View; labelKey: string; Icon: (p: { className?: string 
 ];
 
 /** Phone bottom-tab destinations (the remote-control essentials). */
-const MOBILE_NAV: View[] = ['command', 'chat', 'training', 'workflows', 'settings'];
+const MOBILE_NAV: View[] = ['command', 'training', 'workflows', 'settings'];
 
 export function App() {
   const { view, setView, mascotMood, settings, settingsLoaded, providers, onboardingOpen, refreshSettings, refreshProviders, refreshSessions, refreshTerminals } = useStore(
@@ -336,7 +333,6 @@ export function App() {
           )}
           <ErrorBoundary key={view} label={t(`nav.${view}`)}>
           {view === 'command' && <CommandCenterView />}
-          {view === 'chat' && <WorkspacesView />}
           {view === 'artifacts' && <ArtifactsView />}
           {view === 'skills' && <SkillsView />}
           {view === 'training' && <TrainingView />}

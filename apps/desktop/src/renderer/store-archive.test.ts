@@ -15,7 +15,7 @@ beforeEach(() => {
     settings: { showTips: true, completionTipSeen: false } as never, completionTipSessionId: null,
     sessions: [summarizeSession(session)], activeSessionId: session.id,
     workspaces: [{ id: 'ws_test', anchor: { kind: 'chat', refId: session.id }, root: { id: 'pane_test', kind: 'chat', refId: session.id }, activePaneId: 'pane_test' }],
-    activeWorkspaceId: 'ws_test', toasts: [], archiveOpen: false, archivedViewId: null,
+    activeWorkspaceId: 'ws_test', toasts: [],
   });
   confirmation.mockResolvedValue(true);
   vi.useFakeTimers();

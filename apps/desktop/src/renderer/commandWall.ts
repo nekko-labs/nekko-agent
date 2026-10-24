@@ -18,7 +18,7 @@ import {
 } from './layout.js';
 
 /**
- * The Command Center wall: which live windows are on it and how they are
+ * The Agent board wall: which live windows are on it and how they are
  * split, plus the toolbar switches. Pure data and arithmetic, so the view can
  * be a thin layer and this can be tested on its own.
  *

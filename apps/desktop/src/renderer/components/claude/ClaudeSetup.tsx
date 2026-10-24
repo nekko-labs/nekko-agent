@@ -241,7 +241,7 @@ export function ClaudeSetup({
             <strong>{connected.title}</strong>
             <span>{connected.detail}</span>
           </div>
-          <button type="button" className="btn btn-primary" onClick={() => { setView('chat'); void newChat(); }}>Start a chat</button>
+          <button type="button" className="btn btn-primary" onClick={() => { setView('command'); void newChat(); }}>Start a chat</button>
           <button type="button" className="btn btn-ghost" onClick={onDone}>Done</button>
         </div>
       )}

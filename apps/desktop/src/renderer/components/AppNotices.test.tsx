@@ -44,7 +44,7 @@ describe('app notices', () => {
   });
 
   it('opens Add provider on the kind a notice action asks for', () => {
-    useStore.setState({ view: 'chat', addProviderKind: null, settings: {} as never });
+    useStore.setState({ view: 'command', addProviderKind: null, settings: {} as never });
     useStore.getState().openAddProvider('claude-code');
     expect(useStore.getState().addProviderKind).toBe('claude-code');
     expect(useStore.getState().view).toBe('models');

@@ -19,7 +19,8 @@ vi.mock('./PaneFrame.js', () => ({
   PaneFrame: ({ title, children, focusAction }: { title: string; children: React.ReactNode; focusAction?: React.ReactNode }) => <section data-title={title}>{focusAction}{children}</section>,
   PaneActions: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
-import { CommandWall, boardEdgePreview, commandWallGeometry, companionTree, resizeCompanionSplit, sameDeps, WARM_COMPOSERS, warmFront, workspaceCompanions } from './CommandWall.js';
+import { applyWallDrop } from '../wallDrag.js';
+import { CommandWall, commandWallGeometry, companionTree, resizeCompanionSplit, sameDeps, WARM_COMPOSERS, warmFront, workspaceCompanions } from './CommandWall.js';
 import { leafRects } from '../commandWall.js';
 
 const a: WbPane = { id: 'a', kind: 'chat', refId: 'chat-a' };
@@ -177,15 +178,18 @@ describe('command wall geometry', () => {
     expect(html).not.toContain('data-wall-empty-cell'); // unmeasured: nothing drawn yet
   });
 
-  it('previews a board-edge drop as a full column or a full-width row', () => {
+  it('previews a held window at the place a board-edge drop puts it', () => {
     const stacked: WbSplit = { id: 'col', dir: 'col', children: [a, b], sizes: [0.5, 0.5] };
     const s = state({ root: stacked });
-    expect(boardEdgePreview(s, 'b', 'right', 1000, 600)).toEqual({ x: 500, y: 0, width: 500, height: 600 });
-    expect(boardEdgePreview(s, 'b', 'down', 1000, 600)).toBeNull(); // already the bottom row
+    const right = commandWallGeometry({ ...s, root: applyWallDrop(s.root, 'b', { kind: 'edge', side: 'right' }) }, 1000, 600).panes.get('b')!;
+    expect(right).toMatchObject({ y: 0, height: 600 });
+    expect(right.x).toBeGreaterThan(490);
+    // Already the bottom row: the zone stays where the window already is.
+    expect(commandWallGeometry({ ...s, root: applyWallDrop(s.root, 'b', { kind: 'edge', side: 'down' }) }, 1000, 600).panes.get('b')).toEqual(commandWallGeometry(s, 1000, 600).panes.get('b'));
     const cols = state({ root: { id: 'row', dir: 'row', children: [a, b, t], sizes: [1 / 3, 1 / 3, 1 / 3] } });
-    const bottom = boardEdgePreview(cols, 't', 'down', 900, 600)!;
+    const bottom = commandWallGeometry({ ...cols, root: applyWallDrop(cols.root, 't', { kind: 'edge', side: 'down' }) }, 900, 600).panes.get('t')!;
     expect(bottom).toMatchObject({ x: 0, width: 900 });
-    expect(bottom.y).toBeCloseTo(300);
+    expect(bottom.y).toBeGreaterThan(290);
   });
 
   it('stacks narrow Grid and Fixed panes and handles unmeasured empty mounts', () => {

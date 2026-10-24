@@ -18,21 +18,6 @@ const Svg = ({ children, className }: { children: React.ReactNode } & P) => (
   </svg>
 );
 
-/** Command Center — a military HUD / radar scope (sweep, rings, crosshair, blips). */
-export const CommandHudIcon = (p: P) => (
-  <Svg {...p}>
-    <circle cx="12" cy="12" r="9.2" stroke="#10b981" strokeWidth="1.5" opacity="0.35" />
-    <circle cx="12" cy="12" r="5.6" stroke="#10b981" strokeWidth="1.3" opacity="0.55" />
-    <path d="M12 2.4v19.2M2.4 12h19.2" stroke="#10b981" strokeWidth="1.1" opacity="0.4" />
-    {/* radar sweep wedge */}
-    <path d="M12 12 L12 2.8 A9.2 9.2 0 0 1 20.9 9 Z" fill="#10b981" opacity="0.28" />
-    {/* blips */}
-    <circle cx="16" cy="8.4" r="1.35" fill="#34d399" />
-    <circle cx="8.4" cy="15.2" r="1.05" fill="#6ee7b7" />
-    <circle cx="12" cy="12" r="1.5" fill="#059669" />
-  </Svg>
-);
-
 /** Chat — a friendly violet speech bubble with colored dots. */
 export const ChatColorIcon = (p: P) => (
   <Svg {...p}>

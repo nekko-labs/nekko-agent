@@ -16,7 +16,7 @@ describe('voice intent', () => {
   it('recognizes completion without auto-execution', () => {
     expect(parseVoiceIntent('Nekko complete this session')).toEqual({ kind: 'complete-session' });
   });
-  it.each([['Nekko go to the model server tab', 'modelserver'], ['Nekko open settings', 'settings'], ['Nekko show agents', 'chat']])('routes %s', (text, view) => {
+  it.each([['Nekko go to the model server tab', 'modelserver'], ['Nekko open settings', 'settings'], ['Nekko show agents', 'command']])('routes %s', (text, view) => {
     expect(parseVoiceIntent(text)).toEqual({ kind: 'navigate', view });
   });
   it('leaves arbitrary and multi-step app commands unexecuted', () => {
