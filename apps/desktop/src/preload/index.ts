@@ -33,6 +33,7 @@ import {
 import {
   DISPLAY_ARG, DISPLAYS_CHANGED_EVENT, DISPLAYS_CLAIM_CHANNEL, DISPLAYS_LIST_CHANNEL, DISPLAYS_PLACED_EVENT,
   DISPLAYS_PLACEMENT_CHANNEL, DISPLAYS_REPORT_CHANNEL, DISPLAYS_TOGGLE_CHANNEL, type DisplaysState,
+  DISPLAYS_DESKTOP_CHANNEL, DISPLAYS_GO_CHANNEL, DISPLAYS_SPACES_MODE_CHANNEL,
 } from '../displayWindows.js';
 
 // Every call goes to the engine's socket (see `routing.ts`).
@@ -501,6 +502,9 @@ const chrome: WindowChromeBridge = {
     list: () => ipcRenderer.invoke(DISPLAYS_LIST_CHANNEL),
     toggle: (id, on, reducedMotion) => ipcRenderer.invoke(DISPLAYS_TOGGLE_CHANNEL, id, on, reducedMotion),
     setPlacement: (placement) => ipcRenderer.invoke(DISPLAYS_PLACEMENT_CHANNEL, placement),
+    toggleDesktop: (id, on) => ipcRenderer.invoke(DISPLAYS_DESKTOP_CHANNEL, id, on),
+    setSpacesMode: (mode) => ipcRenderer.invoke(DISPLAYS_SPACES_MODE_CHANNEL, mode),
+    go: (target) => ipcRenderer.invoke(DISPLAYS_GO_CHANNEL, target),
     report: (panes) => { if (process.isMainFrame) ipcRenderer.send(DISPLAYS_REPORT_CHANNEL, panes); },
     claim: (sessionId, mode) => ipcRenderer.invoke(DISPLAYS_CLAIM_CHANNEL, sessionId, mode),
     onChange: (cb) => {

@@ -23,4 +23,13 @@ describe('voice intent', () => {
     expect(parseVoiceIntent('Nekko go to the model server tab and add a new one')).toMatchObject({ kind: 'unknown' });
     expect(parseVoiceIntent('Nekko delete everything')).toMatchObject({ kind: 'unknown' });
   });
+  it('switches desktops and screens by voice', () => {
+    expect(parseVoiceIntent('Nekko, switch to desktop 2.')).toEqual({ kind: 'go', target: { kind: 'desktop', n: 2 } });
+    expect(parseVoiceIntent('Neko go to desktop to')).toEqual({ kind: 'go', target: { kind: 'desktop', n: 2 } });
+    expect(parseVoiceIntent('Nekko next desktop')).toEqual({ kind: 'go', target: { kind: 'desktop', step: 1 } });
+    expect(parseVoiceIntent('Nekko switch to the previous space')).toEqual({ kind: 'go', target: { kind: 'desktop', step: -1 } });
+    expect(parseVoiceIntent('Nekko show screen three')).toEqual({ kind: 'go', target: { kind: 'screen', n: 3 } });
+    expect(parseVoiceIntent('switch to desktop 2')).toEqual({ kind: 'dictation', text: 'switch to desktop 2' });
+    expect(parseVoiceIntent('Nekko switch to desktop purple').kind).toBe('unknown');
+  });
 });
