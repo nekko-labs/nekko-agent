@@ -75,7 +75,7 @@ If your phone is lost or you think something is wrong, the phone can shut the do
 They are in the phone's **Settings → This computer** and in the connection banner's menu, so you can reach them while a chat is running:
 
 - **Sign out this phone.** The computer revokes this phone (as **Revoke** on the desktop does) and the phone forgets the computer: its pairing, drafts, outbox and offline files. Coming back takes a new pairing code. If the phone is offline, it forgets at once and tells the computer when it next connects.
-- **Stop remote access on the computer.** Remote access turns off, every phone is disconnected, and the desktop shows *Remote access was stopped from Philip's iPhone at 14:02. Turn it on again from here.* Only the desktop can turn it back on (with step-up, when it is on). A phone with Change switched off may still press this: stopping is never a change the switches guard.
+- **Stop remote access on the computer.** Remote access turns off, every phone is disconnected (each keeps its notifications, so they come back with remote access), and the desktop shows *Remote access was stopped from Philip's iPhone at 14:02. Turn it on again from here.* Only the desktop can turn it back on (with step-up, when it is on). A phone with Change switched off may still press this: stopping is never a change the switches guard.
 - **Quit Nekko Agent on the computer.** Running chats are interrupted as on a normal quit, and the app closes. There is no remote start: you turn it on again at the computer. This one is off unless you turn it on in the desktop's **Remote access** card, so a phone cannot shut down a computer whose owner did not opt in.
 
 Each one is written to the phone's activity on the computer and shows a desktop notification.

@@ -645,6 +645,7 @@ async fn a_phone_raises_a_mode_with_a_security_key_and_stops_remote_access() {
     let started = Instant::now();
     agent.send(client("c2", json!({ "type": "req", "id": 6, "channel": "remote:stop", "args": [] }))).await.unwrap();
     let mut kicked = Vec::new();
+    let mut push_removed = Vec::new();
     let hung_up = tokio::time::timeout(Duration::from_secs(1), async {
         loop {
             match agent.next().await {
@@ -653,6 +654,9 @@ async fn a_phone_raises_a_mode_with_a_security_key_and_stops_remote_access() {
                     // The relay closes each kicked phone with 4001 (apps/relay-server).
                     if f["type"] == "kick" {
                         kicked.push(f["cid"].as_str().unwrap().to_string());
+                    }
+                    if f["type"] == "push-remove" {
+                        push_removed.push(f["deviceId"].clone());
                     }
                 }
                 Some(Ok(Message::Close(_))) | None | Some(Err(_)) => break,
@@ -664,6 +668,8 @@ async fn a_phone_raises_a_mode_with_a_security_key_and_stops_remote_access() {
     assert!(hung_up.is_ok(), "the agent was still up after {:?}", started.elapsed());
     kicked.sort();
     assert_eq!(kicked, ["c1", "c2"], "every phone was kicked");
+    // Disconnected, not signed out: each phone keeps its push token.
+    assert!(push_removed.is_empty(), "remote:stop dropped push for {push_removed:?}");
     let (_, status) = post(d.port, "remote:status", json!([]), Some(TOKEN)).await;
     assert_eq!(status["enabled"], false, "{status}");
     assert_eq!(status["stoppedBy"]["deviceId"], "phone-2", "{status}");
