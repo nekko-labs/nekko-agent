@@ -47,6 +47,6 @@ final class MachineModelTests: XCTestCase {
     }
 
     func testTodayIsTheUsageSummarysUtcDay() {
-        XCTAssertEqual(MachineModel.dayKey(1_761_300_000_000), "2026-10-24")
+        XCTAssertEqual(MachineModel.dayKey(1_792_843_200_000), "2026-10-24")
     }
 }
