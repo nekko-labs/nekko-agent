@@ -7,6 +7,8 @@ export function createDesktopTray(options: {
   engine: EngineProcess;
   showUi: () => void;
   newChat: () => void;
+  /** Opens the Send feedback sheet (the only way there on Windows and Linux without the rail). */
+  feedback: () => void;
   serviceStarted: () => void;
   quit: () => void;
   onError: (message: string) => void;
@@ -51,6 +53,7 @@ export function createDesktopTray(options: {
         }
       }) },
       { type: 'separator' },
+      { label: 'Send feedback…', click: options.feedback },
       { label: 'Quit Nekko Agent', enabled: !busy, click: options.quit },
     ];
     tray.setContextMenu(Menu.buildFromTemplate(entries));

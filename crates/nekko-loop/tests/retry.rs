@@ -162,6 +162,8 @@ fn tells_a_dropped_network_from_a_provider_that_answered() {
         "error sending request for url (https://api.openai.com/v1/chat/completions)",
         "dns error: failed to lookup address information",
         "terminated",
+        "Can't reach ChatGPT at https://chatgpt.com/backend-api. Check the network connection.",
+        "Can't reach the model server at http://localhost:1234/v1. Is it running and reachable on the network?",
     ] {
         assert!(is_network_error(m), "{m}");
         assert!(is_transient_error(m), "{m}");
