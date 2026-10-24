@@ -172,6 +172,7 @@
  "sandbox:configure",
  "sandbox:diff",
  "sandbox:status",
+ "security:challenge",
  "server:stop",
  "session:create",
  "session:delete",

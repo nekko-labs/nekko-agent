@@ -14,6 +14,7 @@
 
 import { clientMessageIdOf } from './chat.js';
 import { skillTurnText } from './skills.js';
+import { stepUpPolicy, STEP_UP_CHALLENGE } from './step-up.js';
 import { phoneChangesView, PHONE_CHANGES_VIEW } from './phone-changes.js';
 import {
   PHONE_TERMINAL,
@@ -142,6 +143,7 @@ export const PHONE_CHANNELS = [
   'providers:saveSealed',
   'providers:sealKey',
   'providers:setEnabled',
+  'security:challenge',
   'session:create',
   'session:delete',
   'session:fork',
@@ -315,6 +317,8 @@ export const PHONE_READ_CHANNELS: readonly string[] = [
   ...PHONE_GIT_READ_CHANNELS,
   ...PHONE_FILES_READ_CHANNELS,
   ...PHONE_TERMINAL_READ_CHANNELS,
+  // SK-2: a step-up challenge; the daemon's gate answers it itself (step-up.ts).
+  STEP_UP_CHALLENGE.channel,
 ];
 /**
  * Change level without a proof per call (2026-10-22): everything that makes
@@ -1213,5 +1217,6 @@ export function phoneAccessPolicy() {
       checkView: [...PHONE_CHECK_VIEW],
     },
     maxFrameBytes: PHONE_MAX_FRAME_BYTES,
+    stepUp: stepUpPolicy(),
   };
 }
