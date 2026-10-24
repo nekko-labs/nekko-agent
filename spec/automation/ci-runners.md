@@ -76,7 +76,7 @@ None can stop sleep when the lid closes on battery, when Low Power Mode turns on
 | Threat | Control |
 |---|---|
 | A job reads your files, keys or tokens | Separate VM with its own disk. No host folder, clipboard or keychain reaches it. The only secret inside is a single-use runner config. |
-| A job attacks your LAN or other devices | The VM's only network is a userspace NAT inside `nekkod` that forwards to public unicast internet addresses only, judged after DNS resolution. |
+| A job attacks your LAN or other devices | The VM's only network is a userspace NAT inside `nekkod` that forwards to public unicast internet addresses only, judged after DNS resolution, and never to the Mac's own addresses or any network the Mac is on, even a public one. |
 | A job reaches services on the host | There is no host-to-guest and no guest-to-host network. The NAT answers DHCP and DNS for the guest and forwards nothing to a host address. |
 | Malware persists into the next job | Every job starts from a new copy-on-write clone of a read-only golden image; the clone is deleted after the job. |
 | A job poisons the build cache | One cache volume per scope, attached only for trusted runs (never fork PRs), size-capped, wipeable from the runner card. |
@@ -85,7 +85,7 @@ None can stop sleep when the lid closes on battery, when Low Power Mode turns on
 | Fork PRs run on your Mac | Off by default, and a repo scope shows a warning when it is public. |
 | A tampered image | Images are pinned by digest and checked before cloning. |
 
-**Guest network, exactly.** Public unicast internet only. Never RFC 1918, loopback, link-local, 100.64.0.0/10, multicast, broadcast, 0.0.0.0/8, 240.0.0.0/4, 198.18.0.0/15, fc00::/7, fe80::/10, or any host address.
+**Guest network, exactly.** Public unicast internet only. Never RFC 1918, loopback, link-local, 100.64.0.0/10, multicast, broadcast, 0.0.0.0/8, 240.0.0.0/4, 198.18.0.0/15, fc00::/7, fe80::/10, or any host address. "Host address" covers the Mac's own interface addresses, every on-link prefix of every host interface, and known WAN or gateway public addresses, because most LANs give devices global IPv6 addresses that the static list allows. The NAT refreshes that list whenever the Mac's network changes.
 
 **How the guest gets its config.** `nekkod` mints the single-use JIT runner config and puts it on a read-only seed disk attached to the VM. The host never connects into the guest: no SSH, no host-to-guest network.
 

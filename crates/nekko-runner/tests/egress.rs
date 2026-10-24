@@ -1,4 +1,4 @@
-use nekko_runner::guest_may_reach;
+use nekko_runner::{HostNets, guest_may_connect, guest_may_reach};
 
 fn check(list: &[&str], want: bool) {
     for s in list {
@@ -151,4 +151,58 @@ fn embedded_v4_is_judged_as_v4() {
     // 6to4 2002::/16
     check(&["2002:c0a8:0101::", "2002:0a00:0001::", "2002:7f00:1::", "2002::"], false);
     check(&["2002:0101:0101::", "2002:8c52:7003::1"], true);
+}
+
+#[test]
+fn more_v4_and_v6_probes() {
+    // 3fff::/20 is the documentation range: not routed, so it reaches nothing local and stays allowed.
+    check(&["191.255.255.255", "2000::", "3fff::"], true);
+}
+
+fn host() -> HostNets {
+    HostNets::new(vec!["81.2.69.160".parse().unwrap()], vec![("2a02:1234:5678:1::".parse().unwrap(), 64)])
+}
+
+fn connect(ip: &str, host: &HostNets) -> bool {
+    guest_may_connect(ip.parse().unwrap(), host)
+}
+
+#[test]
+fn host_v6_prefix_is_denied() {
+    assert!(!connect("2a02:1234:5678:1::42", &host()));
+    assert!(connect("2a02:1234:5678:2::1", &host()));
+}
+
+#[test]
+fn host_public_v4_is_denied() {
+    assert!(!connect("81.2.69.160", &host()));
+    assert!(connect("81.2.69.161", &host()));
+    assert!(!connect("::ffff:81.2.69.160", &host()));
+}
+
+#[test]
+fn on_link_public_v4_prefix_is_denied() {
+    let h = HostNets::new(vec![], vec![("81.2.69.0".parse().unwrap(), 24)]);
+    assert!(!connect("81.2.69.7", &h));
+    assert!(connect("81.2.70.7", &h));
+    // A v4 prefix never matches a v6 address.
+    assert!(connect("2a02:1234:5678:1::42", &h));
+}
+
+#[test]
+fn oversized_prefix_lengths_are_clamped() {
+    let h = HostNets::new(vec![], vec![("81.2.69.7".parse().unwrap(), 200), ("2a02::1".parse().unwrap(), 255)]);
+    assert!(!connect("81.2.69.7", &h));
+    assert!(connect("81.2.69.8", &h));
+    assert!(!connect("2a02::1", &h));
+    assert!(connect("2a02::2", &h));
+}
+
+#[test]
+fn empty_host_nets_equals_the_static_check() {
+    let h = HostNets::new(vec![], vec![]);
+    for s in ["1.1.1.1", "10.0.0.1", "2606:4700::1111", "fe80::1", "::ffff:192.168.1.1", "81.2.69.160"] {
+        let ip = s.parse().unwrap();
+        assert_eq!(guest_may_connect(ip, &h), guest_may_reach(ip), "{s}");
+    }
 }

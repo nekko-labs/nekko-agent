@@ -8,7 +8,7 @@ pub mod settings;
 pub mod slots;
 
 pub use awake::hold_awake;
-pub use egress::guest_may_reach;
+pub use egress::{HostNets, guest_may_connect, guest_may_reach};
 pub use gates::{
     ACTIVE_INPUT_SECS, BUSY_CPU_PCT, Decision, Pressure, Reason, SECURITY_GRACE_DAYS, Signals, Thermal, evaluate,
 };
