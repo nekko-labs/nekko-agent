@@ -40,6 +40,12 @@
           "description": "Switch off every network connection at once or one by one, and see how often each one is used."
         },
         {
+          "slug": "usage-reports",
+          "title": "Usage and crash reports",
+          "source": "docs/usage-reports.md",
+          "description": "Opt in to anonymous usage and crash reports, what they contain, and how to see each send."
+        },
+        {
           "slug": "privacy-shield",
           "title": "Privacy Shield",
           "source": "docs/privacy-shield.md",

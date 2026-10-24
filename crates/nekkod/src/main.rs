@@ -68,6 +68,7 @@ mod skill_sources;
 mod small_services;
 mod spawn;
 mod speeds;
+mod telemetry;
 mod tooling;
 mod turns;
 mod voice;
@@ -448,6 +449,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         tokio::spawn(async move { d.start(&c).await });
     }
     connections::follow(ctx.clone());
+    telemetry::start(ctx.clone());
     // Claude Agent chats' idle Claude Code children are ended after 15 minutes.
     ctx.turns.harness.start_reaper();
     // Claude Agent's approval bridge: the app's own CLI, else `nekko-agent` on PATH.

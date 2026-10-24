@@ -40,6 +40,7 @@ export const CONNECTIONS: ConnectionInfo[] = [
   { id: 'limits', label: 'Plan and limit checks', group: 'background', where: 'chatgpt.com, openrouter.ai', desc: 'Reads your plan’s usage limits about every 30 seconds while a subscription or key is connected.' },
   { id: 'connectors', label: 'Connectors', group: 'background', where: 'GitHub, Slack, Linear and the others you connect', desc: 'Fetches context for each turn and polls for workflow triggers. Sends text from the turn.' },
   { id: 'decide', label: 'Decision models', group: 'background', where: 'api.typesafe.ai, github.com', desc: 'Hosted decisions on each turn when a TypeSafe key is set (sends turn text), and decision model downloads.' },
+  { id: 'telemetry', label: 'Usage and crash reports', group: 'background', where: 'us.i.posthog.com', desc: 'Only if you turned on Help improve Nekko Agent: anonymous feature use and scrubbed errors, sent once a minute.' },
   { id: 'github', label: 'GitHub pull requests', group: 'background', where: 'api.github.com, your git remotes', desc: 'PR status every 20 seconds while a PR card is open, and git fetches for PR checkouts.' },
   { id: 'telegram', label: 'Telegram', group: 'background', where: 'api.telegram.org', desc: 'Waits for messages to your bot while the Telegram channel is on.' },
   { id: 'model-providers', label: 'Cloud model providers', group: 'onDemand', where: 'The providers you set up', desc: 'Every chat turn sent to a cloud model. Local models on this computer are not affected.' },
