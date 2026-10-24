@@ -94,8 +94,10 @@ public enum Channels {
     public static let logsRead = "logs:read"
     /// The change-class channels among these.
     public static let filesChange: Set<String> = [filesWrite]
+    /// A provider added or switched from the phone (`PHONE_PROVIDER_CHANGE_CHANNELS`): change class, with a proof.
+    public static let providersChange: Set<String> = [providersSaveSealed, providersSetEnabled]
     /// Every change-class channel the phone calls (`PHONE_CHANGE_CHANNELS`): signed, so Face ID or the passcode is asked.
-    public static let change: Set<String> = gitChange.union(filesChange).union(terminalChange)
+    public static let change: Set<String> = gitChange.union(filesChange).union(terminalChange).union(providersChange)
 
     public static let all = [
         settingsGet, settingsUpdate, providersList, modelsList, sessionsSummaries, sessionCreate, sessionGet,
