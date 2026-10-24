@@ -74,16 +74,29 @@ pub enum Reason {
     UserBusy,
 }
 
+/// What a slot does next. One JSON shape, tagged by `kind`, like `Scope`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(tag = "kind", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum Decision {
     Take,
-    Hold(Vec<Reason>),
-    Drain { grace_secs: u64, why: Vec<Reason> },
-    StopNow(Vec<Reason>),
+    Hold {
+        why: Vec<Reason>,
+    },
+    /// Let the running job finish within `grace_secs`, then stop the VM.
+    /// `evaluate` is stateless: the supervisor records when the drain started
+    /// and does not restart the grace when the reasons change. For Runner
+    /// first it also caps the grace at the job's remaining max job time.
+    Drain {
+        grace_secs: u64,
+        why: Vec<Reason>,
+    },
+    StopNow {
+        why: Vec<Reason>,
+    },
 }
 
-/// `running`: a job is in this slot now. Every comparison is written in the
+/// `running`: a job is in this slot now. Stateless: the supervisor owns drain
+/// timing (see [`Decision::Drain`]). Every comparison is written in the
 /// failing direction, so a NaN sensor value counts as unsafe. Reasons are collected, not
 /// short-circuited, so the UI can list everything that is in the way.
 // The negated comparisons are deliberate: `!(x >= floor)` is true for NaN.
@@ -96,7 +109,7 @@ pub fn evaluate(s: &RunnerSettings, sig: &Signals, running: bool) -> Decision {
         Priority::RunnerFirst => u64::from(s.max_job_minutes) * 60,
     };
     let drain_or_hold = |why: Vec<Reason>| {
-        if running { Decision::Drain { grace_secs, why } } else { Decision::Hold(why) }
+        if running { Decision::Drain { grace_secs, why } } else { Decision::Hold { why } }
     };
 
     // 1. Hard limits protect the Mac, so they stop a running VM at once.
@@ -112,12 +125,12 @@ pub fn evaluate(s: &RunnerSettings, sig: &Signals, running: bool) -> Decision {
     .filter_map(|(hit, r)| hit.then_some(r))
     .collect();
     if !hard.is_empty() {
-        return if running { Decision::StopNow(hard) } else { Decision::Hold(hard) };
+        return if running { Decision::StopNow { why: hard } } else { Decision::Hold { why: hard } };
     }
 
     // 2. A stale OS only blocks new VMs; a running job is left to finish.
     if !running && sig.security_update_overdue_days.is_some_and(|d| d > SECURITY_GRACE_DAYS) {
-        return Decision::Hold(vec![Reason::SecurityUpdate]);
+        return Decision::Hold { why: vec![Reason::SecurityUpdate] };
     }
 
     // 3. Soft gates.
