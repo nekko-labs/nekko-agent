@@ -10,7 +10,7 @@ describe('agent panel view', () => {
   it('defaults to the panel as it always was', () => {
     expect(DEFAULT_AGENT_PANEL_VIEW).toEqual({
       groupBy: 'project', sortBy: 'manual', direction: 'desc',
-      showMetadata: true, showAutomations: true, showEmptyGroups: true,
+      showMetadata: true, showProvider: true, showAutomations: true, showEmptyGroups: true,
     });
     expect(isDefaultView(DEFAULT_AGENT_PANEL_VIEW)).toBe(true);
     expect(isDefaultView({ ...DEFAULT_AGENT_PANEL_VIEW, showMetadata: false })).toBe(false);
@@ -19,8 +19,8 @@ describe('agent panel view', () => {
   it('reads a saved view and drops anything no longer valid', () => {
     expect(parseAgentPanelView(null)).toBe(DEFAULT_AGENT_PANEL_VIEW);
     expect(parseAgentPanelView('not json')).toBe(DEFAULT_AGENT_PANEL_VIEW);
-    expect(parseAgentPanelView(JSON.stringify({ groupBy: 'status', sortBy: 'bogus', direction: 'asc', showMetadata: false, showAutomations: 'yes' })))
-      .toEqual({ ...DEFAULT_AGENT_PANEL_VIEW, groupBy: 'status', direction: 'asc', showMetadata: false });
+    expect(parseAgentPanelView(JSON.stringify({ groupBy: 'status', sortBy: 'bogus', direction: 'asc', showMetadata: false, showProvider: false, showAutomations: 'yes' })))
+      .toEqual({ ...DEFAULT_AGENT_PANEL_VIEW, groupBy: 'status', direction: 'asc', showMetadata: false, showProvider: false });
   });
 
   it('only lets cards be dragged into order where that order is what the panel shows', () => {
