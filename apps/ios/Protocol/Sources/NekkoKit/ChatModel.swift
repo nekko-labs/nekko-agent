@@ -54,6 +54,10 @@ public final class ChatModel {
     /// The computer's runnable skills, re-read with the chat.
     public private(set) var skills: [SkillSummary] = []
     public private(set) var sending = false
+    /// The chat's context window as the computer counts it (`context:preview`,
+    /// totals only): read with the chat and after each turn. Kept when a read
+    /// fails; nil from a computer too old to answer.
+    public private(set) var context: ContextUsage?
 
     private let store: ComputersStore
     private let now: () -> Int64
@@ -103,6 +107,7 @@ public final class ChatModel {
             async let pendingRaw = orNil { try await r.call(Channels.chatPending) }
             let (s, p) = (try await raw, await pendingRaw)
             Task { await loadSkills() }
+            Task { await loadContext() }
             guard let session = Session.from(s) else {
                 loadError = "This chat was deleted on your computer."
                 store.transcripts.remove(sessionId)
@@ -141,6 +146,31 @@ public final class ChatModel {
     public func changes() async throws -> PhoneChanges {
         PhoneChanges.from(try await store.remote().call(Channels.changesList, [.string(sessionId)]))
     }
+
+    public func loadContext() async {
+        guard let r = try? store.remote(), let raw = try? await r.call(MonitorChannels.contextPreview, [.string(sessionId)]),
+              let c = ContextUsage.from(raw) else { return }
+        context = c
+    }
+
+    /// Tokens in the window now: the computer's count, plus what the running
+    /// reply has streamed since (about four characters a token, as the
+    /// desktop's live gauge counts), since it is replayed in the next request.
+    public var contextTokens: Int64? {
+        guard let context else { return nil }
+        guard turn.running else { return context.usedTokens }
+        let chars = turn.blocks.reduce(0) { n, b in
+            switch b {
+            case .assistant(_, let text, let reasoning, _, _): return n + text.utf16.count + (reasoning?.utf16.count ?? 0)
+            case .tool(_, _, let label, _, let output): return n + label.utf16.count + (output?.utf16.count ?? 0)
+            case .user(_, let text, _, _): return n + text.utf16.count
+            }
+        }
+        return context.usedTokens + Int64((chars + 3) / 4)
+    }
+
+    /// The chat's own effort; nil follows the computer's setting.
+    public var effort: Effort? { session?.effort.flatMap(Effort.init(rawValue:)) }
 
     public func loadSkills() async {
         guard let r = try? store.remote(), let raw = try? await r.call(Channels.skillsRunnable) else { return }
@@ -322,12 +352,13 @@ public final class ChatModel {
         return unsent
     }
 
-    /// Change this chat's model or tool policy on the computer.
-    public func setOptions(providerId: String? = nil, modelId: String? = nil, mode: PcSettings.ChatMode? = nil) async throws {
+    /// Change this chat's model, effort or tool policy on the computer.
+    public func setOptions(providerId: String? = nil, modelId: String? = nil, mode: PcSettings.ChatMode? = nil, effort: Effort? = nil) async throws {
         var o: [String: JSONValue] = [:]
         if let providerId { o["providerId"] = .string(providerId) }
         if let modelId { o["modelId"] = .string(modelId) }
         if let mode { o["mode"] = .string(mode.rawValue) }
+        if let effort { o["effort"] = .string(effort.rawValue) }
         guard !o.isEmpty else { return }
         // Raising the mode (fewer approvals) needs Face ID; the computer says when.
         _ = try await store.call(raising: Channels.sessionSetOptions, [.string(sessionId), .object(o)])
@@ -411,6 +442,13 @@ public final class ChatModel {
     }
 
     public var modelId: String? { Self.resolveModel(session, store.defaults).1 }
+    public var providerId: String? { Self.resolveModel(session, store.defaults).0 }
+
+    /// The chat's model as its provider names it, else its id.
+    public var modelName: String? {
+        guard let id = modelId else { return nil }
+        return providerId.flatMap { store.models[$0]?.first { $0.id == id }?.name } ?? id
+    }
 
     public var blocks: [Block] {
         let merged = Transcript.mergeLive(saved: savedBlocks, live: turn.blocks)

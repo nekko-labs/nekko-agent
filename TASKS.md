@@ -1,10 +1,19 @@
 ---
 status: active
-last-updated: 2026-10-23
+last-updated: 2026-10-24
 owner:
 ---
 
 # Execution Plan, Nekko Agent
+
+## iPhone Simple and Expert modes (added 2026-10-24)
+
+Philip asked for a Simple / Expert switch at the top left of the phone's chat: Simple picks the model and effort from one control with an effort gauge, Expert adds the computer's hardware gauges and a loaded-models monitor with Unload, and the context usage shows in both. Spec: [iPhone Simple and Expert modes](spec/phone/iphone-simple-and-expert-modes.md); why the gate opens: [decision 0018](docs/decisions/0018-phones-read-the-monitors-and-unload-models.md); issue #984.
+
+- [x] **T203, phone gate for the monitors (2026-10-24).** `system:stats`, `gpu:stats`, `engine:status`, `context:preview` (Read, `PHONE_MONITOR_READ_CHANNELS`) and `model:unload` (agent class) with projections in `phone-views.ts` and `phone_views.rs`; `phone-access.json` regenerated; TS (`phone-monitor.test.ts`) and Rust (`phone::tests::monitor`) tests.
+- [x] **T204, iPhone modes, model and effort control, context gauge, monitor (2026-10-24).** `Prefs.expertMode`; `ModeViews.swift` (mode menu, `EffortGauge`, `ModelEffortButton` / sheet, `ContextGauge`, `MonitorPanel`, `MonitorSheet`); `Monitor.swift` parsing and `MonitorModel` polling; chat `effort` and `context`. Swift package tests pass on Linux; views built only by macOS CI.
+- [ ] **T204a, simulator UI test and screenshots** of the mode switch, the composer row and the monitor against a live computer.
+- [ ] **T204b, Android parity.**
 
 ## Chat page removed (added 2026-10-24)
 

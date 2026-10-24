@@ -25,6 +25,9 @@ struct ChatView: View {
     /// Whether the end of the transcript is on screen: only then does it follow new output.
     @State private var atBottom = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(Prefs.self) private var prefs
+    /// Expert mode's hardware and loaded models, read while the chat is on screen.
+    @State private var monitor: MonitorModel?
 
     var body: some View {
         Group {
@@ -157,8 +160,21 @@ struct ChatView: View {
                 .padding(.horizontal, 12).padding(.bottom, 8).padding(.top, 6)
                 .background(.bar)
             }
+            .safeAreaInset(edge: .top) {
+                if prefs.expertMode, let monitor {
+                    MonitorPanel(monitor: monitor, chat: chat).background(.bar)
+                }
+            }
+        }
+        // Expert mode re-reads the hardware every few seconds, only while it's on and the chat is on screen.
+        .task(id: prefs.expertMode) {
+            guard prefs.expertMode else { return }
+            let m = monitor ?? MonitorModel(store: store)
+            monitor = m
+            await m.follow()
         }
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) { ModeToggle() }
             ToolbarItem(placement: .principal) {
                 VStack(spacing: 0) {
                     Text(chat.title).font(.subheadline.weight(.semibold)).lineLimit(1)
@@ -803,6 +819,13 @@ struct Composer: View {
                     .accessibilityLabel(chat.running ? "Queue" : "Send")
                 }
             }
+            // The chat's model and effort, and its context window: in Simple and Expert alike.
+            HStack(spacing: 0) {
+                ModelEffortButton(chat: chat)
+                Spacer(minLength: 8)
+                ContextGauge(chat: chat)
+            }
+            .padding(.top, -4)
             if dictation.recording || dictation.transcribing { Text(dictation.status).font(.caption2).foregroundStyle(palette.inkFaint) }
             else if let n = dictation.notice { Text(n).font(.caption2).foregroundStyle(palette.inkSoft) }
         }

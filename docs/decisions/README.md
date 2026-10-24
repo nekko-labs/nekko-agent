@@ -26,3 +26,4 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | [0015](0015-experimental-dark-themes-use-a-60-30-10-split.md) | Build the Experimental Dark themes on a 60 / 30 / 10 split with near-black panels | accepted |
 | [0016](0016-a-phone-carries-a-sealed-provider-key-and-never-holds-one.md) | A phone may carry a provider key sealed to a computer; it never holds or reads one | accepted |
 | [0017](0017-nekko-cloud-machines-run-tools-in-a-per-user-jail.md) | Nekko Cloud machines run tools in a per-user jail; the phone decides what the cloud may see | accepted |
+| [0018](0018-phones-read-the-monitors-and-unload-models.md) | Let phones read the hardware, the Model Server and a chat's context, and unload a model | accepted |

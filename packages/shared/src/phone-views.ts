@@ -76,6 +76,34 @@ export const PHONE_PR_VIEW = [
 export const PHONE_LIMITS_VIEW = ['creditsState', 'planType', 'updatedAt'] as const;
 export const PHONE_LIMIT_WINDOW_VIEW = ['id', 'label', 'modelFamily', 'resetAt', 'scope', 'status', 'usedPercent'] as const;
 
+/**
+ * The computer's hardware for the phone's Expert monitor (`system:stats`,
+ * `gpu:stats`, 2026-10-24): load, memory and temperatures, never a process,
+ * a path or a serial number.
+ */
+export const PHONE_SYSTEM_VIEW = ['cpuCores', 'cpuModel', 'cpuPct', 'memTotalMB', 'memUsedMB', 'temps'] as const;
+export const PHONE_GPU_VIEW = ['freeMB', 'source', 'totalMB', 'unified', 'usedMB'] as const;
+export const PHONE_GPU_DEVICE_VIEW = ['memoryFreeMB', 'memoryTotalMB', 'memoryUsedMB', 'name', 'temperatureC', 'utilizationPct'] as const;
+/** A temperature row (`SystemStats.temps`): numbers only. */
+export const PHONE_TEMPS_VIEW = ['cpuC', 'gpuC', 'memoryC'] as const;
+
+/**
+ * The Model Server (`engine:status`) as the phone's monitor shows it: whether
+ * it is installed and running, what it holds in memory and what is loading.
+ * Never its binary path, port, log or settings.
+ */
+export const PHONE_ENGINE_VIEW = ['running'] as const;
+export const PHONE_RESIDENT_VIEW = ['contextLength', 'expiresAt', 'gpuLayers', 'id', 'lastUsedAt', 'loadedOn', 'sizeBytes', 'startedAt', 'totalLayers', 'vramBytes'] as const;
+export const PHONE_LOADING_VIEW = ['id', 'phase', 'progress', 'startedAt'] as const;
+export const PHONE_ENGINE_MEMORY_VIEW = ['budgetBytes', 'kind'] as const;
+
+/**
+ * A chat's context window (`context:preview`) as totals: tokens in use, the
+ * window, and tokens per kind of source. Never an item's label, origin or
+ * preview, which hold file paths, memory and guideline text.
+ */
+export const PHONE_CONTEXT_SOURCES = ['attached-file', 'connector', 'conversation', 'guideline', 'index-snippet', 'memory', 'skill', 'system'] as const;
+
 /** `chat:editQueued`'s edit: the text the editor showed, and the new text (none removes the prompt). */
 export const PHONE_QUEUE_EDIT_KEYS = ['expect', 'text'] as const;
 
@@ -189,6 +217,55 @@ export function phoneUsageView(usage: unknown): Obj | null {
       return { date: o.date, input: num(o.input), output: num(o.output), cost: num(o.cost) };
     }),
   };
+}
+
+/** `system:stats`: the named numbers, temperatures as numbers only. */
+export function phoneSystemView(stats: unknown): Obj | null {
+  if (!isObj(stats)) return null;
+  const out = pickKeys(stats, PHONE_SYSTEM_VIEW);
+  if (own(out, 'temps')) out.temps = pickKeys(out.temps, PHONE_TEMPS_VIEW);
+  return out;
+}
+
+/** `gpu:stats`: the pool and each device's load, memory and temperature. */
+export function phoneGpuView(stats: unknown): Obj | null {
+  if (!isObj(stats)) return null;
+  const devices = Array.isArray(stats.devices) ? stats.devices.filter(isObj).map((d) => pickKeys(d, PHONE_GPU_DEVICE_VIEW)) : [];
+  return { ...pickKeys(stats, PHONE_GPU_VIEW), devices };
+}
+
+/** `engine:status`: installed, running, what is resident and what is loading. */
+export function phoneEngineView(status: unknown): Obj | null {
+  if (!isObj(status)) return null;
+  const list = (v: unknown, keys: readonly string[]) => (Array.isArray(v) ? v.filter(isObj).map((m) => pickKeys(m, keys)) : []);
+  const install = isObj(status.install) ? status.install : {};
+  const out: Obj = {
+    ...pickKeys(status, PHONE_ENGINE_VIEW),
+    installed: typeof install.binPath === 'string' && install.binPath !== '',
+    resident: list(status.resident, PHONE_RESIDENT_VIEW),
+    loading: list(status.loading, PHONE_LOADING_VIEW),
+  };
+  if (isObj(status.memory)) out.memory = pickKeys(status.memory, PHONE_ENGINE_MEMORY_VIEW);
+  return out;
+}
+
+/** `context:preview`: the included items' tokens, in total and by kind of source. */
+export function phoneContextView(bundle: unknown): Obj | null {
+  if (!isObj(bundle)) return null;
+  const sources: Record<string, number> = {};
+  let usedTokens = 0;
+  for (const item of Array.isArray(bundle.items) ? bundle.items : []) {
+    if (!isObj(item) || item.included !== true) continue;
+    const tokens = num(item.tokens);
+    usedTokens += tokens;
+    if ((PHONE_CONTEXT_SOURCES as readonly unknown[]).includes(item.source)) {
+      const source = item.source as string;
+      sources[source] = (sources[source] ?? 0) + tokens;
+    }
+  }
+  const out: Obj = { usedTokens, sources };
+  if (typeof bundle.contextWindow === 'number' && Number.isFinite(bundle.contextWindow)) out.contextWindow = bundle.contextWindow;
+  return out;
 }
 
 /**

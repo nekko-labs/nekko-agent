@@ -19,6 +19,16 @@ pub struct Views {
     pub pr: Vec<String>,
     pub limits: Vec<String>,
     pub limit_window: Vec<String>,
+    /// The Expert monitor's views (`monitor` in `phone-access.json`).
+    pub system: Vec<String>,
+    pub temps: Vec<String>,
+    pub gpu: Vec<String>,
+    pub gpu_device: Vec<String>,
+    pub engine: Vec<String>,
+    pub resident: Vec<String>,
+    pub loading: Vec<String>,
+    pub engine_memory: Vec<String>,
+    pub context_sources: Vec<String>,
 }
 
 fn strings(v: &Value) -> Vec<String> {
@@ -39,6 +49,15 @@ impl Views {
             pr: strings(&v["prView"]),
             limits: strings(&v["limitsView"]),
             limit_window: strings(&v["limitWindowView"]),
+            system: strings(&v["monitor"]["systemView"]),
+            temps: strings(&v["monitor"]["tempsView"]),
+            gpu: strings(&v["monitor"]["gpuView"]),
+            gpu_device: strings(&v["monitor"]["gpuDeviceView"]),
+            engine: strings(&v["monitor"]["engineView"]),
+            resident: strings(&v["monitor"]["residentView"]),
+            loading: strings(&v["monitor"]["loadingView"]),
+            engine_memory: strings(&v["monitor"]["engineMemoryView"]),
+            context_sources: strings(&v["monitor"]["contextSources"]),
         }
     }
 }
@@ -244,4 +263,87 @@ pub fn limits_key(providers: &Value, provider_id: &str) -> Option<String> {
         .flatten()
         .find(|p| p.get("id").and_then(Value::as_str) == Some(provider_id))
         .and_then(limits_key_for)
+}
+
+/// `phoneSystemView`: the named numbers, temperatures as numbers only.
+pub fn system(stats: &Value, views: &Views) -> Value {
+    if !stats.is_object() {
+        return Value::Null;
+    }
+    let mut out = pick_keys(stats, &views.system);
+    if let Some(t) = out.get("temps").cloned() {
+        out.insert("temps".into(), Value::Object(pick_keys(&t, &views.temps)));
+    }
+    Value::Object(out)
+}
+
+fn objects(v: Option<&Value>, keys: &[String]) -> Value {
+    Value::Array(
+        v.and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter(|d| d.is_object())
+            .map(|d| Value::Object(pick_keys(d, keys)))
+            .collect(),
+    )
+}
+
+/// `phoneGpuView`: the pool and each device's load, memory and temperature.
+pub fn gpu(stats: &Value, views: &Views) -> Value {
+    if !stats.is_object() {
+        return Value::Null;
+    }
+    let mut out = pick_keys(stats, &views.gpu);
+    out.insert("devices".into(), objects(stats.get("devices"), &views.gpu_device));
+    Value::Object(out)
+}
+
+/// `phoneEngineView`: installed, running, what is resident and what is loading.
+pub fn engine(status: &Value, views: &Views) -> Value {
+    if !status.is_object() {
+        return Value::Null;
+    }
+    let mut out = pick_keys(status, &views.engine);
+    let installed = status.pointer("/install/binPath").and_then(Value::as_str).is_some_and(|p| !p.is_empty());
+    out.insert("installed".into(), json!(installed));
+    out.insert("resident".into(), objects(status.get("resident"), &views.resident));
+    out.insert("loading".into(), objects(status.get("loading"), &views.loading));
+    if let Some(m) = status.get("memory").filter(|m| m.is_object()) {
+        out.insert("memory".into(), Value::Object(pick_keys(m, &views.engine_memory)));
+    }
+    Value::Object(out)
+}
+
+/// `phoneContextView`: the included items' tokens, in total and by kind of source.
+pub fn context(bundle: &Value, views: &Views) -> Value {
+    if !bundle.is_object() {
+        return Value::Null;
+    }
+    let mut used = 0.0;
+    let mut sources = Map::new();
+    for item in bundle.get("items").and_then(Value::as_array).into_iter().flatten() {
+        if item.get("included") != Some(&Value::Bool(true)) {
+            continue;
+        }
+        let tokens = item.get("tokens").and_then(Value::as_f64).filter(|t| t.is_finite()).unwrap_or(0.0);
+        used += tokens;
+        if let Some(src) =
+            item.get("source").and_then(Value::as_str).filter(|s| views.context_sources.iter().any(|k| k == s))
+        {
+            let was = sources.get(src).map_or(0.0, as_f64);
+            sources.insert(src.to_string(), number(was + tokens));
+        }
+    }
+    let mut out = Map::new();
+    out.insert("usedTokens".into(), number(used));
+    out.insert("sources".into(), Value::Object(sources));
+    if let Some(w) = bundle.get("contextWindow").filter(|w| w.as_f64().is_some_and(f64::is_finite)) {
+        out.insert("contextWindow".into(), w.clone());
+    }
+    Value::Object(out)
+}
+
+/// A whole count as an integer, as JSON.stringify writes it.
+fn number(n: f64) -> Value {
+    if n.fract() == 0.0 && n.abs() < 9.0e15 { json!(n as i64) } else { json!(n) }
 }
