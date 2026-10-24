@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { THEME_PRESETS } from '@nekko-agent/shared';
 import { pixelWaveFor, waveField } from './PixelWaveBackground.js';
 
 describe('pixel wave', () => {
@@ -17,6 +18,15 @@ describe('pixel wave', () => {
         }
       }
     }
+  });
+
+  it('dims every experimental wave and halves its motion speed without changing colours', () => {
+    for (const preset of THEME_PRESETS.filter((p) => p.group === 'experimental')) {
+      expect(preset.wave).toBeDefined();
+      expect(pixelWaveFor(preset.id)).toEqual({ ...preset.wave, peak: preset.wave!.peak * 0.6, speed: 0.4 });
+    }
+    expect(pixelWaveFor('lilac')).toEqual({ from: '#453a92', to: '#9d8ce6', peak: 0.26 });
+    expect(pixelWaveFor('lavender')).toEqual({ from: '#ffffff', to: '#ffffff', peak: 0.34 });
   });
 
   it('only themes with a wave draw one', () => {
