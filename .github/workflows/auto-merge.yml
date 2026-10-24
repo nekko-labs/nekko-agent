@@ -139,6 +139,13 @@ jobs:
                 done
 
                 gh workflow run version-release.yml --repo "$GH_REPO" --ref main
+                # A merge that touched the iPhone app goes to TestFlight. The
+                # workflow itself skips tests-only and docs-only changes.
+                if gh pr view "$PR_URL" --json files -q '.files[].path' | grep -q '^apps/ios/'; then
+                  gh workflow run ios-testflight.yml --repo "$GH_REPO" --ref main \
+                    -f only_if_changed=true -f notes="$PR_TITLE (#$PR_NUMBER)" \
+                    || echo "::warning::Could not dispatch ios-testflight; its schedule uploads within 3 hours."
+                fi
                 # No CI dispatch here: the merge queue tested this exact group on
                 # top of main before merging it, and the 6-hourly full run covers
                 # macOS (ci.yml).
@@ -167,6 +174,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
           # This job never checks out the repo, so gh has no git remote to infer
           # from. `gh pr view` survives that because it is given a full URL;
           # `gh workflow run` does not, and died with "not a git repository".

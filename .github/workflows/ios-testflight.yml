@@ -5,7 +5,13 @@ name: iOS TestFlight
 # signing, and uploads it to App Store Connect, where it appears in TestFlight
 # after Apple's processing (usually 5-30 minutes).
 #
-# Run by hand only:  gh workflow run ios-testflight.yml
+# Runs on its own after a merge that changes what the app ships: auto-merge.yml
+# dispatches it (with only_if_changed) once a PR touching apps/ios/ lands, and
+# a schedule catches merges that went through the queue sweeper instead. Both
+# upload only when the shipping iOS sources (apps/ios/ minus tests, scripts and
+# Markdown) changed since the last successful upload from main; a tests-only or
+# docs-only change uploads nothing. By hand it always uploads:
+#   gh workflow run ios-testflight.yml
 #
 # Signing uses the App Store Connect API key the desktop release already holds
 # for notarization (APPLE_API_KEY_P8, APPLE_API_KEY_ID, APPLE_API_ISSUER). No
@@ -35,16 +41,64 @@ on:
         description: What to test (shown to testers as the build's notes in the summary)
         required: false
         default: ''
+      only_if_changed:
+        description: Upload only if the app's sources changed since the last upload from main
+        type: boolean
+        required: false
+        default: false
+  schedule:
+    - cron: '41 */3 * * *'
 
 permissions:
   contents: read
+  # The changed job reads this workflow's earlier runs.
+  actions: read
 
 concurrency:
   group: ios-testflight
   cancel-in-progress: false
 
 jobs:
+  # On a runner that costs little: whether there is anything to ship.
+  changed:
+    runs-on: ubuntu-latest
+    outputs:
+      ship: ${{ steps.diff.outputs.ship }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FORCE: ${{ github.event_name == 'workflow_dispatch' && !inputs.only_if_changed }}
+          ON_MAIN: ${{ github.ref == 'refs/heads/main' }}
+        run: |
+          set -euo pipefail
+          if [ "$FORCE" = true ]; then echo "By hand: uploading."; echo ship=true >> "$GITHUB_OUTPUT"; exit 0; fi
+          if [ "$ON_MAIN" != true ]; then echo "Automatic uploads are from main only."; echo ship=false >> "$GITHUB_OUTPUT"; exit 0; fi
+          # The last successful run on main: it uploaded, or found nothing new
+          # since the one before, so diffing from it is diffing from the last upload.
+          last=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ios-testflight.yml --branch main --status success \
+            --limit 1 --json headSha -q '.[0].headSha // ""')
+          if [ -z "$last" ] || ! git cat-file -e "$last^{commit}" 2>/dev/null; then
+            echo "No earlier upload from main to compare with: uploading."
+            echo ship=true >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files=$(git diff --name-only "$last" HEAD -- apps/ios \
+            | grep -vE '^apps/ios/(UITests|Tests|Protocol/Tests|scripts|evidence)/|\.md$' || true)
+          if [ -n "$files" ]; then
+            echo "Changed since ${last::7}:"; echo "$files"
+            echo ship=true >> "$GITHUB_OUTPUT"
+          else
+            echo "Nothing the app ships changed since ${last::7}."
+            echo ship=false >> "$GITHUB_OUTPUT"
+          fi
+
   upload:
+    needs: changed
+    if: needs.changed.outputs.ship == 'true'
     runs-on: macos-15
     timeout-minutes: 60
     env:
