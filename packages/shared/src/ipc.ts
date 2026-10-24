@@ -112,6 +112,8 @@ export const IpcChannels = {
   machineDismissNudge: 'machine:dismissNudge',
   gpuStats: 'gpu:stats',
   systemStats: 'system:stats',
+  /** The phone's Monitors pane (FD-1): answered by the phone gate from the other monitor, chat and automation reads. */
+  monitorSummary: 'monitor:summary',
 
   sessionsList: 'sessions:list',
   sessionNextWatch: 'session:nextWatch',

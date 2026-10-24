@@ -19,13 +19,13 @@ describe('phone monitor channels', () => {
     for (const c of ['engine:settings', 'engine:install', 'engine:deleteModel', 'engine:downloadModel']) expect(phoneChannelClass(c), c).toBeNull();
   });
 
-  it('sends hardware as named numbers only', async () => {
+  it('sends hardware as numbers only, without CPU or GPU model names', async () => {
     const { dispatch, calls } = host({
       'system:stats': { cpuPct: 41, cpuCores: 16, cpuModel: 'Ryzen', memUsedMB: 9000, memTotalMB: 32000, temps: { cpuC: 61, sensorPath: '/sys/x' }, pid: 7 },
       'gpu:stats': { source: 'nvidia-smi', totalMB: 24000, usedMB: 8000, freeMB: 16000, devices: [{ name: 'RTX', memoryTotalMB: 24000, memoryUsedMB: 8000, memoryFreeMB: 16000, utilizationPct: 77, temperatureC: 70, uuid: 'GPU-1' }] },
     });
-    expect(await callFromPhone(dispatch, 'system:stats', ['ignored'])).toEqual({ cpuPct: 41, cpuCores: 16, cpuModel: 'Ryzen', memUsedMB: 9000, memTotalMB: 32000, temps: { cpuC: 61 } });
-    expect(await callFromPhone(dispatch, 'gpu:stats', [])).toEqual({ source: 'nvidia-smi', totalMB: 24000, usedMB: 8000, freeMB: 16000, devices: [{ name: 'RTX', memoryTotalMB: 24000, memoryUsedMB: 8000, memoryFreeMB: 16000, utilizationPct: 77, temperatureC: 70 }] });
+    expect(await callFromPhone(dispatch, 'system:stats', ['ignored'])).toEqual({ cpuPct: 41, cpuCores: 16, memUsedMB: 9000, memTotalMB: 32000, temps: { cpuC: 61 } });
+    expect(await callFromPhone(dispatch, 'gpu:stats', [])).toEqual({ source: 'nvidia-smi', totalMB: 24000, usedMB: 8000, freeMB: 16000, devices: [{ memoryTotalMB: 24000, memoryUsedMB: 8000, memoryFreeMB: 16000, utilizationPct: 77, temperatureC: 70 }] });
     expect(calls).toEqual([['system:stats', []], ['gpu:stats', []]]);
   });
 

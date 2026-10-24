@@ -32,6 +32,7 @@
   "logs:read",
   "model:unload",
   "models:list",
+  "monitor:summary",
   "pr:action",
   "pr:checks",
   "pr:create",
@@ -43,6 +44,7 @@
   "session:fork",
   "session:get",
   "session:setOptions",
+  "session:watches",
   "sessions:summaries",
   "settings:get",
   "settings:update",
@@ -132,9 +134,11 @@
   "chat:pending",
   "limits:get",
   "models:list",
+  "monitor:summary",
   "pr:sessionList",
   "providers:list",
   "session:get",
+  "session:watches",
   "sessions:summaries",
   "settings:get",
   "skills:runnable",
@@ -269,6 +273,17 @@
   "kind",
   "label"
  ],
+ "watchView": [
+  "id",
+  "kind",
+  "url",
+  "status",
+  "deadlineAt",
+  "nextPollAt",
+  "pending",
+  "failures",
+  "lastError"
+ ],
  "skillView": [
   "category",
   "description",
@@ -399,14 +414,28 @@
   "status",
   "usedPercent"
  ],
+ "monitorView": {
+  "running": 20,
+  "needsYou": 20,
+  "automations": 10,
+  "labelChars": 120
+ },
+ "monitorSources": [
+  "system:stats",
+  "gpu:stats",
+  "chat:running",
+  "sessions:summaries",
+  "chat:pending",
+  "tasks:list",
+  "workflows:list"
+ ],
  "queueEditKeys": [
   "expect",
   "text"
  ],
- "monitor": {
+ "expertMonitor": {
   "systemView": [
    "cpuCores",
-   "cpuModel",
    "cpuPct",
    "memTotalMB",
    "memUsedMB",
@@ -428,7 +457,6 @@
    "memoryFreeMB",
    "memoryTotalMB",
    "memoryUsedMB",
-   "name",
    "temperatureC",
    "utilizationPct"
   ],

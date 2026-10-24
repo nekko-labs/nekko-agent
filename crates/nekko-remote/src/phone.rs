@@ -34,6 +34,8 @@ pub struct Policy {
     pub settings_keys: Vec<String>,
     pub settings_view: Vec<String>,
     pub provider_view: Vec<String>,
+    /// `session:watches`: the fields of a watch a phone receives (`PHONE_WATCH_VIEW`).
+    pub watch_view: Vec<String>,
     pub skill_view: Vec<String>,
     pub queue_keys: Vec<String>,
     pub session_option_keys: Vec<String>,
@@ -99,6 +101,7 @@ pub fn policy() -> &'static Policy {
             settings_keys: strings(&v["settingsKeys"]),
             settings_view: strings(&v["settingsView"]),
             provider_view: strings(&v["providerView"]),
+            watch_view: strings(&v["watchView"]),
             skill_view: strings(&v["skillView"]),
             queue_keys: strings(&v["queueKeys"]),
             session_option_keys: strings(&v["sessionOptionKeys"]),
@@ -294,7 +297,7 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
         if arg(i).as_str().is_none_or(|s| s.is_empty()) { Err(denied("value-invalid", what)) } else { Ok(()) }
     };
     match channel {
-        "changes:list" => id(0, "chat id")?,
+        "changes:list" | "session:watches" => id(0, "chat id")?,
         "pr:sessionList" => {
             id(0, "chat id")?;
             if args.len() > 1 && !arg(1).is_boolean() {
@@ -485,6 +488,7 @@ pub fn redact(channel: &str, result: Value) -> Value {
         }
         "task:runNow" => Value::Null,
         "pr:sessionList" => crate::phone_views::prs(&result, &policy().views),
+        "session:watches" => crate::phone_views::watches(&result, &policy().watch_view, policy().views.text_chars),
         "usage:summary" => crate::phone_views::usage(&result, &policy().views),
         "limits:get" => crate::phone_views::limits(&result, &policy().views),
         "system:stats" => crate::phone_views::system(&result, &policy().views),
@@ -644,6 +648,15 @@ pub async fn call(run: &Dispatcher, channel: String, args: Value) -> Result<Valu
         if settings.get("phoneChanges") != Some(&Value::Bool(true)) {
             return Err(denied("turned-off", "changes:list").to_string());
         }
+    }
+    if channel == "monitor:summary" {
+        // Answered from what the computer already reads for its own Monitors dock; the phone's arguments are ignored.
+        let mut sources = Map::new();
+        for source in &policy().views.monitor_sources {
+            sources.insert(source.clone(), run(source.clone(), json!([])).await?);
+        }
+        let now = crate::service::system_clock()();
+        return Ok(crate::phone_views::monitor(&sources, now, &policy().views));
     }
     // Only what the computer's own call takes: an id, or nothing.
     let first = args.first().cloned().unwrap_or(Value::Null);
@@ -1096,6 +1109,29 @@ pub fn gate_full(
 
 #[cfg(test)]
 mod tests {
+
+    /// `session:watches` (2026-10-24): a chat id is required; the view keeps the
+    /// `PHONE_WATCH_VIEW` fields, never the continuation prompt, and cuts `lastError`.
+    #[test]
+    fn screens_and_redacts_a_chats_watches() {
+        assert!(screen("session:watches", &[json!("s1")]).is_ok());
+        assert_eq!(screen("session:watches", &[json!("")]).map(|_| ()), Err(denied("value-invalid", "chat id")));
+        assert_eq!(screen("session:watches", &[]).map(|_| ()), Err(denied("value-invalid", "chat id")));
+        let long = "x".repeat(700);
+        let got = redact(
+            "session:watches",
+            json!([
+                { "id": "w1", "kind": "pr", "url": "https://github.com/o/r/pull/5", "status": "active", "deadlineAt": 10, "nextPollAt": 5,
+                  "pending": false, "failures": 1, "lastError": long, "prompt": "secret continuation", "sessionId": "s1" },
+                "junk",
+                null
+            ]),
+        );
+        let want = json!([{ "id": "w1", "kind": "pr", "url": "https://github.com/o/r/pull/5", "status": "active", "deadlineAt": 10, "nextPollAt": 5,
+                            "pending": false, "failures": 1, "lastError": "x".repeat(600) }]);
+        assert_eq!(got, want);
+        assert_eq!(redact("session:watches", Value::Null), json!([]));
+    }
     use super::*;
     use std::sync::Mutex;
 
@@ -1532,7 +1568,7 @@ mod tests {
             for c in ["chat:send", "chat:queue", "tool:approve", "chat:answer", "task:runNow", "workflow:run"] {
                 assert_eq!(classes.of(c), Some(Class::Agent), "{c}");
             }
-            for c in ["sessions:summaries", "session:get", "settings:get", "chat:pending"] {
+            for c in ["sessions:summaries", "session:get", "settings:get", "chat:pending", "monitor:summary"] {
                 assert_eq!(classes.of(c), Some(Class::Read), "{c}");
             }
         }
@@ -1573,7 +1609,7 @@ mod tests {
             assert!(r.ask("session:get", json!(["s1"]), None).is_ok(), "Read stays on");
             assert!(r.ask("app:info", json!([]), None).is_ok());
             let r = policy_rig(DeviceAccess { read: false, change: true }, None, None, "ask");
-            for c in ["sessions:summaries", "session:get", "settings:get", "chat:pending"] {
+            for c in ["sessions:summaries", "session:get", "settings:get", "chat:pending", "monitor:summary"] {
                 assert_eq!(r.ask(c, json!(["s1"]), None), refused("read-off", c));
             }
             assert!(r.ask("app:info", json!([]), None).is_ok(), "open to any paired phone");
@@ -1809,7 +1845,7 @@ mod tests {
         #[test]
         fn sends_hardware_as_named_numbers() {
             let results = json!({
-                "system:stats": { "cpuPct": 41, "cpuCores": 16, "memUsedMB": 9000, "memTotalMB": 32000, "temps": { "cpuC": 61, "sensorPath": "/sys/x" }, "pid": 7 },
+                "system:stats": { "cpuPct": 41, "cpuCores": 16, "cpuModel": "Ryzen", "memUsedMB": 9000, "memTotalMB": 32000, "temps": { "cpuC": 61, "sensorPath": "/sys/x" }, "pid": 7 },
                 "gpu:stats": { "source": "nvidia-smi", "totalMB": 24000, "usedMB": 8000, "freeMB": 16000, "devices": [{ "name": "RTX", "utilizationPct": 77, "uuid": "GPU-1" }] },
             });
             let (got, calls) = call_with(results.clone(), "system:stats", json!(["ignored"]));
@@ -1821,7 +1857,7 @@ mod tests {
             let (got, _) = call_with(results, "gpu:stats", json!([]));
             assert_eq!(
                 got.unwrap(),
-                json!({ "source": "nvidia-smi", "totalMB": 24000, "usedMB": 8000, "freeMB": 16000, "devices": [{ "name": "RTX", "utilizationPct": 77 }] })
+                json!({ "source": "nvidia-smi", "totalMB": 24000, "usedMB": 8000, "freeMB": 16000, "devices": [{ "utilizationPct": 77 }] })
             );
         }
 

@@ -371,7 +371,7 @@ extension Block {
         switch self {
         case .user(_, let text, _, _): return text
         case .assistant(_, let text, _, _, _): return text
-        case .tool(_, _, let label, _, let output): return output.map { label + "\n" + Transcript.splitNotes($0).0 } ?? label
+        case .tool(_, _, let label, _, let output, _): return output.map { label + "\n" + Transcript.splitNotes($0).0 } ?? label
         }
     }
 }

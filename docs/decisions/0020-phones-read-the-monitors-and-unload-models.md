@@ -3,7 +3,7 @@ status: accepted
 date: 2026-10-24
 ---
 
-# 0018. Let phones read the hardware, the Model Server and a chat's context, and unload a model
+# 0020. Let phones read the hardware, the Model Server and a chat's context, and unload a model
 
 ## Context
 

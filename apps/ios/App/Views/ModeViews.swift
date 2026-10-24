@@ -513,9 +513,9 @@ struct MonitorSheet: View {
                 } header: {
                     Text("Hardware")
                 } footer: {
-                    if let s = monitor.system, let cpu = s.cpuModel {
-                        Text(s.cpuCores > 0 ? "\(cpu), \(s.cpuCores) cores. Memory: \(MonitorFormat.memory(usedMB: s.memUsedMB, totalMB: s.memTotalMB))."
-                                            : "\(cpu). Memory: \(MonitorFormat.memory(usedMB: s.memUsedMB, totalMB: s.memTotalMB)).")
+                    if let s = monitor.system, s.memTotalMB > 0 {
+                        Text(s.cpuCores > 0 ? "\(s.cpuCores) cores. Memory: \(MonitorFormat.memory(usedMB: s.memUsedMB, totalMB: s.memTotalMB))."
+                                            : "Memory: \(MonitorFormat.memory(usedMB: s.memUsedMB, totalMB: s.memTotalMB)).")
                     }
                 }
                 Section {

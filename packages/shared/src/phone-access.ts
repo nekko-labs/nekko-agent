@@ -57,11 +57,14 @@ import {
 import {
   PHONE_LIMIT_WINDOW_VIEW,
   PHONE_LIMITS_VIEW,
+  PHONE_MONITOR_SOURCES,
+  PHONE_MONITOR_VIEW,
   PHONE_PR_VIEW,
   PHONE_PROMPT_VIEW,
   PHONE_QUEUE_EDIT_KEYS,
   PHONE_TASK_VIEW,
   PHONE_VIEWS,
+  PHONE_WATCH_VIEW,
   PHONE_WORKFLOW_RUN_VIEW,
   PHONE_WORKFLOW_VIEW,
   PHONE_CONTEXT_SOURCES,
@@ -79,9 +82,11 @@ import {
   phoneSystemView,
   phoneLimitsKey,
   phoneLimitsView,
+  phoneMonitorView,
   phonePromptsView,
   phonePrsView,
   phoneQueueView,
+  phoneWatchesView,
   phoneTasksView,
   phoneUsageView,
   phoneWorkflowsView,
@@ -143,6 +148,7 @@ export const PHONE_CHANNELS = [
   'logs:read',
   'model:unload',
   'models:list',
+  'monitor:summary',
   'pr:action',
   'pr:checks',
   'pr:create',
@@ -154,6 +160,7 @@ export const PHONE_CHANNELS = [
   'session:fork',
   'session:get',
   'session:setOptions',
+  'session:watches',
   'sessions:summaries',
   'settings:get',
   'settings:update',
@@ -301,9 +308,11 @@ export const PHONE_CHAT_READ_CHANNELS: readonly string[] = [
   'chat:pending',
   'limits:get',
   'models:list',
+  'monitor:summary',
   'pr:sessionList',
   'providers:list',
   'session:get',
+  'session:watches',
   'sessions:summaries',
   'settings:get',
   'skills:runnable',
@@ -734,6 +743,7 @@ export function screenPhoneCall(
   switch (channel) {
     case 'changes:list':
     case 'pr:sessionList':
+    case 'session:watches':
       if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
       if (channel === 'pr:sessionList' && args[1] !== undefined && typeof args[1] !== 'boolean') throw new PhoneAccessError('value-invalid', 'refresh');
       return {};
@@ -895,6 +905,8 @@ export function redactPhoneResult(channel: string, result: unknown): unknown {
       return null;
     case 'pr:sessionList':
       return phonePrsView(result);
+    case 'session:watches':
+      return phoneWatchesView(result);
     case 'usage:summary':
       return phoneUsageView(result);
     case 'limits:get':
@@ -1051,6 +1063,12 @@ export async function callFromPhone(
     const settings = await dispatch('settings:get', []);
     if (!isObj(settings) || settings.phoneChanges !== true) throw new PhoneAccessError('turned-off', 'changes:list');
   }
+  if (channel === 'monitor:summary') {
+    // Answered from what the computer already reads for its own Monitors dock; the phone's arguments are ignored.
+    const sources: Record<string, unknown> = {};
+    for (const source of PHONE_MONITOR_SOURCES) sources[source] = await dispatch(source, []);
+    return phoneMonitorView(sources, Date.now());
+  }
   let callArgs = checked ?? args;
   // Only what the computer's own call takes: an id, or nothing.
   if (channel === 'task:runNow' || channel === 'workflow:run') callArgs = [args[0]];
@@ -1108,6 +1126,7 @@ export function phoneAccessPolicy() {
     settingsKeys: [...PHONE_SETTINGS_KEYS],
     settingsView: [...PHONE_SETTINGS_VIEW],
     providerView: [...PHONE_PROVIDER_VIEW],
+    watchView: [...PHONE_WATCH_VIEW],
     skillView: [...PHONE_SKILL_VIEW],
     queueKeys: [...PHONE_QUEUE_KEYS],
     sessionOptionKeys: [...PHONE_SESSION_OPTION_KEYS],
@@ -1124,8 +1143,10 @@ export function phoneAccessPolicy() {
     prView: [...PHONE_PR_VIEW],
     limitsView: [...PHONE_LIMITS_VIEW],
     limitWindowView: [...PHONE_LIMIT_WINDOW_VIEW],
+    monitorView: { ...PHONE_MONITOR_VIEW },
+    monitorSources: [...PHONE_MONITOR_SOURCES],
     queueEditKeys: [...PHONE_QUEUE_EDIT_KEYS],
-    monitor: {
+    expertMonitor: {
       systemView: [...PHONE_SYSTEM_VIEW],
       tempsView: [...PHONE_TEMPS_VIEW],
       gpuView: [...PHONE_GPU_VIEW],

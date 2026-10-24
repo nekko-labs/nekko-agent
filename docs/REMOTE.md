@@ -66,6 +66,14 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > runs (GPU, GPU + CPU, CPU), its context size and memory, and **Unload**; models still loading;
 > how much of the memory for models they take; and this chat's context. The monitor is read every
 > few seconds only while Expert mode is on and a chat is open.
+> In a chat on the iPhone, what the agent does reads as it does on the desktop: each tool step is
+> one quiet line (a mark, the command or file, a chevron when there is output), subagents are a
+> group with one row per child and its model, and an armed watch shows what it watches, what wakes
+> it and a live countdown (*≤ 42 min left*, *overdue*, *triggered*); the wake-up itself is a
+> *Watch triggered* row, not a message from you. Only your own bubbles and an approval or question
+> card keep an outline. The chat list is flat too: project groups with their active and done
+> counts, a glyph beside each chat for what it is doing, and the computer as a pill above the
+> list that opens the computer menu.
 >
 > The Android app's **Settings** also has a **Computers** row, which opens the list of paired
 > computers (rename, switch, forget, pair another), and an **About** section with the installed
@@ -323,7 +331,7 @@ changes how the computer itself is set up:
   with its own keys and config, and nothing about the keys reaches the phone. Running a command
   without typing it, renaming terminals and listing shells stay off.
 - **Hardware, loaded models and context, read only:** CPU and GPU load, memory and temperatures
-  arrive as numbers only (no processes, paths or device ids). The Model Server arrives as whether
+  arrive as numbers only (no CPU or GPU model names, processes, paths or device ids). The Model Server arrives as whether
   it is installed and running and, for each loaded model, its id, where it runs, its context size,
   memory and timing; never its folders, port, log or settings. A chat's context arrives as totals
   (tokens in use, the window, tokens per kind of source); never the files, memory or guideline

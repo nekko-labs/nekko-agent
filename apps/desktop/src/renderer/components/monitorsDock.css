@@ -116,7 +116,7 @@
 .monitors-dock__monitor-header button, .monitors-dock__configure > button { display: grid; place-items: center; width: 26px; height: 26px; padding: 4px; border: 0; background: transparent; color: var(--ink-faint); }
 .monitors-dock__minimized { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; border-bottom: 1px solid var(--line); }
 .monitors-dock__minimized button { display: grid; place-items: center; width: 32px; height: 32px; color: var(--accent); animation: dock-icon-in 180ms ease-out; }
-@keyframes dock-icon-in { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: scale(1); } }
+@keyframes dock-icon-in { from { flex-basis: 0; transform: scale(.6); } to { opacity: 1; transform: scale(1); } }
 .monitors-dock__hardware { gap: 18px; padding: 16px; }
 .monitors-dock__meter { display: grid; gap: 7px; }
 .monitors-dock__meter strong { font-size: 11px; font-weight: 500; color: var(--ink-soft); }
@@ -140,7 +140,7 @@
 /* Keep the outgoing panel mounted until it shrinks into its restore control. */
 @keyframes wall-panel-collapse {
   from { opacity: 1; transform: scale(1); }
-  to { opacity: 0; transform: scale(.08); }
+  to { flex-basis: 0; transform: scale(.08); }
 }
 .monitors-dock__monitor--collapsing { transform-origin: top left; pointer-events: none; animation: wall-panel-collapse 220ms ease-in both; }
 @media (prefers-reduced-motion: reduce) { .monitors-dock__monitor--collapsing { animation: none; } }
@@ -160,7 +160,7 @@
   display: block; box-sizing: border-box; height: var(--landing-height);
   border: 1.5px dashed color-mix(in srgb, var(--accent) 60%, var(--line)); border-radius: 16px;
   background: color-mix(in srgb, var(--accent) 6%, transparent);
-  opacity: 0; transform: scale(.97); transition: opacity 160ms ease, transform 200ms cubic-bezier(.2, .8, .2, 1);
+  flex-basis: 0; height: 0; transform: scale(.97); transition: opacity 160ms ease, transform 200ms cubic-bezier(.2, .8, .2, 1);
 }
 .monitors-dock__landing[data-open] > span { opacity: 1; transform: none; }
 .monitors-dock__monitors[data-dock-lifting] .monitors-dock__landing,
@@ -213,10 +213,14 @@
 .monitors-dock__local-model button.monitors-dock__text-button { flex-shrink: 0; }
 
 /* Keep the dock alive during exit so a second toggle reverses from here. */
-.monitors-dock { --dock-enter-x: 10px; --dock-enter-y: 0px; opacity: 1; transform: translate(0, 0); transition: opacity 140ms ease-out, transform 140ms ease-out; }
-.monitors-dock[data-dock-side='left'] { --dock-enter-x: -10px; }
-.monitors-dock[data-dock-side='top'] { --dock-enter-x: 0px; --dock-enter-y: -10px; }
-.monitors-dock[data-dock-side='bottom'] { --dock-enter-x: 0px; --dock-enter-y: 10px; }
-.monitors-dock[data-panel-open='false'] { opacity: 0; transform: translate(var(--dock-enter-x), var(--dock-enter-y)); pointer-events: none; }
-@starting-style { .monitors-dock[data-panel-open='true'] { opacity: 0; transform: translate(var(--dock-enter-x), var(--dock-enter-y)); } }
+.monitors-dock { --dock-enter-x: 100%; --dock-enter-y: 0px; opacity: 1; transform: translate(0, 0); overflow: clip; interpolate-size: allow-keywords; transition: flex-basis 220ms ease-out, height 220ms ease-out, transform 220ms ease-out; }
+.monitors-dock[data-dock-side='left'] { --dock-enter-x: -100%; }
+.monitors-dock[data-dock-side='top'] { --dock-enter-x: 0px; --dock-enter-y: -100%; }
+.monitors-dock[data-dock-side='bottom'] { --dock-enter-x: 0px; --dock-enter-y: 100%; }
+.monitors-dock[data-panel-open='false'] { flex-basis: 0; transform: translate(var(--dock-enter-x), var(--dock-enter-y)); pointer-events: none; }
+@starting-style { .monitors-dock[data-panel-open='true'] { flex-basis: 0; transform: translate(var(--dock-enter-x), var(--dock-enter-y)); } }
 @media (prefers-reduced-motion: reduce) { .monitors-dock { transition: none; transform: none; } }
+
+.monitors-dock:is([data-dock-side='top'], [data-dock-side='bottom']) { height: auto; }
+.monitors-dock:is([data-dock-side='top'], [data-dock-side='bottom'])[data-panel-open='false'] { height: 0; }
+@starting-style { .monitors-dock:is([data-dock-side='top'], [data-dock-side='bottom'])[data-panel-open='true'] { height: 0; } }
