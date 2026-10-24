@@ -84,6 +84,10 @@ export interface StepUpChallengeReply {
   required: boolean;
   /** The kinds of method registered (never their ids or names). */
   methods: Array<SecurityCredentialKind | 'totp'>;
+  /** The computer's relying-party id (`nekko-computer:<installId>`), for a phone's native FIDO2 client. */
+  rpId?: string;
+  /** Whether the computer offers registering a method from the phone. */
+  register?: boolean;
 }
 
 /** A challenge the computer issued, as its book keeps it. */
