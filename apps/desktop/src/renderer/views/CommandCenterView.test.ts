@@ -19,7 +19,7 @@ import { readFileSync } from 'node:fs';
 it.each(['focus', 'grid', 'fixed'] as const)('direct creation replaces More without changing the %s layout', (mode) => {
   vi.mocked(useState).mockReturnValueOnce([null, vi.fn()]);
   const setWall = vi.fn(); const setAddOpen = vi.fn();
-  const tree = WallToolbar({ wall: { ...DEFAULT_WALL_STATE, layout: { ...DEFAULT_WALL_STATE.layout, mode } }, setWall, setAddOpen, addOpen: false, onAdd: vi.fn() });
+  const tree = WallToolbar({ wall: { ...DEFAULT_WALL_STATE, layout: { ...DEFAULT_WALL_STATE.layout, mode: mode === 'fixed' ? 'grid' as const : mode, fixedGrid: mode === 'fixed' } }, setWall, setAddOpen, addOpen: false, onAdd: vi.fn() });
   const elements: React.ReactElement<Record<string, any>>[] = [];
   const walk = (node: React.ReactNode) => React.Children.forEach(node, (child) => {
     if (!React.isValidElement<Record<string, any>>(child)) return;
@@ -63,11 +63,11 @@ it('watches only the title-bar slot\'s ancestors, never the whole body subtree (
 
 const key = { code: 'Digit1', key: '!', ctrlKey: true, metaKey: false, shiftKey: true, altKey: false, repeat: false, isComposing: false, defaultPrevented: false };
 describe('agent board layout shortcuts', () => {
-  it.each([['Digit1', '!', 'focus'], ['Digit2', '@', 'grid'], ['Digit3', '#', 'fixed']])('maps shifted %s to %s', (code, value, mode) => {
+  it.each([['Digit1', '!', 'focus'], ['Digit2', '@', 'grid']])('maps shifted %s to %s', (code, value, mode) => {
     expect(wallLayoutShortcut({ ...key, code, key: value })).toBe(mode);
     expect(wallLayoutShortcut({ ...key, code, key: value, ctrlKey: false, metaKey: true })).toBe(mode);
   });
-  it.each([{ shiftKey: false }, { altKey: true }, { repeat: true }, { isComposing: true }, { defaultPrevented: true }, { metaKey: true }, { ctrlKey: false }, { code: 'Digit4', key: '$' }])('ignores unsupported modifiers and events %j', (patch) => {
+  it.each([{ shiftKey: false }, { altKey: true }, { repeat: true }, { isComposing: true }, { defaultPrevented: true }, { metaKey: true }, { ctrlKey: false }, { code: 'Digit3', key: '#' }, { code: 'Digit4', key: '$' }])('ignores unsupported modifiers and events %j', (patch) => {
     expect(wallLayoutShortcut({ ...key, ...patch })).toBeNull();
   });
   it('supports synthetic digit keys but never steals unshifted agent selection', () => {

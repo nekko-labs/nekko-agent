@@ -242,6 +242,14 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     let library = settings.clone().map(|s| library::Library::new(s, machine.clone(), engine.clone()));
     if let Some(library) = &library {
         let _ = engine.speeds.sink.set(speeds::Speeds::new(machine.clone(), library.clone()));
+        // Abandoned downloads can be GBs each (#1035).
+        let dir = std::path::PathBuf::from(library.models_dir());
+        tokio::task::spawn_blocking(move || {
+            let freed = downloads::sweep_stale_parts(&dir, std::time::SystemTime::now());
+            if freed > 0 {
+                logs::note(&format!("nekkod: removed {freed} bytes of abandoned downloads"));
+            }
+        });
     }
     let model_downloads = library.clone().zip(catalog.clone()).map(|(library, catalog)| {
         let fetch =
