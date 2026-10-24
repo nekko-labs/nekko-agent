@@ -1109,16 +1109,41 @@ mod tests {
     fn screens_sealed_provider_setup() {
         let good = json!({ "id": "claude-phone", "kind": "anthropic", "label": "Anthropic", "sealedKey": "AQID" });
         assert!(screen("providers:saveSealed", &[good.clone()]).is_ok());
-        assert_eq!(screen("providers:saveSealed", &[good.clone(), json!(1)]).map(|_| ()), Err(denied("option-denied", "extra argument")));
-        assert_eq!(screen("providers:saveSealed", &[json!({ "id": "x", "kind": "anthropic", "label": "x", "apiKey": "sk" })]).map(|_| ()), Err(denied("option-denied", "apiKey")));
-        assert_eq!(screen("providers:saveSealed", &[json!({ "id": "x", "kind": "anthropic", "label": "x" })]).map(|_| ()), Err(denied("value-invalid", "sealedKey")));
-        assert!(screen("providers:setEnabled", &[json!("p1"), json!(false)]).is_ok());
-        assert_eq!(screen("providers:setEnabled", &[json!("p1"), json!("no")]).map(|_| ()), Err(denied("value-invalid", "enabled")));
-        assert_eq!(screen("providers:setEnabled", &[json!("")]).map(|_| ()), Err(denied("value-invalid", "provider id")));
-        assert!(screen("providers:sealKey", &[]).is_ok());
-        assert_eq!(redact("providers:sealKey", json!({ "publicKey": "BAE", "context": "nekko-provider-key-v1", "private": "no" })), json!({ "publicKey": "BAE", "context": "nekko-provider-key-v1" }));
         assert_eq!(
-            redact("providers:saveSealed", json!({ "ok": true, "models": [{ "id": "m", "name": "M", "path": "/x" }], "provider": { "apiKey": "sk" } })),
+            screen("providers:saveSealed", &[good.clone(), json!(1)]).map(|_| ()),
+            Err(denied("option-denied", "extra argument"))
+        );
+        assert_eq!(
+            screen("providers:saveSealed", &[json!({ "id": "x", "kind": "anthropic", "label": "x", "apiKey": "sk" })])
+                .map(|_| ()),
+            Err(denied("option-denied", "apiKey"))
+        );
+        assert_eq!(
+            screen("providers:saveSealed", &[json!({ "id": "x", "kind": "anthropic", "label": "x" })]).map(|_| ()),
+            Err(denied("value-invalid", "sealedKey"))
+        );
+        assert!(screen("providers:setEnabled", &[json!("p1"), json!(false)]).is_ok());
+        assert_eq!(
+            screen("providers:setEnabled", &[json!("p1"), json!("no")]).map(|_| ()),
+            Err(denied("value-invalid", "enabled"))
+        );
+        assert_eq!(
+            screen("providers:setEnabled", &[json!("")]).map(|_| ()),
+            Err(denied("value-invalid", "provider id"))
+        );
+        assert!(screen("providers:sealKey", &[]).is_ok());
+        assert_eq!(
+            redact(
+                "providers:sealKey",
+                json!({ "publicKey": "BAE", "context": "nekko-provider-key-v1", "private": "no" })
+            ),
+            json!({ "publicKey": "BAE", "context": "nekko-provider-key-v1" })
+        );
+        assert_eq!(
+            redact(
+                "providers:saveSealed",
+                json!({ "ok": true, "models": [{ "id": "m", "name": "M", "path": "/x" }], "provider": { "apiKey": "sk" } })
+            ),
             json!({ "ok": true, "models": [{ "id": "m", "name": "M" }] })
         );
         assert_eq!(redact("providers:setEnabled", json!({ "ok": true, "providers": [] })), json!({ "ok": true }));

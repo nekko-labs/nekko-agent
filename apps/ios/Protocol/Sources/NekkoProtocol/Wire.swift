@@ -102,7 +102,7 @@ public enum Channels {
         sessionSetOptions, sessionDelete, voiceStatus, voiceTranscribe, chatSend, chatAbort, chatQueue,
         chatPending, chatAnswer, toolApprove, workspaceList, appInfo, skillsRunnable, changesList,
         chatEditQueued, sessionFork, tasksList, taskRunNow, workflowsList, workflowRun, prSessionList,
-        usageSummary, limitsGet, sessionWatches, machineSummary,
+        usageSummary, limitsGet, sessionWatches, machineSummary, providersSealKey, providersSaveSealed, providersSetEnabled,
         workspaceGitStatus, gitDiff, gitLog, gitShow, gitBranches, gitCompare, prChecks, prDiff,
         gitStage, gitUnstage, gitCommit, gitCommitMessage, gitPush, gitSwitch, gitMergeAbort, prCreate, prAction,
         filesList, filesSearch, filesRead, filesWrite, logsList, logsRead,
