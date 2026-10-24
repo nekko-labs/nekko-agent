@@ -83,6 +83,7 @@ struct SettingsView: View {
     @State private var error: String?
     @State private var testing = false
     @State private var testResult: (text: String, ok: Bool)?
+    @State private var sendingFeedback = false
 
     var body: some View {
         @Bindable var prefs = app.prefs
@@ -220,12 +221,15 @@ struct SettingsView: View {
                 ProtocolBanner()
                 LabeledContent("Transport", value: store.active.map { "\(routeName($0.route)), end-to-end encrypted" } ?? "–")
                 Link("Remote access guide", destination: URL(string: "https://nekkoagent.com/docs/remote")!)
+                Button { sendingFeedback = true } label: { Label("Send feedback", systemImage: "envelope") }
+                    .accessibilityIdentifier("settings.feedback")
             } header: { SectionHeader("About") }
             Section {
                 Button("Forget everything on this iPhone", role: .destructive) { confirmWipe = true }
             }
         }
         .navigationTitle("Settings")
+        .sheet(isPresented: $sendingFeedback) { FeedbackSheet() }
         .confirmationDialog("Forget all computers and keys?", isPresented: $confirmWipe, titleVisibility: .visible) {
             Button("Forget everything", role: .destructive) { app.forgetEverything() }
         }

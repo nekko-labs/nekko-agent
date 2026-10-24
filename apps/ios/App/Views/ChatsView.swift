@@ -18,6 +18,7 @@ struct ChatsView: View {
     /// Groups showing every chat, past the first few recent ones.
     @State private var expanded: Set<String> = []
     @State private var reorderingGroups = false
+    @State private var sendingFeedback = false
     /// The heading a dragged group is over.
     @State private var dropTarget: String?
     @State private var renaming: SessionSummary?
@@ -42,7 +43,7 @@ struct ChatsView: View {
         .refreshable { await store.refresh() }
         .navigationTitle("Chats")
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) { ComputerMenu(path: $path) }
+            ToolbarItem(placement: .topBarLeading) { ComputerMenu(path: $path, feedback: $sendingFeedback) }
             ToolbarItem(placement: .topBarTrailing) { viewMenu }
             ToolbarItem(placement: .topBarTrailing) {
                 // Offline too: a chat started now begins when the computer is back.
@@ -55,6 +56,7 @@ struct ChatsView: View {
         .sheet(isPresented: $reorderingGroups) {
             ReorderGroupsSheet(groups: sections.map { GroupName(key: $0.key, name: $0.name) }) { setGroupOrder($0) }
         }
+        .sheet(isPresented: $sendingFeedback) { FeedbackSheet() }
     }
 
     private func open(_ r: Route) {
@@ -510,9 +512,11 @@ struct PendingChatRow: View {
     }
 }
 
-/// Switch computers, pair another, open settings.
+/// Switch computers, pair another, open settings, send feedback.
 struct ComputerMenu: View {
     @Binding var path: [Route]
+    /// Presents *Send feedback*; the sheet hangs on the chat list, not on the toolbar item.
+    @Binding var feedback: Bool
     @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
     @Environment(\.palette) private var palette
@@ -541,6 +545,8 @@ struct ComputerMenu: View {
                 .accessibilityIdentifier("computer.logs")
             Button { path.append(.computers) } label: { Label("Computers", systemImage: "desktopcomputer") }
             Button { path.append(.settings) } label: { Label("Settings", systemImage: "gearshape") }
+            Button { feedback = true } label: { Label("Send feedback", systemImage: "envelope") }
+                .accessibilityIdentifier("computer.feedback")
         } label: {
             // The computer is the title's companion: its state, its name, and a chevron into the menu.
             HStack(spacing: 6) {
