@@ -40,6 +40,7 @@
   "session:fork",
   "session:get",
   "session:setOptions",
+  "session:watches",
   "sessions:summaries",
   "settings:get",
   "settings:update",
@@ -132,6 +133,7 @@
   "pr:sessionList",
   "providers:list",
   "session:get",
+  "session:watches",
   "sessions:summaries",
   "settings:get",
   "skills:runnable",
@@ -260,6 +262,17 @@
   "id",
   "kind",
   "label"
+ ],
+ "watchView": [
+  "id",
+  "kind",
+  "url",
+  "status",
+  "deadlineAt",
+  "nextPollAt",
+  "pending",
+  "failures",
+  "lastError"
  ],
  "skillView": [
   "category",

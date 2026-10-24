@@ -174,6 +174,22 @@ pub fn prs(prs: &Value, views: &Views) -> Value {
     Value::Array(list.iter().filter(|p| p.is_object()).map(|p| Value::Object(pick_keys(p, &views.pr))).collect())
 }
 
+/// `phoneWatchesView`: a chat's watches picked to `PHONE_WATCH_VIEW` (never the
+/// continuation prompt), `lastError` cut to the text limit, non-objects dropped.
+pub fn watches(watches: &Value, view: &[String], text_chars: usize) -> Value {
+    let Some(list) = watches.as_array() else { return json!([]) };
+    Value::Array(
+        list.iter()
+            .filter(|w| w.is_object())
+            .map(|w| {
+                let mut o = pick_keys(w, view);
+                cut_field(&mut o, "lastError", text_chars);
+                Value::Object(o)
+            })
+            .collect(),
+    )
+}
+
 /// `phoneLimitsView`.
 pub fn limits(limits: &Value, views: &Views) -> Value {
     if !limits.is_object() {

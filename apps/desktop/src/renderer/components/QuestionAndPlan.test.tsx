@@ -31,12 +31,17 @@ describe('agent question in the window', () => {
   // Source pin, pending the wall e2e journey: the question reaches the pane
   // from the host (a promise or an agent event), which a server render never
   // applies, so the pinned layout cannot be rendered here.
-  it('pins the question above the transcript with a visible label, not below it (source pin)', () => {
+  it('puts the question in the transcript footer with no nested scroll panel', () => {
     const pane = readFileSync(new URL('./ChatPane.tsx', import.meta.url), 'utf8');
-    const pin = pane.search(/data-agent-question\b/);
-    expect(pin).toBeGreaterThan(0);
-    expect(pin).toBeLessThan(pane.search(/<VirtualTranscript\b/));
-    expect(pane).toMatch(/Asked you a question<\/p>/);
+    const question = pane.search(/data-agent-question\b/);
+    expect(question).toBeGreaterThan(pane.indexOf('footer={'));
+    expect(question).toBeLessThan(pane.indexOf('{errorNotice && !question && !streaming'));
+    expect(pane).not.toContain('Asked you a question</p>');
+    expect(pane).not.toContain('<ComposerQuestion');
+    expect(cssRule(styles, '.conversation-question')).not.toHaveProperty('overflow-y');
+    const html = renderToStaticMarkup(<QuestionCard request={request} onAnswer={() => {}} onSkip={() => {}} />);
+    expect(html).toContain('data-pixel-question');
+    expect(html).not.toContain('💬');
   });
   it('says what a window is waiting on inside it, not in a frame banner', async () => {
     // The frame's banner sat under the absolutely positioned window content.

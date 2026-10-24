@@ -64,6 +64,7 @@ import {
   PHONE_QUEUE_EDIT_KEYS,
   PHONE_TASK_VIEW,
   PHONE_VIEWS,
+  PHONE_WATCH_VIEW,
   PHONE_WORKFLOW_RUN_VIEW,
   PHONE_WORKFLOW_VIEW,
   phoneLimitsKey,
@@ -72,6 +73,7 @@ import {
   phonePromptsView,
   phonePrsView,
   phoneQueueView,
+  phoneWatchesView,
   phoneTasksView,
   phoneUsageView,
   phoneWorkflowsView,
@@ -138,6 +140,7 @@ export const PHONE_CHANNELS = [
   'session:fork',
   'session:get',
   'session:setOptions',
+  'session:watches',
   'sessions:summaries',
   'settings:get',
   'settings:update',
@@ -288,6 +291,7 @@ export const PHONE_CHAT_READ_CHANNELS: readonly string[] = [
   'pr:sessionList',
   'providers:list',
   'session:get',
+  'session:watches',
   'sessions:summaries',
   'settings:get',
   'skills:runnable',
@@ -710,6 +714,7 @@ export function screenPhoneCall(
   switch (channel) {
     case 'changes:list':
     case 'pr:sessionList':
+    case 'session:watches':
       if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
       if (channel === 'pr:sessionList' && args[1] !== undefined && typeof args[1] !== 'boolean') throw new PhoneAccessError('value-invalid', 'refresh');
       return {};
@@ -864,6 +869,8 @@ export function redactPhoneResult(channel: string, result: unknown): unknown {
       return null;
     case 'pr:sessionList':
       return phonePrsView(result);
+    case 'session:watches':
+      return phoneWatchesView(result);
     case 'usage:summary':
       return phoneUsageView(result);
     case 'limits:get':
@@ -1069,6 +1076,7 @@ export function phoneAccessPolicy() {
     settingsKeys: [...PHONE_SETTINGS_KEYS],
     settingsView: [...PHONE_SETTINGS_VIEW],
     providerView: [...PHONE_PROVIDER_VIEW],
+    watchView: [...PHONE_WATCH_VIEW],
     skillView: [...PHONE_SKILL_VIEW],
     queueKeys: [...PHONE_QUEUE_KEYS],
     sessionOptionKeys: [...PHONE_SESSION_OPTION_KEYS],
