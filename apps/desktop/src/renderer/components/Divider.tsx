@@ -8,7 +8,7 @@ const KEY_STEP = 0.02;
  * window listeners, so the drag keeps tracking over the panes' own iframes and
  * terminals (which would otherwise swallow it). Focused (it is in the tab
  * order), the arrow keys along its axis move it in small steps. Shared by the
- * Agent tab's workspaces and the Command Center wall, so a divider behaves the
+ * Agent tab's workspaces and the Agent board wall, so a divider behaves the
  * same way wherever two windows meet.
  */
 export function Divider({

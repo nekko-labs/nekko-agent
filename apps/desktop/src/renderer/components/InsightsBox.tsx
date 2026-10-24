@@ -23,7 +23,7 @@ export interface Vitals {
 }
 
 /**
- * The Command Center's analytics: the panels the user ticked in the gear menu,
+ * The Agent board's analytics: the panels the user ticked in the gear menu,
  * flowing into as many columns as the box is wide enough for, so the same box
  * reads as a strip in a narrow window and a dashboard in a wide one. On the
  * wall it is a window like any other (the gear rides in the window's strip);

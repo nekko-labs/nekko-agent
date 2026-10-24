@@ -1,3 +1,5 @@
+import { PrWatchContinuation } from './PrWatchContinuation.js';
+import { canOfferPrWatch } from '../prWatchContinuation.js';
 import { chatArtifacts } from '../chatArtifacts.js';
 import { ChatArtifacts } from './ChatArtifacts.js';
 import { MarkdownSession } from './Markdown.js';
@@ -489,7 +491,7 @@ const LiveUsageChip = memo(function LiveUsageChip({
 
 /**
  * The line under the conversation: what the reply is doing, read off the
- * app-wide fold (so it says the same as the chat's Command Center card), and
+ * app-wide fold (so it says the same as the chat's Agent board card), and
  * how long it has been at it.
  */
 const LiveReplyStatus = memo(function LiveReplyStatus({
@@ -690,7 +692,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const planRailOpen = planRailWanted && paneWidth >= PLAN_RAIL_MIN_PANE;
   const planSteps = useMemo(() => { const p = planProgress(session?.agentPlan); return { done: p.done + p.skipped, total: p.total }; }, [session?.agentPlan]);
   const wideEnoughForRail = paneWidth >= PLAN_RAIL_MIN_PANE;
-  // A small window (a cell on the Command Center wall, a sliver of a split)
+  // A small window (a cell on the Agent board wall, a sliver of a split)
   // folds the two control rows into one summary chip, so the transcript keeps
   // the room; the chip opens them again on demand.
   const compact = useElementCompact(paneRef) && surface !== 'composer';
@@ -2609,6 +2611,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   persisted={!streaming && !![...(session?.messages ?? [])].reverse().find((m) => m.role === 'assistant')?.turnStats}
                   blocked={errorNotice ? 'Needs attention' : approval ? 'Waiting for approval' : question ? 'Waiting for your answer' : null}
                 />
+                {!imageMode && <PrWatchContinuation sessionId={sessionId} replyId={lastMsgId ?? ''} prs={prs}
+                  eligible={canOfferPrWatch(session?.messages ?? [], streaming || !!held || !!errorNotice || !!question || !!approval)}
+                  onContinue={async (prompt) => { await send(prompt); }} />}
                 {errorNotice && !question && !streaming && (() => {
                   // A stop the user asked for is not a failure, so it doesn't wear
                   // the failure colour. Either way the run is resumable whenever it

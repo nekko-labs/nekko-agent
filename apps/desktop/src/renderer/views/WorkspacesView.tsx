@@ -493,7 +493,7 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
   };
 
   // Open the active session as a workspace if there are none (e.g. arriving
-  // from the Command Center or command palette).
+  // from the Agent board or command palette).
   useEffect(() => {
     if (!sidebarOnly && workspaces.length === 0 && activeSessionId) openChatPane(activeSessionId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1207,7 +1207,7 @@ const WorkspaceCanvas = React.memo(function WorkspaceCanvas({
   statuses: Map<string, AgentStatus>;
   projects: WorkspaceFolder[];
 }) {
-  // The whole tab may be hidden behind the Command Center; a workspace is on screen only when the tab is.
+  // The whole tab may be hidden behind the Agent board; a workspace is on screen only when the tab is.
   const tabVisible = usePaneVisible();
   const [dragging, setDragging] = useState<string | null>(null);
   const {

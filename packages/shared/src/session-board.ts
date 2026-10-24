@@ -1,5 +1,5 @@
 /**
- * Which column a chat belongs in on the Command Center board.
+ * Which column a chat belongs in on the Agent board board.
  *
  * The board replaced two lists that answered the same question badly: "Now"
  * showed what was running, "Sessions" showed everything else in one flat pile,
