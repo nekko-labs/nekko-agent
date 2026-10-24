@@ -50,11 +50,13 @@ object Channels {
     const val SKILLS_RUNNABLE = "skills:runnable"
     /** What the agent changed in a chat, as a capped read-only diff ([PhoneChanges]); refused unless the computer allows it. */
     const val CHANGES_LIST = "changes:list"
+    /** The Monitors pane: hardware, running chats, what needs the owner, next automations ([MonitorSummary]); read class. */
+    const val MONITOR_SUMMARY = "monitor:summary"
 
     val ALL = listOf(
         SETTINGS_GET, SETTINGS_UPDATE, SESSION_DELETE, VOICE_STATUS, VOICE_TRANSCRIBE, PROVIDERS_LIST, MODELS_LIST, SESSIONS_SUMMARIES, SESSION_CREATE, SESSION_GET,
         SESSION_SET_OPTIONS, CHAT_SEND, CHAT_ABORT, CHAT_QUEUE, CHAT_PENDING, CHAT_ANSWER, TOOL_APPROVE,
-        WORKSPACE_LIST, APP_INFO, SKILLS_RUNNABLE, CHANGES_LIST,
+        WORKSPACE_LIST, APP_INFO, SKILLS_RUNNABLE, CHANGES_LIST, MONITOR_SUMMARY,
     )
 }
 
