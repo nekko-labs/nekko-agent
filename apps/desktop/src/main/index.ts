@@ -125,8 +125,9 @@ function deliverLink(url: string): void {
 
 /**
  * macOS keeps the system menu bar. Electron's default app menu is kept for
- * everything else, but its "Nekko Agent" menu gains Settings… (⌘,) and its
- * About item opens the in-app About page instead of the stock panel.
+ * everything else, but its "Nekko Agent" menu gains Settings… (⌘,), its
+ * About item opens the in-app About page instead of the stock panel, and
+ * Help holds Send Feedback….
  */
 function installMacAppMenu(): void {
   const send = (url: string) => () => deliverLink(url);
@@ -150,6 +151,7 @@ function installMacAppMenu(): void {
     { role: 'editMenu' },
     { role: 'viewMenu' },
     { role: 'windowMenu' },
+    { role: 'help', submenu: [{ label: 'Send Feedback…', click: send('nekko-agent://feedback') }] },
   ]));
 }
 
@@ -597,6 +599,7 @@ app.whenReady().then(async () => {
       engine,
       showUi: showWindow,
       newChat: () => deliverLink('nekko-agent://chat/new'),
+      feedback: () => deliverLink('nekko-agent://feedback'),
       serviceStarted: () => { for (const win of BrowserWindow.getAllWindows()) win.webContents.reload(); },
       quit: () => app.quit(),
       onError: message => dialog.showErrorBox('Nekko Agent', message),

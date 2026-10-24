@@ -7,6 +7,7 @@ export * from './brand-env.js';
 export * from './platform-support.js';
 export * from './voice.js';
 export * from './cloud.js';
+export * from './feedback.js';
 export * from './models.js';
 export * from './model-availability.js';
 export * from './model-capabilities.js';

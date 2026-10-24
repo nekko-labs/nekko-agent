@@ -396,6 +396,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             crate::catalog::route(ctx.catalog.as_ref().expect("checked"), c, &args).await
         }
         c if crate::tooling::CHANNELS.contains(&c) => crate::tooling::route(ctx, c, &args).await,
+        c if crate::feedback::CHANNELS.contains(&c) => crate::feedback::route(ctx, c, &args).await,
         // An `agent_watch` call outside a turn.
         "watch:tool" if ctx.turns.watches.is_some() => {
             let w = ctx.turns.watches.clone().expect("checked");
