@@ -76,6 +76,18 @@
           "description": "Drive the agent on your computer from your phone, end-to-end encrypted."
         },
         {
+          "slug": "protect-this-computer-with-a-security-key",
+          "title": "Protect this computer with a security key",
+          "source": "docs/security-keys.md",
+          "description": "Ask for a security key, a passkey or a one-time code before the actions that could take your computer over, and the safety exits on the phone."
+        },
+        {
+          "slug": "two-chats-on-a-folding-phone",
+          "title": "Two chats on a folding phone",
+          "source": "docs/folding-phones.md",
+          "description": "Two panes on a foldable or an iPad: two chats at once, Monitors beside a chat, and the layouts for each posture."
+        },
+        {
           "slug": "sync-encryption",
           "title": "Encrypted sync",
           "source": "docs/SYNC-ENCRYPTION.md",
