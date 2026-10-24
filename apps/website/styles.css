@@ -643,6 +643,8 @@ body {
 .media img, .media video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .media:has(img, video) { border: 2px solid var(--sticker); box-shadow: 4px 4px 0 var(--sticker); }
 .media:has(img, video) span { display: none; }
+.media:not(:has(img, video)) { place-content: center; gap: 8px; }
+.media .media-joke { max-width: 32ch; padding: 0 16px; font-family: inherit; font-size: 14px; letter-spacing: 0; text-transform: none; text-align: center; }
 .showcase { padding-top: 10px; }
 .media-hero {
   width: min(960px, 100%); margin: 0; aspect-ratio: 16 / 9;
