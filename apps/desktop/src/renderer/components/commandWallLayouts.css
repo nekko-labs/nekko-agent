@@ -306,6 +306,10 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
   .wall-agents-presence[data-panel-open='true'] { width: 0; transform: translateX(-100%); }
   .wall-agents-presence[data-orientation='horizontal'][data-panel-open='true'] { width: 100%; height: 0; transform: translateY(-100%); }
 }
+/* Below md the list is an absolute drawer that this wrapper contains (its
+   transform), so it keeps its old sizing: sized to the Agents button and
+   clipped, it cut the drawer off and clicks fell through to the windows. */
+@media (max-width: 767px) { .wall-agents-presence { width: auto; overflow: visible; } }
 @media (prefers-reduced-motion: reduce) { .wall-agents-presence { transition: none; transform: none; } }
 
 /* Separate project/status/date sections without inflating the agent cards. */
