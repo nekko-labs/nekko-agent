@@ -315,7 +315,8 @@ final class LiveRelayTests: XCTestCase {
             throw XCTSkip("set NEKKO_ITEST_LINK (apps/ios/scripts/itest-stack.sh)")
         }
         let app = XCUIApplication()
-        app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-theme", "light", "-uiTestReset", "YES"]
+        // Past the first run (IO-31): testPairStreamAndApproveFromThePhone walks it.
+        app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-theme", "light", "-onboarded", "YES", "-uiTestReset", "YES"]
         app.launch()
         allowSystemAlerts()
         let start = app.buttons["Pair with your computer"]
