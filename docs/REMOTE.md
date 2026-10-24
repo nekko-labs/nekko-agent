@@ -61,7 +61,9 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > group with one row per child and its model, and an armed watch shows what it watches, what wakes
 > it and a live countdown (*≤ 42 min left*, *overdue*, *triggered*); the wake-up itself is a
 > *Watch triggered* row, not a message from you. Only your own bubbles and an approval or question
-> card keep an outline.
+> card keep an outline. The chat list is flat too: project groups with their active and done
+> counts, a glyph beside each chat for what it is doing, and the computer as a pill above the
+> list that opens the computer menu.
 >
 > The Android app's **Settings** also has a **Computers** row, which opens the list of paired
 > computers (rename, switch, forget, pair another), and an **About** section with the installed

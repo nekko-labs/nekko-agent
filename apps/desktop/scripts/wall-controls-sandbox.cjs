@@ -61,6 +61,21 @@ app.whenReady().then(async () => {
         if (current) await check('focused title strips hidden', "[...document.querySelectorAll('[data-pane-title-strip]')].every(e=>getComputedStyle(e).display==='none')");
         await capture(`focused-motion-${tag}-${theme}-${width}`);
       }
+      win.setContentSize(1400, 900);
+      await sleep(400);
+      if (current && process.env.NEKKO_FOCUS_SURFACES) {
+        await check('focus has rounded translucent surface', "(()=>{const s=getComputedStyle(document.querySelector('.command-wall-window > .panel'));return s.borderTopLeftRadius==='24px' && s.backgroundColor!=='transparent'})()");
+        await check('navigation is 90% height without SVG morph', "(()=>{const r=document.querySelector('.rail'),p=r.parentElement;return Math.abs(r.getBoundingClientRect().height/p.getBoundingClientRect().height-.9)<.01 && !r.querySelector('svg.rail-backdrop')})()");
+        const before = await run("document.querySelector('.wall-agents-presence').getBoundingClientRect().width");
+        await run("document.querySelector('[aria-label=\"Hide the agent panel\"], [aria-label=\"Show the agent panel\"]').click(); document.querySelector('.wall-agents-presence')?.getBoundingClientRect()");
+        await sleep(100);
+        const during = await run("document.querySelector('.wall-agents-presence')?.getBoundingClientRect().width ?? 0");
+        if (!(during > 0 && during < before)) throw Error('Agents must surrender layout space during slide: '+JSON.stringify({before,during,state:await run("document.querySelector('.wall-agents-presence')?.outerHTML.slice(0,400)")}));
+        report.checks.push({ name: 'Agents space interpolates while sliding', before, during });
+        await sleep(250);
+        await check('Agents leaves after slide', "!document.querySelector('.wall-agents-presence')");
+        await run("document.querySelector('[aria-label=\"Hide the agent panel\"], [aria-label=\"Show the agent panel\"]').click()"); await sleep(350);
+      }
       const frames = path.join(runDir, 'motion'); fs.mkdirSync(frames);
       const started = Date.now(); const samples = [];
       for (let i=0; i<36; i++) {
