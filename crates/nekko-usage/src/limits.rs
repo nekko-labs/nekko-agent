@@ -266,6 +266,125 @@ pub fn parse_chatgpt_usage(json: &Map<String, Value>, now: f64) -> Value {
     snapshot(windows, extra, now, POLL_STALE_MS)
 }
 
+/// How long Claude plan usage from Claude Code's stream stays fresh: it only
+/// moves when the chat makes a model call.
+pub const CLAUDE_CODE_STALE_MS: f64 = 5.0 * 60_000.0;
+
+/// A Claude limit kind as a window: `five_hour` is the session, `seven_day`
+/// the week, a model scope (`Opus`) narrows the window to that family.
+fn describe_claude_window(kind: &str, model: Option<&str>) -> Map<String, Value> {
+    let (id, label, scope) = match kind {
+        "five_hour" => ("session".to_string(), "Current session".to_string(), "session"),
+        "seven_day" => ("weekly".to_string(), "This week".to_string(), "weekly"),
+        other => (other.replace('_', "-"), title_case(other), "weekly"),
+    };
+    let mut d = Map::new();
+    match model.map(str::trim).filter(|m| !m.is_empty()) {
+        Some(m) => {
+            let family = m.split_whitespace().next().unwrap_or(m).to_lowercase();
+            d.insert("id".into(), json!(format!("{id}-{family}")));
+            d.insert("label".into(), json!(format!("{label} ({m})")));
+            d.insert("scope".into(), json!("model"));
+            d.insert("modelFamily".into(), json!(family));
+        }
+        None => {
+            d.insert("id".into(), json!(id));
+            d.insert("label".into(), json!(label));
+            d.insert("scope".into(), json!(scope));
+        }
+    }
+    d
+}
+
+/// Claude plan usage from the user's own Claude Code, out of its documented
+/// stream-json: a `rate_limit_event` (one window, merged into `prev`) or an
+/// assistant message's `usage_report` from `/usage` (every window, replacing
+/// `prev`). Anything else is `None`. Never a credential or a plan endpoint:
+/// only what the unmodified binary printed for this chat.
+pub fn parse_claude_code_usage(event: &Value, prev: Option<&Value>, now: f64) -> Option<Value> {
+    if get(event, "type").and_then(Value::as_str) == Some("rate_limit_event") {
+        let info = get(event, "rate_limit_info")?;
+        let status = match get(info, "status").and_then(Value::as_str) {
+            Some("rejected") => "rate_limited",
+            Some("allowed_warning") => "warning",
+            Some("allowed") => "allowed",
+            _ => return None,
+        };
+        // shortcut: the docs leave utilization's scale unstated; Claude Code reads it from the unified
+        // headers, which report a fraction (TASKS.md, "the 6200% limits chip"). Above 1 reads as percent;
+        // confirm against a live plan-signed-in run and drop the guess.
+        let mut used = loose_number(get(info, "utilization"));
+        if used.is_finite() && used <= 1.0 {
+            used *= 100.0;
+        }
+        if !used.is_finite() {
+            if status != "rate_limited" {
+                return None;
+            }
+            used = 100.0;
+        }
+        let resets = loose_number(get(info, "resetsAt"));
+        // Seconds, as the unified headers give it; milliseconds pass through.
+        let reset_at = if !resets.is_finite() {
+            0.0
+        } else if resets < 1e12 {
+            resets * 1000.0
+        } else {
+            resets
+        };
+        // `rateLimitType` is not in the docs yet; without it the event is the session window.
+        let kind = get(info, "rateLimitType").and_then(Value::as_str).unwrap_or("five_hour");
+        let w = window(describe_claude_window(kind, None), clamp_percent(used), reset_at, status);
+        let mut windows: Vec<Value> = prev
+            .and_then(|p| get(p, "windows"))
+            .and_then(Value::as_array)
+            .map(|ws| ws.iter().filter(|o| get(o, "id") != get(&w, "id")).cloned().collect())
+            .unwrap_or_default();
+        windows.push(w);
+        let mut extra = Map::new();
+        let credits = prev.and_then(|p| get(p, "creditsState")).cloned().unwrap_or(json!("unknown"));
+        extra.insert("creditsState".into(), credits);
+        if let Some(b) = prev.and_then(|p| get(p, "creditsBalance")) {
+            extra.insert("creditsBalance".into(), b.clone());
+        }
+        return Some(snapshot(windows, extra, now, CLAUDE_CODE_STALE_MS));
+    }
+    let limits = event.pointer("/usage_report/rate_limits").filter(|l| l.is_object())?;
+    let mut windows = Vec::new();
+    for l in get(limits, "limits").and_then(Value::as_array).into_iter().flatten() {
+        if get(l, "is_active") == Some(&Value::Bool(false)) {
+            continue;
+        }
+        let used = loose_number(get(l, "percent"));
+        let Some(kind) = get(l, "kind").and_then(Value::as_str).filter(|_| used.is_finite()) else { continue };
+        let reset_at = get(l, "resets_at").and_then(Value::as_str).map(crate::date::parse).filter(|r| r.is_finite());
+        let status = match get(l, "severity").and_then(Value::as_str) {
+            _ if used >= 100.0 => "rate_limited",
+            Some("critical" | "exceeded" | "rejected" | "error") => "rate_limited",
+            Some("warning" | "high") => "warning",
+            _ => "allowed",
+        };
+        let model = l.pointer("/scope/model/display_name").and_then(Value::as_str);
+        windows.push(window(describe_claude_window(kind, model), clamp_percent(used), reset_at.unwrap_or(0.0), status));
+    }
+    let mut extra = Map::new();
+    let state = match get(limits, "extra_usage") {
+        Some(x) if get(x, "is_enabled") == Some(&Value::Bool(false)) => "disabled",
+        Some(x) => {
+            let (cap, spent) = (loose_number(get(x, "monthly_limit")), loose_number(get(x, "used_credits")));
+            if cap.is_finite() && spent.is_finite() {
+                extra.insert("creditsBalance".into(), num((cap - spent).max(0.0)));
+                "balance"
+            } else {
+                "unknown"
+            }
+        }
+        None => "unknown",
+    };
+    extra.insert("creditsState".into(), json!(state));
+    Some(snapshot(windows, extra, now, CLAUDE_CODE_STALE_MS))
+}
+
 /// The next UTC midnight after `now` (`setUTCHours(24, 0, 0, 0)`).
 fn next_utc_midnight(now: f64) -> f64 {
     const DAY: f64 = 86_400_000.0;
@@ -376,5 +495,66 @@ mod tests {
         assert_eq!(windows.len(), 1);
         assert_eq!(windows[0]["id"], "tpm");
         assert_eq!(windows[0]["usedPercent"], num(75.0));
+    }
+
+    #[test]
+    fn claude_code_usage_report_becomes_every_window() {
+        let event = json!({ "type": "assistant", "usage_report": { "rate_limits": {
+            "limits": [
+                { "kind": "five_hour", "group": "g", "percent": 42, "resets_at": "2026-10-23T15:00:00Z", "severity": "normal", "is_active": true },
+                { "kind": "seven_day", "group": "g", "percent": 81, "resets_at": "2026-10-27T00:00:00Z",
+                  "scope": { "model": { "display_name": "Opus" } }, "severity": "warning", "is_active": true },
+                { "kind": "seven_day", "group": "g", "percent": 5, "resets_at": null, "severity": "normal", "is_active": false }
+            ],
+            "extra_usage": { "is_enabled": true, "monthly_limit": 50, "used_credits": 12, "utilization": 0.24 }
+        } } });
+        let got = parse_claude_code_usage(&event, None, 1000.0).unwrap();
+        let windows = got["windows"].as_array().unwrap();
+        assert_eq!(windows.len(), 2, "the inactive limit is left out");
+        assert_eq!(windows[0]["id"], "session");
+        assert_eq!(windows[0]["label"], "Current session");
+        assert_eq!(windows[0]["usedPercent"], num(42.0));
+        assert_eq!(windows[0]["resetAt"], num(crate::date::parse("2026-10-23T15:00:00Z")));
+        assert_eq!(windows[1]["id"], "weekly-opus");
+        assert_eq!(windows[1]["scope"], "model");
+        assert_eq!(windows[1]["modelFamily"], "opus");
+        assert_eq!(windows[1]["label"], "This week (Opus)");
+        assert_eq!(windows[1]["status"], "warning");
+        assert_eq!(got["creditsState"], "balance");
+        assert_eq!(got["creditsBalance"], num(38.0));
+        assert_eq!(got["staleAfterMs"], num(CLAUDE_CODE_STALE_MS));
+    }
+
+    #[test]
+    fn claude_code_rate_limit_event_merges_one_window() {
+        let report = json!({ "usage_report": { "rate_limits": { "limits": [
+            { "kind": "five_hour", "percent": 10, "resets_at": "2026-10-23T15:00:00Z", "severity": "normal", "is_active": true },
+            { "kind": "seven_day", "percent": 30, "resets_at": "2026-10-27T00:00:00Z", "severity": "normal", "is_active": true }
+        ], "extra_usage": { "is_enabled": false } } } });
+        let prev = parse_claude_code_usage(&report, None, 1000.0).unwrap();
+        let event = json!({ "type": "rate_limit_event", "rate_limit_info": {
+            "status": "allowed_warning", "resetsAt": 1_761_231_600, "utilization": 0.62
+        } });
+        let got = parse_claude_code_usage(&event, Some(&prev), 2000.0).unwrap();
+        let windows = got["windows"].as_array().unwrap();
+        assert_eq!(windows.len(), 2, "the session window is replaced, the week kept");
+        assert_eq!(windows[0]["id"], "weekly");
+        assert_eq!(windows[1]["id"], "session");
+        assert_eq!(windows[1]["usedPercent"], num(62.0), "a fraction reads as percent");
+        assert_eq!(windows[1]["resetAt"], num(1_761_231_600_000.0), "seconds become ms");
+        assert_eq!(windows[1]["status"], "warning");
+        assert_eq!(got["creditsState"], "disabled", "credits carry over from the report");
+
+        let rejected = json!({ "type": "rate_limit_event", "rate_limit_info": {
+            "status": "rejected", "rateLimitType": "seven_day", "errorCode": "credits_required"
+        } });
+        let got = parse_claude_code_usage(&rejected, None, 3000.0).unwrap();
+        assert_eq!(got["windows"][0]["id"], "weekly");
+        assert_eq!(got["windows"][0]["usedPercent"], num(100.0));
+        assert_eq!(got["windows"][0]["status"], "rate_limited");
+
+        let quiet = json!({ "type": "rate_limit_event", "rate_limit_info": { "status": "allowed" } });
+        assert_eq!(parse_claude_code_usage(&quiet, None, 0.0), None, "nothing to show without a number");
+        assert_eq!(parse_claude_code_usage(&json!({ "type": "assistant" }), None, 0.0), None);
     }
 }

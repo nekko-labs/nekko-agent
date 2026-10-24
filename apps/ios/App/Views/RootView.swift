@@ -1,6 +1,7 @@
 import NekkoKit
 import NekkoProtocol
 import SwiftUI
+import UIKit
 
 enum Route: Hashable {
     case chat(String)
@@ -28,48 +29,51 @@ struct RootView: View {
     @State private var introDone = false
     @Environment(\.horizontalSizeClass) private var size
 
+    /// The lock cover's own window, above sheets and alerts.
+    @State private var cover = CoverWindow()
+
     var body: some View {
-        ZStack {
-            content
-                // Under the cover the chats must not be readable by VoiceOver either.
-                .accessibilityHidden(covered)
-            // The app switcher snapshot shows a cover while the lock is on.
-            if covered {
-                LockView().transition(.opacity)
+        content
+            // Under the cover the chats must not be readable by VoiceOver either.
+            .accessibilityHidden(covered)
+            // The app switcher snapshot shows a cover while the lock is on. It is a
+            // window over this one rather than a view in it: a view here is drawn
+            // under an open sheet (Terminals, Files), which stayed readable.
+            .background(SceneReader { cover.scene = $0 })
+            .onChange(of: covered, initial: true) { _, _ in syncCover() }
+            .onChange(of: phase) { _, _ in syncCover() }
+            .onChange(of: app.prefs.theme) { _, _ in syncCover() }
+            .onChange(of: app.lock.locked) { _, locked in if !locked { app.start() } }
+            // iPad: a new sidebar pick starts a fresh detail stack (Settings pushed
+            // earlier no longer covers it), and another computer drops this one's chat.
+            .onChange(of: selected) { _, _ in if size == .regular { path = [] } }
+            .onChange(of: store.activeId) { _, _ in
+                selected = nil
+                path = []
             }
-        }
-        .animation(.easeOut(duration: 0.15), value: app.lock.locked)
-        .onChange(of: app.lock.locked) { _, locked in if !locked { app.start() } }
-        // iPad: a new sidebar pick starts a fresh detail stack (Settings pushed
-        // earlier no longer covers it), and another computer drops this one's chat.
-        .onChange(of: selected) { _, _ in if size == .regular { path = [] } }
-        .onChange(of: store.activeId) { _, _ in
-            selected = nil
-            path = []
-        }
-        // Shared from another app: New chat opens with the text, nothing is sent.
-        .onChange(of: app.sharedText, initial: true) { _, text in
-            if text != nil { open(.newChat) }
-        }
-        .onChange(of: store.ready, initial: true) { _, _ in
-            app.takeShare()
-            takeNewChat()
-        }
-        // The Control Center control: New chat on the active computer, nothing typed.
-        .onChange(of: app.newChatRequested, initial: true) { _, _ in takeNewChat() }
-        .onChange(of: app.openChat) { _, id in
-            guard let id else { return }
-            open(.chat(id))
-            app.openChat = nil
-        }
-        // A pairing link opened while locked waits until the app is unlocked.
-        .sheet(item: Binding(get: { covered ? nil : app.pendingLink.map(LinkBox.init) }, set: { app.pendingLink = $0?.link })) { box in
-            ConfirmPairSheet(link: box.link) { path = [] }
-        }
-        // First run, step 3: right after the first pairing.
-        .fullScreenCover(isPresented: Binding(get: { app.showNotificationStep && !covered }, set: { if !$0 { app.showNotificationStep = false } })) {
-            NotificationStepView()
-        }
+            // Shared from another app: New chat opens with the text, nothing is sent.
+            .onChange(of: app.sharedText, initial: true) { _, text in
+                if text != nil { open(.newChat) }
+            }
+            .onChange(of: store.ready, initial: true) { _, _ in
+                app.takeShare()
+                takeNewChat()
+            }
+            // The Control Center control: New chat on the active computer, nothing typed.
+            .onChange(of: app.newChatRequested, initial: true) { _, _ in takeNewChat() }
+            .onChange(of: app.openChat) { _, id in
+                guard let id else { return }
+                open(.chat(id))
+                app.openChat = nil
+            }
+            // A pairing link opened while locked waits until the app is unlocked.
+            .sheet(item: Binding(get: { covered ? nil : app.pendingLink.map(LinkBox.init) }, set: { app.pendingLink = $0?.link })) { box in
+                ConfirmPairSheet(link: box.link) { path = [] }
+            }
+            // First run, step 3: right after the first pairing.
+            .fullScreenCover(isPresented: Binding(get: { app.showNotificationStep && !covered }, set: { if !$0 { app.showNotificationStep = false } })) {
+                NotificationStepView()
+            }
     }
 
     /// A cold launch from the control waits until the computers are loaded.
@@ -80,6 +84,13 @@ struct RootView: View {
     }
 
     private var covered: Bool { app.prefs.appLock && (app.lock.locked || phase != .active) }
+
+    private func syncCover() {
+        guard covered else { return cover.hide() }
+        cover.show(LockView(phase: phase)
+            .environment(app)
+            .modifier(Themed(choice: app.prefs.theme, appearance: store.appearance)))
+    }
 
     @ViewBuilder private var content: some View {
         if !store.ready && !(app.prefs.appLock && app.lock.locked) {
@@ -145,17 +156,79 @@ struct LinkBox: Identifiable {
     var id: String { link.room + link.relayUrl }
 }
 
-/// Shown over everything while the app lock is on.
+/// Hosts the lock cover in a window of its own over the app's, so it hides
+/// sheets, alerts and menus as well as the screen under them. Shown at once
+/// (the app switcher snapshot is taken as the app leaves), faded out.
+@MainActor
+final class CoverWindow {
+    /// The scene RootView is in (iPad can have several).
+    weak var scene: UIWindowScene?
+    private var window: UIWindow?
+
+    func show(_ view: some View) {
+        if let window, let host = window.rootViewController as? UIHostingController<AnyView> {
+            host.rootView = AnyView(view)
+            window.layer.removeAllAnimations()
+            window.alpha = 1
+            window.isHidden = false
+            return
+        }
+        guard let scene = scene ?? UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first
+        else { return }
+        let w = UIWindow(windowScene: scene)
+        w.windowLevel = .alert + 1
+        let host = UIHostingController(rootView: AnyView(view))
+        host.view.backgroundColor = .clear
+        w.rootViewController = host
+        w.isHidden = false
+        window = w
+    }
+
+    func hide() {
+        guard let window, !window.isHidden else { return }
+        UIView.animate(withDuration: 0.15, delay: 0, options: [.curveEaseOut, .beginFromCurrentState]) {
+            window.alpha = 0
+        } completion: { done in
+            if done { window.isHidden = true }
+        }
+    }
+}
+
+/// Reports the window scene a view is in.
+struct SceneReader: UIViewRepresentable {
+    let found: (UIWindowScene) -> Void
+
+    func makeUIView(context: Context) -> Probe {
+        let v = Probe()
+        v.found = found
+        v.isUserInteractionEnabled = false
+        return v
+    }
+
+    func updateUIView(_ uiView: Probe, context: Context) {}
+
+    final class Probe: UIView {
+        var found: ((UIWindowScene) -> Void)?
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if let scene = window?.windowScene { found?(scene) }
+        }
+    }
+}
+
+/// Shown over everything while the app lock is on, on the app's own background.
 struct LockView: View {
+    /// RootView's: the cover's window is not part of the SwiftUI scene, so it
+    /// would not see the phase change.
+    let phase: ScenePhase
     @Environment(AppModel.self) private var app
     @Environment(\.palette) private var palette
-    @Environment(\.scenePhase) private var phase
     @State private var prompted = false
 
     var body: some View {
         VStack(spacing: 20) {
             Spacer()
-            CatMark().frame(width: 72, height: 72).foregroundStyle(palette.accent)
+            BrandTile().frame(width: 88, height: 88)
             Text("Nekko Agent").font(.title2.weight(.semibold)).foregroundStyle(palette.ink)
             if app.lock.locked && phase == .active {
                 Button {
@@ -169,7 +242,7 @@ struct LockView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(palette.paper)
+        .background(palette.paper.ignoresSafeArea())
         // Ask once per return to the app: the Face ID sheet itself makes the
         // scene inactive and active again, which used to ask again after Cancel.
         .task(id: phase) {
@@ -181,21 +254,35 @@ struct LockView: View {
     }
 }
 
-/// The outline Nekko head (same path as the desktop's and Android's mark, simplified).
+/// The Nekko head, the brand mark: the same path as the app icon and the
+/// opening animation (BRAND_HEAD), filled in the foreground style.
 struct CatMark: View {
+    private static let head = SVGPath.parse(SplashCells.brandHead)
+
     var body: some View {
         Canvas { ctx, size in
-            let w = size.width, h = size.height
-            var p = Path()
-            p.move(to: CGPoint(x: w * 0.14, y: h * 0.86))
-            p.addLine(to: CGPoint(x: w * 0.14, y: h * 0.18))
-            p.addLine(to: CGPoint(x: w * 0.36, y: h * 0.36))
-            p.addQuadCurve(to: CGPoint(x: w * 0.64, y: h * 0.36), control: CGPoint(x: w * 0.5, y: h * 0.30))
-            p.addLine(to: CGPoint(x: w * 0.86, y: h * 0.18))
-            p.addLine(to: CGPoint(x: w * 0.86, y: h * 0.86))
-            p.addArc(center: CGPoint(x: w * 0.5, y: h * 0.86), radius: w * 0.36, startAngle: .degrees(0), endAngle: .degrees(180), clockwise: true)
-            p.closeSubpath()
-            ctx.stroke(p, with: .foreground, style: StrokeStyle(lineWidth: max(1.5, w / 40), lineCap: .butt, lineJoin: .miter))
+            let b = Self.head.boundingRect
+            let k = min(size.width / b.width, size.height / b.height)
+            let place = CGAffineTransform(translationX: (size.width - b.width * k) / 2 - b.minX * k,
+                                          y: (size.height - b.height * k) / 2 - b.minY * k)
+                .scaledBy(x: k, y: k)
+            ctx.fill(Self.head.applying(place), with: .foreground, style: FillStyle(eoFill: true))
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+/// The app icon as a view: the white head on the indigo-to-lavender tile
+/// (App/Assets.xcassets/AppIcon.appiconset/icon.svg), with iOS's corner.
+struct BrandTile: View {
+    var body: some View {
+        GeometryReader { geo in
+            let side = min(geo.size.width, geo.size.height)
+            RoundedRectangle(cornerRadius: side * 0.225, style: .continuous)
+                .fill(LinearGradient(colors: [Color(hex: 0x453A92), Color(hex: 0x9D8CE6)], startPoint: .leading, endPoint: .trailing))
+                .overlay { CatMark().foregroundStyle(.white).padding(side * 0.13) }
+                .frame(width: side, height: side)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .accessibilityHidden(true)
     }

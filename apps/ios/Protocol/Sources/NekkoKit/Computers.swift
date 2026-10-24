@@ -828,12 +828,13 @@ public final class ComputersStore {
     }
 
     /// Start a chat on the computer with a model, a folder and a tool policy.
-    public func createChat(providerId: String, modelId: String, workspaceId: String?, mode: PcSettings.ChatMode?) async throws -> String {
+    public func createChat(providerId: String, modelId: String, workspaceId: String?, mode: PcSettings.ChatMode?, effort: Effort? = nil) async throws -> String {
         let r = try remote()
         let created = try await r.call(Channels.sessionCreate, workspaceId.map { [.string($0)] } ?? [])
         guard let session = Session.from(created) else { throw RelayError("Your computer didn’t create the chat.") }
         var options: [String: JSONValue] = ["providerId": .string(providerId), "modelId": .string(modelId)]
         if let mode { options["mode"] = .string(mode.rawValue) }
+        if let effort { options["effort"] = .string(effort.rawValue) }
         do {
             // A mode above the computer's default needs Face ID (`call(raising:)`).
             _ = try await call(raising: Channels.sessionSetOptions, [.string(session.id), .object(options)])

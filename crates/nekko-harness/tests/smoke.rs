@@ -9,7 +9,8 @@
 //! ```
 //!
 //! (The variable is set on the test command by the person running it. The
-//! harness itself never sets `CLAUDE_CONFIG_DIR`.)
+//! harness sets `CLAUDE_CONFIG_DIR` only for a named account, and this test
+//! names none.)
 
 use nekko_harness::{
     LaunchSpec, Mapped, Mapper, PermissionMode, Session, SessionStart, TurnExit, TurnInput, auth_status, locate,
@@ -36,7 +37,7 @@ async fn signed_out_end_to_end() {
     let config = isolated();
     let bin = locate(None).await.expect("claude on PATH");
     eprintln!("claude {} at {}", bin.version, bin.path.display());
-    let status = auth_status(&bin).await.expect("auth status");
+    let status = auth_status(&bin, None).await.expect("auth status");
     assert!(!status.logged_in, "{status:?}");
     assert_eq!(status.auth_method, "none");
 
@@ -52,6 +53,7 @@ async fn signed_out_end_to_end() {
         mcp_config: None,
         permission_prompt_tool: None,
         add_dirs: Vec::new(),
+        config_dir: None,
     })
     .expect("spawn");
     let (cancel, steering) = (Cancel::default(), Steering::default());

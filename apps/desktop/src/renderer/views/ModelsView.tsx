@@ -9,7 +9,8 @@ import { useStore } from '../store.js';
 import { Badge, Toggle } from '../components/primitives/index.js';
 import { SubscriptionSignIn } from '../components/SubscriptionSignIn.js';
 import { AddProvider, SUBSCRIPTION_KINDS, reconnectProviderConfig } from '../components/providers/AddProvider.js';
-import { ClaudeWhyLink } from '../components/claude/ClaudeAgent.js';
+import { ClaudeWhyLink, useClaudeCodeStatus } from '../components/claude/ClaudeAgent.js';
+import { claudeSourceLine, isClaudeKind } from '../components/claude/ClaudeSetup.js';
 import { PlusIcon, TrashIcon, CheckIcon, StarIcon } from '../icons.js';
 import { ContextMenu, ContextAction } from '../components/ContextMenu.js';
 import { RuntimeCard } from '../components/runtimes/RuntimeCard.js';
@@ -61,7 +62,7 @@ export function ModelsView() {
   // Keep this flow mounted through saving so its completion step does not disappear.
   const [firstSetup] = useState(() => needsProviderSetup(providers, useStore.getState().activeModelId ?? useStore.getState().models[0]?.id));
   const [adding, setAdding] = useState(false);
-  // A notice action ("Connect Claude Agent", "Add API key") opens the form on a kind.
+  // A notice action ("Use my subscription", "Add API key") opens the form on a kind.
   const [addKind, setAddKind] = useState<ProviderKind | undefined>();
   const requestedKind = useStore((s) => s.addProviderKind);
   useEffect(() => {
@@ -92,7 +93,10 @@ export function ModelsView() {
   // server Nekko Agent installs, holds models for, and configures, so a generic
   // provider card could never have carried it.
   const local = providers.filter((p) => isLocal(p.kind) && p.kind !== 'llamacpp');
-  const cloud = providers.filter((p) => !isLocal(p.kind));
+  // Claude gets its own group: subscription accounts (through Claude Code) and
+  // API or cloud accounts side by side, each card saying where it comes from.
+  const claude = providers.filter((p) => isClaudeKind(p.kind));
+  const cloud = providers.filter((p) => !isLocal(p.kind) && !isClaudeKind(p.kind));
 
   if (firstSetup) return <div className="h-full overflow-y-auto"><FirstProviderSetup /></div>;
 
@@ -129,6 +133,13 @@ export function ModelsView() {
               providers: local,
             },
             {
+              key: 'claude',
+              title: 'Claude',
+              accent: '#d97757',
+              subtitle: claudeGroupSubtitle(claude),
+              providers: claude,
+            },
+            {
               key: 'cloud',
               title: 'Cloud',
               accent: 'var(--info)',
@@ -160,6 +171,26 @@ export function ModelsView() {
       </div>
     </div>
   );
+}
+
+/** "2 subscription accounts through Claude Code, 1 API account". */
+function claudeGroupSubtitle(providers: ProviderConfig[]): string {
+  const subs = providers.filter((p) => p.kind === 'claude-code').length;
+  const api = providers.length - subs;
+  const n = (k: number, what: string) => `${k} ${what} account${k === 1 ? '' : 's'}`;
+  if (!providers.length) return 'Your subscription through Claude Code, or an API or cloud account.';
+  return [subs && `${n(subs, 'subscription')} through Claude Code`, api && n(api, 'API')].filter(Boolean).join(', ');
+}
+
+/** Where a Claude card's models come from (subscription or API, and which account). */
+function ClaudeSource({ provider }: { provider: ProviderConfig }) {
+  // Only a subscription account needs Claude Code's own status; API cards describe themselves.
+  return provider.kind === 'claude-code' ? <ClaudeCodeSource provider={provider} /> : <p className="claude-source">{claudeSourceLine(provider)}</p>;
+}
+
+function ClaudeCodeSource({ provider }: { provider: ProviderConfig }) {
+  const { status } = useClaudeCodeStatus(provider.id);
+  return <p className="claude-source">{claudeSourceLine(provider, status)}</p>;
 }
 
 const LIMIT_STATUS_COLOR: Record<LimitWindow['status'], string> = {
@@ -343,7 +374,7 @@ function RetiredClaudePlan({ provider, onChanged }: { provider: ProviderConfig; 
     <div className="mt-3 space-y-2 rounded-xl border p-3 text-[12px]" style={{ borderColor: 'var(--line)' }}>
       <p className="text-ink-soft">
         Nekko Agent no longer signs in to Claude plans, so this card is turned off and its saved Claude sign-in was deleted.
-        Add an Anthropic API key to keep using it, billed per token to your Anthropic account, or keep using your plan through Claude Agent, which runs your installed Claude Code.
+        Add an Anthropic API key to keep using it, billed per token to your Anthropic account, or keep using your plan through the Subscription option, which runs your installed Claude Code.
       </p>
       <div className="flex gap-2">
         <input
@@ -360,7 +391,7 @@ function RetiredClaudePlan({ provider, onChanged }: { provider: ProviderConfig; 
       </div>
       {error && <p style={{ color: 'var(--danger)' }}>{error}</p>}
       <div className="flex flex-wrap items-center gap-2">
-        <button className="btn btn-outline py-1.5 text-[12px]" onClick={() => useStore.getState().openAddProvider('claude-code')}>Use Claude Agent instead</button>
+        <button className="btn btn-outline py-1.5 text-[12px]" onClick={() => useStore.getState().openAddProvider('claude-code')}>Use my subscription instead</button>
         <ClaudeWhyLink label="What works with a Claude plan?" />
       </div>
     </div>
@@ -634,7 +665,8 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
             )}
             {provider.discovered && <span className="chip">discovered</span>}
           </div>
-          {(!local || !enabled) && <p className="mt-0.5 font-mono text-[11px] text-ink-faint">{provider.baseUrl}</p>}
+          {isClaudeKind(provider.kind) && <ClaudeSource provider={provider} />}
+          {(!local || !enabled) && provider.baseUrl && <p className="mt-0.5 font-mono text-[11px] text-ink-faint">{provider.baseUrl}</p>}
         </div>
         <div className="flex shrink-0 items-center gap-1">
         <Toggle

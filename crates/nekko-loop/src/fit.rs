@@ -43,6 +43,48 @@ pub fn is_context_overflow(message: &str) -> bool {
     NEEDLES.iter().any(|n| lower.contains(n))
 }
 
+/// A context overflow said in the user's terms: the window the model was
+/// loaded with, what this chat needed and the fix, when the server's error
+/// carries the numbers (llama.cpp and LM Studio: `n_ctx`, `n_prompt_tokens`);
+/// else the error as it came. Still an overflow by `is_context_overflow`.
+pub fn overflow_message(message: &str) -> String {
+    let (Some(window), Some(needed)) = (error_number(message, "n_ctx"), error_number(message, "n_prompt_tokens"))
+    else {
+        return message.to_string();
+    };
+    format!(
+        "The model is loaded with a {window}-token context window, and this chat needs {needed} tokens. \
+         Reload the model with a larger context length (16384 or more) in your model server, then send again."
+    )
+}
+
+/// The window and the prompt size an overflow names, from the server's error
+/// (`n_ctx`, `n_prompt_tokens`) or from `overflow_message`'s sentence.
+pub fn overflow_sizes(message: &str) -> Option<(u64, u64)> {
+    if let (Some(w), Some(n)) = (error_number(message, "n_ctx"), error_number(message, "n_prompt_tokens")) {
+        return Some((w, n));
+    }
+    let number_before = |end: &str| -> Option<u64> {
+        let head = &message[..message.find(end)?];
+        let digits: String = head.chars().rev().take_while(char::is_ascii_digit).collect();
+        digits.chars().rev().collect::<String>().parse().ok()
+    };
+    Some((number_before("-token context window")?, number_before(" tokens. Reload the model")?))
+}
+
+/// The context window a server's overflow error says the model was loaded
+/// with (llama.cpp and LM Studio: `"n_ctx":8192`).
+pub fn reported_window(message: &str) -> Option<f64> {
+    error_number(message, "n_ctx").map(|w| w as f64).filter(|w| *w > 0.0)
+}
+
+/// `"key":123` in an error body.
+fn error_number(message: &str, key: &str) -> Option<u64> {
+    let at = message.find(&format!("\"{key}\":"))? + key.len() + 3;
+    let digits: String = message[at..].trim_start().chars().take_while(char::is_ascii_digit).collect();
+    digits.parse().ok()
+}
+
 /// `elidedToolOutput`.
 pub fn elided_tool_output(chars: usize) -> String {
     format!(
@@ -147,5 +189,22 @@ mod tests {
         assert!(is_context_overflow("the request exceeds the available context size, try increasing it"));
         assert!(!is_context_overflow("429 rate limit: too many tokens per min"));
         assert!(!is_context_overflow("fetch failed"));
+    }
+
+    #[test]
+    fn an_overflow_with_numbers_says_the_window_and_the_fix() {
+        let raw = r#"Model stream failed: Engine protocol predict request returned 400: {"error":{"code":400,"message":"request (10510 tokens) exceeds the available context size (8192 tokens), try increasing it","type":"exceed_context_size_error","n_prompt_tokens":10510,"n_ctx":8192}}"#;
+        let said = overflow_message(raw);
+        assert!(
+            said.starts_with("The model is loaded with a 8192-token context window, and this chat needs 10510 tokens.")
+        );
+        assert!(is_context_overflow(&said));
+        assert_eq!(reported_window(raw), Some(8192.0));
+        assert_eq!(overflow_sizes(raw), Some((8192, 10510)));
+        assert_eq!(overflow_sizes(&said), Some((8192, 10510)));
+        assert_eq!(overflow_sizes("This model's maximum context length is 8192 tokens"), None);
+        assert_eq!(reported_window("This model's maximum context length is 8192 tokens"), None);
+        let plain = "anthropic 400: prompt is too long";
+        assert_eq!(overflow_message(plain), plain);
     }
 }

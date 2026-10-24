@@ -2,6 +2,7 @@
   "defaults": {
     "theme": "system",
     "promptCaching": true,
+    "phoneChanges": true,
     "accent": "#6d5efc",
     "sandboxMode": "workspace-jail",
     "providers": [],

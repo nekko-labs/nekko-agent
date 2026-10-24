@@ -291,7 +291,7 @@ export interface AppSettings {
   skipDeleteConfirmation?: boolean;
   /**
    * Let paired phones see a read-only diff of the files the agent changed in a
-   * chat (Settings → Remote access). Off unless set. Phones can never accept,
+   * chat (Settings → Remote access). On by default; only `false` turns it off. Phones can never accept,
    * revert or edit changes, read other files or open terminals.
    */
   phoneChanges?: boolean;

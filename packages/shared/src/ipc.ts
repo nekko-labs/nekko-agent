@@ -724,7 +724,8 @@ export interface NekkoApi {
   /** Shells the host detected as available to launch. */
   listShells(): Promise<ShellOption[]>;
   /** Spawn a PTY-backed shell, optionally scoped to a project / cwd / shell. */
-  createTerminal(opts?: { workspaceId?: string; sessionId?: string; cwd?: string; title?: string; shell?: string; cols?: number; rows?: number }): Promise<TerminalInfo>;
+  /** `claudeAccount`: run `claude` there on that Claude Code account (sets `CLAUDE_CONFIG_DIR`; a checked name, never a path). */
+  createTerminal(opts?: { workspaceId?: string; sessionId?: string; cwd?: string; title?: string; shell?: string; cols?: number; rows?: number; claudeAccount?: string }): Promise<TerminalInfo>;
   /** Fetch current info + retained raw scrollback (for reattaching a renderer); `maxBytes` keeps only the tail. */
   terminalSnapshot(id: string, opts?: { maxBytes?: number }): Promise<TerminalSnapshot | null>;
   /** Host aliases from the computer's ~/.ssh/config (display fields only). */
@@ -1046,8 +1047,12 @@ export interface NekkoApi {
   getClaudeCapability(providerId: string, capability: import('./claude-policy.js').ClaudeCapability): Promise<import('./claude-policy.js').ClaudeCapabilityStatus>;
   /** Plan usage for a Claude provider: none today; example data in the dev-only preview. */
   getClaudePlanUsage(providerId: string): Promise<import('./claude-policy.js').ClaudePlanUsageStatus>;
-  /** Whether the user's Claude Code is installed and signed in; records it for `providerId`'s policy rows. */
-  getClaudeCodeStatus(providerId?: string): Promise<import('./claude-policy.js').ClaudeCodeStatus>;
+  /**
+   * Whether the user's Claude Code is installed and signed in; records it for
+   * `providerId`'s policy rows. Before a provider is saved, `account` names the
+   * Claude Code account to check (none: the default login).
+   */
+  getClaudeCodeStatus(providerId?: string, account?: string): Promise<import('./claude-policy.js').ClaudeCodeStatus>;
   /** Connect configured MCP servers and return their status + tools. */
   getMcpStatus(): Promise<import('./mcp.js').McpServerStatus[]>;
   /** Probe for a local Hypergate daemon (`hypergated`) and return its gateway info. */
