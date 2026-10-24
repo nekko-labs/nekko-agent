@@ -23,7 +23,13 @@ app.whenReady().then(async () => {
   const check = async (name, expression) => { await sleep(120); if (!await run(expression)) throw Error(name); report.checks.push(name); };
   const capture = async (name, wait = 350) => { await sleep(wait); const file = path.join(runDir, name + '.png'); fs.writeFileSync(file, (await win.capturePage(undefined, { stayHidden: true, stayAwake: false })).toPNG()); report.captures.push(file); };
   const mouse = (type, x, y) => win.webContents.sendInputEvent({ type, x: Math.round(x), y: Math.round(y), button: 'left', clickCount: 1 });
-  const rectOf = sel => run(`(()=>{const r=document.querySelector(${JSON.stringify(sel)}).getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height}})()`);
+  // One fixed script per element, so no page code is ever built from a string.
+  const RECTS = {
+    strip3: "[data-wall-pane='p3'] [data-pane-title-strip]", strip2: "[data-wall-pane='p2'] [data-pane-title-strip]",
+    left: "[data-wall-pane='p1']", card: '.wall-held-card', stage: '.command-wall-pane-stage',
+  };
+  const RECT_SCRIPTS = Object.fromEntries(Object.entries(RECTS).map(([key, sel]) => [key, `(()=>{const r=document.querySelector("${sel.replaceAll('"', '')}").getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height}})()`]));
+  const rectOf = key => run(RECT_SCRIPTS[key]);
   const boxes = () => run(`JSON.stringify([...document.querySelectorAll('.command-wall-window')].map(w=>[w.dataset.wallPane,w.style.left,w.style.top,w.style.width,w.style.height]))`);
   const current = !process.env.NEKKO_TEST_REVISION;
   try {
@@ -36,8 +42,8 @@ app.whenReady().then(async () => {
     await sleep(1200);
     await check('three windows on the board', "document.querySelectorAll('.command-wall-window').length===3");
     await capture('1-rest');
-    const strip = await rectOf("[data-wall-pane='p3'] [data-pane-title-strip]");
-    const left = await rectOf("[data-wall-pane='p1']");
+    const strip = await rectOf('strip3');
+    const left = await rectOf('left');
     const grab = { x: strip.x + 60, y: strip.y + strip.height / 2 };
     const under = { x: left.x + left.width / 2, y: left.y + left.height - 60 };
     if (!current) {
@@ -62,10 +68,10 @@ app.whenReady().then(async () => {
       for (let i = 1; i <= frames; i++) { mouse('mouseMove', grab.x + (under.x - grab.x) * i / frames, grab.y + (under.y - grab.y) * i / frames); await capture(`frame-${String(i).padStart(2, '0')}`, 40); }
       await capture('3-zone-under');
       await check('zone opens under the left window', "(()=>{const z=document.querySelector('[data-wall-pane=p3]').getBoundingClientRect();const l=document.querySelector('[data-wall-pane=p1]').getBoundingClientRect();return z.top>l.bottom-1 && Math.abs(z.left-l.left)<2})()");
-      const card = await rectOf('.wall-held-card');
+      const card = await rectOf('card');
       if (Math.abs(card.x - (under.x - (grab.x - strip.x) * card.width / strip.width)) > 40) throw Error('card did not follow the pointer');
       report.checks.push('card follows the pointer');
-      const stage = await rectOf('.command-wall-pane-stage');
+      const stage = await rectOf('stage');
       mouse('mouseMove', stage.x + 4, stage.y + stage.height / 2);
       await capture('4-zone-edge');
       await check('left board edge previews a full-height column', "(()=>{const z=document.querySelector('[data-wall-pane=p3]').getBoundingClientRect();const s=document.querySelector('.command-wall-pane-stage').getBoundingClientRect();return Math.abs(z.left-s.left)<2 && z.height>s.height-4})()");
@@ -75,7 +81,7 @@ app.whenReady().then(async () => {
       await check('drop commits and clears the hold', "!document.querySelector('[data-wall-lifted]') && !document.querySelector('.wall-held-card')");
       const settled = await boxes();
       // Escape puts it back.
-      const strip2 = await rectOf("[data-wall-pane='p2'] [data-pane-title-strip]");
+      const strip2 = await rectOf('strip2');
       mouse('mouseMove', strip2.x + 60, strip2.y + 10); mouse('mouseDown', strip2.x + 60, strip2.y + 10); await sleep(100);
       mouse('mouseMove', under.x, 120); await sleep(300);
       win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' }); await sleep(400);
