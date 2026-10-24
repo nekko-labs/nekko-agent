@@ -2275,3 +2275,8 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [x] **T200c** A small loaded window: an overflow caused by the system prompt and tools filling most of a small window retries once without tools; an overflow that still fails names the window and the fix (`nekko-loop` `run.rs`, `fit::overflow_message`, `fit::reported_window`). Tests: `retry.rs` `a_window_too_small_*`, `a_window_that_is_not_small_keeps_its_tools_for_compaction`. Auto-continue does not compact such an overflow (`overhead_overflow`, test `an_overflow_on_the_prompt_and_tools_alone_is_not_compacted`). Done: 2026-10-23
 - [x] **T200d** Change key: no `touchIDAuthenticationAllowableReuseDuration`; a context the Secure Enclave refuses (CryptoTokenKit -5) is dropped and asked again. Done: 2026-10-23
 - [ ] **T200e** Check T200a, T200b and T200d on a device.
+
+### T205: Limits on what grows in the data folder (2026-10-24, #1035) · [spec](spec/platform/data-folder-growth-limits.md)
+- [x] **T205a** Chat command logs cut to their last 4 MB of whole lines past 5 MB (`keep_file_tail` in `agent_logs.rs`). Test: `a_long_command_log_keeps_its_last_whole_lines`. Done: 2026-10-24
+- [x] **T205b** `quota-history.jsonl` keeps 30 days, pruned at startup (`prune_quota_history`). Test: `quota_history_keeps_thirty_days`. Done: 2026-10-24
+- [x] **T205c** Abandoned `.part` downloads untouched for 7 days removed at startup (`sweep_stale_parts`). Test: `only_old_part_files_go`. Done: 2026-10-24
