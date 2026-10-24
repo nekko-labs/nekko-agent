@@ -59,7 +59,7 @@ with `npx vitest run --project apps/desktop`, or run one package as before with
 - Add tests in `crates/` for new engine behavior (providers, guardrails, agent loop, context); real-binary tests of the daemon go in `crates/nekkod/tests/daemon`.
 - Desktop UI flows: add a step to a journey in `apps/desktop/e2e/` (`npm run test:e2e -w @nekko-agent/desktop`, hidden windows only; see its README) rather than a new one-off script.
 - Match the surrounding code style; keep changes focused.
-- For provider changes, verify against a real local server: point a provider at it and run a chat through the CLI on this checkout's nekkod (`NEKKOD_PATH=target/debug/nekkod node apps/cli/dist/index.js chat "hi" --new`).
+- For provider changes, verify against a real local server: point a provider at it and run a chat through the CLI on this checkout's nekkod (`NEKKOD_PATH=target/debug/nekkod node apps/cli/dist/index.js chat "hi" --new`). A local server may not be on its default port (LM Studio's is 1234, but it can be moved): `lms server status` reports where LM Studio is listening, and `lms ls --json` is the only place it publishes a model's `sizeBytes` (its HTTP API has no size or layer geometry).
 
 ## Documentation
 
