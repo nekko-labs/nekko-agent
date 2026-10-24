@@ -1019,6 +1019,8 @@ speed. Source: [#152](https://github.com/nekko-labs/nekko-agent/pull/152).
 
 ## Unmeasured
 
+- CI scoped to what a change touches (2026-10-24): before, measured on #1023 (two Swift UI test files with `ci:macos`, CI run 40133900216, CodeQL run 40133900149): `daemon (macos-latest)` 274 s, `capture (macos-latest)` 289 s, `build` 147 s, CodeQL Rust 281 s, JS/TS 102 s, Python 42 s, Actions 43 s, Swift 799 s. After: per the scope rules and their tests, the same change runs only CodeQL Swift of these; no CI run of a native-only PR under the new rules has been measured yet. Update with that run's numbers.
+
 - Focus surface refinement (2026-10-24): removed navigation SVG path/clip animation and ResizeObservers, retaining only width and text-opacity reveal. Focus corners reuse native CSS squircle with rounded fallback, without added masks or blur. CPU/GPU/frame times before and after: not measured. No zero-cost or smoothness claim; collect matched renderer traces to quantify the effect.
 
 - Focused panel motion: navigation morph shortened to 180/160 ms and backdrop/text blur removed. These are configured durations, not measured frame times. Before and after CPU, GPU, energy and frame-time cost: not measured. Collect matched renderer traces before claiming a performance improvement.

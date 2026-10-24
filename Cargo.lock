@@ -1962,6 +1962,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "nekko-runner"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "nekko-sandbox"
 version = "0.1.0"
 dependencies = [

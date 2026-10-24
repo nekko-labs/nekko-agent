@@ -1,7 +1,7 @@
 // First, so every module below sees the real packaging state in dev.
 import './devRuntime.js';
 import { NOTIFICATION_VISIBILITY_CHANNEL, visibleNotificationSession, visibleNotificationView, notificationWindowContext, trustedNotificationReporter } from '../notificationVisibility.js';
-import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, screen, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, screen, shell, systemPreferences } from 'electron';
 import { fileURLToPath } from 'url';
 import { join, resolve, sep } from 'path';
 import { existsSync, readFileSync } from 'fs';
@@ -22,10 +22,12 @@ import { createCloseIntent, readWParam, WM_CLOSE, WM_SYSCOMMAND } from './closeI
 import { startMainNotifications, createNativeNotificationPoster } from './notifications.js';
 import { runCeremonyWindow } from './webauthnWindow.js';
 import { WEBAUTHN_CEREMONY_CHANNEL } from '../webauthnCeremony.js';
-import { createDisplayWindows, type DisplayWindows } from './displayWindows.js';
+import { createDisplayWindows, type DisplayWindows, type SpacesApi } from './displayWindows.js';
+import { readSpaces, switchDesktop } from './spaces.js';
 import {
   DISPLAY_ARG, DISPLAYS_CHANGED_EVENT, DISPLAYS_CLAIM_CHANNEL, DISPLAYS_LIST_CHANNEL, DISPLAYS_PLACED_EVENT,
   DISPLAYS_PLACEMENT_CHANNEL, DISPLAYS_REPORT_CHANNEL, DISPLAYS_TOGGLE_CHANNEL, MAIN_KEY,
+  DISPLAYS_DESKTOP_CHANNEL, DISPLAYS_GO_CHANNEL, DISPLAYS_SPACES_MODE_CHANNEL, type GoTarget,
 } from '../displayWindows.js';
 const applicationWindows = new Set<number>();
 
@@ -343,6 +345,7 @@ function createWindow(): void {
   // Hidden to the tray: the other screens' windows go with it, and come back with it.
   win.on('hide', () => displayWindows?.setVisible(false));
   win.on('show', () => displayWindows?.setVisible(true));
+  win.on('focus', () => displayWindows?.mainFocused());
 
   wireAppWindow(win);
 }
@@ -363,6 +366,7 @@ function registerDisplayWindows(dataDir: string): void {
         if (!win.isDestroyed() && applicationWindows.has(win.webContents.id)) win.webContents.send(DISPLAYS_CHANGED_EVENT, state(win.webContents.id));
       }
     },
+    spaces: process.platform === 'darwin' ? macSpaces() : undefined,
     placed: (key, sessionId) => {
       const target = key === MAIN_KEY ? mainWindow : windows.windowFor(key);
       if (target && !target.isDestroyed()) target.webContents.send(DISPLAYS_PLACED_EVENT, sessionId);
@@ -385,8 +389,38 @@ function registerDisplayWindows(dataDir: string): void {
     if (!trusted(e) || typeof sessionId !== 'string') throw new Error('bad request');
     return windows.claim(e.sender.id, sessionId, mode === 'self' || mode === 'place' ? mode : 'auto');
   });
+  ipcMain.handle(DISPLAYS_DESKTOP_CHANNEL, async (e, id: unknown, on: unknown) => {
+    if (!trusted(e) || typeof id !== 'string') throw new Error('bad request');
+    await windows.toggleDesktop(id, on === true);
+    return windows.state(e.sender.id);
+  });
+  ipcMain.handle(DISPLAYS_SPACES_MODE_CHANNEL, (e, mode: unknown) => {
+    if (!trusted(e)) throw new Error('untrusted');
+    windows.setSpacesMode(mode === 'switch' ? 'switch' : 'arrive');
+    return windows.state(e.sender.id);
+  });
+  ipcMain.handle(DISPLAYS_GO_CHANNEL, (e, target: unknown) => {
+    if (!trusted(e)) throw new Error('untrusted');
+    const t = (target && typeof target === 'object' ? target : {}) as Record<string, unknown>;
+    const n = typeof t.n === 'number' && Number.isInteger(t.n) && t.n > 0 && t.n < 100 ? t.n : null;
+    const go: GoTarget | null = t.kind === 'screen' && n ? { kind: 'screen', n }
+      : t.kind === 'desktop' && n ? { kind: 'desktop', n }
+      : t.kind === 'desktop' && (t.step === 1 || t.step === -1) ? { kind: 'desktop', step: t.step } : null;
+    if (!go) throw new Error('bad request');
+    return windows.go(go);
+  });
   ipcMain.on(DISPLAYS_REPORT_CHANNEL, (e, panes: unknown) => { if (trusted(e) && typeof panes === 'number') windows.report(e.sender.id, panes); });
   windows.start();
+}
+
+/** macOS desktops for the screen windows: live prefs, Accessibility, keystroke switching, the switch notification. */
+function macSpaces(): SpacesApi {
+  return {
+    read: () => readSpaces(),
+    trusted: (prompt) => systemPreferences.isTrustedAccessibilityClient(prompt),
+    switchTo: (from, to) => switchDesktop(from, to),
+    onChange: (listener) => { systemPreferences.subscribeWorkspaceNotification('NSWorkspaceActiveSpaceDidChangeNotification', listener); },
+  };
 }
 
 /**
