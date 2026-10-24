@@ -54,6 +54,20 @@ reference until this app reaches parity.
   re-read every time a chat opens. The computer adds each skill's instructions
   itself; the phone only ever sees names and descriptions. No `/goal`.
 
+- **Folding phones and tablets** (written, not yet run on a foldable): open
+  (600 dp or wider) shows two panes from `FoldingFeature` and the window size
+  class (`ui/panes/`): *Chats + Chat* first, also *Chat + Chat*, *Chat +
+  Monitors* and *Monitors + Chats*, with Swap, Focus and Replace with… in each
+  pane's header. Side by side when wide, stacked when tall (the list never
+  below a chat), the divider on the hinge or dragged 35–65; tabletop puts the
+  transcript above the hinge and the message box below it. Remembered per
+  computer on the phone. A message dragged to the other pane lands in its
+  message box, unsent.
+- **Monitors:** the computer's hardware load and temperatures, running chats,
+  what needs you (Allow / Deny / answer) and the next automations, from
+  `monitor:summary` every 10 s while on screen; a pane when open, the last row
+  of the chat list on any phone.
+
 **Not yet:** models on the phone, push notifications, Markdown rendering,
 files other than photos, thumbnails of sent photos, Play Store release. See `TASKS.md` → *Native Android app*.
 
@@ -75,6 +89,8 @@ apps/android/
 | Transcript | `protocol/.../Transcript.kt` | `apps/mobile/src/lib/transcript.ts` |
 | Chat logic | `app/.../chat/ChatController.kt` | `apps/mobile/src/chat/useRemoteChat.ts` |
 | Computers | `app/.../data/ComputersRepository.kt` | `apps/mobile/src/services/computers.ts` |
+| Posture and panes | `protocol/.../Posture.kt`, `protocol/.../Panes.kt` | `apps/ios/Protocol/Sources/NekkoKit/Posture.swift` |
+| Monitors | `protocol/.../MonitorSummary.kt` | `phoneMonitorView` in `packages/shared/src/phone-views.ts` |
 
 ## Security notes
 

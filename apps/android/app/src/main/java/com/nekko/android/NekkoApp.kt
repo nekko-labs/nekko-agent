@@ -10,6 +10,7 @@ import com.nekko.android.connection.ConnectionKeeper
 import com.nekko.android.data.AndroidSecureStore
 import com.nekko.android.data.ChatListFiles
 import com.nekko.android.data.NewChatDefaults
+import com.nekko.android.data.PaneLayouts
 import com.nekko.android.data.ComputersRepository
 import com.nekko.android.data.PhonePrefs
 import com.nekko.android.data.RelayRemoteFactory
@@ -41,6 +42,9 @@ class NekkoApp : Application() {
     lateinit var appLock: AppLock
         private set
     lateinit var newChatDefaults: NewChatDefaults
+    /** The folding-phone pane arrangement per computer (phone only). */
+    lateinit var paneLayouts: PaneLayouts
+        private set
     /** Text shared from other apps on its way to a chat's composer; memory only. */
     val shareInbox = ShareInbox()
     lateinit var connection: ConnectionKeeper
@@ -61,12 +65,16 @@ class NekkoApp : Application() {
         themePrefs = ThemePrefs(this)
         phonePrefs = PhonePrefs(this)
         newChatDefaults = NewChatDefaults(phonePrefs)
+        paneLayouts = PaneLayouts(phonePrefs)
         computers = ComputersRepository(
             store = AndroidSecureStore(this),
             remotes = RelayRemoteFactory(),
             scope = appScope,
             deviceName = ::deviceName,
-            onForget = newChatDefaults::forget,
+            onForget = { id ->
+                newChatDefaults.forget(id)
+                paneLayouts.forget(id)
+            },
         )
         chatLists = ChatListFiles(this)
         if (phonePrefs.get(ChatListFiles.ENABLED)) computers.chatListCache = chatLists

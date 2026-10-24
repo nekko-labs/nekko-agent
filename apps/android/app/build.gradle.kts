@@ -70,6 +70,9 @@ dependencies {
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material3)
     implementation(libs.compose.material.icons.extended)
+    // Folding phones: WindowInfoTracker's FoldingFeature and the window size class (Posture.from).
+    implementation(libs.androidx.window)
+    implementation(libs.compose.material3.adaptive)
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)
 
@@ -79,4 +82,6 @@ dependencies {
     androidTestImplementation(platform(libs.compose.bom))
     androidTestImplementation(libs.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.test.espresso.core)
+    // Fakes a FoldingFeature (Fold-in, Fold-out, Surface Duo) for the pane tests.
+    androidTestImplementation(libs.androidx.window.testing)
 }
