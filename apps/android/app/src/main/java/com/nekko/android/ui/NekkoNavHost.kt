@@ -97,8 +97,8 @@ fun NekkoNavHost(
     val window = rememberWindowPosture()
     val mode = window.mode
     val panes: PanesViewModel = viewModel(key = "panes") { PanesViewModel(PaneLayouts(phonePrefs)) }
-    val activeId by remember(repo) { repo.state.map { it.activeId }.distinctUntilChanged() }.collectAsStateWithLifecycle(repo.state.value.activeId)
-    LaunchedEffect(activeId) { panes.attach(activeId) }
+    // The panes follow the active computer; collected in an effect so composition never reads StateFlow.value.
+    LaunchedEffect(repo) { repo.state.map { it.activeId }.distinctUntilChanged().collect { panes.attach(it) } }
     LaunchedEffect(mode) {
         val was = panes.onMode(mode)
         // Closing the phone returns to the one-column app on the pane that had the keyboard.
