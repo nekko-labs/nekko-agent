@@ -836,7 +836,7 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
               onDrop={byProject ? (e) => { e.preventDefault(); e.stopPropagation(); dropOnBucket(b); } : undefined}
             >
               {!b.bare && <div
-                className="group flex items-center gap-1 rounded-lg px-1.5 py-1 hover:bg-surface-2"
+                className="agent-panel-group-heading group flex items-center gap-1 rounded-lg px-1.5 py-1 hover:bg-surface-2"
                 draggable={byProject && !!b.ws}
                 onContextMenu={sidebarOnly ? (e) => { e.preventDefault(); e.stopPropagation(); setViewMenu({ x: e.clientX, y: e.clientY }); } : undefined}
                 onDragStart={byProject && b.ws ? (e) => {
@@ -859,10 +859,10 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
                   }}
                 >
                   <svg
-                    className={`h-3 w-3 shrink-0 text-ink-faint transition-transform duration-200 ${isCollapsed ? '' : 'rotate-90'}`}
+                    className={`h-3 w-3 shrink-0 text-accent transition-transform duration-200 ${isCollapsed ? '' : 'rotate-90'}`}
                     viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
                   ><path d="M9 6l6 6-6 6" /></svg>
-                  <span className="truncate text-[11px] font-semibold uppercase tracking-wider text-ink-faint">{b.name}</span>
+                  <span className="agent-panel-group-label truncate font-semibold uppercase tracking-wider">{b.name}</span>
                   {isCollapsed && (items.length > 0 || completedGroup) && (
                     <span className="ml-1 shrink-0 rounded-full bg-surface-2 px-1.5 text-[10px] tabular-nums text-ink-faint">
                       {completedGroup ? done.length : items.length}
