@@ -65,6 +65,10 @@ Decision models' CoreML job, nekkod-npm's darwin build) and fails if any of them
 so the PR is not queued until they are green. macOS runners queue, so that can take an
 hour or more. Adding the label re-runs CI.
 
+On a PR, Native iOS checks dark mode only when the change touches colours
+(`scripts/ios-theme-scope.mjs`); add `ci:theme` to force light and dark for theme work
+the script cannot see. The 6-hourly run always checks both.
+
 ### Ready, not draft
 
 Open the PR **ready** once your own verification passes (focused tests, and for UI
