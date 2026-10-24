@@ -121,7 +121,8 @@ impl Link for HubLink {
         Arc::new(RelayAgent::spawn(
             &self.rt,
             Spawn {
-                url: nekko_remote::agent_url(relay_url, room, key, None),
+                // A Nekko Cloud machine presents its access token to the relay's enrolment gate (decision 0017).
+                url: nekko_remote::agent_url(relay_url, room, key, std::env::var("NEKKO_RELAY_ACCESS").ok().as_deref()),
                 secret: key.to_string(),
                 room: room.to_string(),
                 verify,

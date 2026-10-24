@@ -76,6 +76,12 @@
           "description": "Drive the agent on your computer from your phone, end-to-end encrypted."
         },
         {
+          "slug": "cloud-machines",
+          "title": "Nekko Cloud machines",
+          "source": "docs/CLOUD-MACHINES.md",
+          "description": "A sandboxed computer in the cloud your phone pairs with, seeing only what you put in its scope."
+        },
+        {
           "slug": "sync-encryption",
           "title": "Encrypted sync",
           "source": "docs/SYNC-ENCRYPTION.md",
