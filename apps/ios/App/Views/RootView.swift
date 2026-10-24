@@ -231,7 +231,7 @@ struct LockView: View {
     var body: some View {
         VStack(spacing: 20) {
             Spacer()
-            BrandTile().frame(width: 88, height: 88)
+            BrandMark().frame(width: 88, height: 88)
             Text("Nekko Agent").font(.title2.weight(.semibold)).foregroundStyle(palette.ink)
             if app.lock.locked && phase == .active {
                 Button {
@@ -275,19 +275,14 @@ struct CatMark: View {
     }
 }
 
-/// The app icon as a view: the white head on the indigo-to-lavender tile
-/// (App/Assets.xcassets/AppIcon.appiconset/icon.svg), with iOS's corner.
-struct BrandTile: View {
+/// The brand mark on its own: the head in the brand lavender, with no tile
+/// behind it, as the desktop, Android and the opening animation show it. The
+/// tiled square is only the Home Screen icon.
+struct BrandMark: View {
+    static let lavender = Color(red: 0x9d / 255, green: 0x8c / 255, blue: 0xe6 / 255)
+
     var body: some View {
-        GeometryReader { geo in
-            let side = min(geo.size.width, geo.size.height)
-            RoundedRectangle(cornerRadius: side * 0.225, style: .continuous)
-                .fill(LinearGradient(colors: [Color(hex: 0x453A92), Color(hex: 0x9D8CE6)], startPoint: .leading, endPoint: .trailing))
-                .overlay { CatMark().foregroundStyle(.white).padding(side * 0.13) }
-                .frame(width: side, height: side)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .accessibilityHidden(true)
+        CatMark().foregroundStyle(Self.lavender).accessibilityHidden(true)
     }
 }
 

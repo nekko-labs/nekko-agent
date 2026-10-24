@@ -63,7 +63,19 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > *Watch triggered* row, not a message from you. Only your own bubbles and an approval or question
 > card keep an outline. The chat list is flat too: project groups with their active and done
 > counts, a glyph beside each chat for what it is doing, and the computer as a pill above the
-> list that opens the computer menu.
+> list that opens the computer menu. A chat that needs you has a coloured bar down its left edge
+> and the raised hand.
+>
+> Each group opens with up to eight chats from the last two weeks (a chat that is working, needs
+> you or is pinned always shows), then **Show N more**. Tap a group's name to fold it. The
+> **view** button beside New chat arranges the list as the desktop's Agents panel does: **Group
+> by** project, status, date or none; **Sort by** manual, last updated or name; **Show**
+> previews, completed chats and empty groups; and **Reset to defaults**. Grouped by project,
+> touch and hold a group's name to drag it to a new place, or use **Reorder groups…** in the same
+> menu. The order is kept on the iPhone.
+>
+> Each time you come back to the app, the cat dissolves and the app fades in; the full opening
+> animation plays when the app starts.
 >
 > Tapping a computer in **Computers** opens its page: the round trip the phone measures (with a
 > sparkline), the model server and its loaded models, uptime, today's spend, the models of every
@@ -128,7 +140,7 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > - **`/` after what you've typed:** typing `/` after some words (after a space or on a new line)
 >   opens the same menu. Picking a skill keeps your words and adds the skill; picking a saved prompt
 >   puts its text in place of the `/`.
-> - **Continue and search:** the list opens with your most recent chat; search finds completed chats too.
+> - **Search:** finds completed chats too, and shows every match in each group.
 > - **Automations:** **Computers and settings → Automations** lists the computer's tasks and
 >   workflows with how each last went, and **Run now**. You set them up on the computer.
 > - **Pull requests:** a chip shows the chat's pull request and its checks. **Commit these changes**,

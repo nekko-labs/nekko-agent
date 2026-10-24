@@ -380,11 +380,16 @@ final class LiveRelayTests: XCTestCase {
         wait(for: [seeded], timeout: 20)
         attach(app, "beyond-5-forked")
 
-        // IO-25: the chat list offers to continue the most recent chat.
+        // The chat list, with its view menu (group, sort, show) in place of the old Continue card.
         app.navigationBars.buttons.element(boundBy: 0).tap()
-        let resume = app.buttons["chats.continue"].firstMatch
-        XCTAssertTrue(resume.waitForExistence(timeout: 15), "the Continue card")
-        attach(app, "beyond-6-continue")
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "chats.row").firstMatch.waitForExistence(timeout: 15), "the chats")
+        let viewMenu = app.buttons["chats.view"].firstMatch
+        XCTAssertTrue(viewMenu.waitForExistence(timeout: 5), "the view menu")
+        viewMenu.tap()
+        XCTAssertTrue(app.buttons["Group by"].firstMatch.waitForExistence(timeout: 5) || app.staticTexts["Group by"].firstMatch.exists, "Group by")
+        attach(app, "beyond-6-view-menu")
+        // Close the menu.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.95)).tap()
         auditAccessibility(app, "beyond-chats")
 
         // IO-26: the computer's automation, run from the phone; its answer comes back.
