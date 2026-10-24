@@ -18,7 +18,7 @@ final class ComputersTests: XCTestCase {
         row.tap()
         let edit = app.buttons["computer.edit"]
         XCTAssertTrue(edit.waitForExistence(timeout: 5), "the computer page's Edit menu")
-        edit.tap()
+        tapByFrame(edit, in: app)
         app.buttons["Rename"].tap()
         let name = app.alerts.textFields.firstMatch
         XCTAssertTrue(name.waitForExistence(timeout: 5))
@@ -27,7 +27,7 @@ final class ComputersTests: XCTestCase {
         let renamed = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "Studio")).firstMatch
         XCTAssertTrue(renamed.waitForExistence(timeout: 5), "Rename saved")
 
-        edit.tap()
+        tapByFrame(edit, in: app)
         app.buttons["Forget…"].tap()
         confirmForget(app)
         XCTAssertTrue(app.staticTexts["This computer was forgotten"].waitForExistence(timeout: 5), "the page says the computer is gone")
@@ -70,13 +70,20 @@ final class ComputersTests: XCTestCase {
     private func openMenu(_ app: XCUIApplication) {
         let m = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Computers and settings")).firstMatch
         XCTAssertTrue(m.waitForExistence(timeout: 10))
+        tapByFrame(m, in: app)
+    }
+
+    /// Tap a navigation bar menu button by coordinate once it has a real frame. A plain
+    /// tap() asks XCTest to scroll it to visible first, which fails with hit point
+    /// {-1, -1} for toolbar menus (the computer page's Edit menu too).
+    private func tapByFrame(_ e: XCUIElement, in app: XCUIApplication) {
         let deadline = Date().addingTimeInterval(10)
         while Date() < deadline {
-            let f = m.frame
-            if m.exists, !f.isEmpty, app.frame.contains(CGPoint(x: f.midX, y: f.midY)) { break }
+            let f = e.frame
+            if e.exists, !f.isEmpty, app.frame.contains(CGPoint(x: f.midX, y: f.midY)) { break }
             RunLoop.current.run(until: Date().addingTimeInterval(0.25))
         }
-        m.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        e.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
     }
 
     private func confirmForget(_ app: XCUIApplication) {

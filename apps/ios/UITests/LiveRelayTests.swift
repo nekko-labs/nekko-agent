@@ -386,7 +386,9 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "chats.row").firstMatch.waitForExistence(timeout: 15), "the chats")
         let viewMenu = app.buttons["chats.view"].firstMatch
         XCTAssertTrue(viewMenu.waitForExistence(timeout: 5), "the view menu")
-        viewMenu.tap()
+        // A toolbar menu: tap() can't scroll it to visible (hit point {-1, -1}), so tap its frame.
+        XCTAssertTrue(waitForFrame(viewMenu, in: app, 10), "the view menu never got a frame")
+        viewMenu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertTrue(app.buttons["Group by"].firstMatch.waitForExistence(timeout: 5) || app.staticTexts["Group by"].firstMatch.exists, "Group by")
         attach(app, "beyond-6-view-menu")
         // Close the menu.
