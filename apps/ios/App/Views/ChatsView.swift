@@ -547,6 +547,14 @@ struct ComputerMenu: View {
             Button { path.append(.settings) } label: { Label("Settings", systemImage: "gearshape") }
             Button { feedback = true } label: { Label("Send feedback", systemImage: "envelope") }
                 .accessibilityIdentifier("computer.feedback")
+            // The safety exits for the active computer (SK-8), a submenu away from any chat list.
+            if store.active != nil {
+                Divider()
+                Menu {
+                    SafetyExitItems()
+                } label: { Label("Sign out or stop", systemImage: "hand.raised") }
+                    .accessibilityIdentifier("chats.menu.safety")
+            }
         } label: {
             // The computer is the title's companion: its state, its name, and a chevron into the menu.
             HStack(spacing: 6) {

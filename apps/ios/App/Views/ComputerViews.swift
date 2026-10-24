@@ -93,6 +93,8 @@ struct ComputerDetailView: View {
                     LabeledContent("Nekko Agent", value: [v, s?.edition].compactMap { $0 }.joined(separator: " · "))
                 }
             } header: { SectionTitle("Connection") }
+            // Settings → This computer (SK-8): Security, sign out, stop remote access, quit.
+            ThisComputerSection(computerId: c.id)
         }
         .listStyle(.plain)
         .listRowSeparatorTint(palette.line)
