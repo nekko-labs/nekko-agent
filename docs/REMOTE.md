@@ -248,10 +248,10 @@ Keystore. The app drops any provider API keys your computer sends with its setti
 stores them.
 
 Manage devices from the same card: **rename** them, **revoke** one instantly (it's kicked live and
-denied from then on), or **Rotate secret** to cryptographically reset the room, which unpairs
+denied from then on), or **Sign out all phones** (formerly *Rotate secret*) to cryptographically reset the room, which unpairs
 everything at once. A revoked phone can come back only the way a new one does: choose **Pair a
 device** on the computer and scan the new QR from the phone (the one-time code is the proof). Older
-computers refused a revoked phone even then; on those, **Rotate secret** first.
+computers refused a revoked phone even then; on those, **Rotate secret** (its old name) first.
 
 Remote access survives restarts: if it was enabled, the agent reconnects when Nekko Agent starts.
 

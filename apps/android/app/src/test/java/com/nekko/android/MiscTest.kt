@@ -72,10 +72,10 @@ class MiscTest {
     }
 
     @Test
-    fun `a removed phone is told the steps on the computer, with Rotate secret as the fallback`() {
+    fun `a removed phone is told the steps on the computer, with Sign out all phones as the fallback`() {
         val copy = com.nekko.android.ui.components.deniedCopy(com.nekko.protocol.DenyReason.REVOKED)
         assertTrue(copy.contains("Pair a device"))
-        assertTrue(copy.contains("Rotate secret"))
+        assertTrue(copy.contains("Sign out all phones"))
     }
 
     @Test
