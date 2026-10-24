@@ -68,7 +68,7 @@ struct GaugeNeedle: Shape {
     func path(in rect: CGRect) -> Path {
         let c = CGPoint(x: rect.midX, y: rect.midY)
         let r = min(rect.width, rect.height) / 2 * 0.72
-        let a = Angle.degrees(150 + 240 * max(0, min(1, fraction))).radians
+        let a = CGFloat(Angle.degrees(150 + 240 * max(0, min(1, fraction))).radians)
         var p = Path()
         p.move(to: c)
         p.addLine(to: CGPoint(x: c.x + r * cos(a), y: c.y + r * sin(a)))
