@@ -5,6 +5,8 @@ import UIKit
 final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         OutboxRefresh.register()
+        // The folding-phone layout's hinge (none on today's iPhones; faked in the UI tests).
+        Hinge.install()
         return true
     }
 
