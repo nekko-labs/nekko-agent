@@ -12,7 +12,7 @@ Nekko gives a concise progress message before starting tool work and between mea
 
 File tools work within the chat's project by default. Searches can target a single file or directory, missing paths produce an explicit error, and large source files can be read by inclusive line ranges instead of becoming inaccessible after a character cutoff. Shell guidance names the platform's actual shell. ChatGPT conversations preserve assistant commentary/final-answer phases so a progress-only response continues the task rather than prematurely ending it.
 
-## User-started PR continuation (implemented, verification pending)
+## User-started PR continuation (implemented)
 
 After a settled assistant reply, a chat with a known open PR offers **Watch CI and
 merge when passing** and a secondary **Skip**, immediately below reply status.
@@ -33,6 +33,10 @@ closed PRs, interrupted replies, and busy/blocked turns do not offer this action
 Multiple open PRs get distinct labeled offers. No new credentials, external
 services, scheduler, or background activity are introduced before user action.
 
-Verification: focused eligibility/render tests and desktop typecheck are required.
-User interaction, durable registration/wake, and matching desktop visual evidence
-must pass before this feature is described as shipped.
+Verification: focused eligibility/render tests and desktop typecheck; a hidden
+Electron fixture for the click payloads and watcher row; and a real-daemon test
+(`a_user_started_pr_watch_registers_and_wakes_the_chat_when_ci_changes`) in which
+the request registers a PR watch against a loopback GitHub, a PR the host cannot
+read arms nothing, and a CI change wakes the chat through a normal continuation
+turn. Not verified: a merge against real GitHub (the merge itself is the agent's
+normal workflow, not part of this feature).
