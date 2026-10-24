@@ -46,7 +46,6 @@ export function AgentLogsDrawer({ sessionId, title, rect, overlay, selected }: {
   const closed = useWallLogs((s) => s.closed);
   const kind = useWallLogs((s) => s.kind);
   const head = HEADS[kind];
-  const chatViewOn = useStore((s) => s.settings?.developer?.chat === true);
   const ref = useRef<HTMLDivElement>(null);
 
   // Without motion there is no animationend to wait for.
@@ -73,7 +72,6 @@ export function AgentLogsDrawer({ sessionId, title, rect, overlay, selected }: {
         <header className="agent-logs-drawer-head">
           <head.Icon className="h-3.5 w-3.5 shrink-0 text-ink-faint" />
           <span className="min-w-0 flex-1 truncate">{head.label}</span>
-          {chatViewOn && kind === 'logs' && <button type="button" className="rounded-sm p-1 text-ink-faint hover:text-ink" title="Open the log as its own window" aria-label="Open the log as its own window" onClick={() => { close(); useStore.getState().openTerminalPane(`agent_${sessionId}`); }}><ExternalIcon className="h-3 w-3" /></button>}
           <button type="button" className="rounded-sm p-1 text-ink-faint hover:text-ink" title={`Close ${kind === 'logs' ? 'the log' : head.label} (Esc)`} aria-label={kind === 'logs' ? 'Close the command log' : `Close ${head.label}`} onClick={close}><CloseIcon className="h-3 w-3" /></button>
         </header>
         <div className="agent-logs-drawer-body"><DrawerBody key={kind} sessionId={sessionId} kind={kind} /></div>

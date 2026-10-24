@@ -105,6 +105,19 @@ pub fn gate(policy: Policy, activity: Option<&Value>, due_at: f64, now: f64) -> 
     Gate::Wait
 }
 
+/// How a run behaves once started, for the turn's model client (nekko-chat's
+/// `YieldingClient`): `idle` steps aside whenever someone uses the computer;
+/// `lowPriority` only for a chat of theirs on a local model. `None` (always)
+/// never steps aside. Sent in the turn's `chat:send` as `background`.
+pub fn running_mode(policy: Policy, low_priority: bool) -> Option<&'static str> {
+    match policy {
+        Policy::Always => None,
+        Policy::LowPriority => Some("lowPriority"),
+        Policy::Idle if low_priority => Some("lowPriority"),
+        Policy::Idle => Some("idle"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -179,6 +192,14 @@ mod tests {
             gate(Policy::Idle, Some(&busy), 1000.0, 1000.0 + WAIT_CAP_MS),
             Gate::Go { low_priority: true, waited_ms: Some(WAIT_CAP_MS) }
         );
+    }
+
+    #[test]
+    fn a_run_past_the_cap_or_beside_the_user_steps_aside_only_for_their_chats() {
+        assert_eq!(running_mode(Policy::Idle, false), Some("idle"));
+        assert_eq!(running_mode(Policy::Idle, true), Some("lowPriority"));
+        assert_eq!(running_mode(Policy::LowPriority, false), Some("lowPriority"));
+        assert_eq!(running_mode(Policy::Always, true), None);
     }
 
     #[test]

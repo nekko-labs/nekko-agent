@@ -5,7 +5,7 @@ import { useStore } from '../store.js';
 import { AgentSidebar } from '../views/WorkspacesView.js';
 
 /**
- * Server-renders the real Agents panel (the sidebar half of WorkspacesView).
+ * Server-renders the real Agents panel (`AgentSidebar` in WorkspacesView.tsx).
  * The calling file must import `./browserGlobals.js`, mock the store with
  * `liveStore`, and mock `react-dom`'s createPortal to render inline.
  */

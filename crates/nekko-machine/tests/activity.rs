@@ -109,3 +109,34 @@ fn the_answer_json_is_camel_case() {
     assert_eq!(v["cpuC"], serde_json::json!(55.0));
     assert!(v.get("gpuC").is_none_or(|g| g.is_null()), "{v}");
 }
+
+/// What one look at the user's input costs when its cache has run out, as a
+/// background reply's gate looks every 200 ms (B2), and a whole first reading
+/// (temperatures and power too).
+/// `cargo test -p nekko-machine --release --test activity -- --ignored --nocapture read_cost`
+#[test]
+#[ignore = "a measurement, not a check"]
+fn read_cost() {
+    use nekko_machine::activity::Sampler;
+    use std::time::{Duration, Instant};
+    let sampler = Sampler::default();
+    let first = Instant::now();
+    sampler.read();
+    let first = first.elapsed();
+    let mut input = Vec::new();
+    for _ in 0..20 {
+        // Past the input cache, inside the power and temperature ones.
+        std::thread::sleep(Duration::from_millis(1100));
+        let t = Instant::now();
+        sampler.read();
+        input.push(t.elapsed().as_secs_f64() * 1e6);
+    }
+    input.sort_by(f64::total_cmp);
+    println!(
+        "first reading {:.2} ms; input-only reading, median of 20: {:.1} µs (min {:.1}, max {:.1})",
+        first.as_secs_f64() * 1000.0,
+        input[10],
+        input[0],
+        input[19]
+    );
+}

@@ -76,7 +76,7 @@ export function DesignBoardView() {
 
   const updating = working.size > 0;
   const runningSessionId = [...working][0] ?? null;
-  const goToAgent = () => { if (runningSessionId) { openChatPane(runningSessionId); useStore.getState().setView('chat'); } };
+  const goToAgent = () => { if (runningSessionId) { openChatPane(runningSessionId); useStore.getState().setView('command'); } };
 
   const pages = board?.pages ?? [];
   const selectedPage = pages.find((p) => p.id === selected) ?? null;
@@ -193,8 +193,8 @@ export function DesignBoardView() {
             refining={busy?.pageId === selectedPage.id}
             onClose={() => setSelected(null)}
             onRemove={() => removePage(selectedPage.id)}
-            onOpenBrowser={() => { useStore.getState().openBrowserPane(selectedPage.url); useStore.getState().setView('chat'); }}
-            onOpenFile={selectedPage.file ? () => { useStore.getState().openFilePane(selectedPage.file!); useStore.getState().setView('chat'); } : undefined}
+            onOpenBrowser={() => { useStore.getState().openBrowserPane(selectedPage.url); useStore.getState().setView('command'); }}
+            onOpenFile={selectedPage.file ? () => { useStore.getState().openFilePane(selectedPage.file!); useStore.getState().setView('command'); } : undefined}
             onRefine={(text) => generate({ prompt: text, pageId: selectedPage.id })}
             onRestore={async (html) => { setBoard(await window.nekko.updateDesignPage(wsId, selectedPage.id, { html })); }}
             onAddNote={async (text) => { if (wsId) setBoard(await window.nekko.addDesignNote(wsId, selectedPage.id, text)); }}

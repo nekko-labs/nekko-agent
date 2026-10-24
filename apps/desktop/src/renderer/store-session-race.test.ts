@@ -10,7 +10,7 @@ const older: SessionSummary = { id: 'old', title: 'Old', createdAt: 1, updatedAt
 const created: Session = { id: 'new_chat', title: 'New chat', createdAt: 2, updatedAt: 2, messages: [] };
 
 beforeEach(() => {
-  useStore.setState({ sessions: [older], workspaces: [], activeWorkspaceId: null, activeSessionId: 'old', archivedViewId: null });
+  useStore.setState({ sessions: [older], workspaces: [], activeWorkspaceId: null, activeSessionId: 'old' });
 });
 
 describe('a chat created while the session list is loading', () => {
