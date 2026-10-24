@@ -1,7 +1,8 @@
 name: Native iOS
 # macOS-only. Runs every 6 hours on main and with the `ci:macos` label on a PR,
 # not on every iOS change: the Team plan's 5 macOS runners are shared by every
-# workflow (see ci.yml).
+# workflow (see ci.yml). A PR verifies dark mode only when it changes colours or
+# carries `ci:theme`; the schedule always runs light and dark.
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled]
@@ -28,12 +29,32 @@ jobs:
     timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
+        with:
+          # A PR checks out its merge commit; HEAD^1 is the base, for the appearance scope.
+          fetch-depth: 2
       - name: Use the newest installed Xcode
         run: |
           x="$(ls -d /Applications/Xcode_*.app 2>/dev/null | grep -v beta | sort -V | tail -n1)"
           [ -n "$x" ] && sudo xcode-select -s "$x/Contents/Developer"
           xcodebuild -version
           swift --version
+      # Booting takes 1-3 minutes; it runs behind the package tests and builds below,
+      # and gives a fresh device time to settle before the UI tests (IO-17).
+      - name: Start the simulator booting
+        run: |
+          RUNTIME=$(xcrun simctl list runtimes -j | ruby -rjson -e 'puts JSON.parse(STDIN.read)["runtimes"].select { |r| r["isAvailable"] && r["identifier"].include?("iOS") }.last.fetch("identifier")')
+          TYPE=$(xcrun simctl list devicetypes -j | ruby -rjson -e 't = JSON.parse(STDIN.read)["devicetypes"].map { |d| d["identifier"] }; puts(t.select { |i| i =~ /iPhone-1[5-9]-Pro$/ }.last || t.select { |i| i.include?("iPhone") }.last)')
+          DEVICE=$(xcrun simctl create Nekko-CI "$TYPE" "$RUNTIME")
+          echo "DEVICE=$DEVICE" >> "$GITHUB_ENV"
+          nohup xcrun simctl boot "$DEVICE" > "$RUNNER_TEMP/boot.log" 2>&1 &
+      # Dark costs a second live journey (about 5 minutes), so a PR runs it only when
+      # it changes colours (scripts/ios-theme-scope.mjs) or carries `ci:theme`.
+      - name: Appearances to verify
+        env:
+          FORCE: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:theme') }}
+        run: |
+          if [ "$FORCE" = true ]; then THEMES='light dark'; else THEMES=$(git diff HEAD^1 HEAD -- apps/ios | node scripts/ios-theme-scope.mjs); fi
+          echo "THEMES=$THEMES" | tee -a "$GITHUB_ENV"
       - name: Protocol and app-state tests (NekkoProtocol, NekkoKit)
         working-directory: apps/ios/Protocol
         run: swift test
@@ -66,13 +87,17 @@ jobs:
       - name: Validate plists
         run: |
           plutil -lint apps/ios/Info.plist apps/ios/Widgets/Info.plist apps/ios/App/NekkoNative.entitlements apps/ios/Widgets/NekkoWidgets.entitlements apps/ios/Share/Info.plist apps/ios/Share/NekkoShare.entitlements apps/ios/App/PrivacyInfo.xcprivacy apps/ios/Watch/PrivacyInfo.xcprivacy apps/ios/Watch/NekkoWatch.entitlements apps/ios/WatchWidgets/Info.plist apps/ios/WatchWidgets/NekkoWatchWidgets.entitlements apps/ios/WatchWidgets/PrivacyInfo.xcprivacy
-      - name: Build unsigned iOS Simulator app
+      # One build for the bundle checks and every test run below: for the booting
+      # device's architecture only, ad-hoc signed as the UI tests need.
+      - name: Build the app and its tests for the simulator
         working-directory: apps/ios
         run: >-
           xcodebuild -project NekkoNative.xcodeproj -scheme NekkoNative
           -configuration Debug
-          -destination 'generic/platform=iOS Simulator'
-          -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=NO build
+          -destination "platform=iOS Simulator,id=$DEVICE"
+          -derivedDataPath DerivedData
+          CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM=""
+          COMPILER_INDEX_STORE_ENABLE=NO build-for-testing
       - name: Verify bundle (launch screen, widget and share extensions, URL schemes, icon, privacy manifest)
         run: |
           APP=apps/ios/DerivedData/Build/Products/Debug-iphonesimulator/NekkoNative.app
@@ -95,16 +120,13 @@ jobs:
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconName' $APP/Info.plist)" = AppIcon
           test -f $APP/Assets.car
           plutil -lint $APP/PrivacyInfo.xcprivacy $APP/PlugIns/NekkoWidgets.appex/PrivacyInfo.xcprivacy $APP/PlugIns/NekkoShare.appex/PrivacyInfo.xcprivacy
-      - name: Simulator tests and live screenshots (light, dark)
+      - name: Simulator tests and live screenshots (${{ env.THEMES }})
         working-directory: apps/ios
         run: |
           set -euo pipefail
           mkdir -p evidence
-          RUNTIME=$(xcrun simctl list runtimes -j | ruby -rjson -e 'puts JSON.parse(STDIN.read)["runtimes"].select { |r| r["isAvailable"] && r["identifier"].include?("iOS") }.last.fetch("identifier")')
-          TYPE=$(xcrun simctl list devicetypes -j | ruby -rjson -e 't = JSON.parse(STDIN.read)["devicetypes"].map { |d| d["identifier"] }; puts(t.select { |i| i =~ /iPhone-1[5-9]-Pro$/ }.last || t.select { |i| i.include?("iPhone") }.last)')
-          DEVICE=$(xcrun simctl create Nekko-CI "$TYPE" "$RUNTIME")
           trap 'xcrun simctl shutdown "$DEVICE" || true; xcrun simctl delete "$DEVICE" || true; kill ${NEKKO_ITEST_PIDS:-} 2>/dev/null || true' EXIT
-          xcrun simctl boot "$DEVICE"
+          # Booted in the background since the job's start; bootstatus boots it if that failed.
           xcrun simctl bootstatus "$DEVICE" -b
           xcrun simctl status_bar "$DEVICE" override --time 9:41 --batteryState charged --batteryLevel 100 || true
           COMMON=(-project NekkoNative.xcodeproj -scheme NekkoNative -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="")
@@ -114,9 +136,10 @@ jobs:
           # A failed live run prints its stack's own logs (fake model, relay, agent): the phone's
           # screenshots alone can't say why the computer stopped answering.
           stack_logs() { for f in "$NEKKO_ITEST_LOGDIR"/*.log; do echo "::group::$1 $(basename "$f")"; tail -n 120 "$f"; echo "::endgroup::"; done; }
-          xcodebuild "${COMMON[@]}" -resultBundlePath evidence/first-run.xcresult test -skip-testing:NekkoNativeUITests/LiveRelayTests || failed=1
-          # The live journey, once per theme, each against a fresh stack (pairing codes are single-use).
-          for THEME in light dark; do
+          TEST_RUNNER_NEKKO_UI_THEMES="$THEMES" \
+            xcodebuild "${COMMON[@]}" -resultBundlePath evidence/first-run.xcresult test-without-building -skip-testing:NekkoNativeUITests/LiveRelayTests || failed=1
+          # The live journey, once per appearance, each against a fresh stack (pairing codes are single-use).
+          for THEME in $THEMES; do
             xcrun simctl ui "$DEVICE" appearance "$THEME"
             ../../apps/ios/scripts/itest-stack.sh "/tmp/stack-$THEME.env"
             . "/tmp/stack-$THEME.env"
