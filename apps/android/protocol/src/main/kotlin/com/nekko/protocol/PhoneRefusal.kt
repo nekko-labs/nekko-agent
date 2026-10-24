@@ -9,7 +9,9 @@ package com.nekko.protocol
  * Codes: `read-off` and `change-off` (Remote access → What phones can do is off
  * for that kind of channel), `proof-*` (raising a chat's mode needs a signed
  * Change proof, which this app can't make yet; the detail is the channel),
- * `device-unknown`, `channel-denied` (the computer doesn't know the channel).
+ * `device-unknown`, `channel-denied` (the computer doesn't know the channel),
+ * `step-up-required|invalid|stale|replayed` (the computer wants a second
+ * factor too, SK-7; [asksForStepUp]) and `quit-disabled` (SK-3).
  */
 data class PhoneRefusal(val code: String, val detail: String) {
     /** A missing or rejected Change proof. */
@@ -18,8 +20,14 @@ data class PhoneRefusal(val code: String, val detail: String) {
     /** Refused for want of a proof when raising a chat's mode (new chats or this one). */
     val isModeChange: Boolean get() = isProof && detail in MODE_CHANNELS
 
+    /** A step-up refusal (SK-7) or `quit-disabled`; null for every other code. */
+    val stepUp: StepUpCode? get() = StepUpCode.of(code)
+
+    /** A guarded call that a step-up sheet can answer: ask for a key or a code, then send it again. */
+    val asksForStepUp: Boolean get() = stepUp?.asksAgain == true
+
     /** What to tell the owner, or null to show the computer's message as it is. */
-    fun message(computer: String): String? = when {
+    fun message(computer: String): String? = stepUp?.message ?: when {
         code == "read-off" ->
             "Reading from this phone is turned off on $computer. Turn it on in Remote access → What phones can do."
         code == "change-off" ->
