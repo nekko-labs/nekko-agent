@@ -58,6 +58,7 @@ mod resource_queue;
 mod routes;
 mod runtimes;
 mod sandbox;
+mod security;
 mod settings;
 mod side;
 mod sideband;
@@ -337,6 +338,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         )),
         automation: automation.clone(),
         remote: remote.clone(),
+        security: Arc::new(security::Security::new(remote.security_store(), nekko_remote::system_clock())),
         sandboxes,
         compactions,
         image_turns: image_turns::ImageTurns::new(),
