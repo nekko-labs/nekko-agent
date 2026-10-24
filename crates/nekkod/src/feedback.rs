@@ -93,12 +93,13 @@ fn body(message: &str, facts: Option<&Value>) -> Result<Value, String> {
 
 async fn send(base: &str, body: &Value) -> Result<Value, String> {
     let url = format!("{}/v1/feedback", base.trim_end_matches('/'));
-    let res = nekko_cloud::client()
-        .post(url)
-        .json(body)
-        .send()
-        .await
-        .map_err(|_| "Couldn't reach Nekko Cloud. Check your connection and try again.".to_string())?;
+    let res = nekko_net::send("feedback", nekko_cloud::client().post(url).json(body)).await.map_err(|e| {
+        if e.is_blocked() {
+            e.to_string()
+        } else {
+            "Couldn't reach Nekko Cloud. Check your connection and try again.".to_string()
+        }
+    })?;
     match res.status().as_u16() {
         200..=299 => Ok(json!({ "ok": true })),
         429 => Err("Too many notes. Try again later.".into()),

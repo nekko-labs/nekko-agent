@@ -180,6 +180,7 @@ Phone remote control and the native iOS and Android apps.
 Architecture, speed contract, distribution, builds and startup.
 
 - [Build storage maintenance](platform/build-storage-maintenance.md) (3 KB)
+- [Connections: one switch for every network connection, and its activity log](platform/connections-switch-and-activity-log.md) (4 KB)
 - [Development macOS identity](platform/development-macos-identity.md) (2 KB)
 - [Distribution & platforms](platform/distribution-platforms.md) (10 KB)
 - [Hardware keys, step-up on phone and desktop, and remote sign-out (2026-10-24)](platform/hardware-keys-step-up-and-remote-sign-out.md) (17 KB)

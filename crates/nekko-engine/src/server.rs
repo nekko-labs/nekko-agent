@@ -272,7 +272,8 @@ pub const LAN_NEEDS_KEY: &str = "Set an API key before making the engine reachab
 /// binds `0.0.0.0`, and the router only checks a Bearer token when a key is
 /// set, so a LAN bind with an empty key is refused here rather than served open.
 pub fn serve_config(s: &Value) -> Result<Value, String> {
-    let lan = s.get("bind").and_then(Value::as_str) == Some("lan");
+    // Settings > Connections can keep the server on this computer.
+    let lan = s.get("bind").and_then(Value::as_str) == Some("lan") && nekko_net::allowed("model-server-lan");
     let key = s.get("apiKey").and_then(Value::as_str).map(nekko_js::trim).filter(|k| !k.is_empty());
     if lan && key.is_none() {
         return Err(LAN_NEEDS_KEY.to_string());

@@ -378,6 +378,13 @@ impl LocalRelay {
         self.status()
     }
 
+    /// Settings > Connections changed: stop, or start again if switched on.
+    pub async fn recheck(self: &Arc<Self>) {
+        if lock(&self.state).enabled {
+            self.ensure().await;
+        }
+    }
+
     /// App shutdown: stop the process, keep the switch as it is.
     pub async fn close(&self) {
         lock(&self.state).watching = false;
@@ -387,6 +394,11 @@ impl LocalRelay {
     /// Running on the current tailnet (and LAN) addresses, or a reason why not.
     async fn ensure(self: &Arc<Self>) {
         let _one = self.ensuring.lock().await;
+        if !nekko_net::allowed("local-relay") {
+            self.kill().await;
+            lock(&self.state).error = Some(nekko_net::blocked_message("local-relay"));
+            return;
+        }
         let nics = interfaces();
         let ip = tailnet_address(&nics);
         let lan = if lock(&self.state).lan { relay_lan_addresses(&nics) } else { Vec::new() };

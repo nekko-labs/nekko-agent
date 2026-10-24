@@ -1704,6 +1704,7 @@ dependencies = [
  "getrandom 0.3.4",
  "image",
  "nekko-js",
+ "nekko-net",
  "reqwest",
  "serde",
  "serde_json",
@@ -1757,6 +1758,7 @@ dependencies = [
  "futures-util",
  "getrandom 0.3.4",
  "keyring",
+ "nekko-net",
  "nekko-store",
  "nekko-sync",
  "reqwest",
@@ -1784,6 +1786,7 @@ dependencies = [
  "base64 0.22.1",
  "futures-util",
  "nekko-js",
+ "nekko-net",
  "nekko-usage",
  "reqwest",
  "serde_json",
@@ -1817,6 +1820,7 @@ dependencies = [
  "futures-util",
  "libc",
  "nekko-js",
+ "nekko-net",
  "nekko-tools",
  "nekko-usage",
  "regress",
@@ -1903,6 +1907,7 @@ dependencies = [
  "base64 0.22.1",
  "block2",
  "futures-util",
+ "nekko-net",
  "objc2",
  "objc2-av-foundation",
  "objc2-foundation",
@@ -1917,6 +1922,15 @@ dependencies = [
  "url",
  "windows",
  "yaml-rust2",
+]
+
+[[package]]
+name = "nekko-net"
+version = "0.1.0"
+dependencies = [
+ "reqwest",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -1951,6 +1965,7 @@ dependencies = [
  "hmac",
  "image",
  "nekko-js",
+ "nekko-net",
  "p256",
  "pbkdf2",
  "serde_json",
@@ -2077,6 +2092,7 @@ dependencies = [
  "http",
  "hyper-util",
  "nekko-js",
+ "nekko-net",
  "nekko-tools",
  "reqwest",
  "serde",
@@ -2095,6 +2111,7 @@ dependencies = [
  "memchr",
  "nekko-context",
  "nekko-js",
+ "nekko-net",
  "nekko-store",
  "nekko-tools",
  "regress",
@@ -2137,6 +2154,7 @@ dependencies = [
  "nekko-machine",
  "nekko-messaging",
  "nekko-native",
+ "nekko-net",
  "nekko-oauth",
  "nekko-privacy",
  "nekko-remote",

@@ -16,6 +16,7 @@ import { startAppLog } from './appLog.js';
 import { createDesktopTray } from './tray.js';
 import { createTrayCompanion } from './trayCompanion.js';
 import { startAgentBrowser } from './agentBrowser.js';
+import { guardSession } from './connectionsGuard.js';
 import { registerArtifactPreview } from './artifactPreview.js';
 import { offerLegacyCleanup } from './legacyPrompt.js';
 import { createCloseIntent, readWParam, WM_CLOSE, WM_SYSCOMMAND } from './closeIntent.js';
@@ -50,6 +51,10 @@ function showWindow(): void {
 
 /** The engine (nekkod); set once the app is ready. */
 let engine: EngineProcess | null = null;
+/** Settings > Connections, for the pages Chromium loads itself (connectionsGuard.ts). */
+const readConnections = async () => (await engine?.call<AppSettings>(IpcChannels.settingsGet))?.connections;
+const webviewGuests = new Set<number>();
+let webviewGuarded = false;
 /** True once the engine has been stopped for quit, so the second quit goes through. */
 let engineStopped = false;
 import {
@@ -255,6 +260,15 @@ function wireAppWindow(win: BrowserWindow): void {
     if (sameApp) return;
     event.preventDefault();
     if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
+  });
+  // The browser pane's pages share the default session: guard only theirs.
+  win.webContents.on('did-attach-webview', (_event, guest) => {
+    webviewGuests.add(guest.id);
+    guest.once('destroyed', () => webviewGuests.delete(guest.id));
+    if (!webviewGuarded) {
+      webviewGuarded = true;
+      guardSession(guest.session, 'browser-pane', readConnections, (id: number | undefined) => id != null && webviewGuests.has(id));
+    }
   });
   win.webContents.on('will-attach-webview', (event, webPreferences, params) => {
     if (!/^https?:\/\//i.test(params.src) && params.src !== 'about:blank') {
@@ -548,7 +562,7 @@ app.whenReady().then(async () => {
   // The bridge also carries what nekkod asks of the window shell: the app
   // window's handle for owning its dialogs, dialogs it cannot draw (macOS),
   // and quitting so an update can install.
-  const agentBrowser = await startAgentBrowser({ pickFolder: pickFolderDialog, shell: shellBridge(() => app.quit()) });
+  const agentBrowser = await startAgentBrowser({ pickFolder: pickFolderDialog, shell: shellBridge(() => app.quit()), guard: (s) => guardSession(s, 'web-tools', readConnections) });
   app.once('will-quit', () => agentBrowser.close());
   engine = new EngineProcess({
     browserBridge: { url: agentBrowser.url, token: agentBrowser.token },

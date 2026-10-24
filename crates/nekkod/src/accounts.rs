@@ -479,7 +479,10 @@ fn unreadable(status: u16) -> Problem {
 /// One quota read: the status and the body as JSON (`None` when it does not
 /// parse), or the failure a non-2xx answer or the network is.
 async fn send(req: reqwest::RequestBuilder) -> Result<(u16, Option<Value>), Problem> {
-    let res = req.send().await.map_err(|e| Problem::Message(format!("fetch failed: {e}")))?;
+    // A blocked read is quiet: it lands as a problem and the backoff applies.
+    let res = nekko_net::send("limits", req)
+        .await
+        .map_err(|e| Problem::Message(if e.is_blocked() { e.to_string() } else { format!("fetch failed: {e}") }))?;
     let status = res.status().as_u16();
     if !res.status().is_success() {
         let retry = res.headers().get("retry-after").and_then(|v| v.to_str().ok()).map(str::to_string);

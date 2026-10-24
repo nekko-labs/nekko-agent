@@ -414,6 +414,8 @@ export interface AppSettings {
    * enabled with an explicit allowlist of chat ids. See messaging.ts.
    */
   messaging?: import('./messaging.js').MessagingSettings;
+  /** Settings > Connections: All connections off, and the connections switched off one by one. See connections.ts. */
+  connections?: import('./connections.js').ConnectionSettings;
 }
 
 /**

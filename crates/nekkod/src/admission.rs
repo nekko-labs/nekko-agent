@@ -505,7 +505,7 @@ async fn admit(
     }
 
     let mode_name = crate::worktrees::execution_mode(&session);
-    let offline = nekko_js::truthy(session.get("offline"));
+    let offline = crate::connections::offline(&session);
     let incognito = nekko_js::truthy(session.get("incognito"));
     if mode_name == "worktree"
         && !incognito
