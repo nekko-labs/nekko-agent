@@ -18,7 +18,7 @@ final class ComputersTests: XCTestCase {
         row.tap()
         let edit = app.buttons["computer.edit"]
         XCTAssertTrue(edit.waitForExistence(timeout: 5), "the computer's page")
-        edit.tap()
+        tapBarButton(edit, in: app)
         app.buttons["Rename"].tap()
         let name = app.alerts.textFields.firstMatch
         XCTAssertTrue(name.waitForExistence(timeout: 5))
@@ -26,7 +26,7 @@ final class ComputersTests: XCTestCase {
         app.alerts.buttons["Save"].tap()
         XCTAssertTrue(app.staticTexts["Studio"].waitForExistence(timeout: 5), "Rename saved")
 
-        edit.tap()
+        tapBarButton(edit, in: app)
         app.buttons["Forget…"].tap()
         confirmForget(app)
         XCTAssertTrue(row.waitForNonExistence(timeout: 5), "Forget from the page removed the computer")
@@ -70,13 +70,19 @@ final class ComputersTests: XCTestCase {
     private func openMenu(_ app: XCUIApplication) {
         let m = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Computers and settings")).firstMatch
         XCTAssertTrue(m.waitForExistence(timeout: 10))
+        tapBarButton(m, in: app)
+    }
+
+    /// The same for any navigation bar button, such as the computer page's Edit
+    /// menu, which XCTest also fails to "scroll to visible".
+    private func tapBarButton(_ button: XCUIElement, in app: XCUIApplication) {
         let deadline = Date().addingTimeInterval(10)
         while Date() < deadline {
-            let f = m.frame
-            if m.exists, !f.isEmpty, app.frame.contains(CGPoint(x: f.midX, y: f.midY)) { break }
+            let f = button.frame
+            if button.exists, !f.isEmpty, app.frame.contains(CGPoint(x: f.midX, y: f.midY)) { break }
             RunLoop.current.run(until: Date().addingTimeInterval(0.25))
         }
-        m.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        button.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
     }
 
     private func confirmForget(_ app: XCUIApplication) {
