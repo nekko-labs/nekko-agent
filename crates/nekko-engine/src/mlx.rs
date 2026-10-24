@@ -152,8 +152,10 @@ impl MlxRuntime {
             return json!({ "ok": true, "message": "MLX is already installed." });
         }
         let url = format!("https://api.github.com/repos/astral-sh/uv/releases/tags/{UV_VERSION}");
-        let release = match self.io.get(url, vec![("Accept".into(), "application/vnd.github+json".into())], None).await
-        {
+        // GitHub's API answers 403 to a request without a User-Agent.
+        let headers =
+            vec![("Accept".into(), "application/vnd.github+json".into()), ("User-Agent".into(), "nekko-agent".into())];
+        let release = match self.io.get(url, headers, None).await {
             Ok((status, body)) if (200..300).contains(&status) => serde_json::from_slice::<Value>(&body).ok(),
             _ => None,
         };

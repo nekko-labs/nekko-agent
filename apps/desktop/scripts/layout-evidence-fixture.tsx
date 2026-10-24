@@ -10,7 +10,9 @@ const bridge: any = {
   getSettings: async () => settings, updateSettings: async (p: any) => Object.assign(settings, p), listProviders: async () => [provider],
   listSessionSummaries: async () => [],
   getSession: async (id: string) => records.find(s => s.id === id), listModels: async () => [{ id: 'gpt-fixture', providerId: 'fixture', name: 'GPT fixture', contextWindow: 500000 }],
-  listTerminals: async () => [], pendingInput: async () => ({}), runningSessions: async () => [], listTasks: async () => [],
+  listTerminals: async () => [],
+  // A sandbox can seed agent states (localStorage 'fixture.pending' / 'fixture.running') before a reload.
+  pendingInput: async () => JSON.parse(localStorage.getItem('fixture.pending') ?? '{}'), runningSessions: async () => JSON.parse(localStorage.getItem('fixture.running') ?? '[]'), listTasks: async () => [],
   listTools: async () => [], getMcpStatus: async () => [], listSkills: async () => [], listShells: async () => [], listChanges: async () => [], listFiles: async () => [], getUsageSummary: async () => null,
   previewContext: async () => ({ items: [], totalTokens: 0, budget: 128000 }), getGitStatus: async () => ({ repo: false }),
 };

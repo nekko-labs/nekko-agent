@@ -35,7 +35,7 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 
 - [Automatic title requests during queued turns (2026-10-13)](chat/automatic-title-requests-during-queued-turns.md) (1 KB)
 - [Background notification and panel batch (2026-10-13)](chat/background-notification-and-panel-batch.md) (8 KB)
-- [Chat & cowork (unified surface)](chat/chat-cowork-unified-surface.md) (71 KB)
+- [Chat & cowork (unified surface)](chat/chat-cowork-unified-surface.md) (72 KB)
 - [Chat actions and persistent reply measurements](chat/chat-actions-and-persistent-reply-measurements.md) (23 KB)
 - [Chat artifact cards and session-local documents](chat/chat-artifact-cards-and-session-local-documents.md) (4 KB)
 - [Chat chrome and composer refinement (implemented; desktop verification pending)](chat/chat-chrome-and-composer-refinement.md) (3 KB)
@@ -91,7 +91,7 @@ Agents panel, monitors, subagents and delegation.
 
 - [Agent activity and panel polish](agents/agent-activity-and-panel-polish.md) (39 KB)
 - [Agent Monitor Project group, hardware temperatures and multi-monitor Dynamic mode (2026-10-18)](agents/agent-monitor-project-group-hardware-temperatures-and-multi-moni.md) (5 KB)
-- [Agent panel view options (2026-10-17)](agents/agent-panel-view-options.md) (3 KB)
+- [Agent panel view options (2026-10-17)](agents/agent-panel-view-options.md) (4 KB)
 - [Agents dashboard simplification (2026-10-06)](agents/agents-dashboard-simplification.md) (2 KB)
 - [Approval retention and delegation navigation](agents/approval-retention-and-delegation-navigation.md) (1 KB)
 - [Chat finder in the Agents panel (2026-10-16)](agents/chat-finder-in-the-agents-panel.md) (6 KB)
@@ -127,7 +127,7 @@ Providers, local models, the Model Server, training.
 - [Prompt caching across providers (2026-10-07)](models/prompt-caching-across-providers.md) (7 KB)
 - [Running a model with nothing else installed](models/running-a-model-with-nothing-else-installed.md) (28 KB)
 - [Server, model browser and desktop tray](models/server-model-browser-and-desktop-tray.md) (5 KB)
-- [Setting up a local model](models/setting-up-a-local-model.md) (5 KB)
+- [Setting up a local model](models/setting-up-a-local-model.md) (7 KB)
 - [Signing in with a subscription (planned)](models/signing-in-with-a-subscription.md) (2 KB)
 - [System models: dictation on Apple's recognizer or Whisper](models/system-speech-models.md) (4 KB)
 - [Training a model while you watch (Training tab)](models/training-a-model-while-you-watch-training-tab.md) (2 KB)
@@ -164,8 +164,9 @@ Workflows, goals, integrations and tools.
 Phone remote control and the native iOS and Android apps.
 
 - [Driving your home model from your phone (remote control)](phone/driving-your-home-model-from-your-phone-remote-control.md) (13 KB)
+- [iPhone: the desktop's languages and themes, and New chat's effort and computer (2026-10-23)](phone/iphone-languages-themes-and-new-chat-choices.md) (5 KB)
 - [Native Android app (2026-10-11)](phone/native-android-app.md) (40 KB)
-- [Native iOS app (2026-10-16)](phone/native-ios-app.md) (71 KB)
+- [Native iOS app (2026-10-16)](phone/native-ios-app.md) (72 KB)
 - [Native phone implementation decision (2026-10-07)](phone/native-phone-implementation-decision.md) (2 KB)
 - [Phone access classes and relay replay protection](phone/phone-access-classes-and-relay-replay-protection.md) (8 KB)
 - [Your agent in your pocket (the iOS and Android app)](phone/your-agent-in-your-pocket-the-ios-and-android-app.md) (5 KB)

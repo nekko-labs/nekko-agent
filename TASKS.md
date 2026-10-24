@@ -6,6 +6,14 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## iPhone languages, themes and New chat choices (added 2026-10-23)
+
+Philip asked for the phone to match the desktop's languages and themes (with a limited fall icon for Spooky) and for New chat to pick the effort and, for a local model, the computer. Spec: [iPhone languages, themes and New chat choices](spec/phone/iphone-languages-themes-and-new-chat-choices.md); issue #941.
+
+- [x] **T201, iPhone languages, desktop themes, Spooky icon, New chat effort and Run on (2026-10-23).** String Catalogs in seven languages; `ThemePresets.swift` written from `THEME_PRESETS` by a golden test; `AppIcon-Spooky` alternate icon in October; `Effort.levels` mirrors `modelEffortLevels`; `effort` added to the phone's chat options (TS policy, `phone-access.json`, Rust gate). Unit and simulator UI tests (`ThemeLanguageTests`).
+- [ ] **T201a, Android parity.** The same languages, presets, effort and Run on in `apps/android`.
+- [ ] **T201b, native-speaker review** of the six translations, and translating the widgets, Share extension and Watch app.
+
 ## Calmer Experimental Dark themes (added 2026-10-23)
 
 Philip found the Experimental Dark versions overwhelming: one hue on the ground, the panels and the text. Spec: [Experimental themes](spec/code/rich-responses-reports-and-design-workspace.md#experimental-themes); why: [decision 0015](docs/decisions/0015-experimental-dark-themes-use-a-60-30-10-split.md); issue #896.
@@ -2208,3 +2216,10 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 
 ### T199: Forget a computer where you look for it (2026-10-23) · [spec](SPEC.md)
 - [x] **T199a** iPhone: the computer menu's entries open Connect / Forget…; a tap on a row in Computers opens Connect, Rename, Open at launch, Forget…; one shared Forget confirmation (`forgetDialog`). Test: `ComputersTests.testRenameAndForgetAComputer`. Done: 2026-10-23
+
+### T200: iPhone bugs from TestFlight (2026-10-23) · [spec](SPEC.md)
+- [x] **T200a** App lock cover in its own window above sheets and alerts (`CoverWindow` in `RootView.swift`), on the app's background with the icon tile (`BrandTile`); `CatMark` draws the brand head, not the old outline. Done: 2026-10-23
+- [x] **T200b** Chat: no keyboard toolbar (its iOS 26 Done covered the send button); scroll or tap the transcript, or the *Hide keyboard* VoiceOver action. Done: 2026-10-23
+- [x] **T200c** A small loaded window: an overflow caused by the system prompt and tools filling most of a small window retries once without tools; an overflow that still fails names the window and the fix (`nekko-loop` `run.rs`, `fit::overflow_message`, `fit::reported_window`). Tests: `retry.rs` `a_window_too_small_*`, `a_window_that_is_not_small_keeps_its_tools_for_compaction`. Auto-continue does not compact such an overflow (`overhead_overflow`, test `an_overflow_on_the_prompt_and_tools_alone_is_not_compacted`). Done: 2026-10-23
+- [x] **T200d** Change key: no `touchIDAuthenticationAllowableReuseDuration`; a context the Secure Enclave refuses (CryptoTokenKit -5) is dropped and asked again. Done: 2026-10-23
+- [ ] **T200e** Check T200a, T200b and T200d on a device.

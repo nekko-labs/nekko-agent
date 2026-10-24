@@ -42,6 +42,20 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > that choice is kept on the phone. Only the theme, theme preset and the two accent colors are sent
 > for this (the `appearance:updated` event), never the rest of the computer's settings.
 >
+> The iPhone app has the desktop's themes too: **Settings → Appearance → Theme** offers **Match my
+> computer** (the computer's preset, mode and accent), **Match this iPhone**, **Light**, **Dark** and
+> every desktop preset (Nebula, Terminal, Nord, Solar, Lilac, Lavender, Ember, Spooky and the
+> experimental families). In October, **Spooky** also switches the app icon to a limited fall
+> version; iOS confirms the change, and the usual icon comes back with any other theme or after
+> Halloween. The iPhone app speaks the desktop's languages (English, Spanish, French, German,
+> Portuguese, Japanese and Chinese): it follows the iPhone's language, and **Settings → Appearance →
+> Language** opens iOS Settings to pick one for Nekko Agent alone.
+>
+> On the iPhone, **New chat** also picks the **Effort** (the levels the chosen model takes, or the
+> computer's default) and, when the model is a local one (llama.cpp, Ollama, LM Studio, vLLM),
+> **Run on**: which paired computer the chat and its model run on. Choosing another computer
+> connects to it and shows its models and folders; what you typed stays.
+>
 > The Android app's **Settings** also has a **Computers** row, which opens the list of paired
 > computers (rename, switch, forget, pair another), and an **About** section with the installed
 > version and the open-source licenses of the app and the libraries it ships.

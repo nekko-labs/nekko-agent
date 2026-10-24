@@ -920,6 +920,7 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
                           projects={settings?.workspaces ?? []}
                           subAgentCount={kids.length}
                           showMetadata={view.showMetadata}
+                          showProvider={view.showProvider}
                           onOpen={() => {
                             if (sidebarOnly) {
                               if (s) onOpenChat?.(s.id);

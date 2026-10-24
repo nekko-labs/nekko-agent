@@ -72,6 +72,8 @@ struct NekkoApp: App {
     @State private var splash = UserDefaults.standard.object(forKey: "splash") as? Bool
         ?? !ProcessInfo.processInfo.arguments.contains("-uiTestReset")
 
+    private var spooky: Bool { Prefs.preset(app.prefs.theme, computer: app.store.appearance)?.isSpooky == true }
+
     var body: some Scene {
         WindowGroup {
             RootView()
@@ -83,10 +85,14 @@ struct NekkoApp: App {
                 .onOpenURL { app.handle(url: $0) }
                 .task { app.start() }
                 .overlay { if splash { SplashView { splash = false } } }
+                .task(id: spooky) { SpookyIcon.sync(spooky: spooky) }
         }
         .onChange(of: phase) { _, p in
             switch p {
-            case .active: app.didBecomeActive()
+            case .active:
+                app.didBecomeActive()
+                // The season may have ended since the last open.
+                SpookyIcon.sync(spooky: spooky)
             case .background: app.didEnterBackground()
             default: break
             }

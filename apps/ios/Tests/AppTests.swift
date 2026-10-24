@@ -1,4 +1,5 @@
 import XCTest
+import NekkoProtocol
 import SwiftUI
 @testable import NekkoNative
 
@@ -90,6 +91,41 @@ final class PaletteTests: XCTestCase {
         // Button labels on the default accents.
         XCTAssertGreaterThanOrEqual(Palette.contrast(0xFFFFFF, 0x5A4AE8), 4.5)
         XCTAssertGreaterThanOrEqual(Palette.contrast(0x0C0C11, 0x8B7DFF), 4.5)
+    }
+}
+
+@MainActor
+final class ThemePresetTests: XCTestCase {
+    func testAPresetBringsItsSurfacesAndAccent() {
+        let nord = ThemePreset.find("nord")!
+        let p = Palette.make(dark: true, accent: nil, preset: nord)
+        XCTAssertEqual(p.paper, Color(hex: 0x1E222A))
+        XCTAssertEqual(p.accent, Color(hex: 0x88C0D0))
+        // Its surfaces only fit the mode it was drawn for.
+        XCTAssertEqual(Palette.make(dark: false, accent: nil, preset: nord).paper, Color(hex: 0xFBFBFD))
+        // The computer's own accent wins over the preset's.
+        XCTAssertEqual(Palette.make(dark: true, accent: 0x112233, preset: nord).accent, Color(hex: 0x112233))
+        // System, Light and Dark keep the phone's contrast-tuned accent.
+        XCTAssertEqual(Palette.make(dark: false, accent: nil, preset: ThemePreset.find("light")).accent, Color(hex: 0x5A4AE8))
+    }
+
+    func testMatchingTheComputerUsesItsPreset() {
+        let look = Appearance(theme: .dark, preset: "autumn")
+        XCTAssertEqual(Prefs.preset(Prefs.matchComputer, computer: look)?.id, "autumn")
+        XCTAssertEqual(Prefs.preset("nebula", computer: look)?.id, "nebula")
+        XCTAssertNil(Prefs.preset(Prefs.matchComputer, computer: Appearance(preset: "not-a-preset")))
+        XCTAssertTrue(ThemePreset.find("autumn")!.isSpooky)
+    }
+
+    func testTheSpookyIconOnlyShowsInOctober() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        func day(_ m: Int, _ d: Int) -> Date { cal.date(from: DateComponents(year: 2026, month: m, day: d, hour: 12))! }
+        XCTAssertTrue(SpookyIcon.inSeason(day(10, 1), calendar: cal))
+        XCTAssertTrue(SpookyIcon.inSeason(day(10, 31), calendar: cal))
+        XCTAssertFalse(SpookyIcon.inSeason(day(11, 1), calendar: cal))
+        XCTAssertFalse(SpookyIcon.inSeason(day(9, 30), calendar: cal))
+        XCTAssertNil(SpookyIcon.wanted(spooky: false, on: day(10, 15)))
     }
 }
 
