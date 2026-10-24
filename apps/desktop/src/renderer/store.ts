@@ -336,7 +336,7 @@ interface UiState {
   openDiffPane: (sessionId: string) => void;
   /**
    * Give a chat a companion window (Changes, Browser or Files) in its own
-   * workspace, where the Command Center shows it under the chat's window.
+   * workspace, where the Agent board shows it under the chat's window.
    * Unlike the open*Pane actions this stays on the current view. Returns false
    * when the chat's workspace has no room left to split.
    */
@@ -459,7 +459,7 @@ function focusPane(s: UiState, workspaceId: string, paneId: string): Partial<UiS
  * Open a window in the workspace you are looking at, beside the one you are
  * looking at — the same place a tab used to appear, except the chat stays on
  * screen next to it. With no workspace open yet the window becomes one of its
- * own, so an action from the Command Center or a deep link always lands
+ * own, so an action from the Agent board or a deep link always lands
  * somewhere.
  */
 function openInActive(s: UiState, pane: WbPane): Partial<UiState> {
@@ -705,7 +705,7 @@ export const useStore = create<UiState>((set, get) => ({
   },
   setMascotMood: (m) => set({ mascotMood: m }),
   // A destination that's been hidden can't be navigated to: land on the
-  // Command Center instead of a dead end.
+  // Agent board instead of a dead end.
   setView: (v) => set((s) => ({ view: viewEnabled(v, s.settings) ? v : 'command' })),
   setOnboardingOpen: (open) => set({ onboardingOpen: open }),
 

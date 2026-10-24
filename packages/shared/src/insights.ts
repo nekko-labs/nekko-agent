@@ -3,7 +3,7 @@
  * sessions + provider config into a small set of actionable, prioritized tips
  * ("you're spending $X on Opus for short chats, try a smaller model"). No
  * model calls, no I/O: just analysis of data the app already has, so it's
- * trivially unit-testable and safe to run on every Command Center render.
+ * trivially unit-testable and safe to run on every Agent board render.
  */
 
 import type { UsageSummary } from './settings.js';

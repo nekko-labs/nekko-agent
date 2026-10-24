@@ -636,7 +636,7 @@ export interface NekkoApi {
   machineRecommendations(opts?: { refresh?: boolean }): Promise<import('./recommendations.js').Recommendations>;
   /** Keep a task's current pick as seen (every task with none), so its upgrade nudge goes. */
   machineDismissNudge(task?: string): Promise<{ ok: boolean }>;
-  /** GPU/VRAM stats for the metrics bar + Command Center (null if unavailable). */
+  /** GPU/VRAM stats for the metrics bar + Agent board (null if unavailable). */
   getGpuStats(): Promise<import('./models.js').GpuStats | null>;
   /** CPU load + RAM use for the monitor surfaces (null if unavailable). */
   getSystemStats(): Promise<import('./monitor.js').SystemStats | null>;

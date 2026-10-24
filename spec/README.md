@@ -22,7 +22,7 @@ Vision, users, product names, scope boundaries, open questions and policies.
 - [Contributing: how changes land (2026-10-17)](product/contributing-how-changes-land.md) (2 KB)
 - [Editions, same engine + UI, different runtime](product/editions-same-engine-ui-different-runtime.md) (2 KB)
 - [Open Questions](product/open-questions.md) (2 KB)
-- [Products and their names (decided 2026-10-18)](product/products-and-their-names.md) (1 KB)
+- [Products and their names (decided 2026-10-18)](product/products-and-their-names.md) (2 KB)
 - [Scope Boundaries](product/scope-boundaries.md) (3 KB)
 - [Vision](product/vision.md) (2 KB)
 - [What Success Looks Like](product/what-success-looks-like.md) (2 KB)
@@ -61,9 +61,9 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 
 The desktop shell: wall, windows, navigation rail, layouts, settings.
 
+- [Agent board header spacing](desktop/command-center-header-spacing.md) (12 KB)
+- [Agent board panel design parity (2026-10-06)](desktop/command-center-panel-design-parity.md) (7 KB)
 - [Agent window controls refresh (2026-10-15)](desktop/agent-window-controls-refresh.md) (6 KB)
-- [Command Center header spacing](desktop/command-center-header-spacing.md) (12 KB)
-- [Command Center panel design parity (2026-10-06)](desktop/command-center-panel-design-parity.md) (7 KB)
 - [Composer and desktop rail regression fixes (2026-10-07)](desktop/composer-and-desktop-rail-regression-fixes.md) (3 KB)
 - [Empty wall opens the new-chat screen; glass prism composer (2026-10-18)](desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md) (2 KB)
 - [Focused mode transitions, calmer focus ring and layout controls (2026-10-17)](desktop/focused-mode-transitions-calmer-focus-ring-and-layout-controls.md) (4 KB)

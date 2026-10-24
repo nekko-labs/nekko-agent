@@ -489,7 +489,7 @@ const LiveUsageChip = memo(function LiveUsageChip({
 
 /**
  * The line under the conversation: what the reply is doing, read off the
- * app-wide fold (so it says the same as the chat's Command Center card), and
+ * app-wide fold (so it says the same as the chat's Agent board card), and
  * how long it has been at it.
  */
 const LiveReplyStatus = memo(function LiveReplyStatus({
@@ -690,7 +690,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const planRailOpen = planRailWanted && paneWidth >= PLAN_RAIL_MIN_PANE;
   const planSteps = useMemo(() => { const p = planProgress(session?.agentPlan); return { done: p.done + p.skipped, total: p.total }; }, [session?.agentPlan]);
   const wideEnoughForRail = paneWidth >= PLAN_RAIL_MIN_PANE;
-  // A small window (a cell on the Command Center wall, a sliver of a split)
+  // A small window (a cell on the Agent board wall, a sliver of a split)
   // folds the two control rows into one summary chip, so the transcript keeps
   // the room; the chip opens them again on demand.
   const compact = useElementCompact(paneRef) && surface !== 'composer';

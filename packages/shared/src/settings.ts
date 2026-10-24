@@ -116,7 +116,7 @@ export function sanitizeMonthlyBudgetUsd(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;
 }
 
-/** The saved Command Center wall; `root` is the renderer's split tree (`layout.ts`), checked on load. */
+/** The saved Agent board wall; `root` is the renderer's split tree (`layout.ts`), checked on load. */
 export interface CommandWallSetting {
   /** Agent tab placement, independent of window layout. */
   tabs?: 'top' | 'left' | 'hidden';
@@ -391,7 +391,7 @@ export interface AppSettings {
   /** First-run setup wizard progress (undefined on installs that predate it). */
   onboarding?: OnboardingState;
   /**
-   * The Command Center wall: the split tree of windows and the toolbar
+   * The Agent board wall: the split tree of windows and the toolbar
    * switches, as the renderer saves them, so the desktop, web and phone
    * editions of one install show the same wall. The renderer validates the
    * tree field by field on load, hence the loose type here.
