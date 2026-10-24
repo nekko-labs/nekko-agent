@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// How the phone is held, which decides the folding-phone layout
