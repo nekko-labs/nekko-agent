@@ -81,8 +81,9 @@ const newRoom = () => randomBytes(12).toString("hex").slice(0, 20);
 /** An 8-character pairing code of the alphabet the phones expect. */
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 function newPairCode(): string {
+  // 32 symbols, so the top five bits of each byte pick one uniformly.
   const bytes = randomBytes(8);
-  return [...bytes].map((b) => ALPHABET[b % ALPHABET.length]).join("");
+  return [...bytes].map((b) => ALPHABET[b >> 3]).join("");
 }
 
 interface MachineRow {
