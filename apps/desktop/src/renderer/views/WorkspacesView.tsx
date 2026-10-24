@@ -3,27 +3,13 @@ import { AgentPanelControls } from '../components/AgentPanelControls.js';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { AgentEvent, SessionSummary, TerminalInfo, WorkspaceFolder } from '@nekko-agent/shared';
-import { AUTO_MODEL_ID, archiveDaysLeft, archiveDeletesAt, parsePrUrl } from '@nekko-agent/shared';
+import { AUTO_MODEL_ID, archiveDaysLeft, archiveDeletesAt } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore, type Workspace } from '../store.js';
-import { PaneVisibleContext, usePaneVisible } from '../paneVisibility.js';
-import { afterPaint } from '../afterPaint.js';
-import { allPanes, isSplit, type Direction, type WbNode, type WbPane } from '../layout.js';
-import { ChatPane } from '../components/ChatPane.js';
-import { TerminalPane } from '../components/TerminalPane.js';
-import { FilePane } from '../components/FilePane.js';
-import { BrowserPane } from '../components/BrowserPane.js';
-import { HypergatePane } from '../components/HypergatePane.js';
-import { DiffPane } from '../components/DiffPane.js';
-import { PrPane } from '../components/PrCard.js';
-import { ContextInspector } from '../components/ContextInspector.js';
-import { ExplorerPane } from '../components/ExplorerPane.js';
-import { PaneFrame } from '../components/PaneFrame.js';
-import { Divider } from '../components/Divider.js';
 import { runningSessionIds } from '../liveRuns.js';
 import { StatusIcon, WorkspaceCard, type AgentStatus } from '../components/WorkspaceCard.js';
 import { ChatFinder } from '../components/ChatFinder.js';
-import { CheckIcon, ChatIcon, PhotoIcon, TerminalIcon, PlusIcon, SearchIcon, FileIcon, FolderIcon, ExternalIcon, PanelIcon, ShieldIcon, PanelLeftIcon, PanelSwapIcon, SlidersIcon } from '../icons.js';
+import { CheckIcon, PhotoIcon, TerminalIcon, PlusIcon, SearchIcon, SlidersIcon } from '../icons.js';
 import { SHORTCUTS } from '../shortcuts.js';
 import { NekkoAvatar } from '../components/Mascot.js';
 import { COMPLETION_ROW_ATTR, completeWithExit, findCompletionRow } from '../completionExit.js';
@@ -38,78 +24,6 @@ import {
   DATE_GROUPS, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, readAgentPanelView, saveAgentPanelView, statusGroupOf,
   type AgentPanelView, type SortableCard,
 } from './agentPanelView.js';
-
-/** Short label for a window's title strip. */
-function paneTitle(pane: WbPane, sessions: SessionSummary[], terminals: TerminalInfo[]): string {
-  if (pane.kind === 'chat') return sessions.find((s) => s.id === pane.refId)?.title ?? 'Chat';
-  if (pane.kind === 'terminal') return terminals.find((x) => x.id === pane.refId)?.title || (pane.refId.startsWith('agent_') ? 'Agent commands' : 'Terminal');
-  if (pane.kind === 'browser') {
-    try { return new URL(pane.refId).host || 'Browser'; } catch { return 'Browser'; }
-  }
-  if (pane.kind === 'hypergate') return 'Hypergate';
-  if (pane.kind === 'diff') return 'Changes';
-  if (pane.kind === 'pr') {
-    const p = parsePrUrl(pane.refId);
-    return p ? `PR #${p.number}` : 'Pull request';
-  }
-  // A file or an explorer: the last segment of the path, or the prompt an
-  // explorer that hasn't been pointed anywhere yet is showing.
-  if (!pane.refId) return 'Files';
-  return pane.refId.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || pane.refId;
-}
-
-/** Icon for a window by kind. */
-function PaneIcon({ kind }: { kind: WbPane['kind'] }) {
-  const cls = 'h-3.5 w-3.5 shrink-0 text-ink-faint';
-  if (kind === 'terminal') return <TerminalIcon className={cls} />;
-  if (kind === 'browser') return <ExternalIcon className={cls} />;
-  // The one window that is a product rather than a document, so it keeps the
-  // accent its card in Settings uses instead of the muted grey.
-  if (kind === 'hypergate') return <ShieldIcon className="h-3.5 w-3.5 shrink-0 text-accent" />;
-  if (kind === 'pr') return <span className="w-3.5 shrink-0 text-center text-[12px] leading-none text-ink-faint">⑂</span>;
-  if (kind === 'files') return <FolderIcon className={cls} />;
-  if (kind === 'file' || kind === 'diff') return <FileIcon className={cls} />;
-  return <ChatIcon className={cls} />;
-}
-
-/**
- * Render a window's body by kind.
- *
- * A workspace kept mounted behind the one on screen (see MOUNTED_WORKSPACES)
- * keeps only its chats alive: terminals, browsers and the rest mount again when
- * it is shown, as they always have, rather than running at zero size unseen.
- */
-function PaneBody({ pane, hidden }: { pane: WbPane; hidden: boolean }) {
-  if (hidden && pane.kind !== 'chat') return null;
-  switch (pane.kind) {
-    case 'chat': return <ChatPane key={pane.refId} sessionId={pane.refId} />;
-    case 'terminal': return <TerminalPane key={pane.refId} terminalId={pane.refId} />;
-    case 'file': return <FilePane key={pane.refId} path={pane.refId} />;
-    case 'files': return <ExplorerPane key={pane.id} paneId={pane.id} root={pane.refId} />;
-    case 'browser': return <BrowserPane key={pane.refId} url={pane.refId} />;
-    case 'hypergate': return <HypergatePane key={pane.refId} url={pane.refId} />;
-    case 'diff': return <DiffPane key={pane.refId} sessionId={pane.refId} />;
-    case 'pr': return <PrPane key={pane.refId} url={pane.refId} />;
-    default: return null;
-  }
-}
-
-/**
- * Workspaces: the left sidebar lists them, the middle shows the one you picked.
- *
- * A workspace is a whole arrangement of windows rather than a tab — its chat,
- * the file the agent touched, a terminal, a browser, all on screen together —
- * and each card in the sidebar says what its agent is running without being
- * opened. There is no tab strip anywhere: windows are added on a side of an
- * existing one, dragged between sides, and resized by their dividers.
- */
-
-/**
- * Workspaces kept mounted: the one on screen and the ones used just before it.
- * Switching back to one of these is a visibility flip, not a rebuild; the rest
- * are unmounted, so the warm set has a fixed ceiling.
- */
-const MOUNTED_WORKSPACES = 3;
 
 /** Something being dragged in the sidebar (a project or a workspace). */
 type DragItem = { kind: 'project' | 'workspace'; id: string; ws: string | undefined };
@@ -248,49 +162,34 @@ type SidebarActions = {
   onClosePanel?: () => void;
 };
 
-export function AgentSidebar(props: SidebarActions) {
-  return <WorkspacesView sidebarOnly {...props} />;
-}
-
-export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal, selectedId, onCreate, orientation = 'vertical', onOrientation, onClosePanel }: Partial<SidebarActions> & { sidebarOnly?: boolean } = {}) {
-  const horizontal = sidebarOnly && orientation === 'horizontal';
+/** The Agent board's list of agents: one card per active agent, grouped, beside or above the wall. */
+export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate, orientation = 'vertical', onOrientation, onClosePanel }: SidebarActions) {
+  const horizontal = orientation === 'horizontal';
   const {
-    sessions, terminals, workspaces, activeWorkspaceId, settings, activeSessionId,
-    refreshSessions, refreshTerminals, openChatPane, openTerminalPane, newTerminal: storeNewTerminal, newTerminalWorkspace: storeNewTerminalWorkspace,
-    setActiveWorkspace, newChat: storeNewChat,
-    reorderWorkspaces, layoutChats, layoutTerminals, contextPanelOpen,
-    archiveWorkspace, archiveChat, archiveOpen, archivedViewId,
+    sessions, terminals, workspaces, settings,
+    refreshSessions, refreshTerminals,
+    reorderWorkspaces, layoutChats, layoutTerminals,
+    archiveWorkspace, archiveChat,
   } = useStore(
     useShallow((s) => ({
       sessions: s.sessions,
       terminals: s.terminals,
       workspaces: s.workspaces,
-      activeWorkspaceId: s.activeWorkspaceId,
       settings: s.settings,
-      activeSessionId: s.activeSessionId,
       refreshSessions: s.refreshSessions,
       refreshTerminals: s.refreshTerminals,
-      openChatPane: s.openChatPane,
-      openTerminalPane: s.openTerminalPane,
-      newTerminal: s.newTerminal,
-      newTerminalWorkspace: s.newTerminalWorkspace,
-      setActiveWorkspace: s.setActiveWorkspace,
-      newChat: s.newChat,
       reorderWorkspaces: s.reorderWorkspaces,
       layoutChats: s.layoutChats,
       layoutTerminals: s.layoutTerminals,
-      contextPanelOpen: s.contextPanelOpen,
       archiveWorkspace: s.archiveWorkspace,
       archiveChat: s.archiveChat,
-      archiveOpen: s.archiveOpen,
-      archivedViewId: s.archivedViewId,
     })),
   );
-  const newChat = (projectId?: string) => sidebarOnly && onCreate ? onCreate('chat', projectId ?? activeProjectId()) : storeNewChat(projectId);
+  const newChat = (projectId?: string) => onCreate('chat', projectId ?? activeProjectId());
   const activeProjectId = () => useStore.getState().activeProjectId ?? undefined;
-  const newTerminal = (projectId?: string) => sidebarOnly && onCreate ? onCreate('terminal', projectId) : storeNewTerminal(projectId);
-  const newTerminalWorkspace = (projectId?: string, shell?: string) => sidebarOnly && onCreate ? onCreate('terminal', projectId ?? activeProjectId(), shell) : storeNewTerminalWorkspace(projectId, shell);
-  const newImageChat = () => sidebarOnly && onCreate ? onCreate('image', activeProjectId()) : useStore.getState().newImageChat('');
+  const newTerminal = (projectId?: string) => onCreate('terminal', projectId);
+  const newTerminalWorkspace = (projectId?: string, shell?: string) => onCreate('terminal', projectId ?? activeProjectId(), shell);
+  const newImageChat = () => onCreate('image', activeProjectId());
   const pendingProjectActions = useRef(new Set<string>());
   // Set while a group header's + or terminal button is pressed, so the row's
   // project drag does not start under it and eat the click.
@@ -349,8 +248,6 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
     }));
     await refreshSessions(); setSelected([]);
   };
-  /** A completed chat is open in the read-only reader. */
-  const reading = archiveOpen && !!archivedViewId;
 
   // Seeded from the app-wide fold of agent events, so a chat already working
   // is marked so on the first frame; the host confirms on mount for runs that
@@ -405,7 +302,7 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
   const completionDestinationRef = useRef<HTMLButtonElement>(null);
   // Reveal the existing destination without expanding completed chats or taking focus.
   useEffect(() => {
-    if (!sidebarOnly || !showTips || !completionTipSessionId) return;
+    if (!showTips || !completionTipSessionId) return;
     const completed = sessions.find((s) => s.id === completionTipSessionId && s.archivedAt);
     if (!completed) return;
     const group = view.groupBy === 'project' ? chatGroupOf(completed) : COMPLETED_GROUP;
@@ -414,14 +311,14 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
       const next = new Set(previous); next.delete(group); return next;
     });
     if (!horizontal && window.innerWidth < 768) setMobileNav(true);
-  }, [completionTipSessionId, sidebarOnly, showTips, horizontal, sessions, view.groupBy]);
+  }, [completionTipSessionId, showTips, horizontal, sessions, view.groupBy]);
   useLayoutEffect(() => {
-    if (!sidebarOnly || !showTips || !completionTipSessionId) return;
+    if (!showTips || !completionTipSessionId) return;
     const frame = requestAnimationFrame(() => {
       completionDestinationRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
     });
     return () => cancelAnimationFrame(frame);
-  }, [completionTipSessionId, sidebarOnly, showTips, mobileNav, collapsed]);
+  }, [completionTipSessionId, showTips, mobileNav, collapsed]);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [drag, setDrag] = useState<DragItem | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
@@ -491,13 +388,6 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
     window.clearTimeout(newMenuTimer.current);
     setNewMenuOpen(false);
   };
-
-  // Open the active session as a workspace if there are none (e.g. arriving
-  // from the Agent board or command palette).
-  useEffect(() => {
-    if (!sidebarOnly && workspaces.length === 0 && activeSessionId) openChatPane(activeSessionId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Derive each session's status (working / needs-input / error / idle) from its
   // agent events for the sidebar cards + window strips, and surface freshly
@@ -676,58 +566,23 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
     endDrag();
   };
 
-  const active = workspaces.find((w) => w.id === activeWorkspaceId) ?? workspaces[workspaces.length - 1] ?? null;
-
-  // Most recently shown first. Worked out during render, so the frame that
-  // switches is the frame that shows the new workspace.
-  const recent = useRef<string[]>([]);
-  // A workspace that just dropped out of the warm set is unmounted after the
-  // switch has painted, not during it.
-  const leaving = useRef<string[]>([]);
-  const [, settle] = useState(0);
-  if (active && recent.current[0] !== active.id) {
-    const next = [active.id, ...recent.current.filter((id) => id !== active.id)];
-    leaving.current = [...leaving.current, ...next.slice(MOUNTED_WORKSPACES)].filter((id) => id !== active.id);
-    recent.current = next.slice(0, MOUNTED_WORKSPACES);
-  }
-  useEffect(() => {
-    if (!leaving.current.length) return;
-    return afterPaint(() => {
-      leaving.current = [];
-      settle((n) => n + 1);
-    });
-  });
-  // In the sidebar's own order, so a switch never moves a mounted canvas in the DOM.
-  const mounted = (sidebarOnly ? [] : workspaces).filter((w) => w.root && (recent.current.includes(w.id) || leaving.current.includes(w.id)));
 
   const Sidebar = (
     // `min()` guards the mobile overlay, where the chosen width could be wider
     // than the screen it slides over.
     <div
-      className={`panel ${sidebarOnly ? '' : 'panel-ring '}flex ${horizontal ? 'h-auto w-full flex-row items-stretch' : 'h-full flex-col'}`}
+      className={`panel flex ${horizontal ? 'h-auto w-full flex-row items-stretch' : 'h-full flex-col'}`}
       style={horizontal ? undefined : { width: `min(${sidebarW}px, 82vw)` }}
-      data-agent-panel={sidebarOnly || undefined}
-      data-orientation={sidebarOnly ? orientation : undefined}
+      data-agent-panel
+      data-orientation={orientation}
     >
       <div className={horizontal ? 'flex shrink-0 flex-col items-center justify-center gap-1 border-r border-line px-1.5 py-2' : 'flex items-center justify-between px-3 py-2.5'} data-agent-panel-header>
-        {!sidebarOnly && <span className="text-sm font-semibold">Agents</span>}
         {/* A column panel keeps show/hide and orientation at its left and the
             + at its right; a row panel stacks all three in its left strip. */}
-        {sidebarOnly && !horizontal && <AgentPanelControls show orientation={orientation} onToggle={() => onClosePanel?.()} onOrientation={(next) => onOrientation?.(next)} />}
+        {!horizontal && <AgentPanelControls show orientation={orientation} onToggle={() => onClosePanel?.()} onOrientation={(next) => onOrientation?.(next)} />}
         <div className={`relative flex shrink-0 items-center ${horizontal ? 'flex-col gap-1' : 'gap-0.5'}`} ref={newMenuRef}>
-          {sidebarOnly ? (
-            horizontal && <AgentPanelControls show orientation={orientation} onToggle={() => onClosePanel?.()} onOrientation={(next) => onOrientation?.(next)} />
-          ) : (
+          {horizontal && <AgentPanelControls show orientation={orientation} onToggle={() => onClosePanel?.()} onOrientation={(next) => onOrientation?.(next)} />}
           <button
-            className={`rounded-sm p-1.5 ${contextPanelOpen ? 'bg-surface-2 text-accent' : 'text-ink-faint hover:text-ink'}`}
-            title={`${contextPanelOpen ? 'Hide' : 'Show'} the folders, files & context panel (${SHORTCUTS.contextPanel.label})`}
-            aria-label={`${contextPanelOpen ? 'Hide' : 'Show'} the folders, files and context panel`}
-            aria-pressed={contextPanelOpen}
-            onClick={() => useStore.getState().toggleContextPanel()}
-          >
-            <PanelIcon className="h-3.5 w-3.5" />
-          </button>)}
-          {sidebarOnly && <button
             ref={viewButtonRef}
             className={`agent-panel-view btn btn-ghost px-1.5 py-1 ${viewMenu ? 'is-open text-ink' : 'text-ink-faint hover:text-ink'}`}
             title="View options: group, sort and show"
@@ -739,7 +594,7 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
             onClick={openViewMenuFromButton}
           >
             <SlidersIcon className="h-4 w-4" />
-          </button>}
+          </button>
           <button
             ref={finderButtonRef}
             className={`agent-panel-view btn btn-ghost px-1.5 py-1 ${finderOpen ? 'is-open text-ink' : 'text-ink-faint hover:text-ink'}`}
@@ -756,7 +611,7 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
             <ChatFinder
               anchorRef={finderButtonRef}
               onClose={closeFinder}
-              onOpen={(id) => { if (sidebarOnly) onOpenChat?.(id); else openChatPane(id); setMobileNav(false); }}
+              onOpen={(id) => { onOpenChat(id); setMobileNav(false); }}
             />
           )}
           <button
@@ -822,7 +677,7 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
           const completedGroup = b.key === COMPLETED_GROUP;
           const isCollapsed = completedGroup ? !showCompleted.has(b.key) : collapsed.has(b.key);
           const completedOpen = completedGroup || showCompleted.has(b.key);
-          const tipHere = sidebarOnly && showTips && done.some((s) => s.id === completionTipSessionId);
+          const tipHere = showTips && done.some((s) => s.id === completionTipSessionId);
           const bucketActive = dropTarget === 'bucket:' + b.key;
           const groupGap = bucketActive && drag?.kind === 'project' && drag.id !== b.key;
           return (
@@ -838,13 +693,13 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
               {!b.bare && <div
                 className="agent-panel-group-heading group flex items-center gap-1 rounded-lg px-1.5 py-1 hover:bg-surface-2"
                 draggable={byProject && !!b.ws}
-                onContextMenu={sidebarOnly ? (e) => { e.preventDefault(); e.stopPropagation(); setViewMenu({ x: e.clientX, y: e.clientY }); } : undefined}
+                onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setViewMenu({ x: e.clientX, y: e.clientY }); }}
                 onDragStart={byProject && b.ws ? (e) => {
                   if (pressingGroupAction.current) { e.preventDefault(); return; }
                   startDrag(e, { kind: 'project', id: b.ws!.id, ws: b.ws!.id });
                 } : undefined}
                 onDragEnd={endDrag}
-                title={byProject && b.ws ? 'Drag to reorder project · right-click for view options' : sidebarOnly ? 'Right-click for view options' : undefined}
+                title={byProject && b.ws ? 'Drag to reorder project · right-click for view options' : 'Right-click for view options'}
               >
                 <button
                   className="flex min-w-0 flex-1 items-center gap-1 py-0.5 text-left"
@@ -915,19 +770,16 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
                           session={s}
                           terminal={entry.t}
                           status={s ? statuses.get(s.id) : undefined}
-                          isActive={sidebarOnly ? (s?.id ?? entry.t?.id) === selectedId : !!w && w.id === active?.id}
+                          isActive={(s?.id ?? entry.t?.id) === selectedId}
                           now={now}
                           projects={settings?.workspaces ?? []}
                           subAgentCount={kids.length}
                           showMetadata={view.showMetadata}
                           showProvider={view.showProvider}
                           onOpen={() => {
-                            if (sidebarOnly) {
-                              if (s) onOpenChat?.(s.id);
-                              else if (entry.t) onOpenTerminal?.(entry.t.id);
-                              setMobileNav(false);
-                            } else if (w) setActiveWorkspace(w.id);
-                            else if (s) openChatPane(s.id);
+                            if (s) onOpenChat(s.id);
+                            else if (entry.t) onOpenTerminal(entry.t.id);
+                            setMobileNav(false);
                           }}
                           onClose={() => (w ? archiveWorkspace(w.id) : s ? archiveChat(s.id) : undefined)}
                         />
@@ -937,8 +789,8 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
                             key={kid.id}
                             session={kid}
                             status={statuses.get(kid.id)}
-                            isActive={kid.id === (sidebarOnly ? selectedId : activeSessionId)}
-                            onOpen={() => sidebarOnly ? onOpenChat?.(kid.id) : openChatPane(kid.id)}
+                            isActive={kid.id === selectedId}
+                            onOpen={() => onOpenChat(kid.id)}
                           />
                         ))}
                       </div>
@@ -950,9 +802,9 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
                     <div className={completedGroup ? '' : 'pt-1'}>
                       {!completedGroup && <button
                         className="flex w-full items-center gap-1 rounded-md px-2 py-1 text-left text-[11px] text-ink-faint hover:bg-surface-2 hover:text-ink"
-                        style={sidebarOnly && showTips && done.some((s) => s.id === completionTipSessionId) ? { outline: '2px solid var(--accent)', background: 'var(--surface-2)' } : undefined}
+                        style={showTips && done.some((s) => s.id === completionTipSessionId) ? { outline: '2px solid var(--accent)', background: 'var(--surface-2)' } : undefined}
                         aria-expanded={completedOpen}
-                        ref={sidebarOnly && showTips && done.some((s) => s.id === completionTipSessionId) ? completionDestinationRef : undefined}
+                        ref={showTips && done.some((s) => s.id === completionTipSessionId) ? completionDestinationRef : undefined}
                         data-completed-toggle
                         onClick={() => { useStore.setState({ completionTipSessionId: null }); setShowCompleted((c) => { const n = new Set(c); n.has(b.key) ? n.delete(b.key) : n.add(b.key); return n; }); }}
                       >
@@ -971,8 +823,8 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
                           key={s.id}
                           session={s}
                           now={now}
-                          isActive={sidebarOnly ? selectedId === s.id : archiveOpen && archivedViewId === s.id}
-                          onOpen={() => { if (sidebarOnly) onOpenChat?.(s.id); else openChatPane(s.id); setMobileNav(false); }}
+                          isActive={selectedId === s.id}
+                          onOpen={() => { onOpenChat(s.id); setMobileNav(false); }}
                           onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setMenu(null); setDoneMenu({ x: e.clientX, y: e.clientY, id: s.id }); }}
                         />
                       ))}
@@ -997,14 +849,14 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
     <div
       // The Agents tab panel takes the column's height and no more, so its card
       // list overflows into its own scroller and the mouse wheel scrolls it.
-      className={`flex min-w-0 ${sidebarOnly ? `shrink-0 ${horizontal ? 'w-full' : 'agent-panel-host min-h-0 self-stretch'}` : 'h-full overflow-hidden'}`}
-      style={sidebarOnly ? { gap: 'var(--pane-gap)', minHeight: 0 } : { background: 'var(--surface-2)', padding: 'var(--pane-gap)', gap: 'var(--pane-gap)' }}
+      className={`flex min-w-0 shrink-0 ${horizontal ? 'w-full' : 'agent-panel-host min-h-0 self-stretch'}`}
+      style={{ gap: 'var(--pane-gap)', minHeight: 0 }}
     >
       {viewMenu && <AgentPanelViewMenu x={viewMenu.x} y={viewMenu.y} view={view} onChange={setView} onClose={closeViewMenu} />}
       {menu && <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}>
         <div className="select-text break-all px-2.5 py-2 font-mono text-[10px] text-ink-faint">{menu.ids.length === 1 ? <><span className="select-none">Chat ID: </span><span className="select-all">{menu.ids[0]}</span></> : menu.ids.length + ' sessions selected'}</div>
         {menu.model ? <div className="h-72"><ModelPicker expanded open providers={useStore.getState().providers} providerId={null} modelId={null} models={[]} onOpenChange={() => {}} onProvider={() => {}} onModel={(pid, mid) => { const ids = menu.ids; setMenu(null); void Promise.allSettled(ids.map(async id => { const s = await window.nekko.setSessionOptions(id,{providerId:pid,modelId:mid,autoModel:mid===AUTO_MODEL_ID}); if (!s) throw new Error('Chat no longer exists'); window.dispatchEvent(new CustomEvent('nekko-session-brain', {detail:{id,session:s}})); })).then(results => { results.forEach((r,i) => { if(r.status==='rejected') useStore.getState().pushToast('error',ids[i]+': '+String(r.reason)); }); void refreshSessions(); }); }} /></div> : <>
-          <ContextAction onClick={() => { menu.ids.forEach(id => sidebarOnly ? onOpenChat?.(id) : openChatPane(id)); setMenu(null); }}>Open{menu.ids.length > 1 ? ' all' : ''}</ContextAction>
+          <ContextAction onClick={() => { menu.ids.forEach(id => onOpenChat(id)); setMenu(null); }}>Open{menu.ids.length > 1 ? ' all' : ''}</ContextAction>
           <ContextAction onClick={() => void runAction('complete',menu.ids)}>Mark as completed</ContextAction>
           <ContextAction onClick={() => setMenu({...menu, model:true})}>Change model</ContextAction>
           <ContextAction disabled={!menu.ids.some(id => statuses.has(id))} onClick={() => void runAction('stop',menu.ids)}>Stop{menu.ids.length > 1 ? ' all' : ''}</ContextAction>
@@ -1022,10 +874,10 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
           <span className="text-(--danger)">Delete forever</span>
         </ContextAction>
       </ContextMenu>}
-      {sidebarOnly && mobileNav && <div className="absolute inset-0 z-20 bg-black/40 md:hidden" onClick={() => setMobileNav(false)} />}
+      {mobileNav && <div className="absolute inset-0 z-20 bg-black/40 md:hidden" onClick={() => setMobileNav(false)} />}
       {/* A row of cards needs no drawer on a narrow screen: it is already out of the way. */}
       {horizontal && <aside className="flex w-full min-w-0">{Sidebar}</aside>}
-      {sidebarOnly && !horizontal && <><div className="md:hidden">
+      {!horizontal && <><div className="md:hidden">
         <button className="btn btn-ghost" aria-label="Open agent list" aria-expanded={mobileNav}
           style={!mobileNav && showTips && sessions.some((s) => s.id === completionTipSessionId && s.archivedAt) ? { outline: '2px solid var(--accent)', background: 'var(--surface-2)' } : undefined}
           onClick={() => setMobileNav(true)}>Agents</button>
@@ -1084,51 +936,6 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
           className="pane-grip absolute inset-y-0 left-1/2 w-[3px] -translate-x-1/2 rounded-full opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
         />
       </div></>}
-
-      {!sidebarOnly && <main className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center gap-2 border-b border-line px-2 py-1.5 md:hidden">
-          <button className="btn btn-ghost px-2 py-1" onClick={() => useStore.getState().setView('command')} aria-label="Open Agents">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M3 6h18M3 12h18M3 18h18" /></svg>
-          </button>
-          <span className="text-[13px] font-semibold">Agents</span>
-        </div>
-
-        {/* A completed chat being read takes the middle, over the workspaces,
-            which stay mounted underneath so leaving it is instant. */}
-        {reading && (
-          <div className="panel panel-ring flex min-h-0 flex-1 flex-col overflow-hidden">
-            <ChatPane key={`archived:${archivedViewId}`} sessionId={archivedViewId} readOnly />
-          </div>
-        )}
-        {!reading && !active?.root && <EmptyState onNewChat={() => { void newChat(); }} onNewTerminal={() => newTerminal()} />}
-        {mounted.length > 0 && (
-          // The mounted workspaces share one box, stacked; the one on screen is
-          // on top. See WorkspaceCanvas for how the others are kept.
-          <div className="relative min-h-0 flex-1" style={active?.root && !reading ? undefined : { display: 'none' }}>
-            {mounted.map((w) => (
-              <WorkspaceCanvas
-                key={w.id}
-                workspace={w}
-                hidden={w.id !== active?.id}
-                sessions={sessions}
-                terminals={terminals}
-                statuses={statuses}
-                projects={settings?.workspaces ?? []}
-              />
-            ))}
-          </div>
-        )}
-      </main>}
-
-      {/* The right panel: folders + file explorer over the context breakdown. It
-          belongs to the app rather than to one window, so opening a file from
-          the explorer doesn't take the explorer away with it. It follows the
-          active chat, and says so when there isn't one. */}
-      {!sidebarOnly && contextPanelOpen && (
-        <aside className="panel panel-ring hidden shrink-0 lg:block">
-          <ContextInspector sessionId={activeSessionId} />
-        </aside>
-      )}
     </div>
   );
 }
@@ -1188,188 +995,5 @@ function SubAgentRow({
       <span className="min-w-0 flex-1 truncate">{session.title}</span>
       {status && <StatusIcon status={status} />}
     </button>
-  );
-}
-
-/**
- * The workspace on screen: its split tree, rendered, plus the one bit of state
- * the tree itself can't hold — which window is mid-drag, which every other
- * window needs to know so it can offer itself as a target.
- */
-const WorkspaceCanvas = React.memo(function WorkspaceCanvas({
-  workspace, hidden, sessions, terminals, statuses, projects,
-}: {
-  workspace: Workspace;
-  /** Kept mounted but not on screen. */
-  hidden: boolean;
-  sessions: SessionSummary[];
-  terminals: TerminalInfo[];
-  statuses: Map<string, AgentStatus>;
-  projects: WorkspaceFolder[];
-}) {
-  // The whole tab may be hidden behind the Agent board; a workspace is on screen only when the tab is.
-  const tabVisible = usePaneVisible();
-  const [dragging, setDragging] = useState<string | null>(null);
-  const {
-    splitPane, movePane, swapPanes, closePane, setActivePane, canSplitPane, resizePanes,
-    newChatInPane, newTerminalInPane,
-  } = useStore(
-    useShallow((s) => ({
-      splitPane: s.splitPane,
-      movePane: s.movePane,
-      swapPanes: s.swapPanes,
-      closePane: s.closePane,
-      setActivePane: s.setActivePane,
-      canSplitPane: s.canSplitPane,
-      resizePanes: s.resizePanes,
-      newChatInPane: s.newChatInPane,
-      newTerminalInPane: s.newTerminalInPane,
-    })),
-  );
-
-  // A dropped drag that never fired dragend (cancelled over a non-target) would
-  // otherwise leave every window showing a target forever.
-  useEffect(() => {
-    if (!dragging) return;
-    const clear = () => setDragging(null);
-    window.addEventListener('dragend', clear);
-    window.addEventListener('drop', clear);
-    return () => {
-      window.removeEventListener('dragend', clear);
-      window.removeEventListener('drop', clear);
-    };
-  }, [dragging]);
-
-  /**
-   * A new window needs something to point at. Chats and terminals are host
-   * objects, so those go through the store and come back with an id; an
-   * explorer opens on the workspace's own project when it has one, and a
-   * browser on a blank page.
-   */
-  const addWindow = (paneId: string, dir: Direction, kind: WbPane['kind']) => {
-    if (kind === 'chat') return void newChatInPane(paneId, dir);
-    if (kind === 'terminal') return void newTerminalInPane(paneId, dir);
-    const root =
-      kind === 'browser'
-        ? 'about:blank'
-        : projects.find((p) => p.id === projectOfWorkspace(workspace, sessions, terminals))?.path ??
-          projects[0]?.path ??
-          '';
-    splitPane(paneId, dir, kind, root);
-  };
-
-  const chatProject = (pane: WbPane): string | null => {
-    if (pane.kind !== 'chat') return null;
-    const wid = sessions.find((s) => s.id === pane.refId)?.workspaceId;
-    return wid ? projects.find((w) => w.id === wid)?.name ?? null : null;
-  };
-
-  const renderNode = (node: WbNode): React.JSX.Element => {
-    if (!isSplit(node)) {
-      const status = node.kind === 'chat' ? statuses.get(node.refId) : undefined;
-      const project = chatProject(node);
-      return (
-        <PaneFrame
-          key={node.id}
-          pane={node}
-          title={paneTitle(node, sessions, terminals)}
-          icon={<PaneIcon kind={node.kind} />}
-          badge={
-            <>
-              {project && (
-                <span
-                  className="max-w-[90px] shrink-0 truncate rounded-sm px-1 py-px text-[10px] leading-normal text-ink-faint"
-                  style={{ background: 'var(--surface-2)' }}
-                  title={`Project: ${project}`}
-                >
-                  {project}
-                </span>
-              )}
-              {node.kind === 'chat' && <StatusIcon status={status} />}
-            </>
-          }
-          isActive={node.id === workspace.activePaneId}
-          dragging={dragging}
-          canSplit={(dir) => canSplitPane(node.id, dir)}
-          onSplit={(dir, kind) => { void addWindow(node.id, dir, kind); }}
-          onClose={() => closePane(node.id)}
-          onMinimize={() => closePane(node.id)}
-          onFocus={() => setActivePane(node.id)}
-          onDragStart={() => setDragging(node.id)}
-          onDragEnd={() => setDragging(null)}
-          onDrop={(target) => {
-            if (dragging) {
-              if (target === 'swap') swapPanes(dragging, node.id);
-              else movePane(dragging, node.id, target);
-            }
-            setDragging(null);
-          }}
-        >
-          <PaneBody pane={node} hidden={hidden} />
-        </PaneFrame>
-      );
-    }
-    return (
-      // No `gap` here: the Divider between two windows is itself --pane-gap
-      // wide, so it is the space they keep. Each child's share is a flex-grow
-      // weight rather than a percentage of the box, since bases that summed to
-      // 100% pushed the last window's width past the edge once the dividers
-      // took theirs, which is how a row's rightmost window could slide under
-      // the inspector.
-      <div
-        key={node.id}
-        className={`flex min-h-0 min-w-0 flex-1 ${node.dir === 'row' ? 'flex-row' : 'flex-col'}`}
-      >
-        {node.children.map((child, i) => (
-          <React.Fragment key={child.id}>
-            {i > 0 && <Divider splitId={node.id} index={i - 1} dir={node.dir} onResize={resizePanes} />}
-            <div className="flex min-h-0 min-w-0" style={{ flex: `${node.sizes[i]} 1 0` }}>
-              {renderNode(child)}
-            </div>
-          </React.Fragment>
-        ))}
-      </div>
-    );
-  };
-
-  return (
-    // The field and its padding belong to the workbench now, so the windows sit
-    // on the same surface, at the same gap, as the sidebar and the inspector.
-    // A hidden workspace is skipped with content-visibility rather than
-    // display:none: its styles, layout and scroll positions are kept, so
-    // showing it again is a paint, not a rebuild. It sits under the one on
-    // screen, which covers it, so it never takes a click.
-    <div
-      className="absolute inset-0 flex min-h-0"
-      style={{ gap: 'var(--pane-gap)', zIndex: hidden ? 0 : 1, contentVisibility: hidden ? 'hidden' : 'visible' }}
-      aria-hidden={hidden || undefined}
-    >
-      <PaneVisibleContext.Provider value={!hidden && tabVisible}>{renderNode(workspace.root!)}</PaneVisibleContext.Provider>
-    </div>
-  );
-});
-
-function EmptyState({ onNewChat, onNewTerminal }: { onNewChat: () => void; onNewTerminal: () => void }) {
-  return (
-    // A panel of its own, so an empty workbench is still a surface rather than a
-    // hole in the field the windows would otherwise sit on.
-    <div className="panel panel-ring flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
-      <div className="grid h-14 w-14 place-items-center rounded-2xl" style={{ background: 'var(--accent-soft)' }}><NekkoAvatar size={34} /></div>
-      <div>
-        <h2 className="text-lg font-semibold">No agent open</h2>
-        <p className="mx-auto mt-1 max-w-sm text-[13px] text-ink-faint">
-          An agent is a chat and whatever it needs around it, files, a terminal, a browser, all on screen at once.
-          Start one and add windows on any side.
-        </p>
-      </div>
-      <div className="flex gap-2">
-        <button className="btn btn-primary" onClick={onNewChat}>
-          <ChatIcon className="h-4 w-4" /> New agent <kbd className="kbd">{SHORTCUTS.newAgent.label}</kbd>
-        </button>
-        <button className="btn btn-outline" onClick={onNewTerminal}>
-          <TerminalIcon className="h-4 w-4" /> New terminal <kbd className="kbd">{SHORTCUTS.newTerminal.label}</kbd>
-        </button>
-      </div>
-    </div>
   );
 }

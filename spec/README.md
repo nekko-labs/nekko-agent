@@ -93,7 +93,7 @@ Agents panel, monitors, subagents and delegation.
 - [Agent activity and panel polish](agents/agent-activity-and-panel-polish.md) (39 KB)
 - [Agent Monitor Project group, hardware temperatures and multi-monitor Dynamic mode (2026-10-18)](agents/agent-monitor-project-group-hardware-temperatures-and-multi-moni.md) (5 KB)
 - [Agent panel view options (2026-10-17)](agents/agent-panel-view-options.md) (4 KB)
-- [Agents dashboard simplification (2026-10-06)](agents/agents-dashboard-simplification.md) (2 KB)
+- [Agents dashboard simplification (2026-10-06)](agents/agents-dashboard-simplification.md) (3 KB)
 - [Approval retention and delegation navigation](agents/approval-retention-and-delegation-navigation.md) (1 KB)
 - [Chat finder in the Agents panel (2026-10-16)](agents/chat-finder-in-the-agents-panel.md) (6 KB)
 - [Delegating frontier planning to a local worker](agents/delegating-frontier-planning-to-a-local-worker.md) (2 KB)

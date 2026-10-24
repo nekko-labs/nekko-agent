@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useStore } from '../../src/renderer/store';
-import { WorkspacesView } from '../../src/renderer/views/WorkspacesView';
+import { AgentSidebar } from '../../src/renderer/views/WorkspacesView';
 import { summarizeSession } from '@nekko-agent/shared';
 import '../../src/renderer/styles.css';
 
@@ -37,6 +37,6 @@ function Fixture() {
   const [selected, setSelected] = useState<string | undefined>();
   React.useLayoutEffect(() => { useStore.setState({ sessions, providers, terminals: [], workspaces: [], settings: { providers, workspaces, experimental: {}, agent: {}, ui: {} } } as any); }, []);
   Object.assign(window, { integration: { opened, findSeed: () => useStore.getState().findSeed } });
-  return <main style={{ height: '100vh', width: 300 }}><WorkspacesView sidebarOnly selectedId={selected} onOpenChat={(id) => { opened.push(id); setSelected(id); }} /></main>;
+  return <main style={{ height: '100vh', width: 300 }}><AgentSidebar selectedId={selected ?? null} onOpenChat={(id) => { opened.push(id); setSelected(id); }} onOpenTerminal={() => {}} onCreate={async () => {}} /></main>;
 }
 createRoot(document.getElementById('root')!).render(<Fixture />);

@@ -49,21 +49,24 @@ app.whenReady().then(async () => {
           await reset(mode === 'onboarding');
           const event = await run(`shortcutTest.dispatch(${JSON.stringify({ key, shiftKey, [modifier]: true, altKey: mode === 'alt' })})`);
           const handled = mode === 'normal';
-          const state = await poll(name + ' completion', s => !handled || (s.calls.length === 1 && s.view === 'chat' && s.activeWorkspaceId && s.workspaces.length > 0));
+          // A new agent is focused on the wall; a new terminal opens as a workspace.
+          const state = await poll(name + ' completion', s => !handled || (s.calls.length === 1 && s.view === 'command' && (kind === 'agent' ? s.focusRequest : s.activeWorkspaceId && s.workspaces.length > 0)));
           assert.equal(event.defaultPrevented, handled, name + ' preventDefault');
           assert.equal(event.dispatched, !handled, name + ' dispatch result');
           assert.equal(state.calls.length, handled ? 1 : 0, name + ' host calls');
           if (handled) {
             assert.equal(state.calls[0].method, kind === 'agent' ? 'createSession' : 'createTerminal', name);
-            assert.equal(state.view, 'chat', name + ' real store view');
+            assert.equal(state.view, 'command', name + ' real store view');
             const id = kind === 'agent' ? state.sessions[0]?.id : state.terminals[0]?.id;
             assert.ok(id, name + ' real store record');
-            assert.ok(JSON.stringify(state.workspaces).includes(`"refId":"${id}"`), name + ' real pane');
-            assert.ok(state.activeWorkspaceId, name + ' active workspace');
             if (kind === 'agent') {
+              assert.equal(state.focusRequest?.sessionId, id, name + ' focused on the wall');
               assert.equal(state.activeSessionId, id);
               assert.equal(state.calls[0].workspaceId, 'synthetic-project');
-            } else assert.equal(state.calls[0].options.workspaceId, 'synthetic-project');
+            } else {
+              assert.ok(JSON.stringify(state.workspaces).includes(`"refId":"${id}"`), name + ' real pane');
+              assert.equal(state.calls[0].options.workspaceId, 'synthetic-project');
+            }
           } else assert.equal(state.workspaces.length, 0, name + ' no pane');
           report.checks.push({ name, passed: true, event, state });
         }
@@ -78,7 +81,7 @@ app.whenReady().then(async () => {
     for (const tag of ['input', 'textarea', 'div']) {
       await reset(false);
       const event = await run('shortcutTest.dispatch(' + JSON.stringify({ key: 't', ctrlKey: true }) + ', ' + JSON.stringify(tag) + ')');
-      const state = await poll('focused ' + tag, s => s.calls.length === 1 && s.view === 'chat' && s.activeWorkspaceId && s.workspaces.length > 0);
+      const state = await poll('focused ' + tag, s => s.calls.length === 1 && s.view === 'command' && s.focusRequest);
       assert.equal(event.defaultPrevented, true);
       assert.equal(state.calls.length, 1);
       assert.equal(state.calls[0].method, 'createSession');

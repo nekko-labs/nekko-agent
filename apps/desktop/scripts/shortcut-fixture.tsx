@@ -8,7 +8,7 @@ import { summarizeSession } from '@nekko-agent/shared';
 // Real App and store actions; only the host boundary is synthetic.
 const provider = { id: 'fixture', kind: 'ollama', enabled: true, baseUrl: 'http://invalid.local' };
 const models = [{ id: 'fixture-model', providerId: 'fixture', name: 'Fixture', contextWindow: 32000 }];
-let settings = { providers: [provider], defaultProviderId: 'fixture', defaultModelId: 'fixture-model', workspaces: [], workspaceFolders: [], onboarding: { completedAt: 1 }, experimental: {}, developer: { chat: true }, agent: {}, ui: {} };
+let settings = { providers: [provider], defaultProviderId: 'fixture', defaultModelId: 'fixture-model', workspaces: [], workspaceFolders: [], onboarding: { completedAt: 1 }, experimental: {}, agent: {}, ui: {} };
 const records: any[] = [];
 const terminals: any[] = [];
 const calls: any[] = [];
@@ -81,7 +81,7 @@ Object.assign(window, { shortcutTest: {
   },
   snapshot() {
     const s = useStore.getState();
-    return { ready, shortcutHandlerInstalled, resetGeneration, committedGeneration, unexpectedCalls: [...unexpectedCalls], calls: [...calls], view: s.view, sessions: s.sessions, terminals: s.terminals, workspaces: s.workspaces, activeSessionId: s.activeSessionId, activeWorkspaceId: s.activeWorkspaceId, onboardingOpen: s.onboardingOpen };
+    return { ready, shortcutHandlerInstalled, resetGeneration, committedGeneration, unexpectedCalls: [...unexpectedCalls], calls: [...calls], view: s.view, sessions: s.sessions, terminals: s.terminals, workspaces: s.workspaces, activeSessionId: s.activeSessionId, activeWorkspaceId: s.activeWorkspaceId, focusRequest: s.focusRequest, onboardingOpen: s.onboardingOpen };
   },
 } });
 createRoot(document.getElementById('root')!).render(<UpdateProvider><App /><CommitSignal /></UpdateProvider>);

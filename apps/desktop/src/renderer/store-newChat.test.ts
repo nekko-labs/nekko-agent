@@ -14,26 +14,15 @@ beforeEach(() => {
 });
 
 describe('new-chat first frame', () => {
-  it('caches the creation record before the pane opens', async () => {
+  it('selects the new chat on the wall in the current layout, its record already cached', async () => {
     window.nekko = { createSession: vi.fn().mockResolvedValue(created), listProviders: vi.fn().mockResolvedValue([{ id: 'p', kind: 'chatgpt', enabled: true }]), listModels: vi.fn().mockResolvedValue([]) } as unknown as typeof window.nekko;
-    const open = vi.spyOn(useStore.getState(), 'openChatPane').mockImplementation((id) => {
-      expect(getCachedSession(id)).toBe(created);
-    });
-    useStore.setState({ settings: { workspaces: [], developer: { chat: true } } as any });
-    try {
-      await useStore.getState().newChat();
-      expect(open).toHaveBeenCalledWith(created.id);
-      expect(useStore.getState().activeSessionId).toBe(created.id);
-      expect(useStore.getState().view).toBe('chat');
-    } finally { open.mockRestore(); useStore.setState({ settings: null }); }
-  });
-  it('with the Chat tab off, selects the new chat on the wall in the current layout', async () => {
-    window.nekko = { createSession: vi.fn().mockResolvedValue(created), listProviders: vi.fn().mockResolvedValue([{ id: 'p', kind: 'chatgpt', enabled: true }]), listModels: vi.fn().mockResolvedValue([]) } as unknown as typeof window.nekko;
-    useStore.setState({ view: 'settings', focusRequest: null, settings: { workspaces: [], developer: { chat: false } } as any });
+    useStore.setState({ view: 'settings', focusRequest: null, settings: { workspaces: [] } as any });
     const open = vi.spyOn(useStore.getState(), 'openChatPane');
     try {
       await useStore.getState().newChat();
       expect(open).not.toHaveBeenCalled();
+      expect(getCachedSession(created.id)).toBe(created);
+      expect(useStore.getState().activeSessionId).toBe(created.id);
       expect(useStore.getState().view).toBe('command');
       expect(useStore.getState().focusRequest).toEqual({ sessionId: created.id, keepLayout: true });
       expect(useStore.getState().sessions[0]?.id).toBe(created.id);
