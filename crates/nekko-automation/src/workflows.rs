@@ -583,7 +583,8 @@ impl Workflows {
             }?;
             // "Pause all automations" and the run policy hold back what
             // nobody asked for just now.
-            let mut ran = (false, None);
+            // Low priority, how long it waited, and how its turns step aside.
+            let mut ran: (bool, Option<f64>, Option<&'static str>) = (false, None, None);
             if depth == 0 {
                 let kind = trigger_kind.as_str().unwrap_or("");
                 let settings = self.host.settings().await;
@@ -591,14 +592,23 @@ impl Workflows {
                     return None;
                 }
                 if rules::PAUSABLE_TRIGGER_KINDS.contains(&kind) {
-                    match self.policy_gate(&wf, kind, &settings).await {
+                    let (gate, policy) = self.policy_gate(&wf, kind, &settings).await;
+                    match gate {
                         // An event is never dropped: it runs, beside the user.
-                        Gate::Wait if kind != "schedule" => ran = (true, None),
+                        Gate::Wait if kind != "schedule" => {
+                            ran = (true, None, policy.and_then(|p| run_policy::running_mode(p, true)));
+                        }
                         Gate::Wait => {
                             self.mark_waiting(workflow_id, Some(self.now()));
                             return None;
                         }
-                        Gate::Go { low_priority, waited_ms } => ran = (low_priority, waited_ms),
+                        Gate::Go { low_priority, waited_ms } => {
+                            ran = (
+                                low_priority,
+                                waited_ms,
+                                policy.and_then(|p| run_policy::running_mode(p, low_priority)),
+                            );
+                        }
                     }
                 }
             }
@@ -719,6 +729,9 @@ impl Workflows {
             if let Some(l) = trigger_label {
                 run_info.insert("triggerLabel".into(), l);
             }
+            if let Some(mode) = ran.2 {
+                run_info.insert("background".into(), json!(mode));
+            }
             let run_info = Value::Object(run_info);
 
             let outcome = match &session {
@@ -772,7 +785,9 @@ impl Workflows {
 
     /// The run policy for a run `kind` started. A schedule is due since its
     /// slot; an event, since now.
-    async fn policy_gate(&self, wf: &Value, kind: &str, settings: &Value) -> Gate {
+    /// With the policy, when the host could tell whether anyone is here (the
+    /// run's turns step aside by it).
+    async fn policy_gate(&self, wf: &Value, kind: &str, settings: &Value) -> (Gate, Option<run_policy::Policy>) {
         let default = settings.get("defaultProviderId");
         let steps = wf.get("steps").and_then(Value::as_array).into_iter().flatten();
         let local = nekko_js::truthy(wf.get("localModelOnly"))
@@ -780,9 +795,10 @@ impl Workflows {
             || steps.into_iter().any(|s| run_policy::is_local_provider(settings, nullish(s.get("providerId"))));
         let policy = run_policy::policy_of(wf, settings, local);
         if policy == run_policy::Policy::Always {
-            return Gate::Go { low_priority: false, waited_ms: None };
+            return (Gate::Go { low_priority: false, waited_ms: None }, None);
         }
         let activity = self.host.activity(run_policy::idle_after_secs(settings)).await;
+        let known = activity.is_some().then_some(policy);
         let now = self.now();
         let due = match kind {
             "schedule" => {
@@ -793,7 +809,7 @@ impl Workflows {
             }
             _ => now,
         };
-        run_policy::gate(policy, activity.as_ref(), due, now)
+        (run_policy::gate(policy, activity.as_ref(), due, now), known)
     }
 
     /// Say on the workflow that a due run waits for idle (`Some`), or no
@@ -942,7 +958,8 @@ impl Workflows {
             Some("workflow") => self.run_nested(&run_text, depth).await,
             Some("action") => self.run_action(step, event, run_info, tctx).await,
             Some("prompt") | Some("skill") => {
-                let inputs = AgentInputs { with: render("with"), args: render("args"), pr };
+                let background = run_info.get("background").and_then(Value::as_str).map(str::to_string);
+                let inputs = AgentInputs { background, with: render("with"), args: render("args"), pr };
                 self.run_agent(wf, step, &run_text, inputs, session_id, first_event).await
             }
             _ => StepResult::fail("Step did not run."),
@@ -1068,7 +1085,7 @@ impl Workflows {
         session_id: &str,
         event: Option<&Value>,
     ) -> StepResult {
-        let AgentInputs { with, args, pr } = inputs;
+        let AgentInputs { background, with, args, pr } = inputs;
         let sid = || Some(session_id.to_string());
         let fail = |e: &str| StepResult { ok: false, output: None, error: Some(e.to_string()), session_id: sid() };
         let settings = self.host.settings().await;
@@ -1161,6 +1178,9 @@ impl Workflows {
         // A tools-off step reads text someone else wrote: no tool that acts.
         if str_field(step, "tools") == Some("none") {
             opts["noTools"] = json!(true);
+        }
+        if let Some(mode) = background {
+            opts["background"] = json!(mode);
         }
         let failed = match self.host.send_chat(opts).await {
             Ok(f) => f,
@@ -1546,6 +1566,8 @@ impl Workflows {
 
 /// A prompt or skill step's extra inputs.
 struct AgentInputs<'a> {
+    /// How the run's turns step aside for the user (`run_policy::running_mode`).
+    background: Option<String>,
     with: Option<String>,
     /// Fills a skill's `$ARGUMENTS`.
     args: Option<String>,

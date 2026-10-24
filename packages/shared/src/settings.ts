@@ -394,7 +394,7 @@ export interface AppSettings {
   /** Experimental feature toggles (Settings → Experimental). Off = surface hidden. */
   experimental?: ExperimentalFlags;
   /** Desktop developer controls; absent means disabled. */
-  developer?: { serverControls?: boolean; chat?: boolean };
+  developer?: { serverControls?: boolean };
   /** First-run setup wizard progress (undefined on installs that predate it). */
   onboarding?: OnboardingState;
   /**

@@ -15,7 +15,7 @@ export function parseVoiceIntent(text: string): VoiceIntent {
   const go = parseGo(command);
   if (go) return { kind: 'go', target: go };
   const target = command.replace(/^(?:go to|open|show|switch to) (?:the )?/, '').replace(/ (?:tab|page)$/, '');
-  const views: Record<string, View> = { 'agent board': 'command', 'command center': 'command', agents: 'chat', models: 'models', 'model providers': 'models', 'model server': 'modelserver', settings: 'settings', connectors: 'connectors', memory: 'memory', skills: 'skills', training: 'training', workflows: 'workflows', design: 'design', artifacts: 'artifacts' };
+  const views: Record<string, View> = { 'agent board': 'command', 'command center': 'command', agents: 'command', models: 'models', 'model providers': 'models', 'model server': 'modelserver', settings: 'settings', connectors: 'connectors', memory: 'memory', skills: 'skills', training: 'training', workflows: 'workflows', design: 'design', artifacts: 'artifacts' };
   if (target !== command && views[target]) return { kind: 'navigate', view: views[target] };
   return { kind: 'unknown', text: trimmed };
 }

@@ -394,11 +394,6 @@ export function SettingsView() {
               <section className="card mt-5 p-5">
                 <h2 className="font-semibold">Developer</h2>
                 <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
-                  <div><span className="text-[13px]">Show Chat workspace</span>
-                    <p className="text-[11px] text-ink-faint">Show the legacy Chat workspace tab. Off by default; Agents remains the main destination.</p></div>
-                  <Toggle aria-label="Show Chat workspace" on={settings.developer?.chat === true} onChange={(v) => update({ developer: { ...settings.developer, chat: v } })} />
-                </div>
-                <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
                   <div><span className="text-[13px]">Show server controls</span>
                     <p className="text-[11px] text-ink-faint">Desktop only. Show agent and model server toggles and Restart server in the top-right title bar. Off by default.</p></div>
                   <Toggle aria-label="Show server controls" on={settings.developer?.serverControls === true} onChange={(v) => update({ developer: { ...settings.developer, serverControls: v } })} />

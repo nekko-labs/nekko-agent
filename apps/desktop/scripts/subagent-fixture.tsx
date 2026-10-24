@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { useStore } from '../src/renderer/store';
 import { putCachedSession, __resetSessionCache } from '../src/renderer/sessionCache';
 import { CommandCenterView } from '../src/renderer/views/CommandCenterView';
-import { WorkspacesView } from '../src/renderer/views/WorkspacesView';
+import { StoreSidebar } from './store-sidebar';
 import { DEFAULT_WALL_STATE } from '../src/renderer/commandWall';
 import { summarizeSession } from '@nekko-agent/shared';
 import '../src/renderer/styles.css';
@@ -61,6 +61,6 @@ function Fixture() {
   };
   Object.assign(window, { integration: { reset, ask: () => { const request = {callId:'ask-fixture',askedAt:Date.now(),questions:[{id:'choice',header:'Choice',question:'Which verification path?',options:[{label:'Focused tests'},{label:'Full suite'}]}]}; pending={existing:{question:request}}; listeners.forEach(fn=>fn({type:'question',sessionId:'existing',request})); }, calls, failures, wake: (at: number | null) => { nextWakeAt = at; listeners.forEach(fn=>fn({type:'tool_result',sessionId:'existing'})); }, restore: () => { sessionStorage.removeItem('fixture-record'); reset(); }, clean: () => { const s=makeSession('existing'); s.messages = [{id:'clean-user',role:'user',content:'Ready for another turn',createdAt:1},{id:'clean-answer',role:'assistant',content:'Ready.',createdAt:2}]; sessionStorage.setItem('fixture-record',JSON.stringify(s)); reset(); }, route: setRoute, state: () => useStore.getState(), inbox: (text: string) => useStore.setState({composerInbox:{sessionId:'existing',text,run:true}}), records: () => records } });
   React.useEffect(reset, []);
-  return <main style={{ height: '100vh' }} key={epoch}>{route === 'command' ? <CommandCenterView /> : <WorkspacesView />}</main>;
+  return <main style={{ height: '100vh' }} key={epoch}>{route === 'command' ? <CommandCenterView /> : <StoreSidebar />}</main>;
 }
 createRoot(document.getElementById('root')!).render(<Fixture />);

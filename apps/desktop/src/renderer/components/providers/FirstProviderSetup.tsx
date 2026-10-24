@@ -17,7 +17,7 @@ export function FirstProviderSetup() {
     try {
       await useStore.getState().refreshProviders();
       const store = useStore.getState();
-      if (store.activeSessionId) store.setView('chat');
+      if (store.activeSessionId) store.setView('command');
       else await store.newChat();
     } catch (e) { setError(String(e)); }
     finally { setBusy(false); }
