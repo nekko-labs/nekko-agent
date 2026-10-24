@@ -1,0 +1,2123 @@
+{
+ "about": "Step-up verifier cases (SK-1). Written by packages/shared/src/step-up.golden.test.ts with UPDATE_GOLDEN=1; read by crates/nekko-remote/tests/golden.rs.",
+ "cases": [
+  {
+   "name": "valid security key, user verified",
+   "state": {
+    "version": 1,
+    "enabled": true,
+    "rpId": "nekko-computer:golden-install",
+    "origins": [
+     "nekko-app://desktop",
+     "http://localhost:5173"
+    ],
+    "credentials": [
+     {
+      "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+      "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+      "counter": 5,
+      "name": "YubiKey",
+      "kind": "security-key",
+      "addedAt": 1789913600000
+     },
+     {
+      "id": "AgICAgICAgICAgICAgICAg",
+      "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+      "counter": 0,
+      "name": "Touch ID",
+      "kind": "passkey",
+      "addedAt": 1789996400000
+     }
+    ],
+    "totp": {
+     "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+     "addedAt": 1789913600000
+    },
+    "recoveryHashes": []
+   },
+   "issued": [
+    {
+     "challenge": "BwcHBwcHBwcHBwcHBwcHBwcH",
+     "issuedAt": 1789999999000,
+     "used": false
+    }
+   ],
+   "now": 1790000000000,
+   "stepUp": {
+    "credentialId": "AQEBAQEBAQEBAQEBAQEBAQ",
+    "authenticatorData": "IVFUxYKo-rQ5Mno5PvMiXR1brV-uvVIBnlC6s50ULq4FAAAABg",
+    "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiQndjSEJ3Y0hCd2NIQndjSEJ3Y0hCd2NIIiwib3JpZ2luIjoibmVra28tYXBwOi8vZGVza3RvcCIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
+    "signature": "MEQCIBVAEeM3aCvsNlxGeqnUiNNRIh5iGWbr5LExVaJnrZFeAiBnHcWL4jVDEbeMz9dF_s-jlf8buydT1_LRbCY0OweMkg"
+   },
+   "expect": {
+    "result": "ok",
+    "state": {
+     "version": 1,
+     "enabled": true,
+     "rpId": "nekko-computer:golden-install",
+     "origins": [
+      "nekko-app://desktop",
+      "http://localhost:5173"
+     ],
+     "credentials": [
+      {
+       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+       "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+       "counter": 6,
+       "name": "YubiKey",
+       "kind": "security-key",
+       "addedAt": 1789913600000,
+       "lastUsedAt": 1790000000000
+      },
+      {
+       "id": "AgICAgICAgICAgICAgICAg",
+       "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+       "counter": 0,
+       "name": "Touch ID",
+       "kind": "passkey",
+       "addedAt": 1789996400000
+      }
+     ],
+     "totp": {
+      "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "addedAt": 1789913600000
+     },
+     "recoveryHashes": []
+    },
+    "issued": [
+     {
+      "challenge": "BwcHBwcHBwcHBwcHBwcHBwcH",
+      "issuedAt": 1789999999000,
+      "used": true
+     }
+    ],
+    "method": "fido2",
+    "uv": true
+   }
+  },
+  {
+   "name": "valid passkey with a zero counter, presence only",
+   "state": {
+    "version": 1,
+    "enabled": true,
+    "rpId": "nekko-computer:golden-install",
+    "origins": [
+     "nekko-app://desktop",
+     "http://localhost:5173"
+    ],
+    "credentials": [
+     {
+      "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+      "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+      "counter": 5,
+      "name": "YubiKey",
+      "kind": "security-key",
+      "addedAt": 1789913600000
+     },
+     {
+      "id": "AgICAgICAgICAgICAgICAg",
+      "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+      "counter": 0,
+      "name": "Touch ID",
+      "kind": "passkey",
+      "addedAt": 1789996400000
+     }
+    ],
+    "totp": {
+     "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+     "addedAt": 1789913600000
+    },
+    "recoveryHashes": []
+   },
+   "issued": [
+    {
+     "challenge": "BwcHBwcHBwcHBwcHBwcHBwcH",
+     "issuedAt": 1789999999000,
+     "used": false
+    }
+   ],
+   "now": 1790000000000,
+   "stepUp": {
+    "credentialId": "AgICAgICAgICAgICAgICAg",
+    "authenticatorData": "IVFUxYKo-rQ5Mno5PvMiXR1brV-uvVIBnlC6s50ULq4BAAAAAA",
+    "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiQndjSEJ3Y0hCd2NIQndjSEJ3Y0hCd2NIIiwib3JpZ2luIjoibmVra28tYXBwOi8vZGVza3RvcCIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
+    "signature": "MEQCIDSv0wGCkKZhB5HBPzf7AMpq1Pew0Ct6dGQYziy1KDjZAiBtKFvKkeUr3DxBXK45te12SZtaHZjxpOQ26FD6ZBLXpA"
+   },
+   "expect": {
+    "result": "ok",
+    "state": {
+     "version": 1,
+     "enabled": true,
+     "rpId": "nekko-computer:golden-install",
+     "origins": [
+      "nekko-app://desktop",
+      "http://localhost:5173"
+     ],
+     "credentials": [
+      {
+       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+       "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+       "counter": 5,
+       "name": "YubiKey",
+       "kind": "security-key",
+       "addedAt": 1789913600000
+      },
+      {
+       "id": "AgICAgICAgICAgICAgICAg",
+       "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+       "counter": 0,
+       "name": "Touch ID",
+       "kind": "passkey",
+       "addedAt": 1789996400000,
+       "lastUsedAt": 1790000000000
+      }
+     ],
+     "totp": {
+      "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "addedAt": 1789913600000
+     },
+     "recoveryHashes": []
+    },
+    "issued": [
+     {
+      "challenge": "BwcHBwcHBwcHBwcHBwcHBwcH",
+      "issuedAt": 1789999999000,
+      "used": true
+     }
+    ],
+    "method": "fido2",
+    "uv": false
+   }
+  },
+  {
+   "name": "wrong challenge",
+   "state": {
+    "version": 1,
+    "enabled": true,
+    "rpId": "nekko-computer:golden-install",
+    "origins": [
+     "nekko-app://desktop",
+     "http://localhost:5173"
+    ],
+    "credentials": [
+     {
+      "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+      "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+      "counter": 5,
+      "name": "YubiKey",
+      "kind": "security-key",
+      "addedAt": 1789913600000
+     },
+     {
+      "id": "AgICAgICAgICAgICAgICAg",
+      "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+      "counter": 0,
+      "name": "Touch ID",
+      "kind": "passkey",
+      "addedAt": 1789996400000
+     }
+    ],
+    "totp": {
+     "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+     "addedAt": 1789913600000
+    },
+    "recoveryHashes": []
+   },
+   "issued": [
+    {
+     "challenge": "BwcHBwcHBwcHBwcHBwcHBwcH",
+     "issuedAt": 1789999999000,
+     "used": false
+    }
+   ],
+   "now": 1790000000000,
+   "stepUp": {
+    "credentialId": "AQEBAQEBAQEBAQEBAQEBAQ",
+    "authenticatorData": "IVFUxYKo-rQ5Mno5PvMiXR1brV-uvVIBnlC6s50ULq4FAAAABg",
+    "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiQ1FrSkNRa0pDUWtKQ1FrSkNRa0pDUWtKIiwib3JpZ2luIjoibmVra28tYXBwOi8vZGVza3RvcCIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
+    "signature": "MEQCIAGx6nnihJ_Ovz5Sn9ybvhzkPejEZGFcKnUsgLb78zvBAiBxMfZmagXCIbf7a6U4OShrQT3m9sqEjNukzrgQhtpb7w"
+   },
+   "expect": {
+    "result": "step-up-invalid",
+    "state": {
+     "version": 1,
+     "enabled": true,
+     "rpId": "nekko-computer:golden-install",
+     "origins": [
+      "nekko-app://desktop",
+      "http://localhost:5173"
+     ],
+     "credentials": [
+      {
+       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+       "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+       "counter": 5,
+       "name": "YubiKey",
+       "kind": "security-key",
+       "addedAt": 1789913600000
+      },
+      {
+       "id": "AgICAgICAgICAgICAgICAg",
+       "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+       "counter": 0,
+       "name": "Touch ID",
+       "kind": "passkey",
+       "addedAt": 1789996400000
+      }
+     ],
+     "totp": {
+      "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "addedAt": 1789913600000
+     },
+     "recoveryHashes": []
+    },
+    "issued": [
+     {
+      "challenge": "BwcHBwcHBwcHBwcHBwcHBwcH",
+      "issuedAt": 1789999999000,
+      "used": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "stale challenge",
+   "state": {
+    "version": 1,
+    "enabled": true,
+    "rpId": "nekko-computer:golden-install",
+    "origins": [
+     "nekko-app://desktop",
+     "http://localhost:5173"
+    ],
+    "credentials": [
+     {
+      "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+      "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+      "counter": 5,
+      "name": "YubiKey",
+      "kind": "security-key",
+      "addedAt": 1789913600000
+     },
+     {
+      "id": "AgICAgICAgICAgICAgICAg",
+      "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+      "counter": 0,
+      "name": "Touch ID",
+      "kind": "passkey",
+      "addedAt": 1789996400000
+     }
+    ],
+    "totp": {
+     "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+     "addedAt": 1789913600000
+    },
+    "recoveryHashes": []
+   },
+   "issued": [
+    {
+     "challenge": "BwcHBwcHBwcHBwcHBwcHBwcH",
+     "issuedAt": 1789999879999,
+     "used": false
+    }
+   ],
+   "now": 1790000000000,
+   "stepUp": {
+    "credentialId": "AQEBAQEBAQEBAQEBAQEBAQ",
+    "authenticatorData": "IVFUxYKo-rQ5Mno5PvMiXR1brV-uvVIBnlC6s50ULq4FAAAABg",
+    "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiQndjSEJ3Y0hCd2NIQndjSEJ3Y0hCd2NIIiwib3JpZ2luIjoibmVra28tYXBwOi8vZGVza3RvcCIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
+    "signature": "MEUCIQCkMOEQt0s2Jgq7GeypXF3chJkBFONmeRyzJknnJi9UgQIgF8jNPgzHFZtaWNMyYWCPPtHAsU5Zo4uqR_IMCCGzJhk"
+   },
+   "expect": {
+    "result": "step-up-stale",
+    "state": {
+     "version": 1,
+     "enabled": true,
+     "rpId": "nekko-computer:golden-install",
+     "origins": [
+      "nekko-app://desktop",
+      "http://localhost:5173"
+     ],
+     "credentials": [
+      {
+       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+       "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+       "counter": 5,
+       "name": "YubiKey",
+       "kind": "security-key",
+       "addedAt": 1789913600000
+      },
+      {
+       "id": "AgICAgICAgICAgICAgICAg",
+       "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+       "counter": 0,
+       "name": "Touch ID",
+       "kind": "passkey",
+       "addedAt": 1789996400000
+      }
+     ],
+     "totp": {
+      "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "addedAt": 1789913600000
+     },
+     "recoveryHashes": []
+    },
+    "issued": [
+     {
+      "challenge": "BwcHBwcHBwcHBwcHBwcHBwcH",
+      "issuedAt": 1789999879999,
+      "used": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "replayed challenge",
+   "state": {
+    "version": 1,
+    "enabled": true,
+    "rpId": "nekko-computer:golden-install",
+    "origins": [
+     "nekko-app://desktop",
+     "http://localhost:5173"
+    ],
+    "credentials": [
+     {
+      "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+      "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+      "counter": 5,
+      "name": "YubiKey",
+      "kind": "security-key",
+      "addedAt": 1789913600000
+     },
+     {
+      "id": "AgICAgICAgICAgICAgICAg",
+      "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+      "counter": 0,
+      "name": "Touch ID",
+      "kind": "passkey",
+      "addedAt": 1789996400000
+     }
+    ],
+    "totp": {
+     "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+     "addedAt": 1789913600000
+    },
+    "recoveryHashes": []
+   },
+   "issued": [
+    {
+     "challenge": "BwcHBwcHBwcHBwcHBwcHBwcH",
+     "issuedAt": 1789999999000,
+     "used": true
+    }
+   ],
+   "now": 1790000000000,
+   "stepUp": {
+    "credentialId": "AQEBAQEBAQEBAQEBAQEBAQ",
+    "authenticatorData": "IVFUxYKo-rQ5Mno5PvMiXR1brV-uvVIBnlC6s50ULq4FAAAABg",
+    "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiQndjSEJ3Y0hCd2NIQndjSEJ3Y0hCd2NIIiwib3JpZ2luIjoibmVra28tYXBwOi8vZGVza3RvcCIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
+    "signature": "MEUCIQDKb5gqzmYWw59paEnuHGbLNPM1_t-6dT98T_CL5GvHAQIgKi5hI4HHwYnkObmbQEJKBgF9sNGu5FguFo5dEU2WJd8"
+   },
+   "expect": {
+    "result": "step-up-replayed",
+    "state": {
+     "version": 1,
+     "enabled": true,
+     "rpId": "nekko-computer:golden-install",
+     "origins": [
+      "nekko-app://desktop",
+      "http://localhost:5173"
+     ],
+     "credentials": [
+      {
+       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+       "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+       "counter": 5,
+       "name": "YubiKey",
+       "kind": "security-key",
+       "addedAt": 1789913600000
+      },
+      {
+       "id": "AgICAgICAgICAgICAgICAg",
+       "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+       "counter": 0,
+       "name": "Touch ID",
+       "kind": "passkey",
+       "addedAt": 1789996400000
+      }
+     ],
+     "totp": {
+      "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "addedAt": 1789913600000
+     },
+     "recoveryHashes": []
+    },
+    "issued": [
+     {
+      "challenge": "BwcHBwcHBwcHBwcHBwcHBwcH",
+      "issuedAt": 1789999999000,
+      "used": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "counter not rising",
+   "state": {
+    "version": 1,
+    "enabled": true,
+    "rpId": "nekko-computer:golden-install",
+    "origins": [
+     "nekko-app://desktop",
+     "http://localhost:5173"
+    ],
+    "credentials": [
+     {
+      "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+      "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+      "counter": 5,
+      "name": "YubiKey",
+      "kind": "security-key",
+      "addedAt": 1789913600000
+     },
+     {
+      "id": "AgICAgICAgICAgICAgICAg",
+      "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+      "counter": 0,
+      "name": "Touch ID",
+      "kind": "passkey",
+      "addedAt": 1789996400000
+     }
+    ],
+    "totp": {
+     "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+     "addedAt": 1789913600000
+    },
+    "recoveryHashes": []
+   },
+   "issued": [
+    {
+     "challenge": "BwcHBwcHBwcHBwcHBwcHBwcH",
+     "issuedAt": 1789999999000,
+     "used": false
+    }
+   ],
+   "now": 1790000000000,
+   "stepUp": {
+    "credentialId": "AQEBAQEBAQEBAQEBAQEBAQ",
+    "authenticatorData": "IVFUxYKo-rQ5Mno5PvMiXR1brV-uvVIBnlC6s50ULq4FAAAABQ",
+    "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiQndjSEJ3Y0hCd2NIQndjSEJ3Y0hCd2NIIiwib3JpZ2luIjoibmVra28tYXBwOi8vZGVza3RvcCIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
+    "signature": "MEYCIQDGQXFvKT6hpwEC_fbvNIuqgGBskOkRXoaBjvxfiMr4_AIhAJ0QIIdyt37TtA-ynde1WI26b10E3Y5nba0vhFzfn6Dx"
+   },
+   "expect": {
+    "result": "step-up-invalid",
+    "state": {
+     "version": 1,
+     "enabled": true,
+     "rpId": "nekko-computer:golden-install",
+     "origins": [
+      "nekko-app://desktop",
+      "http://localhost:5173"
+     ],
+     "credentials": [
+      {
+       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+       "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+       "counter": 5,
+       "name": "YubiKey",
+       "kind": "security-key",
+       "addedAt": 1789913600000,
+       "cloned": true
+      },
+      {
+       "id": "AgICAgICAgICAgICAgICAg",
+       "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+       "counter": 0,
+       "name": "Touch ID",
+       "kind": "passkey",
+       "addedAt": 1789996400000
+      }
+     ],
+     "totp": {
+      "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "addedAt": 1789913600000
+     },
+     "recoveryHashes": []
+    },
+    "issued": [
+     {
+      "challenge": "BwcHBwcHBwcHBwcHBwcHBwcH",
+      "issuedAt": 1789999999000,
+      "used": true
+     }
+    ],
+    "cloned": "AQEBAQEBAQEBAQEBAQEBAQ"
+   }
+  },
+  {
+   "name": "signature over other data",
+   "state": {
+    "version": 1,
+    "enabled": true,
+    "rpId": "nekko-computer:golden-install",
+    "origins": [
+     "nekko-app://desktop",
+     "http://localhost:5173"
+    ],
+    "credentials": [
+     {
+      "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+      "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+      "counter": 5,
+      "name": "YubiKey",
+      "kind": "security-key",
+      "addedAt": 1789913600000
+     },
+     {
+      "id": "AgICAgICAgICAgICAgICAg",
+      "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+      "counter": 0,
+      "name": "Touch ID",
+      "kind": "passkey",
+      "addedAt": 1789996400000
+     }
+    ],
+    "totp": {
+     "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+     "addedAt": 1789913600000
+    },
+    "recoveryHashes": []
+   },
+   "issued": [
+    {
+     "challenge": "BwcHBwcHBwcHBwcHBwcHBwcH",
+     "issuedAt": 1789999999000,
+     "used": false
+    }
+   ],
+   "now": 1790000000000,
+   "stepUp": {
+    "credentialId": "AQEBAQEBAQEBAQEBAQEBAQ",
+    "authenticatorData": "IVFUxYKo-rQ5Mno5PvMiXR1brV-uvVIBnlC6s50ULq4FAAAABg",
+    "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiQndjSEJ3Y0hCd2NIQndjSEJ3Y0hCd2NIIiwib3JpZ2luIjoibmVra28tYXBwOi8vZGVza3RvcCIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
+    "signature": "MEUCIBFyD9k8bpHZ2RvPQVr2P3I5FDq4SmAaSzCp-RfvGYNjAiEA17GOJOKx5ABUe5DzFaDQQ2Q4gM_tT3pZ-h64Lasb5AE"
+   },
+   "expect": {
+    "result": "step-up-invalid",
+    "state": {
+     "version": 1,
+     "enabled": true,
+     "rpId": "nekko-computer:golden-install",
+     "origins": [
+      "nekko-app://desktop",
+      "http://localhost:5173"
+     ],
+     "credentials": [
+      {
+       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+       "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+       "counter": 5,
+       "name": "YubiKey",
+       "kind": "security-key",
+       "addedAt": 1789913600000
+      },
+      {
+       "id": "AgICAgICAgICAgICAgICAg",
+       "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+       "counter": 0,
+       "name": "Touch ID",
+       "kind": "passkey",
+       "addedAt": 1789996400000
+      }
+     ],
+     "totp": {
+      "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "addedAt": 1789913600000
+     },
+     "recoveryHashes": []
+    },
+    "issued": [
+     {
+      "challenge": "BwcHBwcHBwcHBwcHBwcHBwcH",
+      "issuedAt": 1789999999000,
+      "used": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "origin not allowed",
+   "state": {
+    "version": 1,
+    "enabled": true,
+    "rpId": "nekko-computer:golden-install",
+    "origins": [
+     "nekko-app://desktop",
+     "http://localhost:5173"
+    ],
+    "credentials": [
+     {
+      "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+      "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+      "counter": 5,
+      "name": "YubiKey",
+      "kind": "security-key",
+      "addedAt": 1789913600000
+     },
+     {
+      "id": "AgICAgICAgICAgICAgICAg",
+      "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+      "counter": 0,
+      "name": "Touch ID",
+      "kind": "passkey",
+      "addedAt": 1789996400000
+     }
+    ],
+    "totp": {
+     "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+     "addedAt": 1789913600000
+    },
+    "recoveryHashes": []
+   },
+   "issued": [
+    {
+     "challenge": "BwcHBwcHBwcHBwcHBwcHBwcH",
+     "issuedAt": 1789999999000,
+     "used": false
+    }
+   ],
+   "now": 1790000000000,
+   "stepUp": {
+    "credentialId": "AQEBAQEBAQEBAQEBAQEBAQ",
+    "authenticatorData": "IVFUxYKo-rQ5Mno5PvMiXR1brV-uvVIBnlC6s50ULq4FAAAABg",
+    "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiQndjSEJ3Y0hCd2NIQndjSEJ3Y0hCd2NIIiwib3JpZ2luIjoiaHR0cHM6Ly9ldmlsLmV4YW1wbGUiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+    "signature": "MEYCIQCJyl6ghKktO5lKXbI4KhZOE6Nhkdn8x3EzOIidNjjHEgIhANGOGEsUQcMUsLyv6uT2u3khFHSwBHKhExjJTt0G4INx"
+   },
+   "expect": {
+    "result": "step-up-invalid",
+    "state": {
+     "version": 1,
+     "enabled": true,
+     "rpId": "nekko-computer:golden-install",
+     "origins": [
+      "nekko-app://desktop",
+      "http://localhost:5173"
+     ],
+     "credentials": [
+      {
+       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+       "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+       "counter": 5,
+       "name": "YubiKey",
+       "kind": "security-key",
+       "addedAt": 1789913600000
+      },
+      {
+       "id": "AgICAgICAgICAgICAgICAg",
+       "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+       "counter": 0,
+       "name": "Touch ID",
+       "kind": "passkey",
+       "addedAt": 1789996400000
+      }
+     ],
+     "totp": {
+      "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "addedAt": 1789913600000
+     },
+     "recoveryHashes": []
+    },
+    "issued": [
+     {
+      "challenge": "BwcHBwcHBwcHBwcHBwcHBwcH",
+      "issuedAt": 1789999999000,
+      "used": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "another relying party",
+   "state": {
+    "version": 1,
+    "enabled": true,
+    "rpId": "nekko-computer:golden-install",
+    "origins": [
+     "nekko-app://desktop",
+     "http://localhost:5173"
+    ],
+    "credentials": [
+     {
+      "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+      "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+      "counter": 5,
+      "name": "YubiKey",
+      "kind": "security-key",
+      "addedAt": 1789913600000
+     },
+     {
+      "id": "AgICAgICAgICAgICAgICAg",
+      "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+      "counter": 0,
+      "name": "Touch ID",
+      "kind": "passkey",
+      "addedAt": 1789996400000
+     }
+    ],
+    "totp": {
+     "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+     "addedAt": 1789913600000
+    },
+    "recoveryHashes": []
+   },
+   "issued": [
+    {
+     "challenge": "BwcHBwcHBwcHBwcHBwcHBwcH",
+     "issuedAt": 1789999999000,
+     "used": false
+    }
+   ],
+   "now": 1790000000000,
+   "stepUp": {
+    "credentialId": "AQEBAQEBAQEBAQEBAQEBAQ",
+    "authenticatorData": "OTd-EurT0c84fHRXoWxVCuKjKA_4e9JicJQv7-fUadgFAAAABg",
+    "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiQndjSEJ3Y0hCd2NIQndjSEJ3Y0hCd2NIIiwib3JpZ2luIjoibmVra28tYXBwOi8vZGVza3RvcCIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
+    "signature": "MEQCIDLsbfOHwPOFJ4uu1pMe_iHi4a0atSA59cS2ffziWjvNAiARGPA9FltzRjnfMDml5oXm8sAbFunpmcQf8B4O2KYweA"
+   },
+   "expect": {
+    "result": "step-up-invalid",
+    "state": {
+     "version": 1,
+     "enabled": true,
+     "rpId": "nekko-computer:golden-install",
+     "origins": [
+      "nekko-app://desktop",
+      "http://localhost:5173"
+     ],
+     "credentials": [
+      {
+       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+       "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+       "counter": 5,
+       "name": "YubiKey",
+       "kind": "security-key",
+       "addedAt": 1789913600000
+      },
+      {
+       "id": "AgICAgICAgICAgICAgICAg",
+       "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+       "counter": 0,
+       "name": "Touch ID",
+       "kind": "passkey",
+       "addedAt": 1789996400000
+      }
+     ],
+     "totp": {
+      "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "addedAt": 1789913600000
+     },
+     "recoveryHashes": []
+    },
+    "issued": [
+     {
+      "challenge": "BwcHBwcHBwcHBwcHBwcHBwcH",
+      "issuedAt": 1789999999000,
+      "used": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "no user presence",
+   "state": {
+    "version": 1,
+    "enabled": true,
+    "rpId": "nekko-computer:golden-install",
+    "origins": [
+     "nekko-app://desktop",
+     "http://localhost:5173"
+    ],
+    "credentials": [
+     {
+      "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+      "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+      "counter": 5,
+      "name": "YubiKey",
+      "kind": "security-key",
+      "addedAt": 1789913600000
+     },
+     {
+      "id": "AgICAgICAgICAgICAgICAg",
+      "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+      "counter": 0,
+      "name": "Touch ID",
+      "kind": "passkey",
+      "addedAt": 1789996400000
+     }
+    ],
+    "totp": {
+     "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+     "addedAt": 1789913600000
+    },
+    "recoveryHashes": []
+   },
+   "issued": [
+    {
+     "challenge": "BwcHBwcHBwcHBwcHBwcHBwcH",
+     "issuedAt": 1789999999000,
+     "used": false
+    }
+   ],
+   "now": 1790000000000,
+   "stepUp": {
+    "credentialId": "AQEBAQEBAQEBAQEBAQEBAQ",
+    "authenticatorData": "IVFUxYKo-rQ5Mno5PvMiXR1brV-uvVIBnlC6s50ULq4EAAAABg",
+    "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiQndjSEJ3Y0hCd2NIQndjSEJ3Y0hCd2NIIiwib3JpZ2luIjoibmVra28tYXBwOi8vZGVza3RvcCIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
+    "signature": "MEYCIQCvzXBettWsbD9hHddMSV2Mwcq_QSb-xgA7y4hIPGhLqQIhAIxPSuywR95LiNAFQQTI4gUx_pT2hyR7YEr0j1tHJ79l"
+   },
+   "expect": {
+    "result": "step-up-invalid",
+    "state": {
+     "version": 1,
+     "enabled": true,
+     "rpId": "nekko-computer:golden-install",
+     "origins": [
+      "nekko-app://desktop",
+      "http://localhost:5173"
+     ],
+     "credentials": [
+      {
+       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+       "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+       "counter": 5,
+       "name": "YubiKey",
+       "kind": "security-key",
+       "addedAt": 1789913600000
+      },
+      {
+       "id": "AgICAgICAgICAgICAgICAg",
+       "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+       "counter": 0,
+       "name": "Touch ID",
+       "kind": "passkey",
+       "addedAt": 1789996400000
+      }
+     ],
+     "totp": {
+      "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "addedAt": 1789913600000
+     },
+     "recoveryHashes": []
+    },
+    "issued": [
+     {
+      "challenge": "BwcHBwcHBwcHBwcHBwcHBwcH",
+      "issuedAt": 1789999999000,
+      "used": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "a registration, not an assertion",
+   "state": {
+    "version": 1,
+    "enabled": true,
+    "rpId": "nekko-computer:golden-install",
+    "origins": [
+     "nekko-app://desktop",
+     "http://localhost:5173"
+    ],
+    "credentials": [
+     {
+      "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+      "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+      "counter": 5,
+      "name": "YubiKey",
+      "kind": "security-key",
+      "addedAt": 1789913600000
+     },
+     {
+      "id": "AgICAgICAgICAgICAgICAg",
+      "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+      "counter": 0,
+      "name": "Touch ID",
+      "kind": "passkey",
+      "addedAt": 1789996400000
+     }
+    ],
+    "totp": {
+     "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+     "addedAt": 1789913600000
+    },
+    "recoveryHashes": []
+   },
+   "issued": [
+    {
+     "challenge": "BwcHBwcHBwcHBwcHBwcHBwcH",
+     "issuedAt": 1789999999000,
+     "used": false
+    }
+   ],
+   "now": 1790000000000,
+   "stepUp": {
+    "credentialId": "AQEBAQEBAQEBAQEBAQEBAQ",
+    "authenticatorData": "IVFUxYKo-rQ5Mno5PvMiXR1brV-uvVIBnlC6s50ULq4FAAAABg",
+    "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uY3JlYXRlIiwiY2hhbGxlbmdlIjoiQndjSEJ3Y0hCd2NIQndjSEJ3Y0hCd2NIIiwib3JpZ2luIjoibmVra28tYXBwOi8vZGVza3RvcCIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
+    "signature": "MEUCIQCCEMuDSlUB-5ItvmUCFkaANRYSU_ze_w-l2500wZSw5wIgYIqm7LKwr3NEvAvENFj_gnJh6Y7yMA3ZREOqrc_63xo"
+   },
+   "expect": {
+    "result": "step-up-invalid",
+    "state": {
+     "version": 1,
+     "enabled": true,
+     "rpId": "nekko-computer:golden-install",
+     "origins": [
+      "nekko-app://desktop",
+      "http://localhost:5173"
+     ],
+     "credentials": [
+      {
+       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+       "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+       "counter": 5,
+       "name": "YubiKey",
+       "kind": "security-key",
+       "addedAt": 1789913600000
+      },
+      {
+       "id": "AgICAgICAgICAgICAgICAg",
+       "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+       "counter": 0,
+       "name": "Touch ID",
+       "kind": "passkey",
+       "addedAt": 1789996400000
+      }
+     ],
+     "totp": {
+      "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "addedAt": 1789913600000
+     },
+     "recoveryHashes": []
+    },
+    "issued": [
+     {
+      "challenge": "BwcHBwcHBwcHBwcHBwcHBwcH",
+      "issuedAt": 1789999999000,
+      "used": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "unknown credential",
+   "state": {
+    "version": 1,
+    "enabled": true,
+    "rpId": "nekko-computer:golden-install",
+    "origins": [
+     "nekko-app://desktop",
+     "http://localhost:5173"
+    ],
+    "credentials": [
+     {
+      "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+      "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+      "counter": 5,
+      "name": "YubiKey",
+      "kind": "security-key",
+      "addedAt": 1789913600000
+     },
+     {
+      "id": "AgICAgICAgICAgICAgICAg",
+      "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+      "counter": 0,
+      "name": "Touch ID",
+      "kind": "passkey",
+      "addedAt": 1789996400000
+     }
+    ],
+    "totp": {
+     "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+     "addedAt": 1789913600000
+    },
+    "recoveryHashes": []
+   },
+   "issued": [
+    {
+     "challenge": "BwcHBwcHBwcHBwcHBwcHBwcH",
+     "issuedAt": 1789999999000,
+     "used": false
+    }
+   ],
+   "now": 1790000000000,
+   "stepUp": {
+    "credentialId": "AwMDAwMDAwMDAwMDAwMDAw",
+    "authenticatorData": "IVFUxYKo-rQ5Mno5PvMiXR1brV-uvVIBnlC6s50ULq4FAAAABg",
+    "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiQndjSEJ3Y0hCd2NIQndjSEJ3Y0hCd2NIIiwib3JpZ2luIjoibmVra28tYXBwOi8vZGVza3RvcCIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
+    "signature": "MEUCIQDO7XX0uVuQCFU6NoXg6zx2GMiUm4XeVmeCiX3KhcCTgwIgYFLK-jOgioTs4xpD2dqY7tvy7Zzbm2xpLGMEv6GnMyM"
+   },
+   "expect": {
+    "result": "step-up-invalid",
+    "state": {
+     "version": 1,
+     "enabled": true,
+     "rpId": "nekko-computer:golden-install",
+     "origins": [
+      "nekko-app://desktop",
+      "http://localhost:5173"
+     ],
+     "credentials": [
+      {
+       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+       "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+       "counter": 5,
+       "name": "YubiKey",
+       "kind": "security-key",
+       "addedAt": 1789913600000
+      },
+      {
+       "id": "AgICAgICAgICAgICAgICAg",
+       "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+       "counter": 0,
+       "name": "Touch ID",
+       "kind": "passkey",
+       "addedAt": 1789996400000
+      }
+     ],
+     "totp": {
+      "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "addedAt": 1789913600000
+     },
+     "recoveryHashes": []
+    },
+    "issued": [
+     {
+      "challenge": "BwcHBwcHBwcHBwcHBwcHBwcH",
+      "issuedAt": 1789999999000,
+      "used": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "no step-up",
+   "state": {
+    "version": 1,
+    "enabled": true,
+    "rpId": "nekko-computer:golden-install",
+    "origins": [
+     "nekko-app://desktop",
+     "http://localhost:5173"
+    ],
+    "credentials": [
+     {
+      "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+      "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+      "counter": 5,
+      "name": "YubiKey",
+      "kind": "security-key",
+      "addedAt": 1789913600000
+     },
+     {
+      "id": "AgICAgICAgICAgICAgICAg",
+      "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+      "counter": 0,
+      "name": "Touch ID",
+      "kind": "passkey",
+      "addedAt": 1789996400000
+     }
+    ],
+    "totp": {
+     "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+     "addedAt": 1789913600000
+    },
+    "recoveryHashes": []
+   },
+   "issued": [
+    {
+     "challenge": "BwcHBwcHBwcHBwcHBwcHBwcH",
+     "issuedAt": 1789999999000,
+     "used": false
+    }
+   ],
+   "now": 1790000000000,
+   "stepUp": null,
+   "expect": {
+    "result": "step-up-required",
+    "state": {
+     "version": 1,
+     "enabled": true,
+     "rpId": "nekko-computer:golden-install",
+     "origins": [
+      "nekko-app://desktop",
+      "http://localhost:5173"
+     ],
+     "credentials": [
+      {
+       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+       "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+       "counter": 5,
+       "name": "YubiKey",
+       "kind": "security-key",
+       "addedAt": 1789913600000
+      },
+      {
+       "id": "AgICAgICAgICAgICAgICAg",
+       "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+       "counter": 0,
+       "name": "Touch ID",
+       "kind": "passkey",
+       "addedAt": 1789996400000
+      }
+     ],
+     "totp": {
+      "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "addedAt": 1789913600000
+     },
+     "recoveryHashes": []
+    },
+    "issued": [
+     {
+      "challenge": "BwcHBwcHBwcHBwcHBwcHBwcH",
+      "issuedAt": 1789999999000,
+      "used": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "malformed step-up",
+   "state": {
+    "version": 1,
+    "enabled": true,
+    "rpId": "nekko-computer:golden-install",
+    "origins": [
+     "nekko-app://desktop",
+     "http://localhost:5173"
+    ],
+    "credentials": [
+     {
+      "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+      "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+      "counter": 5,
+      "name": "YubiKey",
+      "kind": "security-key",
+      "addedAt": 1789913600000
+     },
+     {
+      "id": "AgICAgICAgICAgICAgICAg",
+      "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+      "counter": 0,
+      "name": "Touch ID",
+      "kind": "passkey",
+      "addedAt": 1789996400000
+     }
+    ],
+    "totp": {
+     "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+     "addedAt": 1789913600000
+    },
+    "recoveryHashes": []
+   },
+   "issued": [
+    {
+     "challenge": "BwcHBwcHBwcHBwcHBwcHBwcH",
+     "issuedAt": 1789999999000,
+     "used": false
+    }
+   ],
+   "now": 1790000000000,
+   "stepUp": {
+    "credentialId": 1
+   },
+   "expect": {
+    "result": "step-up-invalid",
+    "state": {
+     "version": 1,
+     "enabled": true,
+     "rpId": "nekko-computer:golden-install",
+     "origins": [
+      "nekko-app://desktop",
+      "http://localhost:5173"
+     ],
+     "credentials": [
+      {
+       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+       "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+       "counter": 5,
+       "name": "YubiKey",
+       "kind": "security-key",
+       "addedAt": 1789913600000
+      },
+      {
+       "id": "AgICAgICAgICAgICAgICAg",
+       "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+       "counter": 0,
+       "name": "Touch ID",
+       "kind": "passkey",
+       "addedAt": 1789996400000
+      }
+     ],
+     "totp": {
+      "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "addedAt": 1789913600000
+     },
+     "recoveryHashes": []
+    },
+    "issued": [
+     {
+      "challenge": "BwcHBwcHBwcHBwcHBwcHBwcH",
+      "issuedAt": 1789999999000,
+      "used": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "totp now",
+   "state": {
+    "version": 1,
+    "enabled": true,
+    "rpId": "nekko-computer:golden-install",
+    "origins": [
+     "nekko-app://desktop",
+     "http://localhost:5173"
+    ],
+    "credentials": [
+     {
+      "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+      "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+      "counter": 5,
+      "name": "YubiKey",
+      "kind": "security-key",
+      "addedAt": 1789913600000
+     },
+     {
+      "id": "AgICAgICAgICAgICAgICAg",
+      "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+      "counter": 0,
+      "name": "Touch ID",
+      "kind": "passkey",
+      "addedAt": 1789996400000
+     }
+    ],
+    "totp": {
+     "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+     "addedAt": 1789913600000
+    },
+    "recoveryHashes": []
+   },
+   "issued": [],
+   "now": 1790000000000,
+   "stepUp": {
+    "totp": "144003"
+   },
+   "expect": {
+    "result": "ok",
+    "state": {
+     "version": 1,
+     "enabled": true,
+     "rpId": "nekko-computer:golden-install",
+     "origins": [
+      "nekko-app://desktop",
+      "http://localhost:5173"
+     ],
+     "credentials": [
+      {
+       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+       "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+       "counter": 5,
+       "name": "YubiKey",
+       "kind": "security-key",
+       "addedAt": 1789913600000
+      },
+      {
+       "id": "AgICAgICAgICAgICAgICAg",
+       "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+       "counter": 0,
+       "name": "Touch ID",
+       "kind": "passkey",
+       "addedAt": 1789996400000
+      }
+     ],
+     "totp": {
+      "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "addedAt": 1789913600000,
+      "lastStep": 59666666,
+      "lastUsedAt": 1790000000000
+     },
+     "recoveryHashes": []
+    },
+    "issued": [],
+    "method": "totp"
+   }
+  },
+  {
+   "name": "totp one step behind",
+   "state": {
+    "version": 1,
+    "enabled": true,
+    "rpId": "nekko-computer:golden-install",
+    "origins": [
+     "nekko-app://desktop",
+     "http://localhost:5173"
+    ],
+    "credentials": [
+     {
+      "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+      "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+      "counter": 5,
+      "name": "YubiKey",
+      "kind": "security-key",
+      "addedAt": 1789913600000
+     },
+     {
+      "id": "AgICAgICAgICAgICAgICAg",
+      "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+      "counter": 0,
+      "name": "Touch ID",
+      "kind": "passkey",
+      "addedAt": 1789996400000
+     }
+    ],
+    "totp": {
+     "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+     "addedAt": 1789913600000
+    },
+    "recoveryHashes": []
+   },
+   "issued": [],
+   "now": 1790000000000,
+   "stepUp": {
+    "totp": "508016"
+   },
+   "expect": {
+    "result": "ok",
+    "state": {
+     "version": 1,
+     "enabled": true,
+     "rpId": "nekko-computer:golden-install",
+     "origins": [
+      "nekko-app://desktop",
+      "http://localhost:5173"
+     ],
+     "credentials": [
+      {
+       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+       "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+       "counter": 5,
+       "name": "YubiKey",
+       "kind": "security-key",
+       "addedAt": 1789913600000
+      },
+      {
+       "id": "AgICAgICAgICAgICAgICAg",
+       "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+       "counter": 0,
+       "name": "Touch ID",
+       "kind": "passkey",
+       "addedAt": 1789996400000
+      }
+     ],
+     "totp": {
+      "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "addedAt": 1789913600000,
+      "lastStep": 59666665,
+      "lastUsedAt": 1790000000000
+     },
+     "recoveryHashes": []
+    },
+    "issued": [],
+    "method": "totp"
+   }
+  },
+  {
+   "name": "totp one step ahead",
+   "state": {
+    "version": 1,
+    "enabled": true,
+    "rpId": "nekko-computer:golden-install",
+    "origins": [
+     "nekko-app://desktop",
+     "http://localhost:5173"
+    ],
+    "credentials": [
+     {
+      "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+      "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+      "counter": 5,
+      "name": "YubiKey",
+      "kind": "security-key",
+      "addedAt": 1789913600000
+     },
+     {
+      "id": "AgICAgICAgICAgICAgICAg",
+      "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+      "counter": 0,
+      "name": "Touch ID",
+      "kind": "passkey",
+      "addedAt": 1789996400000
+     }
+    ],
+    "totp": {
+     "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+     "addedAt": 1789913600000
+    },
+    "recoveryHashes": []
+   },
+   "issued": [],
+   "now": 1790000000000,
+   "stepUp": {
+    "totp": "186791"
+   },
+   "expect": {
+    "result": "ok",
+    "state": {
+     "version": 1,
+     "enabled": true,
+     "rpId": "nekko-computer:golden-install",
+     "origins": [
+      "nekko-app://desktop",
+      "http://localhost:5173"
+     ],
+     "credentials": [
+      {
+       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+       "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+       "counter": 5,
+       "name": "YubiKey",
+       "kind": "security-key",
+       "addedAt": 1789913600000
+      },
+      {
+       "id": "AgICAgICAgICAgICAgICAg",
+       "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+       "counter": 0,
+       "name": "Touch ID",
+       "kind": "passkey",
+       "addedAt": 1789996400000
+      }
+     ],
+     "totp": {
+      "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "addedAt": 1789913600000,
+      "lastStep": 59666667,
+      "lastUsedAt": 1790000000000
+     },
+     "recoveryHashes": []
+    },
+    "issued": [],
+    "method": "totp"
+   }
+  },
+  {
+   "name": "totp two steps behind",
+   "state": {
+    "version": 1,
+    "enabled": true,
+    "rpId": "nekko-computer:golden-install",
+    "origins": [
+     "nekko-app://desktop",
+     "http://localhost:5173"
+    ],
+    "credentials": [
+     {
+      "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+      "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+      "counter": 5,
+      "name": "YubiKey",
+      "kind": "security-key",
+      "addedAt": 1789913600000
+     },
+     {
+      "id": "AgICAgICAgICAgICAgICAg",
+      "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+      "counter": 0,
+      "name": "Touch ID",
+      "kind": "passkey",
+      "addedAt": 1789996400000
+     }
+    ],
+    "totp": {
+     "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+     "addedAt": 1789913600000
+    },
+    "recoveryHashes": []
+   },
+   "issued": [],
+   "now": 1790000000000,
+   "stepUp": {
+    "totp": "682098"
+   },
+   "expect": {
+    "result": "step-up-invalid",
+    "state": {
+     "version": 1,
+     "enabled": true,
+     "rpId": "nekko-computer:golden-install",
+     "origins": [
+      "nekko-app://desktop",
+      "http://localhost:5173"
+     ],
+     "credentials": [
+      {
+       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+       "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+       "counter": 5,
+       "name": "YubiKey",
+       "kind": "security-key",
+       "addedAt": 1789913600000
+      },
+      {
+       "id": "AgICAgICAgICAgICAgICAg",
+       "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+       "counter": 0,
+       "name": "Touch ID",
+       "kind": "passkey",
+       "addedAt": 1789996400000
+      }
+     ],
+     "totp": {
+      "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "addedAt": 1789913600000,
+      "wrong": 1
+     },
+     "recoveryHashes": []
+    },
+    "issued": []
+   }
+  },
+  {
+   "name": "totp replayed",
+   "state": {
+    "version": 1,
+    "enabled": true,
+    "rpId": "nekko-computer:golden-install",
+    "origins": [
+     "nekko-app://desktop",
+     "http://localhost:5173"
+    ],
+    "credentials": [
+     {
+      "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+      "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+      "counter": 5,
+      "name": "YubiKey",
+      "kind": "security-key",
+      "addedAt": 1789913600000
+     },
+     {
+      "id": "AgICAgICAgICAgICAgICAg",
+      "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+      "counter": 0,
+      "name": "Touch ID",
+      "kind": "passkey",
+      "addedAt": 1789996400000
+     }
+    ],
+    "totp": {
+     "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+     "addedAt": 1789913600000,
+     "lastStep": 59666666
+    },
+    "recoveryHashes": []
+   },
+   "issued": [],
+   "now": 1790000000000,
+   "stepUp": {
+    "totp": "144003"
+   },
+   "expect": {
+    "result": "step-up-replayed",
+    "state": {
+     "version": 1,
+     "enabled": true,
+     "rpId": "nekko-computer:golden-install",
+     "origins": [
+      "nekko-app://desktop",
+      "http://localhost:5173"
+     ],
+     "credentials": [
+      {
+       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+       "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+       "counter": 5,
+       "name": "YubiKey",
+       "kind": "security-key",
+       "addedAt": 1789913600000
+      },
+      {
+       "id": "AgICAgICAgICAgICAgICAg",
+       "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+       "counter": 0,
+       "name": "Touch ID",
+       "kind": "passkey",
+       "addedAt": 1789996400000
+      }
+     ],
+     "totp": {
+      "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "addedAt": 1789913600000,
+      "lastStep": 59666666
+     },
+     "recoveryHashes": []
+    },
+    "issued": []
+   }
+  },
+  {
+   "name": "totp fifth wrong code locks a minute",
+   "state": {
+    "version": 1,
+    "enabled": true,
+    "rpId": "nekko-computer:golden-install",
+    "origins": [
+     "nekko-app://desktop",
+     "http://localhost:5173"
+    ],
+    "credentials": [
+     {
+      "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+      "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+      "counter": 5,
+      "name": "YubiKey",
+      "kind": "security-key",
+      "addedAt": 1789913600000
+     },
+     {
+      "id": "AgICAgICAgICAgICAgICAg",
+      "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+      "counter": 0,
+      "name": "Touch ID",
+      "kind": "passkey",
+      "addedAt": 1789996400000
+     }
+    ],
+    "totp": {
+     "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+     "addedAt": 1789913600000,
+     "wrong": 4
+    },
+    "recoveryHashes": []
+   },
+   "issued": [],
+   "now": 1790000000000,
+   "stepUp": {
+    "totp": "000000"
+   },
+   "expect": {
+    "result": "step-up-invalid",
+    "state": {
+     "version": 1,
+     "enabled": true,
+     "rpId": "nekko-computer:golden-install",
+     "origins": [
+      "nekko-app://desktop",
+      "http://localhost:5173"
+     ],
+     "credentials": [
+      {
+       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+       "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+       "counter": 5,
+       "name": "YubiKey",
+       "kind": "security-key",
+       "addedAt": 1789913600000
+      },
+      {
+       "id": "AgICAgICAgICAgICAgICAg",
+       "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+       "counter": 0,
+       "name": "Touch ID",
+       "kind": "passkey",
+       "addedAt": 1789996400000
+      }
+     ],
+     "totp": {
+      "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "addedAt": 1789913600000,
+      "wrong": 0,
+      "lockedUntil": 1790000060000,
+      "locks": 1
+     },
+     "recoveryHashes": []
+    },
+    "issued": []
+   }
+  },
+  {
+   "name": "totp while locked",
+   "state": {
+    "version": 1,
+    "enabled": true,
+    "rpId": "nekko-computer:golden-install",
+    "origins": [
+     "nekko-app://desktop",
+     "http://localhost:5173"
+    ],
+    "credentials": [
+     {
+      "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+      "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+      "counter": 5,
+      "name": "YubiKey",
+      "kind": "security-key",
+      "addedAt": 1789913600000
+     },
+     {
+      "id": "AgICAgICAgICAgICAgICAg",
+      "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+      "counter": 0,
+      "name": "Touch ID",
+      "kind": "passkey",
+      "addedAt": 1789996400000
+     }
+    ],
+    "totp": {
+     "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+     "addedAt": 1789913600000,
+     "lockedUntil": 1790000001000,
+     "locks": 1
+    },
+    "recoveryHashes": []
+   },
+   "issued": [],
+   "now": 1790000000000,
+   "stepUp": {
+    "totp": "144003"
+   },
+   "expect": {
+    "result": "step-up-invalid",
+    "state": {
+     "version": 1,
+     "enabled": true,
+     "rpId": "nekko-computer:golden-install",
+     "origins": [
+      "nekko-app://desktop",
+      "http://localhost:5173"
+     ],
+     "credentials": [
+      {
+       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+       "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+       "counter": 5,
+       "name": "YubiKey",
+       "kind": "security-key",
+       "addedAt": 1789913600000
+      },
+      {
+       "id": "AgICAgICAgICAgICAgICAg",
+       "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+       "counter": 0,
+       "name": "Touch ID",
+       "kind": "passkey",
+       "addedAt": 1789996400000
+      }
+     ],
+     "totp": {
+      "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "addedAt": 1789913600000,
+      "lockedUntil": 1790000001000,
+      "locks": 1
+     },
+     "recoveryHashes": []
+    },
+    "issued": []
+   }
+  },
+  {
+   "name": "totp lock doubles",
+   "state": {
+    "version": 1,
+    "enabled": true,
+    "rpId": "nekko-computer:golden-install",
+    "origins": [
+     "nekko-app://desktop",
+     "http://localhost:5173"
+    ],
+    "credentials": [
+     {
+      "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+      "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+      "counter": 5,
+      "name": "YubiKey",
+      "kind": "security-key",
+      "addedAt": 1789913600000
+     },
+     {
+      "id": "AgICAgICAgICAgICAgICAg",
+      "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+      "counter": 0,
+      "name": "Touch ID",
+      "kind": "passkey",
+      "addedAt": 1789996400000
+     }
+    ],
+    "totp": {
+     "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+     "addedAt": 1789913600000,
+     "wrong": 4,
+     "locks": 1,
+     "lockedUntil": 1789999999999
+    },
+    "recoveryHashes": []
+   },
+   "issued": [],
+   "now": 1790000000000,
+   "stepUp": {
+    "totp": "abcdef"
+   },
+   "expect": {
+    "result": "step-up-invalid",
+    "state": {
+     "version": 1,
+     "enabled": true,
+     "rpId": "nekko-computer:golden-install",
+     "origins": [
+      "nekko-app://desktop",
+      "http://localhost:5173"
+     ],
+     "credentials": [
+      {
+       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+       "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+       "counter": 5,
+       "name": "YubiKey",
+       "kind": "security-key",
+       "addedAt": 1789913600000
+      },
+      {
+       "id": "AgICAgICAgICAgICAgICAg",
+       "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+       "counter": 0,
+       "name": "Touch ID",
+       "kind": "passkey",
+       "addedAt": 1789996400000
+      }
+     ],
+     "totp": {
+      "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "addedAt": 1789913600000,
+      "wrong": 0,
+      "locks": 2,
+      "lockedUntil": 1790000120000
+     },
+     "recoveryHashes": []
+    },
+    "issued": []
+   }
+  },
+  {
+   "name": "totp after the lock clears the count",
+   "state": {
+    "version": 1,
+    "enabled": true,
+    "rpId": "nekko-computer:golden-install",
+    "origins": [
+     "nekko-app://desktop",
+     "http://localhost:5173"
+    ],
+    "credentials": [
+     {
+      "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+      "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+      "counter": 5,
+      "name": "YubiKey",
+      "kind": "security-key",
+      "addedAt": 1789913600000
+     },
+     {
+      "id": "AgICAgICAgICAgICAgICAg",
+      "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+      "counter": 0,
+      "name": "Touch ID",
+      "kind": "passkey",
+      "addedAt": 1789996400000
+     }
+    ],
+    "totp": {
+     "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+     "addedAt": 1789913600000,
+     "wrong": 2,
+     "locks": 1,
+     "lockedUntil": 1789999999999
+    },
+    "recoveryHashes": []
+   },
+   "issued": [],
+   "now": 1790000000000,
+   "stepUp": {
+    "totp": "144003"
+   },
+   "expect": {
+    "result": "ok",
+    "state": {
+     "version": 1,
+     "enabled": true,
+     "rpId": "nekko-computer:golden-install",
+     "origins": [
+      "nekko-app://desktop",
+      "http://localhost:5173"
+     ],
+     "credentials": [
+      {
+       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+       "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+       "counter": 5,
+       "name": "YubiKey",
+       "kind": "security-key",
+       "addedAt": 1789913600000
+      },
+      {
+       "id": "AgICAgICAgICAgICAgICAg",
+       "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+       "counter": 0,
+       "name": "Touch ID",
+       "kind": "passkey",
+       "addedAt": 1789996400000
+      }
+     ],
+     "totp": {
+      "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "addedAt": 1789913600000,
+      "lastStep": 59666666,
+      "lastUsedAt": 1790000000000
+     },
+     "recoveryHashes": []
+    },
+    "issued": [],
+    "method": "totp"
+   }
+  },
+  {
+   "name": "totp without a totp method",
+   "state": {
+    "version": 1,
+    "enabled": true,
+    "rpId": "nekko-computer:golden-install",
+    "origins": [
+     "nekko-app://desktop",
+     "http://localhost:5173"
+    ],
+    "credentials": [
+     {
+      "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+      "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+      "counter": 5,
+      "name": "YubiKey",
+      "kind": "security-key",
+      "addedAt": 1789913600000
+     },
+     {
+      "id": "AgICAgICAgICAgICAgICAg",
+      "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+      "counter": 0,
+      "name": "Touch ID",
+      "kind": "passkey",
+      "addedAt": 1789996400000
+     }
+    ],
+    "totp": null,
+    "recoveryHashes": []
+   },
+   "issued": [],
+   "now": 1790000000000,
+   "stepUp": {
+    "totp": "144003"
+   },
+   "expect": {
+    "result": "step-up-invalid",
+    "state": {
+     "version": 1,
+     "enabled": true,
+     "rpId": "nekko-computer:golden-install",
+     "origins": [
+      "nekko-app://desktop",
+      "http://localhost:5173"
+     ],
+     "credentials": [
+      {
+       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
+       "publicKey": "BHJzlD+Muweqs/gQMyJdFWeNU7TCazfewXjMQDb4ec0fmRpaqZo1O8nZFVKjHLRAOp4hV+F/Vt9LTdCw+/kHav4=",
+       "counter": 5,
+       "name": "YubiKey",
+       "kind": "security-key",
+       "addedAt": 1789913600000
+      },
+      {
+       "id": "AgICAgICAgICAgICAgICAg",
+       "publicKey": "BKGN5mBhQprlH/xP7PnDpmqvegK6kqYJyniXz4Z74XumBZMi+cNSSlZh/FwZUr6TsHKNu8Beq8b30eG4MgR95OA=",
+       "counter": 0,
+       "name": "Touch ID",
+       "kind": "passkey",
+       "addedAt": 1789996400000
+      }
+     ],
+     "totp": null,
+     "recoveryHashes": []
+    },
+    "issued": []
+   }
+  }
+ ],
+ "totpVectors": [
+  {
+   "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+   "step": 1,
+   "code": "287082"
+  },
+  {
+   "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+   "step": 37037036,
+   "code": "081804"
+  },
+  {
+   "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+   "step": 37037037,
+   "code": "050471"
+  },
+  {
+   "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+   "step": 41152263,
+   "code": "005924"
+  },
+  {
+   "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+   "step": 66666666,
+   "code": "279037"
+  },
+  {
+   "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+   "step": 666666666,
+   "code": "353130"
+  }
+ ],
+ "recovery": {
+  "codes": [
+   "inxur-pzvox",
+   "pc27v-tx6p6",
+   "7hb3p-h6f3p",
+   "jsltw-4jzm2",
+   "z6vpi-vw2kk",
+   "iixdr-4lmug",
+   "js7v2-34hk6",
+   "jmcpk-3ntdf",
+   "vzbve-foote",
+   "7lj2l-4ypmx"
+  ],
+  "hashes": [
+   "86bd5d848cdd824bb04ea91f7015e498f36c4f3935e3b13670de9967a5596b58",
+   "d7c9f0977487e5d40480bb83c4909dbb7064356bb8c9066acda56b1a1164d4f3",
+   "26bdc3b19a0b40a223439fcde70c81630a488aa2c56145b9f22b719656768f1c",
+   "b880e79b8fd83f15a64be5ea47cc660fc4c21a063ad94edaa687b9676752b18a",
+   "9e8ad1ea8c0bae0f2a2b53963aac63e7532f802e183692c1536561fbead818ab",
+   "940d6562590f7fe126667cc045b21f01789d9e57447e8097dee3c8fb7d9682cb",
+   "48972b9a5edb1480c5b1956156cbd7d207280c451dd8c3f5edd5d1171ecf1b52",
+   "481d5d7c26cadd0eb2db4b56cc9ec08eb5da5a3942ae0576de91e5656a1e05ed",
+   "6019aab252b66cf4ba4b62e89c511c9f884764871b442de144aad7e083422767",
+   "38f09b016bfbaa99862b26876bdf3c7ce3bae37b62c7a847788bbfd28fd3bbb9"
+  ]
+ }
+}

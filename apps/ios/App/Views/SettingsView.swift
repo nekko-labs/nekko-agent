@@ -10,39 +10,35 @@ struct ComputersView: View {
     @State private var renaming: Computer?
     @State private var name = ""
     @State private var forgetting: Computer?
-    @State private var acting: Computer?
 
     var body: some View {
         List {
             Section {
                 ForEach(store.computers) { c in
-                    // A button, so VoiceOver says what tapping does; the connected
-                    // computer isn't torn down and reconnected by a tap.
-                    // A tap offers everything that can be done to this computer.
-                    Button { acting = c } label: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text(c.name).font(.body.weight(.medium)).foregroundStyle(palette.ink)
-                                if c.id == store.activeId { Text("Connected here").font(.caption2).foregroundStyle(palette.success) }
-                                if c.id == app.prefs.defaultComputer {
-                                    Image(systemName: "star.fill").font(.caption2).foregroundStyle(palette.warning)
-                                        .accessibilityLabel("Opens at launch")
+                    // A tap opens the computer's page (2026-10-24); the actions stay on swipe and touch-and-hold.
+                    NavigationLink(value: Route.computer(c.id)) {
+                        HStack(spacing: 10) {
+                            Circle().fill(c.id == store.activeId ? dot : palette.inkFaint.opacity(0.5)).frame(width: 8, height: 8)
+                            VStack(alignment: .leading, spacing: 3) {
+                                HStack(spacing: 6) {
+                                    Text(c.name).font(.body.weight(.medium)).foregroundStyle(palette.ink)
+                                    if c.id == app.prefs.defaultComputer {
+                                        Image(systemName: "star.fill").font(.caption2).foregroundStyle(palette.warning)
+                                            .accessibilityLabel("Opens at launch")
+                                    }
                                 }
+                                Text(subtitle(c)).font(.caption).foregroundStyle(palette.inkFaint)
                             }
-                            Text("\(routeName(c.route)) · \(c.relayHost)").font(.caption).foregroundStyle(palette.inkFaint)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(c.id == store.activeId ? .isSelected : [])
-                    .accessibilityHint("Shows what you can do with this computer")
+                    .accessibilityIdentifier("computers.row")
+                    .accessibilityHint("Opens this computer's page")
                     .swipeActions {
                         Button(role: .destructive) { forgetting = c } label: { Label("Forget", systemImage: "trash") }
                         Button { name = c.name; renaming = c } label: { Label("Rename", systemImage: "pencil") }
                     }
                     .contextMenu {
-                        Button { store.connect(c.id) } label: { Label("Connect", systemImage: "bolt.horizontal") }
+                        if c.id != store.activeId { Button { store.connect(c.id) } label: { Label("Connect", systemImage: "bolt.horizontal") } }
                         Button { app.prefs.defaultComputer = c.id } label: { Label("Open at launch", systemImage: "star") }
                         Button { name = c.name; renaming = c } label: { Label("Rename", systemImage: "pencil") }
                         Button(role: .destructive) { forgetting = c } label: { Label("Forget", systemImage: "trash") }
@@ -60,14 +56,22 @@ struct ComputersView: View {
             Button("Cancel", role: .cancel) {}
             Button("Save") { if let c = renaming { store.rename(c.id, to: name) } }
         }
-        .confirmationDialog(acting?.name ?? "", isPresented: Binding(get: { acting != nil }, set: { if !$0 { acting = nil } }),
-                            titleVisibility: .visible, presenting: acting) { c in
-            if c.id != store.activeId { Button("Connect") { store.connect(c.id) } }
-            Button("Rename") { name = c.name; renaming = c }
-            if c.id != app.prefs.defaultComputer { Button("Open at launch") { app.prefs.defaultComputer = c.id } }
-            Button("Forget…", role: .destructive) { forgetting = c }
-        }
         .forgetDialog($forgetting)
+    }
+
+    private func subtitle(_ c: Computer) -> String {
+        let where_ = "\(routeName(c.route)) · \(c.relayHost)"
+        return c.id == store.activeId ? "\(stateName(store.conn)) · \(where_)" : where_
+    }
+
+    private var dot: Color {
+        switch store.conn {
+        case .online: return palette.success
+        case .connecting: return palette.running
+        case .offline: return palette.warning
+        case .denied: return palette.danger
+        case .idle: return palette.inkFaint
+        }
     }
 }
 

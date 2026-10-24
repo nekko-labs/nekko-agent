@@ -57,6 +57,8 @@ import {
 import {
   PHONE_LIMIT_WINDOW_VIEW,
   PHONE_LIMITS_VIEW,
+  PHONE_MACHINE_RESIDENT_VIEW,
+  PHONE_MACHINE_VIEW,
   PHONE_MONITOR_SOURCES,
   PHONE_MONITOR_VIEW,
   PHONE_PR_VIEW,
@@ -82,6 +84,7 @@ import {
   phoneSystemView,
   phoneLimitsKey,
   phoneLimitsView,
+  phoneMachineView,
   phoneMonitorView,
   phonePromptsView,
   phonePrsView,
@@ -146,6 +149,7 @@ export const PHONE_CHANNELS = [
   'limits:get',
   'logs:list',
   'logs:read',
+  'machine:summary',
   'model:unload',
   'models:list',
   'monitor:summary',
@@ -307,6 +311,7 @@ export const PHONE_CHAT_READ_CHANNELS: readonly string[] = [
   'changes:list',
   'chat:pending',
   'limits:get',
+  'machine:summary',
   'models:list',
   'monitor:summary',
   'pr:sessionList',
@@ -618,7 +623,13 @@ export type PhoneAccessCode =
   | 'token-required'
   | 'token-invalid'
   | 'token-expired'
-  | 'terminal-hidden';
+  | 'terminal-hidden'
+  // SK-1: the step-up a guarded call carries (step-up.ts), and quitting from a phone when the computer did not opt in.
+  | 'step-up-required'
+  | 'step-up-invalid'
+  | 'step-up-stale'
+  | 'step-up-replayed'
+  | 'quit-disabled';
 
 /** Why the computer refused a phone's request. The wire carries `message`. */
 export class PhoneAccessError extends Error {
@@ -907,6 +918,8 @@ export function redactPhoneResult(channel: string, result: unknown): unknown {
       return phonePrsView(result);
     case 'session:watches':
       return phoneWatchesView(result);
+    case 'machine:summary':
+      return phoneMachineView(result);
     case 'usage:summary':
       return phoneUsageView(result);
     case 'limits:get':
@@ -1127,6 +1140,8 @@ export function phoneAccessPolicy() {
     settingsView: [...PHONE_SETTINGS_VIEW],
     providerView: [...PHONE_PROVIDER_VIEW],
     watchView: [...PHONE_WATCH_VIEW],
+    machineView: [...PHONE_MACHINE_VIEW],
+    machineResidentView: [...PHONE_MACHINE_RESIDENT_VIEW],
     skillView: [...PHONE_SKILL_VIEW],
     queueKeys: [...PHONE_QUEUE_KEYS],
     sessionOptionKeys: [...PHONE_SESSION_OPTION_KEYS],

@@ -189,6 +189,27 @@ export function phoneWorkflowsView(snapshot: unknown): Obj[] {
  */
 export const PHONE_WATCH_VIEW = ['id', 'kind', 'url', 'status', 'deadlineAt', 'nextPollAt', 'pending', 'failures', 'lastError'] as const;
 
+/**
+ * `machine:summary` for a phone (2026-10-24): the computer's version and
+ * platform, its hardware profile, live CPU and memory, GPU memory and the
+ * model server's state with its resident models by id and name. The daemon
+ * builds it without paths or addresses; the view pins the top-level keys and
+ * the resident fields so a later field never reaches a phone unseen.
+ */
+export const PHONE_MACHINE_VIEW = ['version', 'platform', 'edition', 'uptimeMs', 'hardware', 'live', 'gpu', 'engine'] as const;
+export const PHONE_MACHINE_RESIDENT_VIEW = ['id', 'name', 'contextTokens'] as const;
+
+export function phoneMachineView(result: unknown): Obj | null {
+  if (!isObj(result)) return null;
+  const view = pickKeys(result, PHONE_MACHINE_VIEW);
+  if (isObj(view.engine)) {
+    const engine = { ...view.engine } as Obj;
+    engine.resident = Array.isArray(engine.resident) ? engine.resident.filter(isObj).map((m) => pickKeys(m, PHONE_MACHINE_RESIDENT_VIEW)) : [];
+    view.engine = engine;
+  }
+  return view;
+}
+
 /** `session:watches` for a phone: each watch picked to `PHONE_WATCH_VIEW`, anything that is not an object dropped. */
 export function phoneWatchesView(result: unknown): Obj[] {
   if (!Array.isArray(result)) return [];
