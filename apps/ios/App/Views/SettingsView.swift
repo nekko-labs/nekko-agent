@@ -10,6 +10,7 @@ struct ComputersView: View {
     @State private var renaming: Computer?
     @State private var name = ""
     @State private var forgetting: Computer?
+    @State private var acting: Computer?
 
     var body: some View {
         List {
@@ -17,7 +18,8 @@ struct ComputersView: View {
                 ForEach(store.computers) { c in
                     // A button, so VoiceOver says what tapping does; the connected
                     // computer isn't torn down and reconnected by a tap.
-                    Button { if c.id != store.activeId { store.connect(c.id) } } label: {
+                    // A tap offers everything that can be done to this computer.
+                    Button { acting = c } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
                                 Text(c.name).font(.body.weight(.medium)).foregroundStyle(palette.ink)
@@ -34,7 +36,7 @@ struct ComputersView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(c.id == store.activeId ? .isSelected : [])
-                    .accessibilityHint(c.id == store.activeId ? "" : "Connects to this computer")
+                    .accessibilityHint("Shows what you can do with this computer")
                     .swipeActions {
                         Button(role: .destructive) { forgetting = c } label: { Label("Forget", systemImage: "trash") }
                         Button { name = c.name; renaming = c } label: { Label("Rename", systemImage: "pencil") }
@@ -58,10 +60,14 @@ struct ComputersView: View {
             Button("Cancel", role: .cancel) {}
             Button("Save") { if let c = renaming { store.rename(c.id, to: name) } }
         }
-        .confirmationDialog("Forget \(forgetting?.name ?? "this computer")?", isPresented: Binding(get: { forgetting != nil }, set: { if !$0 { forgetting = nil } }),
-                            titleVisibility: .visible) {
-            Button("Forget", role: .destructive) { if let c = forgetting { app.forget(c.id) } }
+        .confirmationDialog(acting?.name ?? "", isPresented: Binding(get: { acting != nil }, set: { if !$0 { acting = nil } }),
+                            titleVisibility: .visible, presenting: acting) { c in
+            if c.id != store.activeId { Button("Connect") { store.connect(c.id) } }
+            Button("Rename") { name = c.name; renaming = c }
+            if c.id != app.prefs.defaultComputer { Button("Open at launch") { app.prefs.defaultComputer = c.id } }
+            Button("Forget…", role: .destructive) { forgetting = c }
         }
+        .forgetDialog($forgetting)
     }
 }
 
@@ -78,10 +84,20 @@ struct SettingsView: View {
         @Bindable var prefs = app.prefs
         Form {
             Section {
-                Picker("Theme", selection: $prefs.theme) {
-                    ForEach(Prefs.ThemeChoice.allCases) { Text($0.label).tag($0) }
+                ThemePicker(selection: $prefs.theme)
+                Button {
+                    if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                } label: {
+                    LabeledContent("Language") {
+                        Text(Locale.current.localizedString(forLanguageCode: Bundle.main.preferredLocalizations.first ?? "en") ?? "English")
+                    }
+                    .foregroundStyle(palette.ink, palette.inkSoft)
                 }
-            } header: { SectionHeader("Appearance") }
+                .accessibilityIdentifier("settings.language")
+            } header: { SectionHeader("Appearance") } footer: {
+                Text("The themes are the desktop’s. The language is chosen in this iPhone’s Settings for Nekko Agent: English, Español, Français, Deutsch, Português, 日本語 or 中文.")
+                    .foregroundStyle(palette.inkSoft)
+            }
             Section {
                 Toggle("App lock (Face ID / passcode)", isOn: Binding(get: { prefs.appLock }, set: { on in
                     if on { prefs.appLock = true } else {
@@ -209,5 +225,98 @@ struct SettingsView: View {
         .confirmationDialog("Forget all computers and keys?", isPresented: $confirmWipe, titleVisibility: .visible) {
             Button("Forget everything", role: .destructive) { app.forgetEverything() }
         }
+    }
+}
+
+extension View {
+    /// Confirm, then forget a computer on this iPhone (its pairing keys and saved chats).
+    func forgetDialog(_ computer: Binding<Computer?>) -> some View {
+        modifier(ForgetDialog(computer: computer))
+    }
+}
+
+private struct ForgetDialog: ViewModifier {
+    @Binding var computer: Computer?
+    @Environment(AppModel.self) private var app
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog("Forget \(computer?.name ?? "this computer")?",
+                                   isPresented: Binding(get: { computer != nil }, set: { if !$0 { computer = nil } }),
+                                   titleVisibility: .visible, presenting: computer) { c in
+            Button("Forget", role: .destructive) { app.forget(c.id) }
+        } message: { _ in
+            Text("This iPhone deletes its pairing keys and saved chats for it. To stop the computer accepting this phone, remove it in Settings → Remote access there too.")
+        }
+    }
+}
+
+/// The desktop's theme presets (ThemePresets.swift), plus following the computer.
+struct ThemePicker: View {
+    @Binding var selection: String
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        NavigationLink {
+            ThemeList(selection: $selection)
+        } label: {
+            LabeledContent { Text(Self.name(selection)) } label: { Text("Theme") }
+                .foregroundStyle(palette.ink, palette.inkSoft)
+        }
+        .accessibilityIdentifier("settings.theme")
+    }
+
+    static func name(_ id: String) -> String {
+        switch id {
+        case Prefs.matchComputer: return String(localized: "Match my computer")
+        case "system": return String(localized: "Match this iPhone")
+        case "light": return String(localized: "Light")
+        case "dark": return String(localized: "Dark")
+        default:
+            guard let p = ThemePreset.find(id) else { return id }
+            return p.family.map { "\($0) · \(p.label)" } ?? p.label
+        }
+    }
+}
+
+private struct ThemeList: View {
+    @Binding var selection: String
+    @Environment(\.palette) private var palette
+    @Environment(\.dismiss) private var dismiss
+
+    private var named: [ThemePreset] { ThemePreset.all.filter { $0.family == nil && !$0.isBasic } }
+    private var families: [String] { ThemePreset.all.compactMap(\.family).reduce(into: []) { if !$0.contains($1) { $0.append($1) } } }
+
+    var body: some View {
+        List {
+            Section {
+                ForEach([Prefs.matchComputer, "system", "light", "dark"], id: \.self, content: row)
+            }
+            Section {
+                ForEach(named.map(\.id), id: \.self, content: row)
+            } header: { SectionHeader("Desktop themes") } footer: {
+                Text("Spooky also brings a fall app icon through Halloween.").foregroundStyle(palette.inkSoft)
+            }
+            Section {
+                ForEach(families, id: \.self) { f in
+                    ForEach(ThemePreset.all.filter { $0.family == f }.map(\.id), id: \.self, content: row)
+                }
+            } header: { SectionHeader("Experimental") }
+        }
+        .navigationTitle("Theme")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func row(_ id: String) -> some View {
+        Button {
+            selection = id
+            dismiss()
+        } label: {
+            HStack {
+                Text(ThemePicker.name(id)).foregroundStyle(palette.ink)
+                Spacer()
+                if selection == id { Image(systemName: "checkmark").foregroundStyle(palette.accent) }
+            }
+        }
+        .accessibilityAddTraits(selection == id ? .isSelected : [])
     }
 }

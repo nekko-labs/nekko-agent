@@ -4995,7 +4995,8 @@
         {
           "url": "https://api.github.com/repos/astral-sh/uv/releases/tags/0.12.21",
           "headers": {
-            "Accept": "application/vnd.github+json"
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "nekko-agent"
           }
         },
         {
@@ -5063,7 +5064,8 @@
         {
           "url": "https://api.github.com/repos/astral-sh/uv/releases/tags/0.12.21",
           "headers": {
-            "Accept": "application/vnd.github+json"
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "nekko-agent"
           }
         },
         {
@@ -5131,7 +5133,8 @@
         {
           "url": "https://api.github.com/repos/astral-sh/uv/releases/tags/0.12.21",
           "headers": {
-            "Accept": "application/vnd.github+json"
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "nekko-agent"
           }
         },
         {
@@ -5198,7 +5201,8 @@
         {
           "url": "https://api.github.com/repos/astral-sh/uv/releases/tags/0.12.21",
           "headers": {
-            "Accept": "application/vnd.github+json"
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "nekko-agent"
           }
         },
         {
@@ -5228,7 +5232,8 @@
         {
           "url": "https://api.github.com/repos/astral-sh/uv/releases/tags/0.12.21",
           "headers": {
-            "Accept": "application/vnd.github+json"
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "nekko-agent"
           }
         }
       ],

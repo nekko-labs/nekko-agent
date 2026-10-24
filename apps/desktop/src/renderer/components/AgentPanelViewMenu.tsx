@@ -177,6 +177,8 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
           {sub === 'show' && <>
             <Choice toggle checked={view.showMetadata} onClick={() => set({ showMetadata: !view.showMetadata })}
               title="The model, context, git and sub-agent lines under each card">Metadata</Choice>
+            <Choice toggle checked={view.showMetadata && view.showProvider} disabled={!view.showMetadata} onClick={() => set({ showProvider: !view.showProvider })}
+              title="Where each card's model comes from, under the model">Model provider</Choice>
             <Divider />
             <Choice toggle checked={view.showAutomations} onClick={() => set({ showAutomations: !view.showAutomations })}
               title="Chats an automation started">Automations</Choice>

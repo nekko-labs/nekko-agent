@@ -138,3 +138,7 @@ All shows every available model and Auto; Fusion shows Auto routing; Cloud and
 Local narrow the list to those providers, including favorites and your default.
 Filtering does not select a model or change the chat's mode. Fusion is unavailable
 where Auto routing is not supported, such as a fixed-model workflow step.
+
+### Delegated agents in the Agents panel
+
+Delegated subagents appear as compact rows beneath their parent. Opening a child transcript does not add a duplicate full agent card. Closing the parent's windows keeps the saved parent and its nested children accessible.

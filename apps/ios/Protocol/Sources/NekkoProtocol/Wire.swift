@@ -318,6 +318,9 @@ public struct PublicProvider: Equatable, Sendable, Identifiable {
             return PublicProvider(id: id, kind: p.str("kind") ?? "", label: p.str("label") ?? id, enabled: p.flag("enabled"))
         }
     }
+
+    /// A model server on a computer (`LOCAL_PROVIDER_KINDS`, packages/shared/src/models.ts), not a cloud API.
+    public var isLocal: Bool { ["llamacpp", "ollama", "lmstudio", "vllm"].contains(kind) }
 }
 
 /// The settings fields the phone reads (`settings:get` returns the phone view only).

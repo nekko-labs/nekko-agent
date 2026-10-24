@@ -14,7 +14,7 @@ final class LiveRelayTests: XCTestCase {
         let theme = ProcessInfo.processInfo.environment["NEKKO_ITEST_THEME"] ?? "light"
         let app = XCUIApplication()
         // Settings persist across runs on one simulator: start each from the defaults it checks.
-        app.launchArguments = ["-appLock", "NO", "-onboarded", "NO", "-notifyFinished", "YES", "-dictationHold", "NO",
+        app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "NO", "-notifyFinished", "YES", "-dictationHold", "NO",
                                "-theme", theme == "dark" ? "dark" : "light", "-uiTestReset", "YES"]
         app.launch()
         allowSystemAlerts()
@@ -217,7 +217,7 @@ final class LiveRelayTests: XCTestCase {
         // in the App Group. New chat opens with the text; nothing is sent.
         app.terminate()
         let shared = "Summarise https://example.com/release-notes"
-        app.launchArguments = ["-appLock", "NO", "-onboarded", "YES", "-theme", theme == "dark" ? "dark" : "light", "-uiTestShare", shared]
+        app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "YES", "-theme", theme == "dark" ? "dark" : "light", "-uiTestShare", shared]
         app.launch()
         let prefilled = app.input("newChat.prompt")
         XCTAssertTrue(prefilled.waitForExistence(timeout: 15), "New chat opened for the share")
@@ -239,7 +239,7 @@ final class LiveRelayTests: XCTestCase {
         }
         let app = XCUIApplication()
         // Past the first run (IO-31), which the live journey walks; this test is about the outbox.
-        app.launchArguments = ["-appLock", "NO", "-theme", "light", "-onboarded", "YES", "-uiTestReset", "YES"]
+        app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-theme", "light", "-onboarded", "YES", "-uiTestReset", "YES"]
         app.launch()
         allowSystemAlerts()
         let start = app.buttons["Pair with your computer"]
@@ -296,7 +296,7 @@ final class LiveRelayTests: XCTestCase {
         // from the phone's saved copies, marked as saved, before any answer.
         relay(ctl, "stop")
         app.terminate()
-        app.launchArguments = ["-appLock", "NO", "-theme", "light", "-onboarded", "YES"]
+        app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-theme", "light", "-onboarded", "YES"]
         app.launch()
         XCTAssertTrue(app.descendants(matching: .any)["chats.savedList"].waitForExistence(timeout: 10), "the saved list, at once")
         let row = app.descendants(matching: .any).matching(identifier: "chats.row").firstMatch
@@ -315,7 +315,7 @@ final class LiveRelayTests: XCTestCase {
             throw XCTSkip("set NEKKO_ITEST_LINK (apps/ios/scripts/itest-stack.sh)")
         }
         let app = XCUIApplication()
-        app.launchArguments = ["-appLock", "NO", "-theme", "light", "-uiTestReset", "YES"]
+        app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-theme", "light", "-uiTestReset", "YES"]
         app.launch()
         allowSystemAlerts()
         let start = app.buttons["Pair with your computer"]
@@ -430,7 +430,7 @@ final class LiveRelayTests: XCTestCase {
             throw XCTSkip("set NEKKO_ITEST_LINK (apps/ios/scripts/itest-stack.sh)")
         }
         let app = XCUIApplication()
-        app.launchArguments = ["-appLock", "NO", "-onboarded", "YES", "-uiTestReset", "YES"]
+        app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "YES", "-uiTestReset", "YES"]
         app.launch()
         XCTAssertTrue(app.buttons["Pair with your computer"].waitForExistence(timeout: 10))
 

@@ -76,18 +76,18 @@ describe('account emails in the picker', () => {
   it('names the signed-in account next to the provider, in its own case', () => {
     emails.byToken = { 'claude:a': 'Davide@Example.com' };
     try {
-      const providers = [{ id: 'a', kind: 'anthropic' as const, label: 'Anthropic (Claude)', enabled: true, baseUrl: '', auth: 'subscription' as const, tokenKey: 'claude:a' }];
+      const providers = [{ id: 'a', kind: 'anthropic' as const, label: 'Claude API', enabled: true, baseUrl: '', auth: 'subscription' as const, tokenKey: 'claude:a' }];
       const out = renderToStaticMarkup(<ModelPicker expanded open providers={providers} providerId="a" modelId="m" models={[{ id: 'm', providerId: 'a', name: 'Claude Opus' }]} onOpenChange={() => {}} onProvider={() => {}} onModel={() => {}} />);
-      expect(out).toContain('Anthropic (Claude)<span class="font-normal normal-case tracking-normal text-ink-faint" data-account-email="true"> · Davide@Example.com</span>');
+      expect(out).toContain('Claude API<span class="font-normal normal-case tracking-normal text-ink-faint" data-account-email="true"> · Davide@Example.com</span>');
       const chip = renderToStaticMarkup(<ModelPicker open={false} providers={providers} providerId="a" modelId="m" models={[{ id: 'm', providerId: 'a', name: 'Claude Opus' }]} onOpenChange={() => {}} onProvider={() => {}} onModel={() => {}} />);
-      expect(chip).toContain('Model: Claude Opus · Anthropic (Claude) · Davide@Example.com');
+      expect(chip).toContain('Model: Claude Opus · Claude API · Davide@Example.com');
     } finally { emails.byToken = {}; }
   });
 });
 
 describe('model chip name priority', () => {
   it('wraps the complete model name rather than ellipsizing it for the account label', () => {
-    const out = renderToStaticMarkup(<ModelPicker open={false} providers={[{id:'p',kind:'anthropic',label:'Anthropic (Claude) very long account',enabled:true,baseUrl:''}]} providerId="p" modelId="m" models={[{id:'m',providerId:'p',name:'Claude Opus 4.6'}]} onOpenChange={() => {}} onProvider={() => {}} onModel={() => {}} />);
+    const out = renderToStaticMarkup(<ModelPicker open={false} providers={[{id:'p',kind:'anthropic',label:'Claude API very long account',enabled:true,baseUrl:''}]} providerId="p" modelId="m" models={[{id:'m',providerId:'p',name:'Claude Opus 4.6'}]} onOpenChange={() => {}} onProvider={() => {}} onModel={() => {}} />);
     expect(out).toContain('whitespace-normal break-words text-left');
     expect(out).toContain('data-model-chip-name="true">Claude Opus 4.6</span>');
     expect(out).toContain('ctl-caret shrink-0');
@@ -100,4 +100,29 @@ it('renders four accessible icon filters and disables Fusion when Auto is not al
   for (const label of ['All', 'Fusion', 'Cloud', 'Local']) expect(html).toContain(`</svg>${label}</button>`);
   expect(html).toMatch(/disabled="" title="Auto routing is not available here"/);
   expect(html).toContain('aria-pressed="true"');
+});
+
+describe('account switcher', () => {
+  const gpt = (id: string, tokenKey: string) => ({ id, kind: 'chatgpt' as const, label: 'ChatGPT', enabled: true, baseUrl: 'http://localhost', auth: 'subscription' as const, tokenKey });
+  const base = { expanded: true, open: true, modelId: 'gpt-6', models: [{ id: 'gpt-6', providerId: 'a', name: 'GPT 6' }], onOpenChange: () => {}, onProvider: () => {}, onModel: () => {} };
+  it('lists each account of the current vendor by its email, the current one checked', () => {
+    emails.byToken = { 'chatgpt:a': 'me@home.example', 'chatgpt:b': 'me@work.example' };
+    try {
+      const out = renderToStaticMarkup(<ModelPicker {...base} providers={[gpt('a', 'chatgpt:a'), gpt('b', 'chatgpt:b')]} providerId="a" />);
+      expect(out).toContain('data-account-switcher');
+      expect(out).toMatch(/aria-checked="true"[^>]*>me@home\.example</);
+      expect(out).toMatch(/aria-checked="false"[^>]*>me@work\.example</);
+      expect(out).toContain('Use GPT 6 on me@work.example');
+    } finally { emails.byToken = {}; }
+  });
+  it('shows no switcher with a single account', () => {
+    const out = renderToStaticMarkup(<ModelPicker {...base} providers={[gpt('a', 'chatgpt:a')]} providerId="a" />);
+    expect(out).not.toContain('data-account-switcher');
+  });
+  it('says a Claude Agent switch starts a new Claude Code conversation', () => {
+    const cc = (id: string, label: string, account?: string) => ({ id, kind: 'claude-code' as const, label, enabled: true, baseUrl: '', ...(account ? { claudeCode: { account } } : {}) });
+    const out = renderToStaticMarkup(<ModelPicker {...base} modelId="opus" models={[{ id: 'opus', providerId: 'cc', name: 'Opus' }]} providers={[cc('cc', 'Claude Agent'), cc('ccw', 'Claude Agent · Work', 'work')]} providerId="cc" />);
+    expect(out).toContain('Claude Agent · Work');
+    expect(out).toContain('new Claude Code conversation');
+  });
 });

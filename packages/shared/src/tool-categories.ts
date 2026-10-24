@@ -47,6 +47,7 @@ export const TOOL_CATEGORY_OF: Readonly<Record<string, ToolCategory>> = {
   decide: 'agent',
   report_experiment: 'agent',
   report_artifact: 'agent',
+  remember: 'agent',
 };
 
 /** Agent tools that can reach a cloud provider, so an offline chat goes without them. */

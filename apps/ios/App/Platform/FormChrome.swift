@@ -2,15 +2,14 @@ import SwiftUI
 import UIKit
 
 extension View {
-    /// A Done key above the keyboard, so the transcript and forms are never stuck behind it.
+    /// A Done key above the keyboard, so a form is never stuck behind it. Not for a
+    /// screen with a bar pinned above the keyboard: on iOS 26 the key floats over it.
     func keyboardDoneButton() -> some View {
         toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
-                Button("Done") {
-                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                }
-                .accessibilityIdentifier("keyboard.done")
+                Button("Done", action: hideKeyboard)
+                    .accessibilityIdentifier("keyboard.done")
             }
         }
     }
@@ -27,4 +26,10 @@ struct SectionHeader: View {
     var body: some View {
         Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).textCase(nil)
     }
+}
+
+/// Put the keyboard away, wherever the focus is.
+@MainActor
+func hideKeyboard() {
+    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
 }

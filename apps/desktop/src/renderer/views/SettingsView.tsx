@@ -8,7 +8,7 @@ import { UpdateProgress, useUpdater } from '../components/UpdateBanner.js';
 import { ThemePresetPicker } from '../components/ThemePresetPicker.js';
 import { pixelWaveFor } from '../components/PixelWaveBackground.js';
 import { DEFAULT_SPEC_METHODOLOGY, SPEC_METHODOLOGIES, ORCHESTRATION_STRATEGIES, DEFAULT_ORCHESTRATION, MAX_OUTPUT_TOKENS_DEFAULT, MAX_OUTPUT_TOKENS_RANGE, clampMaxOutputTokens, ONBOARDING_VERSION, updateChecks, DEFAULT_TURN_WRAPPER } from '@nekko-agent/shared';
-import { ShieldIcon, SunIcon, TrashIcon, RobotIcon, WandIcon } from '../icons.js';
+import { GearIcon, PhoneIcon, ShieldIcon, SunIcon, TrashIcon, RobotIcon, WandIcon, WrenchIcon } from '../icons.js';
 import { VoiceSettings } from '../components/VoiceSettings.js';
 import { RemoteAccess } from '../components/RemoteAccess.js';
 import { SyncSettings } from '../components/cloud/SyncSettings.js';
@@ -19,6 +19,7 @@ import { hasAppChrome } from '../chrome.js';
 import { ServiceLoadState } from '../components/ServiceLoadState.js';
 import { ErrorBoundary } from '../components/ErrorBoundary.js';
 import { SettingsSearch } from '../components/SettingsSearch.js';
+import { ProjectManagementToggles, PullRequestToggles } from '../components/WorkTrackingToggles.js';
 import { WallLayoutSettings } from './WallLayoutSettings.js';
 import { DesktopBehaviorSection, FunSection } from './DesktopBehaviorSections.js';
 
@@ -37,11 +38,64 @@ const CHAT_MODES: Array<{ value: ChatMode; label: string; desc: string }> = [
   { value: 'yolo', label: 'YOLO', desc: 'Run everything without confirming (deny rules still block).' },
 ];
 
+/** The left-hand nav. Phone pairing sits second so the QR is one click from opening Settings. */
+export const SETTINGS_GROUPS = [
+  { id: 'general', label: 'General', icon: SunIcon },
+  { id: 'phone', label: 'Phone pairing', icon: PhoneIcon },
+  { id: 'agents', label: 'Agents', icon: RobotIcon },
+  { id: 'safety', label: 'Safety', icon: ShieldIcon },
+  { id: 'tools', label: 'Tools', icon: WrenchIcon },
+  { id: 'system', label: 'System', icon: GearIcon },
+] as const;
+type SettingsGroupId = (typeof SETTINGS_GROUPS)[number]['id'];
+
+function SettingsGroup({ id, children }: { id: SettingsGroupId; children: React.ReactNode }) {
+  const label = SETTINGS_GROUPS.find((g) => g.id === id)!.label;
+  return (
+    <div id={`settings-${id}`} data-settings-group={id} className="settings-group" aria-labelledby={`settings-${id}-title`} role="region">
+      <h2 id={`settings-${id}-title`} className="settings-group-title">{label}</h2>
+      {children}
+    </div>
+  );
+}
+
+/** The group whose top has passed the top of the scroller (the last one once scrolled to the bottom). */
+export function activeGroup(scroller: HTMLElement): SettingsGroupId {
+  const groups = [...scroller.querySelectorAll<HTMLElement>('[data-settings-group]')];
+  if (scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 2) return (groups.at(-1)?.dataset.settingsGroup ?? 'general') as SettingsGroupId;
+  const top = scroller.getBoundingClientRect().top + 24;
+  let cur: string = 'general';
+  for (const g of groups) if (g.getBoundingClientRect().top <= top) cur = g.dataset.settingsGroup!;
+  return cur as SettingsGroupId;
+}
+
 export function SettingsView() {
   const { applyTheme, onboardingOpen, settings, settingsError, refreshSettings } = useStore(useShallow((s) => ({ applyTheme: s.applyTheme, onboardingOpen: s.onboardingOpen, settings: s.settings, settingsError: s.settingsError, refreshSettings: s.refreshSettings })));
   const tr = useT();
   const prevOnboardingOpen = useRef(onboardingOpen);
   const pageRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [active, setActive] = useState<SettingsGroupId>('general');
+  const jumping = useRef(0);
+  const onScroll = () => { if (scrollRef.current && !jumping.current) setActive(activeGroup(scrollRef.current)); };
+  const goTo = (id: SettingsGroupId) => {
+    setActive(id);
+    const scroller = scrollRef.current;
+    const target = document.getElementById(`settings-${id}`);
+    if (!scroller || !target) return;
+    const from = scroller.scrollTop;
+    const to = Math.min(from + target.getBoundingClientRect().top - scroller.getBoundingClientRect().top, scroller.scrollHeight - scroller.clientHeight);
+    cancelAnimationFrame(jumping.current);
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) { scroller.scrollTop = to; return; }
+    // Native smooth scroll takes ~500ms over a long page; this lands in 200ms with an ease-out.
+    const start = performance.now();
+    const step = (t: number) => {
+      const p = Math.min(1, (t - start) / 200);
+      scroller.scrollTop = from + (to - from) * (1 - (1 - p) ** 3);
+      jumping.current = p < 1 ? requestAnimationFrame(step) : 0;
+    };
+    jumping.current = requestAnimationFrame(step);
+  };
   const reload = useCallback(() => refreshSettings(false), [refreshSettings]);
 
   useEffect(() => { void reload(); }, [reload]);
@@ -78,296 +132,312 @@ export function SettingsView() {
   if (!settings) return <ServiceLoadState label="settings" error={settingsError} retry={reload} />;
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div ref={pageRef} className="mx-auto max-w-3xl px-8 py-8">
+    <div ref={scrollRef} className="h-full overflow-y-auto" onScroll={onScroll}>
+      <div ref={pageRef} className="mx-auto max-w-5xl px-8 py-8">
         {settingsError && <ServiceLoadState label="settings" error={settingsError} retry={reload} />}
         {!hasAppChrome && <h1 className="view-title">{tr('settings.title')}</h1>}
-
-        {/* Appearance */}
-        <section className="card mt-6 p-5">
-          <div className="flex items-center gap-2"><SunIcon className="h-4 w-4" /><h2 className="font-semibold">{tr('settings.appearance')}</h2><SettingsSearch root={pageRef} /></div>
-          <ErrorBoundary label="Appearance"><ThemePresetPicker settings={settings} update={update} /></ErrorBoundary>
-
-          <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
-            <div className="min-w-0">
-              <span className="text-[13px]">Background animation</span>
-              <p id="background-animation-hint" className="text-[11px] text-ink-faint">
-                {pixelWaveFor(settings.themePreset)
-                  ? 'The moving pixel dots behind this theme. Turn off for a still background and lower power use.'
-                  : 'The moving pixel dots behind Lilac, Lavender and the Experimental themes. This theme has none.'}
-              </p>
-            </div>
-            <Toggle
-              aria-label="Background animation"
-              aria-describedby="background-animation-hint"
-              on={settings.backgroundAnimation !== false}
-              onChange={(v) => update({ backgroundAnimation: v })}
-            />
-          </div>
-
-          <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3">
-            <div className="min-w-0">
-              <span className="text-[13px]">{tr('settings.language')}</span>
-              <p className="text-[11px] text-ink-faint">{tr('settings.languageHint')}</p>
-            </div>
-            <select
-              className="input max-w-[180px] py-1.5"
-              value={settings.language ?? ''}
-              onChange={(e) => update({ language: e.target.value || undefined })}
-            >
-              <option value="">{tr('settings.systemDefault')}</option>
-              {LANGUAGES.map((l) => (
-                <option key={l.code} value={l.code}>{l.label}</option>
-              ))}
-            </select>
-          </div>
-          <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3">
-            <div className="min-w-0">
-              <label htmlFor="chat-pane-action" className="text-[13px]">Chat pane top-right action</label>
-              <p className="text-[11px] text-ink-faint">The X completes a chat and keeps it under Completed for 60 days. Delete asks for confirmation unless you explicitly skip it. Close remains in the title-bar menu.</p>
-            </div>
-            <select
-              id="chat-pane-action"
-              className="input max-w-[180px] py-1.5"
-              value={settings.chatPaneAction ?? 'complete'}
-              onChange={(e) => update({ chatPaneAction: e.target.value === 'delete' ? 'delete' : 'complete' })}
-            >
-              <option value="complete">Complete (default)</option>
-              <option value="delete">Delete</option>
-            </select>
-          </div>
-          <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3">
-            <div className="min-w-0">
-              <label htmlFor="auto-complete-after" className="text-[13px]">Complete idle agents after</label>
-              <p className="text-[11px] text-ink-faint">Agents with no activity for this long are completed, like pressing their X. Pinned, running, waiting and sub-agent chats are skipped. Restore any from Show completed.</p>
-            </div>
-            <select
-              id="auto-complete-after"
-              className="input max-w-[180px] py-1.5"
-              value={autoCompleteDays(settings.autoCompleteAfterDays)}
-              onChange={(e) => update({ autoCompleteAfterDays: Number(e.target.value) })}
-            >
-              {AUTO_COMPLETE_CHOICES.map((c) => (
-                <option key={c.days} value={c.days}>{c.label}{c.days === AUTO_COMPLETE_DEFAULT_DAYS ? ' (default)' : ''}</option>
-              ))}
-            </select>
-          </div>
-          <div className="mt-2 flex min-h-[40px] items-center justify-between">
-            <span className="text-[13px]">Show tips</span>
-            <Toggle aria-label="Show tips" on={settings.showTips !== false} onChange={(v) => update({ showTips: v })} />
-          </div>
-          <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3">
-            <span className="text-[13px]">Confirm deletions</span>
-            <Toggle aria-label="Confirm deletions" on={settings.skipDeleteConfirmation !== true} onChange={(v) => update({ skipDeleteConfirmation: !v })} />
-          </div>
-          <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3 border-t border-line pt-3">
-            <div className="min-w-0">
-              <span className="text-[13px]">Setup wizard</span>
-              <p className="text-[11px] text-ink-faint">Reopen the first-run walkthrough (theme, providers, integrations).</p>
-            </div>
-            <button className="btn btn-outline shrink-0 py-1.5 text-[12px]" onClick={() => void replaySetup()}>
-              Replay setup
-            </button>
-          </div>
-        </section>
-
-        <DesktopBehaviorSection settings={settings} update={update} />
-        <FunSection settings={settings} update={update} />
-        <section className="card mt-5 p-5">
-          <h2 className="font-semibold">Agents wall</h2>
-          <WallLayoutSettings settings={settings} update={update} />
-          <label className="mt-3 flex items-center justify-between gap-3 text-[13px]">Auto-add new agents
-            <input type="checkbox" checked={loadWallState(localStorage, settings.commandWall).autoAdd} onChange={async (e) => {
-              const wall = { ...loadWallState(localStorage, settings.commandWall), autoAdd: e.target.checked };
-              await update({ commandWall: toWallSetting(wall) });
-              saveWallState(localStorage, wall);
-            }} />
-          </label>
-          <p className="mt-1 text-[12px] text-ink-faint">Add newly created top-level agents to the wall automatically.</p>
-        </section>
-        <ErrorBoundary label="Customization"><CustomizationSection settings={settings} update={update} /></ErrorBoundary>
-        <ErrorBoundary label="Git management"><GitManagementSection settings={settings} update={update} /></ErrorBoundary>
-        <ErrorBoundary label="Voice settings"><VoiceSettings /></ErrorBoundary>
-
-        {/* Updates */}
-        <ErrorBoundary label="Updates"><UpdatesSection settings={settings} update={update} /></ErrorBoundary>
-
-        {/* Sandbox */}
-        <section className="card mt-5 p-5">
-          <div className="flex items-center gap-2"><ShieldIcon className="h-4 w-4" /><h2 className="font-semibold">{tr('settings.sandbox')}</h2></div>
-          <p className="mt-1 text-[12px] text-ink-faint">How Nekko Agent is allowed to touch your machine.</p>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            {SANDBOX_OPTS.map((o) => (
-              <button key={o.value} onClick={() => update({ sandboxMode: o.value })} className={`card p-3 text-left ${settings.sandboxMode === o.value ? 'border-accent' : ''}`}>
-                <div className="text-[13px] font-medium">{o.label}</div>
-                <div className="mt-0.5 text-[11px] text-ink-faint">{o.desc}</div>
+        <div className="flex flex-col gap-6 md:flex-row md:gap-8">
+          <nav aria-label="Settings sections" className="settings-nav" data-settings-search>
+            {SETTINGS_GROUPS.map((g) => (
+              <button
+                key={g.id}
+                type="button"
+                className="settings-nav-item"
+                aria-current={active === g.id ? 'true' : undefined}
+                onClick={() => goTo(g.id)}
+              >
+                <g.icon className="h-4 w-4 shrink-0" />{g.label}
               </button>
             ))}
-          </div>
-        </section>
+          </nav>
+          <div className="min-w-0 max-w-3xl flex-1">
+            <SettingsGroup id="general">
+              {/* Appearance */}
+              <section className="card mt-6 p-5">
+                <div className="flex items-center gap-2"><SunIcon className="h-4 w-4" /><h2 className="font-semibold">{tr('settings.appearance')}</h2><SettingsSearch root={pageRef} /></div>
+                <ErrorBoundary label="Appearance"><ThemePresetPicker settings={settings} update={update} /></ErrorBoundary>
 
-        {/* Chat modes */}
-        <section className="card mt-5 p-5">
-          <div className="flex items-center gap-2"><ShieldIcon className="h-4 w-4" /><h2 className="font-semibold">{tr('settings.chatModes')}</h2></div>
-          <p className="mt-1 text-[12px] text-ink-faint">
-            How chats run tools. Pick the default for new chats, each chat can override it from the composer.
-          </p>
-          <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
-            {CHAT_MODES.map((m) => {
-              const active = (settings.defaultChatMode ?? 'guardrails') === m.value;
-              return (
-                <button key={m.value} onClick={() => update({ defaultChatMode: m.value })} className={`card p-3 text-left ${active ? 'border-accent' : ''}`}>
-                  <div className="text-[13px] font-medium">{m.label}</div>
-                  <div className="mt-0.5 text-[11px] text-ink-faint">{m.desc}</div>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
-        <ErrorBoundary label="Notifications"><NotificationsSection settings={settings} update={update} /></ErrorBoundary>
-        <ErrorBoundary label="Automations"><AutomationsSection settings={settings} update={update} /></ErrorBoundary>
-
-        {/* Agent loop */}
-        <ErrorBoundary label="Agent loop"><AgentLoopSection settings={settings} update={update} /></ErrorBoundary>
-        <ErrorBoundary label="Hooks"><HooksSection settings={settings} update={update} /></ErrorBoundary>
-
-        {/* Terminal */}
-        <ErrorBoundary label="Terminal"><TerminalSection settings={settings} update={update} /></ErrorBoundary>
-
-        {/* Spec-driven development */}
-        <section className="card mt-5 p-5">
-          <div className="flex items-center gap-2"><h2 className="font-semibold">Spec-driven development</h2></div>
-          <p className="mt-1 text-[12px] text-ink-faint">
-            Default workflow for building a spec and tasks from a conversation. Each chat can override it in the Context panel.
-          </p>
-          <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
-            {SPEC_METHODOLOGIES.map((m) => {
-              const active = (settings.specMethodology ?? DEFAULT_SPEC_METHODOLOGY) === m.id;
-              return (
-                <button key={m.id} onClick={() => update({ specMethodology: m.id })} className={`card p-3 text-left ${active ? 'border-accent' : ''}`}>
-                  <div className="text-[13px] font-medium">{m.label}</div>
-                  <div className="mt-0.5 text-[11px] text-ink-faint">{m.description}</div>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* Agent orchestration */}
-        <section className="card mt-5 p-5">
-          <div className="flex items-center gap-2"><RobotIcon className="h-4 w-4" /><h2 className="font-semibold">Agent orchestration</h2></div>
-          <p className="mt-1 text-[12px] text-ink-faint">
-            How agents delegate to sub-agents. Shapes the system prompt and whether the <code className="text-[11px]">spawn_agent</code> tool is offered.
-          </p>
-          <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
-            {ORCHESTRATION_STRATEGIES.map((st) => {
-              const cur = settings.orchestration ?? DEFAULT_ORCHESTRATION;
-              const active = cur.strategy === st.id;
-              return (
-                <button
-                  key={st.id}
-                  onClick={() => update({ orchestration: { ...cur, strategy: st.id } })}
-                  className={`card p-3 text-left ${active ? 'border-accent' : ''}`}
-                >
-                  <div className="text-[13px] font-medium">{st.label}</div>
-                  <div className="mt-0.5 text-[11px] text-ink-faint">{st.description}</div>
-                </button>
-              );
-            })}
-          </div>
-          {(settings.orchestration ?? DEFAULT_ORCHESTRATION).strategy !== 'solo' && (
-            <div className="mt-3 flex flex-wrap gap-4">
-              {([
-                { key: 'maxDepth', label: 'Max nesting depth', min: 1, max: 4 },
-                { key: 'maxParallel', label: 'Parallel sub-agents (advisory)', min: 1, max: 12 },
-              ] as const).map((f) => {
-                const cur = settings.orchestration ?? DEFAULT_ORCHESTRATION;
-                return (
-                  <label key={f.key} className="flex items-center gap-2 text-[12px]">
-                    <span className="text-ink-faint">{f.label}</span>
-                    <input
-                      type="number"
-                      min={f.min}
-                      max={f.max}
-                      value={cur[f.key]}
-                      onChange={(e) => {
-                        const n = Math.max(f.min, Math.min(f.max, Number(e.target.value) || f.min));
-                        update({ orchestration: { ...cur, [f.key]: n } });
-                      }}
-                      className="input w-16 text-[12px]"
-                    />
-                  </label>
-                );
-              })}
-            </div>
-          )}
-        </section>
-
-        <section className="card mt-6 p-5"><ErrorBoundary label="Delegation routes"><DelegationRouteSettings settings={settings} update={update} /></ErrorBoundary></section>
-
-        {/* MCP servers */}
-        <ErrorBoundary label="MCP servers"><McpSection settings={settings} update={update} reload={reload} /></ErrorBoundary>
-
-        {/* Nekko Cloud sign-in and end-to-end encrypted sync */}
-        <ErrorBoundary label="Sync"><SyncSettings /></ErrorBoundary>
-
-        {/* Remote access (relay) */}
-        <ErrorBoundary label="Remote access"><RemoteAccess /></ErrorBoundary>
-
-        {/* Guardrails */}
-        <ErrorBoundary label="Guardrails"><GuardrailsSection settings={settings} update={update} updateGuardrail={updateGuardrail} /></ErrorBoundary>
-
-        <section className="card mt-5 p-5">
-          <h2 className="font-semibold">Developer</h2>
-          <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
-            <div><span className="text-[13px]">Show Chat workspace</span>
-              <p className="text-[11px] text-ink-faint">Show the legacy Chat workspace tab. Off by default; Agents remains the main destination.</p></div>
-            <Toggle aria-label="Show Chat workspace" on={settings.developer?.chat === true} onChange={(v) => update({ developer: { ...settings.developer, chat: v } })} />
-          </div>
-          <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
-            <div><span className="text-[13px]">Show server controls</span>
-              <p className="text-[11px] text-ink-faint">Desktop only. Show agent and model server toggles and Restart server in the top-right title bar. Off by default.</p></div>
-            <Toggle aria-label="Show server controls" on={settings.developer?.serverControls === true} onChange={(v) => update({ developer: { ...settings.developer, serverControls: v } })} />
-          </div>
-        </section>
-
-        {/* Experimental */}
-        <section className="card mt-5 p-5">
-          <div className="flex items-center gap-2"><WandIcon className="h-4 w-4" /><h2 className="font-semibold">Experimental</h2></div>
-          <p className="mt-1 text-[12px] text-ink-faint">
-            In-progress surfaces, kept out of the sidebar until you switch them on here. Off by default; turning one off hides the tab again.
-          </p>
-          <div className="mt-3">
-            {([
-              { key: 'resourceQueue', label: 'Developer resource queue', desc: 'Experimental outbound coordinator: register this machine and manually claim prompt jobs in Model Server. No automatic pickup.' },
-              { key: 'training', label: 'Model training', desc: 'Show the Training tab: launch and watch data-scientist agent runs.' },
-              { key: 'design', label: 'Design board', desc: 'Show the Design tab: sketch or describe a UI and generate live prototypes.' },
-              { key: 'memory', label: 'Memory', desc: 'Show the Memory tab: browse and edit global and per-project memory.' },
-              { key: 'workflowLoopbackListener', label: 'Workflow loopback listener', desc: 'Listen on 127.0.0.1:1441 for inbound workflow webhooks (desktop only).' },
-            ] as const).map((f) => (
-              <div key={f.key} className="flex min-h-[40px] items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <span className="text-[13px]">{f.label}</span>
-                  <p className="text-[11px] text-ink-faint">{f.desc}</p>
+                <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <span className="text-[13px]">Background animation</span>
+                    <p id="background-animation-hint" className="text-[11px] text-ink-faint">
+                      {pixelWaveFor(settings.themePreset)
+                        ? 'The moving pixel dots behind this theme. Turn off for a still background and lower power use.'
+                        : 'The moving pixel dots behind Lilac, Lavender and the Experimental themes. This theme has none.'}
+                    </p>
+                  </div>
+                  <Toggle
+                    aria-label="Background animation"
+                    aria-describedby="background-animation-hint"
+                    on={settings.backgroundAnimation !== false}
+                    onChange={(v) => update({ backgroundAnimation: v })}
+                  />
                 </div>
-                <Toggle
-                  aria-label={f.label}
-                  on={settings.experimental?.[f.key] === true}
-                  onChange={(v) => update({ experimental: { ...settings.experimental, [f.key]: v } })}
-                />
-              </div>
-            ))}
+
+                <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <span className="text-[13px]">{tr('settings.language')}</span>
+                    <p className="text-[11px] text-ink-faint">{tr('settings.languageHint')}</p>
+                  </div>
+                  <select
+                    className="input max-w-[180px] py-1.5"
+                    value={settings.language ?? ''}
+                    onChange={(e) => update({ language: e.target.value || undefined })}
+                  >
+                    <option value="">{tr('settings.systemDefault')}</option>
+                    {LANGUAGES.map((l) => (
+                      <option key={l.code} value={l.code}>{l.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <label htmlFor="chat-pane-action" className="text-[13px]">Chat pane top-right action</label>
+                    <p className="text-[11px] text-ink-faint">The X completes a chat and keeps it under Completed for 60 days. Delete asks for confirmation unless you explicitly skip it. Close remains in the title-bar menu.</p>
+                  </div>
+                  <select
+                    id="chat-pane-action"
+                    className="input max-w-[180px] py-1.5"
+                    value={settings.chatPaneAction ?? 'complete'}
+                    onChange={(e) => update({ chatPaneAction: e.target.value === 'delete' ? 'delete' : 'complete' })}
+                  >
+                    <option value="complete">Complete (default)</option>
+                    <option value="delete">Delete</option>
+                  </select>
+                </div>
+                <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <label htmlFor="auto-complete-after" className="text-[13px]">Complete idle agents after</label>
+                    <p className="text-[11px] text-ink-faint">Agents with no activity for this long are completed, like pressing their X. Pinned, running, waiting and sub-agent chats are skipped. Restore any from Show completed.</p>
+                  </div>
+                  <select
+                    id="auto-complete-after"
+                    className="input max-w-[180px] py-1.5"
+                    value={autoCompleteDays(settings.autoCompleteAfterDays)}
+                    onChange={(e) => update({ autoCompleteAfterDays: Number(e.target.value) })}
+                  >
+                    {AUTO_COMPLETE_CHOICES.map((c) => (
+                      <option key={c.days} value={c.days}>{c.label}{c.days === AUTO_COMPLETE_DEFAULT_DAYS ? ' (default)' : ''}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="mt-2 flex min-h-[40px] items-center justify-between">
+                  <span className="text-[13px]">Show tips</span>
+                  <Toggle aria-label="Show tips" on={settings.showTips !== false} onChange={(v) => update({ showTips: v })} />
+                </div>
+                <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3">
+                  <span className="text-[13px]">Confirm deletions</span>
+                  <Toggle aria-label="Confirm deletions" on={settings.skipDeleteConfirmation !== true} onChange={(v) => update({ skipDeleteConfirmation: !v })} />
+                </div>
+                <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3 border-t border-line pt-3">
+                  <div className="min-w-0">
+                    <span className="text-[13px]">Setup wizard</span>
+                    <p className="text-[11px] text-ink-faint">Reopen the first-run walkthrough (theme, providers, integrations).</p>
+                  </div>
+                  <button className="btn btn-outline shrink-0 py-1.5 text-[12px]" onClick={() => void replaySetup()}>
+                    Replay setup
+                  </button>
+                </div>
+              </section>
+              <DesktopBehaviorSection settings={settings} update={update} />
+              <FunSection settings={settings} update={update} />
+              <section className="card mt-5 p-5">
+                <h2 className="font-semibold">Agents wall</h2>
+                <WallLayoutSettings settings={settings} update={update} />
+                <label className="mt-3 flex items-center justify-between gap-3 text-[13px]">Auto-add new agents
+                  <input type="checkbox" checked={loadWallState(localStorage, settings.commandWall).autoAdd} onChange={async (e) => {
+                    const wall = { ...loadWallState(localStorage, settings.commandWall), autoAdd: e.target.checked };
+                    await update({ commandWall: toWallSetting(wall) });
+                    saveWallState(localStorage, wall);
+                  }} />
+                </label>
+                <p className="mt-1 text-[12px] text-ink-faint">Add newly created top-level agents to the wall automatically.</p>
+              </section>
+              <ErrorBoundary label="Customization"><CustomizationSection settings={settings} update={update} /></ErrorBoundary>
+              <ErrorBoundary label="Voice settings"><VoiceSettings /></ErrorBoundary>
+              <ErrorBoundary label="Notifications"><NotificationsSection settings={settings} update={update} /></ErrorBoundary>
+            </SettingsGroup>
+            <SettingsGroup id="phone">
+              {/* Remote access (relay) */}
+              <ErrorBoundary label="Remote access"><RemoteAccess /></ErrorBoundary>
+              {/* Nekko Cloud sign-in and end-to-end encrypted sync */}
+              <ErrorBoundary label="Sync"><SyncSettings /></ErrorBoundary>
+            </SettingsGroup>
+            <SettingsGroup id="agents">
+              {/* Chat modes */}
+              <section className="card mt-5 p-5">
+                <div className="flex items-center gap-2"><ShieldIcon className="h-4 w-4" /><h2 className="font-semibold">{tr('settings.chatModes')}</h2></div>
+                <p className="mt-1 text-[12px] text-ink-faint">
+                  How chats run tools. Pick the default for new chats, each chat can override it from the composer.
+                </p>
+                <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
+                  {CHAT_MODES.map((m) => {
+                    const active = (settings.defaultChatMode ?? 'guardrails') === m.value;
+                    return (
+                      <button key={m.value} onClick={() => update({ defaultChatMode: m.value })} className={`card p-3 text-left ${active ? 'border-accent' : ''}`}>
+                        <div className="text-[13px] font-medium">{m.label}</div>
+                        <div className="mt-0.5 text-[11px] text-ink-faint">{m.desc}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+              {/* Agent loop */}
+              <ErrorBoundary label="Agent loop"><AgentLoopSection settings={settings} update={update} /></ErrorBoundary>
+              <ErrorBoundary label="Hooks"><HooksSection settings={settings} update={update} /></ErrorBoundary>
+              {/* Spec-driven development */}
+              <section className="card mt-5 p-5">
+                <div className="flex items-center gap-2"><h2 className="font-semibold">Spec-driven development</h2></div>
+                <p className="mt-1 text-[12px] text-ink-faint">
+                  Default workflow for building a spec and tasks from a conversation. Each chat can override it in the Context panel.
+                </p>
+                <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
+                  {SPEC_METHODOLOGIES.map((m) => {
+                    const active = (settings.specMethodology ?? DEFAULT_SPEC_METHODOLOGY) === m.id;
+                    return (
+                      <button key={m.id} onClick={() => update({ specMethodology: m.id })} className={`card p-3 text-left ${active ? 'border-accent' : ''}`}>
+                        <div className="text-[13px] font-medium">{m.label}</div>
+                        <div className="mt-0.5 text-[11px] text-ink-faint">{m.description}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+
+              {/* Agent orchestration */}
+              <section className="card mt-5 p-5">
+                <div className="flex items-center gap-2"><RobotIcon className="h-4 w-4" /><h2 className="font-semibold">Agent orchestration</h2></div>
+                <p className="mt-1 text-[12px] text-ink-faint">
+                  How agents delegate to sub-agents. Shapes the system prompt and whether the <code className="text-[11px]">spawn_agent</code> tool is offered.
+                </p>
+                <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
+                  {ORCHESTRATION_STRATEGIES.map((st) => {
+                    const cur = settings.orchestration ?? DEFAULT_ORCHESTRATION;
+                    const active = cur.strategy === st.id;
+                    return (
+                      <button
+                        key={st.id}
+                        onClick={() => update({ orchestration: { ...cur, strategy: st.id } })}
+                        className={`card p-3 text-left ${active ? 'border-accent' : ''}`}
+                      >
+                        <div className="text-[13px] font-medium">{st.label}</div>
+                        <div className="mt-0.5 text-[11px] text-ink-faint">{st.description}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+                {(settings.orchestration ?? DEFAULT_ORCHESTRATION).strategy !== 'solo' && (
+                  <div className="mt-3 flex flex-wrap gap-4">
+                    {([
+                      { key: 'maxDepth', label: 'Max nesting depth', min: 1, max: 4 },
+                      { key: 'maxParallel', label: 'Parallel sub-agents (advisory)', min: 1, max: 12 },
+                    ] as const).map((f) => {
+                      const cur = settings.orchestration ?? DEFAULT_ORCHESTRATION;
+                      return (
+                        <label key={f.key} className="flex items-center gap-2 text-[12px]">
+                          <span className="text-ink-faint">{f.label}</span>
+                          <input
+                            type="number"
+                            min={f.min}
+                            max={f.max}
+                            value={cur[f.key]}
+                            onChange={(e) => {
+                              const n = Math.max(f.min, Math.min(f.max, Number(e.target.value) || f.min));
+                              update({ orchestration: { ...cur, [f.key]: n } });
+                            }}
+                            className="input w-16 text-[12px]"
+                          />
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+
+              <section className="card mt-6 p-5"><ErrorBoundary label="Delegation routes"><DelegationRouteSettings settings={settings} update={update} /></ErrorBoundary></section>
+              <ErrorBoundary label="Automations"><AutomationsSection settings={settings} update={update} /></ErrorBoundary>
+            </SettingsGroup>
+            <SettingsGroup id="safety">
+              {/* Sandbox */}
+              <section className="card mt-5 p-5">
+                <div className="flex items-center gap-2"><ShieldIcon className="h-4 w-4" /><h2 className="font-semibold">{tr('settings.sandbox')}</h2></div>
+                <p className="mt-1 text-[12px] text-ink-faint">How Nekko Agent is allowed to touch your machine.</p>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  {SANDBOX_OPTS.map((o) => (
+                    <button key={o.value} onClick={() => update({ sandboxMode: o.value })} className={`card p-3 text-left ${settings.sandboxMode === o.value ? 'border-accent' : ''}`}>
+                      <div className="text-[13px] font-medium">{o.label}</div>
+                      <div className="mt-0.5 text-[11px] text-ink-faint">{o.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </section>
+              {/* Guardrails */}
+              <ErrorBoundary label="Guardrails"><GuardrailsSection settings={settings} update={update} updateGuardrail={updateGuardrail} /></ErrorBoundary>
+            </SettingsGroup>
+            <SettingsGroup id="tools">
+              <ErrorBoundary label="Git management"><GitManagementSection settings={settings} update={update} /></ErrorBoundary>
+              <ErrorBoundary label="Project management"><ProjectManagementSection settings={settings} update={update} /></ErrorBoundary>
+              <ErrorBoundary label="Pull requests"><PullRequestsSection settings={settings} update={update} /></ErrorBoundary>
+              {/* Terminal */}
+              <ErrorBoundary label="Terminal"><TerminalSection settings={settings} update={update} /></ErrorBoundary>
+              {/* MCP servers */}
+              <ErrorBoundary label="MCP servers"><McpSection settings={settings} update={update} reload={reload} /></ErrorBoundary>
+            </SettingsGroup>
+            <SettingsGroup id="system">
+              {/* Updates */}
+              <ErrorBoundary label="Updates"><UpdatesSection settings={settings} update={update} /></ErrorBoundary>
+              <section className="card mt-5 p-5">
+                <h2 className="font-semibold">Developer</h2>
+                <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
+                  <div><span className="text-[13px]">Show Chat workspace</span>
+                    <p className="text-[11px] text-ink-faint">Show the legacy Chat workspace tab. Off by default; Agents remains the main destination.</p></div>
+                  <Toggle aria-label="Show Chat workspace" on={settings.developer?.chat === true} onChange={(v) => update({ developer: { ...settings.developer, chat: v } })} />
+                </div>
+                <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
+                  <div><span className="text-[13px]">Show server controls</span>
+                    <p className="text-[11px] text-ink-faint">Desktop only. Show agent and model server toggles and Restart server in the top-right title bar. Off by default.</p></div>
+                  <Toggle aria-label="Show server controls" on={settings.developer?.serverControls === true} onChange={(v) => update({ developer: { ...settings.developer, serverControls: v } })} />
+                </div>
+              </section>
+
+              {/* Experimental */}
+              <section className="card mt-5 p-5">
+                <div className="flex items-center gap-2"><WandIcon className="h-4 w-4" /><h2 className="font-semibold">Experimental</h2></div>
+                <p className="mt-1 text-[12px] text-ink-faint">
+                  In-progress surfaces, kept out of the sidebar until you switch them on here. Off by default; turning one off hides the tab again.
+                </p>
+                <div className="mt-3">
+                  {([
+                    { key: 'resourceQueue', label: 'Developer resource queue', desc: 'Experimental outbound coordinator: register this machine and manually claim prompt jobs in Model Server. No automatic pickup.' },
+                    { key: 'training', label: 'Model training', desc: 'Show the Training tab: launch and watch data-scientist agent runs.' },
+                    { key: 'design', label: 'Design board', desc: 'Show the Design tab: sketch or describe a UI and generate live prototypes.' },
+                    { key: 'memory', label: 'Memory', desc: 'Show the Memory tab: browse and edit global and per-project memory.' },
+                    { key: 'workflowLoopbackListener', label: 'Workflow loopback listener', desc: 'Listen on 127.0.0.1:1441 for inbound workflow webhooks (desktop only).' },
+                  ] as const).map((f) => (
+                    <div key={f.key} className="flex min-h-[40px] items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <span className="text-[13px]">{f.label}</span>
+                        <p className="text-[11px] text-ink-faint">{f.desc}</p>
+                      </div>
+                      <Toggle
+                        aria-label={f.label}
+                        on={settings.experimental?.[f.key] === true}
+                        onChange={(v) => update({ experimental: { ...settings.experimental, [f.key]: v } })}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {/* Backup & restore */}
+              <ErrorBoundary label="Backup"><BackupSection settings={settings} onSettings={(s) => { useStore.setState({ settings: s }); applyTheme(); }} /></ErrorBoundary>
+
+              {/* Data & privacy */}
+              <ErrorBoundary label="Data and privacy"><DataSection onSettings={(s) => { useStore.setState({ settings: s }); applyTheme(); }} /></ErrorBoundary>
+            </SettingsGroup>
+            <p className="mt-6 text-center text-[11px] text-ink-faint">Nekko Agent · open source · MIT</p>
           </div>
-        </section>
-
-        {/* Backup & restore */}
-        <ErrorBoundary label="Backup"><BackupSection settings={settings} onSettings={(s) => { useStore.setState({ settings: s }); applyTheme(); }} /></ErrorBoundary>
-
-        {/* Data & privacy */}
-        <ErrorBoundary label="Data and privacy"><DataSection onSettings={(s) => { useStore.setState({ settings: s }); applyTheme(); }} /></ErrorBoundary>
-
-        <p className="mt-6 text-center text-[11px] text-ink-faint">Nekko Agent · open source · MIT</p>
+        </div>
       </div>
     </div>
   );
@@ -841,6 +911,26 @@ function McpSection({
           );
         })}
       </div>
+    </section>
+  );
+}
+
+export function ProjectManagementSection({ settings, update }: { settings: AppSettings; update: (patch: Partial<AppSettings>) => void }) {
+  return (
+    <section className="card mt-5 p-5">
+      <h2 className="font-semibold">Project management</h2>
+      <p className="mt-1 text-[12px] text-ink-faint">How agent chats track their work. A change bound for a PR gets an issue first, and the PR links to it.</p>
+      <ProjectManagementToggles value={settings.projectManagement} onChange={(projectManagement) => update({ projectManagement })} />
+    </section>
+  );
+}
+
+export function PullRequestsSection({ settings, update }: { settings: AppSettings; update: (patch: Partial<AppSettings>) => void }) {
+  return (
+    <section className="card mt-5 p-5">
+      <h2 className="font-semibold">Pull requests</h2>
+      <p className="mt-1 text-[12px] text-ink-faint">What goes into the PRs agent chats open. Secrets and unrelated images are never included.</p>
+      <PullRequestToggles value={settings.pullRequests} onChange={(pullRequests) => update({ pullRequests })} />
     </section>
   );
 }

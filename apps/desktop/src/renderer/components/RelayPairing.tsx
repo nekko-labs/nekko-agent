@@ -99,7 +99,7 @@ export function RelayPairing() {
       <div className="mb-5 grid h-16 w-16 place-items-center rounded-2xl" style={{ background: 'var(--accent-soft)' }}><NekkoAvatar size={40} /></div>
       <h1 className="text-xl font-semibold">Pair with your computer</h1>
       <p className="mt-2 max-w-sm text-center text-[13px] text-ink-faint">
-        Nekko Agent on your desktop → <span className="font-medium text-ink-soft">Settings → Remote access → Enable</span>, then paste the pairing link here. Your phone drives the model on your computer over an end-to-end encrypted relay.
+        Nekko Agent on your desktop → <span className="font-medium text-ink-soft">Settings → Remote access</span>, pick Tailscale or Nekko Cloud, then paste the pairing link here. Your phone drives the model on your computer, end-to-end encrypted.
       </p>
       <textarea
         className="input mt-5 max-w-sm"

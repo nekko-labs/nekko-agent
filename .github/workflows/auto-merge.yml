@@ -139,6 +139,8 @@ jobs:
                 done
 
                 gh workflow run version-release.yml --repo "$GH_REPO" --ref main
+                # A merge that touched the iPhone app reaches TestFlight through
+                # ios-testflight.yml's own push trigger.
                 # No CI dispatch here: the merge queue tested this exact group on
                 # top of main before merging it, and the 6-hourly full run covers
                 # macOS (ci.yml).

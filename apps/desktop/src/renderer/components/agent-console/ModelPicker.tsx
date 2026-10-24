@@ -10,7 +10,7 @@ import {
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../../store.js';
 import { useAllProviderLimits } from '../../useLimits.js';
-import { accountEmailOf, providerDisplayName, useAccountEmails } from '../../accountEmails.js';
+import { accountEmailOf, accountShortName, accountSiblings, providerDisplayName, useAccountEmails } from '../../accountEmails.js';
 import { ContextMenu, ContextAction } from '../ContextMenu.js';
 import { CloudIcon, GridIcon, LaptopIcon, RouteIcon, StarIcon } from '../../icons.js';
 
@@ -184,6 +184,49 @@ export function ModelPicker({
     if (!expanded) setOpen(false);
   };
 
+  // Accounts of the current vendor (two ChatGPT plans, two Claude Code
+  // logins): one click moves the chat to the same model on another account.
+  const accounts = accountSiblings(providers, currentProvider);
+  const switchTo = (p: ProviderConfig) => {
+    if (!modelId || modelId === AUTO_MODEL_ID) return onProvider(p.id);
+    pick(p.id, modelId);
+  };
+  /** Why an account cannot take the current model, or null when it can (or its list has not loaded). */
+  const accountBlocked = (p: ProviderConfig): string | null => {
+    const list = byProvider[p.id];
+    if (!modelId || modelId === AUTO_MODEL_ID || !list) return null;
+    return list.some((m) => m.id === modelId) ? null : `${accountShortName(p, accountEmails)} does not offer ${currentName}`;
+  };
+  const accountSwitcher = accounts.length > 1 && (
+    <div className="model-accounts mb-1 px-1" data-account-switcher>
+      <div className="flex flex-wrap items-center gap-1" role="radiogroup" aria-label="Account">
+        <span className="px-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">Account</span>
+        {accounts.map((p) => {
+          const current = p.id === providerId;
+          const blocked = current ? null : accountBlocked(p);
+          const name = accountShortName(p, accountEmails);
+          return (
+            <button
+              key={p.id}
+              type="button"
+              role="radio"
+              aria-checked={current}
+              disabled={!!blocked}
+              title={blocked ?? (current ? `${name} (this chat)` : `Use ${currentName} on ${name}`)}
+              className={`max-w-[180px] truncate rounded-full border px-2 py-0.5 text-[11px] ${current ? 'border-accent text-accent' : 'border-line text-ink-soft hover:text-ink'} ${blocked ? 'cursor-not-allowed opacity-50' : ''}`}
+              onClick={() => { if (!current) switchTo(p); }}
+            >
+              {name}
+            </button>
+          );
+        })}
+      </div>
+      {currentProvider?.kind === 'claude-code' && (
+        <p className="px-1.5 pt-1 text-[10px] text-ink-faint">Switching starts a new Claude Code conversation on that account; this chat keeps its history here.</p>
+      )}
+    </div>
+  );
+
   /**
    * Why a model can't be run, or null when it can. Provider-agnostic: the
    * catalog's own claim (a model gated behind a bigger plan) combined with the
@@ -308,6 +351,7 @@ export function ModelPicker({
               onChange={(e) => setQuery(e.target.value)}
             />
           )}
+          {accountSwitcher}
           <div className="min-h-0 flex-1 overflow-y-auto" role="listbox" aria-label="Model">
             {defaultKey && !q && scope !== 'fusion' && (scope === 'all' || defaultProvider) && (defaultProvider && defaultModel ? row(defaultProvider, defaultModel, true) : <button role="option" disabled aria-disabled="true" className="w-full px-2.5 py-2 text-left text-[12px] text-ink-faint">{settings?.defaultModelId} <span className="text-[10px]">Default · {defaultStatus}</span></button>)}
             {providers.length === 0 && <p className="px-2.5 py-1.5 text-[11px] text-ink-faint">No provider configured.</p>}

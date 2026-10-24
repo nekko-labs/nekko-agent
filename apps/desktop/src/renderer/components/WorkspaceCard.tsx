@@ -25,8 +25,9 @@ import { SessionPrLinks } from './SessionPrLinks.js';
  * place and a column of cards can be read down rather than each one decoded:
  *
  * 1. **Who and how it is.** Status dot, title, when it last replied.
- * 2. **What is running it.** Where the model comes from and which model it is
- *    ("Claude / Opus 5.5"), and how full its context window is.
+ * 2. **What is running it.** Which model it is ("Opus 5.5") and how full its
+ *    context window is, with where the model comes from ("Claude") as subtext
+ *    on the line under it, which the view menu can hide.
  * 3. **What it has shipped from where.** The branch (with the worktree glyph
  *    when it is a linked worktree), then each PR the chat made as its own
  *    link (`SessionPrLinks`). The project is not repeated: the card already
@@ -67,8 +68,10 @@ export function StatusIcon({ status, className = '' }: { status: AgentStatus | u
   }
   if (status === 'input') {
     return (
-      <span className={`inline-grid place-items-center ${cls}`} style={{ color: 'var(--warning)' }} title="Needs your input" role="img" aria-label="Needs your input">
-        <QuestionIcon className="h-3 w-3" />
+      // Drawn larger than its slot, like the rocket, so the one state that is
+      // waiting on you stands out without pushing the title over.
+      <span className={`inline-grid place-items-center ${cls}`} style={{ color: 'var(--attention)' }} title="Needs your input" role="img" aria-label="Needs your input">
+        <QuestionIcon className="h-4 w-4" />
       </span>
     );
   }
@@ -174,6 +177,7 @@ function WorkspaceCardImpl({
   projects,
   subAgentCount = 0,
   showMetadata = true,
+  showProvider = true,
   onOpen,
   onClose,
 }: {
@@ -191,6 +195,8 @@ function WorkspaceCardImpl({
   subAgentCount?: number;
   /** The lines under the title; off, the card is its title row alone. */
   showMetadata?: boolean;
+  /** The provider subtext under the model; off, the model line stands alone. */
+  showProvider?: boolean;
   onOpen: () => void;
   onClose: () => void | Promise<void>;
 }) {
@@ -255,8 +261,10 @@ function WorkspaceCardImpl({
       /* The spine: a chat workspace carries an accent edge that fills in when it
          is the active one, so the thing this app is about is findable in a
          column of cards without reading a word of any of them. */
+      /* A card waiting on you (a question, or stopped on an error) takes the
+         active card's highlight too, so it is findable at a glance. */
       className={`group w-full cursor-pointer rounded-lg border-l py-1.5 pl-2 pr-2 text-left transition-colors duration-150 ${
-        isActive ? 'bg-accent-soft' : 'hover:bg-surface-2'
+        isActive || status === 'input' || status === 'error' ? 'bg-accent-soft' : 'hover:bg-surface-2'
       }`}
       style={{
         borderLeftColor: isChat
@@ -298,9 +306,8 @@ function WorkspaceCardImpl({
         </button>
       </div>
 
-      {/* Line 2: what is running it: "source / model", then how full the
-          context window is. Source first because it answers "whose quota is
-          this spending" before "which model", and the two read as one fact. */}
+      {/* Line 2: what is running it: the model, then how full the context
+          window is. Where the model comes from is subtext on the next line. */}
       {showMetadata && <>
       <div className="mt-0.5 flex items-center gap-1 pl-3 text-[10px] leading-[15px] text-ink-faint">
         <Fact
@@ -309,9 +316,6 @@ function WorkspaceCardImpl({
           icon={isChat ? undefined : <TerminalIcon className="h-2.5 w-2.5 shrink-0" />}
           title={`${provider ? `${provider.label} / ` : ''}${session?.modelId ?? model}`}
         >
-          {provider && (
-            <span className="opacity-70">{isLocalProvider(provider.kind) ? 'Local' : provider.label} / </span>
-          )}
           {model}
         </Fact>
         {terminal && !terminal.running && (
@@ -337,6 +341,12 @@ function WorkspaceCardImpl({
           </Fact>
         )}
       </div>
+
+      {showProvider && provider && (
+        <div className="truncate pl-3 text-[10px] leading-[13px] text-ink-faint" data-card-provider>
+          {isLocalProvider(provider.kind) ? 'Local' : provider.label}
+        </div>
+      )}
 
       {/* Line 3: its git position, then the PRs it made. The project is the
           group heading the card sits under, so the card does not repeat it. */}

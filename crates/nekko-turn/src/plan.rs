@@ -85,6 +85,13 @@ pub fn turn_tools(input: &Value) -> Vec<Value> {
     if !incognito && !parent && !training && !disabled.contains("complete_session") {
         tools.push(c.complete_session.clone());
     }
+    if !parent
+        && !training
+        && !disabled.contains("remember")
+        && nekko_context::MemoryScope::of_session(session).global()
+    {
+        tools.push(remember_tool());
+    }
     if training {
         tools.push(c.report_experiment.clone());
         tools.push(c.report_artifact.clone());
@@ -96,6 +103,25 @@ pub fn turn_tools(input: &Value) -> Vec<Value> {
         tools.push(c.decide.clone());
     }
     tools
+}
+
+/// The `remember` tool: the agent saves what it learns about the user as a
+/// global memory note. Offered only where the chat reads global memory, so
+/// incognito and memory-off chats never write it.
+fn remember_tool() -> Value {
+    serde_json::json!({
+        "name": "remember",
+        "description": "Save something you learned about the user to long-term memory so future chats know it: who they are, their preferences, how they like to work, people and projects they mention. Save durable facts only, never secrets, credentials or things that only matter to this chat. One fact per note with a short title; to correct a note, reuse its exact title (shown as \"# Memory: <title>\" in your context) and it is replaced. The user sees a card each time you save.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "title": { "type": "string", "description": "Short name for the fact, e.g. \"Preferred name\"." },
+                "body": { "type": "string", "description": "The fact, in a sentence or two of plain language." }
+            },
+            "required": ["title", "body"],
+            "additionalProperties": false
+        }
+    })
 }
 
 /// `toolAllowedOffline(name)`: not an online or MCP tool, and not an agent
@@ -228,8 +254,13 @@ pub fn turn_system_prompt(input: &Value) -> String {
         .and_then(Value::as_str)
         .and_then(|id| c.work_mode_prompts.get(id))
         .and_then(Value::as_str);
-    let instructions =
-        [own, watch, work_mode].into_iter().flatten().filter(|s| !s.is_empty()).collect::<Vec<_>>().join("\n\n");
+    let tracking = if sandbox { String::new() } else { work_tracking(settings) };
+    let instructions = [own, watch, work_mode, Some(tracking.as_str())]
+        .into_iter()
+        .flatten()
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n\n");
     let wrapper = if sandbox {
         c.default_turn_wrapper.as_str()
     } else {
@@ -280,6 +311,68 @@ pub fn turn_system_prompt(input: &Value) -> String {
     })
 }
 
+/// The work tracking preferences from Settings > Project management and Pull
+/// requests, one line per explicit choice. Unset choices add nothing, so the
+/// prompt's defaults apply: file and link an issue, ask before including.
+pub fn work_tracking(settings: &Value) -> String {
+    let pick = |group: &str, key: &str, on: &str, off: &str| -> Option<String> {
+        match settings.pointer(&format!("/{group}/{key}")) {
+            Some(Value::Bool(true)) if !on.is_empty() => Some(format!("- {on}")),
+            Some(Value::Bool(false)) => Some(format!("- {off}")),
+            _ => None,
+        }
+    };
+    let lines: Vec<String> = [
+        pick(
+            "projectManagement",
+            "createIssue",
+            "",
+            "Do not file an issue for each change; link an existing issue only when the user names one.",
+        ),
+        pick(
+            "projectManagement",
+            "includePrompt",
+            "Include the user's prompt in new issues.",
+            "Leave the user's prompt out of issues.",
+        ),
+        pick(
+            "projectManagement",
+            "includeScreenshots",
+            "Include relevant user-sent screenshots in new issues.",
+            "Leave user-sent screenshots out of issues.",
+        ),
+        pick(
+            "projectManagement",
+            "includeContext",
+            "Include other relevant chat context (attachments, logs, a short summary) in new issues.",
+            "Leave other chat context out of issues.",
+        ),
+        pick("pullRequests", "linkIssue", "", "Do not link PRs to issues."),
+        pick(
+            "pullRequests",
+            "includePrompt",
+            "Include the user's prompt in PR descriptions.",
+            "Leave the user's prompt out of PR descriptions.",
+        ),
+        pick(
+            "pullRequests",
+            "includeScreenshots",
+            "Include relevant user-sent screenshots in PR descriptions.",
+            "Leave user-sent screenshots out of PR descriptions.",
+        ),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    if lines.is_empty() {
+        return String::new();
+    }
+    format!(
+        "Work tracking preferences (Settings > Project management and Pull requests; they override the defaults):\n{}",
+        lines.join("\n")
+    )
+}
+
 /// `hostToolApproval(name, mode, sandboxMode)`: whether a tool the turn runs
 /// indirectly (a sub-agent, an MCP call) asks the user first, and the reason
 /// the prompt shows. `None` when it runs without asking.
@@ -301,5 +394,26 @@ mod tests {
         assert_eq!(redact_urls("HTTP://X and http:// alone"), "[redacted] and http:// alone");
         assert_eq!(redact_urls("httpss://x"), "httpss://x");
         assert_eq!(redact_urls("(http://x.y/z)"), "([redacted]");
+    }
+
+    #[test]
+    fn work_tracking_states_only_explicit_choices() {
+        assert_eq!(work_tracking(&serde_json::json!({})), "");
+        // Defaults spelled out add nothing: the prompt already files and links issues.
+        let on =
+            serde_json::json!({ "projectManagement": { "createIssue": true }, "pullRequests": { "linkIssue": true } });
+        assert_eq!(work_tracking(&on), "");
+        let t = work_tracking(&serde_json::json!({
+            "projectManagement": { "createIssue": false, "includePrompt": true, "includeScreenshots": false },
+            "pullRequests": { "includeScreenshots": true },
+        }));
+        assert!(t.starts_with("Work tracking preferences"));
+        assert!(t.contains("- Do not file an issue for each change"));
+        assert!(t.contains("- Include the user's prompt in new issues."));
+        assert!(t.contains("- Leave user-sent screenshots out of issues."));
+        assert!(t.contains("- Include relevant user-sent screenshots in PR descriptions."));
+        assert!(!t.contains("chat context"));
+        let turn = turn_system_prompt(&serde_json::json!({ "settings": { "pullRequests": { "linkIssue": false } } }));
+        assert!(turn.contains("- Do not link PRs to issues."));
     }
 }
