@@ -490,7 +490,8 @@ export type AgentEvent =
    * discarded and regenerated, so anything showing the live reply should drop
    * the text and reasoning since the last `tool_result` (or the turn's start).
    */
-  | { type: 'retry'; sessionId: string; attempt: number; maxAttempts: number; delayMs: number; reason: string }
+  /** `paused`: a background reply stepped aside for the person at the computer, not a failure. */
+  | { type: 'retry'; sessionId: string; attempt: number; maxAttempts: number; delayMs: number; reason: string; paused?: boolean }
   /**
    * The assistant message that asks for tool calls has been appended to the
    * transcript and the tools are about to run. The host checkpoints here, so a

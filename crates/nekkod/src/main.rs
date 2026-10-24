@@ -14,6 +14,7 @@ mod agent_logs;
 mod api_server;
 mod auto_continue;
 mod automation;
+mod background;
 
 mod boot;
 mod catalog;
@@ -365,6 +366,12 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         cloud.start(std::time::Duration::from_secs(60));
     }
     routes::forward_terminal_events(&ctx);
+    ctx.turns.set_background(background::Background::new(
+        ctx.machine.clone(),
+        ctx.admission.clone(),
+        ctx.settings.as_ref().map(|s| s.store.clone()),
+        ctx.hub.clone(),
+    ));
     if let Some(adm) = ctx.admission.clone() {
         let c = ctx.clone();
         ctx.turns.set_preparer(Arc::new(move |payload| {
