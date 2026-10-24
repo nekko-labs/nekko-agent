@@ -589,7 +589,13 @@ export type PhoneAccessCode =
   | 'token-required'
   | 'token-invalid'
   | 'token-expired'
-  | 'terminal-hidden';
+  | 'terminal-hidden'
+  // SK-1: the step-up a guarded call carries (step-up.ts), and quitting from a phone when the computer did not opt in.
+  | 'step-up-required'
+  | 'step-up-invalid'
+  | 'step-up-stale'
+  | 'step-up-replayed'
+  | 'quit-disabled';
 
 /** Why the computer refused a phone's request. The wire carries `message`. */
 export class PhoneAccessError extends Error {

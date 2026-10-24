@@ -67,6 +67,7 @@ export * from './phone-files.js';
 export * from './phone-views.js';
 export * from './phone-terminal.js';
 export * from './phone-git.js';
+export * from './step-up.js';
 export * from './update.js';
 export * from './mcp.js';
 export * from './spec.js';
