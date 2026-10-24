@@ -21,6 +21,8 @@ import { startDecorClock } from './decorClock.js';
 import { Mascot, NekkoAvatar } from './components/Mascot.js';
 import { ResourceHud } from './components/ResourceMonitor.js';
 import { Toasts } from './components/Toasts.js';
+import { StepUpSheet } from './components/security/StepUpSheet.js';
+import { installStepUpHandler } from './stepUp.js';
 import { CommandPalette } from './components/CommandPalette.js';
 import { UpdateBanner } from './components/UpdateBanner.js';
 import { AppNotices } from './components/AppNotices.js';
@@ -107,6 +109,9 @@ export function App() {
     catch (e) { useStore.setState({ settings: previous }); useStore.getState().pushToast('error', (e as Error).message); }
   };
   const mobileNav = MOBILE_NAV.filter((v) => viewEnabled(v, settings));
+
+  // A guarded call the computer refuses `step-up-required` opens the step-up sheet (SK-4, SK-5).
+  useEffect(() => installStepUpHandler(window.nekko), []);
 
   // If the surface you're looking at gets switched off (say from another
   // client over the same settings file), land somewhere real.
@@ -390,6 +395,7 @@ export function App() {
       <ErrorBoundary label="Links"><DeepLinkListener /></ErrorBoundary>
       <ErrorBoundary label="Claude plan"><ClaudePlanSheet /></ErrorBoundary>
       <ErrorBoundary label="Notifications"><Toasts /></ErrorBoundary>
+      <ErrorBoundary label="Step-up"><StepUpSheet /></ErrorBoundary>
     </div>
   );
 }
