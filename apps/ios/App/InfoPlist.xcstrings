@@ -10,6 +10,12 @@
             "value": "Scanne den Kopplungscode, den dein Computer unter Einstellungen → Fernzugriff anzeigt."
           }
         },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scan the pairing code your computer shows in Settings → Remote access."
+          }
+        },
         "es": {
           "stringUnit": {
             "state": "translated",
@@ -49,6 +55,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Entsperre Nekko Agent und bestätige Änderungen, die er auf deinem Computer vornimmt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unlock Nekko Agent and confirm changes it makes on your computer."
           }
         },
         "es": {
@@ -92,6 +104,12 @@
             "value": "Erreiche das Relay auf deinem Computer über dein lokales Netzwerk oder Tailscale und liste Computer in diesem Wi-Fi auf, wenn du auf „In diesem Netzwerk suchen“ tippst."
           }
         },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reach the relay on your computer over your local network or Tailscale, and list computers on this Wi-Fi when you tap Look on this network."
+          }
+        },
         "es": {
           "stringUnit": {
             "state": "translated",
@@ -133,6 +151,12 @@
             "value": "Diktiere eine Nachricht. Die Aufnahme wird in Text umgewandelt und dann gelöscht."
           }
         },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dictate a message. The recording is turned into text and then deleted."
+          }
+        },
         "es": {
           "stringUnit": {
             "state": "translated",
@@ -172,6 +196,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Wandle dein Diktat in Text um, wenn dein Computer das nicht kann."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn your dictation into text when your computer can’t."
           }
         },
         "es": {
