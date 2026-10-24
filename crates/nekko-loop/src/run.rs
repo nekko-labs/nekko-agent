@@ -320,6 +320,9 @@ pub fn is_network_error(message: &str) -> bool {
         "dns error",
         "network is unreachable",
         "no route to host",
+        // `friendly_error` rewrites a failed send into "Can't reach ChatGPT
+        // at …" / "Can't reach the model server at …" before it gets here.
+        "can't reach",
     ]
     .iter()
     .any(|needle| lower.contains(needle))

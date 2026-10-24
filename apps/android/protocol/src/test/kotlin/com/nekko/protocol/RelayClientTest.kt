@@ -247,6 +247,28 @@ class RelayClientTest {
         c.close()
     }
 
+    @Test fun `a step-up rides inside the sealed request beside the usual fields`() = runBlocking {
+        val t = Recorder(E2E.fromHex(fx("key")))
+        val c = fixtureClient(t)
+        c.connect()
+        until("the socket") { t.sockets.isNotEmpty() }
+        t.last.listener.onMessage(buildJsonObject { put("enc", fxObj("challenge")["blob"]!!) }.toString())
+        until("the HELLO") { t.last.of("hello").isNotEmpty() }
+        t.last.welcome()
+        c.await(RelayState.ONLINE)
+        val patch = buildJsonObject { put("defaultChatMode", "yolo") }
+        c.call(Channels.SETTINGS_UPDATE, patch)
+        c.callWithStepUp(StepUpProof.Totp("123456"), Channels.SETTINGS_UPDATE, patch)
+        val (plain, stepped) = t.last.of("req")
+        assertNull("no step-up unless asked", plain["stepUp"])
+        assertEquals(buildJsonObject { put("totp", "123456") }, stepped["stepUp"])
+        assertEquals(plain["challenge"], stepped["challenge"])
+        assertEquals(plain["seq"]!!.jsonPrimitive.content.toLong() + 1, stepped["seq"]!!.jsonPrimitive.content.toLong())
+        assertEquals(JsonArray(listOf(patch)), stepped["args"])
+        assertEquals(Channels.SETTINGS_UPDATE, stepped["channel"]!!.jsonPrimitive.content)
+        c.close()
+    }
+
     @Test fun `a computer that never challenges gets the legacy HELLO and seq-only requests`() = runBlocking {
         val t = Recorder(E2E.fromHex(fx("key")))
         val c = fixtureClient(t, challengeWaitMs = 100)

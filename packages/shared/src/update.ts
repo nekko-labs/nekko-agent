@@ -13,6 +13,8 @@ export interface AppInfo {
   version: string;
   platform: string;
   edition: 'desktop' | 'web';
+  /** SK-3: whether a phone may quit Nekko Agent here (`app:quit`), the desktop's switch; absent from older computers. */
+  quitFromPhone?: boolean;
 }
 
 export interface UpdateInfo {

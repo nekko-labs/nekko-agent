@@ -54,11 +54,16 @@ public final class ChatModel {
     /// The computer's runnable skills, re-read with the chat.
     public private(set) var skills: [SkillSummary] = []
     public private(set) var sending = false
+    /// The chat's durable watches (`session:watches`), for the watch rows' live chips.
+    public private(set) var watches: [AgentWatch] = []
+    /// This chat's subagent chats (the list hides them), for the delegation rows' status and model.
+    public private(set) var children: [SessionSummary] = []
 
     private let store: ComputersStore
     private let now: () -> Int64
     private var subscription: UUID?
     private var reloadTask: Task<Void, Never>?
+    private var agentStateTask: Task<Void, Never>?
     private var lastConn: RelayState = .idle
 
     public init(sessionId: String, store: ComputersStore, now: @escaping () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }) {
@@ -75,6 +80,32 @@ public final class ChatModel {
         subscription = store.subscribe { [weak self] e in self?.onEvent(e) }
         showSavedCopy()
         Task { await reload() }
+        pollAgentState()
+    }
+
+    /// While a watch is armed, its chip is re-read every 15 s (the desktop's cadence).
+    private func pollAgentState() {
+        agentStateTask?.cancel()
+        agentStateTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 15_000_000_000)
+                guard let self, !Task.isCancelled else { return }
+                if self.watches.contains(where: { $0.status == .active }) { await self.refreshAgentState() }
+            }
+        }
+    }
+
+    /// Re-read what the agent-work rows show beyond the transcript: the watches,
+    /// and the child chats when the transcript delegates. Failures keep the last state.
+    public func refreshAgentState() async {
+        guard let r = try? store.remote() else { return }
+        let hasWatch = blocks.contains { if case .tool(_, let name, _, _, _, _) = $0 { return name == AgentRows.watchTool } else { return false } }
+        let hasAgent = blocks.contains { if case .tool(_, let name, _, _, _, _) = $0 { return name == AgentRows.subagentTool } else { return false } }
+        if hasWatch, let raw = try? await r.call(Channels.sessionWatches, [.string(sessionId)]) { watches = AgentWatch.list(raw) }
+        if hasAgent, let raw = try? await r.call(Channels.sessionsSummaries) {
+            let id = sessionId
+            children = SessionSummary.list(raw).filter { $0.parentSessionId == id }
+        }
     }
 
     /// Paint the saved copy while nothing better is on screen.
@@ -88,6 +119,8 @@ public final class ChatModel {
     public func stop() {
         if let subscription { store.unsubscribe(subscription) }
         subscription = nil
+        agentStateTask?.cancel()
+        agentStateTask = nil
     }
 
     /// The connection came back: re-read, in case events were missed.
@@ -129,6 +162,7 @@ public final class ChatModel {
             // Keep the ids of what was on screen when the saved transcript replaces the live one.
             let carried = Transcript.carriedIds(shown: shown, next: Transcript.mergeLive(saved: savedBlocks, live: turn.blocks))
             if !carried.isEmpty { shownIds.merge(carried) { a, _ in a } }
+            await refreshAgentState()
         } catch {
             // Out of reach: the saved copy (if any) says so itself, under "Saved copy from …".
             showSavedCopy()
@@ -153,6 +187,8 @@ public final class ChatModel {
         turn = Transcript.apply(turn, e)
         switch e {
         case .done, .error, .sessionMeta: scheduleReload()
+        // A watch is armed or cancelled at a tool result; a delegation's child appears then too.
+        case .toolResult: Task { await refreshAgentState() }
         default: break
         }
     }

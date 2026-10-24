@@ -14,6 +14,7 @@ import {
   PHONE_OPEN_CHANNELS,
   PHONE_READ_CHANNELS,
   PHONE_TOKEN_CHANNELS,
+  PHONE_SAFETY_EXIT_CHANNELS,
   PhoneAccessError,
   checkPhoneAccess,
   phoneAccessPolicy,
@@ -102,10 +103,28 @@ describe('phone access classes', () => {
       expect(code(() => checkPhoneAccess(c, { read: false, change: true }))).toBe('read-off');
       expect(code(() => checkPhoneAccess(c, { read: true, change: false }))).toBe('ok');
     }
-    for (const c of [...PHONE_CHANGE_CHANNELS, ...PHONE_AGENT_CHANNELS, ...PHONE_TOKEN_CHANNELS]) {
+    const exits = new Set(PHONE_SAFETY_EXIT_CHANNELS);
+    for (const c of [...PHONE_CHANGE_CHANNELS, ...PHONE_AGENT_CHANNELS, ...PHONE_TOKEN_CHANNELS].filter((c) => !exits.has(c))) {
       expect(code(() => checkPhoneAccess(c, { read: true, change: false }))).toBe('change-off');
       expect(code(() => checkPhoneAccess(c, { read: false, change: true }))).toBe('ok');
     }
+  });
+
+  it('never refuses a safety exit for its switches, and the exemption list is exactly three channels', () => {
+    // SK-3 / decision 0018: growing this list is a security decision; change this test only with one.
+    expect([...PHONE_SAFETY_EXIT_CHANNELS].sort()).toEqual(['app:quit', 'device:signOut', 'remote:stop']);
+    for (const c of PHONE_SAFETY_EXIT_CHANNELS) {
+      expect(phoneChannelClass(c), c).toBe('agent');
+      expect(phoneChannelAllowed(c), c).toBe(true);
+      for (const read of [true, false]) for (const change of [true, false]) {
+        expect(code(() => checkPhoneAccess(c, { read, change })), c).toBe('ok');
+      }
+    }
+    // Only these three agent channels skip the Change switch.
+    const skipping = PHONE_AGENT_CHANNELS.filter((c) => code(() => checkPhoneAccess(c, { read: true, change: false })) === 'ok');
+    expect(skipping.sort()).toEqual(['app:quit', 'device:signOut', 'remote:stop']);
+    // The rest of remote access stays out of a phone's reach.
+    for (const c of ['remote:enable', 'remote:setAccess', 'remote:rotate', 'remote:revoke', 'remote:disable']) expect(phoneChannelAllowed(c), c).toBe(false);
   });
 
   it('reads a device with no switches as everything on', () => {

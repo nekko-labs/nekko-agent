@@ -55,8 +55,15 @@ so a fix to a red PR re-queues itself. Every 15 minutes `queue-sweeper.yml`
 re-queues a ready PR whose `gate` is green but which is not in the queue (once per
 head commit, so a queue ejection by a flake heals and a real one waits for your
 fix), and re-runs a red `gate`'s failed jobs once. To keep a ready PR out of the
-queue, mark it draft or label it `hold`. If you need it queued sooner, `gh pr merge
---auto <n>` once `gate` is green still works.
+queue, mark it draft or label it `hold`. If it is already queued, either one also
+fails the group's `gate`, so the queue ejects it rather than merging it. If you need it
+queued sooner, `gh pr merge --auto <n>` once `gate` is green still works.
+
+With the `ci:macos` label, `gate` on the PR waits for the macOS runs the label turns on
+in other workflows (Native iOS, Mobile's iOS build, Dev identity, CodeQL's Swift pass,
+Decision models' CoreML job, nekkod-npm's darwin build) and fails if any of them fails,
+so the PR is not queued until they are green. macOS runners queue, so that can take an
+hour or more. Adding the label re-runs CI.
 
 ### Ready, not draft
 

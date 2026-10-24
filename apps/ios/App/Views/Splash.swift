@@ -6,7 +6,14 @@ import SwiftUI
 /// app, until the app fills the screen. Drawn from elapsed time in one Canvas,
 /// from the same generated layers (SplashCells.swift). Reduce Motion fades a
 /// solid ground instead. The launch screen is the same lavender, so nothing flashes.
+///
+/// Coming back to the app plays only the end of it (`.resume`): the cat on the
+/// lavender dissolves and the app fades in, in under half a second.
 struct SplashView: View {
+    enum Kind { case launch, resume }
+    var kind: Kind = .launch
+    /// `.resume` waits for this: the app active and not behind the lock.
+    var ready = true
     var onDone: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var start = Date()
@@ -27,7 +34,9 @@ struct SplashView: View {
 
     var body: some View {
         Group {
-            if reduceMotion {
+            if kind == .resume {
+                resume
+            } else if reduceMotion {
                 Self.ground.opacity(faded ? 0 : 1)
                     .task {
                         try? await Task.sleep(for: .milliseconds(300))
@@ -48,6 +57,35 @@ struct SplashView: View {
         .ignoresSafeArea()
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+
+    /// The cat where the full animation draws it, dissolving (growing, blurring and
+    /// fading; only fading with Reduce Motion), then the ground fading off the app.
+    private var resume: some View {
+        GeometryReader { geo in
+            let side = max(40, max(geo.size.width, geo.size.height) * 0.085)
+            ZStack {
+                Self.ground
+                    .opacity(faded ? 0 : 1)
+                    .animation(.easeOut(duration: 0.3).delay(0.1), value: faded)
+                CatMark()
+                    .foregroundStyle(Self.ink)
+                    .frame(width: side, height: side)
+                    .scaleEffect(faded && !reduceMotion ? 1.35 : 1)
+                    .blur(radius: faded && !reduceMotion ? 8 : 0)
+                    .opacity(faded ? 0 : 1)
+                    .animation(.easeIn(duration: 0.3), value: faded)
+                    .position(x: geo.size.width / 2, y: geo.size.height / 2)
+            }
+        }
+        .task(id: ready) {
+            guard ready, !faded else { return }
+            try? await Task.sleep(for: .milliseconds(60))
+            guard !Task.isCancelled else { return }
+            faded = true
+            try? await Task.sleep(for: .milliseconds(450))
+            onDone()
+        }
     }
 
     private func draw(_ ctx: inout GraphicsContext, _ size: CGSize, _ t: Double) {

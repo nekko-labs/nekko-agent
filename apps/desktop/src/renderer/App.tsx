@@ -14,6 +14,8 @@ import { ErrorBoundary } from './components/ErrorBoundary.js';
 import { BrandMark } from './components/BrandMark.js';
 import { RailBackdrop } from './components/RailBackdrop.js';
 import { AboutNekko } from './components/AboutNekko.js';
+import { FeedbackSheet, openFeedback } from './components/FeedbackSheet.js';
+import { FeedbackIcon } from './icons.js';
 import { AutumnBackground } from './components/AutumnBackground.js';
 import { PixelWaveBackground, pixelWaveFor } from './components/PixelWaveBackground.js';
 import { syncAppActivity } from './appActivity.js';
@@ -21,6 +23,8 @@ import { startDecorClock } from './decorClock.js';
 import { Mascot, NekkoAvatar } from './components/Mascot.js';
 import { ResourceHud } from './components/ResourceMonitor.js';
 import { Toasts } from './components/Toasts.js';
+import { StepUpSheet } from './components/security/StepUpSheet.js';
+import { installStepUpHandler } from './stepUp.js';
 import { CommandPalette } from './components/CommandPalette.js';
 import { UpdateBanner } from './components/UpdateBanner.js';
 import { AppNotices } from './components/AppNotices.js';
@@ -107,6 +111,9 @@ export function App() {
     catch (e) { useStore.setState({ settings: previous }); useStore.getState().pushToast('error', (e as Error).message); }
   };
   const mobileNav = MOBILE_NAV.filter((v) => viewEnabled(v, settings));
+
+  // A guarded call the computer refuses `step-up-required` opens the step-up sheet (SK-4, SK-5).
+  useEffect(() => installStepUpHandler(window.nekko), []);
 
   // If the surface you're looking at gets switched off (say from another
   // client over the same settings file), land somewhere real.
@@ -258,6 +265,7 @@ export function App() {
       {/* The window's own title bar, in the desktop shell only. */}
       <ErrorBoundary label="Title bar"><TitleBar /></ErrorBoundary>
       <ErrorBoundary label="About"><AboutNekko /></ErrorBoundary>
+      <ErrorBoundary label="Feedback"><FeedbackSheet /></ErrorBoundary>
 
       {!settingsLoaded ? (
         <div className="relative flex min-h-0 w-full flex-1 items-center justify-center">
@@ -317,6 +325,11 @@ export function App() {
             </div>
             </div>
             <div className="rail-space-after" aria-hidden="true" />
+            {/* Not a destination: it opens the Send feedback sheet over the current view. */}
+            <button className="nav-item rail-feedback" aria-label={t('nav.feedback')} title={t('nav.feedback')} onClick={openFeedback} data-testid="rail-feedback">
+              <span className="grid h-10 w-10 shrink-0 place-items-center text-ink-faint"><FeedbackIcon className="h-[18px] w-[18px]" /></span>
+              <span className="rail-label text-[13px] font-medium">{t('nav.feedback')}</span>
+            </button>
           </div>
         </nav>
 
@@ -390,6 +403,7 @@ export function App() {
       <ErrorBoundary label="Links"><DeepLinkListener /></ErrorBoundary>
       <ErrorBoundary label="Claude plan"><ClaudePlanSheet /></ErrorBoundary>
       <ErrorBoundary label="Notifications"><Toasts /></ErrorBoundary>
+      <ErrorBoundary label="Step-up"><StepUpSheet /></ErrorBoundary>
     </div>
   );
 }

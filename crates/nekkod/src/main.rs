@@ -31,6 +31,7 @@ mod decisions;
 mod desktop;
 mod downloads;
 mod engine;
+mod feedback;
 mod gcp;
 mod harness;
 mod hub;
@@ -58,6 +59,7 @@ mod resource_queue;
 mod routes;
 mod runtimes;
 mod sandbox;
+mod security;
 mod settings;
 mod side;
 mod sideband;
@@ -88,6 +90,7 @@ pub fn random_token() -> String {
 }
 
 fn main() -> std::process::ExitCode {
+    machine::mark_started();
     let cfg = match config::load() {
         Ok(c) => c,
         Err(e) => {
@@ -200,10 +203,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             Some(nekko_cloud::Cloud::new(nekko_cloud::Options {
                 vault: nekko_cloud::vault::default_vault(&dir),
                 dir,
-                api_url: std::env::var("NEKKO_CLOUD_URL")
-                    .ok()
-                    .filter(|u| !u.is_empty())
-                    .unwrap_or_else(|| "https://nekko-agent-api.fly.dev".into()),
+                api_url: feedback::cloud_url(),
                 device_label: gethostname::gethostname().to_string_lossy().chars().take(40).collect(),
                 sessions: store.clone(),
                 publish: Arc::new(move |status| publish_hub.publish(nekko_cloud::EVENT, status, false)),
@@ -336,6 +336,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         )),
         automation: automation.clone(),
         remote: remote.clone(),
+        security: Arc::new(security::Security::new(remote.security_store(), nekko_remote::system_clock())),
         sandboxes,
         compactions,
         image_turns: image_turns::ImageTurns::new(),
@@ -579,5 +580,6 @@ async fn shutdown_signal(watch_stdin: bool, signals: &mut Signals) -> &'static s
     tokio::select! {
         _ = stdin_closed => "stdin closed",
         why = signals.next() => why,
+        _ = small_services::QUIT.notified() => "app:quit from a phone",
     }
 }
