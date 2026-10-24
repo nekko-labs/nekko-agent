@@ -1,0 +1,613 @@
+<title>Nekko iPhone Redesign</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: a design-review board. Phone frames (390 pt) laid out in a wrapping row, each
+   a real screen at rest; notes beside each frame. Palette = apps/ios/App/Platform/Theme.swift. */
+:root {
+  --paper: #FBFBFD; --surface: #FFFFFF; --surface2: #F2F2F7; --line: #E8E8EF;
+  --ink: #17171D; --ink-soft: #52525E; --ink-faint: #6A6A76;
+  --accent: #5A4AE8; --on-accent: #FFFFFF; --accent-wash: rgba(90,74,232,.10);
+  --success: #1E7A4A; --danger: #B42318; --warning: #8F5C0A; --running: #1D4ED8;
+  --user-bubble: #5A4AE8; --user-ink: #FFFFFF; --code: #F2F2F7;
+  --board: #ECEBF3; --board-ink: #17171D; --board-soft: #52525E; --board-line: #D9D7E6;
+  --font-ui: -apple-system, "SF Pro Text", "Helvetica Neue", Inter, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-display: "Space Grotesk", -apple-system, system-ui, sans-serif;
+  --r-bubble: 18px; --r-card: 14px; --r-chip: 999px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #0C0C11; --surface: #16161C; --surface2: #20202A; --line: #26262F;
+  --ink: #ECEAF3; --ink-soft: #A3A1B0; --ink-faint: #8E8E9B;
+  --accent: #8B7DFF; --on-accent: #0C0C11; --accent-wash: rgba(139,125,255,.14);
+  --success: #4CC38A; --danger: #EF6A5B; --warning: #E3A446; --running: #60A5FA;
+  --user-bubble: #2A2550; --user-ink: #ECEAF3; --code: #101016;
+  --board: #07070B; --board-ink: #ECEAF3; --board-soft: #A3A1B0; --board-line: #1C1C26;
+  color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --paper: #0C0C11; --surface: #16161C; --surface2: #20202A; --line: #26262F;
+  --ink: #ECEAF3; --ink-soft: #A3A1B0; --ink-faint: #8E8E9B;
+  --accent: #8B7DFF; --on-accent: #0C0C11; --accent-wash: rgba(139,125,255,.14);
+  --success: #4CC38A; --danger: #EF6A5B; --warning: #E3A446; --running: #60A5FA;
+  --user-bubble: #2A2550; --user-ink: #ECEAF3; --code: #101016;
+  --board: #07070B; --board-ink: #ECEAF3; --board-soft: #A3A1B0; --board-line: #1C1C26;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--board); color: var(--board-ink); font-family: var(--font-ui);
+  padding-block: 28px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.wrap { max-width: 1280px; margin: 0 auto; }
+h1 { font-family: var(--font-display); font-size: 26px; margin: 0 0 6px; letter-spacing: -.01em; text-wrap: balance; }
+.lede { color: var(--board-soft); max-width: 68ch; margin: 0 0 22px; line-height: 1.45; }
+.topbar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+.toggle { display: inline-flex; gap: 2px; border: 1px solid var(--board-line); border-radius: 999px; padding: 2px; background: var(--surface); }
+.toggle button { border: 0; background: transparent; color: var(--ink-soft); font: inherit; font-size: 13px; padding: 5px 12px; border-radius: 999px; cursor: pointer; }
+.toggle button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+.toggle button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+h2 { font-family: var(--font-display); font-size: 18px; margin: 34px 0 4px; }
+h2 small { font-family: var(--font-ui); font-weight: 400; color: var(--board-soft); font-size: 13px; margin-left: 8px; }
+.row { display: flex; flex-wrap: wrap; gap: 22px; align-items: flex-start; }
+.note { flex: 1 1 260px; min-width: 0; max-width: 360px; color: var(--board-soft); font-size: 14px; line-height: 1.5; }
+.note b { color: var(--board-ink); }
+.note ul { padding-left: 18px; margin: 6px 0; }
+.note li { margin: 3px 0; }
+.note code { font-family: var(--font-mono); font-size: 12px; color: var(--board-ink); }
+.eyebrow { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--board-soft); margin: 0 0 4px; }
+
+/* ---- phone frame ---- */
+.phone { flex: 0 0 auto; width: 390px; max-width: 100%; height: 780px; background: var(--paper); color: var(--ink);
+  border-radius: 44px; border: 1px solid var(--board-line); box-shadow: 0 20px 50px rgba(0,0,0,.18); overflow: hidden; position: relative; display: flex; flex-direction: column; }
+.phone .status { height: 50px; flex: 0 0 auto; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 30px 6px; font-size: 14px; font-weight: 600; }
+.phone .island { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: 118px; height: 34px; border-radius: 20px; background: #000; }
+.phone .nav { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; padding: 6px 16px 4px; min-height: 44px; }
+.phone .nav .title { font-size: 17px; font-weight: 600; }
+.phone .nav .sym { width: 36px; height: 36px; display: grid; place-items: center; color: var(--accent); border-radius: 10px; }
+.phone .big { font-size: 30px; font-weight: 700; letter-spacing: -.02em; padding: 2px 16px 8px; line-height: 1.1; }
+.screen { flex: 1 1 auto; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+.scroll { flex: 1 1 auto; overflow: hidden; padding: 0 16px; }
+.home { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); width: 134px; height: 5px; border-radius: 3px; background: var(--ink); opacity: .45; }
+svg.i { width: 16px; height: 16px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+svg.i.lg { width: 20px; height: 20px; }
+.chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: var(--r-chip); background: var(--surface2); color: var(--ink-soft); white-space: nowrap; }
+.chip.accent { background: var(--accent-wash); color: var(--accent); }
+.chip.warn { background: color-mix(in srgb, var(--warning) 18%, transparent); color: var(--warning); }
+.chip.ok { background: color-mix(in srgb, var(--success) 16%, transparent); color: var(--success); }
+.chip.run { background: color-mix(in srgb, var(--running) 16%, transparent); color: var(--running); }
+.chip.danger { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); }
+.chip.quiet { background: transparent; color: var(--ink-faint); font-weight: 500; padding: 0; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); display: inline-block; }
+.dot.run { background: var(--running); } .dot.off { background: var(--warning); } .dot.faint { background: var(--ink-faint); }
+.mono { font-family: var(--font-mono); }
+.tnum { font-variant-numeric: tabular-nums; }
+
+/* ---- running dots (fixed box, desktop rule) ---- */
+.dots { display: inline-flex; width: 16px; height: 16px; align-items: center; justify-content: center; gap: 2px; flex: 0 0 auto; }
+.dots i { width: 3px; height: 3px; border-radius: 50%; background: var(--running); animation: pulse 1.2s infinite ease-in-out; }
+.dots i:nth-child(2) { animation-delay: .2s; } .dots i:nth-child(3) { animation-delay: .4s; }
+@keyframes pulse { 0%,80%,100% { opacity: .25; transform: scale(.8);} 40% { opacity: 1; transform: scale(1);} }
+@media (prefers-reduced-motion: reduce) { .dots i { animation: none; opacity: .8; } }
+
+/* ---- Chats list ---- */
+.pcpill { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px 6px 9px; border-radius: 999px; background: var(--surface2); font-size: 13px; font-weight: 600; }
+.pcpill .lat { color: var(--ink-faint); font-weight: 500; }
+.search { display: flex; align-items: center; gap: 8px; margin: 6px 0 10px; height: 36px; padding: 0 10px; border-radius: 10px; background: var(--surface2); color: var(--ink-faint); font-size: 15px; }
+.sect { display: flex; align-items: baseline; justify-content: space-between; margin: 16px 0 4px; }
+.sect h4 { margin: 0; font-size: 15px; font-weight: 700; color: var(--accent); letter-spacing: -.01em; }
+.sect span { font-size: 12px; color: var(--ink-faint); }
+.sect.plain h4 { color: var(--ink); }
+.crow { display: grid; grid-template-columns: 22px 1fr auto; gap: 10px; padding: 10px 0; align-items: start; border-bottom: 1px solid var(--line); }
+.crow:last-child { border-bottom: 0; }
+.crow .glyph { padding-top: 2px; color: var(--ink-faint); display: grid; place-items: center; }
+.crow .t { font-size: 15px; font-weight: 600; line-height: 1.25; display: flex; gap: 6px; align-items: center; min-width: 0; }
+.crow .t span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crow .p { font-size: 13px; color: var(--ink-faint); line-height: 1.35; margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.crow .meta { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.crow .time { font-size: 12px; color: var(--ink-faint); padding-top: 2px; white-space: nowrap; }
+.crow.needs .t { color: var(--ink); }
+.cont { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 12px 14px; border-radius: var(--r-card); background: var(--accent-wash); margin-top: 10px; }
+.cont .k { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+.cont .v { font-size: 15px; font-weight: 600; margin-top: 2px; }
+.cont .s { font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
+.cont .go { width: 34px; height: 34px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; }
+
+/* ---- Chat transcript ---- */
+.tx { display: flex; flex-direction: column; gap: 14px; padding-top: 6px; }
+.bubble { align-self: flex-end; max-width: 86%; background: var(--user-bubble); color: var(--user-ink); padding: 10px 14px; border-radius: var(--r-bubble); font-size: 15px; line-height: 1.35; }
+.reply { font-size: 15px; line-height: 1.45; }
+.reply code { font-family: var(--font-mono); font-size: 13px; background: var(--code); padding: 1px 5px; border-radius: 5px; }
+.agent { display: flex; flex-direction: column; gap: 2px; }
+.arow { display: grid; grid-template-columns: 16px 1fr auto; gap: 8px; align-items: center; min-height: 30px; padding: 2px 0; font-size: 13px; color: var(--ink-soft); }
+.arow .lbl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.arow .lbl.mono { font-family: var(--font-mono); font-size: 12.5px; }
+.arow .lbl b { color: var(--ink); font-weight: 600; }
+.arow .ic { color: var(--ink-faint); display: grid; place-items: center; }
+.arow .ic.ok { color: var(--success); } .arow .ic.warn { color: var(--warning); } .arow .ic.err { color: var(--danger); }
+.arow .right { display: flex; gap: 6px; align-items: center; }
+/* Desktop chip rule (WatchClockChip, SubagentCue): 10-11px, 4px radius, 1px border, no fill. */
+.arow .chip, .agent .chip { border-radius: 4px; border: 1px solid var(--line); background: transparent; color: var(--ink-faint); font-weight: 500; padding: 1px 6px; font-size: 11px; }
+.arow .chip.accent, .agent .chip.accent { border-color: var(--accent); color: var(--accent); }
+.arow .chip.run, .agent .chip.run { border-color: var(--running); color: var(--running); }
+.arow .chip.warn, .agent .chip.warn { border-color: var(--warning); color: var(--warning); }
+.arow .chip.quiet, .agent .chip.quiet { border-color: transparent; padding: 1px 0; }
+.arow.head { color: var(--ink); font-weight: 600; }
+.arow.head .lbl { white-space: normal; }
+.sub { display: flex; flex-direction: column; gap: 2px; padding-left: 24px; position: relative; }
+.sub::before { content: ""; position: absolute; left: 7px; top: 4px; bottom: 4px; width: 1.5px; background: var(--line); border-radius: 1px; }
+.then { grid-column: 2 / -1; font-size: 12px; color: var(--ink-faint); margin: -4px 0 4px; }
+.then b { color: var(--ink-soft); font-weight: 600; }
+.out { grid-column: 2 / -1; font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-soft); background: var(--code); border-radius: 8px; padding: 8px 10px; white-space: pre; overflow-x: auto; margin: 2px 0 6px; line-height: 1.4; }
+.card { border-radius: var(--r-card); background: var(--surface); padding: 12px 14px; }
+.card.ask { background: color-mix(in srgb, var(--warning) 9%, var(--surface)); }
+.card .h { display: flex; gap: 8px; align-items: center; font-size: 14px; font-weight: 600; }
+.card .h .ic { color: var(--warning); }
+.card .cmd { font-family: var(--font-mono); font-size: 12.5px; margin: 8px 0; color: var(--ink); word-break: break-all; }
+.card .why { font-size: 12px; color: var(--ink-soft); }
+.btns { display: flex; gap: 8px; margin-top: 10px; }
+.btn { flex: 1; text-align: center; font-size: 14px; font-weight: 600; padding: 9px 0; border-radius: 11px; background: var(--surface2); color: var(--ink); }
+.btn.primary { background: var(--accent); color: var(--on-accent); }
+.composer { flex: 0 0 auto; padding: 8px 16px 14px; display: flex; gap: 8px; align-items: flex-end; }
+.composer .field { flex: 1; min-height: 40px; border-radius: 20px; background: var(--surface); border: 1px solid var(--line); padding: 10px 14px; font-size: 15px; color: var(--ink-faint); }
+.composer .send { width: 40px; height: 40px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; }
+.composer .send.stop { background: var(--danger); }
+
+/* ---- Computer details ---- */
+.hero { display: grid; grid-template-columns: 48px 1fr; gap: 12px; align-items: center; padding: 4px 0 10px; }
+.hero .ico { width: 48px; height: 48px; border-radius: 14px; background: var(--accent-wash); color: var(--accent); display: grid; place-items: center; }
+.hero .n { font-size: 22px; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; }
+.hero .s { font-size: 13px; color: var(--ink-soft); margin-top: 3px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 6px 0 4px; }
+.tile { background: var(--surface); border-radius: 12px; padding: 10px 12px; min-width: 0; }
+.tile .k { font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; }
+.tile .v { font-size: 20px; font-weight: 700; letter-spacing: -.02em; margin-top: 2px; display: flex; align-items: baseline; gap: 4px; }
+.tile .v small { font-size: 12px; font-weight: 500; color: var(--ink-faint); }
+.tile .spark { margin-top: 6px; height: 22px; width: 100%; display: block; }
+.lrow { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
+.lrow:last-child { border-bottom: 0; }
+.lrow .k { display: flex; gap: 9px; align-items: center; min-width: 0; }
+.lrow .k .ic { color: var(--ink-faint); display: grid; place-items: center; }
+.lrow .k .sub2 { display: block; font-size: 12px; color: var(--ink-faint); margin-top: 1px; }
+.lrow .v { color: var(--ink-soft); font-size: 14px; display: flex; gap: 6px; align-items: center; white-space: nowrap; }
+.lrow .chev { color: var(--ink-faint); }
+.sw { width: 42px; height: 26px; border-radius: 13px; background: var(--success); position: relative; flex: 0 0 auto; }
+.sw::after { content: ""; position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; }
+.sw.off { background: var(--line); } .sw.off::after { right: auto; left: 3px; }
+.bar { height: 6px; border-radius: 3px; background: var(--surface2); overflow: hidden; margin-top: 6px; }
+.bar i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+.group { background: var(--surface); border-radius: var(--r-card); padding: 2px 14px; margin-top: 8px; }
+.group .lrow { font-size: 15px; }
+.foot { font-size: 12px; color: var(--ink-faint); line-height: 1.4; margin: 6px 0 2px; }
+
+/* ---- sheets ---- */
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; top: 150px; background: var(--paper); border-radius: 22px 22px 0 0; box-shadow: 0 -10px 40px rgba(0,0,0,.22); display: flex; flex-direction: column; }
+.sheet .grab { width: 36px; height: 5px; border-radius: 3px; background: var(--line); margin: 8px auto 2px; }
+.sheet .shn { display: flex; align-items: center; justify-content: space-between; padding: 6px 16px; font-size: 15px; }
+.sheet .shn b { font-size: 17px; }
+.sheet .shn span { color: var(--accent); font-weight: 600; }
+.dim { position: absolute; inset: 0; background: rgba(0,0,0,.28); }
+.kinds { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 6px; }
+.kind { background: var(--surface); border-radius: 12px; padding: 10px 12px; display: flex; gap: 10px; align-items: center; font-size: 14px; font-weight: 600; }
+.kind .lg { width: 28px; height: 28px; border-radius: 8px; background: var(--surface2); display: grid; place-items: center; font-size: 12px; color: var(--ink-soft); font-family: var(--font-mono); }
+.kind.sel { outline: 2px solid var(--accent); }
+.field2 { background: var(--surface); border-radius: 12px; padding: 10px 12px; margin-top: 8px; }
+.field2 .k { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-faint); font-weight: 600; }
+.field2 .v { font-family: var(--font-mono); font-size: 14px; margin-top: 3px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.seal { display: grid; grid-template-columns: 20px 1fr; gap: 10px; align-items: start; margin-top: 12px; font-size: 12.5px; color: var(--ink-soft); line-height: 1.4; }
+.seal .ic { color: var(--success); }
+.stepper { display: flex; flex-direction: column; gap: 0; margin-top: 10px; }
+.step { display: grid; grid-template-columns: 22px 1fr; gap: 10px; font-size: 13px; color: var(--ink-soft); padding: 6px 0; }
+.step .n { width: 22px; height: 22px; border-radius: 50%; background: var(--surface2); color: var(--ink-soft); display: grid; place-items: center; font-size: 11px; font-weight: 700; }
+.step .n.done { background: var(--success); color: #fff; } .step .n.now { background: var(--accent); color: var(--on-accent); }
+.step b { color: var(--ink); }
+
+/* ---- New chat "where" picker ---- */
+.where { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.wopt { display: grid; grid-template-columns: 40px 1fr auto; gap: 12px; align-items: center; background: var(--surface); border-radius: 14px; padding: 12px 14px; }
+.wopt.sel { outline: 2px solid var(--accent); }
+.wopt .ico { width: 40px; height: 40px; border-radius: 12px; background: var(--surface2); color: var(--ink-soft); display: grid; place-items: center; }
+.wopt.sel .ico { background: var(--accent-wash); color: var(--accent); }
+.wopt .t { font-size: 15px; font-weight: 600; }
+.wopt .s { font-size: 12px; color: var(--ink-faint); margin-top: 2px; }
+.radio { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--line); }
+.radio.on { border-color: var(--accent); background: radial-gradient(circle, var(--accent) 45%, transparent 48%); }
+
+/* ---- before/after strip ---- */
+.ba { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 10px; }
+.ba .pane { background: var(--paper); color: var(--ink); border-radius: 16px; padding: 14px 16px; border: 1px solid var(--board-line); }
+.ba .pane h5 { margin: 0 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-faint); }
+.oldcard { border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 10px; display: grid; grid-template-columns: 16px 1fr 12px; gap: 8px; align-items: center; font-family: var(--font-mono); font-size: 12.5px; color: var(--ink-soft); margin-bottom: 8px; }
+.oldcard .ic { color: var(--success); }
+table.spec { border-collapse: collapse; width: 100%; font-size: 13px; margin-top: 10px; }
+table.spec th, table.spec td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--board-line); vertical-align: top; }
+table.spec th { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--board-soft); }
+.tablewrap { overflow-x: auto; }
+@media (max-width: 460px) { .phone { height: 740px; border-radius: 32px; } .tiles { grid-template-columns: 1fr 1fr; } }
+</style>
+
+<div class="wrap">
+  <div class="topbar">
+    <div>
+      <h1>Nekko iPhone redesign</h1>
+      <p class="lede">Five screens of the native iPhone app brought closer to the desktop: borderless agent rows in the chat, a cleaner conversations list, computers you can open, providers set up from the phone, and a Nekko Cloud machine as a computer you pair with. Palette and type are the app's own (<code>Theme.swift</code>); the bubbles are unchanged.</p>
+    </div>
+    <div class="toggle" role="group" aria-label="Theme">
+      <button type="button" id="th-system" aria-pressed="true">System</button>
+      <button type="button" id="th-light" aria-pressed="false">Light</button>
+      <button type="button" id="th-dark" aria-pressed="false">Dark</button>
+    </div>
+  </div>
+
+  <!-- ===================== 1. CHAT ===================== -->
+  <h2 id="chat">1 · A chat: the agent's work without borders <small>bubbles kept, every other row quiet</small></h2>
+  <div class="row">
+    <div class="phone" aria-label="Chat screen">
+      <div class="island"></div>
+      <div class="status"><span>9:41</span><span>●●●</span></div>
+      <div class="nav">
+        <div class="sym"><svg class="i lg" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></div>
+        <div style="text-align:center;min-width:0">
+          <div class="title">Fix flaky relay test</div>
+          <div style="font-size:12px;color:var(--ink-faint);display:flex;gap:6px;justify-content:center;align-items:center"><span class="dot run"></span>Working · Studio · claude-sonnet-5-5</div>
+        </div>
+        <div class="sym"><svg class="i lg" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="19" r="1.4"/></svg></div>
+      </div>
+      <div class="screen">
+        <div class="scroll">
+          <div class="tx">
+            <div class="bubble">The relay reconnect test is flaky on CI. Find out why, fix it, and watch the PR until it's green.</div>
+            <div class="reply">I'll reproduce it first, then split the fix across two helpers.</div>
+
+            <div class="agent">
+              <div class="arow"><span class="ic ok"><svg class="i" viewBox="0 0 24 24"><path d="M5 12l4 4L19 6"/></svg></span><span class="lbl mono">read crates/nekko-remote/tests/reconnect.rs</span></div>
+              <div class="arow"><span class="ic ok"><svg class="i" viewBox="0 0 24 24"><path d="M5 12l4 4L19 6"/></svg></span><span class="lbl mono">cargo test -p nekko-remote reconnect -- --nocapture</span><span class="right"><span class="chip quiet">3 runs</span><svg class="i" viewBox="0 0 24 24" style="color:var(--ink-faint)"><path d="M6 9l6 6 6-6"/></svg></span></div>
+              <div class="out">test reconnect_after_relay_drop ... FAILED
+  assertion failed: backoff.elapsed() >= 2s
+  left: 1.994s</div>
+            </div>
+
+            <div class="agent">
+              <div class="arow head"><span class="dots"><i></i><i></i><i></i></span><span class="lbl">2 subagents · 1 working</span><span class="chip accent">claude-sonnet-5-5</span></div>
+              <div class="sub">
+                <div class="arow"><span class="ic ok"><svg class="i" viewBox="0 0 24 24"><path d="M5 12l4 4L19 6"/></svg></span><span class="lbl"><b>Timer precision</b> · found the 6 ms jitter in <span class="mono">RouteSupervisor</span></span><span class="chip quiet">qwen3-coder</span></div>
+                <div class="arow"><span class="dots"><i></i><i></i><i></i></span><span class="lbl"><b>Write the fix</b> · editing reconnect.rs</span><span class="chip quiet">sonnet</span></div>
+              </div>
+            </div>
+
+            <div class="agent">
+              <div class="arow"><span class="ic"><svg class="i" viewBox="0 0 24 24"><circle cx="7" cy="14" r="3.5"/><circle cx="17" cy="14" r="3.5"/><path d="M7 10.5V6h3v4.5M17 10.5V6h-3v4.5M10 7h4"/></svg></span><span class="lbl"><b>Watching PR #555</b> · wakes on any PR change or after 1h</span><span class="chip run tnum">in 42 min</span></div>
+              <div class="arow" style="min-height:0;padding:0"><span></span><span class="then"><b>then ·</b> read the check logs and push a fix if anything is red</span></div>
+            </div>
+
+            <div class="card ask">
+              <div class="h"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 3v10M7 8l5-5 5 5M5 21h14"/></svg></span>Allow this?<span class="chip warn" style="margin-left:auto">Medium risk</span></div>
+              <div class="cmd">git push -u origin fix/relay-reconnect-backoff</div>
+              <div class="why">Pushes one commit to your fork. Nothing is force-pushed.</div>
+              <div class="btns"><div class="btn">Deny</div><div class="btn primary">Approve</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="composer"><div class="field">Message, or hold to talk</div><div class="send stop"><svg class="i" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" stroke="none"/></svg></div></div>
+      </div>
+      <div class="home"></div>
+    </div>
+    <div class="note">
+      <p class="eyebrow">What changed</p>
+      <ul>
+        <li><b>Chips</b> follow the desktop's one rule: 11 pt text, 4 pt corners, a 1 pt line, no fill; only the tone of the line changes (running, overdue, model).</li>
+        <li><b>Tool steps</b> lose the card. One row: status mark, monospaced label, a chevron only when there is output. Output opens as a code well under the row, like the desktop.</li>
+        <li><b>Subagents</b> become a group: a header with the fixed-box running dots and a count, child rows indented on a hairline, each with its model as a quiet chip (child's model, else the call's <code>model_id</code>, else the parent's).</li>
+        <li><b>Watch rows</b> arrive on the phone for the first time: binoculars, what it watches and what wakes it, a <b>then ·</b> line, and a live chip (countdown, <i>overdue</i>, <i>triggered</i>). The wake-up stops being a user bubble.</li>
+        <li><b>Approvals</b> keep a card, because they are the one thing that needs you, but the stroke goes: a warm tint on the surface and a risk chip instead.</li>
+        <li><b>Title bar</b> carries state: Working dot, computer, model. Send becomes Stop while a run goes, as today.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="ba">
+    <div class="pane">
+      <h5>Today (ChatView.swift)</h5>
+      <div class="oldcard"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M5 12l4 4L19 6"/></svg></span><span>Delegate: Timer precision</span><span style="color:var(--ink-faint)">⌄</span></div>
+      <div class="oldcard"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M5 12l4 4L19 6"/></svg></span><span>arm_watch pr https://github.com/nekko-labs/…</span><span style="color:var(--ink-faint)">⌄</span></div>
+      <div class="bubble" style="max-width:100%">Watch triggered · PR #555 changed (checks pending)</div>
+    </div>
+    <div class="pane">
+      <h5>Proposed</h5>
+      <div class="agent">
+        <div class="arow"><span class="ic ok"><svg class="i" viewBox="0 0 24 24"><path d="M5 12l4 4L19 6"/></svg></span><span class="lbl"><b>Timer precision</b> · found the 6 ms jitter</span><span class="chip quiet">qwen3-coder</span></div>
+        <div class="arow"><span class="ic"><svg class="i" viewBox="0 0 24 24"><circle cx="7" cy="14" r="3.5"/><circle cx="17" cy="14" r="3.5"/><path d="M7 10.5V6h3v4.5M17 10.5V6h-3v4.5M10 7h4"/></svg></span><span class="lbl"><b>Watching PR #555</b> · wakes on any PR change or after 1h</span><span class="chip warn">overdue 3 min</span></div>
+        <div class="arow"><span class="ic" style="color:var(--accent)"><svg class="i" viewBox="0 0 24 24"><path d="M13 3L4 14h7l-1 7 9-11h-7z"/></svg></span><span class="lbl"><b>Watch triggered</b> · PR #555 changed (checks pending)</span><span class="chip quiet tnum">10:12</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== 2. CHATS LIST ===================== -->
+  <h2 id="chats">2 · Conversations <small>the desktop's grouping, without stock grouped cells</small></h2>
+  <div class="row">
+    <div class="phone" aria-label="Chats screen">
+      <div class="island"></div>
+      <div class="status"><span>9:41</span><span>●●●</span></div>
+      <div class="nav">
+        <div class="pcpill"><span class="dot"></span>Studio <span class="lat tnum">38 ms</span><svg class="i" viewBox="0 0 24 24" style="color:var(--ink-faint)"><path d="M6 9l6 6 6-6"/></svg></div>
+        <div style="display:flex;gap:2px"><div class="sym"><svg class="i lg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg></div></div>
+      </div>
+      <div class="big">Chats</div>
+      <div class="screen">
+        <div class="scroll">
+          <div class="search"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4-4"/></svg>Search chats</div>
+          <div class="cont">
+            <div><div class="k">Continue</div><div class="v">Fix flaky relay test</div><div class="s">Working · pushed a fix 2 min ago</div></div>
+            <div class="go"><svg class="i" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>
+          </div>
+
+          <div class="sect"><h4>Needs you</h4><span>1</span></div>
+          <div class="crow needs">
+            <div class="glyph" style="color:var(--warning)"><svg class="i" viewBox="0 0 24 24"><path d="M12 3v10M7 8l5-5 5 5M5 21h14"/></svg></div>
+            <div><div class="t"><span>Rotate the npm token</span></div><div class="p">Wants to run <span class="mono">npm publish --access public</span></div><div class="meta"><span class="chip warn">Allow this?</span><span class="chip quiet">nekko-agent</span></div></div>
+            <div class="time">4m</div>
+          </div>
+
+          <div class="sect"><h4>nekko-agent</h4><span>3 active · 12 done</span></div>
+          <div class="crow">
+            <div class="glyph"><span class="dots"><i></i><i></i><i></i></span></div>
+            <div><div class="t"><span>Fix flaky relay test</span></div><div class="p">Reproduced the 6 ms jitter, two subagents working on the fix.</div><div class="meta"><span class="chip run">Working</span><span class="chip quiet">PR #555 · checks pending</span></div></div>
+            <div class="time">2m</div>
+          </div>
+          <div class="crow">
+            <div class="glyph"><svg class="i" viewBox="0 0 24 24"><circle cx="7" cy="14" r="3.5"/><circle cx="17" cy="14" r="3.5"/><path d="M7 10.5V6h3v4.5M17 10.5V6h-3v4.5M10 7h4"/></svg></div>
+            <div><div class="t"><span>Watch the iOS build</span></div><div class="p">Waiting on CI. Wakes in 42 min or when the run finishes.</div><div class="meta"><span class="chip quiet">Watching</span></div></div>
+            <div class="time">18m</div>
+          </div>
+          <div class="crow">
+            <div class="glyph" style="color:var(--success)"><svg class="i" viewBox="0 0 24 24"><path d="M5 12l4 4L19 6"/></svg></div>
+            <div><div class="t"><svg class="i" viewBox="0 0 24 24" style="width:12px;height:12px;color:var(--warning)"><path d="M12 3l2.5 5 5.5.8-4 3.9.9 5.5L12 15.6 7.1 18.2l.9-5.5-4-3.9L9.5 8z"/></svg><span>Make Agents group headings larger</span></div><div class="p">Merged #940. Headings are accented and more spacious.</div></div>
+            <div class="time">1h</div>
+          </div>
+
+          <div class="sect"><h4>obsurdian</h4><span>1 active</span></div>
+          <div class="crow">
+            <div class="glyph"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg></div>
+            <div><div class="t"><span>Weekly review</span></div><div class="p">Queued: 1 prompt waiting to send.</div><div class="meta"><span class="chip quiet">On this iPhone</span></div></div>
+            <div class="time">3h</div>
+          </div>
+          <div class="sect plain" style="margin-top:10px"><h4 style="font-size:13px;color:var(--ink-faint);font-weight:600">Completed · 12</h4><span>Show</span></div>
+        </div>
+      </div>
+      <div class="home"></div>
+    </div>
+    <div class="note">
+      <p class="eyebrow">What changed</p>
+      <ul>
+        <li><b>The computer is the title's companion.</b> A pill with its state dot, name and round-trip time replaces the bare menu icon. Tapping it opens the computer switcher and, from there, each computer's page (§3).</li>
+        <li><b>Flat rows on the paper</b>, hairline separated, instead of <code>.insetGrouped</code> cells. Group headings take the desktop's new treatment (PR #940): larger, accented, with the active and done counts on the right.</li>
+        <li><b>A glyph column says what the chat is doing</b> before you read it: running dots, a raised hand for approvals, binoculars for a watch, a check for done. The Working / Needs you badges stay, as chips under the preview.</li>
+        <li><b>Continue</b> stays at the top, now as the one tinted block on the screen.</li>
+        <li><b>Nothing new is asked of the computer.</b> The PR chip reuses <code>pr:sessionList</code>; the watch glyph needs the one new channel the chat needs anyway (<code>session:watches</code>).</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ===================== 3. COMPUTER DETAILS ===================== -->
+  <h2 id="computer">3 · A computer, opened <small>everything the phone knows about the machine</small></h2>
+  <div class="row">
+    <div class="phone" aria-label="Computer details screen">
+      <div class="island"></div>
+      <div class="status"><span>9:41</span><span>●●●</span></div>
+      <div class="nav">
+        <div class="sym"><svg class="i lg" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></div>
+        <div class="title">Computers</div>
+        <div class="sym" style="font-size:15px;font-weight:600">Edit</div>
+      </div>
+      <div class="screen">
+        <div class="scroll">
+          <div class="hero">
+            <div class="ico"><svg class="i lg" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></div>
+            <div>
+              <div class="n">Studio</div>
+              <div class="s"><span class="dot"></span>Online · macOS 26.1 · Nekko Agent 0.9.3 <span class="chip quiet">Opens at launch</span></div>
+            </div>
+          </div>
+
+          <div class="tiles">
+            <div class="tile"><div class="k">Round trip</div><div class="v tnum">38 <small>ms · LAN</small></div>
+              <svg class="spark" viewBox="0 0 120 22" preserveAspectRatio="none" aria-label="Round-trip time, last 10 minutes, 31 to 61 milliseconds"><path d="M0 12 L12 10 L24 14 L36 9 L48 11 L60 18 L72 8 L84 10 L96 7 L108 9 L120 8" fill="none" stroke="var(--accent)" stroke-width="1.5"/><path d="M0 12 L12 10 L24 14 L36 9 L48 11 L60 18 L72 8 L84 10 L96 7 L108 9 L120 8 L120 22 L0 22Z" fill="var(--accent)" opacity=".12"/><circle cx="120" cy="8" r="2" fill="var(--accent)"/></svg></div>
+            <div class="tile"><div class="k">Model server</div><div class="v">1 loaded <small>of 4</small></div><div class="bar"><i style="width:62%"></i></div><div class="foot tnum">14.9 of 24 GB unified</div></div>
+            <div class="tile"><div class="k">Up</div><div class="v tnum">3d 4h</div><div class="foot">Paired 12 days ago</div></div>
+            <div class="tile"><div class="k">Today</div><div class="v tnum">$1.84</div><div class="foot tnum">212k tokens · 61% local</div></div>
+          </div>
+
+          <div class="sect plain"><h4>Models</h4><span>models:list</span></div>
+          <div class="group">
+            <div class="lrow"><div class="k"><span class="ic" style="color:var(--success)"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" fill="currentColor" stroke="none"/></svg></span><span>qwen3-coder-30b-a3b<span class="sub2">Local Model Server · loaded · 48 tok/s</span></span></div><div class="v">Default</div></div>
+            <div class="lrow"><div class="k"><span class="ic"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/></svg></span><span>gemma-4-e4b<span class="sub2">Local Model Server · on disk, 8.1 GB</span></span></div><div class="v">Load</div></div>
+            <div class="lrow"><div class="k"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M4 14a8 8 0 0 1 15.3-3A4 4 0 0 1 18 19H7a4 4 0 0 1-3-5z"/></svg></span><span>claude-sonnet-5-5<span class="sub2">Anthropic · cloud</span></span></div><div class="v"></div></div>
+          </div>
+
+          <div class="sect plain"><h4>Providers</h4><span>providers:list</span></div>
+          <div class="group">
+            <div class="lrow"><div class="k"><span>Anthropic<span class="sub2">API key · set on Studio</span></span></div><div class="v"><span class="sw"></span></div></div>
+            <div class="lrow"><div class="k"><span>Local Model Server<span class="sub2">llama.cpp · Metal</span></span></div><div class="v"><span class="sw"></span></div></div>
+            <div class="lrow"><div class="k"><span>OpenRouter<span class="sub2">API key · turned off</span></span></div><div class="v"><span class="sw off"></span></div></div>
+            <div class="lrow"><div class="k" style="color:var(--accent);font-weight:600"><span class="ic" style="color:var(--accent)"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>Add a provider</div><div class="v"><span class="chev">›</span></div></div>
+          </div>
+
+          <div class="sect plain"><h4>Hardware</h4><span>machine:profile · system:stats</span></div>
+          <div class="group">
+            <div class="lrow"><div class="k">Chip</div><div class="v">Apple M4 Max · 16 cores</div></div>
+            <div class="lrow"><div class="k">Memory</div><div class="v tnum">128 GB · 71 GB free</div></div>
+            <div class="lrow"><div class="k">GPU</div><div class="v">40 cores · 48 °C</div></div>
+          </div>
+
+          <div class="sect plain"><h4>Connection</h4></div>
+          <div class="group">
+            <div class="lrow"><div class="k">Route</div><div class="v">LAN · relay.nekkoagent.com <span class="chev">›</span></div></div>
+            <div class="lrow"><div class="k">This iPhone's access</div><div class="v">Read and Change</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="home"></div>
+    </div>
+    <div class="note">
+      <p class="eyebrow">What the page is made of</p>
+      <ul>
+        <li><b>Round trip</b> is measured by the phone itself (the hello timing <code>RouteProber</code> already does for <i>Check routes</i>), sampled every 30 s while the page is open, so it works on any protocol version.</li>
+        <li><b>One new read channel, <code>machine:summary</code></b>, projects what the daemon already answers the desktop: <code>machine:profile</code> (chip, cores, RAM, GPUs, backends), <code>engine:status</code> (resident models, memory, startedAt for uptime), <code>system:stats</code> and <code>gpu:stats</code> (live load and temperatures), plus <code>app:info</code>. The phone view carries no paths, serial numbers or user names.</li>
+        <li><b>Models and Providers</b> reuse <code>models:list</code> and <code>providers:list</code>. The toggle calls a new change-class <code>providers:setEnabled</code> (Face ID, like every change). <b>Add a provider</b> is §4.</li>
+        <li><b>Connection</b> folds today's separate <i>Connection</i> screen in as a row that opens it, and shows this phone's Read / Change switches as the computer has set them.</li>
+        <li><b>Getting here:</b> tap a computer in <i>Computers</i>, or the pill at the top of Chats. The action sheet goes; Connect / Rename / Forget move to the <i>Edit</i> menu and swipe actions.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ===================== 4. ADD PROVIDER ===================== -->
+  <h2 id="provider">4 · A provider, set up from the phone <small>the key is sealed to the computer, never kept here</small></h2>
+  <div class="row">
+    <div class="phone" aria-label="Add provider sheet">
+      <div class="island"></div>
+      <div class="status"><span>9:41</span><span>●●●</span></div>
+      <div class="nav"><div class="sym"><svg class="i lg" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></div><div class="title">Studio</div><div class="sym"></div></div>
+      <div class="screen"><div class="scroll"><div class="hero"><div class="ico"><svg class="i lg" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></div><div><div class="n">Studio</div><div class="s"><span class="dot"></span>Online</div></div></div></div></div>
+      <div class="dim"></div>
+      <div class="sheet">
+        <div class="grab"></div>
+        <div class="shn"><span>Cancel</span><b>Add a provider</b><span>Save</span></div>
+        <div class="scroll">
+          <div class="kinds">
+            <div class="kind sel"><span class="lg">A</span>Anthropic</div>
+            <div class="kind"><span class="lg">O</span>OpenAI</div>
+            <div class="kind"><span class="lg">OR</span>OpenRouter</div>
+            <div class="kind"><span class="lg">G</span>Gemini</div>
+            <div class="kind"><span class="lg">Ol</span>Ollama on Studio</div>
+            <div class="kind"><span class="lg">…</span>OpenAI-compatible</div>
+          </div>
+          <div class="field2"><div class="k">API key</div><div class="v">sk-ant-api03-••••••••••••••••••••••••••••••7Qx</div></div>
+          <div class="field2"><div class="k">Label</div><div class="v" style="font-family:var(--font-ui)">Anthropic</div></div>
+          <div class="seal"><span class="ic"><svg class="i" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span><span><b>Sealed to Studio before it leaves this iPhone.</b> The key is encrypted to Studio's device key, sent once over the end-to-end encrypted relay, and never written to this phone. Studio tests the key and stores it in its own keychain.</span></div>
+          <div class="stepper">
+            <div class="step"><span class="n done">1</span><span><b>Face ID</b> · confirmed on this iPhone</span></div>
+            <div class="step"><span class="n now">2</span><span><b>Studio tests the key</b> · lists the models it can use</span></div>
+            <div class="step"><span class="n">3</span><span><b>Approve on Studio</b> · a notice there asks once (your choice in Remote access)</span></div>
+          </div>
+          <div class="btns" style="margin-top:14px"><div class="btn">Paste from clipboard</div><div class="btn primary">Save to Studio</div></div>
+        </div>
+      </div>
+      <div class="home"></div>
+    </div>
+    <div class="note">
+      <p class="eyebrow">Why this shape</p>
+      <p>Today <code>providers:save</code> is in <code>PHONE_DENIED_FOREVER</code> (decided 2026-10-19: provider keys never reach a phone). This flow keeps the spirit of that rule while granting the ask: the phone <b>carries</b> a key for a moment; it never <b>holds</b> one, never reads one back, and the computer never returns one.</p>
+      <ul>
+        <li><b>Wire:</b> a new change-class channel, <code>providers:saveSealed</code>, whose argument is the provider minus the key plus a ciphertext sealed to the computer's device public key (HPKE, P-256; the same shapes <code>nekko-sync</code> already uses). The relay and the phone's logs see only ciphertext twice over.</li>
+        <li><b>Gate:</b> Face ID through the Secure Enclave change proof (IO-33), plus an optional <i>Approve provider changes on the computer</i> switch under Remote access, on by default for the first provider a phone ever adds.</li>
+        <li><b>Subscriptions</b> (ChatGPT OAuth) stay out: that flow needs the computer's browser and keeps its token there. Claude plan sign-in is already removed by policy.</li>
+        <li><b>What the phone gets back:</b> <code>{ok, models: [...]}</code> or the provider's error text. Never the key, never a base URL with credentials.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ===================== 5. CLOUD MACHINE ===================== -->
+  <h2 id="cloud">5 · A Nekko Cloud machine <small>a sandboxed computer you pair with, no PC needed</small></h2>
+  <div class="row">
+    <div class="phone" aria-label="New chat, where it runs">
+      <div class="island"></div>
+      <div class="status"><span>9:41</span><span>●●●</span></div>
+      <div class="nav"><div class="sym" style="font-size:15px;font-weight:600;width:auto">Cancel</div><div class="title">New chat</div><div class="sym" style="font-size:15px;font-weight:700;width:auto">Start</div></div>
+      <div class="screen">
+        <div class="scroll">
+          <div class="field2" style="min-height:92px;margin-top:4px"><div class="v" style="font-family:var(--font-ui);white-space:normal;color:var(--ink)">Add a Japanese translation of the onboarding emails and open a PR.</div></div>
+          <div class="sect plain"><h4>Runs on</h4></div>
+          <div class="where">
+            <div class="wopt"><div class="ico"><svg class="i lg" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></div><div><div class="t">Studio</div><div class="s">Offline since 2:10 · starts when it's back</div></div><div class="radio"></div></div>
+            <div class="wopt sel"><div class="ico"><svg class="i lg" viewBox="0 0 24 24"><path d="M7 18a4.5 4.5 0 0 1-.6-9A6 6 0 0 1 18 9.5a4 4 0 0 1-.5 8.5z"/><path d="M9 16l2-2-2-2M13 16h2"/></svg></div><div><div class="t">Nekko Cloud</div><div class="s">Sandboxed machine · Tokyo · ready in ~8 s</div></div><div class="radio on"></div></div>
+            <div class="wopt"><div class="ico"><svg class="i lg" viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/></svg></div><div><div class="t">This iPhone</div><div class="s">gemma-4-e2b · nothing leaves the phone</div></div><div class="radio"></div></div>
+          </div>
+          <div class="sect plain"><h4>Model</h4></div>
+          <div class="group">
+            <div class="lrow"><div class="k">claude-sonnet-5-5</div><div class="v">Anthropic · your key <span class="chev">›</span></div></div>
+            <div class="lrow"><div class="k">Effort</div><div class="v">Standard <span class="chev">›</span></div></div>
+          </div>
+          <div class="sect plain"><h4>Repository</h4></div>
+          <div class="group">
+            <div class="lrow"><div class="k"><span class="ic"><svg class="i" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="8" r="2.5"/><path d="M6 8.5v7M18 10.5a6 6 0 0 1-6 6H8.5"/></svg></span>nekko-labs/nekko-agent</div><div class="v">main <span class="chev">›</span></div></div>
+            <div class="lrow"><div class="k">Approvals</div><div class="v">Guardrails <span class="chev">›</span></div></div>
+          </div>
+          <div class="foot" style="margin-top:10px">Cloud machines have no network except GitHub and your model providers, a fresh clone, and no access to your computers. The chat and its files sync back end-to-end encrypted.</div>
+        </div>
+      </div>
+      <div class="home"></div>
+    </div>
+
+    <div class="phone" aria-label="Cloud machine details">
+      <div class="island"></div>
+      <div class="status"><span>9:41</span><span>●●●</span></div>
+      <div class="nav"><div class="sym"><svg class="i lg" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></div><div class="title">Computers</div><div class="sym"></div></div>
+      <div class="screen">
+        <div class="scroll">
+          <div class="hero">
+            <div class="ico"><svg class="i lg" viewBox="0 0 24 24"><path d="M7 18a4.5 4.5 0 0 1-.6-9A6 6 0 0 1 18 9.5a4 4 0 0 1-.5 8.5z"/></svg></div>
+            <div><div class="n">Nekko Cloud</div><div class="s"><span class="dot"></span>Running · Tokyo (nrt) · Pro</div></div>
+          </div>
+          <div class="tiles">
+            <div class="tile"><div class="k">Round trip</div><div class="v tnum">21 <small>ms</small></div><div class="foot">Fly machine, same region as the phone</div></div>
+            <div class="tile"><div class="k">Sandbox</div><div class="v">Jailed</div><div class="foot">No shell outside /workspace · no LAN</div></div>
+            <div class="tile"><div class="k">Hours this month</div><div class="v tnum">6.4 <small>of 40</small></div><div class="bar"><i style="width:16%"></i></div></div>
+            <div class="tile"><div class="k">Sleeps</div><div class="v tnum">in 12 min</div><div class="foot">Idle machines stop; chats stay synced</div></div>
+          </div>
+          <div class="sect plain"><h4>Repositories</h4></div>
+          <div class="group">
+            <div class="lrow"><div class="k">nekko-labs/nekko-agent<span class="sub2">cloned at start · GitHub App</span></div><div class="v">2 chats</div></div>
+            <div class="lrow"><div class="k">ermish/obsurdian</div><div class="v">1 chat</div></div>
+            <div class="lrow"><div class="k" style="color:var(--accent);font-weight:600">Allow another repository</div><div class="v"><span class="chev">›</span></div></div>
+          </div>
+          <div class="sect plain"><h4>Providers</h4></div>
+          <div class="group">
+            <div class="lrow"><div class="k">Anthropic<span class="sub2">Your key · sealed to this machine</span></div><div class="v"><span class="sw"></span></div></div>
+            <div class="lrow"><div class="k">OpenAI<span class="sub2">Not set up</span></div><div class="v"><span class="sw off"></span></div></div>
+          </div>
+          <div class="sect plain"><h4>Machine</h4></div>
+          <div class="group">
+            <div class="lrow"><div class="k">Size</div><div class="v">2 vCPU · 4 GB · 20 GB disk</div></div>
+            <div class="lrow"><div class="k">Image</div><div class="v mono" style="font-size:12px">nekko-agent:0.9.3 · sha256:8c1f…</div></div>
+            <div class="lrow"><div class="k">Network</div><div class="v">github.com, api.anthropic.com</div></div>
+            <div class="lrow"><div class="k" style="color:var(--danger)">Stop and delete this machine</div><div class="v"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="home"></div>
+    </div>
+
+    <div class="note">
+      <p class="eyebrow">How it fits the engine you have</p>
+      <p>A cloud machine is <b>the Docker image you already publish</b> (nekkod + Local Web UI, <code>NEKKO_SANDBOX=workspace-jail</code>) started in <b>relay-agent mode</b> on a Fly Machine, so to the phone it is simply another computer: same pairing keys, same end-to-end encrypted frames, same allowlist. Nekko Cloud only mints the machine and hands the phone its pairing link.</p>
+      <ul>
+        <li><b>No new chat protocol.</b> <code>session:create</code>, streaming, approvals, watches, git and PRs all work as on a PC. The computer details page (§3) is the same screen.</li>
+        <li><b>Keys follow the sealed path of §4</b>: the user's provider key is sealed to the machine's device key; Nekko Labs never holds it. Nekko-paid model credits are a later option.</li>
+        <li><b>Boundary change to record:</b> the spec's <i>Cloud never runs your tools on our servers</i> becomes <i>Cloud never runs tools on your computer; a cloud machine runs them in its own jail</i>. Decision record needed.</li>
+        <li><b>Lifecycle:</b> start on first chat (~8 s cold), stop after 15 min idle, delete after 7 days; the chat and its diff sync E2EE so nothing is lost when it sleeps.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>Row anatomy <small>one component, five states</small></h2>
+  <div class="tablewrap"><table class="spec">
+    <tr><th>Row</th><th>Left (16 pt box)</th><th>Label</th><th>Right</th><th>Expands to</th></tr>
+    <tr><td>Tool step</td><td>check / cross / hand / running dots</td><td>monospaced, 1 line, ellipsis</td><td>count chip, chevron if output</td><td>code well, 280 pt max, horizontal scroll</td></tr>
+    <tr><td>Subagent group</td><td>running dots or check</td><td><i>N subagents · M working</i>, semibold</td><td>parent model chip</td><td>child rows on a hairline</td></tr>
+    <tr><td>Subagent child</td><td>status mark</td><td><b>Title</b> · one-sentence activity</td><td>model chip (quiet)</td><td>task text and result, bounded scroll</td></tr>
+    <tr><td>Watch</td><td>binoculars</td><td><b>Watching …</b> · wakes on …, then a <i>then ·</i> line</td><td>live chip: countdown / overdue / due / retrying / triggered / cancelled</td><td>the arming call's output</td></tr>
+    <tr><td>Watch triggered</td><td>bolt (accent)</td><td><b>Watch triggered</b> · what changed</td><td>time</td><td>the full wake-up text</td></tr>
+  </table></div>
+  <p class="lede" style="margin-top:14px">Spacing: rows are 30 pt tall at the default text size and grow with Dynamic Type; groups are separated by 14 pt, rows by 2 pt. No fills, no strokes: the only edges in a chat are the user bubble, the code well and an approval or question card.</p>
+</div>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  var btns = { system: document.getElementById('th-system'), light: document.getElementById('th-light'), dark: document.getElementById('th-dark') };
+  function set(mode) {
+    if (mode === 'system') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', mode);
+    Object.keys(btns).forEach(function (k) { btns[k].setAttribute('aria-pressed', String(k === mode)); });
+    try { localStorage.setItem('nekko-ios-theme', mode); } catch (e) {}
+  }
+  Object.keys(btns).forEach(function (k) { btns[k].addEventListener('click', function () { set(k); }); });
+  try { var saved = localStorage.getItem('nekko-ios-theme'); if (saved && btns[saved]) set(saved); } catch (e) {}
+})();
+</script>
