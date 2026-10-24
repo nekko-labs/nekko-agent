@@ -3,7 +3,8 @@ import NekkoProtocol
 import SwiftUI
 
 /// Start a chat on the computer: model (every enabled provider's, starred
-/// first), project folder, tool policy, and the first message.
+/// first), effort, the computer a local model runs on, project folder, tool
+/// policy, and the first message.
 struct NewChatView: View {
     @Binding var path: [Route]
     /// Show the created chat (pushed on iPhone, the split view's detail on iPad).
@@ -14,6 +15,10 @@ struct NewChatView: View {
     @State private var model: (String, String)?
     @State private var folder: String?
     @State private var mode: PcSettings.ChatMode?
+    /// nil follows the computer's own effort setting.
+    @State private var effort: Effort?
+    /// The computer was picked here: keep offering the choice while its models load.
+    @State private var pickedComputer = false
     @State private var text = ""
     @State private var busy = false
     @State private var error: String?
@@ -50,8 +55,34 @@ struct NewChatView: View {
                         Image(systemName: "chevron.right").font(.caption).foregroundStyle(palette.inkFaint)
                     }
                 }
+                if let model {
+                    Picker(selection: $effort) {
+                        Text("Computer default").tag(Effort?.none)
+                        ForEach(Effort.levels(for: model.1), id: \.self) { e in Text(effortName(e)).tag(Optional(e)) }
+                    } label: { Text("Effort").foregroundStyle(palette.ink) }
+                    .pickerStyle(.navigationLink)
+                    .foregroundStyle(palette.ink, palette.inkSoft)
+                    .accessibilityIdentifier("newChat.effort")
+                }
             } header: {
                 SectionHeader("Model")
+            } footer: {
+                if model != nil { Text("How hard the model works on each reply. Higher takes longer.").foregroundStyle(palette.inkSoft) }
+            }
+            if isLocal || pickedComputer {
+                Section {
+                    Picker(selection: Binding(get: { store.activeId }, set: { if let id = $0 { switchComputer(id) } })) {
+                        ForEach(store.computers) { c in Text(c.name).tag(Optional(c.id)) }
+                    } label: { Text("Run on").foregroundStyle(palette.ink) }
+                    .pickerStyle(.navigationLink)
+                    .foregroundStyle(palette.ink, palette.inkSoft)
+                    .accessibilityIdentifier("newChat.computer")
+                } header: {
+                    SectionHeader("Computer")
+                } footer: {
+                    Text("A local model runs on the computer’s own hardware. Choosing another computer shows its models and folders.")
+                        .foregroundStyle(palette.inkSoft)
+                }
             }
             Section {
                 Picker(selection: $folder) {
@@ -92,6 +123,7 @@ struct NewChatView: View {
         .sheet(isPresented: $showModels) {
             ModelPicker(selected: (model?.0, model?.1)) { p, m in
                 model = (p, m)
+                if let e = effort, !Effort.levels(for: m).contains(e) { effort = nil }
                 if let id = store.activeId { app.prefs.lastModel[id] = "\(p)::\(m)" }
             }
         }
@@ -104,6 +136,7 @@ struct NewChatView: View {
         .onChange(of: model?.1) { _, _ in saveDraft() }
         .onChange(of: folder) { _, _ in saveDraft() }
         .onChange(of: mode) { _, _ in saveDraft() }
+        .onChange(of: effort) { _, _ in saveDraft() }
         // A chat started offline that the computer turned down comes back here.
         .onChange(of: store.drafts.drafts[DraftStore.newChat]) { _, d in adopt(d) }
         .onChange(of: app.sharedText) { _, _ in takeShared() }
@@ -116,6 +149,38 @@ struct NewChatView: View {
         guard let shared = app.sharedText else { return }
         text = shared
         app.sharedText = nil
+    }
+
+    private var isLocal: Bool {
+        guard let p = model?.0 else { return false }
+        return store.providers.first { $0.id == p }?.isLocal == true
+    }
+
+    private func effortName(_ e: Effort) -> LocalizedStringKey {
+        switch e {
+        case .low: return "Low"
+        case .medium: return "Medium"
+        case .normal: return "Normal"
+        case .high: return "High"
+        case .xhigh: return "Extra high"
+        case .max: return "Max"
+        }
+    }
+
+    /// Start the chat on another paired computer: its own models and folders,
+    /// so those are chosen again there; the words carry over.
+    private func switchComputer(_ id: String) {
+        guard id != store.activeId else { return }
+        pickedComputer = true
+        let words = text
+        store.connect(id)
+        model = nil
+        effort = nil
+        folder = nil
+        refusal = nil
+        text = words
+        store.drafts.set(DraftStore.newChat, current)
+        pickDefault()
     }
 
     private func modelName(_ m: (String, String)) -> String {
@@ -139,7 +204,7 @@ struct NewChatView: View {
     }
 
     private var current: Draft {
-        Draft(text: text, providerId: model?.0, modelId: model?.1, workspaceId: folder, mode: mode?.rawValue, refusal: refusal)
+        Draft(text: text, providerId: model?.0, modelId: model?.1, workspaceId: folder, mode: mode?.rawValue, effort: effort?.rawValue, refusal: refusal)
     }
 
     private func restoreDraft() {
@@ -153,6 +218,7 @@ struct NewChatView: View {
         if let p = d.providerId, let m = d.modelId { model = (p, m) }
         if d.workspaceId != nil { folder = d.workspaceId }
         if let m = d.mode.flatMap(PcSettings.ChatMode.init(rawValue:)) { mode = m }
+        if let e = d.effort.flatMap(Effort.init(rawValue:)) { effort = e }
         refusal = d.refusal
     }
 
@@ -178,7 +244,7 @@ struct NewChatView: View {
         error = nil
         Task {
             do {
-                let id = try await store.createChat(providerId: p, modelId: m, workspaceId: folder, mode: mode)
+                let id = try await store.createChat(providerId: p, modelId: m, workspaceId: folder, mode: mode, effort: effort)
                 store.drafts.clear(DraftStore.newChat)
                 // The chat's own model sends the first message, so a failure shows
                 // there and the text comes back in its composer.
@@ -198,7 +264,7 @@ struct NewChatView: View {
     /// Waiting to send, and start when the computer is back.
     private func startLater(_ p: String, _ m: String, _ first: String) {
         guard !first.isEmpty else { return }
-        store.outbox.add(chatId: nil, text: first, newChat: NewChatSpec(providerId: p, modelId: m, workspaceId: folder, mode: mode?.rawValue))
+        store.outbox.add(chatId: nil, text: first, newChat: NewChatSpec(providerId: p, modelId: m, workspaceId: folder, mode: mode?.rawValue, effort: effort?.rawValue))
         store.drafts.clear(DraftStore.newChat)
         text = ""
         refusal = nil

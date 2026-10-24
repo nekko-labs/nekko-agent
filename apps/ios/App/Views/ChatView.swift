@@ -323,9 +323,9 @@ struct WaitingRow: View {
 
 func modeName(_ m: PcSettings.ChatMode) -> String {
     switch m {
-    case .ask: return "Ask before every tool"
-    case .guardrails: return "Guardrails (ask for risky tools)"
-    case .yolo: return "YOLO (never ask)"
+    case .ask: return String(localized: "Ask before every tool")
+    case .guardrails: return String(localized: "Guardrails (ask for risky tools)")
+    case .yolo: return String(localized: "YOLO (never ask)")
     }
 }
 
@@ -407,10 +407,10 @@ struct BlockView: View {
 
     private func statusName(_ s: ToolStatus) -> String {
         switch s {
-        case .running: return "running"
-        case .waiting: return "waiting for you"
-        case .ok: return "done"
-        case .error: return "failed"
+        case .running: return String(localized: "running")
+        case .waiting: return String(localized: "waiting for you")
+        case .ok: return String(localized: "done")
+        case .error: return String(localized: "failed")
         }
     }
 

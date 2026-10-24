@@ -39,6 +39,7 @@ pub struct Policy {
     pub session_option_keys: Vec<String>,
     pub chat_send_keys: Vec<String>,
     pub chat_modes: Vec<String>,
+    pub effort_levels: Vec<String>,
     /// `PHONE_SESSION_VIEW`: newest messages kept, tool text cut to this many UTF-16 units.
     pub session_messages: usize,
     pub session_text_chars: usize,
@@ -103,6 +104,7 @@ pub fn policy() -> &'static Policy {
             session_option_keys: strings(&v["sessionOptionKeys"]),
             chat_send_keys: strings(&v["chatSendKeys"]),
             chat_modes: strings(&v["chatModes"]),
+            effort_levels: strings(&v["effortLevels"]),
             // Missing numbers keep nothing rather than send a frame too large to arrive.
             session_messages: v["sessionView"]["messages"].as_u64().unwrap_or(0) as usize,
             session_text_chars: v["sessionView"]["textChars"].as_u64().unwrap_or(0) as usize,
@@ -325,6 +327,11 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
             keys_within(arg(1), &policy().session_option_keys, "chat options")?;
             if let Some(mode) = arg(1).get("mode") {
                 chat_mode(mode, "mode")?;
+            }
+            if let Some(effort) = arg(1).get("effort")
+                && !effort.as_str().is_some_and(|e| has(&policy().effort_levels, e))
+            {
+                return Err(denied("value-invalid", "effort"));
             }
         }
         "chat:send" => {
@@ -1587,6 +1594,17 @@ mod tests {
                 r.ask("session:setOptions", json!(["s1", { "mode": "turbo" }]), None),
                 Err("Not allowed from a paired phone (value-invalid): mode".into())
             );
+        }
+
+        #[test]
+        fn screens_a_chat_effort() {
+            assert!(screen("session:setOptions", &[json!("s1"), json!({ "effort": "xhigh" })]).is_ok());
+            for bad in [json!("ludicrous"), json!(3)] {
+                assert_eq!(
+                    screen("session:setOptions", &[json!("s1"), json!({ "effort": bad })]).err(),
+                    Some(denied("value-invalid", "effort"))
+                );
+            }
         }
 
         #[test]

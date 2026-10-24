@@ -329,7 +329,8 @@ struct ComputerMenu: View {
                 Image(systemName: "desktopcomputer")
             }
         }
-        .accessibilityLabel("Computers and settings, \(store.conn.rawValue)")
+        .accessibilityLabel("Computers and settings, \(stateName(store.conn))")
+        .accessibilityIdentifier("chats.menu")
         .forgetDialog($forgetting)
     }
 

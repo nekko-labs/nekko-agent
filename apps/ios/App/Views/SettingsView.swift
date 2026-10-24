@@ -84,10 +84,20 @@ struct SettingsView: View {
         @Bindable var prefs = app.prefs
         Form {
             Section {
-                Picker("Theme", selection: $prefs.theme) {
-                    ForEach(Prefs.ThemeChoice.allCases) { Text($0.label).tag($0) }
+                ThemePicker(selection: $prefs.theme)
+                Button {
+                    if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                } label: {
+                    LabeledContent("Language") {
+                        Text(Locale.current.localizedString(forLanguageCode: Bundle.main.preferredLocalizations.first ?? "en") ?? "English")
+                    }
+                    .foregroundStyle(palette.ink, palette.inkSoft)
                 }
-            } header: { SectionHeader("Appearance") }
+                .accessibilityIdentifier("settings.language")
+            } header: { SectionHeader("Appearance") } footer: {
+                Text("The themes are the desktop’s. The language is chosen in this iPhone’s Settings for Nekko Agent: English, Español, Français, Deutsch, Português, 日本語 or 中文.")
+                    .foregroundStyle(palette.inkSoft)
+            }
             Section {
                 Toggle("App lock (Face ID / passcode)", isOn: Binding(get: { prefs.appLock }, set: { on in
                     if on { prefs.appLock = true } else {
@@ -237,5 +247,76 @@ private struct ForgetDialog: ViewModifier {
         } message: { _ in
             Text("This iPhone deletes its pairing keys and saved chats for it. To stop the computer accepting this phone, remove it in Settings → Remote access there too.")
         }
+    }
+}
+
+/// The desktop's theme presets (ThemePresets.swift), plus following the computer.
+struct ThemePicker: View {
+    @Binding var selection: String
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        NavigationLink {
+            ThemeList(selection: $selection)
+        } label: {
+            LabeledContent { Text(Self.name(selection)) } label: { Text("Theme") }
+                .foregroundStyle(palette.ink, palette.inkSoft)
+        }
+        .accessibilityIdentifier("settings.theme")
+    }
+
+    static func name(_ id: String) -> String {
+        switch id {
+        case Prefs.matchComputer: return String(localized: "Match my computer")
+        case "system": return String(localized: "Match this iPhone")
+        case "light": return String(localized: "Light")
+        case "dark": return String(localized: "Dark")
+        default:
+            guard let p = ThemePreset.find(id) else { return id }
+            return p.family.map { "\($0) · \(p.label)" } ?? p.label
+        }
+    }
+}
+
+private struct ThemeList: View {
+    @Binding var selection: String
+    @Environment(\.palette) private var palette
+    @Environment(\.dismiss) private var dismiss
+
+    private var named: [ThemePreset] { ThemePreset.all.filter { $0.family == nil && !$0.isBasic } }
+    private var families: [String] { ThemePreset.all.compactMap(\.family).reduce(into: []) { if !$0.contains($1) { $0.append($1) } } }
+
+    var body: some View {
+        List {
+            Section {
+                ForEach([Prefs.matchComputer, "system", "light", "dark"], id: \.self, content: row)
+            }
+            Section {
+                ForEach(named.map(\.id), id: \.self, content: row)
+            } header: { SectionHeader("Desktop themes") } footer: {
+                Text("Spooky also brings a fall app icon through Halloween.").foregroundStyle(palette.inkSoft)
+            }
+            Section {
+                ForEach(families, id: \.self) { f in
+                    ForEach(ThemePreset.all.filter { $0.family == f }.map(\.id), id: \.self, content: row)
+                }
+            } header: { SectionHeader("Experimental") }
+        }
+        .navigationTitle("Theme")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func row(_ id: String) -> some View {
+        Button {
+            selection = id
+            dismiss()
+        } label: {
+            HStack {
+                Text(ThemePicker.name(id)).foregroundStyle(palette.ink)
+                Spacer()
+                if selection == id { Image(systemName: "checkmark").foregroundStyle(palette.accent) }
+            }
+        }
+        .accessibilityAddTraits(selection == id ? .isSelected : [])
     }
 }

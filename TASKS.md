@@ -6,6 +6,14 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## iPhone languages, themes and New chat choices (added 2026-10-23)
+
+Philip asked for the phone to match the desktop's languages and themes (with a limited fall icon for Spooky) and for New chat to pick the effort and, for a local model, the computer. Spec: [iPhone languages, themes and New chat choices](spec/phone/iphone-languages-themes-and-new-chat-choices.md); issue #941.
+
+- [x] **T201, iPhone languages, desktop themes, Spooky icon, New chat effort and Run on (2026-10-23).** String Catalogs in seven languages; `ThemePresets.swift` written from `THEME_PRESETS` by a golden test; `AppIcon-Spooky` alternate icon in October; `Effort.levels` mirrors `modelEffortLevels`; `effort` added to the phone's chat options (TS policy, `phone-access.json`, Rust gate). Unit and simulator UI tests (`ThemeLanguageTests`).
+- [ ] **T201a, Android parity.** The same languages, presets, effort and Run on in `apps/android`.
+- [ ] **T201b, native-speaker review** of the six translations, and translating the widgets, Share extension and Watch app.
+
 ## Calmer Experimental Dark themes (added 2026-10-23)
 
 Philip found the Experimental Dark versions overwhelming: one hue on the ground, the panels and the text. Spec: [Experimental themes](spec/code/rich-responses-reports-and-design-workspace.md#experimental-themes); why: [decision 0015](docs/decisions/0015-experimental-dark-themes-use-a-60-30-10-split.md); issue #896.

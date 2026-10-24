@@ -273,6 +273,7 @@
  ],
  "sessionOptionKeys": [
   "archivedAt",
+  "effort",
   "mode",
   "modelId",
   "pinned",
@@ -296,6 +297,14 @@
   "ask",
   "guardrails",
   "yolo"
+ ],
+ "effortLevels": [
+  "low",
+  "medium",
+  "normal",
+  "high",
+  "xhigh",
+  "max"
  ],
  "sessionView": {
   "messages": 300,
