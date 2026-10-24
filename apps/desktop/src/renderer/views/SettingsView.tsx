@@ -76,10 +76,25 @@ export function SettingsView() {
   const pageRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState<SettingsGroupId>('general');
-  const onScroll = () => { if (scrollRef.current) setActive(activeGroup(scrollRef.current)); };
+  const jumping = useRef(0);
+  const onScroll = () => { if (scrollRef.current && !jumping.current) setActive(activeGroup(scrollRef.current)); };
   const goTo = (id: SettingsGroupId) => {
     setActive(id);
-    document.getElementById(`settings-${id}`)?.scrollIntoView({ block: 'start' });
+    const scroller = scrollRef.current;
+    const target = document.getElementById(`settings-${id}`);
+    if (!scroller || !target) return;
+    const from = scroller.scrollTop;
+    const to = Math.min(from + target.getBoundingClientRect().top - scroller.getBoundingClientRect().top, scroller.scrollHeight - scroller.clientHeight);
+    cancelAnimationFrame(jumping.current);
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) { scroller.scrollTop = to; return; }
+    // Native smooth scroll takes ~500ms over a long page; this lands in 200ms with an ease-out.
+    const start = performance.now();
+    const step = (t: number) => {
+      const p = Math.min(1, (t - start) / 200);
+      scroller.scrollTop = from + (to - from) * (1 - (1 - p) ** 3);
+      jumping.current = p < 1 ? requestAnimationFrame(step) : 0;
+    };
+    jumping.current = requestAnimationFrame(step);
   };
   const reload = useCallback(() => refreshSettings(false), [refreshSettings]);
 
