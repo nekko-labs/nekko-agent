@@ -103,6 +103,11 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://nekkoagent.com/docs/send-feedback</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://nekkoagent.com/docs/contributing</loc>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>

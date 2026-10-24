@@ -186,7 +186,7 @@ Architecture, speed contract, distribution, builds and startup.
 - [How it's built: the window and the engine daemon](platform/how-its-built-the-window-and-the-engine-daemon.md) (26 KB)
 - [Noninteractive shell input and bounded stop cleanup](platform/noninteractive-shell-input-and-bounded-stop-cleanup.md) (1 KB)
 - [Page recovery and startup appearance (2026-10-12)](platform/page-recovery-and-startup-appearance.md) (2 KB)
-- [Send feedback from every app (2026-10-24)](platform/send-feedback.md) (4 KB)
+- [Send feedback from every app (2026-10-24)](platform/send-feedback.md) (5 KB)
 - [Speed & responsiveness (the speed contract)](platform/speed-responsiveness-the-speed-contract.md) (12 KB)
 - [Startup splash and window launch (2026-10-21)](platform/startup-splash-and-window-launch.md) (2 KB)
 - [Windows installs without Visual Studio, and a smaller download (2026-10-12)](platform/windows-installs-without-visual-studio-and-a-smaller-download.md) (6 KB)
