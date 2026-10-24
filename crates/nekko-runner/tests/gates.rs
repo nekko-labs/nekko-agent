@@ -19,6 +19,7 @@ fn quiet() -> Signals {
         in_schedule: true,
         free_disk_gb: 200.0,
         security_update_overdue_days: None,
+        available_memory_mb: 32768.0,
         paused_all: false,
     }
 }
@@ -290,4 +291,28 @@ fn nan_battery_counts_as_below_the_floor() {
 fn nan_idle_counts_as_active() {
     let sig = Signals { idle_seconds: Some(f64::NAN), ..quiet() };
     assert_eq!(evaluate(&with(DoNotDisturb), &sig, false), Decision::Hold { why: vec![Reason::UserActive] });
+}
+
+#[test]
+fn too_little_free_memory_holds_new_vms() {
+    // 8192 MB per VM plus the 2 GB margin is 10240 MB.
+    let at = |mb| Signals { available_memory_mb: mb, ..quiet() };
+    assert_eq!(evaluate(&with(Balanced), &at(9000.0), false), Decision::Hold { why: vec![Reason::MemoryHeadroom] });
+    assert_eq!(evaluate(&with(Balanced), &at(10240.0), false), Decision::Take);
+    assert_eq!(evaluate(&with(Balanced), &at(1000.0), true), Decision::Take);
+}
+
+#[test]
+fn memory_headroom_and_security_update_are_both_listed() {
+    let sig = Signals { available_memory_mb: 100.0, security_update_overdue_days: Some(8), ..quiet() };
+    assert_eq!(
+        evaluate(&with(Balanced), &sig, false),
+        Decision::Hold { why: vec![Reason::SecurityUpdate, Reason::MemoryHeadroom] }
+    );
+}
+
+#[test]
+fn nan_available_memory_holds() {
+    let sig = Signals { available_memory_mb: f64::NAN, ..quiet() };
+    assert_eq!(evaluate(&with(Balanced), &sig, false), Decision::Hold { why: vec![Reason::MemoryHeadroom] });
 }

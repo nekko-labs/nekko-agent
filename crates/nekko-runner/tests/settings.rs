@@ -25,6 +25,7 @@ fn settings_round_trip_camel_case() {
     assert_eq!(v["macosSlots"], 1);
     assert_eq!(v["memoryPerVmMb"], 8192);
     assert_eq!(v["cpusPerVm"], serde_json::Value::Null);
+    assert_eq!(v["runnerMemoryMb"], serde_json::Value::Null);
     assert_eq!(serde_json::from_value::<RunnerSettings>(v).unwrap(), RunnerSettings::default());
 
     let cfg = RunnerConfig {
@@ -47,4 +48,12 @@ fn missing_fields_take_defaults() {
     assert!(s.enabled);
     assert_eq!(s.priority, Priority::RunnerFirst);
     assert_eq!(s.max_job_minutes, 120);
+}
+
+#[test]
+fn runner_memory_round_trips() {
+    let s = RunnerSettings { runner_memory_mb: Some(16384), ..Default::default() };
+    let v = serde_json::to_value(&s).unwrap();
+    assert_eq!(v["runnerMemoryMb"], 16384);
+    assert_eq!(serde_json::from_value::<RunnerSettings>(v).unwrap(), s);
 }

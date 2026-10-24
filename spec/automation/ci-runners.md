@@ -64,7 +64,7 @@ None can stop sleep when the lid closes on battery, when Low Power Mode turns on
 
 - **macOS slots:** at most **2** VMs at once per Mac, counting macOS VMs started by other apps. Default 1.
 - **Linux slots:** default 0. Not counted against the macOS limit.
-- **Memory:** 8 GB per VM; total runner memory 50% of RAM (fixed in P1; a configurable cap of at most 75% comes later). Slots that do not fit are greyed out with the reason.
+- **Memory:** 8 GB per VM. Total runner memory is a setting. The default is a recommendation computed from the Mac's RAM and the owner's usual memory use (the owner keeps the larger of 8 GB and 1.25 times their usual use), shown in settings as "Recommended: N GB for this Mac". It is never above 75% of RAM, whatever the setting says. A VM starts only when macOS reports its memory plus 2 GB available right now; a running VM is not stopped by this check. Slots that do not fit are greyed out with the reason.
 - **CPU per VM:** 4 / 6 / all but 2 by mode.
 - **Disk:** image disk budget 150 GB; free disk floor 25 GB (below it no new VM starts and running ones stop).
 - **Max job time:** 2 h. The VM is destroyed at the limit whatever the provider's timeout.
@@ -137,13 +137,13 @@ Cloud is never required for one Mac.
 
 ## Settings and UI `[planned]`
 
-A CI runners section in the Workflows tab: a first-visit card with Connect GitHub, a three-step connect sheet (install the app, choose the org or repo, choose how this Mac helps), a runner card per scope (slots, current job, gates, today's jobs), and runner settings (priority, keep awake, slots, memory, CPU, disk, only-when, safety, max job time). A menu bar indicator shows while any VM runs.
+A CI runners section in the Workflows tab: a first-visit card with Connect GitHub, a three-step connect sheet (install the app, choose the org or repo, choose how this Mac helps), a runner card per scope (slots, current job, gates, today's jobs), and runner settings (priority, keep awake, slots, memory with "Recommended: N GB for this Mac", CPU, disk, only-when, safety, max job time). A menu bar indicator shows while any VM runs.
 
 ## Phases `[planned]`
 
 - **P0, pilot on our own CI** (internal use only): a docked Mac runs jobs for this repo's own CI, with a picker job that falls back to a hosted runner, trusted events only. Uses Tart internally, never shipped (see the decision record).
-- **P1, one Mac, GitHub, local only:** supervisor, the gate chain, the three priority modes, drain and grace, keep awake, the `nekko-vm` helper, VM lifecycle, scopes, caches, the security-update gate, the network filter, GitHub App connect, JIT configs, the audit log, the CI section with on/off, slots and memory, and the menu bar indicator. Total runner memory is a fixed 50% of RAM in P1.
-- **P2, more of one Mac:** Linux slots, a configurable runner memory cap (up to 75%), and the in-app image builder from Apple's restore image.
+- **P1, one Mac, GitHub, local only:** supervisor, the gate chain, the three priority modes, drain and grace, keep awake, the `nekko-vm` helper, VM lifecycle, scopes, caches, the security-update gate, the network filter, GitHub App connect, JIT configs, the audit log, the CI section with on/off, slots and memory, and the menu bar indicator. Total runner memory is a setting with a recommended value for the Mac.
+- **P2, more of one Mac:** Linux slots and the in-app image builder from Apple's restore image.
 - **P3, Buildkite and GitLab.**
 - **P4, Nekko Cloud fleet:** presence, picker endpoint, JIT broker, fleet view.
 - **P5, other hosts** if asked.

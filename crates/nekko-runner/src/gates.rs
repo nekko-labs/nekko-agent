@@ -11,6 +11,9 @@ pub const ACTIVE_INPUT_SECS: f64 = 120.0;
 pub const BUSY_CPU_PCT: f64 = 50.0;
 /// A macOS security update pending longer than this blocks new VMs.
 pub const SECURITY_GRACE_DAYS: u32 = 7;
+/// A new VM starts only when this much more than its own memory is available,
+/// so the owner's apps are not squeezed the moment the VM boots.
+pub const VM_START_MARGIN_MB: f64 = 2048.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -50,6 +53,8 @@ pub struct Signals {
     pub in_schedule: bool,
     pub free_disk_gb: f64,
     pub security_update_overdue_days: Option<u32>,
+    /// Free plus reclaimable memory macOS reports now. A NaN holds new VMs.
+    pub available_memory_mb: f64,
     pub paused_all: bool,
 }
 
@@ -70,6 +75,7 @@ pub enum Reason {
     ThermalCritical,
     DiskFloor,
     SecurityUpdate,
+    MemoryHeadroom,
     UserActive,
     UserBusy,
 }
@@ -128,9 +134,19 @@ pub fn evaluate(s: &RunnerSettings, sig: &Signals, running: bool) -> Decision {
         return if running { Decision::StopNow { why: hard } } else { Decision::Hold { why: hard } };
     }
 
-    // 2. A stale OS only blocks new VMs; a running job is left to finish.
-    if !running && sig.security_update_overdue_days.is_some_and(|d| d > SECURITY_GRACE_DAYS) {
-        return Decision::Hold { why: vec![Reason::SecurityUpdate] };
+    // 2. A stale OS or too little free memory only blocks new VMs; a running
+    // job is left to finish (memory pressure already covers a running VM).
+    if !running {
+        let tier2: Vec<Reason> = [
+            (sig.security_update_overdue_days.is_some_and(|d| d > SECURITY_GRACE_DAYS), Reason::SecurityUpdate),
+            (!(sig.available_memory_mb >= f64::from(s.memory_per_vm_mb) + VM_START_MARGIN_MB), Reason::MemoryHeadroom),
+        ]
+        .into_iter()
+        .filter_map(|(hit, r)| hit.then_some(r))
+        .collect();
+        if !tier2.is_empty() {
+            return Decision::Hold { why: tier2 };
+        }
     }
 
     // 3. Soft gates.
