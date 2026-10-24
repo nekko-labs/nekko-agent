@@ -8,3 +8,8 @@ export function unopenedChats(sessions: SessionSummary[], workspaces: Workspace[
   return sessions.filter((s) => !s.archivedAt && !anchorIds.has(s.id) && !visibleChildIds.has(s.id));
 
 }
+
+/** Opening a nested child changes its transcript, not its sidebar identity. */
+export function sidebarWorkspaces(workspaces: Workspace[], visibleChildIds: ReadonlySet<string>): Workspace[] {
+  return workspaces.filter((w) => w.anchor.kind !== 'chat' || !visibleChildIds.has(w.anchor.refId));
+}

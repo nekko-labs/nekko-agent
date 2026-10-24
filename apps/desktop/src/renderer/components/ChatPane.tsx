@@ -2258,8 +2258,10 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const buildPools = (cross: Record<string, ModelInfo[]>): ProviderPool[] => [
     ...(homePool ? [homePool] : []),
     ...providers
-      // A cloud-only chat's Auto never moves a turn onto this machine.
-      .filter((p) => p.enabled && p.id !== providerId && (!session?.cloudOnly || cloudProviderAllowed(p)))
+      // A cloud-only chat's Auto never moves a turn onto this machine, and no
+      // turn ever overflows onto a Claude Agent: rotating onto a Claude plan
+      // when another account is spent is what Anthropic's terms rule out.
+      .filter((p) => p.enabled && p.id !== providerId && p.kind !== CLAUDE_CODE_PROVIDER_KIND && (!session?.cloudOnly || cloudProviderAllowed(p)))
       .map((p) => {
         const key = limitsKeyFor(p);
         return {

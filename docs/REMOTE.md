@@ -20,8 +20,10 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 
 ## Pairing a phone
 
-1. On your computer: **Settings → Remote access → Enable** (the managed relay is prefilled; or
-   paste your self-hosted relay URL), then **Pair a device**.
+1. On your computer: **Settings → Phone pairing** (second in the left-hand list), then in **Remote access**
+   pick how your phone connects: **Use Tailscale** (free, needs the Tailscale app on both) or
+   **Use Nekko Cloud** (works anywhere, nothing to install). A self-hosted relay goes under **Use your
+   own relay**. Then **Pair a device**. The QR appears right under the button.
 2. On your phone: scan the QR in the Nekko Agent app (**Computers → Pair a computer**), or with the
    phone's camera app, which hands the `nekko-agent-pair:` link to the Nekko Agent app. Without the
    app, the pairing link also opens the web app in a browser over the relay, but it is limited to
@@ -39,6 +41,20 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > computer right away. Pick **Phone setting**, **Light** or **Dark** to choose on the phone instead;
 > that choice is kept on the phone. Only the theme, theme preset and the two accent colors are sent
 > for this (the `appearance:updated` event), never the rest of the computer's settings.
+>
+> The iPhone app has the desktop's themes too: **Settings → Appearance → Theme** offers **Match my
+> computer** (the computer's preset, mode and accent), **Match this iPhone**, **Light**, **Dark** and
+> every desktop preset (Nebula, Terminal, Nord, Solar, Lilac, Lavender, Ember, Spooky and the
+> experimental families). In October, **Spooky** also switches the app icon to a limited fall
+> version; iOS confirms the change, and the usual icon comes back with any other theme or after
+> Halloween. The iPhone app speaks the desktop's languages (English, Spanish, French, German,
+> Portuguese, Japanese and Chinese): it follows the iPhone's language, and **Settings → Appearance →
+> Language** opens iOS Settings to pick one for Nekko Agent alone.
+>
+> On the iPhone, **New chat** also picks the **Effort** (the levels the chosen model takes, or the
+> computer's default) and, when the model is a local one (llama.cpp, Ollama, LM Studio, vLLM),
+> **Run on**: which paired computer the chat and its model run on. Choosing another computer
+> connects to it and shows its models and folders; what you typed stays.
 >
 > The Android app's **Settings** also has a **Computers** row, which opens the list of paired
 > computers (rename, switch, forget, pair another), and an **About** section with the installed
@@ -373,9 +389,9 @@ and it's why relayed local-model use is inherently zero-data-retention for conte
 
 How the Android and iOS apps each handle the connection (URL rules, pairing, reconnects, push, background) is compared in [phone-connection.md](phone-connection.md).
 
-### Managed relay (default): `wss://nekko-agent-relay.fly.dev`
+### Nekko Cloud (the managed relay): `wss://nekko-agent-relay.fly.dev`
 
-Zero setup; free during beta with per-connection rate limits. When Nekko Cloud launches, the
+The app calls this **Nekko Cloud** and never shows the URL. Zero setup; free during beta with per-connection rate limits. When Nekko Cloud launches, the
 managed relay becomes part of the paid plans (it already supports gating via
 `NEKKO_RELAY_AUTHZ_URL`), while self-hosting stays free forever.
 
@@ -388,13 +404,11 @@ Tailscale address. Only devices on your tailnet can reach it, Tailscale encrypts
 tools such as Moonlight stay free: nothing runs in the cloud, the two ends find each other over a
 network you already own.
 
-**In the desktop app:** Settings → Remote access → **Relay on this computer** → **Start relay**.
-The app finds this computer's Tailscale address (any interface in `100.64.0.0/10`), starts the
-bundled relay bound to that address only, and shows the URL phones use. That is the MagicDNS name
+**In the desktop app:** Settings → Remote access → **Use Tailscale**. The app finds this computer's Tailscale address (any interface in `100.64.0.0/10`), starts the
+bundled relay bound to that address only, and turns remote access on through it. Phones dial the MagicDNS name
 (for example `ws://gomi.tailfd6474.ts.net:4400`) when the Tailscale CLI reports one, else the
-`100.x.y.z` address. **Use this relay** fills it in; then Enable, **Pair a device**, and scan the QR
-from the phone with Tailscale switched on. When Tailscale is connected and you haven't chosen a
-relay, this relay is already the default in the relay field, and **Enable** starts it for you.
+`100.x.y.z` address. Then **Pair a device** and scan the QR from the phone with Tailscale switched
+on. Without Tailscale on this computer the option links to Tailscale and stays off.
 
 - **It stays on:** once started it comes back with the app.
 - **It waits for Tailscale:** with Tailscale off it binds nowhere and waits, and starts when
@@ -423,12 +437,12 @@ connection and Live Activities while the app is open work as usual.
 npm run relay:tailscale        # Windows (PowerShell); or scripts/private-relay.sh on macOS/Linux
 ```
 
-The script prints the URL to paste into **Settings → Remote access**. Either way the relay only
+The script prints the URL to paste into **Settings → Remote access → Use your own relay**. Either way the relay only
 listens on the Tailscale interface, so agent enrollment without an access token
 (`NEKKO_RELAY_ALLOW_UNAUTHENTICATED=1` in the script) is safe here; never use that flag on a public
 bind.
 
-The computer refuses a plain `ws://` relay on the open internet, whether you press Enable or start
+The computer refuses a plain `ws://` relay on the open internet, whether you press Connect or start
 a headless agent with `NEKKO_RELAY_URL`. It uses the same rule as the phones, below.
 
 Plain `ws://` is fine on a tailnet: the transport is already encrypted end to end by WireGuard, and
@@ -481,7 +495,7 @@ instance.
 
 Put any self-hosted relay behind TLS (`wss://`) for internet use; the E2E layer protects content
 regardless, but TLS also protects the transport-auth query string. Then paste the URL into
-**Settings → Remote access** before enabling.
+**Settings → Remote access → Use your own relay**.
 
 Environment knobs:
 

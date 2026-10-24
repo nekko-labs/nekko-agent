@@ -5,7 +5,12 @@ name: iOS TestFlight
 # signing, and uploads it to App Store Connect, where it appears in TestFlight
 # after Apple's processing (usually 5-30 minutes).
 #
-# Run by hand only:  gh workflow run ios-testflight.yml
+# Runs on its own on a push to main that changes what the app ships: apps/ios/
+# minus its tests, scripts, evidence and Markdown (the merge queue's merges are
+# pushes too). It still uploads only when those sources changed since the last
+# successful upload from main, so a rerun or a push that only touches tests
+# uploads nothing. By hand it always uploads:
+#   gh workflow run ios-testflight.yml
 #
 # Signing uses the App Store Connect API key the desktop release already holds
 # for notarization (APPLE_API_KEY_P8, APPLE_API_KEY_ID, APPLE_API_ISSUER). No
@@ -29,22 +34,79 @@ name: iOS TestFlight
 # increasing. The marketing version comes from apps/ios/project.yml.
 
 on:
+  push:
+    branches: [main]
+    # Keep in step with the `changed` job's filter below.
+    paths:
+      - 'apps/ios/**'
+      - '!apps/ios/UITests/**'
+      - '!apps/ios/Tests/**'
+      - '!apps/ios/Protocol/Tests/**'
+      - '!apps/ios/scripts/**'
+      - '!apps/ios/evidence/**'
+      - '!apps/ios/**/*.md'
   workflow_dispatch:
     inputs:
       notes:
         description: What to test (shown to testers as the build's notes in the summary)
         required: false
         default: ''
+      only_if_changed:
+        description: Upload only if the app's sources changed since the last upload from main
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
+  # The changed job reads this workflow's earlier runs.
+  actions: read
 
 concurrency:
   group: ios-testflight
   cancel-in-progress: false
 
 jobs:
+  # On a runner that costs little: whether there is anything to ship.
+  changed:
+    runs-on: ubuntu-latest
+    outputs:
+      ship: ${{ steps.diff.outputs.ship }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FORCE: ${{ github.event_name == 'workflow_dispatch' && !inputs.only_if_changed }}
+          ON_MAIN: ${{ github.ref == 'refs/heads/main' }}
+        run: |
+          set -euo pipefail
+          if [ "$FORCE" = true ]; then echo "By hand: uploading."; echo ship=true >> "$GITHUB_OUTPUT"; exit 0; fi
+          if [ "$ON_MAIN" != true ]; then echo "Automatic uploads are from main only."; echo ship=false >> "$GITHUB_OUTPUT"; exit 0; fi
+          # The last successful run on main: it uploaded, or found nothing new
+          # since the one before, so diffing from it is diffing from the last upload.
+          last=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ios-testflight.yml --branch main --status success \
+            --limit 1 --json headSha -q '.[0].headSha // ""')
+          if [ -z "$last" ] || ! git cat-file -e "$last^{commit}" 2>/dev/null; then
+            echo "No earlier upload from main to compare with: uploading."
+            echo ship=true >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files=$(git diff --name-only "$last" HEAD -- apps/ios \
+            | grep -vE '^apps/ios/(UITests|Tests|Protocol/Tests|scripts|evidence)/|\.md$' || true)
+          if [ -n "$files" ]; then
+            echo "Changed since ${last::7}:"; echo "$files"
+            echo ship=true >> "$GITHUB_OUTPUT"
+          else
+            echo "Nothing the app ships changed since ${last::7}."
+            echo ship=false >> "$GITHUB_OUTPUT"
+          fi
+
   upload:
+    needs: changed
+    if: needs.changed.outputs.ship == 'true'
     runs-on: macos-15
     timeout-minutes: 60
     env:
@@ -159,14 +221,15 @@ jobs:
       - name: Summary
         if: always()
         env:
-          NOTES: ${{ inputs.notes }}
+          # By hand, what the dispatcher typed; on a push, the merged PR's title.
+          NOTES: ${{ inputs.notes || github.event.head_commit.message }}
         run: |
           version="$(awk -F'"' '/MARKETING_VERSION/ {print $2; exit}' apps/ios/project.yml)"
           {
             echo "### iOS TestFlight upload"
             echo "- Version $version, build $((BUILD_NUMBER + 100)), commit \`${GITHUB_SHA::7}\`"
             echo "- Team ${TEAM_ID:-unknown}; bundle id dev.nekkolabs.nekkoagent"
-            [ -n "$NOTES" ] && echo "- What to test: $NOTES"
+            [ -n "$NOTES" ] && echo "- What to test: $(printf '%s\n' "$NOTES" | head -n1)"
             echo "- After processing, add the build to a TestFlight group in App Store Connect."
           } >> "$GITHUB_STEP_SUMMARY"
           rm -f "${API_KEY_PATH:-}"

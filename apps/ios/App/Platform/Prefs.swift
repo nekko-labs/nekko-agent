@@ -8,23 +8,18 @@ import Observation
 @MainActor
 @Observable
 final class Prefs {
-    enum ThemeChoice: String, CaseIterable, Identifiable {
-        /// Follow the computer's theme (light/dark/system and accent), like Android.
-        case computer, system, light, dark
-        var id: String { rawValue }
-        var label: String {
-            switch self {
-            case .computer: return "Match my computer"
-            case .system: return "Match this iPhone"
-            case .light: return "Light"
-            case .dark: return "Dark"
-            }
-        }
+    /// `theme` that follows the computer's preset, mode and accent, like Android.
+    static let matchComputer = "computer"
+
+    /// The preset a theme choice draws: its own, or the computer's when it matches the computer.
+    static func preset(_ choice: String, computer: Appearance?) -> ThemePreset? {
+        ThemePreset.find(choice == matchComputer ? computer?.preset : choice)
     }
 
     private let d: UserDefaults
 
-    var theme: ThemeChoice { didSet { d.set(theme.rawValue, forKey: "theme") } }
+    /// `matchComputer` or a desktop preset id (`system` follows this iPhone).
+    var theme: String { didSet { d.set(theme, forKey: "theme") } }
     /// Face ID / passcode on every open and every return. On by default.
     var appLock: Bool { didSet { d.set(appLock, forKey: "appLock") } }
     /// Haptics for approvals and questions (on), and for finished turns (off).
@@ -60,7 +55,7 @@ final class Prefs {
         d = defaults
         // bool(forKey:) also reads `-key YES|NO` launch arguments (UI tests).
         func flag(_ k: String, _ fallback: Bool) -> Bool { defaults.object(forKey: k) == nil ? fallback : defaults.bool(forKey: k) }
-        theme = ThemeChoice(rawValue: d.string(forKey: "theme") ?? "") ?? .computer
+        theme = d.string(forKey: "theme").flatMap { $0 == Self.matchComputer || ThemePreset.find($0) != nil ? $0 : nil } ?? Self.matchComputer
         appLock = flag("appLock", true)
         hapticNeedsYou = flag("hapticNeedsYou", true)
         hapticDone = flag("hapticDone", false)

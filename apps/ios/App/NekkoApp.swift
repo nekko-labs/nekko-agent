@@ -68,6 +68,11 @@ struct NekkoApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @Environment(\.scenePhase) private var phase
     @State private var app = AppModel.shared
+    /// The opening animation, once per launch. UI tests turn it off (`-splash NO`, or a `-uiTestReset` run).
+    @State private var splash = UserDefaults.standard.object(forKey: "splash") as? Bool
+        ?? !ProcessInfo.processInfo.arguments.contains("-uiTestReset")
+
+    private var spooky: Bool { Prefs.preset(app.prefs.theme, computer: app.store.appearance)?.isSpooky == true }
 
     var body: some Scene {
         WindowGroup {
@@ -79,10 +84,15 @@ struct NekkoApp: App {
                 .modifier(Themed(choice: app.prefs.theme, appearance: app.store.appearance))
                 .onOpenURL { app.handle(url: $0) }
                 .task { app.start() }
+                .overlay { if splash { SplashView { splash = false } } }
+                .task(id: spooky) { SpookyIcon.sync(spooky: spooky) }
         }
         .onChange(of: phase) { _, p in
             switch p {
-            case .active: app.didBecomeActive()
+            case .active:
+                app.didBecomeActive()
+                // The season may have ended since the last open.
+                SpookyIcon.sync(spooky: spooky)
             case .background: app.didEnterBackground()
             default: break
             }

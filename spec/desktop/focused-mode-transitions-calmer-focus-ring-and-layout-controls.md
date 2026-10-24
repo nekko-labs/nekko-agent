@@ -15,3 +15,15 @@ split-from: SPEC.md (2026-10-22)
 - **Monitors dock header** reads **Monitors** (it read "Panels"). The Configure popover's checklist legend still reads Panels.
 - **Grid moves to Settings.** The Agents toolbar shows only **Focused** and **Dynamic**; Dynamic's icon is a lightning bolt. **Settings > Command Center > Wall layout** chooses Focused, Dynamic or Grid and sets Grid rows and columns (1–6). Saved `fixed` layouts and Ctrl/Cmd+Shift+3 still open Grid, and Grid placeholders behave as before. This supersedes the toolbar Grid size picker described under 2026-10-08.
 - Reduced motion turns all three animations off. Renderer-only: no new settings keys, permissions or network use.
+
+## Focused workspace and panel motion refinement
+
+Implemented in the current change; 25 focused tests, desktop typecheck, production build, and hidden macOS Electron runtime checks pass. Matching 1400px/760px light/dark captures and timestamp-timed GIFs exist; the parent inspected matching stills and sampled motion frames (not a frame-rate benchmark): Focused mode hides
+individual pane title strips and removes their outer frame, so the workspace does
+not read as a floating window. Other layouts retain window controls and borders.
+Agents and Monitors use short reversible enter/exit transitions, with outgoing
+content inert and hidden from accessibility APIs. Reduced motion skips the delay.
+The navigation outline and its lower tail share the same short timing; labels
+reveal together near the end of expansion, without stagger or text blur. Its
+translucent tint no longer applies a backdrop blur during shape morphing.
+No profile data or external permissions change.

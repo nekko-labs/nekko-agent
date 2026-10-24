@@ -53,7 +53,7 @@ describe('Privacy Shield panel', () => {
     expect(off).toContain('What the shield would hide');
     expect(off).toContain('role="switch" aria-checked="false"');
     expect(panel({ preview: preview({ reach: 'local' }) })).toContain('runs on this computer');
-    expect(panel({ preview: preview({ reach: 'external' }) })).toContain('Claude Agent chats are sent by Claude Code');
+    expect(panel({ preview: preview({ reach: 'external' }) })).toContain('Claude subscription chats are sent by Claude Code');
   });
 
   it('reports a clean chat and a failed preview', () => {

@@ -11,11 +11,11 @@ const claudeNotice: AppNotice = {
   title: 'Claude sign-in has changed',
   body: "To follow Anthropic's terms, Nekko Agent no longer signs in to Claude plans directly, and we've deleted the saved Claude sign-in from this computer. Your chats are safe.",
   points: [
-    'Keep using your plan: connect Claude Agent (uses your Claude Code install).',
+    'Keep using your plan: choose Claude, then Subscription, which runs your installed Claude Code.',
     'Get every feature: add an Anthropic API key or cloud account.',
   ],
   actions: [
-    { id: 'connect-claude-agent', label: 'Connect Claude Agent' },
+    { id: 'connect-claude-agent', label: 'Use my subscription' },
     { id: 'add-api-key', label: 'Add API key' },
     { id: 'what-changed', label: 'What changed?' },
   ],
@@ -32,14 +32,14 @@ describe('app notices', () => {
     const html = renderToStaticMarkup(<NoticeCard notice={claudeNotice} />);
     expect(html).toContain('Claude sign-in has changed');
     expect(html).toContain('Your chats are safe.');
-    expect(html).toContain('connect Claude Agent');
-    for (const label of ['Connect Claude Agent', 'Add API key', 'What changed?', 'Dismiss']) expect(html).toContain(label);
+    expect(html).toContain('choose Claude, then Subscription');
+    for (const label of ['Use my subscription', 'Add API key', 'What changed?', 'Dismiss']) expect(html).toContain(label);
     expect(html).toContain('role="status"');
   });
 
   it('makes the first action the primary one', () => {
     const html = renderToStaticMarkup(<NoticeCard notice={claudeNotice} />);
-    expect(html.indexOf('btn btn-primary')).toBeLessThan(html.indexOf('Connect Claude Agent'));
+    expect(html.indexOf('btn btn-primary')).toBeLessThan(html.indexOf('Use my subscription'));
     expect((html.match(/btn btn-primary/g) ?? []).length).toBe(1);
   });
 

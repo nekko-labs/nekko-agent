@@ -30,7 +30,7 @@ import { COMPLETION_ROW_ATTR, completeWithExit, findCompletionRow } from '../com
 import { ContextMenu, ContextAction } from '../components/ContextMenu.js';
 import { ModelPicker } from '../components/agent-console/ModelPicker.js';
 import { selectWorkspaceRows } from './workspaceSelection.js';
-import { unopenedChats } from './unopenedChats.js';
+import { sidebarWorkspaces, unopenedChats } from './unopenedChats.js';
 import { completedDate, completedInGroup } from './completedChats.js';
 import { leftGroup, moveGroupBefore } from './groupDrag.js';
 import { AgentPanelViewMenu } from '../components/AgentPanelViewMenu.js';
@@ -181,13 +181,13 @@ function CreateRow({
 }) {
   return (
     <button
-      className="create-row flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left"
+      className="create-row flex w-full items-center gap-2 rounded-md px-2 py-1 text-left"
       style={{ '--row-tone': tone } as React.CSSProperties}
       title={title}
       onClick={onClick}
     >
       <span className="create-tile">{icon}</span>
-      <span className="min-w-0 flex-1 text-[13px] font-medium leading-snug">{label}</span>
+      <span className="min-w-0 flex-1 whitespace-nowrap text-[13px] font-medium leading-snug">{label}</span>
     </button>
   );
 }
@@ -543,11 +543,11 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
 
   // Closing a workspace only closes its windows, not the saved conversation.
   // Keep those chats reachable without reopening every transcript at startup.
-  const savedChats = useMemo(() => {
-    const visibleChildIds = new Set(workspaces.flatMap((w) => w.anchor.kind === 'chat'
-      ? (childrenOf.get(w.anchor.refId) ?? []).map((s) => s.id) : []));
-    return unopenedChats(sessions, workspaces, visibleChildIds);
-  }, [sessions, workspaces, childrenOf]);
+  const visibleChildIds = useMemo(() => new Set(sessions
+    .filter((s) => !s.archivedAt && !s.parentSessionId)
+    .flatMap((s) => (childrenOf.get(s.id) ?? []).map((kid) => kid.id))), [sessions, childrenOf]);
+  const savedChats = useMemo(() => unopenedChats(sessions, workspaces, visibleChildIds), [sessions, workspaces, visibleChildIds]);
+  const listedWorkspaces = useMemo(() => sidebarWorkspaces(workspaces, visibleChildIds), [workspaces, visibleChildIds]);
 
   const toggleCollapse = (id: string) =>
     setCollapsed((c) => { const n = new Set(c); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -577,7 +577,7 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
    */
   const bucketEntries = (key: string): Entry[] =>
     [
-      ...workspaces.filter((w) => projectOf(w) === key).map((w): Entry => ({ key: w.id, w, s: sessionOf(w), t: terminalOf(w) })),
+      ...listedWorkspaces.filter((w) => projectOf(w) === key).map((w): Entry => ({ key: w.id, w, s: sessionOf(w), t: terminalOf(w) })),
       ...savedChats.filter((s) => chatGroupOf(s) === key).map((s): Entry => ({ key: CHAT_KEY + s.id, w: null, s, t: null })),
     ]
       .map((e) => ({ e, order: e.s?.order ?? e.t?.order, at: e.s ? -e.s.updatedAt : e.t?.createdAt ?? 0 }))
@@ -777,25 +777,23 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
             <div
               ref={newMenuPopRef}
               data-new-agent-menu
-              className="card fixed z-[1000] w-64 p-1.5 shadow-lg"
+              className="card fixed z-[1000] w-max min-w-48 p-1 shadow-lg"
               style={{ background: 'var(--paper)', top: newMenuPos.top, left: newMenuPos.left }}
               onMouseEnter={openNewMenu}
               onMouseLeave={closeNewMenuSoon}
             >
               {/* The hero row. Everything else in this menu opens a window; this
-                  one starts the work, so it gets the brand gradient and the rest
+                  one starts the work, so it gets the brand wash and the rest
                   get a hue apiece rather than four identical grey lines. */}
               <button
-                className="create-row create-row-hero flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left"
+                className="create-row create-row-hero flex w-full items-center gap-2 rounded-md px-2 py-1 text-left"
+                title="A fresh chat, with room for windows around it"
                 onClick={() => { closeNewMenu(); void Promise.resolve(newChat()).catch((e: Error) => useStore.getState().pushToast('error', `Could not start an agent: ${e.message}`)); }}
               >
-                <span className="create-tile create-tile-brand">
+                <span className="create-tile">
                   <NekkoAvatar size={16} stationary eyes={false} />
                 </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[13px] font-semibold">Agent</span>
-                  <span className="block text-[11px] text-ink-faint">A fresh chat, with room for windows around it</span>
-                </span>
+                <span className="min-w-0 flex-1 text-[13px] font-semibold leading-snug">Agent</span>
                 <kbd className="kbd">{SHORTCUTS.newAgent.label}</kbd>
               </button>
 
@@ -838,7 +836,7 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
               onDrop={byProject ? (e) => { e.preventDefault(); e.stopPropagation(); dropOnBucket(b); } : undefined}
             >
               {!b.bare && <div
-                className="group flex items-center gap-1 rounded-lg px-1.5 py-1 hover:bg-surface-2"
+                className="agent-panel-group-heading group flex items-center gap-1 rounded-lg px-1.5 py-1 hover:bg-surface-2"
                 draggable={byProject && !!b.ws}
                 onContextMenu={sidebarOnly ? (e) => { e.preventDefault(); e.stopPropagation(); setViewMenu({ x: e.clientX, y: e.clientY }); } : undefined}
                 onDragStart={byProject && b.ws ? (e) => {
@@ -861,10 +859,10 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
                   }}
                 >
                   <svg
-                    className={`h-3 w-3 shrink-0 text-ink-faint transition-transform duration-200 ${isCollapsed ? '' : 'rotate-90'}`}
+                    className={`h-3 w-3 shrink-0 text-accent transition-transform duration-200 ${isCollapsed ? '' : 'rotate-90'}`}
                     viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
                   ><path d="M9 6l6 6-6 6" /></svg>
-                  <span className="truncate text-[11px] font-semibold uppercase tracking-wider text-ink-faint">{b.name}</span>
+                  <span className="agent-panel-group-label truncate font-semibold uppercase tracking-wider">{b.name}</span>
                   {isCollapsed && (items.length > 0 || completedGroup) && (
                     <span className="ml-1 shrink-0 rounded-full bg-surface-2 px-1.5 text-[10px] tabular-nums text-ink-faint">
                       {completedGroup ? done.length : items.length}
@@ -922,6 +920,7 @@ export function WorkspacesView({ sidebarOnly = false, onOpenChat, onOpenTerminal
                           projects={settings?.workspaces ?? []}
                           subAgentCount={kids.length}
                           showMetadata={view.showMetadata}
+                          showProvider={view.showProvider}
                           onOpen={() => {
                             if (sidebarOnly) {
                               if (s) onOpenChat?.(s.id);

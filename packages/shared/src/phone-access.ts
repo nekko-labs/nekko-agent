@@ -475,11 +475,12 @@ export const PHONE_PROVIDER_VIEW = ['enabled', 'id', 'kind', 'label'] as const;
 
 /**
  * Chat options a phone may set with `session:setOptions`: the model, the
- * title and organisation, completing (`archivedAt`) and the chat mode. Not the tools, the execution mode, Git
+ * title and organisation, completing (`archivedAt`), the chat mode and the effort. Not the tools, the execution mode, Git
  * isolation or offline/incognito.
  */
 export const PHONE_SESSION_OPTION_KEYS = [
   'archivedAt',
+  'effort',
   'mode',
   'modelId',
   'pinned',
@@ -488,6 +489,9 @@ export const PHONE_SESSION_OPTION_KEYS = [
   'thinking',
   'title',
 ] as const;
+
+/** The effort levels a phone may set on a chat (`EffortLevel`, settings.ts). */
+export const PHONE_EFFORT_LEVELS = ['low', 'medium', 'normal', 'high', 'xhigh', 'max'] as const;
 
 /** `chat:send` fields a phone may set: no `attachedPaths` (files on this computer) or history limits. */
 export const PHONE_CHAT_SEND_KEYS = [
@@ -737,6 +741,7 @@ export function screenPhoneCall(
         if (!(PHONE_SESSION_OPTION_KEYS as readonly string[]).includes(key)) throw new PhoneAccessError('option-denied', key);
       }
       if (own(patch, 'mode')) chatMode(patch.mode, 'mode');
+      if (own(patch, 'effort') && !(PHONE_EFFORT_LEVELS as readonly unknown[]).includes(patch.effort)) throw new PhoneAccessError('value-invalid', 'effort');
       return {};
     }
     case 'chat:send': {
@@ -996,7 +1001,7 @@ export async function callFromPhone(
 ): Promise<unknown> {
   const { settingsPatch, skill, callArgs: checked } = screenPhoneCall(channel, args);
   if (channel === 'changes:list') {
-    // Off unless the computer's owner turned it on (Settings → Remote access).
+    // The computer's setting (Settings → Remote access), on by default; the owner can turn it off.
     const settings = await dispatch('settings:get', []);
     if (!isObj(settings) || settings.phoneChanges !== true) throw new PhoneAccessError('turned-off', 'changes:list');
   }
@@ -1058,6 +1063,7 @@ export function phoneAccessPolicy() {
     sessionOptionKeys: [...PHONE_SESSION_OPTION_KEYS],
     chatSendKeys: [...PHONE_CHAT_SEND_KEYS],
     chatModes: [...PHONE_CHAT_MODES],
+    effortLevels: [...PHONE_EFFORT_LEVELS],
     sessionView: { ...PHONE_SESSION_VIEW },
     changesView: { ...PHONE_CHANGES_VIEW },
     views: { ...PHONE_VIEWS },
