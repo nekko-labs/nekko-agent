@@ -18,6 +18,8 @@ enum Route: Hashable {
     case logs
     case cloud
     case syncedChat(String)
+    /// The computer's Monitors: a pane on a folding phone or iPad, the list's last row elsewhere (FD-5).
+    case monitors
 }
 
 struct RootView: View {
@@ -26,7 +28,8 @@ struct RootView: View {
     @Environment(\.scenePhase) private var phase
     @Environment(\.palette) private var palette
     @State private var path: [Route] = []
-    @State private var selected: Route?
+    /// Regular width (an open folding phone, iPad): the two panes (FD-3).
+    @State private var panes = PaneHost()
     /// First run: step 1 was passed with Continue (this launch).
     @State private var introDone = false
     @Environment(\.horizontalSizeClass) private var size
@@ -46,12 +49,17 @@ struct RootView: View {
             .onChange(of: phase) { _, _ in syncCover() }
             .onChange(of: app.prefs.theme) { _, _ in syncCover() }
             .onChange(of: app.lock.locked) { _, locked in if !locked { app.start() } }
-            // iPad: a new sidebar pick starts a fresh detail stack (Settings pushed
-            // earlier no longer covers it), and another computer drops this one's chat.
-            .onChange(of: selected) { _, _ in if size == .regular { path = [] } }
-            .onChange(of: store.activeId) { _, _ in
-                selected = nil
+            // Another computer drops this one's chat; its own panes come back.
+            .onChange(of: store.activeId) { _, id in
                 path = []
+                panes.sync(computer: id, prefs: app.prefs)
+            }
+            // Closing a folding phone: one column, on the chat that was focused.
+            // Opening it again restores the panes as they were.
+            .onChange(of: size) { old, new in
+                if old == .regular && new == .compact {
+                    path = panes.layout.focusedChatId.map { [Route.chat($0)] } ?? []
+                }
             }
             // Shared from another app: New chat opens with the text, nothing is sent.
             .onChange(of: app.sharedText, initial: true) { _, text in
@@ -102,21 +110,9 @@ struct RootView: View {
                 if app.prefs.onboarded || introDone { WelcomeView() } else { FirstRunIntroView { introDone = true } }
             }
         } else if size == .regular {
-            // iPad and large landscape: chats in the sidebar, the selected one beside it.
-            NavigationSplitView {
-                ChatsView(path: $path, selection: $selected)
-            } detail: {
-                NavigationStack(path: $path) {
-                    Group {
-                        if let selected { destination(selected) } else {
-                            ContentUnavailableView("Pick a chat", systemImage: "bubble.left.and.text.bubble.right",
-                                                   description: Text("Or start a new one on \(store.active?.name ?? "your computer")."))
-                        }
-                    }
-                    .navigationDestination(for: Route.self) { destination($0) }
-                }
-                .id(selected)
-            }
+            // An open folding phone, iPad, large landscape: two panes by posture
+            // (Chats + Chat until another arrangement is picked).
+            PanesView(host: panes)
         } else {
             NavigationStack(path: $path) {
                 ChatsView(path: $path)
@@ -125,10 +121,37 @@ struct RootView: View {
         }
     }
 
-    @ViewBuilder private func destination(_ route: Route) -> some View {
+    private func destination(_ route: Route) -> some View {
+        RouteView(route: route, path: $path, openChat: { id in open(.chat(id)) })
+    }
+
+    /// Show a route: in a pane on a regular-width screen, pushed on iPhone.
+    private func open(_ r: Route) {
+        if size == .regular {
+            panes.sync(computer: store.activeId, prefs: app.prefs)
+            if let content = PaneHost.content(r) {
+                let running = Set(store.activity.compactMap { $0.value == .running || $0.value == .needsYou ? $0.key : nil })
+                panes.open(content, running: running)
+            } else {
+                panes.push(r)
+            }
+        } else {
+            path = [r]
+        }
+    }
+}
+
+/// One route's screen, pushed in the phone's stack or inside a pane.
+struct RouteView: View {
+    let route: Route
+    @Binding var path: [Route]
+    /// Show a chat created or picked here (New chat, Monitors).
+    var openChat: (String) -> Void
+
+    var body: some View {
         switch route {
         case .chat(let id): ChatView(sessionId: id)
-        case .newChat: NewChatView(path: $path, opened: { id in open(.chat(id)) })
+        case .newChat: NewChatView(path: $path, opened: openChat)
         case .computers: ComputersView()
         case .computer(let id): ComputerDetailView(computerId: id)
         case .settings: SettingsView()
@@ -140,16 +163,8 @@ struct RootView: View {
         case .logs: LogsView()
         case .cloud: CloudView()
         case .syncedChat(let id): SyncedChatView(chatId: id)
-        }
-    }
-
-    /// Show a route: in the split view's detail on iPad, pushed on iPhone.
-    private func open(_ r: Route) {
-        if size == .regular {
-            path = []
-            selected = r
-        } else {
-            path = [r]
+        // Back from the chat returns to Monitors.
+        case .monitors: MonitorsView(open: { id in path.append(.chat(id)) })
         }
     }
 }
