@@ -37,17 +37,17 @@ impl YieldGate for Switch {
 }
 
 /// A model that streams `words` one every 10 ms and stops when its call is
-/// cancelled, as the provider task does when its request is aborted.
+/// cancelled, as the provider task does when its request is aborted. It keeps
+/// each call's Cancel: the provider aborts its request when that fires.
 struct Slow {
     words: usize,
     calls: AtomicUsize,
-    stopped: Arc<AtomicUsize>,
+    cancels: Arc<Mutex<Vec<Cancel>>>,
 }
 
 struct SlowStream {
     left: usize,
     cancel: Cancel,
-    stopped: Arc<AtomicUsize>,
 }
 
 impl ChunkStream for SlowStream {
@@ -58,7 +58,6 @@ impl ChunkStream for SlowStream {
         tokio::select! {
             _ = tokio::time::sleep(Duration::from_millis(10)) => {}
             _ = self.cancel.cancelled() => {
-                self.stopped.fetch_add(1, Ordering::SeqCst);
                 self.left = 0;
                 return Some(Err("This operation was aborted".into()));
             }
@@ -72,12 +71,13 @@ impl ModelClient for Slow {
     type Stream = SlowStream;
     async fn chat(&self, _req: ChatRequest, cancel: Cancel) -> Result<SlowStream, String> {
         self.calls.fetch_add(1, Ordering::SeqCst);
-        Ok(SlowStream { left: self.words, cancel, stopped: self.stopped.clone() })
+        self.cancels.lock().unwrap().push(cancel.clone());
+        Ok(SlowStream { left: self.words, cancel })
     }
 }
 
 fn slow(words: usize) -> Slow {
-    Slow { words, calls: AtomicUsize::new(0), stopped: Arc::default() }
+    Slow { words, calls: AtomicUsize::new(0), cancels: Arc::default() }
 }
 
 fn req() -> ChatRequest {
@@ -98,7 +98,7 @@ fn req() -> ChatRequest {
 async fn a_call_under_way_stops_when_the_gate_says_yield() {
     let gate = Switch::new(true);
     let model = slow(100);
-    let stopped = model.stopped.clone();
+    let cancels = model.cancels.clone();
     let client = YieldingClient::new(model, Some(gate.clone()));
     let mut stream = client.chat(req(), Cancel::default()).await.unwrap();
     for _ in 0..3 {
@@ -109,8 +109,10 @@ async fn a_call_under_way_stops_when_the_gate_says_yield() {
     assert_eq!(stream.next().await, Some(Err(YIELDED.to_string())));
     assert!(started.elapsed() <= Duration::from_millis(10), "stops within the chunk under way");
     assert_eq!(stream.next().await, None);
-    tokio::task::yield_now().await;
-    assert_eq!(stopped.load(Ordering::SeqCst), 1, "the request itself was stopped");
+    // Whether the yield or the model's own stream sees the stop first is up to
+    // select!, so check the call's Cancel rather than what the stream observed.
+    let cancels = cancels.lock().unwrap();
+    assert!(cancels.len() == 1 && cancels[0].is_cancelled(), "the request itself was stopped");
 }
 
 #[tokio::test(start_paused = true)]
