@@ -60,6 +60,9 @@ pub trait TaskHost: Send + Sync + 'static {
 struct RunAs {
     low_priority: bool,
     waited_ms: Option<f64>,
+    /// How the turn steps aside while it runs (`run_policy::running_mode`),
+    /// when the host can tell whether anyone is here.
+    background: Option<&'static str>,
 }
 
 /// `Date.now()`; tests pass a fixed clock.
@@ -405,7 +408,9 @@ impl Tasks {
                 }
                 Gate::Go { low_priority, waited_ms } => {
                     lock(&self.held).remove(id);
-                    ran = RunAs { low_priority, waited_ms };
+                    let background =
+                        activity.is_some().then(|| run_policy::running_mode(policy, low_priority)).flatten();
+                    ran = RunAs { low_priority, waited_ms, background };
                 }
             }
         }
@@ -461,9 +466,11 @@ impl Tasks {
                 ("lastRunWaitedMs", ran.waited_ms.map(num)),
             ],
         );
-        self.host
-            .send_chat(json!({ "sessionId": sid, "providerId": provider, "modelId": model, "text": prompt }))
-            .await?;
+        let mut opts = json!({ "sessionId": sid, "providerId": provider, "modelId": model, "text": prompt });
+        if let Some(mode) = ran.background {
+            opts["background"] = json!(mode);
+        }
+        self.host.send_chat(opts).await?;
         let done = self.host.get_session(&sid);
         let messages = done.as_ref().and_then(|s| s.get("messages")).and_then(Value::as_array);
         let last = messages.and_then(|m| {

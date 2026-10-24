@@ -331,6 +331,8 @@ pub struct Turns {
     watched: Mutex<HashMap<String, usize>>,
     /// Set once at startup when the daemon admits `chat:send`.
     preparer: OnceLock<Preparer>,
+    /// The gates background turns on a local model step aside by (background.rs).
+    background: OnceLock<Arc<crate::background::Background>>,
     /// The router (`routes::route`), for a tool that asks another service
     /// (`delegation_targets` lists a provider's models).
     dispatch: OnceLock<crate::automation::Dispatcher>,
@@ -379,8 +381,19 @@ impl Turns {
             chained: Mutex::default(),
             watched: Mutex::default(),
             preparer: OnceLock::new(),
+            background: OnceLock::new(),
             dispatch: OnceLock::new(),
         }
+    }
+
+    /// `background:state`: how many background turns run, and how many are paused.
+    pub fn background_state(&self) -> Value {
+        self.background.get().map_or_else(|| json!({ "running": 0, "paused": 0, "reason": null }), |b| b.state())
+    }
+
+    /// Who decides when background turns step aside, set once the context exists.
+    pub fn set_background(&self, b: Arc<crate::background::Background>) {
+        let _ = self.background.set(b);
     }
 
     /// The router, set once the context exists.
@@ -1090,6 +1103,12 @@ impl Turns {
             ProviderClient::new(provider)
         };
         let client = ShieldedClient::new(client, shield.clone());
+        // An automation's turn on a model on this computer steps aside for the
+        // person at it (background.rs); any other turn runs as it is.
+        let gate = crate::background::Mode::from_opts(opts)
+            .filter(|_| facts.get("provider").is_some_and(crate::admission::offline_provider_allowed))
+            .and_then(|mode| self.background.get().map(|b| b.gate(mode) as Arc<dyn nekko_chat::YieldGate>));
+        let client = nekko_chat::YieldingClient::new(client, gate);
         // In code mode the tools behind `run_code` are still this chat's tools.
         let names: HashSet<String> = tools
             .iter()
