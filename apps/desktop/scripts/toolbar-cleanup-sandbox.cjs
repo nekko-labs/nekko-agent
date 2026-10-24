@@ -8,6 +8,8 @@ const path = require('node:path');
 const out = process.env.NEKKO_INTEGRATION_OUT;
 if (!out) throw Error('Launch through layout-evidence-integration.cjs');
 app.setPath('userData', path.join(out, 'profile'));
+// JSON.stringify leaves <, >, / and U+2028/2029 raw; escape them before splicing into evaluated code.
+const js = (v) => JSON.stringify(v).replace(/[<>/\u2028\u2029]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const report = { captures: [], errors: [] };
 app.whenReady().then(async () => {
@@ -18,7 +20,7 @@ app.whenReady().then(async () => {
   win.on('focus', () => { report.errors.push('took focus'); });
   win.webContents.on('console-message', e => { if (e.level === 'error') report.errors.push(e.message.slice(0, 300)); });
   const run = s => win.webContents.executeJavaScript(s, true);
-  const box = async sel => JSON.parse(await run(`JSON.stringify((()=>{const b=document.querySelector(${JSON.stringify(sel)})?.getBoundingClientRect();return b?{x:Math.round(b.left),y:Math.round(b.top),width:Math.round(b.width),height:Math.round(b.height)}:null})())`));
+  const box = async sel => JSON.parse(await run(`JSON.stringify((()=>{const b=document.querySelector(${js(sel)})?.getBoundingClientRect();return b?{x:Math.round(b.left),y:Math.round(b.top),width:Math.round(b.width),height:Math.round(b.height)}:null})())`));
   const shot = async (name, rect) => { const f = path.join(out, name + '.png'); fs.writeFileSync(f, (await win.capturePage(rect, { stayHidden: true, stayAwake: false })).toPNG()); report.captures.push(f); };
   try {
     await win.loadFile(path.join(out, 'index.html'));
@@ -27,7 +29,7 @@ app.whenReady().then(async () => {
     await run("[...document.querySelectorAll('[aria-label=\"Wall layout\"] button')].find(b=>b.textContent.includes('Dynamic')).click()");
     await sleep(600);
     for (const theme of ['dark', 'light']) {
-      await run(`document.documentElement.dataset.theme=${JSON.stringify(theme)}`);
+      await run(`document.documentElement.dataset.theme=${js(theme)}`);
       for (const snap of [false, true]) {
         await run(`(()=>{const b=document.querySelector('.wall-snap-toggle'); if (b && (b.getAttribute('aria-pressed')==='true')!==${snap}) b.click();})()`);
         await sleep(500);
