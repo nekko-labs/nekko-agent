@@ -27,6 +27,7 @@
   "limits:get",
   "logs:list",
   "logs:read",
+  "machine:summary",
   "models:list",
   "pr:action",
   "pr:checks",
@@ -127,6 +128,7 @@
   "changes:list",
   "chat:pending",
   "limits:get",
+  "machine:summary",
   "models:list",
   "pr:sessionList",
   "providers:list",
@@ -271,6 +273,21 @@
   "pending",
   "failures",
   "lastError"
+ ],
+ "machineView": [
+  "version",
+  "platform",
+  "edition",
+  "uptimeMs",
+  "hardware",
+  "live",
+  "gpu",
+  "engine"
+ ],
+ "machineResidentView": [
+  "id",
+  "name",
+  "contextTokens"
  ],
  "skillView": [
   "category",

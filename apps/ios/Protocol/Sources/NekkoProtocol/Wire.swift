@@ -14,6 +14,8 @@ public enum Channels {
     public static let sessionGet = "session:get"
     /// A chat's durable watches: what each watches, when it wakes and how that went (never the continuation prompt).
     public static let sessionWatches = "session:watches"
+    /// A computer's page in one read: version, hardware, live stats, the model server (`PHONE_MACHINE_VIEW`).
+    public static let machineSummary = "machine:summary"
     public static let sessionSetOptions = "session:setOptions"
     public static let sessionDelete = "session:delete"
     public static let voiceStatus = "voice:status"
@@ -151,6 +153,73 @@ public struct AgentWatch: Equatable, Sendable, Identifiable {
             return AgentWatch(id: id, kind: kind, url: w.str("url"), status: status, deadlineAt: deadline, pending: w.flag("pending"),
                               failures: Int(w.long("failures") ?? 0), lastError: w.str("lastError"))
         }
+    }
+}
+
+/// What a computer says about itself for its page (`machine:summary`): the
+/// daemon builds it without paths or addresses, and the phone shows it as is.
+public struct MachineSummary: Equatable, Sendable {
+    public struct Gpu: Equatable, Sendable, Identifiable {
+        public let name: String
+        public let vramBytes: Double?
+        public let cores: Int?
+        public var id: String { name }
+    }
+    public struct ResidentModel: Equatable, Sendable, Identifiable {
+        public let id: String
+        public let name: String
+        public let contextTokens: Int?
+    }
+
+    public let version: String?
+    public let platform: String?
+    public let edition: String?
+    public let uptimeMs: Int64
+    public let arch: String?
+    public let release: String?
+    public let cpuModel: String?
+    public let cpuCores: Int?
+    public let ramBytes: Double?
+    public let unified: Bool
+    public let gpus: [Gpu]
+    public let backends: [String]
+    public let engineBackend: String?
+    public let engineVersion: String?
+    public let diskFreeBytes: Double?
+    public let cpuPct: Double?
+    public let memUsedMB: Double?
+    public let memTotalMB: Double?
+    public let cpuC: Double?
+    public let gpuC: Double?
+    public let gpuUsedMB: Double?
+    public let gpuTotalMB: Double?
+    public let serverRunning: Bool
+    public let serverStartedAt: Int64?
+    public let resident: [ResidentModel]
+    public let loading: Int
+
+    public static func from(_ v: JSONValue?) -> MachineSummary? {
+        guard let v, v.object != nil else { return nil }
+        let hw = v["hardware"], live = v["live"], gpu = v["gpu"], engine = v["engine"]
+        let gpus: [Gpu] = (hw?["gpus"]?.array ?? []).compactMap { g in
+            g.str("name").map { Gpu(name: $0, vramBytes: g.dbl("vramBytes"), cores: g.long("cores").map(Int.init)) }
+        }
+        let resident: [ResidentModel] = (engine?["resident"]?.array ?? []).compactMap { m in
+            m.str("id").map { ResidentModel(id: $0, name: m.str("name") ?? $0, contextTokens: m.long("contextTokens").map(Int.init)) }
+        }
+        // The hottest GPU the profile reports, else the system sensor.
+        let gpuC = (gpu?["devices"]?.array ?? []).compactMap { $0.dbl("temperatureC") }.max() ?? live?["temps"]?.dbl("gpuC")
+        return MachineSummary(
+            version: v.str("version"), platform: v.str("platform"), edition: v.str("edition"), uptimeMs: v.long("uptimeMs") ?? 0,
+            arch: hw?.str("arch"), release: hw?.str("release"), cpuModel: hw?["cpu"]?.str("model") ?? live?.str("cpuModel"),
+            cpuCores: (hw?["cpu"]?.long("cores") ?? live?.long("cpuCores")).map(Int.init), ramBytes: hw?.dbl("ramBytes"),
+            unified: hw?.flag("unified") || gpu?.flag("unified") == true, gpus: gpus,
+            backends: (hw?["backends"]?.array ?? []).compactMap(\.string),
+            engineBackend: hw?["engine"]?.str("backend"), engineVersion: hw?["engine"]?.str("version"), diskFreeBytes: hw?.dbl("diskFreeBytes"),
+            cpuPct: live?.dbl("cpuPct"), memUsedMB: live?.dbl("memUsedMB"), memTotalMB: live?.dbl("memTotalMB"),
+            cpuC: live?["temps"]?.dbl("cpuC"), gpuC: gpuC, gpuUsedMB: gpu?.dbl("usedMB"), gpuTotalMB: gpu?.dbl("totalMB"),
+            serverRunning: engine?.flag("running") ?? false, serverStartedAt: engine?.long("startedAt"), resident: resident,
+            loading: Int(engine?.long("loading") ?? 0))
     }
 }
 

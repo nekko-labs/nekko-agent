@@ -87,6 +87,7 @@ pub fn random_token() -> String {
 }
 
 fn main() -> std::process::ExitCode {
+    machine::mark_started();
     let cfg = match config::load() {
         Ok(c) => c,
         Err(e) => {

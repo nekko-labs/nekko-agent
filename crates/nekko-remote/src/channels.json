@@ -111,6 +111,7 @@
  "logs:list",
  "logs:read",
  "machine:readiness",
+ "machine:summary",
  "mcp:hypergate",
  "mcp:hypergate:connect",
  "mcp:status",

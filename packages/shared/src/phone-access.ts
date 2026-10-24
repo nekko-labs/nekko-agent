@@ -57,6 +57,8 @@ import {
 import {
   PHONE_LIMIT_WINDOW_VIEW,
   PHONE_LIMITS_VIEW,
+  PHONE_MACHINE_RESIDENT_VIEW,
+  PHONE_MACHINE_VIEW,
   PHONE_PR_VIEW,
   PHONE_PROMPT_VIEW,
   PHONE_QUEUE_EDIT_KEYS,
@@ -67,6 +69,7 @@ import {
   PHONE_WORKFLOW_VIEW,
   phoneLimitsKey,
   phoneLimitsView,
+  phoneMachineView,
   phonePromptsView,
   phonePrsView,
   phoneQueueView,
@@ -124,6 +127,7 @@ export const PHONE_CHANNELS = [
   'limits:get',
   'logs:list',
   'logs:read',
+  'machine:summary',
   'models:list',
   'pr:action',
   'pr:checks',
@@ -282,6 +286,7 @@ export const PHONE_CHAT_READ_CHANNELS: readonly string[] = [
   'changes:list',
   'chat:pending',
   'limits:get',
+  'machine:summary',
   'models:list',
   'pr:sessionList',
   'providers:list',
@@ -866,6 +871,8 @@ export function redactPhoneResult(channel: string, result: unknown): unknown {
       return phonePrsView(result);
     case 'session:watches':
       return phoneWatchesView(result);
+    case 'machine:summary':
+      return phoneMachineView(result);
     case 'usage:summary':
       return phoneUsageView(result);
     case 'limits:get':
@@ -1066,6 +1073,8 @@ export function phoneAccessPolicy() {
     settingsView: [...PHONE_SETTINGS_VIEW],
     providerView: [...PHONE_PROVIDER_VIEW],
     watchView: [...PHONE_WATCH_VIEW],
+    machineView: [...PHONE_MACHINE_VIEW],
+    machineResidentView: [...PHONE_MACHINE_RESIDENT_VIEW],
     skillView: [...PHONE_SKILL_VIEW],
     queueKeys: [...PHONE_QUEUE_KEYS],
     sessionOptionKeys: [...PHONE_SESSION_OPTION_KEYS],
