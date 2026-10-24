@@ -20,6 +20,8 @@ Object.assign(window, { nekko: new Proxy(bridge, { get(t, k: string) { if (k in 
 import('@nekko-agent/shared').then(async ({ summarizeSession }) => {
   bridge.listSessionSummaries = async () => records.map(summarizeSession);
   const [{ createRoot }, React, { App }, { useStore }, { putCachedSession }, { UpdateProvider }] = await Promise.all([import('react-dom/client'), import('react'), import('../src/renderer/App'), import('../src/renderer/store'), import('../src/renderer/sessionCache'), import('../src/renderer/components/UpdateBanner')]);
+  await import('@fontsource-variable/inter-tight');
+  await import('@fontsource-variable/jetbrains-mono');
   await import('../src/renderer/styles.css');
   records.forEach(putCachedSession);
   document.documentElement.dataset.theme = 'dark';

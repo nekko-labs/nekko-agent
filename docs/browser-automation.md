@@ -33,3 +33,12 @@ A hidden window that has gone idle renders only about one frame a second, so cli
 - `scripts/perf/lib/browser.mjs`: existing separate renderer-performance helper, not yet migrated by this task.
 
 Full workspace typecheck/build and all 1362 desktop tests pass. Native fixture covers four wait states, duplicate-selector first match, keyboard submission, extraction, logs/page errors, tabs and popup/dialog/permission/file-navigation boundaries. Matching screenshot dimensions are 1359x873; parent actual-pixel review and public evidence publication are pending. All 956 host tests pass with explicit worktree-owned debug daemon (1 skipped); Rust browser/capture golden parity passes. Alternating benchmarks include native-child memory: cold navigation is slower, warm inspect slightly slower, working-set snapshots lower. This is a trade-off, not a speedup. Unpacked Windows native binary/license/pin hashes match staging; full signed installer and unrelated daemon resource staging remain unverified. See [performance history](perf-history.md), [raw baseline](../reports/agent-browser/playwright-baseline.json), [initial candidate](../reports/agent-browser/native-candidate-v2.json), [patch documentation](../vendor/agent-browser/README.md) and [original feasibility](../reports/agent-browser/feasibility.md).
+
+## Continuing a PR after a reply
+
+A settled chat with an open PR offers **Watch CI and merge when passing** below
+reply status. Choose it to request a normal agent continuation that verifies the
+PR and arms a durable watch while waiting. **Skip** dismisses that reply's offer
+without starting background work. A registered watcher shows its PR and wake
+deadline in chat; detailed watcher history remains in the transcript. This does
+not bypass review requirements, approvals, draft blockers or merge protections.

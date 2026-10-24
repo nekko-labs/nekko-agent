@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Folding phone layouts</title>
+<style>
+  :root { --paper:#f6f4ef; --ink:#1e1d1a; --muted:#6c675d; --line:#d8d3c8; --accent:#2f6f5e; --pane:#ffffff; --hinge:#b9b2a3; --warn:#c25e3a; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --paper:#17161a; --ink:#ece9e2; --muted:#9a958b; --line:#33313a; --accent:#7fc3ad; --pane:#222128; --hinge:#4a4752; --warn:#e4876a; } }
+  :root[data-theme="dark"] { --paper:#17161a; --ink:#ece9e2; --muted:#9a958b; --line:#33313a; --accent:#7fc3ad; --pane:#222128; --hinge:#4a4752; --warn:#e4876a; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:24px 16px 48px; background:var(--paper); color:var(--ink); font:15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  h1 { font-size:22px; margin:0 0 4px; } h2 { font-size:16px; margin:32px 0 8px; }
+  p.lead { color:var(--muted); margin:0 0 20px; max-width:70ch; }
+  .controls { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:20px; }
+  button { font:inherit; padding:6px 12px; border:1px solid var(--line); background:var(--pane); color:var(--ink); border-radius:999px; cursor:pointer; }
+  button[aria-pressed="true"] { background:var(--accent); color:var(--paper); border-color:var(--accent); }
+  .row { display:flex; gap:28px; flex-wrap:wrap; align-items:flex-start; }
+  figure { margin:0; }
+  figcaption { font-size:13px; color:var(--muted); margin-top:8px; max-width:34ch; }
+  .device { position:relative; background:var(--ink); border-radius:22px; padding:10px; display:grid; }
+  .screen { background:var(--paper); border-radius:14px; overflow:hidden; display:grid; position:relative; }
+  .pane { background:var(--pane); display:flex; flex-direction:column; min-width:0; min-height:0; }
+  .hdr { display:flex; align-items:center; gap:6px; padding:6px 8px; border-bottom:1px solid var(--line); font-size:11px; }
+  .dot { width:7px; height:7px; border-radius:50%; background:var(--accent); flex:none; }
+  .dot.needs { background:var(--warn); animation:pulse 1.2s infinite; }
+  @keyframes pulse { 50% { opacity:.3; } }
+  .hdr .sp { flex:1; } .hdr .act { color:var(--muted); letter-spacing:.5px; }
+  .body { flex:1; padding:8px; display:flex; flex-direction:column; gap:6px; overflow:hidden; }
+  .msg { height:8px; border-radius:4px; background:var(--line); } .msg.me { width:55%; align-self:flex-end; background:var(--accent); opacity:.5; }
+  .msg.w60 { width:60%; } .msg.w80 { width:80%; } .msg.w40 { width:40%; }
+  .card { border:1px solid var(--warn); border-radius:8px; padding:5px 6px; font-size:10px; display:flex; justify-content:space-between; gap:4px; }
+  .card b { color:var(--warn); }
+  .composer { margin:6px; border:1px solid var(--line); border-radius:10px; height:22px; background:var(--paper); font-size:10px; color:var(--muted); padding:3px 8px; }
+  .kbd { height:54px; background:var(--line); display:grid; grid-template-columns:repeat(10,1fr); gap:2px; padding:4px; border-radius:0 0 12px 12px; }
+  .kbd i { background:var(--pane); border-radius:2px; }
+  .hinge { background:var(--hinge); }
+  .hinge.v { width:10px; } .hinge.h { height:10px; }
+  .divider { background:var(--line); width:4px; cursor:col-resize; } .divider.h { width:auto; height:4px; cursor:row-resize; }
+  .mon { font-size:10px; padding:8px; display:grid; gap:6px; }
+  .mon .sec { color:var(--muted); letter-spacing:.5px; font-size:9px; margin-top:4px; }
+  .bar { display:flex; align-items:center; gap:6px; } .bar span { width:32px; } .bar .t { flex:1; height:6px; background:var(--line); border-radius:3px; overflow:hidden; } .bar .t i { display:block; height:100%; background:var(--accent); }
+  .bar .deg { width:34px; text-align:right; color:var(--muted); }
+  .tab { position:absolute; right:0; top:40%; writing-mode:vertical-rl; background:var(--accent); color:var(--paper); font-size:10px; padding:8px 3px; border-radius:6px 0 0 6px; }
+  .list { font-size:10px; } .list div { padding:5px 8px; border-bottom:1px solid var(--line); display:flex; gap:6px; align-items:center; }
+  .legend { font-size:13px; color:var(--muted); margin-top:28px; }
+  .legend i { display:inline-block; width:12px; height:12px; vertical-align:-2px; border-radius:2px; margin-right:4px; }
+</style>
+</head>
+<body>
+<h1>Folding phone layouts</h1>
+<p class="lead">Every posture of the two-pane design from <code>spec/phone/folding-phones-two-chats-and-monitors.md</code>. Grey bars are the hinge; the thin line is the draggable divider on hinge-less screens. Static mock-ups, not the app.</p>
+<div class="controls">
+  <button id="t-light" aria-pressed="false" onclick="setTheme('light')">Light</button>
+  <button id="t-dark" aria-pressed="false" onclick="setTheme('dark')">Dark</button>
+  <button id="t-auto" aria-pressed="true" onclick="setTheme(null)">System</button>
+</div>
+
+<h2>Open, wide: Chat + Chat</h2>
+<div class="row">
+<figure>
+  <div class="device" style="width:420px;height:340px">
+    <div class="screen" style="grid-template-columns:1fr 10px 1fr">
+      <div class="pane">
+        <div class="hdr"><span class="dot"></span>Refactor auth<span class="sp"></span><span class="act">⇄ ⤢ ▾</span></div>
+        <div class="body"><div class="msg me"></div><div class="msg w80"></div><div class="msg w60"></div><div class="msg w40"></div><div class="msg me"></div><div class="msg w80"></div></div>
+        <div class="composer">Message… (focused)</div>
+      </div>
+      <div class="hinge v"></div>
+      <div class="pane">
+        <div class="hdr"><span class="dot needs"></span>Deploy script<span class="sp"></span><span class="act">⇄ ⤢ ▾</span></div>
+        <div class="body"><div class="msg me"></div><div class="msg w60"></div><div class="msg w80"></div><div class="card"><span>run <code>rm -rf build/</code></span><b>Allow · Deny</b></div></div>
+        <div class="composer">Message…</div>
+      </div>
+    </div>
+  </div>
+  <figcaption>Galaxy Z Fold / folding iPhone open, held wide. Two independent chats; the right one is waiting on an approval (pulsing dot, card at the bottom). The keyboard belongs to the focused pane only.</figcaption>
+</figure>
+<figure>
+  <div class="device" style="width:420px;height:340px">
+    <div class="screen" style="grid-template-columns:1fr 10px 1fr">
+      <div class="pane">
+        <div class="hdr"><span class="dot"></span>Refactor auth<span class="sp"></span><span class="act">⇄ ⤢ ▾</span></div>
+        <div class="body"><div class="msg me"></div><div class="msg w80"></div><div class="msg w60"></div><div class="msg w40"></div></div>
+        <div class="composer">Message…</div>
+      </div>
+      <div class="hinge v"></div>
+      <div class="pane">
+        <div class="hdr">Monitors<span class="sp"></span><span class="act">⇄ ⤢ ▾</span></div>
+        <div class="mon">
+          <div class="sec">HARDWARE · Philip's Mac Studio</div>
+          <div class="bar"><span>CPU</span><div class="t"><i style="width:38%"></i></div><span class="deg">61°</span></div>
+          <div class="bar"><span>GPU</span><div class="t"><i style="width:82%"></i></div><span class="deg">78°</span></div>
+          <div class="bar"><span>Mem</span><div class="t"><i style="width:64%"></i></div><span class="deg"></span></div>
+          <div class="sec">RUNNING</div>
+          <div class="bar"><span class="dot"></span>Refactor auth · writing tests · 4m12s</div>
+          <div class="bar"><span class="dot needs"></span>Deploy script · needs you</div>
+          <div class="sec">NEEDS YOU</div>
+          <div class="card"><span>Deploy script: <code>rm -rf build/</code></span><b>Allow · Deny</b></div>
+          <div class="sec">AUTOMATIONS</div>
+          <div class="bar">Nightly PR review · in 2h 10m</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <figcaption>Chat + Monitors. The Monitors pane is the phone edition of the desktop's Agent Monitor dock: hardware load and temperatures, running chats, every pending approval across chats, next automations.</figcaption>
+</figure>
+</div>
+
+<h2>Open, tall (vertical mode)</h2>
+<div class="row">
+<figure>
+  <div class="device" style="width:300px;height:470px">
+    <div class="screen" style="grid-template-rows:1fr 10px 1fr">
+      <div class="pane">
+        <div class="hdr"><span class="dot"></span>Refactor auth<span class="sp"></span><span class="act">⇄ ⤢ ▾</span></div>
+        <div class="body"><div class="msg me"></div><div class="msg w80"></div><div class="msg w60"></div><div class="msg w40"></div></div>
+        <div class="composer">Message… (focused)</div>
+      </div>
+      <div class="hinge h"></div>
+      <div class="pane">
+        <div class="hdr"><span class="dot needs"></span>Deploy script<span class="sp"></span><span class="act">⇄ ⤢ ▾</span></div>
+        <div class="body"><div class="msg me"></div><div class="msg w60"></div><div class="card"><span><code>rm -rf build/</code></span><b>Allow · Deny</b></div></div>
+        <div class="composer">Message…</div>
+      </div>
+    </div>
+  </div>
+  <figcaption>The same two chats after rotating: stacked, primary (focused) on top, scroll positions kept. The chat list is never the bottom pane.</figcaption>
+</figure>
+<figure>
+  <div class="device" style="width:300px;height:470px">
+    <div class="screen" style="grid-template-rows:1fr 4px 1fr">
+      <div class="pane">
+        <div class="hdr"><span class="dot"></span>Refactor auth<span class="sp"></span><span class="act">⇄ ⤢ ▾</span></div>
+        <div class="body"><div class="msg me"></div><div class="msg w80"></div><div class="msg w60"></div></div>
+        <div class="composer">Message…</div>
+      </div>
+      <div class="divider h"></div>
+      <div class="pane">
+        <div class="hdr">Monitors<span class="sp"></span><span class="act">⇄ ⤢ ▾</span></div>
+        <div class="mon">
+          <div class="sec">HARDWARE</div>
+          <div class="bar"><span>CPU</span><div class="t"><i style="width:38%"></i></div><span class="deg">61°</span></div>
+          <div class="bar"><span>GPU</span><div class="t"><i style="width:82%"></i></div><span class="deg">78°</span></div>
+          <div class="sec">RUNNING</div>
+          <div class="bar"><span class="dot"></span>Refactor auth · 4m12s</div>
+          <div class="bar"><span class="dot needs"></span>Deploy script · needs you</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <figcaption>Chat over Monitors on a hinge-less tall screen (Pixel Fold rotated, iPad portrait): the divider is draggable between 35 / 65 and 65 / 35.</figcaption>
+</figure>
+</div>
+
+<h2>Half-open</h2>
+<div class="row">
+<figure>
+  <div class="device" style="width:300px;height:470px">
+    <div class="screen" style="grid-template-rows:1fr 10px 1fr">
+      <div class="pane">
+        <div class="hdr"><span class="dot"></span>Refactor auth<span class="sp"></span><span class="act">▾</span></div>
+        <div class="body"><div class="msg me"></div><div class="msg w80"></div><div class="msg w60"></div><div class="msg w40"></div><div class="msg me"></div></div>
+      </div>
+      <div class="hinge h"></div>
+      <div class="pane">
+        <div class="composer">Message… (focused)</div>
+        <div class="card" style="margin:0 6px"><span>Pending: <code>git push</code></span><b>Allow · Deny</b></div>
+        <div style="flex:1"></div>
+        <div class="kbd"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      </div>
+      <div class="tab">Deploy script</div>
+    </div>
+  </div>
+  <figcaption>Tabletop (Flip or Fold resting on a table, hinge horizontal): flex layout. Transcript above the hinge, composer, approval card and keyboard below; nothing under the hinge line. The other chat collapses to an edge tab.</figcaption>
+</figure>
+<figure>
+  <div class="device" style="width:420px;height:340px">
+    <div class="screen" style="grid-template-columns:1fr 10px 1fr">
+      <div class="pane">
+        <div class="hdr">Chats<span class="sp"></span><span class="act">+</span></div>
+        <div class="list">
+          <div><span class="dot"></span>Refactor auth</div>
+          <div><span class="dot needs"></span>Deploy script</div>
+          <div><span class="dot" style="opacity:.3"></span>Weekly report</div>
+          <div><span class="dot" style="opacity:.3"></span>Fix flaky test</div>
+          <div style="color:var(--muted)">Monitors</div>
+        </div>
+      </div>
+      <div class="hinge v"></div>
+      <div class="pane">
+        <div class="hdr"><span class="dot"></span>Refactor auth<span class="sp"></span><span class="act">⇄ ⤢ ▾</span></div>
+        <div class="body"><div class="msg me"></div><div class="msg w80"></div><div class="msg w60"></div><div class="msg w40"></div></div>
+        <div class="composer">Message…</div>
+      </div>
+    </div>
+  </div>
+  <figcaption>Book (hinge vertical, half open) behaves as open-wide with the divider on the hinge. Shown here in the default arrangement, Chats + Chat, which is today's iPad layout. Monitors is also a row in the list on closed phones.</figcaption>
+</figure>
+</div>
+
+<h2>Closed</h2>
+<div class="row">
+<figure>
+  <div class="device" style="width:180px;height:380px">
+    <div class="screen" style="grid-template-rows:1fr">
+      <div class="pane">
+        <div class="hdr"><span class="dot"></span>Refactor auth<span class="sp"></span><span class="act">▾</span></div>
+        <div class="body"><div class="msg me"></div><div class="msg w80"></div><div class="msg w60"></div><div class="msg w40"></div><div class="msg me"></div><div class="msg w80"></div></div>
+        <div class="composer">Message…</div>
+      </div>
+    </div>
+  </div>
+  <figcaption>Cover screen or any phone: today's one-column app on the chat that was focused. Opening the phone restores the last arrangement.</figcaption>
+</figure>
+</div>
+
+<p class="legend"><i style="background:var(--hinge)"></i>hinge &nbsp; <i style="background:var(--line)"></i>divider / placeholder text &nbsp; <i style="background:var(--warn)"></i>needs you &nbsp; <i style="background:var(--accent)"></i>working / focused</p>
+<script>
+  function setTheme(t){ var r=document.documentElement; if(t) r.setAttribute('data-theme',t); else r.removeAttribute('data-theme');
+    ['light','dark','auto'].forEach(function(k){ document.getElementById('t-'+k).setAttribute('aria-pressed', String((t||'auto')===k)); }); }
+</script>
+</body>
+</html>

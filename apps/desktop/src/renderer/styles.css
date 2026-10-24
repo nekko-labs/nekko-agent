@@ -89,8 +89,9 @@
   --pane-radius-inner: 10px;
   --pane-gap: 7px;
 
-  --font-sans: Inter, system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  /* The website's two fonts, bundled (main.tsx). Settings > Style overrides them on :root. */
+  --font-sans: 'Inter Tight Variable', 'Inter Tight', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;
 }
 
 /*
@@ -1791,11 +1792,7 @@
   }
 
   body {
-    font-family:
-      Inter,
-      system-ui,
-      -apple-system,
-      sans-serif;
+    font-family: var(--font-sans);
     background: var(--paper);
     color: var(--ink);
     -webkit-font-smoothing: antialiased;

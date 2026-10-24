@@ -37,6 +37,9 @@ pub struct Admission {
     /// How many `chat:send`s a person started (not an automation) are being
     /// admitted or driven here: someone is using the computer (`activity:state`).
     attended: Arc<std::sync::atomic::AtomicUsize>,
+    /// Those of them on a model on this computer: what a low-priority
+    /// background turn steps aside for (background.rs).
+    attended_local: Arc<std::sync::atomic::AtomicUsize>,
     compactions: Arc<crate::compaction::Compactions>,
     /// The desktop app's host lets the agent drive a browser; the Local Web UI's does not.
     pub allow_browser_control: bool,
@@ -49,6 +52,7 @@ impl Admission {
             interrupting: Arc::default(),
             sending: Arc::default(),
             attended: Arc::default(),
+            attended_local: Arc::default(),
             compactions,
             allow_browser_control,
         })
@@ -76,6 +80,16 @@ impl Admission {
     fn begin_attended(&self) -> AttendedGuard {
         self.attended.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         AttendedGuard(self.attended.clone())
+    }
+
+    fn begin_attended_local(&self) -> AttendedGuard {
+        self.attended_local.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        AttendedGuard(self.attended_local.clone())
+    }
+
+    /// Whether a chat a person started is replying here on a local model.
+    pub fn attended_local_running(&self) -> bool {
+        self.attended_local.load(std::sync::atomic::Ordering::Relaxed) > 0
     }
 
     /// Whether a chat a person started is replying here.
@@ -346,7 +360,18 @@ pub async fn send(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>) -> Result<V
 async fn send_with(ctx: &Ctx, adm: &Arc<Admission>, opts: Value, queued: Option<Value>) -> Result<Value, String> {
     let session_id = s(&opts, "sessionId").to_string();
     let pending = adm.begin(&session_id)?;
-    let _attended = (!crate::claude_policy::is_unattended(&opts)).then(|| adm.begin_attended());
+    let attended = !crate::claude_policy::is_unattended(&opts);
+    let _attended = attended.then(|| adm.begin_attended());
+    let _attended_local = if attended {
+        let settings = crate::settings::current(ctx).await;
+        let provider = settings
+            .get("providers")
+            .and_then(Value::as_array)
+            .and_then(|ps| ps.iter().find(|p| p.get("id") == opts.get("providerId")));
+        provider.is_some_and(offline_provider_allowed).then(|| adm.begin_attended_local())
+    } else {
+        None
+    };
     let result = admit(ctx, adm, opts.clone(), queued, false, &pending.cancel).await?;
     if pending.cancel.is_cancelled() && !matches!(&result, Admit::Ended) {
         stopped(ctx, &session_id).await?;

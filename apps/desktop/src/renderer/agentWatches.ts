@@ -1,4 +1,4 @@
-import { createContext, useContext, useSyncExternalStore } from 'react';
+import { createContext, useCallback, useContext, useSyncExternalStore } from 'react';
 import { parsePrUrl, truncateWords, type AgentWatchView, type ToolCall, type ToolResult } from '@nekko-agent/shared';
 import { compactSentence } from './subagentActivity.js';
 
@@ -205,4 +205,11 @@ export function __setAgentWatches(sessionId: string, views: AgentWatchView[] | n
   const e = entryFor(sessionId);
   e.views = views;
   e.listeners.forEach((fn) => fn());
+}
+
+/** Live watches for user-started continuation controls, sharing the transcript poller. */
+export function useAgentWatches(sessionId: string): AgentWatchView[] {
+  const listen = useCallback((fn: () => void) => subscribe(sessionId, fn), [sessionId]);
+  const snapshot = useCallback(() => entries.get(sessionId)?.views ?? null, [sessionId]);
+  return useSyncExternalStore(listen, snapshot, snapshot) ?? [];
 }

@@ -77,6 +77,12 @@ app.whenReady().then(async () => {
       }
     }
     if (!base) {
+      for (const theme of ['dark', 'light']) {
+        await show('paused', theme); await sleep(400);
+        await capture(`reply-paused-${theme}`);
+        await check(`${theme}: a paused reply says so`, "document.querySelector('[data-paused-status]')?.textContent.includes('Status: Paused')");
+        await check(`${theme}: and drops what it had half written`, "!document.body.innerText.includes('dependency bu')");
+      }
       // Picking a policy in the editor changes the hint with it.
       await show('editor', 'dark'); await run(toRuns);
       await run("(()=>{const s=document.querySelector('[data-run-policy]');const set=Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set;set.call(s,'lowPriority');s.dispatchEvent(new Event('change',{bubbles:true}))})()"); await sleep(300);

@@ -62,7 +62,7 @@ it('watches only the title-bar slot\'s ancestors, never the whole body subtree (
 });
 
 const key = { code: 'Digit1', key: '!', ctrlKey: true, metaKey: false, shiftKey: true, altKey: false, repeat: false, isComposing: false, defaultPrevented: false };
-describe('command center layout shortcuts', () => {
+describe('agent board layout shortcuts', () => {
   it.each([['Digit1', '!', 'focus'], ['Digit2', '@', 'grid'], ['Digit3', '#', 'fixed']])('maps shifted %s to %s', (code, value, mode) => {
     expect(wallLayoutShortcut({ ...key, code, key: value })).toBe(mode);
     expect(wallLayoutShortcut({ ...key, code, key: value, ctrlKey: false, metaKey: true })).toBe(mode);

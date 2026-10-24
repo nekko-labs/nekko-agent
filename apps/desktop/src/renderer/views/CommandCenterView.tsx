@@ -79,7 +79,7 @@ function layoutShortcutLabel(mode: 'focus' | 'grid' | 'fixed') {
 }
 
 /**
- * The Command Center: every agent and terminal as a live window on one wall,
+ * The Agent board: every agent and terminal as a live window on one wall,
  * arranged in the same split tree the Agent tab uses, with the automations
  * list and the insights box as windows among them. The windows are the same
  * chat and terminal panes the Agent tab shows, so work gets handled here, not
@@ -293,8 +293,8 @@ export function CommandCenterView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usage, topLevel, tasks, running, pending, terminals, taskBySession, isRunningSession]);
 
-  const openChat = (id: string) => { openChatPane(id); setView('chat'); };
-  const openTerminal = (id: string) => { openTerminalPane(id); setView('chat'); };
+  const openChat = (id: string) => openChatPane(id);
+  const openTerminal = (id: string) => openTerminalPane(id);
 
   // Starting work from the wall keeps you on the wall: the new chat or shell
   // becomes a window here rather than switching to the Agent tab.
