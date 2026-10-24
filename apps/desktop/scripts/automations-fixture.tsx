@@ -7,6 +7,9 @@ import * as Settings from '../src/renderer/views/SettingsView';
 import { WorkflowEditor } from '../src/renderer/components/WorkflowEditor';
 import { AutomationsPane } from '../src/renderer/components/AutomationsPane';
 import { ScheduleTaskModal } from '../src/renderer/components/ScheduleTaskModal';
+import { LiveTurn } from '../src/renderer/components/agent-console/LiveTurn';
+import { applyEvent, getLiveRun } from '../src/renderer/liveRuns';
+import { describeLiveActivity, shortLiveStatus } from '@nekko-agent/shared';
 import '../src/renderer/styles.css';
 
 // Synthetic records only. This fixture never connects to a host, daemon or engine.
@@ -51,7 +54,30 @@ const bridge: any = {
 };
 Object.assign(window, { nekko: new Proxy(bridge, { get(target, key: string) { if (key in target) return target[key]; if (key.startsWith('on')) return () => () => {}; return () => Promise.resolve(null); } }) });
 
-type Scene = 'workflows' | 'editor' | 'pane' | 'modal' | 'settings';
+type Scene = 'workflows' | 'editor' | 'pane' | 'modal' | 'settings' | 'paused';
+
+/** A background reply that ran a command, started writing, and stepped aside for the user. */
+function pausedReply() {
+  const sessionId = `paused-${Date.now()}`;
+  const ev = (e: object) => applyEvent({ sessionId, ...e } as any);
+  ev({ type: 'text', delta: 'Checking yesterday’s commits. ' });
+  ev({ type: 'tool_call', call: { id: 'c1', name: 'bash', input: { command: 'git log --since=yesterday --oneline' } } });
+  ev({ type: 'tool_result', result: { toolCallId: 'c1', output: 'a1b2c3 Fix login\nd4e5f6 Bump deps' } });
+  ev({ type: 'text', delta: 'Two commits landed: a login fix and a dependency bu' });
+  ev({ type: 'retry', attempt: 1, maxAttempts: 5, delayMs: 0, reason: 'Paused while someone uses this computer', paused: true });
+  return sessionId;
+}
+
+function PausedScene() {
+  const [sessionId] = useState(pausedReply);
+  const [, tick] = useState(0);
+  React.useEffect(() => { const t = setTimeout(() => tick(1), 100); return () => clearTimeout(t); }, []);
+  const run = getLiveRun(sessionId);
+  return <div style={{ maxWidth: 760, margin: 24 }} className="card p-4">
+    <p className="mb-3 text-[12px] text-ink-faint" data-paused-status>Status: {shortLiveStatus(run?.activity)} · Card: {describeLiveActivity(run?.activity)}</p>
+    <LiveTurn sessionId={sessionId} held={null} />
+  </div>;
+}
 
 function Fixture() {
   const [scene, setScene] = useState<Scene>('workflows');
@@ -69,6 +95,7 @@ function Fixture() {
     {scene === 'editor' && <WorkflowEditor workflow={local as any} workflows={[local as any]} skills={[]} onClose={() => {}} onSave={() => {}} />}
     {scene === 'pane' && <div style={{ width: 640, height: 360, margin: 24 }} className="card"><AutomationsPane tasks={tasks as any} running={new Set()} now={NOW} onOpen={() => {}} /></div>}
     {scene === 'modal' && <ScheduleTaskModal providerId="nekko-engine" modelId="qwen3-8b" initialPrompt="Summarize yesterday’s commits." onClose={() => {}} />}
+    {scene === 'paused' && <PausedScene />}
     {scene === 'settings' && <div style={{ maxWidth: 760, margin: 24 }}>{AutomationsSection ? <AutomationsSection settings={settings} update={() => {}} /> : <p data-no-section>No Automations section on this revision.</p>}</div>}
   </div>;
 }
