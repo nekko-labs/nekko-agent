@@ -23,7 +23,7 @@ Vision, users, product names, scope boundaries, open questions and policies.
 - [Editions, same engine + UI, different runtime](product/editions-same-engine-ui-different-runtime.md) (2 KB)
 - [Open Questions](product/open-questions.md) (2 KB)
 - [Products and their names (decided 2026-10-18)](product/products-and-their-names.md) (2 KB)
-- [Scope Boundaries](product/scope-boundaries.md) (3 KB)
+- [Scope Boundaries](product/scope-boundaries.md) (4 KB)
 - [Vision](product/vision.md) (2 KB)
 - [What Success Looks Like](product/what-success-looks-like.md) (2 KB)
 - [Who It's For](product/who-its-for.md) (1 KB)
@@ -154,7 +154,7 @@ Working in a codebase: files, editor, diffs, pull requests, design workspace.
 Workflows, goals, integrations and tools.
 
 - [Automating repeatable work (Workflows tab)](automation/automating-repeatable-work-workflows-tab.md) (4 KB)
-- [Background automations yield to the user](automation/background-automations-yield-to-the-user.md) (7 KB)
+- [Background automations yield to the user](automation/background-automations-yield-to-the-user.md) (10 KB)
 - [Experimental outbound resource queue](automation/experimental-outbound-resource-queue.md) (3 KB)
 - [Handing the agent a long-running goal](automation/handing-the-agent-a-long-running-goal.md) (2 KB)
 - [One-click setup for safe offline PC control (planned)](automation/one-click-setup-for-safe-offline-pc-control.md) (6 KB)
@@ -167,9 +167,10 @@ Phone remote control and the native iOS and Android apps.
 
 - [Driving your home model from your phone (remote control)](phone/driving-your-home-model-from-your-phone-remote-control.md) (13 KB)
 - [iPhone: the desktop's languages and themes, and New chat's effort and computer (2026-10-23)](phone/iphone-languages-themes-and-new-chat-choices.md) (5 KB)
-- [Native Android app (2026-10-11)](phone/native-android-app.md) (40 KB)
+- [Native Android app (2026-10-11)](phone/native-android-app.md) (41 KB)
 - [Native iOS app (2026-10-16)](phone/native-ios-app.md) (76 KB)
 - [Native phone implementation decision (2026-10-07)](phone/native-phone-implementation-decision.md) (2 KB)
+- [Nekko Cloud machines: a sandboxed computer the phone pairs with (2026-10-24)](phone/nekko-cloud-machines.md) (5 KB)
 - [Phone access classes and relay replay protection](phone/phone-access-classes-and-relay-replay-protection.md) (8 KB)
 - [Your agent in your pocket (the iOS and Android app)](phone/your-agent-in-your-pocket-the-ios-and-android-app.md) (5 KB)
 

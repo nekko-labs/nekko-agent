@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12+ draws a system splash on open. By default it shows the launcher icon
+         on its own tile; show the borderless mark on the window's own background instead.
+         No windowSplashScreenIconBackgroundColor, so nothing is drawn behind the cat. -->
+    <style name="Theme.Nekko" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/paper</item>
+        <item name="android:windowSplashScreenBackground">@color/paper</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_mark</item>
+    </style>
+</resources>
