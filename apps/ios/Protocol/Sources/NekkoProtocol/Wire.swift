@@ -12,6 +12,8 @@ public enum Channels {
     public static let sessionsSummaries = "sessions:summaries"
     public static let sessionCreate = "session:create"
     public static let sessionGet = "session:get"
+    /// A chat's durable watches: what each watches, when it wakes and how that went (never the continuation prompt).
+    public static let sessionWatches = "session:watches"
     public static let sessionSetOptions = "session:setOptions"
     public static let sessionDelete = "session:delete"
     public static let voiceStatus = "voice:status"
@@ -114,6 +116,43 @@ public enum Events {
 public let autoModelId = "__auto__"
 
 // MARK: - Models
+
+/// One durable `agent_watch` of a chat as the computer reports it
+/// (`PHONE_WATCH_VIEW`): joined to the arming call by `id`.
+public struct AgentWatch: Equatable, Sendable, Identifiable {
+    public enum Kind: String, Sendable { case timer, pr }
+    public enum Status: String, Sendable { case active, done, cancelled, error }
+    public let id: String
+    public let kind: Kind
+    public let url: String?
+    public let status: Status
+    /// Timer: when it wakes. PR: the latest it waits before waking anyway. Milliseconds since the epoch.
+    public let deadlineAt: Int64
+    /// A wake-up is due but the chat has not been continued yet (busy or failing).
+    public let pending: Bool
+    public let failures: Int
+    public let lastError: String?
+
+    public init(id: String, kind: Kind, url: String? = nil, status: Status, deadlineAt: Int64, pending: Bool = false, failures: Int = 0, lastError: String? = nil) {
+        self.id = id
+        self.kind = kind
+        self.url = url
+        self.status = status
+        self.deadlineAt = deadlineAt
+        self.pending = pending
+        self.failures = failures
+        self.lastError = lastError
+    }
+
+    public static func list(_ v: JSONValue?) -> [AgentWatch] {
+        (v?.array ?? []).compactMap { w in
+            guard let id = w.str("id"), let kind = w.str("kind").flatMap(Kind.init(rawValue:)),
+                  let status = w.str("status").flatMap(Status.init(rawValue:)), let deadline = w.long("deadlineAt") else { return nil }
+            return AgentWatch(id: id, kind: kind, url: w.str("url"), status: status, deadlineAt: deadline, pending: w.flag("pending"),
+                              failures: Int(w.long("failures") ?? 0), lastError: w.str("lastError"))
+        }
+    }
+}
 
 public struct ToolCall: Equatable, Sendable {
     public let id: String
@@ -261,6 +300,11 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
             parentSessionId: v.str("parentSessionId"), taskId: v.str("taskId"), trainingRunId: v.str("trainingRunId"),
             providerId: v.str("providerId"), workspaceId: v.str("workspaceId"), archivedAt: archivedAt,
             order: v.dbl("order"), pinned: v.flag("pinned"))
+    }
+
+    /// Every chat the computer listed, children and task chats included, as sent.
+    public static func list(_ list: JSONValue?) -> [SessionSummary] {
+        (list?.array ?? []).compactMap(from)
     }
 
     /// Every top-level chat, completed ones included, newest first.

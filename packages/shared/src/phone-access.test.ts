@@ -145,6 +145,15 @@ describe('settings from a phone', () => {
     expect(redactPhoneResult('providers:list', SETTINGS.providers)).toEqual([{ id: 'p1', kind: 'anthropic', label: 'Claude', enabled: true }]);
     expect(redactPhoneResult('providers:list', null)).toEqual([]);
   });
+
+  it("lists a chat's watches without their continuation prompt (session:watches)", () => {
+    expect(screenPhoneCall('session:watches', ['s1'])).toEqual({});
+    expect(() => screenPhoneCall('session:watches', [''])).toThrow(PhoneAccessError);
+    const watch = { id: 'w1', kind: 'pr', url: 'https://github.com/o/r/pull/5', status: 'active', deadlineAt: 10, nextPollAt: 5, pending: false, failures: 1, lastError: 'x'.repeat(700), prompt: 'secret continuation', sessionId: 's1' };
+    const [view] = redactPhoneResult('session:watches', [watch, 'junk', null]) as Record<string, unknown>[];
+    expect(view).toEqual({ id: 'w1', kind: 'pr', url: 'https://github.com/o/r/pull/5', status: 'active', deadlineAt: 10, nextPollAt: 5, pending: false, failures: 1, lastError: 'x'.repeat(600) });
+    expect(redactPhoneResult('session:watches', null)).toEqual([]);
+  });
 });
 
 describe('chat options from a phone', () => {
