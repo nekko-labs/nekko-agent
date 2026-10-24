@@ -299,3 +299,5 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 .agent-panel-group-heading { margin-bottom: 6px; }
 .agent-panel-group-label { font-size: 13px; line-height: 20px; color: var(--accent); }
 .agent-panel-row > .agent-panel-group + .agent-panel-group { margin-top: 0; }
+
+.hover-tip-multiline { max-width: min(420px, calc(100vw - 16px)); white-space: pre-wrap; overflow-wrap: anywhere; font-weight: 400; }
