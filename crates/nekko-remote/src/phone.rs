@@ -633,6 +633,15 @@ pub async fn call(run: &Dispatcher, channel: String, args: Value) -> Result<Valu
             return Err(denied("turned-off", "changes:list").to_string());
         }
     }
+    if channel == "monitor:summary" {
+        // Answered from what the computer already reads for its own Monitors dock; the phone's arguments are ignored.
+        let mut sources = Map::new();
+        for source in &policy().views.monitor_sources {
+            sources.insert(source.clone(), run(source.clone(), json!([])).await?);
+        }
+        let now = crate::service::system_clock()();
+        return Ok(crate::phone_views::monitor(&sources, now, &policy().views));
+    }
     // Only what the computer's own call takes: an id, or nothing.
     let first = args.first().cloned().unwrap_or(Value::Null);
     let args: Vec<Value> = match channel.as_str() {
@@ -1539,7 +1548,7 @@ mod tests {
             for c in ["chat:send", "chat:queue", "tool:approve", "chat:answer", "task:runNow", "workflow:run"] {
                 assert_eq!(classes.of(c), Some(Class::Agent), "{c}");
             }
-            for c in ["sessions:summaries", "session:get", "settings:get", "chat:pending"] {
+            for c in ["sessions:summaries", "session:get", "settings:get", "chat:pending", "monitor:summary"] {
                 assert_eq!(classes.of(c), Some(Class::Read), "{c}");
             }
         }
@@ -1580,7 +1589,7 @@ mod tests {
             assert!(r.ask("session:get", json!(["s1"]), None).is_ok(), "Read stays on");
             assert!(r.ask("app:info", json!([]), None).is_ok());
             let r = policy_rig(DeviceAccess { read: false, change: true }, None, None, "ask");
-            for c in ["sessions:summaries", "session:get", "settings:get", "chat:pending"] {
+            for c in ["sessions:summaries", "session:get", "settings:get", "chat:pending", "monitor:summary"] {
                 assert_eq!(r.ask(c, json!(["s1"]), None), refused("read-off", c));
             }
             assert!(r.ask("app:info", json!([]), None).is_ok(), "open to any paired phone");
