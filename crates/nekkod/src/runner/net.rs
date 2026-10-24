@@ -48,7 +48,7 @@ const GATEWAY_MAC: EthernetAddress = EthernetAddress([0x02, 0x6e, 0x6b, 0x00, 0x
 const MAX_FRAME: usize = 1514;
 /// The largest UDP payload one frame carries; longer replies are dropped, not fragmented.
 const MAX_UDP: usize = 1500 - 20 - 8;
-/// Per TCP flow, each direction. With `max_flows` 1024 that bounds socket memory to 32 MiB.
+/// Per TCP flow, each direction. With the default 256 flows that bounds socket memory to 8 MiB per VM.
 const TCP_BUF: usize = 16 * 1024;
 /// Host<->guest chunks in flight per TCP flow direction (`CHUNKS` of up to `CHUNK` bytes).
 const CHUNK: usize = 8 * 1024;
@@ -64,11 +64,23 @@ const DNS_TIMEOUT: Duration = Duration::from_secs(3);
 const TX_QUEUE: usize = 512;
 const LEASE_SECS: u32 = 86_400;
 
+/// Each flow holds one host socket (a file descriptor), so a running VM can
+/// use up to `max_flows` fds plus 64 for DNS. nekkod must raise
+/// RLIMIT_NOFILE at startup to cover that for every VM it runs.
 pub struct NetConfig {
-    /// TCP connections plus UDP flows at once (1024 in the daemon).
+    /// TCP connections plus UDP flows at once (256 per VM by default).
     pub max_flows: usize,
     /// The host's resolvers; the gateway's DNS forwards to these, in order.
     pub dns_upstream: Vec<SocketAddr>,
+    /// How long a host TCP connect may take before the guest gets RST and
+    /// the flow's slot is freed (15 s by default).
+    pub connect_timeout: Duration,
+}
+
+impl Default for NetConfig {
+    fn default() -> Self {
+        Self { max_flows: 256, dns_upstream: vec![], connect_timeout: Duration::from_secs(15) }
+    }
 }
 
 /// How the NAT opens host sockets. Only called for destinations the policy
@@ -214,6 +226,16 @@ struct Flow {
     kind: Kind,
     task: JoinHandle<()>,
     last: std::time::Instant,
+}
+
+/// Host sockets live in the flow tasks; a detached task would keep its
+/// socket open after `serve` returns, so they all end with the NAT.
+impl<C> Drop for Nat<C> {
+    fn drop(&mut self) {
+        for flow in self.flows.values() {
+            flow.task.abort();
+        }
+    }
 }
 
 struct Nat<C> {
@@ -422,6 +444,10 @@ impl<C: Connector> Nat<C> {
             return;
         }
         let handle = self.sockets.add(sock);
+        let limit = self.cfg.connect_timeout;
+        let connect = async move {
+            tokio::time::timeout(limit, connect).await.unwrap_or_else(|_| Err(io::ErrorKind::TimedOut.into()))
+        };
         let (to_host, to_host_rx) = mpsc::channel(CHUNKS);
         let (from_host_tx, from_host) = mpsc::channel(CHUNKS);
         let task = tokio::spawn(tcp_host(connect, to_host_rx, from_host_tx, self.wake.clone()));
@@ -477,6 +503,11 @@ impl<C: Connector> Nat<C> {
                     done.push(*key);
                 }
             }
+        }
+        if !done.is_empty() {
+            // An aborted socket is already Closed but sends its RST on the
+            // next poll; removing it first would leave the guest hanging.
+            self.poll();
         }
         for key in done {
             self.remove(key);

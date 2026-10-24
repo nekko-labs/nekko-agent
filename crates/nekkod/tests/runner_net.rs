@@ -36,11 +36,13 @@ const PUBLIC: Ipv4Addr = Ipv4Addr::new(93, 184, 216, 34);
 struct TestConnector {
     map: Arc<HashMap<SocketAddr, SocketAddr>>,
     calls: Arc<Mutex<Vec<(&'static str, SocketAddr)>>>,
+    /// A TCP destination whose connect never completes.
+    hang: Option<SocketAddr>,
 }
 
 impl TestConnector {
     fn new(map: impl IntoIterator<Item = (SocketAddr, SocketAddr)>) -> Self {
-        Self { map: Arc::new(map.into_iter().collect()), calls: Arc::default() }
+        Self { map: Arc::new(map.into_iter().collect()), calls: Arc::default(), hang: None }
     }
     fn calls(&self) -> Vec<(&'static str, SocketAddr)> {
         self.calls.lock().unwrap().clone()
@@ -53,7 +55,11 @@ impl TestConnector {
 
 impl Connector for TestConnector {
     async fn tcp(&self, dst: SocketAddr) -> io::Result<TcpStream> {
-        TcpStream::connect(self.target("tcp", dst)?).await
+        let to = self.target("tcp", dst)?;
+        if self.hang == Some(dst) {
+            std::future::pending::<()>().await;
+        }
+        TcpStream::connect(to).await
     }
     async fn udp(&self, dst: SocketAddr) -> io::Result<UdpSocket> {
         let to = self.target("udp", dst)?;
@@ -287,8 +293,11 @@ struct Run {
 }
 
 fn start(host: HostNets, max_flows: usize, dns: Vec<SocketAddr>, conn: TestConnector, static_ip: bool) -> Run {
+    start_cfg(host, NetConfig { max_flows, dns_upstream: dns, ..NetConfig::default() }, conn, static_ip)
+}
+
+fn start_cfg(host: HostNets, cfg: NetConfig, conn: TestConnector, static_ip: bool) -> Run {
     let (g, n) = UnixDatagram::pair().unwrap();
-    let cfg = NetConfig { max_flows, dns_upstream: dns };
     let nat = tokio::spawn(serve_with(n, Arc::new(RwLock::new(host)), cfg, conn.clone()));
     Run { guest: Guest::new(g, static_ip), conn, nat }
 }
@@ -556,4 +565,77 @@ async fn serve_returns_when_socket_closes() {
     drop(r.guest);
     let out = tokio::time::timeout(Duration::from_secs(5), r.nat).await;
     assert!(matches!(out, Ok(Ok(Ok(())))), "serve did not return cleanly: {out:?}");
+}
+
+/// A TCP server that accepts, holds every connection open and never writes.
+async fn silent_server() -> SocketAddr {
+    let l = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = l.local_addr().unwrap();
+    tokio::spawn(async move {
+        let mut held = vec![];
+        while let Ok((s, _)) = l.accept().await {
+            held.push(s);
+        }
+    });
+    addr
+}
+
+/// How many of this process's fds are sockets connected to `server`. A
+/// half-closed socket (FIN sent, read half parked) still counts, which a
+/// server-side EOF check would miss.
+fn fds_connected_to(server: SocketAddr) -> usize {
+    let SocketAddr::V4(server) = server else { return 0 };
+    (0..4096)
+        .filter(|&fd| {
+            let mut sa: libc::sockaddr_in = unsafe { std::mem::zeroed() };
+            let mut len = std::mem::size_of::<libc::sockaddr_in>() as libc::socklen_t;
+            // SAFETY: a sockaddr_in-sized buffer and its length; bad fds just fail.
+            let rc = unsafe { libc::getpeername(fd, (&mut sa as *mut libc::sockaddr_in).cast(), &mut len) };
+            rc == 0
+                && i32::from(sa.sin_family) == libc::AF_INET
+                && u16::from_be(sa.sin_port) == server.port()
+                && u32::from_be(sa.sin_addr.s_addr) == u32::from(*server.ip())
+        })
+        .count()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn serve_exit_closes_host_sockets() {
+    let server = silent_server().await;
+    let conn = TestConnector::new((1..=3).map(|p| (sa(PUBLIC, 7000 + p), server)));
+    let mut r = start(HostNets::default(), 16, vec![], conn, true);
+    for p in 1..=3 {
+        r.guest.connect(PUBLIC, 7000 + p, 43000 + p);
+    }
+    let opened = r.guest.run_until(5, |_| fds_connected_to(server) == 3).await;
+    assert!(opened, "the host connections never opened: {}", fds_connected_to(server));
+    drop(r.guest);
+    let out = tokio::time::timeout(Duration::from_secs(5), r.nat).await;
+    assert!(matches!(out, Ok(Ok(Ok(())))), "serve did not return: {out:?}");
+    let end = std::time::Instant::now() + Duration::from_secs(2);
+    while fds_connected_to(server) > 0 && std::time::Instant::now() < end {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert_eq!(fds_connected_to(server), 0, "host sockets outlived serve");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn host_connect_times_out_resets_and_frees_the_slot() {
+    let server = pong_server().await;
+    let stuck = sa(PUBLIC, 8001);
+    let mut conn = TestConnector::new([(stuck, server), (sa(PUBLIC, 8002), server)]);
+    conn.hang = Some(stuck);
+    let cfg = NetConfig { max_flows: 1, connect_timeout: Duration::from_millis(300), ..NetConfig::default() };
+    let mut r = start_cfg(HostNets::default(), cfg, conn, true);
+    let h = r.guest.connect(PUBLIC, 8001, 44001);
+    let start = std::time::Instant::now();
+    assert!(
+        r.guest.run_until(3, |g| g.tcp(h).state() == tcp::State::Closed).await,
+        "the stuck connect was never reset: {:?}",
+        r.guest.tcp(h).state()
+    );
+    assert!(start.elapsed() < Duration::from_secs(2));
+    // The only slot is free again.
+    let h = r.guest.connect(PUBLIC, 8002, 44002);
+    assert_eq!(r.guest.round_trip(h, b"next", 9).await, b"pong:next");
 }
