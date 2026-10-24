@@ -36,6 +36,11 @@ Do not leave finished work sitting uncommitted in a working tree. When several
 in-flight batches share the tree (parallel agents), land them together in one PR
 rather than letting the tree drift further from `main`.
 
+When you fan work out to parallel agents, hand each one its ids up front: the
+next `docs/decisions/` number, any new TASKS.md task ids. Each agent reads the
+same `main`, picks the same "next free" number, and the collision only shows
+when the second PR lands.
+
 ```
 # In the task worktree created above, once your own checks pass:
 git add -A   # or a scoped add; never commit .shots/ or other evidence dirs
@@ -76,6 +81,26 @@ below). "CI is still running" is never a reason to stay draft.
 If the queue ejects your PR, it comes back with the failing run linked. Diagnose
 it like any red check below, push the fix, and it re-queues.
 
+### When the queue holds or ejects your PR
+
+- **A queued branch refuses pushes** (GH006, "Branches that are queued for
+  merging cannot be updated"). Push a fix right after an ejection, before the
+  sweeper re-queues it; if the push is refused, wait for that queue run to finish
+  instead of retrying.
+- **Green but never queued.** `mergeStateStatus` is `BLOCKED` with every check
+  passing: usually an unresolved review thread. The common one is CodeQL's
+  "improper code sanitization" on an `apps/desktop/scripts/*-sandbox.cjs` that
+  splices `JSON.stringify(...)` into `executeJavaScript`; escape it with the `js()`
+  helper the other sandboxes use (see `monitors-trio-sandbox.cjs`) and the thread
+  resolves on the rescan. To see the blocker, call the `enqueuePullRequest`
+  GraphQL mutation (the one in `queue-sweeper.yml`): it names the reason, and
+  queues the PR once it is clear. Auto-merge armed with a merge method also sits
+  here forever; re-arm with plain `gh pr merge --auto`.
+- **No PR CI after a push** means a conflict with `main` (`mergeable_state:
+  dirty`): GitHub computes no merge ref and triggers nothing. Merge `main` in.
+- **Typecheck fails on a new import after merging `main`**: your worktree's
+  `node_modules` is stale. Run `npm ci --ignore-scripts` before believing it.
+
 ### Big features: stack them
 
 When a feature is more than one reviewable change (roughly: several hundred lines,
@@ -94,7 +119,16 @@ gh stack merge --yes                     # queue the stack (or up to a layer)
 
 Each layer is a normal PR: fast-tier CI, ready not draft, its own Unfinished work
 section. Rebasing a lower layer re-runs CI on every layer above it, so keep stacks
-short (2-4 layers) and finish lower layers first. The app's **Continue as stacked
+short (2-4 layers) and finish lower layers first.
+
+The auto-merge workflow and the sweeper only queue PRs based on `main`, so a
+layer whose base is another branch is never queued. Once its parent merges,
+retarget the layer to `main`, merge `main` in, and rerun
+`node scripts/spec-index.mjs` if `spec/` changed. A squash-merged parent leaves
+its original commits in the child's history, so git's merge conflicts wherever
+both layers touched the same lines; a three-way `git merge-file` per file, using
+the parent commit the child was built on as the base (not git's merge-base),
+resolves most of them cleanly. The app's **Continue as stacked
 PR** action creates the same native stacks from an agent chat.
 
 ## PR descriptions must record unfinished work
