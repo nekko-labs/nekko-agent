@@ -2,7 +2,11 @@
 // bridge (macOS) before any renderer module loads; never contacts a host.
 // Two screens, the main window on the first, so the Dynamic toolbar shows its Screens control.
 const screensState = { placement: 'empty-first', displays: [1, 2].map((n) => ({ id: String(n), label: String(n), bounds: { x: (n - 1) * 1728, y: 0, width: 1728, height: 1117 }, main: n === 1, primary: n === 1, enabled: n === 1, self: n === 1, scaleFactor: 2 })) };
-const displays = { displayId: null, list: async () => screensState, toggle: async () => screensState, setPlacement: async () => screensState, report: () => {}, claim: async () => 'main', onChange: () => () => {}, onPlaced: () => () => {} };
+// Sandboxes swap the screens (e.g. one screen with three desktops) through `screensFixture`.
+const screensFixture: any = { state: screensState, emit: (_: unknown) => {} };
+(window as any).screensFixture = screensFixture;
+const current = async () => screensFixture.state;
+const displays = { displayId: null, list: current, toggle: current, setPlacement: current, toggleDesktop: current, setSpacesMode: current, go: async () => 'ok', report: () => {}, claim: async () => 'main', onChange: (cb: (s: unknown) => void) => { screensFixture.emit = cb; return () => {}; }, onPlaced: () => () => {} };
 (window as any).nekkoChrome = { platform: 'darwin', titleBarHeight: 38, setTitleBarOverlay: () => {}, serviceControl: async () => ({}), reportNotificationVisibility: () => {}, displays };
 const now = Date.now();
 const provider = { id: 'fixture', kind: 'openai', enabled: true, label: 'ChatGPT (subscription)', auth: 'subscription', tokenKey: 'fixture' };

@@ -13,6 +13,9 @@ export const DISPLAYS_TOGGLE_CHANNEL = 'displays:toggle';
 export const DISPLAYS_PLACEMENT_CHANNEL = 'displays:placement';
 export const DISPLAYS_REPORT_CHANNEL = 'displays:report';
 export const DISPLAYS_CLAIM_CHANNEL = 'displays:claim';
+export const DISPLAYS_DESKTOP_CHANNEL = 'displays:desktop';
+export const DISPLAYS_SPACES_MODE_CHANNEL = 'displays:spaces-mode';
+export const DISPLAYS_GO_CHANNEL = 'displays:go';
 /** main → every app window: the screens or their windows changed. */
 export const DISPLAYS_CHANGED_EVENT = 'displays:changed';
 /** The command-line switch that tells a screen window which display it fills. */
@@ -48,7 +51,50 @@ export interface DisplayInfo {
 export interface DisplaysState {
   displays: DisplayInfo[];
   placement: DisplayPlacement;
+  /** macOS desktops (Spaces) on the main window's screen; only when there are two or more. */
+  spaces?: SpacesInfo;
 }
+
+/**
+ * How turning on another desktop gets you there. macOS has no public API to
+ * put a window on a chosen desktop, so the window appears on whichever desktop
+ * is active when it is shown.
+ *  - `ask`: not chosen yet; the dropdown explains the Accessibility permission first.
+ *  - `switch`: jump there now (Ctrl+number or Ctrl+arrow keystrokes, which need Accessibility).
+ *  - `arrive`: the window waits and opens the next time you switch to that desktop.
+ */
+export type SpacesMode = 'ask' | 'switch' | 'arrive';
+
+/** One macOS desktop, as the Screens dropdown lists it. */
+export interface DesktopInfo {
+  /** The window key for this desktop's Nekko window (`space-<ManagedSpaceID>`). */
+  id: string;
+  /** "1", "2", ...: Mission Control's Desktop number. */
+  label: string;
+  /** The desktop you are on now. */
+  current: boolean;
+  /** The main window's desktop: always on. */
+  main: boolean;
+  /** A Nekko window is open on it, or waiting to open there. */
+  enabled: boolean;
+  /** Turned on in `arrive` mode, not visited yet. */
+  waiting: boolean;
+  /** The window asking is the one on this desktop. */
+  self: boolean;
+}
+
+export interface SpacesInfo {
+  desktops: DesktopInfo[];
+  mode: SpacesMode;
+  /** Accessibility is granted, so switching desktops works. */
+  access: boolean;
+}
+
+/** Where a spoken "switch to ..." command goes. */
+export type GoTarget = { kind: 'desktop'; n: number } | { kind: 'desktop'; step: 1 | -1 } | { kind: 'screen'; n: number };
+
+/** Why `go` could not finish, for the caller to explain. */
+export type GoResult = 'ok' | 'needs-access' | 'not-found';
 
 /** What `window.nekkoChrome.displays` offers the renderer. */
 export interface DisplaysBridge {
@@ -57,6 +103,12 @@ export interface DisplaysBridge {
   list(): Promise<DisplaysState>;
   toggle(id: string, on: boolean, reducedMotion: boolean): Promise<DisplaysState>;
   setPlacement(placement: DisplayPlacement): Promise<DisplaysState>;
+  /** Turn a desktop's Nekko window on or off (macOS Spaces). */
+  toggleDesktop(id: string, on: boolean): Promise<DisplaysState>;
+  /** Choose how a desktop is reached; `switch` asks macOS for Accessibility if needed. */
+  setSpacesMode(mode: Exclude<SpacesMode, 'ask'>): Promise<DisplaysState>;
+  /** Voice: switch desktops, or bring up a screen's window (turning it on). */
+  go(target: GoTarget): Promise<GoResult>;
   /** How many windows this screen's wall shows; feeds `empty-first`. */
   report(panes: number): void;
   /**
@@ -98,11 +150,12 @@ export function pickWindowForAgent(windows: Array<{ key: string; panes: number }
 }
 
 /** Narrow a saved file to the shape main expects; anything malformed reads as the default. */
-export function readDisplayPrefs(raw: unknown): { enabled: string[]; placement: DisplayPlacement } {
+export function readDisplayPrefs(raw: unknown): { enabled: string[]; placement: DisplayPlacement; spacesMode: SpacesMode } {
   const r = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   const enabled = Array.isArray(r.enabled) ? [...new Set(r.enabled.filter((x): x is string => typeof x === 'string' && x.length > 0 && x.length < 64))] : [];
   const placement = r.placement === 'main-first' ? 'main-first' : 'empty-first';
-  return { enabled, placement };
+  const spacesMode = r.spacesMode === 'switch' || r.spacesMode === 'arrive' ? r.spacesMode : 'ask';
+  return { enabled, placement, spacesMode };
 }
 
 /** The strip a screen window starts from and shrinks into. */
