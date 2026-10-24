@@ -58,6 +58,20 @@ pub fn overflow_message(message: &str) -> String {
     )
 }
 
+/// The window and the prompt size an overflow names, from the server's error
+/// (`n_ctx`, `n_prompt_tokens`) or from `overflow_message`'s sentence.
+pub fn overflow_sizes(message: &str) -> Option<(u64, u64)> {
+    if let (Some(w), Some(n)) = (error_number(message, "n_ctx"), error_number(message, "n_prompt_tokens")) {
+        return Some((w, n));
+    }
+    let number_before = |end: &str| -> Option<u64> {
+        let head = &message[..message.find(end)?];
+        let digits: String = head.chars().rev().take_while(char::is_ascii_digit).collect();
+        digits.chars().rev().collect::<String>().parse().ok()
+    };
+    Some((number_before("-token context window")?, number_before(" tokens. Reload the model")?))
+}
+
 /// The context window a server's overflow error says the model was loaded
 /// with (llama.cpp and LM Studio: `"n_ctx":8192`).
 pub fn reported_window(message: &str) -> Option<f64> {
@@ -186,6 +200,9 @@ mod tests {
         );
         assert!(is_context_overflow(&said));
         assert_eq!(reported_window(raw), Some(8192.0));
+        assert_eq!(overflow_sizes(raw), Some((8192, 10510)));
+        assert_eq!(overflow_sizes(&said), Some((8192, 10510)));
+        assert_eq!(overflow_sizes("This model's maximum context length is 8192 tokens"), None);
         assert_eq!(reported_window("This model's maximum context length is 8192 tokens"), None);
         let plain = "anthropic 400: prompt is too long";
         assert_eq!(overflow_message(plain), plain);
