@@ -72,8 +72,10 @@ final class LiveRelayTests: XCTestCase {
         message.tap()
         message.typeText("please approve a cleanup")
         app.buttons["Send"].tap()
+        // The Live Activity starts in this stretch and the simulator slows down
+        // with it: the card took 15 s in one pass and over 30 s in the next (#831).
         let card = app.staticTexts["Approve this tool?"]
-        XCTAssertTrue(card.waitForExistence(timeout: 30), "the guarded tool asks the phone")
+        XCTAssertTrue(card.waitForExistence(timeout: 60), "the guarded tool asks the phone")
         attach(app, "\(theme)-5-approval")
         // Known, unresolved: with the card up, the audit reports the transcript's
         // "Run rm -rf …" step as clipped (approval) or low-contrast (question),
@@ -389,9 +391,11 @@ final class LiveRelayTests: XCTestCase {
         // The chat list, with its view menu (group, sort, show) in place of the old Continue card.
         app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "chats.row").firstMatch.waitForExistence(timeout: 15), "the chats")
+        // A navigation-bar button: no hit point for XCTest, so tap its centre (as the computer menu).
         let viewMenu = app.buttons["chats.view"].firstMatch
         XCTAssertTrue(viewMenu.waitForExistence(timeout: 5), "the view menu")
-        viewMenu.tap()
+        XCTAssertTrue(waitForFrame(viewMenu, in: app, 10), "the view menu never got a frame")
+        viewMenu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertTrue(app.buttons["Group by"].firstMatch.waitForExistence(timeout: 5) || app.staticTexts["Group by"].firstMatch.exists, "Group by")
         attach(app, "beyond-6-view-menu")
         // Close the menu.
