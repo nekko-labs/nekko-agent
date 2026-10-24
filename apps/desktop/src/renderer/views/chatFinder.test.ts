@@ -182,7 +182,7 @@ describe('chat groups and providers', () => {
   const workspaces = [{ id: 'w1', name: 'nekko-agent' }, { id: 'w2', name: 'website' }];
   const providers = [
     { id: 'eng', label: 'Nekko Agent engine', kind: 'llamacpp' as const, baseUrl: 'http://127.0.0.1:8080' },
-    { id: 'ant', label: 'Anthropic (Claude)', kind: 'anthropic' as const, baseUrl: 'https://api.anthropic.com' },
+    { id: 'ant', label: 'Claude API', kind: 'anthropic' as const, baseUrl: 'https://api.anthropic.com' },
     { id: 'lan', label: 'Home box', kind: 'openai-compat' as const, baseUrl: 'http://localhost:1234/v1' },
   ];
   const sessions = [
@@ -209,11 +209,11 @@ describe('chat groups and providers', () => {
   });
   it('lists configured providers plus removed ones, and "local" or "cloud" finds the whole section', () => {
     const facets = providerFacets(providers, sessions);
-    expect(facets.map((f) => f.name)).toEqual(['Nekko Agent engine', 'Anthropic (Claude)', 'Home box', 'No model yet', 'removed (removed)']);
+    expect(facets.map((f) => f.name)).toEqual(['Nekko Agent engine', 'Claude API', 'Home box', 'No model yet', 'removed (removed)']);
     const local = facetResults(sessions, facets, providerKey, 'local', () => false);
     expect(local.map((f) => [f.name, f.sessions.map((s) => s.id)])).toEqual([['Nekko Agent engine', ['n2']]]);
     const cloud = facetResults(sessions, facets, providerKey, 'cloud', () => false);
-    expect(cloud.map((f) => f.name)).toEqual(['Anthropic (Claude)']);
+    expect(cloud.map((f) => f.name)).toEqual(['Claude API']);
   });
 });
 

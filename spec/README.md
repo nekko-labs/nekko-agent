@@ -18,7 +18,7 @@ The source of truth for **what** Nekko Agent does and **why**: one file per feat
 
 Vision, users, product names, scope boundaries, open questions and policies.
 
-- [Claude policy (2026-10-19)](product/claude-policy.md) (5 KB)
+- [Claude policy (2026-10-19)](product/claude-policy.md) (6 KB)
 - [Contributing: how changes land (2026-10-17)](product/contributing-how-changes-land.md) (2 KB)
 - [Editions, same engine + UI, different runtime](product/editions-same-engine-ui-different-runtime.md) (2 KB)
 - [Open Questions](product/open-questions.md) (2 KB)
@@ -118,7 +118,7 @@ What the model sees: Context Inspector, modes, work modes, rules, memory, specs.
 
 Providers, local models, the Model Server, training.
 
-- [Accounts and switching (2026-10-23)](models/accounts-and-switching.md) (4 KB)
+- [Accounts and switching (2026-10-23)](models/accounts-and-switching.md) (5 KB)
 - [Anthropic image-dimension rejection prevention and continuation](models/anthropic-image-dimension-rejection-prevention-and-continuation.md) (1 KB)
 - [First-agent provider setup](models/first-agent-provider-setup.md) (2 KB)
 - [Hardware-aware model recommendations](models/hardware-aware-model-recommendations.md) (11 KB)
@@ -144,7 +144,7 @@ Working in a codebase: files, editor, diffs, pull requests, design workspace.
 - [In-chat pull requests](code/in-chat-pull-requests.md) (1 KB)
 - [Issue per change and work tracking preferences](code/issue-per-change.md) (2 KB)
 - [Repository review integration](code/repository-review-integration.md) (1 KB)
-- [Rich responses, reports, and design workspace](code/rich-responses-reports-and-design-workspace.md) (20 KB)
+- [Rich responses, reports, and design workspace](code/rich-responses-reports-and-design-workspace.md) (21 KB)
 - [Working in a codebase](code/working-in-a-codebase.md) (4 KB)
 
 ### automation

@@ -9,6 +9,7 @@ import {
   CLAUDE_REASONS,
   claudeAllows,
   claudeCapability,
+  claudeAccountCheck,
   claudeComparisonTable,
   claudeReasonText,
   claudeUnattendedRefusal,
@@ -54,14 +55,32 @@ describe('CLAUDE_POLICY', () => {
   it('generates the comparison table the design specifies', () => {
     const t = claudeComparisonTable();
     expect(Object.fromEntries(t.rows.map((r) => [r.capability, r.cells]))).toEqual({
-      interactive_chat: ['Yes', 'Yes', 'Yes'],
-      phone_remote: ['Yes', 'Yes', 'Yes'],
-      unattended_runs: ['Yes', 'Yes', 'Not yet'],
-      nekko_tools: ['Yes', 'Yes', 'Not yet'],
-      usage_limits: ['Yes', 'Yes', 'No, check in Claude Code'],
-      model_routing: ['Yes', 'No', 'No'],
+      interactive_chat: ['Yes', 'Yes'],
+      phone_remote: ['Yes', 'Yes'],
+      unattended_runs: ['Not yet', 'Yes'],
+      nekko_tools: ['Not yet', 'Yes'],
+      usage_limits: ['No, check in Claude Code', 'Yes'],
+      model_routing: ['No', 'Yes'],
     });
-    expect(t.billedTo).toEqual(['Your API or cloud account', 'Your API account', 'Your Claude plan']);
+    expect(t.columns.map((c) => c.id)).toEqual(['subscription', 'api']);
+    expect(t.billedTo).toEqual(['Your Claude plan', 'Your API or cloud account, per token']);
+  });
+});
+
+describe('claudeAccountCheck', () => {
+  const personal = { label: 'Personal', email: 'me@example.com', orgId: 'o1', subscriptionType: 'max' };
+  it('blocks the same login twice, whatever the case of the email', () => {
+    const r = claudeAccountCheck({ email: 'ME@example.com', orgId: 'o1', subscriptionType: 'max' }, [personal]);
+    expect(r.verdict).toBe('blocked');
+    expect(r.sameAs).toBe('Personal');
+  });
+  it('asks before a second personal plan', () => {
+    expect(claudeAccountCheck({ email: 'other@example.com', orgId: 'o2', subscriptionType: 'pro' }, [personal]).verdict).toBe('confirm');
+  });
+  it('allows an organization seat, or the same email in another organization', () => {
+    expect(claudeAccountCheck({ email: 'me@work.com', orgId: 'o3', subscriptionType: 'team' }, [personal]).verdict).toBe('ok');
+    expect(claudeAccountCheck({ email: 'me@example.com', orgId: 'o9', subscriptionType: 'team' }, [personal]).verdict).toBe('ok');
+    expect(claudeAccountCheck({ email: 'me@example.com', subscriptionType: 'max' }, []).verdict).toBe('ok');
   });
 });
 

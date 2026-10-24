@@ -2,17 +2,17 @@ import { describe, expect, it } from 'vitest';
 import type { ProviderConfig } from '@nekko-agent/shared';
 import { accountEmailOf, accountShortName, accountSiblings, providerDisplayName } from './accountEmails.js';
 
-const claude = (tokenKey?: string): ProviderConfig => ({ id: tokenKey ?? 'k', kind: 'anthropic', label: 'Anthropic (Claude)', baseUrl: '', enabled: true, auth: tokenKey ? 'subscription' : 'apikey', tokenKey });
+const claude = (tokenKey?: string): ProviderConfig => ({ id: tokenKey ?? 'k', kind: 'anthropic', label: 'Claude API', baseUrl: '', enabled: true, auth: tokenKey ? 'subscription' : 'apikey', tokenKey });
 
 describe('account emails', () => {
   const emails = { 'claude:a': 'davide@example.com', 'claude:b': 'davide@work.example' };
   it('names each signed-in plan by its own email', () => {
-    expect(providerDisplayName(claude('claude:a'), emails)).toBe('Anthropic (Claude) · davide@example.com');
-    expect(providerDisplayName(claude('claude:b'), emails)).toBe('Anthropic (Claude) · davide@work.example');
+    expect(providerDisplayName(claude('claude:a'), emails)).toBe('Claude API · davide@example.com');
+    expect(providerDisplayName(claude('claude:b'), emails)).toBe('Claude API · davide@work.example');
   });
   it('keeps the bare label without a known email or a sign-in', () => {
-    expect(providerDisplayName(claude('claude:old'), emails)).toBe('Anthropic (Claude)');
-    expect(providerDisplayName(claude(), emails)).toBe('Anthropic (Claude)');
+    expect(providerDisplayName(claude('claude:old'), emails)).toBe('Claude API');
+    expect(providerDisplayName(claude(), emails)).toBe('Claude API');
     expect(accountEmailOf(claude(), emails)).toBeUndefined();
   });
 });

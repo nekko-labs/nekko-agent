@@ -15,6 +15,7 @@
  */
 
 import type { ClaudeCodeContext } from './chat.js';
+import type { SubscriptionLimits } from './limits.js';
 
 /** How the Claude behind a provider is paid for. */
 export type ClaudeAuth = 'api_key' | 'cloud' | 'subscription' | 'unknown';
@@ -316,19 +317,25 @@ export function claudeUnattendedRefusal(
   return claudeReasonText(claudeCapability(auth, 'unattended_runs', 'claude-code', policy));
 }
 
-/** One column of the comparison table under the two Claude provider cards. */
+/**
+ * One column of the Claude comparison table, which is also the choice the user
+ * makes under the single Claude provider: their subscription (through Claude
+ * Code) or an API account (Anthropic, Bedrock, Vertex or Foundry).
+ */
 export interface ClaudeComparisonColumn {
-  id: 'claude_api' | 'agent_api_key' | 'agent_plan';
+  id: 'subscription' | 'api';
   label: string;
+  /** One line under the label: what it is. */
+  detail: string;
   auth: ClaudeAuth;
   engine: ClaudeEngine;
   billedTo: string;
+  needs: string;
 }
 
 export const CLAUDE_COMPARISON_COLUMNS: readonly ClaudeComparisonColumn[] = [
-  { id: 'claude_api', label: 'Claude (API or cloud)', auth: 'api_key', engine: 'nekko', billedTo: 'Your API or cloud account' },
-  { id: 'agent_api_key', label: 'Claude Agent with an API key', auth: 'api_key', engine: 'claude-code', billedTo: 'Your API account' },
-  { id: 'agent_plan', label: 'Claude Agent with a Claude plan', auth: 'subscription', engine: 'claude-code', billedTo: 'Your Claude plan' },
+  { id: 'subscription', label: 'Subscription', detail: 'Pro, Max or Team, through Claude Code', auth: 'subscription', engine: 'claude-code', billedTo: 'Your Claude plan', needs: 'Claude Code, signed in' },
+  { id: 'api', label: 'API', detail: 'Anthropic key, Bedrock, Vertex or Foundry', auth: 'api_key', engine: 'nekko', billedTo: 'Your API or cloud account, per token', needs: 'An API key or cloud account' },
 ];
 
 /** The comparison table's rows, in order, with their labels. */
@@ -346,6 +353,7 @@ export function claudeComparisonTable(policy: ClaudePolicy = CLAUDE_POLICY): {
   columns: readonly ClaudeComparisonColumn[];
   rows: { capability: ClaudeCapability; label: string; cells: string[] }[];
   billedTo: string[];
+  needs: string[];
 } {
   return {
     columns: CLAUDE_COMPARISON_COLUMNS,
@@ -358,6 +366,7 @@ export function claudeComparisonTable(policy: ClaudePolicy = CLAUDE_POLICY): {
       }),
     })),
     billedTo: CLAUDE_COMPARISON_COLUMNS.map((c) => c.billedTo),
+    needs: CLAUDE_COMPARISON_COLUMNS.map((c) => c.needs),
   };
 }
 
@@ -365,9 +374,9 @@ export function claudeComparisonTable(policy: ClaudePolicy = CLAUDE_POLICY): {
 export const CLAUDE_PLAN_SHEET = {
   title: 'Using your Claude plan in Nekko Agent',
   paragraphs: [
-    "Anthropic's terms say apps like Nekko Agent can't sign you in to your Claude account or send requests on your plan for you. So we don't. Instead, Claude Agent runs the Claude Code you already have installed, and you sign in inside Claude Code itself. Nekko never sees your Claude login.",
+    "Anthropic's terms say apps like Nekko Agent can't sign you in to your Claude account or send requests on your plan for you. So we don't. Instead, the Subscription option runs the Claude Code you already have installed, and you sign in inside Claude Code itself. Nekko never sees your Claude login.",
     "With a Claude plan, you can chat, edit code, approve actions and use your phone, all on your plan. A few things are off for now because the terms don't clearly cover them for third-party apps: scheduled tasks, Nekko's own tools inside a Claude chat, and showing your plan's usage limits.",
-    'Want everything? Use Claude with an API key or through AWS Bedrock, Google Vertex AI or Microsoft Foundry. You get every Nekko feature, billed to your own account.',
+    'Want everything? Choose API: an Anthropic API key, or Claude through AWS Bedrock, Google Vertex AI or Microsoft Foundry. You get every Nekko feature, billed to your own account.',
   ],
 } as const;
 
@@ -390,11 +399,6 @@ export type ClaudeCapabilityStatus =
   | { claude: true; auth: ClaudeAuth; state: ClaudeRowState; reason: ClaudeReasonId | null; message: string | null };
 
 /**
- * `claude:planUsage(providerId)`: there is no sanctioned source of plan usage,
- * so this is `none` with the reason; the dev-only preview answers `example`
- * and the UI renders `claudePlanUsageExample()` with its label.
- */
-/**
  * `claude:codeStatus(providerId?)`: whether the user's own Claude Code is
  * installed and how it is signed in (from `claude --version` and `claude auth
  * status`; Nekko never reads its credentials). `auth` is the policy row it maps
@@ -403,6 +407,73 @@ export type ClaudeCapabilityStatus =
 export type ClaudeCodeStatus =
   | { installed: false; message: string }
   | { installed: true; version: string; loggedIn: false; authMethod?: string; apiProvider?: string | null; auth?: ClaudeAuth; message?: string }
-  | { installed: true; version: string; loggedIn: true; authMethod: string; apiProvider?: string | null; auth: ClaudeAuth };
+  | ({ installed: true; version: string; loggedIn: true; authMethod: string; apiProvider?: string | null; auth: ClaudeAuth } & ClaudeCodeIdentity);
 
-export type ClaudePlanUsageStatus = { source: 'none'; message: string } | { source: 'example'; label: string };
+/**
+ * Who a plan login belongs to, as `claude auth status` prints it (Claude
+ * Code's own output, never its credentials). Only a plan login has them.
+ */
+export interface ClaudeCodeIdentity {
+  email?: string | null;
+  orgId?: string | null;
+  orgName?: string | null;
+  /** `pro`, `max`, `team`, `enterprise`, or whatever a newer CLI reports. */
+  subscriptionType?: string | null;
+}
+
+/** Plan types one person buys for themselves, as opposed to an organization's seat. */
+const PERSONAL_PLANS = ['free', 'pro', 'max'];
+
+/** "Max plan", "Team plan"; `''` when Claude Code did not say. */
+export function claudePlanLabel(subscriptionType?: string | null): string {
+  const t = subscriptionType?.trim();
+  return t ? `${t[0].toUpperCase()}${t.slice(1)} plan` : '';
+}
+
+/**
+ * Whether a new Claude subscription account may be added beside the ones
+ * already connected, from each login's identity:
+ * - `blocked`: the same login (email and organization) is already connected.
+ *   A second copy could only serve to rotate between them around plan limits.
+ * - `confirm`: another personal plan beside a personal plan. Anthropic's plan
+ *   limits "assume ordinary, individual usage", so the user confirms it is for
+ *   separate work, not for adding up limits.
+ * - `ok`: a different person or organization.
+ */
+export function claudeAccountCheck(
+  candidate: ClaudeCodeIdentity,
+  existing: readonly (ClaudeCodeIdentity & { label: string })[],
+): { verdict: 'ok' | 'confirm' | 'blocked'; message: string; sameAs?: string } {
+  const email = candidate.email?.toLowerCase();
+  const same = email ? existing.find((e) => e.email?.toLowerCase() === email && (e.orgId ?? null) === (candidate.orgId ?? null)) : undefined;
+  if (same) {
+    return {
+      verdict: 'blocked',
+      sameAs: same.label,
+      message: `This login (${candidate.email}) is already connected as ${same.label}. Two copies of one login would only let Nekko rotate between them to get around plan limits, which Anthropic's terms rule out.`,
+    };
+  }
+  const personal = (t?: string | null) => !!t && PERSONAL_PLANS.includes(t.toLowerCase());
+  const other = personal(candidate.subscriptionType) ? existing.find((e) => personal(e.subscriptionType)) : undefined;
+  if (other) {
+    return {
+      verdict: 'confirm',
+      sameAs: other.label,
+      message: `You already have a personal ${claudePlanLabel(other.subscriptionType)} connected as ${other.label}. Anthropic's plan limits "assume ordinary, individual usage", so buying several plans to add up limits isn't covered. Ask Anthropic first if that is the reason.`,
+    };
+  }
+  return { verdict: 'ok', message: 'A separate login for separate work is allowed.' };
+}
+
+/**
+ * `claude:planUsage(providerId)`: `claude-code` is the plan usage the user's
+ * own Claude Code last printed in its documented stream output
+ * (`rate_limit_event`, `/usage`'s `usage_report`), answered only where the
+ * `usage_limits` row allows it; otherwise `none` with the reason. The dev-only
+ * preview answers `example` and the UI renders `claudePlanUsageExample()`
+ * with its label.
+ */
+export type ClaudePlanUsageStatus =
+  | { source: 'none'; message: string }
+  | { source: 'example'; label: string }
+  | { source: 'claude-code'; limits: SubscriptionLimits };

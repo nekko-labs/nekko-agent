@@ -30,7 +30,7 @@ const opened: string[] = [];
 Object.assign(window, { nekko: new Proxy({ listSessionSummaries: async () => sessions, getSession: async (id: string) => full.find((s) => s.id === id) ?? null, listTerminals: async () => [], runningSessions: async () => [], pendingInput: async () => ({}) } as any, { get(t, k: string) { if (k in t) return t[k]; if (k.startsWith('on')) return () => () => {}; return () => Promise.resolve(null); } }) });
 const providers = [
   { id: 'eng', label: 'Nekko Agent engine', kind: 'llamacpp', baseUrl: 'http://127.0.0.1:8080', enabled: true },
-  { id: 'ant', label: 'Anthropic (Claude)', kind: 'anthropic', baseUrl: 'https://api.anthropic.com', enabled: true },
+  { id: 'ant', label: 'Claude API', kind: 'anthropic', baseUrl: 'https://api.anthropic.com', enabled: true },
 ];
 const workspaces = [{ id: 'w1', name: 'nekko-agent', path: 'C:/fixture' }, { id: 'w2', name: 'website', path: 'C:/site' }];
 function Fixture() {

@@ -996,7 +996,7 @@ export async function callFromPhone(
 ): Promise<unknown> {
   const { settingsPatch, skill, callArgs: checked } = screenPhoneCall(channel, args);
   if (channel === 'changes:list') {
-    // Off unless the computer's owner turned it on (Settings → Remote access).
+    // The computer's setting (Settings → Remote access), on by default; the owner can turn it off.
     const settings = await dispatch('settings:get', []);
     if (!isObj(settings) || settings.phoneChanges !== true) throw new PhoneAccessError('turned-off', 'changes:list');
   }

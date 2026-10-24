@@ -295,13 +295,21 @@ struct PendingChatRow: View {
 /// Switch computers, pair another, open settings.
 struct ComputerMenu: View {
     @Binding var path: [Route]
+    @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
     @Environment(\.palette) private var palette
+    @State private var forgetting: Computer?
 
     var body: some View {
         Menu {
+            // Each computer opens its own actions: switch to it, or forget it here.
             ForEach(store.computers) { c in
-                Button { store.connect(c.id) } label: {
+                Menu {
+                    if c.id != store.activeId {
+                        Button { store.connect(c.id) } label: { Label("Connect", systemImage: "bolt.horizontal") }
+                    }
+                    Button(role: .destructive) { forgetting = c } label: { Label("Forget…", systemImage: "trash") }
+                } label: {
                     if c.id == store.activeId { Label(c.name, systemImage: "checkmark") } else { Text(c.name) }
                 }
             }
@@ -322,6 +330,7 @@ struct ComputerMenu: View {
             }
         }
         .accessibilityLabel("Computers and settings, \(store.conn.rawValue)")
+        .forgetDialog($forgetting)
     }
 
     private var dot: Color {

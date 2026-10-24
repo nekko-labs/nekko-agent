@@ -407,14 +407,14 @@
     "requests": [],
     "result": {
       "ok": false,
-      "message": "Claude plan sign-in is no longer available in Nekko Agent. Add an Anthropic API key to this provider, or connect Claude Agent to use your plan through Claude Code."
+      "message": "Claude plan sign-in is no longer available in Nekko Agent. Add an Anthropic API key to this provider, or choose Claude, then Subscription, to use your plan through Claude Code."
     }
   },
   "anthropic-sub-signed-out": {
     "requests": [],
     "result": {
       "ok": false,
-      "message": "Claude plan sign-in is no longer available in Nekko Agent. Add an Anthropic API key to this provider, or connect Claude Agent to use your plan through Claude Code."
+      "message": "Claude plan sign-in is no longer available in Nekko Agent. Add an Anthropic API key to this provider, or choose Claude, then Subscription, to use your plan through Claude Code."
     }
   },
   "chatgpt-ok": {
