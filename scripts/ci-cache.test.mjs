@@ -21,7 +21,7 @@ test('CI runs in three tiers: PR, merge queue, and a 6-hourly full run', () => {
 
 test('gate is the single required check and sees every job', () => {
   const gate = read('../.github/workflows/ci.yml').split('\n  gate:')[1];
-  assert.ok(gate.includes('needs: [scope, build, daemon, capture, perf]'));
+  assert.ok(gate.includes('needs: [scope, build, daemon, capture, perf, ios]'));
   assert.ok(gate.includes('if: always()'));
   assert.ok(gate.includes('(failure|cancelled)'));
 });

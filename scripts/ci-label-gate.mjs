@@ -33,6 +33,9 @@ export const LABEL_WORKFLOWS = [
   '.github/workflows/nekkod-npm.yml',
 ];
 
+/** Run by the queue itself (ci.yml's `ios` job), so a PR head's own run of it does not count there. */
+export const QUEUE_RUNS = ['.github/workflows/ios-native.yml'];
+
 const PASSED = new Set(['success', 'skipped', 'neutral']);
 
 /**
@@ -40,11 +43,11 @@ const PASSED = new Set(['success', 'skipped', 'neutral']);
  * into pending, failed and passed. A workflow with no run (its path filter
  * skipped the PR) is not waited for.
  */
-export function labelRuns(runs) {
+export function labelRuns(runs, { queue = false } = {}) {
   const newest = new Map();
   for (const run of runs) {
     const path = run.path?.split('@')[0];
-    if (!LABEL_WORKFLOWS.includes(path)) continue;
+    if (!LABEL_WORKFLOWS.includes(path) || (queue && QUEUE_RUNS.includes(path))) continue;
     const seen = newest.get(path);
     if (!seen || run.id > seen.id) newest.set(path, run);
   }
@@ -129,7 +132,7 @@ function checkQueue(repo, base, head) {
   });
   const problems = queueBlockers(prs);
   for (const pr of prs.filter(needsMacos)) {
-    const state = labelRuns(runsFor(repo, pr.headRefOid));
+    const state = labelRuns(runsFor(repo, pr.headRefOid), { queue: true });
     for (const run of [...state.pending, ...state.failed]) problems.push(`#${pr.number} has \`${MACOS_LABEL}\` and ${describe(run)}`);
   }
   if (problems.length) {

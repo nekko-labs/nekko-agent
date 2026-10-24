@@ -66,3 +66,9 @@ test('gate runs the check on PRs and in the queue, and CI re-runs when a label i
   assert.match(ci, /ci-label-gate\.mjs pr /);
   assert.match(ci, /ci-label-gate\.mjs queue /);
 });
+
+test('in the queue, a PR head\'s own Native iOS run does not count: the queue runs its own', () => {
+  const runs = [run(1, ios, 'completed', 'failure'), run(2, '.github/workflows/mobile.yml', 'completed', 'failure')];
+  assert.deepEqual(labelRuns(runs, { queue: true }).failed.map(r => r.id), [2]);
+  assert.deepEqual(labelRuns(runs).failed.map(r => r.id), [1, 2]);
+});

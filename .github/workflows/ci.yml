@@ -5,7 +5,8 @@ name: CI
 #   pull_request   fast feedback: build, Linux daemon, Windows capture, gated by
 #                  the paths the PR touches. About 8 minutes.
 #   merge_group    the merge queue: adds the Windows daemon and the speed
-#                  contract for the queued group, before anything reaches main.
+#                  contract for the queued group, before anything reaches main,
+#                  and Native iOS for an entry whose own PR touches the iOS app.
 #   schedule       every 6 hours, and before the nightly release: every job on
 #                  every OS, macOS included. Skipped when main has not moved.
 #
@@ -43,6 +44,7 @@ jobs:
       capture_os: ${{ steps.scope.outputs.capture_os }}
       perf: ${{ steps.scope.outputs.perf }}
       itests: ${{ steps.scope.outputs.itests }}
+      ios: ${{ steps.scope.outputs.ios }}
       run: ${{ steps.fresh.outputs.run }}
     steps:
       - uses: actions/checkout@v7
@@ -75,11 +77,14 @@ jobs:
             gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename' > "$RUNNER_TEMP/changed.txt" || true
           else
             gh api "repos/$GITHUB_REPOSITORY/compare/$BASE...$HEAD" --jq '.files[].filename' > "$RUNNER_TEMP/changed.txt" || true
+            # The entry's own PR: the queue squashes it into the group's head commit.
+            gh api "repos/$GITHUB_REPOSITORY/commits/$HEAD" --paginate --jq '.files[].filename' > "$RUNNER_TEMP/own.txt" || true
           fi
       - id: scope
         if: steps.fresh.outputs.run == 'true'
         env:
           CI_CHANGED_FILES: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && format('{0}/changed.txt', runner.temp) || '' }}
+          CI_OWN_FILES: ${{ github.event_name == 'merge_group' && format('{0}/own.txt', runner.temp) || '' }}
           CI_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
         run: node scripts/ci-scope.mjs
 
@@ -352,6 +357,14 @@ jobs:
         if: ${{ !cancelled() }}
         run: node scripts/itest-mcp-http.mjs --spawn hypergate
 
+  # Native iOS (simulator build, unit and UI tests, the live journeys) for a queue
+  # entry whose own PR touches the iOS app: once per PR as it merges, covering it
+  # and everything queued ahead of it, instead of on every push to a `ci:macos` PR.
+  ios:
+    needs: scope
+    if: needs.scope.outputs.run == 'true' && needs.scope.outputs.ios == 'true'
+    uses: ./.github/workflows/ios-native.yml
+
   # The one required check. It passes when every job this run needed passed and
   # the skipped ones were skipped on purpose, so branch protection and the merge
   # queue need not know which jobs a change runs. A scheduled run that fails
@@ -362,7 +375,7 @@ jobs:
   # green. In the queue it fails a group holding a draft, a `hold` PR, or a
   # `ci:macos` PR without green runs, which ejects it (#1002).
   gate:
-    needs: [scope, build, daemon, capture, perf]
+    needs: [scope, build, daemon, capture, perf, ios]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 190

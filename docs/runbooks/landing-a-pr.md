@@ -65,7 +65,13 @@ Decision models' CoreML job, nekkod-npm's darwin build) and fails if any of them
 so the PR is not queued until they are green. macOS runners queue, so that can take an
 hour or more. Adding the label re-runs CI.
 
-On a PR, Native iOS checks dark mode only when the change touches colours
+Native iOS is the exception: on a PR it runs once when `ci:macos` is added (or a
+dispatch, `gh workflow run ios-native.yml --ref <branch>`), not on every push. The
+queue runs it for every entry whose own PR touches the iOS app, and `gate` there
+waits for it, so it is what actually holds an iOS change. Expect an iOS PR's queue
+entry, and anything queued behind it, to take 30 minutes or more.
+
+On a PR or in the queue, Native iOS checks dark mode only when the change touches colours
 (`scripts/ios-theme-scope.mjs`); add `ci:theme` to force light and dark for theme work
 the script cannot see. The 6-hourly run always checks both.
 

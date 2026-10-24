@@ -1,11 +1,18 @@
 name: Native iOS
-# macOS-only. Runs every 6 hours on main and with the `ci:macos` label on a PR,
-# not on every iOS change: the Team plan's 5 macOS runners are shared by every
-# workflow (see ci.yml). A PR verifies dark mode only when it changes colours or
-# carries `ci:theme`; the schedule always runs light and dark.
+# macOS-only: the Team plan's 5 macOS runners are shared by every workflow (see
+# ci.yml). It runs:
+# - in the merge queue, called from ci.yml for an entry whose own PR touches the
+#   iOS app, so `gate` waits for it: one run per PR as it merges, not per push;
+# - every 6 hours on main;
+# - on a PR only on demand: when `ci:macos` is added (or `ci:theme`, with
+#   `ci:macos` on), or by `gh workflow run ios-native.yml --ref <branch>`.
+#   Later pushes do not re-run it.
+# A PR or queue entry verifies dark mode only when it changes colours or carries
+# `ci:theme`; the schedule and a dispatch always run light and dark.
 on:
+  workflow_call:
   pull_request:
-    types: [opened, synchronize, reopened, labeled]
+    types: [labeled]
     paths:
       - 'apps/ios/**'
       - 'apps/relay-server/src/**'
@@ -24,7 +31,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   protocol-and-build:
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:macos')
+    if: github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'ci:macos') && contains(fromJSON('["ci:macos","ci:theme"]'), github.event.label.name))
     runs-on: macos-14
     timeout-minutes: 50
     steps:
@@ -47,11 +54,12 @@ jobs:
           DEVICE=$(xcrun simctl create Nekko-CI "$TYPE" "$RUNTIME")
           echo "DEVICE=$DEVICE" >> "$GITHUB_ENV"
           nohup xcrun simctl boot "$DEVICE" > "$RUNNER_TEMP/boot.log" 2>&1 &
-      # Dark costs a second live journey (about 5 minutes), so a PR runs it only when
-      # it changes colours (scripts/ios-theme-scope.mjs) or carries `ci:theme`.
+      # Dark costs a second live journey (about 5 minutes), so a PR or queue entry runs
+      # it only when it changes colours (scripts/ios-theme-scope.mjs) or carries
+      # `ci:theme`. In the queue, HEAD^1..HEAD is exactly the entry's own PR.
       - name: Appearances to verify
         env:
-          FORCE: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:theme') }}
+          FORCE: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'ci:theme') }}
         run: |
           if [ "$FORCE" = true ]; then THEMES='light dark'; else THEMES=$(git diff HEAD^1 HEAD -- apps/ios | node scripts/ios-theme-scope.mjs); fi
           echo "THEMES=$THEMES" | tee -a "$GITHUB_ENV"

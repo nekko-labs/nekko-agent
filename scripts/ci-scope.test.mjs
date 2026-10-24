@@ -5,10 +5,10 @@ import { ciScope, FILE_LIST_CAP } from './ci-scope.mjs';
 
 const pr = (files, labels = []) => ciScope({ event: 'pull_request', files, labels });
 const queue = (files) => ciScope({ event: 'merge_group', files });
-const full = { daemon_os: ['ubuntu-latest', 'windows-latest', 'macos-latest'], capture_os: ['windows-latest', 'macos-latest'], perf: true, itests: true };
-// Every PR result carries itests: false; every queue result, itests: true.
-const p = (scope) => ({ ...scope, itests: false });
-const q = (scope) => ({ ...scope, itests: true });
+const full = { daemon_os: ['ubuntu-latest', 'windows-latest', 'macos-latest'], capture_os: ['windows-latest', 'macos-latest'], perf: true, itests: true, ios: false };
+// Every PR result carries itests: false; every queue result, itests: true. Neither runs iOS unless a test says so.
+const p = (scope) => ({ ...scope, itests: false, ios: false });
+const q = (scope) => ({ ios: false, ...scope, itests: true });
 const none = { daemon_os: [], capture_os: [], perf: false };
 
 test('the schedule, main pushes and manual dispatches run every job on every OS', () => {
@@ -90,4 +90,18 @@ test('ci.yml runs the itests job from the scope and keeps it out of gate', () =>
   const gate = yml.match(/^ {2}gate:\n {4}needs: \[([^\]]*)\]/m)?.[1];
   assert.ok(gate, 'a gate job');
   assert.ok(!gate.split(',').map((s) => s.trim()).includes('itests'), 'gate does not wait for itests');
+});
+
+test('Native iOS runs in the queue for an entry whose own PR touches iOS, never on a PR', () => {
+  const group = ['apps/ios/App/AppModel.swift', 'docs/guide.md'];
+  assert.equal(ciScope({ event: 'merge_group', files: group, ownFiles: ['apps/ios/App/AppModel.swift'] }).ios, true);
+  // An entry behind an iOS PR: the group's diff has iOS files, its own PR does not.
+  assert.equal(ciScope({ event: 'merge_group', files: group, ownFiles: ['docs/guide.md'] }).ios, false);
+  for (const own of ['crates/nekkod/src/remote.rs', 'packages/shared/src/pairing-link.ts', 'apps/relay-server/src/index.ts', '.github/workflows/ios-native.yml']) {
+    assert.equal(ciScope({ event: 'merge_group', files: [own], ownFiles: [own] }).ios, true, own);
+  }
+  // Own files unknown: the group's files decide.
+  assert.equal(ciScope({ event: 'merge_group', files: group }).ios, true);
+  assert.equal(pr(group, ['ci:macos']).ios, false);
+  assert.equal(ciScope({ event: 'schedule', files: group }).ios, false);
 });
