@@ -33,6 +33,7 @@ val SettingsSections: List<SettingsSection> = listOf(
     { VibrationSection(it) },
     { DictationSection(it) },
     { PcSettingsSection(it) },
+    { ThisComputerSection(it) },
     { ComputersSection(it) },
     { AboutSection(it) },
 )
