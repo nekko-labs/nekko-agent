@@ -200,3 +200,157 @@ export function phoneLimitsKey(providers: unknown, providerId: string): string |
   const found = list.find((p) => isObj(p) && p.id === providerId);
   return isObj(found) ? limitsKeyFor(found as never) : null;
 }
+
+/**
+ * The Monitors pane (`monitor:summary`, FD-1): the limits of what one read
+ * carries. Running chats and pending input are listed oldest-waiting first up
+ * to their cap; automations soonest first.
+ */
+export const PHONE_MONITOR_VIEW = {
+  /** Working chats listed. */
+  running: 20,
+  /** Approvals and questions listed, across chats. */
+  needsYou: 20,
+  /** Next scheduled automation runs listed. */
+  automations: 10,
+  /** A chat title, a tool name or a question, in UTF-16 units. */
+  labelChars: 120,
+} as const;
+
+/**
+ * What the computer reads to answer `monitor:summary`, in this order: the
+ * system probe, the GPU probe, the working chats, the chat summaries, the
+ * pending input, the tasks and the workflows. Each is a channel the desktop
+ * and the daemon already serve.
+ */
+export const PHONE_MONITOR_SOURCES = [
+  'system:stats',
+  'gpu:stats',
+  'chat:running',
+  'sessions:summaries',
+  'chat:pending',
+  'tasks:list',
+  'workflows:list',
+] as const;
+
+export type PhoneMonitorSources = Partial<Record<(typeof PHONE_MONITOR_SOURCES)[number], unknown>>;
+
+const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+const label = (v: unknown): string => (typeof v === 'string' ? cut(v, PHONE_MONITOR_VIEW.labelChars) : '');
+const cmp = <T extends string | number>(a: T, b: T) => (a < b ? -1 : a > b ? 1 : 0);
+
+/** The largest finite number among `values`, or undefined. */
+function highest(values: unknown[]): number | undefined {
+  let best: number | undefined;
+  for (const v of values) if (finite(v) && (best === undefined || v > best)) best = v;
+  return best;
+}
+
+/**
+ * The hardware rows: CPU and memory from the system probe, GPU from the GPU
+ * probe (the busiest device's load, the hottest temperature). No CPU or GPU
+ * model names, no process names: load, memory and temperatures only.
+ */
+function monitorHardware(system: unknown, gpu: unknown): Obj {
+  const sys = isObj(system) ? system : {};
+  const temps = isObj(sys.temps) ? sys.temps : {};
+  const cpu: Obj = { loadPct: num(sys.cpuPct), cores: num(sys.cpuCores) };
+  if (finite(temps.cpuC)) cpu.tempC = temps.cpuC;
+  const memory: Obj = { usedMB: num(sys.memUsedMB), totalMB: num(sys.memTotalMB) };
+  if (finite(temps.memoryC)) memory.tempC = temps.memoryC;
+  let gpuRow: Obj | null = null;
+  if (isObj(gpu)) {
+    const devices = Array.isArray(gpu.devices) ? gpu.devices.filter(isObj) : [];
+    gpuRow = { memoryUsedMB: num(gpu.usedMB), memoryTotalMB: num(gpu.totalMB) };
+    const load = highest(devices.map((d) => d.utilizationPct));
+    if (load !== undefined) gpuRow.loadPct = load;
+    const temp = highest(devices.map((d) => d.temperatureC)) ?? (finite(temps.gpuC) ? temps.gpuC : undefined);
+    if (temp !== undefined) gpuRow.tempC = temp;
+    if (gpu.unified === true) gpuRow.unified = true;
+  } else if (finite(temps.gpuC)) {
+    gpuRow = { tempC: temps.gpuC };
+  }
+  return { cpu, memory, gpu: gpuRow };
+}
+
+/**
+ * `monitor:summary` as a phone receives it: hardware load and temperatures,
+ * the working chats (id, title, what they wait on, how long they have run),
+ * the approvals and questions waiting across chats (ids, risk and a short
+ * label, never a tool's input) and the next automation runs (name and time,
+ * never an instruction or folder). `now` is the computer's clock, in ms.
+ */
+export function phoneMonitorView(sources: PhoneMonitorSources, now: number): Obj {
+  const summaries = Array.isArray(sources['sessions:summaries']) ? sources['sessions:summaries'].filter(isObj) : [];
+  const byId = new Map<string, Obj>();
+  for (const s of summaries) if (typeof s.id === 'string' && !byId.has(s.id)) byId.set(s.id, s);
+  const pending = isObj(sources['chat:pending']) ? sources['chat:pending'] : {};
+  const title = (id: string) => label(byId.get(id)?.title);
+
+  const running: Obj[] = [];
+  const seen = new Set<string>();
+  const ids = Array.isArray(sources['chat:running']) ? sources['chat:running'] : [];
+  for (const id of ids) {
+    if (typeof id !== 'string' || seen.has(id)) continue;
+    seen.add(id);
+    const p = isObj(pending[id]) ? (pending[id] as Obj) : {};
+    const step = isObj(p.approval) ? 'approval' : isObj(p.question) ? 'question' : 'working';
+    const row: Obj = { id, title: title(id), step };
+    const run = byId.get(id)?.activeRun;
+    if (isObj(run) && finite(run.startedAt)) row.elapsedMs = Math.max(0, now - run.startedAt);
+    running.push(row);
+  }
+
+  const needsYou: Obj[] = [];
+  for (const [id, p] of Object.entries(pending)) {
+    if (!isObj(p)) continue;
+    const a = p.approval;
+    if (isObj(a) && isObj(a.call) && typeof a.call.id === 'string') {
+      const sev = a.severity === 'low' || a.severity === 'medium' || a.severity === 'high' ? a.severity : 'medium';
+      const row: Obj = { sessionId: id, title: title(id), kind: 'approval', callId: a.call.id, risk: sev, label: label(a.call.name) };
+      if (finite(a.requestedAt)) row.since = a.requestedAt;
+      needsYou.push(row);
+    }
+    const q = p.question;
+    if (isObj(q) && typeof q.callId === 'string') {
+      const first = Array.isArray(q.questions) && isObj(q.questions[0]) ? q.questions[0] : {};
+      const row: Obj = {
+        sessionId: id,
+        title: title(id),
+        kind: 'question',
+        callId: q.callId,
+        label: label(first.question),
+        count: Array.isArray(q.questions) ? q.questions.length : 0,
+      };
+      if (finite(q.askedAt)) row.since = q.askedAt;
+      needsYou.push(row);
+    }
+  }
+  const since = (r: Obj) => (finite(r.since) ? r.since : Infinity);
+  needsYou.sort((a, b) => cmp(since(a), since(b)) || cmp(a.sessionId as string, b.sessionId as string) || cmp(a.kind as string, b.kind as string));
+
+  const automations: Obj[] = [];
+  const tasks = Array.isArray(sources['tasks:list']) ? sources['tasks:list'] : [];
+  for (const t of tasks) {
+    if (isObj(t) && t.status === 'active' && typeof t.id === 'string' && finite(t.nextRunAt)) {
+      automations.push({ kind: 'task', id: t.id, name: label(t.title), nextRunAt: t.nextRunAt });
+    }
+  }
+  const wf = sources['workflows:list'];
+  const workflows = isObj(wf) && Array.isArray(wf.workflows) ? wf.workflows : [];
+  for (const w of workflows) {
+    if (isObj(w) && w.enabled !== false && typeof w.id === 'string' && finite(w.nextRunAt)) {
+      automations.push({ kind: 'workflow', id: w.id, name: label(w.name), nextRunAt: w.nextRunAt });
+    }
+  }
+  automations.sort(
+    (a, b) => cmp(a.nextRunAt as number, b.nextRunAt as number) || cmp(a.kind as string, b.kind as string) || cmp(a.id as string, b.id as string),
+  );
+
+  return {
+    hardware: monitorHardware(sources['system:stats'], sources['gpu:stats']),
+    running: running.slice(0, PHONE_MONITOR_VIEW.running),
+    needsYou: needsYou.slice(0, PHONE_MONITOR_VIEW.needsYou),
+    automations: automations.slice(0, PHONE_MONITOR_VIEW.automations),
+  };
+}

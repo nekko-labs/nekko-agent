@@ -5,7 +5,7 @@ area: phone
 
 # Folding phones: two chats at once, a Monitors pane and vertical mode (2026-10-24)
 
-`[planned 2026-10-24; nothing implemented yet]` Asked for by Philip on 2026-10-24: a new design for the folding iPhone and other folding phones (Galaxy Z Fold, Pixel Fold, Surface Duo, OnePlus Open, Z Flip when open): two chats at once, a Monitors pane, and support for vertical mode. Decision record: [docs/decisions/0019-folding-phones-get-panes-not-a-new-app.md](../../docs/decisions/0019-folding-phones-get-panes-not-a-new-app.md). Tasks: FD-1 to FD-11 in [TASKS.md](../../TASKS.md). Layout prototype (self-contained HTML, every posture, light and dark): [reports/folding-phones-layout-prototype.html](../../reports/folding-phones-layout-prototype.html).
+`[partly implemented 2026-10-24: FD-1 (the `monitor:summary` channel) unit-tested in TS and Rust and in the phone golden; no pane UI yet]` Asked for by Philip on 2026-10-24: a new design for the folding iPhone and other folding phones (Galaxy Z Fold, Pixel Fold, Surface Duo, OnePlus Open, Z Flip when open): two chats at once, a Monitors pane, and support for vertical mode. Decision record: [docs/decisions/0019-folding-phones-get-panes-not-a-new-app.md](../../docs/decisions/0019-folding-phones-get-panes-not-a-new-app.md). Tasks: FD-1 to FD-11 in [TASKS.md](../../TASKS.md). Layout prototype (self-contained HTML, every posture, light and dark): [reports/folding-phones-layout-prototype.html](../../reports/folding-phones-layout-prototype.html).
 
 ## User intent
 
@@ -44,6 +44,17 @@ A pane's header shows its chat's title, status dot and the usual chat menu, plus
 **Drag between panes.** A message, a file from Files, or an image can be dragged from one pane into the other's composer (SwiftUI `draggable` / `dropDestination`; Compose `dragAndDropSource` / `dragAndDropTarget`). Text only lands as text in the composer; nothing is sent by a drop.
 
 **Monitors on a closed phone.** The Monitors pane content also exists as a tab on the closed-posture app (bottom of the chat list, as *Monitors*), so the feature is not foldable-only. On iPhone it is a route (`.monitors`); on Android a destination in `NekkoNavHost`.
+
+### `monitor:summary` (FD-1, implemented 2026-10-24)
+
+`[implemented 2026-10-24, FD-1; unit-tested (packages/shared phone-views.test.ts, crates/nekko-remote phone_views.rs) and in the phone golden; no phone calls it yet]` A read-class phone channel (refused `read-off` with Read off). The computer answers it in the phone gate from the reads it already serves for its own Monitors dock, in this order: `system:stats`, `gpu:stats`, `chat:running`, `sessions:summaries`, `chat:pending`, `tasks:list`, `workflows:list` (`PHONE_MONITOR_SOURCES`); the phone's arguments are ignored. The daemon (`crates/nekko-remote/src/phone_views.rs`) and the TS edition (`packages/shared/src/phone-views.ts`, `phoneMonitorView`) project it the same way:
+
+- `hardware`: `cpu` (`loadPct`, `cores`, `tempC` when there is a sensor), `memory` (`usedMB`, `totalMB`, `tempC`), `gpu` (`loadPct` of the busiest device, `tempC` of the hottest, `memoryUsedMB`, `memoryTotalMB`, `unified` on Apple Silicon), or `null` without a GPU probe or sensor. No CPU or GPU model names, no process names, no paths.
+- `running`: each working chat's `id`, `title`, `step` (`approval`, `question` or `working`) and `elapsedMs` since its turn started (`activeRun.startedAt`; a start ahead of the computer's clock reads 0), at most 20.
+- `needsYou`: each pending approval (`sessionId`, `title`, `kind: "approval"`, `callId`, `risk` low / medium / high, `label` = the tool's name, `since`) and question (`kind: "question"`, `callId`, `label` = its first question, `count`, `since`), oldest first, at most 20. Never a tool's input or the approval's reason.
+- `automations`: the next runs of active tasks and enabled workflows (`kind`, `id`, `name`, `nextRunAt`), soonest first, at most 10.
+
+Titles and labels are cut to 120 UTF-16 units (`PHONE_MONITOR_VIEW`). The step label is coarse for now: the computer does not yet name the tool a working chat is running.
 
 ## Vertical mode
 
