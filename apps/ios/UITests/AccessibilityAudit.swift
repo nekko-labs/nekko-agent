@@ -1,6 +1,12 @@
 import XCTest
 
 extension XCTestCase {
+    /// The appearances the light-and-dark tests run in: NEKKO_UI_THEMES ("light" on CI
+    /// for a change that keeps its colours; scripts/ios-theme-scope.mjs), else both.
+    var uiTestThemes: [String] {
+        ProcessInfo.processInfo.environment["NEKKO_UI_THEMES"]?.split(separator: " ").map(String.init) ?? ["light", "dark"]
+    }
+
     /// iOS 17's accessibility audit (labels, contrast, hit regions, clipping,
     /// traits) on whatever `app` shows now. Every finding is collected into one
     /// attachment and the test fails listing all blocking ones, so a run shows

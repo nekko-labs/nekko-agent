@@ -11,13 +11,18 @@
 //   is a draft or carries `hold`, or carries `ci:macos` without green runs on
 //   its head, and the queue ejects it.
 //
+// Native iOS runs in batches (scripts/ios-batch.mjs): for a `ci:macos` PR that
+// touches iOS, a green `Native iOS (batch)` status on its head counts as much
+// as a green Native iOS run on it, and with neither yet, `gate` waits for one.
+//
 // Usage (from ci.yml's gate job, with GH_TOKEN and GITHUB_REPOSITORY set):
-//   node scripts/ci-label-gate.mjs pr --sha <head sha>
+//   node scripts/ci-label-gate.mjs pr --pr <number> --sha <head sha>
 //   node scripts/ci-label-gate.mjs queue --base <group base sha> --head <group head sha>
 //
 // REST only: a GraphQL hiccup in the queue would eject every group.
 
 import { execFileSync } from 'node:child_process';
+import { BATCH_CONTEXT, iosVerdict, touchesIos } from './ios-batch.mjs';
 import { pathToFileURL } from 'node:url';
 
 export const MACOS_LABEL = 'ci:macos';
@@ -33,14 +38,19 @@ export const LABEL_WORKFLOWS = [
   '.github/workflows/nekkod-npm.yml',
 ];
 
+const IOS_WORKFLOW = '.github/workflows/ios-native.yml';
 const PASSED = new Set(['success', 'skipped', 'neutral']);
 
 /**
  * The newest run of each label workflow among a commit's workflow runs, sorted
  * into pending, failed and passed. A workflow with no run (its path filter
  * skipped the PR) is not waited for.
+ *
+ * Native iOS also passes on a green batch status (`batch`, the head's newest
+ * `Native iOS (batch)` status), and `iosRequired` waits for one when there is
+ * neither a run nor a status yet.
  */
-export function labelRuns(runs) {
+export function labelRuns(runs, { batch = null, iosRequired = false } = {}) {
   const newest = new Map();
   for (const run of runs) {
     const path = run.path?.split('@')[0];
@@ -54,7 +64,24 @@ export function labelRuns(runs) {
     else if (PASSED.has(run.conclusion)) out.passed.push(run);
     else out.failed.push(run);
   }
+  if (batch || iosRequired) {
+    const run = newest.get(IOS_WORKFLOW);
+    for (const list of Object.values(out)) if (list.includes(run)) list.splice(list.indexOf(run), 1);
+    const verdict = iosVerdict({ run, status: batch, required: iosRequired });
+    const entry = verdict === 'passed' && run && PASSED.has(run.conclusion) ? run
+      : { name: 'Native iOS', status: verdict === 'pending' ? 'pending' : 'completed', conclusion: verdict === 'passed' ? 'success' : 'failure',
+          html_url: batch?.target_url ?? run?.html_url ?? 'no batch has taken it yet' };
+    if (verdict !== 'none') out[verdict].push(entry);
+  }
   return out;
+}
+
+
+/** The head's newest `Native iOS (batch)` status, and whether the PR needs Native iOS at all. */
+function iosContext(repo, pr, sha) {
+  const statuses = JSON.parse(gh(['api', `repos/${repo}/commits/${sha}/status`])).statuses ?? [];
+  const files = gh(['api', '--paginate', `repos/${repo}/pulls/${pr}/files`, '--jq', '.[].filename']).split('\n').filter(Boolean);
+  return { batch: statuses.find(s => s.context === BATCH_CONTEXT) ?? null, iosRequired: touchesIos(files) };
 }
 
 /**
@@ -98,10 +125,10 @@ function runsFor(repo, sha) {
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-async function waitForPr(repo, sha, { timeoutMin, pollSec }) {
+async function waitForPr(repo, pr, sha, { timeoutMin, pollSec }) {
   const until = Date.now() + timeoutMin * 60_000;
   for (;;) {
-    const state = labelRuns(runsFor(repo, sha));
+    const state = labelRuns(runsFor(repo, sha), iosContext(repo, pr, sha));
     if (state.failed.length) {
       console.error(`\`${MACOS_LABEL}\` runs failed on ${sha}:\n${state.failed.map(describe).join('\n')}`);
       return 1;
@@ -129,7 +156,7 @@ function checkQueue(repo, base, head) {
   });
   const problems = queueBlockers(prs);
   for (const pr of prs.filter(needsMacos)) {
-    const state = labelRuns(runsFor(repo, pr.headRefOid));
+    const state = labelRuns(runsFor(repo, pr.headRefOid), iosContext(repo, pr.number, pr.headRefOid));
     for (const run of [...state.pending, ...state.failed]) problems.push(`#${pr.number} has \`${MACOS_LABEL}\` and ${describe(run)}`);
   }
   if (problems.length) {
@@ -150,14 +177,14 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const mode = process.argv[2];
   let code;
   if (mode === 'pr') {
-    code = await waitForPr(repo, arg('sha'), {
+    code = await waitForPr(repo, arg('pr'), arg('sha'), {
       timeoutMin: Number(process.env.CI_LABEL_TIMEOUT_MIN ?? 170),
       pollSec: Number(process.env.CI_LABEL_POLL_SEC ?? 60),
     });
   } else if (mode === 'queue') {
     code = checkQueue(repo, arg('base'), arg('head'));
   } else {
-    console.error('usage: ci-label-gate.mjs pr --sha <sha> | queue --base <sha> --head <sha>');
+    console.error('usage: ci-label-gate.mjs pr --pr <number> --sha <sha> | queue --base <sha> --head <sha>');
     code = 2;
   }
   process.exit(code);

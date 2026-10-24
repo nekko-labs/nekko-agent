@@ -95,6 +95,22 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-10
 
+### #1031 Native iOS CI: one build, dark mode only for colour changes (2026-10-24)
+Area: dev build
+Result: mixed
+Conditions: GitHub-hosted macos-14 (3 vCPU), Native iOS on PR #1011's head e04ff824, old workflow (run 40131450126) against the new one in a batch (run 40138086476); main's live tests were failing in both, which dominates both runs' time.
+
+| Metric | Before | After |
+|---|---|---|
+| `swift test` | 70 s | 70 s |
+| cargo build of nekkod | 114 s | 133 s |
+| Xcode build step | 118 s | 297 s (simulator booting beside it) |
+| Simulator step start to first test | 248 s | 40 s |
+| Build + time to first test | 366 s | 349 s |
+| Whole job | 45.6 min | hit the 50 min timeout |
+
+Booting the simulator in the background made whatever ran beside it slower: `swift test` 262 s instead of about 56 s and the cargo build 185 s when it booted from the job's start (run 40132995453), and nekkod never became ready beside the relay itest (run 40136579251). Net about 17 s, so the background boot was dropped; the single build stays. The larger saving is the dark live journey, which a PR now runs only when it changes colours (#1011 does, so both runs here ran it): on the last green run it was 5.2 min, on these failing runs 450 s and 684 s. Source: #1031.
+
 ### B2 Background replies pause for the user instead of unloading the model (2026-10-23)
 Area: local inference
 Result: improvement (a design choice made on measurements: pause, not unload)
