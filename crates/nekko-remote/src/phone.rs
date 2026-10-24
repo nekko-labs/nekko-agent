@@ -36,6 +36,9 @@ pub struct Policy {
     pub provider_view: Vec<String>,
     /// `session:watches`: the fields of a watch a phone receives (`PHONE_WATCH_VIEW`).
     pub watch_view: Vec<String>,
+    /// `machine:summary`: its top-level keys and the resident model fields (`PHONE_MACHINE_VIEW`).
+    pub machine_view: Vec<String>,
+    pub machine_resident_view: Vec<String>,
     pub skill_view: Vec<String>,
     pub queue_keys: Vec<String>,
     pub session_option_keys: Vec<String>,
@@ -104,6 +107,8 @@ pub fn policy() -> &'static Policy {
             settings_view: strings(&v["settingsView"]),
             provider_view: strings(&v["providerView"]),
             watch_view: strings(&v["watchView"]),
+            machine_view: strings(&v["machineView"]),
+            machine_resident_view: strings(&v["machineResidentView"]),
             skill_view: strings(&v["skillView"]),
             queue_keys: strings(&v["queueKeys"]),
             session_option_keys: strings(&v["sessionOptionKeys"]),
@@ -487,6 +492,9 @@ pub fn redact(channel: &str, result: Value) -> Value {
         "task:runNow" => Value::Null,
         "pr:sessionList" => crate::phone_views::prs(&result, &policy().views),
         "session:watches" => crate::phone_views::watches(&result, &policy().watch_view, policy().views.text_chars),
+        "machine:summary" => {
+            crate::phone_views::machine(&result, &policy().machine_view, &policy().machine_resident_view)
+        }
         "usage:summary" => crate::phone_views::usage(&result, &policy().views),
         "limits:get" => crate::phone_views::limits(&result, &policy().views),
         c if policy().terminal.is_terminal(c) => crate::phone_terminal::result(c, &result),
@@ -1179,6 +1187,22 @@ pub fn gate_secured(
 
 #[cfg(test)]
 mod tests {
+
+    /// `machine:summary` (2026-10-24): no arguments; the view pins the top-level
+    /// keys and the resident model fields.
+    #[test]
+    fn redacts_a_machine_summary() {
+        assert!(screen("machine:summary", &[]).is_ok());
+        let raw = json!({ "version": "0.9.3", "platform": "darwin", "edition": "desktop", "uptimeMs": 5, "hardware": { "cpu": { "cores": 16 } },
+            "live": { "cpuPct": 1 }, "gpu": { "usedMB": 1 },
+            "engine": { "running": true, "startedAt": 1, "resident": [{ "id": "m", "name": "M", "contextTokens": 8, "path": "/Users/me/m.gguf" }, "junk"], "loading": 0, "memory": { "totalMB": 1 } },
+            "extra": "dropped" });
+        let want = json!({ "version": "0.9.3", "platform": "darwin", "edition": "desktop", "uptimeMs": 5, "hardware": { "cpu": { "cores": 16 } },
+            "live": { "cpuPct": 1 }, "gpu": { "usedMB": 1 },
+            "engine": { "running": true, "startedAt": 1, "resident": [{ "id": "m", "name": "M", "contextTokens": 8 }], "loading": 0, "memory": { "totalMB": 1 } } });
+        assert_eq!(redact("machine:summary", raw), want);
+        assert_eq!(redact("machine:summary", Value::Null), Value::Null);
+    }
 
     /// `session:watches` (2026-10-24): a chat id is required; the view keeps the
     /// `PHONE_WATCH_VIEW` fields, never the continuation prompt, and cuts `lastError`.

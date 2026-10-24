@@ -190,6 +190,28 @@ pub fn watches(watches: &Value, view: &[String], text_chars: usize) -> Value {
     )
 }
 
+/// `phoneMachineView`: a computer's summary pinned to `PHONE_MACHINE_VIEW`,
+/// its resident models to `PHONE_MACHINE_RESIDENT_VIEW`; null unless an object.
+pub fn machine(summary: &Value, view: &[String], resident_view: &[String]) -> Value {
+    if !summary.is_object() {
+        return Value::Null;
+    }
+    let mut o = pick_keys(summary, view);
+    if let Some(Value::Object(engine)) = o.get("engine").cloned() {
+        let mut engine = engine;
+        let resident: Vec<Value> = engine
+            .get("resident")
+            .and_then(Value::as_array)
+            .map(|list| {
+                list.iter().filter(|m| m.is_object()).map(|m| Value::Object(pick_keys(m, resident_view))).collect()
+            })
+            .unwrap_or_default();
+        engine.insert("resident".into(), Value::Array(resident));
+        o.insert("engine".into(), Value::Object(engine));
+    }
+    Value::Object(o)
+}
+
 /// `phoneLimitsView`.
 pub fn limits(limits: &Value, views: &Views) -> Value {
     if !limits.is_object() {
