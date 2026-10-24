@@ -47,7 +47,15 @@ const html = (o: Partial<Parameters<typeof SecuritySettingsView>[0]> = {}) =>
   );
 
 /** The unescaped text of the markup, as the owner reads it. */
-const text = (out: string) => out.replace(/<[^>]+>/g, '').replace(/&#x27;/g, "'").replace(/&amp;/g, '&');
+const text = (out: string) => {
+  // Strip tags until none are left (one pass can leave a tag rebuilt from the pieces), then decode.
+  let s = out;
+  for (let prev = ''; prev !== s; ) {
+    prev = s;
+    s = s.replace(/<[^>]*>/g, '');
+  }
+  return s.replace(/&#x27;/g, "'").replace(/&amp;/g, '&');
+};
 
 describe('Settings → Security', () => {
   it('starts empty, with the two-methods rule and the untested-hardware note linking to the issues', () => {
