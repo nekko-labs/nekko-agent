@@ -53,7 +53,11 @@
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout"
             android:windowSoftInputMode="adjustResize">
+            <!-- Folding, unfolding and rotating don't recreate the activity: the panes move
+                 (PanesHost) and both chats keep their scroll position and message box text. -->
+
             <!-- Long-press the launcher icon: New chat (res/xml/shortcuts.xml). -->
             <meta-data
                 android:name="android.app.shortcuts"

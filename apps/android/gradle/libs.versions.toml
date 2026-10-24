@@ -15,6 +15,9 @@ codeScanner = "16.1.0"
 biometric = "1.1.0"
 fragment = "1.9.1"
 espresso = "3.7.0"
+# Folding phones (FD-7): FoldingFeature and the window size class.
+window = "1.4.0"
+adaptive = "1.1.0"
 credentials = "1.5.0"
 
 [libraries]
@@ -48,6 +51,9 @@ compose-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
 androidx-test-espresso-core = { module = "androidx.test.espresso:espresso-core", version.ref = "espresso" }
 compose-material3 = { module = "androidx.compose.material3:material3" }
 compose-material-icons-extended = { module = "androidx.compose.material:material-icons-extended" }
+androidx-window = { module = "androidx.window:window", version.ref = "window" }
+androidx-window-testing = { module = "androidx.window:window-testing", version.ref = "window" }
+compose-material3-adaptive = { module = "androidx.compose.material3.adaptive:adaptive", version.ref = "adaptive" }
 gms-code-scanner = { module = "com.google.android.gms:play-services-code-scanner", version.ref = "codeScanner" }
 
 [plugins]
