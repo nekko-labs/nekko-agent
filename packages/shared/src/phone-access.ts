@@ -69,6 +69,19 @@ import {
   PHONE_WATCH_VIEW,
   PHONE_WORKFLOW_RUN_VIEW,
   PHONE_WORKFLOW_VIEW,
+  PHONE_CONTEXT_SOURCES,
+  PHONE_ENGINE_MEMORY_VIEW,
+  PHONE_ENGINE_VIEW,
+  PHONE_GPU_DEVICE_VIEW,
+  PHONE_GPU_VIEW,
+  PHONE_LOADING_VIEW,
+  PHONE_RESIDENT_VIEW,
+  PHONE_SYSTEM_VIEW,
+  PHONE_TEMPS_VIEW,
+  phoneContextView,
+  phoneEngineView,
+  phoneGpuView,
+  phoneSystemView,
   phoneLimitsKey,
   phoneLimitsView,
   phoneMachineView,
@@ -101,6 +114,9 @@ import {
  * folder's files (list, search, read; save as a Change action) and the
  * computer's logs, read only (phone-files.ts). FA-3 / FA-6 add the chat's
  * terminals and SSH (`PHONE_TERMINAL_CHANNELS`, phone-terminal.ts).
+ * The Expert monitor (2026-10-24) reads the computer's hardware, the Model
+ * Server's loaded models and a chat's context totals, and unloads a model
+ * (`PHONE_MONITOR_READ_CHANNELS`, `model:unload`).
  */
 export const PHONE_CHANNELS = [
   'app:info',
@@ -111,6 +127,8 @@ export const PHONE_CHANNELS = [
   'chat:pending',
   'chat:queue',
   'chat:send',
+  'context:preview',
+  'engine:status',
   'files:list',
   'files:read',
   'files:search',
@@ -127,10 +145,12 @@ export const PHONE_CHANNELS = [
   'git:stage',
   'git:switch',
   'git:unstage',
+  'gpu:stats',
   'limits:get',
   'logs:list',
   'logs:read',
   'machine:summary',
+  'model:unload',
   'models:list',
   'monitor:summary',
   'pr:action',
@@ -151,6 +171,7 @@ export const PHONE_CHANNELS = [
   'skills:runnable',
   'ssh:hosts',
   'ssh:open',
+  'system:stats',
   'task:runNow',
   'tasks:list',
   'terminal:close',
@@ -306,8 +327,14 @@ export const PHONE_CHAT_READ_CHANNELS: readonly string[] = [
   'workflows:list',
   'workspace:list',
 ];
+/**
+ * The Expert monitor's reads (2026-10-24): the computer's hardware, the Model
+ * Server's state and a chat's context totals, each a narrow projection.
+ */
+export const PHONE_MONITOR_READ_CHANNELS: readonly string[] = ['context:preview', 'engine:status', 'gpu:stats', 'system:stats'];
 export const PHONE_READ_CHANNELS: readonly string[] = [
   ...PHONE_CHAT_READ_CHANNELS,
+  ...PHONE_MONITOR_READ_CHANNELS,
   ...PHONE_GIT_READ_CHANNELS,
   ...PHONE_FILES_READ_CHANNELS,
   ...PHONE_TERMINAL_READ_CHANNELS,
@@ -317,8 +344,9 @@ export const PHONE_READ_CHANNELS: readonly string[] = [
  * the agent act or changes the computer's settings or chats. Sending,
  * queueing and editing prompts, stopping a run, approving a tool, answering a
  * question, making, forking and deleting chats and changing their options,
- * the phone-settable settings, running an automation and transcribing a voice
- * prompt. The Change switch applies; each call is written to the activity
+ * the phone-settable settings, running an automation, transcribing a voice
+ * prompt and unloading a local model (it frees memory and reloads on the next
+ * reply, so it is undone by using the model; 2026-10-24). The Change switch applies; each call is written to the activity
  * list. Raising a chat's mode is the exception that needs a proof
  * (`PHONE_MODE_PROOF`).
  */
@@ -328,6 +356,7 @@ export const PHONE_AGENT_CHANNELS: readonly string[] = [
   'chat:editQueued',
   'chat:queue',
   'chat:send',
+  'model:unload',
   'session:create',
   'session:delete',
   'session:fork',
@@ -753,6 +782,13 @@ export function screenPhoneCall(
     case 'limits:get':
       if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'provider id');
       return {};
+    case 'context:preview':
+      if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
+      return {};
+    case 'model:unload':
+      if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'provider id');
+      if (typeof args[1] !== 'string' || args[1] === '') throw new PhoneAccessError('value-invalid', 'model id');
+      return {};
     case 'settings:update':
       return { settingsPatch: checkPhoneSettingsPatch(args[0]) };
     case 'session:setOptions': {
@@ -888,6 +924,16 @@ export function redactPhoneResult(channel: string, result: unknown): unknown {
       return phoneUsageView(result);
     case 'limits:get':
       return phoneLimitsView(result);
+    case 'system:stats':
+      return phoneSystemView(result);
+    case 'gpu:stats':
+      return phoneGpuView(result);
+    case 'engine:status':
+      return phoneEngineView(result);
+    case 'context:preview':
+      return phoneContextView(result);
+    case 'model:unload':
+      return isObj(result) ? pick(result, ['message', 'ok']) : null;
     case 'terminals:list':
     case 'terminal:tail':
     case 'ssh:hosts':
@@ -1040,6 +1086,10 @@ export async function callFromPhone(
   // Only what the computer's own call takes: an id, or nothing.
   if (channel === 'task:runNow' || channel === 'workflow:run') callArgs = [args[0]];
   if (channel === 'tasks:list' || channel === 'workflows:list' || channel === 'usage:summary') callArgs = [];
+  if (channel === 'system:stats' || channel === 'gpu:stats' || channel === 'engine:status') callArgs = [];
+  // A chat's own context only: the phone never attaches a path.
+  if (channel === 'context:preview') callArgs = [args[0], []];
+  if (channel === 'model:unload') callArgs = [args[0], args[1]];
   if (channel === 'session:fork') callArgs = args[1] == null ? [args[0]] : [args[0], args[1]];
   if (channel === 'chat:editQueued') callArgs = [args[0], args[1], pick(args[2], PHONE_QUEUE_EDIT_KEYS)];
   if (channel === 'pr:sessionList') callArgs = [args[0], args[1] === true];
@@ -1111,6 +1161,17 @@ export function phoneAccessPolicy() {
     monitorView: { ...PHONE_MONITOR_VIEW },
     monitorSources: [...PHONE_MONITOR_SOURCES],
     queueEditKeys: [...PHONE_QUEUE_EDIT_KEYS],
+    expertMonitor: {
+      systemView: [...PHONE_SYSTEM_VIEW],
+      tempsView: [...PHONE_TEMPS_VIEW],
+      gpuView: [...PHONE_GPU_VIEW],
+      gpuDeviceView: [...PHONE_GPU_DEVICE_VIEW],
+      engineView: [...PHONE_ENGINE_VIEW],
+      residentView: [...PHONE_RESIDENT_VIEW],
+      loadingView: [...PHONE_LOADING_VIEW],
+      engineMemoryView: [...PHONE_ENGINE_MEMORY_VIEW],
+      contextSources: [...PHONE_CONTEXT_SOURCES],
+    },
     files: {
       view: { ...PHONE_FILES_VIEW },
       entryView: [...PHONE_FILE_ENTRY_VIEW],

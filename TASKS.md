@@ -1,10 +1,19 @@
 ---
 status: active
-last-updated: 2026-10-23
+last-updated: 2026-10-24
 owner:
 ---
 
 # Execution Plan, Nekko Agent
+
+## iPhone Simple and Expert modes (added 2026-10-24)
+
+Philip asked for a Simple / Expert switch at the top left of the phone's chat: Simple picks the model and effort from one control with an effort gauge, Expert adds the computer's hardware gauges and a loaded-models monitor with Unload, and the context usage shows in both. Spec: [iPhone Simple and Expert modes](spec/phone/iphone-simple-and-expert-modes.md); why the gate opens: [decision 0020](docs/decisions/0020-phones-read-the-monitors-and-unload-models.md); issue #984.
+
+- [x] **T203, phone gate for the monitors (2026-10-24).** `system:stats`, `gpu:stats`, `engine:status`, `context:preview` (Read, `PHONE_MONITOR_READ_CHANNELS`) and `model:unload` (agent class) with projections in `phone-views.ts` and `phone_views.rs`; `phone-access.json` regenerated; TS (`phone-monitor.test.ts`) and Rust (`phone::tests::monitor`) tests.
+- [x] **T204, iPhone modes, model and effort control, context gauge, monitor (2026-10-24).** `Prefs.expertMode`; `ModeViews.swift` (mode menu, `EffortGauge`, `ModelEffortButton` / sheet, `ContextGauge`, `MonitorPanel`, `MonitorSheet`); `Monitor.swift` parsing and `MonitorModel` polling; chat `effort` and `context`. Swift package tests pass on Linux; views built only by macOS CI.
+- [ ] **T204a, simulator UI test and screenshots** of the mode switch, the composer row and the monitor against a live computer.
+- [ ] **T204b, Android parity.**
 
 ## Chat page removed (added 2026-10-24)
 
@@ -735,7 +744,7 @@ Extends `../../knowledgebase/principles/coding.md` (which these override).
 
 ### SK: Hardware keys, step-up on phone and desktop, remote sign-out (added 2026-10-24)
 
-Spec: [spec/platform/hardware-keys-step-up-and-remote-sign-out.md](spec/platform/hardware-keys-step-up-and-remote-sign-out.md). Decision: [0018](docs/decisions/0018-the-computer-is-the-relying-party-for-step-up.md). Stack order: SK-1 to SK-3 (the verifier and the safety exits, no UI) land first; SK-4 to SK-8 are one client each; SK-9 to SK-12 close the loop.
+Spec: [spec/platform/hardware-keys-step-up-and-remote-sign-out.md](spec/platform/hardware-keys-step-up-and-remote-sign-out.md). Decision: [0018](docs/decisions/0020-the-computer-is-the-relying-party-for-step-up.md). Stack order: SK-1 to SK-3 (the verifier and the safety exits, no UI) land first; SK-4 to SK-8 are one client each; SK-9 to SK-12 close the loop.
 
 - [x] SK-1: `packages/shared/src/step-up.ts`: the guarded-action list, the challenge (`security:challenge`, read class, 18 random bytes, single use, 2 minutes), the step-up payload shapes (FIDO2 assertion, TOTP), the refusal codes (`step-up-required|invalid|stale|replayed`, `quit-disabled`), and `security.json`'s shape (credentials with public key, counter, name, kind, addedAt, lastUsedAt; TOTP secret; recovery-code hashes; `enabled`). Golden fixture `crates/nekko-remote/tests/golden/step-up.json` with real assertions from a software FIDO2 authenticator. Added: 2026-10-24. Done 2026-10-24: `step-up.ts` (constants, `security.json` types, the TS verifier `checkStepUp`, TOTP, recovery codes) and `step-up.golden.test.ts` (a WebCrypto P-256 software authenticator writing 24 cases: valid, wrong challenge, stale, replayed, counter not rising, origin, rpId, flags, type, TOTP window, replay and lock doubling; RFC 6238 vectors).
 - [ ] SK-2: Rust verifier `crates/nekko-remote/src/step_up.rs` (FIDO2 assertion: rpIdHash, flags UP/UV, counter strictly rising, ES256 over authData‖sha256(clientDataJSON); TOTP RFC 6238 with the rate limit; recovery codes) and the TS twin, both on the golden; the gate (`phone.rs`) checks the step-up after the Change proof for guarded channels. Added: 2026-10-24.

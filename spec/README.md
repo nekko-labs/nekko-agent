@@ -167,6 +167,7 @@ Phone remote control and the native iOS and Android apps.
 
 - [Driving your home model from your phone (remote control)](phone/driving-your-home-model-from-your-phone-remote-control.md) (13 KB)
 - [Folding phones: two chats at once, a Monitors pane and vertical mode (2026-10-24)](phone/folding-phones-two-chats-and-monitors.md) (13 KB)
+- [iPhone: Simple and Expert modes, the model and effort control, the context gauge and the hardware monitor (2026-10-24)](phone/iphone-simple-and-expert-modes.md) (6 KB)
 - [iPhone: the desktop's languages and themes, and New chat's effort and computer (2026-10-23)](phone/iphone-languages-themes-and-new-chat-choices.md) (5 KB)
 - [Native Android app (2026-10-11)](phone/native-android-app.md) (41 KB)
 - [Native iOS app (2026-10-16)](phone/native-ios-app.md) (80 KB)
