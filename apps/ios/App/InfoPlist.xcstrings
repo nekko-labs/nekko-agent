@@ -1,0 +1,252 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "NSCameraUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scanne den Kopplungscode, den dein Computer unter Einstellungen → Fernzugriff anzeigt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escanea el código de vinculación que tu computadora muestra en Ajustes → Acceso remoto."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scannez le code d’association affiché par votre ordinateur dans Paramètres → Accès à distance."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コンピュータの 設定 → リモートアクセス に表示されるペアリングコードをスキャンします。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escaneie o código de pareamento que seu computador mostra em Configurações → Acesso remoto."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫描你的电脑在 设置 → 远程访问 中显示的配对码。"
+          }
+        }
+      }
+    },
+    "NSFaceIDUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entsperre Nekko Agent und bestätige Änderungen, die er auf deinem Computer vornimmt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desbloquea Nekko Agent y confirma los cambios que hace en tu computadora."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Déverrouillez Nekko Agent et confirmez les modifications qu’il effectue sur votre ordinateur."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nekko Agent のロックを解除し、コンピュータ上で行う変更を確認します。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desbloqueie o Nekko Agent e confirme as alterações que ele faz no seu computador."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "解锁 Nekko Agent，并确认它在你电脑上所做的更改。"
+          }
+        }
+      }
+    },
+    "NSLocalNetworkUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erreiche das Relay auf deinem Computer über dein lokales Netzwerk oder Tailscale und liste Computer in diesem Wi-Fi auf, wenn du auf „In diesem Netzwerk suchen“ tippst."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accede al relay de tu computadora por tu red local o Tailscale, y lista las computadoras de este Wi-Fi cuando toques Buscar en esta red."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accédez au relais de votre ordinateur via votre réseau local ou Tailscale, et listez les ordinateurs de ce Wi-Fi quand vous touchez Chercher sur ce réseau."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ローカルネットワークまたは Tailscale 経由でコンピュータの Relay に接続し、「このネットワークを検索」をタップしたときにこの Wi-Fi 上のコンピュータを一覧表示します。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alcance o relay no seu computador pela rede local ou pelo Tailscale e liste computadores neste Wi-Fi quando você tocar em Procurar nesta rede."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通过本地网络或 Tailscale 连接你电脑上的 Relay，并在你轻点“在此网络中查找”时列出此 Wi-Fi 上的电脑。"
+          }
+        }
+      }
+    },
+    "NSMicrophoneUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diktiere eine Nachricht. Die Aufnahme wird in Text umgewandelt und dann gelöscht."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dicta un mensaje. La grabación se convierte en texto y luego se elimina."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dictez un message. L’enregistrement est converti en texte puis supprimé."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メッセージを音声入力します。録音はテキストに変換された後、削除されます。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dite uma mensagem. A gravação é transformada em texto e depois excluída."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "听写消息。录音会被转换为文本，然后删除。"
+          }
+        }
+      }
+    },
+    "NSSpeechRecognitionUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wandle dein Diktat in Text um, wenn dein Computer das nicht kann."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Convierte tu dictado en texto cuando tu computadora no pueda."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Convertissez votre dictée en texte lorsque votre ordinateur ne peut pas le faire."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コンピュータで処理できない場合に、音声入力をテキストに変換します。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transforme seu ditado em texto quando seu computador não puder."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当你的电脑无法转写时，将你的听写转换为文本。"
+          }
+        }
+      }
+    },
+    "New chat": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neuer Chat"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chat nuevo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nouvelle discussion"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新しいチャット"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Novo chat"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新聊天"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

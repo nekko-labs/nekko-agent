@@ -283,9 +283,9 @@ struct ConfirmPairSheet: View {
 func routeName(_ r: RelayRoute) -> String {
     switch r {
     case .tailscale: return "Tailscale"
-    case .lan: return "Local network"
-    case .loopback: return "This device"
-    case .internet: return "Internet relay"
+    case .lan: return String(localized: "Local network")
+    case .loopback: return String(localized: "This device")
+    case .internet: return String(localized: "Internet relay")
     }
 }
 
