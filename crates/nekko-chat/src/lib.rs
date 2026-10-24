@@ -15,7 +15,9 @@ use nekko_loop::{Cancel, Chunk, ChunkStream, ModelClient};
 use serde_json::Value;
 
 mod shielded;
+mod yielding;
 pub use shielded::{ShieldedClient, ShieldedStream, redact_request};
+pub use yielding::{GateFuture, YieldGate, YieldingClient, YieldingStream};
 
 /// A provider, as the agent loop's model client.
 #[derive(Clone)]

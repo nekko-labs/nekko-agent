@@ -30,7 +30,7 @@ import {
 
 export type { Direction, PaneKind, WbNode, WbPane } from './layout.js';
 
-export type View = 'command' | 'chat' | 'artifacts' | 'models' | 'modelserver' | 'connectors' | 'memory' | 'settings' | 'design' | 'skills' | 'training' | 'workflows';
+export type View = 'command' | 'artifacts' | 'models' | 'modelserver' | 'connectors' | 'memory' | 'settings' | 'design' | 'skills' | 'training' | 'workflows';
 
 /**
  * Nav destinations that live behind a Settings → Experimental toggle. The flag
@@ -65,13 +65,12 @@ export function chatFolderPath(s: { sessions: SessionSummary[]; settings: AppSet
 }
 
 /**
- * Whether a nav destination is reachable. Chat needs its Developer flag and
- * experimental views need their flag on; everything else is always available.
+ * Whether a nav destination is reachable. Experimental views need their flag
+ * on; everything else is always available.
  * Settings that haven't loaded yet
  * count as all-flags-off.
  */
 export function viewEnabled(view: View, settings: AppSettings | null | undefined): boolean {
-  if (view === 'chat') return settings?.developer?.chat === true;
   if (!(EXPERIMENTAL_VIEWS as readonly string[]).includes(view)) return true;
   return settings?.experimental?.[view as ExperimentalView] === true;
 }
@@ -304,6 +303,9 @@ interface UiState {
   toggleContextPanel: () => void;
   togglePlanRail: (sessionId: string) => void;
   applyTheme: () => void;
+  /** Settings > Style: the user's fonts folder and the families loaded from it. */
+  customFonts: { dir: string; families: string[] } | null;
+  loadCustomFonts: () => Promise<void>;
 
   refreshTerminals: () => Promise<void>;
   newTerminal: (workspaceId?: string, shell?: string) => Promise<void>;
@@ -336,7 +338,7 @@ interface UiState {
   openDiffPane: (sessionId: string) => void;
   /**
    * Give a chat a companion window (Changes, Browser or Files) in its own
-   * workspace, where the Command Center shows it under the chat's window.
+   * workspace, where the Agent board shows it under the chat's window.
    * Unlike the open*Pane actions this stays on the current view. Returns false
    * when the chat's workspace has no room left to split.
    */
@@ -363,12 +365,6 @@ interface UiState {
   restoreChat: (sessionId: string) => Promise<void>;
   /** Delete an archived chat for good. */
   deleteChatForever: (sessionId: string, confirmed?: boolean) => Promise<void>;
-  /** Whether the sidebar shows the Archived list instead of the workspaces. */
-  archiveOpen: boolean;
-  setArchiveOpen: (open: boolean) => void;
-  /** The archived chat being read, shown read-only in place of the workspaces. */
-  archivedViewId: string | null;
-  setArchivedView: (sessionId: string | null) => void;
   /**
    * A chat the Agents wall should show in its Focused layout the next time it
    * mounts (the Artifacts tab's "Open chat"). Consumed once by the wall.
@@ -446,7 +442,7 @@ function focusPane(s: UiState, workspaceId: string, paneId: string): Partial<UiS
   const workspace = s.workspaces.find((w) => w.id === workspaceId);
   const pane = findPane(workspace?.root ?? null, paneId);
   return {
-    view: 'chat' as View,
+    view: 'command' as View,
     activeWorkspaceId: workspaceId,
     // Returning to the workspace's selected pane changes visibility, not layout.
     workspaces: workspace?.activePaneId === paneId ? s.workspaces
@@ -459,7 +455,7 @@ function focusPane(s: UiState, workspaceId: string, paneId: string): Partial<UiS
  * Open a window in the workspace you are looking at, beside the one you are
  * looking at — the same place a tab used to appear, except the chat stays on
  * screen next to it. With no workspace open yet the window becomes one of its
- * own, so an action from the Command Center or a deep link always lands
+ * own, so an action from the Agent board or a deep link always lands
  * somewhere.
  */
 function openInActive(s: UiState, pane: WbPane): Partial<UiState> {
@@ -475,7 +471,7 @@ function openInActive(s: UiState, pane: WbPane): Partial<UiState> {
   if (!target) return {};
   const dir: Direction = canSplit(active.root, target, 'right') ? 'right' : 'down';
   return {
-    view: 'chat' as View,
+    view: 'command' as View,
     activeWorkspaceId: active.id,
     workspaces: s.workspaces.map((w) =>
       w.id === active.id
@@ -520,7 +516,7 @@ function addWorkspace(s: UiState, pane: WbPane): Partial<UiState> {
     activePaneId: pane.id,
   };
   return {
-    view: 'chat' as View,
+    view: 'command' as View,
     workspaces: [...s.workspaces, created],
     activeWorkspaceId: created.id,
     activeSessionId: pane.kind === 'chat' ? pane.refId : s.activeSessionId,
@@ -566,7 +562,7 @@ async function openUsableChat(get: () => UiState, set: (p: Partial<UiState>) => 
     sid = s.id;
     set({ activeSessionId: sid });
   }
-  set({ view: 'chat' });
+  set({ view: 'command' });
   get().openChatPane(sid);
   return sid;
 }
@@ -587,6 +583,13 @@ export function addCreatedSession(s: Session): void {
 
 // Reserve the first-completion tip while its persistent seen flag is being saved.
 let completionTipPending = false;
+
+/** The faces loaded from the fonts folder, dropped on the next reload. */
+const loadedFontFaces: FontFace[] = [];
+
+/** Settings > Style's interface scale, in percent: 100 unless a sane number was saved. */
+export const textScaleOf = (v: number | undefined): number =>
+  typeof v === 'number' && Number.isFinite(v) ? Math.min(150, Math.max(80, Math.round(v))) : 100;
 
 export const useStore = create<UiState>((set, get) => ({
   completionTipSessionId: null,
@@ -630,23 +633,16 @@ export const useStore = create<UiState>((set, get) => ({
   activeWorkspaceId: restored.activeWorkspaceId,
   prsBySession: {},
   composerInbox: null,
-  archiveOpen: false,
-  archivedViewId: null,
   focusRequest: null,
   composerSeed: null,
   findSeed: null,
 
   focusChatOnWall: (sessionId, opts) => set({ focusRequest: { sessionId, keepLayout: opts?.keepLayout }, view: 'command' }),
   showNewChat: (sessionId) => {
-    // With the Chat tab off, the wall is where chats live: a new chat must be
-    // the selected window there, not one auto-added behind the current one.
-    if (viewEnabled('chat', get().settings)) {
-      set({ activeSessionId: sessionId, view: 'chat' });
-      get().openChatPane(sessionId);
-    } else {
-      set({ activeSessionId: sessionId });
-      get().focusChatOnWall(sessionId, { keepLayout: true });
-    }
+    // The wall is where chats live: a new chat must be the selected window
+    // there, not one auto-added behind the current one.
+    set({ activeSessionId: sessionId });
+    get().focusChatOnWall(sessionId, { keepLayout: true });
   },
 
   setActiveProject: (id) => {
@@ -705,7 +701,7 @@ export const useStore = create<UiState>((set, get) => ({
   },
   setMascotMood: (m) => set({ mascotMood: m }),
   // A destination that's been hidden can't be navigated to: land on the
-  // Command Center instead of a dead end.
+  // Agent board instead of a dead end.
   setView: (v) => set((s) => ({ view: viewEnabled(v, s.settings) ? v : 'command' })),
   setOnboardingOpen: (open) => set({ onboardingOpen: open }),
 
@@ -718,6 +714,7 @@ export const useStore = create<UiState>((set, get) => ({
       const onboardingOpen = autoOpenOnboarding && !isScreenWindow ? shouldAutoOpenOnboarding(settings) : get().onboardingOpen;
       set({ settings, onboardingOpen, settingsLoaded: true, settingsError: null });
       get().applyTheme();
+      void get().loadCustomFonts();
       if (!get().activeProviderId && settings.defaultProviderId) {
         set({ activeProviderId: settings.defaultProviderId, activeModelId: settings.defaultModelId ?? null });
       }
@@ -759,7 +756,7 @@ export const useStore = create<UiState>((set, get) => ({
     // is read from the Archived list, never opened as a workspace by default.
     const firstLive = sessions.find((x) => !x.archivedAt);
     const current = get().activeSessionId;
-    if ((!current || !live.has(current)) && firstLive && !get().archivedViewId) set({ activeSessionId: firstLive.id });
+    if ((!current || !live.has(current)) && firstLive ) set({ activeSessionId: firstLive.id });
   },
 
   installedSkills: [],
@@ -885,11 +882,47 @@ export const useStore = create<UiState>((set, get) => ({
     else if (preset?.accent2) root.style.setProperty('--accent-2', preset.accent2);
     else root.style.removeProperty('--accent-2');
 
+    // Settings > Style. A chosen family falls back to the bundled one.
+    const family = (name: string | undefined, fallback: string) =>
+      !name ? '' : name === 'system-ui' || name === 'ui-monospace' ? `${name}, ${fallback}` : `"${name.replace(/["\\]/g, '')}", ${fallback}`;
+    const sans = family(settings?.fontSans, "'Inter Tight Variable', system-ui, sans-serif");
+    const mono = family(settings?.fontMono, "'JetBrains Mono Variable', ui-monospace, monospace");
+    if (sans) root.style.setProperty('--font-sans', sans);
+    else root.style.removeProperty('--font-sans');
+    if (mono) root.style.setProperty('--font-mono', mono);
+    else root.style.removeProperty('--font-mono');
+    const scale = textScaleOf(settings?.textScale);
+    root.style.zoom = scale === 100 ? '' : `${scale}%`;
+
     // The native window buttons sit in our title bar, so they have to follow
     // the theme with everything else.
     syncTitleBarOverlay();
     // The next launch's splash shows before settings load, so it reads these.
     if (get().settingsLoaded) rememberSplashColours([accent ?? preset?.accent, ...(preset?.swatch ?? [])]);
+  },
+
+  customFonts: null,
+  loadCustomFonts: async () => {
+    try {
+      const { dir, fonts } = await window.nekko.listFonts();
+      for (const face of loadedFontFaces) document.fonts.delete(face);
+      loadedFontFaces.length = 0;
+      const families: string[] = [];
+      for (const f of fonts) {
+        try {
+          const bytes = Uint8Array.from(atob(f.data), (c) => c.charCodeAt(0));
+          const face = await new FontFace(f.family, bytes).load();
+          document.fonts.add(face);
+          loadedFontFaces.push(face);
+          if (!families.includes(f.family)) families.push(f.family);
+        } catch {
+          /* not a font the browser can read; leave it out of the list */
+        }
+      }
+      set({ customFonts: { dir, families } });
+    } catch {
+      /* an older engine without fonts:list */
+    }
   },
 
   refreshTerminals: async () => {
@@ -918,7 +951,7 @@ export const useStore = create<UiState>((set, get) => ({
   newTerminalWorkspace: async (workspaceId, shell) => {
     const t = await window.nekko.createTerminal({ workspaceId: workspaceId ?? get().activeProjectId ?? undefined, shell });
     await get().refreshTerminals();
-    set((s) => ({ ...addWorkspace(s, { id: newPaneId(), kind: 'terminal', refId: t.id }), view: 'chat' }));
+    set((s) => ({ ...addWorkspace(s, { id: newPaneId(), kind: 'terminal', refId: t.id }), view: 'command' }));
   },
 
   setClaudePlanSheet: (open) => set({ claudePlanSheet: open }),
@@ -937,7 +970,7 @@ export const useStore = create<UiState>((set, get) => ({
         ...(account ? { claudeAccount: account } : {}),
       });
       await get().refreshTerminals();
-      set({ view: 'chat' });
+      set({ view: 'command' });
       get().openTerminalPane(t.id);
       await window.nekko.runInTerminal(t.id, 'claude');
     } catch (e) {
@@ -949,7 +982,7 @@ export const useStore = create<UiState>((set, get) => ({
     const wid = workspaceId ?? get().activeProjectId ?? undefined;
     const t = await window.nekko.createTerminal({ workspaceId: wid, shell });
     await get().refreshTerminals();
-    set({ view: 'chat' });
+    set({ view: 'command' });
     get().openTerminalPane(t.id);
   },
 
@@ -961,13 +994,11 @@ export const useStore = create<UiState>((set, get) => ({
       // An archived chat opens read-only in the Archived list instead of as a
       // workspace, so nothing can be sent into it by accident.
       if (s.sessions.find((x) => x.id === sessionId)?.archivedAt) {
-        return { view: 'chat' as View, archiveOpen: true, archivedViewId: sessionId };
+        return { view: 'command' as View };
       }
-      // An active chat leaves the completed-chat reader, if it was open.
-      const leaveReader = { archiveOpen: false, archivedViewId: null };
       const hit = locatePane(s.workspaces, 'chat', sessionId);
-      if (hit) return { ...focusPane(s, hit.workspaceId, hit.paneId), ...leaveReader };
-      return { ...addWorkspace(s, { id: newPaneId(), kind: 'chat', refId: sessionId }), ...leaveReader };
+      if (hit) return { ...focusPane(s, hit.workspaceId, hit.paneId) };
+      return { ...addWorkspace(s, { id: newPaneId(), kind: 'chat', refId: sessionId }) };
     });
   },
 
@@ -1161,11 +1192,9 @@ export const useStore = create<UiState>((set, get) => ({
       const focused = findPane(ws.root, ws.activePaneId ?? '');
       const chat = focused?.kind === 'chat' ? focused : allPanes(ws.root).find((p) => p.kind === 'chat');
       return {
-        view: 'chat' as View,
+        view: 'command' as View,
         activeWorkspaceId: id,
         activeSessionId: chat?.refId ?? s.activeSessionId,
-        archiveOpen: false,
-        archivedViewId: null,
       };
     });
   },
@@ -1278,7 +1307,6 @@ export const useStore = create<UiState>((set, get) => ({
       return;
     }
     await get().refreshSessions();
-    set({ archivedViewId: null, archiveOpen: false });
     get().openChatPane(sessionId);
   },
 
@@ -1304,14 +1332,11 @@ export const useStore = create<UiState>((set, get) => ({
       }
     }
     set((s) => ({
-      ...(s.archivedViewId === sessionId ? { archivedViewId: null, archiveOpen: false } : {}),
       ...(s.activeSessionId === sessionId ? { activeSessionId: null } : {}),
     }));
     await get().refreshSessions();
   },
 
-  setArchiveOpen: (open) => set({ archiveOpen: open, ...(open ? {} : { archivedViewId: null }) }),
-  setArchivedView: (sessionId) => set({ archivedViewId: sessionId, view: 'chat' }),
 
   seedComposer: (sessionId, text, images) => set({ composerSeed: { sessionId, text, images } }),
 

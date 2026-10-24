@@ -176,6 +176,7 @@ export const IpcChannels = {
   sessionsPurgeArchived: 'sessions:purgeArchived',
   sessionFork: 'session:fork',
   settingsReset: 'settings:reset',
+  fontsList: 'fonts:list',
   dataWipe: 'data:wipe',
   toolsList: 'tools:list',
 
@@ -636,7 +637,7 @@ export interface NekkoApi {
   machineRecommendations(opts?: { refresh?: boolean }): Promise<import('./recommendations.js').Recommendations>;
   /** Keep a task's current pick as seen (every task with none), so its upgrade nudge goes. */
   machineDismissNudge(task?: string): Promise<{ ok: boolean }>;
-  /** GPU/VRAM stats for the metrics bar + Command Center (null if unavailable). */
+  /** GPU/VRAM stats for the metrics bar + Agent board (null if unavailable). */
   getGpuStats(): Promise<import('./models.js').GpuStats | null>;
   /** CPU load + RAM use for the monitor surfaces (null if unavailable). */
   getSystemStats(): Promise<import('./monitor.js').SystemStats | null>;
@@ -774,6 +775,8 @@ export interface NekkoApi {
   forkSession(id: string, beforeMessageId?: string): Promise<Session | null>;
   /** Reset all settings to defaults (keeps chats). */
   resetSettings(): Promise<AppSettings>;
+  /** The fonts folder (created if missing) and the font files in it, base64 (Settings > Style). */
+  listFonts(): Promise<{ dir: string; fonts: { family: string; file: string; data: string }[] }>;
   /** Delete everything: chats, settings, memory, and usage. */
   wipeAllData(): Promise<AppSettings>;
   listTools(): Promise<Array<{ name: string; description: string }>>;

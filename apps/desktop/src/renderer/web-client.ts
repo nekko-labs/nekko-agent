@@ -456,6 +456,7 @@ function makeWebClient(): NekkoApi {
     purgeExpiredArchives: () => call(IpcChannels.sessionsPurgeArchived),
     forkSession: (id, beforeMessageId) => call(IpcChannels.sessionFork, id, beforeMessageId),
     resetSettings: () => call(IpcChannels.settingsReset),
+    listFonts: () => call(IpcChannels.fontsList),
     wipeAllData: () => call(IpcChannels.dataWipe),
     listTools: () => call(IpcChannels.toolsList),
 

@@ -1,7 +1,7 @@
 import React from 'react';
 
 /**
- * Line-art placeholders for the Command Center's empty areas: the grid with
+ * Line-art placeholders for the Agent board's empty areas: the grid with
  * no agents on it, the automations list with nothing scheduled, the insights
  * box before any usage exists. Drawn in the same hand as the mascot (thin
  * ink strokes, round caps, no fills to speak of) and in the theme's tokens,

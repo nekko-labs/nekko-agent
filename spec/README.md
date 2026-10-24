@@ -22,8 +22,8 @@ Vision, users, product names, scope boundaries, open questions and policies.
 - [Contributing: how changes land (2026-10-17)](product/contributing-how-changes-land.md) (2 KB)
 - [Editions, same engine + UI, different runtime](product/editions-same-engine-ui-different-runtime.md) (2 KB)
 - [Open Questions](product/open-questions.md) (2 KB)
-- [Products and their names (decided 2026-10-18)](product/products-and-their-names.md) (1 KB)
-- [Scope Boundaries](product/scope-boundaries.md) (3 KB)
+- [Products and their names (decided 2026-10-18)](product/products-and-their-names.md) (2 KB)
+- [Scope Boundaries](product/scope-boundaries.md) (4 KB)
 - [Vision](product/vision.md) (2 KB)
 - [What Success Looks Like](product/what-success-looks-like.md) (2 KB)
 - [Who It's For](product/who-its-for.md) (1 KB)
@@ -41,7 +41,7 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 - [Chat chrome and composer refinement (implemented; desktop verification pending)](chat/chat-chrome-and-composer-refinement.md) (3 KB)
 - [Chat completion X icons and idle auto-completion (2026-10-15)](chat/chat-completion-x-icons-and-idle-auto-completion.md) (2 KB)
 - [Chat isolation and prompt customization](chat/chat-isolation-and-prompt-customization.md) (24 KB)
-- [Chat suggestions, progress and code access](chat/chat-suggestions-progress-and-code-access.md) (1 KB)
+- [Chat suggestions, progress and code access](chat/chat-suggestions-progress-and-code-access.md) (3 KB)
 - [Chat transcript width (2026-10-19)](chat/chat-transcript-width.md) (1 KB)
 - [Clarification answers remain visible in chat](chat/clarification-answers-remain-visible-in-chat.md) (2 KB)
 - [Completion and interruption reconciliation](chat/completion-and-interruption-reconciliation.md) (1 KB)
@@ -61,9 +61,10 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 
 The desktop shell: wall, windows, navigation rail, layouts, settings.
 
+- [Agent board header spacing](desktop/command-center-header-spacing.md) (12 KB)
+- [Agent board panel design parity (2026-10-06)](desktop/command-center-panel-design-parity.md) (7 KB)
+- [Agent board: pick up and drop windows](desktop/agent-board-pick-up-and-drop.md) (3 KB)
 - [Agent window controls refresh (2026-10-15)](desktop/agent-window-controls-refresh.md) (6 KB)
-- [Command Center header spacing](desktop/command-center-header-spacing.md) (12 KB)
-- [Command Center panel design parity (2026-10-06)](desktop/command-center-panel-design-parity.md) (7 KB)
 - [Composer and desktop rail regression fixes (2026-10-07)](desktop/composer-and-desktop-rail-regression-fixes.md) (3 KB)
 - [Empty wall opens the new-chat screen; glass prism composer (2026-10-18)](desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md) (2 KB)
 - [Focused mode transitions, calmer focus ring and layout controls (2026-10-17)](desktop/focused-mode-transitions-calmer-focus-ring-and-layout-controls.md) (4 KB)
@@ -77,6 +78,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Search within Settings (desktop)](desktop/search-within-settings-desktop.md) (2 KB)
 - [Settings section nav and phone pairing placement (desktop)](desktop/settings-section-nav.md) (3 KB)
 - [Slim wave rail, tighter Agents spacing, composer snap points](desktop/slim-wave-rail-tighter-agents-spacing-composer-snap-points.md) (4 KB)
+- [Style: universal fonts, text size and your own fonts (desktop)](desktop/style-fonts-and-text-size.md) (3 KB)
 - [Subtle rail and compact board gutters](desktop/subtle-rail-and-compact-board-gutters.md) (1 KB)
 - [Swoop navigation rail (2026-10-17)](desktop/swoop-navigation-rail.md) (2 KB)
 - [Wall model controls and drafting layout](desktop/wall-model-controls-and-drafting-layout.md) (3 KB)
@@ -92,7 +94,7 @@ Agents panel, monitors, subagents and delegation.
 - [Agent activity and panel polish](agents/agent-activity-and-panel-polish.md) (39 KB)
 - [Agent Monitor Project group, hardware temperatures and multi-monitor Dynamic mode (2026-10-18)](agents/agent-monitor-project-group-hardware-temperatures-and-multi-moni.md) (5 KB)
 - [Agent panel view options (2026-10-17)](agents/agent-panel-view-options.md) (4 KB)
-- [Agents dashboard simplification (2026-10-06)](agents/agents-dashboard-simplification.md) (2 KB)
+- [Agents dashboard simplification (2026-10-06)](agents/agents-dashboard-simplification.md) (3 KB)
 - [Approval retention and delegation navigation](agents/approval-retention-and-delegation-navigation.md) (1 KB)
 - [Chat finder in the Agents panel (2026-10-16)](agents/chat-finder-in-the-agents-panel.md) (6 KB)
 - [Delegating frontier planning to a local worker](agents/delegating-frontier-planning-to-a-local-worker.md) (2 KB)
@@ -152,7 +154,7 @@ Working in a codebase: files, editor, diffs, pull requests, design workspace.
 Workflows, goals, integrations and tools.
 
 - [Automating repeatable work (Workflows tab)](automation/automating-repeatable-work-workflows-tab.md) (4 KB)
-- [Background automations yield to the user](automation/background-automations-yield-to-the-user.md) (7 KB)
+- [Background automations yield to the user](automation/background-automations-yield-to-the-user.md) (10 KB)
 - [Experimental outbound resource queue](automation/experimental-outbound-resource-queue.md) (3 KB)
 - [Handing the agent a long-running goal](automation/handing-the-agent-a-long-running-goal.md) (2 KB)
 - [One-click setup for safe offline PC control (planned)](automation/one-click-setup-for-safe-offline-pc-control.md) (6 KB)
@@ -164,10 +166,12 @@ Workflows, goals, integrations and tools.
 Phone remote control and the native iOS and Android apps.
 
 - [Driving your home model from your phone (remote control)](phone/driving-your-home-model-from-your-phone-remote-control.md) (13 KB)
+- [Folding phones: two chats at once, a Monitors pane and vertical mode (2026-10-24)](phone/folding-phones-two-chats-and-monitors.md) (10 KB)
 - [iPhone: the desktop's languages and themes, and New chat's effort and computer (2026-10-23)](phone/iphone-languages-themes-and-new-chat-choices.md) (5 KB)
-- [Native Android app (2026-10-11)](phone/native-android-app.md) (40 KB)
-- [Native iOS app (2026-10-16)](phone/native-ios-app.md) (72 KB)
+- [Native Android app (2026-10-11)](phone/native-android-app.md) (41 KB)
+- [Native iOS app (2026-10-16)](phone/native-ios-app.md) (73 KB)
 - [Native phone implementation decision (2026-10-07)](phone/native-phone-implementation-decision.md) (2 KB)
+- [Nekko Cloud machines: a sandboxed computer the phone pairs with (2026-10-24)](phone/nekko-cloud-machines.md) (5 KB)
 - [Phone access classes and relay replay protection](phone/phone-access-classes-and-relay-replay-protection.md) (8 KB)
 - [Your agent in your pocket (the iOS and Android app)](phone/your-agent-in-your-pocket-the-ios-and-android-app.md) (5 KB)
 
@@ -178,6 +182,7 @@ Architecture, speed contract, distribution, builds and startup.
 - [Build storage maintenance](platform/build-storage-maintenance.md) (3 KB)
 - [Development macOS identity](platform/development-macos-identity.md) (2 KB)
 - [Distribution & platforms](platform/distribution-platforms.md) (10 KB)
+- [Hardware keys, step-up on phone and desktop, and remote sign-out (2026-10-24)](platform/hardware-keys-step-up-and-remote-sign-out.md) (15 KB)
 - [How it's built: the window and the engine daemon](platform/how-its-built-the-window-and-the-engine-daemon.md) (26 KB)
 - [Noninteractive shell input and bounded stop cleanup](platform/noninteractive-shell-input-and-bounded-stop-cleanup.md) (1 KB)
 - [Page recovery and startup appearance (2026-10-12)](platform/page-recovery-and-startup-appearance.md) (2 KB)

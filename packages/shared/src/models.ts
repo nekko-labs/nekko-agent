@@ -174,7 +174,7 @@ export interface GpuDevice {
 export type GpuSource = 'nvidia-smi' | 'ioreg' | 'llama-server' | 'none';
 
 /**
- * Aggregate GPU/VRAM stats, surfaced in the Chat metrics bar and Command Center.
+ * Aggregate GPU/VRAM stats, surfaced in the Chat metrics bar and Agent board.
  * `source` records where the numbers came from so the UI can label them honestly;
  * totals are summed across all devices.
  */

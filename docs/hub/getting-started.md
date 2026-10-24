@@ -142,3 +142,5 @@ where Auto routing is not supported, such as a fixed-model workflow step.
 ### Delegated agents in the Agents panel
 
 Delegated subagents appear as compact rows beneath their parent. Opening a child transcript does not add a duplicate full agent card. Closing the parent's windows keeps the saved parent and its nested children accessible.
+
+Completed work groups keep their step summary visible when space is tight; tool names truncate first. Hover or keyboard-focus the group header to read the complete summary and bulleted tool list. Click the header to expand individual steps.

@@ -5,7 +5,7 @@
  *
  * `listSessions` used to hand the renderer every message of every chat on each
  * refresh, which is megabytes over IPC and a full JSON parse per chat, all to
- * draw a sidebar. The sidebar, the Command Center board, the sub-agent rail and
+ * draw a sidebar. The sidebar, the Agent board board, the sub-agent rail and
  * the insights need a count, a first prompt, a last reply and a few turns, so
  * the host works those out once, when a chat is written, and lists ship this
  * instead. A chat's full transcript is still one `getSession` away.
@@ -16,7 +16,7 @@ import { estimateTranscriptTokens } from './context.js';
 import { collectSessionPrUrls } from './pr.js';
 import { isStalled, recentTurns, type TurnExcerpt } from './session-board.js';
 
-/** Turns a summary keeps: the most a Command Center card shows expanded. */
+/** Turns a summary keeps: the most an Agent board card shows expanded. */
 export const SUMMARY_TURNS = 8;
 /** Longest excerpt a summary carries per turn; longer ones end in an ellipsis. */
 export const SUMMARY_TURN_CHARS = 4_000;
