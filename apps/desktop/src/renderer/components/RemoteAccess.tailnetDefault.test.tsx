@@ -2,12 +2,11 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import type { LocalRelayStatus } from '@nekko-agent/shared';
-import { defaultRelay, LocalRelayView, MANAGED_RELAY_URL, relayToEnable } from './RemoteAccess.js';
+import { connectionName, LocalRelayView, MANAGED_RELAY_URL, PairingChoiceView, relayToEnable } from './RemoteAccess.js';
 
 vi.mock('../store.js', () => ({ useStore: Object.assign(() => undefined, { getState: () => ({}) }) }));
 
-// TASKS.md IO-19 TS-1: with Tailscale here and no relay chosen, Remote access
-// defaults to the relay on this computer instead of the managed host.
+// Remote access offers two ways in: Tailscale (this computer's relay) or Nekko Cloud.
 const tailnet: LocalRelayStatus = {
   available: true,
   running: false,
@@ -18,29 +17,41 @@ const tailnet: LocalRelayStatus = {
   url: 'ws://gomi.tailfd6474.ts.net:4400',
 };
 
-describe('defaultRelay', () => {
-  it('is the relay on this computer when Tailscale is connected and no relay is chosen', () => {
-    expect(defaultRelay(undefined, tailnet)).toEqual({ url: 'ws://gomi.tailfd6474.ts.net:4400', local: true });
+describe('PairingChoiceView', () => {
+  const html = (local: LocalRelayStatus | null) =>
+    renderToStaticMarkup(<PairingChoiceView local={local} relayUrl="" onRelayUrl={vi.fn()} onTailscale={vi.fn()} onCloud={vi.fn()} onOwnRelay={vi.fn()} />);
+
+  it('offers Tailscale and Nekko Cloud, never naming the relay host', () => {
+    const out = html(tailnet);
+    expect(out).toContain('Use Tailscale');
+    expect(out).toContain('Use Nekko Cloud');
+    expect(out).toContain('gomi.tailfd6474.ts.net');
+    expect(out).not.toContain('fly.dev');
   });
 
-  it('treats a saved managed URL as no choice', () => {
-    expect(defaultRelay(MANAGED_RELAY_URL, tailnet)).toEqual({ url: 'ws://gomi.tailfd6474.ts.net:4400', local: true });
+  it('links to Tailscale and disables it when it is not connected here', () => {
+    const out = html({ available: true, running: false, enabled: false, port: 4400 });
+    expect(out).toContain('https://tailscale.com/download');
+    expect(out).toMatch(/<button[^>]*disabled[^>]*>Use Tailscale/);
   });
 
-  it('keeps a relay the owner chose', () => {
-    expect(defaultRelay('wss://relay.example.com', tailnet)).toEqual({ url: 'wss://relay.example.com', local: false });
+  it('shows only Nekko Cloud where this computer cannot run a relay', () => {
+    expect(html({ ...tailnet, available: false })).not.toContain('Use Tailscale');
+    expect(html(null)).toContain('Use Nekko Cloud');
   });
+});
 
-  it('falls back to the managed relay without Tailscale, before the status loads, and in the web edition', () => {
-    const noTailnet: LocalRelayStatus = { available: true, running: false, enabled: false, port: 4400 };
-    expect(defaultRelay(undefined, noTailnet)).toEqual({ url: MANAGED_RELAY_URL, local: false });
-    expect(defaultRelay(undefined, null)).toEqual({ url: MANAGED_RELAY_URL, local: false });
-    expect(defaultRelay(undefined, { ...tailnet, available: false })).toEqual({ url: MANAGED_RELAY_URL, local: false });
+describe('connectionName', () => {
+  it('calls the managed relay Nekko Cloud, this computer Tailscale, and anything else by its URL', () => {
+    expect(connectionName(MANAGED_RELAY_URL, tailnet)).toBe('Nekko Cloud');
+    expect(connectionName('ws://gomi.tailfd6474.ts.net:4400', tailnet)).toBe('Tailscale');
+    expect(connectionName('ws://100.114.173.86:4400', tailnet)).toBe('Tailscale');
+    expect(connectionName('wss://relay.example.com', tailnet)).toBe('wss://relay.example.com');
   });
 });
 
 describe('relayToEnable', () => {
-  const fallback = defaultRelay(undefined, tailnet);
+  const fallback = { url: tailnet.url!, local: true };
 
   it('starts the relay on this computer, then enables on the address it is on', async () => {
     const start = vi.fn(async () => ({ ...tailnet, running: true, enabled: true }));
