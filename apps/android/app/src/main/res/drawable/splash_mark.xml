@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The opening screen's mark (Android 12+): the brand's outline cat head on its own,
+     no tile behind it, so it sits on the window's background. The same path as
+     BRAND_HEAD in apps/desktop/src/renderer/components/BrandMark.tsx. The system
+     splash wants 288dp with the art inside a 192dp circle; the cat is ~94dp wide,
+     centred on its ink (12, 9.011), drawn with the large-size 0.5 stroke. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="288dp"
+    android:height="288dp"
+    android:viewportWidth="288"
+    android:viewportHeight="288">
+    <group
+        android:scaleX="5"
+        android:scaleY="5"
+        android:translateX="84"
+        android:translateY="98.945">
+        <path
+            android:fillColor="@color/ic_launcher_mark"
+            android:fillType="evenOdd"
+            android:strokeColor="@color/ic_launcher_mark"
+            android:strokeWidth="0.5"
+            android:strokeLineJoin="miter"
+            android:strokeMiterLimit="8"
+            android:pathData="M4.059,10.357C4.034,10.285 4.015,10.212 4.003,10.138L3.007,4.165L2.649,2.016L9.117,5.897C11.039,5.29 12.961,5.29 14.883,5.897L21.351,2.016L20.005,10.088C19.987,10.199 19.959,10.308 19.921,10.415L19.921,10.416C18.733,13.756 15.551,16.006 12,16.006C8.428,16.006 5.23,13.729 4.059,10.357L4.059,10.357ZM5.009,10.027C6.04,12.996 8.856,15 12,15C15.126,15 17.927,13.019 18.973,10.079C18.991,10.028 19.004,9.976 19.013,9.923L20,4L15,7C13,6.267 11,6.267 9,7L4,4L4.995,9.972C4.999,9.991 5.003,10.009 5.009,10.027Z" />
+    </group>
+</vector>

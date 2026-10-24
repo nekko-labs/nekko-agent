@@ -124,6 +124,7 @@
  "model:unload",
  "models:list",
  "models:listStatus",
+ "monitor:summary",
  "oauth:begin",
  "oauth:cancel",
  "oauth:finish",

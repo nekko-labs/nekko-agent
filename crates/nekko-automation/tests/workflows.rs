@@ -758,6 +758,7 @@ async fn a_local_schedule_waits_for_idle_and_an_event_never_waits() {
     let runs = engine.dispatch_event(&pr_event("MEMBER", false)).await;
     assert_eq!(runs[0]["status"], "success", "{runs:?}");
     assert_eq!(runs[0]["lowPriority"], json!(true));
+    assert_eq!(fake.turns.lock().unwrap()[0]["background"], json!("lowPriority"));
     assert!(engine.list()[0].get("waitingSince").is_none(), "a run started: no longer waiting");
 
     *fake.activity.lock().unwrap() = Some(json!({ "userActive": false, "strain": [] }));
@@ -765,6 +766,7 @@ async fn a_local_schedule_waits_for_idle_and_an_event_never_waits() {
     assert_eq!(run["status"], "success", "{run}");
     assert!(run.get("lowPriority").is_none(), "{run}");
     assert_eq!(fake.turns.lock().unwrap().len(), 2);
+    assert_eq!(fake.turns.lock().unwrap()[1]["background"], json!("idle"));
     let _ = std::fs::remove_dir_all(&dir);
 }
 

@@ -38,7 +38,9 @@ describe('panel presence transition contract', () => {
 
   it.each(['commandWallLayouts.css', 'monitorsDock.css'])('keeps %s transitions short and disables reduced motion', (file) => {
     const css = readFileSync(`src/renderer/components/${file}`, 'utf8');
-    expect(css).toContain('transition: opacity 140ms ease-out, transform 140ms ease-out');
+    expect(css).toContain('220ms ease-out');
+    expect(css).toContain('interpolate-size: allow-keywords');
+    expect(css).not.toContain('scale(.94)');
     expect(css).toContain('@starting-style');
     expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{ \.(?:wall-agents-presence|monitors-dock) \{ transition: none; transform: none; \} \}/);
   });

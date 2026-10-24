@@ -59,6 +59,8 @@ import {
   PHONE_LIMITS_VIEW,
   PHONE_MACHINE_RESIDENT_VIEW,
   PHONE_MACHINE_VIEW,
+  PHONE_MONITOR_SOURCES,
+  PHONE_MONITOR_VIEW,
   PHONE_PR_VIEW,
   PHONE_PROMPT_VIEW,
   PHONE_QUEUE_EDIT_KEYS,
@@ -70,6 +72,7 @@ import {
   phoneLimitsKey,
   phoneLimitsView,
   phoneMachineView,
+  phoneMonitorView,
   phonePromptsView,
   phonePrsView,
   phoneQueueView,
@@ -129,6 +132,7 @@ export const PHONE_CHANNELS = [
   'logs:read',
   'machine:summary',
   'models:list',
+  'monitor:summary',
   'pr:action',
   'pr:checks',
   'pr:create',
@@ -291,6 +295,7 @@ export const PHONE_CHAT_READ_CHANNELS: readonly string[] = [
   'limits:get',
   'machine:summary',
   'models:list',
+  'monitor:summary',
   'pr:sessionList',
   'providers:list',
   'providers:sealKey',
@@ -658,7 +663,13 @@ export type PhoneAccessCode =
   | 'token-required'
   | 'token-invalid'
   | 'token-expired'
-  | 'terminal-hidden';
+  | 'terminal-hidden'
+  // SK-1: the step-up a guarded call carries (step-up.ts), and quitting from a phone when the computer did not opt in.
+  | 'step-up-required'
+  | 'step-up-invalid'
+  | 'step-up-stale'
+  | 'step-up-replayed'
+  | 'quit-disabled';
 
 /** Why the computer refused a phone's request. The wire carries `message`. */
 export class PhoneAccessError extends Error {
@@ -1101,6 +1112,12 @@ export async function callFromPhone(
     const settings = await dispatch('settings:get', []);
     if (!isObj(settings) || settings.phoneChanges !== true) throw new PhoneAccessError('turned-off', 'changes:list');
   }
+  if (channel === 'monitor:summary') {
+    // Answered from what the computer already reads for its own Monitors dock; the phone's arguments are ignored.
+    const sources: Record<string, unknown> = {};
+    for (const source of PHONE_MONITOR_SOURCES) sources[source] = await dispatch(source, []);
+    return phoneMonitorView(sources, Date.now());
+  }
   let callArgs = checked ?? args;
   // Only what the computer's own call takes: an id, or nothing.
   if (channel === 'task:runNow' || channel === 'workflow:run') callArgs = [args[0]];
@@ -1177,6 +1194,8 @@ export function phoneAccessPolicy() {
     prView: [...PHONE_PR_VIEW],
     limitsView: [...PHONE_LIMITS_VIEW],
     limitWindowView: [...PHONE_LIMIT_WINDOW_VIEW],
+    monitorView: { ...PHONE_MONITOR_VIEW },
+    monitorSources: [...PHONE_MONITOR_SOURCES],
     queueEditKeys: [...PHONE_QUEUE_EDIT_KEYS],
     files: {
       view: { ...PHONE_FILES_VIEW },

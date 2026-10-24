@@ -20,6 +20,8 @@ public enum Channels {
     public static let sessionWatches = "session:watches"
     /// A computer's page in one read: version, hardware, live stats, the model server (`PHONE_MACHINE_VIEW`).
     public static let machineSummary = "machine:summary"
+    /// The Monitors pane's one read (`PHONE_MONITOR_VIEW`), added on the computer in #989.
+    public static let monitorSummary = "monitor:summary"
     public static let sessionSetOptions = "session:setOptions"
     public static let sessionDelete = "session:delete"
     public static let voiceStatus = "voice:status"
@@ -104,7 +106,7 @@ public enum Channels {
         sessionSetOptions, sessionDelete, voiceStatus, voiceTranscribe, chatSend, chatAbort, chatQueue,
         chatPending, chatAnswer, toolApprove, workspaceList, appInfo, skillsRunnable, changesList,
         chatEditQueued, sessionFork, tasksList, taskRunNow, workflowsList, workflowRun, prSessionList,
-        usageSummary, limitsGet, sessionWatches, machineSummary, providersSealKey, providersSaveSealed, providersSetEnabled,
+        usageSummary, limitsGet, sessionWatches, machineSummary, monitorSummary, providersSealKey, providersSaveSealed, providersSetEnabled,
         workspaceGitStatus, gitDiff, gitLog, gitShow, gitBranches, gitCompare, prChecks, prDiff,
         gitStage, gitUnstage, gitCommit, gitCommitMessage, gitPush, gitSwitch, gitMergeAbort, prCreate, prAction,
         filesList, filesSearch, filesRead, filesWrite, logsList, logsRead,

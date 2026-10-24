@@ -77,24 +77,12 @@ describe('compact board and navigation spacing', () => {
     expect(open['padding-right']).toBe('16px');
     // Open buttons: 198 - 6 inset - 16 right padding = the 176px row.
     expect(198 - 6 - 16).toBe(188 - 12);
-    expect(cssRule(styles, `${OPEN} .rail-backdrop path`).d).toBe('var(--rail-open)');
-    expect(cssRule(styles, '.rail-backdrop path').fill).toBe(cssValue('color-mix(in srgb, color-mix(in srgb, var(--accent) 8%, var(--paper)) 88%, transparent)'));
-    expect(cssRule(styles, `${OPEN} .rail-backdrop path`).fill).toBe(cssValue('color-mix(in srgb, color-mix(in srgb, var(--accent) 6%, var(--surface)) 88%, transparent)'));
   });
 
-  it('clips the tinted outline without a per-frame backdrop blur', () => {
-    const backdrop = cssRule(styles, '.rail-backdrop');
-    expect(backdrop['backdrop-filter']).toBe('none');
-    expect(backdrop['clip-path']).toBe('var(--rail-rest)');
-    expect(cssRule(styles, `${OPEN} .rail-backdrop`)['clip-path']).toBe('var(--rail-open)');
-    expect(backdrop.filter).toBeUndefined();
-    expect(cssRule(styles, `${OPEN} .rail-backdrop`).filter).toBeUndefined();
-  });
-
-  it('lets clicks through everywhere but the buttons and the painted outline', () => {
-    expect(cssRule(styles, '.rail')['pointer-events']).toBe('none');
-    expect(cssRule(styles, '.rail-destinations')['pointer-events']).toBe('auto');
-    expect(cssRule(styles, '.rail-backdrop path')['pointer-events']).toBe('visiblePainted');
+  it('uses a darker nearly opaque rounded surface without a morph or observer', () => {
+    expect(cssRule(styles, '.rail')).toMatchObject({ top: '5%', bottom: '5%', 'border-radius': '22px', 'pointer-events': 'auto' });
+    expect(cssRule(styles, '.rail').background).toBe(cssValue('color-mix(in srgb, color-mix(in srgb, var(--paper) 92%, black) 97%, transparent)'));
+    expect(cssRule(styles, '.rail-backdrop').display).toBe('none');
   });
 
   it('has no per-row entrance animation and snaps open and shut under reduced motion', () => {
@@ -109,8 +97,7 @@ describe('compact board and navigation spacing', () => {
     const nav = html.slice(html.indexOf('<nav'), html.indexOf('</nav>'));
     expect(nav).toMatch(/^<nav class="[^"]*\bw-\[52px\][^"]*\bmd:block/);
     const group = nav.slice(nav.indexOf('class="rail-group"'));
-    expect(group.indexOf('class="rail-backdrop"')).toBeGreaterThan(-1);
-    expect(group.indexOf('class="rail-backdrop"')).toBeLessThan(group.indexOf('class="rail-destinations"'));
+    expect(group).not.toContain('class="rail-backdrop"');
     // On the active (first) row; each row carries its index for the label stagger.
     expect(nav.match(/class="rail-indicator"/g)).toHaveLength(1);
     expect(nav).toMatch(/class="rail-indicator"[^>]*style="--i:0;/);

@@ -27,12 +27,14 @@ struct ChatsView: View {
                 List { rows }
             }
         }
-        .listStyle(.insetGrouped)
+        // Flat rows on the paper, hairline separated, as the desktop's Agents panel (2026-10-24).
+        .listStyle(.plain)
+        .listRowSeparatorTint(palette.line)
         .scrollContentBackground(.hidden)
         .background(palette.paper)
         .searchable(text: $query, prompt: "Search chats")
         .refreshable { await store.refresh() }
-        .navigationTitle(store.active?.name ?? "Chats")
+        .navigationTitle("Chats")
         .toolbar {
             ToolbarItem(placement: .topBarLeading) { ComputerMenu(path: $path) }
             ToolbarItem(placement: .topBarTrailing) {
@@ -109,10 +111,11 @@ struct ChatsView: View {
             if query.isEmpty, let last = ChatSearch.continueChat(store.summaries), store.activity[last.id] != .needsYou {
                 Section {
                     ContinueCard(summary: last, activity: store.activity[last.id]) { open(.chat(last.id)) }
+                        .listRowSeparator(.hidden).listRowBackground(Color.clear).listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
                 }
             }
             if !needsYou.isEmpty && query.isEmpty {
-                Section { ForEach(needsYou) { row($0) } } header: { SectionTitle("Needs you") }
+                Section { ForEach(needsYou) { row($0) } } header: { GroupHeading("Needs you", count: "\(needsYou.count)") }
             }
             ForEach(query.isEmpty || !filtered.isEmpty ? groups : []) { g in
                 Section {
@@ -125,11 +128,12 @@ struct ChatsView: View {
                                                             set: { if $0 { showCompleted.insert(g.key) } else { showCompleted.remove(g.key) } })) {
                             ForEach(g.completed) { row($0) }
                         } label: {
-                            Text("Completed · \(g.completed.count)").font(.footnote).foregroundStyle(palette.inkSoft)
+                            Text("Completed · \(g.completed.count)").font(.footnote.weight(.medium)).foregroundStyle(palette.inkFaint)
                         }
+                        .tint(palette.inkFaint)
                     }
                 } header: {
-                    SectionTitle(g.name)
+                    GroupHeading(g.name, count: counts(g))
                 }
             }
     }
@@ -138,6 +142,14 @@ struct ChatsView: View {
     private var filtered: [SessionSummary] { ChatSearch.matches(store.summaries, query) }
 
     private var groups: [ChatGroup] { ChatGroup.of(filtered, folders: store.workspaces) }
+
+    /// "3 active · 12 done", as the desktop's group headings count.
+    private func counts(_ g: ChatGroup) -> String {
+        var parts: [String] = []
+        if !g.active.isEmpty { parts.append(g.active.count == 1 ? String(localized: "1 active") : String(localized: "\(g.active.count) active")) }
+        if !g.completed.isEmpty { parts.append(String(localized: "\(g.completed.count) done")) }
+        return parts.joined(separator: " · ")
+    }
 
     private var needsYou: [SessionSummary] { store.summaries.filter { store.activity[$0.id] == .needsYou } }
 
@@ -193,31 +205,52 @@ struct ChatRow: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
+        // A glyph column says what the chat is doing before the title is read
+        // (the desktop's StatusIcon); the facts sit under the preview as chips.
         HStack(alignment: .top, spacing: 10) {
+            glyph.frame(width: 22, height: 22).padding(.top, 1)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    if summary.pinned { Image(systemName: "pin.fill").font(.caption2).foregroundStyle(palette.warning) }
-                    Text(title).font(.body.weight(.medium)).foregroundStyle(summary.archived ? palette.inkSoft : palette.ink).lineLimit(1)
+                    if summary.pinned { Image(systemName: "pin.fill").font(.caption2).foregroundStyle(palette.warning).accessibilityLabel("Pinned") }
+                    Text(title).font(.body.weight(.semibold)).foregroundStyle(summary.archived ? palette.inkSoft : palette.ink).lineLimit(1)
                 }
                 if let preview { Text(preview).font(.footnote).foregroundStyle(palette.inkFaint).lineLimit(2) }
+                if activity != nil || waiting > 0 {
+                    HStack(spacing: 6) {
+                        badge
+                        if waiting > 0 {
+                            Label("\(waiting) waiting", systemImage: "tray.and.arrow.up")
+                                .font(.caption2).foregroundStyle(palette.inkSoft)
+                                .accessibilityLabel(waiting == 1 ? "1 prompt waiting to send" : "\(waiting) prompts waiting to send")
+                        }
+                    }
+                    .padding(.top, 2)
+                }
             }
             Spacer(minLength: 6)
-            VStack(alignment: .trailing, spacing: 4) {
-                // Re-rendered each minute, so "2m" doesn't stay "2m".
-                TimelineView(.periodic(from: .now, by: 60)) { _ in
-                    Text(Date(timeIntervalSince1970: Double(summary.updatedAt) / 1000), format: .relative(presentation: .numeric, unitsStyle: .narrow))
-                        .font(.caption2).foregroundStyle(palette.inkFaint)
-                }
-                badge
-                if waiting > 0 {
-                    Label("\(waiting) waiting", systemImage: "tray.and.arrow.up")
-                        .font(.caption2).foregroundStyle(palette.inkSoft)
-                        .accessibilityLabel(waiting == 1 ? "1 prompt waiting to send" : "\(waiting) prompts waiting to send")
-                }
+            // Re-rendered each minute, so "2m" doesn't stay "2m".
+            TimelineView(.periodic(from: .now, by: 60)) { _ in
+                Text(Date(timeIntervalSince1970: Double(summary.updatedAt) / 1000), format: .relative(presentation: .numeric, unitsStyle: .narrow))
+                    .font(.caption2).foregroundStyle(palette.inkFaint).padding(.top, 3)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder private var glyph: some View {
+        switch activity {
+        case .running?: RunningDots()
+        case .needsYou?: Image(systemName: "hand.raised.fill").font(.caption.weight(.semibold)).foregroundStyle(palette.warning).accessibilityHidden(true)
+        case nil:
+            if waiting > 0 {
+                Image(systemName: "clock").font(.caption.weight(.semibold)).foregroundStyle(palette.inkFaint).accessibilityHidden(true)
+            } else if summary.archived {
+                Image(systemName: "checkmark").font(.caption.weight(.semibold)).foregroundStyle(palette.success).accessibilityHidden(true)
+            } else {
+                Image(systemName: "bubble.left").font(.caption.weight(.semibold)).foregroundStyle(palette.inkFaint).accessibilityHidden(true)
+            }
+        }
     }
 
     private var title: String { summary.title.trimmingCharacters(in: .whitespaces).isEmpty ? "New chat" : summary.title }
@@ -229,16 +262,9 @@ struct ChatRow: View {
 
     @ViewBuilder private var badge: some View {
         switch activity {
-        case .needsYou?:
-            Text("Needs you").font(.caption2.weight(.semibold)).padding(.horizontal, 7).padding(.vertical, 2)
-                .background(palette.warning.opacity(0.18), in: Capsule()).foregroundStyle(palette.warning)
-        case .running?:
-            HStack(spacing: 4) {
-                ProgressView().controlSize(.mini)
-                Text("Working").font(.caption2)
-            }.foregroundStyle(palette.running)
-        case nil:
-            EmptyView()
+        case .needsYou?: RowChip(text: String(localized: "Needs you"), tone: .warn)
+        case .running?: RowChip(text: String(localized: "Working"), tone: .normal, accent: true)
+        case nil: EmptyView()
         }
     }
 }
@@ -324,10 +350,18 @@ struct ComputerMenu: View {
             Button { path.append(.computers) } label: { Label("Computers", systemImage: "desktopcomputer") }
             Button { path.append(.settings) } label: { Label("Settings", systemImage: "gearshape") }
         } label: {
-            HStack(spacing: 5) {
+            // The computer is the title's companion: its state, its name, and a chevron into the menu.
+            HStack(spacing: 6) {
                 Circle().fill(dot).frame(width: 8, height: 8)
-                Image(systemName: "desktopcomputer")
+                Text(store.active?.name ?? String(localized: "Computers")).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
+                Image(systemName: "chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(palette.inkFaint)
             }
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .background(palette.surface2, in: Capsule())
+            // One element with one label: the name inside the pill must not be read
+            // (or matched by the UI tests) as a second label beside the menu's own.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Computers and settings, \(stateName(store.conn))")
         }
         .accessibilityLabel("Computers and settings, \(stateName(store.conn))")
         .accessibilityIdentifier("chats.menu")

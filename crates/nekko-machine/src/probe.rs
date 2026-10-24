@@ -180,6 +180,9 @@ pub struct Machine {
     cpu: tokio::sync::Mutex<(sysinfo::System, Option<Instant>)>,
     speeds: crate::measured::MeasuredSpeeds,
     activity: std::sync::Arc<crate::activity::Sampler>,
+    /// The GPU probe's core temperature, read for activity at most every
+    /// `TEMPS_TTL`: `nvidia-smi` is a process spawn.
+    gpu_temp: tokio::sync::Mutex<Option<(Instant, Option<f64>)>>,
 }
 
 /// A polling meter reads the GPU at most this often.
@@ -203,6 +206,7 @@ impl Machine {
             cpu: tokio::sync::Mutex::new((sysinfo::System::new(), None)),
             speeds,
             activity: std::sync::Arc::default(),
+            gpu_temp: tokio::sync::Mutex::new(None),
         }
     }
 
@@ -211,8 +215,19 @@ impl Machine {
     pub async fn activity(&self) -> crate::activity::Readings {
         let sampler = self.activity.clone();
         let mut r = tokio::task::spawn_blocking(move || sampler.read()).await.unwrap_or_default();
-        let probed = self.gpu_stats().await.into_iter().flat_map(|g| g.devices).filter_map(|d| d.temperature_c);
-        if let Some(c) = probed.reduce(f64::max) {
+        let probed = {
+            let mut cache = self.gpu_temp.lock().await;
+            match *cache {
+                Some((at, c)) if at.elapsed() < crate::activity::TEMPS_TTL => c,
+                _ => {
+                    let devices = self.gpu_stats().await.into_iter().flat_map(|g| g.devices);
+                    let c = devices.filter_map(|d| d.temperature_c).reduce(f64::max);
+                    *cache = Some((Instant::now(), c));
+                    c
+                }
+            }
+        };
+        if let Some(c) = probed {
             r.gpu_c = Some(c);
         }
         r
