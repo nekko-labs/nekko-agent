@@ -384,8 +384,9 @@ jobs:
         if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:macos')
         env:
           GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
           SHA: ${{ github.event.pull_request.head.sha }}
-        run: node scripts/ci-label-gate.mjs pr --sha "$SHA"
+        run: node scripts/ci-label-gate.mjs pr --pr "$PR" --sha "$SHA"
       - name: Every PR in the group is ready, not held, and its macOS runs passed
         if: github.event_name == 'merge_group'
         env:

@@ -1,11 +1,16 @@
 name: Native iOS
-# macOS-only. Runs every 6 hours on main and with the `ci:macos` label on a PR,
-# not on every iOS change: the Team plan's 5 macOS runners are shared by every
-# workflow (see ci.yml). A PR verifies dark mode only when it changes colours or
-# carries `ci:theme`; the schedule always runs light and dark.
+# macOS-only: the Team plan's 5 macOS runners are shared by every workflow (see
+# ci.yml). Runs every 6 hours on main, and for `ci:macos` PRs in batches: one
+# run on `ci/ios-batch` covers every open iOS PR that merges cleanly onto main
+# (scripts/ios-batch.mjs, ios-batch.yml) and reports to each PR's head as the
+# `Native iOS (batch)` status. On a PR itself it runs only when `ci:macos` or
+# `ci:theme` is added, or by `gh workflow run ios-native.yml --ref <branch>`
+# (to tell which PR broke a red batch); pushes do not re-run it.
+# A PR or batch verifies dark mode only when it changes colours or a PR carries
+# `ci:theme`; the schedule and a branch dispatch run light and dark.
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled]
+    types: [labeled]
     paths:
       - 'apps/ios/**'
       - 'apps/relay-server/src/**'
@@ -17,20 +22,29 @@ on:
   schedule:
     - cron: '37 */6 * * *'
   workflow_dispatch:
+    inputs:
+      batch:
+        description: 'Set by ios-batch.yml: the PRs in this batch, [{"number":1,"sha":"..."}]'
+        required: false
+        default: ''
 permissions:
   contents: read
+  statuses: write
+# One batch runs at a time and the newest waiting one replaces an older one, so a
+# run of pushes costs one more batch, not one per push.
 concurrency:
-  group: ios-native-${{ github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: true
+  group: ios-native-${{ inputs.batch && 'batch' || github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ !inputs.batch }}
 jobs:
   protocol-and-build:
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:macos')
+    if: github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'ci:macos') && contains(fromJSON('["ci:macos","ci:theme"]'), github.event.label.name))
     runs-on: macos-14
     timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
         with:
-          # A PR checks out its merge commit; HEAD^1 is the base, for the appearance scope.
+          # A PR checks out its merge commit and a batch is one commit on main:
+          # either way HEAD^1 is the base, for the appearance scope.
           fetch-depth: 2
       - name: Use the newest installed Xcode
         run: |
@@ -51,7 +65,7 @@ jobs:
       # it changes colours (scripts/ios-theme-scope.mjs) or carries `ci:theme`.
       - name: Appearances to verify
         env:
-          FORCE: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:theme') }}
+          FORCE: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && !inputs.batch) || contains(github.event.pull_request.labels.*.name, 'ci:theme') }}
         run: |
           if [ "$FORCE" = true ]; then THEMES='light dark'; else THEMES=$(git diff HEAD^1 HEAD -- apps/ios | node scripts/ios-theme-scope.mjs); fi
           echo "THEMES=$THEMES" | tee -a "$GITHUB_ENV"
@@ -202,3 +216,16 @@ jobs:
           path: |
             apps/ios/evidence/shots/**
           if-no-files-found: warn
+      - name: Report the batch to each PR
+        if: always() && inputs.batch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BATCH: ${{ inputs.batch }}
+          STATE: ${{ job.status == 'success' && 'success' || 'failure' }}
+          URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          prs=$(echo "$BATCH" | jq -r '[.[] | "#\(.number)"] | join(", ")')
+          echo "$BATCH" | jq -r '.[].sha' | while read -r sha; do
+            gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/$sha" -f state="$STATE" -f context='Native iOS (batch)' \
+              -f target_url="$URL" -f description="Native iOS $STATE on the batch $prs"
+          done
