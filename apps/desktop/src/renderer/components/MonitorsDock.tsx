@@ -18,6 +18,7 @@ import './monitorsDock.css';
 import type { OAuthStatus } from '@nekko-agent/shared';
 import { SubscriptionSignIn } from './SubscriptionSignIn.js';
 import { SUBSCRIPTION_KINDS, reconnectProviderConfig } from './providers/AddProvider.js';
+import { usePanelPresence } from '../usePanelPresence.js';
 import { dockMinimizeTransition } from './dockMinimize.js';
 
 const MONITOR_ICONS = { automations: GearIcon, utilization: ListIcon, budget: MoneyIcon, insights: BrainIcon, hardware: ServerIcon, localModels: CubeIcon };
@@ -58,6 +59,7 @@ export function MonitorsToggle({ show, side, onToggle }: { show: boolean; side: 
 export function MonitorsDock(props: MonitorsDockProps) {
   const { state, setState } = props;
   const { dock } = state;
+  const present = usePanelPresence(dock.show);
   const reorderDrag = useRef<MonitorKey | null>(null);
   const [reorderAnnouncement, setReorderAnnouncement] = useState('');
   const sideDock = dock.side === 'left' || dock.side === 'right';
@@ -161,15 +163,18 @@ export function MonitorsDock(props: MonitorsDockProps) {
   const setShow = (show: boolean) => setState((s) => ({ ...s, dock: { ...s.dock, show } }));
   // Hidden, the dock leaves only its own show button where it was, the way the
   // agent panel leaves its controls, so the way back is where it went.
-  if (!dock.show) return (
+  const collapsed = !dock.show && (
     <div className="monitors-dock-collapsed" data-dock-side={dock.side}>
       <MonitorsToggle show={false} side={dock.side} onToggle={() => setShow(true)} />
     </div>
   );
+  if (!present) return collapsed;
   const selectedMonitors = normalizeMonitorOrder(dock.monitorOrder).map(key => MONITORS.find(p => p.key === key)!).filter((p) => dock.monitors[p.key]);
   const expandedMonitors = selectedMonitors.filter((p) => !dock.minimized[p.key]);
   return (
-    <aside ref={dockRef} className="monitors-dock" style={{ '--dock-width': `${width}px` } as React.CSSProperties} data-dock-side={dock.side} aria-label="Monitors">
+    <>
+    {collapsed}
+    <aside data-panel-open={dock.show} inert={!dock.show} aria-hidden={!dock.show} ref={dockRef} className="monitors-dock" style={{ '--dock-width': `${width}px` } as React.CSSProperties} data-dock-side={dock.side} aria-label="Monitors">
       {(dock.side === 'left' || dock.side === 'right') && <div className="monitors-dock__resize" role="separator" tabIndex={0} aria-label="Resize monitors" aria-orientation="vertical" aria-valuemin={260} aria-valuemax={600} aria-valuenow={width} title="Drag to resize monitors; double-click to reset"
         onPointerDown={(e) => { drag.current = { x: e.clientX, width }; e.currentTarget.setPointerCapture(e.pointerId); }}
         onPointerMove={(e) => { if (drag.current) size(Math.min((e.currentTarget.parentElement?.parentElement?.clientWidth ?? 1000) - 240, drag.current.width + (e.clientX - drag.current.x) * (dock.side === 'left' ? 1 : -1))); }}
@@ -274,6 +279,7 @@ export function MonitorsDock(props: MonitorsDockProps) {
         {selectedMonitors.length === 0 && <p className="monitors-dock__empty">No monitors selected. Use Configure to restore them.</p>}
       </div>
     </aside>
+    </>
   );
 }
 

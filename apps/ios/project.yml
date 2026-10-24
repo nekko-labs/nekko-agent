@@ -1,5 +1,6 @@
 name: NekkoNative
 options:
+  developmentLanguage: en
   minimumXcodeGenVersion: 2.38.0
   xcodeVersion: "15.4"
   projectFormat: xcode15_3
@@ -31,6 +32,8 @@ targets:
         INFOPLIST_FILE: Info.plist
         CODE_SIGN_ENTITLEMENTS: App/NekkoNative.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # The Spooky theme's limited fall icon (App/Platform/SpookyIcon.swift).
+        ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: AppIcon-Spooky
     dependencies:
       - package: NekkoProtocol
         product: NekkoProtocol
@@ -61,6 +64,7 @@ targets:
         PRODUCT_NAME: NekkoWatch
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Nekko Agent
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_WKCompanionAppBundleIdentifier: dev.nekkolabs.nekkoagent
         SKIP_INSTALL: YES
         TARGETED_DEVICE_FAMILY: "4"

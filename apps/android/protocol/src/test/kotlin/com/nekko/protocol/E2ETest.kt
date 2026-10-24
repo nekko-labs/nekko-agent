@@ -70,8 +70,15 @@ class E2ETest {
         val key = E2E.deriveKey(v("secret"), v("room"))
         val plaintexts = listOf(
             v("plaintext"),
-            buildJsonObject { put("type", "hello"); put("deviceId", "d-1"); put("platform", "android"); put("pair", "ABCD2345") }.toString(),
-            buildJsonObject { put("type", "req"); put("id", 1); put("channel", "chat:send"); put("text", "ñ".repeat(5000)) }.toString(),
+            // Protocol 4 shapes: the challenged HELLO and a request with its seq and challenge.
+            buildJsonObject {
+                put("type", "hello"); put("deviceId", "d-1"); put("platform", "android")
+                put("protocol", PhoneProtocol.VERSION); put("challenge", "BRAbJjE8R1JdaHN+iZSfqrXA"); put("pair", "ABCD2345")
+            }.toString(),
+            buildJsonObject {
+                put("type", "req"); put("id", 1); put("seq", 1); put("challenge", "BRAbJjE8R1JdaHN+iZSfqrXA")
+                put("channel", "chat:send"); put("text", "ñ".repeat(5000))
+            }.toString(),
         )
         val frames = plaintexts.joinToString(",") { pt ->
             buildJsonObject { put("sealed", E2E.sealText(key, pt)); put("plaintext", pt) }.toString()

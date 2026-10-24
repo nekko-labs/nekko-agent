@@ -730,6 +730,13 @@ async fn create_terminal(ctx: &Ctx, opts: &Value) -> Result<Value, String> {
     let settings = crate::settings::current(ctx).await;
     let s = |k: &str| opts.get(k).and_then(Value::as_str);
     let shell = resolve_shell(s("shell"), settings.get("defaultShellPath").and_then(Value::as_str));
+    // `claudeAccount`: a terminal for signing in to a second Claude Code
+    // account, so a `claude` typed there uses that account's folder. Only a
+    // checked account name is accepted, never a path or other variables.
+    let env = match nekko_harness::account_config_dir(s("claudeAccount"))? {
+        Some(dir) => vec![("CLAUDE_CONFIG_DIR".to_string(), dir.to_string_lossy().into_owned())],
+        None => Vec::new(),
+    };
     let spec = CreateSpec {
         title: s("title").map(str::to_string),
         workspace_id: s("workspaceId").map(str::to_string),
@@ -738,7 +745,7 @@ async fn create_terminal(ctx: &Ctx, opts: &Value) -> Result<Value, String> {
         shell,
         cols: dim(opts, "cols", 80),
         rows: dim(opts, "rows", 24),
-        env: Vec::new(),
+        env,
     };
     Ok(serde_json::to_value(ctx.terminals.create(spec)).unwrap_or(Value::Null))
 }

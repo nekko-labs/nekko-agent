@@ -56,7 +56,7 @@ describe('Agents panel header', () => {
   it('portals the + menu above the wall and opens the view menu from a group header right-click (source pin)', () => {
     const source = readFileSync(new URL('./WorkspacesView.tsx', import.meta.url), 'utf8');
     expect(source).toMatch(/newMenuOpen && newMenuPos && createPortal\(/);
-    expect(source).toMatch(/className="card fixed z-\[1000\] w-64 p-1\.5 shadow-lg"/);
+    expect(source).toMatch(/className="card fixed z-\[1000\] w-max min-w-48 p-1 shadow-lg"/);
     expect(source).toMatch(/onContextMenu=\{sidebarOnly \? \(e\) => \{ e\.preventDefault\(\); e\.stopPropagation\(\); setViewMenu\(\{ x: e\.clientX, y: e\.clientY \}\)/);
     expect(source).toMatch(/<AgentPanelViewMenu x=\{viewMenu\.x\} y=\{viewMenu\.y\}/);
   });
@@ -76,9 +76,9 @@ describe('Agents panel header', () => {
     const byName = renderSidebar({ sessions });
     expect(cards(byName)).toEqual(['false', 'false']);
     // Project headers stay draggable while grouped by project.
-    expect(byName).toMatch(/<div class="group flex items-center[^"]*" draggable="true"/);
+    expect(byName).toMatch(/<div class="agent-panel-group-heading group flex items-center[^"]*" draggable="true"/);
     localStorage.setItem(AGENT_PANEL_VIEW_KEY, JSON.stringify({ ...DEFAULT_AGENT_PANEL_VIEW, groupBy: 'status' }));
-    expect(renderSidebar({ sessions })).not.toMatch(/<div class="group flex items-center[^"]*" draggable="true"/);
+    expect(renderSidebar({ sessions })).not.toMatch(/<div class="agent-panel-group-heading group flex items-center[^"]*" draggable="true"/);
   });
 
   it('puts a search button beside the +, styled and sized like the view-options sliders, opening the chat finder', () => {
@@ -106,5 +106,16 @@ describe('Agents panel header', () => {
     expect(cssRule(css, '.wall-add-bar').display).toBe('inline-flex');
     for (const gone of [/\.wall-add-arrow/, /\.wall-add-launch/]) expect(hasSelector(css, gone)).toBe(false);
     expect(cssRule(css, '.wall-composer-row')['flex-direction']).toBeUndefined();
+  });
+});
+
+describe('Agent group hierarchy', () => {
+  it('uses larger primary-color labels and separated vertical groups', () => {
+    const layout = stylesheet('components/commandWallLayouts.css');
+    expect(renderSidebar()).toContain('agent-panel-group-label');
+    expect(cssRule(layout, '.agent-panel-group-label')).toMatchObject({ 'font-size': '13px', color: 'var(--accent)' });
+    expect(cssRule(layout, '.agent-panel-group + .agent-panel-group')['margin-top']).toBe('16px');
+    expect(cssRule(layout, '.agent-panel-group-heading')['margin-bottom']).toBe('6px');
+    expect(cssRule(layout, '.agent-panel-row > .agent-panel-group + .agent-panel-group')['margin-top']).toBe('0');
   });
 });

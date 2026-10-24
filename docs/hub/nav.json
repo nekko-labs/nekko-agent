@@ -52,6 +52,12 @@
           "description": "Use your ChatGPT subscription instead of a metered API key, and how Claude works in Nekko Agent."
         },
         {
+          "slug": "accounts",
+          "title": "Accounts and switching",
+          "source": "docs/accounts.md",
+          "description": "Several accounts for any provider in one window, switching a chat between them, and what Anthropic allows with several Claude accounts."
+        },
+        {
           "slug": "usage-limits",
           "title": "Usage limits and prices",
           "source": "docs/USAGE-LIMITS.md",

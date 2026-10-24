@@ -36,7 +36,9 @@ struct ChatView: View {
         }
         .background(palette.paper)
         .navigationBarTitleDisplayMode(.inline)
-        .keyboardDoneButton()
+        // No keyboard toolbar here: on iOS 26 its Done floats over the
+        // composer's send button. Scrolling or tapping the transcript puts
+        // the keyboard away, and the message box has a VoiceOver action for it.
         .task(id: sessionId) {
             // Coming back to the same chat (a pushed screen popped) keeps the
             // model and what has streamed so far; start() re-subscribes and re-reads.
@@ -111,6 +113,7 @@ struct ChatView: View {
                 .frame(minHeight: geo.size.height, alignment: .bottom)
             }
             .scrollDismissesKeyboard(.interactively)
+            .simultaneousGesture(TapGesture().onEnded { hideKeyboard() })
             .defaultScrollAnchor(.bottom)
           }
             // Follow streamed output only while the reader is at the end, and
@@ -323,9 +326,9 @@ struct WaitingRow: View {
 
 func modeName(_ m: PcSettings.ChatMode) -> String {
     switch m {
-    case .ask: return "Ask before every tool"
-    case .guardrails: return "Guardrails (ask for risky tools)"
-    case .yolo: return "YOLO (never ask)"
+    case .ask: return String(localized: "Ask before every tool")
+    case .guardrails: return String(localized: "Guardrails (ask for risky tools)")
+    case .yolo: return String(localized: "YOLO (never ask)")
     }
 }
 
@@ -407,10 +410,10 @@ struct BlockView: View {
 
     private func statusName(_ s: ToolStatus) -> String {
         switch s {
-        case .running: return "running"
-        case .waiting: return "waiting for you"
-        case .ok: return "done"
-        case .error: return "failed"
+        case .running: return String(localized: "running")
+        case .waiting: return String(localized: "waiting for you")
+        case .ok: return String(localized: "done")
+        case .error: return String(localized: "failed")
         }
     }
 
@@ -751,6 +754,7 @@ struct Composer: View {
                     .lineLimit(1...6)
                     .accessibilityIdentifier("chat.message")
                     .focused($focused)
+                    .accessibilityAction(named: "Hide keyboard") { focused = false }
                     .padding(.horizontal, 12).padding(.vertical, 8)
                     .background(palette.surface, in: RoundedRectangle(cornerRadius: 20))
                     .overlay(RoundedRectangle(cornerRadius: 20).stroke(palette.line))

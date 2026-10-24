@@ -242,7 +242,10 @@ class ComputersRepository(
             pairCode = secret.pair,
             platform = "android",
         )
-        val c = remotes.create(config, scope)
+        // Refusals read with the computer's current name (it can be renamed while connected).
+        val c = PlainRefusals(remotes.create(config, scope)) {
+            _state.value.computers.firstOrNull { it.id == id }?.name ?: computer.name
+        }
         client = c
         connJob = scope.launch {
             launch {

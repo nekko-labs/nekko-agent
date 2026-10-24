@@ -51,9 +51,34 @@ async fn the_daemon_runs_the_phone_relay_agent() {
     let seal = |v: Value| {
         json!({ "enc": nekko_remote::e2e::seal_with_iv(&key, &v, nekko_remote::e2e::random_iv()) }).to_string()
     };
-    let client = |cid: &str, v: Value| Message::text(json!({ "type": "c", "cid": cid, "data": seal(v) }).to_string());
+    // A protocol 4 phone (relay replay protection): its HELLO answers the
+    // connection's challenge, and each request carries it and the next seq.
+    let phone: std::sync::Mutex<(String, u64)> = Default::default();
+    let client = |cid: &str, mut v: Value| {
+        let mut p = phone.lock().unwrap();
+        match v["type"].as_str() {
+            Some("hello") => {
+                v["protocol"] = json!(4);
+                v["challenge"] = json!(p.0);
+                p.1 = 0;
+            }
+            Some("req") => {
+                p.1 += 1;
+                v["seq"] = json!(p.1);
+                v["challenge"] = json!(p.0);
+            }
+            _ => {}
+        }
+        Message::text(json!({ "type": "c", "cid": cid, "data": seal(v) }).to_string())
+    };
 
     agent.send(Message::text(json!({ "type": "client-open", "cid": "c1" }).to_string())).await.unwrap();
+    // The agent challenges each new connection before anything else.
+    let (f, challenge) = next_agent_frame(&mut agent, &key).await;
+    assert_eq!(f["cid"], "c1");
+    let challenge = challenge.unwrap();
+    assert_eq!(challenge["type"], "challenge", "{challenge}");
+    phone.lock().unwrap().0 = challenge["challenge"].as_str().unwrap().to_string();
     // Nothing is served before the handshake.
     agent.send(client("c1", json!({ "type": "req", "id": 1, "channel": "tasks:list", "args": [] }))).await.unwrap();
     let (_, res) = next_agent_frame(&mut agent, &key).await;
@@ -77,6 +102,23 @@ async fn the_daemon_runs_the_phone_relay_agent() {
     assert_eq!(notify["deviceId"], "phone-1");
     let (_, res) = next_agent_frame(&mut agent, &key).await;
     assert_eq!(res.unwrap(), json!({ "type": "res", "id": 32, "result": { "ok": true } }));
+    // A request replayed byte for byte is dropped, and the connection goes
+    // back to the handshake: the phone says hello to the new challenge.
+    let once = client("c1", json!({ "type": "req", "id": 33, "channel": "app:info", "args": [] }));
+    agent.send(once.clone()).await.unwrap();
+    let (_, res) = next_agent_frame(&mut agent, &key).await;
+    assert_eq!(res.unwrap()["id"], 33);
+    agent.send(once).await.unwrap();
+    let (_, again) = next_agent_frame(&mut agent, &key).await;
+    let again = again.unwrap();
+    assert_eq!(again["type"], "challenge", "{again}");
+    phone.lock().unwrap().0 = again["challenge"].as_str().unwrap().to_string();
+    agent
+        .send(client("c1", json!({ "type": "hello", "deviceId": "phone-1", "name": "Pixel", "platform": "android" })))
+        .await
+        .unwrap();
+    let (_, welcome) = next_agent_frame(&mut agent, &key).await;
+    assert_eq!(welcome.unwrap()["type"], "welcome");
     let saved: Value = serde_json::from_str(&std::fs::read_to_string(data.join("remote.json")).unwrap()).unwrap();
     assert_eq!(saved["devices"][0]["id"], "phone-1");
 
@@ -155,10 +197,12 @@ async fn the_daemon_runs_the_phone_relay_agent() {
     let res = ask_res(42, "remote:activity", json!(["phone-1"])).await;
     assert_eq!(res["error"], "Not allowed from a paired phone (channel-denied): remote:activity");
     let (_, activity) = post(d.port, "remote:activity", json!(["phone-1"]), Some(TOKEN)).await;
-    assert_eq!(activity.as_array().map(Vec::len), Some(1), "{activity}");
-    assert_eq!(activity[0]["channel"], "device:registerKey");
-    assert_eq!(activity[0]["ok"], false);
-    assert_eq!(activity[0]["reason"], "proof-required");
+    // The three settings updates above are agent-class: logged, allowed or not.
+    assert_eq!(activity.as_array().map(Vec::len), Some(4), "{activity}");
+    let channels: Vec<&str> = activity.as_array().unwrap().iter().map(|a| a["channel"].as_str().unwrap()).collect();
+    assert_eq!(channels, ["settings:update", "settings:update", "settings:update", "device:registerKey"]);
+    assert_eq!(activity[3]["ok"], false);
+    assert_eq!(activity[3]["reason"], "proof-required");
     let (_, devices) = post(d.port, "remote:setAccess", json!(["phone-1", { "change": false }]), Some(TOKEN)).await;
     assert_eq!(devices[0]["access"], json!({ "read": true, "change": false }), "{devices}");
     let saved: Value = serde_json::from_str(&std::fs::read_to_string(data.join("remote.json")).unwrap()).unwrap();
@@ -174,9 +218,9 @@ async fn the_daemon_runs_the_phone_relay_agent() {
     let res = ask_res(45, "git:push", json!(["session:nope", { "setUpstream": true }])).await;
     assert_eq!(res["error"], "Not allowed from a paired phone (change-off): git:push", "{res}");
     let (_, activity) = post(d.port, "remote:activity", json!(["phone-1"]), Some(TOKEN)).await;
-    assert_eq!(activity.as_array().map(Vec::len), Some(2), "reads are not logged: {activity}");
-    assert_eq!(activity[1]["channel"], "git:push", "oldest first: {activity}");
-    assert_eq!(activity[1]["reason"], "change-off");
+    assert_eq!(activity.as_array().map(Vec::len), Some(5), "reads are not logged: {activity}");
+    assert_eq!(activity[4]["channel"], "git:push", "oldest first: {activity}");
+    assert_eq!(activity[4]["reason"], "change-off");
     post(d.port, "remote:setAccess", json!(["phone-1", { "read": false }]), Some(TOKEN)).await;
     let res = ask_res(46, "workspace:gitStatus", json!(["session:nope"])).await;
     assert_eq!(res["error"], "Not allowed from a paired phone (read-off): workspace:gitStatus", "{res}");

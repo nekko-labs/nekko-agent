@@ -10,6 +10,7 @@ import { SubagentCue, SubagentModelChip, subagentSummary, SubagentHeadline, Suba
 import { WatchClockChip, WatchDetail, WatchIcon, WatchThen, watchCallHeadline } from './WatchRow.js';
 import { parseWatchCall, thenSummary } from '../../agentWatches.js';
 import { useRowState } from './rowState.js';
+import { MemoryCard } from './MemoryCard.js';
 
 /** Running dots ahead of a live row's text, in a fixed box so nothing shifts. */
 export const LeadDots = () => <span className="dots dots-lead" aria-hidden="true" />;
@@ -74,6 +75,7 @@ export const ActivityGroup = memo(function ActivityGroup({ items, streaming = fa
         </button>
         {agents.length === 1 && <SubagentOpenButton call={agents[0].call} />}
       </div>
+      {tools.filter((it) => it.call.name === 'remember').map((it) => <MemoryCard key={it.call.id} call={it.call} result={it.result} />)}
       {!open && watchOnly && <WatchThen text={thenSummary(parseWatchCall(lastWatch.call).prompt)} className="pl-[38px]" />}
       {open && (
         <ol className={`mt-0.5 ${agents.length || watchOnly ? '' : 'ml-[7px] border-l border-line pl-2.5'}`}>

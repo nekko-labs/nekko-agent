@@ -2,30 +2,33 @@ import Foundation
 import NekkoProtocol
 import Observation
 
-/// The model, folder and tool policy of a chat started while the computer was out of reach.
+/// The model, folder, tool policy and effort of a chat started while the computer was out of reach.
 public struct NewChatSpec: Equatable, Sendable {
     public let providerId: String
     public let modelId: String
     public let workspaceId: String?
     public let mode: String?
+    public let effort: String?
 
-    public init(providerId: String, modelId: String, workspaceId: String? = nil, mode: String? = nil) {
+    public init(providerId: String, modelId: String, workspaceId: String? = nil, mode: String? = nil, effort: String? = nil) {
         self.providerId = providerId
         self.modelId = modelId
         self.workspaceId = workspaceId
         self.mode = mode
+        self.effort = effort
     }
 
     var json: JSONValue {
         var o: [String: JSONValue] = ["providerId": .string(providerId), "modelId": .string(modelId)]
         if let workspaceId { o["workspaceId"] = .string(workspaceId) }
         if let mode { o["mode"] = .string(mode) }
+        if let effort { o["effort"] = .string(effort) }
         return .object(o)
     }
 
     static func from(_ v: JSONValue?) -> NewChatSpec? {
         guard let v, let p = v.str("providerId"), let m = v.str("modelId") else { return nil }
-        return NewChatSpec(providerId: p, modelId: m, workspaceId: v.str("workspaceId"), mode: v.str("mode"))
+        return NewChatSpec(providerId: p, modelId: m, workspaceId: v.str("workspaceId"), mode: v.str("mode"), effort: v.str("effort"))
     }
 }
 
@@ -72,7 +75,7 @@ public struct OutboxItem: Equatable, Sendable, Identifiable {
     func asDraft(refusal: String? = nil) -> Draft {
         Draft(text: text, skill: skill, images: images, providerId: chatId == nil ? newChat?.providerId : nil,
               modelId: chatId == nil ? newChat?.modelId : nil, workspaceId: chatId == nil ? newChat?.workspaceId : nil,
-              mode: chatId == nil ? newChat?.mode : nil, refusal: refusal)
+              mode: chatId == nil ? newChat?.mode : nil, effort: chatId == nil ? newChat?.effort : nil, refusal: refusal)
     }
 
     /// Where that draft goes: the chat's composer, or New chat's while the chat doesn't exist.
@@ -291,9 +294,11 @@ public final class Outbox {
             let outcome = await deliver(item, c)
             switch outcome {
             case .delivered(let chatId):
+                // As it was last saved (with any note from delivering it).
+                let current = items.first { $0.id == item.id } ?? item
                 items.removeAll { $0.id == item.id }
                 save()
-                onDelivered?(item, chatId)
+                onDelivered?(current, chatId)
             case .refused(let reason):
                 let current = items.first { $0.id == item.id } ?? item
                 drafts.handBack(current.draftKey, current.asDraft(refusal: reason))
@@ -337,7 +342,18 @@ public final class Outbox {
                 // A chat started offline: its model and tool policy (again on a retry, which changes nothing).
                 var o: [String: JSONValue] = ["providerId": .string(spec.providerId), "modelId": .string(spec.modelId)]
                 if let mode = spec.mode { o["mode"] = .string(mode) }
-                _ = try await c.call(Channels.sessionSetOptions, [.string(chatId), .object(o)])
+                if let effort = spec.effort { o["effort"] = .string(effort) }
+                do {
+                    _ = try await c.call(Channels.sessionSetOptions, [.string(chatId), .object(o)])
+                } catch let e as RelayError where e.fromComputer && o["mode"] != nil
+                    && PhoneRefusal(e.message)?.code == "proof-required" {
+                    // A mode above the computer's default needs Face ID, which a
+                    // prompt sent from the queue can't ask for: it goes out under
+                    // the computer's default mode instead, and says so.
+                    o["mode"] = nil
+                    _ = try await c.call(Channels.sessionSetOptions, [.string(chatId), .object(o)])
+                    update(item.id) { $0.lastError = Self.modeNotRaised }
+                }
             }
             guard let session = Session.from(try await c.call(Channels.sessionGet, [.string(chatId)])) else {
                 return .refused("This chat was deleted on your computer.")
@@ -414,6 +430,9 @@ public final class Outbox {
     }
 
     static let needsUpdate = "Update Nekko Agent on your computer to send prompts written offline. Send it again from here."
+
+    /// A chat started offline asked for fewer approvals than the computer's default.
+    public static let modeNotRaised = "Sent with your computer’s default approvals: allowing fewer needs Face ID, which a queued prompt can’t ask for. Change it in the chat."
 
     private func update(_ id: String, _ change: (inout OutboxItem) -> Void) {
         guard let i = items.firstIndex(where: { $0.id == id }) else { return }

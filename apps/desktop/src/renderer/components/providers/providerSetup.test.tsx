@@ -13,15 +13,16 @@ describe('first provider setup', () => {
     expect(needsProviderSetup([{ ...engine, kind: 'chatgpt' }])).toBe(false);
     expect(needsProviderSetup([{ ...engine, kind: 'chatgpt', enabled: false }])).toBe(true);
   });
-  it('offers nine accessible provider cards with bundled brand marks', () => {
+  it('offers eight accessible provider cards with bundled brand marks', () => {
     const html = renderToStaticMarkup(<ProviderChoices value="chatgpt" onPick={() => {}} />);
-    expect((html.match(/<button /g) ?? []).length).toBe(9);
+    expect((html.match(/<button /g) ?? []).length).toBe(8);
     expect((html.match(/aria-pressed="true"/g) ?? []).length).toBe(1);
     expect(html).toContain('./providers/openai.svg');
     expect(html).toContain('billed separately');
-    // Claude on a key or cloud, and Claude Agent on the user's own Claude Code.
-    expect(html).toContain('Claude Agent');
-    expect(html).toContain('sign in there');
+    // One Claude card: its setup offers the subscription (Claude Code) or an API account.
+    expect(html).toContain('<strong>Claude</strong>');
+    expect(html).toContain('Your subscription or an API account');
+    expect(html).not.toContain('Claude Agent');
     expect(html).not.toContain('Sign in with your Claude plan');
   });
 });

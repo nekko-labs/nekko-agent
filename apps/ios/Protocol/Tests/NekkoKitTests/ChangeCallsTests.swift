@@ -45,6 +45,14 @@ final class ProofComputer: RemoteConnection, ProofCaller, @unchecked Sendable {
             key = k
             return ["registered": true]
         }
+        if channel == Channels.sessionCreate { return ["id": "s-new", "title": "New chat"] }
+        if channel == Channels.sessionSetOptions || channel == Channels.settingsUpdate {
+            // The gate's mode rule: plain unless it raises the mode (here, to yolo), then a proof.
+            let settings = channel == Channels.settingsUpdate
+            let patch = settings ? args.first : args.dropFirst().first
+            guard patch?.str(settings ? "defaultChatMode" : "mode") == "yolo" else { return settings ? (patch ?? .null) : .null }
+            guard proof != nil else { throw refuse("proof-required", channel) }
+        }
         guard changeOn else { throw refuse("change-off", channel) }
         guard let key else { throw refuse("key-missing", channel) }
         try check(channel, args, proof, key: key)
@@ -56,6 +64,7 @@ final class ProofComputer: RemoteConnection, ProofCaller, @unchecked Sendable {
     }
 
     func channels() -> [String] { lock.lock(); defer { lock.unlock() }; return calls.map(\.0) }
+    func proofs(_ channel: String) -> [Bool] { lock.withLock { calls.filter { $0.0 == channel }.map { $0.2 != nil } } }
 
     // The rest of a connection: unused here.
     func setHandlers(onStatus: (@Sendable (RelayStatus) -> Void)?, onEvent: (@Sendable (String, JSONValue) -> Void)?,
@@ -185,5 +194,75 @@ final class StoreChangeTests: XCTestCase {
         _ = try await store.call(change: "file:write", ["s2"])
         let mine = computer.channels().filter { $0 == ChangeProof.keyChannel || $0.hasPrefix("file:") }
         XCTAssertEqual(mine, ["device:registerKey", "file:write", "file:write"], "registered once per connection")
+    }
+
+    func pairedStore(_ computer: ProofComputer) async -> ComputersStore {
+        let store = ComputersStore(store: MemoryStore(), makeConnection: { _ in computer }, deviceName: { "iPhone" },
+                                   deriveKey: { _, _ in Data(repeating: 7, count: 32) }, newId: { "id-1" })
+        store.load()
+        _ = await store.pair(PairingLink(relayUrl: "ws://studio.tail1.ts.net:4400", room: "a1b2c3d4e5f60718",
+                                         key: "00112233445566778899aabbccddeeff", pair: "ABCD2345"))
+        return store
+    }
+
+    func testRaisingAChatsModeAsksForFaceIDAndLoweringItDoesNot() async throws {
+        let computer = ProofComputer(deviceId: "id-1")
+        computer.now = Int64(Date().timeIntervalSince1970 * 1000)
+        let store = await pairedStore(computer)
+        let signer = SoftwareChangeSigner()
+        store.changeSigner = signer
+
+        // Lowering (or keeping) the mode: one plain call, no Face ID.
+        _ = try await store.call(raising: Channels.sessionSetOptions, ["s1", ["mode": "ask"]])
+        XCTAssertEqual(computer.proofs(Channels.sessionSetOptions), [false])
+        XCTAssertEqual(signer.signatures, 0)
+
+        // Raising it: refused plain with proof-required, then sent again signed.
+        _ = try await store.call(raising: Channels.sessionSetOptions, ["s1", ["mode": "yolo"]])
+        XCTAssertEqual(computer.proofs(Channels.sessionSetOptions), [false, false, true])
+        XCTAssertGreaterThan(signer.signatures, 0)
+
+        // The same for the computer's default mode, and for a new chat's mode.
+        try await store.updatePcSettings(PcSettings.patch(mode: .yolo))
+        XCTAssertEqual(computer.proofs(Channels.settingsUpdate), [false, true])
+        _ = try await store.createChat(providerId: "p", modelId: "m", workspaceId: nil, mode: .yolo)
+        XCTAssertEqual(computer.proofs(Channels.sessionSetOptions).suffix(2), [false, true])
+        _ = try await store.createChat(providerId: "p", modelId: "m", workspaceId: nil, mode: .guardrails)
+        XCTAssertEqual(computer.proofs(Channels.sessionSetOptions).last, false)
+    }
+
+    func testARaiseWithoutFaceIDOrWithChangesOffSaysWhy() async throws {
+        let computer = ProofComputer(deviceId: "id-1")
+        computer.now = Int64(Date().timeIntervalSince1970 * 1000)
+        let store = await pairedStore(computer)
+        do {
+            _ = try await store.call(raising: Channels.sessionSetOptions, ["s1", ["mode": "yolo"]])
+            XCTFail("no signer")
+        } catch let e as ChangeRefused {
+            XCTAssertTrue(e.message.contains("Face ID"), e.message)
+        }
+        store.changeSigner = SoftwareChangeSigner()
+        computer.changeOn = false
+        do {
+            _ = try await store.call(raising: Channels.sessionSetOptions, ["s1", ["mode": "yolo"]])
+            XCTFail("changes are off")
+        } catch let e as ChangeRefused {
+            XCTAssertEqual(e.code, "change-off")
+            XCTAssertTrue(e.message.contains("Changes from this phone are turned off"), e.message)
+        }
+    }
+
+    func testPlainRefusalsReadPlainly() async throws {
+        let computer = ProofComputer(deviceId: "id-1")
+        let store = await pairedStore(computer)
+        let raw = RelayError("Not allowed from a paired phone (change-off): chat:send", fromComputer: true)
+        XCTAssertEqual(store.readable(raw).localizedDescription,
+                       "Changes from this phone are turned off on My computer. Turn them on in Remote access → What phones can do.")
+        let read = RelayError("Not allowed from a paired phone (read-off): sessions:summaries", fromComputer: true)
+        XCTAssertEqual((store.readable(read) as? ChangeRefused)?.code, "read-off")
+        let other = RelayError("Session not found.", fromComputer: true)
+        XCTAssertEqual(store.readable(other) as? RelayError, other)
+        XCTAssertEqual(PhoneRefusal("Not allowed from a paired phone (proof-required): session:setOptions")?.message(computer: "Studio"),
+                       "Confirm with Face ID or your passcode to let chats on Studio run with fewer approvals.")
     }
 }

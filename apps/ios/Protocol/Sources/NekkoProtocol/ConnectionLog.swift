@@ -75,6 +75,8 @@ public enum ConnectionAdvice {
                 return ["That pairing code was used or expired (codes last 10 minutes and work once). Make a new one on \(computer)."]
             case .badKey?:
                 return ["The pairing key no longer matches \(computer), usually because remote access was turned off and on there. Pair again."]
+            case .updateRequired?:
+                return ["Update Nekko Agent on this phone: \(computer) no longer accepts older apps. Then open it again; no new pairing is needed."]
             default:
                 return ["\(computer) doesn’t know this iPhone. Pair again from Settings → Remote access on the computer."]
             }

@@ -5,7 +5,7 @@ import { liveStore } from './tests/liveStore.js';
 import { renderApp } from './tests/renderApp.js';
 
 vi.mock('./store.js', (original) => liveStore(original as never));
-import { RAIL_MIN_LOWER_SWOOP, RAIL_OPEN_RADIUS, RAIL_ROW_CLEARANCE, RAIL_TIP, RAIL_TIP_INSET, railGeometry } from './railGeometry.js';
+import { RAIL_MIN_LOWER_SWOOP, RAIL_ROW_CLEARANCE, RAIL_TIP, RAIL_TIP_INSET, railGeometry } from './railGeometry.js';
 
 const nums = (d: string) => d.match(/-?[\d.]+/g)!.map(Number);
 /** Every x the outline reaches (absolute commands only, x first in each pair). */
@@ -32,8 +32,12 @@ describe('swoop rail geometry', () => {
   });
 
   it('opens to one even column with rounded ends', () => {
-    expect(new Set(xs(g.openPath).filter(x => x > 0 && x < 198 - RAIL_OPEN_RADIUS))).toEqual(new Set());
-    expect(g.openPath.startsWith(`M0,${RAIL_TIP_INSET} L${198 - RAIL_OPEN_RADIUS},${RAIL_TIP_INSET} Q198,${RAIL_TIP_INSET} 198,${RAIL_TIP_INSET + RAIL_OPEN_RADIUS}`)).toBe(true);
+    expect(new Set(xs(g.openPath).filter(x => x > 0 && x < 198 - RAIL_TIP))).toEqual(new Set());
+    expect(g.openPath.startsWith(`M0,${RAIL_TIP_INSET} L${198 - RAIL_TIP},${RAIL_TIP_INSET} Q198,${RAIL_TIP_INSET} 198,${RAIL_TIP_INSET + RAIL_TIP}`)).toBe(true);
+  });
+
+  it('keeps every vertical anchor synchronized including the lower tail', () => {
+    expect(nums(g.openPath).filter((_, i) => i % 2 === 1)).toEqual(nums(g.restPath).filter((_, i) => i % 2 === 1));
   });
 
   it('shares one command list so `d` interpolates', () => {
@@ -74,13 +78,13 @@ describe('compact board and navigation spacing', () => {
     // Open buttons: 198 - 6 inset - 16 right padding = the 176px row.
     expect(198 - 6 - 16).toBe(188 - 12);
     expect(cssRule(styles, `${OPEN} .rail-backdrop path`).d).toBe('var(--rail-open)');
-    expect(cssRule(styles, '.rail-backdrop path').fill).toBe(cssValue('color-mix(in srgb, color-mix(in srgb, var(--accent) 8%, var(--paper)) 62%, transparent)'));
-    expect(cssRule(styles, `${OPEN} .rail-backdrop path`).fill).toBe(cssValue('color-mix(in srgb, color-mix(in srgb, var(--accent) 6%, var(--surface)) 55%, transparent)'));
+    expect(cssRule(styles, '.rail-backdrop path').fill).toBe(cssValue('color-mix(in srgb, color-mix(in srgb, var(--accent) 8%, var(--paper)) 88%, transparent)'));
+    expect(cssRule(styles, `${OPEN} .rail-backdrop path`).fill).toBe(cssValue('color-mix(in srgb, color-mix(in srgb, var(--accent) 6%, var(--surface)) 88%, transparent)'));
   });
 
-  it('is frosted glass clipped to the outline, with no glow when open', () => {
+  it('clips the tinted outline without a per-frame backdrop blur', () => {
     const backdrop = cssRule(styles, '.rail-backdrop');
-    expect(backdrop['backdrop-filter']).toBe(cssValue('blur(18px) saturate(1.6)'));
+    expect(backdrop['backdrop-filter']).toBe('none');
     expect(backdrop['clip-path']).toBe('var(--rail-rest)');
     expect(cssRule(styles, `${OPEN} .rail-backdrop`)['clip-path']).toBe('var(--rail-open)');
     expect(backdrop.filter).toBeUndefined();

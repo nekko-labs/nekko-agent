@@ -123,6 +123,21 @@
   ]
  },
  "readChannels": [
+  "changes:list",
+  "chat:pending",
+  "limits:get",
+  "models:list",
+  "pr:sessionList",
+  "providers:list",
+  "session:get",
+  "sessions:summaries",
+  "settings:get",
+  "skills:runnable",
+  "tasks:list",
+  "usage:summary",
+  "voice:status",
+  "workflows:list",
+  "workspace:list",
   "git:branches",
   "git:compare",
   "git:diff",
@@ -156,10 +171,41 @@
   "terminal:create",
   "terminal:signal"
  ],
+ "agentChannels": [
+  "chat:abort",
+  "chat:answer",
+  "chat:editQueued",
+  "chat:queue",
+  "chat:send",
+  "session:create",
+  "session:delete",
+  "session:fork",
+  "session:setOptions",
+  "settings:update",
+  "task:runNow",
+  "tool:approve",
+  "voice:transcribe",
+  "workflow:run"
+ ],
+ "openChannels": [
+  "app:info"
+ ],
  "tokenChannels": [
   "terminal:resize",
   "terminal:write"
  ],
+ "modeProof": {
+  "channels": [
+   "session:setOptions",
+   "settings:update"
+  ],
+  "rank": [
+   "ask",
+   "guardrails",
+   "yolo"
+  ],
+  "fallback": "guardrails"
+ },
  "terminal": {
   "tailBytes": 65536,
   "writeBytes": 65536,
@@ -227,6 +273,7 @@
  ],
  "sessionOptionKeys": [
   "archivedAt",
+  "effort",
   "mode",
   "modelId",
   "pinned",
@@ -250,6 +297,14 @@
   "ask",
   "guardrails",
   "yolo"
+ ],
+ "effortLevels": [
+  "low",
+  "medium",
+  "normal",
+  "high",
+  "xhigh",
+  "max"
  ],
  "sessionView": {
   "messages": 300,

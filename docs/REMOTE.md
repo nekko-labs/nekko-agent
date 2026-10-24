@@ -20,8 +20,10 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 
 ## Pairing a phone
 
-1. On your computer: **Settings → Remote access → Enable** (the managed relay is prefilled; or
-   paste your self-hosted relay URL), then **Pair a device**.
+1. On your computer: **Settings → Phone pairing** (second in the left-hand list), then in **Remote access**
+   pick how your phone connects: **Use Tailscale** (free, needs the Tailscale app on both) or
+   **Use Nekko Cloud** (works anywhere, nothing to install). A self-hosted relay goes under **Use your
+   own relay**. Then **Pair a device**. The QR appears right under the button.
 2. On your phone: scan the QR in the Nekko Agent app (**Computers → Pair a computer**), or with the
    phone's camera app, which hands the `nekko-agent-pair:` link to the Nekko Agent app. Without the
    app, the pairing link also opens the web app in a browser over the relay, but it is limited to
@@ -39,6 +41,20 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > computer right away. Pick **Phone setting**, **Light** or **Dark** to choose on the phone instead;
 > that choice is kept on the phone. Only the theme, theme preset and the two accent colors are sent
 > for this (the `appearance:updated` event), never the rest of the computer's settings.
+>
+> The iPhone app has the desktop's themes too: **Settings → Appearance → Theme** offers **Match my
+> computer** (the computer's preset, mode and accent), **Match this iPhone**, **Light**, **Dark** and
+> every desktop preset (Nebula, Terminal, Nord, Solar, Lilac, Lavender, Ember, Spooky and the
+> experimental families). In October, **Spooky** also switches the app icon to a limited fall
+> version; iOS confirms the change, and the usual icon comes back with any other theme or after
+> Halloween. The iPhone app speaks the desktop's languages (English, Spanish, French, German,
+> Portuguese, Japanese and Chinese): it follows the iPhone's language, and **Settings → Appearance →
+> Language** opens iOS Settings to pick one for Nekko Agent alone.
+>
+> On the iPhone, **New chat** also picks the **Effort** (the levels the chosen model takes, or the
+> computer's default) and, when the model is a local one (llama.cpp, Ollama, LM Studio, vLLM),
+> **Run on**: which paired computer the chat and its model run on. Choosing another computer
+> connects to it and shows its models and folders; what you typed stays.
 >
 > The Android app's **Settings** also has a **Computers** row, which opens the list of paired
 > computers (rename, switch, forget, pair another), and an **About** section with the installed
@@ -295,21 +311,31 @@ changes how the computer itself is set up:
   without typing it, renaming terminals and listing shells stay off.
 - **One chat's options:** a phone can change a chat's model, title, pin and tags, complete it, and
   switch it between Ask, Guardrails and YOLO, but not its tools, isolation or
-  offline/incognito switches. Messages cannot attach files from the computer.
+  offline/incognito switches. Messages cannot attach files from the computer. Moving a chat (or the
+  default for new chats) to a mode with fewer approvals, Ask to Guardrails or anything to YOLO, is
+  confirmed on the phone like any other change: Face ID or the passcode on the iPhone. Android can't
+  confirm changes yet, so there you change the mode on the computer.
 
 ### What phones can do: Read and Change, per phone
 
 Git, files, logs, terminals and SSH are on the iPhone now (above); task boards are coming.
 *Remote access → What phones can do* on the computer lists each paired phone with two switches:
 
-- **Read:** look at files, git status and history, logs and boards.
-- **Change:** edit and save files, commit and push, branch and pull request actions, type in a
+- **Read:** see your chats and their messages, settings, models, automations, usage and limits, and
+  look at files, git status and history, logs and boards.
+- **Change:** send and queue prompts, stop a run, approve tools, answer questions, start, fork,
+  delete and change chats, change the phone-settable settings, run an automation, transcribe a voice
+  prompt; edit and save files, commit and push, branch and pull request actions, type in a
   terminal, edit boards, SSH.
 
 Both are on for every phone, including phones paired before the switches existed. Turn one off and
-your computer refuses those requests from that phone, whatever the phone app does.
+your computer refuses those requests from that phone, whatever the phone app does: with Change off a
+phone can watch but can't make the agent do anything, and with Read off it sees nothing. Every
+request a phone can make is in one of the two; anything else is refused.
 
-**Every change is confirmed on the phone and checked by your computer.** The first time a phone
+**File, git, terminal and SSH changes, and moving a chat to Guardrails or YOLO, are confirmed on
+the phone and checked by your computer.** (Sending a prompt or approving a tool needs only the Change
+switch, so it doesn't ask for Face ID each time.) The first time a phone
 makes a change, it creates a key in its Secure Enclave (on iPhone) that only Face ID, Touch ID or
 the passcode can use, and gives your computer the public half. Each change after that is signed
 with the key, and your computer checks the signature before doing anything: a change with no
@@ -320,9 +346,15 @@ Your computer trusts the first key a phone gives it. A phone that later shows up
 key is refused until you remove it and pair it again. *Forget all computers* on the iPhone deletes
 its key too.
 
-**Activity.** *Activity* under each phone lists every change it made or tried, newest first, with
-why one was refused (Change off, no fresh Face ID or passcode, a changed key). Your computer keeps
-the newest 200 per phone; rotating the secret clears them.
+**Activity.** *Activity* under each phone lists every change it made or tried, prompts and approvals
+included, newest first, with why one was refused (Change off, no fresh Face ID or passcode, a changed
+key). Your computer keeps the newest 200 per phone; rotating the secret clears them.
+
+**Older phone apps.** Phone apps from before relay replay protection (below) still connect for one
+release. Your computer writes it to its log, shows *Older app: update it on the phone* next to that
+phone and adds one *Connected with an older app* line to its activity. To refuse them now, set
+`"acceptLegacyPhones": false` in `remote.json` in the data folder; such a phone is then told to
+update its app.
 
 **Revoke** a phone to stop all of it at once. Whatever the switches say, a phone can never reach
 provider keys or other credentials, remote access itself (pairing more devices, revoking,
@@ -346,6 +378,7 @@ The logs a phone reads are files you can open yourself: `logs/app.log` and `logs
 | Revoked device replays old creds | The agent refuses its handshake and unicasts nothing to it; it gets back in only with a fresh one-time pairing code from the computer's owner; rotate the secret for a full cryptographic reset |
 | Malicious relay withholding/reordering | Availability only; it still can't read or forge frames (AES-GCM auth) |
 | Phone asks for something dangerous | Your computer only serves the phone allowlist above (no wipe, settings reset, remote-access changes, terminals outside a chat, file writes); tool calls run on your machine under your guardrails/sandbox and chat mode |
+| Someone records the relay's traffic and plays it back | Every connection starts with a fresh random challenge from your computer that the phone's sealed hello must answer, once; every request after it carries that challenge and a number that only goes up. A replayed hello or request is dropped and never runs. (Phone apps from before this are accepted for one release, see *Older phone apps*.) |
 | Someone else picks up the phone, or the relay replays a request, to make a change | Each change must be signed by the phone's Secure Enclave key, which needs Face ID or the passcode (one check lasts 5 minutes); your computer checks the signature, its age and that it was not used before, and logs every attempt in the phone's activity |
 
 What the relay does see: connection metadata (IPs, timing, frame sizes), the room code, and, if you
@@ -356,9 +389,9 @@ and it's why relayed local-model use is inherently zero-data-retention for conte
 
 How the Android and iOS apps each handle the connection (URL rules, pairing, reconnects, push, background) is compared in [phone-connection.md](phone-connection.md).
 
-### Managed relay (default): `wss://nekko-agent-relay.fly.dev`
+### Nekko Cloud (the managed relay): `wss://nekko-agent-relay.fly.dev`
 
-Zero setup; free during beta with per-connection rate limits. When Nekko Cloud launches, the
+The app calls this **Nekko Cloud** and never shows the URL. Zero setup; free during beta with per-connection rate limits. When Nekko Cloud launches, the
 managed relay becomes part of the paid plans (it already supports gating via
 `NEKKO_RELAY_AUTHZ_URL`), while self-hosting stays free forever.
 
@@ -371,13 +404,11 @@ Tailscale address. Only devices on your tailnet can reach it, Tailscale encrypts
 tools such as Moonlight stay free: nothing runs in the cloud, the two ends find each other over a
 network you already own.
 
-**In the desktop app:** Settings → Remote access → **Relay on this computer** → **Start relay**.
-The app finds this computer's Tailscale address (any interface in `100.64.0.0/10`), starts the
-bundled relay bound to that address only, and shows the URL phones use. That is the MagicDNS name
+**In the desktop app:** Settings → Remote access → **Use Tailscale**. The app finds this computer's Tailscale address (any interface in `100.64.0.0/10`), starts the
+bundled relay bound to that address only, and turns remote access on through it. Phones dial the MagicDNS name
 (for example `ws://gomi.tailfd6474.ts.net:4400`) when the Tailscale CLI reports one, else the
-`100.x.y.z` address. **Use this relay** fills it in; then Enable, **Pair a device**, and scan the QR
-from the phone with Tailscale switched on. When Tailscale is connected and you haven't chosen a
-relay, this relay is already the default in the relay field, and **Enable** starts it for you.
+`100.x.y.z` address. Then **Pair a device** and scan the QR from the phone with Tailscale switched
+on. Without Tailscale on this computer the option links to Tailscale and stays off.
 
 - **It stays on:** once started it comes back with the app.
 - **It waits for Tailscale:** with Tailscale off it binds nowhere and waits, and starts when
@@ -406,12 +437,12 @@ connection and Live Activities while the app is open work as usual.
 npm run relay:tailscale        # Windows (PowerShell); or scripts/private-relay.sh on macOS/Linux
 ```
 
-The script prints the URL to paste into **Settings → Remote access**. Either way the relay only
+The script prints the URL to paste into **Settings → Remote access → Use your own relay**. Either way the relay only
 listens on the Tailscale interface, so agent enrollment without an access token
 (`NEKKO_RELAY_ALLOW_UNAUTHENTICATED=1` in the script) is safe here; never use that flag on a public
 bind.
 
-The computer refuses a plain `ws://` relay on the open internet, whether you press Enable or start
+The computer refuses a plain `ws://` relay on the open internet, whether you press Connect or start
 a headless agent with `NEKKO_RELAY_URL`. It uses the same rule as the phones, below.
 
 Plain `ws://` is fine on a tailnet: the transport is already encrypted end to end by WireGuard, and
@@ -464,7 +495,7 @@ instance.
 
 Put any self-hosted relay behind TLS (`wss://`) for internet use; the E2E layer protects content
 regardless, but TLS also protects the transport-auth query string. Then paste the URL into
-**Settings → Remote access** before enabling.
+**Settings → Remote access → Use your own relay**.
 
 Environment knobs:
 

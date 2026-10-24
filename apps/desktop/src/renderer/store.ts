@@ -173,6 +173,8 @@ interface UiState {
   completionTipSessionId: string | null;
   /** A workflow run to show when the Workflows view opens (a notification click). */
   workflowFocus: { workflowId: string; runId: string } | null;
+  /** A memory note's title to open when the Memory view shows (a chat's memory card). */
+  memoryFocus: string | null;
   settings: AppSettings | null;
   view: View;
   /**
@@ -313,7 +315,8 @@ interface UiState {
   addProviderKind: ProviderKind | null;
   openAddProvider: (kind: ProviderKind) => void;
   /** Open a Nekko terminal running the user's `claude`, where they sign in with /login. */
-  openClaudeCodeSignIn: () => Promise<void>;
+  /** A Nekko terminal running `claude` to sign in, on `account`'s folder when one is named. */
+  openClaudeCodeSignIn: (account?: string) => Promise<void>;
   openChatPane: (sessionId: string) => void;
   openTerminalPane: (terminalId: string) => void;
   openFilePane: (path: string, sessionId?: string) => void;
@@ -588,6 +591,7 @@ let completionTipPending = false;
 export const useStore = create<UiState>((set, get) => ({
   completionTipSessionId: null,
   workflowFocus: null,
+  memoryFocus: null,
   settings: null,
   view: 'command',
   sessions: [],
@@ -925,9 +929,13 @@ export const useStore = create<UiState>((set, get) => ({
 
   // Sign-in stays inside Claude Code: this only starts `claude` in a terminal
   // the user can see and type into; Nekko never touches the login itself.
-  openClaudeCodeSignIn: async () => {
+  openClaudeCodeSignIn: async (account) => {
     try {
-      const t = await window.nekko.createTerminal({ workspaceId: get().activeProjectId ?? undefined, title: 'Claude Code sign-in' });
+      const t = await window.nekko.createTerminal({
+        workspaceId: get().activeProjectId ?? undefined,
+        title: account ? `Claude Code sign-in (${account})` : 'Claude Code sign-in',
+        ...(account ? { claudeAccount: account } : {}),
+      });
       await get().refreshTerminals();
       set({ view: 'chat' });
       get().openTerminalPane(t.id);

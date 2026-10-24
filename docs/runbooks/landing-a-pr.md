@@ -19,6 +19,16 @@ fast-forward the primary checkout and remove the task worktree and merged branch
 Inspect dirty files and preserve any unmerged work before cleanup; never force
 remove a worktree just because its PR was squash-merged.
 
+## Start from an issue
+
+Every feature or change is tracked as a GitHub issue in `nekko-labs/nekko-agent`, and its PR links to it. Search first (`gh issue list --search "<words>"`); file one only when none fits:
+
+```
+gh issue create --title "<what changes, in plain words>" --body "<what and why>"
+```
+
+Put the requester's prompt, screenshots or other chat context in the issue only when they said to (the app's Settings > Project management holds the same choice for its own users). Then put `Closes #<n>` in the PR description. A fix for a baseline failure links the issue for that failure.
+
 ## Always land work as a PR
 
 The default for every change is: commit it to a branch, push, open a PR, and merge it.

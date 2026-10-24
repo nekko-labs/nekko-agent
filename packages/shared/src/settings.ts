@@ -224,6 +224,14 @@ export interface AppSettings {
    * merged is removed in the background when it is clean and its chat is idle.
    */
   gitManagement?: { mode?: 'worktree' | 'shared'; baseline?: 'head' | 'local-changes'; removeMerged?: boolean };
+  /**
+   * Work tracking (Settings > Project management). `createIssue` is on unless
+   * false. The include choices are unset until the user answers; unset means the
+   * agent asks the first time.
+   */
+  projectManagement?: { createIssue?: boolean; includePrompt?: boolean; includeScreenshots?: boolean; includeContext?: boolean };
+  /** Settings > Pull requests. `linkIssue` is on unless false; includes as above. */
+  pullRequests?: { linkIssue?: boolean; includePrompt?: boolean; includeScreenshots?: boolean };
   theme: ThemeMode;
   navOrder?: string[];
   accent: string;
@@ -283,7 +291,7 @@ export interface AppSettings {
   skipDeleteConfirmation?: boolean;
   /**
    * Let paired phones see a read-only diff of the files the agent changed in a
-   * chat (Settings → Remote access). Off unless set. Phones can never accept,
+   * chat (Settings → Remote access). On by default; only `false` turns it off. Phones can never accept,
    * revert or edit changes, read other files or open terminals.
    */
   phoneChanges?: boolean;

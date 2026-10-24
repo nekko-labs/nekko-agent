@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { findThemePreset } from '@nekko-agent/shared';
 
 /** Dot colours blending `from` to `to` left to right, and the strongest dot's opacity. */
-export interface PixelWave { from: string; to: string; peak: number }
+export interface PixelWave { from: string; to: string; peak: number; speed?: number }
 
 /**
  * The wave a preset draws, or null for presets without one. Lilac draws the
@@ -12,7 +12,11 @@ export interface PixelWave { from: string; to: string; peak: number }
 export function pixelWaveFor(presetId: string | undefined): PixelWave | null {
   if (presetId === 'lilac') return { from: '#453a92', to: '#9d8ce6', peak: 0.26 };
   if (presetId === 'lavender') return { from: '#ffffff', to: '#ffffff', peak: 0.34 };
-  return findThemePreset(presetId)?.wave ?? null;
+  const preset = findThemePreset(presetId);
+  if (!preset?.wave) return null;
+  return preset.group === 'experimental'
+    ? { ...preset.wave, peak: preset.wave.peak * 0.6, speed: 0.4 }
+    : preset.wave;
 }
 
 const rgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
@@ -56,7 +60,7 @@ export function waveField(cols: number, rows: number, t: number, peak: number, o
  * at one pixel per CSS pixel with crisp scaling rather than at device
  * resolution.
  */
-export function PixelWaveBackground({ wave: { from, to, peak } }: { wave: PixelWave }) {
+export function PixelWaveBackground({ wave: { from, to, peak, speed = 0.8 } }: { wave: PixelWave }) {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -107,7 +111,7 @@ export function PixelWaveBackground({ wave: { from, to, peak } }: { wave: PixelW
     let timer = 0;
     const frame = (now: number) => {
       raf = 0;
-      t += (Math.min(now - last, 250) / 1000) * 0.8;
+      t += (Math.min(now - last, 250) / 1000) * speed;
       last = now;
       draw();
       schedule();
@@ -138,7 +142,7 @@ export function PixelWaveBackground({ wave: { from, to, peak } }: { wave: PixelW
       window.removeEventListener('blur', onBlur);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [from, to, peak]);
+  }, [from, to, peak, speed]);
 
   return <canvas ref={ref} className="pixel-wave-background" aria-hidden="true" />;
 }

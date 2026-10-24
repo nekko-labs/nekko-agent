@@ -890,7 +890,7 @@ impl Turns {
         // own tools, so none of Nekko's tools or MCP servers are set up.
         let claude_code = facts.pointer("/provider/kind").and_then(Value::as_str) == Some("claude-code");
         if claude_code && sandbox {
-            return early("Claude Agent chats run Claude Code on this computer, so they cannot use a sandbox.");
+            return early("Claude subscription chats run Claude Code on this computer, so they cannot use a sandbox.");
         }
         if js::truthy(loaded.get("unattended")) {
             shared.unattended.on.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -1071,7 +1071,19 @@ impl Turns {
                 Some(slot) => slot,
                 None => self.harness.take(&session_id).await,
             };
-            self.claude_code_turn(shared, slot, &store, &session, incognito, &workspaces, opts, &mode, wake).await;
+            self.claude_code_turn(
+                shared,
+                slot,
+                &store,
+                &session,
+                incognito,
+                &workspaces,
+                opts,
+                &facts["provider"],
+                &mode,
+                wake,
+            )
+            .await;
             return self.end_turn(&store, shared, &session, forwarder, incognito).await;
         }
 
@@ -1207,10 +1219,11 @@ impl Turns {
         incognito: bool,
         workspaces: &[Value],
         opts: &Value,
+        provider: &Value,
         mode: &str,
         wake: bool,
     ) {
-        use crate::harness::{BRIDGE_SERVER, BRIDGE_TOOL, INTERRUPT_GRACE, Wanted, permission_mode};
+        use crate::harness::{BRIDGE_SERVER, BRIDGE_TOOL, INTERRUPT_GRACE, Wanted, permission_mode, provider_account};
         use nekko_harness::{Mapped, Mapper, SessionStart, TurnExit, TurnInput};
 
         let session_id = shared.session_id.clone();
@@ -1231,13 +1244,27 @@ impl Turns {
         let paths: Vec<PathBuf> =
             workspaces.iter().filter_map(|w| str_at(w, "path")).filter(|p| !p.is_empty()).map(PathBuf::from).collect();
         let Some((cwd, rest)) = paths.split_first() else {
-            return fail("A Claude Agent chat needs a workspace folder to run in.", &history);
+            return fail("A Claude subscription chat needs a workspace folder to run in.", &history);
+        };
+        // The provider's Claude Code account. Its sessions live in its own
+        // folder, so one saved under another account (the chat switched) is
+        // not resumed: the next launch starts a new Claude Code session.
+        let account = provider_account(provider).map(str::to_string);
+        let config_dir = match nekko_harness::account_config_dir(account.as_deref()) {
+            Ok(dir) => dir,
+            Err(e) => return fail(&e, &history),
         };
         let wanted = Wanted {
             cwd: cwd.clone(),
             add_dirs: rest.to_vec(),
             model: str_at(opts, "modelId").filter(|m| !js::trim(m).is_empty()).map(str::to_string),
             permission_mode: permission_mode(mode),
+            config_dir,
+        };
+        let same_account = |s: &Value| str_at(s, "claudeCodeAccount") == account.as_deref();
+        let set_account = |obj: &mut serde_json::Map<String, Value>| match &account {
+            Some(a) => obj.insert("claudeCodeAccount".into(), json!(a)),
+            None => obj.shift_remove("claudeCodeAccount"),
         };
 
         // One turn per chat at a time: the slot stays taken until the end.
@@ -1252,7 +1279,10 @@ impl Turns {
                 Ok(bin) => bin,
                 Err(e) => return fail(&e, &history),
             };
-            let stored = str_at(&lock(session), "claudeCodeSessionId").map(str::to_string);
+            let stored = {
+                let s = lock(session);
+                str_at(&s, "claudeCodeSessionId").filter(|_| same_account(&s)).map(str::to_string)
+            };
             let mut spec = wanted.launch(bin, stored.as_deref());
             // Every permission prompt goes to Nekko through the bridge; with
             // no bridge Claude Code does not start (fail closed).
@@ -1265,6 +1295,7 @@ impl Turns {
                 // Saved before the launch, so a crash mid-turn still resumes.
                 if let Some(obj) = lock(session).as_object_mut() {
                     obj.insert("claudeCodeSessionId".into(), json!(id));
+                    set_account(obj);
                 }
                 persist(store, session, incognito).await;
             }
@@ -1292,6 +1323,9 @@ impl Turns {
                 seen = Some(init.session_id);
                 model = init.model.or(model.take());
             }
+            Mapped::PlanUsage(event) => {
+                self.harness.note_plan_usage(str_at(provider, "id").unwrap_or_default(), &event)
+            }
             Mapped::Unparsed(line) => eprintln!("nekkod: Claude Code printed a non-JSON line: {line}"),
             _ => {}
         })
@@ -1312,6 +1346,7 @@ impl Turns {
                     Some(id) => obj.insert("claudeCodeSessionId".into(), json!(id)),
                     None => obj.shift_remove("claudeCodeSessionId"),
                 };
+                set_account(obj);
             }
             changed = true;
         }
@@ -2051,6 +2086,7 @@ impl TurnTools {
         }
         match name {
             "set_chat_title" => return Ok(self.set_title(id, &input).await),
+            "remember" => return Ok(self.remember(id, &input).await),
             "complete_session" => return Ok(self.complete(id, &input).await),
             "ask_user" => return Ok(result(id, self.ask(call).await)),
             "update_plan" if !self.training => return Ok(self.update_plan(id, &input).await),
@@ -2498,6 +2534,25 @@ impl TurnTools {
         persist(&self.store, &self.session, self.incognito).await;
         self.meta();
         result(id, "Chat title updated.")
+    }
+
+    /// `remember`: a global memory note. The chat's memory card reads the
+    /// call's title and body and this result's first word after "Memory".
+    async fn remember(&self, id: &str, input: &Value) -> Value {
+        let dir = self.turns.data_dir.clone().or_else(|| self.store.dir().parent().map(PathBuf::from));
+        let Some(dir) = dir else { return error(id, "Memory is unavailable here; nothing was saved.") };
+        let text = |k: &str| input.get(k).and_then(Value::as_str).unwrap_or_default().to_string();
+        let (title, body) = (text("title"), text("body"));
+        let saved = tokio::task::spawn_blocking(move || nekko_workspace::memory::remember(&dir, &title, &body))
+            .await
+            .unwrap_or_else(|e| Err(e.to_string()));
+        match saved {
+            Ok((note, updated)) => {
+                let action = if updated { "updated" } else { "added" };
+                result(id, format!("Memory {action}: {}", js::display(&note["title"])))
+            }
+            Err(e) => error(id, format!("Memory was not saved: {e}")),
+        }
     }
 
     async fn complete(&self, id: &str, input: &Value) -> Value {

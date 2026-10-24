@@ -9,6 +9,10 @@ describe('voice intent', () => {
   it.each(['Nekko, create a new session.', 'Nekko start new chat', 'Nekko open a new agent'])('recognizes new-session command: %s', (text) => {
     expect(parseVoiceIntent(text)).toEqual({ kind: 'new-session' });
   });
+  it.each(['Neco, open settings.', 'Neko open settings', 'Necko open settings'])('hears the wake word as recognizers spell it: %s', (text) => {
+    expect(parseVoiceIntent(text)).toEqual({ kind: 'navigate', view: 'settings' });
+    expect(parseVoiceIntent('Necklace open settings')).toMatchObject({ kind: 'dictation' });
+  });
   it('recognizes completion without auto-execution', () => {
     expect(parseVoiceIntent('Nekko complete this session')).toEqual({ kind: 'complete-session' });
   });

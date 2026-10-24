@@ -3,9 +3,11 @@ import XCTest
 @testable import NekkoProtocol
 
 /// The relay client against an in-memory relay + agent. The fake plays the
-/// agent's side of `crates/nekko-remote/src/agent.rs`: it opens sealed frames with
-/// the room key, answers HELLO and replies to requests. Same cases as
-/// Android's `RelayClientTest.kt`.
+/// agent's side of `crates/nekko-remote/src/agent.rs`: it seals a
+/// challenge to each new socket (protocol 4; `challenges = false` plays a
+/// computer from before it), opens sealed frames with the room key, answers
+/// HELLO, checks each request's seq and challenge (re-challenging on a bad
+/// one) and replies. Same cases as Android's `RelayClientTest.kt`.
 final class RelayClientTests: XCTestCase {
     let key = E2E.randomBytes(32)
 
@@ -25,6 +27,12 @@ final class RelayClientTests: XCTestCase {
         var unreachable: [String: Bool] = [:]
         /// The computer's phone protocol version in its welcome; nil sends none (an older computer).
         var welcomeProtocol: Int?
+        /// Seal a challenge to each socket as it opens (a protocol 4 computer).
+        var challenges = true
+        /// Refuse a HELLO without a challenge with `update-required` (legacy phones turned off).
+        var refuseLegacy = false
+        /// Requests dropped for a stale seq or a wrong challenge.
+        var rejected: [JSONValue] = []
         var answer: (JSONValue) -> JSONValue? = { req in
             ["type": "res", "id": req["id"]!, "result": .string("ok:\(req.str("channel")!)")]
         }
@@ -46,6 +54,11 @@ final class RelayClientTests: XCTestCase {
             let handlers: WsHandlers
             let refuse: (Int, String)?
             var hang = false
+            /// The challenge this socket was last sent; nil when the fake never challenged it.
+            var nonce: String?
+            /// The challenge the welcomed HELLO answered, and the last seq seen since.
+            var welcomedChallenge: String?
+            var lastSeq: Int64 = 0
             private let lock = NSLock()
             private var _open = false
             var isOpen: Bool { lock.lock(); defer { lock.unlock() }; return _open }
@@ -67,7 +80,15 @@ final class RelayClientTests: XCTestCase {
                     self._open = true
                     self.lock.unlock()
                     self.handlers.onOpen()
+                    if self.relay.sync({ self.relay.challenges }) { self.challenge() }
                 }
+            }
+
+            /// Seal a fresh challenge to this socket, as the computer does on client-open.
+            func challenge() {
+                let n = E2E.randomBytes(18).base64EncodedString()
+                relay.sync { nonce = n }
+                push(["type": "challenge", "challenge": .string(n)])
             }
 
             func send(_ text: String) -> Bool {
@@ -81,8 +102,17 @@ final class RelayClientTests: XCTestCase {
                 case "hello":
                     let id = frame.str("deviceId")!
                     let pair = frame.str("pair")
+                    relay.sync { relay.hellos.append(frame) }
+                    if let n = relay.sync({ nonce }), frame.str("challenge") != n {
+                        challenge()
+                        return true
+                    }
+                    if frame["challenge"] == nil, relay.sync({ relay.refuseLegacy }) {
+                        push(["type": "denied", "reason": "update-required"])
+                        drop(4001, "kicked by agent")
+                        return true
+                    }
                     let reply: String? = relay.sync {
-                        relay.hellos.append(frame)
                         if relay.known.contains(id) { return nil }
                         if let pair, pair == relay.code {
                             relay.known.insert(id)
@@ -97,9 +127,27 @@ final class RelayClientTests: XCTestCase {
                     } else {
                         var welcome: [String: JSONValue] = ["type": "welcome", "device": ["id": .string(id), "name": frame["name"]!, "platform": "ios"]]
                         if let v = relay.sync({ relay.welcomeProtocol }) { welcome["protocol"] = .int(Int64(v)) }
+                        relay.sync {
+                            welcomedChallenge = frame.str("challenge")
+                            lastSeq = 0
+                            nonce = nil // each challenge is used once
+                        }
                         push(.object(welcome))
                     }
                 case "req":
+                    let ok: Bool = relay.sync {
+                        guard let seq = frame.long("seq"), seq > lastSeq, frame.str("challenge") == welcomedChallenge else {
+                            relay.rejected.append(frame)
+                            return false
+                        }
+                        lastSeq = seq
+                        return true
+                    }
+                    guard ok else {
+                        // A replayed or stale request: dropped, and the handshake starts again.
+                        if relay.sync({ relay.challenges }) { challenge() }
+                        return true
+                    }
                     let a = relay.sync { () -> JSONValue? in
                         relay.requests.append(frame)
                         return relay.answer(frame)
@@ -186,10 +234,11 @@ final class RelayClientTests: XCTestCase {
     }
 
     func client(_ relay: FakeRelay, pair: String? = nil, id: String = "dev-1", retryBase: TimeInterval = 0.02,
-                retryMax: TimeInterval = 0.08) -> (RelayClient, Recorder) {
+                retryMax: TimeInterval = 0.08, challengeWait: TimeInterval = 0.2) -> (RelayClient, Recorder) {
         var cfg = RelayConfig(relayUrl: "wss://relay.test/", room: "abcd1234", key: "k&e+y", keyBytes: key, deviceId: id,
                               deviceName: "iPhone", pairCode: pair)
         cfg.handshakeTimeout = 2
+        cfg.challengeWait = challengeWait
         cfg.requestTimeout = 2
         cfg.retryBase = retryBase
         cfg.retryMax = retryMax
@@ -331,6 +380,8 @@ final class RelayClientTests: XCTestCase {
         conn.plain(["type": "agent-offline"])
         await r.await(.offline)
         conn.plain(["type": "agent-online"])
+        // The computer challenges the connection again when it rejoins the relay.
+        conn.challenge()
         await r.await(.online)
         XCTAssertEqual(relay.sync { relay.urls.count }, 1)
         XCTAssertEqual(relay.sync { relay.hellos.count }, 2)

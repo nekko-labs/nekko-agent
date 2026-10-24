@@ -28,12 +28,19 @@ export interface RemoteDevice {
   /** Revoked devices are denied at HELLO and kicked if connected. */
   revoked?: boolean;
   /**
-   * What this phone may do beyond the chat (IO-33, *What phones can do*):
-   * `read` covers read-class channels, `change` change-class ones
-   * (`PHONE_READ_CHANNELS` / `PHONE_CHANGE_CHANNELS`). Missing, or a missing
+   * What this phone may do (IO-33, *What phones can do*): `read` covers
+   * read-class channels (the chats too, since 2026-10-22), `change`
+   * change-class and agent-class ones (`PHONE_READ_CHANNELS`,
+   * `PHONE_CHANGE_CHANNELS`, `PHONE_AGENT_CHANNELS`). Missing, or a missing
    * field, means on. Set with `remote:setAccess`.
    */
   access?: { read?: boolean; change?: boolean };
+  /**
+   * Its last HELLO came from an app older than relay replay protection
+   * (protocol 4): welcomed for one release unless `acceptLegacyPhones` is
+   * false in remote.json. Cleared when the phone connects with a newer app.
+   */
+  legacyProtocol?: boolean;
   /**
    * The phone's public key for Change proofs (base64 X9.63 P-256), registered
    * by the phone itself over `device:registerKey` on its first Change action.
@@ -87,8 +94,23 @@ export interface RemotePairing {
  *
  * 2 (2026-10-19): `push:test`, notification kinds and dismissal frames.
  * 3 (2026-10-20): git from a phone (IO-33 FA-2), the first Change actions.
+ * 4 (2026-10-22): relay replay protection. The agent seals each new
+ *   connection a `RemoteChallenge`; a HELLO declaring 4 or later must carry
+ *   it (single use), and every request after the welcome carries it plus a
+ *   rising `seq`. Older phones are legacy: accepted unless the computer's
+ *   `acceptLegacyPhones` is false, then refused with `update-required`.
  */
-export const REMOTE_PROTOCOL_VERSION = 3;
+export const REMOTE_PROTOCOL_VERSION = 4;
+
+/** The first protocol whose HELLO answers the agent's challenge (crates/nekko-remote `CHALLENGE_PROTOCOL`). */
+export const REMOTE_CHALLENGE_PROTOCOL = 4;
+
+/** Sealed by the agent to a connection the relay just announced (and again after a refused HELLO or request). */
+export interface RemoteChallenge {
+  type: 'challenge';
+  /** 18 random bytes, base64. */
+  challenge: string;
+}
 
 /** First sealed frame a device sends after connecting. */
 export interface RemoteHello {
@@ -100,9 +122,23 @@ export interface RemoteHello {
   pair?: string;
   /** The phone's `REMOTE_PROTOCOL_VERSION`; absent means 1. */
   protocol?: number;
+  /** The connection's `RemoteChallenge`, required from protocol 4. */
+  challenge?: string;
 }
 
-export type RemoteDenyReason = 'unknown-device' | 'revoked' | 'bad-code' | 'invalid';
+/** A phone's request: from protocol 4 it carries its connection's challenge and a `seq` above every earlier one. */
+export interface RemoteRequest {
+  type: 'req';
+  id: number;
+  seq?: number;
+  challenge?: string;
+  channel: string;
+  args: unknown[];
+  /** A signed Change proof (`PHONE_CHANGE_PROOF`). */
+  proof?: { ts: number; sig: string };
+}
+
+export type RemoteDenyReason = 'unknown-device' | 'revoked' | 'bad-code' | 'invalid' | 'update-required';
 
 /** Agent's sealed reply to a HELLO. The relay agent adds `protocol` to a welcome. */
 export type RemoteHelloReply =

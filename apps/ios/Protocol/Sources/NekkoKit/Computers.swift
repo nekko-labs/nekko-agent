@@ -318,10 +318,33 @@ public final class ComputersStore {
     public func call(read channel: String, _ args: [JSONValue] = [], timeout: TimeInterval? = nil) async throws -> JSONValue {
         do {
             return try await remote().call(channel, args, timeout: timeout)
-        } catch let e as RelayError where e.fromComputer {
-            guard let r = PhoneRefusal(e.message), let m = r.message(computer: active?.name ?? "your computer") else { throw e }
-            throw ChangeRefused(code: r.code, message: m)
+        } catch {
+            throw readable(error)
         }
+    }
+
+    /// A call that may raise a chat's tool policy: `session:setOptions` with a
+    /// more permissive `mode`, or `settings:update` raising `defaultChatMode`
+    /// (ask < guardrails < yolo). Sent plain first; when the computer answers
+    /// `proof-required` (it was a raise), sent again signed, so the phone asks
+    /// for Face ID or the passcode (`call(change:)`). Lowering or keeping the
+    /// mode never asks.
+    public func call(raising channel: String, _ args: [JSONValue], timeout: TimeInterval? = nil) async throws -> JSONValue {
+        do {
+            return try await remote().call(channel, args, timeout: timeout)
+        } catch let e as RelayError where e.fromComputer && PhoneRefusal(e.message)?.code == "proof-required" {
+            return try await call(change: channel, args, timeout: timeout)
+        } catch {
+            throw readable(error)
+        }
+    }
+
+    /// The computer's refusal of a plain call (`change-off`, `read-off`, ...)
+    /// as a `ChangeRefused` with its plain message; any other error as it was.
+    public func readable(_ error: Error) -> Error {
+        guard let e = error as? RelayError, e.fromComputer, let r = PhoneRefusal(e.message),
+              let m = r.message(computer: active?.name ?? "your computer") else { return error }
+        return ChangeRefused(code: r.code, message: m)
     }
 
     /// Every `agent:event` from the active computer. Returns an id for `unsubscribe`.
@@ -805,13 +828,21 @@ public final class ComputersStore {
     }
 
     /// Start a chat on the computer with a model, a folder and a tool policy.
-    public func createChat(providerId: String, modelId: String, workspaceId: String?, mode: PcSettings.ChatMode?) async throws -> String {
+    public func createChat(providerId: String, modelId: String, workspaceId: String?, mode: PcSettings.ChatMode?, effort: Effort? = nil) async throws -> String {
         let r = try remote()
         let created = try await r.call(Channels.sessionCreate, workspaceId.map { [.string($0)] } ?? [])
         guard let session = Session.from(created) else { throw RelayError("Your computer didn’t create the chat.") }
         var options: [String: JSONValue] = ["providerId": .string(providerId), "modelId": .string(modelId)]
         if let mode { options["mode"] = .string(mode.rawValue) }
-        _ = try await r.call(Channels.sessionSetOptions, [.string(session.id), .object(options)])
+        if let effort { options["effort"] = .string(effort.rawValue) }
+        do {
+            // A mode above the computer's default needs Face ID (`call(raising:)`).
+            _ = try await call(raising: Channels.sessionSetOptions, [.string(session.id), .object(options)])
+        } catch {
+            // The chat exists either way: show it, then say why its options didn't stick.
+            scheduleSummaries()
+            throw error
+        }
         scheduleSummaries()
         return session.id
     }
@@ -820,8 +851,9 @@ public final class ComputersStore {
     public func reloadList() { scheduleSummaries() }
 
     /// Change the computer's phone-settable settings; the reply is what was saved there.
+    /// Raising `defaultChatMode` needs Face ID (`call(raising:)`).
     public func updatePcSettings(_ patch: JSONValue) async throws {
-        pcSettings = PcSettings.from(try await remote().call(Channels.settingsUpdate, [patch]))
+        pcSettings = PcSettings.from(try await call(raising: Channels.settingsUpdate, [patch]))
     }
 
     // MARK: Internals
