@@ -17,6 +17,7 @@ pub mod phone;
 pub mod phone_changes;
 pub mod phone_files;
 pub mod phone_git;
+pub mod phone_providers;
 pub mod phone_terminal;
 pub mod phone_thumbs;
 pub mod phone_views;

@@ -38,6 +38,9 @@
   "pr:diff",
   "pr:sessionList",
   "providers:list",
+  "providers:saveSealed",
+  "providers:sealKey",
+  "providers:setEnabled",
   "remote:stop",
   "security:challenge",
   "session:create",
@@ -139,6 +142,7 @@
   "monitor:summary",
   "pr:sessionList",
   "providers:list",
+  "providers:sealKey",
   "session:get",
   "session:watches",
   "sessions:summaries",
@@ -168,6 +172,8 @@
   "security:challenge"
  ],
  "changeChannels": [
+  "providers:saveSealed",
+  "providers:setEnabled",
   "git:commit",
   "git:commitMessage",
   "git:mergeAbort",
@@ -279,6 +285,33 @@
   "kind",
   "label"
  ],
+ "providerKinds": [
+  "anthropic",
+  "openai",
+  "openrouter",
+  "openai-compat",
+  "ollama",
+  "lmstudio",
+  "vllm"
+ ],
+ "providerCloudKinds": [
+  "anthropic",
+  "openai",
+  "openrouter"
+ ],
+ "providerSaveKeys": [
+  "id",
+  "kind",
+  "label",
+  "baseUrl",
+  "sealedKey"
+ ],
+ "providerLimits": {
+  "id": 64,
+  "label": 80,
+  "url": 512,
+  "blob": 8192
+ },
  "watchView": [
   "id",
   "kind",

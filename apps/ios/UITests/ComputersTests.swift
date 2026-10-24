@@ -14,18 +14,25 @@ final class ComputersTests: XCTestCase {
         let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "relay.example.com")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5))
 
+        // The row opens the computer's page; Rename and Forget live in its Edit menu.
         row.tap()
+        let edit = app.buttons["computer.edit"]
+        XCTAssertTrue(edit.waitForExistence(timeout: 5), "the computer page's Edit menu")
+        edit.tap()
         app.buttons["Rename"].tap()
         let name = app.alerts.textFields.firstMatch
         XCTAssertTrue(name.waitForExistence(timeout: 5))
         name.clearAndType("Studio")
         app.alerts.buttons["Save"].tap()
-        XCTAssertTrue(app.staticTexts["Studio"].waitForExistence(timeout: 5), "Rename saved")
+        let renamed = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "Studio")).firstMatch
+        XCTAssertTrue(renamed.waitForExistence(timeout: 5), "Rename saved")
 
-        row.tap()
+        edit.tap()
         app.buttons["Forget…"].tap()
         confirmForget(app)
-        XCTAssertTrue(row.waitForNonExistence(timeout: 5), "Forget from a tap removed the computer")
+        XCTAssertTrue(app.staticTexts["This computer was forgotten"].waitForExistence(timeout: 5), "the page says the computer is gone")
+        app.buttons["Computers"].firstMatch.tap()
+        XCTAssertTrue(row.waitForNonExistence(timeout: 5), "Forget from the computer page removed the computer")
 
         // From the computer menu on the chats screen.
         app.terminate()
