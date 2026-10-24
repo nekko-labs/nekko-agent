@@ -42,6 +42,9 @@ pub struct RunnerSettings {
     pub macos_slots: u8,
     pub linux_slots: u8,
     pub memory_per_vm_mb: u32,
+    /// Total memory all runner VMs may use. `None` means the recommendation
+    /// for this Mac (see `slots::recommended_runner_memory_mb`).
+    pub runner_memory_mb: Option<u32>,
     /// `None` means the mode's default share of the cores.
     pub cpus_per_vm: Option<u8>,
     pub disk_budget_gb: u32,
@@ -64,6 +67,7 @@ impl Default for RunnerSettings {
             macos_slots: 1,
             linux_slots: 0,
             memory_per_vm_mb: 8192,
+            runner_memory_mb: None,
             cpus_per_vm: None,
             disk_budget_gb: 150,
             disk_floor_gb: 25,
