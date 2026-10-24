@@ -24,8 +24,13 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertTrue(intro.waitForExistence(timeout: 10))
         intro.tap()
         // Pair through the paste field; testPairFromADeepLink covers the link path.
+        // On a freshly made simulator the first tap after install can land while
+        // the screen is still settling (the light pass, #831): tap Continue again
+        // while the intro is still showing.
         let start = app.buttons["Pair with your computer"]
-        XCTAssertTrue(start.waitForExistence(timeout: 10))
+        var taps = 1
+        while !start.waitForExistence(timeout: 5), taps < 4, intro.exists { intro.tap(); taps += 1 }
+        XCTAssertTrue(start.exists, "pairing follows the intro")
         attach(app, "\(theme)-0-welcome")
         start.tap()
         let field = app.input("nekko-agent-pair:?relay=…")
@@ -554,8 +559,11 @@ final class LiveRelayTests: XCTestCase {
         return XCTWaiter.wait(for: [p], timeout: seconds) == .completed
     }
 
+    /// The simulator's screen rather than the app's own screenshot: the app
+    /// cannot answer a screenshot request while it is busy starting a Live
+    /// Activity, and that timeout failed the test, not the journey (#831).
     private func attach(_ app: XCUIApplication, _ name: String) {
-        let shot = XCTAttachment(screenshot: app.screenshot())
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         shot.name = name
         shot.lifetime = .keepAlways
         add(shot)

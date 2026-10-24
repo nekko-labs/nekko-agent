@@ -18,7 +18,7 @@ final class ComputersTests: XCTestCase {
         row.tap()
         let edit = app.buttons["computer.edit"]
         XCTAssertTrue(edit.waitForExistence(timeout: 5), "the computer page's Edit menu")
-        edit.tap()
+        tapBarButton(edit, in: app)
         app.buttons["Rename"].tap()
         let name = app.alerts.textFields.firstMatch
         XCTAssertTrue(name.waitForExistence(timeout: 5))
@@ -27,7 +27,7 @@ final class ComputersTests: XCTestCase {
         let renamed = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "Studio")).firstMatch
         XCTAssertTrue(renamed.waitForExistence(timeout: 5), "Rename saved")
 
-        edit.tap()
+        tapBarButton(edit, in: app)
         app.buttons["Forget…"].tap()
         confirmForget(app)
         XCTAssertTrue(app.staticTexts["This computer was forgotten"].waitForExistence(timeout: 5), "the page says the computer is gone")
@@ -70,13 +70,19 @@ final class ComputersTests: XCTestCase {
     private func openMenu(_ app: XCUIApplication) {
         let m = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Computers and settings")).firstMatch
         XCTAssertTrue(m.waitForExistence(timeout: 10))
+        tapBarButton(m, in: app)
+    }
+
+    /// Navigation-bar buttons (the computer menu, the computer page's Edit menu)
+    /// have no hit point for XCTest's tap; tap their centre once they have a frame.
+    private func tapBarButton(_ e: XCUIElement, in app: XCUIApplication) {
         let deadline = Date().addingTimeInterval(10)
         while Date() < deadline {
-            let f = m.frame
-            if m.exists, !f.isEmpty, app.frame.contains(CGPoint(x: f.midX, y: f.midY)) { break }
+            let f = e.frame
+            if e.exists, !f.isEmpty, app.frame.contains(CGPoint(x: f.midX, y: f.midY)) { break }
             RunLoop.current.run(until: Date().addingTimeInterval(0.25))
         }
-        m.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        e.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
     }
 
     private func confirmForget(_ app: XCUIApplication) {
