@@ -2290,4 +2290,5 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [x] **T204b** Onboarding **Help improve Nekko Agent?** step (skippable, off), Settings > System card, the shared promises (`TELEMETRY_PROMISES`), a fresh install id on each turn-on, a Connections row. Done: 2026-10-24
 - [x] **T204c** UI: `screen_viewed` and uncaught errors from the renderer, crashes from Electron main (`uncaughtExceptionMonitor`). Done: 2026-10-24
 - [x] **T204d** Nekko Agent PostHog project 686111; its key in `PROJECT_KEY`. Done: 2026-10-24
-- [ ] **T204e** Turn on Discard client IP data for project 686111 and check events arrive from a packaged build.
+- [x] **T204e** Discard client IP data on for project 686111; a test `app_started` in the engine's batch shape arrived with `$ip` empty and no location. Done: 2026-10-24
+- [ ] **T204f** See events arrive from a packaged build with reports turned on.
