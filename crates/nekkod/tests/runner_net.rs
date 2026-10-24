@@ -639,3 +639,38 @@ async fn host_connect_times_out_resets_and_frees_the_slot() {
     let h = r.guest.connect(PUBLIC, 8002, 44002);
     assert_eq!(r.guest.round_trip(h, b"next", 9).await, b"pong:next");
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn spike_forward_reaches_the_guest_port() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let cfg = NetConfig { forward: Some((listener, 22)), ..NetConfig::default() };
+    let mut r = start_cfg(HostNets::default(), cfg, TestConnector::default(), true);
+    let mut s = tcp::Socket::new(tcp::SocketBuffer::new(vec![0; 4096]), tcp::SocketBuffer::new(vec![0; 4096]));
+    s.listen(22).unwrap();
+    let h = r.guest.sockets.add(s);
+    let client = tokio::spawn(async move {
+        let mut c = TcpStream::connect(addr).await.unwrap();
+        c.write_all(b"ping").await.unwrap();
+        let mut got = [0u8; 8];
+        c.read_exact(&mut got).await.unwrap();
+        got
+    });
+    // The guest answers what it got, prefixed, the way sshd would talk back.
+    let echoed = r
+        .guest
+        .run_until(5, |g| {
+            let s = g.tcp(h);
+            if s.can_recv() {
+                let msg = s.recv(|b| (b.len(), b.to_vec())).unwrap();
+                s.send_slice(&[b"pong".as_slice(), &msg].concat()).unwrap();
+                return true;
+            }
+            false
+        })
+        .await;
+    assert!(echoed, "the forward never reached the guest's port");
+    r.guest.run_until(2, |_| client.is_finished()).await;
+    assert_eq!(&client.await.unwrap(), b"pongping");
+    assert!(r.conn.calls().is_empty(), "a forward opens no outbound host socket");
+}

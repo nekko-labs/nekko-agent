@@ -75,11 +75,22 @@ pub struct NetConfig {
     /// How long a host TCP connect may take before the guest gets RST and
     /// the flow's slot is freed (15 s by default).
     pub connect_timeout: Duration,
+    /// Spike and tests only, never in the shipped daemon (decision 0022: no
+    /// host-to-guest path): each connection accepted on this listener is
+    /// forwarded to the guest's port, from a smoltcp client socket.
+    #[cfg(any(test, feature = "spike"))]
+    pub forward: Option<(std::net::TcpListener, u16)>,
 }
 
 impl Default for NetConfig {
     fn default() -> Self {
-        Self { max_flows: 256, dns_upstream: vec![], connect_timeout: Duration::from_secs(15) }
+        Self {
+            max_flows: 256,
+            dns_upstream: vec![],
+            connect_timeout: Duration::from_secs(15),
+            #[cfg(any(test, feature = "spike"))]
+            forward: None,
+        }
     }
 }
 
@@ -125,6 +136,8 @@ pub async fn serve_with<C: Connector>(
 ) -> io::Result<()> {
     widen_buffers(&sock)?;
     let mut nat = Nat::new(host, cfg, Arc::new(connector));
+    #[cfg(any(test, feature = "spike"))]
+    nat.start_forward()?;
     let wake = nat.wake.clone();
     let mut buf = vec![0u8; 64 * 1024];
     let mut peer_check = tokio::time::interval(Duration::from_secs(1));
@@ -235,6 +248,10 @@ impl<C> Drop for Nat<C> {
         for flow in self.flows.values() {
             flow.task.abort();
         }
+        #[cfg(any(test, feature = "spike"))]
+        if let Some(f) = &self.forward {
+            f.task.abort();
+        }
     }
 }
 
@@ -255,6 +272,17 @@ struct Nat<C> {
     /// DHCP leases the one guest address to the first client MAC seen.
     lease_mac: Option<EthernetAddress>,
     last_sweep: std::time::Instant,
+    #[cfg(any(test, feature = "spike"))]
+    forward: Option<Forward>,
+}
+
+/// The spike's host-to-guest port forward (see [`NetConfig::forward`]).
+#[cfg(any(test, feature = "spike"))]
+struct Forward {
+    accepted: mpsc::Receiver<TcpStream>,
+    guest_port: u16,
+    next_port: u16,
+    task: JoinHandle<()>,
 }
 
 impl<C: Connector> Nat<C> {
@@ -288,6 +316,8 @@ impl<C: Connector> Nat<C> {
             guest_mac: None,
             lease_mac: None,
             last_sweep: std::time::Instant::now(),
+            #[cfg(any(test, feature = "spike"))]
+            forward: None,
         }
     }
 
@@ -443,6 +473,14 @@ impl<C: Connector> Nat<C> {
         if sock.listen(ep).is_err() {
             return;
         }
+        self.attach(key, sock, connect);
+    }
+
+    /// Adds a smoltcp socket for `key` and the host task that connects with `connect` and copies both ways.
+    fn attach<F>(&mut self, key: Key, sock: tcp::Socket<'static>, connect: F)
+    where
+        F: Future<Output = io::Result<TcpStream>> + Send + 'static,
+    {
         let handle = self.sockets.add(sock);
         let limit = self.cfg.connect_timeout;
         let connect = async move {
@@ -453,6 +491,48 @@ impl<C: Connector> Nat<C> {
         let task = tokio::spawn(tcp_host(connect, to_host_rx, from_host_tx, self.wake.clone()));
         let flow = TcpFlow { handle, to_host: Some(to_host), from_host, pending: vec![], sent: 0, host_eof: false };
         self.flows.insert(key, Flow { kind: Kind::Tcp(flow), task, last: std::time::Instant::now() });
+    }
+
+    #[cfg(any(test, feature = "spike"))]
+    fn start_forward(&mut self) -> io::Result<()> {
+        let Some((listener, guest_port)) = self.cfg.forward.take() else { return Ok(()) };
+        listener.set_nonblocking(true)?;
+        let listener = tokio::net::TcpListener::from_std(listener)?;
+        let (tx, accepted) = mpsc::channel(4);
+        let wake = self.wake.clone();
+        let task = tokio::spawn(async move {
+            while let Ok((s, _)) = listener.accept().await {
+                if tx.send(s).await.is_err() {
+                    return;
+                }
+                wake.notify_one();
+            }
+        });
+        self.forward = Some(Forward { accepted, guest_port, next_port: 49152, task });
+        Ok(())
+    }
+
+    /// Opens a smoltcp client socket to the guest for each accepted host connection.
+    #[cfg(any(test, feature = "spike"))]
+    fn accept_forwards(&mut self) {
+        let Some(f) = &mut self.forward else { return };
+        let mut streams = vec![];
+        while let Ok(s) = f.accepted.try_recv() {
+            f.next_port = f.next_port.checked_add(1).unwrap_or(49152);
+            streams.push((s, f.guest_port, f.next_port));
+        }
+        for (stream, guest_port, local_port) in streams {
+            let key = Key::Tcp(guest_port, SocketAddrV4::new(GATEWAY, local_port));
+            if self.flows.contains_key(&key) || !self.make_room() {
+                continue;
+            }
+            let mut sock =
+                tcp::Socket::new(tcp::SocketBuffer::new(vec![0; TCP_BUF]), tcp::SocketBuffer::new(vec![0; TCP_BUF]));
+            if sock.connect(self.iface.context(), (IpAddress::Ipv4(GUEST), guest_port), local_port).is_err() {
+                continue;
+            }
+            self.attach(key, sock, std::future::ready(Ok(stream)));
+        }
     }
 
     fn remove(&mut self, key: Key) {
@@ -467,6 +547,8 @@ impl<C: Connector> Nat<C> {
     /// Moves bytes between smoltcp sockets and host tasks, delivers UDP
     /// replies, and ends finished or idle flows.
     fn pump(&mut self) {
+        #[cfg(any(test, feature = "spike"))]
+        self.accept_forwards();
         let mut done = vec![];
         for (key, flow) in &mut self.flows {
             let Kind::Tcp(t) = &mut flow.kind else { continue };
