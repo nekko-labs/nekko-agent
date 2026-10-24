@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { useStore } from '../src/renderer/store';
 import { putCachedSession } from '../src/renderer/sessionCache';
 import { CommandCenterView } from '../src/renderer/views/CommandCenterView';
-import { WorkspacesView } from '../src/renderer/views/WorkspacesView';
+import { StoreSidebar } from './store-sidebar';
 import { Mascot } from '../src/renderer/components/Mascot';
 import { UpdateProvider } from '../src/renderer/components/UpdateBanner';
 import { SettingsView } from '../src/renderer/views/SettingsView';
@@ -51,6 +51,6 @@ function Fixture() {
   };
   Object.assign(window, { integration: { reset, dashboard: () => { const st=useStore.getState(); useStore.setState({settings:{...st.settings,commandWall:{...st.settings!.commandWall!,dock:{...DEFAULT_WALL_STATE.dock,show:true,monitors:{vitals:true,utilization:true,budget:true,hardware:true,automations:false,insights:true}}}}} as any); setEpoch(e=>e+1); }, calls, failures, route: setRoute, state: () => useStore.getState(), records: () => records } });
   React.useEffect(reset, []);
-  return <main style={{ height: '100vh' }} key={epoch}>{route === 'command' ? <CommandCenterView /> : route === 'settings' ? <UpdateProvider><SettingsView /></UpdateProvider> : <WorkspacesView sidebarOnly />}<Mascot mood="idle" enabled /></main>;
+  return <main style={{ height: '100vh' }} key={epoch}>{route === 'command' ? <CommandCenterView /> : route === 'settings' ? <UpdateProvider><SettingsView /></UpdateProvider> : <StoreSidebar />}<Mascot mood="idle" enabled /></main>;
 }
 createRoot(document.getElementById('root')!).render(<Fixture />);

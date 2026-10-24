@@ -635,7 +635,7 @@ function WorkflowDetail({ wf, runs, live, focusRunId }: { wf: Workflow; runs: Wo
       <button
         className="btn btn-ghost shrink-0 px-1.5! py-0.5! text-[11px] text-ink-soft"
         title="Open this step's transcript"
-        onClick={() => { openChat(sessionId); setView('chat'); }}
+        onClick={() => { openChat(sessionId); setView('command'); }}
       >
         Transcript
       </button>

@@ -85,9 +85,9 @@ Right-clicking a row under a group's **Show completed** opens a menu with exactl
 - **A new chat is the one in focus.** Wherever a chat is started (Ctrl+N, the command palette, the tray, a deep link, dictation, onboarding, Continue as stacked PR, a new image session, or a window's split compass), the new chat becomes the selected one. With the developer Chat surface on, it opens in the Chat tab as before. With it off, the app goes to the Agents wall and selects the new chat's window there, keeping the current layout (it used to be auto-added behind the window you were on, or, when started from another page, left you on the wall with the old chat still selected).
 - **An image sent without words never breaks a chat.** Anthropic rejects a request that contains an empty text block, and a saved turn is resent with every retry and every later turn, so one screenshot pasted with no text (or an empty reply) made the chat fail with `messages: text content blocks must be non-empty` forever after. Requests now leave out empty or whitespace-only text (the image still goes), and skip a turn that has nothing left. The saved transcript is unchanged, so a chat that already hit this works again on its next Retry. OpenAI-compatible requests also omit the empty text part of a picture sent without words.
 
-## Former Command Center agent tabs (superseded by the grouped list)
+## Former Agent board agent tabs (superseded by the grouped list)
 
-- Creating an agent from the wall's New agent controls selects the new session and its focus window/composer without leaving Command Center.
+- Creating an agent from the wall's New agent controls selects the new session and its focus window/composer without leaving Agent board.
 - Right-click the agent tab bar to choose Top tabs, Vertical tabs (left), or Hide tab panel. An always-visible Agent tabs control provides the same menu and restores hidden tabs.
 - Tab placement persists with command-wall settings and browser fallback, independently of focus/grid/fixed layout. Hidden tabs retain sessions and Ctrl+Tab/number shortcuts.
 - Below 720px, the left preference renders as a horizontal strip to preserve editor width; the saved preference remains left.

@@ -94,6 +94,17 @@ describe('subagent model', () => {
   it('puts the running dots before the text in a fixed box', () => {
     const html = renderToStaticMarkup(<ActivityGroup items={[{ kind: 'tool', call: { id: 'r', name: 'read_file', input: { path: 'a' } } }]} streaming />);
     expect(html.indexOf('dots dots-lead')).toBeGreaterThan(-1);
-    expect(html.indexOf('dots dots-lead')).toBeLessThan(html.indexOf('Working · read_file'));
+    expect(html.indexOf('dots dots-lead')).toBeLessThan(html.indexOf('>Working · read_file<'));
+  });
+});
+
+
+describe('activity summary readability', () => {
+  it('preserves the summary and exposes all distinct tool names in a multiline tip', () => {
+    const items = ['bash', 'kill_process', 'bash', 'update_plan', 'agent_watch'].map((name, i) => ({ kind: 'tool' as const, call: { id: String(i), name, input: {} } }));
+    const html = renderToStaticMarkup(<ActivityGroup items={items} />);
+    expect(html).toContain('shrink-0 font-medium text-ink-soft');
+    expect(html).toContain('data-hover-tip="Worked on 5 steps\n• bash\n• kill_process\n• update_plan\n• agent_watch"');
+    expect(html).toContain('min-w-0 truncate text-ink-faint');
   });
 });

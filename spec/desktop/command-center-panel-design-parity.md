@@ -1,10 +1,10 @@
 ---
-title: "Command Center panel design parity (2026-10-06)"
+title: "Agent board panel design parity (2026-10-06)"
 area: desktop
 split-from: SPEC.md (2026-10-22)
 ---
 
-# Command Center panel design parity (2026-10-06)
+# Agent board panel design parity (2026-10-06)
 
 The side dock uses the app background with separate surface-colored panels, a 408px default width (20% wider), a visible Configure control and six-cell Vitals grid. Each panel has a pointer/keyboard vertical resize handle. Its maximum follows its measured content, including expanded pricing details; Home shrinks, End or double-click fits content. Panel sizes remain local to the mounted view. Narrow layouts retain the scrollable wall/dock column.
 

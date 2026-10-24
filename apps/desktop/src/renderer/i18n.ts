@@ -16,7 +16,6 @@ type Dict = Record<string, string>;
 // English is the source of truth; other locales fall back to it per-key.
 const en: Dict = {
   'nav.command': 'Agents',
-  'nav.chat': 'Chat',
   'nav.artifacts': 'Artifacts',
   'nav.design': 'Design',
   'nav.skills': 'Skills',
@@ -59,7 +58,6 @@ const en: Dict = {
 
 const es: Dict = {
   'nav.command': 'Agentes',
-  'nav.chat': 'Chat',
   'nav.models': 'Proveedores',
   'nav.modelserver': 'Servidor de modelos',
   'nav.connectors': 'Conectores',
@@ -95,7 +93,6 @@ const es: Dict = {
 
 const fr: Dict = {
   'nav.command': 'Agents',
-  'nav.chat': 'Chat',
   'nav.models': 'Fournisseurs',
   'nav.modelserver': 'Serveur de modèles',
   'nav.connectors': 'Connecteurs',
@@ -131,7 +128,6 @@ const fr: Dict = {
 
 const de: Dict = {
   'nav.command': 'Agenten',
-  'nav.chat': 'Chat',
   'nav.models': 'Anbieter',
   'nav.modelserver': 'Modellserver',
   'nav.connectors': 'Konnektoren',
@@ -167,7 +163,6 @@ const de: Dict = {
 
 const pt: Dict = {
   'nav.command': 'Agentes',
-  'nav.chat': 'Chat',
   'nav.models': 'Provedores',
   'nav.modelserver': 'Servidor de modelos',
   'nav.connectors': 'Conectores',
@@ -203,7 +198,6 @@ const pt: Dict = {
 
 const ja: Dict = {
   'nav.command': 'エージェント',
-  'nav.chat': 'チャット',
   'nav.models': 'モデル提供元',
   'nav.modelserver': 'モデルサーバー',
   'nav.connectors': 'コネクタ',
@@ -239,7 +233,6 @@ const ja: Dict = {
 
 const zh: Dict = {
   'nav.command': '智能体',
-  'nav.chat': '聊天',
   'nav.models': '模型来源',
   'nav.modelserver': '模型服务器',
   'nav.connectors': '连接器',
