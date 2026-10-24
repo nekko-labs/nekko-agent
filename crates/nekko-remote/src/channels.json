@@ -1,5 +1,6 @@
 [
  "app:info",
+ "app:quit",
  "attachment:import",
  "changes:accept",
  "changes:acceptAll",
@@ -56,6 +57,7 @@
  "design:removePage",
  "design:resolveNote",
  "design:updatePage",
+ "device:signOut",
  "dir:list",
  "engine:autoload",
  "engine:cancelDownload",
@@ -154,6 +156,7 @@
  "remote:rotate",
  "remote:setAccess",
  "remote:status",
+ "remote:stop",
  "resource:queue",
  "runtime:autoFit",
  "runtime:facts",

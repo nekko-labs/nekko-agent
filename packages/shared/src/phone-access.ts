@@ -99,6 +99,7 @@ import {
  */
 export const PHONE_CHANNELS = [
   'app:info',
+  'app:quit',
   'changes:list',
   'chat:abort',
   'chat:answer',
@@ -106,6 +107,7 @@ export const PHONE_CHANNELS = [
   'chat:pending',
   'chat:queue',
   'chat:send',
+  'device:signOut',
   'files:list',
   'files:read',
   'files:search',
@@ -132,6 +134,7 @@ export const PHONE_CHANNELS = [
   'pr:diff',
   'pr:sessionList',
   'providers:list',
+  'remote:stop',
   'security:challenge',
   'session:create',
   'session:delete',
@@ -261,7 +264,7 @@ export const PHONE_ALWAYS_DENIED = {
   channels: DENIED_GROUPS.flatMap((g) => g.channels).sort(),
   prefixes: DENIED_GROUPS.flatMap((g) => g.prefixes).sort(),
   /** Not forced off by a prefix (each still has to be in `PHONE_CHANNELS` to be callable). */
-  except: ['remote:status', ...PHONE_TERMINAL_CHANNELS],
+  except: ['remote:status', 'remote:stop', ...PHONE_TERMINAL_CHANNELS],
 };
 
 /**
@@ -316,7 +319,18 @@ export const PHONE_READ_CHANNELS: readonly string[] = [
  * list. Raising a chat's mode is the exception that needs a proof
  * (`PHONE_MODE_PROOF`).
  */
+/**
+ * SK-3 safety exits: sign this phone out, stop remote access on the computer,
+ * quit the agent (`app:quit` only when the computer reports `quitFromPhone`).
+ * Agent class (logged), but exempt by name from the Change switch, from the
+ * Read switch and from every proof and step-up: a safety exit must never be
+ * harder than the attack (decision 0018). The daemon's gate answers them.
+ * A test pins this list: growing it is a security decision, not a refactor.
+ */
+export const PHONE_SAFETY_EXIT_CHANNELS: readonly string[] = ['app:quit', 'device:signOut', 'remote:stop'];
+
 export const PHONE_AGENT_CHANNELS: readonly string[] = [
+  ...PHONE_SAFETY_EXIT_CHANNELS,
   'chat:abort',
   'chat:answer',
   'chat:editQueued',
@@ -435,6 +449,7 @@ export function checkPhoneAccess(channel: string, access: PhoneDeviceAccess): vo
   const cls = phoneChannelClass(channel);
   if (cls === null) throw new PhoneAccessError('channel-denied', channel);
   if (cls === 'read' && !access.read) throw new PhoneAccessError('read-off', channel);
+  if (PHONE_SAFETY_EXIT_CHANNELS.includes(channel)) return;
   if ((cls === 'change' || cls === 'agent' || cls === 'token') && !access.change) throw new PhoneAccessError('change-off', channel);
 }
 
@@ -1065,6 +1080,7 @@ export function phoneAccessPolicy() {
     readChannels: [...PHONE_READ_CHANNELS],
     changeChannels: [...PHONE_CHANGE_CHANNELS],
     agentChannels: [...PHONE_AGENT_CHANNELS],
+    safetyExits: [...PHONE_SAFETY_EXIT_CHANNELS],
     openChannels: [...PHONE_OPEN_CHANNELS],
     tokenChannels: [...PHONE_TOKEN_CHANNELS],
     modeProof: { channels: [...PHONE_MODE_PROOF.channels], rank: [...PHONE_MODE_PROOF.rank], fallback: PHONE_MODE_PROOF.fallback },

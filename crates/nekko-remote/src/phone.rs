@@ -61,6 +61,8 @@ pub struct Policy {
     pub change_channels: Vec<String>,
     /// `PHONE_AGENT_CHANNELS`: the Change switch, no proof per call.
     pub agent_channels: Vec<String>,
+    /// `PHONE_SAFETY_EXIT_CHANNELS` (SK-3): agent class, but no switch, proof or step-up.
+    pub safety_exits: Vec<String>,
     /// `PHONE_OPEN_CHANNELS`: any paired phone.
     pub open_channels: Vec<String>,
     /// `PHONE_MODE_PROOF`: the channels that can raise a chat's mode, the
@@ -123,6 +125,7 @@ pub fn policy() -> &'static Policy {
             read_channels: strings(&v["readChannels"]),
             change_channels: strings(&v["changeChannels"]),
             agent_channels: strings(&v["agentChannels"]),
+            safety_exits: strings(&v["safetyExits"]),
             open_channels: strings(&v["openChannels"]),
             mode_channels: strings(&v["modeProof"]["channels"]),
             mode_rank: strings(&v["modeProof"]["rank"]),
@@ -762,6 +765,16 @@ pub trait Devices: Send + Sync {
     fn name(&self, _id: &str) -> Option<String> {
         None
     }
+    /// `device:signOut` (SK-3): revoke the device and kick it. A registry
+    /// that can't is refused, so nothing claims a sign-out it did not do.
+    fn sign_out(&self, _id: &str) -> Result<(), String> {
+        Err("signing out is not available here".into())
+    }
+    /// `remote:stop` (SK-3): remote access off, every phone kicked, and who
+    /// stopped it recorded for the desktop.
+    fn stop_remote(&self, _id: &str) -> Result<(), String> {
+        Err("stopping remote access is not available here".into())
+    }
 }
 
 /// Which IO-33 class a channel is in.
@@ -873,6 +886,11 @@ impl Gate {
         }
         match class {
             Class::Open => call(&self.run, channel, args).await,
+            Class::Agent if has(&policy().safety_exits, &channel) => {
+                let out = self.safety_exit(&who, &channel).await;
+                self.record(&who, &channel, out.as_ref().map(|_| ()).map_err(|e| reason_of(e)));
+                out
+            }
             Class::Agent => {
                 if let Err(d) = self.check_agent(&who, &channel, &args).await {
                     self.record(&who, &channel, Err(d.code.to_string()));
@@ -923,6 +941,34 @@ impl Gate {
             return self.check_step_up(who, channel);
         }
         Ok(())
+    }
+
+    /// A safety exit (SK-3): any known device, whatever its switches, with no
+    /// proof or step-up; a safety exit must never be harder than the attack
+    /// (decision 0018). The gate answers it; the host sees only `app:quit`,
+    /// and only when the owner turned on *Quit from a phone* (`quitFromPhone`).
+    async fn safety_exit(&self, who: &PhoneCall, channel: &str) -> Result<Value, String> {
+        if self.devices.device(&who.device_id).is_none() {
+            return Err(denied("device-unknown", channel).to_string());
+        }
+        match channel {
+            "device:signOut" => {
+                self.devices.sign_out(&who.device_id)?;
+                Ok(json!({ "signedOut": true }))
+            }
+            "remote:stop" => {
+                self.devices.stop_remote(&who.device_id)?;
+                Ok(json!({ "stopped": true }))
+            }
+            "app:quit" => {
+                let settings = (self.run)("settings:get".to_string(), json!([])).await?;
+                if settings.get("quitFromPhone") != Some(&Value::Bool(true)) {
+                    return Err(denied("quit-disabled", channel).to_string());
+                }
+                (self.run)("app:quit".to_string(), json!([])).await
+            }
+            _ => Err(denied("channel-denied", channel).to_string()),
+        }
     }
 
     /// The step-up a guarded call needs when `security.json` has it on
@@ -1239,6 +1285,8 @@ mod tests {
         devices: Mutex<HashMap<String, PhoneDevice>>,
         log: Mutex<Vec<(String, Activity)>>,
         now: Mutex<f64>,
+        /// Safety exits taken: `(channel, device)`.
+        exits: Mutex<Vec<(String, String)>>,
     }
 
     impl Devices for MemDevices {
@@ -1262,6 +1310,15 @@ mod tests {
         }
         fn now(&self) -> f64 {
             *self.now.lock().unwrap()
+        }
+        fn sign_out(&self, id: &str) -> Result<(), String> {
+            self.devices.lock().unwrap().remove(id);
+            self.exits.lock().unwrap().push(("device:signOut".into(), id.into()));
+            Ok(())
+        }
+        fn stop_remote(&self, id: &str) -> Result<(), String> {
+            self.exits.lock().unwrap().push(("remote:stop".into(), id.into()));
+            Ok(())
         }
     }
 
@@ -1955,6 +2012,97 @@ mod tests {
                 let s = sk(true);
                 *s.store.state.lock().unwrap() = Some(json!({ "enabled": true }));
                 assert_eq!(s.raise(Some(json!({ "totp": "123456" }))), refused("step-up-invalid", YOLO));
+            }
+        }
+
+        /// SK-3: the safety exits.
+        mod safety_exits {
+            use super::*;
+
+            fn exit_rig(access: DeviceAccess, quit_from_phone: Option<bool>) -> Rig {
+                let devices = Arc::new(MemDevices::default());
+                *devices.now.lock().unwrap() = NOW;
+                devices.devices.lock().unwrap().insert("phone-1".into(), PhoneDevice { access, key: None });
+                let calls: Arc<Mutex<Vec<(String, Value)>>> = Arc::default();
+                let seen = calls.clone();
+                let host: Dispatcher = Arc::new(move |channel: String, args: Value| {
+                    seen.lock().unwrap().push((channel.clone(), args));
+                    let out = match (channel.as_str(), quit_from_phone) {
+                        ("settings:get", Some(q)) => json!({ "quitFromPhone": q }),
+                        ("settings:get", None) => json!({}),
+                        ("app:quit", _) => json!({ "quitting": true }),
+                        (c, _) => json!({ "ok": c }),
+                    };
+                    Box::pin(std::future::ready(Ok(out)))
+                });
+                let gated = gate(host, devices.clone());
+                let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
+                Rig { devices, calls, gated, rt }
+            }
+
+            const OFF: DeviceAccess = DeviceAccess { read: false, change: false };
+
+            #[test]
+            fn the_exemption_list_is_exactly_three_channels() {
+                let mut exits = policy().safety_exits.clone();
+                exits.sort();
+                assert_eq!(exits, ["app:quit", "device:signOut", "remote:stop"]);
+                for c in &exits {
+                    assert_eq!(Classes::from_policy().of(c), Some(Class::Agent), "{c}");
+                    assert!(channel_allowed(c), "{c}");
+                }
+            }
+
+            #[test]
+            fn sign_out_works_with_every_switch_off_and_is_logged() {
+                let r = exit_rig(OFF, None);
+                assert_eq!(r.ask("device:signOut", json!([]), None), Ok(json!({ "signedOut": true })));
+                assert_eq!(*r.devices.exits.lock().unwrap(), [("device:signOut".to_string(), "phone-1".to_string())]);
+                assert_eq!(r.log(), vec![(true, None)]);
+                assert!(r.calls.lock().unwrap().is_empty(), "the host never sees it");
+                // Signed out, the phone is unknown: a second try is refused (and logged).
+                assert_eq!(r.ask("device:signOut", json!([]), None), refused("device-unknown", "device:signOut"));
+            }
+
+            #[test]
+            fn stop_works_with_change_off_and_needs_no_proof() {
+                let r = exit_rig(DeviceAccess { read: true, change: false }, None);
+                assert_eq!(r.ask("remote:stop", json!([]), None), Ok(json!({ "stopped": true })));
+                assert_eq!(*r.devices.exits.lock().unwrap(), [("remote:stop".to_string(), "phone-1".to_string())]);
+                assert_eq!(r.log(), vec![(true, None)]);
+            }
+
+            #[test]
+            fn quit_needs_the_desktop_switch() {
+                for q in [None, Some(false)] {
+                    let r = exit_rig(OFF, q);
+                    assert_eq!(r.ask("app:quit", json!([]), None), refused("quit-disabled", "app:quit"));
+                    assert_eq!(ran(&r, "app:quit"), 0);
+                    assert_eq!(r.log(), vec![(false, Some("quit-disabled".into()))]);
+                }
+                let r = exit_rig(OFF, Some(true));
+                assert_eq!(r.ask("app:quit", json!([]), None), Ok(json!({ "quitting": true })));
+                assert_eq!(ran(&r, "app:quit"), 1);
+                assert_eq!(r.log(), vec![(true, None)]);
+            }
+
+            #[test]
+            fn an_unknown_device_takes_no_exit() {
+                let r = exit_rig(OFF, Some(true));
+                r.devices.devices.lock().unwrap().clear();
+                for c in ["device:signOut", "remote:stop", "app:quit"] {
+                    assert_eq!(r.ask(c, json!([]), None), refused("device-unknown", c));
+                }
+                assert!(r.devices.exits.lock().unwrap().is_empty());
+                assert_eq!(ran(&r, "app:quit"), 0);
+            }
+
+            #[test]
+            fn the_rest_of_remote_access_stays_refused() {
+                let r = exit_rig(DeviceAccess::default(), Some(true));
+                for c in ["remote:disable", "remote:enable", "remote:setAccess", "remote:rotate", "remote:revoke"] {
+                    assert_eq!(r.ask(c, json!([]), None), refused("channel-denied", c));
+                }
             }
         }
 

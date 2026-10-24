@@ -156,7 +156,7 @@ describe('private Electron browser bridge', () => {
   });
 
   it('answers what the daemon asks of the window shell, behind the token', async () => {
-    const shell = { nativeWindow: vi.fn(() => '1234'), dialog: vi.fn(async () => ['C:\\a.txt']), quitForUpdate: vi.fn() };
+    const shell = { nativeWindow: vi.fn(() => '1234'), dialog: vi.fn(async () => ['C:\\a.txt']), quitForUpdate: vi.fn(), quit: vi.fn() };
     const bridge = await startAgentBrowser({ driver: async () => fakeDriver().driver, shell });
     const post = async (body: unknown, auth = true) => {
       const res = await fetch(bridge.url, { method: 'POST', headers: auth ? { Authorization: `Bearer ${bridge.token}` } : {}, body: JSON.stringify(body) });
@@ -170,6 +170,11 @@ describe('private Electron browser bridge', () => {
       expect((await post({ tool: 'dialog', kind: 'exec' })).status).toBe(400);
       expect((await post({ tool: 'quitForUpdate' })).body).toEqual({ ok: true });
       expect(shell.quitForUpdate).toHaveBeenCalledOnce();
+      // SK-3: a phone's app:quit, which the daemon passes on.
+      expect((await post({ tool: 'quit' }, false)).status).toBe(403);
+      expect(shell.quit).not.toHaveBeenCalled();
+      expect((await post({ tool: 'quit' })).body).toEqual({ ok: true });
+      expect(shell.quit).toHaveBeenCalledOnce();
       expect(fake.windows).toHaveLength(0);
     } finally { bridge.close(); }
   });

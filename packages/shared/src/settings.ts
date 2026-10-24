@@ -300,6 +300,12 @@ export interface AppSettings {
    * chat (Settings → Remote access). On by default; only `false` turns it off. Phones can never accept,
    * revert or edit changes, read other files or open terminals.
    */
+  /**
+   * SK-3: whether a paired phone may quit Nekko Agent on this computer
+   * (`app:quit`, reported in `app:info`). Off unless the owner turns it on in
+   * Settings → Remote access; never settable from a phone.
+   */
+  quitFromPhone?: boolean;
   phoneChanges?: boolean;
   /** Chat pane's top-right action. Undefined means Complete (archive), not Delete. */
   chatPaneAction?: 'complete' | 'delete';
