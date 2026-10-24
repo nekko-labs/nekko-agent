@@ -22,7 +22,7 @@ final class AgentRowsTests: XCTestCase {
         XCTAssertEqual(timer.id, "t-9")
         XCTAssertEqual(AgentRows.watchHeadline(timer), "Timer watch · wakes after 10 min")
         let defaults = AgentRows.parseWatch(try input(#"{"action":"create","kind":"timer"}"#), output: nil)
-        XCTAssertEqual(AgentRows.watchHeadline(defaults), "Timer watch · wakes after 5 min")
+        XCTAssertEqual(AgentRows.watchHeadline(defaults), "Timer watch · wakes after 5m 00s")
         XCTAssertEqual(AgentRows.watchHeadline(AgentRows.parseWatch(try input(#"{"action":"list"}"#), output: nil)), "Checked this chat’s watches")
         let cancel = AgentRows.parseWatch(try input(#"{"action":"cancel","id":"w-1a2b3c4d5e"}"#), output: "Cancelled")
         XCTAssertEqual(AgentRows.watchHeadline(cancel), "Cancelled watch w-1a2b3c")

@@ -143,10 +143,10 @@ pub fn screen_save(request: &Value) -> Result<(), Refusal> {
     if label.is_empty() || label.encode_utf16().count() > LABEL_MAX || label.chars().any(char::is_control) {
         return Err(refused("value-invalid", "label"));
     }
-    if let Some(url) = o.get("baseUrl") {
-        if !url.as_str().is_some_and(|u| url_ok(u, kind)) {
-            return Err(refused("value-invalid", "baseUrl"));
-        }
+    if let Some(url) = o.get("baseUrl")
+        && !url.as_str().is_some_and(|u| url_ok(u, kind))
+    {
+        return Err(refused("value-invalid", "baseUrl"));
     }
     match o.get("sealedKey") {
         Some(Value::String(b))
