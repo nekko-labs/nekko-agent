@@ -2289,4 +2289,5 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [x] **T204a** nekkod `telemetry.rs`: off unless `settings.telemetry.enabled` with an install id; allow-listed events and properties; every string scrubbed (log redactor, Privacy Shield detectors, folder paths); queue of 500; batch to PostHog every minute through `nekko_net::send("telemetry")`; engine panics reported without blocking. `turn_started` from admission. Tests: `scrub_takes_out_secrets_people_and_folders`, `off_unless_on_and_only_known_events_and_properties`. Done: 2026-10-24
 - [x] **T204b** Onboarding **Help improve Nekko Agent?** step (skippable, off), Settings > System card, the shared promises (`TELEMETRY_PROMISES`), a fresh install id on each turn-on, a Connections row. Done: 2026-10-24
 - [x] **T204c** UI: `screen_viewed` and uncaught errors from the renderer, crashes from Electron main (`uncaughtExceptionMonitor`). Done: 2026-10-24
-- [ ] **T204d** Create the Nekko Agent PostHog project (Discard client IP data on), put its key in `PROJECT_KEY`, and check events arrive.
+- [x] **T204d** Nekko Agent PostHog project 686111; its key in `PROJECT_KEY`. Done: 2026-10-24
+- [ ] **T204e** Turn on Discard client IP data for project 686111 and check events arrive from a packaged build.

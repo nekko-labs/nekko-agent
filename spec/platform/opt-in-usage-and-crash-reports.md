@@ -5,7 +5,7 @@ area: platform
 
 # Opt-in usage and crash reports (2026-10-24)
 
-`[implemented; unit-tested (engine allow-list, scrubbing, queue, onboarding step, Settings card); not yet sending: the build has no PostHog project key until the Nekko Agent project exists; not checked in the packaged app]`
+`[implemented; unit-tested (engine allow-list, scrubbing, queue, onboarding step, Settings card); sends to the Nekko Agent PostHog project (686111); no event yet seen arriving; not checked in the packaged app]`
 
 **User intent:** let people who want to help send anonymous reports of which features get used and what breaks. Off unless they say yes, and never personal data, never sold.
 
@@ -47,6 +47,6 @@ Each event carries:
 
 ## PostHog project
 
-The Nekko Agent project in the Nekko Labs org (US cloud), with **Discard client IP data** on. Its public ingest key goes in `PROJECT_KEY` in `crates/nekkod/src/telemetry.rs`; `NEKKO_POSTHOG_KEY` overrides it for development. Until the key is set, nothing is sent and Settings says so.
+Project 686111, **Nekko Agent**, in the Nekko Labs org (US cloud). It must have **Discard client IP data** on. Its public ingest key is `PROJECT_KEY` in `crates/nekkod/src/telemetry.rs`. `NEKKO_POSTHOG_KEY` overrides it for development; set it empty to send nothing, and Settings then says nothing is sent.
 
 Decision: [0021](../../docs/decisions/0021-opt-in-reports-sent-by-the-engine.md). User docs: [docs/usage-reports.md](../../docs/usage-reports.md).

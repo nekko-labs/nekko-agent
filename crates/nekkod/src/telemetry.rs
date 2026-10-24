@@ -21,9 +21,10 @@ use std::time::Duration;
 
 pub const CHANNELS: &[&str] = &["telemetry:capture", "telemetry:status"];
 
-/// The Nekko Agent project's public ingest key. `NEKKO_POSTHOG_KEY` overrides
-/// it (development, tests). Empty: nothing is ever sent.
-const PROJECT_KEY: &str = "";
+/// The Nekko Agent PostHog project's public ingest key (project 686111; a
+/// write-only key that ships in every client). `NEKKO_POSTHOG_KEY` overrides
+/// it (development, tests); set it empty to send nothing.
+const PROJECT_KEY: &str = "phc_za3XdjQKQjDxbNgxDvmtfJXTMmtszrNX4q2D7QgcqSd9";
 const HOST: &str = "https://us.i.posthog.com";
 /// Events are sent in batches this often.
 const FLUSH_EVERY: Duration = Duration::from_secs(60);
@@ -59,7 +60,7 @@ fn state() -> std::sync::MutexGuard<'static, State> {
 }
 
 fn key() -> String {
-    std::env::var("NEKKO_POSTHOG_KEY").ok().filter(|k| !k.is_empty()).unwrap_or_else(|| PROJECT_KEY.to_string())
+    std::env::var("NEKKO_POSTHOG_KEY").unwrap_or_else(|_| PROJECT_KEY.to_string())
 }
 
 fn host() -> String {
