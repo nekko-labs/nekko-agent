@@ -6,6 +6,8 @@ split-from: SPEC.md (2026-10-22)
 
 # Your agent in your pocket (the iOS and Android app)
 
+**Availability** `[limited beta, 2026-10-24]`: the native iOS app ([spec](native-ios-app.md)) and the native Android app ([spec](native-android-app.md)) are both available in a **limited beta**. Neither is on public sale: the App Store and Google Play releases are still to come (#615), and so is a public beta. The iOS beta goes out through TestFlight (`.github/workflows/ios-testflight.yml` uploads from `main`).
+
 `[in build 2026-10-03]` A native app for iPhone and Android with three tabs: **Chats**, **On this phone**, and **Computers**. It is built for one-handed check-ins rather than as a copy of the desktop.
 
 - **First run.** Nekko and two choices: *Pair your computer* (scan the QR from Settings → Remote access, or paste the link) or *Chat on this phone* (download a model). Notification permission is asked only after a computer is paired, never at first launch.
