@@ -134,6 +134,12 @@
           "title": "Floop tasks",
           "source": "docs/floop.md",
           "description": "Show your team's Floop tasks in Nekko Agent and let the agent pick up, update and finish them."
+        },
+        {
+          "slug": "send-feedback",
+          "title": "Send feedback",
+          "source": "docs/send-feedback.md",
+          "description": "Tell Nekko Labs what's broken or missing: a prompt for your own agent, a quick anonymous note, or a GitHub issue."
         }
       ]
     },

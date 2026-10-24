@@ -113,6 +113,7 @@ Full docs in one file: https://nekkoagent.com/llms-full.txt. Each page is also a
 - [Decision models](https://nekkoagent.com/docs/decision-models.md): Typed questions answered with calibrated probabilities, in one forward pass.
 - [Local inference benchmarks](https://nekkoagent.com/docs/benchmarks.md): How fast the engine runs a model compared with Ollama and LM Studio.
 - [Floop tasks](https://nekkoagent.com/docs/floop.md): Show your team's Floop tasks in Nekko Agent and let the agent pick up, update and finish them.
+- [Send feedback](https://nekkoagent.com/docs/send-feedback.md): Tell Nekko Labs what's broken or missing: a prompt for your own agent, a quick anonymous note, or a GitHub issue.
 
 ### Contributing
 
