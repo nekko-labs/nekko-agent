@@ -7,6 +7,7 @@ SwiftUI iOS first; a separate Kotlin Android foundation is a future step. This d
 ## Current scope (implemented, not yet native-verified)
 
 - SwiftUI connection form, chat list, and read-only text transcript snapshots, iOS 16+ (iPhone/iPad).
+- *Send feedback* (computer menu and Settings → About): copy a prompt for your own agent, send a quick note to Nekko Cloud's `/v1/feedback` (app info only when switched on), or open GitHub issues. See [the spec](../../spec/phone/native-ios-app.md).
 - A self-contained Foundation package at `Protocol/`, with request, decoding, filtering, timestamp, and error tests.
 - Explicit user-configured **direct HTTPS host origin** and **host bearer token**. Connect is the only initial network trigger. No launch-time connection, discovery, background polling, automatic retry, or relay fallback. Opening a chat fetches it after connection; Refresh is explicit.
 - Successful Connect saves one host bearer in non-synchronizing, `WhenUnlockedThisDeviceOnly` Keychain storage. Only the origin goes in UserDefaults. Token entry is cleared after connection/disconnect. A saved bearer is reused only for the same saved origin; changing hosts requires a newly entered token.
