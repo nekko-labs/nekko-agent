@@ -39,14 +39,19 @@ import com.nekko.android.ui.components.NCard
 import com.nekko.android.ui.components.Notice
 import com.nekko.android.ui.components.SectionHeader
 import com.nekko.android.ui.components.Tone
+import com.nekko.android.ui.security.PendingStepUp
+import com.nekko.android.ui.security.StepUpSheet
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.PcSettings
+import com.nekko.protocol.RelayException
 import com.nekko.protocol.PcSettings.ChatAction
 import com.nekko.protocol.PcSettings.ChatMode
 import com.nekko.protocol.RelayState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 /**
  * Settings → On <computer>: the computer's own settings that a paired phone may
@@ -64,6 +69,8 @@ fun PcSettingsSection(deps: SettingsDeps) {
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var askYolo by rememberSaveable { mutableStateOf(false) }
+    // A mode raise the computer wants a second factor for (SK-7): the sheet asks, then sends it again.
+    var stepUp by remember { mutableStateOf<PendingStepUp?>(null) }
 
     val save: (JsonObject) -> Unit = { patch ->
         error = null
@@ -77,11 +84,18 @@ fun PcSettingsSection(deps: SettingsDeps) {
                 // pcSettings only changes on the computer's reply, so a refused change (raising the
                 // mode needs a confirmation this phone can't sign yet) leaves the old choice selected.
                 // The repository's remote has already reworded refusals into what to do.
-                error = e.message?.takeIf { it.isNotBlank() } ?: "${active.name} didn’t save that."
+                if ((e as? RelayException)?.refusal?.asksForStepUp == true) {
+                    stepUp = PendingStepUp(stepUpAction(patch, active.name)) { proof -> deps.repo.updatePcSettings(patch, proof) }
+                } else {
+                    error = e.message?.takeIf { it.isNotBlank() } ?: "${active.name} didn’t save that."
+                }
             } finally {
                 busy = false
             }
         }
+    }
+    stepUp?.let { pending ->
+        StepUpSheet(deps.repo, pending, onDone = { stepUp = null }, onDismiss = { stepUp = null })
     }
     // Never show the computer's settings before it has told us what they are:
     // defaults drawn as if they were its values would be wrong (YOLO shown as Guardrails).
@@ -173,6 +187,12 @@ fun PcSettingsSection(deps: SettingsDeps) {
             dismissButton = { TextButton(onClick = { askYolo = false }) { Text("Cancel") } },
         )
     }
+}
+
+/** What the step-up sheet says the change is (*Switch new chats on Studio to YOLO*). */
+internal fun stepUpAction(patch: JsonObject, computer: String): String {
+    val mode = ChatMode.of((patch["defaultChatMode"] as? JsonPrimitive)?.contentOrNull)
+    return if (mode != null) "Switch new chats on $computer to ${modeTitle(mode)}" else "Change $computer’s settings"
 }
 
 private fun modeTitle(m: ChatMode) = when (m) {

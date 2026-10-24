@@ -46,4 +46,13 @@ describe('Screens dropdown', () => {
     expect(view.indexOf('className="wall-snap-toggle"')).toBeLessThan(screens);
     expect(view.indexOf('export function WallToolbar(')).toBeLessThan(screens);
   });
+  it('keeps the dropdown out of the title bar drag region, so hover and clicks reach it', () => {
+    // The toolbar is portaled into the draggable title bar; without no-drag the OS
+    // took the pointer over the panel, so it closed on hover and ate clicks.
+    const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
+    expect(css).toMatch(/\.screens-picker \{ -webkit-app-region: no-drag;/);
+    expect(css).toMatch(/\.screens-control::after \{[^}]*-webkit-app-region: no-drag;/);
+    const src = readFileSync(new URL('./ScreensControl.tsx', import.meta.url), 'utf8');
+    expect(src).not.toContain('setOpen((v) => !v)');
+  });
 });

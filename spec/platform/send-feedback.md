@@ -17,8 +17,9 @@ Anyone using Nekko Agent, on any device, can tell Nekko Labs something is broken
 
 ## Where the button is
 
-- **Desktop, Local Web UI and Docker** (one renderer): a Send feedback button at the bottom of the left rail, a **Send feedback** command in the command palette, and Help → Send feedback… in the desktop menu (macOS app menu bar). It works whether or not anyone is signed in to Nekko Cloud.
-- **iPhone and iPad** (native SwiftUI, `apps/ios`) and **Android** (native Compose, `apps/android`): from the app's settings/menu.
+- **Desktop, Local Web UI and Docker** (one renderer, `FeedbackSheet.tsx`): a Send feedback button at the bottom of the left rail, a **Send feedback** command in the command palette, a button on the About page, Help → Send Feedback… on macOS, Send feedback… in the tray menu (the way in on Windows and Linux without the rail), and the `nekko-agent://feedback` link. It works whether or not anyone is signed in to Nekko Cloud. In the Local Web UI and Docker, `nekkod` runs on the server, so the OS fields describe the server, not the browser's machine.
+- **iPhone and iPad** (native SwiftUI, `apps/ios`): **Send feedback** at the bottom of the computer menu on the Chats screen (the same menu in the iPad sidebar), and Settings → About → Send feedback.
+- **Android** (native Compose, `apps/android`): Settings → Feedback → Send feedback, a bottom sheet.
 - The Expo app (`apps/mobile`) is being replaced by the native apps and does not get the sheet.
 
 ## The copied prompt
@@ -53,5 +54,10 @@ The same text on every app (`packages/shared/src/feedback.ts` is the reference; 
 ## Status
 
 - Nekko Cloud `POST /v1/feedback` and the `feedback` table: implemented 2026-10-24, tested against PGlite; not yet deployed to Fly.
-- Desktop / Local Web UI, iOS, Android sheets: in progress in their own PRs (see #1004).
+- Desktop and Local Web UI sheet: implemented 2026-10-24. `nekkod` serves `feedback:info` and `feedback:send` (`crates/nekkod/src/feedback.rs`) and builds the app info itself, so the renderer can't add a field. Unit tested (Rust: field allow-list, body, a 429 against a local server; renderer: the three routes, app info off by default, Send disabled when empty) and captured in headless Chromium with a synthetic bridge. Not yet run in a packaged app or against the deployed endpoint.
+
+- iPhone and iPad sheet: in progress (see #1004).
+
+- Android sheet: in progress (see #1004).
+
 - Not built: reading the notes anywhere but the database, replying to a sender (there is no way to reach them, on purpose), screenshots or log attachments.

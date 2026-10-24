@@ -8,6 +8,8 @@ split-from: SPEC.md (2026-10-22)
 
 **User intent:** Philip asked (2026-10-16) to finish the native SwiftUI iPhone app using Orca's mobile app as the competitive reference, **Tailscale first** and on the Nekko relay, following the Android app's connection approach. It replaces the read-only direct-HTTPS foundation, which never shipped: one transport, the end-to-end encrypted relay, as on Android. Competitive notes: [reports/ios-native-competitive-2026-10-16.md](reports/ios-native-competitive-2026-10-16.md).
 
+**Availability** `[limited beta, 2026-10-24]`: in a limited beta through TestFlight. Builds upload to App Store Connect from `main` (`.github/workflows/ios-testflight.yml`). Not yet released on the App Store (#615). Before that release, the App Store privacy labels need a review against the privacy manifest (`apps/ios/App/PrivacyInfo.xcprivacy`).
+
 **Scope `[shipped 2026-10-16 (#630, #631); verified on Linux (50 protocol tests + live relay itest) and on macOS CI in the simulator (build with the widget extension, unit and UI tests, the live journey in light and dark, deep-link pairing, the largest text size); no physical iPhone yet]`:**
 
 - **Wire and crypto** (`apps/ios/Protocol`, package `NekkoProtocol`): PBKDF2-HMAC-SHA256 (CommonCrypto) → AES-256-GCM (CryptoKit), byte-identical to the agent's WebCrypto through the shared `e2e-vector.json`; pairing links; the relay v2 client with Android's state machine (sealed HELLO, one-time code dropped after the first welcome and never resent, kick 4001 and bad key terminal, offline computer polled every 15 s, agent-online re-HELLO, network-change reconnect); `URLSessionWebSocketTask` transport with 25 s pings. Channel names are pinned to the computer's `PHONE_CHANNELS` by a test.

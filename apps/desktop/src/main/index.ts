@@ -20,6 +20,8 @@ import { registerArtifactPreview } from './artifactPreview.js';
 import { offerLegacyCleanup } from './legacyPrompt.js';
 import { createCloseIntent, readWParam, WM_CLOSE, WM_SYSCOMMAND } from './closeIntent.js';
 import { startMainNotifications, createNativeNotificationPoster } from './notifications.js';
+import { runCeremonyWindow } from './webauthnWindow.js';
+import { WEBAUTHN_CEREMONY_CHANNEL } from '../webauthnCeremony.js';
 import { createDisplayWindows, type DisplayWindows } from './displayWindows.js';
 import {
   DISPLAY_ARG, DISPLAYS_CHANGED_EVENT, DISPLAYS_CLAIM_CHANNEL, DISPLAYS_LIST_CHANNEL, DISPLAYS_PLACED_EVENT,
@@ -123,8 +125,9 @@ function deliverLink(url: string): void {
 
 /**
  * macOS keeps the system menu bar. Electron's default app menu is kept for
- * everything else, but its "Nekko Agent" menu gains Settings… (⌘,) and its
- * About item opens the in-app About page instead of the stock panel.
+ * everything else, but its "Nekko Agent" menu gains Settings… (⌘,), its
+ * About item opens the in-app About page instead of the stock panel, and
+ * Help holds Send Feedback….
  */
 function installMacAppMenu(): void {
   const send = (url: string) => () => deliverLink(url);
@@ -148,6 +151,7 @@ function installMacAppMenu(): void {
     { role: 'editMenu' },
     { role: 'viewMenu' },
     { role: 'windowMenu' },
+    { role: 'help', submenu: [{ label: 'Send Feedback…', click: send('nekko-agent://feedback') }] },
   ]));
 }
 
@@ -455,6 +459,43 @@ function claimSingleInstance(): boolean {
   return true;
 }
 
+/**
+ * Settings → Security's security keys and passkeys (SK-4): WebAuthn runs in
+ * a small loopback window (webauthnWindow.ts), since the app's `file://`
+ * page has no origin WebAuthn accepts. Only the app's own windows may ask.
+ */
+function registerWebAuthnCeremony(): void {
+  ipcMain.handle(WEBAUTHN_CEREMONY_CHANNEL, (event, request: unknown) => {
+    if (!applicationWindows.has(event.sender.id)) throw new Error('untrusted');
+    const parent = BrowserWindow.fromWebContents(event.sender) ?? undefined;
+    return runCeremonyWindow(request, {
+      openWindow: (title) => new BrowserWindow({
+        parent,
+        modal: !!parent,
+        title,
+        width: 420,
+        height: 300,
+        resizable: false,
+        minimizable: false,
+        maximizable: false,
+        fullscreenable: false,
+        show: false,
+        autoHideMenuBar: true,
+        backgroundColor: DEFAULT_OVERLAY.color,
+        icon: resolveWindowIcon(),
+        webPreferences: {
+          // Its own in-memory session: the page keeps nothing and shares nothing with the app.
+          partition: 'nekko-webauthn',
+          sandbox: true,
+          contextIsolation: true,
+          nodeIntegration: false,
+          devTools: !app.isPackaged,
+        },
+      }),
+    });
+  });
+}
+
 /** False in a second copy launched by a link; that one hands over and exits. */
 const isPrimary = claimSingleInstance();
 if (!isPrimary) app.quit();
@@ -543,6 +584,7 @@ app.whenReady().then(async () => {
     notificationViews.set(event.sender.id, visibleNotificationView(report));
   });
   registerIpc(engine, (sender) => applicationWindows.has(sender.id));
+  registerWebAuthnCeremony();
   setWindowStateDir(dataDir);
   registerTitleBarOverlaySync();
   // A link that launched the app is already on this process's command line
@@ -557,6 +599,7 @@ app.whenReady().then(async () => {
       engine,
       showUi: showWindow,
       newChat: () => deliverLink('nekko-agent://chat/new'),
+      feedback: () => deliverLink('nekko-agent://feedback'),
       serviceStarted: () => { for (const win of BrowserWindow.getAllWindows()) win.webContents.reload(); },
       quit: () => app.quit(),
       onError: message => dialog.showErrorBox('Nekko Agent', message),

@@ -315,8 +315,9 @@ describe('wall preferences and panel migration', () => {
     expect(DEFAULT_WALL_STATE.folded).toEqual({});
   });
   it('clamps finite dimensions and rejects malformed persisted values', () => {
-    expect(sanitizeWallLayout({ mode: 'fixed', cols: 99, rows: -2 })).toEqual({ mode: 'fixed', cols: 6, rows: 1 });
-    expect(sanitizeWallLayout({ mode: 'focus', cols: 2.6, rows: 1.2 })).toEqual({ mode: 'focus', cols: 3, rows: 1 });
+    // A wall saved in the retired Grid mode opens as Dynamic with Fixed grid on.
+    expect(sanitizeWallLayout({ mode: 'fixed', cols: 99, rows: -2 })).toEqual({ mode: 'grid', cols: 6, rows: 1, fixedGrid: true });
+    expect(sanitizeWallLayout({ mode: 'focus', cols: 2.6, rows: 1.2, fixedGrid: 'yes' })).toEqual({ mode: 'focus', cols: 3, rows: 1, fixedGrid: false });
     expect(sanitizeWallLayout({ mode: 'other', cols: Infinity, rows: '4' })).toEqual(DEFAULT_WALL_LAYOUT);
     expect(sanitizeMonitorsDock({ side: 'other', show: 0, minimized: 'yes', panels: { insights: true, budget: false, vitals: true, hardware: 0, alien: true } }))
       .toEqual({ ...DEFAULT_MONITORS_DOCK, monitors: { ...DEFAULT_MONITORS_DOCK.monitors, insights: true, budget: false } });
@@ -384,7 +385,7 @@ describe('wall preferences and panel migration', () => {
     expect(restore({ root: { id: 'pane_i', kind: 'insights', refId: 'insights' } }).root).toBeNull();
   });
   it('round-trips every new preference through local and shared persistence', () => {
-    const state = { ...DEFAULT_WALL_STATE, layout: { mode: 'focus' as const, cols: 6, rows: 1 },
+    const state = { ...DEFAULT_WALL_STATE, layout: { mode: 'focus' as const, cols: 6, rows: 1, fixedGrid: true },
       dock: { ...DEFAULT_MONITORS_DOCK, side: 'bottom' as const, show: false,
         minimized: { ...DEFAULT_MONITORS_DOCK.minimized, utilization: true, budget: true } },
       hero: 'session-a', folded: { 'session-a': true, 'session-b': false } };

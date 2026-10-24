@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useStore, viewEnabled, type View } from '../store.js';
 import { SHORTCUTS } from '../shortcuts.js';
 import { Modal } from './primitives/index.js';
+import { openFeedback } from './FeedbackSheet.js';
 
 interface Command {
   id: string;
@@ -45,6 +46,7 @@ export function CommandPalette() {
       ...(viewEnabled('memory', settings) ? [go('memory', 'Go to Memory')] : []),
       go('settings', 'Go to Settings'),
       { id: 'toggle-context', label: 'Toggle context panel', run: () => toggleContextPanel() },
+      { id: 'feedback', label: 'Send feedback', hint: 'Help', run: openFeedback },
       // Only when there is a daemon to reach: an entry that can only fail is
       // worse than no entry. Connected, it is the way back to the tab.
       ...(hypergate

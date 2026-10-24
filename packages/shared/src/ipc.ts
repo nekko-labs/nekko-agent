@@ -360,6 +360,17 @@ export const IpcChannels = {
   appInfo: 'app:info',
   /** SK-2: a single-use step-up challenge; from a phone the daemon's gate answers it (step-up.ts). */
   securityChallenge: 'security:challenge',
+  /** SK-4/SK-5: Settings → Security (step-up-desktop.ts). Desktop and Local Web UI only, never phone-callable. */
+  securityStatus: 'security:status',
+  securityConfirm: 'security:confirm',
+  securityRegisterBegin: 'security:registerBegin',
+  securityRegisterKey: 'security:registerKey',
+  securityTotpBegin: 'security:totpBegin',
+  securityTotpConfirm: 'security:totpConfirm',
+  securityEnable: 'security:enable',
+  securityDisable: 'security:disable',
+  securityRemoveMethod: 'security:removeMethod',
+  securityRecoveryCodes: 'security:recoveryCodes',
   /** SK-3 safety exits, phone only: the daemon's phone gate answers them (phone-access.ts). */
   appQuit: 'app:quit',
   deviceSignOut: 'device:signOut',
@@ -396,6 +407,9 @@ export const IpcChannels = {
   syncSetEnabled: 'sync:setEnabled',
   syncSetIncludeLocalOnly: 'sync:setIncludeLocalOnly',
   syncDeleteAll: 'sync:deleteAll',
+  // Send feedback (crates/nekkod/src/feedback.rs): no sign-in needed.
+  feedbackInfo: 'feedback:info',
+  feedbackSend: 'feedback:send',
   voiceStatus: 'voice:status',
   voiceInstall: 'voice:install',
   voiceCancelInstall: 'voice:cancel',
@@ -427,6 +441,8 @@ export const IpcEvents = {
   /** The skills marketplace catalog refreshed. */
   skillsUpdated: 'skills:updated',
   deepLink: 'app:deepLink',
+  /** SK-4: a phone signed itself out, stopped remote access or quit the app (`RemoteSafetyExit`). */
+  remoteSafetyExit: 'remote:safetyExit',
 } as const;
 
 /**
@@ -456,6 +472,10 @@ export interface NekkoApi {
   cloudBeginOAuth(provider: import('./cloud.js').CloudOAuthProvider): Promise<{ authUrl: string }>;
   cloudCancelOAuth(): Promise<import('./cloud.js').CloudStatus>;
   cloudSignOut(): Promise<import('./cloud.js').CloudStatus>;
+  /** Send feedback: the app facts the sheet may share (app, version, OS, CPU type; nothing identifying). */
+  feedbackInfo(): Promise<import('./feedback.js').FeedbackAppInfo>;
+  /** Send feedback's quick note to Nekko Cloud, with the facts above only when `includeAppInfo`. */
+  feedbackSend(message: string, includeAppInfo: boolean): Promise<{ ok: true }>;
   syncTurnOn(): Promise<import('./cloud.js').SyncTurnOnResult>;
   syncConfirmRecoveryKey(text: string): Promise<import('./cloud.js').CloudStatus>;
   syncRestore(text: string): Promise<import('./cloud.js').CloudStatus>;
@@ -1055,6 +1075,37 @@ export interface NekkoApi {
   networkVisibilityStatus(): Promise<import('./relay-route.js').NetworkVisibilityStatus>;
   networkVisibilityStart(): Promise<import('./relay-route.js').NetworkVisibilityStatus>;
   networkVisibilityStop(): Promise<import('./relay-route.js').NetworkVisibilityStatus>;
+
+  /**
+   * Settings → Security (SK-4, SK-5; step-up-desktop.ts). Optional: only the
+   * desktop app and the Local Web UI have them.
+   */
+  securityStatus?(): Promise<import('./step-up-desktop.js').SecurityStatus>;
+  securityChallenge?(): Promise<import('./step-up-desktop.js').DesktopStepUpChallenge>;
+  /** Answer the step-up sheet for an action class: covers it on this surface for five minutes. */
+  securityConfirm?(action: string, proof: import('./step-up-desktop.js').DesktopStepUpProof): Promise<import('./step-up-desktop.js').StepUpConfirmed>;
+  securityRegisterBegin?(kind: import('./step-up.js').SecurityCredentialKind): Promise<import('./step-up-desktop.js').SecurityRegisterBegin>;
+  securityRegisterKey?(input: import('./step-up-desktop.js').SecurityRegisterKeyInput): Promise<import('./step-up-desktop.js').SecurityMethodAdded>;
+  securityTotpBegin?(): Promise<import('./step-up-desktop.js').SecurityTotpBegin>;
+  securityTotpConfirm?(code: string): Promise<import('./step-up-desktop.js').SecurityMethodAdded>;
+  securityEnable?(): Promise<import('./step-up-desktop.js').SecurityStatus>;
+  /** Turn step-up off: any registered method, or a recovery code. */
+  securityDisable?(proof: import('./step-up-desktop.js').DesktopStepUpProof | null): Promise<import('./step-up-desktop.js').SecurityStatus>;
+  /** Remove a key (its id) or the code app (`totp`): with step-up on, a different method or a recovery code. */
+  securityRemoveMethod?(id: string, proof: import('./step-up-desktop.js').DesktopStepUpProof | null): Promise<import('./step-up-desktop.js').SecurityStatus>;
+  /** Ten new recovery codes, shown once; the old ones stop working. */
+  securityRecoveryCodes?(): Promise<string[]>;
+  /**
+   * Run a WebAuthn ceremony where WebAuthn works: in the page itself in a
+   * browser, in a loopback ceremony window on the desktop.
+   */
+  webAuthnCeremony?(request: import('./step-up-desktop.js').WebAuthnCeremonyRequest): Promise<import('./step-up-desktop.js').WebAuthnCeremonyResult>;
+  /**
+   * Who answers a `step-up-required` refusal: the page's step-up sheet. The
+   * transport calls it with the refused action class and, when it resolves
+   * true (confirmed), calls again once.
+   */
+  setStepUpHandler?(handler: ((action: string | null, message: string) => Promise<boolean>) | null): void;
 
   /** Running version + edition. */
   getAppInfo(): Promise<AppInfo>;

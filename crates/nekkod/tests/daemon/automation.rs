@@ -206,6 +206,10 @@ async fn a_background_reply_steps_aside_for_a_persons_chat_and_finishes_after() 
         (s["paused"] == json!(1) && s["reason"] == json!("chat")).then_some(())
     })
     .await;
+    // The pause is recorded before the person's request reaches the model, so
+    // wait for that request rather than counting the instant the pause shows.
+    wait_for("the person's request", || replies_asked(&model) == 2).await;
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
     assert_eq!(replies_asked(&model), 2, "the task waits; only the person's request went out");
 
     // Their chat ends; the task's request goes out again and finishes.
