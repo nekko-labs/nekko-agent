@@ -134,3 +134,7 @@ For an identified subagent, **Open ↗** beside its activity row opens the child
 ### Delegated agents in the Agents panel
 
 Delegated subagents appear as compact rows beneath their parent. Opening a child transcript does not add a duplicate full agent card. Closing the parent's windows keeps the saved parent and its nested children accessible.
+
+### Answering agent questions
+
+When an agent needs a choice, its question opens at the bottom of the conversation. Scroll the conversation to read the reply and question together; the question has no separate scrollbar. Choose an option or type something else, then send your answer. Multiple questions show one step at a time, with Back and Next. The pixel question-mark icon identifies the question.

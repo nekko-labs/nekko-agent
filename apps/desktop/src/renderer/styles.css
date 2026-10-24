@@ -2566,9 +2566,8 @@
 /* While the floating button shows, the transcript starts below it so the first
    message never sits under it (8px offset + 28px button + breathing room). */
 div:has(> .plan-rail-toggle) > [data-transcript-scroll] { padding-top: 44px; }
-/* A question the agent asked, pinned at the top of its window: a warning-toned
-   label you cannot miss, then the card. Capped so the transcript keeps a view;
-   a long card scrolls inside the pin rather than pushing the history away. */
+/* The plan-change prompt keeps its existing top pin. Pending agent questions
+   use the conversation footer instead, without a nested scroll area. */
 .agent-question-pin {
   max-height: min(62%, 460px); overflow-y: auto; padding: 8px 10px 10px;
   border-bottom: 1px solid color-mix(in srgb, var(--warning) 45%, var(--line));
@@ -3177,3 +3176,9 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 }
 .command-wall-layout[data-wall-layout='focus'] .command-wall-window > .panel::after { display: none; }
 .command-wall-layout[data-wall-layout='focus'] [data-pane-title-strip] { display: none; }
+
+/* The pending question shares the transcript scroll, with no outer panel. */
+.conversation-question { margin-top: 16px; animation: conversation-question-rise 220ms ease-out; }
+.conversation-question > [data-question-tone] { border-radius: 16px 16px 4px 4px; box-shadow: none !important; }
+@keyframes conversation-question-rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .conversation-question { animation: none; } }
