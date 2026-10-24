@@ -223,11 +223,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           BATCH: ${{ inputs.batch }}
-          STATE: ${{ job.status == 'success' && 'success' || 'failure' }}
+          # A cancel (by hand, or the job's timeout) is not a test failure; it still blocks.
+          STATE: ${{ job.status == 'success' && 'success' || job.status == 'cancelled' && 'error' || 'failure' }}
           URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           prs=$(echo "$BATCH" | jq -r '[.[] | "#\(.number)"] | join(", ")')
           echo "$BATCH" | jq -r '.[].sha' | while read -r sha; do
             gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/$sha" -f state="$STATE" -f context='Native iOS (batch)' \
-              -f target_url="$URL" -f description="Native iOS $STATE on the batch $prs"
+              -f target_url="$URL" -f description="Native iOS $( [ "$STATE" = error ] && echo 'cancelled or timed out' || echo "$STATE") on the batch $prs"
           done
