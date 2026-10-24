@@ -8,6 +8,10 @@ public enum Channels {
     /// Only the phone-settable keys (`PHONE_SETTINGS_KEYS`); anything else is refused.
     public static let settingsUpdate = "settings:update"
     public static let providersList = "providers:list"
+    /// Provider setup from a phone (decision 0016): the computer's sealing key, a sealed save, one provider's switch.
+    public static let providersSealKey = "providers:sealKey"
+    public static let providersSaveSealed = "providers:saveSealed"
+    public static let providersSetEnabled = "providers:setEnabled"
     public static let modelsList = "models:list"
     public static let sessionsSummaries = "sessions:summaries"
     public static let sessionCreate = "session:create"
@@ -220,6 +224,23 @@ public struct MachineSummary: Equatable, Sendable {
             cpuC: live?["temps"]?.dbl("cpuC"), gpuC: gpuC, gpuUsedMB: gpu?.dbl("usedMB"), gpuTotalMB: gpu?.dbl("totalMB"),
             serverRunning: engine?.flag("running") ?? false, serverStartedAt: engine?.long("startedAt"), resident: resident,
             loading: Int(engine?.long("loading") ?? 0))
+    }
+}
+
+/// `providers:saveSealed` and `providers:setEnabled` as the computer answers
+/// them: whether it worked, why not, and the models a saved provider offers.
+public struct ProviderSaveResult: Equatable, Sendable {
+    public struct Model: Equatable, Sendable, Identifiable {
+        public let id: String
+        public let name: String
+    }
+    public let ok: Bool
+    public let message: String?
+    public let models: [Model]
+
+    public static func from(_ v: JSONValue?) -> ProviderSaveResult {
+        let models: [Model] = (v?["models"]?.array ?? []).compactMap { m in m.str("id").map { Model(id: $0, name: m.str("name") ?? $0) } }
+        return ProviderSaveResult(ok: v?.flag("ok") ?? false, message: v?.str("message"), models: models)
     }
 }
 

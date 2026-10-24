@@ -135,6 +135,9 @@ export const PHONE_CHANNELS = [
   'pr:diff',
   'pr:sessionList',
   'providers:list',
+  'providers:saveSealed',
+  'providers:sealKey',
+  'providers:setEnabled',
   'session:create',
   'session:delete',
   'session:fork',
@@ -290,6 +293,7 @@ export const PHONE_CHAT_READ_CHANNELS: readonly string[] = [
   'models:list',
   'pr:sessionList',
   'providers:list',
+  'providers:sealKey',
   'session:get',
   'session:watches',
   'sessions:summaries',
@@ -335,7 +339,15 @@ export const PHONE_AGENT_CHANNELS: readonly string[] = [
 ];
 /** Any paired phone, whatever its switches: which Nekko Agent version it talks to. */
 export const PHONE_OPEN_CHANNELS: readonly string[] = ['app:info'];
+/**
+ * Provider setup from a phone (decision 0016, 2026-10-24): a sealed key the
+ * computer opens, and one provider's switch. A signed proof each. The plaintext
+ * `providers:save`, `providers:remove` and `providers:importCliAuth` stay in
+ * `PHONE_DENIED_FOREVER`.
+ */
+export const PHONE_PROVIDER_CHANGE_CHANNELS: readonly string[] = ['providers:saveSealed', 'providers:setEnabled'];
 export const PHONE_CHANGE_CHANNELS: readonly string[] = [
+  ...PHONE_PROVIDER_CHANGE_CHANNELS,
   ...PHONE_GIT_CHANGE_CHANNELS,
   ...PHONE_FILES_CHANGE_CHANNELS,
   ...PHONE_TERMINAL_CHANGE_CHANNELS,
@@ -478,6 +490,63 @@ export const PHONE_SETTINGS_VIEW = [
   'voice.enabled',
   'voice.language',
 ] as const;
+
+/** The kinds a phone may add (`providers:saveSealed`): API-key clouds and the local servers a computer reaches itself. */
+export const PHONE_PROVIDER_KINDS = ['anthropic', 'openai', 'openrouter', 'openai-compat', 'ollama', 'lmstudio', 'vllm'] as const;
+/** Kinds that need a key and an https base URL. */
+export const PHONE_PROVIDER_CLOUD_KINDS = ['anthropic', 'openai', 'openrouter'] as const;
+/** The fields of a `providers:saveSealed` request; anything else is `option-denied`. */
+export const PHONE_PROVIDER_SAVE_KEYS = ['id', 'kind', 'label', 'baseUrl', 'sealedKey'] as const;
+export const PHONE_PROVIDER_LIMITS = { id: 64, label: 80, url: 512, blob: 8192 } as const;
+
+function phoneProviderUrlOk(url: string, kind: string): boolean {
+  if (url.length > PHONE_PROVIDER_LIMITS.url || /[\s\u0000-\u001f\u007f]/.test(url)) return false;
+  let rest: string;
+  if (url.startsWith('https://')) rest = url.slice(8);
+  else if (url.startsWith('http://')) {
+    if ((PHONE_PROVIDER_CLOUD_KINDS as readonly string[]).includes(kind)) return false;
+    rest = url.slice(7);
+  } else return false;
+  const authority = rest.split('/')[0];
+  return authority.length > 0 && !authority.includes('@');
+}
+
+/**
+ * The shape of a sealed provider save, checked before the computer is asked
+ * (the Rust gate runs the same checks, `phone_providers::screen_save`): a
+ * lowercase id, a kind a phone may add, a label, an optional base URL
+ * (https for a cloud kind), and the sealed key, required for a cloud kind.
+ */
+export function screenPhoneProviderSave(request: unknown): void {
+  if (!isObj(request)) throw new PhoneAccessError('value-invalid', 'provider');
+  for (const key of Object.keys(request)) {
+    if (!(PHONE_PROVIDER_SAVE_KEYS as readonly string[]).includes(key)) throw new PhoneAccessError('option-denied', key);
+  }
+  const id = typeof request.id === 'string' ? request.id : '';
+  if (!id || id.length > PHONE_PROVIDER_LIMITS.id || !/^[a-z0-9_-]+$/.test(id)) throw new PhoneAccessError('value-invalid', 'id');
+  const kind = typeof request.kind === 'string' ? request.kind : '';
+  if (!(PHONE_PROVIDER_KINDS as readonly string[]).includes(kind)) throw new PhoneAccessError('value-invalid', 'kind');
+  const label = typeof request.label === 'string' ? request.label.trim() : '';
+  if (!label || label.length > PHONE_PROVIDER_LIMITS.label || /[\u0000-\u001f\u007f]/.test(label)) throw new PhoneAccessError('value-invalid', 'label');
+  if (request.baseUrl !== undefined && (typeof request.baseUrl !== 'string' || !phoneProviderUrlOk(request.baseUrl, kind))) throw new PhoneAccessError('value-invalid', 'baseUrl');
+  const blob = request.sealedKey;
+  if (blob === undefined) {
+    if ((PHONE_PROVIDER_CLOUD_KINDS as readonly string[]).includes(kind)) throw new PhoneAccessError('value-invalid', 'sealedKey');
+  } else if (typeof blob !== 'string' || !blob || blob.length > PHONE_PROVIDER_LIMITS.blob || !/^[A-Za-z0-9_=-]+$/.test(blob)) {
+    throw new PhoneAccessError('value-invalid', 'sealedKey');
+  }
+}
+
+/** `providers:saveSealed` and `providers:setEnabled` as a phone sees them: `ok`, a message, a save's models; never a key or the list. */
+export function phoneProviderResultView(result: unknown): Obj {
+  if (!isObj(result)) return { ok: false };
+  const out: Obj = { ok: result.ok === true };
+  if (typeof result.message === 'string') out.message = result.message.length > 600 ? result.message.slice(0, 600) : result.message;
+  if (Array.isArray(result.models)) {
+    out.models = result.models.filter(isObj).filter((m) => typeof m.id === 'string').map((m) => ({ id: m.id, name: typeof m.name === 'string' ? m.name : m.id }));
+  }
+  return out;
+}
 
 /** The provider fields a phone receives from `providers:list` (never `apiKey`, `tokenKey` or `baseUrl`). */
 export const PHONE_PROVIDER_VIEW = ['enabled', 'id', 'kind', 'label'] as const;
@@ -712,6 +781,14 @@ export function screenPhoneCall(
     }
   }
   switch (channel) {
+    case 'providers:saveSealed':
+      screenPhoneProviderSave(args[0]);
+      if (args.length > 1) throw new PhoneAccessError('option-denied', 'extra argument');
+      return {};
+    case 'providers:setEnabled':
+      if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'provider id');
+      if (typeof args[1] !== 'boolean') throw new PhoneAccessError('value-invalid', 'enabled');
+      return {};
     case 'changes:list':
     case 'pr:sessionList':
     case 'session:watches':
@@ -873,6 +950,11 @@ export function redactPhoneResult(channel: string, result: unknown): unknown {
       return phoneWatchesView(result);
     case 'machine:summary':
       return phoneMachineView(result);
+    case 'providers:sealKey':
+      return isObj(result) && typeof result.publicKey === 'string' && typeof result.context === 'string' ? { publicKey: result.publicKey, context: result.context } : null;
+    case 'providers:saveSealed':
+    case 'providers:setEnabled':
+      return phoneProviderResultView(result);
     case 'usage:summary':
       return phoneUsageView(result);
     case 'limits:get':
@@ -1072,6 +1154,10 @@ export function phoneAccessPolicy() {
     settingsKeys: [...PHONE_SETTINGS_KEYS],
     settingsView: [...PHONE_SETTINGS_VIEW],
     providerView: [...PHONE_PROVIDER_VIEW],
+    providerKinds: [...PHONE_PROVIDER_KINDS],
+    providerCloudKinds: [...PHONE_PROVIDER_CLOUD_KINDS],
+    providerSaveKeys: [...PHONE_PROVIDER_SAVE_KEYS],
+    providerLimits: { ...PHONE_PROVIDER_LIMITS },
     watchView: [...PHONE_WATCH_VIEW],
     machineView: [...PHONE_MACHINE_VIEW],
     machineResidentView: [...PHONE_MACHINE_RESIDENT_VIEW],

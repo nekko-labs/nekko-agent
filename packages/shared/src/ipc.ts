@@ -49,6 +49,10 @@ export const IpcChannels = {
   providersProbe: 'providers:probe',
   providersTest: 'providers:test',
   providersTestConfig: 'providers:testConfig',
+  /** Provider setup from a phone (decision 0016): the computer's sealing key, a sealed save, one provider's switch. */
+  providersSealKey: 'providers:sealKey',
+  providersSaveSealed: 'providers:saveSealed',
+  providersSetEnabled: 'providers:setEnabled',
 
   modelsList: 'models:list',
   modelsListStatus: 'models:listStatus',

@@ -1950,6 +1950,7 @@ dependencies = [
  "getrandom 0.3.4",
  "image",
  "nekko-js",
+ "nekko-sync",
  "p256",
  "pbkdf2",
  "serde_json",

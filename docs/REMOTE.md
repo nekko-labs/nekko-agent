@@ -245,6 +245,13 @@ On the phone, the pairing key and the derived encryption key live in the iOS Key
 Keystore. The app drops any provider API keys your computer sends with its settings and never
 stores them.
 
+A provider can be set up **from the iPhone** (on a computer's page, **Add a provider**): the key you
+paste is sealed to that computer's own key before it leaves the phone, sent once over the encrypted
+relay, tested and kept by the computer, and never written on the phone. The computer answers only
+whether it worked and which models it can now use; it never sends a key back. Each provider's switch
+on the same page turns it on or off on the computer. Both ask for Face ID or the passcode, like every
+change from a phone. Subscriptions (ChatGPT) still sign in on the computer.
+
 Manage devices from the same card: **rename** them, **revoke** one instantly (it's kicked live and
 denied from then on), or **Rotate secret** to cryptographically reset the room, which unpairs
 everything at once. A revoked phone can come back only the way a new one does: choose **Pair a
