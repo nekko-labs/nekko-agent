@@ -2685,7 +2685,38 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 .screens-option > span { display: grid; gap: 2px; }
 .screens-option strong { font-size: 12px; font-weight: 500; color: var(--ink); }
 .screens-option > span > span { font-size: 11px; line-height: 1.35; color: var(--ink-faint); }
-@media (prefers-reduced-motion: reduce) { .screens-tile { transition: none; } }
+.screens-picker__title--sub { margin-top: 12px; }
+.screens-tile[data-current]::before { content: ''; position: absolute; top: 4px; right: 4px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+.screens-tile[data-waiting] { border-style: dashed; }
+/* Spaces: the Accessibility explainer, with an abstract monitor switching desktops. */
+.spaces-ask { margin-top: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
+.spaces-ask__lead { margin: 6px 0 4px; font-size: 12px; font-weight: 600; color: var(--ink); }
+.spaces-ask__body { margin: 0 0 8px; font-size: 11px; line-height: 1.4; color: var(--ink-soft); }
+.spaces-ask__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.spaces-demo { display: block; width: 100%; max-width: 200px; margin: 0 auto; }
+.spaces-demo__bezel { fill: var(--win); stroke: var(--line); stroke-width: 1.5; }
+.spaces-demo__desk { fill: color-mix(in srgb, var(--ink-faint) 14%, var(--win)); }
+.spaces-demo__desk--next { fill: color-mix(in srgb, var(--accent) 12%, var(--win)); }
+.spaces-demo__win { fill: color-mix(in srgb, var(--ink-faint) 30%, var(--win)); }
+.spaces-demo__nekko > rect:first-child { fill: var(--paper); stroke: var(--accent); stroke-width: 1.2; }
+.spaces-demo__nekko-bar { fill: color-mix(in srgb, var(--accent) 35%, var(--paper)); }
+.spaces-demo__nekko-pane { fill: color-mix(in srgb, var(--accent) 16%, var(--paper)); }
+.spaces-demo__dot { fill: var(--line); }
+/* 5s loop: hold on desktop 1, slide to 2, the Nekko window swipes open from the left edge, hold, fade and restart. */
+.spaces-demo__strip { animation: spaces-demo-slide 5s cubic-bezier(.65, 0, .35, 1) infinite; }
+.spaces-demo__nekko { transform-box: fill-box; transform-origin: left center; animation: spaces-demo-open 5s cubic-bezier(.22, 1, .36, 1) infinite; }
+.spaces-demo__dot--one { animation: spaces-demo-dot-one 5s steps(1, end) infinite; }
+.spaces-demo__dot--two { animation: spaces-demo-dot-two 5s steps(1, end) infinite; }
+@keyframes spaces-demo-slide { 0%, 18% { transform: translateX(0); opacity: 1; } 40%, 90% { transform: translateX(-136px); opacity: 1; } 97% { transform: translateX(-136px); opacity: 0; } 100% { transform: translateX(0); opacity: 0; } }
+@keyframes spaces-demo-open { 0%, 46% { transform: scaleX(.06); opacity: 0; } 48% { transform: scaleX(.06); opacity: 1; } 66%, 100% { transform: scaleX(1); opacity: 1; } }
+@keyframes spaces-demo-dot-one { 0% { fill: var(--accent); } 30% { fill: var(--line); } 100% { fill: var(--accent); } }
+@keyframes spaces-demo-dot-two { 0% { fill: var(--line); } 30% { fill: var(--accent); } 100% { fill: var(--line); } }
+@media (prefers-reduced-motion: reduce) {
+  .screens-tile { transition: none; }
+  .spaces-demo__strip, .spaces-demo__nekko, .spaces-demo__dot { animation: none; }
+  .spaces-demo__strip { transform: translateX(-136px); }
+  .spaces-demo__dot--two { fill: var(--accent); }
+}
 @media (max-width: 767px) {
   .wall-workspace { flex-direction: column; overflow: hidden; }
   .wall-workspace > .wall-agent-workspace { flex: 1 1 0; min-height: 0; }
