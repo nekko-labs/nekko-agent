@@ -62,7 +62,6 @@ import { ContextGauge, EffortSlider } from './ChatMetrics.js';
 import { PlanRail } from './PlanRail.js';
 import { PlanChangePrompt, planChangeMessage } from './PlanChangePrompt.js';
 import { TurnStatsLine } from './agent-console/TurnStatsLine.js';
-import { ComposerQuestion } from './ComposerQuestion.js';
 import { QuestionCard } from './QuestionCard.js';
 import { useWallLogs } from '../wallLogs.js';
 import { StatusIcon, type AgentStatus } from './WorkspaceCard.js';
@@ -81,7 +80,7 @@ import { FolderPicker } from './FolderPicker.js';
 import { summarizeChanges } from '../changeSummary.js';
 import { AgentCompanionButtons } from './AgentCompanionButtons.js';
 import { addFolderToChat, shouldAutoFile } from '../sessionFolders.js';
-import { PanelIcon, DownloadIcon, PlusIcon, SearchIcon, CloseIcon, BoltIcon, ThoughtIcon, ListIcon, TerminalIcon, WorktreeIcon, CheckIcon, TrashIcon, UndoIcon, QuestionIcon } from '../icons.js';
+import { PanelIcon, DownloadIcon, PlusIcon, SearchIcon, CloseIcon, BoltIcon, ThoughtIcon, ListIcon, TerminalIcon, WorktreeIcon, CheckIcon, TrashIcon, UndoIcon } from '../icons.js';
 
 const NO_PRS: PrInfo[] = []; // stable empty ref so the store selector doesn't churn
 
@@ -2532,18 +2531,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         </ChatHeader>
         )}
 
-        {/* A question the agent stopped to ask stays pinned at the top of the
-            window, above the transcript, where it cannot scroll away or sit
-            under the history. It says what it is plainly, in the warning tone
-            the window's ring wears. */}
-        {surface === 'transcript' && question && (
-          <div className="agent-question-pin shrink-0" data-agent-question role="region" aria-label="The agent asked you a question">
-            <p className="agent-question-pin-label"><QuestionIcon className="h-3.5 w-3.5" /> Asked you a question</p>
-            <div className="agent-question-pin-body"><QuestionCard key={question.callId} request={question} onAnswer={(answers) => { void answerQuestion(answers); }} onSkip={() => { void answerQuestion([]); }} tone="attention" /></div>
-          </div>
-        )}
-        {/* A wall window has no composer of its own, so the plan change pops up
-            where its questions do: pinned at the top. An open question wins. */}
+        {/* Preserve the wall plan-change pin. An open question takes precedence. */}
         {surface === 'transcript' && planChangeOpen && !question && (
           <div className="agent-question-pin shrink-0" role="region" aria-label="Change the agent's plan">
             <div className="agent-question-pin-body"><PlanChangePrompt running={streaming} onSend={(change) => { void sendPlanChange(change); }} onCancel={() => setPlanChangeOpen(false)} /></div>
@@ -2611,6 +2599,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   persisted={!streaming && !![...(session?.messages ?? [])].reverse().find((m) => m.role === 'assistant')?.turnStats}
                   blocked={errorNotice ? 'Needs attention' : approval ? 'Waiting for approval' : question ? 'Waiting for your answer' : null}
                 />
+                {question && <div className="conversation-question" data-agent-question>
+                  <QuestionCard key={question.callId} request={question} onAnswer={(answers) => { void answerQuestion(answers); }} onSkip={() => { void answerQuestion([]); }} tone="attention" />
+                </div>}
                 {!imageMode && <PrWatchContinuation sessionId={sessionId} replyId={lastMsgId ?? ''} prs={prs}
                   eligible={canOfferPrWatch(session?.messages ?? [], streaming || !!held || !!errorNotice || !!question || !!approval)}
                   onContinue={async (prompt) => { await send(prompt); }} />}
@@ -2741,7 +2732,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             <p>Describe the task. The full chat opens once you send.</p>
           </div>}
           <div className={`composer-column mx-auto ${commandCenter ? 'w-[98%]' : 'w-[90%]'}`} style={cleanStart ? undefined : commandCenter ? { width: '98%' } : undefined}>
-            {surface !== 'composer' && <ComposerQuestion request={question} onAnswer={(answers) => { void answerQuestion(answers); }} />}
             {surface !== 'composer' && planChangeOpen && !question && (
               <div className="composer-question is-open" data-plan-change-pop><div className="composer-question-body"><PlanChangePrompt running={streaming} onSend={(change) => { void sendPlanChange(change); }} onCancel={() => { setPlanChangeOpen(false); composerRef.current?.focus(); }} /></div></div>
             )}

@@ -26,11 +26,13 @@ pub type Dispatcher =
 
 /// Who is calling, for a welcomed phone's request: the device the HELLO
 /// welcomed on that connection, and the request's signed Change proof
-/// (`proof: { ts, sig }` beside `args`), when it sent one (IO-33).
-#[derive(Debug, Clone, PartialEq)]
+/// (`proof: { ts, sig }` beside `args`), when it sent one (IO-33), and its
+/// step-up (`stepUp`, a FIDO2 assertion or `{ totp }`, SK-2).
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct PhoneCall {
     pub device_id: String,
     pub proof: Option<Value>,
+    pub step_up: Option<Value>,
 }
 
 /// Runs a welcomed phone's request (`phone::gate` over a `Dispatcher`).
@@ -264,10 +266,10 @@ fn on_text(shared: &Arc<Shared>, text: &str, verify: &Verifier, dispatch: &Phone
     for out in core.on_relay(text, verify.as_ref()) {
         match out {
             Out::Send(f) => shared.send_all(vec![f]),
-            Out::Dispatch { cid, id, device_id, channel, args, proof } => {
+            Out::Dispatch { cid, id, device_id, channel, args, proof, step_up } => {
                 let (shared, dispatch) = (shared.clone(), dispatch.clone());
                 tokio::spawn(async move {
-                    let result = dispatch(PhoneCall { device_id, proof }, channel, args).await;
+                    let result = dispatch(PhoneCall { device_id, proof, step_up }, channel, args).await;
                     if let Some(core) = lock(&shared.core).as_mut() {
                         let frame = core.reply(&cid, id, result);
                         shared.send_all(vec![frame]);

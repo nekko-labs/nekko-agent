@@ -43,6 +43,11 @@ hostname).
 - `POST /v1/donations`, `DELETE /v1/donations/:id`: opt-in samples sealed to
   the offline research key. Unauthenticated, not request-logged, no sender
   columns; withdrawn with the device's delete token, expired after 180 days.
+- `POST /v1/feedback`: the quick note from any app's Send feedback sheet,
+  `{ message, app? }` (`src/feedback.ts`). Unauthenticated, not request-logged,
+  10 per IP per hour (counted in memory). `app` comes only when the sender
+  switched on "Include app info", and only `app`, `version`, `os`, `osVersion`
+  and `arch` are kept.
 - `GET /healthz`: Fly's health check. The machine stops when idle and wakes on
   the next request in about a second; the signup page should call this on load
   so that happens before anyone presses Join.
@@ -61,6 +66,9 @@ hostname).
 - `api_tokens`, `sync_devices`, `sync_keyrings`, `sync_key_wraps`,
   `sync_objects`, `sync_usage`: encrypted sync (migration `0002`).
 - `donations`: sealed opt-in samples, with no user, device or IP column.
+- `feedback`: Send feedback notes (migration `0005`), with no user, device or
+  IP column and only the day each arrived. Read them with
+  `select received_on, message, app_info from feedback order by received_on desc`.
 
 ## Sign-in: Supabase Auth
 

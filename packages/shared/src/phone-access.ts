@@ -14,6 +14,7 @@
 
 import { clientMessageIdOf } from './chat.js';
 import { skillTurnText } from './skills.js';
+import { stepUpPolicy, STEP_UP_CHALLENGE } from './step-up.js';
 import { phoneChangesView, PHONE_CHANGES_VIEW } from './phone-changes.js';
 import {
   PHONE_TERMINAL,
@@ -57,18 +58,26 @@ import {
 import {
   PHONE_LIMIT_WINDOW_VIEW,
   PHONE_LIMITS_VIEW,
+  PHONE_MACHINE_RESIDENT_VIEW,
+  PHONE_MACHINE_VIEW,
+  PHONE_MONITOR_SOURCES,
+  PHONE_MONITOR_VIEW,
   PHONE_PR_VIEW,
   PHONE_PROMPT_VIEW,
   PHONE_QUEUE_EDIT_KEYS,
   PHONE_TASK_VIEW,
   PHONE_VIEWS,
+  PHONE_WATCH_VIEW,
   PHONE_WORKFLOW_RUN_VIEW,
   PHONE_WORKFLOW_VIEW,
   phoneLimitsKey,
   phoneLimitsView,
+  phoneMachineView,
+  phoneMonitorView,
   phonePromptsView,
   phonePrsView,
   phoneQueueView,
+  phoneWatchesView,
   phoneTasksView,
   phoneUsageView,
   phoneWorkflowsView,
@@ -96,6 +105,7 @@ import {
  */
 export const PHONE_CHANNELS = [
   'app:info',
+  'app:quit',
   'changes:list',
   'chat:abort',
   'chat:answer',
@@ -103,6 +113,7 @@ export const PHONE_CHANNELS = [
   'chat:pending',
   'chat:queue',
   'chat:send',
+  'device:signOut',
   'files:list',
   'files:read',
   'files:search',
@@ -122,18 +133,23 @@ export const PHONE_CHANNELS = [
   'limits:get',
   'logs:list',
   'logs:read',
+  'machine:summary',
   'models:list',
+  'monitor:summary',
   'pr:action',
   'pr:checks',
   'pr:create',
   'pr:diff',
   'pr:sessionList',
   'providers:list',
+  'remote:stop',
+  'security:challenge',
   'session:create',
   'session:delete',
   'session:fork',
   'session:get',
   'session:setOptions',
+  'session:watches',
   'sessions:summaries',
   'settings:get',
   'settings:update',
@@ -256,7 +272,7 @@ export const PHONE_ALWAYS_DENIED = {
   channels: DENIED_GROUPS.flatMap((g) => g.channels).sort(),
   prefixes: DENIED_GROUPS.flatMap((g) => g.prefixes).sort(),
   /** Not forced off by a prefix (each still has to be in `PHONE_CHANNELS` to be callable). */
-  except: ['remote:status', ...PHONE_TERMINAL_CHANNELS],
+  except: ['remote:status', 'remote:stop', ...PHONE_TERMINAL_CHANNELS],
 };
 
 /**
@@ -279,10 +295,13 @@ export const PHONE_CHAT_READ_CHANNELS: readonly string[] = [
   'changes:list',
   'chat:pending',
   'limits:get',
+  'machine:summary',
   'models:list',
+  'monitor:summary',
   'pr:sessionList',
   'providers:list',
   'session:get',
+  'session:watches',
   'sessions:summaries',
   'settings:get',
   'skills:runnable',
@@ -297,6 +316,8 @@ export const PHONE_READ_CHANNELS: readonly string[] = [
   ...PHONE_GIT_READ_CHANNELS,
   ...PHONE_FILES_READ_CHANNELS,
   ...PHONE_TERMINAL_READ_CHANNELS,
+  // SK-2: a step-up challenge; the daemon's gate answers it itself (step-up.ts).
+  STEP_UP_CHALLENGE.channel,
 ];
 /**
  * Change level without a proof per call (2026-10-22): everything that makes
@@ -308,7 +329,18 @@ export const PHONE_READ_CHANNELS: readonly string[] = [
  * list. Raising a chat's mode is the exception that needs a proof
  * (`PHONE_MODE_PROOF`).
  */
+/**
+ * SK-3 safety exits: sign this phone out, stop remote access on the computer,
+ * quit the agent (`app:quit` only when the computer reports `quitFromPhone`).
+ * Agent class (logged), but exempt by name from the Change switch, from the
+ * Read switch and from every proof and step-up: a safety exit must never be
+ * harder than the attack (decision 0018). The daemon's gate answers them.
+ * A test pins this list: growing it is a security decision, not a refactor.
+ */
+export const PHONE_SAFETY_EXIT_CHANNELS: readonly string[] = ['app:quit', 'device:signOut', 'remote:stop'];
+
 export const PHONE_AGENT_CHANNELS: readonly string[] = [
+  ...PHONE_SAFETY_EXIT_CHANNELS,
   'chat:abort',
   'chat:answer',
   'chat:editQueued',
@@ -427,6 +459,7 @@ export function checkPhoneAccess(channel: string, access: PhoneDeviceAccess): vo
   const cls = phoneChannelClass(channel);
   if (cls === null) throw new PhoneAccessError('channel-denied', channel);
   if (cls === 'read' && !access.read) throw new PhoneAccessError('read-off', channel);
+  if (PHONE_SAFETY_EXIT_CHANNELS.includes(channel)) return;
   if ((cls === 'change' || cls === 'agent' || cls === 'token') && !access.change) throw new PhoneAccessError('change-off', channel);
 }
 
@@ -580,7 +613,13 @@ export type PhoneAccessCode =
   | 'token-required'
   | 'token-invalid'
   | 'token-expired'
-  | 'terminal-hidden';
+  | 'terminal-hidden'
+  // SK-1: the step-up a guarded call carries (step-up.ts), and quitting from a phone when the computer did not opt in.
+  | 'step-up-required'
+  | 'step-up-invalid'
+  | 'step-up-stale'
+  | 'step-up-replayed'
+  | 'quit-disabled';
 
 /** Why the computer refused a phone's request. The wire carries `message`. */
 export class PhoneAccessError extends Error {
@@ -705,6 +744,7 @@ export function screenPhoneCall(
   switch (channel) {
     case 'changes:list':
     case 'pr:sessionList':
+    case 'session:watches':
       if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
       if (channel === 'pr:sessionList' && args[1] !== undefined && typeof args[1] !== 'boolean') throw new PhoneAccessError('value-invalid', 'refresh');
       return {};
@@ -859,6 +899,10 @@ export function redactPhoneResult(channel: string, result: unknown): unknown {
       return null;
     case 'pr:sessionList':
       return phonePrsView(result);
+    case 'session:watches':
+      return phoneWatchesView(result);
+    case 'machine:summary':
+      return phoneMachineView(result);
     case 'usage:summary':
       return phoneUsageView(result);
     case 'limits:get':
@@ -1005,6 +1049,12 @@ export async function callFromPhone(
     const settings = await dispatch('settings:get', []);
     if (!isObj(settings) || settings.phoneChanges !== true) throw new PhoneAccessError('turned-off', 'changes:list');
   }
+  if (channel === 'monitor:summary') {
+    // Answered from what the computer already reads for its own Monitors dock; the phone's arguments are ignored.
+    const sources: Record<string, unknown> = {};
+    for (const source of PHONE_MONITOR_SOURCES) sources[source] = await dispatch(source, []);
+    return phoneMonitorView(sources, Date.now());
+  }
   let callArgs = checked ?? args;
   // Only what the computer's own call takes: an id, or nothing.
   if (channel === 'task:runNow' || channel === 'workflow:run') callArgs = [args[0]];
@@ -1048,6 +1098,7 @@ export function phoneAccessPolicy() {
     readChannels: [...PHONE_READ_CHANNELS],
     changeChannels: [...PHONE_CHANGE_CHANNELS],
     agentChannels: [...PHONE_AGENT_CHANNELS],
+    safetyExits: [...PHONE_SAFETY_EXIT_CHANNELS],
     openChannels: [...PHONE_OPEN_CHANNELS],
     tokenChannels: [...PHONE_TOKEN_CHANNELS],
     modeProof: { channels: [...PHONE_MODE_PROOF.channels], rank: [...PHONE_MODE_PROOF.rank], fallback: PHONE_MODE_PROOF.fallback },
@@ -1058,6 +1109,9 @@ export function phoneAccessPolicy() {
     settingsKeys: [...PHONE_SETTINGS_KEYS],
     settingsView: [...PHONE_SETTINGS_VIEW],
     providerView: [...PHONE_PROVIDER_VIEW],
+    watchView: [...PHONE_WATCH_VIEW],
+    machineView: [...PHONE_MACHINE_VIEW],
+    machineResidentView: [...PHONE_MACHINE_RESIDENT_VIEW],
     skillView: [...PHONE_SKILL_VIEW],
     queueKeys: [...PHONE_QUEUE_KEYS],
     sessionOptionKeys: [...PHONE_SESSION_OPTION_KEYS],
@@ -1074,6 +1128,8 @@ export function phoneAccessPolicy() {
     prView: [...PHONE_PR_VIEW],
     limitsView: [...PHONE_LIMITS_VIEW],
     limitWindowView: [...PHONE_LIMIT_WINDOW_VIEW],
+    monitorView: { ...PHONE_MONITOR_VIEW },
+    monitorSources: [...PHONE_MONITOR_SOURCES],
     queueEditKeys: [...PHONE_QUEUE_EDIT_KEYS],
     files: {
       view: { ...PHONE_FILES_VIEW },
@@ -1091,5 +1147,6 @@ export function phoneAccessPolicy() {
       checkView: [...PHONE_CHECK_VIEW],
     },
     maxFrameBytes: PHONE_MAX_FRAME_BYTES,
+    stepUp: stepUpPolicy(),
   };
 }

@@ -50,6 +50,10 @@ final class Prefs {
     var keepTranscripts: Bool { didSet { d.set(keepTranscripts, forKey: "keepTranscripts") } }
     /// Per computer, the last model chosen for a new chat: `providerId::modelId`.
     var lastModel: [String: String] { didSet { d.set(lastModel, forKey: "lastModel") } }
+    /// How the chat list is grouped, sorted and what it shows (the desktop Agents panel's view menu).
+    var chatListView: ChatListView { didSet { d.set(chatListView.encoded, forKey: "chatListView") } }
+    /// Per computer, the project groups' order as dragged on this iPhone (folder ids and `ChatGroup.general`).
+    var groupOrder: [String: [String]] { didSet { d.set(groupOrder, forKey: "groupOrder") } }
 
     init(defaults: UserDefaults = .standard) {
         d = defaults
@@ -70,6 +74,8 @@ final class Prefs {
         dictationHold = flag("dictationHold", false)
         onboarded = flag("onboarded", false)
         lastModel = d.dictionary(forKey: "lastModel") as? [String: String] ?? [:]
+        chatListView = ChatListView.parse(d.data(forKey: "chatListView"))
+        groupOrder = d.dictionary(forKey: "groupOrder") as? [String: [String]] ?? [:]
         // On unless the user turned them off: an install that never touched a switch has nothing stored.
         func choice(_ k: String) -> Bool? { defaults.object(forKey: k) == nil ? nil : defaults.bool(forKey: k) }
         keepChatList = OfflineSetting.isOn(stored: choice("keepChatList"))

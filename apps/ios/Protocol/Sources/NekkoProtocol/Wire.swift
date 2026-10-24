@@ -12,6 +12,12 @@ public enum Channels {
     public static let sessionsSummaries = "sessions:summaries"
     public static let sessionCreate = "session:create"
     public static let sessionGet = "session:get"
+    /// A chat's durable watches: what each watches, when it wakes and how that went (never the continuation prompt).
+    public static let sessionWatches = "session:watches"
+    /// A computer's page in one read: version, hardware, live stats, the model server (`PHONE_MACHINE_VIEW`).
+    public static let machineSummary = "machine:summary"
+    /// The Monitors pane's one read (`PHONE_MONITOR_VIEW`), added on the computer in #989.
+    public static let monitorSummary = "monitor:summary"
     public static let sessionSetOptions = "session:setOptions"
     public static let sessionDelete = "session:delete"
     public static let voiceStatus = "voice:status"
@@ -25,6 +31,12 @@ public enum Channels {
     public static let toolApprove = "tool:approve"
     public static let workspaceList = "workspace:list"
     public static let appInfo = "app:info"
+    /// SK-2: a single-use step-up challenge (read class).
+    public static let securityChallenge = "security:challenge"
+    /// SK-3 safety exits (agent class, never refused for Change off).
+    public static let appQuit = "app:quit"
+    public static let deviceSignOut = "device:signOut"
+    public static let remoteStop = "remote:stop"
     /// Names and descriptions only, never templates.
     public static let skillsRunnable = "skills:runnable"
     /// What the agent changed in a chat, as a capped read-only diff (`PhoneChanges`);
@@ -94,7 +106,7 @@ public enum Channels {
         sessionSetOptions, sessionDelete, voiceStatus, voiceTranscribe, chatSend, chatAbort, chatQueue,
         chatPending, chatAnswer, toolApprove, workspaceList, appInfo, skillsRunnable, changesList,
         chatEditQueued, sessionFork, tasksList, taskRunNow, workflowsList, workflowRun, prSessionList,
-        usageSummary, limitsGet,
+        usageSummary, limitsGet, sessionWatches, machineSummary, monitorSummary, securityChallenge, appQuit, deviceSignOut, remoteStop,
         workspaceGitStatus, gitDiff, gitLog, gitShow, gitBranches, gitCompare, prChecks, prDiff,
         gitStage, gitUnstage, gitCommit, gitCommitMessage, gitPush, gitSwitch, gitMergeAbort, prCreate, prAction,
         filesList, filesSearch, filesRead, filesWrite, logsList, logsRead,
@@ -114,6 +126,110 @@ public enum Events {
 public let autoModelId = "__auto__"
 
 // MARK: - Models
+
+/// One durable `agent_watch` of a chat as the computer reports it
+/// (`PHONE_WATCH_VIEW`): joined to the arming call by `id`.
+public struct AgentWatch: Equatable, Sendable, Identifiable {
+    public enum Kind: String, Sendable { case timer, pr }
+    public enum Status: String, Sendable { case active, done, cancelled, error }
+    public let id: String
+    public let kind: Kind
+    public let url: String?
+    public let status: Status
+    /// Timer: when it wakes. PR: the latest it waits before waking anyway. Milliseconds since the epoch.
+    public let deadlineAt: Int64
+    /// A wake-up is due but the chat has not been continued yet (busy or failing).
+    public let pending: Bool
+    public let failures: Int
+    public let lastError: String?
+
+    public init(id: String, kind: Kind, url: String? = nil, status: Status, deadlineAt: Int64, pending: Bool = false, failures: Int = 0, lastError: String? = nil) {
+        self.id = id
+        self.kind = kind
+        self.url = url
+        self.status = status
+        self.deadlineAt = deadlineAt
+        self.pending = pending
+        self.failures = failures
+        self.lastError = lastError
+    }
+
+    public static func list(_ v: JSONValue?) -> [AgentWatch] {
+        (v?.array ?? []).compactMap { w in
+            guard let id = w.str("id"), let kind = w.str("kind").flatMap(Kind.init(rawValue:)),
+                  let status = w.str("status").flatMap(Status.init(rawValue:)), let deadline = w.long("deadlineAt") else { return nil }
+            return AgentWatch(id: id, kind: kind, url: w.str("url"), status: status, deadlineAt: deadline, pending: w.flag("pending"),
+                              failures: Int(w.long("failures") ?? 0), lastError: w.str("lastError"))
+        }
+    }
+}
+
+/// What a computer says about itself for its page (`machine:summary`): the
+/// daemon builds it without paths or addresses, and the phone shows it as is.
+public struct MachineSummary: Equatable, Sendable {
+    public struct Gpu: Equatable, Sendable, Identifiable {
+        public let name: String
+        public let vramBytes: Double?
+        public let cores: Int?
+        public var id: String { name }
+    }
+    public struct ResidentModel: Equatable, Sendable, Identifiable {
+        public let id: String
+        public let name: String
+        public let contextTokens: Int?
+    }
+
+    public let version: String?
+    public let platform: String?
+    public let edition: String?
+    public let uptimeMs: Int64
+    public let arch: String?
+    public let release: String?
+    public let cpuModel: String?
+    public let cpuCores: Int?
+    public let ramBytes: Double?
+    public let unified: Bool
+    public let gpus: [Gpu]
+    public let backends: [String]
+    public let engineBackend: String?
+    public let engineVersion: String?
+    public let diskFreeBytes: Double?
+    public let cpuPct: Double?
+    public let memUsedMB: Double?
+    public let memTotalMB: Double?
+    public let cpuC: Double?
+    public let gpuC: Double?
+    public let gpuUsedMB: Double?
+    public let gpuTotalMB: Double?
+    public let serverRunning: Bool
+    public let serverStartedAt: Int64?
+    public let resident: [ResidentModel]
+    public let loading: Int
+
+    public static func from(_ v: JSONValue?) -> MachineSummary? {
+        guard let v, v.object != nil else { return nil }
+        let hw = v["hardware"], live = v["live"], gpu = v["gpu"], engine = v["engine"]
+        let gpus: [Gpu] = (hw?["gpus"]?.array ?? []).compactMap { g in
+            g.str("name").map { Gpu(name: $0, vramBytes: g.dbl("vramBytes"), cores: g.long("cores").map(Int.init)) }
+        }
+        let resident: [ResidentModel] = (engine?["resident"]?.array ?? []).compactMap { m in
+            m.str("id").map { ResidentModel(id: $0, name: m.str("name") ?? $0, contextTokens: m.long("contextTokens").map(Int.init)) }
+        }
+        // The hottest GPU the profile reports, else the system sensor.
+        let gpuC = (gpu?["devices"]?.array ?? []).compactMap { $0.dbl("temperatureC") }.max() ?? live?["temps"]?.dbl("gpuC")
+        return MachineSummary(
+            version: v.str("version"), platform: v.str("platform"), edition: v.str("edition"), uptimeMs: v.long("uptimeMs") ?? 0,
+            arch: hw?.str("arch"), release: hw?.str("release"), cpuModel: hw?["cpu"]?.str("model") ?? live?.str("cpuModel"),
+            cpuCores: (hw?["cpu"]?.long("cores") ?? live?.long("cpuCores")).map(Int.init), ramBytes: hw?.dbl("ramBytes"),
+            unified: (hw?.flag("unified") ?? false) || (gpu?.flag("unified") ?? false), gpus: gpus,
+            backends: (hw?["backends"]?.array ?? []).compactMap(\.string),
+            engineBackend: hw?["engine"]?.str("backend"), engineVersion: hw?["engine"]?.str("version"), diskFreeBytes: hw?.dbl("diskFreeBytes"),
+            cpuPct: live?.dbl("cpuPct"), memUsedMB: live?.dbl("memUsedMB"), memTotalMB: live?.dbl("memTotalMB"),
+            cpuC: live?["temps"]?.dbl("cpuC"), gpuC: gpuC, gpuUsedMB: gpu?.dbl("usedMB"), gpuTotalMB: gpu?.dbl("totalMB"),
+            serverRunning: engine?.flag("running") ?? false, serverStartedAt: engine?.long("startedAt"), resident: resident,
+            loading: Int(engine?.long("loading") ?? 0))
+    }
+}
 
 public struct ToolCall: Equatable, Sendable {
     public let id: String
@@ -261,6 +377,11 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
             parentSessionId: v.str("parentSessionId"), taskId: v.str("taskId"), trainingRunId: v.str("trainingRunId"),
             providerId: v.str("providerId"), workspaceId: v.str("workspaceId"), archivedAt: archivedAt,
             order: v.dbl("order"), pinned: v.flag("pinned"))
+    }
+
+    /// Every chat the computer listed, children and task chats included, as sent.
+    public static func list(_ list: JSONValue?) -> [SessionSummary] {
+        (list?.array ?? []).compactMap(from)
     }
 
     /// Every top-level chat, completed ones included, newest first.

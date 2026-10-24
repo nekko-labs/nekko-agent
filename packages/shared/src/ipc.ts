@@ -108,10 +108,14 @@ export const IpcChannels = {
 
   machineReadiness: 'machine:readiness',
   machineProfile: 'machine:profile',
+  /** One phone-safe read for a computer's page: version, hardware, live stats, the model server (2026-10-24). */
+  machineSummary: 'machine:summary',
   machineRecommendations: 'machine:recommendations',
   machineDismissNudge: 'machine:dismissNudge',
   gpuStats: 'gpu:stats',
   systemStats: 'system:stats',
+  /** The phone's Monitors pane (FD-1): answered by the phone gate from the other monitor, chat and automation reads. */
+  monitorSummary: 'monitor:summary',
 
   sessionsList: 'sessions:list',
   sessionNextWatch: 'session:nextWatch',
@@ -350,6 +354,12 @@ export const IpcChannels = {
   networkVisibilityStop: 'networkVisibility:stop',
 
   appInfo: 'app:info',
+  /** SK-2: a single-use step-up challenge; from a phone the daemon's gate answers it (step-up.ts). */
+  securityChallenge: 'security:challenge',
+  /** SK-3 safety exits, phone only: the daemon's phone gate answers them (phone-access.ts). */
+  appQuit: 'app:quit',
+  deviceSignOut: 'device:signOut',
+  remoteStop: 'remote:stop',
   // The Claude policy nekkod enforces, and why a feature is off (claude-policy.ts).
   claudePolicy: 'claude:policy',
   claudeCapability: 'claude:capability',

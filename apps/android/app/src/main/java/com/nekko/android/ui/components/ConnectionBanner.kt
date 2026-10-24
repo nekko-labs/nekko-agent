@@ -38,10 +38,10 @@ import com.nekko.protocol.RelayState
 /**
  * What a refused phone should do. REVOKED names the steps on the computer: a
  * fresh QR re-admits a removed phone; a computer from before that change only
- * lets it back after Rotate secret, so that is the fallback.
+ * lets it back after Sign out all phones (formerly Rotate secret), so that is the fallback.
  */
 fun deniedCopy(reason: DenyReason?): String = when (reason) {
-    DenyReason.REVOKED -> "This phone was removed on your computer. There: Settings → Remote access → Pair a device, then scan the new QR here. If it still refuses, use Rotate secret there first."
+    DenyReason.REVOKED -> "This phone was removed on your computer. There: Settings → Remote access → Pair a device, then scan the new QR here. If it still refuses, use Sign out all phones there first."
     DenyReason.BAD_CODE -> "That pairing code expired or was already used. Scan a fresh QR."
     DenyReason.UNKNOWN_DEVICE -> "Your computer doesn’t know this phone yet. Scan a pairing QR."
     DenyReason.KICKED -> "Your computer disconnected this phone. Pair it again."
