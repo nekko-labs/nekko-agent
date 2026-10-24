@@ -189,7 +189,7 @@ fn the_relay_agent_sends_the_same_frames() {
             for out in outs {
                 match out {
                     Out::Send(f) => sent.push(f),
-                    Out::Dispatch { cid, id, device_id, channel, args, proof } => {
+                    Out::Dispatch { cid, id, device_id, channel, args, proof, .. } => {
                         // As the daemon runs it: through the phone gate, then the host.
                         let seen = Arc::new(Mutex::new(Vec::new()));
                         let (record, responses) = (seen.clone(), responses.clone());
@@ -207,7 +207,7 @@ fn the_relay_agent_sends_the_same_frames() {
                             Box::pin(std::future::ready(result))
                         });
                         let gated = nekko_remote::phone::gate(host, Arc::new(AllOn));
-                        let result = rt.block_on(gated(PhoneCall { device_id, proof }, channel, args));
+                        let result = rt.block_on(gated(PhoneCall { device_id, proof, step_up: None }, channel, args));
                         calls.extend(seen.lock().unwrap().drain(..));
                         sent.push(core.reply(&cid, id, result));
                     }
@@ -568,4 +568,36 @@ fn the_relay_handshake_matches_the_phones() {
 
 fn getrandom_fill(buf: &mut [u8]) {
     (hello::os_random())(buf)
+}
+
+/// SK-2: the step-up verifier decides every case the TS twin wrote
+/// (`packages/shared/src/step-up.golden.test.ts`): real ES256 assertions from
+/// a software authenticator, TOTP codes and their rate limit.
+#[test]
+fn step_up_matches_the_ts_verifier() {
+    use nekko_remote::step_up::{self, Issued};
+    let g = golden("step-up.json");
+    let cases = g["cases"].as_array().unwrap();
+    assert!(cases.len() > 20);
+    for c in cases {
+        let name = c["name"].as_str().unwrap();
+        let mut state = c["state"].clone();
+        let mut issued: Vec<Issued> = c["issued"].as_array().unwrap().iter().map(|v| Issued::of(v).unwrap()).collect();
+        let out = step_up::check(&mut state, &mut issued, c["now"].as_f64().unwrap(), Some(&c["stepUp"]));
+        let e = &c["expect"];
+        assert_eq!(out.result, e["result"].as_str().unwrap(), "{name}");
+        assert_eq!(out.method, e["method"].as_str(), "{name}");
+        assert_eq!(out.uv, e["uv"].as_bool(), "{name}");
+        assert_eq!(out.cloned.as_deref(), e["cloned"].as_str(), "{name}");
+        assert_eq!(state, e["state"], "{name}: security.json after");
+        assert_eq!(Value::Array(issued.iter().map(Issued::value).collect()), e["issued"], "{name}: challenges after");
+    }
+    for v in g["totpVectors"].as_array().unwrap() {
+        let secret = step_up::base32_decode(v["secret"].as_str().unwrap()).unwrap();
+        assert_eq!(step_up::totp_at(&secret, v["step"].as_i64().unwrap(), 6), v["code"].as_str().unwrap());
+    }
+    let r = &g["recovery"];
+    for (code, hash) in r["codes"].as_array().unwrap().iter().zip(r["hashes"].as_array().unwrap()) {
+        assert_eq!(step_up::hash_recovery_code(code.as_str().unwrap()), hash.as_str().unwrap());
+    }
 }

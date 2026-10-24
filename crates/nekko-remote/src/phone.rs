@@ -84,6 +84,8 @@ pub struct Policy {
     pub files: crate::phone_files::FilesPolicy,
     /// Git from a phone (IO-33 FA-2): limits, option keys and views (phone_git.rs).
     pub git: crate::phone_git::GitPolicy,
+    /// `stepUpPolicy()` (SK-2; step_up.rs).
+    pub step_up: crate::step_up::Limits,
 }
 
 fn strings(v: &Value) -> Vec<String> {
@@ -139,6 +141,7 @@ pub fn policy() -> &'static Policy {
             terminal: crate::phone_terminal::Limits::from_policy(&v),
             files: crate::phone_files::FilesPolicy::from_policy(&v["files"]),
             git: crate::phone_git::GitPolicy::from_policy(&v["git"]),
+            step_up: crate::step_up::Limits::from_policy(&v["stepUp"]),
         }
     })
 }
@@ -862,6 +865,14 @@ pub(crate) struct Gate {
     seen: Mutex<Seen>,
     /// Phones attached to terminals and their tokens, shared with the relay agent (FA-3).
     pub(crate) terminals: Arc<crate::phone_terminal::PhoneTerminals>,
+    /// `security.json` (SK-2): `None`, or no file, is step-up off, as before it existed.
+    security: Option<Arc<dyn crate::step_up::SecurityStore>>,
+    /// Each device's step-up challenges (single use, two minutes). Memory
+    /// only: a restart forgets them, so a phone fetches a new one.
+    challenges: Mutex<HashMap<String, Vec<crate::step_up::Issued>>>,
+    /// When each device last answered a step-up: one covers its guarded
+    /// actions for `coverMs`, as one Face ID covers the Change signer's window.
+    covered: Mutex<HashMap<String, f64>>,
 }
 
 impl Gate {
@@ -893,6 +904,9 @@ impl Gate {
                 if !device.map_err(|d| d.to_string())?.access.read {
                     return Err(denied("read-off", channel).to_string());
                 }
+                if channel == policy().step_up.challenge_channel {
+                    return Ok(self.challenge(&who));
+                }
                 call(&self.run, channel, args).await
             }
             Class::Change => {
@@ -921,9 +935,65 @@ impl Gate {
             if who.proof.is_none() {
                 return Err(denied("proof-required", channel));
             }
-            return self.check_change(who, channel, args);
+            // The Change proof first, so an unregistered or revoked phone never reaches the authenticator check.
+            self.check_change(who, channel, args)?;
+            return self.check_step_up(who, channel);
         }
         Ok(())
+    }
+
+    /// The step-up a guarded call needs when `security.json` has it on
+    /// (SK-2): a valid answer to a challenge this device fetched, or one in
+    /// the last `coverMs`. Fails closed: a state that can't be saved after a
+    /// check refuses the call.
+    fn check_step_up(&self, who: &PhoneCall, channel: &str) -> Result<(), Denied> {
+        let Some(store) = &self.security else { return Ok(()) };
+        let Some(mut state) = store.load() else { return Ok(()) };
+        if !crate::step_up::enabled(&state) {
+            return Ok(());
+        }
+        let limits = &policy().step_up;
+        let now = self.devices.now();
+        let mut covered = self.covered.lock().unwrap_or_else(|e| e.into_inner());
+        if who.step_up.is_none() {
+            let fresh = covered.get(&who.device_id).is_some_and(|at| now - at < limits.cover_ms);
+            return if fresh { Ok(()) } else { Err(denied("step-up-required", channel)) };
+        }
+        let mut book = self.challenges.lock().unwrap_or_else(|e| e.into_inner());
+        let list = book.entry(who.device_id.clone()).or_default();
+        let out = crate::step_up::check(&mut state, list, now, who.step_up.as_ref());
+        if store.save(&state).is_err() {
+            return Err(denied("step-up-invalid", channel));
+        }
+        if !out.ok() {
+            return Err(denied(out.result, channel));
+        }
+        covered.insert(who.device_id.clone(), now);
+        Ok(())
+    }
+
+    /// `security:challenge` (read class): a fresh single-use challenge for
+    /// this device, whether a step-up is needed, and the kinds of method
+    /// registered, never their ids or names.
+    fn challenge(&self, who: &PhoneCall) -> Value {
+        let limits = &policy().step_up;
+        let now = self.devices.now();
+        let state = self.security.as_ref().and_then(|s| s.load()).unwrap_or(Value::Null);
+        let challenge = crate::step_up::new_challenge(limits.challenge_bytes);
+        let mut book = self.challenges.lock().unwrap_or_else(|e| e.into_inner());
+        let list = book.entry(who.device_id.clone()).or_default();
+        // Keep a spent or expired one a while, so a late or repeated answer is named (stale, replayed).
+        list.retain(|x| now - x.issued_at <= 2.0 * limits.challenge_ttl_ms);
+        if list.len() >= 16 {
+            list.remove(0);
+        }
+        list.push(crate::step_up::Issued { challenge: challenge.clone(), issued_at: now, used: false });
+        json!({
+            "challenge": challenge,
+            "expiresAt": crate::hello::nekko_num(now + limits.challenge_ttl_ms),
+            "required": crate::step_up::enabled(&state),
+            "methods": crate::step_up::method_kinds(&state),
+        })
     }
 
     /// Whether a phone's call raises a chat's mode (`PHONE_MODE_PROOF`):
@@ -1078,6 +1148,17 @@ pub fn gate_full(
     classes: Classes,
     terminals: Arc<crate::phone_terminal::PhoneTerminals>,
 ) -> PhoneDispatcher {
+    gate_secured(run, devices, classes, terminals, None)
+}
+
+/// `gate_full` reading step-up state from `security` (SK-2): what the daemon runs.
+pub fn gate_secured(
+    run: Dispatcher,
+    devices: Arc<dyn Devices>,
+    classes: Classes,
+    terminals: Arc<crate::phone_terminal::PhoneTerminals>,
+    security: Option<Arc<dyn crate::step_up::SecurityStore>>,
+) -> PhoneDispatcher {
     let detach = run.clone();
     terminals.on_device_gone(Arc::new(move |device: String| {
         // The computer forgets the phone as a viewer of every terminal.
@@ -1088,7 +1169,16 @@ pub fn gate_full(
             });
         }
     }));
-    let gate = Arc::new(Gate { run, devices, classes, seen: Mutex::default(), terminals });
+    let gate = Arc::new(Gate {
+        run,
+        devices,
+        classes,
+        seen: Mutex::default(),
+        terminals,
+        security,
+        challenges: Mutex::default(),
+        covered: Mutex::default(),
+    });
     Arc::new(move |who: PhoneCall, channel: String, args: Value| {
         let gate = gate.clone();
         Box::pin(async move { gate.call(who, channel, args).await })
@@ -1172,7 +1262,7 @@ mod tests {
 
     fn run(calls: &Arc<Mutex<Vec<(String, Value)>>>, channel: &str, args: Value) -> Result<Value, String> {
         let gated = gate(host(calls.clone(), secrets()), paired());
-        let who = PhoneCall { device_id: "phone-1".into(), proof: None };
+        let who = PhoneCall { device_id: "phone-1".into(), proof: None, step_up: None };
         tokio::runtime::Builder::new_current_thread().build().unwrap().block_on(gated(who, channel.to_string(), args))
     }
 
@@ -1257,7 +1347,7 @@ mod tests {
 
         impl Rig {
             fn ask(&self, channel: &str, args: Value, proof: Option<Value>) -> Result<Value, String> {
-                let who = PhoneCall { device_id: "phone-1".into(), proof };
+                let who = PhoneCall { device_id: "phone-1".into(), proof, step_up: None };
                 self.rt.block_on((self.gated)(who, channel.to_string(), args))
             }
             fn log(&self) -> Vec<(bool, Option<String>)> {
@@ -1381,7 +1471,7 @@ mod tests {
             let gated = gate_with(host(calls.clone(), secrets()), devices.clone(), classes);
             let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
             for c in ["file:read", "file:write"] {
-                let who = PhoneCall { device_id: "phone-1".into(), proof: None };
+                let who = PhoneCall { device_id: "phone-1".into(), proof: None, step_up: None };
                 assert_eq!(rt.block_on(gated(who, c.into(), json!([]))), refused("channel-denied", c));
             }
             assert!(calls.lock().unwrap().is_empty());
@@ -1447,7 +1537,7 @@ mod tests {
             let gated = gate(host(calls.clone(), secrets()), devices.clone());
             let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
             let ask = |channel: &str, args: Value, proof: Option<Value>| {
-                let who = PhoneCall { device_id: "phone-1".into(), proof };
+                let who = PhoneCall { device_id: "phone-1".into(), proof, step_up: None };
                 rt.block_on(gated(who, channel.to_string(), args))
             };
             // Read is off: a diff is refused before the computer runs anything.
@@ -1493,7 +1583,7 @@ mod tests {
             let gated = gate(host(calls.clone(), secrets()), devices.clone());
             let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
             let ask = |channel: &str, args: Value, proof: Option<Value>| {
-                let who = PhoneCall { device_id: "phone-1".into(), proof };
+                let who = PhoneCall { device_id: "phone-1".into(), proof, step_up: None };
                 rt.block_on(gated(who, channel.to_string(), args))
             };
             let set = |read: bool, change: bool| {
@@ -1536,6 +1626,16 @@ mod tests {
 
         /// The policy's own classes, a session `s1` in `mode` and the computer's default `default`.
         fn policy_rig(access: DeviceAccess, key: Option<&SigningKey>, mode: Option<&str>, default: &str) -> Rig {
+            policy_rig_with(access, key, mode, default, None)
+        }
+
+        fn policy_rig_with(
+            access: DeviceAccess,
+            key: Option<&SigningKey>,
+            mode: Option<&str>,
+            default: &str,
+            security: Option<Arc<dyn crate::step_up::SecurityStore>>,
+        ) -> Rig {
             let devices = Arc::new(MemDevices::default());
             *devices.now.lock().unwrap() = NOW;
             devices.devices.lock().unwrap().insert("phone-1".into(), PhoneDevice { access, key: key.map(public) });
@@ -1553,7 +1653,8 @@ mod tests {
                 };
                 Box::pin(std::future::ready(Ok(out)))
             });
-            let gated = gate(host, devices.clone());
+            let terminals = crate::phone_terminal::PhoneTerminals::new();
+            let gated = gate_secured(host, devices.clone(), Classes::from_policy(), terminals, security);
             let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
             Rig { devices, calls, gated, rt }
         }
@@ -1586,7 +1687,7 @@ mod tests {
             let gated = gate_with(host(calls.clone(), secrets()), devices, Classes::default());
             let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
             for c in ["chat:send", "sessions:summaries", "app:info", "settings:update"] {
-                let who = PhoneCall { device_id: "phone-1".into(), proof: None };
+                let who = PhoneCall { device_id: "phone-1".into(), proof: None, step_up: None };
                 assert_eq!(rt.block_on(gated(who, c.into(), json!([{}]))), refused("channel-denied", c));
             }
             assert!(calls.lock().unwrap().is_empty());
@@ -1654,6 +1755,240 @@ mod tests {
                 r.ask("session:setOptions", json!(["s1", { "mode": "turbo" }]), None),
                 Err("Not allowed from a paired phone (value-invalid): mode".into())
             );
+        }
+
+        /// SK-2: step-up on a mode raise, after the Change proof.
+        mod step_up {
+            use super::*;
+            use sha2::{Digest, Sha256};
+
+            const ORIGIN: &str = "nekko-app://desktop";
+            const RP: &str = "nekko-computer:test";
+
+            #[derive(Default)]
+            struct MemSecurity {
+                state: Mutex<Option<Value>>,
+                broken: Mutex<bool>,
+            }
+
+            impl crate::step_up::SecurityStore for MemSecurity {
+                fn load(&self) -> Option<Value> {
+                    self.state.lock().unwrap().clone()
+                }
+                fn save(&self, state: &Value) -> Result<(), String> {
+                    if *self.broken.lock().unwrap() {
+                        return Err("disk full".into());
+                    }
+                    *self.state.lock().unwrap() = Some(state.clone());
+                    Ok(())
+                }
+            }
+
+            fn der(sig: &Signature) -> Vec<u8> {
+                let raw = sig.to_bytes();
+                let int = |b: &[u8]| {
+                    let b = &b[b.iter().position(|x| *x != 0).unwrap_or(31)..];
+                    let mut v = vec![0x02];
+                    if b[0] & 0x80 != 0 {
+                        v.extend([b.len() as u8 + 1, 0]);
+                    } else {
+                        v.push(b.len() as u8);
+                    }
+                    v.extend_from_slice(b);
+                    v
+                };
+                let body = [int(&raw[..32]), int(&raw[32..])].concat();
+                [vec![0x30, body.len() as u8], body].concat()
+            }
+
+            /// A software FIDO2 authenticator's answer to `challenge`.
+            fn assert_with(k: &SigningKey, challenge: &str, counter: u32) -> Value {
+                let mut auth = Sha256::digest(RP.as_bytes()).to_vec();
+                auth.push(0x05);
+                auth.extend(counter.to_be_bytes());
+                let cdj = json!({ "type": "webauthn.get", "challenge": challenge, "origin": ORIGIN }).to_string();
+                let mut msg = auth.clone();
+                msg.extend(Sha256::digest(cdj.as_bytes()));
+                let sig: Signature = k.sign(&msg);
+                let u = crate::step_up::to_b64url;
+                json!({
+                    "credentialId": u(&[1; 16]),
+                    "authenticatorData": u(&auth),
+                    "clientDataJSON": u(cdj.as_bytes()),
+                    "signature": u(&der(&sig)),
+                })
+            }
+
+            fn state(enabled: bool, key: &SigningKey) -> Value {
+                json!({
+                    "version": 1, "enabled": enabled, "rpId": RP, "origins": [ORIGIN],
+                    "credentials": [{ "id": crate::step_up::to_b64url(&[1; 16]), "publicKey": public(key), "counter": 0,
+                        "name": "YubiKey", "kind": "security-key", "addedAt": 1 }],
+                    "totp": { "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", "addedAt": 1 },
+                    "recoveryHashes": ["00"],
+                })
+            }
+
+            struct Sk {
+                r: Rig,
+                change: SigningKey,
+                fido: SigningKey,
+                store: Arc<MemSecurity>,
+            }
+
+            fn sk(enabled: bool) -> Sk {
+                let (change, fido) = (signer(21), signer(22));
+                let store = Arc::new(MemSecurity::default());
+                *store.state.lock().unwrap() = Some(state(enabled, &fido));
+                let r = policy_rig_with(ON, Some(&change), None, "guardrails", Some(store.clone()));
+                Sk { r, change, fido, store }
+            }
+
+            const YOLO: &str = "session:setOptions";
+
+            impl Sk {
+                fn raise(&self, step_up: Option<Value>) -> Result<Value, String> {
+                    let args = json!(["s1", { "mode": "yolo" }]);
+                    let now = *self.r.devices.now.lock().unwrap();
+                    // A fresh Change proof each time, so only the step-up decides.
+                    let ts = now as i64 + self.r.devices.log.lock().unwrap().len() as i64;
+                    let p = proof(&self.change, "phone-1", YOLO, &args, ts);
+                    let who = PhoneCall { device_id: "phone-1".into(), proof: Some(p), step_up };
+                    self.r.rt.block_on((self.r.gated)(who, YOLO.to_string(), args))
+                }
+                fn challenge(&self) -> Value {
+                    self.r.ask("security:challenge", json!([]), None).unwrap()
+                }
+                fn later(&self, ms: f64) {
+                    *self.r.devices.now.lock().unwrap() += ms;
+                }
+            }
+
+            #[test]
+            fn off_or_missing_needs_no_step_up() {
+                let s = sk(false);
+                assert!(s.raise(None).is_ok());
+                let r = policy_rig(ON, Some(&s.change), None, "guardrails");
+                let args = json!(["s1", { "mode": "yolo" }]);
+                assert!(r.ask(YOLO, args.clone(), Some(proof(&s.change, "phone-1", YOLO, &args, NOW as i64))).is_ok());
+            }
+
+            #[test]
+            fn a_raise_needs_a_valid_step_up_and_one_covers_five_minutes() {
+                let s = sk(true);
+                assert_eq!(s.raise(None), refused("step-up-required", YOLO));
+                assert_eq!(ran(&s.r, YOLO), 0);
+                let c = s.challenge();
+                assert_eq!(c["required"], json!(true));
+                assert_eq!(c["methods"], json!(["security-key", "totp"]));
+                assert_eq!(c["expiresAt"].as_f64(), Some(NOW + 120_000.0));
+                assert_eq!(c.as_object().unwrap().len(), 4, "a phone learns nothing else: {c}");
+                let a = assert_with(&s.fido, c["challenge"].as_str().unwrap(), 1);
+                assert!(s.raise(Some(a.clone())).is_ok());
+                assert_eq!(ran(&s.r, YOLO), 1);
+                let saved = s.store.state.lock().unwrap().clone().unwrap();
+                assert_eq!(saved["credentials"][0]["counter"], json!(1));
+                assert_eq!(saved["credentials"][0]["lastUsedAt"].as_f64(), Some(NOW));
+                // The same assertion again is a replay, even inside the window.
+                assert_eq!(s.raise(Some(a)), refused("step-up-replayed", YOLO));
+                // Inside five minutes no new step-up is asked for; after, it is.
+                s.later(4.0 * 60_000.0);
+                assert!(s.raise(None).is_ok());
+                s.later(61_000.0);
+                assert_eq!(s.raise(None), refused("step-up-required", YOLO));
+                let log: Vec<_> = s.r.log().into_iter().map(|(_, why)| why).collect();
+                let want = [Some("step-up-required"), None, Some("step-up-replayed"), None, Some("step-up-required")];
+                assert_eq!(log, want.map(|w| w.map(String::from)));
+            }
+
+            #[test]
+            fn wrong_stale_and_foreign_answers_are_refused() {
+                let s = sk(true);
+                let never = crate::step_up::to_b64url(&[9; 18]);
+                assert_eq!(s.raise(Some(assert_with(&s.fido, &never, 1))), refused("step-up-invalid", YOLO));
+                let c = s.challenge();
+                s.later(120_001.0);
+                let a = assert_with(&s.fido, c["challenge"].as_str().unwrap(), 1);
+                assert_eq!(s.raise(Some(a)), refused("step-up-stale", YOLO));
+                // Signed by a key that is not the registered credential.
+                let c = s.challenge();
+                assert_eq!(
+                    s.raise(Some(assert_with(&signer(23), c["challenge"].as_str().unwrap(), 1))),
+                    refused("step-up-invalid", YOLO)
+                );
+                // Another device's challenge is not this one's.
+                let other = PhoneCall { device_id: "phone-2".into(), proof: None, step_up: None };
+                s.r.devices.devices.lock().unwrap().insert("phone-2".into(), PhoneDevice { access: ON, key: None });
+                let theirs = s.r.rt.block_on((s.r.gated)(other, "security:challenge".into(), json!([]))).unwrap();
+                let a = assert_with(&s.fido, theirs["challenge"].as_str().unwrap(), 1);
+                assert_eq!(s.raise(Some(a)), refused("step-up-invalid", YOLO));
+                assert_eq!(ran(&s.r, YOLO), 0);
+            }
+
+            #[test]
+            fn a_counter_that_does_not_rise_flags_the_key() {
+                let s = sk(true);
+                let c = s.challenge();
+                assert!(s.raise(Some(assert_with(&s.fido, c["challenge"].as_str().unwrap(), 7))).is_ok());
+                s.later(6.0 * 60_000.0);
+                let c = s.challenge();
+                assert_eq!(
+                    s.raise(Some(assert_with(&s.fido, c["challenge"].as_str().unwrap(), 7))),
+                    refused("step-up-invalid", YOLO)
+                );
+                assert_eq!(s.store.state.lock().unwrap().clone().unwrap()["credentials"][0]["cloned"], json!(true));
+            }
+
+            #[test]
+            fn a_totp_code_answers_too() {
+                let s = sk(true);
+                let secret = crate::step_up::base32_decode("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ").unwrap();
+                let code = crate::step_up::totp_at(&secret, crate::step_up::totp_step(NOW, 30.0), 6);
+                assert!(s.raise(Some(json!({ "totp": code }))).is_ok());
+                // A step-up that is sent is checked even inside the window: the same code again is a replay.
+                assert_eq!(s.raise(Some(json!({ "totp": code }))), refused("step-up-replayed", YOLO));
+            }
+
+            #[test]
+            fn the_change_proof_is_checked_first() {
+                let s = sk(true);
+                let c = s.challenge();
+                let a = assert_with(&s.fido, c["challenge"].as_str().unwrap(), 1);
+                let args = json!(["s1", { "mode": "yolo" }]);
+                let who = PhoneCall { device_id: "phone-1".into(), proof: None, step_up: Some(a.clone()) };
+                let out = s.r.rt.block_on((s.r.gated)(who, YOLO.into(), args.clone()));
+                assert_eq!(out, refused("proof-required", YOLO));
+                s.r.devices.devices.lock().unwrap().get_mut("phone-1").unwrap().access.change = false;
+                assert_eq!(s.raise(Some(a.clone())), refused("change-off", YOLO));
+                // The challenge was never spent by those refusals.
+                s.r.devices.devices.lock().unwrap().get_mut("phone-1").unwrap().access.change = true;
+                assert!(s.raise(Some(a)).is_ok());
+            }
+
+            #[test]
+            fn other_calls_and_lowering_never_ask() {
+                let s = sk(true);
+                assert!(s.r.ask(YOLO, json!(["s1", { "mode": "ask" }]), None).is_ok());
+                assert!(s.r.ask(YOLO, json!(["s1", { "mode": "guardrails" }]), None).is_ok());
+                assert_eq!(ran(&s.r, YOLO), 2);
+            }
+
+            #[test]
+            fn a_state_that_cannot_be_saved_refuses() {
+                let s = sk(true);
+                let c = s.challenge();
+                *s.store.broken.lock().unwrap() = true;
+                let a = assert_with(&s.fido, c["challenge"].as_str().unwrap(), 1);
+                assert_eq!(s.raise(Some(a)), refused("step-up-invalid", YOLO));
+                assert_eq!(ran(&s.r, YOLO), 0);
+            }
+
+            #[test]
+            fn on_with_no_methods_refuses_every_raise() {
+                let s = sk(true);
+                *s.store.state.lock().unwrap() = Some(json!({ "enabled": true }));
+                assert_eq!(s.raise(Some(json!({ "totp": "123456" }))), refused("step-up-invalid", YOLO));
+            }
         }
 
         #[test]
