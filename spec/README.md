@@ -155,6 +155,7 @@ Workflows, goals, integrations and tools.
 
 - [Automating repeatable work (Workflows tab)](automation/automating-repeatable-work-workflows-tab.md) (4 KB)
 - [Background automations yield to the user](automation/background-automations-yield-to-the-user.md) (10 KB)
+- [CI runners (2026-10-24)](automation/ci-runners.md) (13 KB)
 - [Experimental outbound resource queue](automation/experimental-outbound-resource-queue.md) (3 KB)
 - [Handing the agent a long-running goal](automation/handing-the-agent-a-long-running-goal.md) (2 KB)
 - [One-click setup for safe offline PC control (planned)](automation/one-click-setup-for-safe-offline-pc-control.md) (6 KB)

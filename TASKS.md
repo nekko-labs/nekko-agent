@@ -1387,6 +1387,16 @@ Verification: `npm run typecheck` across workspaces, host tests (`oauth`, `downl
 
 ## Backlog / Planned
 
+### CI runners in Automations ([#1038](https://github.com/nekko-labs/nekko-agent/issues/1038)) · [spec](spec/automation/ci-runners.md) · [decision](docs/decisions/0022-ci-runners-vm-and-network.md)
+
+A Mac running Nekko Agent becomes a sandboxed GitHub Actions self-hosted runner, each job in a throwaway macOS VM. The existing "Local CI runner" template ([docs/git-runner.md](docs/git-runner.md)) stays; it is not a self-hosted runner. Planned 2026-10-24.
+
+- [ ] **T210** Layer A: the spec and decision 0022, and the pure-logic crate `nekko-runner` (settings, slots, gates, keep awake, guest address rules). Added: 2026-10-24. Issue #1038.
+- [ ] **T211** VM helper and userspace network: Swift `nekko-vm` on Virtualization.framework (clone, boot, delete, seed disk) and the NAT in `nekkod`. Added: 2026-10-24. Issue #1038.
+- [ ] **T212** Supervisor and GitHub: GitHub App connect, JIT configs, the supervisor loop in `nekkod`, keychain key. Added: 2026-10-24. Issue #1038.
+- [ ] **T213** CI section UI in the Workflows tab: connect sheet, runner card, settings, menu bar indicator. Added: 2026-10-24. Issue #1038.
+- [ ] **T214** Images, picker and pilot: golden image builder, picker job, the P0 pilot on our own CI. Added: 2026-10-24. Issue #1038.
+
 ### Chat completion X icons ([#533](https://github.com/nekko-labs/nekko-agent/issues/533))
 
 Implemented 2026-10-15 ([SPEC.md](spec/chat/chat-completion-x-icons-and-idle-auto-completion.md)): `CloseIcon` replaces the completion checkmark in `PaneFrame.tsx` and `WorkspaceCard.tsx`; Delete keeps `TrashIcon`; handlers, labels, sizes and exit timing are unchanged. Idle auto-completion: `AUTO_COMPLETE_CHOICES`/`autoCompleteDays`/`agentsToAutoComplete` in `packages/shared/src/archive.ts`, setting `autoCompleteAfterDays`, store `autoCompleteIdle` (refuses when `runningSessions`/`pendingInput` fail; completes via `setSessionOptions({archivedAt})`, closes windows, one toast), swept from `App.tsx` at launch and every 6 h, Settings → General select.
