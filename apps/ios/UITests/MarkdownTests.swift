@@ -30,14 +30,16 @@ final class MarkdownTests: XCTestCase {
             attach(app, "markdown-\(theme)-3-table-expanded")
             done.tap()
 
-            // Long-pressing a table offers its own copy actions.
-            let table = app.staticTexts["Row 1 of 3: Name, Nekko; Status, done; Count, 3"]
-            scrollTo(table, in: app)
-            table.press(forDuration: 1.2)
-            XCTAssertTrue(app.buttons["Copy as Markdown"].waitForExistence(timeout: 5))
-            XCTAssertTrue(app.buttons["Copy as text"].exists)
-            attach(app, "markdown-\(theme)-4-table-menu")
-            app.buttons["Copy as text"].tap()
+            // Long-pressing a table offers its own copy actions (once: the menu is the system's in either theme).
+            if theme == uiTestThemes.first {
+                let table = app.staticTexts["Row 1 of 3: Name, Nekko; Status, done; Count, 3"]
+                scrollTo(table, in: app)
+                table.press(forDuration: 1.2)
+                XCTAssertTrue(app.buttons["Copy as Markdown"].waitForExistence(timeout: 5))
+                XCTAssertTrue(app.buttons["Copy as text"].exists)
+                attach(app, "markdown-\(theme)-4-table-menu")
+                app.buttons["Copy as text"].tap()
+            }
 
             let sent = app.descendants(matching: .any)["lab.sent.0"]
             scrollTo(sent, in: app)
@@ -78,7 +80,7 @@ final class MarkdownTests: XCTestCase {
         var n = 0
         while !visible() && n < max {
             let f = element.exists ? element.frame : .null
-            if !f.isNull && f.maxY <= window.minY + 90 { app.swipeDown(velocity: .slow) } else { app.swipeUp(velocity: .slow) }
+            if !f.isNull && f.maxY <= window.minY + 90 { app.swipeDown() } else { app.swipeUp() }
             n += 1
         }
     }
