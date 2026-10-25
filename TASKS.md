@@ -1,10 +1,22 @@
 ---
 status: active
-last-updated: 2026-10-23
+last-updated: 2026-10-24
 owner:
 ---
 
 # Execution Plan, Nekko Agent
+
+## Chat timing and GPT reasoning (added 2026-10-24)
+
+Philip found GPT-6.1 chats slow, quiet between tool calls, and missing their tokens/sec readout during tool work, and asked for step times and swipe-to-see times. Local logs showed the tools were fast (69 ms median for a trivial shell read) and the model calls slow (7.5 s per step against 4.6 s for Opus) because GPT re-reasoned from scratch after every tool. Spec: [Chat suggestions, progress and code access](SPEC.md#chat-suggestions-progress-and-code-access). #1058
+
+- [x] **CT-1, Carry GPT reasoning between tool steps (2026-10-24).** `chatgpt.rs` asks for `reasoning.encrypted_content` and emits each reasoning item as a new `ProviderChunk::Carry`; the loop stores them on the step's message as `carry: { model, items }` and the provider replays them before the call they led to, for the same model only. `drop_carry_before_last_prompt` strips them once a new prompt starts a turn, so session files stay small. Golden request bodies for ChatGPT gained `include`.
+- [x] **CT-2, Thinking always on for GPT (2026-10-24).** Reasoning summaries go out unless the chat turned Thinking off (`think != Some(false)`), matching the composer, which already showed "Thinking on" for an unset flag.
+- [x] **CT-3, Tokens/sec through tool steps (2026-10-24).** The decode clock starts at `response.output_item.added` and on tool-call argument deltas, so a tool-only step is timed instead of marking the whole turn unmeasurable.
+- [x] **CT-4, Elapsed time on tool rows (2026-10-24).** Each tool step row leads with how long it took (`fmtElapsed`, `ToolElapsed` in `ActivityGroup.tsx`), ticking while it runs; persisted times come from the call and result messages' `createdAt`, live ones from `liveRuns.ts`.
+- [x] **CT-5, Swipe left for times (2026-10-24).** A horizontal trackpad swipe slides the transcript up to 72px left and fades in each row's time; letting go springs it back (`useSwipeToRevealTimes` in `VirtualTranscript.tsx`, `data-vt-stamp` + `::after` in `styles.css`). Evidence: `apps/desktop/scripts/chat-timing-sandbox.cjs`.
+- [ ] **CT-6, Live check against a signed-in ChatGPT plan:** confirm the backend accepts the replayed reasoning, and compare per-step time and narration with the 2026-10-24 baseline.
+- [ ] **CT-7, Touch and mouse-drag reveal.** Only trackpad and wheel swipes reveal times today; a mouse drag is left for text selection.
 
 ## Chat page removed (added 2026-10-24)
 
@@ -463,6 +475,7 @@ Philip asked (2026-10-19) to finish the iOS app: audit Orca's phone app for miss
   - **Still owed:** device runs on iPhone and Android, the managed relay, the Expo app (speaks protocol 1, so it is a legacy phone and mode raises from it are refused), a desktop switch for `acceptLegacyPhones`.
 - [ ] **IO-35, Drop legacy phones (planned for the release after IO-34).** Phones from before protocol 4 are welcomed for one release, logged and marked `legacyProtocol` (`acceptLegacyPhones`, default on). Next release: default `acceptLegacyPhones` to off (refused `update-required`), once the iPhone and Android builds with protocol 4 have shipped and the desktop has shown *Older app* long enough that no paired phone carries the mark; then delete the legacy branch in `AgentCore::on_client` and `RemoteService::verify`, the 3-second fallback in both `RelayClient`s, and the `legacyHello` vector. Check before flipping: no `relay:hello` / `legacy-protocol` entries in recent activity on Philip's machines, and the Expo app either updated or retired.
   - **Done 2026-10-19.** `REMOTE_PROTOCOL_VERSION` / `PROTOCOL_VERSION` = 2 in the welcome (added by the relay agent in nekko-remote; agent golden); the iPhone sends `protocol` in its HELLO; missing counts as 1. `ProtocolCheck` picks the side; `ProtocolBanner` on the chat list and in Settings → About. Android and Expo ignore the field and the relay's new frames (`RelayClientTest`, `relayClient.test.ts`). The computer doesn't yet show a phone's version.
+- [ ] **IO-36, Send feedback (#1004).** *Send feedback* in the computer menu on Chats (iPhone and the iPad sidebar) and in *Settings → About* opens a sheet with *Copy for an agent* (the shared prompt, ending `App: Nekko Agent <version> (ios, iOS|iPadOS <version>, arm64)`), *Quick note* (`POST <Nekko Cloud>/v1/feedback`, 4,000 UTF-16 units, *Include app info* off by default; its own ephemeral session, no cookies, no credentials, redirects refused) and *Open GitHub issues*. Logic in `NekkoProtocol/Feedback.swift`, `FeedbackTests` (Linux). `PrivacyInfo.xcprivacy` now lists Customer Support and Other Diagnostic Data, not linked, not tracking. Still owed: the macOS build, a simulator run against the deployed endpoint, screenshots.
 
 ### Native Android app (2026-10-11)
 
@@ -735,6 +748,9 @@ Extends `../../knowledgebase/principles/coding.md` (which these override).
 - [ ] Cut the **v1.0 release** once the above land (bump versions + tag). *Status 2026-09-30: PR #203 (`chore/release-v0.8.0`) sits open and mergeable as the next version bump, a pure 5-file version change; merging it fires the public release workflow, so it waits on the same credentials below (npm publish cred, remaining Windows signing, macOS notary trio) plus an explicit go. The GUI pass above is the only functional gate left on the list.*
 
 ## Now / In Progress
+
+- [ ] **AFML1057: Composer focus and compact, stable Agents/Monitors layout** ([#1057](https://github.com/nekko-labs/nekko-agent/issues/1057)). Implemented readiness-aware composer focus, viewport-clamped top-layer Configure, stable reorder geometry, and a compact horizontal controls grid with no space below cards or after the scrollbar. Specs: [monitor controls](spec/agents/monitors-dock-naming-and-header-polish.md), [Agents row](spec/agents/agent-panel-view-options.md), [composer](spec/chat/chat-actions-and-persistent-reply-measurements.md). Verified 41 focused tests, desktop typecheck and hidden full-App geometry/interaction assertions. Pending: visual inspection of before/after captures and GIF, then PR landing. Native-window behavior is not proven by renderer capture.
+
 
 ### SK: Hardware keys, step-up on phone and desktop, remote sign-out (added 2026-10-24)
 

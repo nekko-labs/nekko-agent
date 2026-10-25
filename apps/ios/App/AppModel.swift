@@ -454,6 +454,13 @@ final class AppModel {
         return URL(string: configured ?? "") ?? URL(string: "https://nekko-agent-api.fly.dev")!
     }
 
+    /// *Send feedback → Quick note* (#1004): to Nekko Cloud, never through a
+    /// computer, and with no credentials (not the Cloud sign-in, not a pairing key).
+    /// `info` is nil unless *Include app info* is on.
+    func sendFeedback(_ message: String, info: Feedback.AppInfo?) async -> Feedback.Outcome {
+        await Feedback.send(message: message, info: info, api: Self.cloudURL)
+    }
+
     /// Offer *Open Tailscale* (TS-4): the active computer is on the tailnet and
     /// Tailscale is off on this iPhone, so that is the switch to flip.
     var offersTailscale: Bool {

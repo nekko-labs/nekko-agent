@@ -97,6 +97,9 @@ impl ChatGptProvider {
         }
         body.insert("stream".into(), json!(true));
         body.insert("store".into(), json!(false));
+        // With `store: false` the reasoning is gone after each call unless it
+        // comes back encrypted and is replayed (see `to_response_items`).
+        body.insert("include".into(), json!(["reasoning.encrypted_content"]));
         // The Codex backend accepts only the Codex CLI's request shape:
         // `temperature` and `max_output_tokens` are not in it and fail the
         // whole request with a 400 ("Unsupported parameter"), so the effort
@@ -116,7 +119,9 @@ impl ChatGptProvider {
             }
             EffortLevel::Normal => {}
         }
-        if req.think == Some(true) {
+        // Summaries are on unless the chat turned thinking off: without them a
+        // reasoning model works in silence between tool calls.
+        if req.think != Some(false) {
             reasoning.insert("summary".into(), json!("auto"));
         }
         if !reasoning.is_empty() {
@@ -157,6 +162,10 @@ impl ChatGptProvider {
             for data in &batch.data {
                 let Ok(ev) = serde_json::from_str::<Value>(data) else { continue };
                 match ev.get("type").and_then(Value::as_str) {
+                    // The model has started generating an item (hidden
+                    // reasoning, a tool call): time it from here, or a step
+                    // with no visible text measures as instant.
+                    Some("response.output_item.added" | "response.function_call_arguments.delta") => decode.mark(),
                     Some("response.output_text.delta") => {
                         if let Some(d) = js::truthy_str(ev.get("delta")) {
                             decode.mark();
@@ -176,6 +185,11 @@ impl ChatGptProvider {
                                 item.and_then(|i| i.get("phase")).and_then(Value::as_str)
                         {
                             sink.emit(ProviderChunk::Phase { phase: phase.to_string() }).await?;
+                        }
+                        if item.and_then(|i| i.get("type")).and_then(Value::as_str) == Some("reasoning")
+                            && let Some(item) = item.filter(|i| i.get("encrypted_content").is_some())
+                        {
+                            sink.emit(ProviderChunk::Carry { item: item.clone() }).await?;
                         }
                         if item.and_then(|i| i.get("type")).and_then(Value::as_str) == Some("function_call") {
                             decode.mark();
@@ -365,6 +379,13 @@ fn to_response_items(req: &ChatRequest) -> Vec<Value> {
         if let (Role::Tool, Some(r)) = (m.role, &m.tool_result) {
             out.push(json!({ "type": "function_call_output", "call_id": r.tool_call_id, "output": r.output }));
         } else if m.role == Role::Assistant {
+            // Encrypted reasoning comes back before the message it led to, and
+            // only to the model that wrote it.
+            if let Some(carry) =
+                m.extra.get("carry").filter(|c| c.get("model").and_then(Value::as_str) == Some(req.model.as_str()))
+            {
+                out.extend(carry.get("items").and_then(Value::as_array).into_iter().flatten().cloned());
+            }
             if !m.content.is_empty() {
                 out.push(json!({
                     "type": "message",
@@ -408,6 +429,33 @@ fn uuid_v4() -> String {
 
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
+
+    fn items(model: &str) -> Vec<serde_json::Value> {
+        let req: crate::types::ChatRequest = serde_json::from_value(json!({
+            "model": model,
+            "messages": [
+                { "id": "u", "role": "user", "content": "go", "createdAt": 1 },
+                { "id": "a", "role": "assistant", "content": "", "createdAt": 2,
+                  "toolCalls": [{ "id": "c", "name": "bash", "input": {} }],
+                  "carry": { "model": "gpt-6.1-sol", "items": [{ "type": "reasoning", "encrypted_content": "x" }] } },
+            ],
+        }))
+        .unwrap();
+        super::to_response_items(&req)
+    }
+
+    #[test]
+    fn replays_encrypted_reasoning_before_the_call_it_led_to() {
+        let kinds: Vec<_> = items("gpt-6.1-sol").iter().map(|i| i["type"].as_str().unwrap().to_string()).collect();
+        assert_eq!(kinds, ["message", "reasoning", "function_call"]);
+    }
+
+    #[test]
+    fn keeps_reasoning_from_another_model_out() {
+        assert!(items("gpt-6-luna").iter().all(|i| i["type"] != "reasoning"));
+    }
+
     #[test]
     fn makes_v4_uuids() {
         let id = super::uuid_v4();

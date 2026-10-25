@@ -704,6 +704,124 @@ public final class CloudSync {
         if let data = try? JSONEncoder().encode(state) { secrets.set("cloud.state", String(decoding: data, as: UTF8.self)) }
     }
 
+    // MARK: Nekko Cloud machines (decision 0017)
+
+    /// A sandboxed machine on the account, as Nekko Cloud lists it.
+    public struct Machine: Identifiable, Equatable, Sendable {
+        public let id: String
+        public var name: String
+        public let region: String
+        public var state: String
+        public let room: String
+        public var scope: MachineScope
+        public var hoursUsed: Double
+        public var hoursIncluded: Double
+
+        public static func from(_ v: JSONValue?) -> Machine? {
+            guard let v, let id = v.str("id") else { return nil }
+            return Machine(id: id, name: v.str("name") ?? "Nekko Cloud", region: v.str("region") ?? "", state: v.str("state") ?? "",
+                           room: v.str("room") ?? "", scope: MachineScope.from(v["scope"]), hoursUsed: v.dbl("hoursUsed") ?? 0,
+                           hoursIncluded: v.dbl("hoursIncluded") ?? 0)
+        }
+    }
+
+    /// What the phone lets the cloud see: minimal by default.
+    public struct MachineScope: Equatable, Sendable {
+        public var repos: [String] = []
+        public var privacyShield = true
+        public var memory = false
+        public var syncBack = true
+
+        public init(repos: [String] = [], privacyShield: Bool = true, memory: Bool = false, syncBack: Bool = true) {
+            self.repos = repos
+            self.privacyShield = privacyShield
+            self.memory = memory
+            self.syncBack = syncBack
+        }
+
+        public static func from(_ v: JSONValue?) -> MachineScope {
+            MachineScope(repos: (v?["repos"]?.array ?? []).compactMap(\.string),
+                         privacyShield: v?["privacyShield"]?.bool ?? true, memory: v?.flag("memory") ?? false, syncBack: v?["syncBack"]?.bool ?? true)
+        }
+
+        public var json: JSONValue {
+            .object(["repos": .array(repos.map(JSONValue.string)), "privacyShield": .bool(privacyShield), "memory": .bool(memory), "syncBack": .bool(syncBack)])
+        }
+    }
+
+    public private(set) var machines: [Machine] = []
+    /// The relay Nekko Cloud's machines meet the phone on.
+    public private(set) var machinesRelay: String?
+    /// Machine id → the paired computer's id on this iPhone (kept in the Keychain beside the token).
+    public private(set) var machineLinks: [String: String] = [:]
+
+    private static func decodeLinks(_ raw: String?) -> [String: String] {
+        guard let raw, let v = try? JSONValue.parse(raw), let o = v.object else { return [:] }
+        return o.compactMapValues(\.string)
+    }
+
+    private func loadLinks() { machineLinks = Self.decodeLinks(secrets.get("cloud.machines")) }
+
+    private func saveLinks() {
+        secrets.set("cloud.machines", JSONValue.object(machineLinks.mapValues(JSONValue.string)).serialized())
+    }
+
+    /// The machine a paired computer on this iPhone is, if it is one.
+    public func machine(forComputer computerId: String) -> Machine? {
+        guard let id = machineLinks.first(where: { $0.value == computerId })?.key else { return nil }
+        return machines.first { $0.id == id }
+    }
+
+    /// The computer id a machine was paired as on this iPhone.
+    public func computerId(for machine: Machine) -> String? { machineLinks[machine.id] }
+
+    public func loadMachines() async throws {
+        loadLinks()
+        let v = try await request("GET", path("/v1/machines"), token: token())
+        machines = (v["machines"]?.array ?? []).compactMap(Machine.from)
+        machinesRelay = v.str("relayUrl")
+    }
+
+    /// Make a machine. Nekko Cloud answers the pairing link once; the caller
+    /// pairs it like any computer and records the link with `link(_:computer:)`.
+    public func createMachine(name: String, region: String, scope: MachineScope) async throws -> (machine: Machine, link: PairingLink) {
+        let body: JSONValue = .object(["name": .string(name), "region": .string(region), "scope": scope.json])
+        let v = try await request("POST", path("/v1/machines"), json: body, token: token())
+        guard let m = Machine.from(v["machine"]), let raw = v.str("pairingLink"), let link = Pairing.parse(raw) else {
+            throw CloudError(message: "Nekko Cloud didn’t answer with a machine to pair.")
+        }
+        machines.append(m)
+        return (m, link)
+    }
+
+    public func link(_ machine: Machine, computer computerId: String) {
+        machineLinks[machine.id] = computerId
+        saveLinks()
+    }
+
+    public func setScope(_ machine: Machine, _ scope: MachineScope) async throws {
+        let v = try await request("PUT", path("/v1/machines/\(machine.id)/scope"), json: scope.json, token: token())
+        if let m = Machine.from(v["machine"]), let i = machines.firstIndex(where: { $0.id == m.id }) { machines[i] = m }
+    }
+
+    public func stopMachine(_ machine: Machine) async throws {
+        let v = try await request("POST", path("/v1/machines/\(machine.id)/stop"), token: token())
+        if let m = Machine.from(v["machine"]), let i = machines.firstIndex(where: { $0.id == m.id }) { machines[i] = m }
+    }
+
+    public func startMachine(_ machine: Machine) async throws {
+        let v = try await request("POST", path("/v1/machines/\(machine.id)/start"), token: token())
+        if let m = Machine.from(v["machine"]), let i = machines.firstIndex(where: { $0.id == m.id }) { machines[i] = m }
+    }
+
+    /// Delete the machine, its disk and its pairing on Nekko Cloud; the caller forgets the computer here.
+    public func deleteMachine(_ machine: Machine) async throws {
+        try await request("DELETE", path("/v1/machines/\(machine.id)"), token: token())
+        machines.removeAll { $0.id == machine.id }
+        machineLinks[machine.id] = nil
+        saveLinks()
+    }
+
     private func token() throws -> String {
         guard let t = secrets.get("cloud.token") else { throw CloudError(message: "Sign in to Nekko Cloud first.") }
         return t

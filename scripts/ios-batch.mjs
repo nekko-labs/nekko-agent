@@ -91,7 +91,9 @@ export function iosVerdict({ run, status, required }) {
 function sh(cmd, args, opts = {}) {
   return execFileSync(cmd, args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, ...opts }).trim();
 }
-const git = (...args) => sh('git', args);
+// The runner has no git identity; commit-tree and commit need one.
+const IDENTITY = { GIT_AUTHOR_NAME: 'nekko-ci', GIT_AUTHOR_EMAIL: 'ci@nekkolabs.dev', GIT_COMMITTER_NAME: 'nekko-ci', GIT_COMMITTER_EMAIL: 'ci@nekkolabs.dev' };
+const git = (...args) => sh('git', args, { env: { ...process.env, ...IDENTITY } });
 const tryGit = (...args) => { try { git(...args); return true; } catch { return false; } };
 
 function setStatus(repo, sha, state, description, url) {
@@ -158,7 +160,7 @@ function main({ dryRun }) {
   }
   // One commit on main: HEAD^1..HEAD is every PR in the batch.
   git('reset', '--quiet', '--soft', main);
-  git('-c', 'user.name=nekko-ci', '-c', 'user.email=ci@nekkolabs.dev', 'commit', '--quiet', '--allow-empty', '-m', batchMessage(included));
+  git('commit', '--quiet', '--allow-empty', '-m', batchMessage(included));
   git('push', '--quiet', '--force', 'origin', `HEAD:refs/heads/${BATCH_BRANCH}`);
   const batch = JSON.stringify(included.map(pr => ({ number: pr.number, sha: pr.headRefOid })));
   sh('gh', ['workflow', 'run', 'ios-native.yml', '-R', repo, '--ref', BATCH_BRANCH, '-f', `batch=${batch}`]);

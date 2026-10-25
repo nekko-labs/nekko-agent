@@ -43,6 +43,20 @@ hostname).
 - `POST /v1/donations`, `DELETE /v1/donations/:id`: opt-in samples sealed to
   the offline research key. Unauthenticated, not request-logged, no sender
   columns; withdrawn with the device's delete token, expired after 180 days.
+- `/v1/machines`: **Nekko Cloud machines** (decision 0017, `spec/phone/nekko-cloud-machines.md`):
+  a sandboxed machine per user that the phone pairs with like any computer.
+  `GET` lists them; `POST {name?, region?, scope?}` (Pro and Team, at most 3)
+  mints a relay room, a pairing key and a one-time pairing code, starts the
+  machine on Fly with them in its environment, and answers the pairing link
+  once (only the key's hash is stored, so this service can never open the
+  machine's relay frames); `GET /:id`, `PUT /:id/scope` (what the phone lets
+  the cloud see: `repos`, `privacyShield`, `memory`, `syncBack`; applies on
+  the next start), `POST /:id/stop`, `POST /:id/start` (metered against the
+  plan's machine hours), `DELETE /:id`. `POST /v1/relay/authorize` is the
+  relay's enrolment gate (`NEKKO_RELAY_AUTHZ_URL`): a machine's `nkm_` access
+  token as a Bearer. On when `FLY_API_TOKEN` and `FLY_MACHINES_APP` are set
+  (`NEKKO_RELAY_URL`, `NEKKO_MACHINE_IMAGE` optional); the routes are absent
+  otherwise. Tests run against an in-memory driver.
 - `POST /v1/feedback`: the quick note from any app's Send feedback sheet,
   `{ message, app? }` (`src/feedback.ts`). Unauthenticated, not request-logged,
   10 per IP per hour (counted in memory). `app` comes only when the sender
@@ -69,6 +83,9 @@ hostname).
 - `feedback`: Send feedback notes (migration `0005`), with no user, device or
   IP column and only the day each arrived. Read them with
   `select received_on, message, app_info from feedback order by received_on desc`.
+- `cloud_machines`: one row per Nekko Cloud machine (migration `0006`): region,
+  size, state, the hosting provider's machine id, the relay room, the hashes of
+  the pairing key and of the relay access token, the scope, hours used.
 
 ## Sign-in: Supabase Auth
 
