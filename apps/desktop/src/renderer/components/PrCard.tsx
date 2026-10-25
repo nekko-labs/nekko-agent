@@ -3,6 +3,7 @@ import type { PrInfo, PrAction, PrDiff, PrChecks } from '@nekko-agent/shared';
 import { getExecutionMode, parsePrUrl } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
 import { subscribePrPolling } from '../prPolling.js';
+import { PrProgress } from './WorkProgress.js';
 import { BranchIcon, CheckIcon, CloseIcon } from '../icons.js';
 
 /** Summarise a chat's PRs for the sidebar/header badges. */
@@ -110,9 +111,10 @@ export function PrActionCard({ url, info, sessionId, onDismiss }: { url: string;
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <a href={url} className="truncate font-mono text-[11px] font-medium hover:underline" onClick={(e) => { e.preventDefault(); openExternally(url); }}>{label}</a>
           <span className="text-[10px] text-ink-faint">{info ? info.isDraft ? 'Draft' : 'Open' : 'Status unavailable'}</span>
-          {check.dot && <span className="text-[10px]" style={{ color: check.color }}>{check.dot} {check.label}</span>}
+          {!info?.checkProgress && check.dot && <span className="text-[10px]" style={{ color: check.color }}>{check.dot} {check.label}</span>}
         </div>
         {info?.title && <p className="truncate text-[12px]">{info.title}</p>}
+        <PrProgress url={url} info={info} />
         {info?.stack && <span className="text-[10px] text-ink-soft">GitHub stack · {info.stack.size} PRs</span>}
         {parent && <a className="block truncate text-[10px] text-ink-soft hover:underline" href={parent.url} onClick={(e) => { e.preventDefault(); openExternally(parent.url); }}>Builds on {parent.branch}</a>}
       </div>

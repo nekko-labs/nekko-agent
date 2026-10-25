@@ -6,6 +6,16 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Verification and PR progress (added 2026-10-25)
+
+Issue #1115. Spec: [Verification checklists and PR progress](spec/chat/verification-and-pr-progress.md).
+
+- [x] **VP-1, Complete PR observations.** Paginated GraphQL check contexts and review threads, conservative unknown results, local observation time and stale-cache retention; Rust transport/unit coverage.
+- [x] **VP-2, Explicit verification metadata.** Optional structured reports on existing plan steps, matching Rust/TS sanitization and persistence tests; tool guidance never equates tool completion with inspection.
+- [x] **VP-3, Shared-renderer presentation.** Footer checklist and linked CI/thread progress, bounded disclosures and safe links; focused component checks and hidden isolated 900px/390px interaction fixtures.
+- [ ] **VP-4, Evidence signoff and landing.** Capture PNG/GIF before/after, inspect actual pixels/motion, publish media and queue the stack. Captures and interaction checks exist; pixel review pending.
+- [ ] **VP-5, Packaged/device follow-up.** Exercise a real paired-device verification flow; native phone presentation is outside this desktop/shared-renderer scope.
+
 ## Model tuning controls (added 2026-10-25)
 
 Philip asked for a simpler load drawer (one recommended button explained in plain words, a VRAM and RAM meter, GPU only or Hybrid plus context first, simple then expert controls) and for the trick of running a big MoE model on an 8 GB card by keeping experts in RAM and the n-gram table on disk. Spec: [Setting up a local model](spec/models/setting-up-a-local-model.md). Decision: [0023](docs/decisions/0023-place-bytes-in-three-places-and-pass-placement-explicitly.md). #1069
