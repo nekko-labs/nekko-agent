@@ -38,3 +38,23 @@ Both native apps reach the computer the same way: relay v2 over a WebSocket, end
 - **Android: FCM push** (PH6), once the FCM service account is on the relay. The relay already sends FCM.
 - **Android: tailnet IPs.** Either keep requiring the MagicDNS name (the desktop shows it when the Tailscale CLI is present), or route `ws://100.x` through a small cleartext-permitted proxy. Today the network config can't allow an IP range, so the name stays the recommended route.
 - **Both: pair from a listing.** Both apps already list computers whose desktop has *Visible on this network* on (`_nekko-agent._tcp`, parsed by `NearbyComputer` with the same rules), for 30 seconds per tap. A listing carries no secrets, so pairing still takes the QR code or link. Tap-to-pair waits on the owner's choice in [reports/phone-discovery-pairing-proposal.md](../reports/phone-discovery-pairing-proposal.md).
+
+### Saved computer folders on iPhone
+
+From **Chats**, open the computer menu (**Computers and settings**) and choose
+**Files**. Each saved folder shows its name and full path on that computer; tap
+it to browse its files. Project headings in Chats and the new-chat folder chooser
+also show the path when the computer provides it. Chats without a folder remain
+visible without a General heading; choose **No folder** when starting one.
+
+Choose **Add computer folder** and type an absolute path on the computer, for
+example `/Users/me/projects/app` or `C:\Users\me\projects\app`. This is not a
+folder picker for the iPhone. The computer must be online, and changes from this
+phone must be allowed; Face ID or the passcode confirms changes when needed.
+
+Swipe a folder, or touch and hold it, and choose **Remove saved folder**. Confirm
+to remove only the saved entry. **The folder and its files are never deleted from
+disk.** The chat list refreshes after removal. Add/remove are unavailable offline;
+errors from the computer are shown rather than silently queued. If offline chat
+lists are enabled, saved folder names and paths are kept with the list on the
+phone until refreshed or cleared.

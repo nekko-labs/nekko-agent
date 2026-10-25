@@ -56,7 +56,7 @@ struct ChatsView: View {
         .overlay(alignment: .top) { if store.summariesLoading && store.summaries.isEmpty { ProgressView().padding(.top, 80) } }
         .modifier(dialogs)
         .sheet(isPresented: $reorderingGroups) {
-            ReorderGroupsSheet(groups: sections.map { GroupName(key: $0.key, name: $0.name) }) { setGroupOrder($0) }
+            ReorderGroupsSheet(groups: sections.filter { $0.key != ChatGroup.general }.map { GroupName(key: $0.key, name: $0.name) }) { setGroupOrder($0) }
         }
         .sheet(isPresented: $sendingFeedback) { FeedbackSheet() }
     }
@@ -128,9 +128,9 @@ struct ChatsView: View {
             }
             ForEach(query.isEmpty || !filtered.isEmpty ? sections : []) { g in
                 Section {
-                    if !collapsed.contains(g.key) || !query.isEmpty { sectionRows(g) }
+                    if g.key == ChatGroup.general || !collapsed.contains(g.key) || !query.isEmpty { sectionRows(g) }
                 } header: {
-                    sectionHeading(g)
+                    if g.key != ChatGroup.general { sectionHeading(g) }
                 }
             }
             // The computer's Monitors (FD-5): hardware, running chats, what needs you, the next automations.
@@ -176,7 +176,12 @@ struct ChatsView: View {
             HStack(spacing: 6) {
                 Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(palette.inkFaint)
                     .rotationEffect(.degrees(open ? 90 : 0))
-                GroupHeading(groupTitle(g), count: counts(g))
+                VStack(alignment: .leading, spacing: 3) {
+                    GroupHeading(groupTitle(g), count: counts(g))
+                    if let path = store.workspaces.first(where: { $0.id == g.key })?.path {
+                        Text(path).font(.caption).foregroundStyle(palette.inkSoft).textCase(nil)
+                    }
+                }
             }
             .contentShape(Rectangle())
             .overlay(alignment: .top) {
