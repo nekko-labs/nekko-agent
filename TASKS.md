@@ -55,6 +55,8 @@ Philip asked for the iPhone chat to write in Markdown with a styles toolbar, nes
 
 ## Chat timing and GPT reasoning (added 2026-10-24)
 
+- [x] **#1107, Accurate parallel tool timers and model continuation:** unfinished calls tick independently until their own result; finished calls freeze. A separate waiting/thinking preview keeps model work visible, using only public provider reasoning. Focused tests, production build and typecheck pass; matching base/head desktop captures and a six-second recording inspected. Live provider cadence and packaged/non-macOS checks remain unverified.
+
 Philip found GPT-6.1 chats slow, quiet between tool calls, and missing their tokens/sec readout during tool work, and asked for step times and swipe-to-see times. Local logs showed the tools were fast (69 ms median for a trivial shell read) and the model calls slow (7.5 s per step against 4.6 s for Opus) because GPT re-reasoned from scratch after every tool. Spec: [Chat suggestions, progress and code access](SPEC.md#chat-suggestions-progress-and-code-access). #1058
 
 - [x] **CT-1, Carry GPT reasoning between tool steps (2026-10-24).** `chatgpt.rs` asks for `reasoning.encrypted_content` and emits each reasoning item as a new `ProviderChunk::Carry`; the loop stores them on the step's message as `carry: { model, items }` and the provider replays them before the call they led to, for the same model only. `drop_carry_before_last_prompt` strips them once a new prompt starts a turn, so session files stay small. Golden request bodies for ChatGPT gained `include`.
@@ -212,6 +214,8 @@ PRs sat in draft waiting on CI. Run history showed the cause: Linux and Windows 
 
 ## Focused mode transitions and layout controls (added 2026-10-17)
 
+- [x] **#1108, Full new-chat gradient:** replaced corner lighting orbs with a static full-surface diagonal gradient and fixed-seed embedded SVG grain. Matched default-dark Electron screenshots inspected at 1440×900 and 900×900; gradient/grain, bounds and typing checks pass. Production build and desktop typecheck pass. Other themes and packaged/non-macOS rendering remain unverified.
+
 See [SPEC](spec/desktop/focused-mode-transitions-calmer-focus-ring-and-layout-controls.md).
 
 - [x] ✅ 2026-10-17 `CommandWall.tsx` marks panes added after mount as entering (Focus only) and `styles.css` fades the hero in; `ChatPane.tsx` plays `composer-expand-in` once when clean start ends on send; calmer Focus ring mix; Monitors dock header; Grid removed from the toolbar into `WallLayoutSettings.tsx`, Dynamic uses `BoltIcon`. Tests: `focusTransitions.test.ts`, `WallLayoutSettings.test.tsx`. Evidence: `apps/desktop/scripts/focus-transitions-sandbox.cjs` via `agent-window-controls-integration.cjs` (`NEKKO_CONTROLS_SANDBOX`, `NEKKO_TEST_REVISION=main` for before).
@@ -292,6 +296,8 @@ Tracked in [#680](https://github.com/nekko-labs/nekko-agent/issues/680), part of
 - [ ] Original-session/live-provider recovery and other packaged platforms remain unverified; reproduce with an explicitly provided affected transcript or isolated provider session.
 
 ## New agent window defaults
+
+- [x] **#1106, Latest Mode defaults:** desktop and Local Web UI persist changed Mode choices, including effort, to the daemon; new top-level chats snapshot current choices. Cross-window field merging, saved-mode reset, sandbox normalization, unchanged old-chat records and restart persistence covered by 28 desktop helper/ModePanel tests and 31 Rust settings/store tests. Desktop typecheck, production build and daemon compilation pass. Live multi-window/package checks remain unverified.
 
 - [x] Persist explicit ChatPane and Add window model choices as provider/model pairs without changing other panes; preserve Auto and session-specific choices. See [SPEC](spec/desktop/new-agent-window-defaults.md).
 - [x] Save permission default only after a successful session update; restore settings before startup catalog selection. Keep effort/execution persistence and session-only incognito/offline boundaries.

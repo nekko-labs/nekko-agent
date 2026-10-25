@@ -26,14 +26,14 @@ app.whenReady().then(async () => {
     await sleep(300);
     for (const width of [960, 440]) {
       win.setContentSize(width, 3000); await sleep(300);
-      const metrics = await run(`Array.from(document.querySelectorAll('pre')).map(p => ({ width: p.clientWidth, scrollWidth: p.scrollWidth, height: p.clientHeight, scrollHeight: p.scrollHeight, wrap: getComputedStyle(p).overflowWrap, whiteSpace: getComputedStyle(p).whiteSpace, text: p.textContent }))`);
+      const metrics = await run(`Array.from(document.querySelectorAll('pre:not([data-public-reasoning])')).map(p => ({ width: p.clientWidth, scrollWidth: p.scrollWidth, height: p.clientHeight, scrollHeight: p.scrollHeight, wrap: getComputedStyle(p).overflowWrap, whiteSpace: getComputedStyle(p).whiteSpace, text: p.textContent }))`);
       if (metrics.length !== 8) throw Error('Expected eight expanded detail wells, got ' + metrics.length);
       if (kind === 'after' && metrics.some(p => p.scrollWidth > p.width + 1 || p.wrap !== 'anywhere' || p.whiteSpace !== 'pre-wrap')) throw Error('Detail wrapping regression');
       if (kind === 'after' && metrics.some(p => p.height > 288 || p.scrollHeight <= p.height)) throw Error('Expected bounded vertical scroll');
       if (kind === 'after') {
         const baseline = JSON.parse(fs.readFileSync(path.join(out, 'before', 'status.json'), 'utf8')).checks.find(c => c.width === width);
         if (JSON.stringify(metrics.map(p => p.text)) !== JSON.stringify(baseline.metrics.map(p => p.text))) throw Error('Expanded text changed');
-        const scrolled = await run("Array.from(document.querySelectorAll('pre')).every(p => { p.scrollTop = 32; const moved = p.scrollTop > 0; p.scrollTop = 0; return moved; })");
+        const scrolled = await run("Array.from(document.querySelectorAll('pre:not([data-public-reasoning])')).every(p => { p.scrollTop = 32; const moved = p.scrollTop > 0; p.scrollTop = 0; return moved; })");
         if (!scrolled) throw Error('Vertical scroll interaction failed');
       }
       report.checks.push({ width, metrics });

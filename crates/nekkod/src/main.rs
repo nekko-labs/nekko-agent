@@ -12,6 +12,7 @@ mod activity;
 mod admission;
 mod agent_logs;
 mod api_server;
+mod artifacts;
 mod auto_continue;
 mod automation;
 mod background;

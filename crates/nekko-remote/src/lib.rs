@@ -10,10 +10,12 @@
 //! the agent's exact output for a scripted session.
 
 pub mod agent;
+pub mod chat_links;
 pub mod e2e;
 pub mod hello;
 pub mod jsobj;
 pub mod phone;
+pub mod phone_artifacts;
 pub mod phone_changes;
 pub mod phone_files;
 pub mod phone_git;

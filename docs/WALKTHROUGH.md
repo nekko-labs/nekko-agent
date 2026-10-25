@@ -75,9 +75,13 @@ model servers are first-class, not an afterthought.
 3. **Test connection** → the model dropdown fills with whatever LM Studio is serving.
 4. Pick the model in the chat header and go.
 
-**Reasoning models** (Gemma, DeepSeek-R1, Qwen-thinking, etc.) are first-class:
-their chain-of-thought streams into a collapsible **Thinking** block above the
-answer, so you see progress during long reasoning and the answer stays clean.
+**Reasoning models** (Gemma, DeepSeek-R1, Qwen-thinking, etc.) are first-class.
+When a provider exposes public reasoning text or a reasoning summary, the current
+text appears in a **Thinking** preview above the answer, even with the working
+steps folded. Private or encrypted reasoning is never shown. If no public text
+is available after a tool finishes, **Tools finished. Waiting for the model…**
+distinguishes the ongoing turn from the completed tool. Each tool's timer stops
+at its own result; other unfinished calls and the overall reply clock keep going.
 
 ---
 
@@ -85,15 +89,17 @@ answer, so you see progress during long reasoning and the answer stays clean.
 
 ### Defaults for new agent windows
 
+The new-chat screen uses a full diagonal colour gradient with a subtle static grain layer to reduce banding, behind the glass composer. The background never animates or intercepts typing.
+
 Choosing a model in a chat or in **Add window** remembers that model and its provider for the next agent window. Choosing **Auto** remembers Auto, not whichever model it resolves to. Browsing a provider or opening an existing chat does not change this default; existing chats keep their own model choices.
 
-A successfully changed **Permissions** mode (Ask, Guardrails or YOLO) becomes the default for new chats. **Effort** is set per chat (a chat that never picked one follows the app default), and the saved **Execution** mode is reused through the existing setup flow. **Incognito** and **Offline** are different: they apply only to the chat where you enable them and are never turned on globally for new windows.
+Successful changes to **Mode** settings, including **Effort**, **Permissions**, **Execution**, **Incognito** and **Offline**, are remembered for new chats and windows, including windows opened on another screen. New chats keep their own snapshot; changing a default afterwards does not change their choices. Older chats that never saved an effort or approvals choice keep their existing app-default fallback. Folders and task content are never part of these defaults.
 
 The **Mode** button opens the Mode panel. Saved modes run down its left side; the settings sit in three columns: **Environment** (run on your machine or in a Sandbox, and whether edits go to a separate worktree), **Model** (where this chat's models run, and its effort), **Privacy** (Incognito, internet access, folders, approvals, tools, MCP servers and connectors) and **Approach** (skills, project rules and memory). Every setting has a line underneath saying what it does. **Tools**, **MCP servers**, **Connectors** and **Skills** open a list out the panel's side.
 
-The **MCP servers** and **Connectors** lists switch each one on or off for this chat only. A server switched off here keeps running for your other chats, and a connector switched off here is simply not read for this chat's context. Neither list can turn on a server that is off in Settings or a service that is not connected; links at the bottom go to those pages. Sub-agents a chat starts inherit its effort, servers and connectors.
+The **MCP servers** and **Connectors** lists switch each one on or off for this chat and remember the selection for new chats. A server switched off here keeps running for your other chats, and a connector switched off here is simply not read for this chat's context. Neither list can turn on a server that is off in Settings or a service that is not connected; links at the bottom go to those pages. Sub-agents a chat starts inherit its effort, servers and connectors.
 
-Click a saved mode to apply all of its settings to the chat at once. Change anything afterwards and the panel offers **Revert** or **Update** for that mode, or **Save mode** to keep the combination under a new name. Click the star beside a mode to start every new chat in it; click it again to go back to your last-used defaults. A mode also remembers the chat's effort, MCP servers, connectors, project rules and memory. You start with four modes:
+Click a saved mode to apply all of its settings to the chat at once. Change anything afterwards and the panel offers **Revert** or **Update** for that mode, or **Save mode** to keep the combination under a new name. Click the star beside a mode to start every new chat in it; click it again to return to the baseline app defaults. Starring or unstarring clears remembered manual Mode overrides; later changes are remembered again. A mode also remembers the chat's effort, MCP servers, connectors, project rules and memory. You start with four modes:
 
 - **Cloud only**: the chat runs on cloud providers only. Its model menu lists only cloud providers, and the engine refuses a model on this computer.
 - **Fusion**: Auto picks the model for each turn and may move a turn between your local and cloud models. It moves only to a model that is as capable or better, either because it is cheaper (a local model counts as free) or because the current provider's usage limit is spent. The turn says why it moved.
@@ -102,7 +108,7 @@ Click a saved mode to apply all of its settings to the chat at once. Change anyt
 
 **Models run** in the Model column sets the same thing by hand: click *Cloud only*, *Fusion* or *Local only*, and click the highlighted one again to stop pinning. *Local only* needs a local model and *Cloud only* a cloud one; when the chat's model doesn't fit, the panel says so and leaves the setting as it was, so pick the model first. A mode never includes your folders, and applying one that runs in a Sandbox opens the Sandbox setup first.
 
-Under **Approach**, **Skills** holds the work modes: *Default*, *Better review*, *Design* and *Best output*. Picking one changes how the agent works in that chat and brings the matching skills with it (for example Better review applies `/review`, `/security-review` and `/review-council`), so you don't have to remember or type them. A work mode applies to that chat only, costs more tokens and time than Default, and never changes Permissions, tools, Offline or Incognito. Rows marked *Coming soon* (model router, system prompt) are not available yet.
+Under **Approach**, **Skills** holds the work modes: *Default*, *Better review*, *Design* and *Best output*. Picking one changes how the agent works in that chat and brings the matching skills with it (for example Better review applies `/review`, `/security-review` and `/review-council`), so you don't have to remember or type them. A work mode applies to that chat and is remembered for new chats, costs more tokens and time than Default, and never changes Permissions, tools, Offline or Incognito. Rows marked *Coming soon* (model router, system prompt) are not available yet.
 
 **Project rules** decides how much of a repository's own agent instructions the chat reads:
 

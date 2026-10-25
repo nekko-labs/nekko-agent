@@ -8,7 +8,9 @@ describe('expanded tool detail containment', () => {
   for (const [name, count] of [['ActivityGroup', 2], ['ToolCard', 1], ['WatchRow', 3]] as const) {
     it(`${name} wraps unbroken text without discarding indentation or height caps`, () => {
       const source = readFileSync(new URL(`./${name}.tsx`, import.meta.url), 'utf8');
-      const wells = [...source.matchAll(/<pre className=(?:"([^"]+)"|\{`([^`]+)`\})/g)];
+      // Public model continuation is a separate, non-expanded preview.
+      const wells = [...source.matchAll(/<pre className=(?:"([^"]+)"|\{`([^`]+)`\})[^>]*>/g)]
+        .filter(well => !well[0].includes('data-public-reasoning'));
       expect(wells).toHaveLength(count);
       for (const well of wells) {
         const classes = well[1] || well[2];
