@@ -30,7 +30,9 @@ async fn runner_channels_round_trip() {
         (Some(2), Some(8192))
     );
     assert_eq!(v["state"], "error");
-    assert!(v["host"]["ramMb"].as_u64().is_some(), "{v}");
+    // No VM support here, so the loop never runs and no Mac sample is taken: `host` is the
+    // all-zero view. A positive `ramMb` is covered by `views_carry_host_facts` in the supervisor tests.
+    assert_eq!((v["host"]["ramMb"].as_u64(), v["host"]["networkTrusted"].as_bool()), (Some(0), Some(false)), "{v}");
     assert_eq!(v["recent"], json!([]));
     assert!(v["error"].as_str().is_some_and(|e| e.contains("VM support unavailable")), "{v}");
 
