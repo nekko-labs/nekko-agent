@@ -55,6 +55,8 @@ Philip asked for the iPhone chat to write in Markdown with a styles toolbar, nes
 
 ## Chat timing and GPT reasoning (added 2026-10-24)
 
+- [x] **#1107, Accurate parallel tool timers and model continuation:** unfinished calls tick independently until their own result; finished calls freeze. A separate waiting/thinking preview keeps model work visible, using only public provider reasoning. Focused tests, production build and typecheck pass; matching base/head desktop captures and a six-second recording inspected. Live provider cadence and packaged/non-macOS checks remain unverified.
+
 Philip found GPT-6.1 chats slow, quiet between tool calls, and missing their tokens/sec readout during tool work, and asked for step times and swipe-to-see times. Local logs showed the tools were fast (69 ms median for a trivial shell read) and the model calls slow (7.5 s per step against 4.6 s for Opus) because GPT re-reasoned from scratch after every tool. Spec: [Chat suggestions, progress and code access](SPEC.md#chat-suggestions-progress-and-code-access). #1058
 
 - [x] **CT-1, Carry GPT reasoning between tool steps (2026-10-24).** `chatgpt.rs` asks for `reasoning.encrypted_content` and emits each reasoning item as a new `ProviderChunk::Carry`; the loop stores them on the step's message as `carry: { model, items }` and the provider replays them before the call they led to, for the same model only. `drop_carry_before_last_prompt` strips them once a new prompt starts a turn, so session files stay small. Golden request bodies for ChatGPT gained `include`.

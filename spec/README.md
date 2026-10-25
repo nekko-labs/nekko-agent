@@ -55,7 +55,7 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 - [One copy of the reply being written](chat/one-copy-of-the-reply-being-written.md) (1 KB)
 - [Per-step plan working icons (2026-10-17)](chat/per-step-plan-working-icons.md) (3 KB)
 - [Sleeping chats and image-bearing replies](chat/sleeping-chats-and-image-bearing-replies.md) (2 KB)
-- [Tool calls grouped by what they are for](chat/tool-calls-grouped-by-purpose.md) (12 KB)
+- [Tool calls grouped by what they are for](chat/tool-calls-grouped-by-purpose.md) (16 KB)
 - [Verification checklists and PR progress in chat](chat/verification-and-pr-progress.md) (5 KB)
 - [Workspace context commands and connected composer](chat/workspace-context-commands-and-connected-composer.md) (4 KB)
 
