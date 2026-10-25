@@ -40,3 +40,9 @@ the request registers a PR watch against a loopback GitHub, a PR the host cannot
 read arms nothing, and a CI change wakes the chat through a normal continuation
 turn. Not verified: a merge against real GitHub (the merge itself is the agent's
 normal workflow, not part of this feature).
+
+## Swipe left for times
+
+User intent (Philip, 2026-10-24, extended 2026-10-25): pulling a chat left on the macOS desktop app shows each entry's time at the right, as standard chat apps do, and that includes tool calls.
+
+A horizontal trackpad swipe slides the transcript up to 72px left and fades in a time beside each message, each run of working steps, and, when a run is opened, each tool call and each group of calls in it (the call's start time). Letting go springs it back and hides them. Times are local `h:mm` in the same small sans text everywhere. Renderer-only: no new data is recorded. `[implemented on the desktop (CT-5, CT-8); hidden Electron fixture checks the tool rows' times during a swipe; real trackpad gesture on the packaged app not checked; mouse drag and touch not supported (CT-7)]`
