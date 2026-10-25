@@ -2,12 +2,12 @@ import React, { useState } from 'react';
 import {
   STATE_LABELS,
   auditText,
-  formatMinutes,
   networkText,
   reasonText,
   runnerSubtitle,
   runnerTitle,
   slotLines,
+  todayText,
   type RunnerState,
   type RunnerView,
 } from '@nekko-agent/shared';
@@ -95,13 +95,13 @@ export function RunnerCard({ view, now, onSettings, onChanged }: { view: RunnerV
       <div className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-2 text-[12.5px] text-ink-soft">
         <div>
           <b className="block text-[13px] text-ink">
-            {sampled ? `${Math.round(config.settings.memoryPerVmMb / 1024)} GB · ${host.cpusPerVm} cores` : 'VM support unavailable'}
+            {sampled ? `${Math.round(config.settings.memoryPerVmMb / 1024)} GB · ${host.cpusPerVm} cores` : 'Not known yet'}
           </b>
           per VM
         </div>
         <div><b className="block text-[13px] text-ink">Power</b>{power}</div>
         <div><b className="block text-[13px] text-ink">Network</b>{network}</div>
-        <div><b className="block text-[13px] text-ink">Today</b>{`${today.jobs} jobs · ${formatMinutes(today.seconds)}`}</div>
+        <div><b className="block text-[13px] text-ink">Today</b>{todayText(today)}</div>
       </div>
 
       {view.recent.length > 0 && (

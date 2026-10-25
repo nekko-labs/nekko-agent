@@ -10,6 +10,7 @@ import {
   VPN_DIRECT_LABEL,
   auditText,
   formatMinutes,
+  todayText,
   reasonText,
   networkText,
   recommendationText,
@@ -96,6 +97,7 @@ describe('runner helpers', () => {
     expect(slotLines(states, now).map((l) => l.text)).toEqual(['Starting a VM', 'Ready for a job', 'Finishing, stops in 2 min', 'Deleting the VM']);
 
     expect(slotLines(view(), now).map((l) => l.text)).toEqual(['Starts a VM when a job is queued']);
+    expect(slotLines(view({ state: 'error', error: 'No VM image yet.' }), now).map((l) => l.text)).toEqual(['Stopped until the error above is fixed']);
     // A bound with no name still greys the slot with a sentence.
     expect(slotLines(view({ available: 0 }), now)[0]).toEqual({ title: 'Slot 1 · macOS', text: 'Not available: Fewer slots are available right now.', progress: 0, dim: true });
     // A job past the max time caps at a full bar.
@@ -156,5 +158,13 @@ describe('runner helpers', () => {
     expect(err({ repos: '' })).toEqual({ error: 'Pick at least one repo in the org.' });
     expect(err({ label: 'has space' })).toEqual({ error: 'Labels use letters, digits, dot, dash and underscore.' });
     expect(toConnectRequest({ ...f, label: 'studio.m2' }, false)).toMatchObject({ label: 'studio.m2' });
+  });
+});
+
+describe('todayText', () => {
+  it('counts jobs in words people read', () => {
+    expect(todayText({ jobs: 0, seconds: 0 })).toBe('No jobs yet');
+    expect(todayText({ jobs: 1, seconds: 600 })).toBe('1 job · 10 min');
+    expect(todayText({ jobs: 14, seconds: 7800 })).toBe('14 jobs · 2 h 10 min');
   });
 });

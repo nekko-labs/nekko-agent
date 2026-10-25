@@ -40,7 +40,13 @@ export function runnersBody(
   { now, onConnect, onSettings, onChanged }: { now: number; onConnect(): void; onSettings(id: string): void; onChanged(v: RunnerView): void },
 ): React.ReactNode {
   if (state.kind === 'loading') return null;
-  if (state.kind === 'unavailable') return <EmptyHint className="mt-4">CI runners aren't available here: {state.message}</EmptyHint>;
+  if (state.kind === 'unavailable') {
+    // A daemon without runners (not macOS, or older) answers "unknown channel runner:list".
+    const text = state.message.startsWith('unknown channel')
+      ? "CI runners aren't available here. They need a Mac with Apple silicon and an up-to-date Nekko service."
+      : `CI runners aren't available here: ${state.message}`;
+    return <EmptyHint className="mt-4">{text}</EmptyHint>;
+  }
   if (!state.views.length) return <CiRunnersFirstVisit onConnect={onConnect} />;
   return state.views.map((v) => (
     <RunnerCard key={v.config.id} view={v} now={now} onSettings={() => onSettings(v.config.id)} onChanged={onChanged} />

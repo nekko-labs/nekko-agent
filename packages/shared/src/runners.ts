@@ -208,6 +208,10 @@ export function formatMinutes(seconds: number): string {
   return m % 60 ? `${h} h ${m % 60} min` : `${h} h`;
 }
 
+export function todayText(t: Today): string {
+  return t.jobs ? `${t.jobs} ${t.jobs === 1 ? 'job' : 'jobs'} · ${formatMinutes(t.seconds)}` : 'No jobs yet';
+}
+
 export function runnerTitle(v: RunnerView): string {
   return `This Mac · GitHub · ${scopeName(v.config.scope)}`;
 }
@@ -227,7 +231,8 @@ export function slotLines(v: RunnerView, nowSecs: number): SlotLine[] {
     const s = v.slots[i];
     if (!s) {
       if (i >= v.available) return { title, text: `Not available: ${slotLimitText(v.limit)}`, progress: 0, dim: true };
-      const text = v.reasons.length ? `Waiting: ${reasonText(v.reasons[0]).short}` : 'Starts a VM when a job is queued';
+      const text = v.state === 'error' ? 'Stopped until the error above is fixed'
+        : v.reasons.length ? `Waiting: ${reasonText(v.reasons[0]).short}` : 'Starts a VM when a job is queued';
       return { title, text, progress: 0, dim: false };
     }
     const elapsed = Math.max(0, nowSecs - s.since);

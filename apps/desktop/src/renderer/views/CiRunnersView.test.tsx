@@ -30,8 +30,12 @@ describe('CI runners section', () => {
 
   it('shows_a_sentence_when_runners_are_unavailable', () => {
     const html = renderToStaticMarkup(<>{runnersBody({ kind: 'unavailable', message: 'unknown channel runner:list' }, { now: 0, onConnect() {}, onSettings() {}, onChanged() {} })}</>);
-    expect(html).toContain('CI runners aren&#x27;t available here: unknown channel runner:list');
+    // The daemon's own words for a missing channel are not a sentence: say what it needs instead.
+    expect(html).toContain('CI runners aren&#x27;t available here. They need a Mac with Apple silicon and an up-to-date Nekko service.');
+    expect(html).not.toContain('unknown channel');
     expect(html).not.toContain('aria-busy="true"');
+    const other = renderToStaticMarkup(<>{runnersBody({ kind: 'unavailable', message: 'The Nekko service is not running.' }, { now: 0, onConnect() {}, onSettings() {}, onChanged() {} })}</>);
+    expect(other).toContain('CI runners aren&#x27;t available here: The Nekko service is not running.');
   });
 
   it('a late list never overwrites a push', () => {

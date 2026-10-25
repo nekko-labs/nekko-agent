@@ -30,10 +30,6 @@ export interface ConnectDeps {
 }
 
 /**
- * Start runner: validate, connect, then apply the chosen mode. Errors come back
- * as the sentence to show and the step that owns it; the key is never in them.
- */
-/**
  * The first error in the fields up to `through`, or null. Step 1's own check
  * fills step 2 with known-good values, so it never reports a step 2 field.
  */

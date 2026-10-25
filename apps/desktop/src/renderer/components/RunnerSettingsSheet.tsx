@@ -238,7 +238,8 @@ export function SettingsBody({ view, draft, onDraft, onEnabled, onSave, onRemove
         <Seg label="Max job time" value={draft.maxJobMinutes} options={jobChoices.map((m) => ({ value: m, label: formatMinutes(m * 60) }))} onChange={(v) => set('maxJobMinutes', v)} />
       </Row>
 
-      <div className="flex flex-wrap items-center gap-2 border-t pt-3.5" style={{ borderColor: 'var(--line)' }}>
+      {/* Sticky: the sheet is taller than a laptop window, and Save must stay in reach. */}
+      <div className="sticky bottom-0 -mx-5 -mb-5 flex flex-wrap items-center gap-2 border-t bg-surface px-5 pt-3.5 pb-5" style={{ borderColor: 'var(--line)' }}>
         <button type="button" className="btn btn-outline text-[var(--danger)]" disabled={saving} onClick={onRemove}>Remove runner</button>
         <button type="button" className="btn btn-outline ml-auto" onClick={onCancel}>Cancel</button>
         <button type="button" className="btn btn-primary" disabled={saving} onClick={onSave}>{saving ? 'Saving…' : 'Save'}</button>

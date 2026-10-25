@@ -57,10 +57,12 @@ describe('RunnerCard', () => {
     expect(html).toContain('This network is not one you trust. Add it in runner settings.');
   });
 
-  it('says VM support is unavailable before the first sample', () => {
+  // Zeros mean "not sampled" or "no VM support"; the latter already shows the error banner.
+  it('says the VM size is not known before the first sample', () => {
     const html = render(view({ host: { ramMb: 0, cores: 0, recommendedMemoryMb: 0, runnerMemoryMb: 0, cpusPerVm: 0, onBattery: null, batteryPct: null, networkId: null, networkTrusted: false } }));
     expect(html).not.toContain('0 cores');
-    expect(html).toContain('VM support unavailable');
+    expect(html).toContain('Not known yet');
+    expect(html).not.toContain('VM support unavailable');
   });
 
   it('no_em_dash_in_markup', () => {
