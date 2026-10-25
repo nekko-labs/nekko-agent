@@ -144,7 +144,7 @@ Working in a codebase: files, editor, diffs, pull requests, design workspace.
 - [Designing: draw it or describe it (Design tab)](code/designing-draw-it-or-describe-it-design-tab.md) (2 KB)
 - [Editing, reviewing & previewing, without leaving the app](code/editing-reviewing-previewing-without-leaving-the-app.md) (2 KB)
 - [Files, editor & visual surfaces (IDE-like, "stay in the app")](code/files-editor-visual-surfaces-ide-like-stay-in-the-app.md) (6 KB)
-- [In-chat pull requests](code/in-chat-pull-requests.md) (1 KB)
+- [In-chat pull requests](code/in-chat-pull-requests.md) (2 KB)
 - [Issue per change and work tracking preferences](code/issue-per-change.md) (2 KB)
 - [Repository review integration](code/repository-review-integration.md) (1 KB)
 - [Rich responses, reports, and design workspace](code/rich-responses-reports-and-design-workspace.md) (21 KB)
