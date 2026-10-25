@@ -2,12 +2,16 @@
 //! host networks it keeps the guest away from, and the physical interface it
 //! sends from.
 
+pub mod audit;
+pub mod awake;
 pub mod egress;
 pub mod hostnets;
 pub mod lan;
 pub mod net;
+pub mod provider;
 pub mod signals;
 pub mod store;
+pub mod supervisor;
 pub mod updates;
 pub mod vm;
 

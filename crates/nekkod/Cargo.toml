@@ -87,6 +87,8 @@ libc.workspace = true
 # Signs the Change proofs a phone sends in the relay itest (IO-33 FA-3).
 p256 = { version = "0.13", default-features = false, features = ["ecdsa", "std"] }
 tempfile = "3"
+# start_paused: the runner supervisor's tests step its clock.
+tokio = { workspace = true, features = ["test-util"] }
 # The fake guest in tests/runner_net.rs: a DHCP client and UDP sockets on its own smoltcp interface.
 smoltcp = { workspace = true, features = ["socket-dhcpv4", "socket-udp"] }
 

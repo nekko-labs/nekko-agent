@@ -1,0 +1,776 @@
+//! The runner supervisor: every `TICK` it reads the Mac, stops what the gates
+//! or the hard limits say must stop, boots at most one new job VM, follows
+//! each VM's registration, and cleans up VMs that ended. Each slot runs one
+//! job in a throwaway clone: Starting (booting, not yet online), Ready (online,
+//! waiting for a job), Running, Draining (a gate failed; the job has a grace
+//! period), Cleaning (stopped or stopping; its clone is deleted once the
+//! helper is reaped).
+
+use super::audit::{self, AuditLine, AuditResult, Today};
+use super::awake::Awake;
+use super::provider::{JobRef, Provider, ProviderError, RunnerStatus};
+use super::signals::{MacState, Sense, signals_for};
+use super::store::RunnerRecord;
+use super::vm::{RunHandle, RunSpec, Stopped, Vm, reap};
+use nekko_runner::{
+    Decision, HostFacts, MAX_MACOS_VMS, Reason, RunnerConfig, SlotLimit, cpus_per_vm, evaluate, hold_awake,
+    macos_slots_explained, vms_wanted, warm_slots,
+};
+use serde::Serialize;
+use std::collections::{HashMap, HashSet};
+use std::future::Future;
+use std::os::unix::fs::DirBuilderExt;
+use std::path::{Path, PathBuf};
+use std::time::Duration;
+use tokio::sync::oneshot::error::TryRecvError;
+
+pub const TICK: Duration = Duration::from_secs(5);
+/// A wall-clock jump this far past a tick means the Mac slept.
+pub const WAKE_GAP_SECS: f64 = 60.0;
+pub const STATUS_POLL: Duration = Duration::from_secs(15);
+pub const QUEUE_POLL: Duration = Duration::from_secs(30);
+/// A ready VM above what is wanted stops after this long.
+pub const IDLE_READY_SECS: u64 = 180;
+pub const BOOT_TIMEOUT: Duration = Duration::from_secs(600);
+pub const RERUN_EVERY: Duration = Duration::from_secs(60);
+pub const RERUN_FOR: Duration = Duration::from_secs(30 * 60);
+pub const MAX_START_FAILURES: u32 = 3;
+/// Bounds every provider call, so a slow CI service never holds up the next
+/// tick's hard limits for long.
+const PROVIDER_TIMEOUT: Duration = Duration::from_secs(15);
+/// How long a wake waits for killed VMs to be reaped before moving on.
+const KILL_WAIT: Duration = Duration::from_secs(10);
+const NO_IMAGE: &str = "No VM image yet.";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RunnerState {
+    Off,
+    Waiting,
+    Ready,
+    Running,
+    Draining,
+    Cleaning,
+    Error,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SlotState {
+    Starting,
+    Ready,
+    Running,
+    Draining,
+    Cleaning,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SlotView {
+    pub state: SlotState,
+    pub job: Option<JobRef>,
+    pub since: u64,
+    pub drain_ends_at: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RunnerView {
+    pub config: RunnerConfig,
+    pub state: RunnerState,
+    pub slots: Vec<SlotView>,
+    pub reasons: Vec<Reason>,
+    pub available: u8,
+    pub limit: Option<SlotLimit>,
+    pub awake: bool,
+    pub error: Option<String>,
+    pub today: Today,
+}
+
+/// Why we stopped a VM.
+struct Stop {
+    reasons: Vec<String>,
+    /// False for `maxJobTime`: a job that ran out of time is not re-run.
+    rerun: bool,
+    /// Lost to a sleep rather than stopped on purpose.
+    lost: bool,
+    killed: bool,
+}
+
+struct Slot {
+    /// The runner name, also the folder under `vms/`.
+    name: String,
+    runner_id: u64,
+    handle: RunHandle,
+    memory_mb: u32,
+    state: SlotState,
+    since: f64,
+    started_at: f64,
+    polled_at: f64,
+    online: bool,
+    /// When the provider first reported `Busy`.
+    busy_since: Option<f64>,
+    idle_since: Option<f64>,
+    job: Option<JobRef>,
+    drain_ends_at: Option<f64>,
+    stop: Option<Stop>,
+}
+
+impl Slot {
+    fn set_state(&mut self, state: SlotState, now: f64) {
+        if self.state != state {
+            self.state = state;
+            self.since = now;
+        }
+    }
+
+    /// Asks the VM to shut down, or kills it; a later kill escalates a stop.
+    fn halt(&mut self, now: f64, reasons: Vec<String>, kill: bool, rerun: bool) {
+        if self.stop.is_none() {
+            self.stop = Some(Stop { reasons, rerun, lost: false, killed: false });
+            self.drain_ends_at = None;
+            self.set_state(SlotState::Cleaning, now);
+            if !kill {
+                self.handle.request_stop();
+            }
+        }
+        if let Some(stop) = &mut self.stop
+            && kill
+            && !stop.killed
+        {
+            stop.killed = true;
+            self.handle.kill();
+        }
+    }
+}
+
+struct Runner {
+    record: RunnerRecord,
+    /// No longer in the records: its VMs are stopped and it goes once they are cleaned.
+    dropped: bool,
+    slots: Vec<Slot>,
+    /// Sticky until the record changes: auth refused, or too many failed starts.
+    error: Option<String>,
+    /// Re-checked every tick.
+    blocked: Option<String>,
+    start_failures: u32,
+    gates_pass: bool,
+    reasons: Vec<Reason>,
+    available: u8,
+    limit: Option<SlotLimit>,
+    wanted: u8,
+    queued: u32,
+    queue_polled_at: Option<f64>,
+    awake: bool,
+}
+
+impl Runner {
+    fn new(record: RunnerRecord) -> Runner {
+        Runner {
+            record,
+            dropped: false,
+            slots: Vec::new(),
+            error: None,
+            blocked: None,
+            start_failures: 0,
+            gates_pass: false,
+            reasons: Vec::new(),
+            available: 0,
+            limit: None,
+            wanted: 0,
+            queued: 0,
+            queue_polled_at: None,
+            awake: false,
+        }
+    }
+
+    fn note(&mut self, e: ProviderError) {
+        match e {
+            ProviderError::Auth(m) => self.error = Some(m),
+            ProviderError::Other(m) => eprintln!("runner {}: {m}", self.record.config.id),
+        }
+    }
+
+    fn state(&self) -> RunnerState {
+        let has = |st: SlotState| self.slots.iter().any(|s| s.state == st);
+        if !self.record.config.settings.enabled {
+            RunnerState::Off
+        } else if self.error.is_some() || self.blocked.is_some() {
+            RunnerState::Error
+        } else if has(SlotState::Draining) {
+            RunnerState::Draining
+        } else if has(SlotState::Running) {
+            RunnerState::Running
+        } else if has(SlotState::Cleaning) {
+            RunnerState::Cleaning
+        } else if has(SlotState::Starting) || has(SlotState::Ready) || self.gates_pass {
+            RunnerState::Ready
+        } else {
+            RunnerState::Waiting
+        }
+    }
+}
+
+/// A lost or stopped job waiting to be re-run.
+struct Rerun {
+    record: RunnerRecord,
+    job: JobRef,
+    first_at: f64,
+    next_at: f64,
+}
+
+pub struct Supervisor<S: Sense, V: Vm, P: Provider> {
+    runners_dir: PathBuf,
+    sense: S,
+    vm: Result<V, String>,
+    provider: P,
+    awake: Box<dyn Awake>,
+    host: String,
+    runners: Vec<Runner>,
+    // shortcut: queued re-runs live in memory, lost on daemon restart; persist if pilots show it matters.
+    reruns: Vec<Rerun>,
+    /// (repo, job id) of every job ever queued, so each is re-run at most once.
+    rerun_seen: HashSet<(String, u64)>,
+    last_wall: Option<f64>,
+    serial: u64,
+    day_start: u64,
+    today: HashMap<String, Today>,
+}
+
+/// A provider call that gives up after `PROVIDER_TIMEOUT`.
+async fn call<T>(f: impl Future<Output = Result<T, ProviderError>>) -> Result<T, ProviderError> {
+    tokio::time::timeout(PROVIDER_TIMEOUT, f)
+        .await
+        .unwrap_or_else(|_| Err(ProviderError::Other("the CI service did not answer in time".into())))
+}
+
+fn reason_names(why: &[Reason]) -> Vec<String> {
+    why.iter().filter_map(|r| serde_json::to_value(r).ok()?.as_str().map(str::to_owned)).collect()
+}
+
+fn why(d: &Decision) -> &[Reason] {
+    match d {
+        Decision::Take => &[],
+        Decision::Hold { why } | Decision::Drain { why, .. } | Decision::StopNow { why } => why,
+    }
+}
+
+/// Unix seconds of the local midnight starting the day `ts` falls in.
+fn local_midnight(ts: u64) -> u64 {
+    use chrono::{Local, TimeZone};
+    Local
+        .timestamp_opt(ts as i64, 0)
+        .single()
+        .and_then(|t| t.date_naive().and_hms_opt(0, 0, 0))
+        .and_then(|d| d.and_local_timezone(Local).earliest())
+        .map_or(ts - ts % 86_400, |d| d.timestamp().max(0) as u64)
+}
+
+/// `<host>` in runner names: lowercase `[a-z0-9-]`.
+fn name_host(host: &str) -> String {
+    host.to_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect()
+}
+
+impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
+    pub fn new(
+        runners_dir: PathBuf,
+        sense: S,
+        vm: Result<V, String>,
+        provider: P,
+        awake: Box<dyn Awake>,
+        host_name: String,
+    ) -> Self {
+        Supervisor {
+            runners_dir,
+            sense,
+            vm,
+            provider,
+            awake,
+            host: name_host(&host_name),
+            runners: Vec::new(),
+            reruns: Vec::new(),
+            rerun_seen: HashSet::new(),
+            last_wall: None,
+            serial: 0,
+            day_start: u64::MAX,
+            today: HashMap::new(),
+        }
+    }
+
+    fn vms_dir(&self) -> PathBuf {
+        self.runners_dir.join("vms")
+    }
+
+    /// Before the first tick: reaps what a crash or a sleep left under `vms/`,
+    /// removes our stale registrations, and loads today's totals.
+    pub async fn start(&mut self) {
+        if let Err(e) = reap(&self.vms_dir()).await {
+            eprintln!("runner: cannot clear {}: {e}", self.vms_dir().display());
+        }
+        let prefix = format!("nekko-{}-", self.host);
+        for r in &self.runners {
+            if let Err(e) = call(self.provider.remove_stale(&r.record, &prefix)).await {
+                eprintln!("runner {}: cannot remove stale runners: {e}", r.record.config.id);
+            }
+        }
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+        self.roll_day(now);
+    }
+
+    /// A changed record clears its error; a dropped one's VMs are stopped and cleaned on the next tick.
+    pub fn set_records(&mut self, records: Vec<RunnerRecord>) {
+        for r in &mut self.runners {
+            r.dropped = true;
+        }
+        for rec in records {
+            match self.runners.iter_mut().find(|r| r.record.config.id == rec.config.id) {
+                Some(r) => {
+                    if r.record != rec {
+                        r.error = None;
+                        r.start_failures = 0;
+                        r.queue_polled_at = None;
+                    }
+                    r.record = rec;
+                    r.dropped = false;
+                }
+                None => self.runners.push(Runner::new(rec)),
+            }
+        }
+        self.runners.retain(|r| !r.dropped || !r.slots.is_empty());
+    }
+
+    pub fn views(&self) -> Vec<RunnerView> {
+        let vm_error = self.vm.as_ref().err();
+        self.runners
+            .iter()
+            .filter(|r| !r.dropped)
+            .map(|r| RunnerView {
+                config: r.record.config.clone(),
+                state: if vm_error.is_some() { RunnerState::Error } else { r.state() },
+                slots: r
+                    .slots
+                    .iter()
+                    .map(|s| SlotView {
+                        state: s.state,
+                        job: s.job.clone(),
+                        since: s.since as u64,
+                        drain_ends_at: s.drain_ends_at.map(|t| t as u64),
+                    })
+                    .collect(),
+                reasons: r.reasons.clone(),
+                available: r.available,
+                limit: r.limit,
+                awake: r.awake,
+                error: vm_error.cloned().or_else(|| r.error.clone()).or_else(|| r.blocked.clone()),
+                today: self.today.get(&r.record.config.id).copied().unwrap_or_default(),
+            })
+            .collect()
+    }
+
+    /// Memory of every VM still running, for the owner's usual-use history.
+    pub fn running_vm_mb(&self) -> u64 {
+        self.runners.iter().flat_map(|r| &r.slots).map(|s| u64::from(s.memory_mb)).sum()
+    }
+
+    fn roll_day(&mut self, now: u64) {
+        let midnight = local_midnight(now);
+        if midnight != self.day_start {
+            self.day_start = midnight;
+            self.today = audit::today(&self.runners_dir, midnight);
+        }
+    }
+
+    pub async fn tick(&mut self) {
+        // 1. Read the Mac.
+        let m = self.sense.sample().await;
+        let now = m.wall_secs;
+        let slept = self.last_wall.is_some_and(|l| now - l > TICK.as_secs_f64() + WAKE_GAP_SECS);
+        self.last_wall = Some(now);
+        self.roll_day(now as u64);
+        for r in &mut self.runners {
+            let d = evaluate(&r.record.config.settings, &signals_for(&m, &r.record.config.settings), false);
+            r.gates_pass = d == Decision::Take;
+            r.reasons = why(&d).to_vec();
+        }
+        if self.vm.is_err() {
+            self.awake.set(false);
+            return;
+        }
+        if slept {
+            self.wake(now).await;
+        } else if !self.runners.is_empty() {
+            self.run(&m, now).await;
+        }
+        // 7. Keep awake.
+        let mut hold = false;
+        for r in self.runners.iter_mut().filter(|r| !r.dropped) {
+            let s = &r.record.config.settings;
+            let job = r.slots.iter().any(|s| matches!(s.state, SlotState::Running | SlotState::Draining));
+            r.awake = hold_awake(s.keep_awake, job, r.gates_pass);
+            hold |= r.awake;
+        }
+        self.awake.set(hold);
+    }
+
+    /// The Mac slept: every VM is killed, its job audited as lost and queued
+    /// for a re-run, and `vms/` reaped. Nothing starts this tick.
+    async fn wake(&mut self, now: f64) {
+        for slot in self.runners.iter_mut().flat_map(|r| &mut r.slots) {
+            slot.halt(now, vec!["slept".into()], true, true);
+            if let Some(stop) = &mut slot.stop {
+                stop.lost = true;
+            }
+        }
+        let deadline = tokio::time::Instant::now() + KILL_WAIT;
+        for ri in 0..self.runners.len() {
+            for slot in std::mem::take(&mut self.runners[ri].slots) {
+                let mut slot = slot;
+                match tokio::time::timeout_at(deadline, &mut slot.handle.done).await {
+                    Ok(done) => {
+                        self.finish(ri, slot, done.unwrap_or(Stopped::Error("the VM driver went away".into())), now)
+                            .await
+                    }
+                    // Not reaped yet: cleaned by a later tick, never deleted under a live helper.
+                    Err(_) => self.runners[ri].slots.push(slot),
+                }
+            }
+        }
+        if self.runners.iter().all(|r| r.slots.is_empty())
+            && let Err(e) = reap(&self.vms_dir()).await
+        {
+            eprintln!("runner: cannot clear {}: {e}", self.vms_dir().display());
+        }
+        self.runners.retain(|r| !r.dropped || !r.slots.is_empty());
+    }
+
+    /// Steps 2 to 6 of a normal tick.
+    async fn run(&mut self, m: &MacState, now: f64) {
+        // 2. Every VZ VM on the Mac, ours and other apps'; a failed count counts as full.
+        let count = match &self.vm {
+            Ok(vm) => vm.count_vms().await.unwrap_or_else(|e| {
+                eprintln!("runner: cannot count VMs: {e}");
+                MAX_MACOS_VMS
+            }),
+            Err(_) => return,
+        };
+
+        // 3. Stop what must stop.
+        for r in &mut self.runners {
+            let s = &r.record.config.settings;
+            let running = evaluate(s, &signals_for(m, s), true);
+            let max_secs = f64::from(s.max_job_minutes) * 60.0;
+            let idle_why = reason_names(&r.reasons);
+            for slot in &mut r.slots {
+                if r.dropped {
+                    slot.halt(now, vec!["removed".into()], true, true);
+                    continue;
+                }
+                let Some(busy_since) = slot.busy_since else {
+                    // No job here, so stopping loses nothing.
+                    if !r.gates_pass {
+                        slot.halt(now, idle_why.clone(), true, false);
+                    }
+                    continue;
+                };
+                if slot.stop.is_some() {
+                    if let Decision::StopNow { why } = &running {
+                        slot.halt(now, reason_names(why), true, true);
+                    }
+                    continue;
+                }
+                let left = busy_since + max_secs - now;
+                if left <= 0.0 {
+                    slot.halt(now, vec!["maxJobTime".into()], false, false);
+                    continue;
+                }
+                match &running {
+                    Decision::Take | Decision::Hold { .. } => {
+                        slot.drain_ends_at = None;
+                        slot.set_state(SlotState::Running, now);
+                    }
+                    Decision::Drain { grace_secs, why } => {
+                        let ends = *slot.drain_ends_at.get_or_insert(now + (*grace_secs as f64).min(left));
+                        slot.set_state(SlotState::Draining, now);
+                        if now >= ends {
+                            slot.halt(now, reason_names(why), false, true);
+                        }
+                    }
+                    Decision::StopNow { why } => slot.halt(now, reason_names(why), true, true),
+                }
+            }
+        }
+
+        // 4. New VMs, at most one per tick across all runners.
+        let mut started = false;
+        for ri in 0..self.runners.len() {
+            let r = &mut self.runners[ri];
+            let s = r.record.config.settings.clone();
+            let ours = u8::try_from(r.slots.len()).unwrap_or(u8::MAX);
+            let host = HostFacts {
+                ram_mb: m.ram_mb,
+                cores: m.cores,
+                other_macos_vms: count.saturating_sub(ours),
+                user_memory_mb: m.user_memory_mb,
+            };
+            let (available, limit) = macos_slots_explained(&s, &host);
+            (r.available, r.limit) = (available, limit);
+            r.wanted = 0;
+            r.blocked = None;
+            if r.dropped || !r.gates_pass || r.error.is_some() {
+                continue;
+            }
+            let image = r.record.image.clone().unwrap_or_else(|| self.runners_dir.join("images").join("default"));
+            if !image.is_dir() {
+                r.blocked = Some(NO_IMAGE.into());
+                continue;
+            }
+            let warm = warm_slots(&s, available);
+            if warm < available && r.queue_polled_at.is_none_or(|t| now - t >= QUEUE_POLL.as_secs_f64()) {
+                r.queue_polled_at = Some(now);
+                match call(self.provider.queued(&r.record)).await {
+                    Ok(q) => r.queued = q,
+                    Err(e) => r.note(e),
+                }
+            }
+            let busy = r.slots.iter().filter(|s| s.busy_since.is_some() && s.stop.is_none()).count() as u8;
+            r.wanted = vms_wanted(available, warm, busy, r.queued);
+            let live = r.slots.iter().filter(|s| s.stop.is_none()).count();
+            // `slots.len()` counts VMs still shutting down: they hold a place under Apple's cap.
+            if started || r.error.is_some() || live >= usize::from(r.wanted) || r.slots.len() >= usize::from(available)
+            {
+                continue;
+            }
+            started = true;
+            let spec = (cpus_per_vm(&s, &host), s.memory_per_vm_mb);
+            self.start_vm(ri, &image, spec, now).await;
+        }
+
+        // 5. Follow booting and ready VMs.
+        for r in &mut self.runners {
+            let mut excess = r.slots.iter().filter(|s| s.stop.is_none()).count().saturating_sub(usize::from(r.wanted));
+            for slot in &mut r.slots {
+                if slot.stop.is_some() || slot.busy_since.is_some() {
+                    continue;
+                }
+                if now - slot.polled_at >= STATUS_POLL.as_secs_f64() {
+                    slot.polled_at = now;
+                    match call(self.provider.status(&r.record, slot.runner_id)).await {
+                        Ok(RunnerStatus::Busy) => {
+                            slot.busy_since = Some(now);
+                            slot.idle_since = None;
+                            slot.set_state(SlotState::Running, now);
+                            slot.job = call(self.provider.job(&r.record, &slot.name)).await.ok().flatten();
+                            continue;
+                        }
+                        Ok(RunnerStatus::Idle) => {
+                            slot.online = true;
+                            slot.set_state(SlotState::Ready, now);
+                        }
+                        Ok(RunnerStatus::Offline | RunnerStatus::Missing) => {}
+                        Err(ProviderError::Auth(e)) => r.error = Some(e),
+                        Err(e) => eprintln!("runner {}: {e}", r.record.config.id),
+                    }
+                }
+                if !slot.online {
+                    if now - slot.started_at >= BOOT_TIMEOUT.as_secs_f64() {
+                        slot.halt(now, vec!["bootTimeout".into()], true, false);
+                    }
+                } else if excess > 0 {
+                    excess -= 1;
+                    let since = *slot.idle_since.get_or_insert(now);
+                    if now - since >= IDLE_READY_SECS as f64 {
+                        slot.halt(now, vec!["idle".into()], true, false);
+                    }
+                } else {
+                    slot.idle_since = None;
+                }
+            }
+        }
+
+        // 6. Clean up VMs whose helper is reaped, then re-run lost jobs.
+        for ri in 0..self.runners.len() {
+            let mut i = 0;
+            while i < self.runners[ri].slots.len() {
+                let done = match self.runners[ri].slots[i].handle.done.try_recv() {
+                    Ok(st) => st,
+                    Err(TryRecvError::Closed) => Stopped::Error("the VM driver went away".into()),
+                    Err(TryRecvError::Empty) => {
+                        i += 1;
+                        continue;
+                    }
+                };
+                let slot = self.runners[ri].slots.remove(i);
+                self.finish(ri, slot, done, now).await;
+            }
+        }
+        self.runners.retain(|r| !r.dropped || !r.slots.is_empty());
+        self.retry_reruns(now).await;
+    }
+
+    /// Mint, seed, clone, start. A failure removes whatever it made, the
+    /// registration included, and counts toward `MAX_START_FAILURES`.
+    async fn start_vm(&mut self, ri: usize, image: &Path, (cpus, memory_mb): (u8, u32), now: f64) {
+        let Ok(vm) = &self.vm else { return };
+        self.serial += 1;
+        let name = format!("nekko-{}-{}-{}", self.host, now as u64, self.serial);
+        let dir = self.vms_dir().join(&name);
+        let record = self.runners[ri].record.clone();
+        let minted = match call(self.provider.mint(&record, &name)).await {
+            Ok(m) => m,
+            Err(ProviderError::Auth(e)) => {
+                self.runners[ri].error = Some(e);
+                return;
+            }
+            Err(ProviderError::Other(e)) => return self.start_failed(ri, e, now),
+        };
+        let (seed, bundle) = (dir.join("seed.iso"), dir.join("bundle"));
+        let made = async {
+            std::fs::create_dir_all(self.vms_dir()).map_err(|e| format!("cannot make the VMs folder: {e}"))?;
+            // 0700: the seed carries a credential until the runner registers.
+            std::fs::DirBuilder::new()
+                .mode(0o700)
+                .create(&dir)
+                .map_err(|e| format!("cannot make {}: {e}", dir.display()))?;
+            vm.write_seed(&seed, &minted.jit_config).await?;
+            vm.clone_bundle(image, &bundle).await?;
+            vm.start(RunSpec { bundle: bundle.clone(), cpus, memory_mb, seed: seed.clone() }).await
+        }
+        .await;
+        match made {
+            Ok(handle) => {
+                let r = &mut self.runners[ri];
+                r.start_failures = 0;
+                r.slots.push(Slot {
+                    name,
+                    runner_id: minted.runner_id,
+                    handle,
+                    memory_mb,
+                    state: SlotState::Starting,
+                    since: now,
+                    started_at: now,
+                    polled_at: now,
+                    online: false,
+                    busy_since: None,
+                    idle_since: None,
+                    job: None,
+                    drain_ends_at: None,
+                    stop: None,
+                });
+            }
+            Err(e) => {
+                if let Err(err) = tokio::fs::remove_dir_all(&dir).await
+                    && err.kind() != std::io::ErrorKind::NotFound
+                {
+                    eprintln!("runner: cannot remove {}: {err}", dir.display());
+                }
+                if let Err(err) = call(self.provider.remove(&record, minted.runner_id)).await {
+                    eprintln!("runner {}: cannot remove runner {}: {err}", record.config.id, minted.runner_id);
+                }
+                self.start_failed(ri, e, now);
+            }
+        }
+    }
+
+    fn start_failed(&mut self, ri: usize, e: String, now: f64) {
+        eprintln!("runner {}: a job VM did not start: {e}", self.runners[ri].record.config.id);
+        let r = &mut self.runners[ri];
+        r.start_failures += 1;
+        if r.start_failures >= MAX_START_FAILURES {
+            r.error = Some(format!("The job VM failed to start {MAX_START_FAILURES} times in a row: {e}"));
+        }
+        let line = AuditLine {
+            ts: now as u64,
+            runner_id: r.record.config.id.clone(),
+            repo: None,
+            workflow: None,
+            job: None,
+            result: AuditResult::FailedToStart,
+            seconds: 0,
+            reason: vec![e],
+        };
+        self.audit(&line);
+    }
+
+    fn audit(&mut self, line: &AuditLine) {
+        if let Err(e) = audit::append(&self.runners_dir, line) {
+            eprintln!("runner: cannot write the audit log: {e}");
+        }
+        if line.ts >= self.day_start {
+            self.today.entry(line.runner_id.clone()).or_default().add(line);
+        }
+    }
+
+    /// A VM whose helper is reaped: delete its clone and seed, remove its
+    /// registration, audit the job, and queue a re-run if it was cut short.
+    async fn finish(&mut self, ri: usize, slot: Slot, stopped: Stopped, now: f64) {
+        let dir = self.vms_dir().join(&slot.name);
+        if let Err(e) = tokio::fs::remove_dir_all(&dir).await
+            && e.kind() != std::io::ErrorKind::NotFound
+        {
+            eprintln!("runner: cannot remove {}: {e}", dir.display());
+        }
+        let record = self.runners[ri].record.clone();
+        if let Err(e) = call(self.provider.remove(&record, slot.runner_id)).await {
+            eprintln!("runner {}: cannot remove runner {}: {e}", record.config.id, slot.runner_id);
+        }
+        // A guest that shut down on its own ran its one job, even if no poll saw it busy.
+        let ran = slot.busy_since.is_some() || (stopped == Stopped::Guest && slot.stop.is_none());
+        if !ran {
+            return;
+        }
+        let (result, reason, rerun) = match (&slot.stop, &stopped) {
+            (Some(s), _) if s.lost => (AuditResult::Lost, s.reasons.clone(), s.rerun),
+            (Some(s), _) => (AuditResult::Stopped, s.reasons.clone(), s.rerun),
+            (None, Stopped::Guest) => (AuditResult::Finished, vec![], false),
+            (None, Stopped::Signal) => (AuditResult::Lost, vec!["signal".into()], true),
+            (None, Stopped::Error(e)) => (AuditResult::Lost, vec![e.clone()], true),
+        };
+        let job = slot.job.as_ref();
+        let line = AuditLine {
+            ts: now as u64,
+            runner_id: record.config.id.clone(),
+            repo: job.map(|j| j.repo.clone()),
+            workflow: job.map(|j| j.workflow.clone()),
+            job: job.map(|j| j.job.clone()),
+            result,
+            seconds: (now - slot.busy_since.unwrap_or(slot.started_at)).max(0.0) as u64,
+            reason,
+        };
+        self.audit(&line);
+        if let Some(job) = slot.job
+            && rerun
+            && record.config.settings.rerun_lost_jobs
+            && self.rerun_seen.insert((job.repo.clone(), job.job_id))
+        {
+            let next_at = now + RERUN_EVERY.as_secs_f64();
+            self.reruns.push(Rerun { record, job, first_at: now, next_at });
+        }
+    }
+
+    /// GitHub accepts a re-run only once the run has finished, so each queued
+    /// job is tried every `RERUN_EVERY` until it works or `RERUN_FOR` passes.
+    async fn retry_reruns(&mut self, now: f64) {
+        let mut keep = Vec::new();
+        for mut q in std::mem::take(&mut self.reruns) {
+            if now < q.next_at {
+                keep.push(q);
+                continue;
+            }
+            match call(self.provider.rerun(&q.record, &q.job)).await {
+                Ok(()) => continue,
+                Err(e) => {
+                    eprintln!("runner {}: cannot re-run {} job {}: {e}", q.record.config.id, q.job.repo, q.job.job_id)
+                }
+            }
+            q.next_at = now + RERUN_EVERY.as_secs_f64();
+            if q.next_at - q.first_at <= RERUN_FOR.as_secs_f64() {
+                keep.push(q);
+            }
+        }
+        self.reruns = keep;
+    }
+}
+
+#[cfg(test)]
+#[path = "supervisor_tests.rs"]
+mod tests;
