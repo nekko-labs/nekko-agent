@@ -202,6 +202,8 @@ PRs sat in draft waiting on CI. Run history showed the cause: Linux and Windows 
 
 ## Focused mode transitions and layout controls (added 2026-10-17)
 
+- [x] **#1108, Full new-chat gradient:** replaced corner lighting orbs with a static full-surface diagonal gradient and fixed-seed embedded SVG grain. Matched default-dark Electron screenshots inspected at 1440×900 and 900×900; gradient/grain, bounds and typing checks pass. Production build and desktop typecheck pass. Other themes and packaged/non-macOS rendering remain unverified.
+
 See [SPEC](spec/desktop/focused-mode-transitions-calmer-focus-ring-and-layout-controls.md).
 
 - [x] ✅ 2026-10-17 `CommandWall.tsx` marks panes added after mount as entering (Focus only) and `styles.css` fades the hero in; `ChatPane.tsx` plays `composer-expand-in` once when clean start ends on send; calmer Focus ring mix; Monitors dock header; Grid removed from the toolbar into `WallLayoutSettings.tsx`, Dynamic uses `BoltIcon`. Tests: `focusTransitions.test.ts`, `WallLayoutSettings.test.tsx`. Evidence: `apps/desktop/scripts/focus-transitions-sandbox.cjs` via `agent-window-controls-integration.cjs` (`NEKKO_CONTROLS_SANDBOX`, `NEKKO_TEST_REVISION=main` for before).
