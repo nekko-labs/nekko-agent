@@ -53,8 +53,9 @@ jobs:
     # the timeout never turns this into a red check on its own.
     timeout-minutes: 65
     steps:
+      # GitHub refuses auto-merge for a stacked PR; the enqueue below covers it.
       - name: Queue the PR
-        run: gh pr merge --auto "$PR_URL"
+        run: gh pr merge --auto "$PR_URL" || echo '::notice::Auto-merge not armed (a stacked PR?); enqueueing once gate passes.'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
@@ -83,7 +84,8 @@ jobs:
       - name: Enqueue once gate passes
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          PR_ID: ${{ github.event.pull_request.node_id }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_REPO: ${{ github.repository }}
           PR_URL: ${{ github.event.pull_request.html_url }}
         run: |
           for _ in $(seq 1 60); do
@@ -95,8 +97,9 @@ jobs:
             case "$gate" in
               SUCCESS)
                 head=$(jq -r .headRefOid <<<"$pr")
-                gh api graphql -f query='mutation($id:ID!,$head:GitObjectID){enqueuePullRequest(input:{pullRequestId:$id,expectedHeadOid:$head}){mergeQueueEntry{state position}}}' \
-                  -f id="$PR_ID" -f head="$head" || echo '::warning::Enqueue failed; auto-merge stays armed.'
+                # merge-async, not the enqueuePullRequest mutation: the mutation refuses stacked PRs.
+                gh api -X PUT "repos/$GH_REPO/pulls/$PR_NUMBER/merge-async" -f merge_action=merge_queue -f sha="$head" \
+                  || echo '::warning::Enqueue failed; auto-merge stays armed.'
                 exit 0
                 ;;
               FAILURE|CANCELLED|TIMED_OUT)
