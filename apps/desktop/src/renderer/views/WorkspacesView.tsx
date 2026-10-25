@@ -903,7 +903,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
         aria-valuemax={SIDEBAR_MAX_W}
         aria-valuenow={sidebarW}
         tabIndex={0}
-        className="group relative hidden shrink-0 cursor-col-resize md:block"
+        className="agent-list-resize group relative hidden shrink-0 cursor-col-resize md:block"
         style={{ width: 'var(--pane-gap)', marginInline: 'calc(-1 * var(--pane-gap))' }}
         onPointerDown={(e) => {
           e.preventDefault();
