@@ -53,7 +53,7 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 - [Live streaming token rate](chat/live-streaming-token-rate.md) (1 KB)
 - [Muted pending-change badge](chat/muted-pending-change-badge.md) (1 KB)
 - [One copy of the reply being written](chat/one-copy-of-the-reply-being-written.md) (1 KB)
-- [Per-step plan working icons (2026-10-17)](chat/per-step-plan-working-icons.md) (2 KB)
+- [Per-step plan working icons (2026-10-17)](chat/per-step-plan-working-icons.md) (3 KB)
 - [Sleeping chats and image-bearing replies](chat/sleeping-chats-and-image-bearing-replies.md) (2 KB)
 - [Tool calls grouped by what they are for](chat/tool-calls-grouped-by-purpose.md) (8 KB)
 - [Workspace context commands and connected composer](chat/workspace-context-commands-and-connected-composer.md) (4 KB)
