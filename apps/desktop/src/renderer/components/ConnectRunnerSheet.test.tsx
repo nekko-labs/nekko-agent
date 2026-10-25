@@ -8,7 +8,7 @@ vi.mock('./primitives/index.js', async (original) => ({
   Modal: ({ children }: { children: React.ReactNode }) => <div role="dialog">{children}</div>,
 }));
 
-import { ConnectBody, emptyConnectForm, submitConnect } from './ConnectRunnerSheet.js';
+import { ConnectBody, emptyConnectForm, stepError, submitConnect } from './ConnectRunnerSheet.js';
 
 const PEM = '-----BEGIN RSA PRIVATE KEY-----\nMIIEsecret\n-----END RSA PRIVATE KEY-----';
 const form = (over: Partial<ConnectForm> = {}): ConnectForm => ({
@@ -79,6 +79,23 @@ describe('ConnectRunnerSheet', () => {
     const update2 = vi.fn();
     await submitConnect(form({ priority: 'doNotDisturb' }), { connectRunner, updateRunner: update2, pushToast: vi.fn() });
     expect(update2).not.toHaveBeenCalled();
+  });
+
+  it('a_failed_mode_update_still_connects', async () => {
+    const pushToast = vi.fn();
+    const res = await submitConnect(form({ priority: 'balanced' }), {
+      connectRunner: async () => view, updateRunner: () => Promise.reject(new Error('The daemon is busy.')), pushToast,
+    });
+    expect(res).toEqual({ view, form: emptyConnectForm() });
+    expect(pushToast).toHaveBeenCalledWith('error', 'Connected, but could not set the mode: The daemon is busy.');
+    expect(JSON.stringify(pushToast.mock.calls)).not.toContain('BEGIN RSA PRIVATE KEY');
+  });
+
+  it('next_checks_only_the_step_being_left', () => {
+    expect(stepError(form({ appId: 'x', target: '' }), 1)).toBe('The App ID is a number.');
+    expect(stepError(form({ target: '' }), 1)).toBeNull();
+    expect(stepError(form({ target: '' }), 2)).toBe('Enter the repo as owner/name.');
+    expect(stepError(form(), 2)).toBeNull();
   });
 
   it('closing_clears_the_key', async () => {

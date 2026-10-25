@@ -78,12 +78,15 @@ const Row = ({ label, hint, children }: { label: string; hint?: string; children
   </div>
 );
 
-const Check = ({ label, checked, onChange }: { label: string; checked: boolean; onChange(v: boolean): void }) => (
+const Check = ({ label, checked, onChange, disabled }: { label: string; checked: boolean; onChange(v: boolean): void; disabled?: boolean }) => (
   <label className="flex items-center gap-2 text-[13px] text-ink">
-    <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+    <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
     {label}
   </label>
 );
+
+const UNSAMPLED = "Waiting for this Mac's first reading.";
+const Unsampled = () => <span className="text-[12px] text-ink-faint">{UNSAMPLED}</span>;
 
 const Val = ({ children }: { children: React.ReactNode }) => <span className="ml-2.5 whitespace-nowrap font-mono text-[12px] text-ink-soft">{children}</span>;
 
@@ -147,30 +150,48 @@ export function SettingsBody({ view, draft, onDraft, onEnabled, onSave, onRemove
       <Row label="Total runner memory">
         <div role="radiogroup" aria-label="Total runner memory" className="flex flex-wrap items-center gap-3 text-[13px] text-ink">
           <label className="flex items-center gap-2">
-            <input type="radio" name="runner-memory" checked={draft.runnerMemoryMb === null} onChange={() => set('runnerMemoryMb', null)} />
+            <input type="radio" name="runner-memory" disabled={!sampled} checked={draft.runnerMemoryMb === null} onChange={() => set('runnerMemoryMb', null)} />
             Use the recommendation
           </label>
-          <label className="flex items-center gap-2">
-            <input type="radio" name="runner-memory" checked={draft.runnerMemoryMb !== null} onChange={() => set('runnerMemoryMb', (host.recommendedMemoryMb || 4 * GB))} />
-            <input
-              type="number" className="input w-20" min={4} max={capGb} aria-label="Total runner memory in GB" disabled={draft.runnerMemoryMb === null}
-              value={Math.round((draft.runnerMemoryMb ?? host.recommendedMemoryMb) / GB) || ''} onChange={(e) => set('runnerMemoryMb', Number(e.target.value) * GB)}
-            />
-            GB
-          </label>
+          {sampled ? (
+            <label className="flex items-center gap-2">
+              <input type="radio" name="runner-memory" checked={draft.runnerMemoryMb !== null} onChange={() => set('runnerMemoryMb', host.recommendedMemoryMb || 4 * GB)} />
+              <input
+                type="number" className="input w-20" min={4} max={capGb} aria-label="Total runner memory in GB" disabled={draft.runnerMemoryMb === null}
+                value={Math.round((draft.runnerMemoryMb ?? host.recommendedMemoryMb) / GB) || ''} onChange={(e) => set('runnerMemoryMb', Number(e.target.value) * GB)}
+              />
+              GB
+            </label>
+          ) : (
+            <label className="flex items-center gap-2">
+              <input type="radio" name="runner-memory" disabled checked={draft.runnerMemoryMb !== null} onChange={() => {}} />
+              {draft.runnerMemoryMb !== null && `${Math.round(draft.runnerMemoryMb / GB)} GB`}
+            </label>
+          )}
+          {!sampled && <Unsampled />}
         </div>
         {recommendation && <p className="mt-1 text-[11.5px] text-ink-faint">{recommendation}</p>}
       </Row>
       <Row label="CPU per VM">
         <div className="flex flex-wrap items-center gap-3">
-          <Check label="Mode default" checked={draft.cpusPerVm === null} onChange={(v) => set('cpusPerVm', v ? null : Math.min(maxCpus, Math.max(2, host.cpusPerVm)))} />
-          <div className="flex min-w-40 flex-1 items-center">
-            <input
-              type="range" className="flex-1" min={2} max={maxCpus} step={1} aria-label="CPU per VM" disabled={draft.cpusPerVm === null}
-              value={draft.cpusPerVm ?? host.cpusPerVm} onChange={(e) => set('cpusPerVm', Number(e.target.value))}
-            />
-            {sampled && <Val>{`${draft.cpusPerVm ?? host.cpusPerVm} of ${host.cores}`}</Val>}
-          </div>
+          <Check
+            label="Mode default" disabled={!sampled} checked={draft.cpusPerVm === null}
+            onChange={(v) => set('cpusPerVm', v ? null : Math.min(maxCpus, Math.max(2, host.cpusPerVm)))}
+          />
+          {sampled ? (
+            <div className="flex min-w-40 flex-1 items-center">
+              <input
+                type="range" className="flex-1" min={2} max={maxCpus} step={1} aria-label="CPU per VM" disabled={draft.cpusPerVm === null}
+                value={draft.cpusPerVm ?? host.cpusPerVm} onChange={(e) => set('cpusPerVm', Number(e.target.value))}
+              />
+              <Val>{`${draft.cpusPerVm ?? host.cpusPerVm} of ${host.cores}`}</Val>
+            </div>
+          ) : (
+            <>
+              {draft.cpusPerVm !== null && <Val>{`${draft.cpusPerVm} per VM`}</Val>}
+              <Unsampled />
+            </>
+          )}
         </div>
       </Row>
       <Row label="Disk" hint="images and clones">
@@ -226,10 +247,18 @@ export function SettingsBody({ view, draft, onDraft, onEnabled, onSave, onRemove
   );
 }
 
-/** Runner settings for one runner. The draft starts from the view and, after Save, from what the daemon kept. */
+/**
+ * What the form shows: the owner's edits once there are any, otherwise the
+ * runner's settings as last pushed, so a push while the sheet is open is not
+ * overwritten by Save.
+ */
+export const shownSettings = (view: RunnerView, edits: RunnerSettings | null): RunnerSettings => edits ?? view.config.settings;
+
+/** Runner settings for one runner. After Save, the form shows what the daemon kept. */
 export function RunnerSettingsSheet({ view, onClose, onChanged }: { view: RunnerView; onClose(): void; onChanged(v: RunnerView): void }) {
   const pushToast = useStore((s) => s.pushToast);
-  const [draft, setDraft] = useState(view.config.settings);
+  const [edits, setEdits] = useState<RunnerSettings | null>(null);
+  const draft = shownSettings(view, edits);
   const [saving, setSaving] = useState(false);
 
   const setEnabled = async (enabled: boolean) => {
@@ -244,7 +273,7 @@ export function RunnerSettingsSheet({ view, onClose, onChanged }: { view: Runner
     const res = await saveSettings(view, draft, { updateRunner: window.nekko.updateRunner, pushToast });
     setSaving(false);
     if (!res) return;
-    setDraft(res.draft);
+    setEdits(null); // the view now carries what the daemon kept
     onChanged(res.view);
   };
   const remove = async () => {
@@ -262,7 +291,7 @@ export function RunnerSettingsSheet({ view, onClose, onChanged }: { view: Runner
       <SettingsBody
         view={view}
         draft={draft}
-        onDraft={setDraft}
+        onDraft={setEdits}
         onEnabled={(v) => void setEnabled(v)}
         onSave={() => void save()}
         onRemove={() => void remove()}

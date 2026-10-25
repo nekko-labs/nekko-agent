@@ -8,7 +8,7 @@ vi.mock('./primitives/index.js', async (original) => ({
   Modal: ({ children }: { children: React.ReactNode }) => <div role="dialog">{children}</div>,
 }));
 
-import { SettingsBody, saveSettings, trustNetwork } from './RunnerSettingsSheet.js';
+import { SettingsBody, saveSettings, shownSettings, trustNetwork } from './RunnerSettingsSheet.js';
 
 const host: HostView = {
   ramMb: 36864, cores: 12, recommendedMemoryMb: 24576, runnerMemoryMb: 18432, cpusPerVm: 4,
@@ -42,6 +42,29 @@ describe('RunnerSettingsSheet', () => {
   it('hides_the_recommendation_before_the_first_sample', () => {
     const zero: HostView = { ...host, ramMb: 0, cores: 0, recommendedMemoryMb: 0, runnerMemoryMb: 0, cpusPerVm: 0, networkId: null };
     expect(render(view({ host: zero }))).not.toContain('Recommended: 0');
+  });
+
+  it('before_the_first_sample_nothing_is_bounded_by_a_zero_host', async () => {
+    const zero: HostView = { ...host, ramMb: 0, cores: 0, recommendedMemoryMb: 0, runnerMemoryMb: 0, cpusPerVm: 0, networkId: null };
+    const v = view({ host: zero }, { cpusPerVm: 6, runnerMemoryMb: 20480 });
+    const html = render(v);
+    expect(html).toContain('Waiting for this Mac&#x27;s first reading.');
+    expect(html).toMatch(/<input type="checkbox" disabled=""[^>]*\/>Mode default/);
+    expect(html.match(/<input type="radio"[^>]*name="runner-memory"[^>]*>/g)?.map((r) => r.includes('disabled=""'))).toEqual([true, true]);
+    expect(html).not.toContain('aria-label="CPU per VM"');
+    expect(html).not.toContain('aria-label="Total runner memory in GB"');
+    for (const s of ['0 GB Mac', 'of 0', ' 0 GB']) expect(html).not.toContain(s);
+    const updateRunner = vi.fn(async () => v);
+    await saveSettings(v, shownSettings(v, null), { updateRunner, pushToast: vi.fn() });
+    expect(updateRunner).toHaveBeenCalledWith('r1', expect.objectContaining({ cpusPerVm: 6, runnerMemoryMb: 20480 }));
+  });
+
+  it('a_push_while_unedited_replaces_the_form', () => {
+    const before = view();
+    const pushed = view({}, { maxJobMinutes: 360 });
+    expect(shownSettings(pushed, null).maxJobMinutes).toBe(360);
+    const edits = { ...before.config.settings, maxJobMinutes: 30 };
+    expect(shownSettings(pushed, edits)).toBe(edits);
   });
 
   it('offers_to_trust_the_current_network', () => {

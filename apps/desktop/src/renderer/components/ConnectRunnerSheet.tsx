@@ -33,24 +33,42 @@ export interface ConnectDeps {
  * Start runner: validate, connect, then apply the chosen mode. Errors come back
  * as the sentence to show and the step that owns it; the key is never in them.
  */
+/**
+ * The first error in the fields up to `through`, or null. Step 1's own check
+ * fills step 2 with known-good values, so it never reports a step 2 field.
+ */
+export function stepError(form: ConnectForm, through: 1 | 2, keyStored = false): string | null {
+  const f = through === 1 ? { ...form, kind: 'repo' as const, target: 'a/b', label: '' } : form;
+  const req = toConnectRequest(f, keyStored);
+  return 'error' in req ? req.error : null;
+}
+
+/**
+ * Start runner: validate, connect, then apply the chosen mode. Errors come back
+ * as the sentence to show and the step that owns it; the key is never in them.
+ * Once connect resolves the runner exists, so a failed mode update only toasts.
+ */
 export async function submitConnect(
   form: ConnectForm,
   deps: ConnectDeps,
   keyStored = false,
 ): Promise<{ error: string; step: ConnectStep } | { view: RunnerView; form: ConnectForm }> {
   const req = toConnectRequest(form, keyStored);
-  if ('error' in req) {
-    // Step 1's fields alone fail too when the error is theirs; otherwise it belongs to step 2.
-    const own = toConnectRequest({ ...form, kind: 'repo', target: 'a/b', label: '' }, keyStored);
-    return { error: req.error, step: 'error' in own ? 1 : 2 };
-  }
+  if ('error' in req) return { error: req.error, step: stepError(form, 1, keyStored) ? 1 : 2 };
+  let view: RunnerView;
   try {
-    let view = await deps.connectRunner(req);
-    if (form.priority !== 'doNotDisturb') view = await deps.updateRunner(view.config.id, { ...view.config.settings, priority: form.priority });
-    return { view, form: emptyConnectForm() };
+    view = await deps.connectRunner(req);
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e), step: 3 };
   }
+  if (form.priority !== 'doNotDisturb') {
+    try {
+      view = await deps.updateRunner(view.config.id, { ...view.config.settings, priority: form.priority });
+    } catch (e) {
+      deps.pushToast('error', `Connected, but could not set the mode: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  return { view, form: emptyConnectForm() };
 }
 
 const Field = ({ label, hint, children }: { label: string; hint?: React.ReactNode; children: React.ReactNode }) => (
@@ -188,7 +206,7 @@ export function ConnectBody({
       <div className="flex justify-end gap-2">
         {step > 1 && <button type="button" className="btn btn-outline" disabled={busy} onClick={() => onStep((step - 1) as ConnectStep)}>Back</button>}
         {step < 3
-          ? <button type="button" className="btn btn-primary" onClick={() => onStep((step + 1) as ConnectStep)}>Next</button>
+          ? <button type="button" className="btn btn-primary" disabled={busy} onClick={() => onStep((step + 1) as ConnectStep)}>Next</button>
           : <button type="button" className="btn btn-primary" disabled={busy} onClick={onSubmit}>{busy ? 'Starting…' : 'Start runner'}</button>}
       </div>
     </div>
@@ -208,6 +226,7 @@ export function ConnectRunnerSheet({ onClose, onConnected, keyStoredFor }: { onC
     onClose();
   };
   const submit = async () => {
+    if (busy) return;
     setBusy(true);
     setError(null);
     const res = await submitConnect(form, { connectRunner: window.nekko.connectRunner, updateRunner: window.nekko.updateRunner, pushToast }, keyStoredFor(Number(form.appId.trim())));
@@ -229,7 +248,12 @@ export function ConnectRunnerSheet({ onClose, onConnected, keyStoredFor }: { onC
         error={error}
         busy={busy}
         onField={(k, v) => setForm((f) => ({ ...f, [k]: v }))}
-        onStep={(s) => { setError(null); setStep(s); }}
+        onStep={(s) => {
+          // Moving forward checks the steps being left; the error shows here without moving.
+          const err = s > step ? stepError(form, (s - 1) as 1 | 2, keyStoredFor(Number(form.appId.trim()))) : null;
+          setError(err);
+          if (!err) setStep(s);
+        }}
         onSubmit={() => void submit()}
       />
     </Modal>
