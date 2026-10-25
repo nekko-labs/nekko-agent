@@ -643,13 +643,12 @@ async fn admit(
     }
     facts.insert("promptCaching".into(), json!(settings.get("promptCaching") != Some(&json!(false))));
     let mut thinking = true;
-    if let Some(p) = &resolved {
-        if p.get("managedCachePrompt") == Some(&json!(true)) {
-            if let Some(library) = &ctx.library {
-                let model = library.find(model_id).await?.unwrap_or(Value::Null);
-                thinking = effective_thinking(p, &model);
-            }
-        }
+    if let Some(p) = &resolved
+        && p.get("managedCachePrompt") == Some(&json!(true))
+        && let Some(library) = &ctx.library
+    {
+        let model = library.find(model_id).await?.unwrap_or(Value::Null);
+        thinking = effective_thinking(p, &model);
     }
     facts.insert("thinking".into(), json!(thinking));
     // The loaded window, for the loop to keep a long run inside (nekko-loop fit.rs).
