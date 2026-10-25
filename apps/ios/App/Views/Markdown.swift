@@ -139,7 +139,8 @@ struct MarkdownListView: View {
                 .foregroundStyle(task == .done ? style.done : style.faint)
                 .accessibilityLabel(task == .done ? "Done" : "Not done")
         } else {
-            Text(MarkdownParser.marker(ordered: list.ordered, depth: depth, number: number))
+            // U+FE0E: the text glyph, not the emoji square iOS draws for a bare ▪.
+            Text(MarkdownParser.marker(ordered: list.ordered, depth: depth, number: number) + (list.ordered ? "" : "\u{FE0E}"))
                 .monospacedDigit()
                 .foregroundStyle(style.soft)
                 // Numbers line up on their dots; bullets get a narrow column.
@@ -163,10 +164,12 @@ struct MarkdownTableView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             ScrollView(.horizontal, showsIndicators: true) {
+                // The frame hugs the grid: a narrow table doesn't get an empty box to the screen's edge.
                 MarkdownTableGrid(table: table, style: style, cellCap: 240)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(style.line))
+                    .padding(1)
             }
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(style.line))
             HStack(spacing: 12) {
                 if table.isLarge {
                     Button { expanded = true } label: {

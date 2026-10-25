@@ -66,10 +66,19 @@ final class MarkdownTests: XCTestCase {
         return app
     }
 
+    /// Swipe until `element` is on screen above the bottom bar (a lazy list's rows exist, and
+    /// report hittable, before they are scrolled into view).
     func scrollTo(_ element: XCUIElement, in app: XCUIApplication, max: Int = 12) {
+        let window = app.windows.firstMatch.frame
+        func visible() -> Bool {
+            guard element.exists else { return false }
+            let f = element.frame
+            return !f.isEmpty && f.minY > window.minY + 90 && f.maxY < window.maxY - 160
+        }
         var n = 0
-        while !(element.exists && element.isHittable) && n < max {
-            app.swipeUp(velocity: .slow)
+        while !visible() && n < max {
+            let f = element.exists ? element.frame : .null
+            if !f.isNull && f.maxY <= window.minY + 90 { app.swipeDown(velocity: .slow) } else { app.swipeUp(velocity: .slow) }
             n += 1
         }
     }
