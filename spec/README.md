@@ -37,7 +37,7 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 - [Background notification and panel batch (2026-10-13)](chat/background-notification-and-panel-batch.md) (8 KB)
 - [Chat & cowork (unified surface)](chat/chat-cowork-unified-surface.md) (73 KB)
 - [Chat actions and persistent reply measurements](chat/chat-actions-and-persistent-reply-measurements.md) (25 KB)
-- [Chat artifact cards and session-local documents](chat/chat-artifact-cards-and-session-local-documents.md) (4 KB)
+- [Chat artifact cards and session-local documents](chat/chat-artifact-cards-and-session-local-documents.md) (8 KB)
 - [Chat chrome and composer refinement (implemented; desktop verification pending)](chat/chat-chrome-and-composer-refinement.md) (3 KB)
 - [Chat completion X icons and idle auto-completion (2026-10-15)](chat/chat-completion-x-icons-and-idle-auto-completion.md) (2 KB)
 - [Chat isolation and prompt customization](chat/chat-isolation-and-prompt-customization.md) (24 KB)
