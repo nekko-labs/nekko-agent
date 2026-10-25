@@ -183,9 +183,20 @@ async fn a_background_reply_steps_aside_for_a_persons_chat_and_finishes_after() 
     let model = scripted_model(vec![HANG.into(), HANG.into(), say_text("Task done.")]).await;
     scripted_p1(&data, &model, json!({}));
     let d = start_with(Some(&data));
+    // A low-priority run does not start on a low battery or a hot machine:
+    // on a laptop running down, the task waits, and that is all to check.
+    let (_, activity) = post(d.port, "activity:state", json!([]), Some(TOKEN)).await;
+    let strained = activity["strain"].as_array().is_some_and(|s| s.iter().any(|k| k == "lowBattery" || k == "hot"));
     let input = json!({ "title": "Background", "kind": "recurring", "prompt": "Summarize", "intervalMs": 3_600_000, "providerId": "p1", "modelId": "m1", "runPolicy": "lowPriority" });
     let (_, list) = post(d.port, "task:create", json!([input]), Some(TOKEN)).await;
     let task_chat = list[0]["lastSessionId"].as_str().unwrap().to_string();
+    if strained {
+        wait_for("the task waiting", || read_tasks(&data)[0]["waitingSince"].is_number()).await;
+        assert_eq!(replies_asked(&model), 0, "held on a strained machine: {activity}");
+        drop(d);
+        let _ = std::fs::remove_dir_all(&data);
+        return;
+    }
     wait_for("the task's request", || replies_asked(&model) == 1).await;
     let (_, state) = post(d.port, "background:state", json!([]), Some(TOKEN)).await;
     assert_eq!((state["running"].clone(), state["paused"].clone()), (json!(1), json!(0)), "{state}");
