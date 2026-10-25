@@ -76,6 +76,54 @@ impl KvLayout {
     }
 }
 
+/// What the weights are made of, read from a GGUF's tensor table (`gguf.rs`),
+/// as shares of every tensor byte it lists. This is what lets the placement
+/// planner move a mixture-of-experts model's experts (most of its bytes, few
+/// of its reads per token) to RAM, or page a lookup table from disk.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct WeightLayout {
+    /// Routed expert tensors (`blk.N.ffn_*_exps`).
+    pub expert_share: f64,
+    /// Dense feed-forward tensors (`blk.N.ffn_{up,down,gate}`), for `--n-cpu-ffn`.
+    pub ffn_share: f64,
+    /// Lookup tables llama.cpp's `--lazy-mode` reads row by row from the file
+    /// (n-gram and per-layer embeddings).
+    pub table_share: f64,
+    pub experts: Option<f64>,
+    pub experts_used: Option<f64>,
+}
+
+impl WeightLayout {
+    pub fn from_value(v: &Value) -> Option<Self> {
+        let n = |k: &str| v.get(k).and_then(Value::as_f64);
+        Some(Self {
+            expert_share: n("expertShare")?,
+            ffn_share: n("ffnShare").unwrap_or(0.0),
+            table_share: n("tableShare").unwrap_or(0.0),
+            experts: n("experts"),
+            experts_used: n("expertsUsed"),
+        })
+    }
+
+    pub fn to_value(&self) -> Value {
+        let mut o = Map::new();
+        o.insert("expertShare".into(), num(self.expert_share));
+        o.insert("ffnShare".into(), num(self.ffn_share));
+        o.insert("tableShare".into(), num(self.table_share));
+        if let Some(e) = self.experts {
+            o.insert("experts".into(), num(e));
+        }
+        if let Some(e) = self.experts_used {
+            o.insert("expertsUsed".into(), num(e));
+        }
+        Value::Object(o)
+    }
+
+    pub fn is_moe(&self) -> bool {
+        self.expert_share > 0.0
+    }
+}
+
 /// What we know about a model, normalized across runtimes (`ModelFacts`).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ModelFacts {
@@ -88,6 +136,8 @@ pub struct ModelFacts {
     /// Read from the GGUF when the engine holds the file; preferred over the
     /// uniform geometry above, and sized as `llama-server` allocates.
     pub kv_layout: Option<KvLayout>,
+    /// Read from the GGUF too; only the placement planner uses it.
+    pub weight_layout: Option<WeightLayout>,
 }
 
 impl ModelFacts {
@@ -101,6 +151,7 @@ impl ModelFacts {
             head_dim: n("headDim"),
             max_context: n("maxContext"),
             kv_layout: v.get("kvLayout").and_then(KvLayout::from_value),
+            weight_layout: v.get("weightLayout").and_then(WeightLayout::from_value),
         }
     }
 }

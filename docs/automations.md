@@ -132,6 +132,11 @@ free**. It carries on from where it was once you are away again. The model stays
 nothing is lost and it picks up at once. A **Low priority** run only pauses while a chat of
 yours is using a local model, or when the battery is low or the computer is hot.
 
+While an automation runs on a local model, the resource chip in the corner shows **BG
+running** or **BG paused**. The Agent board's Monitors panel spells out why, for example
+**Background: 1 paused · you're using the computer**. Neither shows when no automation is
+running in the background.
+
 What does not wait:
 
 - runs on a **cloud model**, which do not load your computer;
