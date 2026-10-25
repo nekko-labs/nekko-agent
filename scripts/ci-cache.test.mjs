@@ -30,10 +30,11 @@ test('auto-merge queues only ready PRs into main, never a stacked layer', () => 
   const merge = read('../.github/workflows/auto-merge.yml');
   assert.ok(merge.includes("!github.event.pull_request.draft && github.event.pull_request.base.ref == 'main'"));
   // A merge method arms classic auto-merge, which never enters a required queue.
-  assert.ok(merge.includes('run: gh pr merge --auto "$PR_URL"'));
+  assert.ok(merge.includes('run: gh pr merge --auto "$PR_URL" ||'));
   assert.ok(!/gh pr merge --auto --(squash|merge|rebase)/.test(merge));
   // ...and an armed request alone did not reliably enter the queue, so it enqueues once gate passes.
-  assert.ok(merge.includes('enqueuePullRequest(input:{pullRequestId:$id,expectedHeadOid:$head})'));
+  // merge-async, because the enqueuePullRequest mutation refuses stacked PRs.
+  assert.ok(merge.includes('pulls/$PR_NUMBER/merge-async" -f merge_action=merge_queue -f sha="$head"'));
   assert.ok(merge.indexOf('Enqueue once gate passes') < merge.indexOf('Release the merge'));
   // A GITHUB_TOKEN-made merge group starts no merge_group runs, so the enqueue uses the App token.
   assert.ok(merge.split('Enqueue once gate passes')[1].split('run:')[0].includes('GH_TOKEN: ${{ steps.app-token.outputs.token }}'));
