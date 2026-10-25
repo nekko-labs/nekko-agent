@@ -84,6 +84,8 @@ pub struct Policy {
     pub terminal: crate::phone_terminal::Limits,
     /// Files and logs from a phone (IO-33 FA-1, FA-5): limits and views (phone_files.rs).
     pub files: crate::phone_files::FilesPolicy,
+    /// What the agent linked in a chat, opened on a phone (#1095; phone_artifacts.rs).
+    pub artifacts: crate::phone_artifacts::ArtifactsPolicy,
     /// Git from a phone (IO-33 FA-2): limits, option keys and views (phone_git.rs).
     pub git: crate::phone_git::GitPolicy,
     /// `stepUpPolicy()` (SK-2; step_up.rs).
@@ -143,6 +145,7 @@ pub fn policy() -> &'static Policy {
             activity_limit: v["activityLimit"].as_u64().unwrap_or(200) as usize,
             terminal: crate::phone_terminal::Limits::from_policy(&v),
             files: crate::phone_files::FilesPolicy::from_policy(&v["files"]),
+            artifacts: crate::phone_artifacts::ArtifactsPolicy::from_policy(&v["artifacts"]),
             git: crate::phone_git::GitPolicy::from_policy(&v["git"]),
             step_up: crate::step_up::Limits::from_policy(&v["stepUp"]),
         }
@@ -302,12 +305,25 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
         let args = crate::phone_files::screen(channel, args, &policy().files)?;
         return Ok(Screened { args: Some(args), ..Screened::default() });
     }
+    if crate::phone_artifacts::is_artifacts(channel) {
+        let args = crate::phone_artifacts::screen(channel, args, &policy().artifacts)?;
+        return Ok(Screened { args: Some(args), ..Screened::default() });
+    }
     let arg = |i: usize| args.get(i).unwrap_or(&Value::Null);
     let mut out = Screened::default();
     let id = |i: usize, what: &str| -> Result<(), Denied> {
         if arg(i).as_str().is_none_or(|s| s.is_empty()) { Err(denied("value-invalid", what)) } else { Ok(()) }
     };
     match channel {
+        "workspace:addByPath" | "workspace:remove" => {
+            let what = if channel == "workspace:addByPath" { "folder path" } else { "workspace id" };
+            if arg(0).as_str().is_none_or(|s| s.trim().is_empty() || s.contains('\0')) {
+                return Err(denied("value-invalid", what));
+            }
+            if args.len() > 1 {
+                return Err(denied("option-denied", "extra argument"));
+            }
+        }
         "changes:list" | "session:watches" => id(0, "chat id")?,
         "providers:saveSealed" => {
             crate::phone_providers::screen_save(arg(0)).map_err(|r| denied(r.code, r.detail))?;
@@ -532,6 +548,7 @@ pub fn redact(channel: &str, result: Value) -> Value {
         }
         c if policy().terminal.is_terminal(c) => crate::phone_terminal::result(c, &result),
         c if crate::phone_files::is_files(c) => crate::phone_files::view(c, &result, &policy().files),
+        c if crate::phone_artifacts::is_artifacts(c) => crate::phone_artifacts::view(c, &result, &policy().artifacts),
         c if crate::phone_git::is_git(c) => crate::phone_git::view(c, &result, &policy().git, &policy().views.pr),
         _ => result,
     }
@@ -1672,6 +1689,39 @@ mod tests {
         }
 
         #[test]
+        fn saved_folders_require_change_proofs_and_keep_positional_payloads() {
+            let k = signer(31);
+            for (channel, value, detail) in [
+                ("workspace:addByPath", "/Users/me/project", "folder path"),
+                ("workspace:remove", "ws_123", "workspace id"),
+            ] {
+                let r = policy_rig(DeviceAccess { read: false, change: true }, Some(&k), None, "guardrails");
+                let args = json!([value]);
+                assert_eq!(r.ask(channel, args.clone(), None), refused("proof-required", channel));
+                let p = proof(&k, "phone-1", channel, &args, NOW as i64);
+                assert!(r.ask(channel, args.clone(), Some(p.clone())).is_ok());
+                assert_eq!(r.ask(channel, args.clone(), Some(p)), refused("proof-replayed", channel));
+                assert_eq!(*r.calls.lock().unwrap(), vec![(channel.to_string(), args.clone())]);
+                let off = policy_rig(DeviceAccess { read: true, change: false }, Some(&k), None, "guardrails");
+                let p = proof(&k, "phone-1", channel, &args, NOW as i64);
+                assert_eq!(off.ask(channel, args, Some(p)), refused("change-off", channel));
+                assert!(off.calls.lock().unwrap().is_empty());
+                for invalid in [Value::Null, json!(1), json!({}), json!([]), json!(""), json!("  "), json!("a\0b")] {
+                    assert_eq!(screen(channel, &[invalid]).err().unwrap(), denied("value-invalid", detail));
+                }
+                assert_eq!(screen(channel, &[]).err().unwrap(), denied("value-invalid", detail));
+                assert_eq!(
+                    screen(channel, &[json!(value), json!({})]).err().unwrap(),
+                    denied("option-denied", "extra argument")
+                );
+                assert_eq!(
+                    r.log(),
+                    vec![(false, Some("proof-required".into())), (true, None), (false, Some("proof-replayed".into()))]
+                );
+            }
+        }
+
+        #[test]
         fn git_goes_through_the_policy_classes() {
             let k = signer(13);
             let devices = Arc::new(MemDevices::default());
@@ -2270,6 +2320,10 @@ mod tests {
                 assert!(has(&p.read_channels, c), "{c}");
             }
             assert!(has(&p.change_channels, "files:write"));
+            // #1095: what the agent linked in a chat, read only.
+            for c in ["artifact:read", "preview:fetch"] {
+                assert!(has(&p.read_channels, c) && !has(&p.change_channels, c), "{c}");
+            }
             for c in p.read_channels.iter().chain(&p.change_channels) {
                 assert!(!has(&p.read_channels, c) || !has(&p.change_channels, c), "{c} is in both classes");
             }
@@ -2304,8 +2358,6 @@ mod tests {
             "terminal:snapshot",
             "terminals:list:native",
             "file:write",
-            "workspace:addByPath",
-            "workspace:remove",
             "voice:install",
             "connector:connect",
             "mcp:status",

@@ -81,3 +81,27 @@ area: chat
   - the activity headline summary
   - streaming into an open group
 - Desktop visual evidence in the PR shows a turn that reads guidance, explores, edits and runs tests, before and after, in light and dark. It also includes a short recording of a group filling while live. The phones have screenshots from CI simulators and emulators. Status stays *unverified* there until they are run.
+
+## Tool timing and model continuation (#1107)
+
+**Status: implemented in the desktop/shared Local Web UI renderer; focused regression tests pass. Matched desktop screenshots and timing recordings have been captured and inspected. Live-provider verification is unverified.**
+
+- Each unfinished tool keeps its wall-clock timer and running mark until its own result, including older concurrent calls and calls before a newer narration block. Purpose groups stay live while any member call is unfinished. Completed tool and group timings freeze at their recorded result times, not at turn completion. Approval-pending calls do not tick as executing tools.
+- After the latest activity block's tools finish, the ongoing turn shows **Tools finished. Waiting for the model…** separately from the completed calls. The model line remains visible when the step list is folded. It disappears on narration, a new tool call, or turn completion; approval, pause and retry waits do not masquerade as model work. The turn's existing overall elapsed measurement continues separately.
+- When the provider supplies public reasoning through the existing `reasoning` events, its current text is visible in a bounded, wrapping, scrollable **Thinking** preview even when the step list is folded. Without that text, the UI reports only that it is waiting, never invented reasoning or progress.
+- Privacy boundary: presentation only, using existing public event text, rendered as escaped text. No provider calls, new collection, encrypted reasoning, carry metadata, hidden/internal reasoning extraction, or transcript/wire changes.
+- Regression coverage: concurrent and grouped calls, older activity blocks, zero-valued timestamps, fixed completed durations, wall-clock catch-up after sleep, timer cancellation, approval/held/retry/paused states, folded public text and HTML escaping.
+
+Parent evidence scenarios: keep the same default theme, viewport and seeded events on the unchanged base and changed worktree. Record an older long-running call while a newer one returns, then both completed during a silent model wait, then a streamed public reasoning summary with the group folded, then narration and completion. Inspect `[data-tool-elapsed]`, `[data-tool-elapsed][data-running]`, `[data-purpose-group]`, `[data-model-activity]` and `[data-public-reasoning]`. Before/after screenshots plus a short timing recording are required; test renders alone are not visual evidence.
+
+Verification for #1107: focused timing/activity tests and desktop typecheck pass. Matching unchanged-base/working-tree Electron captures and an approximately six-second frame recording show the older parallel tool timer advancing, completed timers freezing, model-wait continuation, public-thinking preview and turn completion. The synthetic fixture runs the real ActivityGroup with deterministic events in a hidden, off-screen, non-focusable, separate-profile window and blocks network/permissions. Reproduce with `node apps/desktop/scripts/tool-timing-integration.cjs`; set `NEKKO_TEST_SOURCE` to an unchanged archive for the baseline. Live provider cadence, packaged builds and other desktop platforms remain unverified.
+
+## Activity-specific transcript icons
+
+`[implemented; focused tests and isolated renderer checks passed; desktop dark/light screenshots reviewed at 1000px and 460px]`
+
+- Individual tool calls show what is happening: a file for reads/guidance, folder for directory listings, magnifier for search, pencil for edits, checkmark for checks, branch for Git, globe for web access, and list for planning. Unknown/MCP tools keep the generic tool glyph.
+- Shell execution (including Python) reuses the live current-work terminal artwork, rendered statically in the transcript so completed calls never appear to be running. Tests and Git commands use their more specific purpose icons. The existing animated current-work indicator is unchanged.
+- Purpose groups use the common icon when their calls agree, or their purpose icon for a mixed group (for example, a magnifier for mixed code exploration). The outer summary uses its latest tool/group icon. Dedicated watch, subagent, thought and narration treatments are preserved.
+- Selection is deterministic from tool name and the existing shared purpose classifier, with native and Claude Code aliases and `functions.` prefixes handled. This is renderer-only: grouping, tool execution, outputs, permissions and network behavior are unchanged. Icons remain decorative beside the existing textual labels.
+- Verified via a synthetic real-ActivityGroup Electron fixture with blocked networking, isolated profile, hidden/non-focusable window, expanded read/search group, and collapse/reopen interaction. Packaged-app and physical-device verification are not included. Native capture source enumeration failed on this host; screenshots cover Electron renderer pixels, not OS window chrome.

@@ -2,6 +2,7 @@
  "channels": [
   "app:info",
   "app:quit",
+  "artifact:read",
   "changes:list",
   "chat:abort",
   "chat:answer",
@@ -41,6 +42,7 @@
   "pr:create",
   "pr:diff",
   "pr:sessionList",
+  "preview:fetch",
   "providers:list",
   "providers:saveSealed",
   "providers:sealKey",
@@ -75,8 +77,10 @@
   "voice:transcribe",
   "workflow:run",
   "workflows:list",
+  "workspace:addByPath",
   "workspace:gitStatus",
-  "workspace:list"
+  "workspace:list",
+  "workspace:remove"
  ],
  "alwaysDenied": {
   "channels": [
@@ -108,9 +112,7 @@
    "workflow:delete",
    "workflow:duplicate",
    "workflow:event",
-   "workflow:update",
-   "workspace:addByPath",
-   "workspace:remove"
+   "workflow:update"
   ],
   "prefixes": [
    "cloud:",
@@ -178,9 +180,13 @@
   "ssh:hosts",
   "terminal:tail",
   "terminals:list",
+  "artifact:read",
+  "preview:fetch",
   "security:challenge"
  ],
  "changeChannels": [
+  "workspace:addByPath",
+  "workspace:remove",
   "providers:saveSealed",
   "providers:setEnabled",
   "git:commit",
@@ -613,6 +619,96 @@
    "size",
    "title",
    "updatedAt"
+  ]
+ },
+ "artifacts": {
+  "view": {
+   "textBytes": 1048576,
+   "binaryBytes": 4194304,
+   "previewBytes": 4194304,
+   "pathChars": 4096,
+   "urlChars": 2048,
+   "idChars": 200,
+   "redirects": 5,
+   "timeoutMs": 15000
+  },
+  "artifactView": [
+   "kind",
+   "mime",
+   "mtime",
+   "name",
+   "path",
+   "size",
+   "truncated"
+  ],
+  "previewView": [
+   "contentType",
+   "status",
+   "truncated",
+   "url"
+  ],
+  "previewHeaders": [
+   "cache-control",
+   "content-length",
+   "content-type",
+   "etag",
+   "last-modified"
+  ],
+  "previewMethods": [
+   "GET",
+   "HEAD"
+  ],
+  "linkExt": [
+   "csv",
+   "doc",
+   "docx",
+   "gif",
+   "htm",
+   "html",
+   "jpeg",
+   "jpg",
+   "json",
+   "markdown",
+   "md",
+   "pdf",
+   "png",
+   "ppt",
+   "pptx",
+   "svg",
+   "txt",
+   "webp",
+   "xls",
+   "xlsx"
+  ],
+  "assetExt": [
+   "avif",
+   "css",
+   "csv",
+   "gif",
+   "htm",
+   "html",
+   "ico",
+   "jpeg",
+   "jpg",
+   "js",
+   "json",
+   "map",
+   "md",
+   "mjs",
+   "otf",
+   "png",
+   "svg",
+   "ttf",
+   "txt",
+   "webp",
+   "woff",
+   "woff2"
+  ],
+  "loopbackHosts": [
+   "localhost",
+   "127.0.0.1",
+   "0.0.0.0",
+   "[::1]"
   ]
  },
  "git": {

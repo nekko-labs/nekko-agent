@@ -33,5 +33,5 @@ import('@nekko-agent/shared').then(async ({ summarizeSession }) => {
   records.forEach(putCachedSession);
   document.documentElement.dataset.theme = 'dark';
   createRoot(document.getElementById('root')!).render(React.createElement(UpdateProvider, null, React.createElement(App)));
-  (window as any).layoutFixture = { store: useStore };
+  (window as any).layoutFixture = { store: useStore, records, bridge, putCachedSession };
 });

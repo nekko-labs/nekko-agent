@@ -34,6 +34,8 @@ public enum Channels {
     public static let chatAnswer = "chat:answer"
     public static let toolApprove = "tool:approve"
     public static let workspaceList = "workspace:list"
+    public static let workspaceAddByPath = "workspace:addByPath"
+    public static let workspaceRemove = "workspace:remove"
     public static let appInfo = "app:info"
     /// SK-2: a single-use step-up challenge (read class).
     public static let securityChallenge = "security:challenge"
@@ -102,15 +104,19 @@ public enum Channels {
     public static let logsRead = "logs:read"
     /// The change-class channels among these.
     public static let filesChange: Set<String> = [filesWrite]
+    /// What the agent linked in a chat (#1095), read only: a linked file, or a file a
+    /// linked page loads from its folder, and a GET/HEAD to a linked local preview server.
+    public static let artifactRead = "artifact:read"
+    public static let previewFetch = "preview:fetch"
     /// A provider added or switched from the phone (`PHONE_PROVIDER_CHANGE_CHANNELS`): change class, with a proof.
     public static let providersChange: Set<String> = [providersSaveSealed, providersSetEnabled]
     /// Every change-class channel the phone calls (`PHONE_CHANGE_CHANNELS`): signed, so Face ID or the passcode is asked.
-    public static let change: Set<String> = gitChange.union(filesChange).union(terminalChange).union(providersChange)
+    public static let change: Set<String> = gitChange.union(filesChange).union(terminalChange).union(providersChange).union([workspaceAddByPath, workspaceRemove])
 
     public static let all = [
         settingsGet, settingsUpdate, providersList, modelsList, sessionsSummaries, sessionCreate, sessionGet,
         sessionSetOptions, sessionDelete, voiceStatus, voiceTranscribe, chatSend, chatAbort, chatQueue,
-        chatPending, chatAnswer, toolApprove, workspaceList, appInfo, skillsRunnable, changesList,
+        chatPending, chatAnswer, toolApprove, workspaceList, workspaceAddByPath, workspaceRemove, appInfo, skillsRunnable, changesList,
         chatEditQueued, sessionFork, tasksList, taskRunNow, workflowsList, workflowRun, prSessionList,
         usageSummary, limitsGet, sessionWatches, machineSummary, monitorSummary, securityChallenge, appQuit, deviceSignOut, remoteStop,
         providersSealKey, providersSaveSealed, providersSetEnabled,
@@ -120,6 +126,7 @@ public enum Channels {
         // The Expert monitor and a chat's context gauge (Monitor.swift).
         MonitorChannels.systemStats, MonitorChannels.gpuStats, MonitorChannels.engineStatus, MonitorChannels.contextPreview,
         MonitorChannels.modelUnload,
+        artifactRead, previewFetch,
         // IO-33 FA-3, FA-6 (Terminal.swift).
         TerminalChannels.list, TerminalChannels.tail, TerminalChannels.sshHosts, TerminalChannels.create, TerminalChannels.sshOpen,
         TerminalChannels.write, TerminalChannels.resize, TerminalChannels.signal, TerminalChannels.close,
@@ -684,13 +691,16 @@ public struct WorkspaceFolder: Equatable, Sendable, Identifiable {
     public let id: String
     public let name: String
 
-    public init(id: String, name: String) {
+    public let path: String?
+
+    public init(id: String, name: String, path: String? = nil) {
         self.id = id
         self.name = name
+        self.path = path
     }
 
     public static func list(_ v: JSONValue?) -> [WorkspaceFolder] {
-        (v?.array ?? []).compactMap { w in w.str("id").map { WorkspaceFolder(id: $0, name: w.str("name") ?? "Folder") } }
+        (v?.array ?? []).compactMap { w in w.str("id").map { WorkspaceFolder(id: $0, name: w.str("name") ?? "Folder", path: w.str("path")) } }
     }
 }
 

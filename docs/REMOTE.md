@@ -76,6 +76,16 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > list that opens the computer menu. A chat that needs you has a coloured bar down its left edge
 > and the raised hand.
 >
+> Tables in a reply show as a grid (it scrolls sideways when wide). When the agent links a file it
+> made on your computer (an HTML prototype, an image, a PDF, Markdown, text, JSON or CSV) or a
+> preview server it started there (`http://localhost:5173`), the reply gets a card for it, with a
+> picture of the page. Tapping the card or the link opens it full screen: a prototype runs and
+> can be clicked through, an image zooms. The computer reads the file or the page and sends it to
+> the phone through the end-to-end encrypted connection, so it works away from home too. It only
+> sends what the agent linked in that chat (and, for a linked web page, the files in its folder),
+> and the page can't reach the internet or anything else on your phone. Ordinary web links open in
+> Safari.
+>
 > Each group opens with up to eight chats from the last two weeks (a chat that is working, needs
 > you or is pinned always shows), then **Show N more**. Tap a group's name to fold it. The
 > **view** button beside New chat arranges the list as the desktop's Agents panel does: **Group
@@ -578,3 +588,14 @@ NEKKO_RELAY_URL=wss://your-relay NEKKO_ROOM=myroom NEKKO_PAIR_KEY=<secret> npx n
 
 It prints a one-time pairing code (10 minutes) at boot and keeps the same persistent device
 registry as the desktop app.
+
+### Chat status on native iOS
+
+The icon to the left of each chat reads like desktop: a rocket means working,
+a question mark means the agent needs you, “Zz” means idle, and a checkmark marks
+a completed chat. A clock means a prompt is waiting to send.
+
+Nekko sits at the top-left of the Chats screen beside the computer menu. Tap the
+pixel cat for a brief greeting. This is a local animation, not a message to an
+agent. The mascot respects Reduce Motion and pauses its animation in the
+background.

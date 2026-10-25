@@ -75,9 +75,13 @@ model servers are first-class, not an afterthought.
 3. **Test connection** → the model dropdown fills with whatever LM Studio is serving.
 4. Pick the model in the chat header and go.
 
-**Reasoning models** (Gemma, DeepSeek-R1, Qwen-thinking, etc.) are first-class:
-their chain-of-thought streams into a collapsible **Thinking** block above the
-answer, so you see progress during long reasoning and the answer stays clean.
+**Reasoning models** (Gemma, DeepSeek-R1, Qwen-thinking, etc.) are first-class.
+When a provider exposes public reasoning text or a reasoning summary, the current
+text appears in a **Thinking** preview above the answer, even with the working
+steps folded. Private or encrypted reasoning is never shown. If no public text
+is available after a tool finishes, **Tools finished. Waiting for the model…**
+distinguishes the ongoing turn from the completed tool. Each tool's timer stops
+at its own result; other unfinished calls and the overall reply clock keep going.
 
 ---
 
@@ -85,15 +89,17 @@ answer, so you see progress during long reasoning and the answer stays clean.
 
 ### Defaults for new agent windows
 
+The new-chat screen uses a full diagonal colour gradient with a subtle static grain layer to reduce banding, behind the glass composer. The background never animates or intercepts typing.
+
 Choosing a model in a chat or in **Add window** remembers that model and its provider for the next agent window. Choosing **Auto** remembers Auto, not whichever model it resolves to. Browsing a provider or opening an existing chat does not change this default; existing chats keep their own model choices.
 
-A successfully changed **Permissions** mode (Ask, Guardrails or YOLO) becomes the default for new chats. **Effort** is set per chat (a chat that never picked one follows the app default), and the saved **Execution** mode is reused through the existing setup flow. **Incognito** and **Offline** are different: they apply only to the chat where you enable them and are never turned on globally for new windows.
+Successful changes to **Mode** settings, including **Effort**, **Permissions**, **Execution**, **Incognito** and **Offline**, are remembered for new chats and windows, including windows opened on another screen. New chats keep their own snapshot; changing a default afterwards does not change their choices. Older chats that never saved an effort or approvals choice keep their existing app-default fallback. Folders and task content are never part of these defaults.
 
 The **Mode** button opens the Mode panel. Saved modes run down its left side; the settings sit in three columns: **Environment** (run on your machine or in a Sandbox, and whether edits go to a separate worktree), **Model** (where this chat's models run, and its effort), **Privacy** (Incognito, internet access, folders, approvals, tools, MCP servers and connectors) and **Approach** (skills, project rules and memory). Every setting has a line underneath saying what it does. **Tools**, **MCP servers**, **Connectors** and **Skills** open a list out the panel's side.
 
-The **MCP servers** and **Connectors** lists switch each one on or off for this chat only. A server switched off here keeps running for your other chats, and a connector switched off here is simply not read for this chat's context. Neither list can turn on a server that is off in Settings or a service that is not connected; links at the bottom go to those pages. Sub-agents a chat starts inherit its effort, servers and connectors.
+The **MCP servers** and **Connectors** lists switch each one on or off for this chat and remember the selection for new chats. A server switched off here keeps running for your other chats, and a connector switched off here is simply not read for this chat's context. Neither list can turn on a server that is off in Settings or a service that is not connected; links at the bottom go to those pages. Sub-agents a chat starts inherit its effort, servers and connectors.
 
-Click a saved mode to apply all of its settings to the chat at once. Change anything afterwards and the panel offers **Revert** or **Update** for that mode, or **Save mode** to keep the combination under a new name. Click the star beside a mode to start every new chat in it; click it again to go back to your last-used defaults. A mode also remembers the chat's effort, MCP servers, connectors, project rules and memory. You start with four modes:
+Click a saved mode to apply all of its settings to the chat at once. Change anything afterwards and the panel offers **Revert** or **Update** for that mode, or **Save mode** to keep the combination under a new name. Click the star beside a mode to start every new chat in it; click it again to return to the baseline app defaults. Starring or unstarring clears remembered manual Mode overrides; later changes are remembered again. A mode also remembers the chat's effort, MCP servers, connectors, project rules and memory. You start with four modes:
 
 - **Cloud only**: the chat runs on cloud providers only. Its model menu lists only cloud providers, and the engine refuses a model on this computer.
 - **Fusion**: Auto picks the model for each turn and may move a turn between your local and cloud models. It moves only to a model that is as capable or better, either because it is cheaper (a local model counts as free) or because the current provider's usage limit is spent. The turn says why it moved.
@@ -102,7 +108,7 @@ Click a saved mode to apply all of its settings to the chat at once. Change anyt
 
 **Models run** in the Model column sets the same thing by hand: click *Cloud only*, *Fusion* or *Local only*, and click the highlighted one again to stop pinning. *Local only* needs a local model and *Cloud only* a cloud one; when the chat's model doesn't fit, the panel says so and leaves the setting as it was, so pick the model first. A mode never includes your folders, and applying one that runs in a Sandbox opens the Sandbox setup first.
 
-Under **Approach**, **Skills** holds the work modes: *Default*, *Better review*, *Design* and *Best output*. Picking one changes how the agent works in that chat and brings the matching skills with it (for example Better review applies `/review`, `/security-review` and `/review-council`), so you don't have to remember or type them. A work mode applies to that chat only, costs more tokens and time than Default, and never changes Permissions, tools, Offline or Incognito. Rows marked *Coming soon* (model router, system prompt) are not available yet.
+Under **Approach**, **Skills** holds the work modes: *Default*, *Better review*, *Design* and *Best output*. Picking one changes how the agent works in that chat and brings the matching skills with it (for example Better review applies `/review`, `/security-review` and `/review-council`), so you don't have to remember or type them. A work mode applies to that chat and is remembered for new chats, costs more tokens and time than Default, and never changes Permissions, tools, Offline or Incognito. Rows marked *Coming soon* (model router, system prompt) are not available yet.
 
 **Project rules** decides how much of a repository's own agent instructions the chat reads:
 
@@ -441,11 +447,17 @@ Local document links in assistant replies appear as artifact cards beneath the r
 
 Local SVG, PNG, JPEG, GIF and WebP image markdown and image links also count as artifacts. Image markdown previews in the message; ordinary image links get a preview card below it. The same image does not get a second response card if it is already shown in image markdown. Cards fill the available width up to 768 px, contain images within 640 px height, and retain **Open source** to open the file in the originating chat. Local images load automatically outside Sandbox; unreadable, oversized or unsupported images show a fallback. SVG runs only as an inert image, with no scripts or external subresource requests. Web photos are shown through Nekko's safe fetch (see *Photos from the web*) and are not listed as artifacts; network shares and unsafe URL schemes are not previewed.
 
+A link to an HTML page (`.html` or `.htm`) gets a rendering card: a small picture of the page above its title and filename. The page is laid out at a desktop size (1280 by 800) and scaled down to the card, and it is read only when the card scrolls near the screen. The picture is drawn with scripts switched off and no network access, and it does not respond to the pointer; select the picture or **Open** to open the page in the originating chat, where the file pane offers the preview, the source and an interactive preview. **Interactive** opens that interactive preview straight away, in its own isolated window. Pages over about 1 MB, and unreadable pages, keep the card without a picture. In Sandbox nothing on your computer is read, so the card stays plain and its actions are off.
+
+`file://` links count as local files too: `file:///C:/Users/me/report.md` and `file:///home/me/report.md` open like the plain paths, and percent-encoded names such as `My%20Designs` are decoded. A `file://` link to another machine (`file://server/share/...`) is not opened.
+
+When a reply points at a preview server on your computer (`http://localhost:5173/`, `127.0.0.1`, `[::1]` or `0.0.0.0`, as a link or a bare address), a **Live preview** card shows the link's label, the host and port, and the path, and **Open in browser** opens it in your browser. The app never loads the page itself, so these cards have no picture. Live previews appear in the chat and in Agent Monitor's Artifacts list, but not in the **Artifacts** tab, which lists files.
+
 The desktop navigation rail stays 52px wide at rest. Hover a destination or Tab into it to reveal the labels in a 198px body; the extra 10px is right-side breathing room, not narrower buttons. Its subtle background extends equally above and below the menu along the left edge. At full available height, each straight shoulder runs from 40px wide at 95px beyond the nearest button to the 198px-wide body at that button, with slowly narrowing tails rather than curved, outward-flaring wings. Header clearance lets the upper tip extend beside the mascot. Short windows shorten both tails equally and keep the destinations scrollable. The decorative tails do not intercept clicks, and phones continue to use bottom navigation. Implementation is geometry-tested; matched visual and interaction verification is pending with the parent task.
 
 The **Artifacts** tab on the left rail collects what agents made across all your chats: documents, web pages, designs, diagrams, images, data and office files, grouped by kind. Pick one to preview it, **Open file** to hand it to its usual app, or **Open chat** to see the chat it came from on the Agents wall in Focused view. Source code the agent edits is not listed.
 
-At the top of **Agent Monitor**, expand **Artifacts** to see the session’s linked documents. It starts collapsed and always displays a count, including 0. A newly discovered artifact path expands just this section and highlights it with an accent border/background and a visible, screen-reader-announced **New artifact** status for ten seconds. Another new path restarts that deadline, including when one path replaces another without changing the count. The whole monitor never opens automatically. Initial history, switching chats and history loaded after a missing session do not trigger the highlight. Repeated links and previously seen paths do not retrigger it. You can collapse the section during the highlight; it stays collapsed until another new path arrives. When the highlight expires, the section keeps its current open or closed state. Non-image documents are not read until you open them; image cards load automatically when rendered. Host previews remain unavailable in Sandbox.
+At the top of **Agent Monitor**, expand **Artifacts** to see the session’s linked documents. It starts collapsed and always displays a count, including 0. A newly discovered artifact path expands just this section and highlights it with an accent border/background and a visible, screen-reader-announced **New artifact** status for ten seconds. Another new path restarts that deadline, including when one path replaces another without changing the count. The whole monitor never opens automatically. Initial history, switching chats and history loaded after a missing session do not trigger the highlight. Repeated links and previously seen paths do not retrigger it. You can collapse the section during the highlight; it stays collapsed until another new path arrives. When the highlight expires, the section keeps its current open or closed state. Documents are not read until you open them; image cards load automatically when rendered, and HTML rendering cards read their page once the section is open and the card is near the screen. Host previews remain unavailable in Sandbox.
 
 ### Plan step status icons
 

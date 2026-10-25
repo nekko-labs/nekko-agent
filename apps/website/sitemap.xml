@@ -18,6 +18,11 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://nekkoagent.com/docs/chat-progress</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://nekkoagent.com/docs/fonts-and-text</loc>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>

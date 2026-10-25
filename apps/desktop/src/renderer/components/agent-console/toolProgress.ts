@@ -1,4 +1,10 @@
 import type { LiveActivity } from '@nekko-agent/shared';
+import type { Activity } from './transcript.js';
+
+/** Completion belongs to each call, including older concurrent calls. */
+export function isRunningTool(item: Activity, pendingCallId?: string): boolean {
+  return item.kind === 'tool' && item.endedAt === undefined && !item.result && item.call.id !== pendingCallId;
+}
 
 export const TOOL_PROGRESS_MINUTE_MS = 60_000;
 
@@ -42,4 +48,10 @@ export function watchQuietMinutes(since: number, onChange: (minutes: number) => 
   }
   schedule();
   return () => { stopped = true; clearTimeout(timer); };
+}
+
+/** Re-read wall time on every wake so background throttling cannot lose time. */
+export function watchToolElapsed(onTick: (now: number) => void): () => void {
+  const timer = setInterval(() => onTick(Date.now()), 100);
+  return () => clearInterval(timer);
 }
