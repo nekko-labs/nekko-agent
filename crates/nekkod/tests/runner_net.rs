@@ -856,26 +856,59 @@ async fn host_sockets_are_bound_to_the_egress_interface_ipv6() {
     assert_eq!(&buf[..n], b"hi");
 }
 
-/// A live server behind every refused address, so a refusal is not a timeout.
+/// Direct behind a recording map: public-looking addresses are handed to
+/// Direct as their live local stand-ins, so only Direct's refusal keeps the
+/// guest from them, and the record shows every flow went through the connector.
+struct DirectVia {
+    inner: Direct,
+    map: HashMap<SocketAddr, SocketAddr>,
+    calls: Arc<Mutex<Vec<(&'static str, SocketAddr)>>>,
+}
+
+impl DirectVia {
+    fn target(&self, kind: &'static str, dst: SocketAddr) -> SocketAddr {
+        self.calls.lock().unwrap().push((kind, dst));
+        self.map.get(&dst).copied().unwrap_or(dst)
+    }
+}
+
+impl Connector for DirectVia {
+    async fn tcp(&self, dst: SocketAddr) -> io::Result<TcpStream> {
+        self.inner.tcp(self.target("tcp", dst)).await
+    }
+    async fn udp(&self, dst: SocketAddr) -> io::Result<UdpSocket> {
+        self.inner.udp(self.target("udp", dst)).await
+    }
+}
+
+/// A live server behind every refused address, so a refusal is not a timeout
+/// and a leak would be answered.
 async fn assert_direct_refuses(d: Direct) {
     let (tcp_dst, udp_dst) = (pong_server().await, udp_echo().await);
     assert_eq!(d.tcp(tcp_dst).await.unwrap_err().kind(), io::ErrorKind::PermissionDenied);
     assert_eq!(d.udp(udp_dst).await.unwrap_err().kind(), io::ErrorKind::PermissionDenied);
-    // End to end: the guest's TCP gets RST and its DNS goes unanswered.
-    // A public upstream, so the policy allows it and only Direct can refuse it.
-    let up = sa(RESOLVER, 53);
+    // End to end: a public upstream (so the policy allows it), live locally on UDP and TCP.
+    let (up, web) = (sa(RESOLVER, 53), sa(PUBLIC, 443));
+    let local_dns = fake_dns(b"").await;
+    let _tcp_up = TcpListener::bind(local_dns).await.unwrap();
+    let calls = Arc::new(Mutex::new(vec![]));
+    let via = DirectVia { inner: d, map: [(up, local_dns), (web, pong_server().await)].into(), calls: calls.clone() };
     let (g, n) = UnixDatagram::pair().unwrap();
     let cfg = NetConfig { dns_upstream: vec![up], ..NetConfig::default() };
-    let _nat = tokio::spawn(serve_with(n, Arc::new(RwLock::new(HostNets::default())), cfg, d));
+    let _nat = tokio::spawn(serve_with(n, Arc::new(RwLock::new(HostNets::default())), cfg, via));
     let mut guest = Guest::new(g, true);
     let h = guest.connect(PUBLIC, 443, 42001);
     assert!(guest.refused(h).await, "a guest flow left without an egress interface");
     let q = guest.udp(5353);
     guest.udp_sock(q).send_slice(b"query", ep(GATEWAY, 53)).unwrap();
     assert!(guest.udp_recv(q, 1).await.is_none(), "DNS left without an egress interface");
-    // 53/tcp too.
     let h = guest.connect(GATEWAY, 53, 42002);
     assert!(guest.refused(h).await, "DNS over TCP left without an egress interface");
+    assert_eq!(
+        *calls.lock().unwrap(),
+        [("tcp", web), ("udp", up), ("tcp", up)],
+        "every flow goes through the connector"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
