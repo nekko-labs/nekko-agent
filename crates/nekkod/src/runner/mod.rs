@@ -20,18 +20,22 @@ pub mod vm;
 
 use github::{ConnectRequest, GitHub, SecKeySigner};
 use keychain::{key_name, runner_vault};
+use nekko_cloud::vault::Vault;
 use nekko_connectors::Net;
 use nekko_runner::{HostNets, RunnerSettings};
 use provider::Provider;
 use serde_json::{Value, json};
 use signals::HostSense;
-use std::path::PathBuf;
+use signals::Sense;
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use store::{RunnerRecord, Store, same_scope};
-use supervisor::{RunnerView, Supervisor, TICK};
+use supervisor::{RunnerState, RunnerView, Supervisor, TICK};
 use vm::HelperVm;
+use vm::Vm;
 
 pub const CHANNELS: &[&str] = &["runner:list", "runner:connect", "runner:update", "runner:remove", "runner:setEnabled"];
 /// Pushed with `RunnerView[]` whenever the views change.
@@ -41,19 +45,26 @@ const NO_RUNNER: &str = "No runner with that id.";
 const WAN_EVERY: Duration = Duration::from_secs(300);
 const GATEWAY_EVERY: Duration = Duration::from_secs(30);
 
-type Sup = Supervisor<HostSense, HelperVm, GitHub<Net>>;
-
-pub struct Runners {
+pub struct Runners<S: Sense = HostSense, V: Vm = HelperVm, P: Provider = GitHub<Net>> {
     store: Store,
-    github: GitHub<Net>,
-    sup: tokio::sync::Mutex<Sup>,
+    /// Connects new runners; `None` in tests.
+    github: Option<GitHub<Net>>,
+    vault: Arc<dyn Vault>,
+    sup: tokio::sync::Mutex<Supervisor<S, V, P>>,
     /// Serializes load-change-save of `runners.json`.
     edit: tokio::sync::Mutex<()>,
     hub: crate::hub::Hub,
     wake: tokio::sync::Notify,
-    published: std::sync::Mutex<Value>,
-    /// `nekko-<host>-`: every runner name of this Mac.
-    prefix: String,
+    /// True once the tick loop runs (VM support is there).
+    looping: AtomicBool,
+    pending: std::sync::Mutex<Option<Pending>>,
+    /// The views last published; `runner:list` answers from here.
+    views: std::sync::Mutex<Vec<RunnerView>>,
+    /// App ids a connect is storing a key for.
+    connecting: std::sync::Mutex<HashSet<u64>>,
+    running_vm_mb: Arc<AtomicU64>,
+    /// Why no VM can run here, shown on every enabled runner.
+    vm_error: Option<String>,
 }
 
 fn now_secs() -> u64 {
@@ -151,99 +162,205 @@ impl Runners {
             now_secs,
         );
         let host_name = gethostname::gethostname().to_string_lossy().into_owned();
-        let store = Store::new(&dir);
-        let mut sup =
-            Supervisor::new(dir, sense, vm, github.clone(), Box::new(awake::Caffeinate::default()), host_name.clone());
-        sup.set_records(store.load());
-        let me = Arc::new(Runners {
-            store,
-            github,
-            sup: tokio::sync::Mutex::new(sup),
-            edit: tokio::sync::Mutex::new(()),
-            hub,
-            wake: tokio::sync::Notify::new(),
-            published: std::sync::Mutex::new(Value::Null),
-            prefix: format!("nekko-{}-", supervisor::name_host(&host_name)),
-        });
+        let vault = github.vault();
+        let sup =
+            Supervisor::new(dir.clone(), sense, vm, github.clone(), Box::new(awake::Caffeinate::default()), host_name);
+        let me = Runners::new(&dir, sup, Some(github), vault, hub, helper.as_ref().err().cloned(), running_vm_mb);
         if helper.is_ok() {
-            let r = me.clone();
-            tokio::spawn(async move {
-                r.sup.lock().await.start().await;
-                loop {
-                    let views = {
-                        let mut s = r.sup.lock().await;
-                        s.tick().await;
-                        running_vm_mb.store(s.running_vm_mb(), Ordering::SeqCst);
-                        s.views()
-                    };
-                    r.publish(&views);
-                    tokio::select! {
-                        () = tokio::time::sleep(TICK) => {}
-                        () = r.wake.notified() => {}
-                    }
-                }
-            });
+            me.spawn_loop();
         }
         me
     }
+}
 
-    fn publish(&self, views: &[RunnerView]) {
-        let v = json!(views);
-        let Ok(mut last) = self.published.lock() else { return };
-        if *last != v {
-            *last = v.clone();
-            self.hub.publish(EVENT, v, false);
+/// Records saved by a channel call, waiting for the loop's next tick.
+struct Pending {
+    records: Vec<RunnerRecord>,
+    /// Reconnected runners whose sticky error clears.
+    reset: Vec<String>,
+}
+
+impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
+    pub fn new(
+        runners_dir: &Path,
+        mut sup: Supervisor<S, V, P>,
+        github: Option<GitHub<Net>>,
+        vault: Arc<dyn Vault>,
+        hub: crate::hub::Hub,
+        vm_error: Option<String>,
+        running_vm_mb: Arc<AtomicU64>,
+    ) -> Arc<Self> {
+        let store = Store::new(runners_dir);
+        sup.set_records(store.load());
+        let views = sup.views();
+        Arc::new(Runners {
+            store,
+            github,
+            vault,
+            sup: tokio::sync::Mutex::new(sup),
+            looping: AtomicBool::new(false),
+            pending: std::sync::Mutex::new(None),
+            views: std::sync::Mutex::new(views),
+            connecting: std::sync::Mutex::new(HashSet::new()),
+            edit: tokio::sync::Mutex::new(()),
+            hub,
+            wake: tokio::sync::Notify::new(),
+            running_vm_mb,
+            vm_error,
+        })
+    }
+
+    /// Ticks every `TICK`, and at once after a channel call. Only the loop
+    /// holds the supervisor while it runs; channels never wait for a tick.
+    pub fn spawn_loop(self: &Arc<Self>) {
+        self.looping.store(true, Ordering::SeqCst);
+        let r = self.clone();
+        tokio::spawn(async move {
+            r.sup.lock().await.start().await;
+            loop {
+                let (views, gone) = {
+                    let mut s = r.sup.lock().await;
+                    let gone = r.step(&mut s, true).await;
+                    r.running_vm_mb.store(s.running_vm_mb(), Ordering::SeqCst);
+                    (s.views(), gone)
+                };
+                if !gone.is_empty() {
+                    let _g = r.edit.lock().await;
+                    r.forget_keys(&r.store.load(), gone.iter().map(|g| g.github.app_id));
+                }
+                // A change saved during the tick keeps its optimistic view until the next one.
+                if r.pending.lock().is_ok_and(|p| p.is_none()) {
+                    r.publish(views);
+                }
+                tokio::select! {
+                    () = tokio::time::sleep(TICK) => {}
+                    () = r.wake.notified() => {}
+                }
+            }
+        });
+    }
+
+    /// Applies saved records and ticks if asked; returns removed runners whose
+    /// VMs are all cleaned, so their keys can be forgotten.
+    async fn step(&self, s: &mut Supervisor<S, V, P>, tick: bool) -> Vec<RunnerRecord> {
+        if let Some(p) = self.pending.lock().ok().and_then(|mut p| p.take()) {
+            s.set_records(p.records);
+            for id in p.reset {
+                s.reset(&id);
+            }
+        }
+        if tick {
+            s.tick().await;
+        }
+        s.take_gone().await
+    }
+
+    /// Deletes each app key no saved record uses and no connect is adding. Call under `edit`.
+    fn forget_keys(&self, saved: &[RunnerRecord], apps: impl Iterator<Item = u64>) {
+        let connecting = self.connecting.lock().map(|c| c.clone()).unwrap_or_default();
+        for app in apps {
+            if !connecting.contains(&app) && !saved.iter().any(|r| r.github.app_id == app) {
+                self.vault.delete(&key_name(app));
+            }
         }
     }
 
-    /// Saves `records`, hands them to the supervisor, and returns the view of `id`.
+    fn publish(&self, views: Vec<RunnerView>) {
+        let Ok(mut last) = self.views.lock() else { return };
+        if *last != views {
+            self.hub.publish(EVENT, json!(views), false);
+            *last = views;
+        }
+    }
+
+    /// What `records` will look like once the supervisor has them: the last
+    /// view of each with its new settings, so the UI shows a change at once.
+    fn optimistic(&self, records: &[RunnerRecord], reset: &[String]) -> Vec<RunnerView> {
+        let old = self.views.lock().map(|v| v.clone()).unwrap_or_default();
+        records
+            .iter()
+            .map(|r| {
+                let mut v = old.iter().find(|v| v.config.id == r.config.id).cloned().unwrap_or_else(|| RunnerView {
+                    config: r.config.clone(),
+                    state: RunnerState::Waiting,
+                    slots: Vec::new(),
+                    reasons: Vec::new(),
+                    available: 0,
+                    limit: None,
+                    awake: false,
+                    error: None,
+                    today: Default::default(),
+                });
+                v.config = r.config.clone();
+                if reset.contains(&r.config.id) {
+                    v.error = None;
+                }
+                v.state = if !r.config.settings.enabled {
+                    RunnerState::Off
+                } else if let Some(e) = &self.vm_error {
+                    v.error = Some(e.clone());
+                    RunnerState::Error
+                } else if matches!(v.state, RunnerState::Off) || (v.state == RunnerState::Error && v.error.is_none()) {
+                    RunnerState::Waiting
+                } else {
+                    v.state
+                };
+                v
+            })
+            .collect()
+    }
+
+    /// Saves `records` and hands them to the supervisor without waiting for it;
+    /// returns the view of `id`. Call under `edit`.
     async fn commit(&self, records: Vec<RunnerRecord>, id: Option<&str>) -> Result<Value, String> {
         self.store.save(&records).map_err(|e| format!("Could not save the runners: {e}"))?;
-        let views = {
+        let mut reset = Vec::new();
+        if let Ok(mut p) = self.pending.lock() {
+            reset = p.take().map(|p| p.reset).unwrap_or_default();
+            reset.extend(id.map(str::to_owned));
+            *p = Some(Pending { records: records.clone(), reset: reset.clone() });
+        }
+        let views = if self.looping.load(Ordering::SeqCst) {
+            self.wake.notify_one();
+            self.optimistic(&records, &reset)
+        } else {
+            // No loop (no VM support): nothing else holds the supervisor.
             let mut s = self.sup.lock().await;
-            s.set_records(records);
-            if let Some(id) = id {
-                s.reset(id);
-            }
+            let gone = self.step(&mut s, false).await;
+            self.forget_keys(&records, gone.iter().map(|g| g.github.app_id));
             s.views()
         };
-        self.publish(&views);
-        self.wake.notify_one();
-        Ok(id.map_or(Value::Null, |id| json!(views.iter().find(|v| v.config.id == id))))
+        let view = id.map_or(Value::Null, |id| json!(views.iter().find(|v| v.config.id == id)));
+        self.publish(views);
+        Ok(view)
     }
 
     pub async fn route(&self, channel: &str, args: &[Value]) -> Result<Value, String> {
         let arg = |i: usize| args.get(i).cloned().unwrap_or(Value::Null);
         let id = arg(0).as_str().unwrap_or_default().to_string();
         if channel == "runner:list" {
-            return Ok(json!(self.sup.lock().await.views()));
+            return Ok(json!(*self.views.lock().map_err(|_| "The runner views are unavailable.")?));
         }
         if channel == "runner:connect" {
+            // Never echo the request: it may hold a private key.
             let req: ConnectRequest =
-                serde_json::from_value(arg(0)).map_err(|e| format!("That is not a connect request: {e}"))?;
+                serde_json::from_value(arg(0)).map_err(|_| "That is not a valid connect request.".to_string())?;
+            let github = self.github.as_ref().ok_or("Connecting is not available here.")?;
+            let app = req.app_id;
+            if let Ok(mut c) = self.connecting.lock() {
+                c.insert(app);
+            }
             let network = signals::read_network_id().await;
-            let _g = self.edit.lock().await;
-            let rec = self.github.connect(req, network.clone()).await?;
-            let mut records = self.store.load();
-            // Reconnecting a scope keeps its id and settings.
-            let id = match records.iter_mut().find(|r| same_scope(&r.config.scope, &rec.config.scope)) {
-                Some(old) => {
-                    old.github = rec.github;
-                    old.config.label = rec.config.label;
-                    let nets = &mut old.config.settings.trusted_networks;
-                    if let Some(n) = network.filter(|n| !nets.contains(n)) {
-                        nets.push(n);
-                    }
-                    old.config.settings = old.config.settings.clone().sanitized();
-                    old.config.id.clone()
-                }
-                None => {
-                    let id = rec.config.id.clone();
-                    records.push(rec);
-                    id
-                }
+            // GitHub's checks hold no lock.
+            let connected = github.connect(req, network.clone()).await;
+            let result = match connected {
+                Ok(rec) => self.save_connected(rec, network).await,
+                Err(e) => Err(e),
             };
-            return self.commit(records, Some(&id)).await;
+            if let Ok(mut c) = self.connecting.lock() {
+                c.remove(&app);
+            }
+            return result;
         }
         let _g = self.edit.lock().await;
         let mut records = self.store.load();
@@ -265,22 +382,42 @@ impl Runners {
                 self.commit(records, Some(&id)).await
             }
             "runner:remove" => {
-                let gone = records.remove(i);
-                self.commit(records.clone(), None).await?;
-                // Its VMs stop on the next tick; offline registrations go now.
-                let sweep = self.github.remove_stale(&gone, &self.prefix);
-                match tokio::time::timeout(Duration::from_secs(15), sweep).await {
-                    Ok(Err(e)) => eprintln!("runner {id}: cannot remove stale runners: {e}"),
-                    Err(_) => eprintln!("runner {id}: GitHub did not answer while removing stale runners"),
-                    Ok(Ok(_)) => {}
-                }
-                if !records.iter().any(|r| r.github.app_id == gone.github.app_id) {
-                    self.github.vault().delete(&key_name(gone.github.app_id));
-                }
-                Ok(Value::Null)
+                // Its VMs stop on the next tick; its offline registrations and,
+                // when no other runner uses the app, its key go once they are cleaned.
+                records.remove(i);
+                self.commit(records, None).await
             }
             _ => Err(format!("unknown channel {channel}")),
         }
+    }
+
+    /// A record GitHub accepted: a scope already saved keeps its id and settings.
+    async fn save_connected(&self, rec: RunnerRecord, network: Option<String>) -> Result<Value, String> {
+        let _g = self.edit.lock().await;
+        let mut records = self.store.load();
+        let mut replaced_app = None;
+        let id = match records.iter_mut().find(|r| same_scope(&r.config.scope, &rec.config.scope)) {
+            Some(old) => {
+                replaced_app = Some(old.github.app_id).filter(|a| *a != rec.github.app_id);
+                old.github = rec.github;
+                old.config.label = rec.config.label;
+                let nets = &mut old.config.settings.trusted_networks;
+                if let Some(n) = network.filter(|n| !nets.contains(n)) {
+                    nets.push(n);
+                }
+                old.config.settings = old.config.settings.clone().sanitized();
+                old.config.id.clone()
+            }
+            None => {
+                let id = rec.config.id.clone();
+                records.push(rec);
+                id
+            }
+        };
+        let view = self.commit(records.clone(), Some(&id)).await?;
+        // The scope moved to another app: the old app's key goes once nothing uses it.
+        self.forget_keys(&records, replaced_app.into_iter());
+        Ok(view)
     }
 }
 

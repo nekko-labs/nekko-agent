@@ -544,3 +544,35 @@ fn rs256_signature_verifies() {
     let err = SecKeySigner.rs256(&p8, msg).unwrap_err();
     assert!(err.contains("BEGIN RSA PRIVATE KEY"), "{err}");
 }
+
+#[tokio::test]
+async fn a_failed_connect_leaves_no_token_behind() {
+    let t = rig(
+        vec![
+            token(),
+            (200, json!({ "account": { "login": "o" } })),
+            (200, json!({ "id": 11, "private": false })),
+            (201, json!({ "token": "ghs_fresh", "expires_at": "2030-01-01T00:00:00Z" })),
+        ],
+        true,
+    );
+    assert!(t.gh.connect(repo_request(false), None).await.is_err());
+    assert_eq!(t.gh.installation_token(&repo_record().github).await.unwrap(), "ghs_fresh");
+}
+
+#[test]
+fn connect_requests_never_print_the_key() {
+    let shown = format!("{:?}", repo_request(false));
+    assert!(!shown.contains("MIIB") && shown.contains("redacted"), "{shown}");
+}
+
+fn early() -> u64 {
+    10
+}
+
+#[test]
+fn a_clock_near_zero_does_not_underflow() {
+    let t = rig_at(vec![], true, early);
+    let jwt = t.gh.app_jwt(123).unwrap();
+    assert_eq!(b64json(jwt.split('.').nth(1).unwrap())["iat"], 0);
+}

@@ -239,6 +239,8 @@ pub struct Supervisor<S: Sense, V: Vm, P: Provider> {
     last_wall: Option<(f64, tokio::time::Instant)>,
     /// Records whose stale registrations were swept (once per id).
     swept: HashSet<String>,
+    /// Removed records whose VMs are all cleaned, for [`Supervisor::take_gone`].
+    gone: Vec<RunnerRecord>,
     serial: u64,
     day_start: u64,
     today: HashMap<String, Today>,
@@ -299,6 +301,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             rerun_seen: HashSet::new(),
             last_wall: None,
             swept: HashSet::new(),
+            gone: Vec::new(),
             serial: 0,
             day_start: u64::MAX,
             today: HashMap::new(),
@@ -360,7 +363,28 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                 None => self.runners.push(Runner::new(rec)),
             }
         }
-        self.runners.retain(|r| !r.dropped || !r.slots.is_empty());
+        self.retire();
+    }
+
+    /// Moves removed runners with no VM left to `gone`.
+    fn retire(&mut self) {
+        let (gone, keep): (Vec<Runner>, Vec<Runner>) =
+            std::mem::take(&mut self.runners).into_iter().partition(|r| r.dropped && r.slots.is_empty());
+        self.runners = keep;
+        self.gone.extend(gone.into_iter().map(|r| r.record));
+    }
+
+    /// Removed runners whose VMs are all cleaned, each handed back once after
+    /// its offline registrations are swept; the caller may then forget its key.
+    pub async fn take_gone(&mut self) -> Vec<RunnerRecord> {
+        let gone = std::mem::take(&mut self.gone);
+        let prefix = format!("nekko-{}-", self.host);
+        for r in &gone {
+            if let Err(e) = call(self.provider.remove_stale(r, &prefix)).await {
+                eprintln!("runner {}: cannot remove stale runners: {e}", r.config.id);
+            }
+        }
+        gone
     }
 
     /// The owner reconnected: a sticky error is cleared even if the record did not change.
@@ -480,7 +504,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
         {
             eprintln!("runner: cannot clear {}: {e}", self.vms_dir().display());
         }
-        self.runners.retain(|r| !r.dropped || !r.slots.is_empty());
+        self.retire();
     }
 
     /// Steps 2 to 6 of a normal tick.
@@ -654,7 +678,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                 self.finish(ri, slot, done, now).await;
             }
         }
-        self.runners.retain(|r| !r.dropped || !r.slots.is_empty());
+        self.retire();
         self.retry_reruns(now).await;
     }
 

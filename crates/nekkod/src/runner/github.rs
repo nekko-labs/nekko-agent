@@ -97,7 +97,7 @@ fn pkcs1_der(pem: &str) -> Result<Vec<u8>, String> {
 }
 
 /// What the connect sheet sends.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectRequest {
     pub provider: String,
@@ -115,6 +115,21 @@ pub struct ConnectRequest {
 }
 
 type Tokens = HashMap<(u64, u64), (String, u64)>;
+
+impl std::fmt::Debug for ConnectRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ConnectRequest")
+            .field("provider", &self.provider)
+            .field("scope", &self.scope)
+            .field("app_id", &self.app_id)
+            .field("installation_id", &self.installation_id)
+            .field("private_key_pem", &self.private_key_pem.as_ref().map(|_| "(redacted)"))
+            .field("repos", &self.repos)
+            .field("allow_public", &self.allow_public)
+            .field("label", &self.label)
+            .finish()
+    }
+}
 
 pub struct GitHub<H: Http> {
     http: Arc<H>,
@@ -184,8 +199,8 @@ impl<H: Http> GitHub<H> {
         }
     }
 
-    pub fn vault(&self) -> &dyn Vault {
-        &*self.vault
+    pub fn vault(&self) -> Arc<dyn Vault> {
+        self.vault.clone()
     }
 
     /// The App JWT, signed with the stored key.
@@ -197,8 +212,11 @@ impl<H: Http> GitHub<H> {
     fn jwt(&self, app_id: u64, pem: &str) -> Result<String, ProviderError> {
         let now = (self.now)();
         let head = b64url(br#"{"alg":"RS256","typ":"JWT"}"#);
-        let body =
-            b64url(json!({ "iat": now - 60, "exp": now + 540, "iss": app_id.to_string() }).to_string().as_bytes());
+        let body = b64url(
+            json!({ "iat": now.saturating_sub(60), "exp": now + 540, "iss": app_id.to_string() })
+                .to_string()
+                .as_bytes(),
+        );
         let input = format!("{head}.{body}");
         let sig = self.signer.rs256(pem, input.as_bytes()).map_err(ProviderError::Auth)?;
         Ok(format!("{input}.{}", b64url(&sig)))
@@ -234,8 +252,9 @@ impl<H: Http> GitHub<H> {
         Ok((res.status, serde_json::from_str(&res.body).unwrap_or(Value::Null)))
     }
 
-    /// A fresh installation token, minted with `pem`.
-    async fn fetch_token(&self, app_id: u64, installation_id: u64, pem: &str) -> Result<String, ProviderError> {
+    /// A fresh installation token, minted with `pem`, and when it expires.
+    /// Not cached: a connect that later fails must leave nothing behind.
+    async fn fetch_token(&self, app_id: u64, installation_id: u64, pem: &str) -> Result<(String, u64), ProviderError> {
         let jwt = self.jwt(app_id, pem)?;
         let path = format!("/app/installations/{installation_id}/access_tokens");
         let (status, v) = self.api("POST", &path, &jwt, None).await?;
@@ -251,10 +270,7 @@ impl<H: Http> GitHub<H> {
             .as_str()
             .and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok())
             .map_or((self.now)() + 600, |t| t.timestamp().max(0) as u64);
-        if let Ok(mut c) = self.tokens.lock() {
-            c.insert((app_id, installation_id), (token.clone(), expires));
-        }
-        Ok(token)
+        Ok((token, expires))
     }
 
     /// The installation token, cached until `TOKEN_MARGIN` before it expires.
@@ -267,7 +283,11 @@ impl<H: Http> GitHub<H> {
             return Ok(t);
         }
         let pem = self.vault.get(&key_name(link.app_id)).ok_or_else(|| ProviderError::Auth(NO_KEY.into()))?;
-        self.fetch_token(link.app_id, link.installation_id, &pem).await
+        let (token, expires) = self.fetch_token(link.app_id, link.installation_id, &pem).await?;
+        if let Ok(mut c) = self.tokens.lock() {
+            c.insert(key, (token.clone(), expires));
+        }
+        Ok(token)
     }
 
     async fn call(
@@ -331,7 +351,7 @@ impl<H: Http> GitHub<H> {
             None => None,
         };
         let pem = given.clone().or_else(|| self.vault.get(&key_name(req.app_id))).ok_or(NO_KEY)?;
-        let token = self.fetch_token(req.app_id, req.installation_id, &pem).await.map_err(|e| e.to_string())?;
+        let (token, _) = self.fetch_token(req.app_id, req.installation_id, &pem).await.map_err(|e| e.to_string())?;
 
         let jwt = self.jwt(req.app_id, &pem).map_err(|e| e.to_string())?;
         let (status, v) = self

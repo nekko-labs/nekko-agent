@@ -4,8 +4,10 @@ use crate::runner::provider::Minted;
 use crate::runner::signals::HostState;
 use crate::runner::store::GithubLink;
 use crate::runner::vm::Halt;
+use nekko_cloud::vault::Vault;
 use nekko_machine::activity::Power;
 use nekko_runner::{KeepAwake, Pressure, Priority, RunnerSettings, Scope, Thermal};
+use serde_json::{Value, json};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use tokio::sync::{mpsc, oneshot};
@@ -704,7 +706,7 @@ async fn views_serialize_camel_case() {
     assert_eq!(v[0]["state"], "ready");
     assert_eq!(v[0]["slots"][0]["state"], "starting");
     assert!(v[0]["slots"][0].get("drainEndsAt").is_some());
-    assert_eq!(v[0]["today"], serde_json::json!({"jobs": 0, "seconds": 0}));
+    assert_eq!(v[0]["today"], json!({"jobs": 0, "seconds": 0}));
 }
 
 #[tokio::test(start_paused = true)]
@@ -845,4 +847,110 @@ async fn reconnecting_clears_an_auth_error() {
     assert_eq!(h.view().state, RunnerState::Error);
     h.sup.reset("r1");
     assert_eq!(h.view().error, None);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_removed_runner_is_handed_back_only_once_its_vms_are_cleaned() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    h.sup.start().await;
+    h.running().await;
+    h.vm.0.lock().unwrap().hold_done = true;
+    h.sup.set_records(vec![]);
+    h.tick_for(10).await;
+    assert!(h.sup.take_gone().await.is_empty(), "its VM is still being stopped");
+    let swept = h.count("remove_stale");
+    h.vm.finish(0, Stopped::Error("killed".into()));
+    h.tick_for(5).await;
+    let gone = h.sup.take_gone().await;
+    assert_eq!(gone.iter().map(|r| r.config.id.as_str()).collect::<Vec<_>>(), ["r1"]);
+    assert_eq!(h.count("remove_stale"), swept + 1, "its offline registrations are swept");
+    assert!(h.sup.take_gone().await.is_empty());
+}
+
+struct Rig {
+    runners: Arc<crate::runner::Runners<FakeSense, FakeVm, FakeProvider>>,
+    dir: tempfile::TempDir,
+    vm: FakeVm,
+    log: Log,
+    vault: nekko_cloud::vault::FileVault,
+}
+
+/// `Runners` over the fakes, its loop running, with `r1` saved and the app key in a file vault.
+fn runners_rig(h: H) -> Rig {
+    let H { dir, vm, log, sup, .. } = h;
+    crate::runner::store::Store::new(dir.path()).save(&[record("r1", Priority::RunnerFirst, 1)]).unwrap();
+    let secrets = dir.path().join("secrets.json");
+    let vault = nekko_cloud::vault::FileVault::new(secrets.clone());
+    vault.set("github-app-1", "pem").unwrap();
+    let runners = crate::runner::Runners::new(
+        dir.path(),
+        sup,
+        None,
+        Arc::new(nekko_cloud::vault::FileVault::new(secrets)),
+        crate::hub::Hub::new(),
+        None,
+        Arc::default(),
+    );
+    runners.spawn_loop();
+    Rig { runners, dir, vm, log, vault }
+}
+
+/// Lets paused time run, a second at a time, until `f` holds.
+async fn wait_for(what: &str, f: impl Fn() -> bool) {
+    for _ in 0..600 {
+        if f() {
+            return;
+        }
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+    panic!("never: {what}");
+}
+
+#[tokio::test(start_paused = true)]
+async fn channels_never_wait_for_a_slow_tick() {
+    let h = harness(vec![]);
+    h.vm.0.lock().unwrap().slow_start = Some((300, h.sense.0.clone()));
+    let Rig { runners, log, dir: _dir, .. } = runners_rig(h);
+    // The loop is now inside a tick, booting a VM for 300 s.
+    wait_for("a VM start", || log.lock().unwrap().iter().any(|l| l.starts_with("start"))).await;
+    let quick = Duration::from_secs(1);
+    let list = tokio::time::timeout(quick, runners.route("runner:list", &[])).await.expect("list answers at once");
+    assert_eq!(list.unwrap().as_array().map(Vec::len), Some(1));
+    let off = tokio::time::timeout(quick, runners.route("runner:setEnabled", &[json!("r1"), json!(false)]))
+        .await
+        .expect("setEnabled answers at once")
+        .unwrap();
+    assert_eq!(off["state"], "off");
+    let listed = runners.route("runner:list", &[]).await.unwrap();
+    assert_eq!(listed[0]["state"], "off", "the change shows before the tick ends");
+    // Once the slow start ends, the next tick stops the VM.
+    wait_for("the VM stopped", || log.lock().unwrap().iter().any(|l| l.starts_with("kill"))).await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn removing_keeps_the_key_until_the_runner_is_cleaned() {
+    let h = harness(vec![]);
+    h.vm.0.lock().unwrap().hold_done = true;
+    let Rig { runners, vm, log, vault, dir: _dir } = runners_rig(h);
+    wait_for("a VM start", || log.lock().unwrap().iter().any(|l| l.starts_with("start"))).await;
+    assert_eq!(runners.route("runner:remove", &[json!("r1")]).await, Ok(Value::Null));
+    assert_eq!(runners.route("runner:list", &[]).await, Ok(json!([])));
+    wait_for("the VM killed", || log.lock().unwrap().iter().any(|l| l.starts_with("kill"))).await;
+    tokio::time::sleep(Duration::from_secs(30)).await;
+    assert_eq!(vault.get("github-app-1").as_deref(), Some("pem"), "kept while its VM may still deregister");
+    vm.finish(0, Stopped::Error("killed".into()));
+    wait_for("the key forgotten", || vault.get("github-app-1").is_none()).await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn reconnecting_a_scope_to_another_app_forgets_the_old_key() {
+    let Rig { runners, dir, vault, .. } = runners_rig(harness(vec![]));
+    let mut moved = record("new-id", Priority::RunnerFirst, 1);
+    moved.github.app_id = 2;
+    moved.config.scope = Scope::Org { org: "ACME".into() };
+    let view = runners.save_connected(moved, None).await.unwrap();
+    assert_eq!(view["config"]["id"], "r1", "the scope keeps its id");
+    let saved = crate::runner::store::Store::new(dir.path()).load();
+    assert_eq!(saved[0].github.app_id, 2);
+    assert_eq!(vault.get("github-app-1"), None);
 }
