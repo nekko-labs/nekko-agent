@@ -7,6 +7,7 @@
 #[path = "../common/mod.rs"]
 mod common;
 
+mod artifacts;
 mod assist;
 mod automation;
 mod backendless;

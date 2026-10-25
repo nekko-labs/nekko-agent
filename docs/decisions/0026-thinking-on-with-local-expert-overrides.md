@@ -3,7 +3,7 @@ status: accepted
 date: 2026-10-25
 ---
 
-# 0025. Keep thinking on, with local Expert overrides
+# 0026. Keep thinking on, with local Expert overrides
 
 ## Options considered
 
