@@ -63,6 +63,8 @@ const DNS_TIMEOUT: Duration = Duration::from_secs(3);
 /// Frames waiting to go to the guest; smoltcp sees a full device and holds its own.
 const TX_QUEUE: usize = 512;
 const LEASE_SECS: u32 = 86_400;
+/// Keep-alive probe interval on guest TCP connections (see [`NetConfig::tcp_timeout`]).
+pub const TCP_KEEP_ALIVE: Duration = Duration::from_secs(30);
 
 /// Each flow holds one host socket (a file descriptor), so a running VM can
 /// use up to `max_flows` fds plus 64 for DNS. nekkod must raise
@@ -75,6 +77,11 @@ pub struct NetConfig {
     /// How long a host TCP connect may take before the guest gets RST and
     /// the flow's slot is freed (15 s by default).
     pub connect_timeout: Duration,
+    /// A guest TCP connection that sends nothing for this long, keep-alive
+    /// probes included, is reset and its slot freed (60 s by default). The
+    /// NAT probes every [`TCP_KEEP_ALIVE`], so a live idle guest keeps its
+    /// connection; a gone or half-open one (a SYN never completed) does not.
+    pub tcp_timeout: Duration,
     /// Spike and tests only, never in the shipped daemon (decision 0022: no
     /// host-to-guest path): each connection accepted on this listener is
     /// forwarded to the guest's port, from a smoltcp client socket.
@@ -88,6 +95,7 @@ impl Default for NetConfig {
             max_flows: 256,
             dns_upstream: vec![],
             connect_timeout: Duration::from_secs(15),
+            tcp_timeout: Duration::from_secs(60),
             #[cfg(any(test, feature = "spike"))]
             forward: None,
         }
@@ -437,11 +445,21 @@ impl<C: Connector> Nat<C> {
         }
     }
 
-    /// Frees a slot if the table is full by evicting the longest-quiet UDP
-    /// flow. TCP flows end by FIN or RST, so they are never evicted: a table
-    /// full of them refuses new flows.
+    /// Frees a slot if the table is full: a TCP flow smoltcp already closed,
+    /// else the longest-quiet UDP flow. Live TCP flows end by FIN, RST or
+    /// [`NetConfig::tcp_timeout`], so they are never evicted: a table full of
+    /// them refuses new flows.
     fn make_room(&mut self) -> bool {
         if self.flows.len() < self.cfg.max_flows {
+            return true;
+        }
+        // A TCP flow that smoltcp closed (a reset, a timeout) since the last pump.
+        let closed = self.flows.iter().find_map(|(k, f)| match &f.kind {
+            Kind::Tcp(t) if self.sockets.get::<tcp::Socket>(t.handle).state() == tcp::State::Closed => Some(*k),
+            _ => None,
+        });
+        if let Some(k) = closed {
+            self.remove(k);
             return true;
         }
         let oldest = self
@@ -477,10 +495,13 @@ impl<C: Connector> Nat<C> {
     }
 
     /// Adds a smoltcp socket for `key` and the host task that connects with `connect` and copies both ways.
-    fn attach<F>(&mut self, key: Key, sock: tcp::Socket<'static>, connect: F)
+    fn attach<F>(&mut self, key: Key, mut sock: tcp::Socket<'static>, connect: F)
     where
         F: Future<Output = io::Result<TcpStream>> + Send + 'static,
     {
+        // Without these an idle or half-open guest connection holds its slot forever.
+        sock.set_timeout(Some(self.cfg.tcp_timeout.into()));
+        sock.set_keep_alive(Some(TCP_KEEP_ALIVE.into()));
         let handle = self.sockets.add(sock);
         let limit = self.cfg.connect_timeout;
         let connect = async move {

@@ -641,6 +641,27 @@ async fn host_connect_times_out_resets_and_frees_the_slot() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn silent_guest_connection_is_reset_and_frees_the_slot() {
+    let server = pong_server().await;
+    let conn = TestConnector::new([(sa(PUBLIC, 8101), server), (sa(PUBLIC, 8102), server)]);
+    let cfg = NetConfig { max_flows: 1, tcp_timeout: Duration::from_millis(300), ..NetConfig::default() };
+    let mut r = start_cfg(HostNets::default(), cfg, conn, true);
+    let h = r.guest.connect(PUBLIC, 8101, 45001);
+    assert_eq!(r.guest.round_trip(h, b"once", 6).await, b"pong:once");
+    // The guest now sends nothing; the NAT resets it after tcp_timeout.
+    let start = std::time::Instant::now();
+    assert!(
+        r.guest.run_until(3, |g| g.tcp(h).state() == tcp::State::Closed).await,
+        "the silent connection was never reset: {:?}",
+        r.guest.tcp(h).state()
+    );
+    assert!(start.elapsed() < Duration::from_secs(2));
+    // The only slot is free again.
+    let h = r.guest.connect(PUBLIC, 8102, 45002);
+    assert_eq!(r.guest.round_trip(h, b"next", 6).await, b"pong:next");
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn spike_forward_reaches_the_guest_port() {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
