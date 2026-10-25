@@ -41,7 +41,7 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 - [Chat chrome and composer refinement (implemented; desktop verification pending)](chat/chat-chrome-and-composer-refinement.md) (3 KB)
 - [Chat completion X icons and idle auto-completion (2026-10-15)](chat/chat-completion-x-icons-and-idle-auto-completion.md) (2 KB)
 - [Chat isolation and prompt customization](chat/chat-isolation-and-prompt-customization.md) (24 KB)
-- [Chat suggestions, progress and code access](chat/chat-suggestions-progress-and-code-access.md) (3 KB)
+- [Chat suggestions, progress and code access](chat/chat-suggestions-progress-and-code-access.md) (4 KB)
 - [Chat transcript width (2026-10-19)](chat/chat-transcript-width.md) (1 KB)
 - [Clarification answers remain visible in chat](chat/clarification-answers-remain-visible-in-chat.md) (2 KB)
 - [Completion and interruption reconciliation](chat/completion-and-interruption-reconciliation.md) (1 KB)
@@ -103,7 +103,7 @@ Agents panel, monitors, subagents and delegation.
 - [Monitors dock naming and header polish (2026-10-16)](agents/monitors-dock-naming-and-header-polish.md) (6 KB)
 - [Subagent transcript identity](agents/subagent-transcript-identity.md) (2 KB)
 - [Watch lifecycle and delegation failure recovery](agents/watch-lifecycle-and-delegation-recovery.md) (2 KB)
-- [Watch rows and subagent models](agents/watch-rows-and-subagent-models.md) (2 KB)
+- [Watch rows and subagent models](agents/watch-rows-and-subagent-models.md) (3 KB)
 
 ### context
 
