@@ -40,6 +40,10 @@ A new chat greets you with “What should we work on?” and a small pixel Nekko
 
 Opening an agent composer puts the caret after any restored draft once a usable model provider is available. If you are already typing in another visible text field, that field keeps focus. Normal background agent and provider updates do not pull you back into the composer.
 
+## Following tool activity
+
+Chat tool calls use icons for what the agent is doing: reading files, searching, editing, running checks, Git, web access or planning. Shell execution, including Python, uses the same terminal artwork as the current-work indicator. Transcript icons stay still; expand a tool row to read its output. Unknown tools keep the generic tool icon.
+
 ## Run it from source
 
 Running from source gives you the newest code and is how you work on Nekko Agent itself. It takes four steps: install the prerequisites, clone the repo, install the dependencies, and run `npm run dev`.
