@@ -1682,8 +1682,14 @@ mod tests {
                     assert_eq!(screen(channel, &[invalid]).err().unwrap(), denied("value-invalid", detail));
                 }
                 assert_eq!(screen(channel, &[]).err().unwrap(), denied("value-invalid", detail));
-                assert_eq!(screen(channel, &[json!(value), json!({})]).err().unwrap(), denied("option-denied", "extra argument"));
-                assert_eq!(r.log(), vec![(false, Some("proof-required".into())), (true, None), (false, Some("proof-replayed".into()))]);
+                assert_eq!(
+                    screen(channel, &[json!(value), json!({})]).err().unwrap(),
+                    denied("option-denied", "extra argument")
+                );
+                assert_eq!(
+                    r.log(),
+                    vec![(false, Some("proof-required".into())), (true, None), (false, Some("proof-replayed".into()))]
+                );
             }
         }
 
