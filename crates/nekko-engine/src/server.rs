@@ -6,11 +6,12 @@
 //! `packages/host/src/engine/server.ts` as it runs under the engine daemon,
 //! held to it by `tests/golden/server.json`.
 
+use crate::capacity::{FitRequest, Hardware, PlanOptions, compute_fit};
 use crate::launch::{
     Companions, build_args, diffusion_args, explain_load_error, is_missing_dll_exit, missing_dll_message, mlx_args,
     resolve_companions, unsupported_load_reason,
 };
-use crate::library::default_context_tokens;
+use crate::library::{default_context_tokens, model_facts_for};
 use crate::{BoxFuture, num};
 use nekko_tools::path::native as path;
 use serde_json::{Map, Value, json};
@@ -68,6 +69,48 @@ pub trait Env: Send + Sync {
     fn clock(&self) -> String;
     /// The engine started serving at this address (the daemon keeps a provider entry pointing at it).
     fn on_serving(&self, base_url: String) -> BoxFuture<()>;
+}
+
+/// The share of a llama.cpp model's layers on the GPU under these params.
+fn gpu_share(model: &Value, params: &Value, gpu_capable: bool) -> f64 {
+    let layers = model.get("layers").and_then(Value::as_f64).filter(|l| *l != 0.0 && !l.is_nan());
+    match (params.get("gpuLayers"), layers) {
+        (Some(g), Some(l)) => (nekko_js::to_number(Some(g)) / l).clamp(0.0, 1.0),
+        _ if gpu_capable => 1.0,
+        _ => 0.0,
+    }
+}
+
+/// What a load will take from free GPU memory: the planner's weights, KV
+/// cache and overhead for its context (`capacity::compute_fit`), times its
+/// share on the GPU. `None` when the model's facts do not say.
+fn needed_bytes(model: &Value, params: &Value, share: f64) -> Option<f64> {
+    let field = |k: &str| params.get(k).filter(|v| !v.is_null());
+    let req = FitRequest {
+        context_tokens: field("contextTokens").map_or_else(
+            || default_context_tokens(model.get("maxContext").and_then(Value::as_f64)),
+            |v| nekko_js::to_number(Some(v)),
+        ),
+        parallel_slots: field("parallelSlots").map_or(1.0, |v| nekko_js::to_number(Some(v))),
+        kv_cache_dtype: field("kvCacheDtype").map_or_else(|| "f16".to_string(), nekko_js::display),
+        gpu_layer_fraction: 1.0,
+    };
+    let hw = Hardware { devices: Vec::new(), unified: false, ram_total: f64::NAN, ram_free: f64::NAN };
+    let plan =
+        compute_fit(&model_facts_for(model), &req, &hw, &PlanOptions { overhead_floor: None, siblings: Vec::new() });
+    let need = plan.required * share;
+    (need.is_finite() && need > 0.0).then_some(need)
+}
+
+/// "6.3 GiB", for the log.
+fn gib(bytes: f64) -> String {
+    format!("{:.1} GiB", bytes / 1024.0 / 1024.0 / 1024.0)
+}
+
+/// Kept resident: its own idle TTL is 0 ("Keep resident" in Model Server).
+/// The global `idleTtlSeconds` of 0 does not pin anything; it only stops the sweep.
+fn kept_resident(c: &Child) -> bool {
+    c.params.get("ttlSeconds").is_some_and(|t| !t.is_null() && nekko_js::to_number(Some(t)) == 0.0)
 }
 
 #[derive(Clone, Debug)]
@@ -636,29 +679,67 @@ impl ModelServer {
 
         let gpu_capable = self.env.gpu_capable().await.unwrap_or(true);
         self.sync().await;
-        // Make room before spending minutes on a load that would push something out anyway.
+        // Make room before spending minutes on a load that would push something
+        // out anyway: under the resident limit, and (a llama.cpp model whose
+        // size the planner knows, with a GPU probe that reads free memory)
+        // room in free GPU memory, unified memory on Apple Silicon. Idle
+        // models go first, least recently used first; a model kept resident
+        // (its own TTL of 0) never goes.
+        let need =
+            if image || mlx { None } else { needed_bytes(&model, &params, gpu_share(&model, &params, gpu_capable)) };
+        let free = match need {
+            Some(_) => self.free_vram().await,
+            None => None,
+        };
+        let mut freed = 0.0;
         loop {
             let max = self.settings_number("maxLoaded").max(1.0);
-            let oldest = {
+            let (full, pinned, oldest) = {
                 let s = self.state.lock().unwrap();
-                if (s.children.len() as f64) < max {
-                    break;
-                }
+                let full = (s.children.len() as f64) >= max;
+                let pinned = s.children.iter().any(|(_, c)| c.active_requests == 0.0 && kept_resident(c));
                 let mut idle: Vec<&(String, Child)> =
-                    s.children.iter().filter(|(_, c)| c.active_requests == 0.0).collect();
+                    s.children.iter().filter(|(_, c)| c.active_requests == 0.0 && !kept_resident(c)).collect();
                 idle.sort_by(|a, b| {
                     a.1.last_used_at.partial_cmp(&b.1.last_used_at).unwrap_or(std::cmp::Ordering::Equal)
                 });
-                idle.first().map(|(k, _)| k.clone())
+                (full, pinned, idle.first().map(|(k, c)| (k.clone(), c.vram_bytes.unwrap_or(c.size_bytes))))
             };
-            let Some(oldest) = oldest else {
-                return reply(
-                    false,
-                    "All resident models are processing requests. Wait for one to finish or increase the resident limit.",
-                );
+            let short = match (need, free) {
+                (Some(need), Some(free)) => free + freed < need,
+                _ => false,
             };
-            self.say(format!("Unloading {oldest} to make room for {id}."));
+            if !full && !short {
+                break;
+            }
+            let Some((oldest, size)) = oldest else {
+                if full && pinned {
+                    return reply(
+                        false,
+                        "Every resident model is busy or kept resident. Stop keeping one resident, or increase the resident limit.",
+                    );
+                }
+                if full {
+                    return reply(
+                        false,
+                        "All resident models are processing requests. Wait for one to finish or increase the resident limit.",
+                    );
+                }
+                // Nothing left to unload: load as before, and say it may not fit.
+                self.say(format!(
+                    "{id} may not fit in free memory ({} needed, {} free); loading anyway.",
+                    gib(need.unwrap_or(0.0)),
+                    gib(free.unwrap_or(0.0) + freed)
+                ));
+                break;
+            };
+            if full {
+                self.say(format!("Unloading {oldest} to make room for {id}."));
+            } else {
+                self.say(format!("Unloading {oldest} to free memory for {id}."));
+            }
             self.unload(&oldest).await;
+            freed += size;
         }
 
         let mut companions = if image || mlx {
@@ -730,15 +811,10 @@ impl ModelServer {
         };
 
         let before = self.free_vram().await;
-        let layers = model.get("layers").and_then(Value::as_f64).filter(|l| *l != 0.0 && !l.is_nan());
         let gpu_share = if image {
             if params.get("diffusion").is_some_and(|d| nekko_js::truthy(d.get("offloadToCpu"))) { 0.0 } else { 1.0 }
         } else {
-            match (params.get("gpuLayers"), layers) {
-                (Some(g), Some(l)) => (nekko_js::to_number(Some(g)) / l).clamp(0.0, 1.0),
-                _ if gpu_capable => 1.0,
-                _ => 0.0,
-            }
+            gpu_share(&model, &params, gpu_capable)
         };
         let size = model.get("sizeBytes").and_then(Value::as_f64).unwrap_or(0.0);
         if let Some(before) = before
@@ -842,7 +918,7 @@ impl ModelServer {
         });
     }
 
-    /// Stop one model's server (`unload`).
+    /// Stop one model's server (`unload`). A model kept resident goes only when asked.
     pub async fn unload(&self, id: &str) -> Value {
         if remove(&mut self.state.lock().unwrap().children, id).is_none() {
             return reply(false, format!("{id} is not loaded."));

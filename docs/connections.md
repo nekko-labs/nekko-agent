@@ -1,6 +1,6 @@
 # Connections
 
-**Settings > Connections** lists everything Nekko Agent connects to besides your own computer. Nekko Agent sends no analytics or crash reports.
+**Settings > Connections** lists everything Nekko Agent connects to besides your own computer. Nekko Agent sends no usage or crash reports unless you turn them on ([Usage and crash reports](usage-reports.md)).
 
 ## All connections off
 

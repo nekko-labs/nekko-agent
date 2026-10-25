@@ -46,6 +46,7 @@ pub const IDS: &[&str] = &[
     "mcp",
     "resource-queue",
     "browser-pane",
+    "telemetry",
 ];
 
 /// Events kept in memory per connection; the file keeps more.

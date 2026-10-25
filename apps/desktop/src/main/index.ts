@@ -56,6 +56,11 @@ let engine: EngineProcess | null = null;
 /** Settings > Connections, for the pages Chromium loads itself (connectionsGuard.ts). */
 const readConnections = async () => (await engine?.call<AppSettings>(IpcChannels.settingsGet))?.connections;
 const webviewGuests = new Set<number>();
+// Opt-in crash reports (telemetry.rs drops them while reports are off). A
+// monitor only: Node still crashes the way it did.
+process.on('uncaughtExceptionMonitor', (err) => {
+  void engine?.call(IpcChannels.telemetryCapture, 'error', { source: 'main', message: String(err?.message ?? err), stack: String(err?.stack ?? '') }).catch(() => {});
+});
 let webviewGuarded = false;
 /** True once the engine has been stopped for quit, so the second quit goes through. */
 let engineStopped = false;

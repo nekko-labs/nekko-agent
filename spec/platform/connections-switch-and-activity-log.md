@@ -10,7 +10,7 @@ area: platform
 **User intent:** see every inbound and outbound connection Nekko Agent makes, switch them all off at once or one by one, and read how often each one talks to the network to debug it ([#1034](https://github.com/nekko-labs/nekko-agent/issues/1034)).
 
 - **Settings > Connections** is its own item in the Settings nav, between Safety and Tools. It lists every connection besides the UI talking to its own engine, in three groups:
-  - **In the background:** app updates, provider model lists, skills catalog, Nekko Cloud, phone relay, plan and limit checks, connectors, decision models, GitHub pull requests, Telegram.
+  - **In the background:** app updates, provider model lists, skills catalog, Nekko Cloud, phone relay, plan and limit checks, connectors, decision models, usage and crash reports, GitHub pull requests, Telegram.
   - **Incoming:** API server, model server on your network, relay on this computer, Visible on this network, workflow webhooks.
   - **When you or an agent asks:** cloud model providers, provider sign-in, models and runtimes, skill sources, web tools, MCP servers, the in-app browser, Send feedback, resource queue.
 - **All connections off** makes the app fully offline:
@@ -24,7 +24,7 @@ area: platform
 - **Privacy:**
   - The log never records a body, header, token or query string.
   - Path segments that look like secrets are replaced with `…`, such as Telegram's `bot<id>:<token>` or any run of 24 or more letters and digits.
-  - The card says that Nekko Agent sends no analytics or crash reports.
+  - The card says that Nekko Agent sends no usage or crash reports unless they are turned on ([opt-in reports](opt-in-usage-and-crash-reports.md)); those appear here as **Usage and crash reports**.
 - **Storage:** events are kept 200 per connection in memory, and in `<data>/logs/connections.log`, which rotates at 2 MB and keeps 2 older files (about 6 MB at most). They are reloaded at startup. **Clear connection logs** empties both.
 - **Default:** everything allowed, as before. Nothing changes until someone flips a switch.
 

@@ -17,6 +17,31 @@ Philip asked for a simpler load drawer (one recommended button explained in plai
 - [x] **MT-5, Load drawer (2026-10-25).** `EngineLoadDrawer.tsx` rebuilt around one `LoadParams` (`loadSettings.ts` maps it): meter, recommended button with "What this chose", Run on, split presets, context per session, More controls, Expert. Evidence: `apps/desktop/scripts/model-tuning-sandbox.cjs`.
 - [ ] **MT-6, Real hardware check:** load an MoE with All experts in RAM on a discrete GPU and compare measured VRAM with the meter; confirm `--moe-cache-mib` and `--lazy-mode` on the bundled build.
 - [ ] **MT-7, Persistent phrase cache:** `--spec-type ngram-cache --lookup-cache-dynamic` once incognito chats can be kept out of it.
+## Tool calls grouped by purpose (added 2026-10-25)
+
+Philip asked for an agent's tool calls to be grouped by what they are doing, with the goal of each group shown (reading the project's guidance apart from coding, say). Spec: [Tool calls grouped by what they are for](spec/chat/tool-calls-grouped-by-purpose.md). #1075
+
+- [ ] **TG-1, Shared purpose classifier.** `toolPurpose(call)` in `packages/shared/src/agent-steps.ts` (guidance, explore, edit, check, run, git, web, plan, delegate, other), the call's own `description` preferred as the goal; fixture `packages/shared/fixtures/tool-purpose.json` (60+ cases).
+- [ ] **TG-2, Desktop and Local Web UI groups.** `transcript.ts` splits an activity run into purpose groups; `ActivityGroup.tsx` renders them and its headline summarises them; approval, question and failure exceptions.
+- [ ] **TG-3, iPhone groups.** Swift port of the classifier in `NekkoProtocol` (runs the shared fixture), `TranscriptRow.of` groups adjacent same-purpose rows; the subagent group becomes the Delegate purpose.
+- [ ] **TG-4, Android groups.** Kotlin port in `protocol` (runs the shared fixture), grouped rows in `ChatScreen.kt` / `BlockViews.kt`.
+- [ ] **TG-5, Evidence.** Desktop before/after and a live recording; simulator and emulator screenshots from CI.
+- [ ] **TG-6, Engine `intent` argument (later, needs a decision).** Optional `intent` on the engine's own tools so Nekko's runs get model-written goals; changes the prompt goldens.
+
+## Phone Markdown composer, rich replies and Mermaid (added 2026-10-25)
+
+Philip asked for the iPhone chat to write in Markdown with a styles toolbar, nested bullets, good tables and a paste-as-Markdown or plain-text choice, and for Mermaid diagrams on the phone. Specs: [iPhone Markdown composer and rich replies](spec/phone/iphone-markdown-composer-and-rich-replies.md) (#1073), [Mermaid diagrams on the phone](spec/phone/mermaid-diagrams-on-the-phone.md) (#1074).
+
+- [ ] **MD-1, Block parser with real nesting and tables.** Replace the line scanner's flat `Piece` list in `Markdown.swift` with a small block tree (nested lists with continuation lines, pipe tables with alignment), moved into `NekkoProtocol` so it is tested on Linux; `MarkdownTests`.
+- [ ] **MD-2, Rendering.** Nested list markers by depth, task checkboxes, the native table grid (sideways scroll, Expand full screen, Copy as Markdown / as text), user bubbles rendered as Markdown; streaming stays incremental.
+- [ ] **MD-3, Composer editor and toolbar.** A `UITextView`-backed composer with live source styling and the in-card toolbar (styles, link, heading, lists, indent/outdent, quote, code block, table, add row/column), list continuation on Return, undo; the edit functions are pure and Linux-tested.
+- [ ] **MD-4, Paste choice.** *Paste as Markdown* / *Paste as plain text* in the edit menu, the *Use formatting* chip after a rich paste; HTML/RTF→Markdown converter with the security cases.
+- [ ] **MD-5, Evidence.** UI test and screenshots (light, dark, largest text) from macOS CI.
+- [ ] **MD-6, Android parity.** The same parser, rendering, toolbar and paste choice in `Markdown.kt`, `MarkdownText.kt` and `Composer.kt`.
+- [ ] **MM-1, Offline Mermaid renderer.** Bundled `mermaid.min.js` (12.x), one locked off-screen `WKWebView` (no network, no navigation, strict), a render queue, SVG→image cache keyed by source, theme and width.
+- [ ] **MM-2, Inline diagram and full screen.** Mermaid fences draw inline once closed (source while streaming), tap for zoom/pan, Copy source, Share image, Save to Photos, source fallback with the error; `.mmd` files in *Files*.
+- [ ] **MM-3, Evidence and cost.** UI test with flowchart, sequence and broken diagrams in light and dark; app size and render time in `docs/perf-history.md`.
+- [ ] **MM-4, Android Mermaid.** The same design in a locked `WebView`.
 
 ## Chat timing and GPT reasoning (added 2026-10-24)
 
@@ -2278,7 +2303,7 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [x] **T195c** "When it runs" in the workflow editor and the ⚡ Automate dialog (`RunPolicyField`), Settings → Automations (default policy, Away after), "waiting for you to be away" on held tasks and workflows, "low priority · waited" on runs; `docs/automations.md`. Tests: `run-policy.test.ts`, `WorkflowEditor.draft.test.tsx`, `SettingsView.automations.test.tsx`, `AutomationsPane.runPolicy.test.tsx`; evidence: `apps/desktop/scripts/automations-integration.cjs`. Done: 2026-10-23
 - [ ] **T195d** Live check of the signals on Windows and on a Linux GNOME/KDE desktop.
 - [x] **T195e** B2: background turns on a local model step aside for the user (`background` on the automation's send; nekko-chat `YieldingClient`; nekkod `background.rs`, `background:state`/`background:updated`; the loop resends a yielded call without spending an attempt). Pausing, not unloading, measured in `docs/perf-history.md` (stop in 22-35 ms; resume re-reads 1-4 prompt tokens vs 0.8-1.2 s load + full prompt). Tests: `nekko-chat/tests/yielding.rs`, `nekko-loop/tests/retry.rs`, `nekkod/tests/daemon/automation.rs`; evidence: the paused reply in `automations-integration.cjs`. Done: 2026-10-23
-- [ ] **T195f** B3: model residency (routing model kept warm, large model evicted under memory pressure) and the monitor's background chip.
+- [x] **T195f** B3: residency (a model kept resident is never unloaded to make room; a load that does not fit in free GPU memory unloads idle models first, least recently used first, then loads anyway with a warning) and the background chip (resource chip `BG paused`/`BG running`, the Monitors panel's "Background: 1 paused · …"; `background:state` + `background:updated`). No routing model is pinned: nothing uses one yet. Tests: `nekko-engine/tests/server.rs`, `BackgroundChip.test.tsx`, `background.test.ts`; evidence: `automations-integration.cjs`. Done: 2026-10-26
 
 ### T196: The agent remembers what it learns about you (2026-10-23) · [spec](spec/context/context-guardrails-memory-the-differentiators.md)
 - [x] **T196a** `remember` tool (`nekko-turn` `plan.rs`): offered only where the chat reads global memory, not to sub-agents or goal runs; a global note per fact, replaced by title (`nekko_workspace::memory::remember`, unit-tested); daemon handler in `turns.rs`. Golden tool lists and workflow-access cases gain the name. Done: 2026-10-23
@@ -2325,6 +2350,15 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [x] **T203e** Electron: the browser pane's pages and the agent's browser windows cancel requests off this computer while their connection is off (`connectionsGuard.ts`). Done: 2026-10-24
 - [x] **T203f** Settings > Connections card and nav item (`ConnectionsSettings.tsx`), with tests and hidden-renderer evidence (`scripts/connections-evidence.cjs`). Done: 2026-10-24
 - [ ] **T203g** Check in the packaged app and the Local Web UI against live services; restart a LAN model server when the switch flips; log the browser pane's requests.
+
+### T204: Opt-in usage and crash reports (2026-10-24) · [spec](spec/platform/opt-in-usage-and-crash-reports.md) · [decision](docs/decisions/0021-opt-in-reports-sent-by-the-engine.md)
+- [x] **T204a** nekkod `telemetry.rs`: off unless `settings.telemetry.enabled` with an install id; allow-listed events and properties; every string scrubbed (log redactor, Privacy Shield detectors, folder paths); queue of 500; batch to PostHog every minute through `nekko_net::send("telemetry")`; engine panics reported without blocking. `turn_started` from admission. Tests: `scrub_takes_out_secrets_people_and_folders`, `off_unless_on_and_only_known_events_and_properties`. Done: 2026-10-24
+- [x] **T204b** Onboarding **Help improve Nekko Agent?** step (skippable, off), Settings > System card, the shared promises (`TELEMETRY_PROMISES`), a fresh install id on each turn-on, a Connections row. Done: 2026-10-24
+- [x] **T204c** UI: `screen_viewed` and uncaught errors from the renderer, crashes from Electron main (`uncaughtExceptionMonitor`). Done: 2026-10-24
+- [x] **T204d** Nekko Agent PostHog project 686111; its key in `PROJECT_KEY`. Done: 2026-10-24
+- [x] **T204e** Discard client IP data on for project 686111; a test `app_started` in the engine's batch shape arrived with `$ip` empty and no location. Done: 2026-10-24
+- [ ] **T204f** See events arrive from a packaged build with reports turned on.
+
 ### T205: Limits on what grows in the data folder (2026-10-24, #1035) · [spec](spec/platform/data-folder-growth-limits.md)
 - [x] **T205a** Chat command logs cut to their last 4 MB of whole lines past 5 MB (`keep_file_tail` in `agent_logs.rs`). Test: `a_long_command_log_keeps_its_last_whole_lines`. Done: 2026-10-24
 - [x] **T205b** `quota-history.jsonl` keeps 30 days, pruned at startup (`prune_quota_history`). Test: `quota_history_keeps_thirty_days`. Done: 2026-10-24

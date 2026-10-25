@@ -1756,6 +1756,294 @@
   }
 
 
+  [data-theme='light'][data-preset='x-arctic-white'] {
+    --paper: #f8fcfc;
+    --win: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #e5f8f8;
+    --ink: #17151f;
+    --ink-soft: #002e2e;
+    --ink-faint: #4f6969;
+    --line: #c8e5e4;
+    --on-accent: #ffffff;
+    --merged-ink: #357272;
+    --merged-wash: rgba(55, 118, 118, 0.08);
+    --merged-wash-soft: rgba(55, 118, 118, 0.04);
+    --merged-chip: rgba(55, 118, 118, 0.1);
+  }
+
+  [data-theme='light'][data-preset='x-arctic-colour'] {
+    --paper: #c1e5e5;
+    --win: #f3fafa;
+    --surface: #ecf7f7;
+    --surface-2: #ddf1f1;
+    --ink: #17151f;
+    --ink-soft: #002929;
+    --ink-faint: #466667;
+    --line: #a1c4c4;
+    --on-accent: #ffffff;
+    --merged-ink: #316969;
+    --merged-wash: rgba(255, 255, 255, 0.3);
+    --merged-wash-soft: rgba(255, 255, 255, 0.12);
+    --merged-chip: rgba(255, 255, 255, 0.55);
+  }
+
+  [data-theme='dark'][data-preset='x-arctic-dark'] {
+    --paper: #003d3e;
+    --win: #0b1616;
+    --surface: #0b1616;
+    --surface-2: #152120;
+    --ink: #eef5f5;
+    --ink-soft: #d0dad9;
+    --ink-faint: #a3adad;
+    --line: #2a3535;
+    --on-accent: #0b1616;
+    --merged-ink: #c1e5e5;
+    --merged-wash: rgba(193, 229, 229, 0.14);
+    --merged-wash-soft: rgba(193, 229, 229, 0.06);
+    --merged-chip: rgba(193, 229, 229, 0.16);
+  }
+
+  [data-theme='light'][data-preset='x-mulberry-white'] {
+    --paper: #fffafa;
+    --win: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #ffeef0;
+    --ink: #17151f;
+    --ink-soft: #3b1b21;
+    --ink-faint: #735c5f;
+    --line: #f1d6da;
+    --on-accent: #ffffff;
+    --merged-ink: #34151b;
+    --merged-wash: rgba(52, 21, 27, 0.08);
+    --merged-wash-soft: rgba(52, 21, 27, 0.04);
+    --merged-chip: rgba(52, 21, 27, 0.1);
+  }
+
+  [data-theme='light'][data-preset='x-mulberry-colour'] {
+    --paper: #f6d9d3;
+    --win: #fdf7f6;
+    --surface: #fcf4f2;
+    --surface-2: #faeae7;
+    --ink: #17151f;
+    --ink-soft: #35161c;
+    --ink-faint: #755c57;
+    --line: #d5b9b3;
+    --on-accent: #ffffff;
+    --merged-ink: #34151b;
+    --merged-wash: rgba(255, 255, 255, 0.3);
+    --merged-wash-soft: rgba(255, 255, 255, 0.12);
+    --merged-chip: rgba(255, 255, 255, 0.55);
+  }
+
+  [data-theme='dark'][data-preset='x-mulberry-dark'] {
+    --paper: #34151b;
+    --win: #362c2d;
+    --surface: #362c2d;
+    --surface-2: #423738;
+    --ink: #f9f1f2;
+    --ink-soft: #ded5d6;
+    --ink-faint: #b1a8a9;
+    --line: #594d4f;
+    --on-accent: #211b1c;
+    --merged-ink: #e59090;
+    --merged-wash: rgba(218, 94, 94, 0.14);
+    --merged-wash-soft: rgba(218, 94, 94, 0.06);
+    --merged-chip: rgba(218, 94, 94, 0.16);
+  }
+
+  [data-theme='light'][data-preset='x-obsidian-white'] {
+    --paper: #fcfdff;
+    --win: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #f9f3e5;
+    --ink: #17151f;
+    --ink-soft: #302504;
+    --ink-faint: #6a6350;
+    --line: #e6dec8;
+    --on-accent: #ffffff;
+    --merged-ink: #303030;
+    --merged-wash: rgba(48, 48, 48, 0.08);
+    --merged-wash-soft: rgba(48, 48, 48, 0.04);
+    --merged-chip: rgba(48, 48, 48, 0.1);
+  }
+
+  [data-theme='light'][data-preset='x-obsidian-colour'] {
+    --paper: #87cefa;
+    --win: #e7f5fe;
+    --surface: #dbf0fd;
+    --surface-2: #bde4fc;
+    --ink: #17151f;
+    --ink-soft: #2b2001;
+    --ink-faint: #2d556c;
+    --line: #68aed9;
+    --on-accent: #ffffff;
+    --merged-ink: #303030;
+    --merged-wash: rgba(255, 255, 255, 0.3);
+    --merged-wash-soft: rgba(255, 255, 255, 0.12);
+    --merged-chip: rgba(255, 255, 255, 0.55);
+  }
+
+  [data-theme='dark'][data-preset='x-obsidian-dark'] {
+    --paper: #303030;
+    --win: #17140c;
+    --surface: #17140c;
+    --surface-2: #211e15;
+    --ink: #f5f3ed;
+    --ink-soft: #dad7d0;
+    --ink-faint: #adaba3;
+    --line: #36332a;
+    --on-accent: #17140c;
+    --merged-ink: #d18fe2;
+    --merged-wash: rgba(186, 85, 211, 0.14);
+    --merged-wash-soft: rgba(186, 85, 211, 0.06);
+    --merged-chip: rgba(186, 85, 211, 0.16);
+  }
+
+  [data-theme='light'][data-preset='x-orchid-white'] {
+    --paper: #fdfffa;
+    --win: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #f9f0fd;
+    --ink: #17151f;
+    --ink-soft: #301e37;
+    --ink-faint: #6a5e6f;
+    --line: #e6d8ec;
+    --on-accent: #ffffff;
+    --merged-ink: #a929d3;
+    --merged-wash: rgba(169, 41, 211, 0.08);
+    --merged-wash-soft: rgba(169, 41, 211, 0.04);
+    --merged-chip: rgba(169, 41, 211, 0.1);
+  }
+
+  [data-theme='light'][data-preset='x-orchid-colour'] {
+    --paper: #ebf6c9;
+    --win: #fbfdf4;
+    --surface: #f9fcef;
+    --surface-2: #f4fae1;
+    --ink: #17151f;
+    --ink-soft: #2b1a32;
+    --ink-faint: #666f47;
+    --line: #cad5a9;
+    --on-accent: #ffffff;
+    --merged-ink: #a929d3;
+    --merged-wash: rgba(255, 255, 255, 0.3);
+    --merged-wash-soft: rgba(255, 255, 255, 0.12);
+    --merged-chip: rgba(255, 255, 255, 0.55);
+  }
+
+  [data-theme='dark'][data-preset='x-orchid-dark'] {
+    --paper: #481c58;
+    --win: #171219;
+    --surface: #171219;
+    --surface-2: #211c23;
+    --ink: #f6f2f7;
+    --ink-soft: #dad6dc;
+    --ink-faint: #ada9b0;
+    --line: #363038;
+    --on-accent: #171219;
+    --merged-ink: #ebf6c9;
+    --merged-wash: rgba(235, 246, 201, 0.14);
+    --merged-wash-soft: rgba(235, 246, 201, 0.06);
+    --merged-chip: rgba(235, 246, 201, 0.16);
+  }
+
+  [data-theme='light'][data-preset='x-parchment-white'] {
+    --paper: #fdfcf9;
+    --win: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #f0f3ff;
+    --ink: #17151f;
+    --ink-soft: #21243f;
+    --ink-faint: #5f6275;
+    --line: #d9ddf2;
+    --on-accent: #ffffff;
+    --merged-ink: #42478b;
+    --merged-wash: rgba(66, 71, 139, 0.08);
+    --merged-wash-soft: rgba(66, 71, 139, 0.04);
+    --merged-chip: rgba(66, 71, 139, 0.1);
+  }
+
+  [data-theme='light'][data-preset='x-parchment-colour'] {
+    --paper: #e8e2d4;
+    --win: #faf9f6;
+    --surface: #f8f6f2;
+    --surface-2: #f2efe7;
+    --ink: #17151f;
+    --ink-soft: #1c1f39;
+    --ink-faint: #666155;
+    --line: #c7c2b4;
+    --on-accent: #ffffff;
+    --merged-ink: #42478b;
+    --merged-wash: rgba(255, 255, 255, 0.3);
+    --merged-wash-soft: rgba(255, 255, 255, 0.12);
+    --merged-chip: rgba(255, 255, 255, 0.55);
+  }
+
+  [data-theme='dark'][data-preset='x-parchment-dark'] {
+    --paper: #282969;
+    --win: #12131b;
+    --surface: #12131b;
+    --surface-2: #1c1d26;
+    --ink: #f2f3f9;
+    --ink-soft: #d6d7de;
+    --ink-faint: #a9aab2;
+    --line: #31323b;
+    --on-accent: #12131b;
+    --merged-ink: #e8e2d4;
+    --merged-wash: rgba(232, 226, 212, 0.14);
+    --merged-wash-soft: rgba(232, 226, 212, 0.06);
+    --merged-chip: rgba(232, 226, 212, 0.16);
+  }
+
+  [data-theme='light'][data-preset='x-tidepool-white'] {
+    --paper: #f8fcfc;
+    --win: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #e5f8f9;
+    --ink: #17151f;
+    --ink-soft: #002d31;
+    --ink-faint: #4f696b;
+    --line: #c8e4e7;
+    --on-accent: #ffffff;
+    --merged-ink: #0e4a4f;
+    --merged-wash: rgba(14, 74, 79, 0.08);
+    --merged-wash-soft: rgba(14, 74, 79, 0.04);
+    --merged-chip: rgba(14, 74, 79, 0.1);
+  }
+
+  [data-theme='light'][data-preset='x-tidepool-colour'] {
+    --paper: #c1e5e5;
+    --win: #f3fafa;
+    --surface: #ecf7f7;
+    --surface-2: #ddf1f1;
+    --ink: #17151f;
+    --ink-soft: #00282c;
+    --ink-faint: #466667;
+    --line: #a1c4c4;
+    --on-accent: #ffffff;
+    --merged-ink: #0e4a4f;
+    --merged-wash: rgba(255, 255, 255, 0.3);
+    --merged-wash-soft: rgba(255, 255, 255, 0.12);
+    --merged-chip: rgba(255, 255, 255, 0.55);
+  }
+
+  [data-theme='dark'][data-preset='x-tidepool-dark'] {
+    --paper: #003b40;
+    --win: #0b1617;
+    --surface: #0b1617;
+    --surface-2: #152021;
+    --ink: #eef5f6;
+    --ink-soft: #d0d9da;
+    --ink-faint: #a3adae;
+    --line: #293536;
+    --on-accent: #0b1617;
+    --merged-ink: #f19a7f;
+    --merged-wash: rgba(239, 138, 106, 0.14);
+    --merged-wash-soft: rgba(239, 138, 106, 0.06);
+    --merged-chip: rgba(239, 138, 106, 0.16);
+  }
+
   /* Belt-and-suspenders for the native <select> popup list. The OS draws that
      list, and it ignores the select's own color unless each option says its
      colors — so the rule covers every select, not only `.input` ones. */

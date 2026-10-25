@@ -97,6 +97,7 @@ Full docs in one file: https://nekkoagent.com/llms-full.txt. Each page is also a
 - [Fonts and text](https://nekkoagent.com/docs/fonts-and-text.md): Text size, the interface and code fonts, and adding your own fonts.
 - [Browser automation](https://nekkoagent.com/docs/browser-automation.md): Chat-owned browser actions, security boundaries and native driver migration status.
 - [Connections](https://nekkoagent.com/docs/connections.md): Switch off every network connection at once or one by one, and see how often each one is used.
+- [Usage and crash reports](https://nekkoagent.com/docs/usage-reports.md): Opt in to anonymous usage and crash reports, what they contain, and how to see each send.
 - [Privacy Shield](https://nekkoagent.com/docs/privacy-shield.md): Replace emails, phone numbers, secrets and your own terms with placeholders before a request reaches a cloud model.
 - [Code mode](https://nekkoagent.com/docs/code-mode.md): Let the model write code that calls your tools in a sandbox, so long tool lists and big results cost far fewer tokens.
 - [Running models locally](https://nekkoagent.com/docs/local-models.md): Run models with the built-in engine or a server you already have (Ollama, LM Studio, vLLM).

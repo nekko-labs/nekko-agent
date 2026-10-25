@@ -117,6 +117,8 @@ export const IpcChannels = {
   /** One phone-safe read for a computer's page: version, hardware, live stats, the model server (2026-10-24). */
   machineSummary: 'machine:summary',
   machineRecommendations: 'machine:recommendations',
+  /** Background automations on a local model, and how many are paused for the user. */
+  backgroundState: 'background:state',
   machineDismissNudge: 'machine:dismissNudge',
   gpuStats: 'gpu:stats',
   systemStats: 'system:stats',
@@ -413,6 +415,9 @@ export const IpcChannels = {
   connectionsStatus: 'connections:status',
   connectionsEvents: 'connections:events',
   connectionsClear: 'connections:clear',
+  // Opt-in usage and crash reports (crates/nekkod/src/telemetry.rs).
+  telemetryCapture: 'telemetry:capture',
+  telemetryStatus: 'telemetry:status',
   // Send feedback (crates/nekkod/src/feedback.rs): no sign-in needed.
   feedbackInfo: 'feedback:info',
   feedbackSend: 'feedback:send',
@@ -436,6 +441,8 @@ export const IpcEvents = {
   terminalViewers: 'terminal:viewers',
   changesUpdated: 'changes:updated',
   tasksUpdated: 'tasks:updated',
+  /** `BackgroundState` changed: a background turn started, ended, paused or resumed. */
+  backgroundUpdated: 'background:updated',
   trainingUpdated: 'training:updated',
   workflowsUpdated: 'workflows:updated',
   limitsUpdated: 'limits:updated',
@@ -484,6 +491,10 @@ export interface NekkoApi {
   connectionsEvents(id: string, limit?: number): Promise<import('./connections.js').ConnectionEvent[]>;
   /** Forget every logged event. */
   connectionsClear(): Promise<import('./connections.js').ConnectionsStatus>;
+  /** Opt-in reports: queue a UI event (`screen_viewed`, `feature_used`, `error`); ignored while reports are off. */
+  telemetryCapture(event: 'screen_viewed' | 'feature_used' | 'error', props: Record<string, string | number | boolean>): Promise<null>;
+  /** Whether reports are on, whether this build has a project to send to, and how many events wait. */
+  telemetryStatus(): Promise<{ enabled: boolean; configured: boolean; queued: number }>;
   /** Send feedback: the app facts the sheet may share (app, version, OS, CPU type; nothing identifying). */
   feedbackInfo(): Promise<import('./feedback.js').FeedbackAppInfo>;
   /** Send feedback's quick note to Nekko Cloud, with the facts above only when `includeAppInfo`. */
@@ -696,6 +707,8 @@ export interface NekkoApi {
   machineProfile(opts?: { refresh?: boolean }): Promise<import('./recommendations.js').HardwareProfile>;
   /** Which model to run for each task here, with expected speed and memory headroom, before any download. */
   machineRecommendations(opts?: { refresh?: boolean }): Promise<import('./recommendations.js').Recommendations>;
+  /** Background automations on a local model, and how many are paused for the user (`background:state`). */
+  backgroundState(): Promise<import('./background.js').BackgroundState>;
   /** Keep a task's current pick as seen (every task with none), so its upgrade nudge goes. */
   machineDismissNudge(task?: string): Promise<{ ok: boolean }>;
   /** GPU/VRAM stats for the metrics bar + Agent board (null if unavailable). */
@@ -1202,6 +1215,7 @@ export interface NekkoApi {
   onChangesUpdated(cb: (e: { sessionId: string }) => void): () => void;
   /** Fires when the automation-task list changes (created/updated/fired/deleted). */
   onTasksUpdated(cb: (tasks: AutomationTask[]) => void): () => void;
+  onBackgroundUpdated(cb: (state: import('./background.js').BackgroundState) => void): () => void;
   /** Fires when any training/goal run changes (experiments, hints, status). */
   onTrainingUpdated(cb: (runs: TrainingRun[]) => void): () => void;
   /** Fires when a workflow is edited or any run advances a step. */

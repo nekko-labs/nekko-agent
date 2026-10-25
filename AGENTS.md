@@ -12,6 +12,7 @@ the runbooks it links. Read a runbook before the work it names.
 | How it is built, and the task list | [TASKS.md](TASKS.md) (Part 1, Plan; Part 2, Tasks, with stable task IDs) |
 | Why a technical or product choice was made | [docs/decisions/](docs/decisions/README.md) |
 | Landing a change: worktrees, PRs, merge queue, stacks | [docs/runbooks/landing-a-pr.md](docs/runbooks/landing-a-pr.md) |
+| Cutting an iOS release / TestFlight upload (manual GitHub action, not EAS or desktop tags) | [docs/runbooks/ios-release.md](docs/runbooks/ios-release.md) |
 | A red check, on your PR or on `main` | [docs/runbooks/failing-checks.md](docs/runbooks/failing-checks.md) |
 | A change to how the app looks or moves | [docs/runbooks/visual-evidence.md](docs/runbooks/visual-evidence.md) |
 | A change that alters a recorded engine behavior | [docs/runbooks/golden-fixtures.md](docs/runbooks/golden-fixtures.md) |

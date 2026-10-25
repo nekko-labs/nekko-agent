@@ -98,6 +98,8 @@ const api: NekkoApi = {
   connectionsStatus: () => inv(IpcChannels.connectionsStatus),
   connectionsEvents: (id, limit) => inv(IpcChannels.connectionsEvents, id, limit),
   connectionsClear: () => inv(IpcChannels.connectionsClear),
+  telemetryCapture: (event, props) => inv(IpcChannels.telemetryCapture, event, props),
+  telemetryStatus: () => inv(IpcChannels.telemetryStatus),
   feedbackInfo: () => inv(IpcChannels.feedbackInfo),
   feedbackSend: (message, includeAppInfo) => inv(IpcChannels.feedbackSend, message, includeAppInfo),
   syncTurnOn: () => inv(IpcChannels.syncTurnOn),
@@ -158,6 +160,7 @@ const api: NekkoApi = {
   machineReadiness: (language) => inv(IpcChannels.machineReadiness, language),
   machineProfile: (opts) => inv(IpcChannels.machineProfile, opts),
   machineRecommendations: (opts) => inv(IpcChannels.machineRecommendations, opts),
+  backgroundState: () => inv(IpcChannels.backgroundState),
   machineDismissNudge: (task) => inv(IpcChannels.machineDismissNudge, task ?? null),
   getGpuStats: () => inv(IpcChannels.gpuStats),
   getSystemStats: () => inv(IpcChannels.systemStats),
@@ -472,6 +475,11 @@ const api: NekkoApi = {
     const listener = (_: unknown, tasks: import('@nekko-agent/shared').AutomationTask[]) => cb(tasks);
     bus.on(IpcEvents.tasksUpdated, listener);
     return () => bus.removeListener(IpcEvents.tasksUpdated, listener);
+  },
+  onBackgroundUpdated: (cb) => {
+    const listener = (_: unknown, state: import('@nekko-agent/shared').BackgroundState) => cb(state);
+    bus.on(IpcEvents.backgroundUpdated, listener);
+    return () => bus.removeListener(IpcEvents.backgroundUpdated, listener);
   },
   onTrainingUpdated: (cb) => {
     const listener = (_: unknown, runs: import('@nekko-agent/shared').TrainingRun[]) => cb(runs);

@@ -113,7 +113,7 @@ export function ConnectionsSettings({ settings, update }: {
     <section className="card mt-5 p-5" id="connections">
       <div className="flex items-center gap-2"><GlobeIcon className="h-4 w-4" /><h2 className="font-semibold">Connections</h2></div>
       <p className="mt-1 text-[12px] text-ink-faint">
-        Everything Nekko Agent connects to besides this computer. Nekko Agent sends no analytics or crash reports. The log keeps when each connection was used and where it went, never what was sent.
+        Everything Nekko Agent connects to besides this computer. Nekko Agent sends no usage or crash reports unless you turn them on under System. The log keeps when each connection was used and where it went, never what was sent.
       </p>
       <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3 rounded-md p-3" style={{ background: allOff ? 'color-mix(in srgb, var(--warning) 12%, transparent)' : 'var(--surface-2, transparent)' }}>
         <div className="min-w-0">

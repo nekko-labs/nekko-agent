@@ -30,7 +30,7 @@ describe('Settings > Connections', () => {
     expect(html).toContain('All connections off');
     for (const c of CONNECTIONS) expect(html).toContain(`data-connection="${c.id}"`);
     expect(html.match(/Show log/g)).toHaveLength(CONNECTIONS.length);
-    expect(html).toContain('sends no analytics');
+    expect(html).toContain('no usage or crash reports unless you turn them on');
   });
 
   it('All connections off saves the switch and greys every row', () => {
