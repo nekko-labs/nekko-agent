@@ -124,8 +124,9 @@ final class LiveRelayTests: XCTestCase {
         // Ask about a change: the quote lands in the message box, unsent, and the sheet closes.
         let line = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Added line 2")).firstMatch
         XCTAssertTrue(line.waitForExistence(timeout: 5))
-        line.press(forDuration: 1.0)
-        app.buttons["Ask about this change"].firstMatch.tap()
+        let ask = app.buttons["Ask about this change"].firstMatch
+        XCTAssertTrue(contextMenuItem(ask, afterLongPressOn: line), "the line's menu offers to ask about it")
+        ask.tap()
         XCTAssertTrue(waitGone(note, 10))
         XCTAssertTrue(message.waitForExistence(timeout: 5))
         XCTAssertTrue((message.value as? String ?? "").contains("+written by the agent"), "the quote is in the message box: \(message.value ?? "")")
@@ -378,11 +379,10 @@ final class LiveRelayTests: XCTestCase {
         // IO-23: fork from the first prompt; the new chat has it in its message box.
         let first = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "You: Say hello")).firstMatch
         XCTAssertTrue(first.waitForExistence(timeout: 10))
-        first.press(forDuration: 1.0)
         // The menu item carries the identifier `chat.fork` (#868); XCTest matches
         // an element's identifier, not its label, once one is set.
         let fork = app.buttons["chat.fork"].firstMatch
-        XCTAssertTrue(fork.waitForExistence(timeout: 5), "the prompt's menu offers a fork")
+        XCTAssertTrue(contextMenuItem(fork, afterLongPressOn: first), "the prompt's menu offers a fork")
         attach(app, "beyond-4-fork-menu")
         fork.tap()
         let forkedBox = app.input("chat.message")
@@ -557,6 +557,20 @@ final class LiveRelayTests: XCTestCase {
             }
             RunLoop.current.run(until: Date().addingTimeInterval(0.5))
         } while Date() < deadline
+        return false
+    }
+
+    /// Long-presses `target` for its context menu and waits for `item` to show.
+    /// On a loaded simulator the first press sometimes lands while the app is
+    /// still busy and no menu opens (the fork step in run 40140666823, the
+    /// "Ask about this change" step in run 40154800339); the item is given
+    /// 10 s, and the press is made once more if it never showed (#1048).
+    private func contextMenuItem(_ item: XCUIElement, afterLongPressOn target: XCUIElement) -> Bool {
+        for attempt in 1...2 {
+            target.press(forDuration: 1.0)
+            if item.waitForExistence(timeout: 10) { return true }
+            if attempt == 1 { _ = target.waitForExistence(timeout: 5) }
+        }
         return false
     }
 
