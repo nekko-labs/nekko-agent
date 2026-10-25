@@ -736,6 +736,9 @@ Extends `../../knowledgebase/principles/coding.md` (which these override).
 
 ## Now / In Progress
 
+- [ ] **AFML1057: Composer focus and compact, stable Agents/Monitors layout** ([#1057](https://github.com/nekko-labs/nekko-agent/issues/1057)). Implemented readiness-aware composer focus, viewport-clamped top-layer Configure, stable reorder geometry, and a compact horizontal controls grid with no space below cards or after the scrollbar. Specs: [monitor controls](spec/agents/monitors-dock-naming-and-header-polish.md), [Agents row](spec/agents/agent-panel-view-options.md), [composer](spec/chat/chat-actions-and-persistent-reply-measurements.md). Verified 41 focused tests, desktop typecheck and hidden full-App geometry/interaction assertions. Pending: visual inspection of before/after captures and GIF, then PR landing. Native-window behavior is not proven by renderer capture.
+
+
 ### SK: Hardware keys, step-up on phone and desktop, remote sign-out (added 2026-10-24)
 
 Spec: [spec/platform/hardware-keys-step-up-and-remote-sign-out.md](spec/platform/hardware-keys-step-up-and-remote-sign-out.md). Decision: [0018](docs/decisions/0018-the-computer-is-the-relying-party-for-step-up.md). Stack order: SK-1 to SK-3 (the verifier and the safety exits, no UI) land first; SK-4 to SK-8 are one client each; SK-9 to SK-12 close the loop.
