@@ -58,8 +58,14 @@ async fn main() -> Res<()> {
 
     let before = count_vms(&helper)?;
     println!("vms before: {before}");
-    let clone = CloneDir(work.join(format!("clone-{}", std::process::id())));
-    let out = Command::new(&helper).arg("clone").arg("--from").arg(&bundle).arg("--to").arg(&clone.0).output()?;
+    // From here every exit but SIGKILL goes through Cleanup's drop.
+    let mut vm = Cleanup {
+        child: None,
+        clone: work.join(format!("clone-{}", std::process::id())),
+        helper: helper.clone(),
+        before,
+    };
+    let out = Command::new(&helper).arg("clone").arg("--from").arg(&bundle).arg("--to").arg(&vm.clone).output()?;
     println!("clone: {}", String::from_utf8_lossy(&out.stdout).trim());
     if !out.status.success() {
         return Err("clone failed".into());
@@ -67,7 +73,7 @@ async fn main() -> Res<()> {
 
     let vm_fd = vm_end.as_raw_fd();
     let mut cmd = Command::new(&helper);
-    cmd.args(["run", "--cpus", "4", "--memory-mb", "8192", "--net-fd", "3", "--bundle"]).arg(&clone.0);
+    cmd.args(["run", "--cpus", "4", "--memory-mb", "8192", "--net-fd", "3", "--bundle"]).arg(&vm.clone);
     // SAFETY: only async-signal-safe calls between fork and exec.
     unsafe {
         cmd.pre_exec(move || {
@@ -76,8 +82,7 @@ async fn main() -> Res<()> {
             if rc < 0 { Err(std::io::Error::last_os_error()) } else { Ok(()) }
         });
     }
-    // Declared after `clone`, so on any early return the VM is killed before the clone is removed.
-    let mut child = tokio::process::Command::from(cmd).kill_on_drop(true).spawn()?;
+    let child = vm.child.insert(tokio::process::Command::from(cmd).spawn()?);
     drop(vm_end);
     let pid = child.id().map(|p| p as libc::pid_t);
     println!("nekko-vm pid {}", pid.unwrap_or(0));
@@ -93,27 +98,45 @@ async fn main() -> Res<()> {
             }
         }
     }
-    // The NAT end is gone now, so the helper stops within a second if SIGTERM did not.
+    // SIGTERM's grace (the helper stops the guest within 20 s). If the NAT
+    // ended instead, the helper sees its socket close within a second.
     let status = tokio::time::timeout(Duration::from_secs(30), child.wait()).await;
     println!("nekko-vm: {status:?}");
-    // The leak check first, so a failed removal cannot hide it.
-    match count_vms(&helper) {
-        Ok(after) => println!("vms after: {after} (before: {before})"),
-        Err(e) => println!("vms after: count failed: {e}"),
-    }
-    match std::fs::remove_dir_all(&clone.0) {
-        Ok(()) => println!("clone removed: {}", clone.0.display()),
-        Err(e) => println!("clone NOT removed: {}: {e}", clone.0.display()),
-    }
     Ok(())
 }
 
-/// Removes the clone on every exit but SIGKILL (that one is left for the reaper).
-struct CloneDir(PathBuf);
+/// The one cleanup path, for every exit but SIGKILL (that leaves the clone
+/// for the reaper): the helper is killed and reaped first, then the VM count
+/// is checked, then the clone is removed.
+struct Cleanup {
+    child: Option<tokio::process::Child>,
+    clone: PathBuf,
+    helper: PathBuf,
+    before: String,
+}
 
-impl Drop for CloneDir {
+impl Drop for Cleanup {
     fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
+        if let Some(child) = &mut self.child {
+            let _ = child.start_kill();
+            let end = std::time::Instant::now() + Duration::from_secs(10);
+            loop {
+                match child.try_wait() {
+                    Ok(Some(s)) => break println!("nekko-vm reaped: {s}"),
+                    Err(e) => break println!("nekko-vm wait failed: {e}"),
+                    Ok(None) if std::time::Instant::now() > end => break println!("nekko-vm still running after 10 s"),
+                    Ok(None) => std::thread::sleep(Duration::from_millis(100)),
+                }
+            }
+        }
+        match count_vms(&self.helper) {
+            Ok(after) => println!("vms after: {after} (before: {})", self.before),
+            Err(e) => println!("vms after: count failed: {e}"),
+        }
+        match std::fs::remove_dir_all(&self.clone) {
+            Ok(()) => println!("clone removed: {}", self.clone.display()),
+            Err(e) => println!("clone NOT removed: {}: {e}", self.clone.display()),
+        }
     }
 }
 
