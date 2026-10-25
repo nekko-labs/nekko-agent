@@ -37,7 +37,7 @@ app.whenReady().then(async () => {
         if (!scrolled) throw Error('Vertical scroll interaction failed');
       }
       report.checks.push({ width, metrics });
-      const file = path.join(dir, `details-${width}.png`);
+      const file = path.join(dir, `${kind}-details-${width}.png`);
       fs.writeFileSync(file, (await win.capturePage(undefined, { stayHidden: true })).toPNG()); report.captures.push(file);
     }
     report.background = { visible: win.isVisible(), focused: win.isFocused(), bounds: win.getBounds() };
