@@ -379,7 +379,9 @@ final class LiveRelayTests: XCTestCase {
         let first = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "You: Say hello")).firstMatch
         XCTAssertTrue(first.waitForExistence(timeout: 10))
         first.press(forDuration: 1.0)
-        let fork = app.buttons["Edit in a new chat"].firstMatch
+        // The menu item carries the identifier `chat.fork` (#868); XCTest matches
+        // an element's identifier, not its label, once one is set.
+        let fork = app.buttons["chat.fork"].firstMatch
         XCTAssertTrue(fork.waitForExistence(timeout: 5), "the prompt's menu offers a fork")
         attach(app, "beyond-4-fork-menu")
         fork.tap()
