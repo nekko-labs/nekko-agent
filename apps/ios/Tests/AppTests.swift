@@ -40,7 +40,7 @@ final class MarkdownTests: XCTestCase {
     }
 
     func testTablesAndPathLinksRender() {
-        XCTAssertEqual(MarkdownText.parse("| a | b |\n|---|:-:|\n| 1 | 2 |"),
+        XCTAssertEqual(MarkdownParser.blocks("| a | b |\n|---|:-:|\n| 1 | 2 |"),
                        [.table(MarkdownTable(header: ["a", "b"], alignments: [.leading, .center], rows: [["1", "2"]]))])
         // A Windows path with a space would not be a URL: it is rewritten to a file: link that routes back to the path.
         let link = InlineMarkdown.attributed("Open [the design](C:\\p\\my work\\index.html)")?.runs.compactMap { $0.link }.first
@@ -49,7 +49,7 @@ final class MarkdownTests: XCTestCase {
     }
 
     func testAnUnclosedFenceStillShowsItsCode() {
-        XCTAssertEqual(MarkdownText.parse("```\nstreaming…"), [.code(language: "", body: "streaming…", closed: false)])
+        XCTAssertEqual(MarkdownParser.blocks("```\nstreaming…"), [.code(language: "", body: "streaming…", closed: false)])
     }
 }
 
