@@ -106,9 +106,10 @@ export function PrActionCard({ url, info, sessionId, onDismiss }: { url: string;
   };
   const actionClass = 'rounded-md px-1.5 py-0.5 text-[11px] font-medium hover:bg-surface-2 disabled:opacity-50';
   return (
-    <div className="pr-deck-card flex items-start gap-2 rounded-lg border border-line px-2.5 py-1.5" data-pr-actions={url}>
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+    <div className="pr-deck-card rounded-lg border border-line px-2.5 py-1.5" data-pr-actions={url}>
+      <div className="pr-action-layout">
+      <div className="pr-action-content min-w-0 flex-1">
+        <div className="pr-action-heading flex flex-wrap items-center gap-x-2 gap-y-1">
           <a href={url} className="truncate font-mono text-[11px] font-medium hover:underline" onClick={(e) => { e.preventDefault(); openExternally(url); }}>{label}</a>
           <span className="text-[10px] text-ink-faint">{info ? info.isDraft ? 'Draft' : 'Open' : 'Status unavailable'}</span>
           {!info?.checkProgress && check.dot && <span className="text-[10px]" style={{ color: check.color }}>{check.dot} {check.label}</span>}
@@ -131,8 +132,9 @@ export function PrActionCard({ url, info, sessionId, onDismiss }: { url: string;
         <button className={actionClass} onClick={() => openExternally(url)} aria-label="Open on GitHub">↗</button>
         {confirm && <button className={actionClass} onClick={() => setConfirm(null)}>Cancel</button>}
       </div>
-      <button className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-ink-faint hover:bg-surface-2 hover:text-ink"
+      <button className="pr-action-dismiss grid h-6 w-6 shrink-0 place-items-center rounded-md text-ink-faint hover:bg-surface-2 hover:text-ink"
         onClick={onDismiss} aria-label={'Hide PR ' + label} title="Hide this PR panel (does not close the PR)"><CloseIcon className="h-3.5 w-3.5" /></button>
+      </div>
     </div>
   );
 }

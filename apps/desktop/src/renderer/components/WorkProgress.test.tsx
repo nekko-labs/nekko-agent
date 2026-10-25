@@ -29,6 +29,18 @@ describe('truthful chat progress', () => {
     expect(progressAge(undefined, now)).toBe('Unknown update time');
     expect(progressAge(now + 1, now)).toBe('Unknown update time');
   });
+  it('keeps terminal report ages without implying they need fresh updates', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(now + 180_000);
+    for (const status of ['passed', 'failed', 'blocked', 'unknown']) {
+      const html = renderToStaticMarkup(<VerificationChecklist steps={[step('terminal', status)]} />);
+      expect(html).toContain('3m ago');
+      expect(html).not.toContain(' · Stale');
+    }
+    for (const status of ['active', 'pending']) {
+      expect(renderToStaticMarkup(<VerificationChecklist steps={[step('waiting', status)]} />)).toContain('3m ago · Stale');
+    }
+    vi.restoreAllMocks();
+  });
   it('distinguishes finished/failing/pending/unknown and links review threads, not comment totals', () => {
     const info = { checkedAt: now, checkProgress: { total: 5, completed: 2, failing: 1, pending: 1, unknown: 1, items: [{ name: 'gate', state: 'pending', link: 'javascript:alert(1)' }] }, reviewThreads: { total: 4, resolved: 3, unresolved: 1 } } as PrInfo;
     const html = renderToStaticMarkup(<PrProgress url="https://github.com/o/r/pull/1?ignored=true" info={info} />);

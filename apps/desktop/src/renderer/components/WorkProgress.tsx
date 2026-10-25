@@ -3,10 +3,10 @@ import type { PlanStep, PrInfo } from '@nekko-agent/shared';
 
 /** Freshness is a report age, not an inference that work stopped or passed. */
 export const PROGRESS_STALE_MS = 120_000;
-export function progressAge(at: number | undefined, now: number) {
+export function progressAge(at: number | undefined, now: number, canBeStale = true) {
   if (!at || !Number.isFinite(at) || at > now) return 'Unknown update time';
   const seconds = Math.floor((now - at) / 1000);
-  return `${seconds >= 60 ? Math.floor(seconds / 60) + 'm' : seconds + 's'} ago${now - at >= PROGRESS_STALE_MS ? ' · Stale' : ''}`;
+  return `${seconds >= 60 ? Math.floor(seconds / 60) + 'm' : seconds + 's'} ago${canBeStale && now - at >= PROGRESS_STALE_MS ? ' · Stale' : ''}`;
 }
 function useProgressClock() {
   const [now, setNow] = useState(Date.now);
@@ -36,6 +36,7 @@ export function VerificationChecklist({ steps = [] }: { steps?: PlanStep[] }) {
   const passed = checks.filter((step) => step.verification?.status === 'passed').length;
   const blocked = checks.filter((step) => step.verification?.status === 'blocked').length;
   const failed = checks.filter((step) => step.verification?.status === 'failed').length;
+  const waiting = checks.filter((step) => ['active', 'pending'].includes(step.verification!.status));
   const updatedAt = checks.length ? Math.max(...checks.map((step) => step.updatedAt)) : undefined;
   return <details open className="shrink-0 rounded-lg border border-line px-3 py-2 text-[11px]" data-verification-checklist>
     <summary className="cursor-pointer text-ink-soft">
@@ -43,7 +44,7 @@ export function VerificationChecklist({ steps = [] }: { steps?: PlanStep[] }) {
       <span>{checks.length ? `${passed} of ${checks.length} passed` : 'Unknown: no checklist published'}</span>
       {!!blocked && <span className="text-warning"> · {blocked} blocked</span>}
       {!!failed && <span className="text-danger"> · {failed} failed</span>}
-      {checks.length > 0 && <span className="text-ink-faint"> · {progressAge(updatedAt, now)}</span>}
+      {checks.length > 0 && <span className="text-ink-faint"> · {progressAge(updatedAt, now, waiting.length > 0)}</span>}
     </summary>
     <div className="mt-2 max-h-40 space-y-2 overflow-y-auto" aria-label="Verification checklist">
       {!checks.length && <p className="text-ink-faint">No verification result reported. Tool completion is not visual inspection.</p>}
@@ -56,11 +57,11 @@ export function VerificationChecklist({ steps = [] }: { steps?: PlanStep[] }) {
             <p className="text-ink-soft">{index + 1}. {step.title} <span className="text-ink-faint">· {status}</span></p>
             {verification.device && <p className="text-ink-faint">On {verification.device}</p>}
             {(verification.detail || step.note) && <p className="text-ink-soft">{verification.detail || step.note}</p>}
-            <p className="text-ink-faint">{progressAge(step.updatedAt, now)}{safeProgressLink(verification.evidenceUrl) && <> · <ProgressLink url={verification.evidenceUrl}>Evidence</ProgressLink></>}</p>
+            <p className="text-ink-faint">{progressAge(step.updatedAt, now, ['active', 'pending'].includes(verification.status))}{safeProgressLink(verification.evidenceUrl) && <> · <ProgressLink url={verification.evidenceUrl}>Evidence</ProgressLink></>}</p>
           </div>
         </div>;
       })}
-      <p className="text-[10px] text-ink-faint">Agent-reported inspection, not inferred from tool completion. Stale means no recent update, not necessarily stuck.</p>
+      <p className="text-[10px] text-ink-faint">Agent-reported inspection, not inferred from tool completion. Stale marks active or pending reports without recent updates, not necessarily stuck.</p>
     </div>
   </details>;
 }

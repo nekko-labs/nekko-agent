@@ -74,6 +74,21 @@ app.whenReady().then(async () => {
         for (let i = 0; i < 4; i++) { frames.push((await win.capturePage(undefined, { stayHidden: true })).toPNG()); await sleep(200); }
         try { const file = path.join(out, `${width}-updates.gif`); gif(frames, file); report.captures.push(file); } catch (error) { report.gifLimitation = String(error); }
       }
+      if (current) {
+        const layout = await run(`(() => {
+          const rect = selector => { const r = document.querySelector(selector).getBoundingClientRect(); return { x: r.x, y: r.y, right: r.right, bottom: r.bottom, width: r.width }; };
+          return { card: rect('[data-pr-actions]'), content: rect('.pr-action-content'), progress: rect('[data-pr-progress]'), actions: rect('[data-pr-action-controls]') };
+        })()`);
+        if (width === 390) {
+          assert(layout.progress.width >= layout.card.width - 24, '390: CI/review content uses full card width');
+          assert(layout.actions.y >= layout.content.bottom, '390: actions occupy a separate wrapping row');
+        } else {
+          assert(layout.actions.x >= layout.content.right, '900: desktop actions remain beside content');
+        }
+        report.checks.push(`${width}: layout geometry ${JSON.stringify(layout)}`);
+        const terminal = await run(`document.querySelector('[aria-label="Verification checklist"] > div').textContent`);
+        assert(!terminal.includes('Stale'), `${width}: passed report retains age without stale label`);
+      }
       const overflow = await run('({ viewport: innerWidth, document: document.documentElement.scrollWidth, body: document.body.scrollWidth })');
       assert(overflow.document <= width && overflow.body <= width, `${width}: no document horizontal overflow ${JSON.stringify(overflow)}`);
       report.windows.push({ width, visible: win.isVisible(), focused: win.isFocused(), focusable: win.isFocusable(), bounds: win.getBounds(), contentBounds: win.getContentBounds() });
