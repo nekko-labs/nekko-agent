@@ -481,10 +481,16 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
    * in manual order this is exactly the bucket list drag-and-drop writes to;
    * every other arrangement is a read-only view of the same cards.
    */
-  const shown = (e: Entry) => view.showAutomations || !e.s?.taskId;
+  const utilityKind = (e: Entry) => e.w?.anchor.kind === 'terminal' ? 'terminal' : e.s?.chatType === 'image' ? 'media' : null;
+  const shown = (e: Entry) => !utilityKind(e) && (view.showAutomations || !e.s?.taskId);
   const shownDone = (s: SessionSummary) => view.showAutomations || !s.taskId;
   const order = (items: Entry[]) => (view.sortBy === 'manual' ? items : [...items].sort((a, b) => compareCards(view)(sortable(a), sortable(b))));
-  const groups: PanelGroup[] = (() => {
+  const utilityEntries = buckets.flatMap((b) => bucketEntries(b.key));
+  const utilityGroups: PanelGroup[] = [
+    { key: '__terminals', name: 'Terminals', items: order(utilityEntries.filter((e) => utilityKind(e) === 'terminal')), done: [] },
+    { key: '__media', name: 'Photos and videos', items: order(utilityEntries.filter((e) => utilityKind(e) === 'media')), done: [] },
+  ].filter((g) => g.items.length > 0);
+  const groups: PanelGroup[] = [...utilityGroups, ...(() => {
     if (view.groupBy === 'project') {
       return buckets.flatMap((b): PanelGroup[] => {
         const items = order(bucketEntries(b.key).filter(shown));
@@ -509,7 +515,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
       }),
       ...completed,
     ];
-  })();
+  })()];
 
   // --- Sidebar drag-and-drop (reorder projects; reorder / re-file workspaces) ---
   const startDrag = (e: React.DragEvent, item: DragItem) => {
@@ -617,14 +623,14 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
           <button
             ref={newMenuButtonRef}
             className={`agent-panel-plus btn btn-ghost px-1.5 py-1 ${newMenuOpen ? 'is-open' : ''}`}
-            title="New agent with a terminal"
+            title="New agent"
             aria-label="New agent"
             aria-haspopup="menu"
             aria-expanded={newMenuOpen}
             onMouseEnter={openNewMenu}
             onMouseLeave={closeNewMenuSoon}
             onFocus={openNewMenu}
-            onClick={() => { closeNewMenu(); void newTerminalWorkspace().catch(e => useStore.getState().pushToast('error', e.message)); }}
+            onClick={() => { closeNewMenu(); void newChat().catch(e => useStore.getState().pushToast('error', e.message)); }}
           >
             <PlusIcon className="h-[22px] w-[22px]" />
           </button>
@@ -672,7 +678,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
       <div className={horizontal ? 'agent-panel-row flex min-w-0 flex-1 items-start gap-3 overflow-x-auto overflow-y-hidden px-2 py-1.5' : 'agent-panel-list min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-2 pb-3'} data-agent-panel-list onWheel={horizontal ? scrollRowWithWheel : undefined}>
         {groups.map((b) => {
           const { items, done } = b;
-          const byProject = view.groupBy === 'project';
+          const byProject = view.groupBy === 'project' && !utilityGroups.includes(b);
           // The Completed group is its own fold: open means its rows show.
           const completedGroup = b.key === COMPLETED_GROUP;
           const isCollapsed = completedGroup ? !showCompleted.has(b.key) : collapsed.has(b.key);

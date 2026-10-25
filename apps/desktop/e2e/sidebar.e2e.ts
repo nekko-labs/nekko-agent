@@ -78,7 +78,7 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1200, 400])
       await page.evaluate('integration.calls.length = 0');
       await openList();
       const create = async (label: string) => {
-        await page.locator('[title="New agent with a terminal"]').dispatchEvent('focusin');
+        await page.locator('[data-agent-panel]').getByRole('button', { name: 'New agent', exact: true }).dispatchEvent('focusin');
         await page.locator('.create-row', { hasText: label }).first().click();
         expect(await state<string>('(i) => i.state().view'), `${label} stays in Agents`).toBe('command');
       };
