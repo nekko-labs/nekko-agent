@@ -92,6 +92,8 @@ function sh(cmd, args, opts = {}) {
   return execFileSync(cmd, args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, ...opts }).trim();
 }
 const git = (...args) => sh('git', args);
+/** The CI identity for the batch's commits: a runner has none of its own. */
+const IDENT = ['-c', 'user.name=nekko-ci', '-c', 'user.email=ci@nekkolabs.dev'];
 const tryGit = (...args) => { try { git(...args); return true; } catch { return false; } };
 
 function setStatus(repo, sha, state, description, url) {
@@ -121,7 +123,7 @@ function main({ dryRun }) {
       continue;
     }
     if (clean.length >= MAX_WEIGHED) { skipped.push({ pr, why: 'Waits for the next batch (this one is full).', state: 'pending' }); continue; }
-    clean.push({ pr, ref, merged: git('commit-tree', tree, '-p', main, '-p', ref, '-m', `#${pr.number} on main`) });
+    clean.push({ pr, ref, merged: git(...IDENT, 'commit-tree', tree, '-p', main, '-p', ref, '-m', `#${pr.number} on main`) });
   }
   const conflicts = new Set();
   clean.forEach((a, i) => clean.slice(i + 1).forEach((b, k) => {
@@ -158,7 +160,7 @@ function main({ dryRun }) {
   }
   // One commit on main: HEAD^1..HEAD is every PR in the batch.
   git('reset', '--quiet', '--soft', main);
-  git('-c', 'user.name=nekko-ci', '-c', 'user.email=ci@nekkolabs.dev', 'commit', '--quiet', '--allow-empty', '-m', batchMessage(included));
+  git(...IDENT, 'commit', '--quiet', '--allow-empty', '-m', batchMessage(included));
   git('push', '--quiet', '--force', 'origin', `HEAD:refs/heads/${BATCH_BRANCH}`);
   const batch = JSON.stringify(included.map(pr => ({ number: pr.number, sha: pr.headRefOid })));
   sh('gh', ['workflow', 'run', 'ios-native.yml', '-R', repo, '--ref', BATCH_BRANCH, '-f', `batch=${batch}`]);
