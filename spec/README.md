@@ -75,7 +75,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Model picker, tool categories, Artifacts tab and wall polish (2026-10-15)](desktop/model-picker-tool-categories-artifacts-tab-and-wall-polish.md) (5 KB)
 - [Nav wings and wall action clarity](desktop/nav-wings-and-wall-action-clarity.md) (1 KB)
 - [Navigation panel, media fade and macOS app menu (2026-10-16)](desktop/navigation-panel-media-fade-and-macos-app-menu.md) (2 KB)
-- [New agent window defaults](desktop/new-agent-window-defaults.md) (2 KB)
+- [New agent window defaults](desktop/new-agent-window-defaults.md) (5 KB)
 - [Search within Settings (desktop)](desktop/search-within-settings-desktop.md) (2 KB)
 - [Settings section nav and phone pairing placement (desktop)](desktop/settings-section-nav.md) (3 KB)
 - [Slim wave rail, tighter Agents spacing, composer snap points](desktop/slim-wave-rail-tighter-agents-spacing-composer-snap-points.md) (4 KB)
