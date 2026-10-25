@@ -267,7 +267,7 @@ export function applyEvent(event: AgentEvent, now = Date.now()): void {
     case 'tool_result':
       next.blocks = next.blocks.map((b) => b.kind !== 'activity' ? b : {
         ...b,
-        items: b.items.map((it) => it.kind === 'tool' && it.call.id === event.result.toolCallId && it.endedAt === undefined ? { ...it, endedAt: now } : it),
+        items: b.items.map((it) => it.kind === 'tool' && it.call.id === event.result.toolCallId && it.endedAt === undefined ? { ...it, endedAt: now, ...(event.result.isError ? { failed: true } : {}) } : it),
       });
       // A step boundary: the next model call starts from here.
       next.stepMark = { blocks: next.blocks, text: next.text, reasoning: next.reasoning };
