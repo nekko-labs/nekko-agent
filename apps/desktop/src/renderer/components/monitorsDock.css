@@ -34,6 +34,7 @@
 }
 .monitors-dock__toolbar { flex-shrink: 0; flex-wrap: wrap; }
 .monitors-dock__count { margin-right: auto; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+.monitors-dock__background { display: flex; flex-shrink: 0; min-width: 0; padding: 0 10px 8px; }
 .monitors-dock button,
 .monitors-dock input[type='number'] {
   border: 1px solid var(--line);

@@ -1766,7 +1766,7 @@
     --ink-faint: #4f6969;
     --line: #c8e5e4;
     --on-accent: #ffffff;
-    --merged-ink: #377676;
+    --merged-ink: #357272;
     --merged-wash: rgba(55, 118, 118, 0.08);
     --merged-wash-soft: rgba(55, 118, 118, 0.04);
     --merged-chip: rgba(55, 118, 118, 0.1);
@@ -1782,7 +1782,7 @@
     --ink-faint: #466667;
     --line: #a1c4c4;
     --on-accent: #ffffff;
-    --merged-ink: #377676;
+    --merged-ink: #316969;
     --merged-wash: rgba(255, 255, 255, 0.3);
     --merged-wash-soft: rgba(255, 255, 255, 0.12);
     --merged-chip: rgba(255, 255, 255, 0.55);
@@ -1845,8 +1845,8 @@
     --ink-soft: #ded5d6;
     --ink-faint: #b1a8a9;
     --line: #594d4f;
-    --on-accent: #362c2d;
-    --merged-ink: #da5e5e;
+    --on-accent: #211b1c;
+    --merged-ink: #e59090;
     --merged-wash: rgba(218, 94, 94, 0.14);
     --merged-wash-soft: rgba(218, 94, 94, 0.06);
     --merged-chip: rgba(218, 94, 94, 0.16);
@@ -1894,7 +1894,7 @@
     --ink-faint: #adaba3;
     --line: #36332a;
     --on-accent: #17140c;
-    --merged-ink: #ba55d3;
+    --merged-ink: #d18fe2;
     --merged-wash: rgba(186, 85, 211, 0.14);
     --merged-wash-soft: rgba(186, 85, 211, 0.06);
     --merged-chip: rgba(186, 85, 211, 0.16);
@@ -2038,7 +2038,7 @@
     --ink-faint: #a3adae;
     --line: #293536;
     --on-accent: #0b1617;
-    --merged-ink: #ef8a6a;
+    --merged-ink: #f19a7f;
     --merged-wash: rgba(239, 138, 106, 0.14);
     --merged-wash-soft: rgba(239, 138, 106, 0.06);
     --merged-chip: rgba(239, 138, 106, 0.16);
