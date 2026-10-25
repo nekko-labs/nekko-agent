@@ -7,12 +7,12 @@ area: chat
 
 **User intent:** Philip asked (2026-10-25) that when an agent makes several tool calls, the chat should group them by what they are doing and tell the user the goal of each group. For example, reading the project's guidance (`AGENTS.md`, `CLAUDE.md` and the docs they point to) should be one group, separate from the coding calls. Tasks TG-1 to TG-6 in [TASKS.md](../../TASKS.md); issue #1075.
 
-**Status `[implemented on the desktop and Local Web UI 2026-10-25; implemented on the iPhone and Android, unverified on devices]`.**
+**Status `[implemented on the desktop and Local Web UI 2026-10-25; implemented on the iPhone and Android; native offline fixtures verified on simulator and emulator 2026-10-26]`.**
 
 - **Shared classifier (TG-1): implemented.** `toolPurpose`, `toolGoal`, `purposeHeadline`, `summarizePurposes` and `groupByPurpose` in `packages/shared/src/tool-purpose.ts`, with the shared fixture `packages/shared/fixtures/tool-purpose.json` run by Vitest.
 - **Desktop and Local Web UI (TG-2): implemented.** `activityRows` in `transcript.ts` splits an activity run into purpose groups, and `ActivityGroup.tsx` draws them (`PurposeGroupRow`) under a headline that summarises them. The Local Web UI serves the same renderer. Verified with unit tests and isolated renderer captures of the real `ActivityGroup` (`apps/desktop/scripts/tool-groups-integration.cjs`); not yet watched in a real Claude Code or engine run.
-- **iPhone (TG-3): implemented, unverified on a device.** `ToolPurpose.swift` in `NekkoProtocol` ports the classifier and the grouping (`Purpose.group`, `Purpose.role(of:)`), and its tests run the shared fixture (passed on Linux in the Swift 6.1 image). `TranscriptRow.of` in `ChatView.swift` groups adjacent same-purpose rows into `PurposeGroupRow` (`AgentRowViews.swift`); a run of `spawn_agent` calls stays the subagent group, now as the Delegate purpose. A thought with no reply text between two same-purpose calls folds into their group; a reply ends it. The SwiftUI compiles only on macOS CI, and no simulator screenshot has been taken.
-- **Android (TG-4): implemented, unverified on a device.** `ToolPurpose.kt` in `protocol` ports the classifier and the grouping; its tests run the shared fixture (pass locally). Tool blocks now carry their input. `ChatScreen.kt` groups the transcript and `PurposeGroupCard` (`BlockViews.kt`) draws a group as one card that opens to the tool cards. The app compiles locally (`:app:compileDebugKotlin`); no emulator screenshot has been taken.
+- **iPhone (TG-3): implemented, verified in an offline simulator fixture.** `ToolPurpose.swift` in `NekkoProtocol` ports the classifier and the grouping (`Purpose.group`, `Purpose.role(of:)`), and its tests run the shared fixture (passed on Linux in the Swift 6.1 image). `TranscriptRow.of` in `ChatView.swift` groups adjacent same-purpose rows into `PurposeGroupRow` (`AgentRowViews.swift`); a run of `spawn_agent` calls stays the subagent group, now as the Delegate purpose. A thought with no reply text between two same-purpose calls folds into their group; a reply ends it. Local native XCTest passed on an isolated iPhone 17 Pro simulator. Matched base/head screenshots and expand/collapse recording were captured and inspected for PR #1081; live relay and physical hardware remain unverified.
+- **Android (TG-4): implemented; offline renderer interactions verified on an API 32 emulator, physical hardware unverified.** `ToolPurpose.kt` in `protocol` ports the classifier and the grouping; its tests run the shared fixture (pass locally). Tool blocks now carry their input. `ChatScreen.kt` groups the transcript and `PurposeGroupCard` (`BlockViews.kt`) draws a group as one card that opens to the tool cards. Debug APK assembly and protocol tests pass locally. The debug-only `PurposeEvidenceActivity` renders deterministic offline blocks through the real `Purpose.group`, `PurposeGroupCard` and `BlockView`; `PurposeEvidenceTest` passes on an isolated API 32 emulator and checks reveal/hide plus failure visibility. Matching base/head screenshots and expand/collapse recordings were captured at 1080×1920 in the default light theme. Pixel text was checked with OCR and interaction state with the UI hierarchy; direct visual review and evidence publication remain pending. This does not verify pairing, a live relay, or physical hardware.
 
 ## What the user gets
 
@@ -82,17 +82,19 @@ area: chat
   - streaming into an open group
 - Desktop visual evidence in the PR shows a turn that reads guidance, explores, edits and runs tests, before and after, in light and dark. It also includes a short recording of a group filling while live. The phones have screenshots from CI simulators and emulators. Status stays *unverified* there until they are run.
 
-### Phone verification fixture (2026-10-25)
+### Phone verification fixtures (2026-10-26)
 
-The DEBUG iOS launch argument `-uiTestPurposeGroups` opens the real purpose rows
-with deterministic completed, failed and running calls and skips normal connection
-startup. `PurposeGroupsTests` checks the initial collapse/failure defaults and
-reveal/hide actions and attaches screenshots. This fixture is implemented but its
-native interaction run, matching base captures and motion evidence remain unverified;
-it does not close TG-5 or establish Android visual parity.
+The DEBUG iOS launch argument `-uiTestPurposeGroups` feeds six calls through
+`TranscriptRow.of` and `BlockView`, matching chat grouping. Local native XCTest
+passed: three two-call groups, failed checks open initially, guidance reveal/hide.
+Matched unchanged-base/head screenshots and a native expand/collapse recording
+were inspected and published on PR #1081.
 
-The offline fixture now feeds six adjacent calls through `TranscriptRow.of` and
-`BlockView`, exactly as the chat does: two guidance reads, two checks (one failed),
-and two exploration calls (one running). Its native test asserts three groups of
-two calls and real call-row reveal/hide. Updated native run and media are pending;
-the previously published one-call row captures remain historical, not this fixture.
+Android's debug-only `PurposeEvidenceActivity` uses `Purpose.group`,
+`PurposeGroupCard` and `BlockView` with six offline calls. Instrumentation passed
+on an isolated API 32 ARM64 emulator, including reveal/hide and initially visible
+failure. Matched base/head screenshots and native expand/collapse recording were
+inspected and published on PR #1081. Fixtures skip pairing and make no relay calls.
+
+These checks establish native renderer behavior, not physical-device, full chat
+navigation or live relay verification. Desktop verification remains as above.
