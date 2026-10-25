@@ -427,9 +427,8 @@ async fn udp_to_private_is_dropped() {
         Ipv4Addr::new(127, 0, 0, 1),
         Ipv4Addr::new(169, 254, 1, 1),
         Ipv4Addr::BROADCAST,
-        GUEST,
     ];
-    let mut map: Vec<_> = private.iter().map(|ip| (sa(*ip, 9999), echo)).collect();
+    let mut map: Vec<_> = private.iter().chain([&GUEST]).map(|ip| (sa(*ip, 9999), echo)).collect();
     map.push((sa(PUBLIC, 9999), echo));
     let mut r = start(HostNets::default(), 16, vec![], TestConnector::new(map), true);
     let h = r.guest.udp(6000);
@@ -437,6 +436,8 @@ async fn udp_to_private_is_dropped() {
         r.guest.udp_sock(h).send_slice(b"leak", ep(ip, 9999)).unwrap();
         r.guest.run_until(0, |_| true).await;
     }
+    // The guest's own address, sent raw: smoltcp would ARP for itself, and the gateway does not answer that.
+    r.guest.dev.sock.send(&udp_frame_to(GUEST, 9999, 6000, b"leak")).unwrap();
     r.guest.udp_sock(h).send_slice(b"ok", ep(PUBLIC, 9999)).unwrap();
     let (data, from) = r.guest.udp_recv(h, 5).await.expect("public UDP got no reply");
     assert_eq!((data.as_slice(), from), (&b"echo:ok"[..], ep(PUBLIC, 9999)));
@@ -484,6 +485,32 @@ async fn flow_table_is_bounded() {
 }
 
 /// A valid guest TCP SYN frame to `dst`.
+fn udp_frame_to(dst: Ipv4Addr, port: u16, src_port: u16, payload: &[u8]) -> Vec<u8> {
+    use smoltcp::wire::{UdpPacket, UdpRepr};
+    let udp = UdpRepr { src_port, dst_port: port };
+    let ip = Ipv4Repr {
+        src_addr: GUEST,
+        dst_addr: dst,
+        next_header: IpProtocol::Udp,
+        payload_len: 8 + payload.len(),
+        hop_limit: 64,
+    };
+    let mut f = vec![0u8; 14 + 20 + 8 + payload.len()];
+    EthernetRepr { src_addr: GUEST_MAC, dst_addr: EthernetAddress::BROADCAST, ethertype: EthernetProtocol::Ipv4 }
+        .emit(&mut EthernetFrame::new_unchecked(&mut f[..]));
+    let caps = smoltcp::phy::ChecksumCapabilities::default();
+    ip.emit(&mut Ipv4Packet::new_unchecked(&mut f[14..]), &caps);
+    udp.emit(
+        &mut UdpPacket::new_unchecked(&mut f[34..]),
+        &IpAddress::Ipv4(GUEST),
+        &IpAddress::Ipv4(dst),
+        payload.len(),
+        |p| p.copy_from_slice(payload),
+        &caps,
+    );
+    f
+}
+
 fn syn_frame(dst: Ipv4Addr, port: u16) -> Vec<u8> {
     let tcp = TcpRepr {
         src_port: 43000,
@@ -694,4 +721,58 @@ async fn spike_forward_reaches_the_guest_port() {
     r.guest.run_until(2, |_| client.is_finished()).await;
     assert_eq!(&client.await.unwrap(), b"pongping");
     assert!(r.conn.calls().is_empty(), "a forward opens no outbound host socket");
+}
+
+/// An ARP request from the guest's MAC.
+fn arp_request(sender: Ipv4Addr, target: Ipv4Addr) -> Vec<u8> {
+    use smoltcp::wire::{ArpOperation, ArpPacket, ArpRepr};
+    let arp = ArpRepr::EthernetIpv4 {
+        operation: ArpOperation::Request,
+        source_hardware_addr: GUEST_MAC,
+        source_protocol_addr: sender,
+        target_hardware_addr: EthernetAddress([0; 6]),
+        target_protocol_addr: target,
+    };
+    let mut buf = vec![0u8; 14 + arp.buffer_len()];
+    EthernetRepr { src_addr: GUEST_MAC, dst_addr: EthernetAddress::BROADCAST, ethertype: EthernetProtocol::Arp }
+        .emit(&mut EthernetFrame::new_unchecked(&mut buf[..]));
+    arp.emit(&mut ArpPacket::new_unchecked(&mut buf[14..]));
+    buf
+}
+
+/// The addresses the gateway's ARP replies claim, collected for `ms`.
+async fn arp_claims(raw: &StdDgram, ms: u64) -> Vec<Ipv4Addr> {
+    use smoltcp::wire::{ArpPacket, ArpRepr};
+    let (mut claims, mut buf) = (vec![], vec![0u8; 2048]);
+    let end = std::time::Instant::now() + Duration::from_millis(ms);
+    while std::time::Instant::now() < end {
+        match raw.recv(&mut buf) {
+            Ok(n) => {
+                let Ok(eth) = EthernetFrame::new_checked(&buf[..n]) else { continue };
+                if eth.ethertype() != EthernetProtocol::Arp {
+                    continue;
+                }
+                if let Ok(ArpRepr::EthernetIpv4 { source_protocol_addr, .. }) =
+                    ArpRepr::parse(&ArpPacket::new_unchecked(eth.payload()))
+                {
+                    claims.push(source_protocol_addr);
+                }
+            }
+            Err(_) => tokio::time::sleep(Duration::from_millis(5)).await,
+        }
+    }
+    claims
+}
+
+/// macOS announces its DHCP address with a gratuitous ARP; a gateway that
+/// answers for it looks like an address conflict and the guest gives the lease up.
+#[tokio::test(flavor = "multi_thread")]
+async fn gateway_answers_arp_only_for_itself() {
+    let r = start(HostNets::default(), 16, vec![], TestConnector::default(), true);
+    let raw = r.guest.dev.sock.try_clone().unwrap();
+    raw.send(&arp_request(GUEST, GUEST)).unwrap();
+    raw.send(&arp_request(GUEST, Ipv4Addr::new(10, 233, 0, 7))).unwrap();
+    raw.send(&arp_request(GUEST, Ipv4Addr::new(93, 184, 216, 34))).unwrap();
+    raw.send(&arp_request(GUEST, GATEWAY)).unwrap();
+    assert_eq!(arp_claims(&raw, 500).await, vec![GATEWAY]);
 }

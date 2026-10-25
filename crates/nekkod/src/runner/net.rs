@@ -25,9 +25,9 @@ use smoltcp::phy::{self, ChecksumCapabilities, Device, DeviceCapabilities, Mediu
 use smoltcp::socket::tcp;
 use smoltcp::time::Instant;
 use smoltcp::wire::{
-    DhcpMessageType, DhcpOption, DhcpPacket, DhcpRepr, EthernetAddress, EthernetFrame, EthernetProtocol, EthernetRepr,
-    HardwareAddress, IpAddress, IpCidr, IpListenEndpoint, IpProtocol, Ipv4Packet, Ipv4Repr, TcpPacket, TcpRepr,
-    UdpPacket, UdpRepr,
+    ArpPacket, ArpRepr, DhcpMessageType, DhcpOption, DhcpPacket, DhcpRepr, EthernetAddress, EthernetFrame,
+    EthernetProtocol, EthernetRepr, HardwareAddress, IpAddress, IpCidr, IpListenEndpoint, IpProtocol, Ipv4Packet,
+    Ipv4Repr, TcpPacket, TcpRepr, UdpPacket, UdpRepr,
 };
 use std::collections::{HashMap, VecDeque};
 use std::future::Future;
@@ -350,7 +350,10 @@ impl<C: Connector> Nat<C> {
             return;
         }
         match eth.ethertype() {
-            EthernetProtocol::Arp => self.feed_smoltcp(frame),
+            // Any-IP would make smoltcp answer ARP for every address, the
+            // guest's own included, which macOS takes as a conflict and drops
+            // its DHCP lease. The gateway answers only for itself.
+            EthernetProtocol::Arp if arp_target(eth.payload()) == Some(GATEWAY) => self.feed_smoltcp(frame),
             EthernetProtocol::Ipv4 => self.on_ipv4(eth.src_addr(), eth.payload(), frame),
             // Guest IPv6 is not routed in P1 (no RA, no host-side v6 sockets).
             _ => {}
@@ -841,6 +844,13 @@ async fn udp_host<C: Connector>(
                 Err(_) => return,
             },
         }
+    }
+}
+
+fn arp_target(payload: &[u8]) -> Option<Ipv4Addr> {
+    match ArpRepr::parse(&ArpPacket::new_checked(payload).ok()?).ok()? {
+        ArpRepr::EthernetIpv4 { target_protocol_addr, .. } => Some(target_protocol_addr),
+        _ => None,
     }
 }
 
