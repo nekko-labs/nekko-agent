@@ -73,8 +73,8 @@ describe('phone channel allowlist', () => {
   it('refuses the dangerous channels and anything unlisted', () => {
     for (const c of [
       'data:wipe', 'settings:reset', 'remote:revoke', 'remote:rotate', 'remote:enable', 'remote:pair',
-      'terminal:run', 'terminal:update', 'terminals:list:native', 'terminal:attach', 'file:write', 'workspace:addByPath',
-      'workspace:remove', 'voice:install', 'voice:uninstall', 'connector:connect', 'connector:disconnect',
+      'terminal:run', 'terminal:update', 'terminals:list:native', 'terminal:attach', 'file:write',
+      'voice:install', 'voice:uninstall', 'connector:connect', 'connector:disconnect',
       'mcp:status', 'mcp:hypergate:connect', 'providers:save', 'oauth:begin', 'file:read', 'task:create',
       'turn:pending', 'no:such',
     ]) {
@@ -83,6 +83,25 @@ describe('phone channel allowlist', () => {
     }
     expect(phoneAlwaysDenied('remote:status')).toBe(false);
   });
+});
+
+describe('saved folders from a phone', () => {
+  for (const [channel, value] of [['workspace:addByPath', '/Users/me/project'], ['workspace:remove', 'ws_123']]) {
+    it(`screens and forwards ${channel} with its existing positional payload and list result`, async () => {
+      expect(phoneChannelAllowed(channel)).toBe(true);
+      expect(phoneChannelClass(channel)).toBe('change');
+      const folders = [{ id: 'ws_123', name: 'project', path: '/Users/me/project', addedAt: 1 }];
+      const dispatch = vi.fn(() => folders);
+      expect(await callFromPhone(dispatch, channel, [value])).toEqual(folders);
+      expect(dispatch).toHaveBeenCalledExactlyOnceWith(channel, [value]);
+      dispatch.mockClear();
+      for (const invalid of [undefined, null, 1, {}, [], '', '  ', 'a\0b']) {
+        await expect(callFromPhone(dispatch, channel, [invalid])).rejects.toThrow(/value-invalid/);
+      }
+      await expect(callFromPhone(dispatch, channel, [value, {}])).rejects.toThrow(/option-denied/);
+      expect(dispatch).not.toHaveBeenCalled();
+    });
+  }
 });
 
 describe('settings from a phone', () => {

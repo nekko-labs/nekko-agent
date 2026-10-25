@@ -7,10 +7,10 @@ area: chat
 
 **User intent:** Philip asked (2026-10-25) that when an agent makes several tool calls, the chat should group them by what they are doing and tell the user the goal of each group. For example, reading the project's guidance (`AGENTS.md`, `CLAUDE.md` and the docs they point to) should be one group, separate from the coding calls. Tasks TG-1 to TG-6 in [TASKS.md](../../TASKS.md); issue #1075.
 
-**Status `[classifier implemented; desktop, Local Web UI and phones planned]`.**
+**Status `[implemented on the desktop and Local Web UI 2026-10-25; phones planned]`.**
 
 - **Shared classifier (TG-1): implemented.** `toolPurpose`, `toolGoal`, `purposeHeadline`, `summarizePurposes` and `groupByPurpose` in `packages/shared/src/tool-purpose.ts`, with the shared fixture `packages/shared/fixtures/tool-purpose.json` run by Vitest.
-- **Desktop and Local Web UI (TG-2): planned.** Today consecutive steps fold into one activity group, *Worked on N steps* (T101, `ActivityGroup.tsx`), and inside it every call is its own numbered row, with no sense of purpose.
+- **Desktop and Local Web UI (TG-2): implemented.** `activityRows` in `transcript.ts` splits an activity run into purpose groups, and `ActivityGroup.tsx` draws them (`PurposeGroupRow`) under a headline that summarises them. The Local Web UI serves the same renderer. Verified with unit tests and isolated renderer captures of the real `ActivityGroup` (`apps/desktop/scripts/tool-groups-integration.cjs`); not yet watched in a real Claude Code or engine run.
 - **iPhone (TG-3): planned.** Today one row per tool; only consecutive `spawn_agent` calls are grouped.
 - **Android (TG-4): planned.** Today one card per tool.
 

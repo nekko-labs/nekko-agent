@@ -17,6 +17,8 @@ final class AppModel {
     let keychain: KeychainStore
     let prefs: Prefs
     let store: ComputersStore
+    /// Files and loopback pages the agent linked, read for the preview window and cards (#1095).
+    let previews: PreviewLoader
     /// Nekko Cloud sign-in and end-to-end encrypted sync (its own Keychain service).
     let cloud: CloudSync
     private let cloudKeychain: KeychainStore
@@ -85,6 +87,7 @@ final class AppModel {
         // Change actions (IO-33) are signed in the Secure Enclave behind Face ID or the passcode.
         computers.changeSigner = SecureEnclaveChangeSigner(store: keychain)
         store = computers
+        previews = PreviewLoader(store: computers)
         let cloudKeychain = KeychainStore(service: "dev.nekkolabs.nekkoagent.cloud")
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("-uiTestReset") { cloudKeychain.wipe() }
