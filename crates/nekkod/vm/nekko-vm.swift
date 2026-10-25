@@ -10,6 +10,8 @@
 //                                              {"event":"started"}, then
 //                                              {"event":"stopped","reason":"guest|signal|error","detail"}
 //   count-vms                                  {"count":N}
+//   egress                                     {"physical":{"name","index"}|null,"vpnCarriesDefault",
+//                                               "expensive","constrained"} now and on every change
 //
 // A bundle is a directory with config.json (keys hardwareModel and ecid as base64
 // of the framework's data representations, plus macAddress), disk.img and
@@ -17,6 +19,7 @@
 // shared; no Tart code is used here.
 import Darwin
 import Foundation
+import Network
 import Virtualization
 
 /// Writes one JSON line with the keys in the order given, as documented above.
@@ -88,6 +91,47 @@ func countVms() -> Never {
         if String(cString: path).hasSuffix("/com.apple.Virtualization.VirtualMachine") { count += 1 }
     }
     emit(["count": count]); exit(0)
+}
+
+// MARK: egress
+
+/// Streams the interface job traffic leaves by, for nekkod's NAT to bind every
+/// host socket to (IP_BOUND_IF), so no VPN route, split or full tunnel, ever
+/// carries it. `physical` comes from a monitor that prohibits `.other`
+/// (tunnels): its first available wifi, wired or cellular interface, or null.
+/// `vpnCarriesDefault`: the default path leads with a tunnel (a full-tunnel
+/// VPN or an exit node), which pauses the runner unless the user allows jobs
+/// out directly. Runs until nekkod goes away.
+func egress() -> Never {
+    let queue = DispatchQueue(label: "egress")
+    let physical = NWPathMonitor(prohibitedInterfaceTypes: [.other])
+    let all = NWPathMonitor()
+    var physicalPath: NWPath?
+    var defaultPath: NWPath?
+    var last = ""
+    func report() {
+        guard let p = physicalPath, let d = defaultPath else { return }
+        let nic = p.availableInterfaces.first { [.wifi, .wiredEthernet, .cellular].contains($0.type) }
+        let pairs: KeyValuePairs<String, Any> = [
+            "physical": nic.map { ["name": $0.name, "index": $0.index] as [String: Any] } ?? NSNull(),
+            "vpnCarriesDefault": d.availableInterfaces.first?.type == .other,
+            "expensive": p.isExpensive,
+            "constrained": p.isConstrained,
+        ]
+        let line = pairs.map { "\($0.key)=\($0.value)" }.joined()
+        if line != last { last = line; emit(pairs) }
+    }
+    physical.pathUpdateHandler = { physicalPath = $0; report() }
+    all.pathUpdateHandler = { defaultPath = $0; report() }
+    physical.start(queue: queue)
+    all.start(queue: queue)
+    // Reparented means nekkod is gone; nothing else would end this process.
+    let parent = getppid()
+    let watch = DispatchSource.makeTimerSource(queue: queue)
+    watch.schedule(deadline: .now() + 1, repeating: 1)
+    watch.setEventHandler { if getppid() != parent { exit(0) } }
+    watch.resume()
+    withExtendedLifetime((physical, all, watch)) { dispatchMain() }
 }
 
 // MARK: run
@@ -274,7 +318,8 @@ switch args.first {
 case "clone": clone()
 case "run": run()
 case "count-vms": countVms()
+case "egress": egress()
 default:
-    emit(["ok": false, "error": "usage: nekko-vm clone|run|count-vms"])
+    emit(["ok": false, "error": "usage: nekko-vm clone|run|count-vms|egress"])
     exit(1)
 }

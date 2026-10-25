@@ -1,7 +1,8 @@
 #!/bin/bash
 # CLI checks for nekko-vm (crates/nekkod/vm/nekko-vm.swift). Builds the helper
-# into a temp dir, ad-hoc signs it with its entitlement, and runs clone, run and
-# count-vms against small fake bundle files. Never boots a VM.
+# into a temp dir, ad-hoc signs it with its entitlement, runs clone, run and
+# count-vms against small fake bundle files, and reads egress's first line.
+# Never boots a VM.
 set -uo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 tmp=$(mktemp -d)
@@ -57,6 +58,15 @@ check "run with a fake bundle stops with an error" "[ $code -eq 1 ] && [[ '$out'
 # count-vms prints a JSON count
 out=$("$helper" count-vms); code=$?
 check "count-vms prints a count ($out)" "[ $code -eq 0 ] && echo '$out' | grep -Eqx '[{]\"count\":[0-9]+[}]'"
+
+# egress prints its first JSON line within 2 s
+"$helper" egress >"$tmp/egress.out" 2>/dev/null &
+egress_pid=$!
+for _ in $(seq 20); do [ -s "$tmp/egress.out" ] && break; sleep 0.1; done
+kill "$egress_pid" 2>/dev/null; wait "$egress_pid" 2>/dev/null
+out=$(head -n 1 "$tmp/egress.out")
+check "egress prints the four keys ($out)" \
+  "python3 -c 'import json, sys; d = json.loads(sys.argv[1]); assert set(d) == {\"physical\", \"vpnCarriesDefault\", \"expensive\", \"constrained\"}' '$out' 2>/dev/null"
 
 # an unknown command fails
 "$helper" bogus >/dev/null; code=$?
