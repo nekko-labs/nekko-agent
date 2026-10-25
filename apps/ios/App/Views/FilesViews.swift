@@ -22,23 +22,78 @@ struct FoldersView: View {
     @Environment(ComputersStore.self) private var store
     @Environment(\.palette) private var palette
 
+    @State private var adding = false
+    @State private var folderPath = ""
+    @State private var removing: WorkspaceFolder?
+    @State private var busy = false
+    @State private var error: String?
+
     var body: some View {
         List {
+            ConnectionBanner()
             if store.workspaces.isEmpty {
-                Text("No saved folders on \(store.active?.name ?? "this computer"). Add one in Nekko Agent there.")
+                Text("No saved folders on \(store.active?.name ?? "this computer").")
                     .foregroundStyle(palette.inkSoft)
             }
             ForEach(store.workspaces) { w in
                 NavigationLink { FilesScreen(root: .folder(w.id), title: w.name) } label: {
-                    Label(w.name, systemImage: "folder")
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label(w.name, systemImage: "folder")
+                        if let path = w.path { Text(path).font(.caption).foregroundStyle(palette.inkSoft) }
+                    }
                 }
                 .accessibilityIdentifier("files.folder")
+                .swipeActions(allowsFullSwipe: false) {
+                    Button(role: .destructive) { removing = w } label: { Label("Remove saved folder", systemImage: "minus.circle") }
+                        .disabled(unavailable)
+                }
+                .contextMenu {
+                    Button(role: .destructive) { removing = w } label: { Label("Remove saved folder", systemImage: "minus.circle") }
+                        .disabled(unavailable)
+                }
+            }
+            Section {
+                Button { folderPath = ""; adding = true } label: { Label("Add computer folder", systemImage: "plus") }
+                    .disabled(unavailable)
+                    .accessibilityIdentifier("files.addFolder")
+                if busy { ProgressView() }
+            } footer: {
+                Text("Use an absolute path on the computer, not on this iPhone. Removing a saved folder never deletes files on disk.")
             }
         }
         .scrollContentBackground(.hidden)
         .background(palette.paper)
         .navigationTitle("Files")
         .accessibilityIdentifier("files.folders")
+        .alert("Add computer folder", isPresented: $adding) {
+            TextField("Absolute computer path", text: $folderPath)
+                .textInputAutocapitalization(.never).autocorrectionDisabled()
+            Button("Cancel", role: .cancel) {}
+            Button("Add") { act { try await store.addWorkspace(path: folderPath) } }
+                .disabled(unavailable || !WorkspacePath.isAbsolute(folderPath.trimmingCharacters(in: .whitespacesAndNewlines)))
+        } message: {
+            Text("Enter the full folder path on \(store.active?.name ?? "the computer").")
+        }
+        .confirmationDialog("Remove saved folder?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), titleVisibility: .visible) {
+            Button("Remove saved folder", role: .destructive) {
+                if let folder = removing { act { try await store.removeWorkspace(folder.id) } }
+            }.disabled(unavailable)
+        } message: {
+            Text("Only the saved entry is removed. The folder and its files stay on the computer.")
+        }
+        .alert("Couldn’t update folders", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: { Text(error ?? "") }
+    }
+
+    private var unavailable: Bool { busy || store.conn != .online }
+
+    private func act(_ action: @escaping () async throws -> Void) {
+        busy = true
+        Task {
+            defer { busy = false }
+            do { try await action() } catch { self.error = error.localizedDescription }
+        }
     }
 }
 

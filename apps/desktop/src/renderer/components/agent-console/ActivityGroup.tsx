@@ -1,8 +1,9 @@
 import { memo, useEffect, useMemo, useState } from 'react';
 import { purposeHeadline, shortLiveStatus, summarizePurposes, summarizeThought, summarizeToolCall, toolPurpose, truncateWords, type LiveActivity, type PurposeCall } from '@nekko-agent/shared';
+import { ToolActivityIcon, toolIconKind, purposeIconKind } from './ToolActivityIcon.js';
 import { ToolProgressChip } from './ToolProgressChip.js';
 import { toolQuietSince } from './toolProgress.js';
-import { ChatIcon, ThoughtIcon, ToolStepIcon } from '../../icons.js';
+import { ChatIcon, ThoughtIcon } from '../../icons.js';
 import { Markdown } from '../Markdown.js';
 import type { Activity, ActivityRow, IndexedActivity } from './transcript.js';
 import { activityRows, stepKey } from './transcript.js';
@@ -65,7 +66,7 @@ export const ActivityGroup = memo(function ActivityGroup({ items, streaming = fa
           aria-expanded={open}
         >
           <span className="w-3 shrink-0 text-[10px]">{open ? '▾' : '▸'}</span>
-          {agents.length ? <SubagentCue /> : watchOnly ? <WatchIcon /> : <ToolStepIcon className="h-3 w-3 shrink-0 text-accent" />}
+          {agents.length ? <SubagentCue /> : watchOnly ? <WatchIcon /> : <ToolActivityIcon kind={lastRow ? rowIconKind(lastRow) : 'other'} className="h-3 w-3 shrink-0 text-accent" />}
           {streaming && !paused && <LeadDots />}
           <span className="min-w-0 truncate font-medium text-ink-soft">{agents.length ? <SubagentHeadline call={agents[agents.length - 1].call} result={agents[agents.length - 1].result} /> : watchOnly ? watchCallHeadline(lastWatch.call, lastWatch.result) : summary}</span>
           {ordinary && failed > 0 && <span className="shrink-0 text-danger" data-activity-failed>· {failed} failed</span>}
@@ -116,6 +117,12 @@ function rowHeadline(row: ActivityRow, running: boolean): string {
   return it.kind === 'tool' ? purposeHeadline(toolPurpose(it.call), [callOf(it)], running).headline : '';
 }
 
+
+function rowIconKind(row: ActivityRow) {
+  if (row.kind === 'group') return purposeIconKind(row.purpose, row.calls);
+  return row.step.item.kind === 'tool' ? toolIconKind(row.step.item.call) : 'other';
+}
+
 function IndexedStepRow({ step, streaming, total, toolActivity }: { step: IndexedActivity; streaming: boolean; total: number; toolActivity?: LiveActivity }) {
   const { item, index } = step;
   return (
@@ -160,7 +167,7 @@ function PurposeGroupRow({ row, live, streaming, total, toolActivity }: { row: E
         <span className="w-4 shrink-0 text-right text-[10px] tabular-nums opacity-60">{first}</span>
         <ToolElapsed startedAt={startedAt} endedAt={endedAt} live={live} />
         <span className="w-3 shrink-0 text-[10px]">{open ? '▾' : '▸'}</span>
-        <span className="self-center"><ToolStepIcon className="h-3 w-3 shrink-0 text-ink-faint" /></span>
+        <span className="self-center"><ToolActivityIcon kind={purposeIconKind(row.purpose, row.calls)} /></span>
         {live && <LeadDots />}
         <span className={`min-w-0 max-w-[70%] shrink-0 truncate font-medium ${live ? 'text-accent' : 'text-ink-soft'}`}>{headline}</span>
         {quiet && <span className="min-w-0 truncate" title={quiet}>· {quiet}</span>}
@@ -233,7 +240,7 @@ function StepRow({ index, item, live, quietSince }: { index: number; item: Activ
       : kind === 'agent' ? <SubagentCue />
         : kind === 'watch' ? <WatchIcon />
           : kind === 'note' ? <ChatIcon className="h-3 w-3 shrink-0 text-ink-faint" />
-            : <ToolStepIcon className="h-3 w-3 shrink-0 text-ink-faint" />;
+            : <ToolActivityIcon kind={item.kind === 'tool' ? toolIconKind(item.call) : 'other'} />;
   const then = kind === 'watch' && item.kind === 'tool' && parseWatchCall(item.call).action === 'create' && !item.result?.isError ? thenSummary(parseWatchCall(item.call).prompt) : '';
 
   return (

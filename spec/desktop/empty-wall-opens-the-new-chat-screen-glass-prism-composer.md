@@ -15,3 +15,12 @@ split-from: SPEC.md (2026-10-22)
 ## Full static gradient (issue #1108)
 
 Implemented. Matching unchanged-base and working-tree Electron window captures in default dark at 1440×900 and 900×900 were inspected. The full-surface diagonal gradient and fixed-seed grain leave the glass composer and its prism edge intact. Automated renderer checks confirm the linear gradient, embedded SVG grain, no grain animation, pointer pass-through, visible composer bounds and successful typing. The sandbox is hidden, off-screen, non-focusable, network-blocked and uses a separate profile. The shared full-App fixture emits the same unrelated missing app-info/list-data warnings on base and head. Other themes, Windows/Linux and packaged rendering are not visually verified. Reproduce with `NEKKO_LAYOUT_SANDBOX=new-chat-gradient-sandbox.cjs node apps/desktop/scripts/layout-evidence-integration.cjs`; point `NEKKO_TEST_SOURCE` at an unchanged archive for the baseline.
+
+## Peeking greeting Nekko
+
+`[implemented; isolated renderer interaction checks passed at 1280px and 460px; matched before/after renderer screenshots visually reviewed at both widths]`
+
+- The new-chat greeting places Nekko to the left of “What should we work on?”, reusing the pixel head and edge-resting paws from Travis's website beta-signup design (PR #763). The eyes glance right toward the heading. Model Providers is unchanged.
+- The small static SVG inherits the active theme's surface, ink, line and accent colors. It has no extra animation, settings, network requests, permissions or host calls.
+- Acceptance: cat and heading remain side by side without clipping at desktop and narrow widths; the heading remains readable, the SVG is decorative and non-focusable, and composing a message still works. Existing clean-start visibility rules remain unchanged, so transcript views do not gain artwork.
+- Verified through a synthetic full-App fixture with an isolated profile, blocked networking and a hidden, non-focusable Electron window. Packaged desktop and physical mobile devices are not part of this check. Native capture source enumeration failed on the host; evidence covers Electron renderer pixels, not OS window chrome.
