@@ -30,6 +30,8 @@ async fn runner_channels_round_trip() {
         (Some(2), Some(8192))
     );
     assert_eq!(v["state"], "error");
+    assert!(v["host"]["ramMb"].as_u64().is_some(), "{v}");
+    assert_eq!(v["recent"], json!([]));
     assert!(v["error"].as_str().is_some_and(|e| e.contains("VM support unavailable")), "{v}");
 
     let (_, updated) = post(d.port, "runner:update", json!(["r1", { "maxJobMinutes": 5 }]), Some(TOKEN)).await;
