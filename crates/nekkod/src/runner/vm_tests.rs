@@ -13,13 +13,14 @@ fn helper(dir: &Path, body: &str) -> PathBuf {
 fn vm(helper: PathBuf, physical: bool) -> HelperVm {
     let egress =
         Egress { physical: Some(("lo0".into(), 1)), vpn_carries_default: false, expensive: false, constrained: false };
-    HelperVm {
+    let mut v = HelperVm::new(
         helper,
-        host: Arc::new(RwLock::new(HostNets::default())),
-        egress: Arc::new(RwLock::new(physical.then_some(egress))),
-        stop_grace: Duration::from_millis(200),
-        start_timeout: Duration::from_secs(5),
-    }
+        Arc::new(RwLock::new(HostNets::default())),
+        Arc::new(RwLock::new(physical.then_some(egress))),
+    );
+    v.stop_grace = Duration::from_millis(200);
+    v.start_timeout = Duration::from_secs(5);
+    v
 }
 
 fn spec(dir: &Path) -> RunSpec {
@@ -129,6 +130,50 @@ async fn clone_reports_the_helpers_error() {
 }
 
 #[tokio::test]
+async fn clone_removes_only_its_own_partial_target() {
+    let dir = tempfile::tempdir().unwrap();
+    // The helper made the folder, then failed (or was killed) mid-clone.
+    let h = helper(dir.path(), "mkdir \"$5\"\necho '{\"ok\":false,\"error\":\"clonefile failed\"}'\nexit 1");
+    let to = dir.path().join("vm-1");
+    assert_eq!(vm(h.clone(), true).clone_bundle(Path::new("/a"), &to).await, Err("clonefile failed".into()));
+    assert!(!to.exists(), "the partial clone is removed");
+    // A target that was already there is refused and left alone.
+    std::fs::create_dir(&to).unwrap();
+    std::fs::write(to.join("keep.txt"), b"keep").unwrap();
+    assert!(vm(h, true).clone_bundle(Path::new("/a"), &to).await.unwrap_err().contains("already exists"));
+    assert!(to.join("keep.txt").exists());
+}
+
+#[tokio::test]
+async fn count_vms_times_out_and_kills_the_helper() {
+    let dir = tempfile::tempdir().unwrap();
+    let d = dir.path().display();
+    let h = helper(dir.path(), &format!("echo $$ > '{d}/pid'\nexec sleep 30"));
+    let mut v = vm(h, true);
+    v.count_timeout = Duration::from_millis(200);
+    let r = tokio::time::timeout(Duration::from_secs(2), v.count_vms()).await.expect("count-vms hung the caller");
+    assert!(r.unwrap_err().contains("did not finish"));
+    assert!(!alive(pid(dir.path()).await), "the helper is killed and reaped");
+}
+
+#[tokio::test]
+async fn nat_failure_stops_the_vm() {
+    let dir = tempfile::tempdir().unwrap();
+    let d = dir.path().display();
+    let h = helper(dir.path(), &format!("echo $$ > '{d}/pid'\nexec sleep 30"));
+    let mut child = tokio::process::Command::new(&h).stdout(Stdio::piped()).kill_on_drop(true).spawn().unwrap();
+    let lines = BufReader::new(child.stdout.take().unwrap()).lines();
+    let pid = pid(dir.path()).await;
+    let (done_tx, done_rx) = oneshot::channel();
+    let (_stop_tx, stop_rx) = mpsc::unbounded_channel();
+    let nat = async { Err::<(), _>(io::Error::other("socket broke")) };
+    tokio::spawn(supervise(child, lines, nat, stop_rx, Duration::from_secs(30), done_tx));
+    let done = tokio::time::timeout(Duration::from_secs(2), done_rx).await.expect("the VM kept running").unwrap();
+    assert_eq!(done, Stopped::Error("the VM's network failed: socket broke".into()));
+    assert!(!alive(pid), "the helper is killed and reaped");
+}
+
+#[tokio::test]
 async fn count_vms_parses_and_rejects_garbage() {
     let dir = tempfile::tempdir().unwrap();
     let h = helper(dir.path(), "echo '{\"count\":1}'");
@@ -181,6 +226,7 @@ async fn seed_image_holds_only_the_config() {
     let _ = std::process::Command::new("hdiutil").arg("detach").arg(&mount).output();
     assert_eq!(names, ["jit-config"]);
     assert_eq!(content.unwrap(), "{\"jit\":\"abc\"}");
+    assert_eq!(std::fs::metadata(&iso).unwrap().permissions().mode() & 0o777, 0o600, "the image holds a credential");
     let left: Vec<_> = std::fs::read_dir(dir.path()).unwrap().map(|e| e.unwrap().file_name()).collect();
     left.iter()
         .for_each(|n| assert!(["seed.iso", "m", "nekko-vm"].contains(&n.to_str().unwrap()), "{n:?} left behind"));

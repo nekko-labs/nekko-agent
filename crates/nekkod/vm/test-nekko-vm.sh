@@ -29,9 +29,10 @@ head -c 4096 /dev/urandom >"$src/nvram.bin"
 src_sum=$(cat "$src"/* | shasum)
 
 # clone refuses an existing target
-mkdir "$tmp/exists"
+mkdir "$tmp/exists" && echo keep >"$tmp/exists/keep.txt"
 out=$("$helper" clone --from "$src" --to "$tmp/exists"); code=$?
 check "clone refuses an existing target" "[ $code -eq 1 ] && [[ '$out' == '{\"ok\":false,\"error\":'* ]]"
+check "clone leaves an existing target intact" "[ -f '$tmp/exists/keep.txt' ] && [ ! -e '$tmp/exists/disk.img' ]"
 
 # clone refuses a missing source
 out=$("$helper" clone --from "$tmp/nope" --to "$tmp/c0"); code=$?

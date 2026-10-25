@@ -11,7 +11,7 @@ use serde_json::Value;
 use std::future::Future;
 use std::io;
 use std::os::fd::AsRawFd;
-use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -87,34 +87,108 @@ pub struct HelperVm {
     pub stop_grace: Duration,
     /// From spawning the helper to its `started` line (60 s).
     pub start_timeout: Duration,
+    /// Limits on the one-shot calls, so a wedged helper or tool never stalls
+    /// the supervisor's tick: `clone` 120 s, the seed's `hdiutil` 30 s,
+    /// `count-vms` 10 s, `scutil --dns` 10 s.
+    pub clone_timeout: Duration,
+    pub seed_timeout: Duration,
+    pub count_timeout: Duration,
+    pub scutil_timeout: Duration,
 }
 
 impl HelperVm {
-    /// `helper <args>`, its stdout as one JSON value.
-    async fn call(&self, args: &[&std::ffi::OsStr]) -> Result<Value, String> {
-        let out = tokio::process::Command::new(&self.helper)
-            .args(args)
-            .stdin(Stdio::null())
-            .stderr(Stdio::null())
-            .kill_on_drop(true)
-            .output()
-            .await
-            .map_err(|e| format!("cannot run nekko-vm: {e}"))?;
+    /// The driver with the production limits.
+    pub fn new(helper: PathBuf, host: Arc<RwLock<HostNets>>, egress: Arc<RwLock<Option<Egress>>>) -> Self {
+        Self {
+            helper,
+            host,
+            egress,
+            stop_grace: Duration::from_secs(30),
+            start_timeout: Duration::from_secs(60),
+            clone_timeout: Duration::from_secs(120),
+            seed_timeout: Duration::from_secs(30),
+            count_timeout: Duration::from_secs(10),
+            scutil_timeout: Duration::from_secs(10),
+        }
+    }
+
+    /// `helper <args>` within `limit`, its stdout as one JSON value.
+    async fn call(&self, args: &[&std::ffi::OsStr], limit: Duration) -> Result<Value, String> {
+        let mut cmd = tokio::process::Command::new(&self.helper);
+        cmd.args(args);
+        let out = output_within(cmd, limit, "nekko-vm").await?;
         let text = String::from_utf8_lossy(&out.stdout);
         serde_json::from_str(text.trim()).map_err(|_| format!("nekko-vm said: {}", text.trim()))
     }
 }
 
+/// Runs `cmd` to completion within `limit`. On a timeout the child is killed
+/// and reaped before the error returns, so nothing is left running.
+async fn output_within(
+    mut cmd: tokio::process::Command,
+    limit: Duration,
+    what: &str,
+) -> Result<std::process::Output, String> {
+    use tokio::io::AsyncReadExt;
+    let mut child = cmd
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|e| format!("cannot run {what}: {e}"))?;
+    let (mut out, mut err) = (child.stdout.take(), child.stderr.take());
+    let run = async {
+        let (mut o, mut e) = (vec![], vec![]);
+        let read_o = async {
+            if let Some(p) = &mut out {
+                let _ = p.read_to_end(&mut o).await;
+            }
+        };
+        let read_e = async {
+            if let Some(p) = &mut err {
+                let _ = p.read_to_end(&mut e).await;
+            }
+        };
+        let (status, (), ()) = tokio::join!(child.wait(), read_o, read_e);
+        status.map(|status| std::process::Output { status, stdout: o, stderr: e })
+    };
+    match tokio::time::timeout(limit, run).await {
+        Ok(r) => r.map_err(|e| format!("{what} failed: {e}")),
+        Err(_) => {
+            let _ = child.kill().await;
+            Err(format!("{what} did not finish within {} s", limit.as_secs_f32()))
+        }
+    }
+}
+
 impl Vm for HelperVm {
     async fn clone_bundle(&self, from: &Path, to: &Path) -> Result<(), String> {
-        let v = self
-            .call(&["clone".as_ref(), "--from".as_ref(), from.as_os_str(), "--to".as_ref(), to.as_os_str()])
-            .await?;
-        match (v["ok"].as_bool(), v["error"].as_str()) {
-            (Some(true), _) => Ok(()),
-            (_, Some(e)) => Err(e.to_owned()),
-            _ => Err(format!("nekko-vm clone said: {v}")),
+        // An existing target is never ours to touch: refuse before the helper runs.
+        if std::fs::symlink_metadata(to).is_ok() {
+            return Err(format!("{} already exists", to.display()));
         }
+        let r = self
+            .call(
+                &["clone".as_ref(), "--from".as_ref(), from.as_os_str(), "--to".as_ref(), to.as_os_str()],
+                self.clone_timeout,
+            )
+            .await
+            .and_then(|v| match (v["ok"].as_bool(), v["error"].as_str()) {
+                (Some(true), _) => Ok(()),
+                (_, Some(e)) => Err(e.to_owned()),
+                _ => Err(format!("nekko-vm clone said: {v}")),
+            });
+        // `to` was absent, and vm ids are unique to this daemon, so anything there now is this
+        // call's partial clone (a helper killed mid-clone leaves one).
+        if r.is_err() {
+            match std::fs::symlink_metadata(to) {
+                Ok(m) if m.is_dir() => drop(std::fs::remove_dir_all(to)),
+                Ok(_) => drop(std::fs::remove_file(to)),
+                Err(_) => {}
+            }
+        }
+        r
     }
 
     async fn write_seed(&self, path: &Path, jit_config: &str) -> Result<(), String> {
@@ -131,17 +205,13 @@ impl Vm for HelperVm {
                 .open(dir.join("jit-config"))
                 .and_then(|mut f| io::Write::write_all(&mut f, jit_config.as_bytes()))
                 .map_err(|e| format!("cannot write the JIT config: {e}"))?;
-            let out = tokio::process::Command::new("hdiutil")
-                .args(["makehybrid", "-iso", "-joliet", "-default-volume-name", "NEKKOSEED", "-o"])
-                .arg(path)
-                .arg(&dir)
-                .stdin(Stdio::null())
-                .kill_on_drop(true)
-                .output()
-                .await
-                .map_err(|e| format!("cannot run hdiutil: {e}"))?;
+            let mut cmd = tokio::process::Command::new("hdiutil");
+            cmd.args(["makehybrid", "-iso", "-joliet", "-default-volume-name", "NEKKOSEED", "-o"]).arg(path).arg(&dir);
+            let out = output_within(cmd, self.seed_timeout, "hdiutil").await?;
             if out.status.success() {
-                Ok(())
+                // makehybrid honours the umask; the image holds the credential.
+                std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+                    .map_err(|e| format!("cannot make the seed image private: {e}"))
             } else {
                 Err(format!("hdiutil makehybrid failed: {}", String::from_utf8_lossy(&out.stderr).trim()))
             }
@@ -156,12 +226,10 @@ impl Vm for HelperVm {
         // return leaves a VM running.
         let physical = self.egress.read().ok().and_then(|e| e.as_ref()?.physical.as_ref().map(|p| p.1));
         let index = physical.ok_or("no physical network interface; the job VM would have no network")?;
-        let scutil = tokio::process::Command::new("scutil")
-            .arg("--dns")
-            .stdin(Stdio::null())
-            .stderr(Stdio::null())
-            .kill_on_drop(true)
-            .output()
+        // Unreadable resolvers fall back to FALLBACK_DNS, so a failure here is not fatal.
+        let mut scutil = tokio::process::Command::new("scutil");
+        scutil.arg("--dns");
+        let scutil = output_within(scutil, self.scutil_timeout, "scutil")
             .await
             .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
             .unwrap_or_default();
@@ -230,7 +298,7 @@ impl Vm for HelperVm {
     }
 
     async fn count_vms(&self) -> Result<u8, String> {
-        let v = self.call(&["count-vms".as_ref()]).await?;
+        let v = self.call(&["count-vms".as_ref()], self.count_timeout).await?;
         v["count"].as_u64().and_then(|n| u8::try_from(n).ok()).ok_or_else(|| format!("nekko-vm count-vms said: {v}"))
     }
 }
@@ -269,6 +337,7 @@ async fn supervise(
     let mut nat = Box::pin(nat);
     let (mut why, mut killed, mut nat_ended, mut out_open) = (None, false, false, true);
     let mut deadline: Option<tokio::time::Instant> = None;
+    let mut nat_failed: Option<String> = None;
     loop {
         tokio::select! {
             _ = child.wait() => break,
@@ -277,7 +346,16 @@ async fn supervise(
                 _ => out_open = false,
             },
             // The NAT stays up through SIGTERM's grace: closing it would pull the guest's plug.
-            _ = &mut nat, if !nat_ended => nat_ended = true,
+            r = &mut nat, if !nat_ended => {
+                nat_ended = true;
+                // A VM with no network would hang its job to the max job time: stop it now.
+                if let Err(e) = r {
+                    eprintln!("nekkod: a job VM's network failed, stopping the VM: {e}");
+                    nat_failed = Some(format!("the VM's network failed: {e}"));
+                    killed = true;
+                    let _ = child.start_kill();
+                }
+            }
             h = stop.recv(), if !killed => match h {
                 Some(Halt::Term) if deadline.is_none() => {
                     if let Some(pid) = pid {
@@ -307,7 +385,7 @@ async fn supervise(
     .await;
     // The helper is reaped; dropping the NAT here ends it before `done` fires.
     drop(nat);
-    let why = why.unwrap_or_else(|| {
+    let why = nat_failed.map(Stopped::Error).or(why).unwrap_or_else(|| {
         Stopped::Error(if killed { "killed".into() } else { "nekko-vm exited without a reason".into() })
     });
     let _ = done.send(why);

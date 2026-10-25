@@ -55,11 +55,14 @@ func clone() -> Never {
     if let missing = names.first(where: { !fm.fileExists(atPath: "\(from)/\($0)") }) {
         emit(["ok": false, "error": "\(from) is not a VM bundle: no \(missing)"]); exit(1)
     }
-    if fm.fileExists(atPath: to) {
-        emit(["ok": false, "error": "\(to) already exists"]); exit(1)
+    // mkdir is the existence check: no gap between checking and creating, so
+    // the catch below only ever removes a folder this run created.
+    if mkdir(to, 0o755) != 0 {
+        let e = errno
+        emit(["ok": false, "error": e == EEXIST ? "\(to) already exists" : "cannot create \(to): \(String(cString: strerror(e)))"])
+        exit(1)
     }
     do {
-        try fm.createDirectory(atPath: to, withIntermediateDirectories: false)
         for name in ["disk.img", "nvram.bin"] where clonefile("\(from)/\(name)", "\(to)/\(name)", 0) != 0 {
             throw Failure(description: "clonefile \(name): \(String(cString: strerror(errno))) (the clone must be on the same APFS volume)")
         }
