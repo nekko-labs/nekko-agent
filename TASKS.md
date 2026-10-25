@@ -6,6 +6,17 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Model tuning controls (added 2026-10-25)
+
+Philip asked for a simpler load drawer (one recommended button explained in plain words, a VRAM and RAM meter, GPU only or Hybrid plus context first, simple then expert controls) and for the trick of running a big MoE model on an 8 GB card by keeping experts in RAM and the n-gram table on disk. Spec: [Setting up a local model](spec/models/setting-up-a-local-model.md). Decision: [0023](docs/decisions/0023-place-bytes-in-three-places-and-pass-placement-explicitly.md). #1069
+
+- [x] **MT-1, Weight kinds from the GGUF (2026-10-25).** `gguf.rs` sizes every tensor by its ggml type and sums experts (`ffn_*_exps`), dense feed-forward and lookup tables (n-gram and per-layer embeddings) into a `WeightLayout` of shares; the library stores it as `weightLayout` and backfills old rows once.
+- [x] **MT-2, Placement planner (2026-10-25).** `placement.rs::place` puts weights, KV cache and overhead in VRAM, RAM or on disk for a drawer request (run on, context per session, sessions, KV type, GPU layers, expert or FFN layers in RAM, KV on GPU, mmap, pin, paged tables, expert cache); verdict `disk` when mapped weights page from the SSD. `compute_fit` is untouched.
+- [x] **MT-3, Solver goals (2026-10-25).** `solve`/`recommend` with `speed` (GPU only, else the lightest split at 32K, then more context), `context` (most context first) and `fill` (keep context, lightest split); sessions 4 or 2 only when each keeps 64K and fits. Daemon channels `runtime:place` and `runtime:recommend`.
+- [x] **MT-4, Launch flags (2026-10-25).** `--cpu-moe`, `--n-cpu-moe`, `--n-cpu-ffn`, `--moe-cache-mib`, `--no-kv-offload`, `--lazy-mode`, `--threads-batch`, `--kv-unified(-per-slot)`, and `--fit off` with any explicit placement, each gated on the build's `--help` with `--override-tensor` fallbacks; `same_params` knows the new keys.
+- [x] **MT-5, Load drawer (2026-10-25).** `EngineLoadDrawer.tsx` rebuilt around one `LoadParams` (`loadSettings.ts` maps it): meter, recommended button with "What this chose", Run on, split presets, context per session, More controls, Expert. Evidence: `apps/desktop/scripts/model-tuning-sandbox.cjs`.
+- [ ] **MT-6, Real hardware check:** load an MoE with All experts in RAM on a discrete GPU and compare measured VRAM with the meter; confirm `--moe-cache-mib` and `--lazy-mode` on the bundled build.
+- [ ] **MT-7, Persistent phrase cache:** `--spec-type ngram-cache --lookup-cache-dynamic` once incognito chats can be kept out of it.
 ## Tool calls grouped by purpose (added 2026-10-25)
 
 Philip asked for an agent's tool calls to be grouped by what they are doing, with the goal of each group shown (reading the project's guidance apart from coding, say). Spec: [Tool calls grouped by what they are for](spec/chat/tool-calls-grouped-by-purpose.md). #1075
@@ -2292,7 +2303,7 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [x] **T195c** "When it runs" in the workflow editor and the ⚡ Automate dialog (`RunPolicyField`), Settings → Automations (default policy, Away after), "waiting for you to be away" on held tasks and workflows, "low priority · waited" on runs; `docs/automations.md`. Tests: `run-policy.test.ts`, `WorkflowEditor.draft.test.tsx`, `SettingsView.automations.test.tsx`, `AutomationsPane.runPolicy.test.tsx`; evidence: `apps/desktop/scripts/automations-integration.cjs`. Done: 2026-10-23
 - [ ] **T195d** Live check of the signals on Windows and on a Linux GNOME/KDE desktop.
 - [x] **T195e** B2: background turns on a local model step aside for the user (`background` on the automation's send; nekko-chat `YieldingClient`; nekkod `background.rs`, `background:state`/`background:updated`; the loop resends a yielded call without spending an attempt). Pausing, not unloading, measured in `docs/perf-history.md` (stop in 22-35 ms; resume re-reads 1-4 prompt tokens vs 0.8-1.2 s load + full prompt). Tests: `nekko-chat/tests/yielding.rs`, `nekko-loop/tests/retry.rs`, `nekkod/tests/daemon/automation.rs`; evidence: the paused reply in `automations-integration.cjs`. Done: 2026-10-23
-- [ ] **T195f** B3: model residency (routing model kept warm, large model evicted under memory pressure) and the monitor's background chip.
+- [x] **T195f** B3: residency (a model kept resident is never unloaded to make room; a load that does not fit in free GPU memory unloads idle models first, least recently used first, then loads anyway with a warning) and the background chip (resource chip `BG paused`/`BG running`, the Monitors panel's "Background: 1 paused · …"; `background:state` + `background:updated`). No routing model is pinned: nothing uses one yet. Tests: `nekko-engine/tests/server.rs`, `BackgroundChip.test.tsx`, `background.test.ts`; evidence: `automations-integration.cjs`. Done: 2026-10-26
 
 ### T196: The agent remembers what it learns about you (2026-10-23) · [spec](spec/context/context-guardrails-memory-the-differentiators.md)
 - [x] **T196a** `remember` tool (`nekko-turn` `plan.rs`): offered only where the chat reads global memory, not to sub-agents or goal runs; a global note per fact, replaced by title (`nekko_workspace::memory::remember`, unit-tested); daemon handler in `turns.rs`. Golden tool lists and workflow-access cases gain the name. Done: 2026-10-23
