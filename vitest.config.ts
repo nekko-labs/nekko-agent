@@ -6,7 +6,7 @@ import { defineConfig } from 'vitest/config';
 // package as root, so include/exclude, tsconfig (desktop's JSX) and the
 // package's own vitest.config.ts (shared, cli and local-web-ui exclude dist/) apply exactly
 // as under `npm test -w <pkg>`, which still works on its own.
-// apps/mobile and apps/nekko-agent-api keep their own runners and are not part of root
+// apps/nekko-agent-api keeps its own runner and is not part of root
 // `npm test`.
 const packages = ['packages/shared', 'packages/profile', 'apps/desktop', 'apps/local-web-ui', 'apps/relay-server', 'apps/cli'];
 const withConfig = new Set(['packages/shared', 'apps/cli', 'apps/local-web-ui']);

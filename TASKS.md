@@ -2387,3 +2387,7 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [x] Combine provider setup and Model Server under one Models rail entry, retaining existing destinations and title-bar highlighting.
 - [x] Add local/cloud subnavigation, current-provider chips, a divider, five filled provider shortcuts and the full overflow chooser; retain existing connection and model controls.
 - [x] Verify desktop typechecking, focused provider/navigation tests, hidden Electron interactions and matching 1440/390 px before/after evidence. Live credential sign-in and server lifecycle actions are not exercised by this layout change.
+
+## Expo retirement
+
+- [x] Remove the retired Expo app and its dedicated Mobile CI; keep native phone workflows, relay/push infrastructure and shared protocol coverage. Update merge-gate accounting and desktop icon/test references. See [native phone decision](spec/phone/native-phone-implementation-decision.md) and [decision 0026](docs/decisions/0026-retire-expo-in-favor-of-native-phone-apps.md). Tracked in #1124.
