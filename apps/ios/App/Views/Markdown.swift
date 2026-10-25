@@ -1,10 +1,13 @@
+import NekkoProtocol
 import SwiftUI
 import UIKit
 
 /// Enough Markdown for agent replies, without a dependency: fenced code
 /// blocks (scrollable, monospaced, copyable), headings, bullet and numbered
-/// lists, quotes, rules, and inline styling (bold, italic, code, links) via
-/// `AttributedString(markdown:)`. Links render but are never fetched.
+/// lists, quotes, rules, pipe tables, and inline styling (bold, italic, code,
+/// links) via `AttributedString(markdown:)`. The blocks are parsed in the
+/// package (`MarkdownBlocks`). Links are never fetched here: a tap goes to the
+/// `openURL` action, which the chat routes (`ChatLinks`, `PreviewWindow`).
 struct MarkdownText: View {
     let text: String
     @Environment(\.palette) private var palette
@@ -30,6 +33,8 @@ struct MarkdownText: View {
                     Divider()
                 case .paragraph(let s):
                     inline(s)
+                case .table(let t):
+                    MarkdownTableView(table: t)
                 }
             }
         }
@@ -41,69 +46,83 @@ struct MarkdownText: View {
         return Text(s)
     }
 
-    enum Piece: Equatable {
-        case code(String, String)
-        case heading(Int, String)
-        case bullet(Int, String, String)
-        case quote(String)
-        case rule
-        case paragraph(String)
+    static func parse(_ text: String) -> [LegacyMarkdownBlock] { MarkdownBlocks.parse(text) }
+}
+
+/// A pipe table: the header semibold on a faint fill, hairlines between rows,
+/// columns aligned as the `:---:` row says. A wide table scrolls sideways in
+/// its own frame; a long cell wraps at a width cap instead of widening it.
+struct MarkdownTableView: View {
+    let table: MarkdownTable
+    @Environment(\.palette) private var palette
+    @ScaledMetric(relativeTo: .subheadline) private var cellCap: CGFloat = 260
+
+    var body: some View {
+        // What VoiceOver reads and Copy copies: the cells without Markdown marks.
+        let spoken = MarkdownTable(header: table.header.map(InlineMarkdown.plain), alignments: table.alignments,
+                                   rows: table.rows.map { $0.map(InlineMarkdown.plain) })
+        ScrollView(.horizontal, showsIndicators: true) {
+            Grid(alignment: .topLeading, horizontalSpacing: 0, verticalSpacing: 0) {
+                GridRow {
+                    ForEach(table.header.indices, id: \.self) { c in
+                        cell(table.header[c], column: c, header: true)
+                            .accessibilityLabel(spoken.accessibilityLabel(row: 0, column: c))
+                            .accessibilityAddTraits(.isHeader)
+                    }
+                }
+                ForEach(table.rows.indices, id: \.self) { r in
+                    Rectangle().fill(palette.line).frame(height: 1).gridCellUnsizedAxes(.horizontal)
+                        .accessibilityHidden(true)
+                    GridRow {
+                        ForEach(table.header.indices, id: \.self) { c in
+                            cell(table.rows[r][c], column: c, header: false)
+                                .accessibilityLabel(spoken.accessibilityLabel(row: r + 1, column: c))
+                        }
+                    }
+                }
+            }
+        }
+        .background(palette.surface, in: RoundedRectangle(cornerRadius: 10))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(palette.line))
+        .contextMenu {
+            Button { UIPasteboard.general.string = Self.tabSeparated(spoken) } label: { Label("Copy table", systemImage: "doc.on.doc") }
+        }
     }
 
-    static func parse(_ text: String) -> [Piece] {
-        var out: [Piece] = []
-        var para: [String] = []
-        var fence: (lang: String, lines: [String])?
-        func flush() {
-            if !para.isEmpty { out.append(.paragraph(para.joined(separator: "\n"))) }
-            para = []
+    private func cell(_ s: String, column c: Int, header: Bool) -> some View {
+        let align = table.alignments.indices.contains(c) ? table.alignments[c] : .leading
+        let text = InlineMarkdown.attributed(s).map { Text($0) } ?? Text(s)
+        let frameAlign: Alignment = align == .center ? .top : align == .trailing ? .topTrailing : .topLeading
+        return CappedWidth(cap: cellCap) {
+            text.font(header ? .subheadline.weight(.semibold) : .subheadline)
+                .foregroundStyle(palette.ink)
+                .multilineTextAlignment(align == .center ? .center : align == .trailing ? .trailing : .leading)
         }
-        for raw in text.components(separatedBy: "\n") {
-            let line = raw.trimmingCharacters(in: .whitespaces)
-            if var f = fence {
-                if line.hasPrefix("```") {
-                    out.append(.code(f.lang, f.lines.joined(separator: "\n")))
-                    fence = nil
-                } else {
-                    f.lines.append(raw)
-                    fence = f
-                }
-                continue
-            }
-            if line.hasPrefix("```") {
-                flush()
-                fence = (String(line.dropFirst(3)).trimmingCharacters(in: .whitespaces), [])
-                continue
-            }
-            if line.isEmpty { flush(); continue }
-            if let h = line.firstIndex(where: { $0 != "#" }), line.hasPrefix("#"), line[h] == " " {
-                flush()
-                out.append(.heading(line.distance(from: line.startIndex, to: h), String(line[h...]).trimmingCharacters(in: .whitespaces)))
-                continue
-            }
-            if line == "---" || line == "***" || line == "___" { flush(); out.append(.rule); continue }
-            if line.hasPrefix("> ") { flush(); out.append(.quote(String(line.dropFirst(2)))); continue }
-            let indent = (raw.prefix { $0 == " " }.count) / 2
-            if line.hasPrefix("- ") || line.hasPrefix("* ") || line.hasPrefix("+ ") {
-                flush()
-                var body = String(line.dropFirst(2))
-                var marker = "•"
-                if body.hasPrefix("[ ] ") { marker = "☐"; body = String(body.dropFirst(4)) }
-                if body.hasPrefix("[x] ") || body.hasPrefix("[X] ") { marker = "☑"; body = String(body.dropFirst(4)) }
-                out.append(.bullet(indent, marker, body))
-                continue
-            }
-            if let dot = line.firstIndex(of: "."), dot != line.startIndex, line[..<dot].allSatisfy(\.isNumber),
-               line.index(after: dot) < line.endIndex, line[line.index(after: dot)] == " " {
-                flush()
-                out.append(.bullet(indent, String(line[...dot]), String(line[line.index(dot, offsetBy: 2)...])))
-                continue
-            }
-            para.append(raw)
-        }
-        if let f = fence { out.append(.code(f.lang, f.lines.joined(separator: "\n"))) }
-        flush()
-        return out
+        .padding(.horizontal, 10).padding(.vertical, 7)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: frameAlign)
+        .background(header ? palette.surface2 : Color.clear)
+    }
+
+    /// Pastes into Numbers or Sheets as cells.
+    static func tabSeparated(_ t: MarkdownTable) -> String {
+        ([t.header] + t.rows).map { $0.joined(separator: "\t") }.joined(separator: "\n")
+    }
+}
+
+/// Its content at its natural width up to `cap`, wrapping beyond that. A
+/// horizontal scroll view offers unlimited width, so a plain frame can't wrap.
+struct CappedWidth: Layout {
+    let cap: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let v = subviews.first else { return .zero }
+        let w = min(v.sizeThatFits(.unspecified).width, cap)
+        return CGSize(width: w, height: v.sizeThatFits(ProposedViewSize(width: w, height: nil)).height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(width: bounds.width, height: bounds.height))
     }
 }
 
@@ -161,8 +180,14 @@ enum InlineMarkdown {
     static func attributed(_ s: String) -> AttributedString? {
         let key = s as NSString
         if let hit = cache.object(forKey: key) { return hit.value }
-        let value = try? AttributedString(markdown: s, options: options)
+        // Paths Markdown can't read as URLs (`C:\x\y.html`, spaces) become `file:` links first.
+        let value = try? AttributedString(markdown: ChatLinks.linkable(s), options: options)
         cache.setObject(Box(value), forKey: key)
         return value
+    }
+
+    /// The text without Markdown marks, for VoiceOver and copying.
+    static func plain(_ s: String) -> String {
+        attributed(s).map { String($0.characters) } ?? s
     }
 }

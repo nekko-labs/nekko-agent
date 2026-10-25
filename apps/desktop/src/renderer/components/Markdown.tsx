@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { LocalImageCard } from './LocalImageCard.js';
 import { localImagePath } from '../localImages.js';
+import { fileUrlPath } from '../chatArtifacts.js';
 import { remoteImageUrl } from '../remoteImages.js';
 import { RemoteImageCard, RemoteImageGallery } from './RemoteImageCard.js';
 import { MermaidDiagram } from './ArtifactPreview.js';
@@ -441,7 +442,7 @@ function lineBreaks(lines: string[], ctx: Ctx): React.ReactNode {
 // text so arithmetic like `2 * 3 * 4` isn't read as emphasis. A link target is
 // either a URL or something that looks like a path or anchor, so `arr[0](x)` in
 // prose about code isn't mistaken for a link.
-const LINK_TARGET = String.raw`https?:\/\/[^\s)]+|[a-zA-Z]:[\\/][^\s)]+|[.\/#][^\s)]*|[\w.-]+(?:[\\/][^\s)]+|\.[a-zA-Z]{1,8}(?:#[^\s)]*)?)`;
+const LINK_TARGET = String.raw`https?:\/\/[^\s)]+|file:\/\/[^\s)]+|[a-zA-Z]:[\\/][^\s)]+|[.\/#][^\s)]*|[\w.-]+(?:[\\/][^\s)]+|\.[a-zA-Z]{1,8}(?:#[^\s)]*)?)`;
 const INLINE_RE = new RegExp(
   [
     String.raw`!\[([^\]]*)\]\(([^\s)]+)\)`,
@@ -511,8 +512,10 @@ function resolveRef(basePath: string, target: string): string {
  * `#section`) only becomes clickable when we know the document's folder,
  * otherwise it reads as plain emphasis instead of a dead link.
  */
-function Ref({ href, basePath, children }: { href: string; basePath?: string; children: React.ReactNode }) {
+function Ref({ href: raw, basePath, children }: { href: string; basePath?: string; children: React.ReactNode }) {
   const sessionId = React.useContext(MarkdownSession);
+  // A `file://` URL names a local file like an absolute path does.
+  const href = fileUrlPath(raw) ?? raw;
   const sandbox = React.useContext(MarkdownSandbox);
   if (sandbox && !/^https?:\/\//i.test(href)) return <span title="Host file previews are unavailable in Sandbox">{children} (preview unavailable)</span>;
   if (/^https?:\/\//i.test(href)) return <Link href={href}>{children}</Link>;

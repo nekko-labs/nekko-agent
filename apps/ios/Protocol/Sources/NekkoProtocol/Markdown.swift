@@ -62,6 +62,15 @@ public struct MarkdownTable: Equatable, Sendable {
         self.rows = rows
     }
 
+    /// What VoiceOver reads for one cell: "Row 2, Name: Nekko". `row` 0 is the header.
+    public func accessibilityLabel(row: Int, column: Int) -> String {
+        let name = header.indices.contains(column) ? header[column] : ""
+        guard row > 0 else { return "Column header: \(name)" }
+        let value = rows.indices.contains(row - 1) && rows[row - 1].indices.contains(column) ? rows[row - 1][column] : ""
+        let shown = value.isEmpty ? "empty" : value
+        return name.isEmpty ? "Row \(row): \(shown)" : "Row \(row), \(name): \(shown)"
+    }
+
     /// More than this many columns or body rows gets an Expand button on the phone.
     public static let expandColumns = 4
     public static let expandRows = 12
