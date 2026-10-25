@@ -249,17 +249,14 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > connected. If Android restricts Nekko in the background, Settings says so and opens the app's
 > system page.
 
-The iOS and Android app (`apps/mobile`) is built for the phone rather than being the desktop on a
-small screen: your computer's chats with **Working** / **Needs you** badges, new chats on any of the
-computer's models and folders, live replies, **Allow this?** cards for risky commands, the agent's
-questions as tap-to-answer choices, follow-ups that queue while a run is going, and Stop. It can
-pair several computers and talks to one at a time.
+The phone clients are native apps: SwiftUI in `apps/ios` and Kotlin/Jetpack Compose in
+`apps/android`. They drive chats on your computer over the encrypted relay. The former
+Expo app and its dedicated CI have been removed. This does not implement on-phone
+inference or close the native apps' remaining feature and release gaps; see the
+[native iOS spec](../spec/phone/native-ios-app.md) and
+[native Android spec](../spec/phone/native-android-app.md).
 
-It also runs **models on the phone itself** (llama.cpp, curated small GGUF models from Hugging Face
-sized to the phone's memory), so you can keep chatting when the computer is off. Those chats never
-leave the phone and don't use the relay.
-
-**The native iPhone app** (`apps/ios`, SwiftUI) does the same over the same encrypted relay, and
+**The native iPhone app** (`apps/ios`, SwiftUI) runs chats over the encrypted relay, and
 adds what only iOS can: a **Live Activity** for each running chat on the Lock Screen and in the
 Dynamic Island, with **Allow / Deny** for a waiting tool and **Stop**; notifications with Allow /
 Deny actions while the app is in the background (Allow asks you to unlock first); photo attachments;

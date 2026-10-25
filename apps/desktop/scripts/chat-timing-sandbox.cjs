@@ -1,4 +1,4 @@
-// Synthetic evidence for tool-step elapsed times and swipe-left message times;
+// Synthetic evidence for tool-step elapsed times and swipe-left message and tool times;
 // never connects to the user's host or profile. Launched through
 // chat-search-integration.cjs with NEKKO_SANDBOX=chat-timing-sandbox.cjs
 // (NEKKO_TEST_REVISION=<rev> for "before"). Hidden, non-focusable, off-screen;
@@ -36,9 +36,9 @@ app.whenReady().then(async () => {
     await win.loadFile(path.join(out, 'index.html'));
     await sleep(1500);
     await run('integration.reset()'); await sleep(1500);
-    // Open the last run of working steps so its rows show.
+    // Open the last run of working steps (an activity header, not a row inside one) so its rows show.
     const target = await run(`(()=>{
-      const groups=[...document.querySelectorAll('[data-transcript-scroll] button[aria-expanded="false"]')].filter(b=>/Worked on/.test(b.textContent));
+      const groups=[...document.querySelectorAll('[data-transcript-scroll] button[aria-expanded="false"]')].filter(b=>b.closest('.font-mono')&&!b.closest('li'));
       const g=groups[groups.length-1]; if(!g) return null; g.scrollIntoView({block:'center'});
       const r=g.getBoundingClientRect(); return {x:Math.round(r.left+20),y:Math.round(r.top+r.height/2)};
     })()`);
@@ -61,6 +61,10 @@ app.whenReady().then(async () => {
       during = await reveal();
     }
     report.measures.during = during;
+    // Each opened tool row carries its own time, not only the run's first call.
+    const toolStamps = await run(`[...document.querySelectorAll('[data-tool-elapsed]')].map(e=>{const li=e.closest('li');return li&&li.dataset.vtStamp&&Number(getComputedStyle(li,'::after').opacity)>0?li.dataset.vtStamp:null})`);
+    report.measures.toolStamps = toolStamps;
+    if (!base) check('swiping shows a time beside every opened tool row', toolStamps.length > 0 && toolStamps.every(Boolean));
     await capture('swipe-held');
     await sleep(600);
     const after = await reveal();

@@ -99,6 +99,26 @@ inspected and published on PR #1081. Fixtures skip pairing and make no relay cal
 These checks establish native renderer behavior, not physical-device, full chat
 navigation or live relay verification. Desktop verification remains as above.
 
+## Expanded detail wrapping (desktop and Local Web UI, issue #1103)
+
+User intent: expanded tool usage should use multiple lines and available height,
+not a single horizontally scrolling row.
+
+Implemented: expanded activity inputs, reasoning, delegation tasks, standalone
+ToolCard inputs, watch prompts/results and watch wake details preserve whitespace
+and indentation while wrapping even unbroken paths, URLs and long tokens to the
+available width. Existing height caps remain (10, 15 or 18 rem by well), with
+vertical scrolling for longer content. JSON inputs retain their original JSON
+serialization, including escaped newlines inside string values; literal backslash
+sequences are not interpreted as display instructions. This is presentation only:
+no transcript mutation, tool execution, new data access or network requests.
+
+Acceptance: desktop (960 px) and narrow (440 px) isolated renderer checks must
+show no horizontal overflow in expanded detail wells, retained text and bounded
+vertical scrolling. Native phone tool cards are outside this change. Verification
+status and before/after evidence are recorded in the linked PR; screenshots still
+require visual inspection, not just successful capture.
+
 ## Tool timing and model continuation (#1107)
 
 **Status: implemented in the desktop/shared Local Web UI renderer; focused regression tests pass. Matched desktop screenshots and timing recordings have been captured and inspected. Live-provider verification is unverified.**
