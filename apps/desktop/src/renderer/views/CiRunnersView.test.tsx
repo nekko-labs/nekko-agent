@@ -8,7 +8,7 @@ vi.mock('../components/primitives/index.js', async (original) => ({
   Modal: ({ children }: { children: React.ReactNode }) => <div role="dialog">{children}</div>,
 }));
 
-import { CiRunnersFirstVisit, runnersBody } from './CiRunnersView.js';
+import { CiRunnersFirstVisit, afterList, runnersBody } from './CiRunnersView.js';
 import { SectionSegment } from './WorkflowsView.js';
 
 (globalThis as unknown as { window: unknown }).window = {
@@ -32,6 +32,13 @@ describe('CI runners section', () => {
     const html = renderToStaticMarkup(<>{runnersBody({ kind: 'unavailable', message: 'unknown channel runner:list' }, { now: 0, onConnect() {}, onSettings() {}, onChanged() {} })}</>);
     expect(html).toContain('CI runners aren&#x27;t available here: unknown channel runner:list');
     expect(html).not.toContain('aria-busy="true"');
+  });
+
+  it('a late list never overwrites a push', () => {
+    const pushed = { kind: 'ready' as const, views: [] };
+    expect(afterList({ kind: 'loading' }, { kind: 'unavailable', message: 'x' })).toEqual({ kind: 'unavailable', message: 'x' });
+    expect(afterList(pushed, { kind: 'unavailable', message: 'x' })).toBe(pushed);
+    expect(afterList(pushed, { kind: 'ready', views: [] })).toBe(pushed);
   });
 
   it('segment_switches_sections', () => {

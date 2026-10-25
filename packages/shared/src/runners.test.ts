@@ -11,6 +11,7 @@ import {
   auditText,
   formatMinutes,
   reasonText,
+  networkText,
   recommendationText,
   runnerActivity,
   runnerSubtitle,
@@ -113,6 +114,14 @@ describe('runner helpers', () => {
     expect(auditText(line({ result: 'stopped', reason: ['idle'] }))).toBe('ci · darwin daemon · stopped after 2 min (idle too long) · VM deleted');
     expect(auditText(line({ result: 'lost', reason: ['signal'] }))).toBe('ci · darwin daemon · lost (the daemon stopped it) · re-run queued');
     expect(auditText(line({ result: 'lost', reason: ['removed'] }))).toBe('ci · darwin daemon · lost (the runner was removed) · re-run queued');
+  });
+
+  it('names the network with its trust state', () => {
+    const h = (over: Partial<HostView>) => ({ ...host, ...over });
+    expect(networkText(h({}))).toBe('Unknown');
+    expect(networkText(h({ networkId: 'gw:aa:bb:cc:dd:ee:01', networkTrusted: true }))).toBe('Trusted · router dd:ee:01');
+    expect(networkText(h({ networkId: 'gw:aa:bb:cc:dd:ee:01' }))).toBe('Not trusted · router dd:ee:01');
+    expect(networkText(h({ networkId: 'odd' }))).toBe('Not trusted · odd');
   });
 
   it('recommends memory in whole GB', () => {

@@ -3,6 +3,7 @@ import {
   STATE_LABELS,
   auditText,
   formatMinutes,
+  networkText,
   reasonText,
   runnerSubtitle,
   runnerTitle,
@@ -13,6 +14,7 @@ import {
 import { Badge, StatusDot, Toggle } from './primitives/index.js';
 import type { StatusTone } from '../tokens.js';
 import { GearIcon } from '../icons.js';
+import { useStore } from '../store.js';
 
 const TONE: Record<RunnerState, StatusTone> = {
   off: 'neutral', waiting: 'warning', ready: 'success', running: 'running', draining: 'warning', cleaning: 'info', error: 'danger',
@@ -26,15 +28,18 @@ const hhmm = (ts: number) => {
 /** One connected runner (mockup 3): state, slots, the Mac's facts and recent jobs. */
 export function RunnerCard({ view, now, onSettings, onChanged }: { view: RunnerView; now: number; onSettings(): void; onChanged(v: RunnerView): void }) {
   const [busy, setBusy] = useState(false);
+  const pushToast = useStore((s) => s.pushToast);
   const { config, state, host, today } = view;
   const sampled = host.ramMb > 0;
   const power = host.onBattery === null ? 'Unknown' : host.onBattery ? `On battery, ${host.batteryPct ?? 0}%` : 'On AC';
-  const network = host.networkId === null ? 'Unknown' : host.networkTrusted ? 'Trusted' : 'Not trusted';
+  const network = networkText(host);
 
   const setEnabled = async (enabled: boolean) => {
     setBusy(true);
     try {
       onChanged(await window.nekko.setRunnerEnabled(config.id, enabled));
+    } catch (e) {
+      pushToast('error', `Couldn't turn the runner ${enabled ? 'on' : 'off'}: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setBusy(false);
     }

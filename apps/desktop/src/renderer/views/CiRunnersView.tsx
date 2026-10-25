@@ -45,6 +45,11 @@ export function runnersBody(
   ));
 }
 
+/** Applies the one `listRunners` result: a push that already arrived is newer, so it wins. */
+export function afterList(current: RunnersState, listed: RunnersState): RunnersState {
+  return current.kind === 'loading' ? listed : current;
+}
+
 const nowSecs = () => Date.now() / 1000;
 
 /** The Workflows tab's CI runners section: this Mac's runners from nekkod. */
@@ -58,8 +63,8 @@ export function CiRunnersView({ segment, now = nowSecs }: { segment?: React.Reac
   useEffect(() => {
     let live = true;
     window.nekko.listRunners().then(
-      (views) => live && setState({ kind: 'ready', views }),
-      (e: unknown) => live && setState({ kind: 'unavailable', message: e instanceof Error ? e.message : String(e) }),
+      (views) => live && setState((s) => afterList(s, { kind: 'ready', views })),
+      (e: unknown) => live && setState((s) => afterList(s, { kind: 'unavailable', message: e instanceof Error ? e.message : String(e) })),
     );
     const off = window.nekko.onRunnersChanged((views) => setState({ kind: 'ready', views }));
     return () => {

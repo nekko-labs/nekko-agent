@@ -273,6 +273,15 @@ export function auditText(l: AuditLine, rerun = true): string {
   }
 }
 
+/** The network fact: trust plus which network, so "Not trusted" always says which one. */
+export function networkText(h: HostView): string {
+  if (h.networkId === null) return 'Unknown';
+  // The daemon's id is `gw:<router MAC>`; its last three octets tell routers apart at a glance.
+  const mac = h.networkId.startsWith('gw:') ? h.networkId.slice(3).split(':') : [];
+  const name = mac.length === 6 ? `router ${mac.slice(3).join(':')}` : h.networkId;
+  return `${h.networkTrusted ? 'Trusted' : 'Not trusted'} · ${name}`;
+}
+
 /** Empty until the daemon has sampled the Mac (0 means unknown, never "0 GB"). */
 export function recommendationText(h: HostView): string {
   const gb = Math.round(h.recommendedMemoryMb / 1024);

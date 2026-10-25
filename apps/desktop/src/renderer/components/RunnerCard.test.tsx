@@ -42,7 +42,7 @@ describe('RunnerCard', () => {
     const html = render(view());
     for (const s of [
       'This Mac · GitHub · nekko-labs/nekko-agent', 'Slot 1 · macOS', 'ios-native · PR #904 · 6 min', 'Waiting: you&#x27;re using the Mac',
-      '8 GB · 4 cores', 'On AC', 'Trusted', '14 jobs · 2 h 10 min', 'role="switch" aria-checked="true" aria-label="Runner on"',
+      '8 GB · 4 cores', 'On AC', 'Trusted · home', '14 jobs · 2 h 10 min', 'role="switch" aria-checked="true" aria-label="Runner on"',
       'data-runner-card="r1"', 'aria-label="Runner settings"', 'ci · darwin daemon · stopped after 2 min',
     ]) expect(html).toContain(s);
   });
