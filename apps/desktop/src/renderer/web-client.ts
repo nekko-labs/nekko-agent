@@ -1,3 +1,4 @@
+import { setChatOptionsAndDefaults, settingsPatchWithModeReset } from '../chatDefaults.js';
 import { AGENT_REPLAY, IpcChannels, IpcEvents, deriveKey, seal, open, withApiServerDefaults, RELEASE_NOTES_URL, LOCAL_RELAY_PORT } from '@nekko-agent/shared';
 import type { AgentReplay, LocalRelayStatus, NetworkVisibilityStatus, AppSettings, AgentEvent, IndexStatus, NekkoApi, AppInfo, ClaudeCapabilityStatus, ClaudeCodeStatus, ClaudePlanUsageStatus, ClaudePolicyStatus, UpdateInfo, TerminalEvent, OAuthStatus, SubscriptionLimits } from '@nekko-agent/shared';
 import { readBrandKey } from './brandStorage.js';
@@ -304,7 +305,7 @@ function makeWebClient(): NekkoApi {
 
   return {
     getSettings: () => call(IpcChannels.settingsGet),
-    updateSettings: (patch) => call(IpcChannels.settingsUpdate, patch),
+    updateSettings: (patch) => call(IpcChannels.settingsUpdate, settingsPatchWithModeReset(patch)),
 
     listProviders: () => call(IpcChannels.providersList),
     saveProvider: (p) => call(IpcChannels.providersSave, p),
@@ -470,7 +471,10 @@ function makeWebClient(): NekkoApi {
   sandboxStatus: (id) => call(IpcChannels.sandboxStatus, id),
   sandboxDiff: (id) => call(IpcChannels.sandboxDiff, id),
   applySandboxDiff: (id, identity, diffId, paths) => call(IpcChannels.sandboxApplyDiff, id, identity, diffId, paths) as Promise<never>,
-  setSessionOptions: (id, patch) => call(IpcChannels.sessionSetOptions, id, patch),
+  setSessionOptions: (id, patch) => setChatOptionsAndDefaults({
+    setSessionOptions: (id, patch) => call(IpcChannels.sessionSetOptions, id, patch),
+    updateSettings: (patch) => call(IpcChannels.settingsUpdate, settingsPatchWithModeReset(patch)),
+  }, id, patch),
     truncateSession: (id, messageId) => call(IpcChannels.sessionTruncate, id, messageId),
     clearSessions: (scope) => call(IpcChannels.sessionsClear, scope),
     purgeExpiredArchives: () => call(IpcChannels.sessionsPurgeArchived),

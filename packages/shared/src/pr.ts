@@ -33,6 +33,20 @@ export interface PrInfo {
   closedAt?: string | null;
   mergedAt?: string | null;
   updatedAt?: string | null;
+  /** Local fetch time in epoch milliseconds, independent of GitHub updatedAt. */
+  checkedAt?: number;
+  /** Absent when the complete head check connection could not be read. */
+  checkProgress?: {
+    total: number;
+    /** Successful, neutral or skipped checks. Failures are counted separately. */
+    completed: number;
+    pending: number;
+    failing: number;
+    unknown: number;
+    items: Array<{ name: string; state: 'completed' | 'pending' | 'failing' | 'unknown'; link: string | null }>;
+  };
+  /** Review threads only, not approvals, reviews or issue comments. Absent on read failure. */
+  reviewThreads?: { total: number; resolved: number; unresolved: number };
   /** Where the live state came from, for graceful-degradation messaging. */
   source: 'gh' | 'api';
 }

@@ -14,7 +14,7 @@ Every subagent row (group header, each step, standalone card) shows the model it
 
 ## Agent status: done versus waiting on a watch (#1110)
 
-`[implemented; focused daemon, renderer, Expo and native tests; matching hidden before/after captures collected; visual inspection pending]`
+`[implemented; focused daemon, renderer and native tests; matching hidden before/after captures collected; visual inspection pending]`
 Desktop sidebar cards, wall strips/composer, child-chat rows, phone-width web,
 and native iOS/Android chat rows distinguish an inactive agent that is finished
 from one waiting to wake:
@@ -25,7 +25,7 @@ from one waiting to wake:
 - **Idle:** the existing Zz glyph when no work is active but at least one watch
   remains armed. A due watch waiting for a busy chat still counts as armed.
 - Working, approval/question, interrupted/error and iOS outbox indicators retain
-  precedence; a watch never hides actionable or running work. Native/Expo activity
+  precedence; a watch never hides actionable or running work. Native activity
   models do not introduce a new error state in this change.
 
 The host adds `activeWatchCount` to `sessions:list` and `sessions:summaries`,
@@ -43,10 +43,10 @@ not apply late responses. Failed requests alone do not start a retry loop.
 
 Evidence uses synthetic records and base `beee7cd1` at matching dimensions,
 theme and data, in hidden Electron fixtures and owned native framebuffer-only
-sandboxes. Desktop real glyph/card/frame checks and Expo real-row DOM checks pass;
+sandboxes. Desktop real glyph/card/frame checks pass;
 the desktop composer fixture is a layout equivalent, not full composer navigation.
 Native iOS gray-check pixel/precedence tests and Android Compose precedence/tint
 tests pass. Screenshots are captured but not visually inspected because the
 available tools cannot display image content. Packaged-app/navigation coverage is
-not claimed. Expo standard lint is a baseline setup limitation (no installed
-ESLint/config); tests and typecheck pass without retaining generated setup files.
+not claimed. The retired Expo app is out of scope: main removed it in #1125 during this work;
+its independent prototype and tests were discarded rather than resurrecting it.
