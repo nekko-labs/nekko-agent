@@ -13,7 +13,7 @@ Issue #1115. Spec: [Verification checklists and PR progress](spec/chat/verificat
 - [x] **VP-1, Complete PR observations.** Paginated GraphQL check contexts and review threads, conservative unknown results, local observation time and stale-cache retention; Rust transport/unit coverage.
 - [x] **VP-2, Explicit verification metadata.** Optional structured reports on existing plan steps, matching Rust/TS sanitization and persistence tests; tool guidance never equates tool completion with inspection.
 - [x] **VP-3, Shared-renderer presentation.** Footer checklist and linked CI/thread progress, bounded disclosures and safe links; focused component checks and hidden isolated 900px/390px interaction fixtures.
-- [ ] **VP-4, Evidence signoff and landing.** Capture PNG/GIF before/after, inspect actual pixels/motion, publish media and queue the stack. Captures and interaction checks exist; pixel review pending.
+- [ ] **VP-4, Evidence signoff and landing.** Capture PNG/GIF before/after, inspect actual pixels/motion, publish media and queue the stack. Published PNG/GIF evidence and parent pixel signoff cover baseline desktop/narrow, original desktop active, responsive-v2 narrow updated and desktop GIF active/updated frames. Narrow full-width content and changing counts/status are readable with no layout issue. Renderer-only signoff; packaged app and real paired device remain untested. Main synchronization and landing in progress.
 - [ ] **VP-5, Packaged/device follow-up.** Exercise a real paired-device verification flow; native phone presentation is outside this desktop/shared-renderer scope.
 
 ## Model tuning controls (added 2026-10-25)
@@ -2375,3 +2375,9 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [x] **T205a** Chat command logs cut to their last 4 MB of whole lines past 5 MB (`keep_file_tail` in `agent_logs.rs`). Test: `a_long_command_log_keeps_its_last_whole_lines`. Done: 2026-10-24
 - [x] **T205b** `quota-history.jsonl` keeps 30 days, pruned at startup (`prune_quota_history`). Test: `quota_history_keeps_thirty_days`. Done: 2026-10-24
 - [x] **T205c** Abandoned `.part` downloads untouched for 7 days removed at startup (`sweep_stale_parts`). Test: `only_old_part_files_go`. Done: 2026-10-24
+
+### Unified Models workspace (2026-10-25, #1102) · [spec](spec/models/models-providers.md)
+
+- [x] Combine provider setup and Model Server under one Models rail entry, retaining existing destinations and title-bar highlighting.
+- [x] Add local/cloud subnavigation, current-provider chips, a divider, five filled provider shortcuts and the full overflow chooser; retain existing connection and model controls.
+- [x] Verify desktop typechecking, focused provider/navigation tests, hidden Electron interactions and matching 1440/390 px before/after evidence. Live credential sign-in and server lifecycle actions are not exercised by this layout change.
