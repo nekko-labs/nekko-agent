@@ -36,8 +36,7 @@ import { SkillsView } from './views/SkillsView.js';
 import { TrainingView } from './views/TrainingView.js';
 import { WorkflowsView } from './views/WorkflowsView.js';
 import { CommandCenterView } from './views/CommandCenterView.js';
-import { ModelsView } from './views/ModelsView.js';
-import { ModelServerView } from './views/ModelServerView.js';
+import { ModelsWorkspace } from './views/ModelsWorkspace.js';
 import { ConnectorsView } from './views/ConnectorsView.js';
 import { MemoryView } from './views/MemoryView.js';
 import { SettingsView } from './views/SettingsView.js';
@@ -50,7 +49,6 @@ import {
   WorkflowsColorIcon,
   DesignColorIcon,
   ModelsColorIcon,
-  ModelServerColorIcon,
   ConnectorsColorIcon,
   MemoryColorIcon,
   SettingsColorIcon,
@@ -68,7 +66,6 @@ const NAV: Array<{ view: View; labelKey: string; Icon: (p: { className?: string 
   { view: 'workflows', labelKey: 'nav.workflows', Icon: WorkflowsColorIcon },
   { view: 'design', labelKey: 'nav.design', Icon: DesignColorIcon },
   { view: 'models', labelKey: 'nav.models', Icon: ModelsColorIcon },
-  { view: 'modelserver', labelKey: 'nav.modelserver', Icon: ModelServerColorIcon },
   { view: 'connectors', labelKey: 'nav.connectors', Icon: ConnectorsColorIcon },
   { view: 'memory', labelKey: 'nav.memory', Icon: MemoryColorIcon },
   { view: 'settings', labelKey: 'nav.settings', Icon: SettingsColorIcon },
@@ -102,7 +99,7 @@ export function App() {
   const wave = settings?.backgroundAnimation === false ? null : pixelWaveFor(settings?.themePreset);
   const order = navOrder(NAV.map(n => n.view), settings?.navOrder);
   const visibleNav = order.map(v => NAV.find(n => n.view === v)!).filter(n => viewEnabled(n.view, settings));
-  const activeNavIndex = visibleNav.findIndex(n => n.view === view);
+  const activeNavIndex = visibleNav.findIndex(n => n.view === (view === 'modelserver' ? 'models' : view));
   const reorder = async (from: View, to: View) => {
     const previous = settings;
     const nextOrder = moveNav(order, from, to);
@@ -300,7 +297,7 @@ export function App() {
             {visibleNav.map(({ view: v, labelKey, Icon }, navIndex) => (
               <button
                 key={v}
-                className={`nav-item ${view === v ? 'active' : ''}`}
+                className={`nav-item ${(view === 'modelserver' ? 'models' : view) === v ? 'active' : ''}`}
                 aria-label={t(labelKey)}
                 draggable
                 title={`${t(labelKey)}. Drag to reorder, or use Alt+Up / Alt+Down.`}
@@ -341,7 +338,7 @@ export function App() {
               style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}
               onClick={() => setView('models')}
             >
-              <span className="font-medium">Get started:</span> connect your first model in Model Providers →
+              <span className="font-medium">Get started:</span> connect your first model in Models →
             </button>
           )}
           <ErrorBoundary key={view} label={t(`nav.${view}`)}>
@@ -351,8 +348,7 @@ export function App() {
           {view === 'training' && <TrainingView />}
           {view === 'workflows' && <WorkflowsView />}
           {view === 'design' && <DesignBoardView />}
-          {view === 'models' && <ModelsView />}
-          {view === 'modelserver' && <ModelServerView />}
+          {(view === 'models' || view === 'modelserver') && <ModelsWorkspace />}
           {view === 'connectors' && <ConnectorsView />}
           {view === 'memory' && <MemoryView />}
           {view === 'settings' && <SettingsView />}

@@ -192,8 +192,10 @@ export const PHONE_CHANNELS = [
   'voice:transcribe',
   'workflow:run',
   'workflows:list',
+  'workspace:addByPath',
   'workspace:gitStatus',
   'workspace:list',
+  'workspace:remove',
 ] as const;
 
 /** A family of channels a phone may not call: exact names, and whole prefixes. */
@@ -274,8 +276,6 @@ export const PHONE_DENIED_FOR_NOW: Record<'files' | 'git' | 'terminal' | 'undeci
       'workflow:duplicate',
       'workflow:event',
       'workflow:update',
-      'workspace:addByPath',
-      'workspace:remove',
     ],
     /** MCP servers. */
     prefixes: ['mcp:'],
@@ -390,6 +390,9 @@ export const PHONE_OPEN_CHANNELS: readonly string[] = ['app:info'];
  */
 export const PHONE_PROVIDER_CHANGE_CHANNELS: readonly string[] = ['providers:saveSealed', 'providers:setEnabled'];
 export const PHONE_CHANGE_CHANNELS: readonly string[] = [
+  // Saved-folder access changes need a signed proof, including revocation.
+  'workspace:addByPath',
+  'workspace:remove',
   ...PHONE_PROVIDER_CHANGE_CHANNELS,
   ...PHONE_GIT_CHANGE_CHANNELS,
   ...PHONE_FILES_CHANGE_CHANNELS,
@@ -839,6 +842,13 @@ export function screenPhoneCall(
     }
   }
   switch (channel) {
+    case 'workspace:addByPath':
+    case 'workspace:remove':
+      if (typeof args[0] !== 'string' || args[0].trim() === '' || args[0].includes('\0')) {
+        throw new PhoneAccessError('value-invalid', channel === 'workspace:addByPath' ? 'folder path' : 'workspace id');
+      }
+      if (args.length > 1) throw new PhoneAccessError('option-denied', 'extra argument');
+      return {};
     case 'providers:saveSealed':
       screenPhoneProviderSave(args[0]);
       if (args.length > 1) throw new PhoneAccessError('option-denied', 'extra argument');

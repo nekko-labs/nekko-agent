@@ -72,8 +72,10 @@
   "voice:transcribe",
   "workflow:run",
   "workflows:list",
+  "workspace:addByPath",
   "workspace:gitStatus",
-  "workspace:list"
+  "workspace:list",
+  "workspace:remove"
  ],
  "alwaysDenied": {
   "channels": [
@@ -105,9 +107,7 @@
    "workflow:delete",
    "workflow:duplicate",
    "workflow:event",
-   "workflow:update",
-   "workspace:addByPath",
-   "workspace:remove"
+   "workflow:update"
   ],
   "prefixes": [
    "cloud:",
@@ -176,6 +176,8 @@
   "security:challenge"
  ],
  "changeChannels": [
+  "workspace:addByPath",
+  "workspace:remove",
   "providers:saveSealed",
   "providers:setEnabled",
   "git:commit",

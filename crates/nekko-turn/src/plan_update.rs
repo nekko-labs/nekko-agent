@@ -42,6 +42,35 @@ fn set_note(step: &mut Value, note: &str, has_slot: bool) {
     *obj = next;
 }
 
+// Keep this sanitizer aligned with the shared TS contract.
+fn verification(value: Option<&Value>) -> Option<Value> {
+    let v = value?.as_object()?;
+    let st = v.get("status")?.as_str()?;
+    if !["pending", "active", "passed", "failed", "blocked", "unknown"].contains(&st) {
+        return None;
+    }
+    let mut result = Map::new();
+    result.insert("status".into(), json!(st));
+    for (key, cap) in [("device", 160), ("detail", 1000)] {
+        if let Some(text) = v.get(key).and_then(Value::as_str).map(js::trim).filter(|s| !s.is_empty()) {
+            result.insert(key.into(), json!(js::slice16(text, cap)));
+        }
+    }
+    if let Some(link) = v.get("evidenceUrl").and_then(Value::as_str).map(js::trim) {
+        let lower = link.to_ascii_lowercase();
+        if link.encode_utf16().count() <= 2048
+            && (lower.starts_with("https://") || lower.starts_with("http://"))
+            && let Ok(url) = url::Url::parse(link)
+            && matches!(url.scheme(), "http" | "https")
+            && url.username().is_empty()
+            && url.password().is_none()
+        {
+            result.insert("evidenceUrl".into(), json!(link));
+        }
+    }
+    Some(Value::Object(result))
+}
+
 /// `applyPlanUpdate(current, input)` at time `now`.
 pub fn apply_plan_update(current: Option<&Value>, input: &Value, now: u64) -> PlanOutcome {
     let raw: Vec<Value> = input.get("steps").and_then(Value::as_array).cloned().unwrap_or_default();
@@ -73,6 +102,7 @@ pub fn apply_plan_update(current: Option<&Value>, input: &Value, now: u64) -> Pl
             Some(n) if !n.is_empty() => Some(js::slice16(n, 240).to_string()),
             _ => None,
         };
+        let verification = verification(r.get("verification"));
         let mut found = if id.is_empty() {
             None
         } else {
@@ -97,6 +127,9 @@ pub fn apply_plan_update(current: Option<&Value>, input: &Value, now: u64) -> Pl
             }
             if let Some(n) = &note {
                 set_note(step, n, note_slots.contains(&i));
+            }
+            if let Some(v) = verification {
+                step["verification"] = v;
             }
             step["updatedAt"] = json!(now);
             let now_status = status(step);
@@ -127,6 +160,9 @@ pub fn apply_plan_update(current: Option<&Value>, input: &Value, now: u64) -> Pl
             }
             step.insert("createdAt".into(), json!(now));
             step.insert("updatedAt".into(), json!(now));
+            if let Some(v) = verification {
+                step.insert("verification".into(), v);
+            }
             next.push(Value::Object(step));
         }
     }
@@ -157,4 +193,86 @@ pub fn plan_echo(plan: &[Value]) -> String {
         .collect();
     let skipped_part = if skipped > 0 { format!(", {skipped} skipped") } else { String::new() };
     format!("Plan saved ({done}/{} done{skipped_part}):\n{}", plan.len(), lines.join("\n"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn apply(current: Option<&Value>, input: Value, now: u64) -> Vec<Value> {
+        match apply_plan_update(current, &input, now) {
+            PlanOutcome::Applied { plan, .. } => plan,
+            _ => panic!("expected applied plan"),
+        }
+    }
+
+    #[test]
+    fn verification_is_explicit_persisted_and_independent() {
+        for st in ["pending", "active", "passed", "failed", "blocked", "unknown"] {
+            let plan = apply(
+                None,
+                json!({"steps":[{"title":"Inspect", "status":"done", "verification":{"status":st, "device":" phone ", "detail":" inspecting "}}]}),
+                10,
+            );
+            assert_eq!(plan[0]["verification"], json!({"status":st,"device":"phone","detail":"inspecting"}));
+            let current = json!(plan);
+            let updated = apply(
+                Some(&current),
+                json!({"steps":[{"id":"step_1", "verification":{"status":"passed","evidenceUrl":"https://example.com/proof"}}]}),
+                20,
+            );
+            assert_eq!(updated[0]["status"], "done");
+            assert_eq!(updated[0]["createdAt"], 10);
+            assert_eq!(updated[0]["updatedAt"], 20);
+            assert_eq!(updated[0]["verification"]["status"], "passed");
+            let current = json!(updated);
+            for invalid in [Value::Null, json!([]), json!("passed"), json!({}), json!({"status":"done"})] {
+                let next = apply(Some(&current), json!({"steps":[{"id":"step_1","verification":invalid}]}), 30);
+                assert_eq!(next[0]["verification"], current[0]["verification"]);
+            }
+            let next = apply(Some(&current), json!({"replace":true,"steps":[{"title":"Next"}]}), 40);
+            assert_eq!(next[0], current[0]);
+        }
+        let plain = apply(None, json!({"steps":[{"title":"Build","status":"done"}]}), 10);
+        assert!(plain[0].get("verification").is_none());
+        assert_eq!(plan_echo(&plain), "Plan saved (1/1 done):\n1. [done] step_1: Build");
+    }
+
+    #[test]
+    fn catalog_exposes_independent_verification_contract() {
+        let catalog: Value = serde_json::from_str(include_str!("catalog.json")).unwrap();
+        let tool = &catalog["tools"]["updatePlan"];
+        let properties = &tool["parameters"]["properties"]["steps"]["items"]["properties"];
+        assert_eq!(properties["status"]["enum"], json!(["pending", "active", "done", "skipped"]));
+        assert_eq!(
+            properties["verification"]["properties"]["status"]["enum"],
+            json!(["pending", "active", "passed", "failed", "blocked", "unknown"])
+        );
+        assert_eq!(properties["verification"]["required"], json!(["status"]));
+        let description = tool["description"].as_str().unwrap();
+        assert!(description.contains("tool return is not proof"));
+        assert!(description.contains("counts only verification.status passed"));
+    }
+
+    #[test]
+    fn verification_sanitizes_optional_fields() {
+        for link in [
+            json!("file:///tmp/proof"),
+            json!("javascript:alert(1)"),
+            json!("https://user:secret@example.com"),
+            json!(format!("https://example.com/{}", "a".repeat(2048))),
+            json!("https://"),
+            json!(123),
+        ] {
+            let plan = apply(
+                None,
+                json!({"steps":[{"title":"Inspect", "verification":{"status":"unknown","device":"x".repeat(200),"detail":"y".repeat(1100),"evidenceUrl":link}}]}),
+                10,
+            );
+            assert_eq!(
+                plan[0]["verification"],
+                json!({"status":"unknown","device":"x".repeat(160),"detail":"y".repeat(1000)})
+            );
+        }
+    }
 }

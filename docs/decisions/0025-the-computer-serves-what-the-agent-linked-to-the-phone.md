@@ -3,7 +3,7 @@ status: proposed
 date: 2026-10-26
 ---
 
-# 0024. The computer serves the phone what the agent linked in a chat, and nothing more
+# 0025. The computer serves the phone what the agent linked in a chat, and nothing more
 
 ## Context
 
@@ -19,7 +19,9 @@ Constraints: the phone must not gain general file access or a general network pr
 4. **A tunnel (Tailscale or similar)** so the phone reaches the computer's ports directly. Pros: full fidelity, no proxying. Cons: needs a VPN set up on both ends, exposes ports by network rather than by intent, and does nothing for files; the relay exists so none of this is needed.
 5. **Scoped to what the agent linked in that chat** (chosen): two read-class channels, `artifact:read` and `preview:fetch`. The computer reads the chat's assistant messages for linked files and loopback origins (the desktop's artifact rules plus `file://` URLs and absolute paths) and serves only those, a linked HTML page's own asset folder, and GET/HEAD to a linked origin over 127.0.0.1 or ::1, with caps.
 
-## Decision
+## Proposed decision and implementation status
+
+The product decision remains proposed, not owner-accepted. This PR implements option 5 on the computer; it does not establish new product policy or claim device/relay verification. The separate iPhone consumer is now on main.
 
 Option 5. The link in the agent's reply is the owner-visible statement of what the chat produced; scoping to it means the phone sees exactly what the desktop would let the owner click, in that chat, and nothing else. It needs no setup, works through the existing relay and access classes, and its rules are shared TS and Rust code held equal by a golden fixture.
 

@@ -315,6 +315,15 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
         if arg(i).as_str().is_none_or(|s| s.is_empty()) { Err(denied("value-invalid", what)) } else { Ok(()) }
     };
     match channel {
+        "workspace:addByPath" | "workspace:remove" => {
+            let what = if channel == "workspace:addByPath" { "folder path" } else { "workspace id" };
+            if arg(0).as_str().is_none_or(|s| s.trim().is_empty() || s.contains('\0')) {
+                return Err(denied("value-invalid", what));
+            }
+            if args.len() > 1 {
+                return Err(denied("option-denied", "extra argument"));
+            }
+        }
         "changes:list" | "session:watches" => id(0, "chat id")?,
         "providers:saveSealed" => {
             crate::phone_providers::screen_save(arg(0)).map_err(|r| denied(r.code, r.detail))?;
@@ -1660,6 +1669,39 @@ mod tests {
         }
 
         #[test]
+        fn saved_folders_require_change_proofs_and_keep_positional_payloads() {
+            let k = signer(31);
+            for (channel, value, detail) in [
+                ("workspace:addByPath", "/Users/me/project", "folder path"),
+                ("workspace:remove", "ws_123", "workspace id"),
+            ] {
+                let r = policy_rig(DeviceAccess { read: false, change: true }, Some(&k), None, "guardrails");
+                let args = json!([value]);
+                assert_eq!(r.ask(channel, args.clone(), None), refused("proof-required", channel));
+                let p = proof(&k, "phone-1", channel, &args, NOW as i64);
+                assert!(r.ask(channel, args.clone(), Some(p.clone())).is_ok());
+                assert_eq!(r.ask(channel, args.clone(), Some(p)), refused("proof-replayed", channel));
+                assert_eq!(*r.calls.lock().unwrap(), vec![(channel.to_string(), args.clone())]);
+                let off = policy_rig(DeviceAccess { read: true, change: false }, Some(&k), None, "guardrails");
+                let p = proof(&k, "phone-1", channel, &args, NOW as i64);
+                assert_eq!(off.ask(channel, args, Some(p)), refused("change-off", channel));
+                assert!(off.calls.lock().unwrap().is_empty());
+                for invalid in [Value::Null, json!(1), json!({}), json!([]), json!(""), json!("  "), json!("a\0b")] {
+                    assert_eq!(screen(channel, &[invalid]).err().unwrap(), denied("value-invalid", detail));
+                }
+                assert_eq!(screen(channel, &[]).err().unwrap(), denied("value-invalid", detail));
+                assert_eq!(
+                    screen(channel, &[json!(value), json!({})]).err().unwrap(),
+                    denied("option-denied", "extra argument")
+                );
+                assert_eq!(
+                    r.log(),
+                    vec![(false, Some("proof-required".into())), (true, None), (false, Some("proof-replayed".into()))]
+                );
+            }
+        }
+
+        #[test]
         fn git_goes_through_the_policy_classes() {
             let k = signer(13);
             let devices = Arc::new(MemDevices::default());
@@ -2296,8 +2338,6 @@ mod tests {
             "terminal:snapshot",
             "terminals:list:native",
             "file:write",
-            "workspace:addByPath",
-            "workspace:remove",
             "voice:install",
             "connector:connect",
             "mcp:status",

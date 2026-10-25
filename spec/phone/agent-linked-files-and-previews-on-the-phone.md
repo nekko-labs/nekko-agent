@@ -5,7 +5,7 @@ area: phone
 
 # Agent-linked files and local previews on the phone
 
-`[computer side implemented 2026-10-26 (issue #1095): TS and Rust screens and projections with shared golden cases, nekkod handlers with unit tests (temp folders, a local HTTP server); not yet run from a phone, on a device or over the managed relay; the iPhone UI is a separate change; Android not started]` Decision record: [docs/decisions/0024-the-computer-serves-what-the-agent-linked-to-the-phone.md](../../docs/decisions/0024-the-computer-serves-what-the-agent-linked-to-the-phone.md). Builds on [phone access classes](phone-access-classes-and-relay-replay-protection.md) and *Files and logs on the iPhone* in [native-ios-app.md](native-ios-app.md).
+`[computer side implemented 2026-10-26 (issue #1095): TS and Rust screens and projections with shared golden cases, nekkod handlers with unit tests (temp folders, a local HTTP server) and a seeded-chat daemon HTTP integration test; not yet run from a phone, on a device or over the managed relay; the separate iPhone UI is now on main but not verified here; Android not started]` Decision record: [docs/decisions/0025-the-computer-serves-what-the-agent-linked-to-the-phone.md](../../docs/decisions/0025-the-computer-serves-what-the-agent-linked-to-the-phone.md). The decision remains proposed, not owner-accepted; the status above describes code and verification, not a new product policy. Builds on [phone access classes](phone-access-classes-and-relay-replay-protection.md) and *Files and logs on the iPhone* in [native-ios-app.md](native-ios-app.md).
 
 ## User intent
 
@@ -25,7 +25,7 @@ Two read-class phone channels (the device's **Read** switch applies; refused `re
 
 - `path` is absolute or a `file:` URL. The gate normalises it (`\` to `/`, `.` and `..` resolved, query and fragment dropped) and refuses a relative path, another scheme or a secret-looking file before the computer is asked.
 - The computer allows it when it equals a linked artifact (compared case-insensitively on Windows and macOS), or lies inside the folder of a linked `.html`/`.htm` page with an asset extension (css, js, mjs, json, map, svg, png, jpg, jpeg, gif, webp, avif, ico, woff, woff2, ttf, otf, html, htm, md, txt, csv; no WebAssembly) and no dot-folder or dot-file below the page's folder. A page at a disk root or directly in the user's home folder opens only itself, not the folder around it.
-- The real path (symlinks followed) is checked again: it must be a file (`not-a-file` for a folder), not a secret (`secret-file`: the `.env*`, `id_*`, `.ssh/`, `.aws/`, `.gnupg/`, `.npmrc`, `.netrc`, `.pypirc`, `credentials`, key and certificate files, `.git-credentials`, `.git/config` rule the phone's file browser uses), still a linked extension, and for an asset still inside the page's real folder.
+- The real path (symlinks followed) is checked again: it must be a file (`not-a-file` for a folder), not a secret (`secret-file`: the `.env*`, `id_*`, `.ssh/`, `.aws/`, `.gnupg/`, `.npmrc`, `.netrc`, `.pypirc`, `credentials`, key and certificate files, `.git-credentials`, `.git/config` rule the phone's file browser uses), still the same canonical linked file with a linked extension, and for an asset still inside the page's real folder with no dot-folder or dot-file in its real relative path.
 - Text files (md, markdown, html, htm, svg, css, js, mjs, json, map, csv, txt) up to 1 MiB come as UTF-8 `content`; longer text is cut at 1 MiB (on a character boundary) with `truncated: true`. Text that is not UTF-8, and every other file, comes as `base64` up to 4 MiB; a larger file comes with no body and `truncated: true`. `mime` is always present (by extension, `application/octet-stream` when unknown); `mtime` is milliseconds since the epoch; `path` is the normalised path.
 
 **`preview:fetch [sessionId, url, { method? }]`** → `{ url, status, contentType, headers, base64, truncated }`
@@ -52,9 +52,11 @@ Two read-class phone channels (the device's **Read** switch applies; refused `re
 - Only loopback: the fetch never resolves a name and never reaches the LAN or the internet, so the phone can't use the computer to reach other machines (`image:fetch` stays refused).
 - The phone's own headers, cookies and body never reach the dev server, and the server's cookies never reach the phone.
 - Both channels are read class: the Read switch turns them off, and they are not written to the phone's activity list (reads never are).
+- Filesystem checks resolve symlinks before reading, but are not an atomic sandbox against a concurrent local process replacing files or directories during the read.
+- GET/HEAD restrict the HTTP method, not the behavior of the linked local service; a service can still have side effects on GET. No general claim of service-side read-only behavior is made.
 - Caps keep every reply under the relay's 9 MiB frame (4 MiB of body is about 5.4 MiB of base64).
 
 ## Not yet
 
-- The phone UI (tapping a link, rendering a page and its assets, a preview) is a separate change; Android not started.
-- Not run from a device or over the managed relay. No end-to-end daemon test drives a chat with assistant messages through these channels; the handlers are unit-tested and the gate is held to the TS by the golden cases.
+- The phone UI (tapping a link, rendering a page and its assets, a preview) landed separately on main; this backend PR does not verify it. Android not started.
+- Not run from a device or over the managed relay. A daemon HTTP integration test seeds a chat with assistant messages on disk and exercises both channels, missing chats, user-only links and page assets. It does not exercise pairing or the encrypted relay; the phone gate is tested separately and held to the TS by golden cases.
