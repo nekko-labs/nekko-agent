@@ -36,7 +36,7 @@ describe('Agents header placement', () => {
     expect(toolbar()).not.toContain('<h1');
     expect(title).not.toContain('pr-[150px]');
   });
-  it.each([['settings', 'Settings'], ['models', 'Model Providers'], ['skills', 'Skills']])('names the %s view in the title bar, not Agents', (view, label) => {
+  it.each([['settings', 'Settings'], ['models', 'Models'], ['modelserver', 'Models'], ['skills', 'Skills']])('names the %s view in the title bar, not Agents', (view, label) => {
     state.view = view;
     const title = renderToStaticMarkup(<TitleBar />);
     expect(title).toContain('>' + label + '</h1>');

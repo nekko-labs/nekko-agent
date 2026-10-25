@@ -62,12 +62,23 @@ export interface RunArtifact {
 /** Status of one step in a goal run's execution plan. */
 export type PlanStepStatus = 'pending' | 'active' | 'done' | 'skipped';
 
+export type PlanVerificationStatus = 'pending' | 'active' | 'passed' | 'failed' | 'blocked' | 'unknown';
+
+export interface PlanVerification {
+  status: PlanVerificationStatus;
+  device?: string;
+  detail?: string;
+  evidenceUrl?: string;
+}
+
 /** One step of the execution plan a goal agent builds before working. */
 export interface PlanStep {
   id: string;
   /** Concrete, verifiable step, e.g. "Wire the CSV parser + unit tests". */
   title: string;
   status: PlanStepStatus;
+  /** Explicit inspection state, independent of generic completion; freshness uses updatedAt. */
+  verification?: PlanVerification;
   /** One-line outcome, blocker, or the reason a step was skipped. */
   note?: string;
   createdAt: number;
@@ -326,6 +337,28 @@ export interface PlanUpdateResult {
   skippedNow: PlanStep[];
 }
 
+/** Invalid objects are ignored; invalid optional fields are dropped. No completion inference. */
+function sanitizeVerification(value: unknown): PlanVerification | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const v = value as Record<string, unknown>;
+  const statuses: string[] = ['pending', 'active', 'passed', 'failed', 'blocked', 'unknown'];
+  if (typeof v.status !== 'string' || !statuses.includes(v.status)) return undefined;
+  const result: PlanVerification = { status: v.status as PlanVerificationStatus };
+  for (const [key, cap] of [['device', 160], ['detail', 1000]] as const) {
+    if (typeof v[key] === 'string' && v[key].trim()) result[key] = v[key].trim().slice(0, cap);
+  }
+  if (typeof v.evidenceUrl === 'string') {
+    const link = v.evidenceUrl.trim();
+    if (link.length <= 2048 && /^https?:\/\//i.test(link)) {
+      try {
+        const url = new URL(link);
+        if (['http:', 'https:'].includes(url.protocol) && !url.username && !url.password) result.evidenceUrl = link;
+      } catch { /* Ignore unsafe or malformed evidence links. */ }
+    }
+  }
+  return result;
+}
+
 /**
  * Apply an `update_plan` call to an existing plan: the semantics both writers
  * share: goal-run plans on a TrainingRun and the live `agentPlan` on an
@@ -366,6 +399,7 @@ export function applyPlanUpdate(
       ? (r.status as PlanStepStatus)
       : undefined;
     const note = typeof r.note === 'string' && r.note.trim() ? r.note.trim().slice(0, 240) : undefined;
+    const verification = sanitizeVerification(r.verification);
     let step = id ? next.find((s) => s.id === id) : undefined;
     // A fresh plan often starts numbering at step_1 again. Do not rename history.
     if (replace && step && title && step.title.toLowerCase() !== title.toLowerCase()) step = undefined;
@@ -375,11 +409,12 @@ export function applyPlanUpdate(
       if (title) step.title = title;
       if (status && !(replace && (was === 'done' || was === 'skipped'))) step.status = status;
       if (note) step.note = note;
+      if (verification) step.verification = verification;
       step.updatedAt = now;
       if (step.status === 'done' && was !== 'done') finished.push(step);
       else if (step.status === 'skipped' && was !== 'skipped') skippedNow.push(step);
     } else if (title) {
-      next.push({ id: id && !next.some((s) => s.id === id) ? id : freshId(), title, status: status ?? 'pending', note, createdAt: now, updatedAt: now });
+      next.push({ id: id && !next.some((s) => s.id === id) ? id : freshId(), title, status: status ?? 'pending', note, createdAt: now, updatedAt: now, ...(verification ? { verification } : {}) });
     }
   }
   if (!next.length) return { error: 'The plan cannot be empty; pass the full step list.' };

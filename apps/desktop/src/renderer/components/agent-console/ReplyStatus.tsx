@@ -22,7 +22,7 @@ export function replyIconState(activity: LiveActivity | undefined): ReplyIconSta
 }
 
 /** The 16px icon before the live status text. Decorative; the text says the same. */
-export function ReplyActivityIcon({ state, size = 16 }: { state: ReplyIconState; size?: number }) {
+export function ReplyActivityIcon({ state, size = 16, stationary = false }: { state: ReplyIconState; size?: number; stationary?: boolean }) {
   if (state === 'idle') return <MiniNekko size={size} />;
   return (
     <span className="reply-activity-icon inline-block shrink-0 align-middle" data-reply-icon={state} style={{ lineHeight: 0 }}>
@@ -32,7 +32,7 @@ export function ReplyActivityIcon({ state, size = 16 }: { state: ReplyIconState;
             <rect x="3" y="5" width="26" height="23" rx="2" />
             <path d="M3 11H29 M7 8H8 M11 8H12" />
             <svg x="6" y="14" width="20" height="11" viewBox="0 0 20 11" overflow="hidden">
-              <g className="reply-terminal-lines" strokeWidth="1.5">
+              <g className={stationary ? undefined : 'reply-terminal-lines'} strokeWidth="1.5">
                 <path d="M0 2L2 3.5L0 5 M5 4H13 M0 9H17 M0 14H10 M0 19H15 M0 24H13" />
               </g>
             </svg>
