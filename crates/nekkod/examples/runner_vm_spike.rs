@@ -46,20 +46,28 @@ async fn main() -> Res<()> {
     let host = Arc::new(RwLock::new(hostnets::try_current().map_err(|e| format!("cannot read host networks: {e}"))?));
     hostnets::spawn_refresh(host.clone(), Duration::from_secs(5));
 
-    println!("vms before: {}", count_vms(&helper)?);
-    let clone = work.join(format!("clone-{}", std::process::id()));
-    let out = Command::new(&helper).arg("clone").arg("--from").arg(&bundle).arg("--to").arg(&clone).output()?;
+    // Everything that can fail is ready before the clone exists, so no early
+    // return leaves a VM or a clone behind.
+    let forward = std::net::TcpListener::bind("127.0.0.1:2222")?;
+    let cfg = net::NetConfig { dns_upstream: vec![dns_upstream()], forward: Some((forward, 22)), ..Default::default() };
+    let (vm_end, nat_end) = UnixDatagram::pair()?;
+    // macOS gives unix datagram sockets 4 KiB; the helper's end needs the room too.
+    net::widen_buffers(&vm_end)?;
+    nat_end.set_nonblocking(true)?;
+    let nat_end = tokio::net::UnixDatagram::from_std(nat_end)?;
+
+    let before = count_vms(&helper)?;
+    println!("vms before: {before}");
+    let clone = CloneDir(work.join(format!("clone-{}", std::process::id())));
+    let out = Command::new(&helper).arg("clone").arg("--from").arg(&bundle).arg("--to").arg(&clone.0).output()?;
     println!("clone: {}", String::from_utf8_lossy(&out.stdout).trim());
     if !out.status.success() {
         return Err("clone failed".into());
     }
 
-    let (vm_end, nat_end) = UnixDatagram::pair()?;
-    // macOS gives unix datagram sockets 4 KiB; the helper's end needs the room too.
-    net::widen_buffers(&vm_end)?;
     let vm_fd = vm_end.as_raw_fd();
     let mut cmd = Command::new(&helper);
-    cmd.args(["run", "--cpus", "4", "--memory-mb", "8192", "--net-fd", "3", "--bundle"]).arg(&clone);
+    cmd.args(["run", "--cpus", "4", "--memory-mb", "8192", "--net-fd", "3", "--bundle"]).arg(&clone.0);
     // SAFETY: only async-signal-safe calls between fork and exec.
     unsafe {
         cmd.pre_exec(move || {
@@ -68,18 +76,13 @@ async fn main() -> Res<()> {
             if rc < 0 { Err(std::io::Error::last_os_error()) } else { Ok(()) }
         });
     }
-    let child = tokio::process::Command::from(cmd).spawn()?;
+    // Declared after `clone`, so on any early return the VM is killed before the clone is removed.
+    let mut child = tokio::process::Command::from(cmd).kill_on_drop(true).spawn()?;
     drop(vm_end);
-    println!("nekko-vm pid {}", child.id().unwrap_or(0));
-
-    nat_end.set_nonblocking(true)?;
-    let nat_end = tokio::net::UnixDatagram::from_std(nat_end)?;
-    let forward = std::net::TcpListener::bind("127.0.0.1:2222")?;
-    let cfg = net::NetConfig { dns_upstream: vec![dns_upstream()], forward: Some((forward, 22)), ..Default::default() };
+    let pid = child.id().map(|p| p as libc::pid_t);
+    println!("nekko-vm pid {}", pid.unwrap_or(0));
     println!("ssh -p 2222 admin@127.0.0.1 once the guest is up; Ctrl-C stops the VM");
 
-    let pid = child.id().map(|p| p as libc::pid_t);
-    let mut child = child;
     tokio::select! {
         r = net::serve(nat_end, host, cfg) => println!("nat ended: {r:?}"),
         s = child.wait() => println!("nekko-vm exited: {s:?}"),
@@ -93,9 +96,25 @@ async fn main() -> Res<()> {
     // The NAT end is gone now, so the helper stops within a second if SIGTERM did not.
     let status = tokio::time::timeout(Duration::from_secs(30), child.wait()).await;
     println!("nekko-vm: {status:?}");
-    std::fs::remove_dir_all(&clone)?;
-    println!("vms after: {}", count_vms(&helper)?);
+    // The leak check first, so a failed removal cannot hide it.
+    match count_vms(&helper) {
+        Ok(after) => println!("vms after: {after} (before: {before})"),
+        Err(e) => println!("vms after: count failed: {e}"),
+    }
+    match std::fs::remove_dir_all(&clone.0) {
+        Ok(()) => println!("clone removed: {}", clone.0.display()),
+        Err(e) => println!("clone NOT removed: {}: {e}", clone.0.display()),
+    }
     Ok(())
+}
+
+/// Removes the clone on every exit but SIGKILL (that one is left for the reaper).
+struct CloneDir(PathBuf);
+
+impl Drop for CloneDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
 }
 
 /// target/runner-spike/nekko-vm, built and ad-hoc signed when the source is newer.
