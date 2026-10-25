@@ -134,11 +134,15 @@ final class MarkdownTests: XCTestCase {
             scrollTo(error, in: app)
             attach(app, "mermaid-\(theme)-2-sequence-and-broken")
 
+            // The checks that don't depend on the theme run once (Native iOS has a 50-minute budget).
+            let first = theme == uiTestThemes.first
             let network = app.staticTexts["lab.mermaidNetwork"]
-            scrollTo(network, in: app, max: 6)
-            let probed = expectation(for: NSPredicate(format: "label != %@", "Renderer network: "), evaluatedWith: network)
-            wait(for: [probed], timeout: 20)
-            XCTAssertEqual(network.label, "Renderer network: blocked", "the renderer can't reach the network")
+            if first {
+                scrollTo(network, in: app, max: 6)
+                let probed = expectation(for: NSPredicate(format: "label != %@", "Renderer network: "), evaluatedWith: network)
+                wait(for: [probed], timeout: 20)
+                XCTAssertEqual(network.label, "Renderer network: blocked", "the renderer can't reach the network")
+            }
             let times = app.staticTexts["lab.mermaidTimes"].label
             print("MERMAID-RENDER-TIMES \(theme): \(times)")
             let note = XCTAttachment(string: "\(theme): \(times)")
@@ -153,13 +157,14 @@ final class MarkdownTests: XCTestCase {
             XCTAssertTrue(done.waitForExistence(timeout: 10), "the diagram opens full screen")
             RunLoop.current.run(until: Date().addingTimeInterval(1.5))
             attach(app, "mermaid-\(theme)-3-fullscreen")
-            // A navigation-bar menu: no hit point for XCTest, so tap its centre.
-            app.buttons["mermaid.actions"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-            XCTAssertTrue(app.buttons["Copy source"].waitForExistence(timeout: 5))
-            XCTAssertTrue(app.buttons["Save to Photos"].exists)
-            attach(app, "mermaid-\(theme)-4-actions")
-            app.buttons["Copy source"].tap()
-            done.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            if first {
+                // A navigation-bar menu: no hit point for XCTest, so tap its centre.
+                app.buttons["mermaid.actions"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+                XCTAssertTrue(app.buttons["Copy source"].waitForExistence(timeout: 5))
+                XCTAssertTrue(app.buttons["Save to Photos"].exists)
+                attach(app, "mermaid-\(theme)-4-actions")
+                app.buttons["Copy source"].tap()
+            }
             app.terminate()
         }
     }
