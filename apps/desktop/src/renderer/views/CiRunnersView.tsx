@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { PRIORITY_LABELS, type RunnerView } from '@nekko-agent/shared';
 import { Badge, EmptyHint } from '../components/primitives/index.js';
 import { RunnerCard } from '../components/RunnerCard.js';
+import { ConnectRunnerSheet } from '../components/ConnectRunnerSheet.js';
+import { RunnerSettingsSheet } from '../components/RunnerSettingsSheet.js';
 import { LaptopIcon, PlugIcon, ShieldIcon } from '../icons.js';
 import { hasAppChrome } from '../chrome.js';
 
@@ -56,7 +58,6 @@ const nowSecs = () => Date.now() / 1000;
 export function CiRunnersView({ segment, now = nowSecs }: { segment?: React.ReactNode; now?: () => number }) {
   const [state, setState] = useState<RunnersState>({ kind: 'loading' });
   const [clock, setClock] = useState(now);
-  // The connect and settings sheets (Task 4) open from these; nothing draws them yet.
   const [connecting, setConnecting] = useState(false);
   const [settingsFor, setSettingsFor] = useState<string | null>(null);
 
@@ -83,7 +84,17 @@ export function CiRunnersView({ segment, now = nowSecs }: { segment?: React.Reac
 
   const onChanged = (v: RunnerView) =>
     setState((s) => (s.kind === 'ready' ? { kind: 'ready', views: s.views.map((x) => (x.config.id === v.config.id ? v : x)) } : s));
+  // A new runner may beat its `runner:changed` push here, so add it when it is not listed yet.
+  const onConnected = (v: RunnerView) => {
+    setConnecting(false);
+    setState((s) => {
+      const views = s.kind === 'ready' ? s.views : [];
+      return { kind: 'ready', views: views.some((x) => x.config.id === v.config.id) ? views.map((x) => (x.config.id === v.config.id ? v : x)) : [...views, v] };
+    });
+  };
   const hasRunners = state.kind === 'ready' && state.views.length > 0;
+  // A removed runner's push drops it from the list, which closes its sheet.
+  const settingsView = state.kind === 'ready' ? state.views.find((v) => v.config.id === settingsFor) : undefined;
 
   return (
     <div className="min-w-0 flex-1 overflow-y-auto p-4">
@@ -99,6 +110,11 @@ export function CiRunnersView({ segment, now = nowSecs }: { segment?: React.Reac
         </div>
         {runnersBody(state, { now: clock, onConnect: () => setConnecting(true), onSettings: setSettingsFor, onChanged })}
       </div>
+      {connecting && (
+        // shortcut: views do not carry the GitHub app id yet, so connect always asks for the key; pass a real lookup once they do.
+        <ConnectRunnerSheet onClose={() => setConnecting(false)} onConnected={onConnected} keyStoredFor={() => false} />
+      )}
+      {settingsView && <RunnerSettingsSheet view={settingsView} onClose={() => setSettingsFor(null)} onChanged={onChanged} />}
     </div>
   );
 }
