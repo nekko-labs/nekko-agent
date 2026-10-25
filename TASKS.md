@@ -15,6 +15,18 @@ Philip asked for a Simple / Expert switch at the top left of the phone's chat: S
 - [ ] **T204a, simulator UI test and screenshots** of the mode switch, the composer row and the monitor against a live computer.
 - [ ] **T204b, Android parity.**
 
+
+## Model tuning controls (added 2026-10-25)
+
+Philip asked for a simpler load drawer (one recommended button explained in plain words, a VRAM and RAM meter, GPU only or Hybrid plus context first, simple then expert controls) and for the trick of running a big MoE model on an 8 GB card by keeping experts in RAM and the n-gram table on disk. Spec: [Setting up a local model](spec/models/setting-up-a-local-model.md). Decision: [0023](docs/decisions/0023-place-bytes-in-three-places-and-pass-placement-explicitly.md). #1069
+
+- [x] **MT-1, Weight kinds from the GGUF (2026-10-25).** `gguf.rs` sizes every tensor by its ggml type and sums experts (`ffn_*_exps`), dense feed-forward and lookup tables (n-gram and per-layer embeddings) into a `WeightLayout` of shares; the library stores it as `weightLayout` and backfills old rows once.
+- [x] **MT-2, Placement planner (2026-10-25).** `placement.rs::place` puts weights, KV cache and overhead in VRAM, RAM or on disk for a drawer request (run on, context per session, sessions, KV type, GPU layers, expert or FFN layers in RAM, KV on GPU, mmap, pin, paged tables, expert cache); verdict `disk` when mapped weights page from the SSD. `compute_fit` is untouched.
+- [x] **MT-3, Solver goals (2026-10-25).** `solve`/`recommend` with `speed` (GPU only, else the lightest split at 32K, then more context), `context` (most context first) and `fill` (keep context, lightest split); sessions 4 or 2 only when each keeps 64K and fits. Daemon channels `runtime:place` and `runtime:recommend`.
+- [x] **MT-4, Launch flags (2026-10-25).** `--cpu-moe`, `--n-cpu-moe`, `--n-cpu-ffn`, `--moe-cache-mib`, `--no-kv-offload`, `--lazy-mode`, `--threads-batch`, `--kv-unified(-per-slot)`, and `--fit off` with any explicit placement, each gated on the build's `--help` with `--override-tensor` fallbacks; `same_params` knows the new keys.
+- [x] **MT-5, Load drawer (2026-10-25).** `EngineLoadDrawer.tsx` rebuilt around one `LoadParams` (`loadSettings.ts` maps it): meter, recommended button with "What this chose", Run on, split presets, context per session, More controls, Expert. Evidence: `apps/desktop/scripts/model-tuning-sandbox.cjs`.
+- [ ] **MT-6, Real hardware check:** load an MoE with All experts in RAM on a discrete GPU and compare measured VRAM with the meter; confirm `--moe-cache-mib` and `--lazy-mode` on the bundled build.
+- [ ] **MT-7, Persistent phrase cache:** `--spec-type ngram-cache --lookup-cache-dynamic` once incognito chats can be kept out of it.
 ## Tool calls grouped by purpose (added 2026-10-25)
 
 Philip asked for an agent's tool calls to be grouped by what they are doing, with the goal of each group shown (reading the project's guidance apart from coding, say). Spec: [Tool calls grouped by what they are for](spec/chat/tool-calls-grouped-by-purpose.md). #1075
