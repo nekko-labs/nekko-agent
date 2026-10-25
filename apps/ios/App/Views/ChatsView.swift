@@ -9,6 +9,8 @@ struct ChatsView: View {
     @Binding var path: [Route]
     /// iPad (regular width): the split view's selected chat. Nil on iPhone, where rows push.
     var selection: Binding<Route?>? = nil
+    /// In a pane: the chat open in the other pane, marked like a selection.
+    var highlighted: String? = nil
     @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
     @Environment(\.palette) private var palette
@@ -18,6 +20,7 @@ struct ChatsView: View {
     /// Groups showing every chat, past the first few recent ones.
     @State private var expanded: Set<String> = []
     @State private var reorderingGroups = false
+    @State private var sendingFeedback = false
     /// The heading a dragged group is over.
     @State private var dropTarget: String?
     @State private var renaming: SessionSummary?
@@ -42,7 +45,7 @@ struct ChatsView: View {
         .refreshable { await store.refresh() }
         .navigationTitle("Chats")
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) { ComputerMenu(path: $path) }
+            ToolbarItem(placement: .topBarLeading) { ComputerMenu(path: $path, feedback: $sendingFeedback) }
             ToolbarItem(placement: .topBarTrailing) { viewMenu }
             ToolbarItem(placement: .topBarTrailing) {
                 // Offline too: a chat started now begins when the computer is back.
@@ -55,6 +58,7 @@ struct ChatsView: View {
         .sheet(isPresented: $reorderingGroups) {
             ReorderGroupsSheet(groups: sections.map { GroupName(key: $0.key, name: $0.name) }) { setGroupOrder($0) }
         }
+        .sheet(isPresented: $sendingFeedback) { FeedbackSheet() }
     }
 
     private func open(_ r: Route) {
@@ -127,6 +131,16 @@ struct ChatsView: View {
                     if !collapsed.contains(g.key) || !query.isEmpty { sectionRows(g) }
                 } header: {
                     sectionHeading(g)
+                }
+            }
+            // The computer's Monitors (FD-5): hardware, running chats, what needs you, the next automations.
+            if query.isEmpty && !store.computers.isEmpty {
+                Section {
+                    NavigationLink(value: Route.monitors) {
+                        Label("Monitors", systemImage: "gauge.with.dots.needle.50percent").foregroundStyle(palette.ink)
+                    }
+                    .listRowBackground(Color.clear)
+                    .accessibilityIdentifier("chats.monitors")
                 }
             }
     }
@@ -289,7 +303,7 @@ struct ChatsView: View {
         }
         // On the paper like the rest of the list, with the attention bar on a chat that needs you.
         .listRowBackground(RowBackground(needsYou: store.activity[s.id] == .needsYou,
-                                         selected: selection.map { $0.wrappedValue == .chat(s.id) } ?? false))
+                                         selected: selection.map { $0.wrappedValue == .chat(s.id) } ?? (highlighted == s.id)))
         .accessibilityIdentifier("chats.row")
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             if s.archived {
@@ -510,9 +524,11 @@ struct PendingChatRow: View {
     }
 }
 
-/// Switch computers, pair another, open settings.
+/// Switch computers, pair another, open settings, send feedback.
 struct ComputerMenu: View {
     @Binding var path: [Route]
+    /// Presents *Send feedback*; the sheet hangs on the chat list, not on the toolbar item.
+    @Binding var feedback: Bool
     @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
     @Environment(\.palette) private var palette
@@ -541,6 +557,8 @@ struct ComputerMenu: View {
                 .accessibilityIdentifier("computer.logs")
             Button { path.append(.computers) } label: { Label("Computers", systemImage: "desktopcomputer") }
             Button { path.append(.settings) } label: { Label("Settings", systemImage: "gearshape") }
+            Button { feedback = true } label: { Label("Send feedback", systemImage: "envelope") }
+                .accessibilityIdentifier("computer.feedback")
             // The safety exits for the active computer (SK-8), a submenu away from any chat list.
             if store.active != nil {
                 Divider()

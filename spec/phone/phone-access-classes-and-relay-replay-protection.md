@@ -50,4 +50,6 @@ Not done: the agent's own replies and events carry no counter the phone checks. 
 
 ## Security boundaries
 
+`[added 2026-10-24, decision 0016]` Three provider channels joined the classes: `providers:sealKey` (read: the computer's P-256 sealing key, public half only) and `providers:saveSealed` and `providers:setEnabled` (change, a signed proof each). A sealed save carries the provider without its key and the key sealed to that one computer (`nekko-provider-key-v1`); the gate checks its shape before the computer is asked (`PHONE_PROVIDER_SAVE_KEYS`, `PHONE_PROVIDER_KINDS`, an https base URL for a cloud kind, a base64url blob of at most 8 KB) and the answer is reduced to `ok`, a message and the saved provider's models. `providers:save`, `providers:remove` and `providers:importCliAuth` stay in `PHONE_DENIED_FOREVER`.
+
 The computer decides; neither phone app is trusted to class its own calls. The challenge and counter sit inside the sealed frames, so the relay can neither forge nor strip them; it can still drop or delay frames, which is a denial of service, not an action. Proof-checked changes keep their own replay check (the proof fingerprint) on top.

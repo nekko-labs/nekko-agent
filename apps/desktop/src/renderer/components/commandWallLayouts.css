@@ -220,7 +220,7 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 /* Tab placement remains independent of focus/grid/fixed window layout. */
 .wall-agent-workspace { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
 .wall-agent-workspace[data-tabs='left'] { flex-direction: row; gap: 6px; }
-.wall-agent-workspace[data-tabs='top'] { flex-direction: column; gap: 8px; }
+.wall-agent-workspace[data-tabs='top'] { flex-direction: column; gap: 0; }
 /* The Agents panel's own controls: icon buttons whose meaning shows in a hover
    tooltip (HoverTip), so they never change size under the pointer. A stack in
    a column panel, a row in a row panel or when collapsed beside the wall
@@ -253,7 +253,8 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 }
 /* The Agents panel as a row: each project is a strip of cards, the strip
    scrolls sideways, and the row stays about one card tall. */
-.agent-panel-row { max-height: 168px; }
+.agent-panel-row { max-height: 168px; padding-block: 0; }
+.agent-panel-row .collapse-wrap > div { padding-bottom: 0; }
 .agent-panel-row > * { flex: 0 0 auto; margin-bottom: 0 !important; }
 .agent-panel-row .collapse-wrap > div { display: flex; flex-direction: row; gap: 6px; }
 .agent-panel-row .collapse-wrap > div > * { flex: 0 0 240px; min-width: 0; }
@@ -322,3 +323,6 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 
 /* Keep the agent-list boundary visible even in low-contrast presets. */
 .wall-agents-presence[data-orientation='vertical'][data-panel-open='true'] { box-shadow: 1px 0 0 color-mix(in srgb, var(--ink) 28%, var(--paper)); }
+/* Five stacked controls must not set the row's height below its cards. */
+[data-agent-panel][data-orientation='horizontal'] [data-agent-panel-header] > div { display: grid; grid-template-columns: repeat(2, 28px); gap: 4px; }
+[data-agent-panel][data-orientation='horizontal'] [data-agent-panel-header] .agent-panel-controls { display: contents; }

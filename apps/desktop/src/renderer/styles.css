@@ -2055,6 +2055,38 @@
 .vt-row > :last-child {
   margin-bottom: 0;
 }
+/* Swipe-left times (useSwipeToRevealTimes): a pseudo-element, so the margin
+   rules above still see the row's real first and last parts. */
+.vt-row[data-vt-stamp] {
+  position: relative;
+}
+.vt-row[data-vt-stamp]::after {
+  content: attr(data-vt-stamp);
+  position: absolute;
+  top: 2px;
+  left: 100%;
+  padding-left: 16px;
+  white-space: nowrap;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+  opacity: var(--vt-reveal-o, 0);
+  pointer-events: none;
+  transition: opacity 200ms ease;
+}
+.vt-list {
+  transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.vt-swiping .vt-list,
+.vt-swiping .vt-row[data-vt-stamp]::after {
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vt-list,
+  .vt-row[data-vt-stamp]::after {
+    transition: none;
+  }
+}
 
 /* Skill pill — a highlighted slash-command token (Claude-Code style). Used both
    as the active skill above the composer and as the badge on a sent message. */
