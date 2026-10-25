@@ -513,7 +513,10 @@ final class LiveRelayTests: XCTestCase {
         auditAccessibility(app, "modes-expert")
         panel.tap()
         XCTAssertTrue(app.navigationBars["Monitor"].waitForExistence(timeout: 10), "the whole monitor opens")
-        XCTAssertTrue(app.staticTexts["Loaded models"].waitForExistence(timeout: 10))
+        // A list section header can read in capitals, so match its identifier or its words in any case.
+        let models = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier == %@ OR label ==[c] %@", "monitor.models", "Loaded models")).firstMatch
+        XCTAssertTrue(models.waitForExistence(timeout: 10), "the monitor lists the loaded models")
         settle()
         attach(app, "modes-4-monitor")
         app.buttons["Done"].firstMatch.tap()

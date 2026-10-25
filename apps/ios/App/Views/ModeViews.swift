@@ -527,7 +527,7 @@ struct MonitorSheet: View {
                 Section {
                     models
                 } header: {
-                    Text("Loaded models")
+                    Text("Loaded models").accessibilityIdentifier("monitor.models")
                 } footer: {
                     Text("Unloading frees the model’s memory on \(computer). The next reply that uses it loads it again.")
                 }
