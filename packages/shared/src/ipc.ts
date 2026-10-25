@@ -68,6 +68,8 @@ export const IpcChannels = {
   runtimeFacts: 'runtime:facts',
   runtimePlan: 'runtime:plan',
   runtimeAutoFit: 'runtime:autoFit',
+  runtimePlace: 'runtime:place',
+  runtimeRecommend: 'runtime:recommend',
 
   engineStatus: 'engine:status',
   engineInstallPreview: 'engine:installPreview',
@@ -569,6 +571,21 @@ export interface NekkoApi {
     budgetFraction: number,
     parallelSlots?: number,
   ): Promise<import('./capacity.js').AutoFitSummary | null>;
+  /** Where a load's bytes land: graphics memory, system memory or the SSD. */
+  runtimePlace(
+    providerId: string,
+    modelId: string,
+    req: import('./capacity.js').PlacementRequest,
+  ): Promise<import('./capacity.js').PlacementPlan | null>;
+  /**
+   * The fastest setup that fits (`speed`), the most context (`context`), or the
+   * lightest split that keeps `request`'s context (`fill`), each choice explained.
+   */
+  runtimeRecommend(
+    providerId: string,
+    modelId: string,
+    opts?: { goal?: import('./capacity.js').RecommendGoal; request?: import('./capacity.js').PlacementRequest },
+  ): Promise<import('./capacity.js').Recommendation | null>;
 
   /** The built-in engine: install state, server state, resident models. */
   engineStatus(): Promise<import('./engine.js').EngineStatus>;

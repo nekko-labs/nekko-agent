@@ -117,10 +117,73 @@ pub fn build_args(
     if let Some(g) = defined(p, "gpuLayers") {
         push(&mut args, "--n-gpu-layers", nekko_js::display(g));
     }
-    if truthy(p, "parallelSlots") && nekko_js::to_number(p.get("parallelSlots")) > 1.0 {
-        push(&mut args, "--parallel", text(p.get("parallelSlots")));
+    let layers = nekko_js::to_number(model.get("layers"));
+    let first_layers = |n: f64| (0..n as u32).map(|i| i.to_string()).collect::<Vec<_>>().join("|");
+    if let Some(n) = p.get("cpuMoeLayers").and_then(Value::as_f64).filter(|n| *n >= 1.0) {
+        if n >= layers && supports("--cpu-moe") {
+            args.push("--cpu-moe".into());
+        } else if n < layers && supports("--n-cpu-moe") {
+            push(&mut args, "--n-cpu-moe", nekko_js::number_to_string(n.floor()));
+        } else if n >= layers || !layers.is_finite() {
+            push(&mut args, "--override-tensor", r"\.ffn_(up|down|gate|gate_up)_(ch|)exps\.=CPU".into());
+        } else {
+            push(
+                &mut args,
+                "--override-tensor",
+                format!(r"blk\.({})\.ffn_(up|down|gate|gate_up)_(ch|)exps\.=CPU", first_layers(n)),
+            );
+        }
     }
-    for (k, flag) in [("batchSize", "--batch-size"), ("ubatchSize", "--ubatch-size"), ("threads", "--threads")] {
+    if let Some(n) = p.get("cpuFfnLayers").and_then(Value::as_f64).filter(|n| *n >= 1.0) {
+        if supports("--n-cpu-ffn") {
+            push(&mut args, "--n-cpu-ffn", nekko_js::number_to_string(n.floor()));
+        } else {
+            push(
+                &mut args,
+                "--override-tensor",
+                format!(r"blk\.({})\.ffn_(up|down|gate|gate_up)\.=CPU", first_layers(n.min(layers))),
+            );
+        }
+    }
+    if let Some(mib) = p.get("moeCacheMiB").and_then(Value::as_f64).filter(|n| *n >= 1.0)
+        && supports("--moe-cache-mib")
+    {
+        push(&mut args, "--moe-cache-mib", nekko_js::number_to_string(mib.floor()));
+    }
+    if p.get("kvOnGpu") == Some(&Value::Bool(false)) {
+        args.push("--no-kv-offload".into());
+    }
+    if let Some(lazy) = p.get("lazyTables").and_then(Value::as_bool)
+        && supports("--lazy-mode")
+    {
+        push(&mut args, "--lazy-mode", if lazy { "on" } else { "off" }.into());
+    }
+    // Placement we solved ourselves is passed as is: llama.cpp's `--fit`
+    // (on by default) would otherwise re-place tensors behind the meter.
+    let explicit = defined(p, "gpuLayers").is_some()
+        || ["cpuMoeLayers", "cpuFfnLayers"].iter().any(|k| defined(p, k).is_some())
+        || p.get("kvOnGpu") == Some(&Value::Bool(false));
+    if explicit && supports("--fit") {
+        push(&mut args, "--fit", "off".into());
+    }
+    if truthy(p, "parallelSlots") && nekko_js::to_number(p.get("parallelSlots")) > 1.0 {
+        let slots = nekko_js::to_number(p.get("parallelSlots"));
+        push(&mut args, "--parallel", text(p.get("parallelSlots")));
+        // One shared pool any session can grow into, each capped at its share.
+        if supports("--kv-unified") {
+            args.push("--kv-unified".into());
+            if truthy(p, "contextTokens") && supports("--kv-unified-per-slot") {
+                let per = (nekko_js::to_number(p.get("contextTokens")) / slots).floor();
+                push(&mut args, "--kv-unified-per-slot", nekko_js::number_to_string(per));
+            }
+        }
+    }
+    for (k, flag) in [
+        ("batchSize", "--batch-size"),
+        ("ubatchSize", "--ubatch-size"),
+        ("threads", "--threads"),
+        ("threadsBatch", "--threads-batch"),
+    ] {
         if truthy(p, k) {
             push(&mut args, flag, text(p.get(k)));
         }

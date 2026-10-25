@@ -223,6 +223,18 @@ export interface LoadParams {
    * replies down even while it speeds edits up.
    */
   draftModelId?: string;
+  /** The first N layers keep their experts in RAM (`--n-cpu-moe`); all of them is `--cpu-moe`. */
+  cpuMoeLayers?: number;
+  /** The first N layers run their feed-forward from RAM (`--n-cpu-ffn`), for dense models. */
+  cpuFfnLayers?: number;
+  /** Spare VRAM for llama.cpp's cache of the busiest CPU-resident experts. */
+  moeCacheMiB?: number;
+  /** False keeps the KV cache in system RAM (`--no-kv-offload`). */
+  kvOnGpu?: boolean;
+  /** Page lookup tables (n-gram embeddings) from the file (`--lazy-mode`). */
+  lazyTables?: boolean;
+  /** Threads for reading prompts (`--threads-batch`). */
+  threadsBatch?: number;
 }
 
 export interface StartOptions {

@@ -30,3 +30,4 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | [0019](0019-folding-phones-get-panes-not-a-new-app.md) | Folding phones get posture-driven panes in the existing apps, not a tablet app or a device list | proposed |
 | [0020](0020-one-network-switch-enforced-in-the-engine.md) | One network switch for every connection, enforced in the engine; All connections off is offline except loopback | accepted |
 | [0022](0022-ci-runners-vm-and-network.md) | CI runners use our own `nekko-vm` helper, a userspace public-only NAT in nekkod and a read-only seed disk; no privileged helper | accepted |
+| [0023](0023-place-bytes-in-three-places-and-pass-placement-explicitly.md) | Plan a load across VRAM, RAM and disk by weight kind, and pass the placement to llama.cpp explicitly | accepted |
