@@ -816,3 +816,33 @@ async fn a_new_record_never_sweeps_a_live_runner_of_the_same_scope() {
     h.tick_for(10).await;
     assert_eq!(h.count("remove_stale"), 2);
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_live_runner_is_not_swept_by_a_record_naming_its_scope_in_another_case() {
+    let mut h = harness(vec![record("a", Priority::RunnerFirst, 1)]);
+    h.sup.start().await;
+    h.running().await;
+    let mut b = record("b", Priority::DoNotDisturb, 1);
+    b.config.scope = Scope::Org { org: "ACME".into() };
+    h.sup.set_records(vec![record("a", Priority::RunnerFirst, 1), b]);
+    h.tick_for(30).await;
+    assert_eq!(h.count("remove_stale"), 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_disabled_runner_is_off_even_without_vm_support() {
+    let mut r = record("a", Priority::RunnerFirst, 1);
+    r.config.settings.enabled = false;
+    let h = harness_with(vec![r], Some("VM support unavailable."));
+    assert_eq!(h.view().state, RunnerState::Off);
+}
+
+#[tokio::test(start_paused = true)]
+async fn reconnecting_clears_an_auth_error() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    h.prov.0.lock().unwrap().mint.push_back(Err(ProviderError::Auth("revoked".into())));
+    h.tick_for(10).await;
+    assert_eq!(h.view().state, RunnerState::Error);
+    h.sup.reset("r1");
+    assert_eq!(h.view().error, None);
+}

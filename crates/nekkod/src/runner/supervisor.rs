@@ -10,7 +10,7 @@ use super::audit::{self, AuditLine, AuditResult, Today};
 use super::awake::Awake;
 use super::provider::{JobRef, Provider, ProviderError, RunnerStatus};
 use super::signals::{MacState, Sense, signals_for};
-use super::store::RunnerRecord;
+use super::store::{RunnerRecord, same_scope};
 use super::vm::{RunHandle, RunSpec, Stopped, Vm, reap};
 use nekko_runner::{
     Decision, HostFacts, MAX_MACOS_VMS, Reason, RunnerConfig, SlotLimit, cpus_per_vm, evaluate, hold_awake,
@@ -274,7 +274,7 @@ fn local_midnight(ts: u64) -> u64 {
 }
 
 /// `<host>` in runner names: lowercase `[a-z0-9-]`.
-fn name_host(host: &str) -> String {
+pub(super) fn name_host(host: &str) -> String {
     host.to_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect()
 }
 
@@ -330,7 +330,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             let scope = &r.record.config.scope;
             if r.dropped
                 || self.swept.contains(&r.record.config.id)
-                || self.runners.iter().any(|o| &o.record.config.scope == scope && !o.slots.is_empty())
+                || self.runners.iter().any(|o| same_scope(&o.record.config.scope, scope) && !o.slots.is_empty())
             {
                 continue;
             }
@@ -363,6 +363,14 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
         self.runners.retain(|r| !r.dropped || !r.slots.is_empty());
     }
 
+    /// The owner reconnected: a sticky error is cleared even if the record did not change.
+    pub fn reset(&mut self, id: &str) {
+        if let Some(r) = self.runners.iter_mut().find(|r| r.record.config.id == id) {
+            r.error = None;
+            r.start_failures = 0;
+        }
+    }
+
     pub fn views(&self) -> Vec<RunnerView> {
         let vm_error = self.vm.as_ref().err();
         self.runners
@@ -370,7 +378,11 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             .filter(|r| !r.dropped)
             .map(|r| RunnerView {
                 config: r.record.config.clone(),
-                state: if vm_error.is_some() { RunnerState::Error } else { r.state() },
+                state: if vm_error.is_some() && r.record.config.settings.enabled {
+                    RunnerState::Error
+                } else {
+                    r.state()
+                },
                 slots: r
                     .slots
                     .iter()

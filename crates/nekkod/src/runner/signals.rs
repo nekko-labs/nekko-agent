@@ -200,30 +200,11 @@ impl HostSense {
             None => Arc::new(RwLock::new(None)),
         };
         let network_id = Arc::new(RwLock::new(None));
-        let shared = network_id.clone();
-        tokio::spawn(async move {
-            loop {
-                let id = read_network_id().await;
-                if let Ok(mut s) = shared.write() {
-                    *s = id;
-                }
-                tokio::time::sleep(NETWORK_EVERY).await;
-            }
-        });
         let update_labels = Arc::new(RwLock::new(None));
-        let shared = update_labels.clone();
-        tokio::spawn(async move {
-            loop {
-                // 0 when unreadable: every macOS label then counts (fails closed).
-                let major = output("/usr/bin/sw_vers", &["-productVersion"], Duration::from_secs(5)).await;
-                let major = major.as_deref().map_or(0, os_major);
-                let out = output("/usr/sbin/softwareupdate", &["--list", "--no-scan"], Duration::from_secs(120)).await;
-                if let (Some(out), Ok(mut s)) = (out, shared.write()) {
-                    *s = Some(security_labels(&out, major));
-                }
-                tokio::time::sleep(UPDATES_EVERY).await;
-            }
-        });
+        // Without a helper nothing can start, so the slow readers stay off.
+        if helper.is_some() {
+            Self::spawn_readers(network_id.clone(), update_labels.clone());
+        }
         HostSense {
             machine,
             memory: Mutex::new(MemoryHistory::load(&runners_dir)),
@@ -239,6 +220,33 @@ impl HostSense {
             network_id,
             update_labels,
         }
+    }
+
+    /// The router's MAC every 30 s, and pending security updates every 6 h.
+    fn spawn_readers(network_id: Arc<RwLock<Option<String>>>, update_labels: Arc<RwLock<Option<Vec<String>>>>) {
+        let shared = network_id;
+        tokio::spawn(async move {
+            loop {
+                let id = read_network_id().await;
+                if let Ok(mut s) = shared.write() {
+                    *s = id;
+                }
+                tokio::time::sleep(NETWORK_EVERY).await;
+            }
+        });
+        let shared = update_labels;
+        tokio::spawn(async move {
+            loop {
+                // 0 when unreadable: every macOS label then counts (fails closed).
+                let major = output("/usr/bin/sw_vers", &["-productVersion"], Duration::from_secs(5)).await;
+                let major = major.as_deref().map_or(0, os_major);
+                let out = output("/usr/sbin/softwareupdate", &["--list", "--no-scan"], Duration::from_secs(120)).await;
+                if let (Some(out), Ok(mut s)) = (out, shared.write()) {
+                    *s = Some(security_labels(&out, major));
+                }
+                tokio::time::sleep(UPDATES_EVERY).await;
+            }
+        });
     }
 
     /// CPU of the VZ VM processes, per core (100 = one core).
@@ -305,7 +313,7 @@ impl Sense for HostSense {
 }
 
 /// The router's hardware address, or `None` when either command fails.
-async fn read_network_id() -> Option<String> {
+pub(super) async fn read_network_id() -> Option<String> {
     let route = output("/sbin/route", &["-n", "get", "default"], Duration::from_secs(5)).await?;
     let gateway = default_gateway(&route)?;
     let arp = output("/usr/sbin/arp", &["-n", &gateway.to_string()], Duration::from_secs(5)).await?;
@@ -313,7 +321,7 @@ async fn read_network_id() -> Option<String> {
 }
 
 /// A command's stdout when it exits 0 within `limit`.
-async fn output(cmd: &str, args: &[&str], limit: Duration) -> Option<String> {
+pub(super) async fn output(cmd: &str, args: &[&str], limit: Duration) -> Option<String> {
     let run = tokio::process::Command::new(cmd)
         .args(args)
         .stdin(Stdio::null())

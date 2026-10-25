@@ -2,7 +2,7 @@
 //! damaged file must never stop the daemon: records load sanitized, broken
 //! ones are skipped, and a file that is not JSON at all is kept aside.
 
-use nekko_runner::RunnerConfig;
+use nekko_runner::{RunnerConfig, Scope};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::io;
@@ -32,6 +32,17 @@ pub struct RunnerRecord {
     /// A golden bundle other than `images/default/`.
     #[serde(default)]
     pub image: Option<PathBuf>,
+}
+
+/// GitHub owner, org and repo names match in any case.
+pub fn same_scope(a: &Scope, b: &Scope) -> bool {
+    match (a, b) {
+        (Scope::Org { org: x }, Scope::Org { org: y }) => x.eq_ignore_ascii_case(y),
+        (Scope::Repo { owner: o1, repo: r1 }, Scope::Repo { owner: o2, repo: r2 }) => {
+            o1.eq_ignore_ascii_case(o2) && r1.eq_ignore_ascii_case(r2)
+        }
+        _ => false,
+    }
 }
 
 pub struct Store {
@@ -144,7 +155,7 @@ fn unix_secs() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nekko_runner::{RunnerSettings, Scope};
+    use nekko_runner::RunnerSettings;
     use serde_json::json;
 
     fn record(id: &str) -> RunnerRecord {

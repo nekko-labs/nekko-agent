@@ -50,6 +50,8 @@ pub struct Ctx {
     /// GPU and system stats, the readiness advisor, the hardware profile and model
     /// recommendations (`gpu:stats`, `system:stats`, `machine:*`).
     pub machine: Arc<nekko_machine::Machine>,
+    /// CI runners (`runner:*`), when the data directory is known.
+    pub runners: Option<Arc<crate::runner::Runners>>,
     /// The experimental resource-queue client, when the data directory is known.
     pub resource_queue: Option<Arc<crate::resource_queue::ResourceQueue>>,
     /// Sandbox chats' containers (sandbox.rs), with a data directory.
@@ -396,6 +398,9 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             crate::catalog::route(ctx.catalog.as_ref().expect("checked"), c, &args).await
         }
         c if crate::tooling::CHANNELS.contains(&c) => crate::tooling::route(ctx, c, &args).await,
+        c if crate::runner::CHANNELS.contains(&c) && ctx.runners.is_some() => {
+            ctx.runners.clone().expect("checked").route(c, &args).await
+        }
         c if crate::telemetry::CHANNELS.contains(&c) => crate::telemetry::route(c, &args).await,
         c if crate::connections::CHANNELS.contains(&c) => {
             crate::connections::route(ctx.workspace.data_dir(), c, &args).await

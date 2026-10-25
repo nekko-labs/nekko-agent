@@ -80,6 +80,12 @@ url = "2.5"
 [target.'cfg(windows)'.dependencies]
 windows-sys.workspace = true
 
+# The runner's GitHub App JWT is signed with Security.framework's RSA (runner/github.rs).
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = "3"
+security-framework-sys = "2"
+core-foundation = "0.10"
+
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true
 

@@ -334,12 +334,21 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             }
             _ => None,
         },
-        machine,
+        machine: machine.clone(),
         runtimes: runtimes.clone(),
         library: library.clone(),
         downloads: model_downloads.clone(),
         installs: installs.clone(),
         server: server.clone(),
+        runners: cfg.data_dir.clone().map(|d| {
+            runner::Runners::start(
+                d.into(),
+                machine.clone(),
+                Box::new(read_settings(&settings)),
+                hub.clone(),
+                cfg.github_api_url.clone(),
+            )
+        }),
         resource_queue: cfg.data_dir.clone().map(|d| {
             Arc::new(resource_queue::ResourceQueue::new(
                 std::path::PathBuf::from(d),
