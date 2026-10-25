@@ -88,18 +88,26 @@ async fn main() -> Res<()> {
     println!("nekko-vm pid {}", pid.unwrap_or(0));
     println!("ssh -p 2222 admin@127.0.0.1 once the guest is up; Ctrl-C stops the VM");
 
+    let serve = net::serve(nat_end, host, cfg);
+    tokio::pin!(serve);
     tokio::select! {
-        r = net::serve(nat_end, host, cfg) => println!("nat ended: {r:?}"),
+        r = &mut serve => println!("nat ended: {r:?}"),
         s = child.wait() => println!("nekko-vm exited: {s:?}"),
         _ = tokio::signal::ctrl_c() => {
             if let Some(pid) = pid {
                 // SAFETY: signalling our own child.
                 unsafe { libc::kill(pid, libc::SIGTERM) };
             }
+            // Keep the NAT up through SIGTERM's grace (the helper stops the
+            // guest within 20 s): dropping it closes the socket, and the
+            // helper would pull the plug at once.
+            tokio::select! {
+                s = tokio::time::timeout(Duration::from_secs(30), child.wait()) => println!("nekko-vm exited: {s:?}"),
+                r = &mut serve => println!("nat ended: {r:?}"),
+            }
         }
     }
-    // SIGTERM's grace (the helper stops the guest within 20 s). If the NAT
-    // ended instead, the helper sees its socket close within a second.
+    // If the NAT ended first, the helper sees its socket close within a second.
     let status = tokio::time::timeout(Duration::from_secs(30), child.wait()).await;
     println!("nekko-vm: {status:?}");
     Ok(())
