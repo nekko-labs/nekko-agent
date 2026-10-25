@@ -190,15 +190,22 @@ pub fn read_artifact(
     }
     let real_ext = chat_links::path_ext(&real_text);
     match &access {
-        Access::Linked(_) => {
-            if !LINK_EXT.contains(&real_ext.as_str()) {
+        Access::Linked(linked) => {
+            // Lexical case folding must not authorize a different file on a case-sensitive volume.
+            let linked_real = std::fs::canonicalize(linked).map_err(|_| NOT_LINKED_FILE.to_string())?;
+            if linked_real != real || !LINK_EXT.contains(&real_ext.as_str()) {
                 return Err(NOT_LINKED_FILE.into());
             }
         }
         Access::Asset(root) => {
             let root_real = std::fs::canonicalize(root).map_err(|_| NOT_LINKED_FILE.to_string())?;
             let at_home = home.and_then(|h| std::fs::canonicalize(h).ok()).is_some_and(|h| h == root_real);
-            if root_real.parent().is_none()
+            let hidden = real
+                .strip_prefix(&root_real)
+                .ok()
+                .is_some_and(|rel| rel.components().any(|c| c.as_os_str().to_string_lossy().starts_with('.')));
+            if hidden
+                || root_real.parent().is_none()
                 || at_home
                 || !real.starts_with(&root_real)
                 || !ASSET_EXT.contains(&real_ext.as_str())
@@ -473,10 +480,32 @@ mod tests {
         std::fs::write(dir.path().join("site/index.html"), "x").unwrap();
         std::fs::write(dir.path().join("secret.css"), "x").unwrap();
         std::os::unix::fs::symlink(dir.path().join("secret.css"), dir.path().join("site/a.css")).unwrap();
+        std::fs::create_dir(dir.path().join("site/.private")).unwrap();
+        std::fs::write(dir.path().join("site/.private/data.json"), "private").unwrap();
+        std::os::unix::fs::symlink(dir.path().join("site/.private"), dir.path().join("site/public")).unwrap();
         let links = links_for(&format!("[n]({root}/notes.md) [s]({root}/site/index.html)"));
         let read = |n: &str| read_artifact(&format!("{root}/{n}"), &links, false, None, &limits());
         assert!(read("notes.md").unwrap_err().starts_with("secret-file:"));
         assert_eq!(read("site/a.css").unwrap_err(), NOT_LINKED_FILE, "an asset that leaves the page's folder");
+        assert_eq!(read("site/public/data.json").unwrap_err(), NOT_LINKED_FILE, "a hidden real asset folder");
+    }
+
+    #[test]
+    fn case_folding_does_not_authorize_a_different_real_file() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("report.md"), "linked").unwrap();
+        std::fs::write(dir.path().join("REPORT.md"), "other").unwrap();
+        if std::fs::canonicalize(dir.path().join("report.md")).unwrap()
+            == std::fs::canonicalize(dir.path().join("REPORT.md")).unwrap()
+        {
+            return; // This volume is case-insensitive.
+        }
+        let root = slash(dir.path());
+        let links = links_for(&format!("[report]({root}/report.md)"));
+        assert_eq!(
+            read_artifact(&format!("{root}/REPORT.md"), &links, true, None, &limits()).unwrap_err(),
+            NOT_LINKED_FILE
+        );
     }
 
     /// A tiny HTTP/1.1 server on 127.0.0.1: each request gets one canned answer, then the connection closes.

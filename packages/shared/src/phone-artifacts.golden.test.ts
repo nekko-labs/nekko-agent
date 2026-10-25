@@ -34,6 +34,7 @@ const links: Array<[unknown, string | null]> = [
   [[say('Not ours: http://localhost.example.com/ http://localhost@example.com http://localhost:99999 http://localhost:0 http://127.0.0.1.nip.io http://localhost:80a http://localhostx')], null],
   [[say('Edge: (http://localhost:4000) <http://localhost:4001> "http://localhost:4002" http://localhost:4003, http://localhost')], null],
   [[{ role: 'user', content: '[mine](/tmp/user.md) http://localhost:7000' }, { role: 'tool', content: '[t](/tmp/tool.md)' }, say('[a](/tmp/a.md)'), say('[A again](/tmp/a.md) http://localhost:5173'), 'junk', { role: 'assistant', content: 5 }], null],
+  [[say('Not loopback: http://localhosté/ http://localhost%2Eevil/ http://localhost:80.evil/ http://localhost\\evil/')], null],
   ['not a list', '/p'],
   [[say('[label [nested](/tmp/n.md) x](/tmp/outer.md) [multi\nline](/tmp/m.md) [empty]() [sp](< /tmp/angle.md >)')], null],
 ];
@@ -75,6 +76,8 @@ const urls: string[] = [
   'http://localhost:65536/',
   'http://localhost:/',
   'http://localhost:12a/',
+  'http://localhosté/',
+  'http://[::1]é/',
   'http://localhost /x',
   'http://localhost\\x',
   'http://[::2]:80/',

@@ -245,7 +245,8 @@ export function loopbackUrl(url: string, maxChars = 2048): LoopbackUrl | null {
 /**
  * The loopback origins in `text`, in order, once each. After the host and an
  * optional port, the next character must end the address (not a letter,
- * digit, `_`, `-`, `:`, `@`, nor `.` when there is no port), so
+ * digit, non-ASCII host text, `%`, backslash, `_`, `-`, `:`, `@`, or a
+ * hostname suffix after `.`). A sentence-ending dot after a port is allowed, so
  * `http://localhost.example.com` and `http://localhost@example.com` are not
  * this computer.
  */
@@ -270,7 +271,7 @@ export function loopbackOrigins(text: string): string[] {
       j = k;
     }
     const next = text[j];
-    if (next !== undefined && (/[A-Za-z0-9_\-:@]/.test(next) || (!hasPort && next === '.'))) continue;
+    if (next !== undefined && (next.charCodeAt(0) > 127 || /[A-Za-z0-9_%\\\-:@]/.test(next) || (next === '.' && (!hasPort || /[A-Za-z0-9]/.test(text[j + 1] ?? ''))))) continue;
     const origin = `${scheme}://${h.host}:${port}`;
     if (!out.includes(origin)) out.push(origin);
   }

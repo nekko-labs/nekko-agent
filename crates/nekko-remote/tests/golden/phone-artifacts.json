@@ -15,6 +15,7 @@
 {"messages":[{"role":"assistant","content":"Not ours: http://localhost.example.com/ http://localhost@example.com http://localhost:99999 http://localhost:0 http://127.0.0.1.nip.io http://localhost:80a http://localhostx"}],"base":null,"links":{"artifacts":[],"origins":[]}},
 {"messages":[{"role":"assistant","content":"Edge: (http://localhost:4000) <http://localhost:4001> \"http://localhost:4002\" http://localhost:4003, http://localhost"}],"base":null,"links":{"artifacts":[],"origins":["http://localhost:4000","http://localhost:4001","http://localhost:4002","http://localhost:4003","http://localhost:80"]}},
 {"messages":[{"role":"user","content":"[mine](/tmp/user.md) http://localhost:7000"},{"role":"tool","content":"[t](/tmp/tool.md)"},{"role":"assistant","content":"[a](/tmp/a.md)"},{"role":"assistant","content":"[A again](/tmp/a.md) http://localhost:5173"},"junk",{"role":"assistant","content":5}],"base":null,"links":{"artifacts":["/tmp/a.md"],"origins":["http://localhost:5173"]}},
+{"messages":[{"role":"assistant","content":"Not loopback: http://localhosté/ http://localhost%2Eevil/ http://localhost:80.evil/ http://localhost\\evil/"}],"base":null,"links":{"artifacts":[],"origins":[]}},
 {"messages":"not a list","base":"/p","links":{"artifacts":[],"origins":[]}},
 {"messages":[{"role":"assistant","content":"[label [nested](/tmp/n.md) x](/tmp/outer.md) [multi\nline](/tmp/m.md) [empty]() [sp](< /tmp/angle.md >)"}],"base":null,"links":{"artifacts":["/tmp/n.md"],"origins":[]}}
 ],"paths":[
@@ -52,6 +53,8 @@
 {"url":"http://localhost:65536/","parsed":null},
 {"url":"http://localhost:/","parsed":null},
 {"url":"http://localhost:12a/","parsed":null},
+{"url":"http://localhosté/","parsed":null},
+{"url":"http://[::1]é/","parsed":null},
 {"url":"http://localhost /x","parsed":null},
 {"url":"http://localhost\\x","parsed":null},
 {"url":"http://[::2]:80/","parsed":null},

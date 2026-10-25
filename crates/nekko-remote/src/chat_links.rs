@@ -335,12 +335,11 @@ pub fn loopback_url(url: &str, max_chars: usize) -> Option<LoopbackUrl> {
     let (host, host_end) = loopback_host(authority.as_bytes(), 0)?;
     let mut port: u32 = if scheme == "https" { 443 } else { 80 };
     if host_end < authority.len() {
+        if authority.as_bytes()[host_end] != b':' {
+            return None;
+        }
         let digits = &authority[host_end + 1..];
-        if authority.as_bytes()[host_end] != b':'
-            || digits.is_empty()
-            || digits.len() > 5
-            || !digits.bytes().all(|c| c.is_ascii_digit())
-        {
+        if digits.is_empty() || digits.len() > 5 || !digits.bytes().all(|c| c.is_ascii_digit()) {
             return None;
         }
         port = digits.parse().ok()?;
@@ -393,7 +392,10 @@ pub fn loopback_origins(text: &str) -> Vec<String> {
             j = k;
         }
         if let Some(&next) = b.get(j)
-            && (next.is_ascii_alphanumeric() || b"_-:@".contains(&next) || (!has_port && next == b'.'))
+            && (!next.is_ascii()
+                || next.is_ascii_alphanumeric()
+                || b"_%\\-:@".contains(&next)
+                || (next == b'.' && (!has_port || b.get(j + 1).is_some_and(|c| c.is_ascii_alphanumeric()))))
         {
             continue;
         }
@@ -513,5 +515,7 @@ mod tests {
         assert!(artifact_access("/i̇/b.css", &l, true).is_some());
         assert_eq!(local_path("file:///tmp/%C3", None), None);
         assert_eq!(local_path("file:///tmp/%zz", None), None);
+        assert_eq!(loopback_url("http://localhosté/", 2048), None);
+        assert_eq!(loopback_url("http://[::1]é/", 2048), None);
     }
 }
