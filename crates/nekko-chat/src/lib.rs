@@ -45,6 +45,7 @@ impl ChunkStream for ProviderStream {
         let item = self.0.next().await?;
         Some(item.map_err(|e| e.message).map(|chunk| match chunk {
             ProviderChunk::Phase { phase } => Chunk::Phase(phase),
+            ProviderChunk::Carry { item } => Chunk::Carry(item),
             ProviderChunk::Text { delta } => Chunk::Text(delta),
             ProviderChunk::Reasoning { delta } => Chunk::Reasoning(delta),
             ProviderChunk::ToolCall { call } => Chunk::ToolCall(serde_json::to_value(call).unwrap_or(Value::Null)),

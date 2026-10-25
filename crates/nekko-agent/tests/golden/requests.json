@@ -25428,7 +25428,13 @@
           }
         ],
         "stream": true,
-        "store": false
+        "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "reasoning": {
+          "summary": "auto"
+        }
       }
     },
     "system-and-tools": {
@@ -25493,7 +25499,13 @@
           }
         ],
         "stream": true,
-        "store": false
+        "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "reasoning": {
+          "summary": "auto"
+        }
       }
     },
     "wrap-up-no-tools": {
@@ -25534,7 +25546,13 @@
         ],
         "tools": [],
         "stream": true,
-        "store": false
+        "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "reasoning": {
+          "summary": "auto"
+        }
       }
     },
     "images": {
@@ -25600,7 +25618,13 @@
           }
         ],
         "stream": true,
-        "store": false
+        "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "reasoning": {
+          "summary": "auto"
+        }
       }
     },
     "tool-round-trip": {
@@ -25730,7 +25754,13 @@
           }
         ],
         "stream": true,
-        "store": false
+        "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "reasoning": {
+          "summary": "auto"
+        }
       }
     },
     "think-on": {
@@ -25760,6 +25790,9 @@
         ],
         "stream": true,
         "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
         "reasoning": {
           "summary": "auto"
         }
@@ -25791,7 +25824,10 @@
           }
         ],
         "stream": true,
-        "store": false
+        "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ]
       }
     },
     "opus-5-normal": {
@@ -25821,8 +25857,12 @@
         ],
         "stream": true,
         "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
         "reasoning": {
-          "effort": "high"
+          "effort": "high",
+          "summary": "auto"
         }
       }
     },
@@ -25853,8 +25893,12 @@
         ],
         "stream": true,
         "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
         "reasoning": {
-          "effort": "medium"
+          "effort": "medium",
+          "summary": "auto"
         }
       }
     },
@@ -25885,8 +25929,12 @@
         ],
         "stream": true,
         "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
         "reasoning": {
-          "effort": "medium"
+          "effort": "medium",
+          "summary": "auto"
         }
       }
     },
@@ -25917,8 +25965,12 @@
         ],
         "stream": true,
         "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
         "reasoning": {
-          "effort": "low"
+          "effort": "low",
+          "summary": "auto"
         }
       }
     },
@@ -25949,8 +26001,12 @@
         ],
         "stream": true,
         "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
         "reasoning": {
-          "effort": "medium"
+          "effort": "medium",
+          "summary": "auto"
         }
       }
     },
@@ -25981,8 +26037,12 @@
         ],
         "stream": true,
         "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
         "reasoning": {
-          "effort": "high"
+          "effort": "high",
+          "summary": "auto"
         }
       }
     },
@@ -26013,8 +26073,12 @@
         ],
         "stream": true,
         "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
         "reasoning": {
-          "effort": "high"
+          "effort": "high",
+          "summary": "auto"
         }
       }
     },
@@ -26045,8 +26109,12 @@
         ],
         "stream": true,
         "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
         "reasoning": {
-          "effort": "high"
+          "effort": "high",
+          "summary": "auto"
         }
       }
     },
@@ -26077,8 +26145,12 @@
         ],
         "stream": true,
         "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
         "reasoning": {
-          "effort": "high"
+          "effort": "high",
+          "summary": "auto"
         }
       }
     },
@@ -26109,8 +26181,12 @@
         ],
         "stream": true,
         "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
         "reasoning": {
-          "effort": "high"
+          "effort": "high",
+          "summary": "auto"
         }
       }
     },
@@ -26141,8 +26217,12 @@
         ],
         "stream": true,
         "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
         "reasoning": {
-          "effort": "high"
+          "effort": "high",
+          "summary": "auto"
         }
       }
     },
@@ -26173,8 +26253,12 @@
         ],
         "stream": true,
         "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
         "reasoning": {
-          "effort": "high"
+          "effort": "high",
+          "summary": "auto"
         }
       }
     },
@@ -26205,6 +26289,9 @@
         ],
         "stream": true,
         "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
         "reasoning": {
           "effort": "high",
           "summary": "auto"
@@ -26237,7 +26324,13 @@
           }
         ],
         "stream": true,
-        "store": false
+        "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "reasoning": {
+          "summary": "auto"
+        }
       }
     },
     "o3-via-openrouter": {
@@ -26267,8 +26360,12 @@
         ],
         "stream": true,
         "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
         "reasoning": {
-          "effort": "low"
+          "effort": "low",
+          "summary": "auto"
         }
       }
     },
@@ -26298,7 +26395,13 @@
           }
         ],
         "stream": true,
-        "store": false
+        "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "reasoning": {
+          "summary": "auto"
+        }
       }
     },
     "empty-system": {
@@ -26328,7 +26431,13 @@
           }
         ],
         "stream": true,
-        "store": false
+        "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "reasoning": {
+          "summary": "auto"
+        }
       }
     },
     "unicode": {
@@ -26369,7 +26478,13 @@
           }
         ],
         "stream": true,
-        "store": false
+        "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "reasoning": {
+          "summary": "auto"
+        }
       }
     },
     "purpose": {
@@ -26398,7 +26513,13 @@
           }
         ],
         "stream": true,
-        "store": false
+        "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "reasoning": {
+          "summary": "auto"
+        }
       }
     },
     "haiku-5-5-xhigh": {
@@ -26428,8 +26549,12 @@
         ],
         "stream": true,
         "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
         "reasoning": {
-          "effort": "high"
+          "effort": "high",
+          "summary": "auto"
         }
       }
     },
@@ -26560,7 +26685,13 @@
           }
         ],
         "stream": true,
-        "store": false
+        "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "reasoning": {
+          "summary": "auto"
+        }
       }
     },
     "cache-on": {
@@ -26690,7 +26821,13 @@
           }
         ],
         "stream": true,
-        "store": false
+        "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "reasoning": {
+          "summary": "auto"
+        }
       }
     },
     "cache-off": {
@@ -26820,7 +26957,13 @@
           }
         ],
         "stream": true,
-        "store": false
+        "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "reasoning": {
+          "summary": "auto"
+        }
       }
     },
     "cache-claude-default": {
@@ -26950,7 +27093,13 @@
           }
         ],
         "stream": true,
-        "store": false
+        "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "reasoning": {
+          "summary": "auto"
+        }
       }
     },
     "cache-claude-on": {
@@ -27080,7 +27229,13 @@
           }
         ],
         "stream": true,
-        "store": false
+        "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "reasoning": {
+          "summary": "auto"
+        }
       }
     },
     "cache-claude-off": {
@@ -27210,7 +27365,13 @@
           }
         ],
         "stream": true,
-        "store": false
+        "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "reasoning": {
+          "summary": "auto"
+        }
       }
     },
     "cache-claude-alias-default": {
@@ -27340,7 +27501,13 @@
           }
         ],
         "stream": true,
-        "store": false
+        "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "reasoning": {
+          "summary": "auto"
+        }
       }
     },
     "cache-claude-alias-on": {
@@ -27470,7 +27637,13 @@
           }
         ],
         "stream": true,
-        "store": false
+        "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "reasoning": {
+          "summary": "auto"
+        }
       }
     },
     "cache-claude-alias-off": {
@@ -27600,7 +27773,13 @@
           }
         ],
         "stream": true,
-        "store": false
+        "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "reasoning": {
+          "summary": "auto"
+        }
       }
     },
     "cache-gemini-default": {
@@ -27730,7 +27909,13 @@
           }
         ],
         "stream": true,
-        "store": false
+        "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "reasoning": {
+          "summary": "auto"
+        }
       }
     },
     "cache-gemini-on": {
@@ -27860,7 +28045,13 @@
           }
         ],
         "stream": true,
-        "store": false
+        "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "reasoning": {
+          "summary": "auto"
+        }
       }
     },
     "cache-gemini-off": {
@@ -27990,7 +28181,13 @@
           }
         ],
         "stream": true,
-        "store": false
+        "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "reasoning": {
+          "summary": "auto"
+        }
       }
     },
     "cache-gemini-legacy-default": {
@@ -28120,7 +28317,13 @@
           }
         ],
         "stream": true,
-        "store": false
+        "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "reasoning": {
+          "summary": "auto"
+        }
       }
     },
     "cache-gemini-legacy-on": {
@@ -28250,7 +28453,13 @@
           }
         ],
         "stream": true,
-        "store": false
+        "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "reasoning": {
+          "summary": "auto"
+        }
       }
     },
     "cache-gemini-legacy-off": {
@@ -28380,7 +28589,13 @@
           }
         ],
         "stream": true,
-        "store": false
+        "store": false,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "reasoning": {
+          "summary": "auto"
+        }
       }
     }
   }
