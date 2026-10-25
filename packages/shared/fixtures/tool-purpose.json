@@ -1,0 +1,271 @@
+{
+  "about": "Tool-call purpose cases (TG-1). Run by packages/shared/src/tool-purpose.golden.test.ts, apps/ios/Protocol/Tests/NekkoProtocolTests/ToolPurposeTests.swift and apps/android/protocol/src/test/kotlin/com/nekko/protocol/ToolPurposeTest.kt. Change the three classifiers together. Spec: spec/chat/tool-calls-grouped-by-purpose.md.",
+  "purposes": [
+    { "name": "read_file", "input": { "path": "AGENTS.md" }, "purpose": "guidance" },
+    { "name": "read_file", "input": { "path": "CLAUDE.md" }, "purpose": "guidance" },
+    { "name": "Read", "input": { "file_path": "/home/me/code/app/AGENTS.md" }, "purpose": "guidance" },
+    { "name": "Read", "input": { "file_path": "C:\\Users\\me\\code\\app\\CLAUDE.md" }, "purpose": "guidance" },
+    { "name": "Read", "input": { "file_path": "C:\\Users\\me\\code\\app\\docs\\runbooks\\landing-a-pr.md" }, "purpose": "guidance" },
+    { "name": "read_file", "input": { "path": "docs/decisions/0042-merge-queue.md" }, "purpose": "guidance" },
+    { "name": "read_file", "input": { "path": "spec/chat/tool-calls-grouped-by-purpose.md" }, "purpose": "guidance" },
+    { "name": "read_file", "input": { "path": "README.md" }, "purpose": "guidance" },
+    { "name": "Read", "input": { "file_path": "/srv/app/packages/ui/README" }, "purpose": "guidance" },
+    { "name": "read_file", "input": { "path": "CONTRIBUTING.md" }, "purpose": "guidance" },
+    { "name": "Read", "input": { "file_path": "/home/me/.claude/skills/review/SKILL.md" }, "purpose": "guidance" },
+    { "name": "Read", "input": { "file_path": "C:\\Users\\me\\.claude\\commands\\land.md" }, "purpose": "guidance" },
+    { "name": "read_file", "input": { "path": ".cursorrules" }, "purpose": "guidance" },
+    { "name": "read_file", "input": { "path": ".github/copilot-instructions.md" }, "purpose": "guidance" },
+    { "name": "read_file", "input": { "path": ".cursor/rules/style.mdc" }, "purpose": "guidance" },
+    { "name": "list_dir", "input": { "path": "docs/runbooks" }, "purpose": "guidance" },
+    { "name": "Glob", "input": { "pattern": "**/AGENTS.md" }, "purpose": "guidance" },
+    { "name": "Grep", "input": { "pattern": "merge queue", "path": "docs/runbooks" }, "purpose": "guidance" },
+    { "name": "Read", "input": { "file_path": "C:\\code\\app\\.claude\\worktrees\\task-1\\AGENTS.md" }, "purpose": "guidance" },
+    { "name": "Bash", "input": { "command": "cat AGENTS.md CLAUDE.md" }, "purpose": "guidance" },
+    { "name": "bash", "input": { "command": "cd /repo && head -50 docs/runbooks/visual-evidence.md" }, "purpose": "guidance" },
+
+    { "name": "read_file", "input": { "path": "src/main.ts" }, "purpose": "explore" },
+    { "name": "Read", "input": { "file_path": "C:\\Users\\me\\code\\app\\.claude\\worktrees\\task-1\\src\\chat.ts" }, "purpose": "explore" },
+    { "name": "Read", "input": { "file_path": "/repo/spec/models/user_spec.rb" }, "purpose": "explore" },
+    { "name": "read_file", "input": { "path": ".github/workflows/ci.yml" }, "purpose": "explore" },
+    { "name": "grep", "input": { "pattern": "summarizeToolCall", "path": "packages" }, "purpose": "explore" },
+    { "name": "Grep", "input": { "pattern": "ToolRow" }, "purpose": "explore" },
+    { "name": "glob", "input": { "pattern": "apps/**/*.swift" }, "purpose": "explore" },
+    { "name": "list_dir", "input": { "path": "apps/desktop/src" }, "purpose": "explore" },
+    { "name": "LS", "input": { "path": "C:\\Users\\me\\code\\app" }, "purpose": "explore" },
+    { "name": "Bash", "input": { "command": "rg -n \"toolLabel\" apps/ios" }, "purpose": "explore" },
+    { "name": "Bash", "input": { "command": "ls -la && git status" }, "purpose": "git" },
+    { "name": "Bash", "input": { "command": "grep -rn foo src | head -20" }, "purpose": "explore" },
+    { "name": "PowerShell", "input": { "command": "Get-ChildItem -Recurse src | Select-String 'TODO'" }, "purpose": "explore" },
+    { "name": "bash", "input": { "command": "wc -l src/*.ts" }, "purpose": "explore" },
+
+    { "name": "write_file", "input": { "path": "src/tool-purpose.ts", "content": "export {}" }, "purpose": "edit" },
+    { "name": "edit_file", "input": { "path": "src/chat.ts", "old_string": "a", "new_string": "b" }, "purpose": "edit" },
+    { "name": "Edit", "input": { "file_path": "C:\\Users\\me\\code\\app\\AGENTS.md", "old_string": "a", "new_string": "b" }, "purpose": "edit" },
+    { "name": "Write", "input": { "file_path": "/repo/notes.md", "content": "x" }, "purpose": "edit" },
+    { "name": "MultiEdit", "input": { "file_path": "/repo/src/a.ts", "edits": [] }, "purpose": "edit" },
+    { "name": "NotebookEdit", "input": { "notebook_path": "/repo/analysis.ipynb" }, "purpose": "edit" },
+    { "name": "apply_patch", "input": { "input": "*** Begin Patch" }, "purpose": "edit" },
+
+    { "name": "bash", "input": { "command": "npm test" }, "purpose": "check" },
+    { "name": "Bash", "input": { "command": "cd apps/desktop && npx vitest run src/renderer 2>&1 | tail -20", "description": "Run the desktop tests" }, "purpose": "check" },
+    { "name": "bash", "input": { "command": "npm run typecheck" }, "purpose": "check" },
+    { "name": "bash", "input": { "command": "npm -w apps/desktop run test:unit" }, "purpose": "check" },
+    { "name": "bash", "input": { "command": "pnpm lint" }, "purpose": "check" },
+    { "name": "bash", "input": { "command": "cargo test -p nekko-tools" }, "purpose": "check" },
+    { "name": "bash", "input": { "command": "cargo clippy --all-targets" }, "purpose": "check" },
+    { "name": "bash", "input": { "command": "python -m pytest tests/ -q" }, "purpose": "check" },
+    { "name": "bash", "input": { "command": "go test ./..." }, "purpose": "check" },
+    { "name": "bash", "input": { "command": "./node_modules/.bin/tsc --noEmit -p ." }, "purpose": "check" },
+    { "name": "bash", "input": { "command": "npx eslint src" }, "purpose": "check" },
+    { "name": "bash", "input": { "command": "xcodebuild -scheme Nekko -destination 'platform=iOS Simulator' test" }, "purpose": "check" },
+    { "name": "PowerShell", "input": { "command": ".\\gradlew.bat :protocol:test" }, "purpose": "check" },
+    { "name": "bash", "input": { "command": "swift test --package-path apps/ios/Protocol" }, "purpose": "check" },
+    { "name": "bash", "input": { "command": "CI=1 npm run build" }, "purpose": "check" },
+    { "name": "bash", "input": { "command": "make" }, "purpose": "check" },
+
+    { "name": "bash", "input": { "command": "npm install" }, "purpose": "run" },
+    { "name": "bash", "input": { "command": "npm ci --ignore-scripts" }, "purpose": "run" },
+    { "name": "Bash", "input": { "command": "node scripts/spec-index.mjs" }, "purpose": "run" },
+    { "name": "bash", "input": { "command": "cargo run --bin nekkod" }, "purpose": "run" },
+    { "name": "bash", "input": { "command": "cat > notes.md <<'EOF'\nhello\nEOF" }, "purpose": "run" },
+    { "name": "PowerShell", "input": { "command": "Start-Process notepad" }, "purpose": "run" },
+    { "name": "local_shell", "input": { "command": ["bash", "-lc", "python3 scripts/gen.py"] }, "purpose": "run" },
+    { "name": "start_process", "input": { "command": "npm run dev" }, "purpose": "run" },
+    { "name": "bash", "input": {}, "purpose": "run" },
+
+    { "name": "bash", "input": { "command": "git status" }, "purpose": "git" },
+    { "name": "Bash", "input": { "command": "git add -A && git commit -m 'Group tool calls' && git push -u origin feat/x" }, "purpose": "git" },
+    { "name": "bash", "input": { "command": "gh pr create --title 'x' --body 'y'" }, "purpose": "git" },
+    { "name": "bash", "input": { "command": "C:\\Git\\bin\\git.exe -C C:\\code\\app log --oneline -5" }, "purpose": "git" },
+    { "name": "bash", "input": { "command": "cd /repo && git fetch origin main" }, "purpose": "git" },
+    { "name": "bash", "input": { "command": "npm test && git push" }, "purpose": "check" },
+
+    { "name": "web_search", "input": { "query": "swiftui markdown table" }, "purpose": "web" },
+    { "name": "WebSearch", "input": { "query": "mermaid offline" }, "purpose": "web" },
+    { "name": "WebFetch", "input": { "url": "https://developer.apple.com/documentation/swiftui", "prompt": "summarise" }, "purpose": "web" },
+    { "name": "fetch_url", "input": { "url": "https://example.com/a" }, "purpose": "web" },
+    { "name": "browser", "input": { "action": "navigate", "url": "https://example.com" }, "purpose": "web" },
+
+    { "name": "update_plan", "input": { "plan": [] }, "purpose": "plan" },
+    { "name": "TodoWrite", "input": { "todos": [] }, "purpose": "plan" },
+    { "name": "ExitPlanMode", "input": { "plan": "x" }, "purpose": "plan" },
+
+    { "name": "spawn_agent", "input": { "task": "Port the classifier" }, "purpose": "delegate" },
+    { "name": "Task", "input": { "description": "Explore the codebase", "prompt": "Find X", "subagent_type": "Explore" }, "purpose": "delegate" },
+    { "name": "Agent", "input": { "description": "Review the diff", "prompt": "Review" }, "purpose": "delegate" },
+
+    { "name": "mcp__github__create_issue", "input": { "title": "x", "description": "A long body" }, "purpose": "other" },
+    { "name": "mcp__filesystem__read_file", "input": { "path": "AGENTS.md" }, "purpose": "other" },
+    { "name": "mcp__claude_ai_Linear__list_issues", "input": {}, "purpose": "other" },
+    { "name": "ask_user", "input": { "questions": [] }, "purpose": "other" },
+    { "name": "AskUserQuestion", "input": { "questions": [] }, "purpose": "other" },
+    { "name": "remember", "input": { "text": "x" }, "purpose": "other" },
+    { "name": "capture", "input": {}, "purpose": "other" },
+    { "name": "some_new_tool", "input": { "path": "AGENTS.md" }, "purpose": "other" }
+  ],
+  "goals": [
+    { "name": "Bash", "input": { "command": "npm test", "description": "Run the desktop tests" }, "goal": "Run the desktop tests" },
+    { "name": "Bash", "input": { "command": "ls", "description": "  Check existing issues, spec format, TASKS sections.  " }, "goal": "Check existing issues, spec format, TASKS sections" },
+    { "name": "Task", "input": { "description": "Explore the codebase", "prompt": "…" }, "goal": "Explore the codebase" },
+    { "name": "mcp__linear__create_issue", "input": { "description": "Body text" }, "goal": "" },
+    { "name": "Bash", "input": { "command": "ls", "description": "line one\nline two" }, "goal": "" },
+    { "name": "read_file", "input": { "path": "a.ts" }, "goal": "" }
+  ],
+  "headlines": [
+    {
+      "purpose": "guidance", "running": false,
+      "calls": [
+        { "name": "read_file", "input": { "path": "AGENTS.md" } },
+        { "name": "read_file", "input": { "path": "CLAUDE.md" } },
+        { "name": "read_file", "input": { "path": "docs/runbooks/landing-a-pr.md" } }
+      ],
+      "headline": "Read the project's guidance", "detail": "AGENTS.md, CLAUDE.md, landing-a-pr.md"
+    },
+    {
+      "purpose": "guidance", "running": true,
+      "calls": [
+        { "name": "Read", "input": { "file_path": "C:\\repo\\AGENTS.md" } },
+        { "name": "Read", "input": { "file_path": "C:\\repo\\CLAUDE.md" } }
+      ],
+      "headline": "Reading the project's guidance", "detail": "AGENTS.md, CLAUDE.md"
+    },
+    {
+      "purpose": "explore", "running": false,
+      "calls": [
+        { "name": "read_file", "input": { "path": "a.ts" } },
+        { "name": "read_file", "input": { "path": "b.ts" } },
+        { "name": "grep", "input": { "pattern": "x" } },
+        { "name": "Bash", "input": { "command": "rg -n y src" } },
+        { "name": "list_dir", "input": { "path": "src" } }
+      ],
+      "headline": "Looked through the code", "detail": "2 files, 1 folder, 2 searches"
+    },
+    {
+      "purpose": "edit", "running": false,
+      "calls": [
+        { "name": "edit_file", "input": { "path": "apps/ios/Markdown.swift" } },
+        { "name": "edit_file", "input": { "path": "apps/ios/ChatView.swift" } },
+        { "name": "edit_file", "input": { "path": "apps/ios/Markdown.swift" } },
+        { "name": "write_file", "input": { "path": "apps/ios/Table.swift" } },
+        { "name": "write_file", "input": { "path": "apps/ios/Toolbar.swift" } }
+      ],
+      "headline": "Edited 4 files", "detail": "Markdown.swift, ChatView.swift +2"
+    },
+    {
+      "purpose": "edit", "running": true,
+      "calls": [
+        { "name": "Edit", "input": { "file_path": "/r/a.ts" } },
+        { "name": "Edit", "input": { "file_path": "/r/a.ts" } }
+      ],
+      "headline": "Editing 1 file", "detail": "a.ts"
+    },
+    {
+      "purpose": "check", "running": false,
+      "calls": [
+        { "name": "bash", "input": { "command": "npm test" } },
+        { "name": "bash", "input": { "command": "npx vitest run" }, "failed": true }
+      ],
+      "headline": "Ran the tests", "detail": "1 failed"
+    },
+    {
+      "purpose": "check", "running": false,
+      "calls": [
+        { "name": "bash", "input": { "command": "cargo build" } },
+        { "name": "bash", "input": { "command": "npm run build" } }
+      ],
+      "headline": "Built the app", "detail": "passed"
+    },
+    {
+      "purpose": "check", "running": true,
+      "calls": [
+        { "name": "bash", "input": { "command": "npm run typecheck" } },
+        { "name": "bash", "input": { "command": "npm test" } }
+      ],
+      "headline": "Running the checks", "detail": "npm run typecheck"
+    },
+    {
+      "purpose": "check", "running": false,
+      "calls": [
+        { "name": "Bash", "input": { "command": "npm test", "description": "Run the desktop tests" } },
+        { "name": "Bash", "input": { "command": "npm run typecheck", "description": "Typecheck everything" } },
+        { "name": "Bash", "input": { "command": "cargo test", "description": "Run the engine tests" } }
+      ],
+      "headline": "Run the desktop tests and 2 more", "detail": "passed"
+    },
+    {
+      "purpose": "run", "running": false,
+      "calls": [
+        { "name": "bash", "input": { "command": "npm ci --ignore-scripts" } },
+        { "name": "bash", "input": { "command": "node scripts/spec-index.mjs" } },
+        { "name": "bash", "input": { "command": "node x.mjs" }, "failed": true }
+      ],
+      "headline": "Ran 3 commands", "detail": "npm ci --ignore-scripts · 1 failed"
+    },
+    {
+      "purpose": "git", "running": false,
+      "calls": [
+        { "name": "bash", "input": { "command": "git status" } },
+        { "name": "bash", "input": { "command": "git add -A && git commit -m 'x'" } },
+        { "name": "bash", "input": { "command": "git push -u origin feat/x" } }
+      ],
+      "headline": "Committed and pushed", "detail": "git status"
+    },
+    {
+      "purpose": "git", "running": true,
+      "calls": [
+        { "name": "bash", "input": { "command": "git push" } },
+        { "name": "bash", "input": { "command": "gh pr create --fill" } }
+      ],
+      "headline": "Pushing and opening a PR", "detail": "git push"
+    },
+    {
+      "purpose": "git", "running": false,
+      "calls": [
+        { "name": "bash", "input": { "command": "git status" } },
+        { "name": "bash", "input": { "command": "git diff --stat" } }
+      ],
+      "headline": "Checked the changes", "detail": "git status"
+    },
+    {
+      "purpose": "web", "running": false,
+      "calls": [
+        { "name": "web_search", "input": { "query": "swiftui table" } },
+        { "name": "web_fetch", "input": { "url": "https://www.example.com/a" } }
+      ],
+      "headline": "Searched the web", "detail": "swiftui table"
+    },
+    {
+      "purpose": "web", "running": false,
+      "calls": [
+        { "name": "WebFetch", "input": { "url": "https://developer.apple.com/a" } },
+        { "name": "WebFetch", "input": { "url": "https://www.example.com/b" } },
+        { "name": "WebFetch", "input": { "url": "https://example.com/c" } }
+      ],
+      "headline": "Read 3 pages", "detail": "developer.apple.com, example.com"
+    },
+    {
+      "purpose": "plan", "running": false,
+      "calls": [
+        { "name": "TodoWrite", "input": { "todos": [] } },
+        { "name": "TodoWrite", "input": { "todos": [] } }
+      ],
+      "headline": "Updated the plan", "detail": ""
+    },
+    {
+      "purpose": "other", "running": false,
+      "calls": [
+        { "name": "mcp__linear__list_issues", "input": {} },
+        { "name": "mcp__linear__get_issue", "input": { "id": "X" } }
+      ],
+      "headline": "Used 2 tools", "detail": "mcp__linear__list_issues, mcp__linear__get_issue"
+    },
+    {
+      "purpose": "delegate", "running": true,
+      "calls": [
+        { "name": "spawn_agent", "input": { "task": "a" } },
+        { "name": "spawn_agent", "input": { "task": "b" } }
+      ],
+      "headline": "Delegating 2 tasks", "detail": ""
+    }
+  ]
+}

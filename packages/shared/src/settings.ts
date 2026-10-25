@@ -415,6 +415,10 @@ export interface AppSettings {
    * enabled with an explicit allowlist of chat ids. See messaging.ts.
    */
   messaging?: import('./messaging.js').MessagingSettings;
+  /** Settings > Connections: All connections off, and the connections switched off one by one. See connections.ts. */
+  connections?: import('./connections.js').ConnectionSettings;
+  /** Opt-in usage and crash reports (crates/nekkod/src/telemetry.rs). Off unless turned on; `installId` is random and replaced each time it is turned on. */
+  telemetry?: { enabled?: boolean; installId?: string };
 }
 
 /**

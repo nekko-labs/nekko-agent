@@ -28,6 +28,16 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://nekkoagent.com/docs/connections</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://nekkoagent.com/docs/usage-reports</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://nekkoagent.com/docs/privacy-shield</loc>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>

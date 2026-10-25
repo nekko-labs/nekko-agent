@@ -662,6 +662,7 @@ impl Runtimes {
                             .opt("kvHeads", m.get("kvHeads").cloned())
                             .opt("headDim", m.get("headDim").cloned())
                             .opt("kvLayout", m.get("kvLayout").cloned())
+                            .opt("weightLayout", m.get("weightLayout").cloned())
                             .opt("maxContext", m.get("maxContext").cloned())
                             .opt("quantization", m.get("quantization").cloned())
                             .opt("parameterSize", m.get("parameterSize").cloned())
@@ -1120,6 +1121,42 @@ impl Runtimes {
         }
     }
 
+    /// Where a load's bytes land (`runtime:place`), for the load drawer's meter.
+    pub async fn place(&self, id: &str, model: &str, req: &Value) -> Value {
+        match self.planning(id, model).await {
+            Some((facts, _, hw, target)) => {
+                let layers = facts.layers.unwrap_or(1.0);
+                let resident = resident_vram(&target);
+                crate::placement::place(&facts, &crate::placement::Request::from_value(req, layers), &hw, resident)
+                    .to_value()
+            }
+            None => Value::Null,
+        }
+    }
+
+    /// The fastest setup that fits, with a sentence per choice (`runtime:recommend`).
+    /// `opts`: `{ goal: "speed" | "context" | "fill", request }`; `fill` keeps
+    /// the request's context, precision and sessions.
+    pub async fn recommend(&self, id: &str, model: &str, opts: &Value) -> Value {
+        use crate::placement::{Goal, Request, recommend};
+        match self.planning(id, model).await {
+            Some((facts, _, hw, target)) => {
+                let base = opts
+                    .get("request")
+                    .filter(|r| r.is_object())
+                    .map(|r| Request::from_value(r, facts.layers.unwrap_or(1.0)));
+                recommend(
+                    &facts,
+                    &hw,
+                    resident_vram(&target),
+                    Goal::parse(opts.get("goal").and_then(Value::as_str)),
+                    base.as_ref(),
+                )
+            }
+            None => Value::Null,
+        }
+    }
+
     pub async fn load(&self, id: &str, model: &str, params: &Value) -> Value {
         let found = self.resolve(id).filter(|(k, _)| k != "vllm");
         let Some((kind, p)) = found else {
@@ -1551,4 +1588,12 @@ pub fn resolve_program(name: &str) -> PathBuf {
         }
     }
     as_is
+}
+
+/// VRAM a resident model already holds: a reload gets it back.
+fn resident_vram(target: &Value) -> f64 {
+    if target.get("loaded") != Some(&Value::Bool(true)) {
+        return 0.0;
+    }
+    target.get("vramBytes").and_then(Value::as_f64).filter(|v| v.is_finite()).unwrap_or(0.0)
 }

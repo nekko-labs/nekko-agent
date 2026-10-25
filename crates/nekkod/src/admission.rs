@@ -505,7 +505,7 @@ async fn admit(
     }
 
     let mode_name = crate::worktrees::execution_mode(&session);
-    let offline = nekko_js::truthy(session.get("offline"));
+    let offline = crate::connections::offline(&session);
     let incognito = nekko_js::truthy(session.get("incognito"));
     if mode_name == "worktree"
         && !incognito
@@ -613,6 +613,11 @@ async fn admit(
     if !sandbox {
         facts.insert("hookRules".into(), settings.get("hooks").filter(|h| h.is_array()).cloned().unwrap_or(json!([])));
     }
+    // Opt-in usage reports: the provider's kind only, never its name, model or the prompt.
+    crate::telemetry::capture(
+        "turn_started",
+        &json!({ "provider": kind, "local": is_local(kind), "offline": offline, "mode": mode_name, "sandbox": sandbox }),
+    );
     // The turn runs its tools in this daemon's container for the chat (turns.rs).
     facts.insert("sandbox".into(), json!(sandbox));
     facts.insert("connectorSnippets".into(), connector_snippets);

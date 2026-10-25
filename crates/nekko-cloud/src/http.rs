@@ -28,7 +28,7 @@ impl From<HttpError> for String {
     }
 }
 
-fn network(e: reqwest::Error) -> HttpError {
+fn network(e: impl std::fmt::Display) -> HttpError {
     HttpError {
         status: 0,
         code: "network".into(),
@@ -38,6 +38,11 @@ fn network(e: reqwest::Error) -> HttpError {
 
 fn short(s: &str) -> String {
     s.chars().take(200).collect()
+}
+
+/// Send through Settings > Connections as `cloud-sync` and read the answer.
+async fn call(rb: reqwest::RequestBuilder) -> Result<Value, HttpError> {
+    answer(nekko_net::send("cloud-sync", rb).await.map_err(network)?).await
 }
 
 async fn answer(res: reqwest::Response) -> Result<Value, HttpError> {
@@ -101,28 +106,20 @@ impl Supabase {
 
     /// Email a one-time sign-in code (and create the user on first use).
     pub async fn send_code(&self, email: &str) -> Result<(), HttpError> {
-        answer(self.post("otp").json(&json!({ "email": email, "create_user": true })).send().await.map_err(network)?)
-            .await
-            .map(|_| ())
+        call(self.post("otp").json(&json!({ "email": email, "create_user": true }))).await.map(|_| ())
     }
 
     /// The code from the email, for a Supabase access token.
     pub async fn verify_code(&self, email: &str, code: &str) -> Result<String, HttpError> {
-        let v = answer(
-            self.post("verify")
-                .json(&json!({ "type": "email", "email": email, "token": code }))
-                .send()
-                .await
-                .map_err(network)?,
-        )
-        .await
-        .map_err(|e| {
-            if e.status == 403 || e.status == 400 {
-                HttpError { message: "That code didn't work. Check it, or send a new one.".into(), ..e }
-            } else {
-                e
-            }
-        })?;
+        let v = call(self.post("verify").json(&json!({ "type": "email", "email": email, "token": code })))
+            .await
+            .map_err(|e| {
+                if e.status == 403 || e.status == 400 {
+                    HttpError { message: "That code didn't work. Check it, or send a new one.".into(), ..e }
+                } else {
+                    e
+                }
+            })?;
         access_token(&v)
     }
 
@@ -147,14 +144,8 @@ impl Supabase {
 
     /// The `code` the browser brought back, for a Supabase access token.
     pub async fn exchange(&self, code: &str, verifier: &str) -> Result<String, HttpError> {
-        let v = answer(
-            self.post("token?grant_type=pkce")
-                .json(&json!({ "auth_code": code, "code_verifier": verifier }))
-                .send()
-                .await
-                .map_err(network)?,
-        )
-        .await?;
+        let v = call(self.post("token?grant_type=pkce").json(&json!({ "auth_code": code, "code_verifier": verifier })))
+            .await?;
         access_token(&v)
     }
 }
@@ -180,16 +171,16 @@ impl Api {
     }
 
     pub async fn config(&self) -> Result<Value, HttpError> {
-        answer(self.http.get(self.url("/v1/auth/config")).send().await.map_err(network)?).await
+        call(self.http.get(self.url("/v1/auth/config"))).await
     }
 
     pub async fn session(&self, access_token: &str, label: &str) -> Result<Value, HttpError> {
         let body = json!({ "accessToken": access_token, "label": label });
-        answer(self.http.post(self.url("/v1/auth/session")).json(&body).send().await.map_err(network)?).await
+        call(self.http.post(self.url("/v1/auth/session")).json(&body)).await
     }
 
     pub async fn get(&self, token: &str, path: &str) -> Result<Value, HttpError> {
-        answer(self.http.get(self.url(path)).bearer_auth(token).send().await.map_err(network)?).await
+        call(self.http.get(self.url(path)).bearer_auth(token)).await
     }
 
     pub async fn send(
@@ -203,7 +194,7 @@ impl Api {
         if let Some(b) = body {
             req = req.json(&b);
         }
-        answer(req.send().await.map_err(network)?).await
+        call(req).await
     }
 }
 

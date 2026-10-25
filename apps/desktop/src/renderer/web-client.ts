@@ -57,6 +57,7 @@ function makeWebClient(): NekkoApi {
   const limitsUpdatedCbs = new Set<(e: { tokenKey: string; limits: SubscriptionLimits }) => void>();
   const downloadsUpdatedCbs = new Set<(jobs: import('@nekko-agent/shared').DownloadJob[]) => void>();
   const modelsUpdatedCbs = new Set<(e: { providerId: string }) => void>();
+  const backgroundCbs = new Set<(state: import('@nekko-agent/shared').BackgroundState) => void>();
   const skillsUpdatedCbs = new Set<(catalog: import('@nekko-agent/shared').VaizerCatalog) => void>();
   const replayCbs = new Set<(r: AgentReplay) => void>();
   // Narrowing the agent event stream: only over the server's own socket to nekkod.
@@ -69,6 +70,7 @@ function makeWebClient(): NekkoApi {
     else if (channel === IpcEvents.terminalEvent) terminalCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.changesUpdated) changesCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.tasksUpdated) tasksCbs.forEach((cb) => cb(payload));
+    else if (channel === IpcEvents.backgroundUpdated) backgroundCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.trainingUpdated) trainingCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.workflowsUpdated) workflowCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.oauthStatus) oauthStatusCbs.forEach((cb) => cb(payload));
@@ -327,6 +329,8 @@ function makeWebClient(): NekkoApi {
     runtimePlan: (providerId, modelId, req) => call(IpcChannels.runtimePlan, providerId, modelId, req),
     runtimeAutoFit: (providerId, modelId, budgetFraction, parallelSlots) =>
       call(IpcChannels.runtimeAutoFit, providerId, modelId, budgetFraction, parallelSlots),
+    runtimePlace: (providerId, modelId, req) => call(IpcChannels.runtimePlace, providerId, modelId, req),
+    runtimeRecommend: (providerId, modelId, opts) => call(IpcChannels.runtimeRecommend, providerId, modelId, opts),
     cloudStatus: () => call(IpcChannels.cloudStatus),
     cloudRefresh: () => call(IpcChannels.cloudRefresh),
     cloudSendCode: (email) => call(IpcChannels.cloudSendCode, email),
@@ -334,6 +338,11 @@ function makeWebClient(): NekkoApi {
     cloudBeginOAuth: (provider) => call(IpcChannels.cloudBeginOAuth, provider),
     cloudCancelOAuth: () => call(IpcChannels.cloudCancelOAuth),
     cloudSignOut: () => call(IpcChannels.cloudSignOut),
+    connectionsStatus: () => call(IpcChannels.connectionsStatus),
+    connectionsEvents: (id, limit) => call(IpcChannels.connectionsEvents, id, limit),
+    connectionsClear: () => call(IpcChannels.connectionsClear),
+    telemetryCapture: (event, props) => call(IpcChannels.telemetryCapture, event, props),
+    telemetryStatus: () => call(IpcChannels.telemetryStatus),
     feedbackInfo: () => call(IpcChannels.feedbackInfo),
     feedbackSend: (message, includeAppInfo) => call(IpcChannels.feedbackSend, message, includeAppInfo),
     syncTurnOn: () => call(IpcChannels.syncTurnOn),
@@ -398,6 +407,7 @@ function makeWebClient(): NekkoApi {
     machineReadiness: (language) => call(IpcChannels.machineReadiness, language),
     machineProfile: (opts) => call(IpcChannels.machineProfile, opts),
     machineRecommendations: (opts) => call(IpcChannels.machineRecommendations, opts),
+    backgroundState: () => call(IpcChannels.backgroundState),
     machineDismissNudge: (task) => call(IpcChannels.machineDismissNudge, task ?? null),
     getGpuStats: () => call(IpcChannels.gpuStats),
     getSystemStats: () => call(IpcChannels.systemStats),
@@ -722,6 +732,10 @@ function makeWebClient(): NekkoApi {
     onTasksUpdated: (cb) => {
       tasksCbs.add(cb);
       return () => tasksCbs.delete(cb);
+    },
+    onBackgroundUpdated: (cb) => {
+      backgroundCbs.add(cb);
+      return () => backgroundCbs.delete(cb);
     },
     onTrainingUpdated: (cb) => {
       trainingCbs.add(cb);

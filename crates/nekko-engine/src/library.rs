@@ -314,20 +314,26 @@ fn assign(m: &mut Map<String, Value>, k: &str, v: Option<Value>) {
     }
 }
 
-/// A row described before the KV layout was read gets it once, from its
-/// header; everything else in the row (its name, preset, when it was added)
-/// stays. `true` when the row changed.
+/// A row described before the KV or weight layout was read gets them once,
+/// from its header; everything else in the row (its name, preset, when it was
+/// added) stays. `true` when the row changed.
 fn add_kv_layout(stored: &mut Map<String, Value>, p: &str) -> bool {
-    if stored.contains_key("kvLayout") || stored.get("readable") != Some(&Value::Bool(true)) {
+    let want_kv = !stored.contains_key("kvLayout");
+    let want_weights = !stored.contains_key("weightLayout");
+    if !(want_kv || want_weights) || stored.get("readable") != Some(&Value::Bool(true)) {
         return false;
     }
-    match gguf::read_metadata(p).and_then(|m| m.kv_layout) {
-        Some(l) => {
-            stored.insert("kvLayout".into(), l.to_value());
-            true
-        }
-        None => false,
+    let Some(meta) = gguf::read_metadata(p) else { return false };
+    let mut changed = false;
+    if want_kv && let Some(l) = meta.kv_layout {
+        stored.insert("kvLayout".into(), l.to_value());
+        changed = true;
     }
+    if want_weights && let Some(w) = meta.weight_layout {
+        stored.insert("weightLayout".into(), w.to_value());
+        changed = true;
+    }
+    changed
 }
 
 /// Read one file's header into a library row (`describe`).
@@ -371,6 +377,7 @@ fn describe_with(
     put(&mut m, "headDim", meta.and_then(|m| m.head_dim).map(num));
     put(&mut m, "maxContext", meta.and_then(|m| m.max_context).map(num));
     put(&mut m, "kvLayout", meta.and_then(|m| m.kv_layout).map(|l| l.to_value()));
+    put(&mut m, "weightLayout", meta.and_then(|m| m.weight_layout).map(|w| w.to_value()));
     m.insert("hasChatTemplate".into(), json!(meta.is_some_and(|m| m.chat_template.is_some())));
     m.insert("readable".into(), json!(meta.is_some()));
     m.insert("addedAt".into(), num(now));
@@ -961,6 +968,7 @@ pub fn model_facts_for(m: &Value) -> ModelFacts {
         ("headDim", "headDim"),
         ("maxContext", "maxContext"),
         ("kvLayout", "kvLayout"),
+        ("weightLayout", "weightLayout"),
     ] {
         put(&mut facts, to, m.get(from).cloned());
     }

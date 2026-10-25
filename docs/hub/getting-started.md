@@ -147,11 +147,15 @@ where Auto routing is not supported, such as a fixed-model workflow step.
 
 Delegated subagents appear as compact rows beneath their parent. Opening a child transcript does not add a duplicate full agent card. Closing the parent's windows keeps the saved parent and its nested children accessible.
 
-Completed work groups keep their step summary visible when space is tight; tool names truncate first. Hover or keyboard-focus the group header to read the complete summary and bulleted tool list. Click the header to expand individual steps.
+A turn's working steps fold into one work group whose header says what the agent did, by purpose: for example *Read guidance, looked through the code, edited 3 files*. Hover or keyboard-focus the header to read the complete summary and each purpose group with its number of calls. Click the header to open the steps. Inside it, adjacent calls with one purpose are one row that states the goal, such as *Read the project's guidance · AGENTS.md, CLAUDE.md* or *Ran the tests · passed*. When a call gave its own description (Claude Code's commands do), that description is the goal. Click a group to see its individual calls. A call waiting for your approval, a question for you, and a lone call stay rows of their own. A group with a failed call says *1 failed* and stays open.
 
 ### Answering agent questions
 
 When an agent needs a choice, its question opens at the bottom of the conversation. Scroll the conversation to read the reply and question together; the question has no separate scrollbar. Choose an option or type something else, then send your answer. Multiple questions show one step at a time, with Back and Next. The pixel question-mark icon identifies the question.
+
+### Agent panel shortcuts
+
+Click the plus button in the Agents panel to open a new agent window. Hover over it for the Agent, Photos and Videos, and Terminal choices. Terminals and photo/video projects appear in separate groups at the top of the panel only when there are items to show.
 
 ### Compact agent row and monitor controls
 

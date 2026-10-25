@@ -36,11 +36,23 @@ pub fn make(data_dir: &Path, folder: &str, number: &str, run_id: &str) -> Result
     let root = git(folder, &["rev-parse", "--show-toplevel"]).map_err(|e| e.message)?;
     let reference = run_ref(run_id);
     let spec = format!("+pull/{number}/head:{reference}");
-    match run("git", &["fetch", "--no-tags", "origin", &spec], &root, None, FETCH_TIMEOUT)? {
-        (0, _, _) => {}
-        (_, _, err) => {
-            let err = String::from_utf8_lossy(&err);
-            return Err(format!("git fetch origin pull/{number}/head failed: {}", err.trim()));
+    let host = remote_host(&git(&root, &["remote", "get-url", "origin"]).unwrap_or_default());
+    nekko_net::check("github", &host)?;
+    let fetched = run("git", &["fetch", "--no-tags", "origin", &spec], &root, None, FETCH_TIMEOUT);
+    let ev = nekko_net::Event::new("request").host(&host);
+    let failure = match &fetched {
+        Ok((0, _, _)) => None,
+        Ok((_, _, err)) => {
+            let err = String::from_utf8_lossy(err);
+            Some(format!("git fetch origin pull/{number}/head failed: {}", err.trim()))
+        }
+        Err(e) => Some(e.clone()),
+    };
+    match failure {
+        None => nekko_net::record("github", ev),
+        Some(e) => {
+            nekko_net::record("github", ev.error(&e));
+            return Err(e);
         }
     }
     let base = checkouts_dir(data_dir);
@@ -111,6 +123,18 @@ pub fn sweep(data_dir: &Path) {
                 let _ = git(&common, &["update-ref", "-d", &run_ref(&run_id)]);
             }
         }
+    }
+}
+
+/// Where a git remote URL goes: its host, or `localhost` for a path on this computer.
+fn remote_host(url: &str) -> String {
+    if let Ok(u) = url::Url::parse(url) {
+        return u.host_str().unwrap_or("localhost").to_string();
+    }
+    // scp-like `git@github.com:owner/repo.git`
+    match url.split_once(':') {
+        Some((h, _)) if !h.is_empty() && !h.contains('/') => h.rsplit('@').next().unwrap_or(h).to_string(),
+        _ => "localhost".into(),
     }
 }
 
@@ -199,5 +223,14 @@ mod tests {
         assert!(!sh(&user, &["worktree", "list"]).contains("run-4"));
         assert!(sh(&user, &["for-each-ref", "refs/nekko-runs"]).is_empty());
         let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn remote_host_reads_every_remote_form() {
+        assert_eq!(remote_host("https://github.com/o/r.git"), "github.com");
+        assert_eq!(remote_host("ssh://git@gitlab.example.com/o/r"), "gitlab.example.com");
+        assert_eq!(remote_host("git@github.com:o/r.git"), "github.com");
+        assert_eq!(remote_host("/tmp/remote"), "localhost");
+        assert_eq!(remote_host(""), "localhost");
     }
 }

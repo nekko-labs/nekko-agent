@@ -55,6 +55,7 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 - [One copy of the reply being written](chat/one-copy-of-the-reply-being-written.md) (1 KB)
 - [Per-step plan working icons (2026-10-17)](chat/per-step-plan-working-icons.md) (2 KB)
 - [Sleeping chats and image-bearing replies](chat/sleeping-chats-and-image-bearing-replies.md) (2 KB)
+- [Tool calls grouped by what they are for](chat/tool-calls-grouped-by-purpose.md) (8 KB)
 - [Workspace context commands and connected composer](chat/workspace-context-commands-and-connected-composer.md) (4 KB)
 
 ### desktop
@@ -74,7 +75,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Model picker, tool categories, Artifacts tab and wall polish (2026-10-15)](desktop/model-picker-tool-categories-artifacts-tab-and-wall-polish.md) (5 KB)
 - [Nav wings and wall action clarity](desktop/nav-wings-and-wall-action-clarity.md) (1 KB)
 - [Navigation panel, media fade and macOS app menu (2026-10-16)](desktop/navigation-panel-media-fade-and-macos-app-menu.md) (2 KB)
-- [New agent window defaults](desktop/new-agent-window-defaults.md) (1 KB)
+- [New agent window defaults](desktop/new-agent-window-defaults.md) (2 KB)
 - [Search within Settings (desktop)](desktop/search-within-settings-desktop.md) (2 KB)
 - [Settings section nav and phone pairing placement (desktop)](desktop/settings-section-nav.md) (3 KB)
 - [Slim wave rail, tighter Agents spacing, composer snap points](desktop/slim-wave-rail-tighter-agents-spacing-composer-snap-points.md) (4 KB)
@@ -92,7 +93,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 Agents panel, monitors, subagents and delegation.
 
 - [Agent activity and panel polish](agents/agent-activity-and-panel-polish.md) (39 KB)
-- [Agent Monitor Project group, hardware temperatures and multi-monitor Dynamic mode (2026-10-18)](agents/agent-monitor-project-group-hardware-temperatures-and-multi-moni.md) (9 KB)
+- [Agent Monitor Project group, hardware temperatures and multi-monitor Dynamic mode (2026-10-18)](agents/agent-monitor-project-group-hardware-temperatures-and-multi-moni.md) (10 KB)
 - [Agent panel view options (2026-10-17)](agents/agent-panel-view-options.md) (4 KB)
 - [Agents dashboard simplification (2026-10-06)](agents/agents-dashboard-simplification.md) (3 KB)
 - [Approval retention and delegation navigation](agents/approval-retention-and-delegation-navigation.md) (1 KB)
@@ -129,7 +130,7 @@ Providers, local models, the Model Server, training.
 - [Prompt caching across providers (2026-10-07)](models/prompt-caching-across-providers.md) (7 KB)
 - [Running a model with nothing else installed](models/running-a-model-with-nothing-else-installed.md) (28 KB)
 - [Server, model browser and desktop tray](models/server-model-browser-and-desktop-tray.md) (5 KB)
-- [Setting up a local model](models/setting-up-a-local-model.md) (7 KB)
+- [Setting up a local model](models/setting-up-a-local-model.md) (10 KB)
 - [Signing in with a subscription (planned)](models/signing-in-with-a-subscription.md) (2 KB)
 - [System models: dictation on Apple's recognizer or Whisper](models/system-speech-models.md) (4 KB)
 - [Training a model while you watch (Training tab)](models/training-a-model-while-you-watch-training-tab.md) (2 KB)
@@ -154,13 +155,13 @@ Working in a codebase: files, editor, diffs, pull requests, design workspace.
 Workflows, goals, integrations and tools.
 
 - [Automating repeatable work (Workflows tab)](automation/automating-repeatable-work-workflows-tab.md) (4 KB)
-- [Background automations yield to the user](automation/background-automations-yield-to-the-user.md) (10 KB)
+- [Background automations yield to the user](automation/background-automations-yield-to-the-user.md) (13 KB)
 - [CI runners](automation/ci-runners.md) (15 KB)
 - [Experimental outbound resource queue](automation/experimental-outbound-resource-queue.md) (3 KB)
 - [Handing the agent a long-running goal](automation/handing-the-agent-a-long-running-goal.md) (2 KB)
 - [One-click setup for safe offline PC control (planned)](automation/one-click-setup-for-safe-offline-pc-control.md) (6 KB)
 - [Tooling & integrations](automation/tooling-integrations.md) (8 KB)
-- [Workflows (procedural automation)](automation/workflows-procedural-automation.md) (20 KB)
+- [Workflows (procedural automation)](automation/workflows-procedural-automation.md) (22 KB)
 
 ### phone
 
@@ -168,7 +169,9 @@ Phone remote control and the native iOS and Android apps.
 
 - [Driving your home model from your phone (remote control)](phone/driving-your-home-model-from-your-phone-remote-control.md) (13 KB)
 - [Folding phones: two chats at once, a Monitors pane and vertical mode (2026-10-24)](phone/folding-phones-two-chats-and-monitors.md) (13 KB)
+- [iPhone Markdown composer and rich replies (planned 2026-10-25)](phone/iphone-markdown-composer-and-rich-replies.md) (6 KB)
 - [iPhone: the desktop's languages and themes, and New chat's effort and computer (2026-10-23)](phone/iphone-languages-themes-and-new-chat-choices.md) (5 KB)
+- [Mermaid diagrams on the phone (planned 2026-10-25)](phone/mermaid-diagrams-on-the-phone.md) (4 KB)
 - [Native Android app (2026-10-11)](phone/native-android-app.md) (41 KB)
 - [Native iOS app (2026-10-16)](phone/native-ios-app.md) (88 KB)
 - [Native phone implementation decision (2026-10-07)](phone/native-phone-implementation-decision.md) (2 KB)
@@ -181,12 +184,14 @@ Phone remote control and the native iOS and Android apps.
 Architecture, speed contract, distribution, builds and startup.
 
 - [Build storage maintenance](platform/build-storage-maintenance.md) (3 KB)
+- [Connections: one switch for every network connection, and its activity log](platform/connections-switch-and-activity-log.md) (4 KB)
 - [Development macOS identity](platform/development-macos-identity.md) (2 KB)
 - [Distribution & platforms](platform/distribution-platforms.md) (10 KB)
 - [Hardware keys, step-up on phone and desktop, and remote sign-out (2026-10-24)](platform/hardware-keys-step-up-and-remote-sign-out.md) (17 KB)
 - [How it's built: the window and the engine daemon](platform/how-its-built-the-window-and-the-engine-daemon.md) (26 KB)
 - [Limits on what grows in the data folder](platform/data-folder-growth-limits.md) (2 KB)
 - [Noninteractive shell input and bounded stop cleanup](platform/noninteractive-shell-input-and-bounded-stop-cleanup.md) (1 KB)
+- [Opt-in usage and crash reports](platform/opt-in-usage-and-crash-reports.md) (3 KB)
 - [Page recovery and startup appearance (2026-10-12)](platform/page-recovery-and-startup-appearance.md) (2 KB)
 - [Send feedback from every app (2026-10-24)](platform/send-feedback.md) (5 KB)
 - [Speed & responsiveness (the speed contract)](platform/speed-responsiveness-the-speed-contract.md) (12 KB)

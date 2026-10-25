@@ -423,7 +423,7 @@ impl Prs {
     }
 
     async fn api_json(&self, url: &str, token: Option<&str>) -> Option<Value> {
-        let res = self.http.get(url).headers(self.headers(token)).send().await.ok()?;
+        let res = nekko_net::send("github", self.http.get(url).headers(self.headers(token))).await.ok()?;
         if !res.status().is_success() {
             return None;
         }
@@ -449,14 +449,15 @@ impl Prs {
                 return None;
             }
         }
-        let response = self
-            .http
-            .get(format!("{}/{path}", self.api))
-            .headers(self.headers(token))
-            .header("X-GitHub-Api-Version", "2026-03-10")
-            .send()
-            .await
-            .ok()?;
+        let response = nekko_net::send(
+            "github",
+            self.http
+                .get(format!("{}/{path}", self.api))
+                .headers(self.headers(token))
+                .header("X-GitHub-Api-Version", "2026-03-10"),
+        )
+        .await
+        .ok()?;
         if !response.status().is_success() {
             return None;
         }
@@ -512,7 +513,9 @@ impl Prs {
         if let Some(numbers) = body {
             req = req.body(js::stringify(&json!({ "pull_requests": numbers })));
         }
-        let res = req.send().await.map_err(|_| "fetch failed".to_string())?;
+        let res = nekko_net::send("github", req)
+            .await
+            .map_err(|e| if e.is_blocked() { e.to_string() } else { "fetch failed".to_string() })?;
         if !res.status().is_success() {
             return Err(format!(
                 "GitHub request failed ({}). Check repository access and GitHub stack availability.",
@@ -702,29 +705,32 @@ impl Prs {
         let h = self.headers(Some(token));
         let sent = match action {
             "approve" => {
-                self.http
-                    .post(format!("{base}/pulls/{number}/reviews"))
-                    .headers(h)
-                    .body(r#"{"event":"APPROVE"}"#)
-                    .send()
-                    .await
+                nekko_net::send(
+                    "github",
+                    self.http.post(format!("{base}/pulls/{number}/reviews")).headers(h).body(r#"{"event":"APPROVE"}"#),
+                )
+                .await
             }
             "merge" => {
-                self.http
-                    .put(format!("{base}/pulls/{number}/merge"))
-                    .headers(h)
-                    .body(r#"{"merge_method":"merge"}"#)
-                    .send()
-                    .await
+                nekko_net::send(
+                    "github",
+                    self.http
+                        .put(format!("{base}/pulls/{number}/merge"))
+                        .headers(h)
+                        .body(r#"{"merge_method":"merge"}"#),
+                )
+                .await
             }
             _ => {
                 let state = if action == "reopen" { "open" } else { "closed" };
-                self.http
-                    .patch(format!("{base}/pulls/{number}"))
-                    .headers(h)
-                    .body(json!({ "state": state }).to_string())
-                    .send()
-                    .await
+                nekko_net::send(
+                    "github",
+                    self.http
+                        .patch(format!("{base}/pulls/{number}"))
+                        .headers(h)
+                        .body(json!({ "state": state }).to_string()),
+                )
+                .await
             }
         };
         let r = match sent {
@@ -896,14 +902,15 @@ impl Prs {
                 .ok_or("Could not read the repository's default branch.")?,
         };
         let payload = json!({ "title": title, "body": body, "head": head, "base": base, "draft": draft });
-        let res = self
-            .http
-            .post(format!("{}/repos/{slug}/pulls", self.api))
-            .headers(self.headers(Some(token)))
-            .body(payload.to_string())
-            .send()
-            .await
-            .map_err(|e| e.to_string())?;
+        let res = nekko_net::send(
+            "github",
+            self.http
+                .post(format!("{}/repos/{slug}/pulls", self.api))
+                .headers(self.headers(Some(token)))
+                .body(payload.to_string()),
+        )
+        .await
+        .map_err(|e| e.to_string())?;
         let status = res.status();
         let j: Value = res.json().await.unwrap_or(Value::Null);
         if !status.is_success() {

@@ -235,6 +235,13 @@ impl Desktop {
         }
     }
 
+    /// Settings > Connections changed: every listener here follows at once.
+    pub async fn connections_changed(&self, ctx: &Ctx) {
+        self.api.sync(ctx, &api_settings(ctx).await).await;
+        self.relay.recheck().await;
+        self.visibility.recheck().await;
+    }
+
     /// A new port, address or token reaches the server, the CLI's link file
     /// and the MCP entries this app wrote, or they keep dialling the old one.
     async fn after_change(&self, ctx: &Ctx) -> Result<Value, String> {

@@ -23,6 +23,7 @@ mod claude_policy;
 mod cli_install;
 mod compaction;
 mod config;
+mod connections;
 mod connectors;
 mod context;
 mod datalock;
@@ -70,6 +71,7 @@ mod skill_sources;
 mod small_services;
 mod spawn;
 mod speeds;
+mod telemetry;
 mod tooling;
 mod turns;
 mod voice;
@@ -180,6 +182,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             Err(e) => eprintln!("nekkod: Claude sign-in cleanup failed: {e}"),
         }
     }
+    // Settings > Connections: the switch, before anything below reaches the network.
+    connections::start(cfg.data_dir.as_deref().map(std::path::Path::new), settings.as_ref());
     // Voice reads its settings from the daemon's store.
     let voice = cfg.data_dir.clone().zip(settings.clone()).map(|(d, s)| {
         let store = s.store.clone();
@@ -455,6 +459,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         let c = ctx.clone();
         tokio::spawn(async move { d.start(&c).await });
     }
+    connections::follow(ctx.clone());
+    telemetry::start(ctx.clone());
     // Claude Agent chats' idle Claude Code children are ended after 15 minutes.
     ctx.turns.harness.start_reaper();
     // Claude Agent's approval bridge: the app's own CLI, else `nekko-agent` on PATH.

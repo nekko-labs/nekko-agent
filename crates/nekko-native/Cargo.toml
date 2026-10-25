@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 base64 = "0.22"
 futures-util.workspace = true
+nekko-net = { path = "../nekko-net" }
 raw-window-handle = "0.6"
 reqwest = { workspace = true, features = ["native-tls", "stream"] }
 # Only the XDG portal on Linux (parented by X11 window id); no Wayland or GTK libraries to link.

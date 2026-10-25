@@ -52,6 +52,7 @@ nekko-runner = { path = "../nekko-runner" }
 nekko-machine = { path = "../nekko-machine" }
 nekko-messaging = { path = "../nekko-messaging" }
 nekko-native = { path = "../nekko-native" }
+nekko-net = { path = "../nekko-net" }
 nekko-sandbox = { path = "../nekko-sandbox" }
 nekko-store = { path = "../nekko-store" }
 nekko-term = { path = "../nekko-term" }

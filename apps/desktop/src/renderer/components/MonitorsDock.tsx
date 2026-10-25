@@ -11,6 +11,7 @@ import { InsightsBox, type Vitals } from './InsightsBox.js';
 import { RangeToggles } from './RangeToggles.js';
 import type { InsightRange } from '../insightRanges.js';
 import { useMonitors, useResourceSample } from './ResourceMonitor.js';
+import { BackgroundChip, useBackgroundState } from './BackgroundChip.js';
 import { BrainIcon, ServerIcon, MoneyIcon, ListIcon, GearIcon, SlidersIcon, CloseIcon, MinimizeIcon, CubeIcon, PanelIcon } from '../icons.js';
 import { formatBytes, formatTokens, placementLabel, placementTitle } from './runtimes/verdict.js';
 import { HoverTip } from './HoverTip.js';
@@ -59,6 +60,7 @@ export function MonitorsToggle({ show, side, onToggle }: { show: boolean; side: 
 export function MonitorsDock(props: MonitorsDockProps) {
   const { state, setState } = props;
   const { dock } = state;
+  const background = useBackgroundState();
   const present = usePanelPresence(dock.show);
   const reorderDrag = useRef<MonitorKey | null>(null);
   const [reorderAnnouncement, setReorderAnnouncement] = useState('');
@@ -222,6 +224,8 @@ export function MonitorsDock(props: MonitorsDockProps) {
         </div>
         <MonitorsToggle show side={dock.side} onToggle={() => setShow(false)} />
       </header>
+      {/* Automations on a local model, and whether they are paused for you. */}
+      {background.running > 0 && <div className="monitors-dock__background"><BackgroundChip state={background} /></div>}
       {selectedMonitors.some((p) => dock.minimized[p.key]) && <div className="monitors-dock__minimized" role="group" aria-label="Minimized monitors">
         {selectedMonitors.filter((p) => dock.minimized[p.key]).map((p) => { const Icon = MONITOR_ICONS[p.key]; return <button key={p.key} type="button" title={`Restore ${p.label}`} aria-label={`Expand ${p.label} monitor`} aria-expanded={false} onClick={() => minimize(p.key, false)}><Icon className="monitors-dock__icon" /></button>; })}
       </div>}

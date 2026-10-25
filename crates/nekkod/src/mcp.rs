@@ -212,7 +212,7 @@ impl Http {
         if let Some(s) = lock(&self.session).clone() {
             req = req.header("mcp-session-id", s);
         }
-        let res = req.send().await.map_err(|e| e.to_string())?;
+        let res = nekko_net::send("mcp", req).await.map_err(|e| e.to_string())?;
         if let Some(sid) = res.headers().get("mcp-session-id").and_then(|v| v.to_str().ok()) {
             *lock(&self.session) = Some(sid.to_string());
         }

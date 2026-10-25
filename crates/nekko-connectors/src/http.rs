@@ -99,7 +99,9 @@ impl Http for Net {
                 }
                 b = b.body(body);
             }
-            let res = b.send().await.map_err(|_| FETCH_FAILED.to_string())?;
+            let res = nekko_net::send("connectors", b)
+                .await
+                .map_err(|e| if e.is_blocked() { e.to_string() } else { FETCH_FAILED.to_string() })?;
             let status = res.status().as_u16();
             let location =
                 res.headers().get(reqwest::header::LOCATION).and_then(|v| v.to_str().ok()).map(str::to_string);

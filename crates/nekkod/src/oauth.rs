@@ -410,7 +410,9 @@ impl OAuth {
         for (k, v) in &req.headers {
             r = r.header(*k, *v);
         }
-        let res = r.send().await.map_err(|e| format!("fetch failed: {e}"))?;
+        let res = nekko_net::send("sign-in", r)
+            .await
+            .map_err(|e| if e.is_blocked() { e.to_string() } else { format!("fetch failed: {e}") })?;
         let status = res.status();
         let text = res.text().await.unwrap_or_default();
         Ok((status.is_success(), status.as_u16(), text))

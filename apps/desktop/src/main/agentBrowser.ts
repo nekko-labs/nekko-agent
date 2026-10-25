@@ -91,6 +91,8 @@ export async function startAgentBrowser(options: {
   onTiming?: (timing: BrowserTiming) => void;
   /** Keep hidden windows producing frames during clicks and screenshots (default true; benchmarks compare without). */
   wakeFrames?: boolean;
+  /** Called once per chat's partition: Settings > Connections' request guard. */
+  guard?: (session: Electron.Session) => void;
 } = {}): Promise<{ url: string; token: string; close: () => void }> {
   const createDriver = options.driver ?? nativeDriver;
   const token = randomBytes(32).toString('hex');
@@ -143,7 +145,7 @@ export async function startAgentBrowser(options: {
     win.webContents.session.setPermissionCheckHandler(() => false);
     // The partition outlives a reaped window; listen once, not per reopen.
     const partition = partitionFor(sessionId);
-    if (!guardedPartitions.has(partition)) { guardedPartitions.add(partition); win.webContents.session.on('will-download', (event) => event.preventDefault()); }
+    if (!guardedPartitions.has(partition)) { guardedPartitions.add(partition); win.webContents.session.on('will-download', (event) => event.preventDefault()); options.guard?.(win.webContents.session); }
     return win;
   };
 
