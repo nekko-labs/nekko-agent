@@ -4,10 +4,12 @@ export const RUNNER_DOT_BGRA = [0x58, 0xd1, 0x30, 0xff] as const;
 /**
  * The CI runner badge on the tray icon: a copy of `bgra` with a filled circle
  * (diameter 40% of the width) in the bottom-right corner and a 1 px transparent
- * ring that keeps it readable against the icon. Other pixels are unchanged.
+ * ring that keeps it readable against the icon. Other pixels are unchanged; a buffer of any other size comes back unchanged.
  */
 export function paintDot(bgra: Buffer, width: number, height: number, color: readonly number[]): Buffer {
   const out = Buffer.from(bgra);
+  // A representation at another scale is not width x height: leave it as it is.
+  if (bgra.length !== width * height * 4) return out;
   const r = Math.round(width * 0.4) / 2;
   const cx = width - r, cy = height - r;
   for (let y = 0; y < height; y++) {

@@ -206,7 +206,6 @@ export function SettingsBody({ view, draft, onDraft, onEnabled, onSave, onRemove
             <input type="number" className="input w-20" min={10} max={1000} value={draft.diskFloorGb} onChange={(e) => set('diskFloorGb', Number(e.target.value))} />
             GB
           </label>
-          <Val>{`${draft.diskBudgetGb} GB, keep ${draft.diskFloorGb} GB free`}</Val>
         </div>
       </Row>
       <Row label="Only when">

@@ -31,11 +31,11 @@ describe('RunnerSettingsSheet', () => {
       'CPU per VM', 'Mode default', 'Disk', 'images and clones', 'Only when', 'On power', 'Trusted networks', 'Never on hotspots',
       'recognised by the router&#x27;s hardware address', 'This network', 'Remove', 'Safety', 'Re-run jobs lost to sleep', 'Max job time',
       '30 min', '1 h', '2 h', '6 h', 'Remove runner', 'Cancel', 'Save',
-      'Let jobs use the internet directly while a VPN is on', 'Recommended: 24 GB for this Mac', '4 of 12', '150 GB, keep 25 GB free',
+      'Let jobs use the internet directly while a VPN is on', 'Recommended: 24 GB for this Mac', '4 of 12',
     ]) expect(html).toContain(s);
     for (const l of [...Object.values(PRIORITY_LABELS), ...Object.values(KEEP_AWAKE_LABELS)]) expect(html).toContain(esc(l));
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>3 not allowed<\/button>/);
-    for (const s of ['Linux slots', 'Run fork pull requests', 'Build cache', 'Outside 9:00', '\u2014']) expect(html).not.toContain(s);
+    for (const s of ['Linux slots', 'Run fork pull requests', 'Build cache', 'Outside 9:00', '\u2014', 'keep 25 GB free']) expect(html).not.toContain(s);
     expect(html).not.toContain('Trust this network');
   });
 

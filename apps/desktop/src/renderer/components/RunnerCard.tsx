@@ -64,7 +64,8 @@ export function RunnerCard({ view, now, onSettings, onChanged }: { view: RunnerV
         </div>
       </div>
 
-      {state === 'error' && view.error && (
+      {/* Any state: an Off runner on a Mac without VM support still carries why. */}
+      {view.error && (
         <p
           role="alert"
           className="mt-3 rounded-xl border px-3 py-2 text-[12.5px]"

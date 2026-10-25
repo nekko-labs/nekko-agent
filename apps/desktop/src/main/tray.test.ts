@@ -66,6 +66,19 @@ describe('desktop tray', () => {
     result.dispose();
   });
 
+  it('clears an earlier dot when runner:list starts rejecting', async () => {
+    vi.useFakeTimers();
+    let fail = false;
+    const result = open(runnerEngine(async () => { if (fail) throw new Error('unknown channel runner:list'); return [running]; }));
+    await settle();
+    expect(mocks.setImage).toHaveBeenLastCalledWith(mocks.dotted);
+    fail = true;
+    await vi.advanceTimersByTimeAsync(6000); await settle();
+    expect(mocks.setImage).toHaveBeenLastCalledWith(mocks.plain);
+    expect(mocks.menus.at(-1)!.some((i) => String(i.label).startsWith('CI runners'))).toBe(false);
+    result.dispose();
+  });
+
   it('treats a failed runner:list as no runners', async () => {
     const onError = vi.fn();
     const result = open(runnerEngine(() => Promise.reject(new Error('unknown channel'))), onError);

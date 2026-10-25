@@ -51,6 +51,11 @@ describe('RunnerCard', () => {
     expect(render(view({ state: 'error', error: 'No VM image yet.', slots: [] }))).toMatch(/role="alert"[^>]*>[^<]*No VM image yet\./);
   });
 
+  it('an off runner still shows the daemon error', () => {
+    const html = render(view({ state: 'off', error: 'VM support unavailable: the nekko-vm helper is not installed.', slots: [] }));
+    expect(html).toMatch(/role="alert"[^>]*>[^<]*VM support unavailable: the nekko-vm helper is not installed\./);
+  });
+
   it('waiting_card_lists_every_reason', () => {
     const html = render(view({ state: 'waiting', slots: [], reasons: ['onBattery', 'network'] }));
     expect(html).toContain('This Mac is on battery, below what this mode allows.');

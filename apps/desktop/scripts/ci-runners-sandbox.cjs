@@ -51,6 +51,7 @@ app.whenReady().then(async () => {
     running: async () => {},
     waiting: async () => {},
     error: async () => {},
+    'off-no-vm-support': async () => {},
     unavailable: async () => {},
     'connect-step-3': async () => {
       await click(byText('button', 'Connect GitHub')); await sleep(300);
@@ -63,6 +64,11 @@ app.whenReady().then(async () => {
       await click(byText('[role=dialog] button', 'Next')); await sleep(400);
     },
     settings: async () => { await click(`document.querySelector('[aria-label="Runner settings"]')`); await sleep(500); },
+    // The sheet is taller than the window: the same sheet scrolled to its end shows Max job time.
+    'settings-bottom': async () => {
+      await click(`document.querySelector('[aria-label="Runner settings"]')`); await sleep(500);
+      await run("[...document.querySelectorAll('[role=dialog], [role=dialog] *')].forEach(e=>{e.scrollTop=e.scrollHeight})"); await sleep(200);
+    },
     'settings-unsampled': async () => { await click(`document.querySelector('[aria-label="Runner settings"]')`); await sleep(500); },
   };
   const checks = {
@@ -71,10 +77,12 @@ app.whenReady().then(async () => {
     waiting: [['every reason as a sentence', "['This Mac is on battery, below what this mode allows.','This network is not one you trust. Add it in runner settings.','You\\'re using the Mac.'].every(s=>document.body.innerText.includes(s))"],
       ['memory-bound slot greyed with its sentence', "document.body.innerText.includes('Not available: Not enough runner memory for another VM.')"]],
     error: [['missing image error', "document.body.innerText.includes('No VM image yet.')"]],
+    'off-no-vm-support': [['off runner shows the daemon error', "document.querySelector('[role=alert]')?.textContent.includes('VM support unavailable')"]],
     unavailable: [['one plain sentence', "document.body.innerText.includes('They need a Mac with Apple silicon') && !document.body.innerText.includes('unknown channel') && !document.querySelector('[data-runner-card]')"]],
     'connect-step-3': [['connect step 3 with public callout', "document.querySelector('[aria-current=step]')?.textContent.includes('How this Mac helps') && document.body.innerText.includes('may be public')"]],
     settings: [['exact mode labels present', "[\"Do not disturb: Only run when I'm idle\",'Balanced: in the background','Runner first','System default','While a runner is active','Always','Let jobs use the internet directly while a VPN is on'].every(s=>document.querySelector('[role=dialog]').innerText.includes(s))"],
       ['recommendation shown', "document.body.innerText.includes('Recommended: 20 GB for this Mac')"]],
+    'settings-bottom': [['Max job time and Save in view', "(()=>{const v=e=>{const r=e.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight};const m=[...document.querySelectorAll('[role=dialog] p')].find(e=>e.textContent==='Max job time');const s=[...document.querySelectorAll('[role=dialog] button')].find(e=>e.textContent==='Save');return !!m&&!!s&&v(m)&&v(s)})()"]],
     'settings-unsampled': [['waits for the first reading', "document.body.innerText.includes('Waiting for this Mac\\'s first reading.') && !document.body.innerText.includes('Recommended:')"]],
   };
   try {

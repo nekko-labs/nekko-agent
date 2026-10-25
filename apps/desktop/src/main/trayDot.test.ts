@@ -12,4 +12,9 @@ describe('paintDot', () => {
     expect(px(11, 15)).toEqual([0, 0, 0, 0]); // the transparent ring keeps the dot off the icon
     expect(src[(15 * 20 + 15) * 4]).toBe(0x11); // input untouched
   });
+
+  it('leaves a bitmap of another size unchanged', () => {
+    const retina = Buffer.alloc(40 * 40 * 4, 0x11); // a 2x representation is not 20x20
+    expect(paintDot(retina, 20, 20, RUNNER_DOT_BGRA).equals(retina)).toBe(true);
+  });
 });
