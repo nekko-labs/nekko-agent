@@ -172,6 +172,18 @@ final class MarkdownEditingTests: XCTestCase {
         XCTAssertNil(tab("not‸ a table"))
     }
 
+    /// A selection past the end of the text (the toolbar a moment behind a send) never traps.
+    func testAStaleSelectionIsClamped() {
+        let past = NSRange(location: 40, length: 3)
+        for action in MarkdownAction.allCases {
+            _ = MarkdownEditing.isActive(action, in: "- a", selection: past)
+            _ = MarkdownEditing.apply(action, to: "", selection: past)
+        }
+        XCTAssertNil(MarkdownEditing.newline(in: "", selection: past))
+        XCTAssertNil(MarkdownEditing.tableLines("", at: 9))
+        XCTAssertEqual(MarkdownEditing.clamp(past, in: "abc"), NSRange(location: 3, length: 0))
+    }
+
     /// What the toolbar types parses back as the structure it means.
     func testToolbarOutputParses() {
         var e = MarkdownEditing.apply(.bullet, to: "", selection: NSRange(location: 0, length: 0))

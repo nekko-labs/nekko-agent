@@ -54,6 +54,7 @@ public enum MarkdownEditing {
 
     /// Whether the selection already has `action`'s style (the button shows pressed).
     public static func isActive(_ action: MarkdownAction, in text: String, selection: NSRange) -> Bool {
+        let selection = clamp(selection, in: text)
         let s = text as NSString
         let start = selection.location, end = selection.location + selection.length
         if let mark = mark(action) { return inlineSpan(s, start, end, mark) != nil }
@@ -73,6 +74,7 @@ public enum MarkdownEditing {
 
     /// Apply a toolbar button to the selection (or the current line, for block styles).
     public static func apply(_ action: MarkdownAction, to text: String, selection: NSRange) -> MarkdownEdit {
+        let selection = clamp(selection, in: text)
         switch action {
         case .indent: return indent(text, selection: selection, outdent: false)
         case .outdent: return indent(text, selection: selection, outdent: true)
@@ -157,6 +159,7 @@ public enum MarkdownEditing {
     /// Return on a list or quote line: continue it (next number, an empty task
     /// box), or end the list when the item is empty. Nil: an ordinary newline.
     public static func newline(in text: String, selection: NSRange) -> MarkdownEdit? {
+        let selection = clamp(selection, in: text)
         let s = text as NSString
         let lineRange = s.lineRange(for: NSRange(location: selection.location, length: 0))
         var line = s.substring(with: lineRange)
@@ -181,6 +184,7 @@ public enum MarkdownEditing {
     /// Indent (or outdent) the selected lines by one list level: two spaces,
     /// or three under a numbered item. The numbers follow.
     public static func indent(_ text: String, selection: NSRange, outdent: Bool) -> MarkdownEdit {
+        let selection = clamp(selection, in: text)
         let s = text as NSString
         let start = selection.location, end = selection.location + selection.length
         let (from, to) = block(s, start, end)
@@ -254,6 +258,7 @@ public enum MarkdownEditing {
 
     /// A 2×2 skeleton on lines of its own, the caret in the first header cell.
     public static func insertTable(_ text: String, selection: NSRange) -> MarkdownEdit {
+        let selection = clamp(selection, in: text)
         let s = text as NSString
         let skeleton = "|  |  |\n| --- | --- |\n|  |  |"
         let before = selection.location > 0 && s.substring(with: NSRange(location: selection.location - 1, length: 1)) != "\n" ? "\n\n" : ""
@@ -265,6 +270,7 @@ public enum MarkdownEditing {
 
     /// The lines of the table the caret is in (the header, its divider, its rows), or nil.
     public static func tableLines(_ text: String, at location: Int) -> NSRange? {
+        let location = min(max(0, location), (text as NSString).length)
         let s = text as NSString
         let here = s.lineRange(for: NSRange(location: min(location, s.length), length: 0))
         func isRow(_ r: NSRange) -> Bool { s.substring(with: r).contains("|") }
@@ -290,6 +296,7 @@ public enum MarkdownEditing {
 
     /// A row below the caret's row (below the divider when the caret is in the header), caret in its first cell.
     public static func addRow(_ text: String, selection: NSRange) -> MarkdownEdit? {
+        let selection = clamp(selection, in: text)
         guard let table = tableLines(text, at: selection.location) else { return nil }
         let s = text as NSString
         let header = s.lineRange(for: NSRange(location: table.location, length: 0))
@@ -308,6 +315,7 @@ public enum MarkdownEditing {
 
     /// A column at the right of every row of the caret's table, caret in its header cell.
     public static func addColumn(_ text: String, selection: NSRange) -> MarkdownEdit? {
+        let selection = clamp(selection, in: text)
         guard let table = tableLines(text, at: selection.location) else { return nil }
         let s = text as NSString
         let lines = s.substring(with: table).components(separatedBy: "\n")
@@ -330,6 +338,7 @@ public enum MarkdownEditing {
     /// Tab in a table: the caret to the next cell, then the next row's first
     /// (past the divider); from the last cell, a new row. Nil outside a table.
     public static func nextCell(_ text: String, selection: NSRange) -> MarkdownEdit? {
+        let selection = clamp(selection, in: text)
         guard let table = tableLines(text, at: selection.location) else { return nil }
         let s = text as NSString
         let line = s.lineRange(for: NSRange(location: selection.location, length: 0))
@@ -369,6 +378,14 @@ public enum MarkdownEditing {
     }
 
     // MARK: Helpers
+
+    /// The selection kept inside the text: the toolbar can hold a selection a
+    /// moment older than the text it is drawn with (a send just cleared it).
+    public static func clamp(_ selection: NSRange, in text: String) -> NSRange {
+        let n = (text as NSString).length
+        let location = min(max(0, selection.location), n)
+        return NSRange(location: location, length: min(max(0, selection.length), n - location))
+    }
 
     private static func mark(_ action: MarkdownAction) -> String? {
         switch action {
