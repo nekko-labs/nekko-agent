@@ -674,10 +674,10 @@ impl Prs {
         let mut v = self.fetch_info(url, token).await;
         // Preserve the last observation on transport failure. checkedAt is not
         // advanced, so consumers can label it stale rather than inventing zeros.
-        if v.is_null() {
-            if let Some((previous, _, _)) = self.info.lock().unwrap_or_else(|e| e.into_inner()).get(url) {
-                v = previous.clone();
-            }
+        if v.is_null()
+            && let Some((previous, _, _)) = self.info.lock().unwrap_or_else(|e| e.into_inner()).get(url)
+        {
+            v = previous.clone();
         }
         self.info
             .lock()
