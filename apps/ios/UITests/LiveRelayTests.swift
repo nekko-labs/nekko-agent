@@ -7,6 +7,14 @@ import XCTest
 ///
 /// Opt-in: the CI passes `TEST_RUNNER_NEKKO_ITEST_LINK`; without it this skips.
 final class LiveRelayTests: XCTestCase {
+    /// How long a step the computer drives may take to reach the phone: a
+    /// reply from the fake model, an approval or question card, a tool step,
+    /// a changed file, a queued prompt's turn. On a loaded runner each of these
+    /// has arrived after a 20 to 45 s wait ran out, a different one each run,
+    /// with the rest of the journey green (#831); the edited queued prompt,
+    /// which follows a whole slow reply, gets twice this.
+    private let computerWait: TimeInterval = 120
+
     func testPairStreamAndApproveFromThePhone() throws {
         guard let raw = ProcessInfo.processInfo.environment["NEKKO_ITEST_LINK"], let link = URL(string: raw) else {
             throw XCTSkip("set NEKKO_ITEST_LINK (apps/ios/scripts/itest-stack.sh)")
@@ -64,7 +72,7 @@ final class LiveRelayTests: XCTestCase {
         auditAccessibility(app, "\(theme)-new-chat")
         app.buttons["Start"].tap()
 
-        XCTAssertTrue(app.staticTexts["Hello from your computer."].waitForExistence(timeout: 30), "the reply streamed in")
+        XCTAssertTrue(app.staticTexts["Hello from your computer."].waitForExistence(timeout: computerWait), "the reply streamed in")
         attach(app, "\(theme)-4-reply")
 
         let message = app.input("chat.message")
@@ -75,7 +83,7 @@ final class LiveRelayTests: XCTestCase {
         // The Live Activity starts in this stretch and the simulator slows down
         // with it: the card took 15 s in one pass and over 30 s in the next (#831).
         let card = app.staticTexts["Approve this tool?"]
-        XCTAssertTrue(card.waitForExistence(timeout: 60), "the guarded tool asks the phone")
+        XCTAssertTrue(card.waitForExistence(timeout: computerWait), "the guarded tool asks the phone")
         attach(app, "\(theme)-5-approval")
         // Known, unresolved: with the card up, the audit reports the transcript's
         // "Run rm -rf …" step as clipped (approval) or low-contrast (question),
@@ -92,7 +100,7 @@ final class LiveRelayTests: XCTestCase {
         message.typeText("ask me which platform")
         app.buttons["Send"].tap()
         let question = app.staticTexts["Which platform should I build first?"]
-        XCTAssertTrue(question.waitForExistence(timeout: 30), "the question reaches the phone")
+        XCTAssertTrue(question.waitForExistence(timeout: computerWait), "the question reaches the phone")
         attach(app, "\(theme)-6b-question")
         // Known, unresolved: with the card up, the audit reports the transcript's
         // "Run rm -rf …" step as clipped (approval) or low-contrast (question),
@@ -103,7 +111,7 @@ final class LiveRelayTests: XCTestCase {
         app.buttons["iOS"].firstMatch.tap()
         app.buttons["Answer"].tap()
         XCTAssertTrue(waitGone(question, 15))
-        XCTAssertTrue(app.staticTexts["Hello from your computer."].firstMatch.waitForExistence(timeout: 30))
+        XCTAssertTrue(app.staticTexts["Hello from your computer."].firstMatch.waitForExistence(timeout: computerWait))
 
         // The agent writes a file; the phone reads the change, read only (the
         // stack turns the computer's "Let phones see changes" on).
@@ -111,12 +119,12 @@ final class LiveRelayTests: XCTestCase {
         message.typeText("write a note")
         app.buttons["Send"].tap()
         let step = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "nekko-itest-note.txt")).firstMatch
-        XCTAssertTrue(step.waitForExistence(timeout: 30), "the write step shows in the chat")
+        XCTAssertTrue(step.waitForExistence(timeout: computerWait), "the write step shows in the chat")
         sleep(2)
         app.buttons["More"].tap()
         app.buttons["Changes"].tap()
         let note = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "nekko-itest-note.txt", "new file, 2 added")).firstMatch
-        XCTAssertTrue(note.waitForExistence(timeout: 20), "the changed file reaches the phone")
+        XCTAssertTrue(note.waitForExistence(timeout: computerWait), "the changed file reaches the phone")
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Read only")).firstMatch.exists)
         XCTAssertFalse(app.buttons["Accept"].exists)
         attach(app, "\(theme)-6d-changes")
@@ -138,7 +146,7 @@ final class LiveRelayTests: XCTestCase {
         message.typeText("a slow one please")
         app.buttons["Send"].tap()
         // A slow simulator can take 15 s just to deliver the tap; the reply itself starts within seconds.
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "word2")).firstMatch.waitForExistence(timeout: 45),
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "word2")).firstMatch.waitForExistence(timeout: computerWait),
                       "the slow reply never started streaming")
         XCUIDevice.shared.press(.home)
         sleep(3)
@@ -177,7 +185,7 @@ final class LiveRelayTests: XCTestCase {
         for _ in 0..<3 where !(check.exists && check.isHittable) { app.swipeUp() }
         check.tap()
         let answered = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "answered")).firstMatch
-        XCTAssertTrue(answered.waitForExistence(timeout: 30), "a relay hello came back")
+        XCTAssertTrue(answered.waitForExistence(timeout: computerWait), "a relay hello came back")
         attach(app, "\(theme)-7c-checks")
         // The results push Share diagnostics below the fold; a List only builds what's on screen.
         let share = app.buttons["share-diagnostics"].firstMatch
@@ -267,12 +275,12 @@ final class LiveRelayTests: XCTestCase {
         prompt.tap()
         prompt.typeText("Say hello")
         app.buttons["Start"].tap()
-        XCTAssertTrue(app.staticTexts["Hello from your computer."].waitForExistence(timeout: 30), "the first reply streamed in")
+        XCTAssertTrue(app.staticTexts["Hello from your computer."].waitForExistence(timeout: computerWait), "the first reply streamed in")
 
         // The relay goes away: the composer stays usable and says the prompt will wait.
         relay(ctl, "stop")
         let later = app.buttons["chat.sendLater"]
-        XCTAssertTrue(later.waitForExistence(timeout: 30), "the composer offers Send when online")
+        XCTAssertTrue(later.waitForExistence(timeout: computerWait), "the composer offers Send when online")
         let message = app.input("chat.message")
         message.tap()
         message.typeText("written while offline")
@@ -290,10 +298,10 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertTrue(waitGone(waiting, 90), "the waiting prompt was delivered")
         // A user bubble reads as one element, "You: …".
         let sent = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "You: written while offline"))
-        XCTAssertTrue(sent.firstMatch.waitForExistence(timeout: 20))
+        XCTAssertTrue(sent.firstMatch.waitForExistence(timeout: computerWait))
         let replies = app.staticTexts.matching(NSPredicate(format: "label == %@", "Hello from your computer."))
         let answered = expectation(for: NSPredicate(format: "count == 2"), evaluatedWith: replies)
-        wait(for: [answered], timeout: 30)
+        wait(for: [answered], timeout: computerWait)
         sleep(2)
         XCTAssertEqual(sent.count, 1, "delivered exactly once")
         XCTAssertEqual(replies.count, 2, "answered once")
@@ -344,7 +352,7 @@ final class LiveRelayTests: XCTestCase {
         prompt.tap()
         prompt.typeText("Say hello")
         app.buttons["Start"].tap()
-        XCTAssertTrue(app.staticTexts["Hello from your computer."].waitForExistence(timeout: 30), "the first reply streamed in")
+        XCTAssertTrue(app.staticTexts["Hello from your computer."].waitForExistence(timeout: computerWait), "the first reply streamed in")
 
         // IO-22: a slow reply runs; a follow-up waits in the queue and is edited before it runs.
         let message = app.input("chat.message")
@@ -352,7 +360,7 @@ final class LiveRelayTests: XCTestCase {
         // "long run" streams for 90 s on the fake model: time for a slow simulator to type and edit.
         message.typeText("a long run please")
         app.buttons["Send"].tap()
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "word1")).firstMatch.waitForExistence(timeout: 45))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "word1")).firstMatch.waitForExistence(timeout: computerWait))
         message.tap()
         message.typeText("next one")
         let queue = app.buttons["Queue"]
@@ -369,12 +377,12 @@ final class LiveRelayTests: XCTestCase {
         attach(app, "beyond-2-queue-editor")
         app.buttons["queue.editor.save"].tap()
         let edited = app.staticTexts["next one, edited"]
-        XCTAssertTrue(edited.waitForExistence(timeout: 10), "the edit reached the computer's queue")
+        XCTAssertTrue(edited.waitForExistence(timeout: computerWait), "the edit reached the computer's queue")
         attach(app, "beyond-3-queue-edited")
         auditAccessibility(app, "beyond-queue")
         // The edited prompt runs after the slow reply, as edited.
         let ranEdited = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "You: next one, edited"))
-        XCTAssertTrue(ranEdited.firstMatch.waitForExistence(timeout: 150), "the edited prompt ran")
+        XCTAssertTrue(ranEdited.firstMatch.waitForExistence(timeout: 2 * computerWait), "the edited prompt ran")
 
         // IO-23: fork from the first prompt; the new chat has it in its message box.
         let first = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "You: Say hello")).firstMatch
@@ -387,7 +395,7 @@ final class LiveRelayTests: XCTestCase {
         fork.tap()
         let forkedBox = app.input("chat.message")
         let seeded = expectation(for: NSPredicate(format: "value == %@", "Say hello"), evaluatedWith: forkedBox)
-        wait(for: [seeded], timeout: 20)
+        wait(for: [seeded], timeout: computerWait)
         attach(app, "beyond-5-forked")
 
         // The chat list, with its view menu (group, sort, show) in place of the old Continue card.
@@ -415,7 +423,7 @@ final class LiveRelayTests: XCTestCase {
         auditAccessibility(app, "beyond-automations")
         run.tap()
         let result = app.staticTexts["Hello from your computer."]
-        XCTAssertTrue(result.waitForExistence(timeout: 60), "the run's answer shows as the last result")
+        XCTAssertTrue(result.waitForExistence(timeout: computerWait), "the run's answer shows as the last result")
         attach(app, "beyond-8-ran")
 
         // IO-29: usage, read only.
@@ -435,7 +443,7 @@ final class LiveRelayTests: XCTestCase {
         app.buttons["computer.logs"].firstMatch.tap()
         XCTAssertTrue(app.navigationBars["Logs"].waitForExistence(timeout: 10))
         let log = app.buttons["logs.row"].firstMatch
-        XCTAssertTrue(log.waitForExistence(timeout: 15), "the computer lists its logs")
+        XCTAssertTrue(log.waitForExistence(timeout: computerWait), "the computer lists its logs")
         attach(app, "beyond-10-logs")
         log.tap()
         XCTAssertTrue(app.buttons["log.refresh"].waitForExistence(timeout: 10), "a log opens with Refresh")
