@@ -811,6 +811,26 @@ async fn host_sockets_are_bound_to_the_egress_interface() {
     assert_eq!(&buf[..n], b"echo:hi");
 }
 
+/// The IPv6 branch of the binding (DNS upstreams may be IPv6): lo0 and [::1].
+#[cfg(target_os = "macos")]
+#[tokio::test(flavor = "multi_thread")]
+async fn host_sockets_are_bound_to_the_egress_interface_ipv6() {
+    use socket2::SockRef;
+    // SAFETY: a NUL-terminated name.
+    let lo0 = unsafe { libc::if_nametoindex(c"lo0".as_ptr()) };
+    let d = direct(Some(("lo0", lo0)), true);
+    let l = TcpListener::bind("[::1]:0").await.unwrap();
+    let t = d.tcp(l.local_addr().unwrap()).await.unwrap();
+    assert_eq!(SockRef::from(&t).device_index_v6().unwrap().map(|i| i.get()), Some(lo0));
+    let echo = UdpSocket::bind("[::1]:0").await.unwrap();
+    let u = d.udp(echo.local_addr().unwrap()).await.unwrap();
+    assert_eq!(SockRef::from(&u).device_index_v6().unwrap().map(|i| i.get()), Some(lo0));
+    u.send(b"hi").await.unwrap();
+    let mut buf = [0u8; 16];
+    let n = tokio::time::timeout(Duration::from_secs(2), echo.recv(&mut buf)).await.unwrap().unwrap();
+    assert_eq!(&buf[..n], b"hi");
+}
+
 /// A live server behind every refused address, so a refusal is not a timeout.
 async fn assert_direct_refuses(d: Direct) {
     let (tcp_dst, udp_dst) = (pong_server().await, udp_echo().await);
@@ -827,6 +847,10 @@ async fn assert_direct_refuses(d: Direct) {
     let q = guest.udp(5353);
     guest.udp_sock(q).send_slice(b"query", ep(GATEWAY, 53)).unwrap();
     assert!(guest.udp_recv(q, 1).await.is_none(), "DNS left without an egress interface");
+    // 53/tcp too, with a live TCP server on the upstream's address.
+    let _tcp_up = TcpListener::bind(up).await.unwrap();
+    let h = guest.connect(GATEWAY, 53, 42002);
+    assert!(guest.refused(h).await, "DNS over TCP left without an egress interface");
 }
 
 #[tokio::test(flavor = "multi_thread")]

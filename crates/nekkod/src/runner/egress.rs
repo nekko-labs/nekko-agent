@@ -126,11 +126,16 @@ mod tests {
         let state = spawn_watch(&helper);
         assert_eq!(*state.read().unwrap(), None, "unknown until the first line");
         let read = || state.read().unwrap().as_ref().and_then(|e| e.physical.clone());
-        let mut seen = vec![];
-        for _ in 0..70 {
+        // Changes from the initial None, until three are seen or 6 s pass.
+        let (mut seen, mut last) = (vec![], None);
+        for _ in 0..120 {
             tokio::time::sleep(Duration::from_millis(50)).await;
-            if seen.last() != Some(&read()) {
-                seen.push(read());
+            if read() != last {
+                last = read();
+                seen.push(last.clone());
+            }
+            if seen.len() >= 3 {
+                break;
             }
         }
         std::fs::remove_dir_all(&dir).unwrap();
