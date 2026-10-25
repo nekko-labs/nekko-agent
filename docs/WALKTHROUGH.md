@@ -75,9 +75,13 @@ model servers are first-class, not an afterthought.
 3. **Test connection** → the model dropdown fills with whatever LM Studio is serving.
 4. Pick the model in the chat header and go.
 
-**Reasoning models** (Gemma, DeepSeek-R1, Qwen-thinking, etc.) are first-class:
-their chain-of-thought streams into a collapsible **Thinking** block above the
-answer, so you see progress during long reasoning and the answer stays clean.
+**Reasoning models** (Gemma, DeepSeek-R1, Qwen-thinking, etc.) are first-class.
+When a provider exposes public reasoning text or a reasoning summary, the current
+text appears in a **Thinking** preview above the answer, even with the working
+steps folded. Private or encrypted reasoning is never shown. If no public text
+is available after a tool finishes, **Tools finished. Waiting for the model…**
+distinguishes the ongoing turn from the completed tool. Each tool's timer stops
+at its own result; other unfinished calls and the overall reply clock keep going.
 
 ---
 
