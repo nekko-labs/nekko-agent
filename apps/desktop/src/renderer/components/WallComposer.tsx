@@ -13,7 +13,7 @@ export interface WallAgent {
   /** 1-based position among the wall's agent windows, in reading order. */
   n: number;
   status: { label: string; tone: string; live?: boolean } | null;
-  /** The same state as a glyph: rocket working, Zz idle. */
+  /** The same state as a glyph: rocket working, gray check done, Zz idle with a watch. */
   glyph?: AgentStatus;
 }
 

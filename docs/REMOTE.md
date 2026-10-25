@@ -567,11 +567,18 @@ NEKKO_RELAY_URL=wss://your-relay NEKKO_ROOM=myroom NEKKO_PAIR_KEY=<secret> npx n
 It prints a one-time pairing code (10 minutes) at boot and keeps the same persistent device
 registry as the desktop app.
 
-### Chat status on native iOS
+### Chat status on the phone
 
-The icon to the left of each chat reads like desktop: a rocket means working,
-a question mark means the agent needs you, “Zz” means idle, and a checkmark marks
-a completed chat. A clock means a prompt is waiting to send.
+Chat status follows desktop: a rocket (or Working/Running badge) means working,
+and a question mark or Needs you badge means the agent needs your input.
+A quiet gray checkmark means **Done**: no active work and no armed watcher.
+**Zz · Idle** means no active work, but a watcher is armed to wake the chat later.
+Triggered, cancelled and failed watches no longer keep a chat idle. Done does not
+archive the chat; you can still continue it. An older computer that does not send
+watch counts treats inactive chats as Done until it is updated.
+
+On native iOS, a clock means a prompt is waiting to send. Running work, input
+requests and waiting prompts take priority over the inactive status.
 
 Nekko sits at the top-left of the Chats screen beside the computer menu. Tap the
 pixel cat for a brief greeting. This is a local animation, not a message to an

@@ -4,6 +4,7 @@ import { Pressable, RefreshControl, SectionList, StyleSheet, View } from 'react-
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { findModel } from '@/lib/catalog';
+import { remoteChatStatus } from '@/lib/chat-status';
 import { plainText } from '@/lib/markdown';
 import type { SessionSummary } from '@/lib/protocol';
 import { useStore } from '@/lib/store';
@@ -90,6 +91,7 @@ export default function ChatsScreen() {
 function RemoteRow({ s, activity }: { s: SessionSummary; activity?: Activity }) {
   const p = usePalette();
   const preview = plainText(s.lastReplyText || s.firstUserText || '');
+  const status = remoteChatStatus(s, activity);
   return (
     <Pressable
       accessibilityRole="button"
@@ -112,11 +114,17 @@ function RemoteRow({ s, activity }: { s: SessionSummary; activity?: Activity }) 
             {preview}
           </T>
         ) : null}
-        {activity ? (
-          <View style={{ marginTop: 4 }}>
-            {activity === 'needs-you' ? <Pill label="Needs you" tone="warning" icon="warning" /> : <Pill label="Working" tone="accent" icon="bolt" />}
-          </View>
-        ) : null}
+        <View style={{ marginTop: 4 }}>
+          {status === 'needs-you' ? (
+            <Pill label="Needs you" tone="warning" icon="warning" />
+          ) : status === 'running' ? (
+            <Pill label="Working" tone="accent" icon="bolt" />
+          ) : status === 'idle' ? (
+            <Pill label="Zz · Idle" />
+          ) : (
+            <Pill label="Done" icon="check" />
+          )}
+        </View>
       </View>
     </Pressable>
   );

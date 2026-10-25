@@ -7,7 +7,7 @@ import { AUTO_MODEL_ID, archiveDaysLeft, archiveDeletesAt } from '@nekko-agent/s
 import { useShallow } from 'zustand/react/shallow';
 import { useStore, type Workspace } from '../store.js';
 import { runningSessionIds } from '../liveRuns.js';
-import { StatusIcon, WorkspaceCard, type AgentStatus } from '../components/WorkspaceCard.js';
+import { StatusIcon, WorkspaceCard, agentStatusOfLane, type AgentStatus } from '../components/WorkspaceCard.js';
 import { ChatFinder } from '../components/ChatFinder.js';
 import { CheckIcon, PhotoIcon, TerminalIcon, PlusIcon, SearchIcon, SlidersIcon } from '../icons.js';
 import { SHORTCUTS } from '../shortcuts.js';
@@ -137,6 +137,7 @@ function projectOfWorkspace(w: Workspace, sessions: SessionSummary[], terminals:
  */
 export function statusFromEvent(type: AgentEvent['type'], prev?: AgentStatus): AgentStatus | null | undefined {
   switch (type) {
+    case 'session_meta': return undefined;
     case 'tool_approval_required':
     case 'question': return 'input';
     case 'question_resolved':
@@ -999,7 +1000,7 @@ function SubAgentRow({
         className={`h-[5px] w-[5px] shrink-0 rounded-full bg-transparent ring-1 ${isActive ? 'ring-accent' : 'ring-ink-faint'}`}
       />
       <span className="min-w-0 flex-1 truncate">{session.title}</span>
-      {status && <StatusIcon status={status} />}
+      <StatusIcon status={status ?? agentStatusOfLane('idle', undefined, session.activeWatchCount)} />
     </button>
   );
 }

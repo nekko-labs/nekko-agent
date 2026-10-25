@@ -413,3 +413,12 @@ final class BeyondWireTests: XCTestCase {
         XCTAssertEqual(try result(cases, "session:fork")?.str("id"), "s_fork")
     }
 }
+
+final class ActiveWatchSummaryTests: XCTestCase {
+    func testMissingAndExplicitCounts() throws {
+        for (field, expected): (String, Int64) in [("", 0), (",\"activeWatchCount\":0", 0), (",\"activeWatchCount\":2", 2)] {
+            let summary = try XCTUnwrap(SessionSummary.from(JSONValue.parse("{\"id\":\"chat\"\(field)}")))
+            XCTAssertEqual(summary.activeWatchCount, expected)
+        }
+    }
+}

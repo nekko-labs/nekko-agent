@@ -480,7 +480,7 @@ export function CommandCenterView() {
     if (!session) return [];
     const { lane, blocked } = sessionLane({ running: isRunningSession(session), pending: pending[session.id], stalled: session.stalled });
     const status = lane === 'needs-you' && blocked ? { label: BLOCKED_META[blocked].label, tone: LANE_META[lane].tone, live: true } : { label: LANE_META[lane].title, tone: LANE_META[lane].tone, live: lane === 'working' };
-    return [{ session, n: i + 1, status, glyph: agentStatusOfLane(lane, blocked) }];
+    return [{ session, n: i + 1, status, glyph: agentStatusOfLane(lane, blocked, session.activeWatchCount) }];
   }), [agentsOnWall, sessions, pending, isRunningSession]);
   const selectedAgent = agentList.find((a) => a.session.id === selected) ?? null;
   // The dragged height is saved with the wall (like the dock and width), so
