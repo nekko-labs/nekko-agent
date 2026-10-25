@@ -107,7 +107,7 @@ Conditions: Apple M1 Max, 64 GB, macOS 27.0.1; guest Cirrus `macos-sequoia-base`
 
 Internet downloads were limited by the host link, not the NAT. With 64 KiB, 20 s of `https://proof.ovh.net/files/1Gb.dat` alternating host then guest gave, in run order, host 3202000, guest 3105736, host 2610439, guest 2622182, host 3077573, guest 2956506 B/s (guest 98% of host in total, about 23 Mbit/s). `ash-speed.hetzner.com` swung between 212934 and 2738628 B/s on either side across four pairs, so it supports no comparison. A debug build gave 68.2 to 103.1 Mbit/s NAT to guest at 16 KiB, about the same as optimized, so the cap was the window, not CPU.
 
-Why: the smoltcp send buffer toward the guest bounds bytes in flight on a sub-millisecond leg; guest-to-host keeps 16 KiB. Worst-case socket memory is 20 MiB per VM at 256 flows. Source: commit `nekkod: runner NAT sends to the guest from a 64 KiB TCP buffer`, `.superpowers/sdd/.plan-layer-b/task-3-report.md`.
+Why: the smoltcp send buffer toward the guest bounds bytes in flight on a sub-millisecond leg; guest-to-host keeps 16 KiB. Worst-case socket memory is 20 MiB per VM at 256 flows. Source: commit 11395dc6 (`nekkod: runner NAT sends to the guest from a 64 KiB TCP buffer`), PR #1065.
 
 ### Phone Markdown parser: block tree, cached per segment (MD-1, 2026-10-25)
 Area: renderer
