@@ -161,6 +161,8 @@ struct Runner {
     wanted: u8,
     queued: u32,
     queue_polled_at: Option<f64>,
+    /// After a transient mint error, no mint before this.
+    mint_after: Option<f64>,
     awake: bool,
 }
 
@@ -180,6 +182,7 @@ impl Runner {
             wanted: 0,
             queued: 0,
             queue_polled_at: None,
+            mint_after: None,
             awake: false,
         }
     }
@@ -231,7 +234,11 @@ pub struct Supervisor<S: Sense, V: Vm, P: Provider> {
     reruns: Vec<Rerun>,
     /// (repo, job id) of every job ever queued, so each is re-run at most once.
     rerun_seen: HashSet<(String, u64)>,
-    last_wall: Option<f64>,
+    /// The wall clock and the monotonic clock at the last tick: the wall
+    /// clock keeps counting through sleep, the monotonic one does not.
+    last_wall: Option<(f64, tokio::time::Instant)>,
+    /// Records whose stale registrations were swept (once per id).
+    swept: HashSet<String>,
     serial: u64,
     day_start: u64,
     today: HashMap<String, Today>,
@@ -291,6 +298,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             reruns: Vec::new(),
             rerun_seen: HashSet::new(),
             last_wall: None,
+            swept: HashSet::new(),
             serial: 0,
             day_start: u64::MAX,
             today: HashMap::new(),
@@ -307,14 +315,30 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
         if let Err(e) = reap(&self.vms_dir()).await {
             eprintln!("runner: cannot clear {}: {e}", self.vms_dir().display());
         }
+        self.sweep().await;
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+        self.roll_day(now);
+    }
+
+    /// Removes stale registrations of each record not yet swept. The prefix
+    /// matches every VM of ours, so a record waits while one of ours with the
+    /// same scope is live.
+    async fn sweep(&mut self) {
         let prefix = format!("nekko-{}-", self.host);
-        for r in &self.runners {
+        for i in 0..self.runners.len() {
+            let r = &self.runners[i];
+            let scope = &r.record.config.scope;
+            if r.dropped
+                || self.swept.contains(&r.record.config.id)
+                || self.runners.iter().any(|o| &o.record.config.scope == scope && !o.slots.is_empty())
+            {
+                continue;
+            }
+            self.swept.insert(r.record.config.id.clone());
             if let Err(e) = call(self.provider.remove_stale(&r.record, &prefix)).await {
                 eprintln!("runner {}: cannot remove stale runners: {e}", r.record.config.id);
             }
         }
-        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
-        self.roll_day(now);
     }
 
     /// A changed record clears its error; a dropped one's VMs are stopped and cleaned on the next tick.
@@ -384,8 +408,12 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
         // 1. Read the Mac.
         let m = self.sense.sample().await;
         let now = m.wall_secs;
-        let slept = self.last_wall.is_some_and(|l| now - l > TICK.as_secs_f64() + WAKE_GAP_SECS);
-        self.last_wall = Some(now);
+        let mono = tokio::time::Instant::now();
+        // A slow tick (a VM start can take minutes) moves both clocks alike; only a sleep moves the wall alone.
+        let slept = self
+            .last_wall
+            .is_some_and(|(wall, at)| (now - wall) - mono.duration_since(at).as_secs_f64() > WAKE_GAP_SECS);
+        self.last_wall = Some((now, mono));
         self.roll_day(now as u64);
         for r in &mut self.runners {
             let d = evaluate(&r.record.config.settings, &signals_for(&m, &r.record.config.settings), false);
@@ -454,6 +482,8 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             Err(_) => return,
         };
 
+        self.sweep().await;
+
         // 3. Stop what must stop.
         for r in &mut self.runners {
             let s = &r.record.config.settings;
@@ -468,7 +498,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                 let Some(busy_since) = slot.busy_since else {
                     // No job here, so stopping loses nothing.
                     if !r.gates_pass {
-                        slot.halt(now, idle_why.clone(), true, false);
+                        slot.halt(now, idle_why.clone(), true, true);
                     }
                     continue;
                 };
@@ -515,13 +545,12 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             let (available, limit) = macos_slots_explained(&s, &host);
             (r.available, r.limit) = (available, limit);
             r.wanted = 0;
-            r.blocked = None;
-            if r.dropped || !r.gates_pass || r.error.is_some() {
+            if r.dropped {
                 continue;
             }
             let image = r.record.image.clone().unwrap_or_else(|| self.runners_dir.join("images").join("default"));
-            if !image.is_dir() {
-                r.blocked = Some(NO_IMAGE.into());
+            r.blocked = (!image.is_dir()).then(|| NO_IMAGE.into());
+            if r.blocked.is_some() || !r.gates_pass || r.error.is_some() {
                 continue;
             }
             let warm = warm_slots(&s, available);
@@ -536,12 +565,18 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             r.wanted = vms_wanted(available, warm, busy, r.queued);
             let live = r.slots.iter().filter(|s| s.stop.is_none()).count();
             // `slots.len()` counts VMs still shutting down: they hold a place under Apple's cap.
-            if started || r.error.is_some() || live >= usize::from(r.wanted) || r.slots.len() >= usize::from(available)
+            if started
+                || r.error.is_some()
+                || r.mint_after.is_some_and(|t| now < t)
+                || live >= usize::from(r.wanted)
+                || r.slots.len() >= usize::from(available)
             {
                 continue;
             }
             started = true;
             let spec = (cpus_per_vm(&s, &host), s.memory_per_vm_mb);
+            // A start can hold this tick for minutes (bounded by the provider and Vm timeouts);
+            // a hard limit that appears meanwhile is acted on next tick.
             self.start_vm(ri, &image, spec, now).await;
         }
 
@@ -559,7 +594,11 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                             slot.busy_since = Some(now);
                             slot.idle_since = None;
                             slot.set_state(SlotState::Running, now);
-                            slot.job = call(self.provider.job(&r.record, &slot.name)).await.ok().flatten();
+                            match call(self.provider.job(&r.record, &slot.name)).await {
+                                Ok(job) => slot.job = job,
+                                Err(ProviderError::Auth(e)) => r.error = Some(e),
+                                Err(e) => eprintln!("runner {}: {e}", r.record.config.id),
+                            }
                             continue;
                         }
                         Ok(RunnerStatus::Idle) => {
@@ -573,13 +612,13 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                 }
                 if !slot.online {
                     if now - slot.started_at >= BOOT_TIMEOUT.as_secs_f64() {
-                        slot.halt(now, vec!["bootTimeout".into()], true, false);
+                        slot.halt(now, vec!["bootTimeout".into()], true, true);
                     }
                 } else if excess > 0 {
                     excess -= 1;
                     let since = *slot.idle_since.get_or_insert(now);
                     if now - since >= IDLE_READY_SECS as f64 {
-                        slot.halt(now, vec!["idle".into()], true, false);
+                        slot.halt(now, vec!["idle".into()], true, true);
                     }
                 } else {
                     slot.idle_since = None;
@@ -621,7 +660,12 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                 self.runners[ri].error = Some(e);
                 return;
             }
-            Err(ProviderError::Other(e)) => return self.start_failed(ri, e, now),
+            // A GitHub blip is not the Mac's fault: back off, without counting it or auditing it.
+            Err(ProviderError::Other(e)) => {
+                eprintln!("runner {}: cannot register a runner: {e}", record.config.id);
+                self.runners[ri].mint_after = Some(now + QUEUE_POLL.as_secs_f64());
+                return;
+            }
         };
         let (seed, bundle) = (dir.join("seed.iso"), dir.join("bundle"));
         let made = async {
@@ -702,14 +746,25 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
 
     /// A VM whose helper is reaped: delete its clone and seed, remove its
     /// registration, audit the job, and queue a re-run if it was cut short.
-    async fn finish(&mut self, ri: usize, slot: Slot, stopped: Stopped, now: f64) {
+    async fn finish(&mut self, ri: usize, mut slot: Slot, stopped: Stopped, now: f64) {
+        let record = self.runners[ri].record.clone();
+        // An online VM we stopped may have taken a job since its last status poll.
+        if slot.stop.is_some() && slot.online && slot.busy_since.is_none() {
+            match call(self.provider.job(&record, &slot.name)).await {
+                Ok(Some(job)) => {
+                    slot.job = Some(job);
+                    slot.busy_since = Some(slot.polled_at);
+                }
+                Ok(None) => {}
+                Err(e) => self.runners[ri].note(e),
+            }
+        }
         let dir = self.vms_dir().join(&slot.name);
         if let Err(e) = tokio::fs::remove_dir_all(&dir).await
             && e.kind() != std::io::ErrorKind::NotFound
         {
             eprintln!("runner: cannot remove {}: {e}", dir.display());
         }
-        let record = self.runners[ri].record.clone();
         if let Err(e) = call(self.provider.remove(&record, slot.runner_id)).await {
             eprintln!("runner {}: cannot remove runner {}: {e}", record.config.id, slot.runner_id);
         }

@@ -74,6 +74,8 @@ struct VmState {
     /// Halts are logged but `done` waits for `finish`.
     hold_done: bool,
     done: Vec<Option<oneshot::Sender<Stopped>>>,
+    /// The next `start` takes this many seconds, of paused time and of the fake wall clock.
+    slow_start: Option<(u64, Arc<Mutex<MacState>>)>,
 }
 
 #[derive(Clone)]
@@ -109,6 +111,11 @@ impl Vm for FakeVm {
 
     async fn start(&self, spec: RunSpec) -> Result<RunHandle, String> {
         self.1.lock().unwrap().push(format!("start {} {}", spec.cpus, spec.memory_mb));
+        let slow = self.0.lock().unwrap().slow_start.take();
+        if let Some((secs, mac)) = slow {
+            tokio::time::sleep(Duration::from_secs(secs)).await;
+            mac.lock().unwrap().wall_secs += secs as f64;
+        }
         let run = {
             let mut st = self.0.lock().unwrap();
             if st.start_fails > 0 {
@@ -144,6 +151,7 @@ struct ProvState {
     queued: u32,
     mint: VecDeque<Result<Minted, ProviderError>>,
     rerun: VecDeque<Result<(), ProviderError>>,
+    job: Result<Option<JobRef>, ProviderError>,
     next_id: u64,
 }
 
@@ -168,7 +176,8 @@ impl Provider for FakeProvider {
     }
 
     async fn job(&self, _: &RunnerRecord, _: &str) -> Result<Option<JobRef>, ProviderError> {
-        Ok(Some(job_ref()))
+        self.1.lock().unwrap().push("job".into());
+        self.0.lock().unwrap().job.clone()
     }
 
     async fn queued(&self, _: &RunnerRecord) -> Result<u32, ProviderError> {
@@ -223,6 +232,7 @@ fn harness_with(records: Vec<RunnerRecord>, no_vm: Option<&str>) -> H {
             queued: 0,
             mint: VecDeque::new(),
             rerun: VecDeque::new(),
+            job: Ok(Some(job_ref())),
             next_id: 99,
         })),
         log.clone(),
@@ -409,12 +419,14 @@ async fn runner_first_grace_is_capped_by_max_job_time() {
     r.config.settings.max_job_minutes = 10;
     let mut h = harness(vec![r]);
     h.running().await;
+    let busy_start = h.sense.0.lock().unwrap().wall_secs as u64;
     h.tick_for(540).await;
     assert_eq!(h.count("request_stop"), 0);
     h.mac(|m| m.power = Some(Power { on_battery: true, percent: Some(40.0), low: false }));
     h.tick_for(55).await;
     assert_eq!(h.count("request_stop"), 0);
-    assert!(h.view().slots[0].drain_ends_at.is_some());
+    // Runner first's own grace is the whole max job time (600 s); only the cap ends it here.
+    assert_eq!(h.view().slots[0].drain_ends_at, Some(busy_start + 600));
     h.tick_for(5).await;
     assert_eq!(h.count("request_stop"), 1);
 }
@@ -693,4 +705,114 @@ async fn views_serialize_camel_case() {
     assert_eq!(v[0]["slots"][0]["state"], "starting");
     assert!(v[0]["slots"][0].get("drainEndsAt").is_some());
     assert_eq!(v[0]["today"], serde_json::json!({"jobs": 0, "seconds": 0}));
+}
+
+#[tokio::test(start_paused = true)]
+async fn slow_start_is_not_a_sleep() {
+    let mut h = harness(vec![record("r1", Priority::Balanced, 2)]);
+    h.running().await;
+    h.vm.0.lock().unwrap().slow_start = Some((70, h.sense.0.clone()));
+    h.queued(1);
+    h.tick_for(60).await;
+    assert_eq!(h.count("start"), 2, "{:?}", h.log.lock().unwrap());
+    h.tick_for(30).await;
+    assert_eq!(h.count("kill"), 0);
+    assert!(h.audit().iter().all(|l| l.result != AuditResult::Lost));
+    assert_eq!(h.view().slots[0].state, SlotState::Running);
+}
+
+#[tokio::test(start_paused = true)]
+async fn mint_blips_do_not_stick_in_error() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    let blip = || Err(ProviderError::Other("GitHub said 502".into()));
+    h.prov.0.lock().unwrap().mint = VecDeque::from([blip(), blip(), blip()]);
+    for _ in 0..40 {
+        h.tick_for(5).await;
+        assert_ne!(h.view().state, RunnerState::Error);
+    }
+    assert_eq!(h.count("mint"), 4);
+    assert_eq!(h.count("start"), 1);
+    assert!(h.audit().is_empty());
+}
+
+#[tokio::test(start_paused = true)]
+async fn mint_blips_back_off() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    h.prov.0.lock().unwrap().mint = VecDeque::from([Err(ProviderError::Other("GitHub said 502".into()))]);
+    h.tick_for(25).await;
+    assert_eq!(h.count("mint"), 1);
+    h.tick_for(10).await;
+    assert_eq!(h.count("mint"), 2);
+}
+
+#[tokio::test(start_paused = true)]
+async fn job_taken_between_polls_is_audited_when_stopped() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    h.tick_for(20).await;
+    assert_eq!(h.view().slots[0].state, SlotState::Ready);
+    // GitHub hands it a job; the Mac overheats before the next status poll.
+    h.mac(|m| m.host.as_mut().unwrap().thermal = Thermal::Critical);
+    h.tick_for(10).await;
+    let audit = h.audit();
+    assert_eq!(audit.len(), 1);
+    assert_eq!((audit[0].result, audit[0].job.as_deref()), (AuditResult::Stopped, Some("build")));
+    h.tick_for(60).await;
+    assert_eq!(h.count("rerun"), 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn idle_vm_stopped_without_a_job_is_not_audited() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    h.prov.0.lock().unwrap().job = Ok(None);
+    h.tick_for(20).await;
+    h.mac(|m| m.host.as_mut().unwrap().thermal = Thermal::Critical);
+    h.tick_for(10).await;
+    assert!(h.audit().is_empty());
+}
+
+#[tokio::test(start_paused = true)]
+async fn job_lookup_auth_error_marks_runner_error() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    h.prov.0.lock().unwrap().job = Err(ProviderError::Auth("revoked".into()));
+    h.status(RunnerStatus::Busy);
+    h.tick_for(20).await;
+    let v = h.view();
+    assert_eq!((v.state, v.error.as_deref()), (RunnerState::Error, Some("revoked")));
+}
+
+#[tokio::test(start_paused = true)]
+async fn missing_image_stays_visible_when_gates_fail() {
+    let mut h = harness(vec![record("r1", Priority::DoNotDisturb, 1)]);
+    std::fs::remove_dir_all(h.dir.path().join("images/default")).unwrap();
+    h.mac(|m| m.idle_seconds = Some(30.0));
+    h.tick_for(10).await;
+    let v = h.view();
+    assert_eq!((v.state, v.error.as_deref()), (RunnerState::Error, Some("No VM image yet.")));
+}
+
+#[tokio::test(start_paused = true)]
+async fn records_added_later_get_their_stale_runners_swept_once() {
+    let mut h = harness(vec![record("a", Priority::DoNotDisturb, 1)]);
+    h.sup.start().await;
+    assert_eq!(h.count("remove_stale"), 1);
+    h.sup.set_records(vec![record("a", Priority::DoNotDisturb, 1), record("b", Priority::DoNotDisturb, 1)]);
+    h.tick_for(5).await;
+    assert_eq!(h.count("remove_stale"), 2);
+    h.sup.set_records(vec![record("a", Priority::DoNotDisturb, 1), record("b", Priority::Balanced, 1)]);
+    h.tick_for(30).await;
+    assert_eq!(h.count("remove_stale"), 2);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_new_record_never_sweeps_a_live_runner_of_the_same_scope() {
+    let mut h = harness(vec![record("a", Priority::RunnerFirst, 1)]);
+    h.sup.start().await;
+    h.running().await;
+    h.sup.set_records(vec![record("a", Priority::RunnerFirst, 1), record("b", Priority::DoNotDisturb, 1)]);
+    h.tick_for(30).await;
+    assert_eq!(h.count("remove_stale"), 1);
+    h.vm.finish(0, Stopped::Guest);
+    h.mac(|m| m.paused_all = true);
+    h.tick_for(10).await;
+    assert_eq!(h.count("remove_stale"), 2);
 }
