@@ -269,7 +269,10 @@ struct FileDetailView: View {
             ScrollView([.vertical]) {
                 VStack(alignment: .leading, spacing: 0) {
                     banners(f)
-                    if rendered, f.markdown, let text = f.text {
+                    if MermaidRules.isMermaidFile(f.name), !rendered, !f.truncated, let text = f.text {
+                        // A .mmd or .mermaid file draws as its diagram, as a fence in a chat does (MM-2).
+                        MermaidBlock(source: text, closed: true, style: .standard(palette)).padding(12)
+                    } else if rendered, f.markdown, let text = f.text {
                         MarkdownText(text: text).padding(12)
                     } else {
                         CodeLines(lines: Array(f.lines.prefix(Self.maxLines)))

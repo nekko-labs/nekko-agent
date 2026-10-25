@@ -27,8 +27,8 @@ Philip asked for the iPhone chat to write in Markdown with a styles toolbar, nes
 - [ ] **MD-4, Paste choice.** *Paste as Markdown* / *Paste as plain text* in the edit menu, the *Use formatting* chip after a rich paste; HTML/RTF→Markdown converter with the security cases. Implemented (`RichPaste`, `RichPasteTests` passing on Linux; RTF goes through `NSAttributedString` and is described as simple HTML); the paste UI is unverified until the macOS CI run.
 - [ ] **MD-5, Evidence.** UI test and screenshots (light, dark, largest text) from macOS CI.
 - [ ] **MD-6, Android parity.** The same parser, rendering, toolbar and paste choice in `Markdown.kt`, `MarkdownText.kt` and `Composer.kt`.
-- [ ] **MM-1, Offline Mermaid renderer.** Bundled `mermaid.min.js` (12.x), one locked off-screen `WKWebView` (no network, no navigation, strict), a render queue, SVG→image cache keyed by source, theme and width.
-- [ ] **MM-2, Inline diagram and full screen.** Mermaid fences draw inline once closed (source while streaming), tap for zoom/pan, Copy source, Share image, Save to Photos, source fallback with the error; `.mmd` files in *Files*.
+- [ ] **MM-1, Offline Mermaid renderer.** Bundled `mermaid.min.js` (12.x), one locked off-screen `WKWebView` (no network, no navigation, strict), a render queue, SVG→image cache keyed by source, theme and width. Implemented (`vendor/mermaid` pinned by `scripts/vendor-mermaid.mjs`, `Mermaid.swift`, `MermaidRules` + `MermaidRulesTests` on Linux); unverified until the macOS CI run.
+- [ ] **MM-2, Inline diagram and full screen.** Mermaid fences draw inline once closed (source while streaming), tap for zoom/pan, Copy source, Share image, Save to Photos, source fallback with the error; `.mmd` files in *Files*. Implemented; unverified until the macOS CI run.
 - [ ] **MM-3, Evidence and cost.** UI test with flowchart, sequence and broken diagrams in light and dark; app size and render time in `docs/perf-history.md`.
 - [ ] **MM-4, Android Mermaid.** The same design in a locked `WebView`.
 

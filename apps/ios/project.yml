@@ -24,6 +24,10 @@ targets:
     sources:
       - path: App
         excludes: ["*.entitlements"]
+      # Mermaid for diagrams in chats (MM-1): the pinned copy, its license and pin, as the bundle's mermaid/ folder.
+      - path: ../../vendor/mermaid
+        type: folder
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.nekkolabs.nekkoagent

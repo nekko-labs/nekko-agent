@@ -13,6 +13,7 @@ on:
     types: [labeled]
     paths:
       - 'apps/ios/**'
+      - 'vendor/mermaid/**'
       - 'apps/relay-server/src/**'
       - 'crates/nekko-remote/**'
       - 'crates/nekkod/src/remote.rs'
@@ -72,6 +73,8 @@ jobs:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
         run: |
           npm ci --no-audit --no-fund --ignore-scripts
+          # The app's bundled Mermaid is the lockfile's version, byte for byte (vendor/mermaid).
+          node scripts/vendor-mermaid.mjs --check
           npm run build:core
           npm run build --workspace=apps/cli
           npm run build -w @nekko-agent/local-web-ui
