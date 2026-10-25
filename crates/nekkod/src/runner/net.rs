@@ -16,9 +16,15 @@
 //! is not routed in P1: every IPv6 frame is dropped. Every buffer, queue and
 //! table is bounded, and no guest byte is trusted without a checked parse.
 //!
-//! The file is self-contained (no `crate::` paths) because
-//! `tests/runner_net.rs` includes it with `#[path]`.
+//! VPN routes never carry job traffic: [`Direct`] binds every host socket,
+//! DNS upstreams included, to the physical interface `nekko-vm egress`
+//! reports (IP_BOUND_IF), and refuses every flow while there is none or it is
+//! not known yet.
+//!
+//! The file uses no `crate::` paths, only `super::egress`, because
+//! `tests/runner_net.rs` and the spike example include both with `#[path]`.
 
+use super::egress::Egress;
 use nekko_runner::{HostNets, guest_may_connect};
 use smoltcp::iface::{Config, Interface, SocketHandle, SocketSet};
 use smoltcp::phy::{self, ChecksumCapabilities, Device, DeviceCapabilities, Medium};
@@ -115,28 +121,58 @@ pub trait Connector: Send + Sync + 'static {
     fn udp(&self, dst: SocketAddr) -> impl Future<Output = io::Result<UdpSocket>> + Send;
 }
 
-/// The real connector: plain host sockets.
-pub struct Direct;
+/// The real connector: host sockets bound to the physical egress interface,
+/// so no VPN route carries them. The only place that binds.
+pub struct Direct {
+    pub egress: Arc<RwLock<Option<Egress>>>,
+}
+
+impl Direct {
+    /// An unconnected non-blocking socket for `dst`, bound to the physical
+    /// interface. No interface, egress unknown or a poisoned lock: refused.
+    fn socket(&self, dst: SocketAddr, ty: socket2::Type) -> io::Result<socket2::Socket> {
+        let index = self
+            .egress
+            .read()
+            .ok()
+            .and_then(|e| e.as_ref()?.physical.as_ref().and_then(|p| std::num::NonZeroU32::new(p.1)))
+            .ok_or_else(|| io::Error::new(io::ErrorKind::PermissionDenied, "no physical egress interface"))?;
+        let s = socket2::Socket::new(socket2::Domain::for_address(dst), ty, None)?;
+        s.set_nonblocking(true)?;
+        // IP_BOUND_IF is Apple-only; the runner runs VMs only on macOS.
+        #[cfg(target_os = "macos")]
+        if dst.is_ipv4() {
+            s.bind_device_by_index_v4(Some(index))?;
+        } else {
+            s.bind_device_by_index_v6(Some(index))?;
+        }
+        #[cfg(not(target_os = "macos"))]
+        let _ = index;
+        Ok(s)
+    }
+}
 
 impl Connector for Direct {
     async fn tcp(&self, dst: SocketAddr) -> io::Result<TcpStream> {
-        TcpStream::connect(dst).await
+        let s = self.socket(dst, socket2::Type::STREAM)?;
+        tokio::net::TcpSocket::from_std_stream(s.into()).connect(dst).await
     }
     async fn udp(&self, dst: SocketAddr) -> io::Result<UdpSocket> {
-        connected_udp(dst).await
+        let s = UdpSocket::from_std(self.socket(dst, socket2::Type::DGRAM)?.into())?;
+        s.connect(dst).await?;
+        Ok(s)
     }
 }
 
-async fn connected_udp(dst: SocketAddr) -> io::Result<UdpSocket> {
-    let any: SocketAddr = if dst.is_ipv4() { ([0, 0, 0, 0], 0).into() } else { ([0u16; 8], 0).into() };
-    let s = UdpSocket::bind(any).await?;
-    s.connect(dst).await?;
-    Ok(s)
-}
-
-/// Runs the NAT on `sock` until the VM side closes it (or it fails).
-pub async fn serve(sock: UnixDatagram, host: Arc<RwLock<HostNets>>, cfg: NetConfig) -> io::Result<()> {
-    serve_with(sock, host, cfg, Direct).await
+/// Runs the NAT on `sock` until the VM side closes it (or it fails), with
+/// host sockets bound to `egress`'s physical interface.
+pub async fn serve(
+    sock: UnixDatagram,
+    host: Arc<RwLock<HostNets>>,
+    egress: Arc<RwLock<Option<Egress>>>,
+    cfg: NetConfig,
+) -> io::Result<()> {
+    serve_with(sock, host, cfg, Direct { egress }).await
 }
 
 /// [`serve`] with the host sockets opened through `connector`.
@@ -419,7 +455,8 @@ impl<C: Connector> Nat<C> {
         if new_syn && tcp.dst_port != 0 && !self.flows.contains_key(&key) {
             if dst.ip() == &GATEWAY {
                 if let (53, Some(&up)) = (dst.port(), self.cfg.dns_upstream.first()) {
-                    self.open_tcp(key, TcpStream::connect(up));
+                    let c = self.connector.clone();
+                    self.open_tcp(key, async move { c.tcp(up).await });
                 }
             } else if self.allowed(*dst.ip()) {
                 let c = self.connector.clone();
@@ -657,13 +694,18 @@ impl<C: Connector> Nat<C> {
             return;
         }
         let Ok(slot) = self.dns_slots.clone().try_acquire_owned() else { return };
-        let (query, upstream, back, wake) =
-            (query.to_vec(), self.cfg.dns_upstream.clone(), self.udp_back_tx.clone(), self.wake.clone());
+        let (query, upstream, back, wake, c) = (
+            query.to_vec(),
+            self.cfg.dns_upstream.clone(),
+            self.udp_back_tx.clone(),
+            self.wake.clone(),
+            self.connector.clone(),
+        );
         tokio::spawn(async move {
             let _slot = slot;
             let mut buf = vec![0u8; DNS_MAX];
             for up in upstream.iter().take(3) {
-                let Ok(s) = connected_udp(*up).await else { continue };
+                let Ok(s) = c.udp(*up).await else { continue };
                 if s.send(&query).await.is_err() {
                     continue;
                 }

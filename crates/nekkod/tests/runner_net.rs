@@ -5,12 +5,16 @@
 //! servers. Refusal tests map the refused address to a live local server too,
 //! so a policy hole would show up as a connection, not a timeout.
 
+#[path = "../src/runner/egress.rs"]
+#[allow(dead_code)]
+mod egress;
 #[path = "../src/runner/net.rs"]
 #[allow(dead_code)]
 mod net;
 
+use egress::Egress;
 use nekko_runner::HostNets;
-use net::{Connector, GATEWAY, GUEST, NetConfig, serve_with};
+use net::{Connector, Direct, GATEWAY, GUEST, NetConfig, serve_with};
 use smoltcp::iface::{Config, Interface, SocketHandle, SocketSet};
 use smoltcp::phy::{self, Device, DeviceCapabilities, Medium};
 use smoltcp::socket::{dhcpv4, tcp, udp};
@@ -324,13 +328,14 @@ async fn dhcp_offers_the_guest_address_and_gateway() {
 #[tokio::test(flavor = "multi_thread")]
 async fn dns_query_is_forwarded_and_answered() {
     let up = fake_dns(b"").await;
-    let mut r = start(HostNets::default(), 16, vec![up], TestConnector::default(), true);
+    let mut r = start(HostNets::default(), 16, vec![up], TestConnector::new([(up, up)]), true);
     let h = r.guest.udp(5353);
     r.guest.udp_sock(h).send_slice(b"query1", ep(GATEWAY, 53)).unwrap();
     let (data, from) = r.guest.udp_recv(h, 5).await.expect("no DNS answer");
     assert_eq!(data, b"ans:query1");
     assert_eq!(from, ep(GATEWAY, 53));
-    assert!(r.conn.calls().is_empty(), "DNS goes to the upstream, not the connector");
+    // Through the connector, so the upstream socket is bound to the egress interface too.
+    assert_eq!(r.conn.calls(), vec![("udp", up)]);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -382,7 +387,7 @@ async fn tcp_to_public_address_is_forwarded() {
 async fn net_refuses_private_after_dns() {
     let server = pong_server().await;
     let up = fake_dns(&[192, 168, 1, 1]).await;
-    let conn = TestConnector::new([(sa(Ipv4Addr::new(192, 168, 1, 1), 80), server)]);
+    let conn = TestConnector::new([(sa(Ipv4Addr::new(192, 168, 1, 1), 80), server), (up, up)]);
     let mut r = start(HostNets::default(), 16, vec![up], conn, true);
     let q = r.guest.udp(5353);
     r.guest.udp_sock(q).send_slice(b"router.lan", ep(GATEWAY, 53)).unwrap();
@@ -392,7 +397,7 @@ async fn net_refuses_private_after_dns() {
     assert_eq!(ip, Ipv4Addr::new(192, 168, 1, 1));
     let h = r.guest.connect(ip, 80, 40001);
     assert!(r.guest.refused(h).await, "expected RST, state {:?}", r.guest.tcp(h).state());
-    assert!(r.conn.calls().is_empty(), "connector was called: {:?}", r.conn.calls());
+    assert_eq!(r.conn.calls(), vec![("udp", up)], "only the DNS upstream may be dialed");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -775,4 +780,61 @@ async fn gateway_answers_arp_only_for_itself() {
     raw.send(&arp_request(GUEST, Ipv4Addr::new(93, 184, 216, 34))).unwrap();
     raw.send(&arp_request(GUEST, GATEWAY)).unwrap();
     assert_eq!(arp_claims(&raw, 500).await, vec![GATEWAY]);
+}
+
+fn direct(physical: Option<(&str, u32)>, known: bool) -> Direct {
+    let e = Egress {
+        physical: physical.map(|(n, i)| (n.to_string(), i)),
+        vpn_carries_default: false,
+        expensive: false,
+        constrained: false,
+    };
+    Direct { egress: Arc::new(RwLock::new(known.then_some(e))) }
+}
+
+/// lo0 stands in for the physical interface: bound to it, a loopback connect still works.
+#[cfg(target_os = "macos")]
+#[tokio::test(flavor = "multi_thread")]
+async fn host_sockets_are_bound_to_the_egress_interface() {
+    use socket2::SockRef;
+    // SAFETY: a NUL-terminated name.
+    let lo0 = unsafe { libc::if_nametoindex(c"lo0".as_ptr()) };
+    assert_ne!(lo0, 0);
+    let d = direct(Some(("lo0", lo0)), true);
+    let t = d.tcp(pong_server().await).await.unwrap();
+    assert_eq!(SockRef::from(&t).device_index_v4().unwrap().map(|i| i.get()), Some(lo0));
+    let u = d.udp(udp_echo().await).await.unwrap();
+    assert_eq!(SockRef::from(&u).device_index_v4().unwrap().map(|i| i.get()), Some(lo0));
+    u.send(b"hi").await.unwrap();
+    let mut buf = [0u8; 16];
+    let n = tokio::time::timeout(Duration::from_secs(2), u.recv(&mut buf)).await.unwrap().unwrap();
+    assert_eq!(&buf[..n], b"echo:hi");
+}
+
+/// A live server behind every refused address, so a refusal is not a timeout.
+async fn assert_direct_refuses(d: Direct) {
+    let (tcp_dst, udp_dst) = (pong_server().await, udp_echo().await);
+    assert_eq!(d.tcp(tcp_dst).await.unwrap_err().kind(), io::ErrorKind::PermissionDenied);
+    assert_eq!(d.udp(udp_dst).await.unwrap_err().kind(), io::ErrorKind::PermissionDenied);
+    // End to end: the guest's TCP gets RST and its DNS goes unanswered.
+    let up = fake_dns(b"").await;
+    let (g, n) = UnixDatagram::pair().unwrap();
+    let cfg = NetConfig { dns_upstream: vec![up], ..NetConfig::default() };
+    let _nat = tokio::spawn(serve_with(n, Arc::new(RwLock::new(HostNets::default())), cfg, d));
+    let mut guest = Guest::new(g, true);
+    let h = guest.connect(PUBLIC, 443, 42001);
+    assert!(guest.refused(h).await, "a guest flow left without an egress interface");
+    let q = guest.udp(5353);
+    guest.udp_sock(q).send_slice(b"query", ep(GATEWAY, 53)).unwrap();
+    assert!(guest.udp_recv(q, 1).await.is_none(), "DNS left without an egress interface");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn no_physical_interface_refuses_every_flow() {
+    assert_direct_refuses(direct(None, true)).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn unknown_egress_refuses_every_flow() {
+    assert_direct_refuses(direct(Some(("en0", 4)), false)).await;
 }

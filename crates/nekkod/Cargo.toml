@@ -69,7 +69,8 @@ serde_json.workspace = true
 sha2 = "0.10"
 smoltcp.workspace = true
 # The mDNS responder's socket: SO_REUSEADDR before bind, multicast membership per interface.
-socket2 = "0.6"
+# "all": bind_device_by_index_v4/v6 (IP_BOUND_IF) for the runner NAT's host sockets.
+socket2 = { version = "0.6", features = ["all"] }
 # The OS name and version the Send feedback sheet may share (feedback.rs); nekko-machine already builds it.
 sysinfo = { version = "0.39", default-features = false, features = ["system"] }
 tokio.workspace = true

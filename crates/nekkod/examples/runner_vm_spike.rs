@@ -11,6 +11,9 @@
 //! on a clean exit (Ctrl-C or the guest stopping); after a SIGKILL it stays,
 //! as it would for the supervisor's reaper.
 
+#[path = "../src/runner/egress.rs"]
+#[allow(dead_code)]
+mod egress;
 #[path = "../src/runner/hostnets.rs"]
 #[allow(dead_code)]
 mod hostnets;
@@ -45,6 +48,8 @@ async fn main() -> Res<()> {
     // Fail closed: without the host's addresses the policy cannot keep the guest off them.
     let host = Arc::new(RwLock::new(hostnets::try_current().map_err(|e| format!("cannot read host networks: {e}"))?));
     hostnets::spawn_refresh(host.clone(), Duration::from_secs(5));
+    // The NAT refuses every flow until the helper reports the physical interface.
+    let egress = egress::spawn_watch(&helper);
 
     // Everything that can fail is ready before the clone exists, so no early
     // return leaves a VM or a clone behind.
@@ -89,7 +94,7 @@ async fn main() -> Res<()> {
     println!("ssh -p 2222 admin@127.0.0.1 once the guest is up; Ctrl-C stops the VM");
     let strip = tokio::spawn(strip_tart_agent(work.clone()));
 
-    let serve = net::serve(nat_end, host, cfg);
+    let serve = net::serve(nat_end, host, egress, cfg);
     tokio::pin!(serve);
     tokio::select! {
         r = &mut serve => println!("nat ended: {r:?}"),
