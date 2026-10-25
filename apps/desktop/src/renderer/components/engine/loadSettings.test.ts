@@ -15,6 +15,13 @@ import {
 const moe = { layers: 48, sizeBytes: 45 * 1024 ** 3, weightLayout: { expertShare: 21 / 45, ffnShare: 0, tableShare: 21 / 45 } };
 
 describe('load settings', () => {
+  it('defaults thinking on and retains the local model Expert override', () => {
+    expect(fromPreset().params.thinking !== false).toBe(true);
+    expect(fromPreset({}).params.thinking !== false).toBe(true);
+    expect(fromPreset({ thinking: false }).params.thinking).toBe(false);
+    expect(fromPreset({ thinking: true }).params.thinking).toBe(true);
+  });
+
   it('reads where it runs off the launch parameters', () => {
     expect(runOnOf({}, 48)).toBe('gpu');
     expect(runOnOf({ gpuLayers: 48 }, 48)).toBe('gpu');
@@ -34,8 +41,9 @@ describe('load settings', () => {
 
   it('keeps settings the solver does not decide', () => {
     const rec = { runOn: 'gpu', contextTokens: 32768, sessions: 1, kvCacheDtype: 'f16', gpuLayers: 48, cpuMoeLayers: 0, cpuFfnLayers: 0, kvOnGpu: true, mmap: true, pin: false, tablesOnDisk: true, moeCacheBytes: 0 } as Recommendation['request'];
-    const p = fromRecommendation(rec, moe, { seed: 7, mlock: true, ttlSeconds: 0, cpuMoeLayers: 10 });
+    const p = fromRecommendation(rec, moe, { thinking: false, seed: 7, mlock: true, ttlSeconds: 0, cpuMoeLayers: 10 });
     expect(p.seed).toBe(7);
+    expect(p.thinking).toBe(false);
     expect(p.mlock).toBe(true);
     expect(p.cpuMoeLayers).toBeUndefined();
     expect(p.parallelSlots).toBeUndefined();

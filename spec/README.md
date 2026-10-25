@@ -127,7 +127,7 @@ Providers, local models, the Model Server, training.
 - [First-agent provider setup](models/first-agent-provider-setup.md) (2 KB)
 - [Hardware-aware model recommendations](models/hardware-aware-model-recommendations.md) (11 KB)
 - [Model training & goals (the data-scientist agent)](models/model-training-goals-the-data-scientist-agent.md) (4 KB)
-- [Models & providers](models/models-providers.md) (41 KB)
+- [Models & providers](models/models-providers.md) (42 KB)
 - [Prompt caching across providers (2026-10-07)](models/prompt-caching-across-providers.md) (7 KB)
 - [Running a model with nothing else installed](models/running-a-model-with-nothing-else-installed.md) (28 KB)
 - [Server, model browser and desktop tray](models/server-model-browser-and-desktop-tray.md) (5 KB)
@@ -148,8 +148,8 @@ Working in a codebase: files, editor, diffs, pull requests, design workspace.
 - [In-chat pull requests](code/in-chat-pull-requests.md) (2 KB)
 - [Issue per change and work tracking preferences](code/issue-per-change.md) (2 KB)
 - [Repository review integration](code/repository-review-integration.md) (1 KB)
-- [Rich responses, reports, and design workspace](code/rich-responses-reports-and-design-workspace.md) (21 KB)
-- [Working in a codebase](code/working-in-a-codebase.md) (4 KB)
+- [Rich responses, reports, and design workspace](code/rich-responses-reports-and-design-workspace.md) (22 KB)
+- [Working in a codebase](code/working-in-a-codebase.md) (5 KB)
 
 ### automation
 
