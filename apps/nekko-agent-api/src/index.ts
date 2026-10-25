@@ -1,6 +1,7 @@
 import { createPgDb } from "./db.js";
 import { expireDonations } from "./donations.js";
 import { migrate } from "./migrate.js";
+import { FlyDriver } from "./fly.js";
 import { buildServer, DEFAULT_ORIGINS } from "./server.js";
 import { supabaseVerifier } from "./supabase.js";
 
@@ -28,7 +29,18 @@ const signIn = supabaseUrl && supabaseAnonKey
   ? { supabaseUrl, supabaseAnonKey, verify: supabaseVerifier({ url: supabaseUrl, jwtSecret: process.env.SUPABASE_JWT_SECRET || undefined }) }
   : undefined;
 if (!signIn) console.warn("SUPABASE_URL / SUPABASE_ANON_KEY not set: sign-in is off (the /v1/auth routes answer 503).");
-const app = buildServer({ db, allowedOrigins, logger: true, signIn });
+// Nekko Cloud machines run on Fly Machines when the app and token are set.
+const flyToken = process.env.FLY_API_TOKEN;
+const flyApp = process.env.FLY_MACHINES_APP;
+const machines = flyToken && flyApp
+  ? {
+      driver: new FlyDriver({ token: flyToken, app: flyApp }),
+      relayUrl: process.env.NEKKO_RELAY_URL ?? "wss://nekko-agent-relay.fly.dev",
+      image: process.env.NEKKO_MACHINE_IMAGE ?? "ghcr.io/nekko-labs/nekko-agent:latest",
+    }
+  : undefined;
+if (!machines) console.warn("FLY_API_TOKEN / FLY_MACHINES_APP not set: Nekko Cloud machines are off (the /v1/machines routes are absent).");
+const app = buildServer({ db, allowedOrigins, logger: true, signIn, machines });
 await app.listen({ host: "0.0.0.0", port: Number(process.env.PORT ?? 4320) });
 
 for (const signal of ["SIGTERM", "SIGINT"] as const) {

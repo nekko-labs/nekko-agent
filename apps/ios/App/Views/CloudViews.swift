@@ -165,6 +165,7 @@ struct CloudView: View {
             } header: { SectionHeader("Devices") } footer: {
                 Text("Remove a device on a computer: Settings → Sync.").foregroundStyle(palette.inkSoft)
             }
+            CloudMachinesSection()
         default:
             EmptyView()
         }
@@ -437,5 +438,72 @@ struct SyncedChatView: View {
         .background(palette.paper)
         .navigationTitle(chat?.title ?? "Chat")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// The account's Nekko Cloud machines (decision 0017): sandboxed computers the
+/// phone pairs with. Each opens its computer page; a new one is made and paired
+/// in one step.
+struct CloudMachinesSection: View {
+    @Environment(CloudSync.self) private var cloud
+    @Environment(ComputersStore.self) private var store
+    @Environment(\.palette) private var palette
+    @State private var busy = false
+    @State private var error: String?
+    @State private var loaded = false
+
+    var body: some View {
+        Section {
+            if cloud.machines.isEmpty && loaded {
+                Text("No machines yet.").foregroundStyle(palette.inkSoft)
+            }
+            ForEach(cloud.machines) { m in
+                if let id = cloud.computerId(for: m), store.computers.contains(where: { $0.id == id }) {
+                    NavigationLink(value: Route.computer(id)) { MachineRow(machine: m) }
+                } else {
+                    MachineRow(machine: m)
+                }
+            }
+            Button { Task { await make() } } label: {
+                if busy { ProgressView() } else { Label("New machine", systemImage: "plus") }
+            }
+            .disabled(busy || !(cloud.account?.canSync ?? false))
+            .accessibilityIdentifier("cloud.newMachine")
+            if let error { Text(error).font(.footnote).foregroundStyle(palette.danger) }
+        } header: { SectionHeader("Machines") } footer: {
+            Text("A sandboxed computer in the cloud, paired like any other. It sees only what you put in its scope: repositories by name, your own provider keys, Privacy Shield on. Nothing from your computers unless you copy it up. Pro and Team.")
+                .foregroundStyle(palette.inkSoft)
+        }
+        .task { if !loaded { try? await cloud.loadMachines(); loaded = true } }
+    }
+
+    private func make() async {
+        busy = true
+        error = nil
+        defer { busy = false }
+        do {
+            let made = try await cloud.createMachine(name: "Nekko Cloud", region: "nrt", scope: CloudSync.MachineScope())
+            let id = await store.pair(made.link)
+            store.rename(id, to: made.machine.name)
+            cloud.link(made.machine, computer: id)
+        } catch { self.error = error.localizedDescription }
+    }
+}
+
+struct MachineRow: View {
+    let machine: CloudSync.Machine
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(machine.name).foregroundStyle(palette.ink)
+                Text("\(machine.region.uppercased()) · \(machine.state) · \(machine.hoursUsed, format: .number.precision(.fractionLength(1))) of \(Int(machine.hoursIncluded)) h")
+                    .font(.caption).foregroundStyle(palette.inkFaint)
+            }
+            Spacer()
+            Circle().fill(machine.state == "running" ? palette.success : palette.inkFaint.opacity(0.5)).frame(width: 8, height: 8)
+        }
+        .accessibilityElement(children: .combine)
     }
 }
