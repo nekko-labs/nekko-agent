@@ -264,10 +264,10 @@ impl Watches {
         let ended_session = matches!(str_of(w, "status"), Some("done" | "cancelled" | "error"))
             .then(|| str_of(w, "sessionId").map(str::to_string))
             .flatten();
-        if self.save(&watches).is_ok() {
-            if let Some(session_id) = ended_session {
-                self.host.status_changed(&session_id);
-            }
+        if self.save(&watches).is_ok()
+            && let Some(session_id) = ended_session
+        {
+            self.host.status_changed(&session_id);
         }
     }
 

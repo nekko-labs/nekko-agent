@@ -36,7 +36,10 @@ phone summaries receive no watch continuation, URL or error details through this
 field. Watch creation/cancellation and active-to-terminal transitions publish a
 minimal `session_meta` event after saving. Clients refresh summaries on that event
 and turn completion; the desktop refresh is debounced and does not require an
-open ChatPane. Metadata alone never marks a chat working.
+open ChatPane. Metadata alone never marks a chat working. Invalidations received
+while a summary call is pending are coalesced into a trailing fetch, so an old
+watch count cannot be the final result. Disconnected/replaced phone clients do
+not apply late responses. Failed requests alone do not start a retry loop.
 
 Evidence uses synthetic records and base `beee7cd1` at matching dimensions,
 theme and data, in hidden Electron fixtures and owned native framebuffer-only

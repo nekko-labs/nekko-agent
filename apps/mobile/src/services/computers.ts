@@ -29,6 +29,7 @@ import { nextActivity, type Activity } from '@/lib/transcript';
 import { createStore } from '@/lib/store';
 import { currentPushToken } from './push';
 import { getSecret, setSecret } from './storage';
+import { createSummaryScheduler } from './summaryScheduler';
 
 export interface Computer {
   id: string;
@@ -86,6 +87,16 @@ const DEVICE_KEY = 'nekko.deviceId';
 const secretKey = (id: string) => `nekko.computer.${id}`;
 
 let client: RelayClient | null = null;
+let connectionGeneration = 0;
+const summaryScheduler = createSummaryScheduler(
+  () => remote().call<SessionSummary[]>(Channels.sessionsSummaries),
+  (summaries) => computers.set({ summaries: visibleSummaries(summaries) }),
+);
+
+function invalidateSummaries(): void {
+  connectionGeneration++;
+  summaryScheduler.reset();
+}
 const eventListeners = new Set<(e: AgentEvent) => void>();
 
 /** Chat screens follow their session's events through this. */
@@ -163,7 +174,8 @@ export async function connect(id: string): Promise<void> {
     pairCode: secret.pair,
     onState: (state, detail) => {
       if (client !== c) return;
-      computers.set({ conn: state, connDetail: detail });
+      if (state !== 'online') invalidateSummaries();
+      computers.set({ conn: state, connDetail: detail, ...(state !== 'online' ? { summariesLoading: false } : {}) });
       if (state === 'online') {
         void refresh();
         void currentPushToken().then((t) => {
@@ -180,13 +192,13 @@ export async function connect(id: string): Promise<void> {
       computers.set({ denied: reason });
     },
     onEvent: (channel, payload) => {
-      if (channel !== Events.agentEvent) return;
+      if (client !== c || computers.get().conn !== 'online' || channel !== Events.agentEvent) return;
       const e = payload as AgentEvent;
       for (const l of eventListeners) l(e);
       const activity = nextActivity(computers.get().activity, e);
       if (activity !== computers.get().activity) computers.set({ activity });
       // Keep the list fresh when a turn ends anywhere (another device, a task).
-      if (e.type === 'done' || e.type === 'session_meta') scheduleSummaries();
+      if (e.type === 'done' || e.type === 'session_meta') summaryScheduler.schedule();
     },
   });
   client = c;
@@ -194,9 +206,10 @@ export async function connect(id: string): Promise<void> {
 }
 
 export function disconnect(): void {
+  invalidateSummaries();
   client?.close();
   client = null;
-  computers.set({ conn: 'idle' });
+  computers.set({ conn: 'idle', summariesLoading: false });
 }
 
 /** App came to the foreground: reconnect now rather than after the backoff. */
@@ -205,41 +218,29 @@ export function nudge(): void {
 }
 
 export async function refresh(): Promise<void> {
-  if (!client) return;
+  if (!client || computers.get().conn !== 'online') return;
+  const c = client;
+  const generation = connectionGeneration;
   computers.set({ summariesLoading: true, lastError: undefined });
   try {
-    const c = client;
-    const [summaries, providers, settings, workspaces, info, pending] = await Promise.all([
-      c.call<SessionSummary[]>(Channels.sessionsSummaries),
+    const [, providers, settings, workspaces, info, pending] = await Promise.all([
+      summaryScheduler.refresh(),
       c.call(Channels.providersList).then(publicProviders),
       c.call(Channels.settingsGet).then(pickDefaults),
       c.call<WorkspaceFolder[]>(Channels.workspaceList).catch(() => []),
       c.call<{ platform?: string }>(Channels.appInfo).catch(() => ({ platform: undefined })),
       c.call<Record<string, PendingInput>>(Channels.chatPending).catch(() => ({})),
     ]);
-    if (client !== c) return;
+    if (client !== c || generation !== connectionGeneration) return;
     // Approvals and questions already waiting when we (re)connect.
     const activity = { ...computers.get().activity };
     for (const [sid, p] of Object.entries(pending ?? {})) if (p?.approval || p?.question) activity[sid] = 'needs-you';
-    computers.set({ summaries: visibleSummaries(summaries), providers, defaults: settings, workspaces, activity, summariesLoading: false });
+    computers.set({ providers, defaults: settings, workspaces, activity, summariesLoading: false });
     learnPlatform(info.platform);
   } catch (e) {
+    if (client !== c || generation !== connectionGeneration) return;
     computers.set({ summariesLoading: false, lastError: (e as Error).message });
   }
-}
-
-let summariesTimer: ReturnType<typeof setTimeout> | null = null;
-function scheduleSummaries(): void {
-  if (summariesTimer) return;
-  summariesTimer = setTimeout(async () => {
-    summariesTimer = null;
-    if (!client) return;
-    try {
-      computers.set({ summaries: visibleSummaries(await client.call(Channels.sessionsSummaries)) });
-    } catch {
-      /* next refresh will catch up */
-    }
-  }, 600);
 }
 
 export async function loadModels(providerId: string): Promise<ModelInfo[]> {
