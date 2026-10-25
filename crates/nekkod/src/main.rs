@@ -14,6 +14,7 @@ mod agent_logs;
 mod api_server;
 mod auto_continue;
 mod automation;
+mod background;
 
 mod boot;
 mod catalog;
@@ -30,6 +31,7 @@ mod decisions;
 mod desktop;
 mod downloads;
 mod engine;
+mod feedback;
 mod gcp;
 mod harness;
 mod hub;
@@ -57,6 +59,7 @@ mod resource_queue;
 mod routes;
 mod runtimes;
 mod sandbox;
+mod security;
 mod settings;
 mod side;
 mod sideband;
@@ -200,10 +203,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             Some(nekko_cloud::Cloud::new(nekko_cloud::Options {
                 vault: nekko_cloud::vault::default_vault(&dir),
                 dir,
-                api_url: std::env::var("NEKKO_CLOUD_URL")
-                    .ok()
-                    .filter(|u| !u.is_empty())
-                    .unwrap_or_else(|| "https://nekko-agent-api.fly.dev".into()),
+                api_url: feedback::cloud_url(),
                 device_label: gethostname::gethostname().to_string_lossy().chars().take(40).collect(),
                 sessions: store.clone(),
                 publish: Arc::new(move |status| publish_hub.publish(nekko_cloud::EVENT, status, false)),
@@ -242,6 +242,14 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     let library = settings.clone().map(|s| library::Library::new(s, machine.clone(), engine.clone()));
     if let Some(library) = &library {
         let _ = engine.speeds.sink.set(speeds::Speeds::new(machine.clone(), library.clone()));
+        // Abandoned downloads can be GBs each (#1035).
+        let dir = std::path::PathBuf::from(library.models_dir());
+        tokio::task::spawn_blocking(move || {
+            let freed = downloads::sweep_stale_parts(&dir, std::time::SystemTime::now());
+            if freed > 0 {
+                logs::note(&format!("nekkod: removed {freed} bytes of abandoned downloads"));
+            }
+        });
     }
     let model_downloads = library.clone().zip(catalog.clone()).map(|(library, catalog)| {
         let fetch =
@@ -336,6 +344,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         )),
         automation: automation.clone(),
         remote: remote.clone(),
+        security: Arc::new(security::Security::new(remote.security_store(), nekko_remote::system_clock())),
         sandboxes,
         compactions,
         image_turns: image_turns::ImageTurns::new(),
@@ -365,6 +374,12 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         cloud.start(std::time::Duration::from_secs(60));
     }
     routes::forward_terminal_events(&ctx);
+    ctx.turns.set_background(background::Background::new(
+        ctx.machine.clone(),
+        ctx.admission.clone(),
+        ctx.settings.as_ref().map(|s| s.store.clone()),
+        ctx.hub.clone(),
+    ));
     if let Some(adm) = ctx.admission.clone() {
         let c = ctx.clone();
         ctx.turns.set_preparer(Arc::new(move |payload| {
@@ -573,5 +588,6 @@ async fn shutdown_signal(watch_stdin: bool, signals: &mut Signals) -> &'static s
     tokio::select! {
         _ = stdin_closed => "stdin closed",
         why = signals.next() => why,
+        _ = small_services::QUIT.notified() => "app:quit from a phone",
     }
 }

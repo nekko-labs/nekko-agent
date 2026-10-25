@@ -25,6 +25,8 @@ pub mod proof;
 pub mod route;
 pub mod service;
 pub mod socket;
+pub mod step_up;
+pub mod step_up_register;
 
 pub use agent::{AgentCore, Out, PUSH_TEST_CHANNEL, RELAYED_EVENTS};
 pub use phone::{Activity, DeviceAccess, Devices, PhoneDevice};

@@ -24,6 +24,8 @@ import { AGENT_REPLAY, IpcChannels, IpcEvents } from '@nekko-agent/shared';
 import { ENGINE_ENDPOINT_CHANNEL, PICK_FOLDER_CHANNEL, SERVICE_CONTROL_CHANNEL } from '../engineChannels.js';
 import { createEngineSocket, type Listener } from './engine-socket.js';
 import { MAIN_EVENTS } from './routing.js';
+import { withStepUpRetry, type StepUpHandler } from '../stepUpRetry.js';
+import { WEBAUTHN_CEREMONY_CHANNEL } from '../webauthnCeremony.js';
 import {
   TITLEBAR_HEIGHT,
   TITLEBAR_OVERLAY_CHANNEL,
@@ -33,12 +35,17 @@ import {
 import {
   DISPLAY_ARG, DISPLAYS_CHANGED_EVENT, DISPLAYS_CLAIM_CHANNEL, DISPLAYS_LIST_CHANNEL, DISPLAYS_PLACED_EVENT,
   DISPLAYS_PLACEMENT_CHANNEL, DISPLAYS_REPORT_CHANNEL, DISPLAYS_TOGGLE_CHANNEL, type DisplaysState,
+  DISPLAYS_DESKTOP_CHANNEL, DISPLAYS_GO_CHANNEL, DISPLAYS_SPACES_MODE_CHANNEL,
 } from '../displayWindows.js';
 
 // Every call goes to the engine's socket (see `routing.ts`).
 const engine = createEngineSocket((operation) => ipcRenderer.invoke(ENGINE_ENDPOINT_CHANNEL, operation));
 
-const inv = (channel: string, ...args: unknown[]): Promise<any> => engine.call(channel, args);
+/** The page's step-up sheet (SK-4), set by the renderer through `setStepUpHandler`. */
+let stepUpHandler: StepUpHandler | null = null;
+
+/** A call to the engine; a guarded one refused `step-up-required` opens the sheet and runs again once confirmed. */
+const inv = (channel: string, ...args: unknown[]): Promise<any> => withStepUpRetry(() => engine.call(channel, args), () => stepUpHandler);
 
 /** Events: main's few from `ipcRenderer`, the rest from the engine. */
 const bus = {
@@ -86,6 +93,8 @@ const api: NekkoApi = {
   cloudBeginOAuth: (provider) => inv(IpcChannels.cloudBeginOAuth, provider),
   cloudCancelOAuth: () => inv(IpcChannels.cloudCancelOAuth),
   cloudSignOut: () => inv(IpcChannels.cloudSignOut),
+  feedbackInfo: () => inv(IpcChannels.feedbackInfo),
+  feedbackSend: (message, includeAppInfo) => inv(IpcChannels.feedbackSend, message, includeAppInfo),
   syncTurnOn: () => inv(IpcChannels.syncTurnOn),
   syncConfirmRecoveryKey: (text) => inv(IpcChannels.syncConfirmRecoveryKey, text),
   syncRestore: (text) => inv(IpcChannels.syncRestore, text),
@@ -379,6 +388,20 @@ const api: NekkoApi = {
   networkVisibilityStatus: () => inv(IpcChannels.networkVisibilityStatus),
   networkVisibilityStart: () => inv(IpcChannels.networkVisibilityStart),
   networkVisibilityStop: () => inv(IpcChannels.networkVisibilityStop),
+  // Settings → Security (SK-4): the engine verifies; WebAuthn runs in main's loopback ceremony window.
+  securityStatus: () => inv(IpcChannels.securityStatus),
+  securityChallenge: () => inv(IpcChannels.securityChallenge),
+  securityConfirm: (action, proof) => inv(IpcChannels.securityConfirm, action, proof),
+  securityRegisterBegin: (kind) => inv(IpcChannels.securityRegisterBegin, kind),
+  securityRegisterKey: (input) => inv(IpcChannels.securityRegisterKey, input),
+  securityTotpBegin: () => inv(IpcChannels.securityTotpBegin),
+  securityTotpConfirm: (code) => inv(IpcChannels.securityTotpConfirm, code),
+  securityEnable: () => inv(IpcChannels.securityEnable),
+  securityDisable: (proof) => inv(IpcChannels.securityDisable, proof),
+  securityRemoveMethod: (id, proof) => inv(IpcChannels.securityRemoveMethod, id, proof),
+  securityRecoveryCodes: () => inv(IpcChannels.securityRecoveryCodes),
+  webAuthnCeremony: (request) => ipcRenderer.invoke(WEBAUTHN_CEREMONY_CHANNEL, request),
+  setStepUpHandler: (handler) => { stepUpHandler = handler; },
 
   getAppInfo: () => inv(IpcChannels.appInfo),
   getClaudePolicy: () => inv(IpcChannels.claudePolicy),
@@ -502,6 +525,9 @@ const chrome: WindowChromeBridge = {
     list: () => ipcRenderer.invoke(DISPLAYS_LIST_CHANNEL),
     toggle: (id, on, reducedMotion) => ipcRenderer.invoke(DISPLAYS_TOGGLE_CHANNEL, id, on, reducedMotion),
     setPlacement: (placement) => ipcRenderer.invoke(DISPLAYS_PLACEMENT_CHANNEL, placement),
+    toggleDesktop: (id, on) => ipcRenderer.invoke(DISPLAYS_DESKTOP_CHANNEL, id, on),
+    setSpacesMode: (mode) => ipcRenderer.invoke(DISPLAYS_SPACES_MODE_CHANNEL, mode),
+    go: (target) => ipcRenderer.invoke(DISPLAYS_GO_CHANNEL, target),
     report: (panes) => { if (process.isMainFrame) ipcRenderer.send(DISPLAYS_REPORT_CHANNEL, panes); },
     claim: (sessionId, mode) => ipcRenderer.invoke(DISPLAYS_CLAIM_CHANNEL, sessionId, mode),
     onChange: (cb) => {

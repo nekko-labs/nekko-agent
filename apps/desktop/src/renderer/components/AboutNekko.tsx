@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { NekkoAvatar } from './Mascot.js';
 import { useUpdater } from './UpdateBanner.js';
 import { Modal } from './primitives/index.js';
+import { openFeedback } from './FeedbackSheet.js';
 
 const FACTS = [
   { k: 'Local-first', v: 'Your chats, files and memory stay on this machine unless you send them somewhere.' },
@@ -48,6 +49,7 @@ export function AboutNekko() {
         <p className="mt-2 text-[12px] text-ink-faint">
           Built with care (and catnip) by <span className="font-semibold text-ink">Nekko Labs</span>.
         </p>
+        <button type="button" className="btn btn-outline" onClick={() => { setOpen(false); setPurr(null); openFeedback(); }}>Send feedback</button>
         <p className="text-[11px] text-ink-faint">© {new Date().getFullYear()} Nekko Labs</p>
       </div>
     </Modal>

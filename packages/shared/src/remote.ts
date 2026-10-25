@@ -27,6 +27,8 @@ export interface RemoteDevice {
   lastSeenAt: number;
   /** Revoked devices are denied at HELLO and kicked if connected. */
   revoked?: boolean;
+  /** SK-3: when the phone signed itself out (`device:signOut`), so *Paired devices* says so. */
+  signedOutAt?: number;
   /**
    * What this phone may do (IO-33, *What phones can do*): `read` covers
    * read-class channels (the chats too, since 2026-10-22), `change`
@@ -73,6 +75,8 @@ export interface RemoteStatus {
   /** True when the agent's relay socket is currently open. */
   online?: boolean;
   error?: string;
+  /** SK-3: the phone that stopped remote access (`remote:stop`) and when, until it is turned on again: the desktop's banner. */
+  stoppedBy?: { deviceId: string; name?: string | null; at: number };
 }
 
 export interface RemotePairing {

@@ -33,6 +33,11 @@ pub trait LinkHandle: Send + Sync {
     fn stop(&self);
     /// Kick a device's live connections and drop its push token.
     fn kick_device(&self, device_id: &str);
+    /// Kick a device's live connections and keep its push token
+    /// (`remote:stop`: the phone is disconnected, not signed out).
+    fn disconnect_device(&self, device_id: &str) {
+        self.kick_device(device_id);
+    }
     /// Device ids with a welcomed live connection.
     fn connected_devices(&self) -> Vec<String>;
     fn is_online(&self) -> bool;
@@ -98,6 +103,8 @@ impl RemoteService {
                     // Relay replay protection: phones from before protocol 4
                     // are welcomed unless this is `false` (one release).
                     .with("acceptLegacyPhones", get("acceptLegacyPhones"))
+                    // SK-3: `{ deviceId, name, at }` when a phone stopped remote access, for the desktop's banner.
+                    .with("stoppedBy", get("stoppedBy"))
             }
         }
     }
@@ -229,9 +236,14 @@ impl RemoteService {
                 .with("connected", Some(json!(h.map(|h| h.connected_devices()).unwrap_or_default())))
                 .with("online", Some(json!(h.is_some_and(|h| h.is_online()))))
                 .with("error", h.and_then(|h| h.last_error()).map(Value::from))
+                .with("stoppedBy", cfg.get("stoppedBy").cloned())
                 .to_value()
         } else {
-            JsObj::new().with("enabled", Some(json!(false))).with("devices", cfg.get("devices").cloned()).to_value()
+            JsObj::new()
+                .with("enabled", Some(json!(false)))
+                .with("devices", cfg.get("devices").cloned())
+                .with("stoppedBy", cfg.get("stoppedBy").cloned())
+                .to_value()
         }
     }
 
@@ -252,6 +264,8 @@ impl RemoteService {
         };
         let cfg = prev
             .with("enabled", Some(json!(true)))
+            // Turned on again at the computer: the banner about a phone's stop goes.
+            .with("stoppedBy", None)
             .with("relayUrl", Some(relay_url.clone()))
             .with("room", Some(room))
             .with("secret", Some(secret));
@@ -557,6 +571,60 @@ impl crate::phone::Devices for RemoteService {
             .into_iter()
             .find(|d| d.get("id").and_then(Value::as_str) == Some(id))
             .and_then(|d| d.get("name").and_then(Value::as_str).map(String::from))
+    }
+
+    fn sign_out(&self, id: &str) -> Result<(), String> {
+        self.sign_out_device(id)
+    }
+
+    fn stop_remote(&self, id: &str) -> Result<(), String> {
+        self.stop_from_phone(id)
+    }
+}
+
+impl RemoteService {
+    /// `device:signOut` (SK-3): the calling phone revokes itself, as the
+    /// desktop's *Revoke* does (kicked with 4001, `revoked` on its record),
+    /// with `signedOutAt` so *Paired devices* says it was signed out from the phone.
+    pub fn sign_out_device(&self, id: &str) -> Result<(), String> {
+        let _io = lock(&self.io);
+        let cfg = self.load();
+        let now = hello::nekko_num((self.clock)());
+        let devices: Vec<Value> = Self::devices_of(&cfg)
+            .into_iter()
+            .map(|d| match d {
+                Value::Object(mut m) if m.get("id").and_then(Value::as_str) == Some(id) => {
+                    m.insert("revoked".into(), json!(true));
+                    m.insert("signedOutAt".into(), now.clone());
+                    Value::Object(m)
+                }
+                d => d,
+            })
+            .collect();
+        self.save(&cfg.with("devices", Some(Value::Array(devices))))?;
+        drop(_io);
+        if let Some(h) = self.handle() {
+            h.kick_device(id);
+        }
+        Ok(())
+    }
+
+    /// `remote:stop` (SK-3): remote access off exactly as the desktop's
+    /// switch turns it off, every phone kicked first, and who stopped it and
+    /// when kept in `remote.json` (`stoppedBy`, in `remote:status`) for the
+    /// desktop's banner until remote access is turned on again.
+    pub fn stop_from_phone(&self, id: &str) -> Result<(), String> {
+        let name = crate::phone::Devices::name(self, id);
+        let at = (self.clock)();
+        if let Some(h) = self.handle() {
+            for device in h.connected_devices() {
+                h.disconnect_device(&device);
+            }
+        }
+        self.disable()?;
+        let _io = lock(&self.io);
+        let by = json!({ "deviceId": id, "name": name, "at": hello::nekko_num(at) });
+        self.save(&self.load().with("stoppedBy", Some(by)))
     }
 }
 

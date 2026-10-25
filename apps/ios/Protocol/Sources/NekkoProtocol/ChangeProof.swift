@@ -170,6 +170,10 @@ public struct PhoneRefusal: Equatable, Sendable {
         case "device-unknown": return "\(computer) doesn’t know this phone any more. Pair it again."
         case "channel-denied": return "\(computer) doesn’t allow this from a phone. Update Nekko on \(computer) if it’s new."
         case "value-invalid" where detail == "secret file": return "This file may hold secrets, so it never leaves \(computer)."
+        // SK-6: the step-up refusals and the safety exit the owner kept off.
+        case let c where StepUp.isStepUpCode(c): return StepUpCode(rawValue: c)?.message(computer: computer)
+        case "quit-disabled":
+            return "Quitting from a phone is turned off on \(computer). Turn it on there in Settings → Remote access."
         default: return nil
         }
     }

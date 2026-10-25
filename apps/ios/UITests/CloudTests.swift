@@ -4,7 +4,7 @@ import XCTest
 /// dark (the screenshots are the PR's iPhone evidence), audited for accessibility.
 final class CloudTests: XCTestCase {
     func testTheSignInScreenInLightAndDark() {
-        for theme in ["light", "dark"] {
+        for theme in uiTestThemes {
             let app = XCUIApplication()
             // No Nekko Cloud reachable: the screen renders without the network.
             app.launchArguments = ["-appLock", "NO", "-onboarded", "YES", "-theme", theme, "-uiTestReset", "YES", "-cloudAPI", "http://127.0.0.1:9"]

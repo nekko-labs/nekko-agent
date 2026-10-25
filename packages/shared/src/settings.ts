@@ -87,8 +87,9 @@ export interface OnboardingState {
 /** Bump when the wizard's steps change enough that existing users should see it again. */
 export const ONBOARDING_VERSION = 1;
 
-export type WallLayoutMode = 'grid' | 'focus' | 'fixed';
-export interface WallLayout { mode: WallLayoutMode; cols: number; rows: number }
+export type WallLayoutMode = 'grid' | 'focus';
+/** `fixedGrid`: Dynamic draws even rows and columns (`rows` x `cols`) instead of the free-form split tree. */
+export interface WallLayout { mode: WallLayoutMode; cols: number; rows: number; fixedGrid?: boolean }
 export type MonitorsSide = 'right' | 'left' | 'top' | 'bottom';
 export type MonitorKey = 'automations' | 'utilization' | 'budget' | 'insights' | 'hardware' | 'localModels';
 export interface MonitorsDock {
@@ -100,7 +101,7 @@ export interface MonitorsDock {
   /** Independent minimization state for each monitor. */
   minimized: Record<MonitorKey, boolean>;
 }
-export const DEFAULT_WALL_LAYOUT: WallLayout = { mode: 'grid', cols: 3, rows: 2 };
+export const DEFAULT_WALL_LAYOUT: WallLayout = { mode: 'grid', cols: 3, rows: 2, fixedGrid: false };
 export const DEFAULT_MONITORS_DOCK: MonitorsDock = {
   side: 'right', show: true,
   // The hardware monitor leads; a Vitals panel was here until 2026-10-13
@@ -300,6 +301,12 @@ export interface AppSettings {
    * chat (Settings → Remote access). On by default; only `false` turns it off. Phones can never accept,
    * revert or edit changes, read other files or open terminals.
    */
+  /**
+   * SK-3: whether a paired phone may quit Nekko Agent on this computer
+   * (`app:quit`, reported in `app:info`). Off unless the owner turns it on in
+   * Settings → Remote access; never settable from a phone.
+   */
+  quitFromPhone?: boolean;
   phoneChanges?: boolean;
   /** Chat pane's top-right action. Undefined means Complete (archive), not Delete. */
   chatPaneAction?: 'complete' | 'delete';

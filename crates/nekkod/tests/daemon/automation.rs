@@ -163,6 +163,70 @@ async fn a_local_task_waits_while_someone_uses_the_computer() {
     let _ = std::fs::remove_dir_all(&data);
 }
 
+/// The reply requests the model got, leaving out chat titles.
+fn replies_asked(model: &ScriptedModel) -> usize {
+    let titled = |r: &Value| r["messages"].to_string().contains("Give this task a short title");
+    model.requests.lock().unwrap().iter().filter(|r| !titled(r)).count()
+}
+
+/// A low-priority task on a local model steps aside while a chat of the
+/// person's replies on that model, and finishes once that chat is done: its
+/// request is stopped and sent again, and the reply holds no trace of the
+/// stopped one (B2).
+#[tokio::test(flavor = "multi_thread")]
+async fn a_background_reply_steps_aside_for_a_persons_chat_and_finishes_after() {
+    let data = std::env::temp_dir().join(format!("nekkod-tasks-yield-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    // The task's first call hangs mid-reply; so does the person's; the task's
+    // second attempt answers.
+    let model = scripted_model(vec![HANG.into(), HANG.into(), say_text("Task done.")]).await;
+    scripted_p1(&data, &model, json!({}));
+    let d = start_with(Some(&data));
+    let input = json!({ "title": "Background", "kind": "recurring", "prompt": "Summarize", "intervalMs": 3_600_000, "providerId": "p1", "modelId": "m1", "runPolicy": "lowPriority" });
+    let (_, list) = post(d.port, "task:create", json!([input]), Some(TOKEN)).await;
+    let task_chat = list[0]["lastSessionId"].as_str().unwrap().to_string();
+    wait_for("the task's request", || replies_asked(&model) == 1).await;
+    let (_, state) = post(d.port, "background:state", json!([]), Some(TOKEN)).await;
+    assert_eq!((state["running"].clone(), state["paused"].clone()), (json!(1), json!(0)), "{state}");
+
+    // The person starts a chat on the same local model.
+    let (_, made) = post(d.port, "session:create", json!([null]), Some(TOKEN)).await;
+    let mine = made["id"].as_str().unwrap().to_string();
+    let send = {
+        let (port, mine) = (d.port, mine.clone());
+        tokio::spawn(async move {
+            let opts = json!({ "sessionId": mine, "providerId": "p1", "modelId": "m1", "text": "Hi" });
+            post(port, "chat:send", json!([opts]), Some(TOKEN)).await
+        })
+    };
+    let port = d.port;
+    until("the background turn paused for the chat", std::time::Duration::from_secs(10), || async move {
+        let (_, s) = post(port, "background:state", json!([]), Some(TOKEN)).await;
+        (s["paused"] == json!(1) && s["reason"] == json!("chat")).then_some(())
+    })
+    .await;
+    // The pause is recorded before the person's request reaches the model, so
+    // wait for that request rather than counting the instant the pause shows.
+    wait_for("the person's request", || replies_asked(&model) == 2).await;
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    assert_eq!(replies_asked(&model), 2, "the task waits; only the person's request went out");
+
+    // Their chat ends; the task's request goes out again and finishes.
+    post(d.port, "chat:abort", json!([mine]), Some(TOKEN)).await;
+    let _ = send.await;
+    wait_for("the task's reply", || replies(&data, &task_chat) == ["Task done."]).await;
+    assert_eq!(replies_asked(&model), 3, "the task's request was sent again once");
+    let port = d.port;
+    until("no background turn left", std::time::Duration::from_secs(10), || async move {
+        let (_, s) = post(port, "background:state", json!([]), Some(TOKEN)).await;
+        (s["running"] == json!(0)).then_some(())
+    })
+    .await;
+    drop(d);
+    let _ = std::fs::remove_dir_all(&data);
+}
+
 /// The runs as the daemon wrote them.
 fn read_runs(data: &std::path::Path) -> Value {
     std::fs::read_to_string(data.join("training.json"))

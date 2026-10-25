@@ -69,12 +69,16 @@ describe('Agents header placement', () => {
     // The add bar leads the controls, left of the layout switcher.
     expect(html.indexOf('aria-label="Add to the wall"')).toBeLessThan(html.indexOf('aria-label="Wall layout"'));
   });
-  it.each(['focus', 'grid', 'fixed'] as const)('only exposes snap to grid in Dynamic (%s)', (mode) => {
-    const html = renderToStaticMarkup(<WallToolbar wall={{ ...DEFAULT_WALL_STATE, layout: { ...DEFAULT_WALL_STATE.layout, mode } }} setWall={() => {}} addOpen={false} setAddOpen={() => {}} onAdd={() => {}} />);
+  it.each(['focus', 'grid', 'fixed'] as const)('only exposes snap to grid in free-form Dynamic (%s)', (mode) => {
+    const layout = { ...DEFAULT_WALL_STATE.layout, mode: mode === 'fixed' ? 'grid' as const : mode, fixedGrid: mode === 'fixed' };
+    const html = renderToStaticMarkup(<WallToolbar wall={{ ...DEFAULT_WALL_STATE, layout }} setWall={() => {}} addOpen={false} setAddOpen={() => {}} onAdd={() => {}} />);
     expect(html).toContain(`class="wall-auto-arrange" data-visible="${mode === 'grid'}"`);
     expect(html).toContain(`tabindex="${mode === 'grid' ? 0 : -1}"`);
-    // A magnet, not the old wand.
-    expect(html).toContain('M6 15V9a6 6 0 0 1 12 0v6');
+    // A coloured magnet with sparks off its poles, not the old wand.
+    expect(html).toContain('M6 12.5V10a6 6 0 0 1 12 0v2.5');
+    expect(html).toContain('--magnet-spark');
+    // Two layouts only: Grid is now Dynamic's Fixed grid setting.
+    expect(html).not.toContain('>Grid<');
     expect(html).toContain('aria-label="Snap to grid"');
     // The agent panel's own controls moved into the panel; the title bar has none.
     expect(html).not.toContain('agent panel');
@@ -88,8 +92,8 @@ describe('Agents header placement', () => {
     // The tip is a hover tooltip, not a native title that duplicates it.
     expect(on).not.toContain('title="Snap');
   });
-  it('names the saved layout modes Focus, Dynamic and Grid without migrating keys', () => {
-    expect(LAYOUT_LABEL).toEqual({ focus: 'Focused', grid: 'Dynamic', fixed: 'Grid' });
+  it('names the two layout modes Focused and Dynamic without migrating keys', () => {
+    expect(LAYOUT_LABEL).toEqual({ focus: 'Focused', grid: 'Dynamic' });
     const html = toolbar();
     expect(html).toMatch(/title="Dynamic \((Ctrl|⌘)\+Shift\+2\)"/);
     expect(html).not.toContain('title="Grid');

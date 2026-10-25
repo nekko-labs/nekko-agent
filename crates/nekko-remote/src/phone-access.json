@@ -1,6 +1,7 @@
 {
  "channels": [
   "app:info",
+  "app:quit",
   "changes:list",
   "chat:abort",
   "chat:answer",
@@ -8,6 +9,7 @@
   "chat:pending",
   "chat:queue",
   "chat:send",
+  "device:signOut",
   "files:list",
   "files:read",
   "files:search",
@@ -29,6 +31,7 @@
   "logs:read",
   "machine:summary",
   "models:list",
+  "monitor:summary",
   "pr:action",
   "pr:checks",
   "pr:create",
@@ -38,6 +41,8 @@
   "providers:saveSealed",
   "providers:sealKey",
   "providers:setEnabled",
+  "remote:stop",
+  "security:challenge",
   "session:create",
   "session:delete",
   "session:fork",
@@ -116,6 +121,7 @@
   ],
   "except": [
    "remote:status",
+   "remote:stop",
    "ssh:hosts",
    "ssh:open",
    "terminal:close",
@@ -133,6 +139,7 @@
   "limits:get",
   "machine:summary",
   "models:list",
+  "monitor:summary",
   "pr:sessionList",
   "providers:list",
   "providers:sealKey",
@@ -161,7 +168,8 @@
   "logs:read",
   "ssh:hosts",
   "terminal:tail",
-  "terminals:list"
+  "terminals:list",
+  "security:challenge"
  ],
  "changeChannels": [
   "providers:saveSealed",
@@ -182,6 +190,9 @@
   "terminal:signal"
  ],
  "agentChannels": [
+  "app:quit",
+  "device:signOut",
+  "remote:stop",
   "chat:abort",
   "chat:answer",
   "chat:editQueued",
@@ -196,6 +207,11 @@
   "tool:approve",
   "voice:transcribe",
   "workflow:run"
+ ],
+ "safetyExits": [
+  "app:quit",
+  "device:signOut",
+  "remote:stop"
  ],
  "openChannels": [
   "app:info"
@@ -452,6 +468,21 @@
   "status",
   "usedPercent"
  ],
+ "monitorView": {
+  "running": 20,
+  "needsYou": 20,
+  "automations": 10,
+  "labelChars": 120
+ },
+ "monitorSources": [
+  "system:stats",
+  "gpu:stats",
+  "chat:running",
+  "sessions:summaries",
+  "chat:pending",
+  "tasks:list",
+  "workflows:list"
+ ],
  "queueEditKeys": [
   "expect",
   "text"
@@ -585,5 +616,65 @@
    "workflow"
   ]
  },
- "maxFrameBytes": 9437184
+ "maxFrameBytes": 9437184,
+ "stepUp": {
+  "challenge": {
+   "channel": "security:challenge",
+   "bytes": 18,
+   "ttlMs": 120000
+  },
+  "coverMs": 300000,
+  "clientType": "webauthn.get",
+  "totp": {
+   "periodS": 30,
+   "digits": 6,
+   "window": 1,
+   "algorithm": "SHA-1",
+   "maxWrong": 5,
+   "lockMs": 60000
+  },
+  "recovery": {
+   "count": 10,
+   "length": 10
+  },
+  "minMethods": 2,
+  "phoneGuarded": {
+   "channels": [
+    "session:setOptions",
+    "settings:update"
+   ]
+  },
+  "desktopGuarded": {
+   "modeRaise": [
+    "session:setOptions",
+    "settings:update"
+   ],
+   "remoteAccess": [
+    "remote:enable",
+    "remote:attach"
+   ],
+   "pairing": [
+    "remote:pair",
+    "remote:rotate"
+   ],
+   "phoneAccess": [
+    "remote:setAccess"
+   ],
+   "providerKeys": [
+    "providers:save",
+    "providers:remove",
+    "providers:importCliAuth",
+    "providers:revealKey"
+   ],
+   "stepUpOff": [
+    "security:disable",
+    "security:removeMethod"
+   ]
+  },
+  "neverGuarded": [
+   "app:quit",
+   "device:signOut",
+   "remote:stop"
+  ]
+ }
 }

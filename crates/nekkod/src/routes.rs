@@ -43,6 +43,10 @@ pub struct Ctx {
     pub automation: Arc<crate::automation::Automation>,
     /// Phone remote access (`remote:*`) and the relay agent.
     pub remote: Arc<crate::remote::Remote>,
+    /// Settings → Security and the step-up check on the desktop's and the
+    /// Local Web UI's guarded calls (`security:*`, SK-4/SK-5). Reached from the
+    /// wire only (wire.rs), never through `route`, so a phone cannot call it.
+    pub security: Arc<crate::security::Security>,
     /// GPU and system stats, the readiness advisor, the hardware profile and model
     /// recommendations (`gpu:stats`, `system:stats`, `machine:*`).
     pub machine: Arc<nekko_machine::Machine>,
@@ -392,6 +396,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             crate::catalog::route(ctx.catalog.as_ref().expect("checked"), c, &args).await
         }
         c if crate::tooling::CHANNELS.contains(&c) => crate::tooling::route(ctx, c, &args).await,
+        c if crate::feedback::CHANNELS.contains(&c) => crate::feedback::route(ctx, c, &args).await,
         // An `agent_watch` call outside a turn.
         "watch:tool" if ctx.turns.watches.is_some() => {
             let w = ctx.turns.watches.clone().expect("checked");
@@ -459,6 +464,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             crate::machine::route(&ctx.machine, ctx.library.as_ref(), c, &args).await
         }
         c if crate::activity::CHANNELS.contains(&c) => crate::activity::route(ctx, c, &args).await,
+        c if crate::background::CHANNELS.contains(&c) => Ok(ctx.turns.background_state()),
         "resource:queue" => match &ctx.resource_queue {
             Some(queue) => queue.route(&args).await,
             None => Err(NO_SESSIONS.into()),

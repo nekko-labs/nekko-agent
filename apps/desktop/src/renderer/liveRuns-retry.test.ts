@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentEvent } from '@nekko-agent/shared';
+import { shortLiveStatus } from '@nekko-agent/shared';
 import { __resetLiveRuns, applyEvent, getLiveRun } from './liveRuns.js';
 
 vi.stubGlobal('requestAnimationFrame', () => 0);
@@ -36,6 +37,16 @@ describe('liveRuns on retry', () => {
     applyEvent(text('Second try. '));
     expect(getLiveRun('a')!.retrying).toBeUndefined();
     expect(getLiveRun('a')!.text).toBe('Step one. Second try. ');
+  });
+
+  it('says a background reply paused for the person at the computer, not that it is retrying', () => {
+    applyEvent(text('half a sentence'));
+    applyEvent({ type: 'retry', sessionId: 'a', attempt: 1, maxAttempts: 5, delayMs: 0, reason: 'Paused while someone uses this computer', paused: true });
+    const run = getLiveRun('a')!;
+    expect(run.text).toBe('');
+    expect(run.activity.steps.at(-1)).toMatchObject({ kind: 'note', label: 'Paused' });
+    expect(run.activity.steps.at(-1)!.detail).toMatch(/carries on from here once it is free/);
+    expect(shortLiveStatus(run.activity)).toBe('Paused');
   });
 
   it('starts the run on a retry too, and ignores step checkpoints', () => {

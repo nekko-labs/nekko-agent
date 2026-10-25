@@ -8,7 +8,7 @@
  */
 import { useEffect, useState } from 'react';
 import type { ClaimMode, DisplaysBridge, DisplaysState } from '../displayWindows.js';
-export type { DisplayInfo, DisplayPlacement, DisplaysState } from '../displayWindows.js';
+export type { DesktopInfo, DisplayInfo, DisplayPlacement, DisplaysState, GoTarget, SpacesMode } from '../displayWindows.js';
 export { MAIN_KEY } from '../displayWindows.js';
 
 /** The bridge, or undefined outside the desktop shell. */

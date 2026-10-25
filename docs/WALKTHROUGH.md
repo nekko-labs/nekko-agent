@@ -450,3 +450,12 @@ At the top of **Agent Monitor**, expand **Artifacts** to see the session’s lin
 ### Plan step status icons
 
 In Agent Monitor, each active plan step has a static **Working** glyph and tooltip. Multiple steps can be working at once, even between streamed replies. If a reply was explicitly interrupted and no turn is running, active entries show pause bars labeled **Paused** until work resumes. Completed steps show a check, pending steps a hollow circle, and skipped steps a slashed circle with a struck-through title.
+
+### Focused workspace and navigation
+
+Focused view keeps one conversation prominent on a subtle, translucent
+rounded surface. Agents and Monitors slide from their edge and make room for
+that conversation, rather than covering it. The left navigation uses a darker,
+mostly opaque theme-matched surface with rounded corners, inset about 5% at the
+top and bottom. Hover, keyboard focus or pin expands the navigation and reveals
+its labels together. Reduced motion disables these transitions.

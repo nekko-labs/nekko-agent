@@ -124,9 +124,13 @@ pub fn assess(r: &Readings, chat_active: bool, idle_after: f64) -> Activity {
 
 /// Input is read often (a background reply has to yield within a second of
 /// the user's return); power and heat change slowly and cost more to read.
-const INPUT_TTL: Duration = Duration::from_millis(500);
+/// Linux reads input by spawning `loginctl`, so less often there.
+#[cfg(not(target_os = "linux"))]
+const INPUT_TTL: Duration = Duration::from_millis(200);
+#[cfg(target_os = "linux")]
+const INPUT_TTL: Duration = Duration::from_secs(1);
 const POWER_TTL: Duration = Duration::from_secs(30);
-const TEMPS_TTL: Duration = Duration::from_secs(10);
+pub const TEMPS_TTL: Duration = Duration::from_secs(10);
 
 /// A cached reading of one signal.
 type Cache<T> = Mutex<Option<(Instant, T)>>;

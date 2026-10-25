@@ -111,10 +111,14 @@ final class RouteStoreTests: XCTestCase {
         let c = try XCTUnwrap(connections.last)
         c.online()
         await settle()
-        s.enterBackground(grace: 0.15)
+        // A grace far longer than the check below, so a slow runner can't let it
+        // run out first; then wait for the close rather than for a fixed time.
+        s.enterBackground(grace: 1)
         await settle(0.05)
         XCTAssertFalse(c.closed, "kept during the grace")
-        await settle(0.2)
+        XCTAssertFalse(s.suspended)
+        let deadline = Date().addingTimeInterval(10)
+        while !c.closed, Date() < deadline { await settle(0.05) }
         XCTAssertTrue(c.closed, "closed after it")
         XCTAssertTrue(s.suspended)
         // Foreground: the same client dials again, nothing reloaded from scratch.

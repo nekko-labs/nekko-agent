@@ -206,6 +206,16 @@ fn trim_runaway(s: &str) -> String {
     }
 }
 
+/// What a background turn's model call ends with when it steps aside for the
+/// person at the computer (nekko-chat's `YieldingClient`). The loop sends it
+/// again from where it stood, at once and without spending an attempt: the
+/// client holds the next call until it may run.
+pub const YIELDED: &str = "Paused while someone uses this computer";
+
+pub fn is_yield(message: &str) -> bool {
+    message == YIELDED
+}
+
 /// Attempts a model call gets before the reply ends as interrupted
 /// (`MAX_STREAM_ATTEMPTS` in providers/errors.ts).
 pub const MAX_STREAM_ATTEMPTS: u32 = 5;
@@ -310,6 +320,9 @@ pub fn is_network_error(message: &str) -> bool {
         "dns error",
         "network is unreachable",
         "no route to host",
+        // `friendly_error` rewrites a failed send into "Can't reach ChatGPT
+        // at …" / "Can't reach the model server at …" before it gets here.
+        "can't reach",
     ]
     .iter()
     .any(|needle| lower.contains(needle))
@@ -520,6 +533,20 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
                             }),
                         );
                         attempt = 1;
+                        continue;
+                    }
+                    if is_yield(&e) && !self.opts.cancel.is_cancelled() {
+                        *turn = before;
+                        self.event(
+                            "retry",
+                            json!({
+                                "attempt": attempt,
+                                "maxAttempts": MAX_STREAM_ATTEMPTS,
+                                "delayMs": 0,
+                                "reason": e,
+                                "paused": true,
+                            }),
+                        );
                         continue;
                     }
                     // Still too big, and the system prompt and tool definitions

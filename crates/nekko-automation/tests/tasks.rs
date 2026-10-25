@@ -353,6 +353,7 @@ async fn a_local_task_waits_while_the_user_is_active_and_runs_once_they_are_away
     *now.lock().unwrap() = next_look;
     svc.fire_if_due("t1", next_look).await;
     assert_eq!(host.0.turns.lock().unwrap().len(), 1, "runs once the user is away");
+    assert_eq!(host.0.turns.lock().unwrap()[0]["background"], json!("idle"), "and steps aside if they return");
     let t = &svc.list()[0];
     assert!(t.get("waitingSince").is_none() && t.get("lastRunLowPriority").is_none(), "{t}");
     let _ = std::fs::remove_dir_all(&dir);
@@ -369,6 +370,7 @@ async fn a_task_kept_waiting_past_the_cap_runs_in_low_priority() {
     let t = &svc.list()[0];
     assert_eq!(t["lastRunLowPriority"], json!(true));
     assert_eq!(t["lastRunWaitedMs"], json!(7_200_000), "two hours");
+    assert_eq!(host.0.turns.lock().unwrap()[0]["background"], json!("lowPriority"));
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -378,10 +380,12 @@ async fn cloud_tasks_and_run_now_do_not_wait() {
     nightly(&svc, "cloud").await;
     svc.fire_if_due("t1", 1_000.0).await;
     assert_eq!(host.0.turns.lock().unwrap().len(), 1, "a cloud model does not load this machine");
+    assert!(host.0.turns.lock().unwrap()[0].get("background").is_none(), "and never steps aside");
     // A local task the person runs by hand goes at once.
     svc.update("t1", &json!({ "providerId": "engine" })).unwrap();
     svc.fire("t1").await;
     assert_eq!(host.0.turns.lock().unwrap().len(), 2);
+    assert!(host.0.turns.lock().unwrap()[1].get("background").is_none(), "a person's run does not step aside");
     // Its own policy wins over the default.
     svc.update("t1", &json!({ "runPolicy": "lowPriority", "nextRunAt": 1_000 })).unwrap();
     svc.fire_if_due("t1", 1_000.0).await;

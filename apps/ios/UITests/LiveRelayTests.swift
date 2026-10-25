@@ -24,8 +24,13 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertTrue(intro.waitForExistence(timeout: 10))
         intro.tap()
         // Pair through the paste field; testPairFromADeepLink covers the link path.
+        // On a freshly made simulator the first tap after install can land while
+        // the screen is still settling (the light pass, #831): tap Continue again
+        // while the intro is still showing.
         let start = app.buttons["Pair with your computer"]
-        XCTAssertTrue(start.waitForExistence(timeout: 10))
+        var taps = 1
+        while !start.waitForExistence(timeout: 5), taps < 4, intro.exists { intro.tap(); taps += 1 }
+        XCTAssertTrue(start.exists, "pairing follows the intro")
         attach(app, "\(theme)-0-welcome")
         start.tap()
         let field = app.input("nekko-agent-pair:?relay=…")
@@ -67,8 +72,10 @@ final class LiveRelayTests: XCTestCase {
         message.tap()
         message.typeText("please approve a cleanup")
         app.buttons["Send"].tap()
+        // The Live Activity starts in this stretch and the simulator slows down
+        // with it: the card took 15 s in one pass and over 30 s in the next (#831).
         let card = app.staticTexts["Approve this tool?"]
-        XCTAssertTrue(card.waitForExistence(timeout: 30), "the guarded tool asks the phone")
+        XCTAssertTrue(card.waitForExistence(timeout: 60), "the guarded tool asks the phone")
         attach(app, "\(theme)-5-approval")
         // Known, unresolved: with the card up, the audit reports the transcript's
         // "Run rm -rf …" step as clipped (approval) or low-contrast (question),
@@ -315,7 +322,8 @@ final class LiveRelayTests: XCTestCase {
             throw XCTSkip("set NEKKO_ITEST_LINK (apps/ios/scripts/itest-stack.sh)")
         }
         let app = XCUIApplication()
-        app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-theme", "light", "-uiTestReset", "YES"]
+        // Past the first run (IO-31): testPairStreamAndApproveFromThePhone walks it.
+        app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-theme", "light", "-onboarded", "YES", "-uiTestReset", "YES"]
         app.launch()
         allowSystemAlerts()
         let start = app.buttons["Pair with your computer"]
@@ -371,7 +379,9 @@ final class LiveRelayTests: XCTestCase {
         let first = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "You: Say hello")).firstMatch
         XCTAssertTrue(first.waitForExistence(timeout: 10))
         first.press(forDuration: 1.0)
-        let fork = app.buttons["Edit in a new chat"].firstMatch
+        // The menu item carries the identifier `chat.fork` (#868); XCTest matches
+        // an element's identifier, not its label, once one is set.
+        let fork = app.buttons["chat.fork"].firstMatch
         XCTAssertTrue(fork.waitForExistence(timeout: 5), "the prompt's menu offers a fork")
         attach(app, "beyond-4-fork-menu")
         fork.tap()
@@ -380,11 +390,18 @@ final class LiveRelayTests: XCTestCase {
         wait(for: [seeded], timeout: 20)
         attach(app, "beyond-5-forked")
 
-        // IO-25: the chat list offers to continue the most recent chat.
+        // The chat list, with its view menu (group, sort, show) in place of the old Continue card.
         app.navigationBars.buttons.element(boundBy: 0).tap()
-        let resume = app.buttons["chats.continue"].firstMatch
-        XCTAssertTrue(resume.waitForExistence(timeout: 15), "the Continue card")
-        attach(app, "beyond-6-continue")
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "chats.row").firstMatch.waitForExistence(timeout: 15), "the chats")
+        // A navigation-bar button: no hit point for XCTest, so tap its centre (as the computer menu).
+        let viewMenu = app.buttons["chats.view"].firstMatch
+        XCTAssertTrue(viewMenu.waitForExistence(timeout: 5), "the view menu")
+        XCTAssertTrue(waitForFrame(viewMenu, in: app, 10), "the view menu never got a frame")
+        viewMenu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(app.buttons["Group by"].firstMatch.waitForExistence(timeout: 5) || app.staticTexts["Group by"].firstMatch.exists, "Group by")
+        attach(app, "beyond-6-view-menu")
+        // Close the menu.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.95)).tap()
         auditAccessibility(app, "beyond-chats")
 
         // IO-26: the computer's automation, run from the phone; its answer comes back.
@@ -498,8 +515,11 @@ final class LiveRelayTests: XCTestCase {
         connectionMenu(app, "online").waitForExistence(timeout: seconds)
     }
 
+    /// The computer pill reads "Computers and settings, <state>", where the state
+    /// is the localized `stateName` ("Online", "Computer offline"), so match the
+    /// end of the label without regard to case (#831).
     private func connectionMenu(_ app: XCUIApplication, _ state: String) -> XCUIElement {
-        app.buttons.matching(NSPredicate(format: "label == %@", "Computers and settings, \(state)")).firstMatch
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label ENDSWITH[c] %@", "Computers and settings", state)).firstMatch
     }
 
     /// `GET <NEKKO_ITEST_RELAY_CTL>/stop` or `/start` (apps/ios/scripts/relay-ctl.mjs): kill or restart the relay.
@@ -545,8 +565,11 @@ final class LiveRelayTests: XCTestCase {
         return XCTWaiter.wait(for: [p], timeout: seconds) == .completed
     }
 
+    /// The simulator's screen rather than the app's own screenshot: the app
+    /// cannot answer a screenshot request while it is busy starting a Live
+    /// Activity, and that timeout failed the test, not the journey (#831).
     private func attach(_ app: XCUIApplication, _ name: String) {
-        let shot = XCTAttachment(screenshot: app.screenshot())
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         shot.name = name
         shot.lifetime = .keepAlways
         add(shot)

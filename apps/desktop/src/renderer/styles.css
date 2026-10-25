@@ -661,69 +661,34 @@
   color: var(--ink-faint);
 }
 
-/* Left rail: one SVG outline (components/RailBackdrop + railGeometry.ts). At
-   rest it is a hairline near the top of the window that swoops out to the icon
-   column and tapers back to a hairline below it. Opening moves every point to
-   the same x, so the whole rail becomes one even column. Both outlines share a
-   command list, so `d` interpolates between them. Plain (unlayered) rules, so
-   they win over the nav-item / active utilities inside the rail. */
+/* A single rounded surface: only width and label opacity animate. */
 .rail {
   --rail-w-rest: 52px;
   --rail-w-open: 198px;
-  --rail-row: 40px;          /* one destination row (nav-item h-10) */
-  --rail-gap: 7px;           /* gap between rows */
-  --rail-ease: cubic-bezier(0.32, 0.72, 0, 1);   /* quick start, long soft settle */
-  --rail-slide: cubic-bezier(0.3, 1.25, 0.5, 1); /* the active tile: a hint of spring */
+  --rail-row: 40px;
+  --rail-gap: 7px;
+  --rail-ease: cubic-bezier(.2, .8, .2, 1);
+  --rail-slide: ease-out;
   --rail-open-ms: 180ms;
-  --rail-close-ms: 160ms;
-  --rail-slide-ms: 340ms;
-  --rail-open-delay: 50ms;   /* hover intent: sweeping past never opens it */
-  --rail-close-delay: 60ms; /* and a brief slip out never snaps it shut */
-
+  --rail-close-ms: 180ms;
+  --rail-slide-ms: 140ms;
+  --rail-open-delay: 50ms;
+  --rail-close-delay: 60ms;
   width: var(--rail-w-rest);
   padding-inline: 6px;
   justify-content: flex-start;
   isolation: isolate;
-  /* Only the button column and the painted outline receive input. */
-  pointer-events: none;
+  pointer-events: auto;
+  z-index: 1;
+  top: 5%; bottom: 5%;
+  border-radius: 22px;
+  background: color-mix(in srgb, color-mix(in srgb, var(--paper) 92%, black) 97%, transparent);
   transition: width var(--rail-close-ms) var(--rail-ease) var(--rail-close-delay);
 }
 .rail-space-before { flex: 1 1 0; }
-/* Spare space splits 1:4 above/below the destinations, so they sit high. On
-   short windows the spacers collapse and the destinations scroll instead. */
 .rail-space-after { flex: 4 1 0; }
-.rail-group {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  flex: 0 1 auto;
-  min-height: 0;
-}
-
-/* One synchronized outline and clip, with a tinted fill instead of a
-   backdrop blur that repaints the workspace during every morph frame. */
-.rail-backdrop {
-  position: absolute;
-  left: -6px;                 /* x = 0 is the window wall */
-  width: var(--rail-w-open);
-  z-index: -1;
-  overflow: visible;
-  pointer-events: none;
-  clip-path: var(--rail-rest);
-  backdrop-filter: none;
-  transition: clip-path var(--rail-close-ms) var(--rail-ease) var(--rail-close-delay);
-  & path {
-    d: var(--rail-rest);
-    fill: color-mix(in srgb, color-mix(in srgb, var(--accent) 8%, var(--paper)) 88%, transparent);
-    /* Twice the hairline: the clip keeps only the inner half. */
-    stroke: color-mix(in srgb, var(--ink) 9%, transparent);
-    stroke-width: 2px;
-    pointer-events: visiblePainted;  /* pointing at the shape keeps it open */
-    transition:
-      d var(--rail-close-ms) var(--rail-ease) var(--rail-close-delay),
-      fill var(--rail-close-ms) ease var(--rail-close-delay);
-  }
-}
+.rail-group { position: relative; display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; }
+.rail-backdrop { display: none; }
 
 .rail-destinations {
   position: relative;
@@ -782,12 +747,9 @@
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
-  transform: translateX(-6px);
+  transform: none;
   filter: none;
-  transition:
-    opacity 120ms ease var(--rail-close-delay),
-    transform 200ms var(--rail-ease) var(--rail-close-delay),
-    filter 120ms ease var(--rail-close-delay);
+  transition: opacity 100ms ease var(--rail-close-delay);
 }
 
 /* Open: hover, keyboard focus inside, or pinned with data-open. */
@@ -795,23 +757,12 @@
   width: var(--rail-w-open);
   padding-right: 16px;
   transition: width var(--rail-open-ms) var(--rail-ease) var(--rail-open-delay);
-  & .rail-backdrop {
-    clip-path: var(--rail-open);
-    transition: clip-path var(--rail-open-ms) var(--rail-ease) var(--rail-open-delay);
-  }
-  & .rail-backdrop path {
-    d: var(--rail-open);
-    fill: color-mix(in srgb, color-mix(in srgb, var(--accent) 6%, var(--surface)) 88%, transparent);
-    transition:
-      d var(--rail-open-ms) var(--rail-ease) var(--rail-open-delay),
-      fill var(--rail-open-ms) ease var(--rail-open-delay);
-  }
   & .rail-label {
     opacity: 1;
     transform: none;
     filter: none;
     /* Reveal together only once the expansion is nearly complete. */
-    transition-duration: 100ms, 100ms, 100ms;
+    transition-duration: 100ms;
     transition-delay: calc(var(--rail-open-delay) + var(--rail-open-ms) - 20ms);
   }
 }
@@ -885,8 +836,10 @@
 .developer-server-controls {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   margin-left: auto;
+  /* The same 8px step as the Agents controls it follows in the slot. */
+  padding-left: 8px;
   margin-right: 138px;
   padding-right: 10px;
   white-space: nowrap;
@@ -917,7 +870,7 @@
    weights. Layout offsets are pixel-snapped the same way for every group. */
 .titlebar:not(.titlebar-mac) #command-titlebar-slot > .wall-toolbar-titlebar { position: relative; top: -2.35px; }
 #command-titlebar-slot > .wall-toolbar-titlebar { flex: 1; min-width: 0; flex-wrap: nowrap; }
-#command-titlebar-slot .wall-fixed-picker, #command-titlebar-slot .screens-picker { z-index: 60; }
+#command-titlebar-slot .screens-picker { z-index: 60; }
 #command-titlebar-slot > .wall-toolbar-titlebar > div { flex-wrap: nowrap; }
 #command-titlebar-slot .btn, #command-titlebar-slot .wall-layout-segments button { padding-top: 2px; padding-bottom: 2px; }
 
@@ -2563,9 +2516,8 @@
 /* While the floating button shows, the transcript starts below it so the first
    message never sits under it (8px offset + 28px button + breathing room). */
 div:has(> .plan-rail-toggle) > [data-transcript-scroll] { padding-top: 44px; }
-/* A question the agent asked, pinned at the top of its window: a warning-toned
-   label you cannot miss, then the card. Capped so the transcript keeps a view;
-   a long card scrolls inside the pin rather than pushing the history away. */
+/* The plan-change prompt keeps its existing top pin. Pending agent questions
+   use the conversation footer instead, without a nested scroll area. */
 .agent-question-pin {
   max-height: min(62%, 460px); overflow-y: auto; padding: 8px 10px 10px;
   border-bottom: 1px solid color-mix(in srgb, var(--warning) 45%, var(--line));
@@ -2609,18 +2561,22 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
    frame is fully clipped, and one paused while closing never unmounts. */
 html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !important; }
 .command-wall-window[data-wall-selected] .wall-num, .wall-composer[data-has-agent] .wall-num { background: var(--accent); color: var(--win); }
-.wall-layout-control { position: relative; display: inline-flex; align-items: center; }
+.wall-layout-control { position: relative; display: inline-flex; align-items: center; gap: 8px; }
 /* Reveal by grid track rather than a fixed pixel width: a fixed 38px was
    narrower than the button once the title bar's own button padding applied,
    so the wand spilled under the All/Agents/Terminals toggle beside it.
    Its slot is always reserved (hidden only by opacity/visibility), so picking
    Dynamic fades it in place without shifting the filter and Panels beside it. */
-.wall-auto-arrange { position: relative; display: grid; grid-template-columns: 1fr; align-items: center; margin-left: 6px; opacity: 0; visibility: hidden; transform: scale(.6); transition: opacity 180ms ease, transform 240ms ease, visibility 0s 240ms; }
+.wall-auto-arrange { position: relative; display: grid; grid-template-columns: 1fr; align-items: center; opacity: 0; visibility: hidden; transform: scale(.6); transition: opacity 180ms ease, transform 240ms ease, visibility 0s 240ms; }
 .wall-auto-arrange[data-visible='true'] { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
 .wall-auto-arrange > button { min-width: 0; overflow: hidden; }
-/* Snap to grid: an icon toggle with the outline button's frame; lit in the accent while on. */
-.wall-snap-toggle { display: inline-grid; place-items: center; width: 32px; height: 28px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink-faint); transition: background var(--dur-fast) ease, color var(--dur-fast) ease, border-color var(--dur-fast) ease; }
-.wall-snap-toggle:hover:not(:disabled) { color: var(--ink); background: var(--surface-2); }
+/* Snap to grid: an icon toggle with the outline button's frame. The magnet keeps
+   its colours; off it is muted (and its sparks hidden), on it lights the frame in the accent. */
+.wall-snap-toggle { display: inline-grid; place-items: center; width: 32px; height: 28px; border: 1px solid var(--line); border-radius: 8px; transition: background var(--dur-fast) ease, border-color var(--dur-fast) ease; }
+.wall-snap-toggle svg { opacity: .7; transition: opacity var(--dur-fast) ease; }
+.wall-snap-toggle:not([aria-pressed='true']) svg { --magnet-spark: transparent; }
+.wall-snap-toggle:hover:not(:disabled) { background: var(--surface-2); }
+.wall-snap-toggle:hover:not(:disabled) svg, .wall-snap-toggle[aria-pressed='true'] svg { opacity: 1; }
 .wall-snap-toggle[aria-pressed='true'] { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); background: var(--accent-soft); }
 .wall-snap-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
@@ -2655,17 +2611,12 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 .wall-layout-segments { display: inline-flex; padding: 2px; border: 1px solid var(--line); border-radius: 8px; }
 .wall-layout-segments button { padding: 4px 10px; border-radius: 6px; font-size: 12px; color: var(--ink-faint); }
 .wall-layout-segments button[aria-pressed='true'] { background: var(--surface-2); color: var(--ink); font-weight: 500; }
-.wall-fixed-picker { position: absolute; top: calc(100% + 6px); right: 0; z-index: 40; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--win); box-shadow: var(--shadow-md); }
-.wall-fixed-picker p { margin: 0 0 8px; font-size: 11px; color: var(--ink-soft); white-space: nowrap; }
-.wall-fixed-cells { display: grid; grid-template-columns: repeat(6, 20px); gap: 4px; }
-.wall-fixed-cells button { height: 20px; border: 1px solid var(--line); border-radius: 3px; background: var(--surface-2); }
-.wall-fixed-cells button.is-preview { border-color: var(--accent); background: var(--accent-soft); }
-.wall-layout-segments button:focus-visible, .wall-fixed-cells button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-/* Multi-monitor: the Screens dropdown, in the grid picker's frame. A gap
+.wall-layout-segments button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Multi-monitor: the Screens dropdown. A gap
    bridge under the button keeps hover alive on the way down to the panel. */
 .screens-control { position: relative; display: inline-flex; align-items: center; }
-.screens-control::after { content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 8px; }
-.screens-picker { position: absolute; top: calc(100% + 6px); right: 0; z-index: 40; width: max-content; min-width: 260px; max-width: 360px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--win); box-shadow: var(--shadow-md); }
+.screens-control::after { content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 8px; -webkit-app-region: no-drag; }
+.screens-picker { -webkit-app-region: no-drag; position: absolute; top: calc(100% + 6px); right: 0; z-index: 40; width: max-content; min-width: 260px; max-width: 360px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--win); box-shadow: var(--shadow-md); }
 .screens-picker__title { margin: 0 0 8px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint); }
 .screens-picker__note { margin: 6px 0 0; font-size: 11px; color: var(--ink-faint); }
 .screens-picker__divider { margin: 10px -10px; border: 0; border-top: 1px solid var(--line); }
@@ -2684,7 +2635,38 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 .screens-option > span { display: grid; gap: 2px; }
 .screens-option strong { font-size: 12px; font-weight: 500; color: var(--ink); }
 .screens-option > span > span { font-size: 11px; line-height: 1.35; color: var(--ink-faint); }
-@media (prefers-reduced-motion: reduce) { .screens-tile { transition: none; } }
+.screens-picker__title--sub { margin-top: 12px; }
+.screens-tile[data-current]::before { content: ''; position: absolute; top: 4px; right: 4px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+.screens-tile[data-waiting] { border-style: dashed; }
+/* Spaces: the Accessibility explainer, with an abstract monitor switching desktops. */
+.spaces-ask { margin-top: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
+.spaces-ask__lead { margin: 6px 0 4px; font-size: 12px; font-weight: 600; color: var(--ink); }
+.spaces-ask__body { margin: 0 0 8px; font-size: 11px; line-height: 1.4; color: var(--ink-soft); }
+.spaces-ask__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.spaces-demo { display: block; width: 100%; max-width: 200px; margin: 0 auto; }
+.spaces-demo__bezel { fill: var(--win); stroke: var(--line); stroke-width: 1.5; }
+.spaces-demo__desk { fill: color-mix(in srgb, var(--ink-faint) 14%, var(--win)); }
+.spaces-demo__desk--next { fill: color-mix(in srgb, var(--accent) 12%, var(--win)); }
+.spaces-demo__win { fill: color-mix(in srgb, var(--ink-faint) 30%, var(--win)); }
+.spaces-demo__nekko > rect:first-child { fill: var(--paper); stroke: var(--accent); stroke-width: 1.2; }
+.spaces-demo__nekko-bar { fill: color-mix(in srgb, var(--accent) 35%, var(--paper)); }
+.spaces-demo__nekko-pane { fill: color-mix(in srgb, var(--accent) 16%, var(--paper)); }
+.spaces-demo__dot { fill: var(--line); }
+/* 5s loop: hold on desktop 1, slide to 2, the Nekko window swipes open from the left edge, hold, fade and restart. */
+.spaces-demo__strip { animation: spaces-demo-slide 5s cubic-bezier(.65, 0, .35, 1) infinite; }
+.spaces-demo__nekko { transform-box: fill-box; transform-origin: left center; animation: spaces-demo-open 5s cubic-bezier(.22, 1, .36, 1) infinite; }
+.spaces-demo__dot--one { animation: spaces-demo-dot-one 5s steps(1, end) infinite; }
+.spaces-demo__dot--two { animation: spaces-demo-dot-two 5s steps(1, end) infinite; }
+@keyframes spaces-demo-slide { 0%, 18% { transform: translateX(0); opacity: 1; } 40%, 90% { transform: translateX(-136px); opacity: 1; } 97% { transform: translateX(-136px); opacity: 0; } 100% { transform: translateX(0); opacity: 0; } }
+@keyframes spaces-demo-open { 0%, 46% { transform: scaleX(.06); opacity: 0; } 48% { transform: scaleX(.06); opacity: 1; } 66%, 100% { transform: scaleX(1); opacity: 1; } }
+@keyframes spaces-demo-dot-one { 0% { fill: var(--accent); } 30% { fill: var(--line); } 100% { fill: var(--accent); } }
+@keyframes spaces-demo-dot-two { 0% { fill: var(--line); } 30% { fill: var(--accent); } 100% { fill: var(--line); } }
+@media (prefers-reduced-motion: reduce) {
+  .screens-tile { transition: none; }
+  .spaces-demo__strip, .spaces-demo__nekko, .spaces-demo__dot { animation: none; }
+  .spaces-demo__strip { transform: translateX(-136px); }
+  .spaces-demo__dot--two { fill: var(--accent); }
+}
 @media (max-width: 767px) {
   .wall-workspace { flex-direction: column; overflow: hidden; }
   .wall-workspace > .wall-agent-workspace { flex: 1 1 0; min-height: 0; }
@@ -3169,8 +3151,16 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 
 /* Focus is a workspace, not a framed window inside another window. */
 .command-wall-layout[data-wall-layout='focus'] .command-wall-window > .panel {
-  border: 0; border-radius: 0; box-shadow: none !important;
+  border: 0; border-radius: 24px; box-shadow: none !important;
+  background: color-mix(in srgb, var(--paper) 35%, transparent);
+  corner-shape: squircle;
   --panel-ring-width: 0px !important;
 }
 .command-wall-layout[data-wall-layout='focus'] .command-wall-window > .panel::after { display: none; }
 .command-wall-layout[data-wall-layout='focus'] [data-pane-title-strip] { display: none; }
+
+/* The pending question shares the transcript scroll, with no outer panel. */
+.conversation-question { margin-top: 16px; animation: conversation-question-rise 220ms ease-out; }
+.conversation-question > [data-question-tone] { border-radius: 16px 16px 4px 4px; box-shadow: none !important; }
+@keyframes conversation-question-rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .conversation-question { animation: none; } }

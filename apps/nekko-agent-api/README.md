@@ -57,6 +57,11 @@ hostname).
   token as a Bearer. On when `FLY_API_TOKEN` and `FLY_MACHINES_APP` are set
   (`NEKKO_RELAY_URL`, `NEKKO_MACHINE_IMAGE` optional); the routes are absent
   otherwise. Tests run against an in-memory driver.
+- `POST /v1/feedback`: the quick note from any app's Send feedback sheet,
+  `{ message, app? }` (`src/feedback.ts`). Unauthenticated, not request-logged,
+  10 per IP per hour (counted in memory). `app` comes only when the sender
+  switched on "Include app info", and only `app`, `version`, `os`, `osVersion`
+  and `arch` are kept.
 - `GET /healthz`: Fly's health check. The machine stops when idle and wakes on
   the next request in about a second; the signup page should call this on load
   so that happens before anyone presses Join.
@@ -75,7 +80,10 @@ hostname).
 - `api_tokens`, `sync_devices`, `sync_keyrings`, `sync_key_wraps`,
   `sync_objects`, `sync_usage`: encrypted sync (migration `0002`).
 - `donations`: sealed opt-in samples, with no user, device or IP column.
-- `cloud_machines`: one row per Nekko Cloud machine (migration `0005`): region,
+- `feedback`: Send feedback notes (migration `0005`), with no user, device or
+  IP column and only the day each arrived. Read them with
+  `select received_on, message, app_info from feedback order by received_on desc`.
+- `cloud_machines`: one row per Nekko Cloud machine (migration `0006`): region,
   size, state, the hosting provider's machine id, the relay room, the hashes of
   the pairing key and of the relay access token, the scope, hours used.
 

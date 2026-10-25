@@ -191,11 +191,11 @@ body:has(.wall-drag-shield) { user-select: none; }
 .wall-focus-agent { display: flex; align-items: center; gap: 6px; max-width: 260px; flex-shrink: 0; padding: 3px 8px; border: 1px solid var(--line); border-radius: 12px; font-size: 12px; color: var(--ink-soft); }
 .wall-focus-agent[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
 .command-wall-content[data-focus-chat] .command-wall-primary { flex: 1 1 100%; transition: flex-basis 360ms cubic-bezier(.22, 1, .36, 1); }
-.command-wall-content[data-focus-chat] .command-wall-companions { display: flex; flex: 0 0 0%; width: 0; opacity: 0; overflow: hidden; transform: translateX(-18px) scale(.94); transform-origin: left center; border-radius: 28px; transition: flex-basis 360ms cubic-bezier(.22, 1, .36, 1), opacity 240ms ease, transform 360ms cubic-bezier(.22, 1, .36, 1), border-radius 360ms ease; }
+.command-wall-content[data-focus-chat] .command-wall-companions { display: flex; flex: 0 0 0%; width: 0; opacity: 0; overflow: hidden; transform: translateX(100%); transform-origin: left center; border-radius: 28px; transition: flex-basis 360ms cubic-bezier(.22, 1, .36, 1), opacity 240ms ease, transform 360ms cubic-bezier(.22, 1, .36, 1), border-radius 360ms ease; }
 .command-wall-content[data-focus-chat][data-companions-visible] .command-wall-primary { flex-basis: auto; }
 /* No transition while dragging the column: it would lag the pointer. */
 body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary, body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-companions { transition: none; }
-.command-wall-content[data-focus-chat][data-companions-visible] .command-wall-companions { flex-basis: var(--companion-share, 38%); opacity: 1; transform: translateX(0) scale(1); border-radius: 20px 0 0 20px; }
+.command-wall-content[data-focus-chat][data-companions-visible] .command-wall-companions { flex-basis: var(--companion-share, 38%); opacity: 1; transform: translateX(0); border-radius: 20px 0 0 20px; }
 .command-wall-content[data-focus-chat] .command-wall-companion { background: var(--surface); border-radius: 20px 0 0 20px; }
 @media (max-width: 639px) {
   .command-wall-content[data-focus-chat][data-companions-visible] .command-wall-primary { flex-basis: 65%; }
@@ -296,16 +296,20 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 }
 
 /* Presence changes are reversible CSS transitions, never queued animations. */
-.wall-agents-presence { display: flex; flex: 0 0 auto; min-height: 0; max-height: 100%; opacity: 1; transform: translateX(0); transition: opacity 140ms ease-out, transform 140ms ease-out; }
-.wall-agents-presence[data-orientation='horizontal'] { width: 100%; }
+.wall-agents-presence { display: flex; flex: 0 0 auto; min-width: 0; min-height: 0; max-height: 100%; opacity: 1; transform: translateX(0); interpolate-size: allow-keywords; width: max-content; overflow: clip; transition: width 220ms ease-out, transform 220ms ease-out; }
+.wall-agents-presence[data-orientation='horizontal'] { width: 100%; height: auto; transition: height 220ms ease-out, transform 220ms ease-out; }
 .wall-agents-presence > .agent-panel-host { min-height: 0; max-height: 100%; }
 .wall-agents-presence > .agent-panel-host > aside { min-height: 0; max-height: 100%; }
-.wall-agents-presence[data-panel-open='false'] { opacity: 0; transform: translateX(-10px); pointer-events: none; }
-.wall-agents-presence[data-orientation='horizontal'][data-panel-open='false'] { transform: translateY(-10px); }
+.wall-agents-presence[data-panel-open='false'] { width: 0; transform: translateX(-100%); pointer-events: none; }
+.wall-agents-presence[data-orientation='horizontal'][data-panel-open='false'] { width: 100%; height: 0; transform: translateY(-100%); }
 @starting-style {
-  .wall-agents-presence[data-panel-open='true'] { opacity: 0; transform: translateX(-10px); }
-  .wall-agents-presence[data-orientation='horizontal'][data-panel-open='true'] { transform: translateY(-10px); }
+  .wall-agents-presence[data-panel-open='true'] { width: 0; transform: translateX(-100%); }
+  .wall-agents-presence[data-orientation='horizontal'][data-panel-open='true'] { width: 100%; height: 0; transform: translateY(-100%); }
 }
+/* Below md the list is an absolute drawer that this wrapper contains (its
+   transform), so it keeps its old sizing: sized to the Agents button and
+   clipped, it cut the drawer off and clicks fell through to the windows. */
+@media (max-width: 767px) { .wall-agents-presence { width: auto; overflow: visible; } }
 @media (prefers-reduced-motion: reduce) { .wall-agents-presence { transition: none; transform: none; } }
 
 /* Separate project/status/date sections without inflating the agent cards. */

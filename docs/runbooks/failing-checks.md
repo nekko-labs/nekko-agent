@@ -40,6 +40,30 @@ When one of them is red:
 
 This is the policy the "Bound failed-check investigations" rules below apply to.
 
+### `perf` fails in the queue but not on the PR
+
+`perf` is skipped on PR runs unless the PR has `ci:perf`, so a change to a UI
+path the speed contract drives can pass its own CI and leave the queue on
+`perf`. Read which phase failed:
+
+- A missing selector, a layout the script waits for, or a phase that times out
+  waiting for the UI is the PR's: it changed something the script drives.
+- Only a timing budget missed, on a PR that does not touch that path, is the
+  known flap on unchanged code (issue #704): add the run there and compare the
+  queue runs just before and after.
+
+Run it locally, headless, before queuing a change to such a path:
+
+```
+npm run build:web
+cargo build -p nekkod
+NEKKOD_PATH=target/debug/nekkod node scripts/perf/run.mjs --quick --no-gpu
+```
+
+Set `PERF_BROWSER` to a Chromium binary when auto-detection picks the wrong one.
+CI measures a release `nekkod` (`cargo build -p nekkod --release`), so a debug
+build proves the flow, not the budget.
+
 Keep verification plan steps pending/active until verified; recording missing
 screenshots in a draft PR does not complete the verification step. Pause only
 for a concrete blocker requiring user input, credentials, permission, or an action

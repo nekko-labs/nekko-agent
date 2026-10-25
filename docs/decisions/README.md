@@ -26,3 +26,6 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | [0015](0015-experimental-dark-themes-use-a-60-30-10-split.md) | Build the Experimental Dark themes on a 60 / 30 / 10 split with near-black panels | accepted |
 | [0016](0016-a-phone-carries-a-sealed-provider-key-and-never-holds-one.md) | A phone may carry a provider key sealed to a computer; it never holds or reads one | accepted |
 | [0017](0017-nekko-cloud-machines-run-tools-in-a-per-user-jail.md) | Nekko Cloud machines run tools in a per-user jail; the phone decides what the cloud may see | accepted |
+| [0018](0018-the-computer-is-the-relying-party-for-step-up.md) | The computer is the relying party for hardware keys and step-up; safety exits are never guarded | proposed |
+| [0019](0019-folding-phones-get-panes-not-a-new-app.md) | Folding phones get posture-driven panes in the existing apps, not a tablet app or a device list | proposed |
+| [0022](0022-ci-runners-vm-and-network.md) | CI runners use our own `nekko-vm` helper, a userspace public-only NAT in nekkod and a read-only seed disk; no privileged helper | accepted |

@@ -82,6 +82,18 @@
           "description": "A sandboxed computer in the cloud your phone pairs with, seeing only what you put in its scope."
         },
         {
+          "slug": "protect-this-computer-with-a-security-key",
+          "title": "Protect this computer with a security key",
+          "source": "docs/security-keys.md",
+          "description": "Ask for a security key, a passkey or a one-time code before the actions that could take your computer over, and the safety exits on the phone."
+        },
+        {
+          "slug": "two-chats-on-a-folding-phone",
+          "title": "Two chats on a folding phone",
+          "source": "docs/folding-phones.md",
+          "description": "Two panes on a foldable or an iPad: two chats at once, Monitors beside a chat, and the layouts for each posture."
+        },
+        {
           "slug": "sync-encryption",
           "title": "Encrypted sync",
           "source": "docs/SYNC-ENCRYPTION.md",
@@ -128,6 +140,12 @@
           "title": "Floop tasks",
           "source": "docs/floop.md",
           "description": "Show your team's Floop tasks in Nekko Agent and let the agent pick up, update and finish them."
+        },
+        {
+          "slug": "send-feedback",
+          "title": "Send feedback",
+          "source": "docs/send-feedback.md",
+          "description": "Tell Nekko Labs what's broken or missing: a prompt for your own agent, a quick anonymous note, or a GitHub issue."
         }
       ]
     },

@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { summarizeThought, summarizeToolCall, truncateWords, type LiveActivity } from '@nekko-agent/shared';
+import { shortLiveStatus, summarizeThought, summarizeToolCall, truncateWords, type LiveActivity } from '@nekko-agent/shared';
 import { ToolProgressChip } from './ToolProgressChip.js';
 import { toolQuietSince } from './toolProgress.js';
 import { ChatIcon, ThoughtIcon, ToolStepIcon } from '../../icons.js';
@@ -40,7 +40,11 @@ export const ActivityGroup = memo(function ActivityGroup({ items, streaming = fa
   const watches = tools.filter((it) => it.call.name === 'agent_watch' && parseWatchCall(it.call).action === 'create');
   const watchOnly = !agents.length && watches.length > 0 && tools.every((it) => it.call.name === 'agent_watch');
   const lastWatch = watches[watches.length - 1];
-  const summary = streaming
+  // A background reply that stepped aside for the person at the computer.
+  const paused = streaming && shortLiveStatus(toolActivity) === 'Paused';
+  const summary = paused
+    ? 'Paused until this computer is free'
+    : streaming
     ? (toolCount ? `Working · ${tools[tools.length - 1].call.name}` : 'Thinking')
     : (toolCount
         ? `Worked on ${items.length} step${items.length === 1 ? '' : 's'}`
@@ -59,7 +63,7 @@ export const ActivityGroup = memo(function ActivityGroup({ items, streaming = fa
         >
           <span className="w-3 shrink-0 text-[10px]">{open ? '▾' : '▸'}</span>
           {agents.length ? <SubagentCue /> : watchOnly ? <WatchIcon /> : <ToolStepIcon className="h-3 w-3 shrink-0 text-accent" />}
-          {streaming && <LeadDots />}
+          {streaming && !paused && <LeadDots />}
           <span className={`${ordinary ? 'shrink-0' : 'min-w-0 truncate'} font-medium text-ink-soft`}>{agents.length ? <SubagentHeadline call={agents[agents.length - 1].call} result={agents[agents.length - 1].result} /> : watchOnly ? watchCallHeadline(lastWatch.call, lastWatch.result) : summary}</span>
           {!streaming && toolCount > 0 && agents.length === 0 && !watchOnly && (
             <span className="min-w-0 truncate text-ink-faint">
