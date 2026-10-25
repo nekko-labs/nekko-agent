@@ -11,6 +11,8 @@ fs.mkdirSync(dir, { recursive: true });
 const profile = fs.mkdtempSync(path.join(dir, 'profile-'));
 app.setPath('userData', profile);
 app.setPath('sessionData', profile);
+// Escape JSON before embedding values in evaluated JavaScript.
+const js = v => JSON.stringify(v).replace(/[<>/\u2028\u2029]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 app.whenReady().then(async () => {
   const report = { revision: process.env.NEKKO_TEST_REVISION || 'working-tree', checks: [], errors: [], captures: [], blockedNetwork: [] };
@@ -28,8 +30,8 @@ app.whenReady().then(async () => {
   win.webContents.on('console-message', e => { if (e.level === 'error') report.errors.push(e.message); });
   const run = s => win.webContents.executeJavaScript(s, true);
   const check = async (name, source) => { report.checks.push({ name, passed: !!await run(source) }); };
-  const click = async selector => { const ok = await run(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});if(!e)return false;e.click();return true})()`); if (!ok) report.errors.push('Missing ' + selector); await sleep(700); };
-  const clickText = async text => { await run(`[...document.querySelectorAll('button')].find(b=>b.innerText.trim()===${JSON.stringify(text)})?.click()`); await sleep(700); };
+  const click = async selector => { const ok = await run(`(()=>{const e=document.querySelector(${js(selector)});if(!e)return false;e.click();return true})()`); if (!ok) report.errors.push('Missing ' + selector); await sleep(700); };
+  const clickText = async text => { await run(`[...document.querySelectorAll('button')].find(b=>b.innerText.trim()===${js(text)})?.click()`); await sleep(700); };
   const capture = async name => {
     const height = Math.min(4000, Math.ceil(await run('document.documentElement.scrollHeight')));
     win.setContentSize(820, height); await sleep(500);
@@ -39,7 +41,7 @@ app.whenReady().then(async () => {
     fs.writeFileSync(file, image.toPNG()); report.captures.push({ file, size: image.getSize() });
     win.setContentSize(820, 1200);
   };
-  const reset = async opts => { await run(`integration.reset(${JSON.stringify(opts)})`); await sleep(1500); };
+  const reset = async opts => { await run(`integration.reset(${js(opts)})`); await sleep(1500); };
   try {
     await win.loadFile(path.join(out, 'index.html')); await sleep(1000);
     if (base) {
