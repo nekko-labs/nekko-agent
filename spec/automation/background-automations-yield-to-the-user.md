@@ -11,7 +11,7 @@ Three pieces, in order:
 
 1. **B1: when** (signals and per-automation policies), this page.
 2. **B2: how to yield** (preemption within about a second of the user's return), below.
-3. **B3: what stays loaded** (a small routing model kept warm, the large one evicted under memory pressure, and a monitor chip such as "Background: paused, you're active"), planned.
+3. **B3: what stays loaded** (models kept resident, idle ones unloaded under memory pressure, and a monitor chip such as "Background: 1 paused · you're using the computer"), below.
 
 ## Activity signals `[implemented, unit- and daemon-tested; live-checked on macOS only]`
 
@@ -110,3 +110,25 @@ Acceptance:
 - **Daemon:** the real daemon pauses a low-priority task while a person's chat replies on the same loopback model, then finishes it with no trace of the stopped reply (`nekkod/tests/daemon/automation.rs`).
 
 **Not built:** unloading the model when a pause lasts (B3, residency), and lighter launches (fewer GPU layers or threads) for low priority.
+
+## What stays loaded, and the background chip (B3) `[implemented, unit-tested; isolated renderer evidence]`
+
+**Residency.** Before a load, the engine makes room (nekko-engine `server.rs`, `do_load`):
+
+- **The resident limit** (`maxLoaded`): idle models are unloaded, least recently used first. This is unchanged.
+- **Free GPU memory:** for a llama.cpp model the planner can size (`capacity::compute_fit`: weights, KV cache for the load's context, overhead, times its GPU share), when the GPU probe reads free memory. Idle models are unloaded, least recently used first, until the estimate fits.
+  - If nothing idle is left, the load goes ahead, as before, and the log says it may not fit. A load is never refused on a memory estimate alone.
+  - On Apple Silicon, "free" is total memory less what the GPU has allocated. That overstates free memory, so this rarely unloads anything there. It never unloads by mistake.
+- **Kept resident:** a model with its own idle TTL of 0 ("Keep resident" in Model Server) is never unloaded to make room. The global `idleTtlSeconds` of 0 only stops the idle sweep and pins nothing.
+  - If every resident model is busy or kept resident, the load is refused: "Every resident model is busy or kept resident. Stop keeping one resident, or increase the resident limit."
+- **No routing model:** the plan named a small routing model to keep warm. Nothing in the app uses a local routing model yet, so none is pinned by default; "Keep resident" is how to keep one warm.
+- **A long pause:** a paused background turn holds no open request, so its model is idle. It is unloaded by the idle timeout (900 s by default), or sooner when a person's chat needs the room. B3 adds no separate rule for it.
+
+**The chip.**
+- **On every view but the Agent board:** the resource chip in the corner shows **BG running** or **BG paused** while an automation runs on a local model, with the whole line on hover.
+- **On the Agent board:** the Monitors panel shows it as a row under its toolbar, for example **Background: 1 paused · you're using the computer**. The reasons read: you're using the computer, your chat is using the model, on battery, battery low, running hot.
+- **Source:** both read `background:state` once and then follow `background:updated`. Nothing shows when no automation runs in the background.
+
+Acceptance:
+- **Engine:** `nekko-engine/tests/server.rs` checks that a model kept resident is not unloaded to make room, that a load which does not fit in free memory unloads the idle ones first (oldest first) and then loads, and that without a GPU reading only the resident limit counts. The golden scenarios are unchanged.
+- **Renderer:** `BackgroundChip.test.tsx` and `background.test.ts`. Evidence: `automations-integration.cjs`, with the resource chip and the Monitors panel paused and running, in dark and light.
