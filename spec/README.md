@@ -161,7 +161,7 @@ Workflows, goals, integrations and tools.
 - [Handing the agent a long-running goal](automation/handing-the-agent-a-long-running-goal.md) (2 KB)
 - [One-click setup for safe offline PC control (planned)](automation/one-click-setup-for-safe-offline-pc-control.md) (6 KB)
 - [Tooling & integrations](automation/tooling-integrations.md) (8 KB)
-- [Workflows (procedural automation)](automation/workflows-procedural-automation.md) (20 KB)
+- [Workflows (procedural automation)](automation/workflows-procedural-automation.md) (22 KB)
 
 ### phone
 
