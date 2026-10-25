@@ -2602,13 +2602,11 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 .wall-auto-arrange { position: relative; display: grid; grid-template-columns: 1fr; align-items: center; opacity: 0; visibility: hidden; transform: scale(.6); transition: opacity 180ms ease, transform 240ms ease, visibility 0s 240ms; }
 .wall-auto-arrange[data-visible='true'] { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
 .wall-auto-arrange > button { min-width: 0; overflow: hidden; }
-/* Snap to grid: an icon toggle with the outline button's frame. The magnet keeps
-   its colours; off it is muted (and its sparks hidden), on it lights the frame in the accent. */
-.wall-snap-toggle { display: inline-grid; place-items: center; width: 32px; height: 28px; border: 1px solid var(--line); border-radius: 8px; transition: background var(--dur-fast) ease, border-color var(--dur-fast) ease; }
-.wall-snap-toggle svg { opacity: .7; transition: opacity var(--dur-fast) ease; }
+/* Snap to grid: an icon toggle with the outline button's frame. The magnet follows
+   the theme's ink; off it is faint (and its sparks hidden), on it lights in the accent. */
+.wall-snap-toggle { display: inline-grid; place-items: center; width: 32px; height: 28px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink-faint); transition: background var(--dur-fast) ease, color var(--dur-fast) ease, border-color var(--dur-fast) ease; }
 .wall-snap-toggle:not([aria-pressed='true']) svg { --magnet-spark: transparent; }
-.wall-snap-toggle:hover:not(:disabled) { background: var(--surface-2); }
-.wall-snap-toggle:hover:not(:disabled) svg, .wall-snap-toggle[aria-pressed='true'] svg { opacity: 1; }
+.wall-snap-toggle:hover:not(:disabled) { color: var(--ink); background: var(--surface-2); }
 .wall-snap-toggle[aria-pressed='true'] { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); background: var(--accent-soft); }
 .wall-snap-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
