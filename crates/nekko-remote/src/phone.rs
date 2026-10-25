@@ -84,6 +84,8 @@ pub struct Policy {
     pub terminal: crate::phone_terminal::Limits,
     /// Files and logs from a phone (IO-33 FA-1, FA-5): limits and views (phone_files.rs).
     pub files: crate::phone_files::FilesPolicy,
+    /// What the agent linked in a chat, opened on a phone (#1095; phone_artifacts.rs).
+    pub artifacts: crate::phone_artifacts::ArtifactsPolicy,
     /// Git from a phone (IO-33 FA-2): limits, option keys and views (phone_git.rs).
     pub git: crate::phone_git::GitPolicy,
     /// `stepUpPolicy()` (SK-2; step_up.rs).
@@ -143,6 +145,7 @@ pub fn policy() -> &'static Policy {
             activity_limit: v["activityLimit"].as_u64().unwrap_or(200) as usize,
             terminal: crate::phone_terminal::Limits::from_policy(&v),
             files: crate::phone_files::FilesPolicy::from_policy(&v["files"]),
+            artifacts: crate::phone_artifacts::ArtifactsPolicy::from_policy(&v["artifacts"]),
             git: crate::phone_git::GitPolicy::from_policy(&v["git"]),
             step_up: crate::step_up::Limits::from_policy(&v["stepUp"]),
         }
@@ -300,6 +303,10 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
     }
     if crate::phone_files::is_files(channel) {
         let args = crate::phone_files::screen(channel, args, &policy().files)?;
+        return Ok(Screened { args: Some(args), ..Screened::default() });
+    }
+    if crate::phone_artifacts::is_artifacts(channel) {
+        let args = crate::phone_artifacts::screen(channel, args, &policy().artifacts)?;
         return Ok(Screened { args: Some(args), ..Screened::default() });
     }
     let arg = |i: usize| args.get(i).unwrap_or(&Value::Null);
@@ -525,6 +532,7 @@ pub fn redact(channel: &str, result: Value) -> Value {
         "limits:get" => crate::phone_views::limits(&result, &policy().views),
         c if policy().terminal.is_terminal(c) => crate::phone_terminal::result(c, &result),
         c if crate::phone_files::is_files(c) => crate::phone_files::view(c, &result, &policy().files),
+        c if crate::phone_artifacts::is_artifacts(c) => crate::phone_artifacts::view(c, &result, &policy().artifacts),
         c if crate::phone_git::is_git(c) => crate::phone_git::view(c, &result, &policy().git, &policy().views.pr),
         _ => result,
     }
@@ -2292,6 +2300,10 @@ mod tests {
                 assert!(has(&p.read_channels, c), "{c}");
             }
             assert!(has(&p.change_channels, "files:write"));
+            // #1095: what the agent linked in a chat, read only.
+            for c in ["artifact:read", "preview:fetch"] {
+                assert!(has(&p.read_channels, c) && !has(&p.change_channels, c), "{c}");
+            }
             for c in p.read_channels.iter().chain(&p.change_channels) {
                 assert!(!has(&p.read_channels, c) || !has(&p.change_channels, c), "{c} is in both classes");
             }

@@ -438,6 +438,8 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             Some(voice) => voice.route(c, &args).await,
             None => Err("voice needs the data directory".into()),
         },
+        // What the agent linked in a chat, for a phone (#1095).
+        c if crate::artifacts::CHANNELS.contains(&c) => crate::artifacts::route(ctx, c, &args).await,
         c if ctx.workspace.serves(c) => crate::workspace::route(ctx, c, &args).await,
         c if crate::logs::CHANNELS.contains(&c) && ctx.workspace.data_dir().is_some() => {
             crate::logs::route(ctx, c, &args).await
