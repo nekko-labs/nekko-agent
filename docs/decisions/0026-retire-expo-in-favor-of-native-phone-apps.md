@@ -1,4 +1,4 @@
-# 0025: Retire Expo in favor of native phone apps
+# 0026: Retire Expo in favor of native phone apps
 
 Status: accepted
 

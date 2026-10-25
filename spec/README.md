@@ -55,7 +55,7 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 - [One copy of the reply being written](chat/one-copy-of-the-reply-being-written.md) (1 KB)
 - [Per-step plan working icons (2026-10-17)](chat/per-step-plan-working-icons.md) (3 KB)
 - [Sleeping chats and image-bearing replies](chat/sleeping-chats-and-image-bearing-replies.md) (2 KB)
-- [Tool calls grouped by what they are for](chat/tool-calls-grouped-by-purpose.md) (10 KB)
+- [Tool calls grouped by what they are for](chat/tool-calls-grouped-by-purpose.md) (13 KB)
 - [Verification checklists and PR progress in chat](chat/verification-and-pr-progress.md) (5 KB)
 - [Workspace context commands and connected composer](chat/workspace-context-commands-and-connected-composer.md) (4 KB)
 
@@ -68,7 +68,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Agent board: pick up and drop windows](desktop/agent-board-pick-up-and-drop.md) (3 KB)
 - [Agent window controls refresh (2026-10-15)](desktop/agent-window-controls-refresh.md) (6 KB)
 - [Composer and desktop rail regression fixes (2026-10-07)](desktop/composer-and-desktop-rail-regression-fixes.md) (3 KB)
-- [Empty wall opens the new-chat screen; glass prism composer (2026-10-18)](desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md) (3 KB)
+- [Empty wall opens the new-chat screen; glass prism composer (2026-10-18)](desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md) (4 KB)
 - [Focused mode transitions, calmer focus ring and layout controls (2026-10-17)](desktop/focused-mode-transitions-calmer-focus-ring-and-layout-controls.md) (7 KB)
 - [Grid model selection and chat-mode menus (2026-10-07)](desktop/grid-model-selection-and-chat-mode-menus.md) (1 KB)
 - [Inline agent-window creation](desktop/inline-agent-window-creation.md) (3 KB)
@@ -76,7 +76,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Model picker, tool categories, Artifacts tab and wall polish (2026-10-15)](desktop/model-picker-tool-categories-artifacts-tab-and-wall-polish.md) (5 KB)
 - [Nav wings and wall action clarity](desktop/nav-wings-and-wall-action-clarity.md) (1 KB)
 - [Navigation panel, media fade and macOS app menu (2026-10-16)](desktop/navigation-panel-media-fade-and-macos-app-menu.md) (2 KB)
-- [New agent window defaults](desktop/new-agent-window-defaults.md) (2 KB)
+- [New agent window defaults](desktop/new-agent-window-defaults.md) (5 KB)
 - [Search within Settings (desktop)](desktop/search-within-settings-desktop.md) (2 KB)
 - [Settings section nav and phone pairing placement (desktop)](desktop/settings-section-nav.md) (3 KB)
 - [Slim wave rail, tighter Agents spacing, composer snap points](desktop/slim-wave-rail-tighter-agents-spacing-composer-snap-points.md) (4 KB)
@@ -168,6 +168,7 @@ Workflows, goals, integrations and tools.
 
 Phone remote control and the native iOS and Android apps.
 
+- [Agent-linked files and local previews on the phone](phone/agent-linked-files-and-previews-on-the-phone.md) (9 KB)
 - [Driving your home model from your phone (remote control)](phone/driving-your-home-model-from-your-phone-remote-control.md) (13 KB)
 - [Folding phones: two chats at once, a Monitors pane and vertical mode (2026-10-24)](phone/folding-phones-two-chats-and-monitors.md) (13 KB)
 - [iPhone chat: tables, and previews of files and local pages the agent links (2026-10-26)](phone/iphone-chat-tables-and-link-previews.md) (8 KB)
@@ -175,10 +176,10 @@ Phone remote control and the native iOS and Android apps.
 - [iPhone: the desktop's languages and themes, and New chat's effort and computer (2026-10-23)](phone/iphone-languages-themes-and-new-chat-choices.md) (5 KB)
 - [Mermaid diagrams on the phone (planned 2026-10-25)](phone/mermaid-diagrams-on-the-phone.md) (4 KB)
 - [Native Android app (2026-10-11)](phone/native-android-app.md) (41 KB)
-- [Native iOS app (2026-10-16)](phone/native-ios-app.md) (92 KB)
+- [Native iOS app (2026-10-16)](phone/native-ios-app.md) (93 KB)
 - [Native phone implementation decision (2026-10-07)](phone/native-phone-implementation-decision.md) (2 KB)
 - [Nekko Cloud machines: a sandboxed computer the phone pairs with (2026-10-24)](phone/nekko-cloud-machines.md) (7 KB)
-- [Phone access classes and relay replay protection](phone/phone-access-classes-and-relay-replay-protection.md) (11 KB)
+- [Phone access classes and relay replay protection](phone/phone-access-classes-and-relay-replay-protection.md) (12 KB)
 - [Your agent in your pocket (the iOS and Android app)](phone/your-agent-in-your-pocket-the-ios-and-android-app.md) (5 KB)
 
 ### platform

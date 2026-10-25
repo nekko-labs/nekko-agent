@@ -228,6 +228,9 @@ export const IpcChannels = {
   /** The app's, the engine's and each chat's agent logs, redacted (IO-33 FA-5). */
   logsList: 'logs:list',
   logsRead: 'logs:read',
+  /** What the agent linked in a chat, for a phone (#1095): a linked file or a page's asset, and a linked local preview server. */
+  artifactRead: 'artifact:read',
+  previewFetch: 'preview:fetch',
   /** What Privacy Shield would hide from a cloud model in a chat and its draft. */
   privacyPreview: 'privacy:preview',
   attachmentImport: 'attachment:import',
