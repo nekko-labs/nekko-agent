@@ -36,7 +36,7 @@ it('serializes delayed refreshes and follows an in-flight watch invalidation onc
   await vi.advanceTimersByTimeAsync(100);
   expect(refresh).toHaveBeenCalledOnce();
   listener({ type: 'session_meta', sessionId: 's' });
-  listener({ type: 'done', sessionId: 's' });
+  listener({ type: 'done', sessionId: 's', messageId: 'reply' });
   await vi.advanceTimersByTimeAsync(100);
   expect(refresh).toHaveBeenCalledOnce();
   finish();
