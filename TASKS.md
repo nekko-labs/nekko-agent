@@ -6,6 +6,32 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Tool calls grouped by purpose (added 2026-10-25)
+
+Philip asked for an agent's tool calls to be grouped by what they are doing, with the goal of each group shown (reading the project's guidance apart from coding, say). Spec: [Tool calls grouped by what they are for](spec/chat/tool-calls-grouped-by-purpose.md). #1075
+
+- [ ] **TG-1, Shared purpose classifier.** `toolPurpose(call)` in `packages/shared/src/agent-steps.ts` (guidance, explore, edit, check, run, git, web, plan, delegate, other), the call's own `description` preferred as the goal; fixture `packages/shared/fixtures/tool-purpose.json` (60+ cases).
+- [ ] **TG-2, Desktop and Local Web UI groups.** `transcript.ts` splits an activity run into purpose groups; `ActivityGroup.tsx` renders them and its headline summarises them; approval, question and failure exceptions.
+- [ ] **TG-3, iPhone groups.** Swift port of the classifier in `NekkoProtocol` (runs the shared fixture), `TranscriptRow.of` groups adjacent same-purpose rows; the subagent group becomes the Delegate purpose.
+- [ ] **TG-4, Android groups.** Kotlin port in `protocol` (runs the shared fixture), grouped rows in `ChatScreen.kt` / `BlockViews.kt`.
+- [ ] **TG-5, Evidence.** Desktop before/after and a live recording; simulator and emulator screenshots from CI.
+- [ ] **TG-6, Engine `intent` argument (later, needs a decision).** Optional `intent` on the engine's own tools so Nekko's runs get model-written goals; changes the prompt goldens.
+
+## Phone Markdown composer, rich replies and Mermaid (added 2026-10-25)
+
+Philip asked for the iPhone chat to write in Markdown with a styles toolbar, nested bullets, good tables and a paste-as-Markdown or plain-text choice, and for Mermaid diagrams on the phone. Specs: [iPhone Markdown composer and rich replies](spec/phone/iphone-markdown-composer-and-rich-replies.md) (#1073), [Mermaid diagrams on the phone](spec/phone/mermaid-diagrams-on-the-phone.md) (#1074).
+
+- [ ] **MD-1, Block parser with real nesting and tables.** Replace the line scanner's flat `Piece` list in `Markdown.swift` with a small block tree (nested lists with continuation lines, pipe tables with alignment), moved into `NekkoProtocol` so it is tested on Linux; `MarkdownTests`.
+- [ ] **MD-2, Rendering.** Nested list markers by depth, task checkboxes, the native table grid (sideways scroll, Expand full screen, Copy as Markdown / as text), user bubbles rendered as Markdown; streaming stays incremental.
+- [ ] **MD-3, Composer editor and toolbar.** A `UITextView`-backed composer with live source styling and the in-card toolbar (styles, link, heading, lists, indent/outdent, quote, code block, table, add row/column), list continuation on Return, undo; the edit functions are pure and Linux-tested.
+- [ ] **MD-4, Paste choice.** *Paste as Markdown* / *Paste as plain text* in the edit menu, the *Use formatting* chip after a rich paste; HTML/RTF→Markdown converter with the security cases.
+- [ ] **MD-5, Evidence.** UI test and screenshots (light, dark, largest text) from macOS CI.
+- [ ] **MD-6, Android parity.** The same parser, rendering, toolbar and paste choice in `Markdown.kt`, `MarkdownText.kt` and `Composer.kt`.
+- [ ] **MM-1, Offline Mermaid renderer.** Bundled `mermaid.min.js` (12.x), one locked off-screen `WKWebView` (no network, no navigation, strict), a render queue, SVG→image cache keyed by source, theme and width.
+- [ ] **MM-2, Inline diagram and full screen.** Mermaid fences draw inline once closed (source while streaming), tap for zoom/pan, Copy source, Share image, Save to Photos, source fallback with the error; `.mmd` files in *Files*.
+- [ ] **MM-3, Evidence and cost.** UI test with flowchart, sequence and broken diagrams in light and dark; app size and render time in `docs/perf-history.md`.
+- [ ] **MM-4, Android Mermaid.** The same design in a locked `WebView`.
+
 ## Chat timing and GPT reasoning (added 2026-10-24)
 
 Philip found GPT-6.1 chats slow, quiet between tool calls, and missing their tokens/sec readout during tool work, and asked for step times and swipe-to-see times. Local logs showed the tools were fast (69 ms median for a trivial shell read) and the model calls slow (7.5 s per step against 4.6 s for Opus) because GPT re-reasoned from scratch after every tool. Spec: [Chat suggestions, progress and code access](SPEC.md#chat-suggestions-progress-and-code-access). #1058
