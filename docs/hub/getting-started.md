@@ -175,3 +175,16 @@ when completed. Minimize only hides a window and deliberately lets work continue
 Stop cannot undo tokens already consumed. A later intentional run can arm new
 watches; a failed delegation should explain its failure and continue directly
 when safe, never silently switch provider or model.
+
+### Reading expanded tool details
+
+Click a tool activity row's chevron to see its full inputs or task. Expanded
+details wrap long paths, URLs and unbroken text to the chat width, while keeping
+indentation and line breaks. Longer details scroll vertically inside a bounded
+area. Tool inputs shown as JSON keep JSON escaping (for example, `\n` inside a
+string); the display does not rewrite the original input. Watch prompts, results
+and wake-up details wrap the same way on desktop and the Local Web UI.
+
+### Resizing the side panels
+
+Hover the edge between the agent list and chat wall, or the edge beside Monitors, to reveal a bright vertical resize line. Drag it to change the panel width, or focus the separator and use the left/right arrow keys. The line disappears when you leave the edge; there is no permanent divider beside the agent list.

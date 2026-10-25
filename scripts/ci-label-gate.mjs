@@ -31,7 +31,6 @@ export const HOLD_LABEL = 'hold';
 /** The workflows `ci:macos` turns macOS work on in, besides ci.yml itself. */
 export const LABEL_WORKFLOWS = [
   '.github/workflows/ios-native.yml',
-  '.github/workflows/mobile.yml',
   '.github/workflows/dev-identity.yml',
   '.github/workflows/codeql.yml',
   '.github/workflows/decision-models.yml',

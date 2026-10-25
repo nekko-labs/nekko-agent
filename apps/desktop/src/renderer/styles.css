@@ -3547,3 +3547,11 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
   .models-add-strip { gap: 6px; padding-left: 12px; }
   .models-add-provider { width: 36px; height: 36px; border-radius: 10px; }
 }
+
+/* Transparent sandboxed SVG frames let the chat-matched dotted canvas show through. */
+.diagram-canvas {
+  background-color: var(--surface);
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--ink-faint) 25%, transparent) 0.75px, transparent 0.85px);
+  background-size: 18px 18px;
+}
+.diagram-card { box-shadow: var(--shadow-sm); }

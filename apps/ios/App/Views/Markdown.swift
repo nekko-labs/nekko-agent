@@ -46,7 +46,7 @@ struct MarkdownText: View {
         return Text(s)
     }
 
-    static func parse(_ text: String) -> [MarkdownBlock] { MarkdownBlocks.parse(text) }
+    static func parse(_ text: String) -> [LegacyMarkdownBlock] { MarkdownBlocks.parse(text) }
 }
 
 /// A pipe table: the header semibold on a faint fill, hairlines between rows,
