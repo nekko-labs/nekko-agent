@@ -33,3 +33,4 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | [0022](0022-ci-runners-vm-and-network.md) | CI runners use our own `nekko-vm` helper, a userspace public-only NAT in nekkod and a read-only seed disk; no privileged helper | accepted |
 | [0023](0023-place-bytes-in-three-places-and-pass-placement-explicitly.md) | Plan a load across VRAM, RAM and disk by weight kind, and pass the placement to llama.cpp explicitly | accepted |
 | [0024](0024-one-models-workspace-with-local-and-cloud-sections.md) | One Models rail entry with local and cloud subnavigation, preserving existing destinations | accepted |
+| [0025](0025-retire-expo-in-favor-of-native-phone-apps.md) | Retire Expo in favor of native phone apps | accepted |
