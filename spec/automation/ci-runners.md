@@ -5,7 +5,7 @@ area: automation
 
 # CI runners
 
-**Status: `[planned]`.** Nothing on this page is built yet. Every section carries its own status, and all of them are planned. Issue: [nekko-labs/nekko-agent#1038](https://github.com/nekko-labs/nekko-agent/issues/1038). Choices behind it: [decision 0022](../../docs/decisions/0022-ci-runners-vm-and-network.md). Tasks: T210 to T214 in [TASKS.md](../../TASKS.md).
+**Status: `[planned]` product; T211 scaffolding implemented, real-VM acceptance unverified.** The Swift VM helper and userspace NAT exist, but nothing in the app starts a runner yet. The fake-guest network tests do not establish real-VM isolation or throughput. The Linux test transport probes for peer closure so an idle NAT returns and closes its host sockets; the macOS helper's orphan-VM behavior still needs real-guest acceptance. All product journeys and remaining sections below are planned unless explicitly identified as T211 implementation details. Issue: [nekko-labs/nekko-agent#1038](https://github.com/nekko-labs/nekko-agent/issues/1038). Choices behind it: [decision 0022](../../docs/decisions/0022-ci-runners-vm-and-network.md). Tasks: T210 to T214 in [TASKS.md](../../TASKS.md).
 
 ## What it is for `[planned]`
 
@@ -95,7 +95,7 @@ None can stop sleep when the lid closes on battery, when Low Power Mode turns on
 
 **How the guest gets its config.** `nekkod` mints the single-use JIT runner config and puts it on a read-only seed disk attached to the VM. The host never connects into the guest: no SSH, no host-to-guest network.
 
-**The honest limit.** No software promises zero risk. The target is that a job can only hurt its own VM. The remaining path is a VM-escape bug in macOS itself, the class of bug that affects every desktop virtualization product. It is narrowed by fork code being off by default, the 7-day security-update gate, and the network filter, which gives even an escaped job no LAN access.
+**The honest limit.** No software promises zero risk. The target is that a job can only hurt its own VM. The remaining path is a VM-escape bug in macOS itself, the class of bug that affects every desktop virtualization product. The planned fork-code default and 7-day security-update gate reduce exposure. The network filter constrains traffic through the guest's virtual NIC, not code that has escaped into a host process; it cannot promise LAN isolation after a VM escape.
 
 ## Apple's license `[planned]`
 

@@ -172,8 +172,21 @@ pub async fn serve_with<C: Connector>(
             },
             _ = wake.notified() => {}
             _ = tokio::time::sleep(delay) => {}
-            // A datagram socket has no EOF; macOS signals a closed peer once, this catches the rest.
-            _ = peer_check.tick() => if sock.peer_addr().is_err() { return Ok(()) },
+            _ = peer_check.tick() => {
+                if sock.peer_addr().is_err() { return Ok(()) }
+                // Linux keeps getpeername valid after a datagram peer closes and
+                // recv never yields EOF. An empty datagram detects ECONNREFUSED
+                // without inventing an Ethernet packet. The fake guest drops it
+                // like any truncated frame; the macOS VM transport needs no probe.
+                #[cfg(target_os = "linux")]
+                if let Err(e) = sock.try_send(&[]) {
+                    match e.kind() {
+                        io::ErrorKind::WouldBlock => {} // A full live peer is not a closed peer.
+                        _ if e.raw_os_error() == Some(libc::ENOBUFS) => {}
+                        _ => return closed_or(e),
+                    }
+                }
+            },
         }
     }
 }
