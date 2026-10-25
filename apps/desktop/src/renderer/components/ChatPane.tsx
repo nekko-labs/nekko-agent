@@ -26,6 +26,7 @@ import { clearLiveRun, getLiveRun, takeFinishedRun, useLiveRun, type LiveRun } f
 import { getCachedSession, loadSession, putCachedSession } from '../sessionCache.js';
 import { usePaneVisible } from '../paneVisibility.js';
 import { useAgentEventClaim } from '../agentSubscription.js';
+import { ComposerFocus } from './ComposerFocus.js';
 import { afterPaint } from '../afterPaint.js';
 import { chatWelcomeState } from './agent-console/chatWelcome.js';
 import { useAllProviderLimits, useProviderLimits } from '../useLimits.js';
@@ -523,47 +524,6 @@ const LiveReplyStatus = memo(function LiveReplyStatus({
   const label = status.streaming ? shortLiveStatus(run?.activity) || 'Working' : '';
   return <ReplyStatus {...status} tps={liveRate?.rate ?? status.tps} estimatedRate={!!liveRate} status={label} iconState={status.streaming ? replyIconState(run?.activity) : 'idle'} elapsed={status.streaming ? elapsed : 0} nextWakeAt={nextWakeAt} now={now} />;
 });
-
-/**
- * Focus the composer when a chat opens so you can start typing straight away,
- * caret after any restored draft. Once per chat, and again whenever a pane
- * kept mounted behind the scenes is shown, so switching back to a chat lands
- * in its composer as it always did. Never steals focus from something else
- * you're already typing in. `ready` is a dependency because the textarea is
- * disabled until providers have loaded.
- *
- * Its own component so the pane showing and hiding re-renders this, not the
- * chat; and done after the frame, because focus forces a layout, and paying for
- * it inside the switch would hold back the frame that shows the chat.
- */
-function ComposerFocus({ target, sessionId, ready }: { target: React.RefObject<MarkdownEditorElement | null>; sessionId: string; ready: number }) {
-  const visible = usePaneVisible();
-  const focusedFor = useRef<string | null>(null);
-  useEffect(() => {
-    if (!visible) {
-      focusedFor.current = null;
-      return;
-    }
-    if (focusedFor.current === sessionId) return;
-    return afterPaint(() => {
-      const el = target.current;
-      if (!el || !el.isContentEditable) return;
-      const active = document.activeElement;
-      // A composer in a pane that was just hidden may still hold focus for a
-      // moment; it is not someone typing.
-      const typingElsewhere =
-        active instanceof HTMLElement &&
-        active !== el &&
-        active.checkVisibility?.() !== false &&
-        (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable);
-      if (typingElsewhere) return;
-      focusedFor.current = sessionId;
-      el.focus();
-      el.setSelectionRange(el.value.length, el.value.length);
-    });
-  }, [visible, sessionId, ready, target]);
-  return null;
-}
 
 function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCenter = false, surface = 'full', status, selected, header, cleanStart: cleanStartWanted = false }: {
   sessionId: string;
@@ -3116,7 +3076,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     onKeyDown={onComposerKeyDown}
                     disabled={!canCompose}
                   />
-                  <ComposerFocus target={composerRef} sessionId={sessionId} ready={providers.length} />
+                  <ComposerFocus target={composerRef} sessionId={sessionId} ready={canCompose} />
                 </div>
                 <div className="flex items-center gap-2 px-2 pb-2 pt-1">
                   {!imageMode && (<>

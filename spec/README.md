@@ -36,7 +36,7 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 - [Automatic title requests during queued turns (2026-10-13)](chat/automatic-title-requests-during-queued-turns.md) (1 KB)
 - [Background notification and panel batch (2026-10-13)](chat/background-notification-and-panel-batch.md) (8 KB)
 - [Chat & cowork (unified surface)](chat/chat-cowork-unified-surface.md) (73 KB)
-- [Chat actions and persistent reply measurements](chat/chat-actions-and-persistent-reply-measurements.md) (24 KB)
+- [Chat actions and persistent reply measurements](chat/chat-actions-and-persistent-reply-measurements.md) (25 KB)
 - [Chat artifact cards and session-local documents](chat/chat-artifact-cards-and-session-local-documents.md) (4 KB)
 - [Chat chrome and composer refinement (implemented; desktop verification pending)](chat/chat-chrome-and-composer-refinement.md) (3 KB)
 - [Chat completion X icons and idle auto-completion (2026-10-15)](chat/chat-completion-x-icons-and-idle-auto-completion.md) (2 KB)
@@ -98,7 +98,7 @@ Agents panel, monitors, subagents and delegation.
 - [Approval retention and delegation navigation](agents/approval-retention-and-delegation-navigation.md) (1 KB)
 - [Chat finder in the Agents panel (2026-10-16)](agents/chat-finder-in-the-agents-panel.md) (6 KB)
 - [Delegating frontier planning to a local worker](agents/delegating-frontier-planning-to-a-local-worker.md) (2 KB)
-- [Monitors dock naming and header polish (2026-10-16)](agents/monitors-dock-naming-and-header-polish.md) (5 KB)
+- [Monitors dock naming and header polish (2026-10-16)](agents/monitors-dock-naming-and-header-polish.md) (6 KB)
 - [Subagent transcript identity](agents/subagent-transcript-identity.md) (2 KB)
 - [Watch rows and subagent models](agents/watch-rows-and-subagent-models.md) (2 KB)
 
