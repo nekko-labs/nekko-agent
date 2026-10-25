@@ -166,3 +166,12 @@ Click the plus button in the Agents panel to open a new agent window. Hover over
 ### Compact agent row and monitor controls
 
 In the horizontal Agents row, the controls sit in a compact two-column strip beside the cards, leaving no unused band below them. Configure monitors stays within the window even when the dock is at either edge. Press Escape or click outside to close it. Dragging monitor headers keeps the scroll surface steady while the landing outline opens.
+
+### Stopping agents and their watchers
+
+Completing or closing an agent stops its active work and cancels pending durable
+watches, including watches owned by delegated descendants. The chat is retained
+when completed. Minimize only hides a window and deliberately lets work continue.
+Stop cannot undo tokens already consumed. A later intentional run can arm new
+watches; a failed delegation should explain its failure and continue directly
+when safe, never silently switch provider or model.

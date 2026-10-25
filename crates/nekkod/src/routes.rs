@@ -412,6 +412,18 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         "session:nextWatch" if ctx.turns.watches.is_some() => {
             Ok(ctx.turns.watches.as_ref().expect("checked").next_wake_at(str_arg(&args, 0).unwrap_or_default()))
         }
+        "session:cancelWatch" if ctx.turns.watches.is_some() => {
+            ctx.turns
+                .watches
+                .as_ref()
+                .expect("checked")
+                .tool(
+                    str_arg(&args, 0).unwrap_or_default(),
+                    &json!({ "action": "cancel", "id": str_arg(&args, 1).unwrap_or_default() }),
+                )
+                .await?;
+            Ok(Value::Null)
+        }
         "session:watches" if ctx.turns.watches.is_some() => {
             Ok(ctx.turns.watches.as_ref().expect("checked").views(str_arg(&args, 0).unwrap_or_default()))
         }
@@ -482,7 +494,15 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             {
                 ctx.turns.harness.close(id).await;
             }
-            session_op(ctx.sessions.clone().expect("checked"), ctx.turns.agent_logs.clone(), channel, args).await
+            let closing = c == "session:delete"
+                || (c == "session:setOptions" && arg(&args, 1).get("archivedAt").is_some_and(|v| !v.is_null()));
+            let id = str_arg(&args, 0).unwrap_or_default().to_string();
+            let result =
+                session_op(ctx.sessions.clone().expect("checked"), ctx.turns.agent_logs.clone(), channel, args).await?;
+            if closing {
+                stop_chat(ctx, &id).await?;
+            }
+            Ok(result)
         }
         _ => {
             if let Some(r) = crate::engine::route(&ctx.engine, channel, &args).await {
@@ -509,13 +529,37 @@ const NO_SESSIONS: &str = "this needs the daemon to know the data directory";
 /// `chat:abort`: stop the daemon's turn at once (and its image turn and its
 /// admission) and the chat's dev servers.
 pub async fn stop_chat(ctx: &Ctx, session_id: &str) -> Result<Value, String> {
-    if let Some(admission) = &ctx.admission {
-        admission.abort(session_id);
+    // Include detached delegated descendants: their parent turn may already have ended.
+    let mut ids = vec![session_id.to_string()];
+    if let Some(store) = &ctx.sessions {
+        let metas = store.list_meta();
+        loop {
+            let before = ids.len();
+            for meta in &metas {
+                if let (Some(parent), Some(id)) =
+                    (meta.get("parentSessionId").and_then(Value::as_str), meta.get("id").and_then(Value::as_str))
+                {
+                    if ids.iter().any(|s| s == parent) && !ids.iter().any(|s| s == id) {
+                        ids.push(id.to_string());
+                    }
+                }
+            }
+            if ids.len() == before {
+                break;
+            }
+        }
     }
-    ctx.image_turns.abort(session_id);
-    ctx.turns.abort_session(session_id);
-    // A dev server the agent started belongs to the work it was doing.
-    ctx.turns.processes.kill_session(session_id);
+    for id in &ids {
+        if let Some(admission) = &ctx.admission {
+            admission.abort(id);
+        }
+        ctx.image_turns.abort(id);
+        ctx.turns.abort_session(id);
+        ctx.turns.processes.kill_session(id);
+        if let Some(watches) = &ctx.turns.watches {
+            watches.cancel_session(id).await?;
+        }
+    }
     Ok(Value::Null)
 }
 
