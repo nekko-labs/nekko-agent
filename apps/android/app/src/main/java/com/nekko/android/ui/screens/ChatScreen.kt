@@ -66,6 +66,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nekko.android.chat.ChatViewModel
 import com.nekko.android.ui.chat.ApprovalCard
 import com.nekko.android.ui.chat.BlockView
+import com.nekko.android.ui.chat.PurposeGroupCard
 import com.nekko.android.ui.chat.ChatColumns
 import com.nekko.android.ui.chat.Composer
 import com.nekko.android.ui.chat.QuestionCard
@@ -73,6 +74,8 @@ import com.nekko.android.ui.components.Notice
 import com.nekko.android.ui.components.Tone
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.Block
+import com.nekko.protocol.Purpose
+import com.nekko.protocol.PurposeRun
 import java.util.Locale
 import android.content.ClipData
 import android.content.ClipDescription
@@ -135,11 +138,13 @@ fun ChatScreen(
     // A note above the messages when the computer sent only the newest ones.
     val headerCount = if (chat.omittedMessages > 0) 1 else 0
     val footerCount = 1
-    val lastIndex = headerCount + keyed.size + footerCount - 1
+    // Adjacent calls with one purpose fold into one card (spec/chat/tool-calls-grouped-by-purpose.md).
+    val rows = remember(keyed) { Purpose.group(keyed) { Purpose.role(it.second) } }
+    val lastIndex = headerCount + rows.size + footerCount - 1
 
     // Follow the reply while it streams, unless the user scrolled up to read.
     val streamTick = (chat.blocks.lastOrNull() as? Block.Assistant)?.let { it.text.length + (it.reasoning?.length ?: 0) } ?: 0
-    LaunchedEffect(keyed.size, streamTick, chat.error) {
+    LaunchedEffect(rows.size, keyed.size, streamTick, chat.error) {
         if (keyed.isEmpty()) return@LaunchedEffect
         val info = list.layoutInfo
         val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: -1
@@ -227,9 +232,15 @@ fun ChatScreen(
                                 )
                             }
                         }
-                        itemsIndexed(keyed, key = { _, (k, _) -> k }) { _, (_, block) ->
-                            // In a pane a message can be dragged into the other pane's message box.
-                            if (pane == null) BlockView(block) else Box(Modifier.messageDragSource(block, vm.sessionId)) { BlockView(block) }
+                        itemsIndexed(rows, key = { _, run -> rowKey(run) }) { _, run ->
+                            when (run) {
+                                is PurposeRun.Single -> {
+                                    val block = run.item.second
+                                    // In a pane a message can be dragged into the other pane's message box.
+                                    if (pane == null) BlockView(block) else Box(Modifier.messageDragSource(block, vm.sessionId)) { BlockView(block) }
+                                }
+                                is PurposeRun.Group -> PurposeGroupCard(run.purpose, run.items.map { it.second }, run.calls)
+                            }
                         }
                         item(key = "footer") {
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -460,3 +471,9 @@ private fun rememberAttach(vm: ChatViewModel): AttachUi {
 
 private fun cameraUri(context: Context, file: File): Uri =
     FileProvider.getUriForFile(context, "${context.packageName}.photos", file)
+
+/** A list key for a transcript row: the block's own key, or its first block's for a purpose group. */
+private fun rowKey(run: PurposeRun<Pair<String, Block>>): String = when (run) {
+    is PurposeRun.Single -> run.item.first
+    is PurposeRun.Group -> "purpose:" + run.items.first().first
+}
