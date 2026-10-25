@@ -86,6 +86,8 @@ const api: NekkoApi = {
   runtimePlan: (providerId, modelId, req) => inv(IpcChannels.runtimePlan, providerId, modelId, req),
   runtimeAutoFit: (providerId, modelId, budgetFraction, parallelSlots) =>
     inv(IpcChannels.runtimeAutoFit, providerId, modelId, budgetFraction, parallelSlots),
+  runtimePlace: (providerId, modelId, req) => inv(IpcChannels.runtimePlace, providerId, modelId, req),
+  runtimeRecommend: (providerId, modelId, opts) => inv(IpcChannels.runtimeRecommend, providerId, modelId, opts),
   cloudStatus: () => inv(IpcChannels.cloudStatus),
   cloudRefresh: () => inv(IpcChannels.cloudRefresh),
   cloudSendCode: (email) => inv(IpcChannels.cloudSendCode, email),

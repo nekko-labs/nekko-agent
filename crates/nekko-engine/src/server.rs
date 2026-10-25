@@ -187,7 +187,7 @@ fn js_eq(a: Option<&Value>, b: Option<&Value>) -> bool {
 
 /// A reload with the same settings is not a reload (`sameParams`).
 fn same_params(a: &Value, b: &Value) -> bool {
-    const KEYS: [&str; 15] = [
+    const KEYS: [&str; 21] = [
         "contextTokens",
         "gpuLayers",
         "kvCacheDtype",
@@ -203,6 +203,12 @@ fn same_params(a: &Value, b: &Value) -> bool {
         "seed",
         "speculative",
         "draftModelId",
+        "cpuMoeLayers",
+        "cpuFfnLayers",
+        "moeCacheMiB",
+        "kvOnGpu",
+        "lazyTables",
+        "threadsBatch",
     ];
     let diffusion = |v: &Value| nekko_js::stringify(v.get("diffusion").filter(|d| !d.is_null()).unwrap_or(&json!({})));
     KEYS.iter().all(|k| js_eq(a.get(*k), b.get(*k))) && diffusion(a) == diffusion(b)

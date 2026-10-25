@@ -329,6 +329,8 @@ function makeWebClient(): NekkoApi {
     runtimePlan: (providerId, modelId, req) => call(IpcChannels.runtimePlan, providerId, modelId, req),
     runtimeAutoFit: (providerId, modelId, budgetFraction, parallelSlots) =>
       call(IpcChannels.runtimeAutoFit, providerId, modelId, budgetFraction, parallelSlots),
+    runtimePlace: (providerId, modelId, req) => call(IpcChannels.runtimePlace, providerId, modelId, req),
+    runtimeRecommend: (providerId, modelId, opts) => call(IpcChannels.runtimeRecommend, providerId, modelId, opts),
     cloudStatus: () => call(IpcChannels.cloudStatus),
     cloudRefresh: () => call(IpcChannels.cloudRefresh),
     cloudSendCode: (email) => call(IpcChannels.cloudSendCode, email),
