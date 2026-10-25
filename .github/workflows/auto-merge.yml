@@ -53,9 +53,9 @@ jobs:
     # the timeout never turns this into a red check on its own.
     timeout-minutes: 65
     steps:
-      # GitHub refuses auto-merge for a stacked PR; the enqueue below covers it.
+      # GitHub refuses auto-merge for a stacked PR; a person queues a stack with `gh stack merge`.
       - name: Queue the PR
-        run: gh pr merge --auto "$PR_URL" || echo '::notice::Auto-merge not armed (a stacked PR?); enqueueing once gate passes.'
+        run: gh pr merge --auto "$PR_URL" || echo '::notice::Auto-merge not armed (a stacked PR? queue it with gh stack merge).'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
@@ -84,8 +84,7 @@ jobs:
       - name: Enqueue once gate passes
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          GH_REPO: ${{ github.repository }}
+          PR_ID: ${{ github.event.pull_request.node_id }}
           PR_URL: ${{ github.event.pull_request.html_url }}
         run: |
           for _ in $(seq 1 60); do
@@ -97,9 +96,11 @@ jobs:
             case "$gate" in
               SUCCESS)
                 head=$(jq -r .headRefOid <<<"$pr")
-                # merge-async, not the enqueuePullRequest mutation: the mutation refuses stacked PRs.
-                gh api -X PUT "repos/$GH_REPO/pulls/$PR_NUMBER/merge-async" -f merge_action=merge_queue -f sha="$head" \
-                  || echo '::warning::Enqueue failed; auto-merge stays armed.'
+                # A stacked PR is refused here ("must be enqueued using the asynchronous merge
+                # REST API"), and that API refuses this App ("Enqueuer is not authorized to
+                # merge"), so stacks are queued by a person with `gh stack merge`.
+                gh api graphql -f query='mutation($id:ID!,$head:GitObjectID){enqueuePullRequest(input:{pullRequestId:$id,expectedHeadOid:$head}){mergeQueueEntry{state position}}}' \
+                  -f id="$PR_ID" -f head="$head" || echo '::warning::Enqueue failed (queue a stacked PR with gh stack merge); auto-merge stays armed.'
                 exit 0
                 ;;
               FAILURE|CANCELLED|TIMED_OUT)

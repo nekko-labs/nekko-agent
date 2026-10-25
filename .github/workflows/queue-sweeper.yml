@@ -97,8 +97,9 @@ jobs:
                   echo "#$n: already re-queued once at ${head:0:8} and dropped out again; waiting for a new push."
                   continue
                 fi
-                # merge-async, not the enqueuePullRequest mutation: the mutation refuses stacked PRs.
-                if gh api -X PUT "repos/$GH_REPO/pulls/$n/merge-async" -f merge_action=merge_queue -f sha="$head" >/dev/null; then
+                # A stacked PR fails here; a person queues it with `gh stack merge` (see auto-merge.yml).
+                if gh api graphql -f query='mutation($id:ID!,$head:GitObjectID){enqueuePullRequest(input:{pullRequestId:$id,expectedHeadOid:$head}){mergeQueueEntry{position}}}' \
+                     -f id="$(jq -r .id <<<"$pr")" -f head="$head" >/dev/null; then
                   echo "#$n: gate is green and it was not queued; enqueued."
                   gh pr comment "$n" --body "Queue sweeper: \`gate\` is green at ${head:0:8} but the PR was not in the merge queue (ejected by a flaky job, or never picked up), so it is queued again. If the queue drops it once more, that is a real failure: push a fix and it re-queues. $marker" \
                     || echo "::warning::Could not comment on #$n."
