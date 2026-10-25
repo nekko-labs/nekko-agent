@@ -6,7 +6,7 @@ split-from: SPEC.md (2026-10-22)
 
 # Chat suggestions, progress and code access
 
-Updated 2026-10-02. Suggested follow-up replies sit inside the top of the message box, above attachments and the draft. They keep their one-click send behavior and the Right Arrow draft suggestion. Image chats do not show reply suggestions.
+Updated 2026-10-25. There is no suggested-response button row: the hard-coded Continue work/Retry shortcut and its eligibility/send logic are removed. Only the single ghost placeholder suggestion remains, with Right Arrow acceptance. Old response options are ignored rather than rendered. Explicit interruption/error recovery controls remain in their dedicated warning banner. Image chats do not show placeholder suggestions.
 
 Nekko gives a concise progress message before starting tool work and between meaningful action batches. Live updates remain visible in their original order between tool groups; tools and private reasoning stay in their own disclosures. Active status labels describe current work (Reading, Searching, Editing, Thinking, Writing reply), without appending "done" to an ongoing activity.
 
@@ -23,9 +23,7 @@ The agent registers the existing durable PR watcher when waiting, with a bounded
 deadline, and continues the normal workflow on wake. Watch registration remains
 subject to existing engine/tool availability and approval policy.
 
-Rendering the offer never starts a watch. Active scheduler records render a
-watcher status row, including the PR link, deadline, waiting state and polling
-retry information. Existing tool transcript watcher rows retain detailed history.
+Rendering the offer never starts a watch. Active scheduler records render an expandable watch chip beside the composer, independent of transcript/footer visibility. It shows the live countdown, waiting/retry/overdue state, safe PR link and Cancel watcher action. Cancellation uses an owned-watch host mutation; failure remains explicit. Immediate child-agent watches are shown with their owner title, so delegated waits are visible in the parent chat. The old passive footer status row is removed to avoid duplication. Existing tool transcript watcher rows retain detailed history.
 Active watches suppress duplicate offers for the same URL. Skip dismisses only
 the current reply's offer in this mounted chat; it does not cancel an existing
 watch or alter the PR. A later reply may offer continuation again. Merged and
@@ -40,3 +38,6 @@ the request registers a PR watch against a loopback GitHub, a PR the host cannot
 read arms nothing, and a CI change wakes the chat through a normal continuation
 turn. Not verified: a merge against real GitHub (the merge itself is the agent's
 normal workflow, not part of this feature).
+
+
+Verification (2026-10-25): focused renderer tests and hidden, isolated full-ChatPane fixtures cover a watch without a watch tool transcript, expand, pending state, cancel, preserved ghost suggestion, response-row absence, 960px/390px containment, and releasing bridge subscriptions on unmount. Native packaged windows/paired-phone mutations and provider billing are not verified.

@@ -175,3 +175,8 @@ when completed. Minimize only hides a window and deliberately lets work continue
 Stop cannot undo tokens already consumed. A later intentional run can arm new
 watches; a failed delegation should explain its failure and continue directly
 when safe, never silently switch provider or model.
+
+Active watches appear above the chat draft as expandable chips. Open one to see
+its wake condition, follow the PR, or cancel that watcher without stopping the
+chat. Child-agent watchers show their owner. Suggested response buttons are gone;
+the gray draft placeholder and Right Arrow acceptance remain.

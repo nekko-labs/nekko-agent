@@ -11,3 +11,8 @@ split-from: SPEC.md (2026-10-22)
 Watch state comes from a new read-only `session:watches` channel listing a chat's watches (kind, PR URL, status, deadline, pending, failures, last error), never their continuation prompts, which the transcript already holds in the arming call. Rows refresh on the chat's tool results, turn ends and messages, plus a 15 s poll while one is on screen.
 
 Every subagent row (group header, each step, standalone card) shows the model it runs on as a quiet chip, with the full ID in its tooltip and where it came from: the child chat's own model, else the call's `model_id`, else the saved delegation route or this chat's model when the call named none. The Working subagents panel shows it after the child's title. The running dots now sit before a live row's text, in a fixed box, so neither the dots nor the text move as the third dot lands.
+
+
+## Composer controls and teardown (2026-10-25)
+
+An active watch also appears as an expandable composer chip, independent of whether its arming call exists in the loaded transcript. It offers owned cancellation and a PR link; immediate child-agent watches are labeled by owner. Watch subscriptions share a poller per session. Removing the final subscriber clears the poll interval/event listener/cache entry and late responses cannot recreate that entry. Closing/completing an agent cancels work and watches through the engine lifecycle; minimize remains hide-only.

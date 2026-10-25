@@ -83,10 +83,10 @@ describe('agent window indicators', () => {
     expect(html.match(/<button[^>]*data-tool-name="read_file"[^>]*>/)![0]).not.toContain('disabled=""');
   });
 
-  it('drops the Continue work box from the wall composer', () => {
+  it('drops the Continue work box from every composer', () => {
     withProvider();
-    // The same chat with work to resume: the full chat offers it, the wall composer does not.
-    expect(renderChatPane(chatSession(), { surface: 'full' })).toContain('>Continue work</button>');
+    // Recovery remains in the error banner, never a suggested-response row.
+    expect(renderChatPane(chatSession(), { surface: 'full' })).not.toContain('>Continue work</button>');
     expect(renderWallComposer()).not.toContain('Continue work');
   });
 });
