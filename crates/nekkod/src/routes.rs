@@ -438,6 +438,8 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             Some(voice) => voice.route(c, &args).await,
             None => Err("voice needs the data directory".into()),
         },
+        // What the agent linked in a chat, for a phone (#1095).
+        c if crate::artifacts::CHANNELS.contains(&c) => crate::artifacts::route(ctx, c, &args).await,
         c if ctx.workspace.serves(c) => crate::workspace::route(ctx, c, &args).await,
         c if crate::logs::CHANNELS.contains(&c) && ctx.workspace.data_dir().is_some() => {
             crate::logs::route(ctx, c, &args).await
@@ -828,9 +830,11 @@ pub async fn create_session(
         }
     }
     let (w, p) = (workspace_id.map(str::to_string), parent_id.map(str::to_string));
-    tokio::task::spawn_blocking(move || store.create_with(w.as_deref(), p.as_deref(), supporting.as_ref(), &settings))
-        .await
-        .map_err(|e| e.to_string())?
+    tokio::task::spawn_blocking(move || {
+        store.create_with_mode_defaults(w.as_deref(), p.as_deref(), supporting.as_ref(), &settings, true)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// `deleteAgentLog` for a chat being removed, from a blocking caller.

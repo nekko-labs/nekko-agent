@@ -475,6 +475,18 @@ impl SessionStore {
         supporting: Option<&Value>,
         settings: &Value,
     ) -> Result<Value, String> {
+        self.create_with_mode_defaults(workspace_id, parent_id, supporting, settings, false)
+    }
+
+    /// UI creation reads authoritative settings, not a renderer's cached mode.
+    pub fn create_with_mode_defaults(
+        &self,
+        workspace_id: Option<&str>,
+        parent_id: Option<&str>,
+        supporting: Option<&Value>,
+        settings: &Value,
+        snapshot: bool,
+    ) -> Result<Value, String> {
         let now = now_ms();
         let mut rand = [0u8; 6];
         getrandom::fill(&mut rand).map_err(|e| e.to_string())?;
@@ -518,6 +530,55 @@ impl SessionStore {
             apply_mode(&mut s, start.get("options").unwrap_or(&Value::Null));
             if s.get("executionMode").and_then(Value::as_str) == Some("sandbox") {
                 s.set("mode", Some(json!("ask")));
+            }
+        }
+        if snapshot && parent_id.is_none() {
+            if let Some(defaults) = settings.get("defaultSessionOptions").and_then(Value::as_object) {
+                for key in [
+                    "executionMode",
+                    "gitIsolation",
+                    "mode",
+                    "offline",
+                    "cloudOnly",
+                    "incognito",
+                    "disabledTools",
+                    "workMode",
+                    "effort",
+                    "disabledMcpServers",
+                    "disabledConnectors",
+                    "memory",
+                    "guidance",
+                    "toolApproach",
+                    "autoModel",
+                    "autoProviderSwitch",
+                ] {
+                    if let Some(value) = defaults.get(key).filter(|v| !v.is_null()) {
+                        s.set(key, Some(value.clone()));
+                    }
+                }
+            }
+            // Pin fallback values so later default changes never retune this chat.
+            if s.get("effort").is_none() {
+                s.set(
+                    "effort",
+                    Some(settings.get("effort").filter(|v| !v.is_null()).cloned().unwrap_or(json!("normal"))),
+                );
+            }
+            if s.get("mode").is_none() {
+                s.set(
+                    "mode",
+                    Some(
+                        settings
+                            .get("defaultChatMode")
+                            .filter(|v| !v.is_null())
+                            .cloned()
+                            .unwrap_or(json!("guardrails")),
+                    ),
+                );
+            }
+            if s.get("executionMode").and_then(Value::as_str) == Some("sandbox") {
+                s.set("mode", Some(json!("ask")));
+                s.set("gitIsolation", Some(json!(false)));
             }
         }
         let mut s = s.into_map();
