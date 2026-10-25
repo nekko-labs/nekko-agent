@@ -229,7 +229,7 @@ export function applyEvent(event: AgentEvent, now = Date.now()): void {
     const items = last?.kind === 'activity' ? last.items : [];
     const tail = items[items.length - 1];
     const item: Activity = event.type === 'tool_call'
-      ? { kind: 'tool', call: event.call }
+      ? { kind: 'tool', call: event.call, startedAt: now }
       : { kind: 'reasoning', text: clampLive((tail?.kind === 'reasoning' ? tail.text : '') + event.delta), duration: null };
     const merged = event.type === 'reasoning' && tail?.kind === 'reasoning' ? [...items.slice(0, -1), item] : [...items, item];
     const block: LiveBlock = { kind: 'activity', items: merged };
@@ -265,6 +265,10 @@ export function applyEvent(event: AgentEvent, now = Date.now()): void {
       next.decodeMs = accumulateDecodeMs(prev.decodeMs, event.outputTokens, event.outputMs);
       break;
     case 'tool_result':
+      next.blocks = next.blocks.map((b) => b.kind !== 'activity' ? b : {
+        ...b,
+        items: b.items.map((it) => it.kind === 'tool' && it.call.id === event.result.toolCallId && it.endedAt === undefined ? { ...it, endedAt: now } : it),
+      });
       // A step boundary: the next model call starts from here.
       next.stepMark = { blocks: next.blocks, text: next.text, reasoning: next.reasoning };
       break;

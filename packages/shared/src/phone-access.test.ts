@@ -10,6 +10,7 @@ import {
   thumbnailPhoneImages,
   phoneAlwaysDenied,
   phoneChannelAllowed,
+  phoneChannelClass,
   phoneSettingsUpdate,
   redactPhoneResult,
   phoneSessionView,
@@ -153,6 +154,32 @@ describe('settings from a phone', () => {
     const [view] = redactPhoneResult('session:watches', [watch, 'junk', null]) as Record<string, unknown>[];
     expect(view).toEqual({ id: 'w1', kind: 'pr', url: 'https://github.com/o/r/pull/5', status: 'active', deadlineAt: 10, nextPollAt: 5, pending: false, failures: 1, lastError: 'x'.repeat(600) });
     expect(redactPhoneResult('session:watches', null)).toEqual([]);
+  });
+
+  it('takes a sealed provider key and a switch from a phone, never a plaintext save (decision 0016)', () => {
+    const good = { id: 'claude-phone', kind: 'anthropic', label: ' Anthropic ', sealedKey: 'AQID' };
+    expect(screenPhoneCall('providers:saveSealed', [good])).toEqual({});
+    expect(screenPhoneCall('providers:saveSealed', [{ id: 'o', kind: 'ollama', label: 'x', baseUrl: 'http://localhost:11434' }])).toEqual({});
+    const code = (args: unknown[]) => { try { screenPhoneCall('providers:saveSealed', args); return 'ok'; } catch (e) { return `${(e as PhoneAccessError).code}:${(e as PhoneAccessError).detail}`; } };
+    expect(code([{ ...good, apiKey: 'sk' }])).toBe('option-denied:apiKey');
+    expect(code([{ id: 'x', kind: 'anthropic', label: 'x' }])).toBe('value-invalid:sealedKey');
+    expect(code([{ ...good, id: 'Bad Id' }])).toBe('value-invalid:id');
+    expect(code([{ ...good, kind: 'chatgpt' }])).toBe('value-invalid:kind');
+    expect(code([{ ...good, label: '  ' }])).toBe('value-invalid:label');
+    for (const baseUrl of ['http://api.openai.com/v1', 'https://user:pw@host/v1', 'ftp://x', 'https://x y', 'https://']) expect(code([{ ...good, baseUrl }]), baseUrl).toBe('value-invalid:baseUrl');
+    expect(code([{ ...good, sealedKey: 'not base64url!' }])).toBe('value-invalid:sealedKey');
+    expect(code([good, 1])).toBe('option-denied:extra argument');
+    expect(screenPhoneCall('providers:setEnabled', ['p1', false])).toEqual({});
+    expect(() => screenPhoneCall('providers:setEnabled', ['p1', 'no'])).toThrow(PhoneAccessError);
+    expect(() => screenPhoneCall('providers:setEnabled', [''])).toThrow(PhoneAccessError);
+    expect(redactPhoneResult('providers:sealKey', { publicKey: 'BAE', context: 'nekko-provider-key-v1', private: 'no' })).toEqual({ publicKey: 'BAE', context: 'nekko-provider-key-v1' });
+    expect(redactPhoneResult('providers:sealKey', { publicKey: 'BAE' })).toBeNull();
+    expect(redactPhoneResult('providers:saveSealed', { ok: true, models: [{ id: 'm', name: 'M', path: '/x' }, 'junk'], provider: { apiKey: 'sk' } })).toEqual({ ok: true, models: [{ id: 'm', name: 'M' }] });
+    expect(redactPhoneResult('providers:setEnabled', { ok: true, providers: [] })).toEqual({ ok: true });
+    expect(redactPhoneResult('providers:setEnabled', null)).toEqual({ ok: false });
+    for (const c of ['providers:save', 'providers:remove', 'providers:importCliAuth']) expect(phoneChannelAllowed(c), c).toBe(false);
+    expect(phoneChannelClass('providers:saveSealed')).toBe('change');
+    expect(phoneChannelClass('providers:sealKey')).toBe('read');
   });
 
   it("projects a computer's summary to the pinned keys (machine:summary)", () => {

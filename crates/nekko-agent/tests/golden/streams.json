@@ -2502,6 +2502,9 @@
           ],
           "stream": true,
           "store": false,
+          "include": [
+            "reasoning.encrypted_content"
+          ],
           "reasoning": {
             "summary": "auto"
           }
@@ -2585,7 +2588,13 @@
             }
           ],
           "stream": true,
-          "store": false
+          "store": false,
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "reasoning": {
+            "summary": "auto"
+          }
         }
       }
     ],
@@ -2638,7 +2647,13 @@
             }
           ],
           "stream": true,
-          "store": false
+          "store": false,
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "reasoning": {
+            "summary": "auto"
+          }
         }
       }
     ],
@@ -2681,7 +2696,13 @@
             }
           ],
           "stream": true,
-          "store": false
+          "store": false,
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "reasoning": {
+            "summary": "auto"
+          }
         }
       }
     ],
@@ -2729,7 +2750,13 @@
             }
           ],
           "stream": true,
-          "store": false
+          "store": false,
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "reasoning": {
+            "summary": "auto"
+          }
         }
       }
     ],
@@ -2773,7 +2800,13 @@
             }
           ],
           "stream": true,
-          "store": false
+          "store": false,
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "reasoning": {
+            "summary": "auto"
+          }
         }
       }
     ],
@@ -2817,7 +2850,13 @@
             }
           ],
           "stream": true,
-          "store": false
+          "store": false,
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "reasoning": {
+            "summary": "auto"
+          }
         }
       }
     ],
@@ -2861,7 +2900,13 @@
             }
           ],
           "stream": true,
-          "store": false
+          "store": false,
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "reasoning": {
+            "summary": "auto"
+          }
         }
       }
     ],
@@ -2908,7 +2953,13 @@
             }
           ],
           "stream": true,
-          "store": false
+          "store": false,
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "reasoning": {
+            "summary": "auto"
+          }
         }
       }
     ],
@@ -2966,7 +3017,13 @@
             }
           ],
           "stream": true,
-          "store": false
+          "store": false,
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "reasoning": {
+            "summary": "auto"
+          }
         }
       }
     ],
@@ -4795,7 +4852,13 @@
             }
           ],
           "stream": true,
-          "store": false
+          "store": false,
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "reasoning": {
+            "summary": "auto"
+          }
         }
       }
     ],
@@ -4945,7 +5008,13 @@
             }
           ],
           "stream": true,
-          "store": false
+          "store": false,
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "reasoning": {
+            "summary": "auto"
+          }
         }
       }
     ],
@@ -6452,7 +6521,13 @@
             }
           ],
           "stream": true,
-          "store": false
+          "store": false,
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "reasoning": {
+            "summary": "auto"
+          }
         }
       }
     ],
@@ -6602,7 +6677,13 @@
             }
           ],
           "stream": true,
-          "store": false
+          "store": false,
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "reasoning": {
+            "summary": "auto"
+          }
         }
       }
     ],

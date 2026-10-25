@@ -2016,6 +2016,7 @@ dependencies = [
  "hmac",
  "image",
  "nekko-js",
+ "nekko-sync",
  "p256",
  "pbkdf2",
  "serde_json",

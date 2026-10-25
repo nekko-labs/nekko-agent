@@ -105,10 +105,10 @@ describe('compact board and navigation spacing', () => {
     expect(nav).toContain('style="--n:1"');
   });
 
-  it('keeps 1px around the board and 8px beside the agent list without shrinking grips', () => {
+  it('keeps 1px around the board and 6px beside the agent list without shrinking grips', () => {
     const board = stylesheet('components/commandWallLayouts.css');
-    expect(cssRule(board, '.command-wall-layout').padding).toBe('14px 1px');
-    expect(cssRule(board, ".wall-agent-workspace[data-tabs='left']")).toMatchObject({ 'flex-direction': 'row', gap: '8px' });
+    expect(cssRule(board, '.command-wall-layout').padding).toBe('14px 1px 0');
+    expect(cssRule(board, ".wall-agent-workspace[data-tabs='left']")).toMatchObject({ 'flex-direction': 'row', gap: '6px' });
     expect(cssRule(styles, '.wall-composer-row')['padding-inline']).toBe(cssValue('15px calc(15px + var(--wall-gutter))'));
     expect(cssRule(styles, '.wall-composer-side')).toMatchObject({ width: '14px', 'z-index': '2', cursor: 'col-resize' });
   });

@@ -103,6 +103,7 @@ Full docs in one file: https://nekkoagent.com/llms-full.txt. Each page is also a
 - [Accounts and switching](https://nekkoagent.com/docs/accounts.md): Several accounts for any provider in one window, switching a chat between them, and what Anthropic allows with several Claude accounts.
 - [Usage limits and prices](https://nekkoagent.com/docs/usage-limits.md): Where the usage numbers and price estimates come from, and what they mean.
 - [Phone remote control](https://nekkoagent.com/docs/remote.md): Drive the agent on your computer from your phone, end-to-end encrypted.
+- [Nekko Cloud machines](https://nekkoagent.com/docs/cloud-machines.md): A sandboxed computer in the cloud your phone pairs with, seeing only what you put in its scope.
 - [Protect this computer with a security key](https://nekkoagent.com/docs/protect-this-computer-with-a-security-key.md): Ask for a security key, a passkey or a one-time code before the actions that could take your computer over, and the safety exits on the phone.
 - [Two chats on a folding phone](https://nekkoagent.com/docs/two-chats-on-a-folding-phone.md): Two panes on a foldable or an iPad: two chats at once, Monitors beside a chat, and the layouts for each posture.
 - [Encrypted sync](https://nekkoagent.com/docs/sync-encryption.md): How Pro and Team sync your chats without Nekko Cloud being able to read them.

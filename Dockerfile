@@ -47,8 +47,9 @@ WORKDIR /app
 # tini as PID 1: it forwards `docker stop`'s SIGTERM to the server (which stops
 # nekkod, which stops its terminals) and reaps any orphaned shell.
 # libssl3: nekkod links OpenSSL dynamically (Node's own is static).
+# git and gh: the agent's own repository work (and a Nekko Cloud machine's clone at boot).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends tini libssl3 ca-certificates \
+    && apt-get install -y --no-install-recommends tini libssl3 ca-certificates git gh \
     && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production \
     NEKKO_HOST=0.0.0.0 \

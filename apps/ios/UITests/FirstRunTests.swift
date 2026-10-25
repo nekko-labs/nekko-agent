@@ -63,7 +63,7 @@ final class FirstRunTests: XCTestCase {
     /// IO-31: the three first-run steps, each audited in light and dark. Step 3
     /// follows the first pairing; here a launch argument opens it directly.
     func testTheFirstRunInLightAndDark() {
-        for theme in ["light", "dark"] {
+        for theme in uiTestThemes {
             let app = XCUIApplication()
             app.launchArguments = ["-appLock", "NO", "-onboarded", "NO", "-theme", theme, "-uiTestReset", "YES"]
             app.launch()

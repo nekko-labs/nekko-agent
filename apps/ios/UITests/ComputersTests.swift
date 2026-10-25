@@ -15,6 +15,7 @@ final class ComputersTests: XCTestCase {
         let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "relay.example.com")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5))
 
+        // The row opens the computer's page; Rename and Forget live in its Edit menu.
         row.tap()
         let edit = app.buttons["computer.edit"]
         XCTAssertTrue(edit.waitForExistence(timeout: 5), "the computer's page")
@@ -24,12 +25,17 @@ final class ComputersTests: XCTestCase {
         XCTAssertTrue(name.waitForExistence(timeout: 5))
         name.clearAndType("Studio")
         app.alerts.buttons["Save"].tap()
-        XCTAssertTrue(app.staticTexts["Studio"].waitForExistence(timeout: 5), "Rename saved")
+        let renamed = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "Studio")).firstMatch
+        XCTAssertTrue(renamed.waitForExistence(timeout: 5), "Rename saved")
 
         tapBarButton(edit, in: app)
         app.buttons["Forget…"].tap()
         confirmForget(app)
-        XCTAssertTrue(row.waitForNonExistence(timeout: 5), "Forget from the page removed the computer")
+        // Forgetting the only computer leaves the app with nothing paired: the
+        // page either says so or the stack unwinds to the pairing invitation.
+        let gone = app.buttons["Pair with your computer"].waitForExistence(timeout: 10)
+            || app.staticTexts["This computer was forgotten"].exists
+        XCTAssertTrue(gone, "Forget from the computer page removed the only computer")
 
         // From the computer menu on the chats screen.
         app.terminate()
