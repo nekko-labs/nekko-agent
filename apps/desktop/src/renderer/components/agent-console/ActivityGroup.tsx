@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { shortLiveStatus, summarizeThought, summarizeToolCall, truncateWords, type LiveActivity } from '@nekko-agent/shared';
 import { ToolProgressChip } from './ToolProgressChip.js';
 import { toolQuietSince } from './toolProgress.js';
@@ -101,6 +101,29 @@ export const ActivityGroup = memo(function ActivityGroup({ items, streaming = fa
   );
 });
 
+/** "0.4s", "12s", "2m 5s": sub-second calls keep a decimal, since most tools are. */
+export function fmtElapsed(ms: number): string {
+  const s = Math.max(0, ms) / 1000;
+  if (s < 10) return `${s.toFixed(1)}s`;
+  if (s < 60) return `${Math.round(s)}s`;
+  const m = Math.floor(s / 60);
+  return m < 60 ? `${m}m ${Math.floor(s % 60)}s` : `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
+/** How long a tool call took, ticking while it runs. Blank when no start was recorded. */
+function ToolElapsed({ startedAt, endedAt, live }: { startedAt?: number; endedAt?: number; live: boolean }) {
+  const running = live && endedAt === undefined;
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    if (!running) return;
+    const t = setInterval(() => setNow(Date.now()), 100);
+    return () => clearInterval(t);
+  }, [running]);
+  const end = endedAt ?? (running ? now : undefined);
+  const text = startedAt && end ? fmtElapsed(end - startedAt) : '';
+  return <span className="w-11 shrink-0 text-right text-[10px] tabular-nums opacity-70" data-tool-elapsed title={text ? `Took ${text}` : undefined}>{text}</span>;
+}
+
 /**
  * One step in the sequence: a numbered, single-line row that opens to the whole
  * thing. The headline is what a reader needs to follow the run without opening
@@ -144,6 +167,7 @@ function StepRow({ index, item, live, quietSince }: { index: number; item: Activ
           aria-expanded={open}
         >
           <span className="w-4 shrink-0 text-right text-[10px] tabular-nums opacity-60">{index}</span>
+          {item.kind === 'tool' ? <ToolElapsed startedAt={item.startedAt} endedAt={item.endedAt} live={live} /> : <span className="w-11 shrink-0" />}
           <span className="w-3 shrink-0 text-[10px]">{open ? '▾' : '▸'}</span>
           <span className="self-center">{icon}</span>
           {live && <LeadDots />}
@@ -155,23 +179,23 @@ function StepRow({ index, item, live, quietSince }: { index: number; item: Activ
         </button>
         {kind === 'agent' && item.kind === 'tool' && <SubagentOpenButton call={item.call} />}
       </div>
-      {then && <WatchThen text={then} className="pl-[60px]" />}
+      {then && <WatchThen text={then} className="pl-[110px]" />}
       {open && (
         kind === 'agent' && item.kind === 'tool' ? (
-          <div className="ml-[34px] space-y-2 py-1">
+          <div className="ml-[84px] space-y-2 py-1">
             <div className="text-ink-soft">Task</div>
             <pre className="max-h-60 overflow-auto whitespace-pre-wrap text-ink-soft">{typeof item.call.input.task === 'string' ? item.call.input.task : JSON.stringify(item.call.input, null, 2)}</pre>
             <div className="text-ink-soft">{item.result?.isError ? 'Delegation tool error' : item.result ? 'Delegation tool result' : 'No delegation tool result recorded'}</div>
             {item.result && <div className="max-h-60 overflow-auto font-sans text-[13px] text-ink-soft"><Markdown text={item.result.output} /></div>}
           </div>
         ) : kind === 'watch' && item.kind === 'tool' ? (
-          <div className="ml-[34px]"><WatchDetail call={item.call} result={item.result} /></div>
+          <div className="ml-[84px]"><WatchDetail call={item.call} result={item.result} /></div>
         ) : item.kind === 'note' ? (
-          <div className="ml-[34px] border-l border-line py-0.5 pl-2 font-sans text-[13px] text-ink-soft">
+          <div className="ml-[84px] border-l border-line py-0.5 pl-2 font-sans text-[13px] text-ink-soft">
             <Markdown text={item.text} />
           </div>
         ) : (
-          <pre className="ml-[34px] mt-0.5 max-h-60 overflow-auto whitespace-pre-wrap border-l border-line pl-2 text-[12px] leading-relaxed text-ink-faint">
+          <pre className="ml-[84px] mt-0.5 max-h-60 overflow-auto whitespace-pre-wrap border-l border-line pl-2 text-[12px] leading-relaxed text-ink-faint">
             {item.kind === 'reasoning' ? item.text : JSON.stringify(item.call.input, null, 2)}
           </pre>
         )
