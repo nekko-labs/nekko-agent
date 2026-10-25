@@ -329,3 +329,7 @@ Say "Nekko, open settings" (or "Nekko, new chat") and the app shows the command 
 Browsing and downloading models from inside the app, and a bundled inference engine so a
 fresh install can run a model with nothing else present, are both planned as separate
 pieces of work. Today Nekko Agent manages the runtimes you already have.
+
+## Models navigation
+
+Open **Models** in the app rail. **Local model server** contains the built-in engine and connected local servers, with discovery and shortcuts for Ollama, LM Studio and vLLM. **Cloud providers** contains subscriptions and API accounts. To add one, use the filled provider icons to the right of your current providers, or **More providers** for the full chooser. Existing provider controls are unchanged.

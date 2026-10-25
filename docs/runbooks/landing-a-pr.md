@@ -65,7 +65,7 @@ fails the group's `gate`, so the queue ejects it rather than merging it. If you 
 queued sooner, `gh pr merge --auto <n>` once `gate` is green still works.
 
 With the `ci:macos` label, `gate` on the PR waits for the macOS runs the label turns on
-in other workflows (Native iOS, Mobile's iOS build, Dev identity, CodeQL's Swift pass,
+in other workflows (Native iOS, Dev identity, CodeQL's Swift pass,
 Decision models' CoreML job, nekkod-npm's darwin build) and fails if any of them fails,
 so the PR is not queued until they are green. macOS runners queue, so that can take an
 hour or more. Adding the label re-runs CI.
