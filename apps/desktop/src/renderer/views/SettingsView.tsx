@@ -8,11 +8,12 @@ import { UpdateProgress, useUpdater } from '../components/UpdateBanner.js';
 import { ThemePresetPicker } from '../components/ThemePresetPicker.js';
 import { pixelWaveFor } from '../components/PixelWaveBackground.js';
 import { DEFAULT_SPEC_METHODOLOGY, SPEC_METHODOLOGIES, ORCHESTRATION_STRATEGIES, DEFAULT_ORCHESTRATION, MAX_OUTPUT_TOKENS_DEFAULT, MAX_OUTPUT_TOKENS_RANGE, clampMaxOutputTokens, ONBOARDING_VERSION, updateChecks, DEFAULT_TURN_WRAPPER } from '@nekko-agent/shared';
-import { GearIcon, PhoneIcon, ShieldIcon, SlidersIcon, SunIcon, TrashIcon, RobotIcon, WandIcon, WrenchIcon } from '../icons.js';
+import { GearIcon, GlobeIcon, PhoneIcon, ShieldIcon, SlidersIcon, SunIcon, TrashIcon, RobotIcon, WandIcon, WrenchIcon } from '../icons.js';
 import { VoiceSettings } from '../components/VoiceSettings.js';
 import { RemoteAccess } from '../components/RemoteAccess.js';
 import { SecuritySettings } from '../components/security/SecuritySettings.js';
 import { SyncSettings } from '../components/cloud/SyncSettings.js';
+import { ConnectionsSettings } from '../components/ConnectionsSettings.js';
 import { DelegationRouteSettings } from '../components/DelegationRouteSettings.js';
 import { useT, LANGUAGES } from '../i18n.js';
 import { loadWallState, saveWallState, toWallSetting } from '../commandWall.js';
@@ -47,6 +48,7 @@ export const SETTINGS_GROUPS = [
   { id: 'style', label: 'Style', icon: SlidersIcon },
   { id: 'agents', label: 'Agents', icon: RobotIcon },
   { id: 'safety', label: 'Safety', icon: ShieldIcon },
+  { id: 'connections', label: 'Connections', icon: GlobeIcon },
   { id: 'tools', label: 'Tools', icon: WrenchIcon },
   { id: 'system', label: 'System', icon: GearIcon },
 ] as const;
@@ -381,6 +383,9 @@ export function SettingsView() {
               </section>
               {/* Guardrails */}
               <ErrorBoundary label="Guardrails"><GuardrailsSection settings={settings} update={update} updateGuardrail={updateGuardrail} /></ErrorBoundary>
+            </SettingsGroup>
+            <SettingsGroup id="connections">
+              <ErrorBoundary label="Connections"><ConnectionsSettings settings={settings} update={update} /></ErrorBoundary>
             </SettingsGroup>
             <SettingsGroup id="tools">
               <ErrorBoundary label="Git management"><GitManagementSection settings={settings} update={update} /></ErrorBoundary>

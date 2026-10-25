@@ -243,9 +243,15 @@ impl MlxRuntime {
         if signal.aborted() {
             return Err("This operation was aborted".into());
         }
-        self.io
+        // uv reaches PyPI (and its Python mirror) itself; the switch still applies.
+        nekko_net::check("models", "pypi.org")?;
+        let installed = self
+            .io
             .exec(uv, vec![s("tool"), s("install"), s("--python"), s("3.12"), format!("mlx-lm=={MLX_LM_VERSION}")], env)
-            .await?;
+            .await;
+        let ev = nekko_net::Event::new("connect").host("pypi.org");
+        nekko_net::record("models", if let Err(e) = &installed { ev.error(e) } else { ev });
+        installed?;
         if !is_file(&self.managed_bin()) {
             return Ok(Some(format!("mlx-lm installed but {SERVER} was not where uv puts tools.")));
         }

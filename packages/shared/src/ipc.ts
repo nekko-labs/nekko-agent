@@ -407,6 +407,10 @@ export const IpcChannels = {
   syncSetEnabled: 'sync:setEnabled',
   syncSetIncludeLocalOnly: 'sync:setIncludeLocalOnly',
   syncDeleteAll: 'sync:deleteAll',
+  // Settings > Connections (crates/nekkod/src/connections.rs).
+  connectionsStatus: 'connections:status',
+  connectionsEvents: 'connections:events',
+  connectionsClear: 'connections:clear',
   // Send feedback (crates/nekkod/src/feedback.rs): no sign-in needed.
   feedbackInfo: 'feedback:info',
   feedbackSend: 'feedback:send',
@@ -472,6 +476,12 @@ export interface NekkoApi {
   cloudBeginOAuth(provider: import('./cloud.js').CloudOAuthProvider): Promise<{ authUrl: string }>;
   cloudCancelOAuth(): Promise<import('./cloud.js').CloudStatus>;
   cloudSignOut(): Promise<import('./cloud.js').CloudStatus>;
+  /** Settings > Connections: the switch and each connection's counts. */
+  connectionsStatus(): Promise<import('./connections.js').ConnectionsStatus>;
+  /** A connection's recent events, newest first. */
+  connectionsEvents(id: string, limit?: number): Promise<import('./connections.js').ConnectionEvent[]>;
+  /** Forget every logged event. */
+  connectionsClear(): Promise<import('./connections.js').ConnectionsStatus>;
   /** Send feedback: the app facts the sheet may share (app, version, OS, CPU type; nothing identifying). */
   feedbackInfo(): Promise<import('./feedback.js').FeedbackAppInfo>;
   /** Send feedback's quick note to Nekko Cloud, with the facts above only when `includeAppInfo`. */

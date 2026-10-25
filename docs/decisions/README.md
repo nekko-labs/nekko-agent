@@ -28,4 +28,5 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | [0017](0017-nekko-cloud-machines-run-tools-in-a-per-user-jail.md) | Nekko Cloud machines run tools in a per-user jail; the phone decides what the cloud may see | accepted |
 | [0018](0018-the-computer-is-the-relying-party-for-step-up.md) | The computer is the relying party for hardware keys and step-up; safety exits are never guarded | proposed |
 | [0019](0019-folding-phones-get-panes-not-a-new-app.md) | Folding phones get posture-driven panes in the existing apps, not a tablet app or a device list | proposed |
+| [0020](0020-one-network-switch-enforced-in-the-engine.md) | One network switch for every connection, enforced in the engine; All connections off is offline except loopback | accepted |
 | [0022](0022-ci-runners-vm-and-network.md) | CI runners use our own `nekko-vm` helper, a userspace public-only NAT in nekkod and a read-only seed disk; no privileged helper | accepted |

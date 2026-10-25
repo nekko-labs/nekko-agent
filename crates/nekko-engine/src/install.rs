@@ -59,7 +59,9 @@ impl InstallIo for SystemIo {
             if let Some(t) = timeout {
                 req = req.timeout(t);
             }
-            let res = req.send().await.map_err(|_| "fetch failed".to_string())?;
+            let res = nekko_net::send("models", req)
+                .await
+                .map_err(|e| if e.is_blocked() { e.to_string() } else { "fetch failed".to_string() })?;
             let status = res.status().as_u16();
             let body = res.bytes().await.map_err(|_| "terminated".to_string())?;
             Ok((status, body.to_vec()))

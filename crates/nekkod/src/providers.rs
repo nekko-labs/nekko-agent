@@ -360,7 +360,7 @@ fn window_cache() -> &'static WindowCache {
 async fn ollama_loaded(base_url: &str) -> Vec<(String, u64)> {
     let root = base_url.trim_end_matches('/').trim_end_matches("/v1").trim_end_matches('/');
     let client = reqwest::Client::builder().no_proxy().timeout(WINDOW_LOOKUP).build().unwrap_or_default();
-    let Ok(res) = client.get(format!("{root}/api/ps")).send().await else { return Vec::new() };
+    let Ok(res) = nekko_net::send("model-lists", client.get(format!("{root}/api/ps"))).await else { return Vec::new() };
     let Ok(body) = res.json::<Value>().await else { return Vec::new() };
     let mut out = Vec::new();
     for m in body.get("models").and_then(Value::as_array).into_iter().flatten() {
@@ -465,7 +465,7 @@ async fn discover() -> Vec<Value> {
         probes.spawn(async move {
             for host in ["127.0.0.1", "localhost"] {
                 let base = base_url.replacen("localhost", host, 1);
-                if let Ok(res) = client.get(format!("{base}{probe}")).send().await
+                if let Ok(res) = nekko_net::send("model-lists", client.get(format!("{base}{probe}"))).await
                     && res.status().is_success()
                 {
                     return Some(json!({

@@ -2305,6 +2305,14 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [x] **T200d** Change key: no `touchIDAuthenticationAllowableReuseDuration`; a context the Secure Enclave refuses (CryptoTokenKit -5) is dropped and asked again. Done: 2026-10-23
 - [ ] **T200e** Check T200a, T200b and T200d on a device.
 
+### T203: Settings > Connections: one switch for every connection, and its activity log (2026-10-24, #1034) · [spec](spec/platform/connections-switch-and-activity-log.md) · [decision](docs/decisions/0020-one-network-switch-enforced-in-the-engine.md)
+- [x] **T203a** `crates/nekko-net`: the switch (`configure`, `allowed`, `check`), `send(id, request)` for every reqwest call, per-connection ring of 200 events and 24 hourly counts, path scrubbing (`scrub_path`), and a test that its `IDS` match `packages/shared/src/connections.ts`. Done: 2026-10-24
+- [x] **T203b** Every outbound request routed through it: nekko-cloud, nekko-connectors, nekko-agent (model providers), nekko-workspace (PRs, skills, git push, stack fetch), nekko-web, nekko-remote (relay dial, one blocked event per streak), nekko-native, nekko-engine, and nekkod's own calls (updates, model lists, skill sources, feedback, voice, decisions, limits, sign-in, MCP, resource queue, photos, PR checkouts, Telegram with a 30 s blocked poll). Done: 2026-10-24
+- [x] **T203c** nekkod `connections.rs`: applies `settings.connections` before anything reaches the network, follows saves, writes `logs/connections.log` (2 MB × 3), reloads it at startup, and serves `connections:status`, `connections:events`, `connections:clear`. Done: 2026-10-24
+- [x] **T203d** All connections off: every chat treated as Offline (`connections::offline` at admission and in turns.rs); the API server, local relay, mDNS and webhook listener close at once (`Desktop::connections_changed`); a LAN model server binds 127.0.0.1 on its next start. Done: 2026-10-24
+- [x] **T203e** Electron: the browser pane's pages and the agent's browser windows cancel requests off this computer while their connection is off (`connectionsGuard.ts`). Done: 2026-10-24
+- [x] **T203f** Settings > Connections card and nav item (`ConnectionsSettings.tsx`), with tests and hidden-renderer evidence (`scripts/connections-evidence.cjs`). Done: 2026-10-24
+- [ ] **T203g** Check in the packaged app and the Local Web UI against live services; restart a LAN model server when the switch flips; log the browser pane's requests.
 ### T205: Limits on what grows in the data folder (2026-10-24, #1035) · [spec](spec/platform/data-folder-growth-limits.md)
 - [x] **T205a** Chat command logs cut to their last 4 MB of whole lines past 5 MB (`keep_file_tail` in `agent_logs.rs`). Test: `a_long_command_log_keeps_its_last_whole_lines`. Done: 2026-10-24
 - [x] **T205b** `quota-history.jsonl` keeps 30 days, pruned at startup (`prune_quota_history`). Test: `quota_history_keeps_thirty_days`. Done: 2026-10-24

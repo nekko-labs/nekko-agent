@@ -777,7 +777,10 @@ impl Turns {
             let id = session_id.clone();
             let fresh = tokio::task::spawn_blocking(move || store.meta(&id)).await.ok().flatten();
             let linked = fresh.as_ref().is_some_and(|s| {
-                js::truthy(s.get("specLinked")) && !js::truthy(s.get("incognito")) && !js::truthy(s.get("offline"))
+                js::truthy(s.get("specLinked"))
+                    && !js::truthy(s.get("incognito"))
+                    && !js::truthy(s.get("offline"))
+                    && !nekko_net::all_off()
             });
             if linked {
                 let _ = d("spec:build".into(), vec![json!(session_id)]).await;
@@ -805,7 +808,7 @@ impl Turns {
         // titleAuto guards a name the user typed; incognito and offline chats
         // skip the extra call, as does a turn whose provider never resolved.
         if !js::truthy(fresh.get("incognito"))
-            && !js::truthy(fresh.get("offline"))
+            && !crate::connections::offline(&fresh)
             && fresh.get("titleAuto") == Some(&Value::Bool(true))
             && spec.pointer("/facts/provider").is_some_and(Value::is_object)
             && let Some(flight) = self.title_flights.claim(&session_id)
@@ -905,7 +908,7 @@ impl Turns {
         // a Claude Code chat and an offline one have none.
         let own_mcp = facts.get("mcpServers").filter(|s| s.is_array() && !sandbox && !claude_code).cloned();
         let mcp_tools = match &own_mcp {
-            Some(configs) if !js::truthy(loaded.get("offline")) => {
+            Some(configs) if !crate::connections::offline(&loaded) => {
                 let any = configs.as_array().is_some_and(|a| a.iter().any(|c| c.get("enabled") == Some(&json!(true))));
                 if any { self.mcp.sync(configs).await["specs"].clone() } else { self.mcp.snapshot()["specs"].clone() }
             }
@@ -914,7 +917,7 @@ impl Turns {
         // The turn's composition: tools, context from disk, the system prompt.
         let tool_input = json!({
             "session": loaded,
-            "offline": js::truthy(loaded.get("offline")),
+            "offline": crate::connections::offline(&loaded),
             "orchestration": settings.get("orchestration").cloned().unwrap_or(Value::Null),
             "allowBrowserControl": spec.get("allowBrowserControl").cloned().unwrap_or(json!(false)),
             "mcpTools": mcp_tools,
@@ -1461,7 +1464,7 @@ async fn generate_title(
     let (st, id) = (store.clone(), session_id.clone());
     let Some(fresh) = tokio::task::spawn_blocking(move || st.get(&id)).await.ok().flatten() else { return };
     if js::truthy(fresh.get("incognito"))
-        || js::truthy(fresh.get("offline"))
+        || crate::connections::offline(&fresh)
         || fresh.get("titleAuto") != Some(&Value::Bool(true))
         || !facts.get("provider").is_some_and(Value::is_object)
     {
@@ -2198,7 +2201,7 @@ impl TurnTools {
     async fn agent_watch(&self, watches: &crate::watches::Watches, call: &Value) -> Value {
         let id = str_at(call, "id").unwrap_or_default();
         let input = call.get("input").cloned().unwrap_or(json!({}));
-        let offline = js::truthy(lock(&self.session).get("offline"));
+        let offline = crate::connections::offline(&lock(&self.session));
         let failed = |e: &str| error(id, format!("Agent watch failed: {e}"));
         if self.incognito || self.training || offline {
             return failed("Durable watches are unavailable in incognito, goal runs, or offline chats");
@@ -2350,7 +2353,10 @@ impl TurnTools {
             .get("disabledTools")
             .and_then(Value::as_array)
             .is_some_and(|d| d.iter().any(|t| t.as_str() == Some("spawn_agent")));
-        if js::truthy(session.get("incognito")) || js::truthy(session.get("offline")) || !self.allow_spawn || spawn_off
+        if js::truthy(session.get("incognito"))
+            || crate::connections::offline(&session)
+            || !self.allow_spawn
+            || spawn_off
         {
             return failure("delegation_unavailable", "Delegation discovery is unavailable in this chat.");
         }

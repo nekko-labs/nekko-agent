@@ -92,7 +92,9 @@ impl ResourceQueue {
         if action != "list" {
             req = req.body(nekko_js::stringify(input));
         }
-        let response = req.send().await.map_err(|_| "fetch failed".to_string())?;
+        let response = nekko_net::send("resource-queue", req)
+            .await
+            .map_err(|e| if e.is_blocked() { e.to_string() } else { "fetch failed".to_string() })?;
         let status = response.status();
         if !status.is_success() {
             return Err(format!("Coordinator request failed ({})", status.as_u16()));

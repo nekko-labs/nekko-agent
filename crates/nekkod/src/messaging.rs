@@ -31,6 +31,8 @@ pub const CHANNELS: &[&str] = &["messaging:status"];
 /// The longest a Bot API call may take (the long poll asks for 25 s).
 const CALL_TIMEOUT: Duration = Duration::from_secs(30);
 const POLL_TIMEOUT: Duration = Duration::from_secs(60);
+/// How long a poll waits while Telegram is switched off in Settings > Connections.
+const BLOCKED_POLL: Duration = Duration::from_secs(30);
 
 pub use crate::automation::Dispatcher;
 
@@ -269,6 +271,10 @@ impl Messaging {
         };
         let (weak, http) = (Arc::downgrade(self), self.http.clone());
         let task = tokio::spawn(async move {
+            // Switched off in Settings > Connections: ask again every half minute, not every 5 s.
+            if !nekko_net::allowed("telegram") {
+                tokio::time::sleep(BLOCKED_POLL).await;
+            }
             let result = post(&http, &call, POLL_TIMEOUT).await;
             let Some(me) = weak.upgrade() else { return };
             {
@@ -333,15 +339,12 @@ impl Messaging {
 /// `POST` a Bot API call and read the reply as the TS client does. The URL
 /// holds the bot token, so it is never logged.
 async fn post(http: &reqwest::Client, call: &TgCall, timeout: Duration) -> Result<Value, String> {
-    let res = http
-        .post(&call.url)
-        .header("content-type", "application/json")
-        .body(call.body.clone())
-        .timeout(timeout)
-        .send()
-        .await
+    let rb = http.post(&call.url).header("content-type", "application/json").body(call.body.clone()).timeout(timeout);
+    let res = nekko_net::send("telegram", rb).await.map_err(|e| match e {
+        nekko_net::Error::Blocked(m) => m,
         // Node's fetch says this for every network failure.
-        .map_err(|_| "fetch failed".to_string())?;
+        nekko_net::Error::Http(_) => "fetch failed".to_string(),
+    })?;
     let status = res.status().as_u16();
     let body = res.bytes().await.map_err(|_| "terminated".to_string())?;
     telegram::reply(&call.method, status, &body)
