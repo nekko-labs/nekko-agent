@@ -1,14 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { EngineProcess } from './engine-process.js';
-const mocks = vi.hoisted(() => ({ menus: [] as any[][], on: vi.fn(), destroy: vi.fn() }));
+const mocks = vi.hoisted(() => {
+  const plain = { toBitmap: () => Buffer.alloc(20 * 20 * 4) };
+  return { menus: [] as any[][], on: vi.fn(), destroy: vi.fn(), setImage: vi.fn(), setToolTip: vi.fn(), plain, dotted: { dotted: true } };
+});
 vi.mock('electron', () => ({
-  Tray: class { setToolTip() {} setContextMenu() {} on = mocks.on; destroy = mocks.destroy; },
-  nativeImage: { createFromPath: () => ({ resize: () => ({}) }) },
+  Tray: class { setToolTip = mocks.setToolTip; setImage = mocks.setImage; setContextMenu() {} on = mocks.on; destroy = mocks.destroy; },
+  nativeImage: { createFromPath: () => ({ resize: () => mocks.plain }), createFromBitmap: () => mocks.dotted },
   Menu: { buildFromTemplate: (items: any[]) => { mocks.menus.push(items); return items; } },
 }));
 import { createDesktopTray } from './tray.js';
 const settle = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
-afterEach(() => { vi.useRealTimers(); mocks.menus.length = 0; mocks.on.mockClear(); });
+afterEach(() => { vi.useRealTimers(); mocks.menus.length = 0; mocks.on.mockClear(); mocks.setImage.mockClear(); mocks.setToolTip.mockClear(); });
 
 describe('desktop tray', () => {
   it('puts new chat first and distinguishes service and model power', async () => {
@@ -32,5 +35,45 @@ describe('desktop tray', () => {
     menu.find(i => i.label === 'Start Nekko service').click(); await settle();
     expect(engine.start).toHaveBeenCalledOnce(); expect(serviceStarted).toHaveBeenCalledOnce();
     result.dispose(); expect(mocks.destroy).toHaveBeenCalled();
+  });
+
+  const runnerEngine = (runners: () => Promise<unknown>) => ({
+    running: true, start: vi.fn(), endpoint: vi.fn(), stop: vi.fn(),
+    call: vi.fn((channel: string) => channel === 'runner:list' ? runners() : Promise.resolve({ running: false, install: {} })),
+  });
+  const open = (engine: object, onError = vi.fn()) => createDesktopTray({ iconPath: '/icon', engine: engine as unknown as EngineProcess, newChat: vi.fn(), feedback: vi.fn(), showUi: vi.fn(), serviceStarted: vi.fn(), quit: vi.fn(), onError });
+  const running = { slots: [{ state: 'running', job: null, since: 0, drainEndsAt: null }], awake: true };
+
+  it('shows the CI runner dot and line while a VM runs', async () => {
+    vi.useFakeTimers();
+    let views: unknown[] = [running];
+    const result = open(runnerEngine(async () => views));
+    await settle();
+    let menu = mocks.menus.at(-1)!;
+    expect(menu.find((i) => i.label === 'CI runners: 1 VM running').enabled).toBe(false);
+    expect(menu.some((i) => i.label === 'Keeping this Mac awake for CI')).toBe(true);
+    expect(mocks.setImage).toHaveBeenLastCalledWith(mocks.dotted);
+    expect(mocks.setToolTip).toHaveBeenLastCalledWith('Nekko Agent · CI runner active');
+    views = [{ ...running, slots: [...running.slots, ...running.slots] }];
+    await vi.advanceTimersByTimeAsync(6000); await settle();
+    expect(mocks.menus.at(-1)!.some((i) => i.label === 'CI runners: 2 VMs running')).toBe(true);
+    views = [];
+    await vi.advanceTimersByTimeAsync(6000); await settle();
+    menu = mocks.menus.at(-1)!;
+    expect(menu.some((i) => String(i.label).startsWith('CI runners') || i.label === 'Keeping this Mac awake for CI')).toBe(false);
+    expect(mocks.setImage).toHaveBeenLastCalledWith(mocks.plain);
+    expect(mocks.setToolTip).toHaveBeenLastCalledWith('Nekko Agent');
+    result.dispose();
+  });
+
+  it('treats a failed runner:list as no runners', async () => {
+    const onError = vi.fn();
+    const result = open(runnerEngine(() => Promise.reject(new Error('unknown channel'))), onError);
+    await settle();
+    const menu = mocks.menus.at(-1)!;
+    expect(menu.some((i) => String(i.label).startsWith('CI runners'))).toBe(false);
+    expect(mocks.setImage).not.toHaveBeenCalledWith(mocks.dotted);
+    expect(onError).not.toHaveBeenCalled();
+    result.dispose();
   });
 });
