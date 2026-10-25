@@ -32,3 +32,4 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | [0021](0021-opt-in-reports-sent-by-the-engine.md) | Opt-in usage and crash reports, sent by the engine with an allow-list and scrubbing; no PostHog SDK | accepted |
 | [0022](0022-ci-runners-vm-and-network.md) | CI runners use our own `nekko-vm` helper, a userspace public-only NAT in nekkod and a read-only seed disk; no privileged helper | accepted |
 | [0023](0023-place-bytes-in-three-places-and-pass-placement-explicitly.md) | Plan a load across VRAM, RAM and disk by weight kind, and pass the placement to llama.cpp explicitly | accepted |
+| [0024](0024-the-computer-serves-what-the-agent-linked-to-the-phone.md) | The computer serves the phone what the agent linked in a chat (files, a page's assets, loopback previews), and nothing more | proposed |
