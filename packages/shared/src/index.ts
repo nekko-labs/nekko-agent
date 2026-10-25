@@ -9,6 +9,7 @@ export * from './voice.js';
 export * from './cloud.js';
 export * from './feedback.js';
 export * from './connections.js';
+export * from './telemetry.js';
 export * from './models.js';
 export * from './model-availability.js';
 export * from './model-capabilities.js';

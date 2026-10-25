@@ -1,4 +1,5 @@
 import React from 'react';
+import { startTelemetry } from './telemetry.js';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.js';
 import { ensureNekko } from './web-client.js';
@@ -40,6 +41,7 @@ function startApp(root: ReturnType<typeof createRoot>) {
   // signed-in account's Bearer token). Either way the UI below is identical.
   ensureNekko();
   registerServiceWorker();
+  startTelemetry();
   root.render(
     <React.StrictMode>
       <UpdateProvider>

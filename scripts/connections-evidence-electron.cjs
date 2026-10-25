@@ -15,7 +15,7 @@ try{await win.loadFile(path.join(dir,'index.html'));win.showInactive();await sle
 const click=sel=>run(`(()=>{const e=document.querySelector(${js(sel)});if(!e)throw Error('missing '+${js(sel)});e.click();return true})()`);
 const scrollTo=sel=>run(`document.querySelector(${js(sel)}).scrollIntoView({block:'start'})`);
 for(const width of [1280,480])for(const theme of ['light','dark']){await resize(width);await run(`document.documentElement.dataset.theme='${theme}'`);await stable();const label=`${width}-${theme}`;
-await check(label+' every connection has a row',`document.querySelectorAll('[data-connection]').length===24`);
+await check(label+' every connection has a row',`document.querySelectorAll('[data-connection]').length===25`);
 await check(label+' MCP shows off',`document.querySelector('[data-connection=mcp] [role=switch]').getAttribute('aria-checked')==='false'`);
 await check(label+' no horizontal overflow',`document.documentElement.scrollWidth<=innerWidth+1`);
 await scrollTo('#connections');await capture(`connections-top-${label}`);

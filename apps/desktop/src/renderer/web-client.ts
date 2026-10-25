@@ -337,6 +337,8 @@ function makeWebClient(): NekkoApi {
     connectionsStatus: () => call(IpcChannels.connectionsStatus),
     connectionsEvents: (id, limit) => call(IpcChannels.connectionsEvents, id, limit),
     connectionsClear: () => call(IpcChannels.connectionsClear),
+    telemetryCapture: (event, props) => call(IpcChannels.telemetryCapture, event, props),
+    telemetryStatus: () => call(IpcChannels.telemetryStatus),
     feedbackInfo: () => call(IpcChannels.feedbackInfo),
     feedbackSend: (message, includeAppInfo) => call(IpcChannels.feedbackSend, message, includeAppInfo),
     syncTurnOn: () => call(IpcChannels.syncTurnOn),

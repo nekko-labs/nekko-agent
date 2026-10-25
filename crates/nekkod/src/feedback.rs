@@ -39,7 +39,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
 }
 
 /// The sheet's app facts from `app:info` and the OS, each cut to what the server accepts.
-fn info(app: &Value) -> Value {
+pub(crate) fn info(app: &Value) -> Value {
     let edition = if app["edition"] == "desktop" { "desktop" } else { "web" };
     let mut out = Map::new();
     out.insert("app".into(), json!(edition));

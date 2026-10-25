@@ -14,6 +14,7 @@ import { RemoteAccess } from '../components/RemoteAccess.js';
 import { SecuritySettings } from '../components/security/SecuritySettings.js';
 import { SyncSettings } from '../components/cloud/SyncSettings.js';
 import { ConnectionsSettings } from '../components/ConnectionsSettings.js';
+import { UsageReportsSection } from '../components/UsageReports.js';
 import { DelegationRouteSettings } from '../components/DelegationRouteSettings.js';
 import { useT, LANGUAGES } from '../i18n.js';
 import { loadWallState, saveWallState, toWallSetting } from '../commandWall.js';
@@ -439,6 +440,8 @@ export function SettingsView() {
 
               {/* Backup & restore */}
               <ErrorBoundary label="Backup"><BackupSection settings={settings} onSettings={(s) => { useStore.setState({ settings: s }); applyTheme(); }} /></ErrorBoundary>
+
+              <ErrorBoundary label="Usage reports"><UsageReportsSection settings={settings} update={update} /></ErrorBoundary>
 
               {/* Data & privacy */}
               <ErrorBoundary label="Data and privacy"><DataSection onSettings={(s) => { useStore.setState({ settings: s }); applyTheme(); }} /></ErrorBoundary>

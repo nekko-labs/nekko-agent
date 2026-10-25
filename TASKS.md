@@ -2313,6 +2313,15 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [x] **T203e** Electron: the browser pane's pages and the agent's browser windows cancel requests off this computer while their connection is off (`connectionsGuard.ts`). Done: 2026-10-24
 - [x] **T203f** Settings > Connections card and nav item (`ConnectionsSettings.tsx`), with tests and hidden-renderer evidence (`scripts/connections-evidence.cjs`). Done: 2026-10-24
 - [ ] **T203g** Check in the packaged app and the Local Web UI against live services; restart a LAN model server when the switch flips; log the browser pane's requests.
+
+### T204: Opt-in usage and crash reports (2026-10-24) · [spec](spec/platform/opt-in-usage-and-crash-reports.md) · [decision](docs/decisions/0021-opt-in-reports-sent-by-the-engine.md)
+- [x] **T204a** nekkod `telemetry.rs`: off unless `settings.telemetry.enabled` with an install id; allow-listed events and properties; every string scrubbed (log redactor, Privacy Shield detectors, folder paths); queue of 500; batch to PostHog every minute through `nekko_net::send("telemetry")`; engine panics reported without blocking. `turn_started` from admission. Tests: `scrub_takes_out_secrets_people_and_folders`, `off_unless_on_and_only_known_events_and_properties`. Done: 2026-10-24
+- [x] **T204b** Onboarding **Help improve Nekko Agent?** step (skippable, off), Settings > System card, the shared promises (`TELEMETRY_PROMISES`), a fresh install id on each turn-on, a Connections row. Done: 2026-10-24
+- [x] **T204c** UI: `screen_viewed` and uncaught errors from the renderer, crashes from Electron main (`uncaughtExceptionMonitor`). Done: 2026-10-24
+- [x] **T204d** Nekko Agent PostHog project 686111; its key in `PROJECT_KEY`. Done: 2026-10-24
+- [x] **T204e** Discard client IP data on for project 686111; a test `app_started` in the engine's batch shape arrived with `$ip` empty and no location. Done: 2026-10-24
+- [ ] **T204f** See events arrive from a packaged build with reports turned on.
+
 ### T205: Limits on what grows in the data folder (2026-10-24, #1035) · [spec](spec/platform/data-folder-growth-limits.md)
 - [x] **T205a** Chat command logs cut to their last 4 MB of whole lines past 5 MB (`keep_file_tail` in `agent_logs.rs`). Test: `a_long_command_log_keeps_its_last_whole_lines`. Done: 2026-10-24
 - [x] **T205b** `quota-history.jsonl` keeps 30 days, pruned at startup (`prune_quota_history`). Test: `quota_history_keeps_thirty_days`. Done: 2026-10-24
