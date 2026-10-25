@@ -60,13 +60,14 @@
 .monitors-dock-collapsed[data-dock-side='top'] { order: -1; }
 .monitors-dock-collapsed[data-dock-side='bottom'] { order: 1; }
 .monitors-dock__popover {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  box-sizing: border-box;
   z-index: 40;
   width: 380px;
   max-width: calc(100vw - 24px);
-  max-height: min(420px, 60vh);
+  max-height: min(420px, calc(100vh - 24px));
   overflow: auto;
   padding: 12px;
   background: var(--paper);
@@ -74,7 +75,7 @@
   border-radius: 10px;
   box-shadow: 0 8px 24px #0003;
 }
-.monitors-dock[data-dock-side='bottom'] .monitors-dock__popover { top: auto; bottom: calc(100% + 6px); }
+
 .monitors-dock__popover label { display: flex; align-items: center; gap: 8px; padding: 5px 0; }
 .monitors-dock__popover fieldset { border: 0; border-top: 1px solid var(--line); margin-top: 8px; padding: 8px 0 0; }
 .monitors-dock__popover legend { color: var(--ink-faint); }
@@ -83,7 +84,7 @@
 .monitors-dock__positions button[aria-pressed='true'] { border-color: var(--accent); background: var(--surface); }
 .monitors-dock__popover input[type='checkbox'] { flex-shrink: 0; }
 .monitors-dock__option { display: grid; gap: 2px; }
-.monitors-dock__option > span { color: var(--ink-soft); white-space: nowrap; }
+.monitors-dock__option > span { color: var(--ink-soft); white-space: normal; overflow-wrap: anywhere; }
 .monitors-dock__monitors { display: flex; flex-direction: column; gap: 12px; padding: 8px; min-height: 0; overflow: auto; }
 .monitors-dock__monitor { flex: 0 0 auto; min-width: 0; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); overflow: hidden; }
 .monitors-dock__monitor-header { justify-content: space-between; }
@@ -108,7 +109,7 @@
 @media (max-width: 720px) {
   .monitors-dock { flex: 0 0 auto; width: 100%; max-height: 360px; }
   .monitors-dock__monitors { flex-direction: column; }
-  .monitors-dock__popover { right: auto; left: 0; }
+
 }
 
 .monitors-dock__icon { width: 16px; height: 16px; }
@@ -150,6 +151,7 @@
    moves onto each panel's margin so a zone can collapse to nothing and an
    open zone (its height plus one gap) takes exactly the lifted panel's room:
    lifting moves nothing, and every move after that slides. */
+.monitors-dock__monitors { overflow-anchor: none; scrollbar-gutter: stable; }
 .monitors-dock__monitors[data-dock-dragging] { gap: 0; }
 .monitors-dock__monitors[data-dock-dragging] > .monitors-dock__monitor { margin-bottom: 12px; }
 .monitors-dock__monitor[data-monitor-lifted] { display: none; }
@@ -160,7 +162,7 @@
   display: block; box-sizing: border-box; height: var(--landing-height);
   border: 1.5px dashed color-mix(in srgb, var(--accent) 60%, var(--line)); border-radius: 16px;
   background: color-mix(in srgb, var(--accent) 6%, transparent);
-  flex-basis: 0; height: 0; transform: scale(.97); transition: opacity 160ms ease, transform 200ms cubic-bezier(.2, .8, .2, 1);
+  opacity: 0; transform: scale(.97); transition: opacity 160ms ease, transform 200ms cubic-bezier(.2, .8, .2, 1);
 }
 .monitors-dock__landing[data-open] > span { opacity: 1; transform: none; }
 .monitors-dock__monitors[data-dock-lifting] .monitors-dock__landing,
@@ -199,8 +201,8 @@
 .monitors-dock__monitor-resize:hover, .monitors-dock__monitor-resize:focus-visible { background: var(--accent-soft); outline: none; }
 .monitors-dock__monitor-resize:focus-visible::after { background: var(--accent); }
 .monitors-dock select:focus-visible, .monitors-dock summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-/* Sign in again, inline under an expired subscription: the primary button keeps its own look on hover. */ 
-.monitors-dock__signin { display: grid; gap: 6px; justify-items: start; } 
+/* Sign in again, inline under an expired subscription: the primary button keeps its own look on hover. */
+.monitors-dock__signin { display: grid; gap: 6px; justify-items: start; }
 .monitors-dock .monitors-dock__signin .btn-primary, .monitors-dock .monitors-dock__signin .btn-primary:hover:not(:disabled) { border: 0; border-radius: 10px; padding: 6px 14px; background: var(--brand-grad); color: #fff; font-weight: 600; }
 /* A long account email truncates rather than widening the panel. */
 .monitors-dock__provider-name { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
