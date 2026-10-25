@@ -538,10 +538,10 @@ pub async fn stop_chat(ctx: &Ctx, session_id: &str) -> Result<Value, String> {
             for meta in &metas {
                 if let (Some(parent), Some(id)) =
                     (meta.get("parentSessionId").and_then(Value::as_str), meta.get("id").and_then(Value::as_str))
+                    && ids.iter().any(|s| s == parent)
+                    && !ids.iter().any(|s| s == id)
                 {
-                    if ids.iter().any(|s| s == parent) && !ids.iter().any(|s| s == id) {
-                        ids.push(id.to_string());
-                    }
+                    ids.push(id.to_string());
                 }
             }
             if ids.len() == before {
