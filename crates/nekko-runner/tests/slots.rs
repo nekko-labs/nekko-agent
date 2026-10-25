@@ -111,6 +111,8 @@ fn slot_limit_names_the_binding_bound() {
         (2, Some(SlotLimit::AppleCap))
     );
     assert_eq!(macos_slots_explained(&RunnerSettings::default(), &big), (1, None));
+    let seven = RunnerSettings { macos_slots: 7, ..Default::default() };
+    assert_eq!(macos_slots_explained(&seven, &HostFacts { ram_mb: 16384, ..big }), (1, Some(SlotLimit::Memory)));
 }
 
 #[test]

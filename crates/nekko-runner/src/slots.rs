@@ -76,17 +76,13 @@ pub enum SlotLimit {
 pub fn macos_slots_explained(s: &RunnerSettings, host: &HostFacts) -> (u8, Option<SlotLimit>) {
     let avail = macos_slots_available(s, host);
     let target = s.macos_slots.min(MAX_MACOS_VMS);
-    let over_cap = s.macos_slots > MAX_MACOS_VMS;
+    let by_cap = MAX_MACOS_VMS.saturating_sub(host.other_macos_vms);
+    let by_memory = (runner_memory_mb(s, host) / u64::from(s.memory_per_vm_mb.max(1))).min(u64::from(MAX_MACOS_VMS));
     let limit = if avail < target {
-        if MAX_MACOS_VMS.saturating_sub(host.other_macos_vms) < target && host.other_macos_vms > 0 {
-            Some(SlotLimit::OtherApps)
-        } else if over_cap {
-            Some(SlotLimit::AppleCap)
-        } else {
-            Some(SlotLimit::Memory)
-        }
+        // The smaller bound produced the count; a tie goes to the other apps.
+        if by_memory < u64::from(by_cap) { Some(SlotLimit::Memory) } else { Some(SlotLimit::OtherApps) }
     } else {
-        over_cap.then_some(SlotLimit::AppleCap)
+        (s.macos_slots > MAX_MACOS_VMS).then_some(SlotLimit::AppleCap)
     };
     (avail, limit)
 }

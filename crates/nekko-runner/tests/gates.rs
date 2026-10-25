@@ -362,3 +362,12 @@ fn unknown_host_state_holds_new_vms_only() {
         assert_eq!(evaluate(&with(p), &sig, true), Decision::Take);
     }
 }
+
+#[test]
+fn unknown_host_and_low_memory_list_in_ui_order() {
+    let sig = Signals { host_known: false, available_memory_mb: 0.0, ..quiet() };
+    assert_eq!(
+        evaluate(&with(DoNotDisturb), &sig, false),
+        Decision::Hold { why: vec![Reason::MemoryHeadroom, Reason::HostStateUnknown] }
+    );
+}

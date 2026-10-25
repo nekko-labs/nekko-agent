@@ -147,8 +147,8 @@ pub fn evaluate(s: &RunnerSettings, sig: &Signals, running: bool) -> Decision {
     if !running {
         let tier2: Vec<Reason> = [
             (sig.security_update_overdue_days.is_some_and(|d| d > SECURITY_GRACE_DAYS), Reason::SecurityUpdate),
-            (!sig.host_known, Reason::HostStateUnknown),
             (!(sig.available_memory_mb >= f64::from(s.memory_per_vm_mb) + VM_START_MARGIN_MB), Reason::MemoryHeadroom),
+            (!sig.host_known, Reason::HostStateUnknown),
         ]
         .into_iter()
         .filter_map(|(hit, r)| hit.then_some(r))
