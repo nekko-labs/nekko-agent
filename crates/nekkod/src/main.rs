@@ -118,6 +118,9 @@ fn main() -> std::process::ExitCode {
     let _daemon_log = cfg.data_dir.as_ref().and_then(|d| logs::start_daemon_log(&std::path::Path::new(d).join("logs")));
     logs::note(&format!("nekkod {} starting, pid {}", env!("CARGO_PKG_VERSION"), std::process::id()));
     procgroup::init();
+    // Each job VM's NAT holds a socket per guest flow; 256 runs out.
+    #[cfg(unix)]
+    runner::raise_nofile();
     // What a predecessor killed outright left running goes first; then keep
     // our own record for the next one.
     if let Some(d) = &cfg.data_dir {

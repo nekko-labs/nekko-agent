@@ -17,11 +17,13 @@ mod egress;
 #[path = "../src/runner/hostnets.rs"]
 #[allow(dead_code)]
 mod hostnets;
+#[path = "../src/runner/lan.rs"]
+#[allow(dead_code)]
+mod lan;
 #[path = "../src/runner/net.rs"]
 #[allow(dead_code)]
 mod net;
 
-use std::net::{IpAddr, SocketAddr};
 use std::os::fd::AsRawFd;
 use std::os::unix::net::UnixDatagram;
 use std::os::unix::process::CommandExt;
@@ -46,15 +48,36 @@ async fn main() -> Res<()> {
     let helper = build_helper(&repo, &work)?;
 
     // Fail closed: without the host's addresses the policy cannot keep the guest off them.
-    let host = Arc::new(RwLock::new(hostnets::try_current().map_err(|e| format!("cannot read host networks: {e}"))?));
-    hostnets::spawn_refresh(host.clone(), Duration::from_secs(5));
+    // The router's public address is refused too, learned from the router itself.
+    let route = Command::new("route").args(["-n", "get", "default"]).output()?;
+    let wan = match lan::default_gateway(&String::from_utf8_lossy(&route.stdout)) {
+        Some(gw) => lan::discover_wan(gw).await,
+        None => vec![],
+    };
+    println!("router WAN address: {wan:?}");
+    let host =
+        Arc::new(RwLock::new(hostnets::try_current_with(&wan).map_err(|e| format!("cannot read host networks: {e}"))?));
+    hostnets::spawn_refresh(host.clone(), Duration::from_secs(5), Arc::new(RwLock::new(wan)));
     // The NAT refuses every flow until the helper reports the physical interface.
     let egress = egress::spawn_watch(&helper);
+    let mut index = None;
+    for _ in 0..50 {
+        index = egress.read().ok().and_then(|e| e.as_ref()?.physical.as_ref().map(|p| p.1));
+        if index.is_some() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    let index = index.ok_or("no physical network interface")?;
+    let scutil = Command::new("scutil").arg("--dns").output()?;
+    let dns =
+        lan::dns_upstreams(&String::from_utf8_lossy(&scutil.stdout), index, &*host.read().map_err(|_| "host lock")?);
+    println!("dns upstreams: {dns:?}");
 
     // Everything that can fail is ready before the clone exists, so no early
     // return leaves a VM or a clone behind.
     let forward = std::net::TcpListener::bind("127.0.0.1:2222")?;
-    let cfg = net::NetConfig { dns_upstream: vec![dns_upstream()], forward: Some((forward, 22)), ..Default::default() };
+    let cfg = net::NetConfig { dns_upstream: dns, forward: Some((forward, 22)), ..Default::default() };
     let (vm_end, nat_end) = UnixDatagram::pair()?;
     // macOS gives unix datagram sockets 4 KiB; the helper's end needs the room too.
     net::widen_buffers(&vm_end)?;
@@ -218,24 +241,4 @@ fn build_helper(repo: &Path, work: &Path) -> Res<PathBuf> {
 
 fn count_vms(helper: &Path) -> Res<String> {
     Ok(String::from_utf8(Command::new(helper).arg("count-vms").output()?.stdout)?.trim().to_owned())
-}
-
-/// The host's first resolver. Loopback or Tailscale's 100.100.100.100 would
-/// not answer the NAT's sockets as the guest expects, so the spike uses
-/// 1.1.1.1 then (shortcut: the daemon needs real resolver discovery).
-fn dns_upstream() -> SocketAddr {
-    let fallback: SocketAddr = ([1, 1, 1, 1], 53).into();
-    let scutil = Command::new("scutil").arg("--dns").output().map(|o| String::from_utf8_lossy(&o.stdout).into_owned());
-    let first = scutil.ok().and_then(|s| {
-        s.lines().find_map(|l| l.trim().strip_prefix("nameserver[0] :").and_then(|ip| ip.trim().parse::<IpAddr>().ok()))
-    });
-    let up = match first {
-        Some(ip) if !ip.is_loopback() && ip != IpAddr::from([100, 100, 100, 100]) => SocketAddr::new(ip, 53),
-        other => {
-            println!("host resolver {other:?} is loopback or Tailscale; DNS goes to {fallback} for the spike");
-            fallback
-        }
-    };
-    println!("dns upstream: {up}");
-    up
 }
