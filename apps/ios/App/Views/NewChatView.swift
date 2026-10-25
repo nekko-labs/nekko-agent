@@ -117,8 +117,13 @@ struct NewChatView: View {
             }
             Section {
                 Picker(selection: $folder) {
-                    Text("General").tag(String?.none)
-                    ForEach(store.workspaces) { w in Text(w.name).tag(Optional(w.id)) }
+                    Text("No folder").tag(String?.none)
+                    ForEach(store.workspaces) { w in
+                        VStack(alignment: .leading) {
+                            Text(w.name)
+                            if let path = w.path { Text(path).font(.caption).foregroundStyle(palette.inkSoft) }
+                        }.tag(Optional(w.id))
+                    }
                 } label: { Text("Folder").foregroundStyle(palette.ink) }
                 .pickerStyle(.navigationLink)
                 // The selected value is drawn in the secondary style: inkSoft
