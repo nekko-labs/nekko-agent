@@ -42,7 +42,7 @@ Philip asked for an agent's tool calls to be grouped by what they are doing, wit
 
 Philip asked for the iPhone chat to write in Markdown with a styles toolbar, nested bullets, good tables and a paste-as-Markdown or plain-text choice, and for Mermaid diagrams on the phone. Specs: [iPhone Markdown composer and rich replies](spec/phone/iphone-markdown-composer-and-rich-replies.md) (#1073), [Mermaid diagrams on the phone](spec/phone/mermaid-diagrams-on-the-phone.md) (#1074).
 
-- [ ] **MD-1, Block parser with real nesting and tables.** Replace the line scanner's flat `Piece` list in `Markdown.swift` with a small block tree (nested lists with continuation lines, pipe tables with alignment), moved into `NekkoProtocol` so it is tested on Linux; `MarkdownTests`.
+- [x] **MD-1, Block parser with real nesting and tables.** Replace the line scanner's flat `Piece` list in `Markdown.swift` with a small block tree (nested lists with continuation lines, pipe tables with alignment), moved into `NekkoProtocol` so it is tested on Linux; `MarkdownTests`. Done: `MarkdownParser` in `NekkoProtocol/Markdown.swift` (cached per segment, so a streaming reply re-parses only its last segment), `MarkdownTests` passing on Linux (Swift 6.1).
 - [ ] **MD-2, Rendering.** Nested list markers by depth, task checkboxes, the native table grid (sideways scroll, Expand full screen, Copy as Markdown / as text), user bubbles rendered as Markdown; streaming stays incremental.
 - [ ] **MD-3, Composer editor and toolbar.** A `UITextView`-backed composer with live source styling and the in-card toolbar (styles, link, heading, lists, indent/outdent, quote, code block, table, add row/column), list continuation on Return, undo; the edit functions are pure and Linux-tested.
 - [ ] **MD-4, Paste choice.** *Paste as Markdown* / *Paste as plain text* in the edit menu, the *Use formatting* chip after a rich paste; HTML/RTF→Markdown converter with the security cases.
@@ -2387,3 +2387,7 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [x] Combine provider setup and Model Server under one Models rail entry, retaining existing destinations and title-bar highlighting.
 - [x] Add local/cloud subnavigation, current-provider chips, a divider, five filled provider shortcuts and the full overflow chooser; retain existing connection and model controls.
 - [x] Verify desktop typechecking, focused provider/navigation tests, hidden Electron interactions and matching 1440/390 px before/after evidence. Live credential sign-in and server lifecycle actions are not exercised by this layout change.
+
+## Expo retirement
+
+- [x] Remove the retired Expo app and its dedicated Mobile CI; keep native phone workflows, relay/push infrastructure and shared protocol coverage. Update merge-gate accounting and desktop icon/test references. See [native phone decision](spec/phone/native-phone-implementation-decision.md) and [decision 0026](docs/decisions/0026-retire-expo-in-favor-of-native-phone-apps.md). Tracked in #1124.
