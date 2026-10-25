@@ -1,10 +1,22 @@
 ---
 status: active
-last-updated: 2026-10-23
+last-updated: 2026-10-24
 owner:
 ---
 
 # Execution Plan, Nekko Agent
+
+## Chat timing and GPT reasoning (added 2026-10-24)
+
+Philip found GPT-6.1 chats slow, quiet between tool calls, and missing their tokens/sec readout during tool work, and asked for step times and swipe-to-see times. Local logs showed the tools were fast (69 ms median for a trivial shell read) and the model calls slow (7.5 s per step against 4.6 s for Opus) because GPT re-reasoned from scratch after every tool. Spec: [Chat suggestions, progress and code access](SPEC.md#chat-suggestions-progress-and-code-access). #1058
+
+- [x] **CT-1, Carry GPT reasoning between tool steps (2026-10-24).** `chatgpt.rs` asks for `reasoning.encrypted_content` and emits each reasoning item as a new `ProviderChunk::Carry`; the loop stores them on the step's message as `carry: { model, items }` and the provider replays them before the call they led to, for the same model only. `drop_carry_before_last_prompt` strips them once a new prompt starts a turn, so session files stay small. Golden request bodies for ChatGPT gained `include`.
+- [x] **CT-2, Thinking always on for GPT (2026-10-24).** Reasoning summaries go out unless the chat turned Thinking off (`think != Some(false)`), matching the composer, which already showed "Thinking on" for an unset flag.
+- [x] **CT-3, Tokens/sec through tool steps (2026-10-24).** The decode clock starts at `response.output_item.added` and on tool-call argument deltas, so a tool-only step is timed instead of marking the whole turn unmeasurable.
+- [x] **CT-4, Elapsed time on tool rows (2026-10-24).** Each tool step row leads with how long it took (`fmtElapsed`, `ToolElapsed` in `ActivityGroup.tsx`), ticking while it runs; persisted times come from the call and result messages' `createdAt`, live ones from `liveRuns.ts`.
+- [x] **CT-5, Swipe left for times (2026-10-24).** A horizontal trackpad swipe slides the transcript up to 72px left and fades in each row's time; letting go springs it back (`useSwipeToRevealTimes` in `VirtualTranscript.tsx`, `data-vt-stamp` + `::after` in `styles.css`). Evidence: `apps/desktop/scripts/chat-timing-sandbox.cjs`.
+- [ ] **CT-6, Live check against a signed-in ChatGPT plan:** confirm the backend accepts the replayed reasoning, and compare per-step time and narration with the 2026-10-24 baseline.
+- [ ] **CT-7, Touch and mouse-drag reveal.** Only trackpad and wheel swipes reveal times today; a mouse drag is left for text selection.
 
 ## Chat page removed (added 2026-10-24)
 

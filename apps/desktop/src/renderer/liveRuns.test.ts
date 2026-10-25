@@ -32,6 +32,13 @@ describe('liveRuns', () => {
     expect(takeFinishedRun('a')!.blocks).toEqual(blocks);
   });
 
+  it('times each tool call from its call to its result', () => {
+    applyEvent(call('a', 'bash'), 1_000);
+    applyEvent({ type: 'tool_result', sessionId: 'a', result: { toolCallId: 'c_bash', output: 'ok' } }, 3_500);
+    const block = getLiveRun('a')!.blocks[0];
+    expect(block.kind === 'activity' && block.items[0]).toMatchObject({ kind: 'tool', startedAt: 1_000, endedAt: 3_500 });
+  });
+
   it('does not reopen a finished turn for a late session_meta', () => {
     // The auto-title lands after `done`; it used to resurrect an empty run that
     // nothing would ever end, leaving the chat on "Starting" indefinitely.

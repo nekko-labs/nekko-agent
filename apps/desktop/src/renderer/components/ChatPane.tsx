@@ -57,7 +57,7 @@ import { promptHistory, recallPrompt, type HistoryCursor } from './agent-console
 import { PERSISTED_INTERRUPTION, shouldShowPersistedInterruption, reconcileInterruptionNotice, describeInterruption, suggestedReplyClassName } from './agent-console/interruption.js';
 import { cutPrompt, messageCuts, type MessageCuts } from './agent-console/messageCut.js';
 
-import { estimateRowHeight, toTranscriptRows, transcriptBeforeLiveTurn, type TranscriptRow } from './agent-console/transcript.js';
+import { estimateRowHeight, toTranscriptRows, transcriptBeforeLiveTurn, transcriptRowStamp, type TranscriptRow } from './agent-console/transcript.js';
 import { ContextGauge, EffortSlider } from './ChatMetrics.js';
 import { PlanRail } from './PlanRail.js';
 import { PlanChangePrompt, planChangeMessage } from './PlanChangePrompt.js';
@@ -2548,6 +2548,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             className={`${contentWidth} space-y-5`}
             onPinnedChange={onPinnedChange}
             onGrowWhileUnpinned={onGrowWhileUnpinned}
+            stampOf={transcriptRowStamp}
             header={welcomeState.welcome ? (
 
               // On the wall the window's own reveal is the entrance; a second
