@@ -134,6 +134,11 @@ impl Store {
         }
     }
 
+    /// The last load could not read the file (it exists but is unreadable).
+    pub fn is_unreadable(&self) -> bool {
+        self.unreadable.load(Ordering::SeqCst)
+    }
+
     /// Write through a temp file and rename, so a crash never leaves half a file.
     pub fn save(&self, records: &[RunnerRecord]) -> io::Result<()> {
         if self.unreadable.load(Ordering::SeqCst) {

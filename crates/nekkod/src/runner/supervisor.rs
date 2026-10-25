@@ -11,9 +11,10 @@ use super::awake::Awake;
 use super::provider::{JobRef, Provider, ProviderError, RunnerStatus};
 use super::signals::{MacState, Sense, signals_for};
 use super::store::{RunnerRecord, same_scope};
+use super::updates::write_atomic;
 use super::vm::{RunHandle, RunSpec, Stopped, Vm, reap};
 use nekko_runner::{
-    Decision, HostFacts, MAX_MACOS_VMS, Reason, RunnerConfig, SlotLimit, cpus_per_vm, evaluate, hold_awake,
+    Decision, HostFacts, MAX_MACOS_VMS, Reason, RunnerConfig, SlotLimit, cpus_per_vm, evaluate, hold_awake, keep_idle,
     macos_slots_explained, vms_wanted, warm_slots,
 };
 use serde::Serialize;
@@ -154,7 +155,11 @@ struct Runner {
     /// Re-checked every tick.
     blocked: Option<String>,
     start_failures: u32,
+    /// A new VM may start (every gate passes).
     gates_pass: bool,
+    /// A booted VM with no job may stay: the gates without the start-only checks.
+    keep_idle: bool,
+    idle_why: Vec<Reason>,
     reasons: Vec<Reason>,
     available: u8,
     limit: Option<SlotLimit>,
@@ -176,6 +181,8 @@ impl Runner {
             blocked: None,
             start_failures: 0,
             gates_pass: false,
+            keep_idle: false,
+            idle_why: Vec::new(),
             reasons: Vec::new(),
             available: 0,
             limit: None,
@@ -229,6 +236,7 @@ pub struct Supervisor<S: Sense, V: Vm, P: Provider> {
     provider: P,
     awake: Box<dyn Awake>,
     host: String,
+    install: String,
     runners: Vec<Runner>,
     // shortcut: queued re-runs live in memory, lost on daemon restart; persist if pilots show it matters.
     reruns: Vec<Rerun>,
@@ -275,6 +283,26 @@ fn local_midnight(ts: u64) -> u64 {
         .map_or(ts - ts % 86_400, |d| d.timestamp().max(0) as u64)
 }
 
+/// This install's id (8 lowercase hex, `<runners>/install-id`), made once, so
+/// our runner names never match another Mac's, even one with the same name.
+fn install_id(runners_dir: &Path) -> String {
+    let path = runners_dir.join("install-id");
+    if let Ok(id) = std::fs::read_to_string(&path) {
+        let id = id.trim();
+        if id.len() == 8 && id.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')) {
+            return id.to_owned();
+        }
+    }
+    let mut b = [0u8; 4];
+    let _ = getrandom::fill(&mut b);
+    let id: String = b.iter().map(|x| format!("{x:02x}")).collect();
+    let saved = std::fs::create_dir_all(runners_dir).and_then(|()| write_atomic(&path, id.as_bytes()));
+    if let Err(e) = saved {
+        eprintln!("runner: cannot save {}: {e}", path.display());
+    }
+    id
+}
+
 /// `<host>` in runner names: lowercase `[a-z0-9-]`.
 pub(super) fn name_host(host: &str) -> String {
     host.to_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect()
@@ -290,6 +318,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
         host_name: String,
     ) -> Self {
         Supervisor {
+            install: install_id(&runners_dir),
             runners_dir,
             sense,
             vm,
@@ -306,6 +335,11 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             day_start: u64::MAX,
             today: HashMap::new(),
         }
+    }
+
+    /// `nekko-<host>-<install>-`: our runner names are this plus `<unix secs>-<n>`.
+    fn prefix(&self) -> String {
+        format!("nekko-{}-{}-", self.host, self.install)
     }
 
     fn vms_dir(&self) -> PathBuf {
@@ -327,7 +361,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
     /// matches every VM of ours, so a record waits while one of ours with the
     /// same scope is live.
     async fn sweep(&mut self) {
-        let prefix = format!("nekko-{}-", self.host);
+        let prefix = self.prefix();
         for i in 0..self.runners.len() {
             let r = &self.runners[i];
             let scope = &r.record.config.scope;
@@ -378,7 +412,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
     /// its offline registrations are swept; the caller may then forget its key.
     pub async fn take_gone(&mut self) -> Vec<RunnerRecord> {
         let gone = std::mem::take(&mut self.gone);
-        let prefix = format!("nekko-{}-", self.host);
+        let prefix = self.prefix();
         for r in &gone {
             if let Err(e) = call(self.provider.remove_stale(r, &prefix)).await {
                 eprintln!("runner {}: cannot remove stale runners: {e}", r.config.id);
@@ -446,15 +480,20 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
         let now = m.wall_secs;
         let mono = tokio::time::Instant::now();
         // A slow tick (a VM start can take minutes) moves both clocks alike; only a sleep moves the wall alone.
+        // A manual or NTP step of the clock by more than WAKE_GAP_SECS also reads as a wake.
         let slept = self
             .last_wall
             .is_some_and(|(wall, at)| (now - wall) - mono.duration_since(at).as_secs_f64() > WAKE_GAP_SECS);
         self.last_wall = Some((now, mono));
         self.roll_day(now as u64);
         for r in &mut self.runners {
-            let d = evaluate(&r.record.config.settings, &signals_for(&m, &r.record.config.settings), false);
+            let (s, sig) = (&r.record.config.settings, signals_for(&m, &r.record.config.settings));
+            let d = evaluate(s, &sig, false);
             r.gates_pass = d == Decision::Take;
             r.reasons = why(&d).to_vec();
+            let keep = keep_idle(s, &sig);
+            r.keep_idle = keep == Decision::Take;
+            r.idle_why = why(&keep).to_vec();
         }
         if self.vm.is_err() {
             self.awake.set(false);
@@ -470,7 +509,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
         for r in self.runners.iter_mut().filter(|r| !r.dropped) {
             let s = &r.record.config.settings;
             let job = r.slots.iter().any(|s| matches!(s.state, SlotState::Running | SlotState::Draining));
-            r.awake = hold_awake(s.keep_awake, job, r.gates_pass);
+            r.awake = hold_awake(s.keep_awake, job, r.gates_pass || (r.keep_idle && !r.slots.is_empty()));
             hold |= r.awake;
         }
         self.awake.set(hold);
@@ -525,7 +564,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             let s = &r.record.config.settings;
             let running = evaluate(s, &signals_for(m, s), true);
             let max_secs = f64::from(s.max_job_minutes) * 60.0;
-            let idle_why = reason_names(&r.reasons);
+            let idle_why = reason_names(&r.idle_why);
             for slot in &mut r.slots {
                 if r.dropped {
                     slot.halt(now, vec!["removed".into()], true, true);
@@ -533,7 +572,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                 }
                 let Some(busy_since) = slot.busy_since else {
                     // No job here, so stopping loses nothing.
-                    if !r.gates_pass {
+                    if !r.keep_idle {
                         slot.halt(now, idle_why.clone(), true, true);
                     }
                     continue;
@@ -586,7 +625,9 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             }
             let image = r.record.image.clone().unwrap_or_else(|| self.runners_dir.join("images").join("default"));
             r.blocked = (!image.is_dir()).then(|| NO_IMAGE.into());
-            if r.blocked.is_some() || !r.gates_pass || r.error.is_some() {
+            // `wanted` is kept while booted VMs may stay, so a start-only gate (memory headroom,
+            // which counts our own VMs as used) never idles them out.
+            if r.blocked.is_some() || !r.keep_idle || r.error.is_some() {
                 continue;
             }
             let warm = warm_slots(&s, available);
@@ -602,6 +643,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             let live = r.slots.iter().filter(|s| s.stop.is_none()).count();
             // `slots.len()` counts VMs still shutting down: they hold a place under Apple's cap.
             if started
+                || !r.gates_pass
                 || r.error.is_some()
                 || r.mint_after.is_some_and(|t| now < t)
                 || live >= usize::from(r.wanted)
@@ -687,7 +729,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
     async fn start_vm(&mut self, ri: usize, image: &Path, (cpus, memory_mb): (u8, u32), now: f64) {
         let Ok(vm) = &self.vm else { return };
         self.serial += 1;
-        let name = format!("nekko-{}-{}-{}", self.host, now as u64, self.serial);
+        let name = format!("{}{}-{}", self.prefix(), now as u64, self.serial);
         let dir = self.vms_dir().join(&name);
         let record = self.runners[ri].record.clone();
         let minted = match call(self.provider.mint(&record, &name)).await {
@@ -785,7 +827,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
     async fn finish(&mut self, ri: usize, mut slot: Slot, stopped: Stopped, now: f64) {
         let record = self.runners[ri].record.clone();
         // An online VM we stopped may have taken a job since its last status poll.
-        if slot.stop.is_some() && slot.online && slot.busy_since.is_none() {
+        if slot.stop.is_some() && slot.busy_since.is_none() {
             match call(self.provider.job(&record, &slot.name)).await {
                 Ok(Some(job)) => {
                     slot.job = Some(job);

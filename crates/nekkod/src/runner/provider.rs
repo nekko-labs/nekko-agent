@@ -64,7 +64,7 @@ pub trait Provider: Send + Sync + 'static {
     fn queued(&self, r: &RunnerRecord) -> impl Future<Output = Result<u32, ProviderError>> + Send;
     /// Removes a registration; one that is already gone is `Ok`.
     fn remove(&self, r: &RunnerRecord, runner_id: u64) -> impl Future<Output = Result<(), ProviderError>> + Send;
-    /// Removes every registration whose name starts with `name_prefix`; returns how many.
+    /// Removes every offline registration named exactly `<name_prefix><unix secs>-<n>`; returns how many.
     fn remove_stale(
         &self,
         r: &RunnerRecord,

@@ -116,6 +116,11 @@ pub enum Decision {
 // The negated comparisons are deliberate: `!(x >= floor)` is true for NaN.
 #[allow(clippy::neg_cmp_op_on_partial_ord)]
 pub fn evaluate(s: &RunnerSettings, sig: &Signals, running: bool) -> Decision {
+    decide(s, sig, running, !running)
+}
+
+#[allow(clippy::neg_cmp_op_on_partial_ord)]
+fn decide(s: &RunnerSettings, sig: &Signals, running: bool, starting: bool) -> Decision {
     let mode = s.priority;
     let grace_secs = match mode {
         Priority::DoNotDisturb => 120,
@@ -144,7 +149,7 @@ pub fn evaluate(s: &RunnerSettings, sig: &Signals, running: bool) -> Decision {
 
     // 2. A stale OS or too little free memory only blocks new VMs; a running
     // job is left to finish (memory pressure already covers a running VM).
-    if !running {
+    if starting {
         let tier2: Vec<Reason> = [
             (sig.security_update_overdue_days.is_some_and(|d| d > SECURITY_GRACE_DAYS), Reason::SecurityUpdate),
             (!(sig.available_memory_mb >= f64::from(s.memory_per_vm_mb) + VM_START_MARGIN_MB), Reason::MemoryHeadroom),
@@ -208,4 +213,13 @@ pub fn evaluate(s: &RunnerSettings, sig: &Signals, running: bool) -> Decision {
     let mut why: Vec<Reason> = why.into_iter().filter_map(|(hit, r)| hit.then_some(r)).collect();
     why.sort_by_key(|r| *r as u8);
     if why.is_empty() { Decision::Take } else { drain_or_hold(why) }
+}
+
+/// Whether a booted VM with no job may stay: [`evaluate`] for a slot without
+/// a job, minus the checks that only gate starting a VM (security update,
+/// memory headroom, unknown host state). macOS counts the VM's own memory as
+/// used, so judging a booted VM by the start margin would stop every VM it
+/// just started.
+pub fn keep_idle(s: &RunnerSettings, sig: &Signals) -> Decision {
+    decide(s, sig, false, false)
 }

@@ -27,7 +27,7 @@ use provider::Provider;
 use serde_json::{Value, json};
 use signals::HostSense;
 use signals::Sense;
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
@@ -60,8 +60,8 @@ pub struct Runners<S: Sense = HostSense, V: Vm = HelperVm, P: Provider = GitHub<
     pending: std::sync::Mutex<Option<Pending>>,
     /// The views last published; `runner:list` answers from here.
     views: std::sync::Mutex<Vec<RunnerView>>,
-    /// App ids a connect is storing a key for.
-    connecting: std::sync::Mutex<HashSet<u64>>,
+    /// App ids a connect is storing a key for, with how many connects are in flight.
+    connecting: std::sync::Mutex<HashMap<u64, u32>>,
     running_vm_mb: Arc<AtomicU64>,
     /// Why no VM can run here, shown on every enabled runner.
     vm_error: Option<String>,
@@ -201,7 +201,7 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
             looping: AtomicBool::new(false),
             pending: std::sync::Mutex::new(None),
             views: std::sync::Mutex::new(views),
-            connecting: std::sync::Mutex::new(HashSet::new()),
+            connecting: std::sync::Mutex::new(HashMap::new()),
             edit: tokio::sync::Mutex::new(()),
             hub,
             wake: tokio::sync::Notify::new(),
@@ -217,6 +217,8 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
         let r = self.clone();
         tokio::spawn(async move {
             r.sup.lock().await.start().await;
+            // Keys of removed runners waiting for a readable `runners.json`.
+            let mut forget: Vec<u64> = Vec::new();
             loop {
                 let (views, gone) = {
                     let mut s = r.sup.lock().await;
@@ -224,9 +226,14 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
                     r.running_vm_mb.store(s.running_vm_mb(), Ordering::SeqCst);
                     (s.views(), gone)
                 };
-                if !gone.is_empty() {
+                forget.extend(gone.iter().map(|g| g.github.app_id));
+                if !forget.is_empty() {
                     let _g = r.edit.lock().await;
-                    r.forget_keys(&r.store.load(), gone.iter().map(|g| g.github.app_id));
+                    let saved = r.store.load();
+                    // An unreadable file loads as no runners at all: forgetting now could delete a key in use.
+                    if !r.store.is_unreadable() {
+                        r.forget_keys(&saved, std::mem::take(&mut forget).into_iter());
+                    }
                 }
                 // A change saved during the tick keeps its optimistic view until the next one.
                 if r.pending.lock().is_ok_and(|p| p.is_none()) {
@@ -255,11 +262,19 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
         s.take_gone().await
     }
 
+    /// Marks a connect for `app` in progress until the guard drops.
+    fn connect_guard(&self, app: u64) -> ConnectGuard<'_> {
+        if let Ok(mut c) = self.connecting.lock() {
+            *c.entry(app).or_default() += 1;
+        }
+        ConnectGuard { set: &self.connecting, app }
+    }
+
     /// Deletes each app key no saved record uses and no connect is adding. Call under `edit`.
     fn forget_keys(&self, saved: &[RunnerRecord], apps: impl Iterator<Item = u64>) {
         let connecting = self.connecting.lock().map(|c| c.clone()).unwrap_or_default();
         for app in apps {
-            if !connecting.contains(&app) && !saved.iter().any(|r| r.github.app_id == app) {
+            if !connecting.contains_key(&app) && !saved.iter().any(|r| r.github.app_id == app) {
                 self.vault.delete(&key_name(app));
             }
         }
@@ -346,10 +361,7 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
             let req: ConnectRequest =
                 serde_json::from_value(arg(0)).map_err(|_| "That is not a valid connect request.".to_string())?;
             let github = self.github.as_ref().ok_or("Connecting is not available here.")?;
-            let app = req.app_id;
-            if let Ok(mut c) = self.connecting.lock() {
-                c.insert(app);
-            }
+            let _connecting = self.connect_guard(req.app_id);
             let network = signals::read_network_id().await;
             // GitHub's checks hold no lock.
             let connected = github.connect(req, network.clone()).await;
@@ -357,9 +369,6 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
                 Ok(rec) => self.save_connected(rec, network).await,
                 Err(e) => Err(e),
             };
-            if let Ok(mut c) = self.connecting.lock() {
-                c.remove(&app);
-            }
             return result;
         }
         let _g = self.edit.lock().await;
@@ -444,5 +453,23 @@ pub fn raise_nofile() {
     };
     if rc != 0 {
         eprintln!("nekkod: cannot raise the open-file limit: {}", std::io::Error::last_os_error());
+    }
+}
+
+struct ConnectGuard<'a> {
+    set: &'a std::sync::Mutex<HashMap<u64, u32>>,
+    app: u64,
+}
+
+impl Drop for ConnectGuard<'_> {
+    fn drop(&mut self) {
+        if let Ok(mut c) = self.set.lock()
+            && let Some(n) = c.get_mut(&self.app)
+        {
+            *n -= 1;
+            if *n == 0 {
+                c.remove(&self.app);
+            }
+        }
     }
 }

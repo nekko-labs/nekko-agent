@@ -171,6 +171,12 @@ fn other(what: &str, status: u16, v: &Value) -> ProviderError {
     ProviderError::Other(format!("GitHub refused {what} ({status}: {msg})"))
 }
 
+/// Exactly `<prefix><unix secs>-<n>`, so a longer host name sharing the prefix never matches.
+fn is_ours(name: &str, prefix: &str) -> bool {
+    let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+    name.strip_prefix(prefix).and_then(|rest| rest.split_once('-')).is_some_and(|(a, b)| digits(a) && digits(b))
+}
+
 fn ok(status: u16) -> bool {
     (200..300).contains(&status)
 }
@@ -259,6 +265,11 @@ impl<H: Http> GitHub<H> {
         let path = format!("/app/installations/{installation_id}/access_tokens");
         let (status, v) = self.api("POST", &path, &jwt, None).await?;
         match status {
+            // A rate limit is a 403 too, and passes. shortcut: `Response` carries no headers, so it is
+            // recognized by GitHub's message ("API rate limit exceeded", "secondary rate limit").
+            403 if v["message"].as_str().is_some_and(|m| m.to_ascii_lowercase().contains("rate limit")) => {
+                return Err(other("an installation token", status, &v));
+            }
             401 | 403 => return Err(ProviderError::Auth(REVOKED.into())),
             404 => return Err(ProviderError::Auth(GONE.into())),
             s if !ok(s) => return Err(other("an installation token", s, &v)),
@@ -481,6 +492,19 @@ impl<H: Http> GitHub<H> {
 
 impl<H: Http + 'static> Provider for GitHub<H> {
     async fn mint(&self, r: &RunnerRecord, name: &str) -> Result<Minted, ProviderError> {
+        // A repo can go public after connect: check again before a job of a stranger's PR could land here.
+        if let (Scope::Repo { owner, repo }, false) = (&r.config.scope, r.github.allow_public) {
+            let full = format!("{owner}/{repo}");
+            let (s, v) = self.call(r, "GET", &format!("/repos/{full}"), None).await?;
+            if !ok(s) {
+                return Err(other("the repo", s, &v));
+            }
+            if v["private"].as_bool() != Some(true) {
+                return Err(ProviderError::Auth(format!(
+                    "{full} is public. Anyone can open a pull request there, and its jobs would run on this Mac; allow public repos to run it anyway."
+                )));
+            }
+        }
         let group = match (&r.config.scope, r.github.group_id) {
             (Scope::Repo { .. }, _) => 1,
             (Scope::Org { .. }, Some(g)) => g,
@@ -557,7 +581,7 @@ impl<H: Http + 'static> Provider for GitHub<H> {
         }
         let mut removed = 0;
         for x in v["runners"].as_array().into_iter().flatten() {
-            let ours = x["name"].as_str().is_some_and(|n| n.starts_with(name_prefix));
+            let ours = x["name"].as_str().is_some_and(|n| is_ours(n, name_prefix));
             if let (true, Some("offline"), Some(id)) = (ours, x["status"].as_str(), x["id"].as_u64()) {
                 self.remove(r, id).await?;
                 removed += 1;

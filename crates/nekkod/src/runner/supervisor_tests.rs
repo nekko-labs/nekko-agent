@@ -36,6 +36,7 @@ fn quiet() -> MacState {
         user_memory_mb: Some(8000),
         security_update_overdue_days: None,
         paused_all: false,
+        updates_read: true,
     }
 }
 
@@ -58,12 +59,18 @@ fn record(id: &str, priority: Priority, slots: u8) -> RunnerRecord {
     }
 }
 
+/// The Mac as scripted, minus the memory of every VM still running: macOS
+/// counts our own guests as used memory.
 #[derive(Clone)]
-struct FakeSense(Arc<Mutex<MacState>>);
+struct FakeSense(Arc<Mutex<MacState>>, Arc<Mutex<VmState>>);
 
 impl Sense for FakeSense {
     async fn sample(&self) -> MacState {
-        self.0.lock().unwrap().clone()
+        let mut m = self.0.lock().unwrap().clone();
+        let vms = self.1.lock().unwrap();
+        let used: u32 = vms.done.iter().zip(&vms.mems).filter(|(d, _)| d.is_some()).map(|(_, mb)| *mb).sum();
+        m.available_memory_mb -= f64::from(used);
+        m
     }
 }
 
@@ -78,6 +85,8 @@ struct VmState {
     done: Vec<Option<oneshot::Sender<Stopped>>>,
     /// The next `start` takes this many seconds, of paused time and of the fake wall clock.
     slow_start: Option<(u64, Arc<Mutex<MacState>>)>,
+    /// Each run's memory, beside `done`.
+    mems: Vec<u32>,
 }
 
 #[derive(Clone)]
@@ -128,7 +137,11 @@ impl Vm for FakeVm {
         };
         let (done_tx, done_rx) = oneshot::channel();
         let (stop_tx, mut stop_rx) = mpsc::unbounded_channel();
-        self.0.lock().unwrap().done.push(Some(done_tx));
+        {
+            let mut st = self.0.lock().unwrap();
+            st.done.push(Some(done_tx));
+            st.mems.push(spec.memory_mb);
+        }
         let me = self.clone();
         tokio::spawn(async move {
             while let Some(h) = stop_rx.recv().await {
@@ -153,7 +166,8 @@ struct ProvState {
     queued: u32,
     mint: VecDeque<Result<Minted, ProviderError>>,
     rerun: VecDeque<Result<(), ProviderError>>,
-    job: Result<Option<JobRef>, ProviderError>,
+    /// `None`: the runner's job while `status` is `Busy`, else none (as GitHub answers).
+    job: Option<Result<Option<JobRef>, ProviderError>>,
     next_id: u64,
 }
 
@@ -179,7 +193,8 @@ impl Provider for FakeProvider {
 
     async fn job(&self, _: &RunnerRecord, _: &str) -> Result<Option<JobRef>, ProviderError> {
         self.1.lock().unwrap().push("job".into());
-        self.0.lock().unwrap().job.clone()
+        let st = self.0.lock().unwrap();
+        st.job.clone().unwrap_or(Ok((st.status == RunnerStatus::Busy).then(job_ref)))
     }
 
     async fn queued(&self, _: &RunnerRecord) -> Result<u32, ProviderError> {
@@ -226,15 +241,15 @@ fn harness_with(records: Vec<RunnerRecord>, no_vm: Option<&str>) -> H {
     std::fs::create_dir_all(&image).unwrap();
     std::fs::write(image.join("disk.img"), b"golden").unwrap();
     let log: Log = Arc::default();
-    let sense = FakeSense(Arc::new(Mutex::new(quiet())));
     let vm = FakeVm(Arc::new(Mutex::new(VmState { root: dir.path().into(), ..Default::default() })), log.clone());
+    let sense = FakeSense(Arc::new(Mutex::new(quiet())), vm.0.clone());
     let prov = FakeProvider(
         Arc::new(Mutex::new(ProvState {
             status: RunnerStatus::Idle,
             queued: 0,
             mint: VecDeque::new(),
             rerun: VecDeque::new(),
-            job: Ok(Some(job_ref())),
+            job: None,
             next_id: 99,
         })),
         log.clone(),
@@ -332,7 +347,8 @@ async fn takes_a_job_when_gates_pass_and_deletes_vm_after() {
     h.tick_for(5).await;
     let log = h.log.lock().unwrap().clone();
     let name = log[1].strip_prefix("mint ").unwrap().to_owned();
-    assert!(name.starts_with("nekko-mac1-1700000005-"), "{name}");
+    let id = std::fs::read_to_string(h.dir.path().join("install-id")).unwrap();
+    assert!(name.starts_with(&format!("nekko-mac1-{id}-1700000005-")), "{name}");
     assert_eq!(
         log[1..],
         [
@@ -753,6 +769,7 @@ async fn job_taken_between_polls_is_audited_when_stopped() {
     h.tick_for(20).await;
     assert_eq!(h.view().slots[0].state, SlotState::Ready);
     // GitHub hands it a job; the Mac overheats before the next status poll.
+    h.prov.0.lock().unwrap().job = Some(Ok(Some(job_ref())));
     h.mac(|m| m.host.as_mut().unwrap().thermal = Thermal::Critical);
     h.tick_for(10).await;
     let audit = h.audit();
@@ -765,7 +782,7 @@ async fn job_taken_between_polls_is_audited_when_stopped() {
 #[tokio::test(start_paused = true)]
 async fn idle_vm_stopped_without_a_job_is_not_audited() {
     let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
-    h.prov.0.lock().unwrap().job = Ok(None);
+    h.prov.0.lock().unwrap().job = Some(Ok(None));
     h.tick_for(20).await;
     h.mac(|m| m.host.as_mut().unwrap().thermal = Thermal::Critical);
     h.tick_for(10).await;
@@ -775,7 +792,7 @@ async fn idle_vm_stopped_without_a_job_is_not_audited() {
 #[tokio::test(start_paused = true)]
 async fn job_lookup_auth_error_marks_runner_error() {
     let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
-    h.prov.0.lock().unwrap().job = Err(ProviderError::Auth("revoked".into()));
+    h.prov.0.lock().unwrap().job = Some(Err(ProviderError::Auth("revoked".into())));
     h.status(RunnerStatus::Busy);
     h.tick_for(20).await;
     let v = h.view();
@@ -952,5 +969,105 @@ async fn reconnecting_a_scope_to_another_app_forgets_the_old_key() {
     assert_eq!(view["config"]["id"], "r1", "the scope keeps its id");
     let saved = crate::runner::store::Store::new(dir.path()).load();
     assert_eq!(saved[0].github.app_id, 2);
+    assert_eq!(vault.get("github-app-1"), None);
+}
+
+/// A 16 GB Mac: room for exactly one 8 GB VM, and the VM's own memory shows as used.
+fn small_mac(m: &mut MacState) {
+    m.ram_mb = 16_384;
+    m.user_memory_mb = None;
+    m.available_memory_mb = 12_000.0;
+}
+
+#[tokio::test(start_paused = true)]
+async fn own_vms_do_not_fail_the_memory_gate() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    h.mac(small_mac);
+    h.tick_for(600).await;
+    assert_eq!(h.count("mint"), 1);
+    assert_eq!(h.count("kill"), 0);
+    assert_eq!(h.view().slots[0].state, SlotState::Ready);
+    // A new VM would not fit, and the view says why.
+    assert!(h.view().reasons.contains(&Reason::MemoryHeadroom));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_host_state_blip_keeps_a_ready_vm() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    h.tick_for(30).await;
+    assert_eq!(h.view().slots[0].state, SlotState::Ready);
+    h.mac(|m| m.host = None);
+    h.tick_for(5).await;
+    h.mac(|m| m.host = quiet().host);
+    h.tick_for(30).await;
+    assert_eq!((h.count("kill"), h.count("mint")), (0, 1));
+}
+
+#[tokio::test(start_paused = true)]
+async fn job_taken_before_the_first_poll_is_audited() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    h.tick_for(5).await;
+    assert_eq!(h.view().slots[0].state, SlotState::Starting);
+    h.prov.0.lock().unwrap().job = Some(Ok(Some(job_ref())));
+    h.mac(|m| m.host.as_mut().unwrap().thermal = Thermal::Critical);
+    h.tick_for(10).await;
+    let audit = h.audit();
+    assert_eq!((audit.len(), audit[0].result), (1, AuditResult::Stopped));
+    h.tick_for(60).await;
+    assert_eq!(h.count("rerun"), 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn runner_names_carry_this_installs_id() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    h.sup.start().await;
+    h.tick_for(5).await;
+    let id = std::fs::read_to_string(h.dir.path().join("install-id")).expect("an install id");
+    assert!(id.len() == 8 && id.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)), "{id}");
+    assert_eq!(h.count(&format!("remove_stale nekko-mac1-{id}-")), 1);
+    assert_eq!(h.count(&format!("mint nekko-mac1-{id}-1700000005-")), 1);
+    // The id is kept across restarts.
+    let again = harness_with_dir(h.dir.path());
+    drop(again);
+    assert_eq!(std::fs::read_to_string(h.dir.path().join("install-id")).unwrap(), id);
+}
+
+/// A second supervisor on the same data folder, as after a daemon restart.
+fn harness_with_dir(dir: &Path) -> Supervisor<FakeSense, FakeVm, FakeProvider> {
+    let h = harness(vec![]);
+    Supervisor::new(dir.into(), h.sense, Ok(h.vm), h.prov, Box::new(FakeAwake(h.awake)), "Mac1".into())
+}
+
+#[tokio::test(start_paused = true)]
+async fn keys_are_kept_while_runners_json_is_unreadable() {
+    use std::os::unix::fs::PermissionsExt;
+    let h = harness(vec![]);
+    h.vm.0.lock().unwrap().hold_done = true;
+    let Rig { runners, vm, log, vault, dir } = runners_rig(h);
+    wait_for("a VM start", || log.lock().unwrap().iter().any(|l| l.starts_with("start"))).await;
+    assert_eq!(runners.route("runner:remove", &[json!("r1")]).await, Ok(Value::Null));
+    wait_for("the VM killed", || log.lock().unwrap().iter().any(|l| l.starts_with("kill"))).await;
+    let file = dir.path().join("runners.json");
+    std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o000)).unwrap();
+    if std::fs::read(&file).is_ok() {
+        return; // running as root: permissions do not apply
+    }
+    vm.finish(0, Stopped::Error("killed".into()));
+    tokio::time::sleep(Duration::from_secs(30)).await;
+    assert_eq!(vault.get("github-app-1").as_deref(), Some("pem"), "kept while the saved records are unknown");
+    std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o644)).unwrap();
+    wait_for("the key forgotten", || vault.get("github-app-1").is_none()).await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn overlapping_connects_for_one_app_keep_its_key() {
+    let Rig { runners, vault, dir: _dir, .. } = runners_rig(harness(vec![]));
+    let first = runners.connect_guard(1);
+    let second = runners.connect_guard(1);
+    drop(first);
+    runners.forget_keys(&[], [1].into_iter());
+    assert_eq!(vault.get("github-app-1").as_deref(), Some("pem"), "the second connect still needs it");
+    drop(second);
+    runners.forget_keys(&[], [1].into_iter());
     assert_eq!(vault.get("github-app-1"), None);
 }

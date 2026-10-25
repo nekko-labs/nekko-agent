@@ -196,7 +196,7 @@ async fn missing_key_is_auth_error() {
 #[tokio::test]
 async fn jit_config_request_has_labels_and_group() {
     let jit = (201, json!({ "runner": { "id": 23 }, "encoded_jit_config": "abc" }));
-    let t = rig(vec![token(), jit.clone()], true);
+    let t = rig(vec![token(), (200, json!({ "id": 5, "private": true })), jit.clone()], true);
     let minted = t.gh.mint(&repo_record(), "nekko-mac1-1-1").await.unwrap();
     assert_eq!(minted, Minted { runner_id: 23, jit_config: "abc".into() });
     assert_eq!(t.http.urls()[0], "POST https://api.github.com/app/installations/9/access_tokens");
@@ -209,7 +209,8 @@ async fn jit_config_request_has_labels_and_group() {
     assert_eq!(header(&last, "Accept"), Some("application/vnd.github+json"));
     assert_eq!(header(&last, "X-GitHub-Api-Version"), Some("2022-11-28"));
     assert_eq!(header(&last, "User-Agent"), Some("nekko-agent"));
-    let body = t.http.body(1);
+    assert_eq!(t.http.urls()[1], "GET https://api.github.com/repos/o/r");
+    let body = t.http.body(2);
     assert_eq!(body["name"], "nekko-mac1-1-1");
     assert_eq!(body["labels"], json!(["self-hosted", "macOS", "ARM64", "nekko-mac"]));
     assert_eq!(body["runner_group_id"], 1);
@@ -220,8 +221,8 @@ async fn jit_config_request_has_labels_and_group() {
     t.gh.mint(&org_record(), "n2").await.unwrap();
     let last = t.http.last();
     assert_eq!(last.url, "https://api.github.com/orgs/acme/actions/runners/generate-jitconfig");
-    assert_eq!(t.http.body(2)["runner_group_id"], 7);
-    assert_eq!(t.http.urls().len(), 3);
+    assert_eq!(t.http.body(3)["runner_group_id"], 7);
+    assert_eq!(t.http.urls().len(), 4);
 }
 
 #[tokio::test]
@@ -435,8 +436,8 @@ async fn remove_tolerates_404_and_stale_removes_only_ours() {
             (
                 200,
                 json!({ "total_count": 3, "runners": [
-                    { "id": 1, "name": "nekko-mac1-1", "status": "offline" },
-                    { "id": 2, "name": "nekko-mac1-2", "status": "online" },
+                    { "id": 1, "name": "nekko-mac1-abcd1234-1-1", "status": "offline" },
+                    { "id": 2, "name": "nekko-mac1-abcd1234-1-2", "status": "online" },
                     { "id": 3, "name": "other", "status": "offline" },
                 ] }),
             ),
@@ -447,7 +448,7 @@ async fn remove_tolerates_404_and_stale_removes_only_ours() {
     let r = org_record();
     assert_eq!(t.gh.remove(&r, 40).await, Ok(()));
     assert_eq!(t.http.urls()[1], "DELETE https://api.github.com/orgs/acme/actions/runners/40");
-    assert_eq!(t.gh.remove_stale(&r, "nekko-mac1-").await, Ok(1));
+    assert_eq!(t.gh.remove_stale(&r, "nekko-mac1-abcd1234-").await, Ok(1));
     let urls = t.http.urls();
     assert_eq!(urls[2], "GET https://api.github.com/orgs/acme/actions/runners?per_page=100");
     assert_eq!(&urls[3..], ["DELETE https://api.github.com/orgs/acme/actions/runners/1"]);
@@ -575,4 +576,59 @@ fn a_clock_near_zero_does_not_underflow() {
     let t = rig_at(vec![], true, early);
     let jwt = t.gh.app_jwt(123).unwrap();
     assert_eq!(b64json(jwt.split('.').nth(1).unwrap())["iat"], 0);
+}
+
+#[tokio::test]
+async fn stale_sweep_matches_only_this_install_exactly() {
+    let t = rig(
+        vec![
+            token(),
+            (
+                200,
+                json!({ "runners": [
+                    { "id": 1, "name": "nekko-macbook-pro-abcd1234-1700000000-1", "status": "offline" },
+                    { "id": 2, "name": "nekko-macbook-pro-2-abcd1234-1700000000-1", "status": "offline" },
+                    { "id": 3, "name": "nekko-macbook-pro-ffff0000-1700000000-1", "status": "offline" },
+                    { "id": 4, "name": "nekko-macbook-pro-abcd1234-1700000000-1-x", "status": "offline" },
+                    { "id": 5, "name": "nekko-macbook-pro-abcd1234-17x-1", "status": "offline" },
+                    { "id": 6, "name": "nekko-macbook-pro-abcd1234-1700000000-2", "status": "online" },
+                ] }),
+            ),
+            (204, json!(null)),
+        ],
+        true,
+    );
+    assert_eq!(t.gh.remove_stale(&org_record(), "nekko-macbook-pro-abcd1234-").await, Ok(1));
+    assert_eq!(t.http.urls().last().unwrap(), "DELETE https://api.github.com/orgs/acme/actions/runners/1");
+}
+
+#[tokio::test]
+async fn rate_limits_are_not_a_revoked_key() {
+    for msg in [
+        "You have exceeded a secondary rate limit. Please wait a few minutes.",
+        "API rate limit exceeded for installation ID 9.",
+    ] {
+        let t = rig(vec![(403, json!({ "message": msg }))], true);
+        assert!(matches!(t.gh.mint(&org_record(), "n").await, Err(ProviderError::Other(_))), "{msg}");
+    }
+    let t = rig(vec![(403, json!({ "message": "Resource not accessible by integration" }))], true);
+    assert!(matches!(t.gh.mint(&org_record(), "n").await, Err(ProviderError::Auth(_))));
+}
+
+#[tokio::test]
+async fn a_repo_that_went_public_is_refused_at_mint() {
+    let t = rig(vec![token(), (200, json!({ "id": 5, "private": false }))], true);
+    match t.gh.mint(&repo_record(), "n").await {
+        Err(ProviderError::Auth(m)) => assert!(m.contains("o/r is public"), "{m}"),
+        other => panic!("{other:?}"),
+    }
+    assert_eq!(t.http.urls()[1], "GET https://api.github.com/repos/o/r");
+    assert!(!t.http.urls().iter().any(|u| u.contains("generate-jitconfig")));
+
+    let mut allowed = repo_record();
+    allowed.github.allow_public = true;
+    let jit = (201, json!({ "runner": { "id": 23 }, "encoded_jit_config": "abc" }));
+    let t = rig(vec![token(), jit], true);
+    assert!(t.gh.mint(&allowed, "n").await.is_ok());
+    assert!(!t.http.urls().iter().any(|u| u.ends_with("/repos/o/r")), "allowed: no extra check");
 }

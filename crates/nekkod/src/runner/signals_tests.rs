@@ -25,6 +25,7 @@ fn mac() -> MacState {
         user_memory_mb: Some(8000),
         security_update_overdue_days: Some(3),
         paused_all: true,
+        updates_read: true,
     }
 }
 
@@ -170,4 +171,9 @@ fn gateway_and_network_id_parse() {
     );
     assert_eq!(network_id("? (192.168.1.1) at (incomplete) on en0", gw), None);
     assert_eq!(default_gateway("    gateway: link#14\n"), None);
+}
+
+#[test]
+fn unread_updates_hold_new_vms() {
+    assert!(!signals_for(&MacState { updates_read: false, ..mac() }, &trusting()).host_known);
 }

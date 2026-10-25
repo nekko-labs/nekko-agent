@@ -67,6 +67,8 @@ pub struct MacState {
     pub user_memory_mb: Option<u64>,
     pub security_update_overdue_days: Option<u32>,
     pub paused_all: bool,
+    /// `softwareupdate` has been read at least once since nekkod started.
+    pub updates_read: bool,
 }
 
 pub fn signals_for(m: &MacState, s: &RunnerSettings) -> Signals {
@@ -91,7 +93,8 @@ pub fn signals_for(m: &MacState, s: &RunnerSettings) -> Signals {
         available_memory_mb: m.available_memory_mb,
         paused_all: m.paused_all,
         vpn_carries_default: egress.is_some_and(|e| e.vpn_carries_default),
-        host_known: m.host.is_some() && m.egress.is_some() && m.host_nets_ok,
+        // Pending updates unread since start count as unknown too: new VMs hold until the first read.
+        host_known: m.host.is_some() && m.egress.is_some() && m.host_nets_ok && m.updates_read,
     }
 }
 
@@ -241,10 +244,12 @@ impl HostSense {
                 let major = output("/usr/bin/sw_vers", &["-productVersion"], Duration::from_secs(5)).await;
                 let major = major.as_deref().map_or(0, os_major);
                 let out = output("/usr/sbin/softwareupdate", &["--list", "--no-scan"], Duration::from_secs(120)).await;
+                let read = out.is_some();
                 if let (Some(out), Ok(mut s)) = (out, shared.write()) {
                     *s = Some(security_labels(&out, major));
                 }
-                tokio::time::sleep(UPDATES_EVERY).await;
+                // Until a read works new VMs hold, so a failure retries within a minute.
+                tokio::time::sleep(if read { UPDATES_EVERY } else { Duration::from_secs(60) }).await;
             }
         });
     }
@@ -290,6 +295,7 @@ impl Sense for HostSense {
             h.usual()
         });
         let labels = self.update_labels.read().ok().and_then(|l| l.clone());
+        let updates_read = labels.is_some();
         let security_update_overdue_days =
             labels.and_then(|l| self.ledger.lock().ok().and_then(|mut g| g.observe(&l, wall.as_secs())));
         MacState {
@@ -308,6 +314,7 @@ impl Sense for HostSense {
             user_memory_mb,
             security_update_overdue_days,
             paused_all: nekko_js::truthy((self.settings)().get("automationsPaused")),
+            updates_read,
         }
     }
 }

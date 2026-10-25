@@ -1,7 +1,7 @@
 //! The gates: one test per row of the decision table, so a rule change shows
 //! up as exactly one failing test.
 
-use nekko_runner::{Decision, Pressure, Priority, Reason, RunnerSettings, Signals, Thermal, evaluate};
+use nekko_runner::{Decision, Pressure, Priority, Reason, RunnerSettings, Signals, Thermal, evaluate, keep_idle};
 
 const ALL: [Priority; 3] = [Priority::DoNotDisturb, Priority::Balanced, Priority::RunnerFirst];
 
@@ -370,4 +370,27 @@ fn unknown_host_and_low_memory_list_in_ui_order() {
         evaluate(&with(DoNotDisturb), &sig, false),
         Decision::Hold { why: vec![Reason::MemoryHeadroom, Reason::HostStateUnknown] }
     );
+}
+
+#[test]
+fn an_idle_vm_stays_through_start_only_gates() {
+    let mut sig = quiet();
+    sig.available_memory_mb = 1000.0;
+    sig.host_known = false;
+    sig.security_update_overdue_days = Some(30);
+    for p in [DoNotDisturb, Balanced, RunnerFirst] {
+        assert!(matches!(evaluate(&with(p), &sig, false), Decision::Hold { .. }));
+        assert_eq!(keep_idle(&with(p), &sig), Decision::Take, "{p:?}");
+    }
+}
+
+#[test]
+fn an_idle_vm_still_stops_for_hard_limits_and_the_mode() {
+    let mut hot = quiet();
+    hot.thermal = Thermal::Critical;
+    assert_eq!(keep_idle(&with(RunnerFirst), &hot), Decision::Hold { why: vec![Reason::ThermalCritical] });
+    let mut typing = quiet();
+    typing.idle_seconds = Some(10.0);
+    typing.available_memory_mb = 1000.0;
+    assert_eq!(keep_idle(&with(DoNotDisturb), &typing), Decision::Hold { why: vec![Reason::UserActive] });
 }
