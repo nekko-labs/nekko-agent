@@ -87,6 +87,7 @@ async fn main() -> Res<()> {
     let pid = child.id().map(|p| p as libc::pid_t);
     println!("nekko-vm pid {}", pid.unwrap_or(0));
     println!("ssh -p 2222 admin@127.0.0.1 once the guest is up; Ctrl-C stops the VM");
+    let strip = tokio::spawn(strip_tart_agent(work.clone()));
 
     let serve = net::serve(nat_end, host, cfg);
     tokio::pin!(serve);
@@ -107,10 +108,42 @@ async fn main() -> Res<()> {
             }
         }
     }
+    strip.abort();
     // If the NAT ended first, the helper sees its socket close within a second.
     let status = tokio::time::timeout(Duration::from_secs(30), child.wait()).await;
     println!("nekko-vm: {status:?}");
     Ok(())
+}
+
+/// Spike only: the Cirrus base image ships Tart's guest agent, which makes
+/// the guest reboot every 12 to 15 s when Tart is not the host. Once SSH is
+/// up, the agent's launchd plists are moved aside in this clone (the source
+/// image is untouched). Our own golden image (T214) will not contain it.
+async fn strip_tart_agent(work: PathBuf) {
+    let askpass = work.join("askpass.sh");
+    if std::fs::write(&askpass, "#!/bin/sh\necho admin\n").is_err()
+        || std::fs::set_permissions(&askpass, std::os::unix::fs::PermissionsExt::from_mode(0o700)).is_err()
+    {
+        return println!("tart agent: cannot write the askpass script");
+    }
+    let script = "mkdir -p ~/tart-agent-disabled; for f in /Library/LaunchDaemons/org.cirruslabs.tart-guest-daemon.plist \
+        /Library/LaunchAgents/org.cirruslabs.tart-guest-agent.plist; do [ -e $f ] && sudo -n mv $f ~/tart-agent-disabled/; done; \
+        ls /Library/LaunchDaemons/org.cirruslabs.* /Library/LaunchAgents/org.cirruslabs.* >/dev/null 2>&1 || echo agent-off";
+    for _ in 0..100 {
+        let out = tokio::process::Command::new("ssh")
+            .args(["-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", "-o", "LogLevel=ERROR"])
+            .args(["-o", "ConnectTimeout=5", "-o", "PubkeyAuthentication=no", "-p", "2222", "admin@127.0.0.1", script])
+            .env("SSH_ASKPASS", &askpass)
+            .env("SSH_ASKPASS_REQUIRE", "force")
+            .stdin(std::process::Stdio::null())
+            .output()
+            .await;
+        if out.is_ok_and(|o| String::from_utf8_lossy(&o.stdout).contains("agent-off")) {
+            return println!("tart agent: moved aside in the guest");
+        }
+        tokio::time::sleep(Duration::from_secs(3)).await;
+    }
+    println!("tart agent: could not reach the guest over ssh");
 }
 
 /// The one cleanup path, for every exit but SIGKILL (that leaves the clone

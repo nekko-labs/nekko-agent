@@ -100,7 +100,9 @@ func countVms() -> Never {
 /// reach the host by any path but nekkod's filtered NAT:
 /// - no directory sharing (VZSharedDirectoryConfiguration): it would expose host files;
 /// - no clipboard, serial console, audio or USB: each is a host channel the job does not need;
-/// - no graphics, keyboard or pointing device: the VM runs headless and nobody logs in.
+/// - no keyboard or pointing device, and no VZVirtualMachineView: nobody drives the guest.
+///
+/// One display device is present (see below) only because a macOS guest does not boot without one.
 func makeConfiguration(bundle: String, cpus: Int, memoryMB: UInt64, netFd: Int32) throws -> VZVirtualMachineConfiguration {
     let fm = FileManager.default
     for name in ["config.json", "disk.img", "nvram.bin"] where !fm.fileExists(atPath: "\(bundle)/\(name)") {
@@ -160,6 +162,14 @@ func makeConfiguration(bundle: String, cpus: Int, memoryMB: UInt64, netFd: Int32
     attachment.maximumTransmissionUnit = 1500
     network.attachment = attachment
     config.networkDevices = [network]
+
+    // A display device with no view and no input devices. A macOS guest does
+    // not boot without a graphics device (with none it spins at boot and never
+    // brings up its network). Nothing attaches a VZVirtualMachineView, so no
+    // frame of the guest's screen ever reaches the host.
+    let graphics = VZMacGraphicsDeviceConfiguration()
+    graphics.displays = [VZMacGraphicsDisplayConfiguration(widthInPixels: 1024, heightInPixels: 768, pixelsPerInch: 72)]
+    config.graphicsDevices = [graphics]
 
     config.entropyDevices = [VZVirtioEntropyDeviceConfiguration()]
     config.memoryBalloonDevices = [VZVirtioTraditionalMemoryBalloonDeviceConfiguration()]

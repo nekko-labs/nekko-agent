@@ -75,7 +75,7 @@ None can stop sleep when the lid closes on battery, when Low Power Mode turns on
 
 | Threat | Control |
 |---|---|
-| A job reads your files, keys or tokens | Separate VM with its own disk. No host folder, clipboard or keychain reaches it. The only secret inside is a single-use runner config. |
+| A job reads your files, keys or tokens | Separate VM with its own disk. No host folder, clipboard or keychain reaches it. The VM has a display device with no view and no input devices (a macOS guest needs one to boot), so nothing of its screen reaches the host. The only secret inside is a single-use runner config. |
 | A job attacks your LAN or other devices | The VM's only network is a userspace NAT inside `nekkod` that forwards to public unicast internet addresses only, judged after DNS resolution, and never to the Mac's own addresses or any network the Mac is on, even a public one. |
 | A job reaches services on the host | There is no host-to-guest and no guest-to-host network. The NAT answers DHCP and DNS for the guest and forwards nothing to a host address. |
 | Malware persists into the next job | Every job starts from a new copy-on-write clone of a read-only golden image; the clone is deleted after the job. |
