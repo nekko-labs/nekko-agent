@@ -6,6 +6,16 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Verification and PR progress (added 2026-10-25)
+
+Issue #1115. Spec: [Verification checklists and PR progress](spec/chat/verification-and-pr-progress.md).
+
+- [x] **VP-1, Complete PR observations.** Paginated GraphQL check contexts and review threads, conservative unknown results, local observation time and stale-cache retention; Rust transport/unit coverage.
+- [x] **VP-2, Explicit verification metadata.** Optional structured reports on existing plan steps, matching Rust/TS sanitization and persistence tests; tool guidance never equates tool completion with inspection.
+- [x] **VP-3, Shared-renderer presentation.** Footer checklist and linked CI/thread progress, bounded disclosures and safe links; focused component checks and hidden isolated 900px/390px interaction fixtures.
+- [ ] **VP-4, Evidence signoff and landing.** Capture PNG/GIF before/after, inspect actual pixels/motion, publish media and queue the stack. Published PNG/GIF evidence and parent pixel signoff cover baseline desktop/narrow, original desktop active, responsive-v2 narrow updated and desktop GIF active/updated frames. Narrow full-width content and changing counts/status are readable with no layout issue. Renderer-only signoff; packaged app and real paired device remain untested. Main synchronization and landing in progress.
+- [ ] **VP-5, Packaged/device follow-up.** Exercise a real paired-device verification flow; native phone presentation is outside this desktop/shared-renderer scope.
+
 ## Model tuning controls (added 2026-10-25)
 
 Philip asked for a simpler load drawer (one recommended button explained in plain words, a VRAM and RAM meter, GPU only or Hybrid plus context first, simple then expert controls) and for the trick of running a big MoE model on an 8 GB card by keeping experts in RAM and the n-gram table on disk. Spec: [Setting up a local model](spec/models/setting-up-a-local-model.md). Decision: [0023](docs/decisions/0023-place-bytes-in-three-places-and-pass-placement-explicitly.md). #1069
@@ -785,6 +795,8 @@ Extends `../../knowledgebase/principles/coding.md` (which these override).
 - [ ] Cut the **v1.0 release** once the above land (bump versions + tag). *Status 2026-09-30: PR #203 (`chore/release-v0.8.0`) sits open and mergeable as the next version bump, a pure 5-file version change; merging it fires the public release workflow, so it waits on the same credentials below (npm publish cred, remaining Windows signing, macOS notary trio) plus an explicit go. The GUI pass above is the only functional gate left on the list.*
 
 ## Now / In Progress
+
+- [ ] **IOS-STATUS-MASCOT** (added 2026-10-25): desktop-style leading chat status icons and a top-left interactive pixel mascot on native iOS. [Spec](spec/phone/native-ios-app.md#desktop-style-chat-status-and-top-left-nekko-2026-10-25). Native build, status precedence test and simulator greeting/touch-target test pass; native fixture before/after evidence captured. Landing tracked by #1093. Physical-device VoiceOver and release delivery remain unverified.
 
 - [ ] **AFML1057: Composer focus and compact, stable Agents/Monitors layout** ([#1057](https://github.com/nekko-labs/nekko-agent/issues/1057)). Implemented readiness-aware composer focus, viewport-clamped top-layer Configure, stable reorder geometry, and a compact horizontal controls grid with no space below cards or after the scrollbar. Specs: [monitor controls](spec/agents/monitors-dock-naming-and-header-polish.md), [Agents row](spec/agents/agent-panel-view-options.md), [composer](spec/chat/chat-actions-and-persistent-reply-measurements.md). Verified 41 focused tests, desktop typecheck and hidden full-App geometry/interaction assertions. Pending: visual inspection of before/after captures and GIF, then PR landing. Native-window behavior is not proven by renderer capture.
 
@@ -2363,3 +2375,9 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [x] **T205a** Chat command logs cut to their last 4 MB of whole lines past 5 MB (`keep_file_tail` in `agent_logs.rs`). Test: `a_long_command_log_keeps_its_last_whole_lines`. Done: 2026-10-24
 - [x] **T205b** `quota-history.jsonl` keeps 30 days, pruned at startup (`prune_quota_history`). Test: `quota_history_keeps_thirty_days`. Done: 2026-10-24
 - [x] **T205c** Abandoned `.part` downloads untouched for 7 days removed at startup (`sweep_stale_parts`). Test: `only_old_part_files_go`. Done: 2026-10-24
+
+### Unified Models workspace (2026-10-25, #1102) · [spec](spec/models/models-providers.md)
+
+- [x] Combine provider setup and Model Server under one Models rail entry, retaining existing destinations and title-bar highlighting.
+- [x] Add local/cloud subnavigation, current-provider chips, a divider, five filled provider shortcuts and the full overflow chooser; retain existing connection and model controls.
+- [x] Verify desktop typechecking, focused provider/navigation tests, hidden Electron interactions and matching 1440/390 px before/after evidence. Live credential sign-in and server lifecycle actions are not exercised by this layout change.

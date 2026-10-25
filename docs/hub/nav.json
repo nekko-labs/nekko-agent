@@ -22,6 +22,12 @@
       "title": "Using Nekko Agent",
       "pages": [
         {
+          "slug": "chat-progress",
+          "title": "Verification and PR progress",
+          "source": "docs/chat-progress.md",
+          "description": "Follow verification checklists, device activity, CI checks and resolved or unresolved review threads in chat."
+        },
+        {
           "slug": "fonts-and-text",
           "title": "Fonts and text",
           "source": "docs/fonts-and-text.md",

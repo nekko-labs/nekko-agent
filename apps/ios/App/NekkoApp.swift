@@ -82,14 +82,29 @@ struct NekkoApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView()
+            Group {
+                #if DEBUG
+                if ProcessInfo.processInfo.arguments.contains("-uiTestChatStatus") {
+                    ChatStatusFixture()
+                } else {
+                    RootView()
+                }
+                #else
+                RootView()
+                #endif
+            }
                 .environment(app)
                 .environment(app.store)
                 .environment(app.cloud)
                 .environment(app.prefs)
                 .modifier(Themed(choice: app.prefs.theme, appearance: app.store.appearance))
                 .onOpenURL { app.handle(url: $0) }
-                .task { app.start() }
+                .task {
+                    #if DEBUG
+                    if ProcessInfo.processInfo.arguments.contains("-uiTestChatStatus") { return }
+                    #endif
+                    app.start()
+                }
                 .overlay {
                     if let kind = splash {
                         let run = splashRun

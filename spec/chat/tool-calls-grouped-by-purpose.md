@@ -101,3 +101,13 @@ show no horizontal overflow in expanded detail wells, retained text and bounded
 vertical scrolling. Native phone tool cards are outside this change. Verification
 status and before/after evidence are recorded in the linked PR; screenshots still
 require visual inspection, not just successful capture.
+
+## Activity-specific transcript icons
+
+`[implemented; focused tests and isolated renderer checks passed; desktop dark/light screenshots reviewed at 1000px and 460px]`
+
+- Individual tool calls show what is happening: a file for reads/guidance, folder for directory listings, magnifier for search, pencil for edits, checkmark for checks, branch for Git, globe for web access, and list for planning. Unknown/MCP tools keep the generic tool glyph.
+- Shell execution (including Python) reuses the live current-work terminal artwork, rendered statically in the transcript so completed calls never appear to be running. Tests and Git commands use their more specific purpose icons. The existing animated current-work indicator is unchanged.
+- Purpose groups use the common icon when their calls agree, or their purpose icon for a mixed group (for example, a magnifier for mixed code exploration). The outer summary uses its latest tool/group icon. Dedicated watch, subagent, thought and narration treatments are preserved.
+- Selection is deterministic from tool name and the existing shared purpose classifier, with native and Claude Code aliases and `functions.` prefixes handled. This is renderer-only: grouping, tool execution, outputs, permissions and network behavior are unchanged. Icons remain decorative beside the existing textual labels.
+- Verified via a synthetic real-ActivityGroup Electron fixture with blocked networking, isolated profile, hidden/non-focusable window, expanded read/search group, and collapse/reopen interaction. Packaged-app and physical-device verification are not included. Native capture source enumeration failed on this host; screenshots cover Electron renderer pixels, not OS window chrome.

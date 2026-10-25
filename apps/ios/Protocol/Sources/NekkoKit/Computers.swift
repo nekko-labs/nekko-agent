@@ -978,6 +978,33 @@ public final class ComputersStore {
         }
     }
 
+    /// Saved folders belong to the computer, not the phone's file system.
+    public func addWorkspace(path: String) async throws {
+        let path = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard WorkspacePath.isAbsolute(path) else { throw RelayError("Enter an absolute folder path on the computer.") }
+        try await changeWorkspace(Channels.workspaceAddByPath, path)
+    }
+
+    /// Removes only the saved entry. The computer never deletes the folder on disk.
+    public func removeWorkspace(_ id: String) async throws {
+        try await changeWorkspace(Channels.workspaceRemove, id, refreshSummaries: true)
+    }
+
+    private func changeWorkspace(_ channel: String, _ value: String, refreshSummaries: Bool = false) async throws {
+        guard conn == .online else { throw RelayError("Connect to the computer to manage folders.") }
+        let c = try remote()
+        let result = try await call(change: channel, [.string(value)])
+        guard client === c else { return }
+        workspaces = WorkspaceFolder.list(result)
+        saveList()
+        if refreshSummaries {
+            let list = try await c.call(Channels.sessionsSummaries)
+            guard client === c else { return }
+            summaries = SessionSummary.visible(list)
+            saveList()
+        }
+    }
+
     @discardableResult
     public func loadModels(_ providerId: String) async throws -> [ModelInfo] {
         if let m = models[providerId] { return m }

@@ -474,7 +474,7 @@ function ServicesPanel({ providers, usage }: { providers: ProviderConfig[]; usag
           </div>
         ))}
         {providers.length === 0 && mcp.length === 0 && (
-          <div className="rounded-xl border border-line p-3 text-[12px] text-ink-faint">No model providers yet, add one in Model Providers.</div>
+          <div className="rounded-xl border border-line p-3 text-[12px] text-ink-faint">No model providers yet, add one in Models.</div>
         )}
       </div>
     </div>
