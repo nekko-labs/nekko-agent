@@ -266,11 +266,22 @@ fn context_in_ram_tables_and_expert_cache_flags() {
 fn dump_fixture() {
     use nekko_engine::capacity::{AutoFitInput, FitRequest, PlanOptions, auto_fit, plan_fit};
     let path = std::env::var("NEKKO_DUMP_FIXTURE").expect("NEKKO_DUMP_FIXTURE");
-    let scenarios = [("moe8", flash_next(), machine(8.0, 7.5, 32.0, 24.5)), ("dense24", dense_14b(), machine(24.0, 23.0, 64.0, 50.0)), ("dense8", dense_14b(), machine(8.0, 7.5, 32.0, 24.5))];
+    let scenarios = [
+        ("moe8", flash_next(), machine(8.0, 7.5, 32.0, 24.5)),
+        ("dense24", dense_14b(), machine(24.0, 23.0, 64.0, 50.0)),
+        ("dense8", dense_14b(), machine(8.0, 7.5, 32.0, 24.5)),
+    ];
     let mut out = serde_json::Map::new();
     for (name, facts, hw) in scenarios {
         let opts = PlanOptions::default();
-        let auto = auto_fit(&AutoFitInput { facts: &facts, hardware: &hw, budget_fraction: 0.75, parallel_slots: None, max_context_tokens: None, options: PlanOptions::default() });
+        let auto = auto_fit(&AutoFitInput {
+            facts: &facts,
+            hardware: &hw,
+            budget_fraction: 0.75,
+            parallel_slots: None,
+            max_context_tokens: None,
+            options: PlanOptions::default(),
+        });
         let speed = rec(&facts, &hw, 0.0, Goal::Speed, None);
         let context = rec(&facts, &hw, 0.0, Goal::Context, None);
         let layers = facts.layers.unwrap();
