@@ -262,7 +262,7 @@ function StepRow({ index, item, live, quietSince }: { index: number; item: Activ
         kind === 'agent' && item.kind === 'tool' ? (
           <div className="ml-[84px] space-y-2 py-1">
             <div className="text-ink-soft">Task</div>
-            <pre className="max-h-60 overflow-auto whitespace-pre-wrap text-ink-soft">{typeof item.call.input.task === 'string' ? item.call.input.task : JSON.stringify(item.call.input, null, 2)}</pre>
+            <pre className="max-h-60 overflow-auto whitespace-pre-wrap [overflow-wrap:anywhere] text-ink-soft">{typeof item.call.input.task === 'string' ? item.call.input.task : JSON.stringify(item.call.input, null, 2)}</pre>
             <div className="text-ink-soft">{item.result?.isError ? 'Delegation tool error' : item.result ? 'Delegation tool result' : 'No delegation tool result recorded'}</div>
             {item.result && <div className="max-h-60 overflow-auto font-sans text-[13px] text-ink-soft"><Markdown text={item.result.output} /></div>}
           </div>
@@ -273,7 +273,7 @@ function StepRow({ index, item, live, quietSince }: { index: number; item: Activ
             <Markdown text={item.text} />
           </div>
         ) : (
-          <pre className="ml-[84px] mt-0.5 max-h-60 overflow-auto whitespace-pre-wrap border-l border-line pl-2 text-[12px] leading-relaxed text-ink-faint">
+          <pre className="ml-[84px] mt-0.5 max-h-60 overflow-auto whitespace-pre-wrap [overflow-wrap:anywhere] border-l border-line pl-2 text-[12px] leading-relaxed text-ink-faint">
             {item.kind === 'reasoning' ? item.text : JSON.stringify(item.call.input, null, 2)}
           </pre>
         )

@@ -36,7 +36,7 @@ export function ToolCard({ call }: { call: ToolCall }) {
       {then && <WatchThen text={then} className="pl-[38px]" />}
       {open && (isWatch
         ? <div className="ml-[18px]"><WatchDetail call={call} /></div>
-        : <pre className={`ml-[18px] mt-0.5 overflow-x-auto whitespace-pre-wrap text-ink-faint max-h-60 overflow-auto ${isSpawn ? '' : 'border-l border-line pl-2'}`}>{isSpawn && typeof call.input.task === 'string' ? call.input.task : JSON.stringify(call.input, null, 2)}</pre>)}
+        : <pre className={`ml-[18px] mt-0.5 whitespace-pre-wrap [overflow-wrap:anywhere] text-ink-faint max-h-60 overflow-auto ${isSpawn ? '' : 'border-l border-line pl-2'}`}>{isSpawn && typeof call.input.task === 'string' ? call.input.task : JSON.stringify(call.input, null, 2)}</pre>)}
     </div>
   );
 }
