@@ -45,6 +45,9 @@ struct ChatsView: View {
         .refreshable { await store.refresh() }
         .navigationTitle("Chats")
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                ChatMascot(working: store.activity.values.contains(.running))
+            }
             ToolbarItem(placement: .topBarLeading) { ComputerMenu(path: $path, feedback: $sendingFeedback) }
             ToolbarItem(placement: .topBarTrailing) { viewMenu }
             ToolbarItem(placement: .topBarTrailing) {
@@ -361,7 +364,8 @@ struct ChatRow: View {
         // A glyph column says what the chat is doing before the title is read
         // (the desktop's StatusIcon); the facts sit under the preview as chips.
         HStack(alignment: .top, spacing: 10) {
-            glyph.frame(width: 22, height: 22).padding(.top, 1)
+            ChatStatusIcon(activity: activity, completed: summary.archived, waiting: waiting > 0)
+                .frame(width: 22, height: 22).padding(.top, 1)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     if summary.pinned { Image(systemName: "pin.fill").font(.caption2).foregroundStyle(palette.warning).accessibilityLabel("Pinned") }
@@ -389,21 +393,6 @@ struct ChatRow: View {
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
-    }
-
-    @ViewBuilder private var glyph: some View {
-        switch activity {
-        case .running?: RunningDots()
-        case .needsYou?: Image(systemName: "hand.raised.fill").font(.caption.weight(.semibold)).foregroundStyle(palette.warning).accessibilityHidden(true)
-        case nil:
-            if waiting > 0 {
-                Image(systemName: "clock").font(.caption.weight(.semibold)).foregroundStyle(palette.inkFaint).accessibilityHidden(true)
-            } else if summary.archived {
-                Image(systemName: "checkmark").font(.caption.weight(.semibold)).foregroundStyle(palette.success).accessibilityHidden(true)
-            } else {
-                Image(systemName: "bubble.left").font(.caption.weight(.semibold)).foregroundStyle(palette.inkFaint).accessibilityHidden(true)
-            }
-        }
     }
 
     private var title: String { summary.title.trimmingCharacters(in: .whitespaces).isEmpty ? "New chat" : summary.title }

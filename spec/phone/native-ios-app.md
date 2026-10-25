@@ -183,7 +183,7 @@ split-from: SPEC.md (2026-10-22)
 **Not in this version:** terminals not opened for a chat and files by a path on the computer (the computer refuses those channels to phones, `PHONE_ALWAYS_DENIED`; adding them is a security decision), accepting or reverting changes from a phone, pairing from a computer found on the network (both phones list them, PH3, and the desktop advertises, PH2; how a phone pairs from a listing waits on the owner's decision), on-device models (gate 5). A watchOS glance and complication ship (above); approving from the watch is still through mirrored notifications.
 - **Chat list groups and view menu (2026-10-24)** `[implemented 2026-10-24; layout logic unit-tested (ChatListLayoutTests, macOS CI); the views compile only on macOS CI; not yet run on a simulator or device]`. Philip asked, from screenshots of the list, for groups that are open and short, for the desktop Agents panel's controls, and for a list that reads as one surface.
   - **Groups open, short.** Every group starts open; tapping its heading folds it (for this session). A group shows up to 8 chats updated (or completed) in the last 14 days, in the view's order: active chats, then completed ones, which are no longer folded behind *Completed · N*. A chat that is working, needs you or is pinned always shows. The rest are behind **Show N more** / **Show fewer**. Search shows every match. (`ChatSections.split`.)
-  - **Needs attention in place.** The Continue card is gone. A chat that needs you has a 3 pt warning-coloured bar down its leading edge on a faint warning wash, with the raised hand it already had in the glyph column; the Needs you section at the top stays (except grouped by status, which has its own).
+  - **Needs attention in place.** The Continue card is gone. A chat that needs you has a 3 pt warning-coloured bar down its leading edge on a faint warning wash, with a question-mark status icon in the glyph column; the Needs you section at the top stays (except grouped by status, which has its own).
   - **View menu** (toolbar, beside New chat; the desktop's `AgentPanelViewMenu`): **Group by** Project, Status (Needs you, Working, Idle), Date (Today, Yesterday, Previous 7 days, Previous 30 days, Older) or None; completed chats gather in a trailing *Completed* group when not by project. **Sort by** Manual (the desktop's dragged order, newest first for the rest), Last updated or Name, with a direction except for Manual; choosing Name starts A to Z, a date newest first. **Show** Previews, Completed chats, Empty groups. **Reset to defaults**. The icon fills when the view isn't the default. Not on the phone: *Date created* (summaries carry no creation time) and *Automations* (the phone never lists automation chats). A phone preference (`Prefs.chatListView`, JSON in UserDefaults), not a computer setting, as the desktop's is per window.
   - **Draggable groups.** Grouped by project, a group's heading can be touched, held and dropped on another heading to go before it, or ordered in **Reorder groups…** (a sheet with drag handles, also a VoiceOver action on the heading). The order is kept per computer on the iPhone (`Prefs.groupOrder`); folders it doesn't name follow in the computer's order. It does not change the desktop's order: that is written through `settings:update`, which phones can't call. Syncing it is a follow-up.
   - **One surface.** Rows are drawn on the list's paper (`listRowBackground`), so there is no seam between the header area and the rows; on iPad the selected row keeps an accent wash.
@@ -202,8 +202,8 @@ split-from: SPEC.md (2026-10-22)
 **Intent:** manage the computer's saved project folders without returning to the
 computer, and distinguish folders with identical names by their absolute paths.
 
-**Implemented; focused Swift tests pass; SwiftUI rendering and interaction not
-verified yet (parent task owns unchanged-baseline and after evidence):**
+**Implemented; focused Swift tests, native simulator build, and isolated fixture-backed
+UI interactions verified. Hardware and live-host verification remain untested:**
 
 - Chats keeps unassigned chats visible without a **General** heading or collapse
   control. Named project headings show their absolute host path when available.
@@ -212,7 +212,7 @@ verified yet (parent task owns unchanged-baseline and after evidence):**
 - **Chats → Computers and settings → Files** opens saved folders and their files.
   **Add computer folder** accepts a typed absolute path on the active computer
   (POSIX, Windows drive-rooted, or UNC), never a phone document picker. The host
-  validates that path and folder; the phone does not resolve it locally.
+  stores the supplied path without validating directory existence; the phone does not resolve it locally.
 - A folder's swipe/context action **Remove saved folder** requires confirmation
   that only the saved entry is removed: the folder and files stay on disk.
   Add/remove controls are disabled offline and during an in-flight operation;
@@ -231,5 +231,14 @@ verified yet (parent task owns unchanged-baseline and after evidence):**
 **Verification:** workspace decoding/legacy initializer and cache round trips,
 POSIX/Windows/UNC path validation, signed exact mutation arguments, full-array
 replacement, refreshed unassigned summaries, Change-off refusal and offline
-no-send behavior are covered by focused Swift package tests. Simulator/device,
-VoiceOver and matching before/after screenshots remain for the parent task.
+no-send behavior are covered by focused Swift package tests. Isolated native UI
+tests verify unassigned chats retained without General, path labels in Chats, Files
+and New Chat, absolute-path validation, add, removal dismissal and confirmation.
+Matching native screenshots were captured and visually inspected. Live host,
+hardware authentication, iPad and VoiceOver remain unverified.
+
+### Desktop-style chat status and top-left Nekko (2026-10-25)
+
+- **Intent:** recognize a chat's state from its leading icon, with the same visual vocabulary as desktop. Working uses a rocket, needs-attention a question mark, idle “Zz”, and completed a checkmark. A queued prompt keeps its clock. Live working/attention takes precedence over queued/completed state. VoiceOver includes the status label; colour alone never carries the state.
+- **Mascot:** one interactive pixel-cat button sits at the top-left of Chats, beside the computer menu. It uses the desktop head design, gently bobs while a chat is working, and shows a happy greeting for 1.2 seconds when tapped. Tapping only changes the local drawing, never sends a prompt or changes a setting. Its hit target is at least 44 pt. Reduce Motion suppresses movement and backgrounding pauses the animation timeline.
+- **Verification:** native implementation and deterministic DEBUG-only synthetic-chat fixture added. Build, simulator interaction, visual evidence, physical-device VoiceOver and release verification are tracked separately; code presence alone does not mean this has shipped. The fixture has no computer credentials and does not represent a live relay journey.
