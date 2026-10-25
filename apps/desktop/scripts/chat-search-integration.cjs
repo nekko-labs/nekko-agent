@@ -14,7 +14,7 @@ async function main() {
   if (process.env.NEKKO_TEST_REVISION) {
     const source = path.join(out, 'base-source'); fs.rmSync(source, { recursive: true, force: true }); fs.mkdirSync(source, { recursive: true });
     const zip = path.join(out, 'base.zip');
-    cp.execFileSync('git', ['archive', '--format=zip', `--output=${zip}`, process.env.NEKKO_TEST_REVISION, 'apps/desktop/src/renderer', 'packages/shared/src'], { cwd: repo, windowsHide: true });
+    cp.execFileSync('git', ['archive', '--format=zip', `--output=${zip}`, process.env.NEKKO_TEST_REVISION, 'apps/desktop/src', 'packages/shared/src'], { cwd: repo, windowsHide: true });
     // bsdtar (bundled with Windows 10+, macOS and most Linux) reads zip archives.
     cp.execFileSync('tar', ['-xf', zip, '-C', source], { windowsHide: true });
     entry = path.join(out, 'base-fixture.tsx');

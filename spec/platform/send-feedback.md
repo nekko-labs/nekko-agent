@@ -20,7 +20,7 @@ Anyone using Nekko Agent, on any device, can tell Nekko Labs something is broken
 - **Desktop, Local Web UI and Docker** (one renderer, `FeedbackSheet.tsx`): a Send feedback button at the bottom of the left rail, a **Send feedback** command in the command palette, a button on the About page, Help → Send Feedback… on macOS, Send feedback… in the tray menu (the way in on Windows and Linux without the rail), and the `nekko-agent://feedback` link. It works whether or not anyone is signed in to Nekko Cloud. In the Local Web UI and Docker, `nekkod` runs on the server, so the OS fields describe the server, not the browser's machine.
 - **iPhone and iPad** (native SwiftUI, `apps/ios`): **Send feedback** at the bottom of the computer menu on the Chats screen (the same menu in the iPad sidebar), and Settings → About → Send feedback.
 - **Android** (native Compose, `apps/android`): Settings → Feedback → Send feedback, a bottom sheet.
-- The Expo app (`apps/mobile`) is being replaced by the native apps and does not get the sheet.
+- The Expo app has been removed; the native apps are the supported phone clients.
 
 ## The copied prompt
 

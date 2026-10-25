@@ -415,6 +415,7 @@ function makeWebClient(): NekkoApi {
 
     listSessions: () => call(IpcChannels.sessionsList),
     nextAgentWatchAt: (sessionId) => call(IpcChannels.sessionNextWatch, sessionId),
+    cancelAgentWatch: (sessionId, id) => call(IpcChannels.sessionCancelWatch, sessionId, id),
     listAgentWatches: (sessionId) => call(IpcChannels.sessionWatches, sessionId),
     listSessionSummaries: () => call(IpcChannels.sessionsSummaries),
     createSession: (workspaceId) => call(IpcChannels.sessionCreate, workspaceId),

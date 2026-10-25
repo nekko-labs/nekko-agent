@@ -5,9 +5,8 @@ phone: pair with the QR code from **Settings → Remote access** on the computer
 then run chats there, on the computer's models, files and tools. Everything goes
 through the end-to-end encrypted relay; the relay only ever sees ciphertext.
 
-This replaces the Android half of the Expo app in `apps/mobile` (the 2026-10-07
-native decision in [the spec](../../spec/README.md)). Expo stays as the behaviour
-reference until this app reaches parity.
+This is the supported Android implementation. The former Expo app and its dedicated
+CI have been removed. Remaining native feature gaps below stay tracked separately.
 
 ## What works
 
@@ -100,12 +99,12 @@ apps/android/
 
 | Piece | Kotlin | Mirrors |
 |---|---|---|
-| Crypto | `protocol/.../E2E.kt` | `packages/shared/src/e2e.ts`, `apps/mobile/src/lib/e2e.ts` |
-| Relay client | `protocol/.../RelayClient.kt` | `apps/mobile/src/lib/relayClient.ts` ↔ the computer's side in `crates/nekko-remote` |
-| Pairing links | `protocol/.../Pairing.kt` | `apps/mobile/src/lib/pairing.ts` |
-| Transcript | `protocol/.../Transcript.kt` | `apps/mobile/src/lib/transcript.ts` |
-| Chat logic | `app/.../chat/ChatController.kt` | `apps/mobile/src/chat/useRemoteChat.ts` |
-| Computers | `app/.../data/ComputersRepository.kt` | `apps/mobile/src/services/computers.ts` |
+| Crypto | `protocol/.../E2E.kt` | `packages/shared/src/e2e.ts` |
+| Relay client | `protocol/.../RelayClient.kt` | The computer's side in `crates/nekko-remote` |
+| Pairing links | `protocol/.../Pairing.kt` | Shared pairing fixtures and native protocol tests |
+| Transcript | `protocol/.../Transcript.kt` | Native transcript tests |
+| Chat logic | `app/.../chat/ChatController.kt` | Native chat controller tests |
+| Computers | `app/.../data/ComputersRepository.kt` | Native computer repository tests |
 | Posture and panes | `protocol/.../Posture.kt`, `protocol/.../Panes.kt` | `apps/ios/Protocol/Sources/NekkoKit/Posture.swift` |
 | Monitors | `protocol/.../MonitorSummary.kt` | `phoneMonitorView` in `packages/shared/src/phone-views.ts` |
 
