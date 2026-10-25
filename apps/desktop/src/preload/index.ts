@@ -351,6 +351,11 @@ const api: NekkoApi = {
   listWorkflowRuns: (workflowId) => inv(IpcChannels.workflowRuns, workflowId),
   listWorkflowSkillDefs: () => inv(IpcChannels.workflowSkillDefs),
   dispatchWorkflowEvent: (event) => inv(IpcChannels.workflowEvent, event),
+  listRunners: () => inv(IpcChannels.runnerList),
+  connectRunner: (req) => inv(IpcChannels.runnerConnect, req),
+  updateRunner: (id, settings) => inv(IpcChannels.runnerUpdate, id, settings),
+  removeRunner: (id) => inv(IpcChannels.runnerRemove, id),
+  setRunnerEnabled: (id, enabled) => inv(IpcChannels.runnerSetEnabled, id, enabled),
 
   listConnectors: () => inv(IpcChannels.connectorsList),
   connectConnector: (kind: ConnectorKind, token, settings) => inv(IpcChannels.connectorConnect, kind, token, settings),
@@ -494,6 +499,11 @@ const api: NekkoApi = {
     const listener = (_: unknown, snapshot: import('@nekko-agent/shared').WorkflowsSnapshot) => cb(snapshot);
     bus.on(IpcEvents.workflowsUpdated, listener);
     return () => bus.removeListener(IpcEvents.workflowsUpdated, listener);
+  },
+  onRunnersChanged: (cb) => {
+    const listener = (_: unknown, views: import('@nekko-agent/shared').RunnerView[]) => cb(views);
+    bus.on(IpcEvents.runnerChanged, listener);
+    return () => bus.removeListener(IpcEvents.runnerChanged, listener);
   },
   onDownloadsUpdated: (cb) => {
     const listener = (_: unknown, jobs: import('@nekko-agent/shared').DownloadJob[]) => cb(jobs);
