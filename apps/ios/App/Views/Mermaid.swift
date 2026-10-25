@@ -362,8 +362,21 @@ final class MermaidRenderer {
 
     // MARK: The locked web view
 
+    /// The page being set up, so two callers at once (a render and the probe) share one web view.
+    private var starting: Task<WKWebView, Error>?
+
     private func webView() async throws -> WKWebView {
         if let web { return web }
+        if let starting { return try await starting.value }
+        let task = Task { @MainActor in try await self.makeWebView() }
+        starting = task
+        defer { starting = nil }
+        let made = try await task.value
+        web = made
+        return made
+    }
+
+    private func makeWebView() async throws -> WKWebView {
         guard let url = Bundle.main.url(forResource: "mermaid.min", withExtension: "js", subdirectory: "mermaid"),
               let script = try? String(contentsOf: url, encoding: .utf8) else {
             throw NSError(domain: "Mermaid", code: 1, userInfo: [NSLocalizedDescriptionKey: "Mermaid isn’t in this build."])
@@ -391,7 +404,6 @@ final class MermaidRenderer {
             lockdown.allowNext = true
             web.loadHTMLString(Self.page, baseURL: nil)
         }
-        self.web = web
         return web
     }
 
@@ -428,7 +440,9 @@ final class MermaidRenderer {
         svg = (await m.render('nekko' + (++window.nekkoCount), source)).svg;
       } catch (e) {
         const text = String((e && (e.message || e.str)) || e);
-        const line = text.split('\\n').map(l => l.trim()).find(l => l.length) || 'Mermaid couldn’t read this diagram.';
+        // Mermaid's first line says where ("Parse error on line 3:"), its last what it expected.
+        const lines = text.split('\\n').map(l => l.trim()).filter(l => l.length && !/^-*\\^$/.test(l));
+        const line = lines.length > 1 ? lines[0] + ' ' + lines[lines.length - 1] : (lines[0] || 'Mermaid couldn’t read this diagram.');
         return { error: line.slice(0, 240) };
       }
       const el = new DOMParser().parseFromString(svg, 'image/svg+xml').documentElement;
@@ -439,7 +453,9 @@ final class MermaidRenderer {
       el.setAttribute('height', String(h));
       el.removeAttribute('style');
       const fixed = new XMLSerializer().serializeToString(el);
-      const drawW = Math.min(width, w * 1.25);
+      // Never wider than the bubble or than drawn, and a tall one no taller than maxHeight (full screen has the rest).
+      const maxHeight = 560;
+      const drawW = Math.max(1, Math.min(width, w, w * maxHeight / h));
       const drawH = h * drawW / w;
       let s = scale;
       while (drawW * s * drawH * s > 16000000 && s > 0.5) s -= 0.5;

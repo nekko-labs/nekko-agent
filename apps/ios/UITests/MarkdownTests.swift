@@ -135,7 +135,9 @@ final class MarkdownTests: XCTestCase {
             attach(app, "mermaid-\(theme)-2-sequence-and-broken")
 
             let network = app.staticTexts["lab.mermaidNetwork"]
-            scrollTo(network, in: app, max: 4)
+            scrollTo(network, in: app, max: 6)
+            let probed = expectation(for: NSPredicate(format: "label != %@", "Renderer network: "), evaluatedWith: network)
+            wait(for: [probed], timeout: 20)
             XCTAssertEqual(network.label, "Renderer network: blocked", "the renderer can't reach the network")
             let times = app.staticTexts["lab.mermaidTimes"].label
             print("MERMAID-RENDER-TIMES \(theme): \(times)")
