@@ -36,6 +36,8 @@ macOS builds are signed and notarized, so they open normally. If Windows shows a
 
 ## Typing in a new agent window
 
+A new chat greets you with “What should we work on?” and a small pixel Nekko peeking beside it, looking toward the heading. Type your request in the composer below.
+
 Opening an agent composer puts the caret after any restored draft once a usable model provider is available. If you are already typing in another visible text field, that field keeps focus. Normal background agent and provider updates do not pull you back into the composer.
 
 ## Run it from source

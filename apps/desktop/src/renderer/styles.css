@@ -3342,7 +3342,8 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 @media (prefers-reduced-transparency: reduce) {
   [data-clean-start][data-chat-surface] .clean-start .composer { background: var(--win, var(--surface)); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
-.clean-start-greeting { margin: 0 auto 18px; text-align: center; }
+.clean-start-greeting { display: flex; align-items: center; justify-content: center; gap: 14px; max-width: 100%; margin: 0 auto 18px; text-align: left; }
+.greeting-nekko { display: block; flex: 0 0 64px; pointer-events: none; }
 .clean-start-greeting h2 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
 .clean-start-greeting p { margin-top: 6px; font-size: 13px; color: var(--ink-faint); }
 [data-clean-start] .clean-start-model { opacity: 0.8; transition: opacity 0.2s vas (--ease-out)}
