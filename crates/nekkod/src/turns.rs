@@ -1092,6 +1092,11 @@ impl Turns {
 
         // Privacy Shield: a cloud model gets placeholders for private values.
         let shield = crate::privacy::shield_for(&lock(&session), settings, &facts["provider"]);
+        // Only an admitted local-model Expert override can disable thinking.
+        // Legacy session flags (and off facts on cloud turns) never take effect.
+        let thinking = config.kind != ProviderKind::Llamacpp
+            || config.managed_cache_prompt != Some(true)
+            || facts.get("thinking") != Some(&json!(false));
         let provider = create_provider(config);
         // An Anthropic API key's own rate limits, read off each response.
         let client = if let Some(key) = str_at(facts, "apiLimitsKey").map(str::to_string) {
@@ -1180,7 +1185,7 @@ impl Turns {
             tools,
             temperature: facts.get("temperature").and_then(Value::as_f64),
             effort: str_of(facts, "effort"),
-            think: lock(&session).get("thinking").and_then(Value::as_bool),
+            think: Some(thinking),
             prompt_caching: Some(facts.get("promptCaching").and_then(Value::as_bool).unwrap_or(true)),
             max_history_turns: opts.get("maxHistoryTurns").and_then(Value::as_f64),
             context_window: facts.get("contextWindow").and_then(Value::as_f64).filter(|w| *w > 0.0),

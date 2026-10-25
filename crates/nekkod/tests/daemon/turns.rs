@@ -3,6 +3,44 @@
 use crate::common::*;
 
 #[tokio::test(flavor = "multi_thread")]
+async fn thinking_ignores_stale_chat_flags_and_only_accepts_local_expert_off() {
+    for (name, kind, managed, admitted, expected) in [
+        ("cloud-stale", "openai", false, false, None),
+        ("local-stale", "openai-compat", false, false, Some(true)),
+        ("expert-off", "llamacpp", true, false, Some(false)),
+        ("expert-on", "llamacpp", true, true, Some(true)),
+    ] {
+        let rig = turn_rig(
+            name,
+            json!({
+                "id": "s_think", "title": "Named", "workspaceId": "w1", "thinking": false,
+                "messages": [], "createdAt": 1, "updatedAt": 1
+            }),
+        );
+        let model = scripted_model(vec![say_text("answer")]).await;
+        let mut spec = turn_spec(&rig, &model, "t_think", "s_think", json!({}));
+        spec["facts"]["provider"]["kind"] = json!(kind);
+        spec["facts"]["provider"]["managedCachePrompt"] = json!(managed);
+        spec["facts"]["thinking"] = json!(admitted);
+        let (status, started) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+        assert_eq!(status, 200, "{name}: {started}");
+        let (_, end) = turn_record(&rig, "t_think", "s_think").await;
+        assert_eq!(end["stop"], "complete", "{name}: {end}");
+        let requests = model.requests.lock().unwrap();
+        assert!(!requests.is_empty());
+        assert_eq!(
+            requests[0].pointer("/chat_template_kwargs/enable_thinking").and_then(Value::as_bool),
+            expected,
+            "{name}"
+        );
+        if expected.is_none() {
+            assert!(requests[0].get("chat_template_kwargs").is_none());
+        }
+        assert_eq!(saved_session(&rig, "s_think")["thinking"], false, "no migration needed");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn large_image_reply_completes_and_followup_starts_with_local_provider() {
     use axum::routing::post as route_post;
 

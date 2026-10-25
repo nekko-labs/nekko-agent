@@ -312,9 +312,8 @@ export interface Session {
   /** Settings for an image-generation chat. */
   imageParams?: ImageChatParams;
   /**
-   * Per-chat reasoning toggle for models that support it: `true` forces thinking
-   * on, `false` suppresses it, `undefined` leaves the model's default. Only
-   * offered in the UI when the selected model is reasoning-capable.
+   * Legacy per-chat reasoning preference, retained for saved-session compatibility.
+   * Ignored by the engine. Thinking is on, with local model overrides under Expert.
    */
   thinking?: boolean;
   /** Tool names the user disabled for this chat (subset of the builtins). */

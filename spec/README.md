@@ -41,7 +41,7 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 - [Chat chrome and composer refinement (implemented; desktop verification pending)](chat/chat-chrome-and-composer-refinement.md) (3 KB)
 - [Chat completion X icons and idle auto-completion (2026-10-15)](chat/chat-completion-x-icons-and-idle-auto-completion.md) (2 KB)
 - [Chat isolation and prompt customization](chat/chat-isolation-and-prompt-customization.md) (24 KB)
-- [Chat suggestions, progress and code access](chat/chat-suggestions-progress-and-code-access.md) (3 KB)
+- [Chat suggestions, progress and code access](chat/chat-suggestions-progress-and-code-access.md) (4 KB)
 - [Chat transcript width (2026-10-19)](chat/chat-transcript-width.md) (1 KB)
 - [Clarification answers remain visible in chat](chat/clarification-answers-remain-visible-in-chat.md) (2 KB)
 - [Completion and interruption reconciliation](chat/completion-and-interruption-reconciliation.md) (1 KB)
@@ -55,7 +55,7 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 - [One copy of the reply being written](chat/one-copy-of-the-reply-being-written.md) (1 KB)
 - [Per-step plan working icons (2026-10-17)](chat/per-step-plan-working-icons.md) (3 KB)
 - [Sleeping chats and image-bearing replies](chat/sleeping-chats-and-image-bearing-replies.md) (2 KB)
-- [Tool calls grouped by what they are for](chat/tool-calls-grouped-by-purpose.md) (13 KB)
+- [Tool calls grouped by what they are for](chat/tool-calls-grouped-by-purpose.md) (14 KB)
 - [Verification checklists and PR progress in chat](chat/verification-and-pr-progress.md) (5 KB)
 - [Workspace context commands and connected composer](chat/workspace-context-commands-and-connected-composer.md) (4 KB)
 
@@ -81,7 +81,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Settings section nav and phone pairing placement (desktop)](desktop/settings-section-nav.md) (3 KB)
 - [Slim wave rail, tighter Agents spacing, composer snap points](desktop/slim-wave-rail-tighter-agents-spacing-composer-snap-points.md) (4 KB)
 - [Style: universal fonts, text size and your own fonts (desktop)](desktop/style-fonts-and-text-size.md) (3 KB)
-- [Subtle rail and compact board gutters](desktop/subtle-rail-and-compact-board-gutters.md) (2 KB)
+- [Subtle rail and compact board gutters](desktop/subtle-rail-and-compact-board-gutters.md) (3 KB)
 - [Swoop navigation rail (2026-10-17)](desktop/swoop-navigation-rail.md) (2 KB)
 - [Wall model controls and drafting layout](desktop/wall-model-controls-and-drafting-layout.md) (3 KB)
 - [Wall new-chat details placement](desktop/wall-new-chat-details-placement.md) (1 KB)
@@ -102,6 +102,7 @@ Agents panel, monitors, subagents and delegation.
 - [Delegating frontier planning to a local worker](agents/delegating-frontier-planning-to-a-local-worker.md) (2 KB)
 - [Monitors dock naming and header polish (2026-10-16)](agents/monitors-dock-naming-and-header-polish.md) (6 KB)
 - [Subagent transcript identity](agents/subagent-transcript-identity.md) (2 KB)
+- [Watch lifecycle and delegation failure recovery](agents/watch-lifecycle-and-delegation-recovery.md) (2 KB)
 - [Watch rows and subagent models](agents/watch-rows-and-subagent-models.md) (2 KB)
 
 ### context
@@ -127,7 +128,7 @@ Providers, local models, the Model Server, training.
 - [First-agent provider setup](models/first-agent-provider-setup.md) (2 KB)
 - [Hardware-aware model recommendations](models/hardware-aware-model-recommendations.md) (11 KB)
 - [Model training & goals (the data-scientist agent)](models/model-training-goals-the-data-scientist-agent.md) (4 KB)
-- [Models & providers](models/models-providers.md) (41 KB)
+- [Models & providers](models/models-providers.md) (42 KB)
 - [Prompt caching across providers (2026-10-07)](models/prompt-caching-across-providers.md) (7 KB)
 - [Running a model with nothing else installed](models/running-a-model-with-nothing-else-installed.md) (28 KB)
 - [Server, model browser and desktop tray](models/server-model-browser-and-desktop-tray.md) (5 KB)
@@ -148,8 +149,8 @@ Working in a codebase: files, editor, diffs, pull requests, design workspace.
 - [In-chat pull requests](code/in-chat-pull-requests.md) (2 KB)
 - [Issue per change and work tracking preferences](code/issue-per-change.md) (2 KB)
 - [Repository review integration](code/repository-review-integration.md) (1 KB)
-- [Rich responses, reports, and design workspace](code/rich-responses-reports-and-design-workspace.md) (21 KB)
-- [Working in a codebase](code/working-in-a-codebase.md) (4 KB)
+- [Rich responses, reports, and design workspace](code/rich-responses-reports-and-design-workspace.md) (22 KB)
+- [Working in a codebase](code/working-in-a-codebase.md) (5 KB)
 
 ### automation
 

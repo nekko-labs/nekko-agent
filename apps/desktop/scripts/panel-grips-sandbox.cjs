@@ -27,7 +27,6 @@ app.whenReady().then(async () => {
     win.webContents.on('console-message', e => { if (e.level === 'error') report.errors.push(e.message); });
     const run = s => win.webContents.executeJavaScript(s, true);
     await win.loadFile(path.join(out, 'index.html'), { search: 'quota' });
-    win.showInactive();
     await sleep(1600);
     const facts = async (hover) => run(`(async () => {
       const r = el => { if (!el) return null; const b = el.getBoundingClientRect(); return { x: +b.x.toFixed(1), w: +b.width.toFixed(1), y: Math.round(b.y), h: Math.round(b.height) }; };
@@ -71,7 +70,6 @@ app.whenReady().then(async () => {
     // '#' by the page loader here, while the app encodes the whole page.
     fs.writeFileSync(path.join(runDir, 'companion.html'), companionHtml(true, true, true));
     await tip.loadFile(path.join(runDir, 'companion.html'));
-    tip.showInactive();
     await sleep(500);
     report.facts.tip = await tip.webContents.executeJavaScript(`({ scrollH: document.documentElement.scrollHeight, clientH: document.documentElement.clientHeight, overflows: document.documentElement.scrollHeight > document.documentElement.clientHeight, links: [...document.querySelectorAll('a')].map(a => ({ text: a.textContent, h: Math.round(a.getBoundingClientRect().height) })), close: !!document.querySelector('[aria-label="Dismiss"]') })`, true);
     await capture(tip, 'tray-companion');
