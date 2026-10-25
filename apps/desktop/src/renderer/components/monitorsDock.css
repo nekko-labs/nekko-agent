@@ -1,5 +1,6 @@
 .monitors-dock {
   position: relative;
+  z-index: 5;
   display: flex;
   flex-direction: column;
   flex: 0 0 var(--dock-width, 408px);
@@ -128,7 +129,7 @@
 .monitors-dock__bar { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
 .monitors-dock__bar > span { display: block; height: 100%; border-radius: inherit; }
 .monitors-dock__reading { color: var(--ink-faint); font-size: 11px; font-variant-numeric: tabular-nums; }
-.monitors-dock__resize { position: absolute; top: 0; bottom: 0; left: -9px; width: 10px; cursor: col-resize; touch-action: none; }
+.monitors-dock__resize { position: absolute; top: 0; bottom: 0; left: -9px; width: 10px; z-index: 5; cursor: col-resize; touch-action: none; }
 .monitors-dock[data-dock-side='left'] .monitors-dock__resize { left: auto; right: -9px; }
 /* The same grip as the agent list's resize handle (WorkspacesView): a 3px
    rounded line centred in the gap, hidden until hover or focus. */
@@ -216,14 +217,17 @@
 .monitors-dock__local-model button.monitors-dock__text-button { flex-shrink: 0; }
 
 /* Keep the dock alive during exit so a second toggle reverses from here. */
-.monitors-dock { --dock-enter-x: 100%; --dock-enter-y: 0px; opacity: 1; transform: translate(0, 0); overflow: clip; interpolate-size: allow-keywords; transition: flex-basis 220ms ease-out, height 220ms ease-out, transform 220ms ease-out; }
+.monitors-dock { --dock-enter-x: 100%; --dock-enter-y: 0px; opacity: 1; transform: translate(0, 0); overflow: visible; clip-path: inset(0 -10px); interpolate-size: allow-keywords; transition: flex-basis 220ms ease-out, height 220ms ease-out, transform 220ms ease-out; }
 .monitors-dock[data-dock-side='left'] { --dock-enter-x: -100%; }
 .monitors-dock[data-dock-side='top'] { --dock-enter-x: 0px; --dock-enter-y: -100%; }
 .monitors-dock[data-dock-side='bottom'] { --dock-enter-x: 0px; --dock-enter-y: 100%; }
-.monitors-dock[data-panel-open='false'] { flex-basis: 0; transform: translate(var(--dock-enter-x), var(--dock-enter-y)); pointer-events: none; }
+.monitors-dock[data-panel-open='false'] { clip-path: inset(0); flex-basis: 0; transform: translate(var(--dock-enter-x), var(--dock-enter-y)); pointer-events: none; }
 @starting-style { .monitors-dock[data-panel-open='true'] { flex-basis: 0; transform: translate(var(--dock-enter-x), var(--dock-enter-y)); } }
 @media (prefers-reduced-motion: reduce) { .monitors-dock { transition: none; transform: none; } }
 
 .monitors-dock:is([data-dock-side='top'], [data-dock-side='bottom']) { height: auto; }
 .monitors-dock:is([data-dock-side='top'], [data-dock-side='bottom'])[data-panel-open='false'] { height: 0; }
 @starting-style { .monitors-dock:is([data-dock-side='top'], [data-dock-side='bottom'])[data-panel-open='true'] { height: 0; } }
+
+/* The grip lives just outside the dock, beyond the presence animation clip. */
+.monitors-dock__resize > .pane-grip { background: color-mix(in srgb, var(--accent) 70%, white); box-shadow: 0 0 5px color-mix(in srgb, var(--accent) 65%, transparent); }

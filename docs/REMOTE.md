@@ -66,6 +66,13 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > list that opens the computer menu. A chat that needs you has a coloured bar down its left edge
 > and the raised hand.
 >
+> Replies and your own messages on the iPhone render Markdown as the desktop does: nested lists
+> mark each level differently (•, ◦, ▪ and 1., a., i.) with wrapped lines hanging under the text,
+> task items are checkboxes, and tables are a native grid with a bold header that scrolls sideways
+> inside its own frame. A table with more than 4 columns or 12 rows has **Expand**, which opens it
+> full screen to zoom and scroll; touch and hold any table for **Copy as Markdown**, **Copy as
+> text** (tab-separated, so it pastes into Numbers or Sheets as cells) and **Share**.
+>
 > Tables in a reply show as a grid (it scrolls sideways when wide). When the agent links a file it
 > made on your computer (an HTML prototype, an image, a PDF, Markdown, text, JSON or CSV) or a
 > preview server it started there (`http://localhost:5173`), the reply gets a card for it, with a
