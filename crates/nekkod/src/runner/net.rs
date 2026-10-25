@@ -48,8 +48,12 @@ const GATEWAY_MAC: EthernetAddress = EthernetAddress([0x02, 0x6e, 0x6b, 0x00, 0x
 const MAX_FRAME: usize = 1514;
 /// The largest UDP payload one frame carries; longer replies are dropped, not fragmented.
 const MAX_UDP: usize = 1500 - 20 - 8;
-/// Per TCP flow, each direction. With the default 256 flows that bounds socket memory to 8 MiB per VM.
+/// Per TCP flow, guest to host. The guest-facing send buffer is larger:
+/// it bounds the bytes in flight to the guest, so at 16 KiB a download
+/// capped near 88 Mbit/s on a real VM. With the default 256 flows socket
+/// memory stays under 20 MiB per VM.
 const TCP_BUF: usize = 16 * 1024;
+const TCP_TX_BUF: usize = 64 * 1024;
 /// Host<->guest chunks in flight per TCP flow direction (`CHUNKS` of up to `CHUNK` bytes).
 const CHUNK: usize = 8 * 1024;
 const CHUNKS: usize = 2;
@@ -489,7 +493,7 @@ impl<C: Connector> Nat<C> {
             return;
         }
         let mut sock =
-            tcp::Socket::new(tcp::SocketBuffer::new(vec![0; TCP_BUF]), tcp::SocketBuffer::new(vec![0; TCP_BUF]));
+            tcp::Socket::new(tcp::SocketBuffer::new(vec![0; TCP_BUF]), tcp::SocketBuffer::new(vec![0; TCP_TX_BUF]));
         let ep = IpListenEndpoint { addr: Some(IpAddress::Ipv4(*dst.ip())), port: dst.port() };
         if sock.listen(ep).is_err() {
             return;
@@ -551,7 +555,7 @@ impl<C: Connector> Nat<C> {
                 continue;
             }
             let mut sock =
-                tcp::Socket::new(tcp::SocketBuffer::new(vec![0; TCP_BUF]), tcp::SocketBuffer::new(vec![0; TCP_BUF]));
+                tcp::Socket::new(tcp::SocketBuffer::new(vec![0; TCP_BUF]), tcp::SocketBuffer::new(vec![0; TCP_TX_BUF]));
             if sock.connect(self.iface.context(), (IpAddress::Ipv4(GUEST), guest_port), local_port).is_err() {
                 continue;
             }
