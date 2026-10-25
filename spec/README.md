@@ -68,7 +68,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Agent board: pick up and drop windows](desktop/agent-board-pick-up-and-drop.md) (3 KB)
 - [Agent window controls refresh (2026-10-15)](desktop/agent-window-controls-refresh.md) (6 KB)
 - [Composer and desktop rail regression fixes (2026-10-07)](desktop/composer-and-desktop-rail-regression-fixes.md) (3 KB)
-- [Empty wall opens the new-chat screen; glass prism composer (2026-10-18)](desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md) (3 KB)
+- [Empty wall opens the new-chat screen; glass prism composer (2026-10-18)](desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md) (4 KB)
 - [Focused mode transitions, calmer focus ring and layout controls (2026-10-17)](desktop/focused-mode-transitions-calmer-focus-ring-and-layout-controls.md) (7 KB)
 - [Grid model selection and chat-mode menus (2026-10-07)](desktop/grid-model-selection-and-chat-mode-menus.md) (1 KB)
 - [Inline agent-window creation](desktop/inline-agent-window-creation.md) (3 KB)

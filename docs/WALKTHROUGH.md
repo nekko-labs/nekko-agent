@@ -85,6 +85,8 @@ answer, so you see progress during long reasoning and the answer stays clean.
 
 ### Defaults for new agent windows
 
+The new-chat screen uses a full diagonal colour gradient with a subtle static grain layer to reduce banding, behind the glass composer. The background never animates or intercepts typing.
+
 Choosing a model in a chat or in **Add window** remembers that model and its provider for the next agent window. Choosing **Auto** remembers Auto, not whichever model it resolves to. Browsing a provider or opening an existing chat does not change this default; existing chats keep their own model choices.
 
 A successfully changed **Permissions** mode (Ask, Guardrails or YOLO) becomes the default for new chats. **Effort** is set per chat (a chat that never picked one follows the app default), and the saved **Execution** mode is reused through the existing setup flow. **Incognito** and **Offline** are different: they apply only to the chat where you enable them and are never turned on globally for new windows.

@@ -3321,16 +3321,20 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 /* Focus mode, new chat: one centered composer on a quiet page. The first send
    drops data-clean-start and the window becomes the full chat. */
 [data-clean-start] .clean-start { position: relative; isolation: isolate; align-items: center; padding: 0 24px 12vh; }
-/* Prism light: soft washes anchored off the window's corners and edges, never a
-   centred disc (the old radial wash read as a halo behind the composer). It is
-   static, so the glass above it costs no per-frame repaint. */
+/* Full-surface prism gradient, with a separate static grain layer to dither
+   colour steps. Both stay behind the content and never intercept input. */
 [data-clean-start] .clean-start::before {
+  content: ''; position: absolute; inset: 0; z-index: -2; pointer-events: none;
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--accent) 22%, var(--win, var(--surface))) 0%,
+    color-mix(in srgb, var(--accent-2) 14%, var(--win, var(--surface))) 52%,
+    color-mix(in srgb, #ff7eb6 16%, var(--win, var(--surface))) 100%);
+}
+[data-clean-start] .clean-start::after {
   content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
-  background:
-    radial-gradient(55% 70% at 0% 100%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%),
-    radial-gradient(50% 60% at 100% 0%, color-mix(in srgb, var(--accent-2) 11%, transparent), transparent 70%),
-    radial-gradient(40% 45% at 92% 96%, color-mix(in srgb, #ff7eb6 8%, transparent), transparent 70%),
-    linear-gradient(180deg, transparent 35%, color-mix(in srgb, var(--accent) 4%, transparent));
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cfilter id='grain' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Cpath fill='white' filter='url(%23grain)' d='M0 0h160v160H0z'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+  opacity: 0.055;
 }
 [data-clean-start] .clean-start .composer-section { width: min(720px, 100%); padding: 0; }
 [data-clean-start] .clean-start .composer-column { width: 100% !important; }
