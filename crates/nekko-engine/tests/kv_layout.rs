@@ -305,3 +305,36 @@ fn the_fit_verdict_follows_the_layout() {
     assert_eq!(after.verdict, "fits");
     assert_eq!(after.gpu_layers, Some(48.0));
 }
+
+/// Experts, dense feed-forward and lookup tables are told apart by name and
+/// sized by type, as shares of every tensor byte (all F32 here: 4 bytes each).
+#[test]
+fn weights_are_sized_by_kind() {
+    let t = |name: &str, a: u64, b: u64| (name.to_string(), [a, b]);
+    let meta = read(
+        "moe",
+        gguf(
+            &[
+                ("general.architecture", V::Str("qwen3moe")),
+                ("qwen3moe.block_count", V::U32(1)),
+                ("qwen3moe.expert_count", V::U32(128)),
+                ("qwen3moe.expert_used_count", V::U32(8)),
+            ],
+            &[
+                t("token_embd.weight", 10, 10),
+                t("blk.0.attn_k.weight", 10, 10),
+                t("blk.0.ffn_gate_inp.weight", 10, 10),
+                t("blk.0.ffn_up_exps.weight", 20, 10),
+                t("blk.0.ffn_down_exps.weight", 20, 10),
+                t("blk.0.ffn_up_shexp.weight", 10, 10),
+                t("blk.0.ffn_up.weight", 10, 10),
+                t("ngram_embd.weight", 30, 10),
+            ],
+        ),
+    );
+    let w = meta.weight_layout.expect("a weight layout");
+    // 1200 elements: experts 400, dense FFN 100, n-gram table 300.
+    assert_eq!((w.expert_share, w.ffn_share, w.table_share), (400.0 / 1200.0, 100.0 / 1200.0, 300.0 / 1200.0));
+    assert_eq!((w.experts, w.experts_used), (Some(128.0), Some(8.0)));
+    assert!(meta.to_value()["weightLayout"]["expertShare"].is_number());
+}
