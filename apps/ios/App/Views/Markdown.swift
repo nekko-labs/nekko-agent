@@ -406,8 +406,14 @@ enum InlineMarkdown {
     static func attributed(_ s: String) -> AttributedString? {
         let key = s as NSString
         if let hit = cache.object(forKey: key) { return hit.value }
-        let value = try? AttributedString(markdown: s, options: options)
+        // Paths Markdown can't read as URLs (`C:\x\y.html`, spaces) become `file:` links first.
+        let value = try? AttributedString(markdown: ChatLinks.linkable(s), options: options)
         cache.setObject(Box(value), forKey: key)
         return value
+    }
+
+    /// The text without Markdown marks, for VoiceOver and copying.
+    static func plain(_ s: String) -> String {
+        attributed(s).map { String($0.characters) } ?? s
     }
 }

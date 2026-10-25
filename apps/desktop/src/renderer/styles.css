@@ -2727,6 +2727,24 @@
 @media (prefers-reduced-motion: reduce) { .remote-image-skeleton { animation: none; } }
 .artifact-card-open { color: color-mix(in srgb, var(--accent) 40%, var(--ink-faint)); }
 .artifact-card:hover:not(:disabled) .artifact-card-open { color: var(--accent); }
+/* An HTML page drawn small above its card row, and a localhost preview server.
+   The thumbnail well is the card's tint until the page arrives; the page itself
+   sits on white, as a browser would draw it. */
+.artifact-render-thumb {
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface-2));
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line));
+}
+.artifact-card-action {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
+  background: var(--surface);
+  color: var(--ink);
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+.artifact-card-action:hover:not(:disabled) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+.artifact-card-action:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.artifact-live-label { color: color-mix(in srgb, var(--accent) 55%, var(--ink)); }
+a.artifact-card:hover .artifact-card-open { color: var(--accent); }
+@media (prefers-reduced-motion: reduce) { .artifact-card, .artifact-card-action { transition: none; } }
 .pr-deck-slot { transform-origin: bottom center; animation: pr-deck-pop 240ms ease-out both; }
 .pr-deck-slot[data-closing=true] { pointer-events: none; animation: pr-deck-retract 220ms ease-in both; }
 @keyframes pr-deck-pop { from { opacity: 0; transform: translateY(12px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }

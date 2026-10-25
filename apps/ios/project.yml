@@ -43,6 +43,9 @@ targets:
         product: NekkoProtocol
       - package: NekkoProtocol
         product: NekkoKit
+      # The chat's preview window and cards (#1095): an isolated WKWebView, and PDFs.
+      - sdk: WebKit.framework
+      - sdk: PDFKit.framework
       - target: NekkoWidgets
         embed: true
       - target: NekkoShare

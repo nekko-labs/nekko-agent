@@ -2548,7 +2548,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 {/* The reply being written: repaints once a frame on its own. */}
                 {imageMode
                   ? <ImageLiveTurn sessionId={sessionId} streaming={streaming} />
-                  : <LiveTurn sessionId={sessionId} held={held} onImageClick={setLightbox} />}
+                  : <LiveTurn sessionId={sessionId} held={held} onImageClick={setLightbox} pendingCallId={approval?.call.id} />}
                 <LiveReplyStatus
                   sessionId={sessionId}
                   startedAt={turnStart.current}
