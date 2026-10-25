@@ -165,7 +165,9 @@ func host() -> Never {
         case .nominal: thermal = "nominal"
         case .fair: thermal = "fair"
         case .serious: thermal = "serious"
-        default: thermal = "critical"
+        case .critical: thermal = "critical"
+        // Unknown: exit, so nekkod treats the host state as unknown (holds new VMs only).
+        @unknown default: exit(1)
         }
         let pairs: KeyValuePairs<String, Any> = [
             "thermal": thermal,

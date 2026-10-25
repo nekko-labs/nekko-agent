@@ -8,3 +8,5 @@ Software Update found the following new or updated software:
 	Title: Safari, Version: 18.1.1, Size: 177795KiB, Recommended: YES,
 * Label: Background Security Improvement 15.1.1a
 	Title: Background Security Improvement, Version: 15.1.1 (a), Size: 4096KiB, Recommended: YES,
+* Label: macOS Tahoe 26.1-25B78
+	Title: macOS Tahoe 26.1, Version: 26.1, Size: 7340032KiB, Recommended: YES, Action: restart,

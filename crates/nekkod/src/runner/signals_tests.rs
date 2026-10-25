@@ -1,6 +1,6 @@
 use super::*;
 use crate::runner::lan::{default_gateway, network_id};
-use crate::runner::updates::{UpdateLedger, security_labels};
+use crate::runner::updates::{UpdateLedger, os_major, security_labels};
 use std::net::Ipv4Addr;
 
 fn mac() -> MacState {
@@ -130,9 +130,16 @@ fn memory_history_samples_every_10_minutes_for_7_days() {
 
 #[test]
 fn security_labels_from_softwareupdate() {
-    let labels = security_labels(include_str!("../../tests/fixtures/runner/softwareupdate-list.txt"));
-    assert_eq!(labels, ["macOS Sequoia 15.1.1-24B91", "Background Security Improvement 15.1.1a"]); // Safari entry excluded
-    assert!(security_labels("Software Update Tool\n\nNo new software available.\n").is_empty());
+    let list = include_str!("../../tests/fixtures/runner/softwareupdate-list.txt");
+    // Safari is excluded; the Tahoe major upgrade is not a Sequoia security update.
+    assert_eq!(security_labels(list, 15), ["macOS Sequoia 15.1.1-24B91", "Background Security Improvement 15.1.1a"]);
+    assert_eq!(security_labels(list, 26), ["Background Security Improvement 15.1.1a", "macOS Tahoe 26.1-25B78"]);
+    // Unknown OS version (0): every macOS label counts, failing closed.
+    assert_eq!(security_labels(list, 0).len(), 3);
+    // A macOS label with no version anywhere still counts.
+    assert_eq!(security_labels("* Label: macOS Update\n\tTitle: macOS Update,\n", 15), ["macOS Update"]);
+    assert!(security_labels("Software Update Tool\n\nNo new software available.\n", 15).is_empty());
+    assert_eq!((os_major("15.1.1\n"), os_major("26.0"), os_major("")), (15, 26, 0));
 }
 
 #[test]

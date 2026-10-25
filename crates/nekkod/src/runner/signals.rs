@@ -9,7 +9,7 @@
 
 use super::egress::{Egress, spawn_line_watch};
 use super::lan::{default_gateway, network_id};
-use super::updates::{UpdateLedger, security_labels};
+use super::updates::{UpdateLedger, os_major, security_labels, write_atomic};
 use nekko_machine::Machine;
 use nekko_machine::activity::Power;
 use nekko_runner::{Pressure, RunnerSettings, Signals, Thermal};
@@ -143,9 +143,8 @@ impl MemoryHistory {
         }
         self.samples.push((now_secs, used_mb));
         self.samples.retain(|&(at, _)| now_secs.saturating_sub(at) <= MEMORY_KEEP_SECS);
-        let write = serde_json::to_vec(&self.samples)
-            .map_err(std::io::Error::other)
-            .and_then(|b| std::fs::write(&self.path, b));
+        let write =
+            serde_json::to_vec(&self.samples).map_err(std::io::Error::other).and_then(|b| write_atomic(&self.path, &b));
         if let Err(e) = write {
             eprintln!("runner memory history: cannot save {}: {e}", self.path.display());
         }
@@ -215,9 +214,12 @@ impl HostSense {
         let shared = update_labels.clone();
         tokio::spawn(async move {
             loop {
+                // 0 when unreadable: every macOS label then counts (fails closed).
+                let major = output("/usr/bin/sw_vers", &["-productVersion"], Duration::from_secs(5)).await;
+                let major = major.as_deref().map_or(0, os_major);
                 let out = output("/usr/sbin/softwareupdate", &["--list", "--no-scan"], Duration::from_secs(120)).await;
                 if let (Some(out), Ok(mut s)) = (out, shared.write()) {
-                    *s = Some(security_labels(&out));
+                    *s = Some(security_labels(&out, major));
                 }
                 tokio::time::sleep(UPDATES_EVERY).await;
             }

@@ -94,7 +94,7 @@ pub fn vms_wanted(available: u8, warm: u8, busy: u8, queued: u32) -> u8 {
 }
 
 /// The owner's usual memory use: nearest-rank 95th percentile, once there are
-/// at least 36 samples (3 hours at 5 minutes).
+/// at least 36 samples (6 hours at 10 minutes).
 pub fn usual_memory_mb(samples_mb: &[u64]) -> Option<u64> {
     if samples_mb.len() < 36 {
         return None;
