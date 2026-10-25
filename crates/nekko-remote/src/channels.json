@@ -1,6 +1,7 @@
 [
  "app:info",
  "app:quit",
+ "artifact:read",
  "attachment:import",
  "changes:accept",
  "changes:acceptAll",
@@ -139,6 +140,7 @@
  "pr:diff",
  "pr:linkStack",
  "pr:sessionList",
+ "preview:fetch",
  "providers:discover",
  "providers:importCliAuth",
  "providers:list",

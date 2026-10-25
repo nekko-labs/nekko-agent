@@ -74,7 +74,7 @@ All three write an activity entry and a desktop notification. None asks for a pr
 - **Local Web UI**: the same renderer code over `http://localhost`; WebAuthn treats `localhost` as a secure context, so keys and platform authenticators work there too. A reverse-proxied Local Web UI on another host name is told that step-up needs `https`.
 - **iPhone**: `AuthenticationServices` for security keys (NFC, Lightning, USB-C) and platform passkeys; the step-up sheet is the system sheet. The Watch never asks for a step-up (it has no authenticator); a guarded action from the Watch is refused with *confirm on your phone*.
 - **Android**: `androidx.credentials` with `GetPublicKeyCredentialOption`, which reaches USB-C and NFC keys and the device's own passkey. Android's Change signer (AN-30) is still missing; step-up does not wait for it, because a step-up is verified on its own.
-- **Expo app**: no step-up (it is being retired by the native ports); guarded actions are refused with *use the native app*.
+- **Former Expo app**: removed. Native clients are the supported phone implementations.
 - **Nekko Cloud machines**: the cloud machine is a computer like any other and runs the same relying-party code; registered methods are per machine, never per account, so a Nekko Labs operator cannot add one. `[decided 2026-10-24, Philip]` A cloud machine has no desktop to turn remote access back on, so a restart re-attaches it even after a phone's *Stop remote access* (today's behavior), and Nekko Cloud keeps at least one of the owner's machines running, so stopping one never leaves the owner with nothing reachable.
 
 ## Acceptance criteria

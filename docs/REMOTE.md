@@ -66,6 +66,16 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > list that opens the computer menu. A chat that needs you has a coloured bar down its left edge
 > and the raised hand.
 >
+> Tables in a reply show as a grid (it scrolls sideways when wide). When the agent links a file it
+> made on your computer (an HTML prototype, an image, a PDF, Markdown, text, JSON or CSV) or a
+> preview server it started there (`http://localhost:5173`), the reply gets a card for it, with a
+> picture of the page. Tapping the card or the link opens it full screen: a prototype runs and
+> can be clicked through, an image zooms. The computer reads the file or the page and sends it to
+> the phone through the end-to-end encrypted connection, so it works away from home too. It only
+> sends what the agent linked in that chat (and, for a linked web page, the files in its folder),
+> and the page can't reach the internet or anything else on your phone. Ordinary web links open in
+> Safari.
+>
 > Each group opens with up to eight chats from the last two weeks (a chat that is working, needs
 > you or is pinned always shows), then **Show N more**. Tap a group's name to fold it. The
 > **view** button beside New chat arranges the list as the desktop's Agents panel does: **Group
@@ -235,17 +245,14 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > connected. If Android restricts Nekko in the background, Settings says so and opens the app's
 > system page.
 
-The iOS and Android app (`apps/mobile`) is built for the phone rather than being the desktop on a
-small screen: your computer's chats with **Working** / **Needs you** badges, new chats on any of the
-computer's models and folders, live replies, **Allow this?** cards for risky commands, the agent's
-questions as tap-to-answer choices, follow-ups that queue while a run is going, and Stop. It can
-pair several computers and talks to one at a time.
+The phone clients are native apps: SwiftUI in `apps/ios` and Kotlin/Jetpack Compose in
+`apps/android`. They drive chats on your computer over the encrypted relay. The former
+Expo app and its dedicated CI have been removed. This does not implement on-phone
+inference or close the native apps' remaining feature and release gaps; see the
+[native iOS spec](../spec/phone/native-ios-app.md) and
+[native Android spec](../spec/phone/native-android-app.md).
 
-It also runs **models on the phone itself** (llama.cpp, curated small GGUF models from Hugging Face
-sized to the phone's memory), so you can keep chatting when the computer is off. Those chats never
-leave the phone and don't use the relay.
-
-**The native iPhone app** (`apps/ios`, SwiftUI) does the same over the same encrypted relay, and
+**The native iPhone app** (`apps/ios`, SwiftUI) runs chats over the encrypted relay, and
 adds what only iOS can: a **Live Activity** for each running chat on the Lock Screen and in the
 Dynamic Island, with **Allow / Deny** for a waiting tool and **Stop**; notifications with Allow /
 Deny actions while the app is in the background (Allow asks you to unlock first); photo attachments;
@@ -556,3 +563,14 @@ NEKKO_RELAY_URL=wss://your-relay NEKKO_ROOM=myroom NEKKO_PAIR_KEY=<secret> npx n
 
 It prints a one-time pairing code (10 minutes) at boot and keeps the same persistent device
 registry as the desktop app.
+
+### Chat status on native iOS
+
+The icon to the left of each chat reads like desktop: a rocket means working,
+a question mark means the agent needs you, “Zz” means idle, and a checkmark marks
+a completed chat. A clock means a prompt is waiting to send.
+
+Nekko sits at the top-left of the Chats screen beside the computer menu. Tap the
+pixel cat for a brief greeting. This is a local animation, not a message to an
+agent. The mascot respects Reduce Motion and pauses its animation in the
+background.

@@ -36,7 +36,13 @@ macOS builds are signed and notarized, so they open normally. If Windows shows a
 
 ## Typing in a new agent window
 
+A new chat greets you with “What should we work on?” and a small pixel Nekko peeking beside it, looking toward the heading. Type your request in the composer below.
+
 Opening an agent composer puts the caret after any restored draft once a usable model provider is available. If you are already typing in another visible text field, that field keeps focus. Normal background agent and provider updates do not pull you back into the composer.
+
+## Following tool activity
+
+Chat tool calls use icons for what the agent is doing: reading files, searching, editing, running checks, Git, web access or planning. Shell execution, including Python, uses the same terminal artwork as the current-work indicator. Transcript icons stay still; expand a tool row to read its output. Unknown tools keep the generic tool icon.
 
 ## Run it from source
 
@@ -160,3 +166,7 @@ Click the plus button in the Agents panel to open a new agent window. Hover over
 ### Compact agent row and monitor controls
 
 In the horizontal Agents row, the controls sit in a compact two-column strip beside the cards, leaving no unused band below them. Configure monitors stays within the window even when the dock is at either edge. Press Escape or click outside to close it. Dragging monitor headers keeps the scroll surface steady while the landing outline opens.
+
+### Resizing the side panels
+
+Hover the edge between the agent list and chat wall, or the edge beside Monitors, to reveal a bright vertical resize line. Drag it to change the panel width, or focus the separator and use the left/right arrow keys. The line disappears when you leave the edge; there is no permanent divider beside the agent list.

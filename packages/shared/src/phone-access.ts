@@ -82,10 +82,23 @@ import {
   phoneUsageView,
   phoneWorkflowsView,
 } from './phone-views.js';
+import {
+  PHONE_ARTIFACT_CHANNELS,
+  PHONE_ARTIFACT_READ_CHANNELS,
+  PHONE_ARTIFACT_VIEW,
+  PHONE_ARTIFACTS_VIEW,
+  PHONE_PREVIEW_HEADERS,
+  PHONE_PREVIEW_METHODS,
+  PHONE_PREVIEW_VIEW,
+  PhoneArtifactsRefusal,
+  phoneArtifactsView,
+  screenPhoneArtifacts,
+} from './phone-artifacts.js';
+import { CHAT_ASSET_EXT, CHAT_LINK_EXT, LOOPBACK_HOSTS } from './chat-links.js';
 
 /**
  * Channels a paired phone may call. Built from what the phone clients send
- * (apps/mobile/src/lib/protocol.ts, apps/android/protocol Wire.kt `Channels`,
+ * (apps/android/protocol Wire.kt `Channels`,
  * apps/ios/Protocol Wire.swift `Channels`), plus the ones the next phone
  * releases need: settings (filtered), completing or deleting a chat the way
  * the desktop does (`session:setOptions` with `archivedAt`, `session:delete`)
@@ -102,10 +115,14 @@ import {
  * folder's files (list, search, read; save as a Change action) and the
  * computer's logs, read only (phone-files.ts). FA-3 / FA-6 add the chat's
  * terminals and SSH (`PHONE_TERMINAL_CHANNELS`, phone-terminal.ts).
+ * Issue #1095 adds what the agent linked in a chat, read only: its files
+ * (`artifact:read`) and its local preview servers (`preview:fetch`),
+ * phone-artifacts.ts and chat-links.ts.
  */
 export const PHONE_CHANNELS = [
   'app:info',
   'app:quit',
+  'artifact:read',
   'changes:list',
   'chat:abort',
   'chat:answer',
@@ -141,6 +158,7 @@ export const PHONE_CHANNELS = [
   'pr:create',
   'pr:diff',
   'pr:sessionList',
+  'preview:fetch',
   'providers:list',
   'providers:saveSealed',
   'providers:sealKey',
@@ -174,8 +192,10 @@ export const PHONE_CHANNELS = [
   'voice:transcribe',
   'workflow:run',
   'workflows:list',
+  'workspace:addByPath',
   'workspace:gitStatus',
   'workspace:list',
+  'workspace:remove',
 ] as const;
 
 /** A family of channels a phone may not call: exact names, and whole prefixes. */
@@ -256,8 +276,6 @@ export const PHONE_DENIED_FOR_NOW: Record<'files' | 'git' | 'terminal' | 'undeci
       'workflow:duplicate',
       'workflow:event',
       'workflow:update',
-      'workspace:addByPath',
-      'workspace:remove',
     ],
     /** MCP servers. */
     prefixes: ['mcp:'],
@@ -320,6 +338,8 @@ export const PHONE_READ_CHANNELS: readonly string[] = [
   ...PHONE_GIT_READ_CHANNELS,
   ...PHONE_FILES_READ_CHANNELS,
   ...PHONE_TERMINAL_READ_CHANNELS,
+  // #1095: what the agent linked in a chat, scoped to those links (phone-artifacts.ts).
+  ...PHONE_ARTIFACT_READ_CHANNELS,
   // SK-2: a step-up challenge; the daemon's gate answers it itself (step-up.ts).
   STEP_UP_CHALLENGE.channel,
 ];
@@ -370,6 +390,9 @@ export const PHONE_OPEN_CHANNELS: readonly string[] = ['app:info'];
  */
 export const PHONE_PROVIDER_CHANGE_CHANNELS: readonly string[] = ['providers:saveSealed', 'providers:setEnabled'];
 export const PHONE_CHANGE_CHANNELS: readonly string[] = [
+  // Saved-folder access changes need a signed proof, including revocation.
+  'workspace:addByPath',
+  'workspace:remove',
   ...PHONE_PROVIDER_CHANGE_CHANNELS,
   ...PHONE_GIT_CHANGE_CHANNELS,
   ...PHONE_FILES_CHANGE_CHANNELS,
@@ -802,6 +825,14 @@ export function screenPhoneCall(
       throw e;
     }
   }
+  if (PHONE_ARTIFACT_CHANNELS.includes(channel)) {
+    try {
+      return { callArgs: screenPhoneArtifacts(channel, args) };
+    } catch (e) {
+      if (e instanceof PhoneArtifactsRefusal) throw new PhoneAccessError(e.code, e.detail);
+      throw e;
+    }
+  }
   if (PHONE_FILES_CHANNELS.includes(channel)) {
     try {
       return { callArgs: screenPhoneFiles(channel, args) };
@@ -811,6 +842,13 @@ export function screenPhoneCall(
     }
   }
   switch (channel) {
+    case 'workspace:addByPath':
+    case 'workspace:remove':
+      if (typeof args[0] !== 'string' || args[0].trim() === '' || args[0].includes('\0')) {
+        throw new PhoneAccessError('value-invalid', channel === 'workspace:addByPath' ? 'folder path' : 'workspace id');
+      }
+      if (args.length > 1) throw new PhoneAccessError('option-denied', 'extra argument');
+      return {};
     case 'providers:saveSealed':
       screenPhoneProviderSave(args[0]);
       if (args.length > 1) throw new PhoneAccessError('option-denied', 'extra argument');
@@ -1001,6 +1039,7 @@ export function redactPhoneResult(channel: string, result: unknown): unknown {
       return phoneTerminalResult(channel, result);
     default:
       if (PHONE_GIT_CHANNELS.includes(channel)) return phoneGitView(channel, result);
+      if (PHONE_ARTIFACT_CHANNELS.includes(channel)) return phoneArtifactsView(channel, result);
       return PHONE_FILES_CHANNELS.includes(channel) ? phoneFilesView(channel, result) : result;
   }
 }
@@ -1223,6 +1262,16 @@ export function phoneAccessPolicy() {
       fileView: [...PHONE_FILE_VIEW],
       writeView: [...PHONE_FILE_WRITE_VIEW],
       logView: [...PHONE_LOG_VIEW],
+    },
+    artifacts: {
+      view: { ...PHONE_ARTIFACTS_VIEW },
+      artifactView: [...PHONE_ARTIFACT_VIEW],
+      previewView: [...PHONE_PREVIEW_VIEW],
+      previewHeaders: [...PHONE_PREVIEW_HEADERS],
+      previewMethods: [...PHONE_PREVIEW_METHODS],
+      linkExt: [...CHAT_LINK_EXT],
+      assetExt: [...CHAT_ASSET_EXT],
+      loopbackHosts: [...LOOPBACK_HOSTS],
     },
     git: {
       view: { ...PHONE_GIT_VIEW },

@@ -66,9 +66,9 @@ describe('PR milestones and composer actions', () => {
     expect(markup.match(/data-pr-actions=/g)).toHaveLength(1);
     expect(markup).not.toContain(second.url);
     expect(markup).not.toContain('mb-2');
-    expect(markup).not.toContain('mt-1');
+    expect(markup).toContain('data-pr-progress');
     expect(markup).toContain('justify-end gap-0');
-    expect(markup).toContain('</p></div><div class="flex max-w-[55%]');
+    expect(markup).toContain('</div></div><div class="flex max-w-[55%]');
   });
   it('opens upward: cards render above the toggle that sits on the footer divider', () => {
     const markup = renderToStaticMarkup(<PrActionDock sessionId="s" prs={[pr]} urls={[url]} />);

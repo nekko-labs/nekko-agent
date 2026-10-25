@@ -109,6 +109,20 @@ Internet downloads were limited by the host link, not the NAT. With 64 KiB, 20 s
 
 Why: the smoltcp send buffer toward the guest bounds bytes in flight on a sub-millisecond leg; guest-to-host keeps 16 KiB. Worst-case socket memory is 20 MiB per VM at 256 flows. Source: commit `nekkod: runner NAT sends to the guest from a 64 KiB TCP buffer`, `.superpowers/sdd/.plan-layer-b/task-3-report.md`.
 
+### Phone Markdown parser: block tree, cached per segment (MD-1, 2026-10-25)
+Area: renderer
+Result: mixed
+Conditions: microbenchmark, not the app. Docker `swift:6.1-noble` (x86_64, 32 cores) on a Windows 11 desktop, `swift test -c release`, three runs of one test. Input: a generated 500-line reply (10,560 characters) with headings, nested lists, numbered lists, inline styles and three 10-row tables. Before is the old line scanner (`MarkdownText.parse`, copied verbatim into the benchmark); after is `MarkdownParser`. Streaming: the text grown one character at a time, parsed at every 20th character (528 parses). Medians of 20 for the whole-text rows.
+
+| Metric | Before (line scanner) | After (`MarkdownParser`) |
+|---|---|---|
+| One whole parse, median | 0.785 / 0.778 / 0.776 ms | 1.192 / 1.177 / 1.153 ms (`parse`) |
+| Same text again | same as above (no cache) | 0.246 / 0.250 / 0.242 ms (`blocks`, segments cached) |
+| Streaming, total for 528 parses | 209.6 / 206.1 / 205.9 ms | 78.3 / 76.7 / 76.2 ms |
+| Streaming, per parse | 0.397 / 0.390 / 0.390 ms | 0.148 / 0.145 / 0.144 ms |
+
+Why: the block tree (nested lists, tables) costs about 50% more than the flat scan for one cold parse, but `blocks` re-parses only the segment still being written, so a streaming reply costs less than half as much per token. Not measured: SwiftUI layout and `AttributedString` inline parsing, scrolling frame times on a device, and anything on iOS hardware. Source: the MD-1 PR.
+
 ### #1031 Native iOS CI: one build, dark mode only for colour changes (2026-10-24)
 Area: dev build
 Result: mixed
