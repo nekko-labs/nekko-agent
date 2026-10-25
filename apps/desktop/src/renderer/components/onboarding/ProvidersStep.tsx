@@ -225,7 +225,7 @@ export function ProvidersStep({ onExit }: { onExit?: (after?: () => void) => voi
           )}
           {scan === 'failed' && (
             <p className="rounded-xl border border-dashed p-4 text-[12px] text-ink-faint" style={{ borderColor: 'var(--line)' }}>
-              Couldn't scan automatically. Model Providers can discover local servers too.
+              Couldn't scan automatically. Models can discover local servers too.
             </p>
           )}
           {scan === 'done' && found.length === 0 && extraLocal.length === 0 && (
@@ -280,7 +280,7 @@ export function ProvidersStep({ onExit }: { onExit?: (after?: () => void) => voi
       <DefaultOffer providers={providers} />
 
       <p className="mt-6 text-center text-[12px] text-ink-faint">
-        You can add or tune providers any time in Model Providers.
+        You can add or tune providers any time in Models.
       </p>
     </div>
   );

@@ -39,7 +39,7 @@ export function CommandPalette() {
       { id: 'new-terminal', label: 'New terminal', hint: SHORTCUTS.newTerminal.label, run: () => newTerminal() },
       go('artifacts', 'Go to Artifacts'),
       go('skills', 'Go to Skills'),
-      go('models', 'Go to Model Providers'),
+      go('models', 'Go to Models'),
       go('modelserver', 'Go to Model Server'),
       go('connectors', 'Go to Connectors'),
       // Experimental destinations stay out of the palette while their flag is off.
