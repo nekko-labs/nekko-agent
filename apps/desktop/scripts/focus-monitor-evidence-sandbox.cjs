@@ -92,12 +92,14 @@ app.whenReady().then(async () => {
       const { PNG } = require(path.join(modules, 'pngjs'));
       const { GifWriter } = require(path.join(modules, 'omggif'));
       const images = frames.map(f=>PNG.sync.read(fs.readFileSync(f)));
+      const { width, height } = images[0];
+      if (images.some(im => im.width !== width || im.height !== height)) throw new Error('GIF frame dimensions must match');
       const counts = new Map();
       for (const im of images) for(let i=0;i<im.data.length;i+=4) { const c=(im.data[i]<<16)|(im.data[i+1]<<8)|im.data[i+2];counts.set(c,(counts.get(c)||0)+1); }
       const palette=[...counts].sort((a,b)=>b[1]-a[1]).slice(0,256).map(p=>p[0]);while(palette.length<256)palette.push(0);
       const cache=new Map();const nearest=c=>{if(cache.has(c))return cache.get(c);let best=0,dist=Infinity;palette.forEach((p,j)=>{const d=((c>>16)-(p>>16))**2+(((c>>8)&255)-((p>>8)&255))**2+((c&255)-(p&255))**2;if(d<dist){dist=d;best=j}});cache.set(c,best);return best};
-      const buffer=Buffer.alloc(20*400*800*2);const gif=new GifWriter(buffer,400,800,{loop:0,palette});
-      for(const im of images){const pixels=Buffer.alloc(400*800);for(let i=0;i<pixels.length;i++)pixels[i]=nearest((im.data[i*4]<<16)|(im.data[i*4+1]<<8)|im.data[i*4+2]);gif.addFrame(0,0,400,800,pixels,{delay:8});}
+      const buffer=Buffer.alloc(images.length*width*height*2+4096);const gif=new GifWriter(buffer,width,height,{loop:0,palette});
+      for(const im of images){const pixels=Buffer.alloc(width*height);for(let i=0;i<pixels.length;i++)pixels[i]=nearest((im.data[i*4]<<16)|(im.data[i*4+1]<<8)|im.data[i*4+2]);gif.addFrame(0,0,width,height,pixels,{delay:8});}
       fs.writeFileSync(path.join(out,'reorder.gif'),buffer.subarray(0,gif.end()));
       report.gif=path.join(out,'reorder.gif');
     } catch(e) {report.errors.push(`GIF: ${e.stack}`);}
