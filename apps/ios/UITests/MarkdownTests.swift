@@ -53,7 +53,8 @@ final class MarkdownTests: XCTestCase {
     /// table (Return continues and ends the list, Tab moves through cells),
     /// Send, and the same Markdown reads back rendered.
     func testToolbarWritesANestedListAndATable() {
-        for theme in uiTestThemes {
+        // One theme: the live journey photographs the composer in both, and Native iOS has a 50-minute budget.
+        for theme in uiTestThemes.prefix(1) {
             let app = launchLab(theme: theme)
             let box = app.input("chat.message")
             XCTAssertTrue(box.waitForExistence(timeout: 15))
