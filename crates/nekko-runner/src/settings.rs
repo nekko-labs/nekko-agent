@@ -53,6 +53,10 @@ pub struct RunnerSettings {
     pub only_on_power: bool,
     pub trusted_networks_only: bool,
     pub never_on_hotspot: bool,
+    /// "Let jobs use the internet directly while a VPN is on": take jobs while
+    /// a VPN carries all the Mac's traffic. Job traffic still leaves by the
+    /// physical interface, never the tunnel.
+    pub allow_direct_with_vpn: bool,
     pub allow_fork_prs: bool,
     pub rerun_lost_jobs: bool,
     pub trusted_cache: bool,
@@ -75,6 +79,7 @@ impl Default for RunnerSettings {
             only_on_power: true,
             trusted_networks_only: true,
             never_on_hotspot: true,
+            allow_direct_with_vpn: false,
             allow_fork_prs: false,
             rerun_lost_jobs: true,
             trusted_cache: true,

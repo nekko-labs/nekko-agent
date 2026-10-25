@@ -68,7 +68,7 @@ None can stop sleep when the lid closes on battery, when Low Power Mode turns on
 - **CPU per VM:** 4 / 6 / all but 2 by mode.
 - **Disk:** image disk budget 150 GB; free disk floor 25 GB (below it no new VM starts and running ones stop).
 - **Max job time:** 2 h. The VM is destroyed at the limit whatever the provider's timeout.
-- **Only when:** on power, on trusted networks, never on hotspots.
+- **Only when:** on power, on trusted networks, never on hotspots, and not while a VPN carries all the Mac's traffic (a full-tunnel VPN or a Tailscale exit node). The setting **Let jobs use the internet directly while a VPN is on** (off by default) lifts the VPN pause; job traffic still leaves by the physical interface, never the tunnel. Like the other network gates, a VPN coming on drains a running job with the mode's grace (Runner first lets it finish).
 - **Safety:** fork PRs off, re-run lost jobs on, build cache for trusted runs on.
 
 ## The sandbox `[planned]`
@@ -77,6 +77,7 @@ None can stop sleep when the lid closes on battery, when Low Power Mode turns on
 |---|---|
 | A job reads your files, keys or tokens | Separate VM with its own disk. No host folder, clipboard or keychain reaches it. The VM has a display device with no view and no input devices (a macOS guest needs one to boot), so nothing of its screen reaches the host. The only secret inside is a single-use runner config. |
 | A job attacks your LAN or other devices | The VM's only network is a userspace NAT inside `nekkod` that forwards to public unicast internet addresses only, judged after DNS resolution, and never to the Mac's own addresses or any network the Mac is on, even a public one. |
+| A job reaches networks behind your VPN | Every host socket the NAT opens, DNS included, is bound to the Mac's physical interface (Wi-Fi, Ethernet or cellular), so no VPN route, split or full tunnel, ever carries job traffic. With no physical interface, or before it is known, every flow is refused. A full-tunnel VPN pauses the runner by default. |
 | A job reaches services on the host | There is no host-to-guest and no guest-to-host network. The NAT answers DHCP and DNS for the guest and forwards nothing to a host address. |
 | Malware persists into the next job | Every job starts from a new copy-on-write clone of a read-only golden image; the clone is deleted after the job. |
 | A job poisons the build cache | One cache volume per scope, attached only for trusted runs (never fork PRs), size-capped, wipeable from the runner card. |
@@ -89,7 +90,7 @@ None can stop sleep when the lid closes on battery, when Low Power Mode turns on
 
 **Guest network, the P1 details.** Guests are IPv4 only: the guest is 10.233.0.2/24 behind gateway 10.233.0.1, and every IPv6 frame from the guest is dropped. DNS goes through the gateway: 53/udp and 53/tcp to the gateway are forwarded to the host's resolvers, which the supervisor chooses and which are never a loopback resolver or 100.100.100.100; every other packet to the gateway is dropped or reset. Each VM holds at most 256 flows at once, a host connect gives up after 15 s, and a guest TCP connection that stops answering (keep-alive probes included) is reset after an idle timeout and frees its slot. The supervisor refuses to start a VM if it cannot read the host's addresses, rather than run with an empty list.
 
-**Known limit until T212.** Public address ranges that the Mac routes through a VPN or tunnel (a split-tunnel corporate VPN, a Tailscale exit node or subnet routes) are not yet refused, so a guest could reach a public-addressed service that is only reachable over that tunnel. T212 will refuse any destination whose route leaves through a tunnel or a non-primary interface.
+**Guest network and VPNs (T211).** `nekko-vm egress` streams the Mac's physical egress interface from `NWPathMonitor` (the first Wi-Fi, wired or cellular interface on a monitor that excludes tunnels) and whether a tunnel leads the default route. The NAT creates every host socket unconnected, binds it to that interface with `IP_BOUND_IF`, then connects, so split-tunnel routes (a corporate VPN's ranges, Tailscale subnet routes) and full tunnels (an exit node) never carry job traffic. With no physical interface, or before the helper's first report, every flow is refused: TCP gets a reset, UDP and DNS get nothing. `nekkod` restarts the helper if it exits and refuses flows until it reports again. The VPN pause is the `nekko-runner` gate described under Limits; the supervisor that feeds it the helper's report lands with T212.
 
 **Who holds the virtualization entitlement.** Only `nekko-vm` carries `com.apple.security.virtualization`; `nekkod` and the app do not. Dev builds ad-hoc sign it; release packaging and signing land with T213/T214, together with a signed release dry-run, and until then packaged builds report no VM support.
 

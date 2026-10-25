@@ -15,6 +15,7 @@ fn defaults_match_the_spec() {
     assert!(s.only_on_power && s.trusted_networks_only && s.never_on_hotspot && !s.allow_fork_prs);
     assert!(!s.enabled && s.linux_slots == 0 && s.cpus_per_vm.is_none());
     assert!(s.rerun_lost_jobs && s.trusted_cache);
+    assert!(!s.allow_direct_with_vpn);
 }
 
 #[test]
@@ -56,4 +57,15 @@ fn runner_memory_round_trips() {
     let v = serde_json::to_value(&s).unwrap();
     assert_eq!(v["runnerMemoryMb"], 16384);
     assert_eq!(serde_json::from_value::<RunnerSettings>(v).unwrap(), s);
+}
+
+#[test]
+fn allow_direct_with_vpn_round_trips_and_defaults_off() {
+    assert_eq!(serde_json::to_value(RunnerSettings::default()).unwrap()["allowDirectWithVpn"], false);
+    let s = RunnerSettings { allow_direct_with_vpn: true, ..Default::default() };
+    let v = serde_json::to_value(&s).unwrap();
+    assert_eq!(v["allowDirectWithVpn"], true);
+    assert_eq!(serde_json::from_value::<RunnerSettings>(v).unwrap(), s);
+    let old: RunnerSettings = serde_json::from_value(json!({"enabled": true})).unwrap();
+    assert!(!old.allow_direct_with_vpn);
 }
