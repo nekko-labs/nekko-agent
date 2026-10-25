@@ -185,6 +185,8 @@ export interface RuntimeMetrics {
  * serves every runtime, and `canSetCompute` says whose controls to draw.
  */
 export interface LoadParams {
+  /** Local model reasoning. Default on; configurable only under Expert. */
+  thinking?: boolean;
   contextTokens?: number;
   gpuLayers?: number;
   kvCacheDtype?: KvCacheDtype;

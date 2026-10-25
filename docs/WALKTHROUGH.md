@@ -78,6 +78,9 @@ model servers are first-class, not an afterthought.
 **Reasoning models** (Gemma, DeepSeek-R1, Qwen-thinking, etc.) are first-class:
 their chain-of-thought streams into a collapsible **Thinking** block above the
 answer, so you see progress during long reasoning and the answer stays clean.
+Thinking stays on for cloud models, even in chats saved with an old off preference.
+The composer no longer has a thinking switch. Built-in local models default on and
+can be configured under **More controls > Expert > Thinking** in the model settings.
 
 ---
 
@@ -465,3 +468,5 @@ that conversation, rather than covering it. The left navigation uses a darker,
 mostly opaque theme-matched surface with rounded corners, inset about 5% at the
 top and bottom. Hover, keyboard focus or pin expands the navigation and reveals
 its labels together. Reduced motion disables these transitions.
+
+Mermaid diagrams blend into chat on a dotted, borderless canvas with a subtle shadow and theme-matched colors. Hover or focus the diagram for Copy and Expand; the expanded view supports zoom, pan, and Escape to close.

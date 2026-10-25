@@ -17,7 +17,7 @@ import { createPortal } from 'react-dom';
 import { DictationButton } from './DictationButton.js';
 import { decideApproval, type ApprovalScope } from './agent-console/approval-decision.js';
 import type { AgentEvent, AskAnswer, AskRequest, AutoQuality, Session, ContextBundle, IndexedFile, ModelInfo, ProviderConfig, SkillDef, PrInfo, QueuePayload, QueuedPrompt } from '@nekko-agent/shared';
-import { archiveDaysLeft, CLAUDE_CODE_PROVIDER_KIND, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, modelSupportsThinking, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
+import { archiveDaysLeft, CLAUDE_CODE_PROVIDER_KIND, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
 import type { AutoProviderPick, ProviderPool } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { approvalAfterResult } from './ChatPane.approval.js';
@@ -2239,13 +2239,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const isCloudModel = !providerKind || !isLocalProvider(providerKind);
   // A cloud-only chat's picker lists cloud providers only (the engine refuses the rest).
   const cloudOnlyFilter = useMemo(() => (session?.cloudOnly ? cloudProviderAllowed : undefined), [session?.cloudOnly]);
-  // Reasoning toggle: offered only for a concrete, reasoning-capable model.
   const selectedModelInfo = modelId && modelId !== AUTO_MODEL_ID ? models.find((m) => m.id === modelId) : undefined;
-  const thinkingSupported = !!modelId && modelId !== AUTO_MODEL_ID && modelSupportsThinking({ id: modelId, name: selectedModelInfo?.name });
-  const thinkingOn = session?.thinking !== false;
-  const setThinkingPref = (value: boolean) => {
-    window.nekko.setSessionOptions(sessionId, { thinking: value }).then((s) => { if (s) setSession(s); }).catch(() => {});
-  };
 
   // Auto mode: the model the next message will actually run on. Shown whether or
   // not anything is typed yet - "Auto" alone tells you nothing, and the pick
@@ -2716,7 +2710,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   <span className="composer-summary-model">{imageMode ? 'Image' : modelId === AUTO_MODEL_ID ? 'Auto' : selectedModelInfo?.name ?? modelId ?? 'Pick a model'}</span>
                   <span className="composer-summary-meta">
                     {!imageMode && ` \u00b7 ${MODE_LABEL[session?.mode ?? settings?.defaultChatMode ?? 'guardrails']}`}
-                    {thinkingSupported && ` \u00b7 Thinking ${thinkingOn ? 'on' : 'off'}`}
                     {session?.offline && ' \u00b7 Offline'}
                     {session?.incognito && ' \u00b7 Incognito'}
                   </span>
@@ -2790,17 +2783,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   → {autoPick.name}{autoPick.switched ? ` · ${autoPick.providerLabel}` : ''}
                 </span>
               )}
-              {thinkingSupported ? (
-                <button
-                  className="ctl-toggle whitespace-nowrap"
-                  onClick={() => setThinkingPref(!thinkingOn)}
-                  aria-pressed={thinkingOn}
-                  title={thinkingOn ? 'Reasoning is on for this chat — click to turn off' : 'Reasoning is off for this chat — click to turn on'}
-                >
-                  <span className={`ctl-dot ${thinkingOn && streaming ? 'animate-pulse' : ''}`} />
-                  <ThoughtIcon className="h-3 w-3" /> Thinking {thinkingOn ? 'on' : 'off'}
-                </button>
-              ) : thinking ? (
+              {thinking ? (
                 <span
                   className="ctl-toggle ctl-toggle-on whitespace-nowrap"
                   title="The model streamed reasoning while writing this reply"

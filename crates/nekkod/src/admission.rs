@@ -282,6 +282,15 @@ pub(crate) fn host_provider_config(ctx: &Ctx, config: &Value) -> Value {
     Value::Object(out)
 }
 
+/// Thinking is on unless this is our local model with an explicit Expert override.
+/// Legacy per-chat flags are deliberately not an input, including after Auto routing.
+fn effective_thinking(provider: &Value, model: &Value) -> bool {
+    !(s(provider, "kind") == "llamacpp"
+        && provider.get("managedCachePrompt") == Some(&json!(true))
+        && s(model, "format") != "mlx"
+        && model.pointer("/preset/thinking") == Some(&json!(false)))
+}
+
 /// `/[a-z0-9_]{4,}/g` over the lowercased prompt: whether the index has anything to search for.
 fn has_index_words(text: &str) -> bool {
     let lower = text.to_lowercase();
@@ -633,6 +642,16 @@ async fn admit(
         );
     }
     facts.insert("promptCaching".into(), json!(settings.get("promptCaching") != Some(&json!(false))));
+    let mut thinking = true;
+    if let Some(p) = &resolved {
+        if p.get("managedCachePrompt") == Some(&json!(true)) {
+            if let Some(library) = &ctx.library {
+                let model = library.find(model_id).await?.unwrap_or(Value::Null);
+                thinking = effective_thinking(p, &model);
+            }
+        }
+    }
+    facts.insert("thinking".into(), json!(thinking));
     // The loaded window, for the loop to keep a long run inside (nekko-loop fit.rs).
     facts.insert("contextWindow".into(), json!(crate::providers::context_window_for(ctx, &provider, model_id).await));
     // False for a model the provider lists without image input: pictures go as a note.
@@ -811,6 +830,30 @@ fn terminal_text(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn thinking_is_on_except_for_a_managed_local_expert_override() {
+        let off = json!({ "preset": { "thinking": false } });
+        for kind in [
+            "anthropic",
+            "openai",
+            "openrouter",
+            "chatgpt",
+            "claude-code",
+            "ollama",
+            "lmstudio",
+            "vllm",
+            "openai-compat",
+        ] {
+            assert!(effective_thinking(&json!({ "kind": kind, "thinking": false }), &off), "{kind}");
+        }
+        assert!(effective_thinking(&json!({ "kind": "llamacpp" }), &off));
+        let managed = json!({ "kind": "llamacpp", "managedCachePrompt": true });
+        assert!(!effective_thinking(&managed, &off));
+        assert!(effective_thinking(&managed, &json!({ "preset": { "thinking": true } })));
+        assert!(effective_thinking(&managed, &json!({})));
+        assert!(effective_thinking(&managed, &json!({ "format": "mlx", "preset": { "thinking": false } })));
+    }
 
     #[test]
     fn a_person_s_chat_counts_while_it_runs() {

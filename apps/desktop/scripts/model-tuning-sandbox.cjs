@@ -39,6 +39,10 @@ app.whenReady().then(async () => {
     const image = await win.capturePage(undefined, { stayHidden: true, stayAwake: false });
     if (image.isEmpty()) throw Error('Empty capture: ' + name);
     fs.writeFileSync(file, image.toPNG()); report.captures.push({ file, size: image.getSize() });
+    if (name === 'moe8-more-and-expert') {
+      const y = await run(`(() => { const e = [...document.querySelectorAll('p,h3,h4')].find(e => e.textContent.trim() === 'Speed'); return e ? Math.max(0, Math.floor(e.getBoundingClientRect().top) - 180) : 1800; })()`);
+      fs.writeFileSync(path.join(dir, 'expert-thinking-detail.png'), (await win.capturePage({ x: 0, y, width: 820, height: 420 }, { stayHidden: true })).toPNG());
+    }
     win.setContentSize(820, 1200);
   };
   const reset = async opts => { await run(`integration.reset(${js(opts)})`); await sleep(1500); };
@@ -46,7 +50,8 @@ app.whenReady().then(async () => {
     await win.loadFile(path.join(out, 'index.html')); await sleep(1000);
     if (base) {
       await reset({ scenario: 'moe8' }); await capture('moe8-open');
-      await clickText('Advanced'); await capture('moe8-advanced');
+      await click('[data-run-on="gpu"]'); await click('[data-run-on="hybrid"]'); await click('[data-preset="coding"]');
+      await click('[data-fold="more"]'); await click('[data-fold="expert"]'); await capture('moe8-more-and-expert');
       await reset({ scenario: 'dense24' }); await capture('dense24-open');
     } else {
       await reset({ scenario: 'moe8' });
@@ -64,9 +69,12 @@ app.whenReady().then(async () => {
       await check('long coding keeps the full context', "document.querySelector('[data-context-label]')?.innerText.startsWith('256k')");
       await click('[data-fold="more"]'); await click('[data-fold="expert"]');
       await capture('moe8-more-and-expert');
+      await check('Expert thinking defaults on', "document.querySelector('[aria-label=\"Thinking\"]')?.getAttribute('aria-checked')==='true'");
+      await click('[aria-label="Thinking"]');
+      await check('Expert thinking can be disabled', "document.querySelector('[aria-label=\"Thinking\"]')?.getAttribute('aria-checked')==='false'");
       await check('expert controls name their flags', "document.querySelector('[data-engine-load-drawer]').innerText.includes('--n-cpu-moe')");
       await click('[data-load]'); await sleep(500);
-      await check('load sends experts in RAM and paged tables', "(()=>{const l=integration.loads().at(-1);return !!l&&l.cpuMoeLayers>0&&l.lazyTables===true&&l.contextTokens===262144})()");
+      await check('load sends experts in RAM and paged tables', "(()=>{const l=integration.loads().at(-1);return !!l&&l.thinking===false&&l.cpuMoeLayers>0&&l.lazyTables===true&&l.contextTokens===262144})()");
       await reset({ scenario: 'dense24' });
       await capture('dense24-open');
       await check('a dense model that fits runs on the GPU', "document.querySelector('[data-run-on=\"gpu\"]')?.getAttribute('aria-pressed')==='true'");
