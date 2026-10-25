@@ -17,6 +17,7 @@ pub mod phone;
 pub mod phone_changes;
 pub mod phone_files;
 pub mod phone_git;
+pub mod phone_providers;
 pub mod phone_terminal;
 pub mod phone_thumbs;
 pub mod phone_views;
@@ -25,6 +26,7 @@ pub mod route;
 pub mod service;
 pub mod socket;
 pub mod step_up;
+pub mod step_up_register;
 
 pub use agent::{AgentCore, Out, PUSH_TEST_CHANNEL, RELAYED_EVENTS};
 pub use phone::{Activity, DeviceAccess, Devices, PhoneDevice};

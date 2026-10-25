@@ -577,10 +577,16 @@ async function measureMemory({ appUrl, mock, api, ids }) {
 
   // ---- GPU layers: every visible wall window working at once.
   await cdp.send('Emulation.setDeviceMetricsOverride', { ...CFG.viewport, deviceScaleFactor: CFG.memory.scale, mobile: false });
-  // Ctrl+Shift+3 is the 3 x 2 Grid. Grid has no toolbar button (it lives in
-  // Settings since #741), so wait on the wall's own layout attribute.
-  await cdp.evaluate(`document.dispatchEvent(new KeyboardEvent('keydown', { code: 'Digit3', key: '#', ctrlKey: true, shiftKey: true, bubbles: true }))`);
-  await app.waitFor(`document.querySelector('[data-wall-layout]')?.dataset.wallLayout === 'fixed'`, 'the Grid wall layout', 5000);
+  // The 3 x 2 grid is Dynamic with Settings' Fixed grid on; it has no shortcut
+  // or toolbar button. Turn it on there, as a person would, then come back: the
+  // wall reads its layout when it mounts. Wait on the wall's own attribute.
+  await app.clickEl('nav button[aria-label="Settings"]', null, 'the Settings nav');
+  await app.waitFor(`!!document.getElementById('wall-fixed-grid')`, 'the Fixed grid setting');
+  await cdp.evaluate(`(() => { const box = document.getElementById('wall-fixed-grid'); if (!box.checked) box.click(); })()`);
+  await app.waitFor(`document.getElementById('wall-fixed-grid').checked`, 'the Fixed grid setting to save');
+  await app.clickEl('nav button[aria-label="Agents"]', null, 'the Agents nav');
+  await cdp.evaluate(`document.dispatchEvent(new KeyboardEvent('keydown', { code: 'Digit2', key: '@', ctrlKey: true, shiftKey: true, bubbles: true }))`);
+  await app.waitFor(`document.querySelector('[data-wall-layout]')?.dataset.wallLayout === 'fixed'`, 'the Fixed grid wall layout', 5000);
   const working = ids.slice(0, CFG.memory.working);
   const before = mock.state.streamsStarted;
   for (const id of working) {

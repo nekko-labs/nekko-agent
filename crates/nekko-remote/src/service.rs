@@ -33,6 +33,11 @@ pub trait LinkHandle: Send + Sync {
     fn stop(&self);
     /// Kick a device's live connections and drop its push token.
     fn kick_device(&self, device_id: &str);
+    /// Kick a device's live connections and keep its push token
+    /// (`remote:stop`: the phone is disconnected, not signed out).
+    fn disconnect_device(&self, device_id: &str) {
+        self.kick_device(device_id);
+    }
     /// Device ids with a welcomed live connection.
     fn connected_devices(&self) -> Vec<String>;
     fn is_online(&self) -> bool;
@@ -599,7 +604,7 @@ impl RemoteService {
         let at = (self.clock)();
         if let Some(h) = self.handle() {
             for device in h.connected_devices() {
-                h.kick_device(&device);
+                h.disconnect_device(&device);
             }
         }
         self.disable()?;

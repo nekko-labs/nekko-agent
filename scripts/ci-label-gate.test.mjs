@@ -66,3 +66,17 @@ test('gate runs the check on PRs and in the queue, and CI re-runs when a label i
   assert.match(ci, /ci-label-gate\.mjs pr /);
   assert.match(ci, /ci-label-gate\.mjs queue /);
 });
+
+test('Native iOS passes on a green batch status, a green run, or neither when the PR needs no iOS', () => {
+  const status = state => ({ state, target_url: 'https://example/batch' });
+  const failedRun = run(1, ios, 'completed', 'failure');
+  assert.deepEqual(labelRuns([failedRun], { batch: status('success'), iosRequired: true }).failed, []);
+  assert.equal(labelRuns([], { batch: status('success'), iosRequired: true }).passed.length, 1);
+  assert.equal(labelRuns([], { batch: status('pending'), iosRequired: true }).pending.length, 1);
+  assert.equal(labelRuns([], { batch: status('failure'), iosRequired: true }).failed[0].html_url, 'https://example/batch');
+  // A pushed head no batch has taken yet: wait.
+  assert.equal(labelRuns([run(2, mobile, 'completed', 'success')], { iosRequired: true }).pending[0].name, 'Native iOS');
+  // A green run on the PR (a dispatch to tell which PR broke a batch) beats a red batch.
+  assert.deepEqual(labelRuns([run(3, ios, 'completed', 'success')], { batch: status('failure'), iosRequired: true }).passed.map(r => r.id), [3]);
+  assert.deepEqual(labelRuns([], { iosRequired: false }), { pending: [], failed: [], passed: [] });
+});

@@ -31,7 +31,7 @@ import kotlinx.serialization.json.JsonPrimitive
 
 /** Android wrapper around [ChatController]: wires it to the repository's state and events. */
 class ChatViewModel(
-    private val sessionId: String,
+    val sessionId: String,
     private val repo: ComputersRepository,
     /** The phone's microphone and its settings; null keeps dictation off (tests, previews). */
     mic: MicHardware? = null,

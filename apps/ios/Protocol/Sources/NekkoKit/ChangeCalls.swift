@@ -4,6 +4,17 @@ import NekkoProtocol
 /// A connection that can carry a signed Change proof beside a call's args.
 public protocol ProofCaller: Caller {
     func call(_ channel: String, _ args: [JSONValue], proof: JSONValue?, timeout: TimeInterval?) async throws -> JSONValue
+    /// With a step-up beside the proof (SK-6): `StepUpProof.json`.
+    func call(_ channel: String, _ args: [JSONValue], proof: JSONValue?, stepUp: JSONValue?, timeout: TimeInterval?) async throws -> JSONValue
+}
+
+extension ProofCaller {
+    /// A connection that can't carry a step-up never drops one silently.
+    public func call(_ channel: String, _ args: [JSONValue], proof: JSONValue?, stepUp: JSONValue?,
+                     timeout: TimeInterval?) async throws -> JSONValue {
+        if case .some = stepUp { throw RelayError("This connection can’t carry a security key confirmation.") }
+        return try await call(channel, args, proof: proof, timeout: timeout)
+    }
 }
 
 extension RelayClient: ProofCaller {}
@@ -45,11 +56,13 @@ public final class ChangeCalls: @unchecked Sendable {
 
     /// Call a change-class channel with a fresh proof. Registers this phone's
     /// key first if this connection hasn't yet. A refusal comes back as a
-    /// `ChangeRefused` with a message for the owner.
-    public func call(change channel: String, _ args: [JSONValue] = [], timeout: TimeInterval? = nil) async throws -> JSONValue {
+    /// `ChangeRefused` with a message for the owner. `stepUp` (SK-6) rides
+    /// beside the proof when the computer asked for one.
+    public func call(change channel: String, _ args: [JSONValue] = [], stepUp: JSONValue? = nil,
+                     timeout: TimeInterval? = nil) async throws -> JSONValue {
         do {
             try await registerIfNeeded()
-            return try await signed(channel, args, timeout: timeout)
+            return try await signed(channel, args, stepUp: stepUp, timeout: timeout)
         } catch let e as RelayError where e.fromComputer {
             guard let refusal = PhoneRefusal(e.message) else { throw e }
             if refusal.code == "key-missing" {
@@ -57,7 +70,7 @@ public final class ChangeCalls: @unchecked Sendable {
                 setRegistered(false)
                 do {
                     try await registerIfNeeded()
-                    return try await signed(channel, args, timeout: timeout)
+                    return try await signed(channel, args, stepUp: stepUp, timeout: timeout)
                 } catch let again as RelayError where again.fromComputer {
                     throw refused(again.message)
                 }
@@ -80,7 +93,7 @@ public final class ChangeCalls: @unchecked Sendable {
     private func registerIfNeeded() async throws {
         if lock.withLock({ registered }) { return }
         let key: JSONValue = .string(try signer.publicKey().base64EncodedString())
-        _ = try await signed(ChangeProof.keyChannel, [key], timeout: nil)
+        _ = try await signed(ChangeProof.keyChannel, [key], stepUp: nil, timeout: nil)
         setRegistered(true)
     }
 
@@ -93,8 +106,9 @@ public final class ChangeCalls: @unchecked Sendable {
         }
     }
 
-    private func signed(_ channel: String, _ args: [JSONValue], timeout: TimeInterval?) async throws -> JSONValue {
+    private func signed(_ channel: String, _ args: [JSONValue], stepUp: JSONValue?, timeout: TimeInterval?) async throws -> JSONValue {
         let proof = try await ChangeProof.proof(signer: signer, deviceId: deviceId, channel: channel, args: args, ts: nextTs())
-        return try await caller.call(channel, args, proof: proof, timeout: timeout)
+        guard let stepUp else { return try await caller.call(channel, args, proof: proof, timeout: timeout) }
+        return try await caller.call(channel, args, proof: proof, stepUp: stepUp, timeout: timeout)
     }
 }

@@ -64,12 +64,18 @@ dependencies {
     // App lock: the system fingerprint / face / screen-lock prompt. BiometricPrompt needs a FragmentActivity.
     implementation(libs.androidx.biometric)
     implementation(libs.androidx.fragment.ktx)
+    // Step-up (SK-7): security keys and passkeys through Credential Manager.
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material3)
     implementation(libs.compose.material.icons.extended)
+    // Folding phones: WindowInfoTracker's FoldingFeature and the window size class (Posture.from).
+    implementation(libs.androidx.window)
+    implementation(libs.compose.material3.adaptive)
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)
 
@@ -79,4 +85,6 @@ dependencies {
     androidTestImplementation(platform(libs.compose.bom))
     androidTestImplementation(libs.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.test.espresso.core)
+    // Fakes a FoldingFeature (Fold-in, Fold-out, Surface Duo) for the pane tests.
+    androidTestImplementation(libs.androidx.window.testing)
 }

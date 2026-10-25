@@ -11,6 +11,7 @@ import { DEFAULT_SPEC_METHODOLOGY, SPEC_METHODOLOGIES, ORCHESTRATION_STRATEGIES,
 import { GearIcon, PhoneIcon, ShieldIcon, SlidersIcon, SunIcon, TrashIcon, RobotIcon, WandIcon, WrenchIcon } from '../icons.js';
 import { VoiceSettings } from '../components/VoiceSettings.js';
 import { RemoteAccess } from '../components/RemoteAccess.js';
+import { SecuritySettings } from '../components/security/SecuritySettings.js';
 import { SyncSettings } from '../components/cloud/SyncSettings.js';
 import { DelegationRouteSettings } from '../components/DelegationRouteSettings.js';
 import { useT, LANGUAGES } from '../i18n.js';
@@ -363,6 +364,8 @@ export function SettingsView() {
               <ErrorBoundary label="Automations"><AutomationsSection settings={settings} update={update} /></ErrorBoundary>
             </SettingsGroup>
             <SettingsGroup id="safety">
+              {/* Security: hardware keys and step-up (SK-4) */}
+              <ErrorBoundary label="Security"><SecuritySettings /></ErrorBoundary>
               {/* Sandbox */}
               <section className="card mt-5 p-5">
                 <div className="flex items-center gap-2"><ShieldIcon className="h-4 w-4" /><h2 className="font-semibold">{tr('settings.sandbox')}</h2></div>

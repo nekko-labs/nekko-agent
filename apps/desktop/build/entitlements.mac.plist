@@ -48,5 +48,13 @@
        NSCameraUsageDescription in the mac.extendInfo block. -->
   <key>com.apple.security.device.camera</key>
   <true/>
+
+  <!-- Desktops (macOS Spaces): main/spaces.ts switches desktops by sending
+       Mission Control's shortcuts to System Events through osascript. Apple
+       events are blocked under the hardened runtime without this; pairs with
+       NSAppleEventsUsageDescription in mac.extendInfo. Accessibility is asked
+       for separately, only when the user picks "Allow and switch". -->
+  <key>com.apple.security.automation.apple-events</key>
+  <true/>
 </dict>
 </plist>

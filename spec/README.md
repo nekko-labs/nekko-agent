@@ -67,7 +67,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Agent window controls refresh (2026-10-15)](desktop/agent-window-controls-refresh.md) (6 KB)
 - [Composer and desktop rail regression fixes (2026-10-07)](desktop/composer-and-desktop-rail-regression-fixes.md) (3 KB)
 - [Empty wall opens the new-chat screen; glass prism composer (2026-10-18)](desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md) (2 KB)
-- [Focused mode transitions, calmer focus ring and layout controls (2026-10-17)](desktop/focused-mode-transitions-calmer-focus-ring-and-layout-controls.md) (5 KB)
+- [Focused mode transitions, calmer focus ring and layout controls (2026-10-17)](desktop/focused-mode-transitions-calmer-focus-ring-and-layout-controls.md) (7 KB)
 - [Grid model selection and chat-mode menus (2026-10-07)](desktop/grid-model-selection-and-chat-mode-menus.md) (1 KB)
 - [Inline agent-window creation](desktop/inline-agent-window-creation.md) (3 KB)
 - [Minimize agent windows](desktop/minimize-agent-windows.md) (1 KB)
@@ -92,7 +92,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 Agents panel, monitors, subagents and delegation.
 
 - [Agent activity and panel polish](agents/agent-activity-and-panel-polish.md) (39 KB)
-- [Agent Monitor Project group, hardware temperatures and multi-monitor Dynamic mode (2026-10-18)](agents/agent-monitor-project-group-hardware-temperatures-and-multi-moni.md) (5 KB)
+- [Agent Monitor Project group, hardware temperatures and multi-monitor Dynamic mode (2026-10-18)](agents/agent-monitor-project-group-hardware-temperatures-and-multi-moni.md) (9 KB)
 - [Agent panel view options (2026-10-17)](agents/agent-panel-view-options.md) (4 KB)
 - [Agents dashboard simplification (2026-10-06)](agents/agents-dashboard-simplification.md) (3 KB)
 - [Approval retention and delegation navigation](agents/approval-retention-and-delegation-navigation.md) (1 KB)
@@ -155,6 +155,7 @@ Workflows, goals, integrations and tools.
 
 - [Automating repeatable work (Workflows tab)](automation/automating-repeatable-work-workflows-tab.md) (4 KB)
 - [Background automations yield to the user](automation/background-automations-yield-to-the-user.md) (10 KB)
+- [CI runners](automation/ci-runners.md) (14 KB)
 - [Experimental outbound resource queue](automation/experimental-outbound-resource-queue.md) (3 KB)
 - [Handing the agent a long-running goal](automation/handing-the-agent-a-long-running-goal.md) (2 KB)
 - [One-click setup for safe offline PC control (planned)](automation/one-click-setup-for-safe-offline-pc-control.md) (6 KB)
@@ -169,10 +170,10 @@ Phone remote control and the native iOS and Android apps.
 - [Folding phones: two chats at once, a Monitors pane and vertical mode (2026-10-24)](phone/folding-phones-two-chats-and-monitors.md) (13 KB)
 - [iPhone: the desktop's languages and themes, and New chat's effort and computer (2026-10-23)](phone/iphone-languages-themes-and-new-chat-choices.md) (5 KB)
 - [Native Android app (2026-10-11)](phone/native-android-app.md) (41 KB)
-- [Native iOS app (2026-10-16)](phone/native-ios-app.md) (83 KB)
+- [Native iOS app (2026-10-16)](phone/native-ios-app.md) (86 KB)
 - [Native phone implementation decision (2026-10-07)](phone/native-phone-implementation-decision.md) (2 KB)
 - [Nekko Cloud machines: a sandboxed computer the phone pairs with (2026-10-24)](phone/nekko-cloud-machines.md) (5 KB)
-- [Phone access classes and relay replay protection](phone/phone-access-classes-and-relay-replay-protection.md) (8 KB)
+- [Phone access classes and relay replay protection](phone/phone-access-classes-and-relay-replay-protection.md) (9 KB)
 - [Your agent in your pocket (the iOS and Android app)](phone/your-agent-in-your-pocket-the-ios-and-android-app.md) (5 KB)
 
 ### platform
@@ -182,8 +183,9 @@ Architecture, speed contract, distribution, builds and startup.
 - [Build storage maintenance](platform/build-storage-maintenance.md) (3 KB)
 - [Development macOS identity](platform/development-macos-identity.md) (2 KB)
 - [Distribution & platforms](platform/distribution-platforms.md) (10 KB)
-- [Hardware keys, step-up on phone and desktop, and remote sign-out (2026-10-24)](platform/hardware-keys-step-up-and-remote-sign-out.md) (16 KB)
+- [Hardware keys, step-up on phone and desktop, and remote sign-out (2026-10-24)](platform/hardware-keys-step-up-and-remote-sign-out.md) (17 KB)
 - [How it's built: the window and the engine daemon](platform/how-its-built-the-window-and-the-engine-daemon.md) (26 KB)
+- [Limits on what grows in the data folder](platform/data-folder-growth-limits.md) (2 KB)
 - [Noninteractive shell input and bounded stop cleanup](platform/noninteractive-shell-input-and-bounded-stop-cleanup.md) (1 KB)
 - [Page recovery and startup appearance (2026-10-12)](platform/page-recovery-and-startup-appearance.md) (2 KB)
 - [Send feedback from every app (2026-10-24)](platform/send-feedback.md) (5 KB)
@@ -196,7 +198,7 @@ Architecture, speed contract, distribution, builds and startup.
 Brand, website, onboarding and the mascot.
 
 - [Beta signups and website analytics (2026-10-17)](brand/beta-signups-and-website-analytics.md) (2 KB)
-- [Brand refresh and website redesign (2026-10-18)](brand/brand-refresh-and-website-redesign.md) (6 KB)
+- [Brand refresh and website redesign (2026-10-18)](brand/brand-refresh-and-website-redesign.md) (7 KB)
 - [First-run setup (planned onboarding wizard)](brand/first-run-setup.md) (2 KB)
 - [Local marketing website preview (2026-10-17)](brand/local-marketing-website-preview.md) (1 KB)
 - [Mascot, polish & onboarding](brand/mascot-polish-onboarding.md) (10 KB)
