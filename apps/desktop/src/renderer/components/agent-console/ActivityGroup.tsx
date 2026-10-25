@@ -6,7 +6,7 @@ import { isRunningTool, toolQuietSince, watchToolElapsed } from './toolProgress.
 import { ChatIcon, ThoughtIcon } from '../../icons.js';
 import { Markdown } from '../Markdown.js';
 import type { Activity, ActivityRow, IndexedActivity } from './transcript.js';
-import { activityRows, stepKey } from './transcript.js';
+import { activityRows, fmtTime, stepKey } from './transcript.js';
 import { SubagentCue, SubagentModelChip, subagentSummary, SubagentHeadline, SubagentOpenButton } from './SubagentCue.js';
 import { WatchClockChip, WatchDetail, WatchIcon, WatchThen, watchCallHeadline } from './WatchRow.js';
 import { parseWatchCall, thenSummary } from '../../agentWatches.js';
@@ -172,7 +172,7 @@ function PurposeGroupRow({ row, live, streaming, total, toolActivity, pendingCal
   const endedAt = ends.every((e) => e !== undefined) ? Math.max(...(ends as number[])) : undefined;
   const quiets = tools.map((t) => toolQuietSince(toolActivity, t.call.id)).filter((q): q is number => q !== undefined);
   return (
-    <li className="list-none" data-purpose-group={row.purpose}>
+    <li className="list-none" data-purpose-group={row.purpose} data-vt-stamp={startedAt ? fmtTime(startedAt) || undefined : undefined}>
       <button
         className="flex w-full min-w-0 items-baseline gap-1.5 py-0.5 text-left text-ink-faint hover:text-ink-soft"
         onClick={() => setOpen(!open)}
@@ -258,7 +258,7 @@ function StepRow({ index, item, live, quietSince }: { index: number; item: Activ
   const then = kind === 'watch' && item.kind === 'tool' && parseWatchCall(item.call).action === 'create' && !item.result?.isError ? thenSummary(parseWatchCall(item.call).prompt) : '';
 
   return (
-    <li className="list-none">
+    <li className="list-none" data-vt-stamp={item.kind === 'tool' && item.startedAt ? fmtTime(item.startedAt) || undefined : undefined}>
       <div className="flex min-w-0 items-center gap-1">
         <button
           className="flex min-w-0 flex-1 items-baseline gap-1.5 py-0.5 text-left text-ink-faint hover:text-ink-soft"
