@@ -2365,3 +2365,9 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [x] **T205a** Chat command logs cut to their last 4 MB of whole lines past 5 MB (`keep_file_tail` in `agent_logs.rs`). Test: `a_long_command_log_keeps_its_last_whole_lines`. Done: 2026-10-24
 - [x] **T205b** `quota-history.jsonl` keeps 30 days, pruned at startup (`prune_quota_history`). Test: `quota_history_keeps_thirty_days`. Done: 2026-10-24
 - [x] **T205c** Abandoned `.part` downloads untouched for 7 days removed at startup (`sweep_stale_parts`). Test: `only_old_part_files_go`. Done: 2026-10-24
+
+### Unified Models workspace (2026-10-25, #1102) · [spec](spec/models/models-providers.md)
+
+- [x] Combine provider setup and Model Server under one Models rail entry, retaining existing destinations and title-bar highlighting.
+- [x] Add local/cloud subnavigation, current-provider chips, a divider, five filled provider shortcuts and the full overflow chooser; retain existing connection and model controls.
+- [x] Verify desktop typechecking, focused provider/navigation tests, hidden Electron interactions and matching 1440/390 px before/after evidence. Live credential sign-in and server lifecycle actions are not exercised by this layout change.
