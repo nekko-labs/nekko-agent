@@ -5,7 +5,7 @@ area: automation
 
 # CI runners
 
-**Status: `[planned]` product; T211 helper and NAT implemented and run on a real macOS 15 guest.** Verified with the spike example on a macOS 15.7.7 guest: it boots, gets its address by DHCP, resolves through the gateway, and reaches the public internet, while curls from the guest to the host's LAN address, the router, Tailscale addresses, the gateway's other ports and DNS-rebinding names are all refused. Orphan behavior: when the example is SIGKILLed the helper exits about 0.56 s later and `count-vms` returns to 0; when the helper is SIGKILLed the VM is gone about 0.05 s later. Throughput is in [docs/perf-history.md](../../docs/perf-history.md). Not yet verified: the VPN binding against a real tunnel. Nothing in the app starts a runner yet: the runner is not wired into the shipped daemon until T212. All product journeys and remaining sections below are planned unless explicitly identified as T211 implementation details. Issue: [nekko-labs/nekko-agent#1038](https://github.com/nekko-labs/nekko-agent/issues/1038). Choices behind it: [decision 0022](../../docs/decisions/0022-ci-runners-vm-and-network.md). Tasks: T210 to T214 in [TASKS.md](../../TASKS.md).
+**Status: `[planned]` product; T211 helper and NAT implemented and run on a real macOS 15 guest; T212 implemented: the supervisor, the Mac's signals, the VM lifecycle, GitHub App connect and the `runner:*` channels.** Verified with the spike example on a macOS 15.7.7 guest: it boots, gets its address by DHCP, resolves through the gateway, and reaches the public internet, while curls from the guest to the host's LAN address, the router, Tailscale addresses, the gateway's other ports and DNS-rebinding names are all refused. Orphan behavior: when the example is SIGKILLed the helper exits about 0.56 s later and `count-vms` returns to 0; when the helper is SIGKILLed the VM is gone about 0.05 s later. Throughput is in [docs/perf-history.md](../../docs/perf-history.md). Not yet verified: the VPN binding against a real tunnel, and one real GitHub job end to end (the T214 pilot). The daemon runs the supervisor whenever the `nekko-vm` helper is staged beside it on an Apple silicon Mac; there is no UI yet (T213), and no golden image or picker (T214). All product journeys and remaining sections below are planned unless explicitly identified as T211 implementation details. Issue: [nekko-labs/nekko-agent#1038](https://github.com/nekko-labs/nekko-agent/issues/1038). Choices behind it: [decision 0022](../../docs/decisions/0022-ci-runners-vm-and-network.md). Tasks: T210 to T214 in [TASKS.md](../../TASKS.md).
 
 ## What it is for `[planned]`
 
@@ -50,7 +50,7 @@ The host always keeps at least 2 cores. A supervisor checks a chain of gates eve
 
 **Hard limits for every mode.** These stop a running VM at once: memory pressure critical, thermal state critical, free disk below the floor, Low Power Mode, Off, and Pause all automations. A macOS security update available for more than **7** days blocks new VMs until the Mac is updated.
 
-### How a slot runs `[implemented, unit-tested; not yet run by the daemon]`
+### How a slot runs `[implemented, unit-tested; run by the daemon, not yet against a real job]`
 
 Each slot runs one job in a throwaway VM and moves through five states: **starting** (the VM boots and its runner registers), **ready** (online, waiting for a job), **running**, **draining** (a gate failed and the job has its grace period) and **cleaning** (the VM is stopping; its clone and seed are deleted once the VM process has exited, and its registration is removed).
 
@@ -127,6 +127,8 @@ This is a product reading of the macOS license, not legal advice; check the curr
 
 **GitHub Actions comes first.** Buildkite and GitLab are planned later, behind the same adapter shape (connect, mint a single-job credential, start the agent in the VM, read job status).
 
+**Connecting GitHub** `[implemented T212]`. The owner makes a GitHub App, installs it on their org or repo, and gives this Mac its app id, installation id and private key (the PKCS#1 `.pem` GitHub downloads, under 16 KB). Before anything is saved, connect checks in order: the key mints an installation token (a refused key fails with "GitHub refused this app key. It may have been revoked; connect again with a new key."); the installation's account is the scope's org or owner, compared in any case, so only the owner's own accounts can be connected; every repo is reachable and private, and a public repo is refused unless the owner turns on public repos; for an org, the runner group `nekko-<label>` is created, or updated, limited to the chosen repos. An org that cannot create runner groups is refused ("This org cannot create runner groups. Connect a single repo instead."), never put in the Default group. Only then is the key stored in the keychain item `github-app-<appId>` of the runner vault, and the runner saved enabled, trusting the network the Mac is on. Any failure leaves nothing stored and nothing registered. Reconnecting a scope replaces its GitHub link and keeps its settings. A runner whose key is later revoked or removed shows Error, not Waiting. Owner, org and repo names match in any case wherever scopes are compared.
+
 | Provider | Connect | One job per VM | Label |
 |---|---|---|---|
 | GitHub Actions (first) | Install the Nekko GitHub App on an org or repo | A JIT runner config per VM; the runner exits after one job | `self-hosted`, `macOS`, `ARM64`, `nekko-mac` |
@@ -157,6 +159,8 @@ The runner itself is free in the open source app, with everything on one Mac: sa
 Cloud is never required for one Mac.
 
 ## Settings and UI `[planned]`
+
+**Channels** `[implemented T212]`. The daemon serves `runner:list()` (every `RunnerView`: settings, state, slots, reasons, available slots and their limit, keep awake, error, today's totals), `runner:connect(request)`, `runner:update(id, settings)` (a patch over the saved settings, sanitized), `runner:setEnabled(id, enabled)` and `runner:remove(id)` (stops its VMs, removes its offline registrations, and deletes the app key once no other runner uses that app), and pushes `runner:changed` with every view whenever they change. An unknown id is "No runner with that id.". Without the helper (or off Apple silicon) every enabled runner shows Error with "VM support unavailable" and nothing starts.
 
 A CI runners section in the Workflows tab: a first-visit card with Connect GitHub, a three-step connect sheet (install the app, choose the org or repo, choose how this Mac helps), a runner card per scope (slots, current job, gates, today's jobs), and runner settings (priority, keep awake, slots, memory with "Recommended: N GB for this Mac", CPU, disk, only-when, safety, max job time). A menu bar indicator shows while any VM runs.
 
