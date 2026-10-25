@@ -37,7 +37,7 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 - [Background notification and panel batch (2026-10-13)](chat/background-notification-and-panel-batch.md) (8 KB)
 - [Chat & cowork (unified surface)](chat/chat-cowork-unified-surface.md) (73 KB)
 - [Chat actions and persistent reply measurements](chat/chat-actions-and-persistent-reply-measurements.md) (25 KB)
-- [Chat artifact cards and session-local documents](chat/chat-artifact-cards-and-session-local-documents.md) (4 KB)
+- [Chat artifact cards and session-local documents](chat/chat-artifact-cards-and-session-local-documents.md) (8 KB)
 - [Chat chrome and composer refinement (implemented; desktop verification pending)](chat/chat-chrome-and-composer-refinement.md) (3 KB)
 - [Chat completion X icons and idle auto-completion (2026-10-15)](chat/chat-completion-x-icons-and-idle-auto-completion.md) (2 KB)
 - [Chat isolation and prompt customization](chat/chat-isolation-and-prompt-customization.md) (24 KB)
@@ -169,14 +169,15 @@ Phone remote control and the native iOS and Android apps.
 
 - [Driving your home model from your phone (remote control)](phone/driving-your-home-model-from-your-phone-remote-control.md) (13 KB)
 - [Folding phones: two chats at once, a Monitors pane and vertical mode (2026-10-24)](phone/folding-phones-two-chats-and-monitors.md) (13 KB)
+- [iPhone chat: tables, and previews of files and local pages the agent links (2026-10-26)](phone/iphone-chat-tables-and-link-previews.md) (8 KB)
 - [iPhone Markdown composer and rich replies (planned 2026-10-25)](phone/iphone-markdown-composer-and-rich-replies.md) (7 KB)
 - [iPhone: the desktop's languages and themes, and New chat's effort and computer (2026-10-23)](phone/iphone-languages-themes-and-new-chat-choices.md) (5 KB)
 - [Mermaid diagrams on the phone (planned 2026-10-25)](phone/mermaid-diagrams-on-the-phone.md) (4 KB)
 - [Native Android app (2026-10-11)](phone/native-android-app.md) (41 KB)
-- [Native iOS app (2026-10-16)](phone/native-ios-app.md) (88 KB)
+- [Native iOS app (2026-10-16)](phone/native-ios-app.md) (92 KB)
 - [Native phone implementation decision (2026-10-07)](phone/native-phone-implementation-decision.md) (2 KB)
 - [Nekko Cloud machines: a sandboxed computer the phone pairs with (2026-10-24)](phone/nekko-cloud-machines.md) (7 KB)
-- [Phone access classes and relay replay protection](phone/phone-access-classes-and-relay-replay-protection.md) (9 KB)
+- [Phone access classes and relay replay protection](phone/phone-access-classes-and-relay-replay-protection.md) (11 KB)
 - [Your agent in your pocket (the iOS and Android app)](phone/your-agent-in-your-pocket-the-ios-and-android-app.md) (5 KB)
 
 ### platform

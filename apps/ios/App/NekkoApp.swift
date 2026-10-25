@@ -83,7 +83,11 @@ struct NekkoApp: App {
     /// The app, or (Debug builds, `-uiTestMarkdownLab`) the Markdown fixture the UI tests photograph.
     @ViewBuilder private var root: some View {
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("-uiTestMarkdownLab") { MarkdownLab() } else { RootView() }
+        if ProcessInfo.processInfo.arguments.contains("-uiTestMarkdownLab") {
+            MarkdownLab()
+        } else if ProcessInfo.processInfo.arguments.contains("-uiTestChatStatus") {
+            ChatStatusFixture()
+        } else { RootView() }
         #else
         RootView()
         #endif
@@ -98,7 +102,12 @@ struct NekkoApp: App {
                 .environment(app.prefs)
                 .modifier(Themed(choice: app.prefs.theme, appearance: app.store.appearance))
                 .onOpenURL { app.handle(url: $0) }
-                .task { app.start() }
+                .task {
+                    #if DEBUG
+                    if ProcessInfo.processInfo.arguments.contains("-uiTestChatStatus") { return }
+                    #endif
+                    app.start()
+                }
                 .overlay {
                     if let kind = splash {
                         let run = splashRun
