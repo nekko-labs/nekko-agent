@@ -73,6 +73,11 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://nekkoagent.com/docs/cloud-machines</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://nekkoagent.com/docs/protect-this-computer-with-a-security-key</loc>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>

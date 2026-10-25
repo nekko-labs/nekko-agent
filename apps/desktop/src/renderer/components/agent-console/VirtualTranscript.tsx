@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { RowKeyContext, RowMemoryContext } from './rowState.js';
 import { bottomRange, isPinned, prefixOffsets, rangeFor, sameRange, shiftAbove, type RowRange } from './virtualGeometry.js';
@@ -82,11 +82,57 @@ export interface VirtualTranscriptProps<R extends VirtualRow> {
   onPinnedChange?: (pinned: boolean) => void;
   /** The conversation grew at the bottom while the reader was scrolled up. */
   onGrowWhileUnpinned?: () => void;
+  /** A row's time, shown when the reader swipes the transcript left. */
+  stampOf?: (row: R) => string | undefined;
   ref?: React.Ref<VirtualTranscriptHandle>;
 }
 
+/** How far a left swipe slides the rows, which is the room the times get. */
+const REVEAL_PX = 72;
+/** No horizontal wheel input for this long means the fingers left the trackpad. */
+const REVEAL_RELEASE_MS = 120;
+
+/**
+ * Swipe left on the trackpad to see when each row was sent, as chat apps do:
+ * the rows slide left under the gesture and spring back on release. Driven
+ * through CSS variables on the scroller, so a swipe re-renders nothing.
+ */
+function useSwipeToRevealTimes(scrollRef: React.RefObject<HTMLDivElement | null>, listRef: React.RefObject<HTMLDivElement | null>) {
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    let reveal = 0;
+    let release: ReturnType<typeof setTimeout> | undefined;
+    let settle: ReturnType<typeof setTimeout> | undefined;
+    const paint = (px: number) => {
+      el.style.setProperty('--vt-reveal', `${px}px`);
+      el.style.setProperty('--vt-reveal-o', String(px / REVEAL_PX));
+      // Only while moved: a transform at rest would trap fixed popovers in rows.
+      if (listRef.current) listRef.current.style.transform = px ? `translateX(${-px}px)` : '';
+    };
+    const onWheel = (e: WheelEvent) => {
+      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+      e.preventDefault();
+      clearTimeout(release);
+      clearTimeout(settle);
+      el.classList.add('vt-swiping');
+      reveal = Math.min(REVEAL_PX, Math.max(0, reveal + e.deltaX));
+      paint(reveal);
+      release = setTimeout(() => {
+        el.classList.remove('vt-swiping');
+        reveal = 0;
+        el.style.setProperty('--vt-reveal-o', '0');
+        if (listRef.current) listRef.current.style.transform = 'translateX(0)';
+        settle = setTimeout(() => paint(0), 250);
+      }, REVEAL_RELEASE_MS);
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => { el.removeEventListener('wheel', onWheel); clearTimeout(release); clearTimeout(settle); };
+  }, [scrollRef, listRef]);
+}
+
 function VirtualTranscriptImpl<R extends VirtualRow>({
-  rows, renderRow, estimate, cacheKey, className, header, footer, onPinnedChange, onGrowWhileUnpinned, ref,
+  rows, renderRow, estimate, cacheKey, className, header, footer, onPinnedChange, onGrowWhileUnpinned, stampOf, ref,
 }: VirtualTranscriptProps<R>) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -305,6 +351,8 @@ function VirtualTranscriptImpl<R extends VirtualRow>({
     };
   }, []);
 
+  useSwipeToRevealTimes(scrollRef, listRef);
+
   const visible = rows.slice(range.start, range.end);
   const tailGap = rows[rows.length - 1]?.gapAfter;
   return (
@@ -321,6 +369,7 @@ function VirtualTranscriptImpl<R extends VirtualRow>({
           <RowMemoryContext.Provider value={memory}>
             <div
               ref={listRef}
+              className="vt-list"
               style={{
                 paddingTop: offsets[range.start],
                 paddingBottom: Math.max(0, total - offsets[range.end]),
@@ -334,6 +383,7 @@ function VirtualTranscriptImpl<R extends VirtualRow>({
                   row={row}
                   renderRow={renderRow}
                   last={range.start + k === rows.length - 1}
+                  stamp={stampOf?.(row)}
                   observe={observe}
                 />
               ))}
@@ -350,14 +400,15 @@ interface RowProps<R extends VirtualRow> {
   row: R;
   renderRow: (row: R) => React.ReactNode;
   last: boolean;
+  stamp?: string;
   observe: (el: HTMLElement) => () => void;
 }
 
-function RowImpl<R extends VirtualRow>({ row, renderRow, last, observe }: RowProps<R>) {
+function RowImpl<R extends VirtualRow>({ row, renderRow, last, stamp, observe }: RowProps<R>) {
   const ref = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => (ref.current ? observe(ref.current) : undefined), [observe]);
   return (
-    <div ref={ref} data-vt-key={row.key} className="vt-row space-y-5" style={last ? undefined : { paddingBottom: row.gapAfter ?? ROW_GAP }}>
+    <div ref={ref} data-vt-key={row.key} data-vt-stamp={stamp || undefined} className="vt-row space-y-5" style={last ? undefined : { paddingBottom: row.gapAfter ?? ROW_GAP }}>
       <RowKeyContext.Provider value={row.key}>{renderRow(row)}</RowKeyContext.Provider>
     </div>
   );

@@ -1,10 +1,22 @@
 ---
 status: active
-last-updated: 2026-10-23
+last-updated: 2026-10-24
 owner:
 ---
 
 # Execution Plan, Nekko Agent
+
+## Chat timing and GPT reasoning (added 2026-10-24)
+
+Philip found GPT-6.1 chats slow, quiet between tool calls, and missing their tokens/sec readout during tool work, and asked for step times and swipe-to-see times. Local logs showed the tools were fast (69 ms median for a trivial shell read) and the model calls slow (7.5 s per step against 4.6 s for Opus) because GPT re-reasoned from scratch after every tool. Spec: [Chat suggestions, progress and code access](SPEC.md#chat-suggestions-progress-and-code-access). #1058
+
+- [x] **CT-1, Carry GPT reasoning between tool steps (2026-10-24).** `chatgpt.rs` asks for `reasoning.encrypted_content` and emits each reasoning item as a new `ProviderChunk::Carry`; the loop stores them on the step's message as `carry: { model, items }` and the provider replays them before the call they led to, for the same model only. `drop_carry_before_last_prompt` strips them once a new prompt starts a turn, so session files stay small. Golden request bodies for ChatGPT gained `include`.
+- [x] **CT-2, Thinking always on for GPT (2026-10-24).** Reasoning summaries go out unless the chat turned Thinking off (`think != Some(false)`), matching the composer, which already showed "Thinking on" for an unset flag.
+- [x] **CT-3, Tokens/sec through tool steps (2026-10-24).** The decode clock starts at `response.output_item.added` and on tool-call argument deltas, so a tool-only step is timed instead of marking the whole turn unmeasurable.
+- [x] **CT-4, Elapsed time on tool rows (2026-10-24).** Each tool step row leads with how long it took (`fmtElapsed`, `ToolElapsed` in `ActivityGroup.tsx`), ticking while it runs; persisted times come from the call and result messages' `createdAt`, live ones from `liveRuns.ts`.
+- [x] **CT-5, Swipe left for times (2026-10-24).** A horizontal trackpad swipe slides the transcript up to 72px left and fades in each row's time; letting go springs it back (`useSwipeToRevealTimes` in `VirtualTranscript.tsx`, `data-vt-stamp` + `::after` in `styles.css`). Evidence: `apps/desktop/scripts/chat-timing-sandbox.cjs`.
+- [ ] **CT-6, Live check against a signed-in ChatGPT plan:** confirm the backend accepts the replayed reasoning, and compare per-step time and narration with the 2026-10-24 baseline.
+- [ ] **CT-7, Touch and mouse-drag reveal.** Only trackpad and wheel swipes reveal times today; a mouse drag is left for text selection.
 
 ## Chat page removed (added 2026-10-24)
 
@@ -145,6 +157,9 @@ PRs sat in draft waiting on CI. Run history showed the cause: Linux and Windows 
 - [x] ✅ 2026-10-17 Perf gates recalibrated from 115 CI reports (Philip: "update it to a reasonable number"), closing #544: composer 25 to 27 ms, streaming frame 10.4 to 14, warm switch 20.8 to 30, cold-switch frame 26 to 33. Replayed: 45 failing reports become 0. Details and the per-metric distribution in `docs/perf-history.md`.
 - [x] ✅ 2026-10-17 Draft policy and stacks in `AGENTS.md`: PRs open ready once the author's own checks pass and are queued with `gh pr merge --auto` (not `--admin`); draft only while working or for a named release blocker. Big features use `gh stack` (2-4 layers).
 - [x] ✅ 2026-10-17 The other macOS jobs off the PR path. `ios-native`, the `mobile` iOS build and `dev-identity` run on their own 6-hourly schedule (staggered at :37, :47, :57 from ci.yml's :17) and on a PR only with `ci:macos` (their `pull_request` triggers listen for `labeled` so adding the label starts them; Linux jobs in `mobile` still run per PR). `nekkod-npm` and `decision-models` drop their macOS matrix row on unlabelled PRs through a computed `exclude` (a job `if` cannot read `matrix`); `release.yml` still builds darwin. CodeQL moves from default setup to `.github/workflows/codeql.yml`: actions, JS/TS, Python and Rust on every PR and in the queue; Swift (`swift build` of `apps/ios/Protocol`, a macOS runner) weekly and with `ci:macos`. Default setup is switched off after this lands (both cannot run).
+- [x] ✅ 2026-10-24 CI scoped to what a change touches. On #1023 (two Swift UI test files, `ci:macos`), CI ran `daemon (macos-latest)` 274 s, `capture (macos-latest)` 289 s, `build` 147 s (npm and the cargo build of nekkod) and CodeQL Rust 281 s, JS/TS 102 s, Python 42 s, Actions 43 s and Swift 799 s (macOS): four of the 5 macOS runners for a test-only change. Now (`scripts/ci-scope.mjs`): `ci:macos` adds the macOS row only to `daemon`/`capture` when the change already needs them; a change only under `apps/ios/` or `apps/android/` skips `build` and the queue's itests (their own workflows test them); CodeQL (`codeql.yml`, new `scope` job) analyses only the languages the changed files are in, Swift still only with `ci:macos` on a PR. The Claude compliance check moved from `build` into `scope` so it still scans every change. Unknown file lists, CI files and `package(-lock).json` still run everything. Native iOS still builds nekkod: its live journeys run against it.
+- [x] ✅ 2026-10-24 Native iOS CI faster (`ios-native.yml`). One `build-for-testing` for the test device's architecture serves the bundle checks and every test run (before, the bundle check built for a generic destination and `test` rebuilt). Booting the simulator in the background was tried and dropped: it slowed whatever ran beside it and saved about 17 s (see docs/perf-history.md). A PR verifies dark mode (the second live journey, about 5 minutes, and the dark halves of `FirstRunTests`/`CloudTests` through `NEKKO_UI_THEMES`) only when it changes colours, per `scripts/ios-theme-scope.mjs` (theme sources, colour sets, or a Swift file whose colour references differ between removed and added lines), or carries `ci:theme`; the schedule and a dispatch run both.
+- [x] ✅ 2026-10-24 Native iOS in batches (`scripts/ios-batch.mjs`, `.github/workflows/ios-batch.yml`). In the 24 hours to 2026-10-24 Native iOS ran 60 times on 18 branches (none green, 22 cancelled by a newer push). Now a push to a `ci:macos` iOS PR (and a 30-minute schedule) composes a batch: the ready same-repo `ci:macos` PRs into main that touch iOS, minus those that conflict with main, then the largest set that merges with each other (oldest first on a tie, from pairwise `git merge-tree`), squashed into one commit on main and force-pushed to `ci/ios-batch`; an unchanged batch is not re-run. Native iOS is dispatched there with the PRs and heads (`batch` input; one batch at a time, the newest waiting one replacing older ones) and posts `Native iOS (batch)` to each head. `ci-label-gate.mjs` accepts a green batch status or a green run on the PR, waits when the PR touches iOS and has neither, and checks the same in the queue. On a PR, Native iOS itself now runs only when `ci:macos` or `ci:theme` is added or by dispatch. The merge queue's settings are unchanged (Philip: keep the 60-minute timeout).
 - [ ] CodeQL Swift covers the SwiftPM protocol package only; the Xcode app targets need a signed-free `xcodebuild` in the analysis job.
 - [ ] Nightly desktop release from the last commit that passed a scheduled full run (Philip's plan; releases follow version bumps today).
 
@@ -460,6 +475,7 @@ Philip asked (2026-10-19) to finish the iOS app: audit Orca's phone app for miss
   - **Still owed:** device runs on iPhone and Android, the managed relay, the Expo app (speaks protocol 1, so it is a legacy phone and mode raises from it are refused), a desktop switch for `acceptLegacyPhones`.
 - [ ] **IO-35, Drop legacy phones (planned for the release after IO-34).** Phones from before protocol 4 are welcomed for one release, logged and marked `legacyProtocol` (`acceptLegacyPhones`, default on). Next release: default `acceptLegacyPhones` to off (refused `update-required`), once the iPhone and Android builds with protocol 4 have shipped and the desktop has shown *Older app* long enough that no paired phone carries the mark; then delete the legacy branch in `AgentCore::on_client` and `RemoteService::verify`, the 3-second fallback in both `RelayClient`s, and the `legacyHello` vector. Check before flipping: no `relay:hello` / `legacy-protocol` entries in recent activity on Philip's machines, and the Expo app either updated or retired.
   - **Done 2026-10-19.** `REMOTE_PROTOCOL_VERSION` / `PROTOCOL_VERSION` = 2 in the welcome (added by the relay agent in nekko-remote; agent golden); the iPhone sends `protocol` in its HELLO; missing counts as 1. `ProtocolCheck` picks the side; `ProtocolBanner` on the chat list and in Settings → About. Android and Expo ignore the field and the relay's new frames (`RelayClientTest`, `relayClient.test.ts`). The computer doesn't yet show a phone's version.
+- [ ] **IO-36, Send feedback (#1004).** *Send feedback* in the computer menu on Chats (iPhone and the iPad sidebar) and in *Settings → About* opens a sheet with *Copy for an agent* (the shared prompt, ending `App: Nekko Agent <version> (ios, iOS|iPadOS <version>, arm64)`), *Quick note* (`POST <Nekko Cloud>/v1/feedback`, 4,000 UTF-16 units, *Include app info* off by default; its own ephemeral session, no cookies, no credentials, redirects refused) and *Open GitHub issues*. Logic in `NekkoProtocol/Feedback.swift`, `FeedbackTests` (Linux). `PrivacyInfo.xcprivacy` now lists Customer Support and Other Diagnostic Data, not linked, not tracking. Still owed: the macOS build, a simulator run against the deployed endpoint, screenshots.
 
 ### Native Android app (2026-10-11)
 
@@ -732,6 +748,9 @@ Extends `../../knowledgebase/principles/coding.md` (which these override).
 - [ ] Cut the **v1.0 release** once the above land (bump versions + tag). *Status 2026-09-30: PR #203 (`chore/release-v0.8.0`) sits open and mergeable as the next version bump, a pure 5-file version change; merging it fires the public release workflow, so it waits on the same credentials below (npm publish cred, remaining Windows signing, macOS notary trio) plus an explicit go. The GUI pass above is the only functional gate left on the list.*
 
 ## Now / In Progress
+
+- [ ] **AFML1057: Composer focus and compact, stable Agents/Monitors layout** ([#1057](https://github.com/nekko-labs/nekko-agent/issues/1057)). Implemented readiness-aware composer focus, viewport-clamped top-layer Configure, stable reorder geometry, and a compact horizontal controls grid with no space below cards or after the scrollbar. Specs: [monitor controls](spec/agents/monitors-dock-naming-and-header-polish.md), [Agents row](spec/agents/agent-panel-view-options.md), [composer](spec/chat/chat-actions-and-persistent-reply-measurements.md). Verified 41 focused tests, desktop typecheck and hidden full-App geometry/interaction assertions. Pending: visual inspection of before/after captures and GIF, then PR landing. Native-window behavior is not proven by renderer capture.
+
 
 ### SK: Hardware keys, step-up on phone and desktop, remote sign-out (added 2026-10-24)
 
@@ -1386,6 +1405,16 @@ Philip's batch of feedback from a live session: the ChatGPT subscription connect
 Verification: `npm run typecheck` across workspaces, host tests (`oauth`, `download`/`engine` presets), core capacity tests untouched, desktop `npm test` (composer, picker, layout), `npm run build:web` + desktop build. Visual evidence: before/after of the Model server page, the picker, a themed select popup, and the workspace column; a short recording of the sidebar resize.
 
 ## Backlog / Planned
+
+### CI runners in Automations ([#1038](https://github.com/nekko-labs/nekko-agent/issues/1038)) · [spec](spec/automation/ci-runners.md) · [decision](docs/decisions/0022-ci-runners-vm-and-network.md)
+
+A Mac running Nekko Agent becomes a sandboxed GitHub Actions self-hosted runner, each job in a throwaway macOS VM. The existing "Local CI runner" template ([docs/git-runner.md](docs/git-runner.md)) stays; it is not a self-hosted runner. Planned 2026-10-24.
+
+- [ ] **T210** Layer A: the spec and decision 0022, and the pure-logic crate `nekko-runner` (settings, slots, gates, keep awake, guest address rules). Added: 2026-10-24. Issue #1038.
+- [ ] **T211** VM helper and userspace network: Swift `nekko-vm` on Virtualization.framework (clone, boot, delete, seed disk) and the NAT in `nekkod`. Added: 2026-10-24. Issue #1038.
+- [ ] **T212** Supervisor and GitHub: GitHub App connect, JIT configs, the supervisor loop in `nekkod`, keychain key. Added: 2026-10-24. Issue #1038.
+- [ ] **T213** CI section UI in the Workflows tab: connect sheet, runner card, settings, menu bar indicator. Added: 2026-10-24. Issue #1038.
+- [ ] **T214** Images, picker and pilot: golden image builder, picker job, the P0 pilot on our own CI. Added: 2026-10-24. Issue #1038.
 
 ### Chat completion X icons ([#533](https://github.com/nekko-labs/nekko-agent/issues/533))
 
@@ -2292,3 +2321,8 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [x] **T204d** Nekko Agent PostHog project 686111; its key in `PROJECT_KEY`. Done: 2026-10-24
 - [x] **T204e** Discard client IP data on for project 686111; a test `app_started` in the engine's batch shape arrived with `$ip` empty and no location. Done: 2026-10-24
 - [ ] **T204f** See events arrive from a packaged build with reports turned on.
+
+### T205: Limits on what grows in the data folder (2026-10-24, #1035) · [spec](spec/platform/data-folder-growth-limits.md)
+- [x] **T205a** Chat command logs cut to their last 4 MB of whole lines past 5 MB (`keep_file_tail` in `agent_logs.rs`). Test: `a_long_command_log_keeps_its_last_whole_lines`. Done: 2026-10-24
+- [x] **T205b** `quota-history.jsonl` keeps 30 days, pruned at startup (`prune_quota_history`). Test: `quota_history_keeps_thirty_days`. Done: 2026-10-24
+- [x] **T205c** Abandoned `.part` downloads untouched for 7 days removed at startup (`sweep_stale_parts`). Test: `only_old_part_files_go`. Done: 2026-10-24

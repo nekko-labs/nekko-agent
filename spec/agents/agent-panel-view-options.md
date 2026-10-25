@@ -28,3 +28,10 @@ Verification: regression tests and isolated matching light/dark renderer capture
 - A card whose agent is waiting on you (a question or approval) or stopped on an error takes the same highlighted background as the active card, so it can be found in a column without reading.
 - The waiting glyph is orange (`--attention`, its own token, louder than the amber warning) and drawn a size larger than its slot, like the working rocket, so the titles stay aligned.
 - The model line names the model alone ("Opus 5.5"), followed by the context readout. The provider ("Claude", "Local", "ChatGPT (subscription)") is fainter subtext on the line under it, toggled by **Show > Model provider** (on by default). The hover title still reads "provider / model id".
+
+
+## Compact horizontal row
+
+Implemented: the horizontal Agents panel has no block padding below the cards or their collapse wrapper, and adjacent groups have no vertical gap. Its five controls occupy a two-column grid at the left, rather than a five-button stack that determines the row height. Column controls and collapsed-panel placement are unchanged. Choices, grouping and scrolling retain their behavior; no new settings or permissions.
+
+Acceptance: the card bottoms meet the horizontal scrollbar, with no unused panel space after the scrollbar. Hidden full-App DOM measurements at 1440x900 found a card-to-scrollbar difference below 1px and no space after the list. CSS regression tests cover the grid and padding. Before/after captures exist; pixel inspection and native-window verification remain unverified.

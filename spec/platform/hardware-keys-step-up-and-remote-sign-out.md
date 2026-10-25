@@ -90,7 +90,7 @@ All three write an activity entry and a desktop notification. None asks for a pr
 
 ## Security boundaries
 
-- The computer verifies every factor itself and holds the credential public keys and the TOTP secret (in `security.json` beside `remote.json`, mode 600, TOTP secret and recovery-code hashes only). Nothing about registered methods goes to the relay, Nekko Cloud or a phone; a phone learns only *step-up required* and which methods exist by kind, so it can show the right sheet.
+- The computer verifies every factor itself and holds the credential public keys and the TOTP secret (in `security.json` beside `remote.json`, mode 600, TOTP secret and recovery-code hashes only). Nothing about registered methods goes to the relay, Nekko Cloud or a phone; a phone learns only *step-up required*, which methods exist by kind, and the computer's relying-party id (`nekko-computer:<installId>`, which the phone's FIDO2 client must name to ask a key for an assertion; not a secret, since every assertion's rpIdHash carries it), so it can show the right sheet.
 - The step-up assertion is bound to a single-use challenge issued by the computer, carried inside the end-to-end sealed frame; the relay sees ciphertext and cannot forge, strip or replay it.
 - Step-up is **in addition to** the Change proof and the Read / Change switches, never instead: a phone with Change off cannot raise a mode even with a key.
 - Safety exits are deliberately unguarded. The worst an attacker with a stolen phone can do with them is a denial of service that the owner repairs at the computer in two taps; the activity list and the desktop banner say which phone did it and when.

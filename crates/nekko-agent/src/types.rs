@@ -327,6 +327,12 @@ pub enum ProviderChunk {
     Phase {
         phase: String,
     },
+    /// An opaque output item the provider wants back on the next call of the
+    /// same turn: OpenAI's encrypted reasoning, which `store: false` would
+    /// otherwise drop, making the model reason from scratch after every tool.
+    Carry {
+        item: Value,
+    },
     Text {
         delta: String,
     },

@@ -836,8 +836,10 @@
 .developer-server-controls {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   margin-left: auto;
+  /* The same 8px step as the Agents controls it follows in the slot. */
+  padding-left: 8px;
   margin-right: 138px;
   padding-right: 10px;
   white-space: nowrap;
@@ -868,7 +870,7 @@
    weights. Layout offsets are pixel-snapped the same way for every group. */
 .titlebar:not(.titlebar-mac) #command-titlebar-slot > .wall-toolbar-titlebar { position: relative; top: -2.35px; }
 #command-titlebar-slot > .wall-toolbar-titlebar { flex: 1; min-width: 0; flex-wrap: nowrap; }
-#command-titlebar-slot .wall-fixed-picker, #command-titlebar-slot .screens-picker { z-index: 60; }
+#command-titlebar-slot .screens-picker { z-index: 60; }
 #command-titlebar-slot > .wall-toolbar-titlebar > div { flex-wrap: nowrap; }
 #command-titlebar-slot .btn, #command-titlebar-slot .wall-layout-segments button { padding-top: 2px; padding-bottom: 2px; }
 
@@ -2053,6 +2055,38 @@
 .vt-row > :last-child {
   margin-bottom: 0;
 }
+/* Swipe-left times (useSwipeToRevealTimes): a pseudo-element, so the margin
+   rules above still see the row's real first and last parts. */
+.vt-row[data-vt-stamp] {
+  position: relative;
+}
+.vt-row[data-vt-stamp]::after {
+  content: attr(data-vt-stamp);
+  position: absolute;
+  top: 2px;
+  left: 100%;
+  padding-left: 16px;
+  white-space: nowrap;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+  opacity: var(--vt-reveal-o, 0);
+  pointer-events: none;
+  transition: opacity 200ms ease;
+}
+.vt-list {
+  transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.vt-swiping .vt-list,
+.vt-swiping .vt-row[data-vt-stamp]::after {
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vt-list,
+  .vt-row[data-vt-stamp]::after {
+    transition: none;
+  }
+}
 
 /* Skill pill — a highlighted slash-command token (Claude-Code style). Used both
    as the active skill above the composer and as the badge on a sent message. */
@@ -2418,7 +2452,7 @@
   font-variant-numeric: tabular-nums; color: var(--accent);
   background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
-.wall-workspace { display: flex; flex: 1; min-width: 0; min-height: 0; gap: 6px; }
+.wall-workspace { display: flex; flex: 1; min-width: 0; min-height: 0; gap: 3px; }
 .wall-workspace[data-dock-side='top'], .wall-workspace[data-dock-side='bottom'] { flex-direction: column; }
 .wall-column { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; gap: 0; overflow: hidden; }
 /* The board viewport yields to the composer; its tall stage scrolls internally. */
@@ -2559,18 +2593,22 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
    frame is fully clipped, and one paused while closing never unmounts. */
 html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !important; }
 .command-wall-window[data-wall-selected] .wall-num, .wall-composer[data-has-agent] .wall-num { background: var(--accent); color: var(--win); }
-.wall-layout-control { position: relative; display: inline-flex; align-items: center; }
+.wall-layout-control { position: relative; display: inline-flex; align-items: center; gap: 8px; }
 /* Reveal by grid track rather than a fixed pixel width: a fixed 38px was
    narrower than the button once the title bar's own button padding applied,
    so the wand spilled under the All/Agents/Terminals toggle beside it.
    Its slot is always reserved (hidden only by opacity/visibility), so picking
    Dynamic fades it in place without shifting the filter and Panels beside it. */
-.wall-auto-arrange { position: relative; display: grid; grid-template-columns: 1fr; align-items: center; margin-left: 6px; opacity: 0; visibility: hidden; transform: scale(.6); transition: opacity 180ms ease, transform 240ms ease, visibility 0s 240ms; }
+.wall-auto-arrange { position: relative; display: grid; grid-template-columns: 1fr; align-items: center; opacity: 0; visibility: hidden; transform: scale(.6); transition: opacity 180ms ease, transform 240ms ease, visibility 0s 240ms; }
 .wall-auto-arrange[data-visible='true'] { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
 .wall-auto-arrange > button { min-width: 0; overflow: hidden; }
-/* Snap to grid: an icon toggle with the outline button's frame; lit in the accent while on. */
-.wall-snap-toggle { display: inline-grid; place-items: center; width: 32px; height: 28px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink-faint); transition: background var(--dur-fast) ease, color var(--dur-fast) ease, border-color var(--dur-fast) ease; }
-.wall-snap-toggle:hover:not(:disabled) { color: var(--ink); background: var(--surface-2); }
+/* Snap to grid: an icon toggle with the outline button's frame. The magnet keeps
+   its colours; off it is muted (and its sparks hidden), on it lights the frame in the accent. */
+.wall-snap-toggle { display: inline-grid; place-items: center; width: 32px; height: 28px; border: 1px solid var(--line); border-radius: 8px; transition: background var(--dur-fast) ease, border-color var(--dur-fast) ease; }
+.wall-snap-toggle svg { opacity: .7; transition: opacity var(--dur-fast) ease; }
+.wall-snap-toggle:not([aria-pressed='true']) svg { --magnet-spark: transparent; }
+.wall-snap-toggle:hover:not(:disabled) { background: var(--surface-2); }
+.wall-snap-toggle:hover:not(:disabled) svg, .wall-snap-toggle[aria-pressed='true'] svg { opacity: 1; }
 .wall-snap-toggle[aria-pressed='true'] { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); background: var(--accent-soft); }
 .wall-snap-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
@@ -2605,17 +2643,12 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 .wall-layout-segments { display: inline-flex; padding: 2px; border: 1px solid var(--line); border-radius: 8px; }
 .wall-layout-segments button { padding: 4px 10px; border-radius: 6px; font-size: 12px; color: var(--ink-faint); }
 .wall-layout-segments button[aria-pressed='true'] { background: var(--surface-2); color: var(--ink); font-weight: 500; }
-.wall-fixed-picker { position: absolute; top: calc(100% + 6px); right: 0; z-index: 40; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--win); box-shadow: var(--shadow-md); }
-.wall-fixed-picker p { margin: 0 0 8px; font-size: 11px; color: var(--ink-soft); white-space: nowrap; }
-.wall-fixed-cells { display: grid; grid-template-columns: repeat(6, 20px); gap: 4px; }
-.wall-fixed-cells button { height: 20px; border: 1px solid var(--line); border-radius: 3px; background: var(--surface-2); }
-.wall-fixed-cells button.is-preview { border-color: var(--accent); background: var(--accent-soft); }
-.wall-layout-segments button:focus-visible, .wall-fixed-cells button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-/* Multi-monitor: the Screens dropdown, in the grid picker's frame. A gap
+.wall-layout-segments button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Multi-monitor: the Screens dropdown. A gap
    bridge under the button keeps hover alive on the way down to the panel. */
 .screens-control { position: relative; display: inline-flex; align-items: center; }
-.screens-control::after { content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 8px; }
-.screens-picker { position: absolute; top: calc(100% + 6px); right: 0; z-index: 40; width: max-content; min-width: 260px; max-width: 360px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--win); box-shadow: var(--shadow-md); }
+.screens-control::after { content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 8px; -webkit-app-region: no-drag; }
+.screens-picker { -webkit-app-region: no-drag; position: absolute; top: calc(100% + 6px); right: 0; z-index: 40; width: max-content; min-width: 260px; max-width: 360px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--win); box-shadow: var(--shadow-md); }
 .screens-picker__title { margin: 0 0 8px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint); }
 .screens-picker__note { margin: 6px 0 0; font-size: 11px; color: var(--ink-faint); }
 .screens-picker__divider { margin: 10px -10px; border: 0; border-top: 1px solid var(--line); }
@@ -2634,7 +2667,38 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 .screens-option > span { display: grid; gap: 2px; }
 .screens-option strong { font-size: 12px; font-weight: 500; color: var(--ink); }
 .screens-option > span > span { font-size: 11px; line-height: 1.35; color: var(--ink-faint); }
-@media (prefers-reduced-motion: reduce) { .screens-tile { transition: none; } }
+.screens-picker__title--sub { margin-top: 12px; }
+.screens-tile[data-current]::before { content: ''; position: absolute; top: 4px; right: 4px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+.screens-tile[data-waiting] { border-style: dashed; }
+/* Spaces: the Accessibility explainer, with an abstract monitor switching desktops. */
+.spaces-ask { margin-top: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
+.spaces-ask__lead { margin: 6px 0 4px; font-size: 12px; font-weight: 600; color: var(--ink); }
+.spaces-ask__body { margin: 0 0 8px; font-size: 11px; line-height: 1.4; color: var(--ink-soft); }
+.spaces-ask__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.spaces-demo { display: block; width: 100%; max-width: 200px; margin: 0 auto; }
+.spaces-demo__bezel { fill: var(--win); stroke: var(--line); stroke-width: 1.5; }
+.spaces-demo__desk { fill: color-mix(in srgb, var(--ink-faint) 14%, var(--win)); }
+.spaces-demo__desk--next { fill: color-mix(in srgb, var(--accent) 12%, var(--win)); }
+.spaces-demo__win { fill: color-mix(in srgb, var(--ink-faint) 30%, var(--win)); }
+.spaces-demo__nekko > rect:first-child { fill: var(--paper); stroke: var(--accent); stroke-width: 1.2; }
+.spaces-demo__nekko-bar { fill: color-mix(in srgb, var(--accent) 35%, var(--paper)); }
+.spaces-demo__nekko-pane { fill: color-mix(in srgb, var(--accent) 16%, var(--paper)); }
+.spaces-demo__dot { fill: var(--line); }
+/* 5s loop: hold on desktop 1, slide to 2, the Nekko window swipes open from the left edge, hold, fade and restart. */
+.spaces-demo__strip { animation: spaces-demo-slide 5s cubic-bezier(.65, 0, .35, 1) infinite; }
+.spaces-demo__nekko { transform-box: fill-box; transform-origin: left center; animation: spaces-demo-open 5s cubic-bezier(.22, 1, .36, 1) infinite; }
+.spaces-demo__dot--one { animation: spaces-demo-dot-one 5s steps(1, end) infinite; }
+.spaces-demo__dot--two { animation: spaces-demo-dot-two 5s steps(1, end) infinite; }
+@keyframes spaces-demo-slide { 0%, 18% { transform: translateX(0); opacity: 1; } 40%, 90% { transform: translateX(-136px); opacity: 1; } 97% { transform: translateX(-136px); opacity: 0; } 100% { transform: translateX(0); opacity: 0; } }
+@keyframes spaces-demo-open { 0%, 46% { transform: scaleX(.06); opacity: 0; } 48% { transform: scaleX(.06); opacity: 1; } 66%, 100% { transform: scaleX(1); opacity: 1; } }
+@keyframes spaces-demo-dot-one { 0% { fill: var(--accent); } 30% { fill: var(--line); } 100% { fill: var(--accent); } }
+@keyframes spaces-demo-dot-two { 0% { fill: var(--line); } 30% { fill: var(--accent); } 100% { fill: var(--line); } }
+@media (prefers-reduced-motion: reduce) {
+  .screens-tile { transition: none; }
+  .spaces-demo__strip, .spaces-demo__nekko, .spaces-demo__dot { animation: none; }
+  .spaces-demo__strip { transform: translateX(-136px); }
+  .spaces-demo__dot--two { fill: var(--accent); }
+}
 @media (max-width: 767px) {
   .wall-workspace { flex-direction: column; overflow: hidden; }
   .wall-workspace > .wall-agent-workspace { flex: 1 1 0; min-height: 0; }
@@ -3120,7 +3184,7 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 /* Focus is a workspace, not a framed window inside another window. */
 .command-wall-layout[data-wall-layout='focus'] .command-wall-window > .panel {
   border: 0; border-radius: 24px; box-shadow: none !important;
-  background: color-mix(in srgb, var(--paper) 35%, transparent);
+  background: var(--win);
   corner-shape: squircle;
   --panel-ring-width: 0px !important;
 }

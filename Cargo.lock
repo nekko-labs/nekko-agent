@@ -1966,6 +1966,7 @@ dependencies = [
  "image",
  "nekko-js",
  "nekko-net",
+ "nekko-sync",
  "p256",
  "pbkdf2",
  "serde_json",
@@ -1974,6 +1975,14 @@ dependencies = [
  "tempfile",
  "tokio",
  "tokio-tungstenite 0.27.0",
+]
+
+[[package]]
+name = "nekko-runner"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
