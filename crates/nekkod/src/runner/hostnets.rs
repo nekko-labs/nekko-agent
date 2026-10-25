@@ -22,13 +22,6 @@ pub fn try_current() -> io::Result<HostNets> {
     Ok(HostNets::new(addrs, prefixes))
 }
 
-/// [`try_current`], or an empty list if the interfaces cannot be read (the
-/// static ranges are still refused). Refreshes use [`try_current`] so a read
-/// error never replaces a good list.
-pub fn current() -> HostNets {
-    try_current().unwrap_or_default()
-}
-
 /// Re-reads the host's networks every `every` (5 s in P1) for as long as the runtime runs.
 pub fn spawn_refresh(host: Arc<RwLock<HostNets>>, every: Duration) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
@@ -57,8 +50,8 @@ mod tests {
     use std::net::{IpAddr, Ipv4Addr};
 
     #[test]
-    fn current_includes_loopback() {
-        assert!(current().contains(IpAddr::V4(Ipv4Addr::LOCALHOST)));
+    fn try_current_includes_loopback() {
+        assert!(try_current().unwrap().contains(IpAddr::V4(Ipv4Addr::LOCALHOST)));
     }
 
     #[test]
