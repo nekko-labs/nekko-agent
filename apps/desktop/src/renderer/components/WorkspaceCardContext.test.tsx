@@ -21,7 +21,7 @@ const session = {
   messageCount: 2, exchangeCount: 1, stalled: false, recentTurns: [], prUrls: [], imageCount: 0, createdAt: 0,
 } as unknown as SessionSummary;
 
-const card = (status?: 'working', chat: SessionSummary = session) => renderToStaticMarkup(
+const card = (status?: 'working' | 'done' | 'idle', chat: SessionSummary = session) => renderToStaticMarkup(
   <WorkspaceCard workspace={null} session={chat} terminal={null} status={status} isActive={false} now={0} projects={[]} onOpen={() => {}} onClose={() => {}} />,
 );
 
@@ -34,6 +34,13 @@ describe('workspace card completion control', () => {
     const action = html.match(/<button[^>]*aria-label="Complete Chat"[^]*?<\/button>/)?.[0] ?? '';
     expect(action).toContain('M18 6 6 18M6 6l12 12');
     expect(action).not.toContain('M20 6 9 17l-5-5');
+  });
+
+  it('keeps the last-reply time for done and idle cards, not working ones', () => {
+    const replied = { ...session, lastReplyAt: -60_000 } as SessionSummary;
+    expect(card('done', replied)).toContain('1 min ago');
+    expect(card('idle', replied)).toContain('1 min ago');
+    expect(card('working', replied)).not.toContain('min ago');
   });
 });
 

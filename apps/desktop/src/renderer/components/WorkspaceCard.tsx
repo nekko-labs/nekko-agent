@@ -280,7 +280,7 @@ function WorkspaceCardImpl({
         <span className={`min-w-0 flex-1 truncate text-[13px] ${isActive ? 'font-medium text-ink' : 'text-ink-soft'}`}>
           {title}
         </span>
-        {lastReply && !status && (
+        {lastReply && (!status || status === 'done' || status === 'idle') && (
           <time className="shrink-0 text-[10px] tabular-nums text-ink-faint" dateTime={new Date(lastReply).toISOString()} title={`Last reply ${new Date(lastReply).toLocaleString()}`}>
             {timeAgo(now - lastReply)}
           </time>
