@@ -78,25 +78,26 @@ struct NekkoApp: App {
     private static let splashOn = UserDefaults.standard.object(forKey: "splash") as? Bool
         ?? !ProcessInfo.processInfo.arguments.contains("-uiTestReset")
 
-    @ViewBuilder private var launchView: some View {
+    private var spooky: Bool { Prefs.preset(app.prefs.theme, computer: app.store.appearance)?.isSpooky == true }
+
+    /// The app, or (Debug builds) a fixture the UI tests photograph.
+    @ViewBuilder private var root: some View {
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("-uiTestChatStatus") {
+        if ProcessInfo.processInfo.arguments.contains("-uiTestMarkdownLab") {
+            MarkdownLab()
+        } else if ProcessInfo.processInfo.arguments.contains("-uiTestChatStatus") {
             ChatStatusFixture()
         } else if ProcessInfo.processInfo.arguments.contains("-uiTestPurposeGroups") {
             PurposeGroupsFixture()
-        } else {
-            RootView()
-        }
+        } else { RootView() }
         #else
         RootView()
         #endif
     }
 
-    private var spooky: Bool { Prefs.preset(app.prefs.theme, computer: app.store.appearance)?.isSpooky == true }
-
     var body: some Scene {
         WindowGroup {
-            launchView
+            root
                 .environment(app)
                 .environment(app.store)
                 .environment(app.cloud)
