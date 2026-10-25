@@ -426,25 +426,29 @@ struct PurposeGroupRow<Content: View>: View {
 }
 
 #if DEBUG
-/// Offline fixture of the real group row; it never starts a connection.
+/// Offline fixture using the same transcript grouping and block renderer as ChatView.
 struct PurposeGroupsFixture: View {
+    private let blocks: [Block] = [
+        .tool(id: "guide1", name: "read_file", label: "Read AGENTS.md", status: .ok, output: nil, input: ["path": .string("AGENTS.md")]),
+        .tool(id: "guide2", name: "read_file", label: "Read CLAUDE.md", status: .ok, output: nil, input: ["path": .string("CLAUDE.md")]),
+        .tool(id: "test1", name: "bash", label: "Run tests", status: .ok, output: nil, input: ["command": .string("npm test")]),
+        .tool(id: "test2", name: "bash", label: "Run lint", status: .error, output: "Lint failed", input: ["command": .string("npm run lint")]),
+        .tool(id: "read1", name: "read_file", label: "Read source", status: .running, output: nil, input: ["path": .string("src/main.ts")]),
+        .tool(id: "read2", name: "grep", label: "Search source", status: .ok, output: nil, input: ["pattern": .string("main")])
+    ]
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                group("success", purpose: .guidance, status: .ok, failed: false)
-                group("failure", purpose: .check, status: .error, failed: true)
-                group("running", purpose: .explore, status: .running, failed: false)
-            }
-            .padding()
-        }
-    }
-
-    private func group(_ id: String, purpose: ToolPurpose, status: ToolStatus, failed: Bool) -> some View {
-        let input: [String: JSONValue] = ["command": .string("swift test")]
-        let blocks: [Block] = [.tool(id: id, name: "bash", label: id, status: status, output: nil, input: input)]
-        return PurposeGroupRow(purpose: purpose, blocks: blocks,
-                               calls: [PurposeCall(name: "bash", input: input, failed: failed)]) { _ in
-            Text("Call detail: \(id)").accessibilityIdentifier("fixture.detail.\(id)")
+                ForEach(TranscriptRow.of(blocks)) { row in
+                    switch row {
+                    case .block(let block): BlockView(block: block)
+                    case .agents(let blocks): ForEach(blocks) { BlockView(block: $0) }
+                    case .purpose(let purpose, let items, let calls):
+                        PurposeGroupRow(purpose: purpose, blocks: items, calls: calls) { BlockView(block: $0) }
+                    }
+                }
+            }.padding()
         }
     }
 }

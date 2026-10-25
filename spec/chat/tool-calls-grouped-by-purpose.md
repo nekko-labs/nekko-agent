@@ -90,3 +90,9 @@ startup. `PurposeGroupsTests` checks the initial collapse/failure defaults and
 reveal/hide actions and attaches screenshots. This fixture is implemented but its
 native interaction run, matching base captures and motion evidence remain unverified;
 it does not close TG-5 or establish Android visual parity.
+
+The offline fixture now feeds six adjacent calls through `TranscriptRow.of` and
+`BlockView`, exactly as the chat does: two guidance reads, two checks (one failed),
+and two exploration calls (one running). Its native test asserts three groups of
+two calls and real call-row reveal/hide. Updated native run and media are pending;
+the previously published one-call row captures remain historical, not this fixture.
