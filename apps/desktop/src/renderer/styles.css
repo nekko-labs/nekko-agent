@@ -2452,7 +2452,7 @@
   font-variant-numeric: tabular-nums; color: var(--accent);
   background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
-.wall-workspace { display: flex; flex: 1; min-width: 0; min-height: 0; gap: 6px; }
+.wall-workspace { display: flex; flex: 1; min-width: 0; min-height: 0; gap: 3px; }
 .wall-workspace[data-dock-side='top'], .wall-workspace[data-dock-side='bottom'] { flex-direction: column; }
 .wall-column { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; gap: 0; overflow: hidden; }
 /* The board viewport yields to the composer; its tall stage scrolls internally. */
@@ -3184,7 +3184,7 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 /* Focus is a workspace, not a framed window inside another window. */
 .command-wall-layout[data-wall-layout='focus'] .command-wall-window > .panel {
   border: 0; border-radius: 24px; box-shadow: none !important;
-  background: color-mix(in srgb, var(--paper) 35%, transparent);
+  background: var(--win);
   corner-shape: squircle;
   --panel-ring-width: 0px !important;
 }
