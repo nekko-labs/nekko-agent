@@ -54,10 +54,11 @@ function stageSpeechHelper(dirs) {
 }
 
 // The CI runner VM helper (crates/nekkod/vm/nekko-vm.swift, decision 0022),
-// staged beside nekkod. It is the only binary with the virtualization
-// entitlement, so it is signed here on its own; release signing re-signs it with
-// the same entitlements file (scripts/sign-mac.cjs). Apple silicon only: macOS
-// guests need it, and elsewhere CI runners report no VM support.
+// staged beside the dev daemon only. It is the only binary with the
+// virtualization entitlement, so it is ad-hoc signed here on its own. Release
+// packaging and signing land with the packaging task (T213/T214) together with a
+// signed release dry-run; until then packaged builds carry no nekko-vm and CI
+// runners report no VM support. Apple silicon only: macOS guests need it.
 function stageVmHelper(dirs) {
   if (process.platform !== 'darwin' || process.arch !== 'arm64') return;
   const source = join(repo, 'crates', 'nekkod', 'vm', 'nekko-vm.swift');
@@ -97,7 +98,6 @@ mkdirSync(dest, { recursive: true });
 copyFileSync(built, join(dest, exe));
 console.log(`staged ${exe} -> ${join(dest, exe)}`);
 stageSpeechHelper([dirname(built), dest]);
-stageVmHelper([dirname(built), dest]);
 
 // The decision-model runtime (ONNX Runtime, statically linked into nekkod) loads the CUDA
 // provider libraries from next to the executable on a Linux build with `--features cuda`. The

@@ -84,10 +84,6 @@ mac:
   hardenedRuntime: true
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
-  # Signs like electron-builder does, but gives resources/bin/nekko-vm its own
-  # entitlements (com.apple.security.virtualization). Never put that one in the
-  # files above: everything the app starts, nekkod included, inherits them.
-  sign: scripts/sign-mac.cjs
   # Left off here on purpose: notarization needs the App Store Connect key,
   # which only the release workflow has. It turns this on with
   # `-c.mac.notarize=true` rather than failing every local `npm run dist`.
