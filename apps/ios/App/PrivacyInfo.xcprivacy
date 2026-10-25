@@ -9,8 +9,37 @@
 	<array/>
 	<!-- Chats, prompts, images and voice go only to the user's own computer, end-to-end
 	     encrypted through the relay, so they are not data the developer collects. -->
+	<!-- Send feedback → Quick note (#1004) is the one thing collected: the note the person
+	     writes and sends, and only when they switch on Include app info, the app, its
+	     version, the OS and its version, and the CPU type. Stored by Nekko Cloud with no
+	     account, device id or IP, so not linked to the person and not used for tracking. -->
 	<key>NSPrivacyCollectedDataTypes</key>
-	<array/>
+	<array>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeCustomerSupport</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeOtherDiagnosticData</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+	</array>
 	<key>NSPrivacyAccessedAPITypes</key>
 	<array>
 		<!-- Prefs.swift: the app's own theme, app-lock and notification settings (CA92.1).

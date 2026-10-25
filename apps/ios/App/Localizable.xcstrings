@@ -2680,6 +2680,46 @@
         }
       }
     },
+    "App, version, OS and version, and CPU type. Nothing that identifies you.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App, Version, Betriebssystem und dessen Version sowie CPU-Typ. Nichts, was dich identifiziert."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App, versión, sistema operativo y su versión, y tipo de CPU. Nada que te identifique."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App, version, système et sa version, et type de processeur. Rien qui vous identifie."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アプリ、バージョン、OS とそのバージョン、CPU の種類。あなたを特定する情報は含みません。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App, versão, sistema e sua versão, e tipo de CPU. Nada que identifique você."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用、版本、操作系统及其版本、CPU 类型。不含任何能识别你的信息。"
+          }
+        }
+      }
+    },
     "Appearance": {
       "localizations": {
         "de": {
@@ -5600,6 +5640,46 @@
         }
       }
     },
+    "Copy for an agent": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Für einen Agenten kopieren"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copiar para un agente"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copier pour un agent"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "エージェント用にコピー"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copiar para um agente"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制给智能体"
+          }
+        }
+      }
+    },
     "Copy log": {
       "localizations": {
         "de": {
@@ -5956,6 +6036,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "无法运行"
+          }
+        }
+      }
+    },
+    "Couldn’t send the note. Check your connection and try again.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Notiz konnte nicht gesendet werden. Prüfe deine Verbindung und versuche es noch einmal."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo enviar la nota. Revisa tu conexión e inténtalo de nuevo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible d’envoyer la note. Vérifiez votre connexion et réessayez."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモを送信できませんでした。接続を確認してもう一度お試しください。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível enviar a nota. Verifique sua conexão e tente novamente."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法发送留言。请检查网络连接后再试。"
           }
         }
       }
@@ -8326,6 +8446,86 @@
         }
       }
     },
+    "GitHub": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub"
+          }
+        }
+      }
+    },
+    "Goes straight to Nekko Labs through Nekko Cloud, with no account. Leave out names, keys and chat contents.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geht über Nekko Cloud direkt an Nekko Labs, ohne Konto. Lass Namen, Schlüssel und Chat-Inhalte weg."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Llega directamente a Nekko Labs a través de Nekko Cloud, sin cuenta. No incluyas nombres, claves ni contenido de chats."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrive directement chez Nekko Labs via Nekko Cloud, sans compte. N’incluez ni noms, ni clés, ni contenu de chats."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アカウント不要で、Nekko Cloud 経由で直接 Nekko Labs に届きます。名前、キー、チャットの内容は書かないでください。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vai direto para a Nekko Labs pela Nekko Cloud, sem conta. Não inclua nomes, chaves nem conteúdo de chats."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通过 Nekko Cloud 直接发送给 Nekko Labs，无需账户。请勿包含姓名、密钥和聊天内容。"
+          }
+        }
+      }
+    },
     "Group by": {
       "localizations": {
         "de": {
@@ -8848,6 +9048,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "在电脑上的 Nekko Agent 中：设置 → 远程访问 → 此电脑上的 Relay → 启动 Relay，然后选择“使用此 Relay”。"
+          }
+        }
+      }
+    },
+    "Include app info": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App-Infos mitsenden"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incluir información de la app"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inclure les infos de l’app"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アプリ情報を含める"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incluir informações do app"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "附带应用信息"
           }
         }
       }
@@ -10768,6 +11008,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nekko Cloud"
+          }
+        }
+      }
+    },
+    "Nekko Cloud didn’t accept that note. Shorten it and try again.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nekko Cloud hat diese Notiz nicht angenommen. Kürze sie und versuche es noch einmal."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nekko Cloud no aceptó esa nota. Acórtala e inténtalo de nuevo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nekko Cloud n’a pas accepté cette note. Raccourcissez-la et réessayez."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nekko Cloud がこのメモを受け付けませんでした。短くしてもう一度お試しください。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A Nekko Cloud não aceitou essa nota. Encurte e tente novamente."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nekko Cloud 未接受这条留言。请缩短后再试。"
           }
         }
       }
@@ -13098,6 +13378,46 @@
         }
       }
     },
+    "Open GitHub issues": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub-Issues öffnen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir incidencias en GitHub"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir les tickets GitHub"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub の Issue を開く"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir issues no GitHub"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开 GitHub issues"
+          }
+        }
+      }
+    },
     "Open Settings": {
       "localizations": {
         "de": {
@@ -14258,6 +14578,46 @@
         }
       }
     },
+    "Paste it into Claude Code, Codex or Nekko Agent on your computer. It asks what happened, checks for an existing issue, and files one only after you approve it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Füge es in Claude Code, Codex oder Nekko Agent auf deinem Computer ein. Der Agent fragt, was passiert ist, sucht nach einem bestehenden Issue und legt erst eines an, wenn du zustimmst."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pégalo en Claude Code, Codex o Nekko Agent en tu ordenador. Te pregunta qué pasó, busca si ya hay una incidencia y solo la crea cuando la apruebas."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Collez-le dans Claude Code, Codex ou Nekko Agent sur votre ordinateur. Il demande ce qui s’est passé, cherche un ticket existant et n’en crée un qu’après votre accord."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コンピュータの Claude Code、Codex、Nekko Agent に貼り付けてください。何が起きたかを尋ね、既存の Issue を確認し、あなたが承認してから Issue を作成します。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cole no Claude Code, Codex ou Nekko Agent no seu computador. Ele pergunta o que aconteceu, procura uma issue existente e só cria uma depois que você aprovar."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "粘贴到你电脑上的 Claude Code、Codex 或 Nekko Agent 中。它会询问发生了什么，查找已有的 issue，并且只在你同意后才创建。"
+          }
+        }
+      }
+    },
     "Phone protocol": {
       "localizations": {
         "de": {
@@ -15184,6 +15544,46 @@
         }
       }
     },
+    "Quick note": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kurze Notiz"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nota rápida"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Note rapide"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "クイックメモ"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nota rápida"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "简短留言"
+          }
+        }
+      }
+    },
     "Read again": {
       "localizations": {
         "de": {
@@ -16104,6 +16504,46 @@
         }
       }
     },
+    "Report a bug or suggest an idea in public, and follow what happens to it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Melde einen Fehler oder schlage eine Idee öffentlich vor und verfolge, was daraus wird."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Informa de un error o sugiere una idea en público, y sigue lo que pasa con ella."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Signalez un bug ou proposez une idée en public, et suivez ce qu’il en advient."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "バグの報告やアイデアの提案を公開で行い、その後の経過を追えます。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relate um bug ou sugira uma ideia em público e acompanhe o que acontece com ela."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "公开报告问题或提出想法，并关注后续进展。"
+          }
+        }
+      }
+    },
     "Reset to defaults": {
       "localizations": {
         "de": {
@@ -16980,6 +17420,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "发送测试通知"
+          }
+        }
+      }
+    },
+    "Send feedback": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Feedback senden"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviar comentarios"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envoyer un avis"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "フィードバックを送信"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviar feedback"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发送反馈"
           }
         }
       }
@@ -19270,6 +19750,46 @@
         }
       }
     },
+    "Thanks. Your note is on its way to Nekko Labs.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Danke. Deine Notiz ist auf dem Weg zu Nekko Labs."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gracias. Tu nota va de camino a Nekko Labs."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merci. Votre note est en route vers Nekko Labs."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ありがとうございます。メモを Nekko Labs に送信しました。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Obrigado. Sua nota está a caminho da Nekko Labs."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "谢谢。你的留言已发送给 Nekko Labs。"
+          }
+        }
+      }
+    },
     "The 55-character key you saved when sync was turned on, or the QR code in your recovery kit.": {
       "localizations": {
         "de": {
@@ -20266,6 +20786,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "Token"
+          }
+        }
+      }
+    },
+    "Too many notes. Try again later.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zu viele Notizen. Versuche es später noch einmal."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Demasiadas notas. Inténtalo más tarde."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trop de notes. Réessayez plus tard."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモが多すぎます。しばらくしてからもう一度お試しください。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notas demais. Tente novamente mais tarde."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "留言过多。请稍后再试。"
           }
         }
       }
@@ -21630,6 +22190,46 @@
         }
       }
     },
+    "What happened, or what would you like it to do?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was ist passiert, oder was soll die App können?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Qué pasó, o qué te gustaría que hiciera?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Que s’est-il passé, ou que voudriez-vous qu’elle fasse ?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "何が起きましたか？またはどんな機能が欲しいですか？"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O que aconteceu, ou o que você gostaria que ele fizesse?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发生了什么，或者你希望它能做什么？"
+          }
+        }
+      }
+    },
     "What needs me?": {
       "localizations": {
         "de": {
@@ -21866,6 +22466,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "工作中"
+          }
+        }
+      }
+    },
+    "Write another": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch eine schreiben"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escribir otra"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En écrire une autre"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "もう一つ書く"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escrever outra"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再写一条"
           }
         }
       }
