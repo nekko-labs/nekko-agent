@@ -1,6 +1,7 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { expect, it } from 'vitest';
+import { IpcChannels } from './ipc.js';
 import { DEFAULT_RUNNER_SETTINGS, REASONS } from './runners.js';
 
 /**
@@ -22,4 +23,10 @@ it('has a sentence for every reason the daemon sends', () => {
 
 it('matches the Rust defaults', () => {
   expect(DEFAULT_RUNNER_SETTINGS).toEqual(fixture('default-settings.json'));
+});
+
+it('runner channels match what the daemon serves', () => {
+  const served: string[] = JSON.parse(readFileSync(join(__dirname, '..', '..', '..', 'crates', 'nekko-remote', 'src', 'channels.json'), 'utf8'));
+  const ours = Object.values(IpcChannels).filter((c) => c.startsWith('runner:')).sort();
+  expect(ours).toEqual(served.filter((c) => c.startsWith('runner:')).sort());
 });

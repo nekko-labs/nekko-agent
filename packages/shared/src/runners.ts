@@ -248,8 +248,15 @@ export function slotLines(v: RunnerView, nowSecs: number): SlotLine[] {
   });
 }
 
-const AUDIT_REASONS: Record<string, string> = { slept: 'this Mac slept', removed: 'the runner was removed' };
-const auditWhy = (reasons: string[]) => reasons.map((r) => AUDIT_REASONS[r] ?? reasonText(r).short).join(', ');
+/** The supervisor's own stop reasons, beside the `Reason` names. */
+const AUDIT_REASONS: Record<string, string> = {
+  slept: 'this Mac slept',
+  removed: 'the runner was removed',
+  bootTimeout: 'the VM never started',
+  idle: 'idle too long',
+  signal: 'the daemon stopped it',
+};
+const auditWhy = (reasons: string[]) => reasons.map((r) => (own(AUDIT_REASONS, r) ? AUDIT_REASONS[r] : reasonText(r).short)).join(', ');
 
 /** One recent-jobs row. `rerun` is the runner's `rerunLostJobs`. */
 export function auditText(l: AuditLine, rerun = true): string {
@@ -297,8 +304,10 @@ const id = (s: string) => (/^\d+$/.test(s.trim()) && Number.isSafeInteger(Number
 export function toConnectRequest(f: ConnectForm, keyStored: boolean): ConnectRequest | { error: string } {
   const appId = id(f.appId);
   if (appId === null) return { error: 'The App ID is a number.' };
+  if (appId === 0) return { error: 'The App ID is a number above 0.' };
   const installationId = id(f.installationId);
   if (installationId === null) return { error: 'The installation ID is a number.' };
+  if (installationId === 0) return { error: 'The installation ID is a number above 0.' };
   const key = f.privateKeyPem.trim();
   if (!key && !keyStored) return { error: "Paste the app's private key." };
   if (key.startsWith('-----BEGIN PRIVATE KEY-----')) return { error: 'Paste the key as GitHub downloads it (BEGIN RSA PRIVATE KEY).' };

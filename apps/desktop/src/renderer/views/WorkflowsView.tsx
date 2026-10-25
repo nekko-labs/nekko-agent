@@ -34,6 +34,7 @@ import { setAutomationsPaused } from '../automationsPause.js';
 import { PlusIcon } from '../icons.js';
 import { STATUS } from '../tokens.js';
 import { hasAppChrome } from '../chrome.js';
+import { CiRunnersView } from './CiRunnersView.js';
 
 /**
  * The Workflows tab: automation modelled on GitHub Actions, where a step can be
@@ -87,6 +88,7 @@ export function WorkflowsView() {
   const [snapshot, setSnapshot] = useState<WorkflowsSnapshot>({ workflows: [], runs: [] });
   const [filter, setFilter] = useState<WorkflowFilter>({});
   const [grouping, setGrouping] = useState<WorkflowGrouping>('category');
+  const [section, setSection] = useState<'workflows' | 'ciRunners'>('workflows');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [editing, setEditing] = useState<Workflow | null>(null);
   const [creating, setCreating] = useState<{ seed?: WorkflowSeed } | null>(null);
@@ -191,6 +193,7 @@ export function WorkflowsView() {
 
   return (
     <div className="flex h-full min-h-0">
+      {section === 'ciRunners' ? <CiRunnersView segment={<SectionSegment value={section} onChange={setSection} />} /> : <>
       {/* Filters */}
       <aside className="flex w-60 shrink-0 flex-col overflow-y-auto border-r border-(--line) px-3 py-3">
         <input
@@ -281,6 +284,7 @@ export function WorkflowsView() {
         <div className="mx-auto max-w-5xl">
           <div className="flex flex-wrap items-baseline gap-2">
             {!hasAppChrome && <h1 className="view-title">Workflows</h1>}
+            <SectionSegment value={section} onChange={setSection} />
             <span className="text-[12px] text-ink-faint">
               {visible.length === workflows.length
                 ? `${workflows.length} total`
@@ -400,6 +404,7 @@ export function WorkflowsView() {
           </div>
         </div>
       </div>
+      </>}
 
       {picking && (
         <TemplateGallery
@@ -445,6 +450,26 @@ export function WorkflowsView() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+/** Switches the tab between workflows and this Mac's CI runners. */
+export function SectionSegment({ value, onChange }: { value: 'workflows' | 'ciRunners'; onChange(v: 'workflows' | 'ciRunners'): void }) {
+  return (
+    <div role="tablist" aria-label="Section" className="flex gap-1">
+      {(['workflows', 'ciRunners'] as const).map((v) => (
+        <button
+          key={v}
+          role="tab"
+          aria-selected={value === v}
+          className={`rounded-lg border px-2 py-1 text-[11.5px] transition ${value === v ? 'border-transparent' : 'border-line text-ink-faint'}`}
+          style={value === v ? { background: 'var(--accent-soft)', color: 'var(--accent)' } : undefined}
+          onClick={() => onChange(v)}
+        >
+          {v === 'workflows' ? 'Workflows' : 'CI runners'}
+        </button>
+      ))}
     </div>
   );
 }

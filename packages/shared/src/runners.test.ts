@@ -109,6 +109,10 @@ describe('runner helpers', () => {
     expect(auditText(line({ result: 'lost', reason: ['slept'] }), false)).toBe('ci · darwin daemon · lost (this Mac slept) · not re-run');
     expect(auditText(line({ result: 'stopped', reason: ['maxJobTime'] }))).toBe('ci · darwin daemon · stopped at the max job time · VM deleted');
     expect(auditText(line({ result: 'failedToStart', workflow: null, job: null }))).toBe('A VM failed to start');
+    expect(auditText(line({ result: 'stopped', reason: ['bootTimeout'] }))).toBe('ci · darwin daemon · stopped after 2 min (the VM never started) · VM deleted');
+    expect(auditText(line({ result: 'stopped', reason: ['idle'] }))).toBe('ci · darwin daemon · stopped after 2 min (idle too long) · VM deleted');
+    expect(auditText(line({ result: 'lost', reason: ['signal'] }))).toBe('ci · darwin daemon · lost (the daemon stopped it) · re-run queued');
+    expect(auditText(line({ result: 'lost', reason: ['removed'] }))).toBe('ci · darwin daemon · lost (the runner was removed) · re-run queued');
   });
 
   it('recommends memory in whole GB', () => {
@@ -132,6 +136,8 @@ describe('runner helpers', () => {
     const err = (over: Partial<ConnectForm>, keyStored = false) => toConnectRequest({ ...f, ...over }, keyStored);
     expect(err({ appId: 'abc' })).toEqual({ error: 'The App ID is a number.' });
     expect(err({ installationId: '' })).toEqual({ error: 'The installation ID is a number.' });
+    expect(err({ appId: '0' })).toEqual({ error: 'The App ID is a number above 0.' });
+    expect(err({ installationId: '00' })).toEqual({ error: 'The installation ID is a number above 0.' });
     expect(err({ privateKeyPem: '' })).toEqual({ error: "Paste the app's private key." });
     const stored = err({ privateKeyPem: '' }, true);
     expect(stored).not.toHaveProperty('error');
