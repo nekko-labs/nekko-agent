@@ -476,7 +476,14 @@ struct BlockView: View {
                         Label(streaming && text.isEmpty ? "Thinking…" : "Thought", systemImage: "brain").font(.footnote).foregroundStyle(palette.inkFaint)
                     }
                 }
-                if !text.isEmpty { MarkdownText(text: text).foregroundStyle(palette.ink) }
+                if !text.isEmpty {
+                    if let chat {
+                        // Links route to the preview window or Safari; linked files and pages get cards (#1095).
+                        AssistantReply(text: text, streaming: streaming, sessionId: chat.sessionId)
+                    } else {
+                        MarkdownText(text: text).foregroundStyle(palette.ink)
+                    }
+                }
                 if interrupted { Label("Interrupted", systemImage: "pause.circle").font(.caption).foregroundStyle(palette.warning) }
             }
         case .tool(_, let name, let label, let status, let output, let input):

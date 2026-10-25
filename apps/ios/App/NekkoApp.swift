@@ -80,7 +80,9 @@ struct NekkoApp: App {
 
     @ViewBuilder private var launchView: some View {
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("-uiTestPurposeGroups") {
+        if ProcessInfo.processInfo.arguments.contains("-uiTestChatStatus") {
+            ChatStatusFixture()
+        } else if ProcessInfo.processInfo.arguments.contains("-uiTestPurposeGroups") {
             PurposeGroupsFixture()
         } else {
             RootView()
@@ -103,7 +105,7 @@ struct NekkoApp: App {
                 .onOpenURL { app.handle(url: $0) }
                 .task {
                     #if DEBUG
-                    if ProcessInfo.processInfo.arguments.contains("-uiTestPurposeGroups") { return }
+                    if ProcessInfo.processInfo.arguments.contains("-uiTestPurposeGroups") || ProcessInfo.processInfo.arguments.contains("-uiTestChatStatus") { return }
                     #endif
                     app.start()
                 }

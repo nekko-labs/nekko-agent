@@ -45,6 +45,9 @@ struct ChatsView: View {
         .refreshable { await store.refresh() }
         .navigationTitle("Chats")
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                ChatMascot(working: store.activity.values.contains(.running))
+            }
             ToolbarItem(placement: .topBarLeading) { ComputerMenu(path: $path, feedback: $sendingFeedback) }
             ToolbarItem(placement: .topBarTrailing) { viewMenu }
             ToolbarItem(placement: .topBarTrailing) {
@@ -56,7 +59,7 @@ struct ChatsView: View {
         .overlay(alignment: .top) { if store.summariesLoading && store.summaries.isEmpty { ProgressView().padding(.top, 80) } }
         .modifier(dialogs)
         .sheet(isPresented: $reorderingGroups) {
-            ReorderGroupsSheet(groups: sections.map { GroupName(key: $0.key, name: $0.name) }) { setGroupOrder($0) }
+            ReorderGroupsSheet(groups: sections.filter { $0.key != ChatGroup.general }.map { GroupName(key: $0.key, name: $0.name) }) { setGroupOrder($0) }
         }
         .sheet(isPresented: $sendingFeedback) { FeedbackSheet() }
     }
@@ -128,9 +131,9 @@ struct ChatsView: View {
             }
             ForEach(query.isEmpty || !filtered.isEmpty ? sections : []) { g in
                 Section {
-                    if !collapsed.contains(g.key) || !query.isEmpty { sectionRows(g) }
+                    if g.key == ChatGroup.general || !collapsed.contains(g.key) || !query.isEmpty { sectionRows(g) }
                 } header: {
-                    sectionHeading(g)
+                    if g.key != ChatGroup.general { sectionHeading(g) }
                 }
             }
             // The computer's Monitors (FD-5): hardware, running chats, what needs you, the next automations.
@@ -176,7 +179,12 @@ struct ChatsView: View {
             HStack(spacing: 6) {
                 Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(palette.inkFaint)
                     .rotationEffect(.degrees(open ? 90 : 0))
-                GroupHeading(groupTitle(g), count: counts(g))
+                VStack(alignment: .leading, spacing: 3) {
+                    GroupHeading(groupTitle(g), count: counts(g))
+                    if let path = store.workspaces.first(where: { $0.id == g.key })?.path {
+                        Text(path).font(.caption).foregroundStyle(palette.inkSoft).textCase(nil)
+                    }
+                }
             }
             .contentShape(Rectangle())
             .overlay(alignment: .top) {
@@ -356,7 +364,8 @@ struct ChatRow: View {
         // A glyph column says what the chat is doing before the title is read
         // (the desktop's StatusIcon); the facts sit under the preview as chips.
         HStack(alignment: .top, spacing: 10) {
-            glyph.frame(width: 22, height: 22).padding(.top, 1)
+            ChatStatusIcon(activity: activity, completed: summary.archived, waiting: waiting > 0)
+                .frame(width: 22, height: 22).padding(.top, 1)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     if summary.pinned { Image(systemName: "pin.fill").font(.caption2).foregroundStyle(palette.warning).accessibilityLabel("Pinned") }
@@ -384,21 +393,6 @@ struct ChatRow: View {
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
-    }
-
-    @ViewBuilder private var glyph: some View {
-        switch activity {
-        case .running?: RunningDots()
-        case .needsYou?: Image(systemName: "hand.raised.fill").font(.caption.weight(.semibold)).foregroundStyle(palette.warning).accessibilityHidden(true)
-        case nil:
-            if waiting > 0 {
-                Image(systemName: "clock").font(.caption.weight(.semibold)).foregroundStyle(palette.inkFaint).accessibilityHidden(true)
-            } else if summary.archived {
-                Image(systemName: "checkmark").font(.caption.weight(.semibold)).foregroundStyle(palette.success).accessibilityHidden(true)
-            } else {
-                Image(systemName: "bubble.left").font(.caption.weight(.semibold)).foregroundStyle(palette.inkFaint).accessibilityHidden(true)
-            }
-        }
     }
 
     private var title: String { summary.title.trimmingCharacters(in: .whitespaces).isEmpty ? "New chat" : summary.title }

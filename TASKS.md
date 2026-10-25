@@ -786,6 +786,8 @@ Extends `../../knowledgebase/principles/coding.md` (which these override).
 
 ## Now / In Progress
 
+- [ ] **IOS-STATUS-MASCOT** (added 2026-10-25): desktop-style leading chat status icons and a top-left interactive pixel mascot on native iOS. [Spec](spec/phone/native-ios-app.md#desktop-style-chat-status-and-top-left-nekko-2026-10-25). Native build, status precedence test and simulator greeting/touch-target test pass; native fixture before/after evidence captured. Landing tracked by #1093. Physical-device VoiceOver and release delivery remain unverified.
+
 - [ ] **AFML1057: Composer focus and compact, stable Agents/Monitors layout** ([#1057](https://github.com/nekko-labs/nekko-agent/issues/1057)). Implemented readiness-aware composer focus, viewport-clamped top-layer Configure, stable reorder geometry, and a compact horizontal controls grid with no space below cards or after the scrollbar. Specs: [monitor controls](spec/agents/monitors-dock-naming-and-header-polish.md), [Agents row](spec/agents/agent-panel-view-options.md), [composer](spec/chat/chat-actions-and-persistent-reply-measurements.md). Verified 41 focused tests, desktop typecheck and hidden full-App geometry/interaction assertions. Pending: visual inspection of before/after captures and GIF, then PR landing. Native-window behavior is not proven by renderer capture.
 
 
@@ -2363,3 +2365,9 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [x] **T205a** Chat command logs cut to their last 4 MB of whole lines past 5 MB (`keep_file_tail` in `agent_logs.rs`). Test: `a_long_command_log_keeps_its_last_whole_lines`. Done: 2026-10-24
 - [x] **T205b** `quota-history.jsonl` keeps 30 days, pruned at startup (`prune_quota_history`). Test: `quota_history_keeps_thirty_days`. Done: 2026-10-24
 - [x] **T205c** Abandoned `.part` downloads untouched for 7 days removed at startup (`sweep_stale_parts`). Test: `only_old_part_files_go`. Done: 2026-10-24
+
+### Unified Models workspace (2026-10-25, #1102) · [spec](spec/models/models-providers.md)
+
+- [x] Combine provider setup and Model Server under one Models rail entry, retaining existing destinations and title-bar highlighting.
+- [x] Add local/cloud subnavigation, current-provider chips, a divider, five filled provider shortcuts and the full overflow chooser; retain existing connection and model controls.
+- [x] Verify desktop typechecking, focused provider/navigation tests, hidden Electron interactions and matching 1440/390 px before/after evidence. Live credential sign-in and server lifecycle actions are not exercised by this layout change.
