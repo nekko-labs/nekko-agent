@@ -80,9 +80,18 @@ struct NekkoApp: App {
 
     private var spooky: Bool { Prefs.preset(app.prefs.theme, computer: app.store.appearance)?.isSpooky == true }
 
+    /// The app, or (Debug builds, `-uiTestMarkdownLab`) the Markdown fixture the UI tests photograph.
+    @ViewBuilder private var root: some View {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-uiTestMarkdownLab") { MarkdownLab() } else { RootView() }
+        #else
+        RootView()
+        #endif
+    }
+
     var body: some Scene {
         WindowGroup {
-            RootView()
+            root
                 .environment(app)
                 .environment(app.store)
                 .environment(app.cloud)

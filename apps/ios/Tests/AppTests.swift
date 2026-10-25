@@ -23,35 +23,12 @@ final class KeychainStoreTests: XCTestCase {
 }
 
 final class MarkdownTests: XCTestCase {
-    func testParsesTheBlocksAgentRepliesUse() {
-        let md = """
-        # Plan
-        Some **bold** text
-        continued.
-
-        - one
-          - nested
-        - [x] done
-        2. second
-
-        ```swift
-        let x = 1
-        ```
-        > quoted
-        ---
-        """
-        let p = MarkdownText.parse(md)
-        XCTAssertEqual(p, [
-            .heading(1, "Plan"),
-            .paragraph("Some **bold** text\ncontinued."),
-            .bullet(0, "•", "one"),
-            .bullet(1, "•", "nested"),
-            .bullet(0, "☑", "done"),
-            .bullet(0, "2.", "second"),
-            .code("swift", "let x = 1"),
-            .quote("quoted"),
-            .rule,
-        ])
+    // The block parser itself is NekkoProtocol's (MarkdownTests there, run on Linux too).
+    func testTheRendererReadsTheParsersTree() {
+        let blocks = MarkdownParser.blocks("- one\n  - nested\n\n| a | b |\n|---|---|\n| 1 | 2 |")
+        guard case .list(let list) = blocks.first, case .table(let table) = blocks.last else { return XCTFail("a list and a table") }
+        XCTAssertEqual(list.items.first?.children.first?.items.first?.text, "nested")
+        XCTAssertEqual(table.rows, [["1", "2"]])
     }
 
     func testInlineMarkdownIsParsedOnceAndStaysTheSame() {
@@ -60,10 +37,6 @@ final class MarkdownTests: XCTestCase {
         XCTAssertEqual(String(first!.characters), "Some bold and code")
         XCTAssertEqual(InlineMarkdown.attributed("Some **bold** and `code`"), first, "a cache hit gives the same text")
         XCTAssertEqual(String(InlineMarkdown.attributed("plain")!.characters), "plain")
-    }
-
-    func testAnUnclosedFenceStillShowsItsCode() {
-        XCTAssertEqual(MarkdownText.parse("```\nstreaming…"), [.code("", "streaming…")])
     }
 }
 
