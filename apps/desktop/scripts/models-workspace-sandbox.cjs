@@ -14,7 +14,7 @@ app.whenReady().then(async () => {
   win.on('focus', () => { report.errors.push('took focus'); });
   win.webContents.on('console-message', e => { if (e.level === 'error') report.errors.push(e.message.slice(0, 300)); });
   const run = s => win.webContents.executeJavaScript(s, true);
-  const shot = async name => { const f = path.join(out, name + '.png'); fs.writeFileSync(f, (await win.capturePage(undefined, { stayHidden: true, stayAwake: false })).toPNG()); report.captures.push(f); };
+  const shot = async name => { const f = path.join(out, name + '.png'); fs.writeFileSync(f, (await win.capturePage(undefined, { stayHidden: true, stayAwake: true })).toPNG()); report.captures.push(f); };
   fs.cpSync(path.join(__dirname, '../src/renderer/public/providers'), path.join(out, 'providers'), { recursive: true });
   try {
     await win.loadFile(path.join(out, 'index.html'));
@@ -60,7 +60,7 @@ app.whenReady().then(async () => {
       await sleep(300);
       if (!(await run("!!document.querySelector('.models-local-connections')"))) throw new Error('Local connections missing');
       await run("document.querySelector('.models-local-connections').scrollIntoView()");
-      await sleep(200);
+      await sleep(1200);
       await shot('local-connections-1440');
       // Short interaction recording, encoded from hidden renderer frames.
       const modules = process.env.NEKKO_TEST_MODULES || path.join(__dirname, '../../../node_modules');
@@ -73,7 +73,7 @@ app.whenReady().then(async () => {
         if (i === 6) await run("document.querySelector('[aria-label=\"Close provider setup\"]').click()");
         if (i === 9) await run("document.querySelectorAll('.models-subnav button')[0].click()");
         await sleep(250);
-        frames.push(PNG.sync.read((await win.capturePage(undefined, { stayHidden: true })).resize({ width: 960 }).toPNG()));
+        frames.push(PNG.sync.read((await win.capturePage(undefined, { stayHidden: true, stayAwake: true })).resize({ width: 960 }).toPNG()));
       }
       const counts = new Map();
       const key = (d, i) => (d[i] >> 3) << 10 | (d[i + 1] >> 3) << 5 | (d[i + 2] >> 3);
