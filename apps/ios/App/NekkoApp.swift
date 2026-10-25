@@ -78,18 +78,35 @@ struct NekkoApp: App {
     private static let splashOn = UserDefaults.standard.object(forKey: "splash") as? Bool
         ?? !ProcessInfo.processInfo.arguments.contains("-uiTestReset")
 
+    @ViewBuilder private var launchView: some View {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-uiTestPurposeGroups") {
+            PurposeGroupsFixture()
+        } else {
+            RootView()
+        }
+        #else
+        RootView()
+        #endif
+    }
+
     private var spooky: Bool { Prefs.preset(app.prefs.theme, computer: app.store.appearance)?.isSpooky == true }
 
     var body: some Scene {
         WindowGroup {
-            RootView()
+            launchView
                 .environment(app)
                 .environment(app.store)
                 .environment(app.cloud)
                 .environment(app.prefs)
                 .modifier(Themed(choice: app.prefs.theme, appearance: app.store.appearance))
                 .onOpenURL { app.handle(url: $0) }
-                .task { app.start() }
+                .task {
+                    #if DEBUG
+                    if ProcessInfo.processInfo.arguments.contains("-uiTestPurposeGroups") { return }
+                    #endif
+                    app.start()
+                }
                 .overlay {
                     if let kind = splash {
                         let run = splashRun

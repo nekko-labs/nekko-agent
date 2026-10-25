@@ -81,3 +81,12 @@ area: chat
   - the activity headline summary
   - streaming into an open group
 - Desktop visual evidence in the PR shows a turn that reads guidance, explores, edits and runs tests, before and after, in light and dark. It also includes a short recording of a group filling while live. The phones have screenshots from CI simulators and emulators. Status stays *unverified* there until they are run.
+
+### Phone verification fixture (2026-10-25)
+
+The DEBUG iOS launch argument `-uiTestPurposeGroups` opens the real purpose rows
+with deterministic completed, failed and running calls and skips normal connection
+startup. `PurposeGroupsTests` checks the initial collapse/failure defaults and
+reveal/hide actions and attaches screenshots. This fixture is implemented but its
+native interaction run, matching base captures and motion evidence remain unverified;
+it does not close TG-5 or establish Android visual parity.

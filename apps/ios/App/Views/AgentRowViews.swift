@@ -424,3 +424,28 @@ struct PurposeGroupRow<Content: View>: View {
             .filter { !$0.isEmpty }.joined(separator: ", ")
     }
 }
+
+#if DEBUG
+/// Offline fixture of the real group row; it never starts a connection.
+struct PurposeGroupsFixture: View {
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                group("success", purpose: .guidance, status: .ok, failed: false)
+                group("failure", purpose: .check, status: .error, failed: true)
+                group("running", purpose: .explore, status: .running, failed: false)
+            }
+            .padding()
+        }
+    }
+
+    private func group(_ id: String, purpose: ToolPurpose, status: ToolStatus, failed: Bool) -> some View {
+        let input: [String: JSONValue] = ["command": .string("swift test")]
+        let blocks: [Block] = [.tool(id: id, name: "bash", label: id, status: status, output: nil, input: input)]
+        return PurposeGroupRow(purpose: purpose, blocks: blocks,
+                               calls: [PurposeCall(name: "bash", input: input, failed: failed)]) { _ in
+            Text("Call detail: \(id)").accessibilityIdentifier("fixture.detail.\(id)")
+        }
+    }
+}
+#endif
