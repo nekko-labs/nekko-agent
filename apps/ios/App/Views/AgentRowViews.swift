@@ -355,3 +355,72 @@ struct SubagentGroup: View {
         return "\(n) · done"
     }
 }
+
+/// Adjacent calls with one purpose as one row that says the goal ("Read the
+/// project's guidance", "Ran the tests") with a quiet detail line, opening to
+/// the calls as they look on their own (spec/chat/tool-calls-grouped-by-purpose.md).
+/// Present tense with the running dots while a call in it runs; a group with a
+/// failed call says so and starts open, so the failure is not hidden.
+struct PurposeGroupRow<Content: View>: View {
+    let purpose: ToolPurpose
+    let blocks: [Block]
+    let calls: [PurposeCall]
+    @ViewBuilder var row: (Block) -> Content
+    @Environment(\.palette) private var palette
+    @State private var open: Bool?
+
+    var body: some View {
+        let running = blocks.contains { if case .tool(_, _, _, .running, _, _) = $0 { return true } else { return false } }
+        let h = Purpose.headline(purpose, calls, running: running)
+        // The detail without the failure count, which is drawn in its own colour.
+        let quiet = h.failed > 0 && purpose == .check && !running ? "" : Purpose.headline(purpose, calls.map { PurposeCall(name: $0.name, input: $0.input) }, running: running).detail
+        let expanded = open ?? (h.failed > 0)
+        VStack(alignment: .leading, spacing: 2) {
+            Button {
+                withAnimation(.snappy) { open = !expanded }
+            } label: {
+                HStack(alignment: .center, spacing: 8) {
+                    if running { RunningDots() } else {
+                        Image(systemName: h.failed > 0 ? "xmark" : "checkmark").font(.caption.weight(.semibold))
+                            .foregroundStyle(h.failed > 0 ? palette.danger : palette.success)
+                            .frame(width: 16, height: 16).accessibilityHidden(true)
+                    }
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(h.headline).font(.footnote.weight(.semibold)).foregroundStyle(running ? palette.accent : palette.inkSoft).lineLimit(1)
+                        if !quiet.isEmpty || h.failed > 0 {
+                            HStack(spacing: 4) {
+                                if !quiet.isEmpty { Text(quiet).foregroundStyle(palette.inkFaint).lineLimit(1) }
+                                if h.failed > 0 { Text("\(h.failed) failed").foregroundStyle(palette.danger) }
+                            }
+                            .font(.caption.monospaced())
+                        }
+                    }
+                    Spacer(minLength: 4)
+                    RowChip(text: "\(calls.count)", tone: .quiet)
+                    Image(systemName: expanded ? "chevron.up" : "chevron.down").font(.caption2).foregroundStyle(palette.inkFaint)
+                }
+                .frame(minHeight: 30)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(accessibility(h))
+            .accessibilityValue(expanded ? String(localized: "Calls shown") : String(localized: "Calls hidden"))
+            .accessibilityHint(String(localized: "Shows or hides the calls"))
+            .accessibilityIdentifier("chat.purposeGroup")
+            if expanded {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(blocks) { b in row(b) }
+                }
+                .padding(.leading, 24)
+                .overlay(alignment: .leading) {
+                    Rectangle().fill(palette.line).frame(width: 1.5).padding(.leading, 7).padding(.vertical, 4)
+                }
+            }
+        }
+    }
+
+    private func accessibility(_ h: PurposeHeadline) -> String {
+        [h.headline, h.detail, calls.count == 1 ? String(localized: "1 call") : String(localized: "\(calls.count) calls")]
+            .filter { !$0.isEmpty }.joined(separator: ", ")
+    }
+}

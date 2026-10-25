@@ -100,6 +100,14 @@ struct ChatView: View {
                             SubagentGroup(blocks: blocks, chat: chat)
                                 .id(row.id)
                                 .contextMenu { if let first = blocks.first { blockMenu(chat, first) } }
+                        case .purpose(let purpose, let blocks, let calls):
+                            // Adjacent calls with one purpose: one row that says the goal, opening to the calls.
+                            PurposeGroupRow(purpose: purpose, blocks: blocks, calls: calls) { b in
+                                BlockView(block: b, chat: chat)
+                                    .id(b.id)
+                                    .contextMenu { blockMenu(chat, b) }
+                            }
+                            .id(row.id)
                         }
                     }
                     // Prompts written here that the computer doesn't have yet.
@@ -393,31 +401,35 @@ func modeName(_ m: PcSettings.ChatMode) -> String {
     }
 }
 
-/// The transcript's rows: each block on its own, except a run of delegations,
-/// which is one group with a header and its children.
+/// The transcript's rows: each block on its own, except adjacent calls with one
+/// purpose, which are one row that says the goal (spec/chat/tool-calls-grouped-by-purpose.md).
+/// A run of delegations is the Delegate purpose, drawn as the subagent group.
 enum TranscriptRow: Identifiable {
     case block(Block)
     case agents([Block])
+    case purpose(ToolPurpose, [Block], [PurposeCall])
 
     var id: String {
         switch self {
         case .block(let b): return b.id
         case .agents(let blocks): return "agents-" + (blocks.first?.id ?? "")
+        case .purpose(_, let blocks, _): return "purpose-" + (blocks.first?.id ?? "")
         }
     }
 
     static func of(_ blocks: [Block]) -> [TranscriptRow] {
-        var out: [TranscriptRow] = []
-        var run: [Block] = []
-        func flush() {
-            if run.count == 1 { out.append(.block(run[0])) } else if !run.isEmpty { out.append(.agents(run)) }
-            run = []
+        Purpose.group(blocks, role: Purpose.role(of:)).map { run in
+            switch run {
+            case .single(let b):
+                return .block(b)
+            case .group(let purpose, let items, let calls):
+                let subagents = items.allSatisfy { b in
+                    if case .tool(_, let name, _, _, _, _) = b { return name == AgentRows.subagentTool }
+                    return false
+                }
+                return purpose == .delegate && subagents ? .agents(items) : .purpose(purpose, items, calls)
+            }
         }
-        for b in blocks {
-            if case .tool(_, let name, _, _, _, _) = b, name == AgentRows.subagentTool { run.append(b) } else { flush(); out.append(.block(b)) }
-        }
-        flush()
-        return out
     }
 }
 
