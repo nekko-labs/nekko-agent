@@ -295,6 +295,8 @@ Tracked in [#680](https://github.com/nekko-labs/nekko-agent/issues/680), part of
 
 ## New agent window defaults
 
+- [x] **#1106, Latest Mode defaults:** desktop and Local Web UI persist changed Mode choices, including effort, to the daemon; new top-level chats snapshot current choices. Cross-window field merging, saved-mode reset, sandbox normalization, unchanged old-chat records and restart persistence covered by 28 desktop helper/ModePanel tests and 31 Rust settings/store tests. Desktop typecheck, production build and daemon compilation pass. Live multi-window/package checks remain unverified.
+
 - [x] Persist explicit ChatPane and Add window model choices as provider/model pairs without changing other panes; preserve Auto and session-specific choices. See [SPEC](spec/desktop/new-agent-window-defaults.md).
 - [x] Save permission default only after a successful session update; restore settings before startup catalog selection. Keep effort/execution persistence and session-only incognito/offline boundaries.
 - [x] Verified: 67 focused regressions (7 files), all 1,145 desktop tests (165 files), desktop typecheck, isolated shared/core/host and production app builds, docs regeneration and five docs tests. Initial full-suite bundle checks needed the production build; all pass after building.

@@ -830,9 +830,11 @@ pub async fn create_session(
         }
     }
     let (w, p) = (workspace_id.map(str::to_string), parent_id.map(str::to_string));
-    tokio::task::spawn_blocking(move || store.create_with(w.as_deref(), p.as_deref(), supporting.as_ref(), &settings))
-        .await
-        .map_err(|e| e.to_string())?
+    tokio::task::spawn_blocking(move || {
+        store.create_with_mode_defaults(w.as_deref(), p.as_deref(), supporting.as_ref(), &settings, true)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// `deleteAgentLog` for a chat being removed, from a blocking caller.
