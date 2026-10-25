@@ -8,6 +8,16 @@ vi.mock('../store.js', () => ({ useStore: { getState: () => ({ openBrowserPane: 
 
 const html = (text: string) => renderToStaticMarkup(<Markdown text={text} />);
 
+describe('file:// links', () => {
+  it('open the decoded local path in the file pane, and network shares stay inert', () => {
+    expect(html('[Report](file:///C:/My%20Docs/report.md)')).toContain('title="Open C:/My Docs/report.md"');
+    expect(html('[Notes](file:///home/me/notes.md)')).toContain('title="Open /home/me/notes.md"');
+    const share = html('[Share](file://server/share/a.md)');
+    expect(share).not.toContain('<button');
+    expect(share).not.toContain('href=');
+  });
+});
+
 describe('remote images', () => {
   it('render as host-loaded cards, never as a remote <img src>', () => {
     const out = html('Here it is:\n\n![Wall mount](https://hamilex.example/a.jpeg)');
