@@ -108,6 +108,14 @@ struct SettingsView: View {
                         Task { if await app.lock.confirmDisable() { prefs.appLock = false; app.lock.disable() } }
                     }
                 }))
+                if store.active != nil {
+                    // SK-6: the active computer's step-up (security keys, passkeys, codes).
+                    NavigationLink(value: Route.security) {
+                        Label("Security keys and codes", systemImage: "key.horizontal")
+                    }
+                    .accessibilityIdentifier("settings.security")
+                    UntestedHardwareNote()
+                }
             } header: { SectionHeader("Security") } footer: {
                 Text("Asks on every open and every return, covers the app switcher preview, and keeps notifications and the Lock Screen free of chat details.")
                     .foregroundStyle(palette.inkSoft)

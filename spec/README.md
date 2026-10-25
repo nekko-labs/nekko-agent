@@ -170,10 +170,10 @@ Phone remote control and the native iOS and Android apps.
 - [Folding phones: two chats at once, a Monitors pane and vertical mode (2026-10-24)](phone/folding-phones-two-chats-and-monitors.md) (13 KB)
 - [iPhone: the desktop's languages and themes, and New chat's effort and computer (2026-10-23)](phone/iphone-languages-themes-and-new-chat-choices.md) (5 KB)
 - [Native Android app (2026-10-11)](phone/native-android-app.md) (41 KB)
-- [Native iOS app (2026-10-16)](phone/native-ios-app.md) (84 KB)
+- [Native iOS app (2026-10-16)](phone/native-ios-app.md) (86 KB)
 - [Native phone implementation decision (2026-10-07)](phone/native-phone-implementation-decision.md) (2 KB)
 - [Nekko Cloud machines: a sandboxed computer the phone pairs with (2026-10-24)](phone/nekko-cloud-machines.md) (5 KB)
-- [Phone access classes and relay replay protection](phone/phone-access-classes-and-relay-replay-protection.md) (8 KB)
+- [Phone access classes and relay replay protection](phone/phone-access-classes-and-relay-replay-protection.md) (9 KB)
 - [Your agent in your pocket (the iOS and Android app)](phone/your-agent-in-your-pocket-the-ios-and-android-app.md) (5 KB)
 
 ### platform
@@ -199,7 +199,7 @@ Architecture, speed contract, distribution, builds and startup.
 Brand, website, onboarding and the mascot.
 
 - [Beta signups and website analytics (2026-10-17)](brand/beta-signups-and-website-analytics.md) (2 KB)
-- [Brand refresh and website redesign (2026-10-18)](brand/brand-refresh-and-website-redesign.md) (6 KB)
+- [Brand refresh and website redesign (2026-10-18)](brand/brand-refresh-and-website-redesign.md) (7 KB)
 - [First-run setup (planned onboarding wizard)](brand/first-run-setup.md) (2 KB)
 - [Local marketing website preview (2026-10-17)](brand/local-marketing-website-preview.md) (1 KB)
 - [Mascot, polish & onboarding](brand/mascot-polish-onboarding.md) (10 KB)

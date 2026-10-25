@@ -69,6 +69,7 @@ private struct FolderList: View {
     let path: String
     let title: String
     @Environment(\.palette) private var palette
+    @Environment(\.inPanes) private var inPanes
     @State private var listing: FileListing?
     @State private var error: String?
     @State private var query = ""
@@ -152,6 +153,8 @@ private struct FolderList: View {
             }
         }
         .accessibilityIdentifier(e.dir ? "files.folderRow" : "files.fileRow")
+        // On a folding phone or iPad, a file dragged to a chat pane adds its path to the message (FD-4).
+        .modifier(PaneDraggable(text: e.dir || !inPanes ? nil : e.path))
     }
 
     private func failure(_ message: String) -> some View {

@@ -11,6 +11,7 @@
 //! the daemon knows the data directory (it then owns settings and tokens).
 
 use crate::routes::Ctx;
+use nekko_remote::phone_providers;
 use serde_json::{Value, json};
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -24,6 +25,10 @@ pub const CHANNELS: &[&str] = &[
     "providers:probe",
     "providers:test",
     "providers:testConfig",
+    // Provider setup from a phone (decision 0016): see nekko_remote::phone_providers.
+    "providers:sealKey",
+    "providers:saveSealed",
+    "providers:setEnabled",
     "models:list",
     "models:listStatus",
     "lms:probe",
@@ -94,6 +99,36 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
             Ok(test(ctx, &p).await)
         }
         "providers:testConfig" => Ok(test(ctx, &arg(0)).await),
+        "providers:sealKey" => Ok(phone_providers::seal_key_view(&seal_key(ctx)?)),
+        "providers:saveSealed" => {
+            let config = match phone_providers::sealed_provider(&arg(0), &seal_key(ctx)?) {
+                Ok(c) => c,
+                Err(message) => return Ok(json!({ "ok": false, "message": message })),
+            };
+            let tested = test(ctx, &config).await;
+            if tested.get("ok") != Some(&Value::Bool(true)) {
+                let message = tested.get("message").and_then(Value::as_str).unwrap_or("The provider didn’t answer.");
+                return Ok(json!({ "ok": false, "message": message }));
+            }
+            let id = config.get("id").and_then(Value::as_str).unwrap_or_default().to_string();
+            let mut list: Vec<Value> =
+                providers(ctx).await.into_iter().filter(|x| x.get("id") != config.get("id")).collect();
+            list.push(config);
+            save(ctx, list).await?;
+            Ok(phone_providers::save_result(&list_models(ctx, &id).await))
+        }
+        "providers:setEnabled" => {
+            let (target, enabled) = (id(0), arg(1).as_bool().unwrap_or(true));
+            let mut list = providers(ctx).await;
+            let Some(p) = list.iter_mut().find(|p| p.get("id").and_then(Value::as_str) == Some(target.as_str())) else {
+                return Ok(json!({ "ok": false, "message": "Not found" }));
+            };
+            if let Some(o) = p.as_object_mut() {
+                o.insert("enabled".into(), json!(enabled));
+            }
+            save(ctx, list).await?;
+            Ok(json!({ "ok": true }))
+        }
         "models:list" => Ok(list_models(ctx, &id(0)).await),
         "models:listStatus" => Ok(list_models_status(ctx, &id(0)).await),
         "lms:probe" => {
@@ -122,6 +157,12 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
 
 async fn providers(ctx: &Ctx) -> Vec<Value> {
     crate::settings::current(ctx).await.get("providers").and_then(Value::as_array).cloned().unwrap_or_default()
+}
+
+/// The computer's sealing key for phones' provider keys, beside its data.
+fn seal_key(ctx: &Ctx) -> Result<phone_providers::DeviceKey, String> {
+    let dir = ctx.machine.data_dir().ok_or("This computer has no data folder to keep a key in.")?;
+    phone_providers::seal_key(dir)
 }
 
 /// A provider switched off on the Models page is never contacted or launched.

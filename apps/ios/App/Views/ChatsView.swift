@@ -9,6 +9,8 @@ struct ChatsView: View {
     @Binding var path: [Route]
     /// iPad (regular width): the split view's selected chat. Nil on iPhone, where rows push.
     var selection: Binding<Route?>? = nil
+    /// In a pane: the chat open in the other pane, marked like a selection.
+    var highlighted: String? = nil
     @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
     @Environment(\.palette) private var palette
@@ -127,6 +129,16 @@ struct ChatsView: View {
                     if !collapsed.contains(g.key) || !query.isEmpty { sectionRows(g) }
                 } header: {
                     sectionHeading(g)
+                }
+            }
+            // The computer's Monitors (FD-5): hardware, running chats, what needs you, the next automations.
+            if query.isEmpty && !store.computers.isEmpty {
+                Section {
+                    NavigationLink(value: Route.monitors) {
+                        Label("Monitors", systemImage: "gauge.with.dots.needle.50percent").foregroundStyle(palette.ink)
+                    }
+                    .listRowBackground(Color.clear)
+                    .accessibilityIdentifier("chats.monitors")
                 }
             }
     }
@@ -289,7 +301,7 @@ struct ChatsView: View {
         }
         // On the paper like the rest of the list, with the attention bar on a chat that needs you.
         .listRowBackground(RowBackground(needsYou: store.activity[s.id] == .needsYou,
-                                         selected: selection.map { $0.wrappedValue == .chat(s.id) } ?? false))
+                                         selected: selection.map { $0.wrappedValue == .chat(s.id) } ?? (highlighted == s.id)))
         .accessibilityIdentifier("chats.row")
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             if s.archived {
@@ -541,6 +553,14 @@ struct ComputerMenu: View {
                 .accessibilityIdentifier("computer.logs")
             Button { path.append(.computers) } label: { Label("Computers", systemImage: "desktopcomputer") }
             Button { path.append(.settings) } label: { Label("Settings", systemImage: "gearshape") }
+            // The safety exits for the active computer (SK-8), a submenu away from any chat list.
+            if store.active != nil {
+                Divider()
+                Menu {
+                    SafetyExitItems()
+                } label: { Label("Sign out or stop", systemImage: "hand.raised") }
+                    .accessibilityIdentifier("chats.menu.safety")
+            }
         } label: {
             // The computer is the title's companion: its state, its name, and a chevron into the menu.
             HStack(spacing: 6) {

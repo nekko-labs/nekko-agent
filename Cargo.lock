@@ -1966,6 +1966,7 @@ dependencies = [
  "image",
  "nekko-js",
  "nekko-net",
+ "nekko-sync",
  "p256",
  "pbkdf2",
  "serde_json",

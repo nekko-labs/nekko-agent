@@ -17,6 +17,8 @@ getrandom.workspace = true
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
 nekko-js = { path = "../nekko-js" }
 nekko-net = { path = "../nekko-net" }
+# The sealed box a phone seals a provider key into (decision 0016).
+nekko-sync = { path = "../nekko-sync" }
 pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
 # Numbers must parse to the exact double JavaScript has, or a re-sealed frame differs.
 serde_json = { workspace = true, features = ["float_roundtrip"] }

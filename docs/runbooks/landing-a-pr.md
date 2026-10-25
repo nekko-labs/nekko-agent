@@ -70,6 +70,20 @@ Decision models' CoreML job, nekkod-npm's darwin build) and fails if any of them
 so the PR is not queued until they are green. macOS runners queue, so that can take an
 hour or more. Adding the label re-runs CI.
 
+Native iOS runs in batches, not on every push: about a minute after a push, one run
+on `ci/ios-batch` takes every open, ready `ci:macos` PR that touches iOS and merges
+cleanly onto main (the largest set that also merges with each other), and reports to
+each PR's head as the `Native iOS (batch)` status, which `gate` accepts
+(`scripts/ios-batch.mjs`). A PR that conflicts with main gets a red status saying so;
+one that conflicts only with others in the batch waits for a later batch. A red batch
+marks every PR in it red: run `gh workflow run ios-native.yml --ref <branch>` on your
+branch to see whether the failure is yours (a green run on the PR beats a red batch).
+Preview the next batch with `node scripts/ios-batch.mjs --dry-run`.
+
+On a PR, Native iOS checks dark mode only when the change touches colours
+(`scripts/ios-theme-scope.mjs`); add `ci:theme` to force light and dark for theme work
+the script cannot see. The 6-hourly run always checks both.
+
 ### Ready, not draft
 
 Open the PR **ready** once your own verification passes (focused tests, and for UI

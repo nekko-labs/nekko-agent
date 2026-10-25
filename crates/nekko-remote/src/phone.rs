@@ -309,6 +309,18 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
     };
     match channel {
         "changes:list" | "session:watches" => id(0, "chat id")?,
+        "providers:saveSealed" => {
+            crate::phone_providers::screen_save(arg(0)).map_err(|r| denied(r.code, r.detail))?;
+            if args.len() > 1 {
+                return Err(denied("option-denied", "extra argument"));
+            }
+        }
+        "providers:setEnabled" => {
+            id(0, "provider id")?;
+            if !arg(1).is_boolean() {
+                return Err(denied("value-invalid", "enabled"));
+            }
+        }
         "pr:sessionList" => {
             id(0, "chat id")?;
             if args.len() > 1 && !arg(1).is_boolean() {
@@ -498,6 +510,8 @@ pub fn redact(channel: &str, result: Value) -> Value {
         "machine:summary" => {
             crate::phone_views::machine(&result, &policy().machine_view, &policy().machine_resident_view)
         }
+        "providers:sealKey" => crate::phone_providers::seal_key_result_view(&result),
+        "providers:saveSealed" | "providers:setEnabled" => crate::phone_providers::result_view(&result),
         "usage:summary" => crate::phone_views::usage(&result, &policy().views),
         "limits:get" => crate::phone_views::limits(&result, &policy().views),
         c if policy().terminal.is_terminal(c) => crate::phone_terminal::result(c, &result),
@@ -1019,8 +1033,11 @@ impl Gate {
     }
 
     /// `security:challenge` (read class): a fresh single-use challenge for
-    /// this device, whether a step-up is needed, and the kinds of method
-    /// registered, never their ids or names.
+    /// this device, whether a step-up is needed, the kinds of method
+    /// registered (never their ids or names), and the computer's
+    /// relying-party id, which a phone's FIDO2 client must name to ask a key
+    /// or passkey for an assertion (SK-6; `nekko-computer:<installId>`, not a
+    /// secret: the rpIdHash of every assertion already carries it).
     fn challenge(&self, who: &PhoneCall) -> Value {
         let limits = &policy().step_up;
         let now = self.devices.now();
@@ -1039,6 +1056,7 @@ impl Gate {
             "expiresAt": crate::hello::nekko_num(now + limits.challenge_ttl_ms),
             "required": crate::step_up::enabled(&state),
             "methods": crate::step_up::method_kinds(&state),
+            "rpId": state.get("rpId").cloned().unwrap_or(Value::Null),
         })
     }
 
@@ -1233,6 +1251,56 @@ pub fn gate_secured(
 
 #[cfg(test)]
 mod tests {
+
+    /// Provider setup from a phone (decision 0016): the sealed save is screened
+    /// by shape, the switch takes an id and a bool, and the answers never carry a key.
+    #[test]
+    fn screens_sealed_provider_setup() {
+        let good = json!({ "id": "claude-phone", "kind": "anthropic", "label": "Anthropic", "sealedKey": "AQID" });
+        assert!(screen("providers:saveSealed", std::slice::from_ref(&good)).is_ok());
+        assert_eq!(
+            screen("providers:saveSealed", &[good.clone(), json!(1)]).map(|_| ()),
+            Err(denied("option-denied", "extra argument"))
+        );
+        assert_eq!(
+            screen("providers:saveSealed", &[json!({ "id": "x", "kind": "anthropic", "label": "x", "apiKey": "sk" })])
+                .map(|_| ()),
+            Err(denied("option-denied", "apiKey"))
+        );
+        assert_eq!(
+            screen("providers:saveSealed", &[json!({ "id": "x", "kind": "anthropic", "label": "x" })]).map(|_| ()),
+            Err(denied("value-invalid", "sealedKey"))
+        );
+        assert!(screen("providers:setEnabled", &[json!("p1"), json!(false)]).is_ok());
+        assert_eq!(
+            screen("providers:setEnabled", &[json!("p1"), json!("no")]).map(|_| ()),
+            Err(denied("value-invalid", "enabled"))
+        );
+        assert_eq!(
+            screen("providers:setEnabled", &[json!("")]).map(|_| ()),
+            Err(denied("value-invalid", "provider id"))
+        );
+        assert!(screen("providers:sealKey", &[]).is_ok());
+        assert_eq!(
+            redact(
+                "providers:sealKey",
+                json!({ "publicKey": "BAE", "context": "nekko-provider-key-v1", "private": "no" })
+            ),
+            json!({ "publicKey": "BAE", "context": "nekko-provider-key-v1" })
+        );
+        assert_eq!(
+            redact(
+                "providers:saveSealed",
+                json!({ "ok": true, "models": [{ "id": "m", "name": "M", "path": "/x" }], "provider": { "apiKey": "sk" } })
+            ),
+            json!({ "ok": true, "models": [{ "id": "m", "name": "M" }] })
+        );
+        assert_eq!(redact("providers:setEnabled", json!({ "ok": true, "providers": [] })), json!({ "ok": true }));
+        // Still denied forever: the plaintext save and the removal.
+        for c in ["providers:save", "providers:remove", "providers:importCliAuth"] {
+            assert!(!channel_allowed(c), "{c}");
+        }
+    }
 
     /// `machine:summary` (2026-10-24): no arguments; the view pins the top-level
     /// keys and the resident model fields.
@@ -1939,7 +2007,8 @@ mod tests {
                 assert_eq!(c["required"], json!(true));
                 assert_eq!(c["methods"], json!(["security-key", "totp"]));
                 assert_eq!(c["expiresAt"].as_f64(), Some(NOW + 120_000.0));
-                assert_eq!(c.as_object().unwrap().len(), 4, "a phone learns nothing else: {c}");
+                assert_eq!(c["rpId"], json!(RP), "the phone's FIDO2 client names it (SK-6)");
+                assert_eq!(c.as_object().unwrap().len(), 5, "a phone learns nothing else: {c}");
                 let a = assert_with(&s.fido, c["challenge"].as_str().unwrap(), 1);
                 assert!(s.raise(Some(a.clone())).is_ok());
                 assert_eq!(ran(&s.r, YOLO), 1);
