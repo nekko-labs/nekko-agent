@@ -62,6 +62,15 @@ final class MarkdownTests: XCTestCase {
         XCTAssertEqual(String(InlineMarkdown.attributed("plain")!.characters), "plain")
     }
 
+    func testTablesAndPathLinksRender() {
+        XCTAssertEqual(MarkdownText.parse("| a | b |\n|---|:-:|\n| 1 | 2 |"),
+                       [.table(MarkdownTable(header: ["a", "b"], alignments: [.leading, .center], rows: [["1", "2"]]))])
+        // A Windows path with a space would not be a URL: it is rewritten to a file: link that routes back to the path.
+        let link = InlineMarkdown.attributed("Open [the design](C:\\p\\my work\\index.html)")?.runs.compactMap { $0.link }.first
+        XCTAssertEqual(link.map { ChatLinks.classify($0) }, .artifact("C:/p/my work/index.html"))
+        XCTAssertEqual(InlineMarkdown.plain("**Name**"), "Name")
+    }
+
     func testAnUnclosedFenceStillShowsItsCode() {
         XCTAssertEqual(MarkdownText.parse("```\nstreaming…"), [.code("", "streaming…")])
     }
