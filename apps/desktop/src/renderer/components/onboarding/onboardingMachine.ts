@@ -8,10 +8,11 @@ export const ONBOARDING_STEPS: WizardStepDef[] = [
   { id: 'providers', title: 'Providers' },
   { id: 'integrations', title: 'Integrations' },
   { id: 'tracking', title: 'Work tracking' },
+  { id: 'help', title: 'Help improve' },
   { id: 'done', title: 'All set' },
 ];
 
-export const SKIPPABLE_STEP_IDS = new Set(['theme', 'providers', 'integrations', 'tracking']);
+export const SKIPPABLE_STEP_IDS = new Set(['theme', 'providers', 'integrations', 'tracking', 'help']);
 
 export interface WizardState {
   index: number;

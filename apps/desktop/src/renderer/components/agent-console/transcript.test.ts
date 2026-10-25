@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { ASK_CANCELLED, ASK_UNATTENDED, formatAskAnswers, parseAskRequest } from '../../../../../../packages/shared/src/ask.js';
 import type { ChatMessage } from '@nekko-agent/shared';
 import { collectSessionPrUrls, extractPrUrls } from '../../../../../../packages/shared/src/pr.js';
-import { estimateRowHeight, fmtDateTime, fmtTime, toTranscriptRows, transcriptBeforeLiveTurn } from './transcript.js';
+import { estimateRowHeight, fmtDateTime, fmtTime, toStreamBlocks, toTranscriptRows, transcriptBeforeLiveTurn, transcriptRowStamp } from './transcript.js';
+import { fmtElapsed } from './ActivityGroup.js';
 
 const msg = (id: string, role: ChatMessage['role'], content: string, extra: Partial<ChatMessage> = {}): ChatMessage => ({
   id, role, content, createdAt: 0, ...extra,
@@ -214,5 +215,27 @@ describe('compaction rows', () => {
     const summaries = rows.filter((r) => r.kind === 'compaction');
     expect(summaries.map((r) => r.kind === 'compaction' && r.latest)).toEqual([false, true]);
     expect(estimateRowHeight(summaries[1], 600)).toBeGreaterThan(estimateRowHeight(summaries[0], 600));
+  });
+});
+
+describe('step timing', () => {
+  const at = new Date(2026, 9, 24, 15, 42).getTime();
+  const messages = [
+    { id: 'u', role: 'user', content: 'go', createdAt: at - 1000 },
+    { id: 'a', role: 'assistant', content: '', toolCalls: [{ id: 'c1', name: 'bash', input: {} }], createdAt: at },
+    { id: 't', role: 'tool', content: '', toolResult: { toolCallId: 'c1', output: 'ok' }, createdAt: at + 1500 },
+  ] as ChatMessage[];
+
+  it('gives a persisted tool call its start and end', () => {
+    const run = toStreamBlocks(messages).find((b) => b.type === 'activity');
+    expect(run?.type === 'activity' && run.items[0]).toMatchObject({ startedAt: at, endedAt: at + 1500 });
+  });
+
+  it('stamps message and step rows with their time', () => {
+    expect(rows(messages).map(transcriptRowStamp)).toEqual([fmtTime(at - 1000), fmtTime(at)]);
+  });
+
+  it('formats elapsed times compactly', () => {
+    expect([400, 12_300, 125_000, 3_720_000].map(fmtElapsed)).toEqual(['0.4s', '12s', '2m 5s', '1h 2m']);
   });
 });

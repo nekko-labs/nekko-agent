@@ -119,3 +119,17 @@ describe('Agent group hierarchy', () => {
     expect(cssRule(layout, '.agent-panel-row > .agent-panel-group + .agent-panel-group')['margin-top']).toBe('0');
   });
 });
+
+
+describe('Compact horizontal panel', () => {
+  it('fits five controls into three rows without padding below the cards', () => {
+    const layout = stylesheet('components/commandWallLayouts.css');
+    expect(cssRule(layout, "[data-agent-panel][data-orientation='horizontal'] [data-agent-panel-header] > div")).toMatchObject({ display: 'grid', 'grid-template-columns': 'repeat(2,28px)' });
+    expect(cssRule(layout, "[data-agent-panel][data-orientation='horizontal'] [data-agent-panel-header] .agent-panel-controls").display).toBe('contents');
+    expect(cssRule(layout, '.agent-panel-row')['padding-block']).toBe('0');
+    expect(cssRule(layout, '.agent-panel-row .collapse-wrap > div')['padding-bottom']).toBe('0');
+    const dock = stylesheet('components/monitorsDock.css');
+    expect(cssRule(dock, '.monitors-dock__monitors')).toMatchObject({ 'overflow-anchor': 'none', 'scrollbar-gutter': 'stable' });
+    expect(cssRule(dock, '.monitors-dock__landing > span').height).toBe('var(--landing-height)');
+  });
+});

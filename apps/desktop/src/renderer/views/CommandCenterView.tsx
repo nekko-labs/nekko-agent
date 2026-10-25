@@ -62,20 +62,20 @@ function screenStorage(storage: Storage | undefined): Pick<Storage, 'getItem' | 
 /** Physical digits also work when Shift produces !, @, or #. */
 export function wallLayoutShortcut(e: Pick<KeyboardEvent, 'code' | 'key' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'altKey' | 'repeat' | 'isComposing' | 'defaultPrevented'>) {
   if (e.defaultPrevented || e.repeat || e.isComposing || e.altKey || !e.shiftKey || !(e.ctrlKey || e.metaKey) || (e.ctrlKey && e.metaKey)) return null;
-  const digit = /^Digit[1-3]$/.test(e.code) ? e.code.slice(-1) : /^[1-3]$/.test(e.key) ? e.key : null;
-  return digit === '1' ? 'focus' : digit === '2' ? 'grid' : digit === '3' ? 'fixed' : null;
+  const digit = /^Digit[12]$/.test(e.code) ? e.code.slice(-1) : /^[12]$/.test(e.key) ? e.key : null;
+  return digit === '1' ? 'focus' : digit === '2' ? 'grid' : null;
 }
 
 /**
- * What each saved layout mode is called. The free-form tiled wall reads as
- * Dynamic; the even rows and columns read as Grid. Saved values keep their
+ * What each saved layout mode is called. The tiled wall reads as Dynamic
+ * (even rows and columns are its Fixed grid setting). Saved values keep their
  * original keys so existing walls load unchanged.
  */
-export const LAYOUT_LABEL: Record<'focus' | 'grid' | 'fixed', string> = { focus: 'Focused', grid: 'Dynamic', fixed: 'Grid' };
+export const LAYOUT_LABEL: Record<'focus' | 'grid', string> = { focus: 'Focused', grid: 'Dynamic' };
 
-function layoutShortcutLabel(mode: 'focus' | 'grid' | 'fixed') {
+function layoutShortcutLabel(mode: 'focus' | 'grid') {
   const mac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
-  return `${mac ? '⌘' : 'Ctrl'}+Shift+${mode === 'focus' ? 1 : mode === 'grid' ? 2 : 3}`;
+  return `${mac ? '⌘' : 'Ctrl'}+Shift+${mode === 'focus' ? 1 : 2}`;
 }
 
 /**
@@ -542,7 +542,7 @@ export function CommandCenterView() {
   const composerRow = <div className="wall-composer-row" data-dock={`${wall.composer.side}-${wall.composer.align}`}>{composer}</div>;
 
   return (
-    <div ref={viewRef} className="flex h-full min-h-0 flex-col gap-2 pb-1.5 pl-[3px] pr-px pt-1">
+    <div ref={viewRef} className="flex h-full min-h-0 flex-col gap-2 pb-0 pl-[3px] pr-px pt-1">
       <WallToolbar wall={wall} setWall={setWall} addOpen={addOpen} setAddOpen={setAddOpen}
         onAdd={(kind) => {
           setCompletedId(null);
@@ -631,6 +631,7 @@ export function WallToolbar({
 }) {
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const snapOn = !!wall.snap;
+  const snapAvailable = wall.layout.mode === 'grid' && !wall.layout.fixedGrid;
   // In the desktop shell the controls share the title bar's row with the
   // Agents heading instead of costing a row of their own.
   const [slot, setSlot] = useState<HTMLElement | null>(null);
@@ -677,12 +678,12 @@ export function WallToolbar({
               <button key={mode} type="button" title={`${LAYOUT_LABEL[mode]} (${layoutShortcutLabel(mode)})`} aria-pressed={wall.layout.mode === mode} onClick={() => setWall((w) => ({ ...w, layout: { ...w.layout, mode } }))}>{React.createElement(mode === 'focus' ? FocusLayoutIcon : BoltIcon, { className: 'h-4 w-4' })}{LAYOUT_LABEL[mode]}</button>
             ))}
           </div>
-          {/* Snap to grid, only in Dynamic (the one free-form layout). Its
-              space stays reserved so revealing it never shifts the controls. */}
-          <div className="wall-auto-arrange" data-visible={wall.layout.mode === 'grid'}>
+          {/* Snap to grid, only in free-form Dynamic (a Fixed grid is already
+              even). Its space stays reserved so revealing it never shifts the controls. */}
+          <div className="wall-auto-arrange" data-visible={snapAvailable}>
             <HoverTip label={snapOn ? 'Snap to grid is on: windows stay evenly spaced' : 'Snap to grid: keep windows evenly spaced'}>
               <button type="button" className="wall-snap-toggle" aria-label="Snap to grid" aria-pressed={snapOn}
-                tabIndex={wall.layout.mode === 'grid' ? 0 : -1} disabled={wall.layout.mode !== 'grid'}
+                tabIndex={snapAvailable ? 0 : -1} disabled={!snapAvailable}
                 onClick={() => setWall((w) => ({ ...w, snap: !w.snap }))}>
                 <MagnetIcon className="h-4 w-4" />
               </button>

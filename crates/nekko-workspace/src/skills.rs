@@ -496,7 +496,9 @@ impl Vaizer {
         if !refresh {
             return fallback();
         }
-        let Ok(res) = self.http.get(&self.catalog_url).send().await else { return fallback() };
+        let Ok(res) = nekko_net::send("skills-catalog", self.http.get(&self.catalog_url)).await else {
+            return fallback();
+        };
         if !res.status().is_success() {
             return fallback();
         }
@@ -543,7 +545,7 @@ impl Vaizer {
             format!("{}/plugins/{slug}/skills/{slug}/SKILL.md", self.raw_base),
         ];
         for url in urls {
-            let Ok(res) = self.http.get(&url).send().await else { continue };
+            let Ok(res) = nekko_net::send("skills-catalog", self.http.get(&url)).await else { continue };
             if !res.status().is_success() {
                 continue;
             }

@@ -48,6 +48,7 @@ nekko-remote = { path = "../nekko-remote" }
 nekko-machine = { path = "../nekko-machine" }
 nekko-messaging = { path = "../nekko-messaging" }
 nekko-native = { path = "../nekko-native" }
+nekko-net = { path = "../nekko-net" }
 nekko-sandbox = { path = "../nekko-sandbox" }
 nekko-store = { path = "../nekko-store" }
 nekko-term = { path = "../nekko-term" }
@@ -64,6 +65,8 @@ serde_json.workspace = true
 sha2 = "0.10"
 # The mDNS responder's socket: SO_REUSEADDR before bind, multicast membership per interface.
 socket2 = "0.6"
+# The OS name and version the Send feedback sheet may share (feedback.rs); nekko-machine already builds it.
+sysinfo = { version = "0.39", default-features = false, features = ["system"] }
 tokio.workspace = true
 tokio-tungstenite.workspace = true
 url = "2.5"

@@ -468,7 +468,10 @@ impl Voice {
 
     /// One verified download: capped, hashed, written beside its target and renamed in.
     async fn download(&self, url: &str, dest: &Path, hash: &str, cancel: &Cancel, offset: f64) -> Result<(), String> {
-        let mut response = cancel.guard(self.http.get(url).send()).await?.map_err(|e| chain(&e))?;
+        let mut response = cancel.guard(nekko_net::send("models", self.http.get(url))).await?.map_err(|e| match e {
+            nekko_net::Error::Http(e) => chain(&e),
+            e => e.to_string(),
+        })?;
         if !response.status().is_success() {
             return Err(format!("Download failed ({}).", response.status().as_u16()));
         }

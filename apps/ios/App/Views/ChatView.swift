@@ -27,7 +27,15 @@ struct ChatView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(Prefs.self) private var prefs
     /// Expert mode's hardware and loaded models, read while the chat is on screen.
-    @State private var monitor: MonitorModel?
+    @State private var monitor: HardwareMonitorModel?
+    /// Tabletop (FD-6): the hinge in window points, from the pane host; nil elsewhere.
+    @Environment(\.paneHinge) private var paneHinge
+    /// In the pane host: messages can be dragged to the other pane.
+    @Environment(\.inPanes) private var inPanes
+    /// This chat's frame in the window, to place the hinge.
+    @State private var windowFrame: CGRect = .zero
+    /// Something is being dragged over the chat.
+    @State private var dropping = false
 
     var body: some View {
         Group {
@@ -64,7 +72,11 @@ struct ChatView: View {
     }
 
     @ViewBuilder private func content(_ chat: ChatModel) -> some View {
+        let flex = self.flex
         ScrollViewReader { proxy in
+         // Tabletop (FD-6): the transcript above the hinge, the composer and cards below it.
+         // One structure either way, so the transcript keeps its place when the phone folds.
+         VStack(spacing: 0) {
           // At least as tall as the space above the bottom bar, bottom-aligned:
           // a short transcript then moves up when an approval or question card
           // grows the bar, instead of staying pinned where the card now covers it.
@@ -83,6 +95,8 @@ struct ChatView: View {
                                 viewing = PhotoSet(photos: chat.photos(b.id), index: i)
                             }
                             .id(b.id)
+                            // Drag a message to the other pane's composer (FD-4); it lands as text, never sent.
+                            .modifier(PaneDraggable(text: inPanes ? b.copyText : nil))
                             .contextMenu { blockMenu(chat, b) }
                         case .agents(let blocks):
                             // Consecutive delegations read as one group, as on the desktop.
@@ -146,38 +160,45 @@ struct ChatView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) {
-                VStack(spacing: 8) {
-                    if let a = chat.turn.approval {
-                        ApprovalCard(approval: a) { ok in try await chat.approve(ok) }.id(a.call.id)
-                    }
-                    if let q = chat.turn.question {
-                        // A new question starts with nothing picked.
-                        QuestionCard(request: q) { answers in try await chat.answer(answers) }.id(q.callId)
-                    }
-                    if !chat.queuedPrompts.isEmpty { QueueList(chat: chat) }
-                    PrChip(chat: chat).frame(maxWidth: .infinity, alignment: .leading)
-                    // The phone's saved copy (OF-5): read-only until the computer answers.
-                    if let at = chat.savedAt {
-                        Label(SavedListNote.copy(savedAt: at, computer: store.active?.name ?? "your computer"), systemImage: "clock.arrow.circlepath")
-                            .font(.footnote).foregroundStyle(palette.inkSoft)
-                            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4)
-                            .accessibilityIdentifier("chat.savedCopy")
-                    }
-                    Composer(chat: chat)
-                }
-                .padding(.horizontal, 12).padding(.bottom, 8).padding(.top, 6)
-                .background(.bar)
+                if flex == nil { bottomBar(chat) }
             }
-            .safeAreaInset(edge: .top) {
-                if prefs.expertMode, let monitor {
-                    MonitorPanel(monitor: monitor, chat: chat).background(.bar)
-                }
+            .frame(height: flex.map { CGFloat($0.top) })
+          if let flex {
+              // Nothing sits on the hinge.
+              Color.clear.frame(height: CGFloat(flex.gap)).accessibilityHidden(true)
+              ScrollView { bottomBar(chat) }
+                  .scrollBounceBehavior(.basedOnSize)
+                  .background(.bar)
+                  .accessibilityIdentifier("chat.flexLower")
+          }
+         }
+        }
+        // Where this chat sits in the window, for the hinge (measured under the keyboard too).
+        .background {
+            GeometryReader { g in
+                Color.clear.onChange(of: g.frame(in: .global), initial: true) { _, f in windowFrame = f }
+            }
+            .ignoresSafeArea(.keyboard)
+        }
+        // Text or a photo dragged from the other pane (or another app) goes into the message; nothing is sent.
+        .dropDestination(for: PaneDrop.self) { items, _ in
+            PaneDrop.accept(items, into: chat)
+        } isTargeted: { dropping = $0 }
+        .overlay {
+            if dropping {
+                RoundedRectangle(cornerRadius: 14).strokeBorder(palette.accent, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+                    .padding(6).allowsHitTesting(false).accessibilityHidden(true)
+            }
+        }
+        .safeAreaInset(edge: .top) {
+            if prefs.expertMode, let monitor {
+                MonitorPanel(monitor: monitor, chat: chat).background(.bar)
             }
         }
         // Expert mode re-reads the hardware every few seconds, only while it's on and the chat is on screen.
         .task(id: prefs.expertMode) {
             guard prefs.expertMode else { return }
-            let m = monitor ?? MonitorModel(store: store)
+            let m = monitor ?? HardwareMonitorModel(store: store)
             monitor = m
             await m.follow()
         }
@@ -241,6 +262,38 @@ struct ChatView: View {
         .alert("Couldn’t do that", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(actionError ?? "") }
+    }
+
+    /// The approval and question cards, the queue, the PR chip and the composer.
+    private func bottomBar(_ chat: ChatModel) -> some View {
+        VStack(spacing: 8) {
+            if let a = chat.turn.approval {
+                ApprovalCard(approval: a) { ok in try await chat.approve(ok) }.id(a.call.id)
+            }
+            if let q = chat.turn.question {
+                // A new question starts with nothing picked.
+                QuestionCard(request: q) { answers in try await chat.answer(answers) }.id(q.callId)
+            }
+            if !chat.queuedPrompts.isEmpty { QueueList(chat: chat) }
+            PrChip(chat: chat).frame(maxWidth: .infinity, alignment: .leading)
+            // The phone's saved copy (OF-5): read-only until the computer answers.
+            if let at = chat.savedAt {
+                Label(SavedListNote.copy(savedAt: at, computer: store.active?.name ?? "your computer"), systemImage: "clock.arrow.circlepath")
+                    .font(.footnote).foregroundStyle(palette.inkSoft)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4)
+                    .accessibilityIdentifier("chat.savedCopy")
+            }
+            Composer(chat: chat)
+        }
+        .padding(.horizontal, 12).padding(.bottom, 8).padding(.top, 6)
+        .background(.bar)
+    }
+
+    /// Tabletop: where the hinge cuts this chat, when the pane host passes one and it falls inside.
+    private var flex: PaneFlex? {
+        guard let h = paneHinge else { return nil }
+        return PaneFlex(hingeMinY: Double(h.minY), hingeMaxY: Double(h.maxY),
+                        frameMinY: Double(windowFrame.minY), frameHeight: Double(windowFrame.height))
     }
 
     /// Copy, and fork: a prompt comes back in a new chat to edit and send; a reply keeps the chat up to there.
@@ -852,6 +905,14 @@ struct Composer: View {
         .onChange(of: chat.insert) { _, q in
             guard q != nil, let quote = chat.takeInsert() else { return }
             text += (text.isEmpty || text.hasSuffix("\n") ? "" : "\n\n") + quote
+        }
+        // A photo dropped on the chat (from the other pane): into the message, at most four, never sent.
+        .onChange(of: chat.insertImages) { _, dropped in
+            guard !dropped.isEmpty else { return }
+            let taken = chat.takeImages()
+            let room = max(0, 4 - images.count)
+            images += taken.prefix(room)
+            if taken.count > room { error = "A message takes four photos at most." }
         }
         // A prompt that never reached the computer comes back, with its skill and photos.
         .onChange(of: chat.unsent) { _, u in

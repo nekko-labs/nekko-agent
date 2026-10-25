@@ -427,7 +427,7 @@ pub async fn download(
     let dir = dest.parent().ok_or("no download folder")?;
     tokio::fs::create_dir_all(dir).await.map_err(|e| e.to_string())?;
     let temp = dir.join(format!("temp-{}", dest.file_name().and_then(|n| n.to_str()).unwrap_or("update")));
-    let res = client.get(r.url.clone()).send().await.map_err(|e| e.to_string())?;
+    let res = nekko_net::send("updates", client.get(r.url.clone())).await.map_err(|e| e.to_string())?;
     if !res.status().is_success() {
         return Err(format!("Cannot download \"{}\", status {}", r.url, res.status().as_u16()));
     }

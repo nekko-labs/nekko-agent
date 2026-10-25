@@ -8,6 +8,10 @@ public enum Channels {
     /// Only the phone-settable keys (`PHONE_SETTINGS_KEYS`); anything else is refused.
     public static let settingsUpdate = "settings:update"
     public static let providersList = "providers:list"
+    /// Provider setup from a phone (decision 0016): the computer's sealing key, a sealed save, one provider's switch.
+    public static let providersSealKey = "providers:sealKey"
+    public static let providersSaveSealed = "providers:saveSealed"
+    public static let providersSetEnabled = "providers:setEnabled"
     public static let modelsList = "models:list"
     public static let sessionsSummaries = "sessions:summaries"
     public static let sessionCreate = "session:create"
@@ -31,6 +35,12 @@ public enum Channels {
     public static let toolApprove = "tool:approve"
     public static let workspaceList = "workspace:list"
     public static let appInfo = "app:info"
+    /// SK-2: a single-use step-up challenge (read class).
+    public static let securityChallenge = "security:challenge"
+    /// SK-3 safety exits (agent class, never refused for Change off).
+    public static let appQuit = "app:quit"
+    public static let deviceSignOut = "device:signOut"
+    public static let remoteStop = "remote:stop"
     /// Names and descriptions only, never templates.
     public static let skillsRunnable = "skills:runnable"
     /// What the agent changed in a chat, as a capped read-only diff (`PhoneChanges`);
@@ -92,15 +102,18 @@ public enum Channels {
     public static let logsRead = "logs:read"
     /// The change-class channels among these.
     public static let filesChange: Set<String> = [filesWrite]
+    /// A provider added or switched from the phone (`PHONE_PROVIDER_CHANGE_CHANNELS`): change class, with a proof.
+    public static let providersChange: Set<String> = [providersSaveSealed, providersSetEnabled]
     /// Every change-class channel the phone calls (`PHONE_CHANGE_CHANNELS`): signed, so Face ID or the passcode is asked.
-    public static let change: Set<String> = gitChange.union(filesChange).union(terminalChange)
+    public static let change: Set<String> = gitChange.union(filesChange).union(terminalChange).union(providersChange)
 
     public static let all = [
         settingsGet, settingsUpdate, providersList, modelsList, sessionsSummaries, sessionCreate, sessionGet,
         sessionSetOptions, sessionDelete, voiceStatus, voiceTranscribe, chatSend, chatAbort, chatQueue,
         chatPending, chatAnswer, toolApprove, workspaceList, appInfo, skillsRunnable, changesList,
         chatEditQueued, sessionFork, tasksList, taskRunNow, workflowsList, workflowRun, prSessionList,
-        usageSummary, limitsGet, sessionWatches, machineSummary, monitorSummary,
+        usageSummary, limitsGet, sessionWatches, machineSummary, monitorSummary, securityChallenge, appQuit, deviceSignOut, remoteStop,
+        providersSealKey, providersSaveSealed, providersSetEnabled,
         workspaceGitStatus, gitDiff, gitLog, gitShow, gitBranches, gitCompare, prChecks, prDiff,
         gitStage, gitUnstage, gitCommit, gitCommitMessage, gitPush, gitSwitch, gitMergeAbort, prCreate, prAction,
         filesList, filesSearch, filesRead, filesWrite, logsList, logsRead,
@@ -225,6 +238,23 @@ public struct MachineSummary: Equatable, Sendable {
             cpuC: live?["temps"]?.dbl("cpuC"), gpuC: gpuC, gpuUsedMB: gpu?.dbl("usedMB"), gpuTotalMB: gpu?.dbl("totalMB"),
             serverRunning: engine?.flag("running") ?? false, serverStartedAt: engine?.long("startedAt"), resident: resident,
             loading: Int(engine?.long("loading") ?? 0))
+    }
+}
+
+/// `providers:saveSealed` and `providers:setEnabled` as the computer answers
+/// them: whether it worked, why not, and the models a saved provider offers.
+public struct ProviderSaveResult: Equatable, Sendable {
+    public struct Model: Equatable, Sendable, Identifiable {
+        public let id: String
+        public let name: String
+    }
+    public let ok: Bool
+    public let message: String?
+    public let models: [Model]
+
+    public static func from(_ v: JSONValue?) -> ProviderSaveResult {
+        let models: [Model] = (v?["models"]?.array ?? []).compactMap { m in m.str("id").map { Model(id: $0, name: m.str("name") ?? $0) } }
+        return ProviderSaveResult(ok: v?.flag("ok") ?? false, message: v?.str("message"), models: models)
     }
 }
 
@@ -667,8 +697,12 @@ public struct WorkspaceFolder: Equatable, Sendable, Identifiable {
 public struct AppInfo: Equatable, Sendable {
     public let version: String?
     public let platform: String?
+    /// The owner lets a phone quit Nekko Agent there (SK-3, `app:quit`); false from older computers.
+    public var quitFromPhone = false
 
-    public static func from(_ v: JSONValue?) -> AppInfo { AppInfo(version: v?.str("version"), platform: v?.str("platform")) }
+    public static func from(_ v: JSONValue?) -> AppInfo {
+        AppInfo(version: v?.str("version"), platform: v?.str("platform"), quitFromPhone: v?.flag("quitFromPhone") ?? false)
+    }
 }
 
 public struct VoiceInstall: Equatable, Sendable {

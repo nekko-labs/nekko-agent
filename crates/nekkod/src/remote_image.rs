@@ -260,13 +260,14 @@ impl ImageGet for NetImageGet {
     fn get<'a>(&'a self, url: &'a Url) -> BoxFuture<'a, Result<ImageResponse, GetError>> {
         Box::pin(async move {
             let client = self.client.as_ref().map_err(|e| GetError::Failed(e.clone()))?;
-            let res = client
+            let req = client
                 .get(url.clone())
                 .header(reqwest::header::ACCEPT, ACCEPT)
-                .header(reqwest::header::USER_AGENT, USER_AGENT)
-                .send()
-                .await
-                .map_err(|e| get_error(&e))?;
+                .header(reqwest::header::USER_AGENT, USER_AGENT);
+            let res = nekko_net::send("web-tools", req).await.map_err(|e| match e {
+                nekko_net::Error::Http(e) => get_error(&e),
+                e => GetError::Failed(e.to_string()),
+            })?;
             let headers = res.headers();
             let location = headers.get(reqwest::header::LOCATION).map(latin1);
             // `Number(res.headers['content-length'])`, kept when finite.

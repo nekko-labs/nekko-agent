@@ -2,50 +2,6 @@ import NekkoKit
 import NekkoProtocol
 import SwiftUI
 
-/// The chat to pick up again, on top of the list: the most recently active one.
-struct ContinueCard: View {
-    let summary: SessionSummary
-    let activity: Activity?
-    var open: () -> Void
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Button(action: open) {
-            HStack(alignment: .center, spacing: 12) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Continue").font(.caption2.weight(.bold)).foregroundStyle(palette.accent).textCase(.uppercase).kerning(0.6)
-                    Text(title).font(.body.weight(.semibold)).foregroundStyle(palette.ink)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if let preview {
-                        Text(preview).font(.footnote).foregroundStyle(palette.inkSoft).lineLimit(2)
-                    }
-                }
-                Spacer(minLength: 4)
-                if activity == .running { RunningDots().accessibilityLabel("Working") }
-                Image(systemName: "arrow.right").font(.footnote.weight(.bold)).foregroundStyle(palette.onAccent)
-                    .frame(width: 32, height: 32).background(palette.accent, in: Circle())
-                    .accessibilityHidden(true)
-            }
-            .padding(.horizontal, 14).padding(.vertical, 12)
-            // The one tinted block on the list, as the desktop's active row.
-            .background(palette.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Continue \(title)")
-        .accessibilityIdentifier("chats.continue")
-    }
-
-    private var title: String { summary.title.trimmingCharacters(in: .whitespaces).isEmpty ? "New chat" : summary.title }
-
-    private var preview: String? {
-        let t = (summary.lastReplyText ?? summary.firstUserText ?? "").replacingOccurrences(of: "\n", with: " ")
-            .trimmingCharacters(in: .whitespaces)
-        return t.isEmpty ? nil : t
-    }
-}
-
 /// The computer's automations: its tasks and workflows, how each last went,
 /// and Run now. Setting them up and changing them happens on the computer.
 struct AutomationsView: View {

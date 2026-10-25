@@ -32,6 +32,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 pub enum Chunk {
     Text(String),
     Phase(String),
+    /// A provider item to send back on the turn's next call (`ProviderChunk::Carry`).
+    Carry(Value),
     Reasoning(String),
     /// A complete `ToolCall` (`{ id, name, input }`).
     ToolCall(Value),
@@ -320,6 +322,9 @@ pub fn is_network_error(message: &str) -> bool {
         "dns error",
         "network is unreachable",
         "no route to host",
+        // `friendly_error` rewrites a failed send into "Can't reach ChatGPT
+        // at …" / "Can't reach the model server at …" before it gets here.
+        "can't reach",
     ]
     .iter()
     .any(|needle| lower.contains(needle))
@@ -342,12 +347,25 @@ struct Turn {
     reasoning: String,
     reasoning_seconds: Option<u64>,
     calls: Vec<Value>,
+    carry: Vec<Value>,
     runaway: bool,
 }
 
 impl Turn {
     fn is_empty(&self) -> bool {
         js::trim(&self.text).is_empty() && js::trim(&self.reasoning).is_empty() && self.calls.is_empty()
+    }
+}
+
+/// Strips `carry` from every message up to the latest user prompt, so a
+/// finished turn's encrypted reasoning neither grows the session file nor
+/// rides along on later requests.
+fn drop_carry_before_last_prompt(history: &mut [Value]) {
+    let last_user = history.iter().rposition(|m| m.get("role").and_then(Value::as_str) == Some("user"));
+    for m in history.iter_mut().take(last_user.map_or(0, |i| i + 1)) {
+        if let Some(o) = m.as_object_mut() {
+            o.remove("carry");
+        }
     }
 }
 
@@ -445,6 +463,7 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
             };
             match chunk {
                 Chunk::Phase(phase) => turn.phase = Some(phase),
+                Chunk::Carry(item) => turn.carry.push(item),
                 Chunk::Text(delta) => {
                     settle(turn, reasoning_started);
                     turn.text.push_str(&delta);
@@ -505,6 +524,7 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
                 reasoning: turn.reasoning.clone(),
                 reasoning_seconds: turn.reasoning_seconds,
                 calls: turn.calls.clone(),
+                carry: turn.carry.clone(),
                 runaway: turn.runaway,
             };
             match self.stream(turn, extra.clone(), send_tools).await {
@@ -634,6 +654,8 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
     }
 
     async fn run(&mut self) {
+        // Carried provider items only matter within the turn that made them.
+        drop_carry_before_last_prompt(self.opts.history);
         let mut resume_extra = Vec::new();
         // A normal follow-up after Stop needs the same valid history as Resume.
         repair_interrupted_history(self.opts.history);
@@ -705,6 +727,9 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
                 }
                 if !turn.calls.is_empty() {
                     m.insert("toolCalls".into(), Value::Array(turn.calls.clone()));
+                }
+                if !turn.carry.is_empty() {
+                    m.insert("carry".into(), json!({ "model": self.opts.model, "items": turn.carry }));
                 }
             }
             m.insert("createdAt".into(), json!(now_ms()));
@@ -809,6 +834,19 @@ pub async fn run_agent<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) 
 mod tests {
     use super::*;
     use std::sync::atomic::AtomicUsize;
+
+    #[test]
+    fn carry_is_dropped_once_a_new_prompt_starts_a_turn() {
+        let carry = json!({ "model": "m", "items": [{}] });
+        let mut h = vec![
+            json!({ "role": "assistant", "carry": carry }),
+            json!({ "role": "user" }),
+            json!({ "role": "assistant", "carry": carry }),
+        ];
+        drop_carry_before_last_prompt(&mut h);
+        assert!(h[0].get("carry").is_none());
+        assert!(h[2].get("carry").is_some(), "the turn in progress keeps its own");
+    }
 
     #[test]
     fn cancel_runs_each_hook_once_even_when_registered_late() {

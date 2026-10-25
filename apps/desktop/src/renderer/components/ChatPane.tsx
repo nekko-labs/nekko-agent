@@ -26,6 +26,7 @@ import { clearLiveRun, getLiveRun, takeFinishedRun, useLiveRun, type LiveRun } f
 import { getCachedSession, loadSession, putCachedSession } from '../sessionCache.js';
 import { usePaneVisible } from '../paneVisibility.js';
 import { useAgentEventClaim } from '../agentSubscription.js';
+import { ComposerFocus } from './ComposerFocus.js';
 import { afterPaint } from '../afterPaint.js';
 import { chatWelcomeState } from './agent-console/chatWelcome.js';
 import { useAllProviderLimits, useProviderLimits } from '../useLimits.js';
@@ -57,7 +58,7 @@ import { promptHistory, recallPrompt, type HistoryCursor } from './agent-console
 import { PERSISTED_INTERRUPTION, shouldShowPersistedInterruption, reconcileInterruptionNotice, describeInterruption, suggestedReplyClassName } from './agent-console/interruption.js';
 import { cutPrompt, messageCuts, type MessageCuts } from './agent-console/messageCut.js';
 
-import { estimateRowHeight, toTranscriptRows, transcriptBeforeLiveTurn, type TranscriptRow } from './agent-console/transcript.js';
+import { estimateRowHeight, toTranscriptRows, transcriptBeforeLiveTurn, transcriptRowStamp, type TranscriptRow } from './agent-console/transcript.js';
 import { ContextGauge, EffortSlider } from './ChatMetrics.js';
 import { PlanRail } from './PlanRail.js';
 import { PlanChangePrompt, planChangeMessage } from './PlanChangePrompt.js';
@@ -523,47 +524,6 @@ const LiveReplyStatus = memo(function LiveReplyStatus({
   const label = status.streaming ? shortLiveStatus(run?.activity) || 'Working' : '';
   return <ReplyStatus {...status} tps={liveRate?.rate ?? status.tps} estimatedRate={!!liveRate} status={label} iconState={status.streaming ? replyIconState(run?.activity) : 'idle'} elapsed={status.streaming ? elapsed : 0} nextWakeAt={nextWakeAt} now={now} />;
 });
-
-/**
- * Focus the composer when a chat opens so you can start typing straight away,
- * caret after any restored draft. Once per chat, and again whenever a pane
- * kept mounted behind the scenes is shown, so switching back to a chat lands
- * in its composer as it always did. Never steals focus from something else
- * you're already typing in. `ready` is a dependency because the textarea is
- * disabled until providers have loaded.
- *
- * Its own component so the pane showing and hiding re-renders this, not the
- * chat; and done after the frame, because focus forces a layout, and paying for
- * it inside the switch would hold back the frame that shows the chat.
- */
-function ComposerFocus({ target, sessionId, ready }: { target: React.RefObject<MarkdownEditorElement | null>; sessionId: string; ready: number }) {
-  const visible = usePaneVisible();
-  const focusedFor = useRef<string | null>(null);
-  useEffect(() => {
-    if (!visible) {
-      focusedFor.current = null;
-      return;
-    }
-    if (focusedFor.current === sessionId) return;
-    return afterPaint(() => {
-      const el = target.current;
-      if (!el || !el.isContentEditable) return;
-      const active = document.activeElement;
-      // A composer in a pane that was just hidden may still hold focus for a
-      // moment; it is not someone typing.
-      const typingElsewhere =
-        active instanceof HTMLElement &&
-        active !== el &&
-        active.checkVisibility?.() !== false &&
-        (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable);
-      if (typingElsewhere) return;
-      focusedFor.current = sessionId;
-      el.focus();
-      el.setSelectionRange(el.value.length, el.value.length);
-    });
-  }, [visible, sessionId, ready, target]);
-  return null;
-}
 
 function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCenter = false, surface = 'full', status, selected, header, cleanStart: cleanStartWanted = false }: {
   sessionId: string;
@@ -2548,6 +2508,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             className={`${contentWidth} space-y-5`}
             onPinnedChange={onPinnedChange}
             onGrowWhileUnpinned={onGrowWhileUnpinned}
+            stampOf={transcriptRowStamp}
             header={welcomeState.welcome ? (
 
               // On the wall the window's own reveal is the entrance; a second
@@ -2615,19 +2576,25 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   const tone = interruption.paused ? 'var(--warning)' : 'var(--danger)';
                   return (
                   <div
-                    className="fade-in flex flex-wrap items-center gap-2.5 rounded-xl border px-3 py-2 text-[12px]"
+                    className="fade-in flex flex-col gap-2 rounded-xl border px-3 py-2 text-[12px]"
                     style={{
                       borderColor: `color-mix(in srgb, ${tone} 35%, transparent)`,
                       background: `color-mix(in srgb, ${tone} 7%, transparent)`,
                     }}
                     role="alert"
                   >
-                    <span className="shrink-0 font-medium" style={{ color: tone }}>
-                      {interruption.title}
-                    </span>
-                    <span className="min-w-0 basis-48 flex-1 text-ink-soft">
-                      {interruption.detail} Retrying sends approximately {ctx ? ctxUsed.toLocaleString() : 'an unavailable number of'} input context tokens. Provider caching and billing vary.
-                    </span>
+                    {/* Message on top, actions underneath: beside a long
+                        message the buttons wrapped into a ragged column. */}
+                    <div className="flex items-start gap-2.5">
+                      <span className="min-w-0 flex-1 text-ink-soft">
+                        <span className="mr-1.5 font-medium" style={{ color: tone }}>{interruption.title}</span>
+                        {interruption.detail} Retrying sends approximately {ctx ? ctxUsed.toLocaleString() : 'an unavailable number of'} input context tokens. Provider caching and billing vary.
+                      </span>
+                      <button className="shrink-0 rounded-sm p-0.5 text-ink-faint hover:text-ink" title="Dismiss" onClick={() => { setDismissedInterruption(lastMsgId ?? null); setErrorNotice(null); }}>
+                        <CloseIcon className="h-3 w-3" />
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 empty:hidden">
                     {session?.messages.some((m) => m.role === 'user') && (
                       <button className="btn btn-primary shrink-0 px-2.5 py-0.5 text-[11px]"
                         title="Retry using the saved conversation and work" onClick={() => void resumeRun()}>
@@ -2641,9 +2608,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                         Delete last message
                       </button>
                     )}
-                    <button className="shrink-0 rounded-sm p-0.5 text-ink-faint hover:text-ink" title="Dismiss" onClick={() => { setDismissedInterruption(lastMsgId ?? null); setErrorNotice(null); }}>
-                      <CloseIcon className="h-3 w-3" />
-                    </button>
+                    </div>
                   </div>
                   );
                 })()}
@@ -2725,7 +2690,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           </div>}
           {cleanStart && <div className="clean-start-greeting fade-in" data-clean-start-greeting>
             <h2>What should we work on?</h2>
-            <p>Describe the task. The full chat opens once you send.</p>
           </div>}
           <div className={`composer-column mx-auto ${commandCenter ? 'w-[98%]' : 'w-[90%]'}`} style={cleanStart ? undefined : commandCenter ? { width: '98%' } : undefined}>
             {surface !== 'composer' && planChangeOpen && !question && (
@@ -3111,7 +3075,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     onKeyDown={onComposerKeyDown}
                     disabled={!canCompose}
                   />
-                  <ComposerFocus target={composerRef} sessionId={sessionId} ready={providers.length} />
+                  <ComposerFocus target={composerRef} sessionId={sessionId} ready={canCompose} />
                 </div>
                 <div className="flex items-center gap-2 px-2 pb-2 pt-1">
                   {!imageMode && (<>

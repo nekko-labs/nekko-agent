@@ -175,6 +175,13 @@ public final class ComputersStore {
     /// When the list on screen is the phone's saved copy (not yet re-read from
     /// the computer), when it was saved; nil once the computer has answered.
     public private(set) var savedListAt: Int64?
+    /// The active computer lets a phone quit Nekko Agent on it (`app:info`
+    /// `quitFromPhone`, SK-3): only then does the phone offer *Quit*.
+    public private(set) var quitFromPhone = false
+    /// A safety exit this phone used (SK-8): why the connection ended, for the banner.
+    public private(set) var safetyExit: SafetyExit?
+    /// Computers this phone signed out of that haven't heard yet (SK-8), by name.
+    public private(set) var pendingSignOuts: [String] = []
     /// Set while *Keep the chat list when offline* is on (the default); nil keeps nothing.
     public var chatListCache: ChatListCache? {
         didSet { if chatListCache == nil { savedListAt = nil } else { saveList() } }
@@ -222,6 +229,9 @@ public final class ComputersStore {
     private let probeNetwork: ProbeNetwork
     /// Signs Change actions (IO-33): the Secure Enclave in the app; nil where there is none.
     @ObservationIgnored public var changeSigner: ChangeSigner?
+    /// Asks the owner for a step-up (SK-6): the app's sheet; nil where there is none.
+    @ObservationIgnored public var stepUpPrompt: StepUpPrompt?
+    @ObservationIgnored private var flushingSignOuts = false
     @ObservationIgnored private var changeCalls: (client: ObjectIdentifier, calls: ChangeCalls)?
 
     private var client: RemoteConnection?
@@ -297,7 +307,8 @@ public final class ComputersStore {
     /// phone's key (Face ID or the passcode within the last 5 minutes), the
     /// key registered on first use. Refusals throw `ChangeRefused` with a
     /// message to show, e.g. "Changes from this phone are turned off on Studio".
-    public func call(change channel: String, _ args: [JSONValue] = [], timeout: TimeInterval? = nil) async throws -> JSONValue {
+    public func call(change channel: String, _ args: [JSONValue] = [], stepUp: JSONValue? = nil,
+                     timeout: TimeInterval? = nil) async throws -> JSONValue {
         guard let client else { throw RelayError("Not connected to a computer.") }
         guard let signer = changeSigner, let caller = client as? ProofCaller else {
             throw ChangeRefused(code: nil, message: "This phone can’t confirm changes with Face ID or a passcode.")
@@ -310,7 +321,7 @@ public final class ComputersStore {
             calls = ChangeCalls(caller: caller, signer: signer, deviceId: deviceId(), computerName: active?.name ?? "your computer")
             changeCalls = (id, calls)
         }
-        return try await calls.call(change: channel, args, timeout: timeout)
+        return try await calls.call(change: channel, args, stepUp: stepUp, timeout: timeout)
     }
 
     /// A Read action on the active computer (IO-33): a plain call, with the
@@ -328,15 +339,214 @@ public final class ComputersStore {
     /// (ask < guardrails < yolo). Sent plain first; when the computer answers
     /// `proof-required` (it was a raise), sent again signed, so the phone asks
     /// for Face ID or the passcode (`call(change:)`). Lowering or keeping the
-    /// mode never asks.
+    /// mode never asks. When the computer also wants a step-up (SK-6), the
+    /// step-up sheet is shown and the call sent once more with it
+    /// (`call(guarded:)`).
     public func call(raising channel: String, _ args: [JSONValue], timeout: TimeInterval? = nil) async throws -> JSONValue {
         do {
             return try await remote().call(channel, args, timeout: timeout)
         } catch let e as RelayError where e.fromComputer && PhoneRefusal(e.message)?.code == "proof-required" {
-            return try await call(change: channel, args, timeout: timeout)
+            return try await call(guarded: channel, args, timeout: timeout)
         } catch {
             throw readable(error)
         }
+    }
+
+    /// A guarded action (SK-6): signed like any Change; when the computer
+    /// answers `step-up-required`, a fresh challenge (`security:challenge`),
+    /// the step-up sheet, and the same call again with the answer beside the
+    /// proof. A turned-down answer (wrong code, a slow touch) shows the sheet
+    /// again with the computer's reason, up to `StepUp.maxAttempts`. The
+    /// five-minute window is the computer's: the phone sends no step-up
+    /// until it is asked, and keeps none.
+    public func call(guarded channel: String, _ args: [JSONValue], timeout: TimeInterval? = nil) async throws -> JSONValue {
+        do {
+            return try await call(change: channel, args, timeout: timeout)
+        } catch let e as ChangeRefused where e.code == StepUpCode.required.rawValue {
+            return try await withStepUp(channel, args, timeout: timeout)
+        }
+    }
+
+    private func withStepUp(_ channel: String, _ args: [JSONValue], timeout: TimeInterval?) async throws -> JSONValue {
+        let name = active?.name ?? "your computer"
+        guard let prompt = stepUpPrompt else {
+            throw ChangeRefused(code: StepUpCode.required.rawValue,
+                                message: "\(name) asks for a security key or a code for this, and this iPhone can’t ask for one. Do it on \(name).")
+        }
+        var problem: String?
+        var last = ChangeRefused(code: StepUpCode.required.rawValue, message: StepUpCode.required.message(computer: name))
+        for attempt in 1...StepUp.maxAttempts {
+            let reply = try await call(read: Channels.securityChallenge)
+            guard let challenge = StepUpChallenge.from(reply) else {
+                throw ChangeRefused(code: nil, message: "\(name) didn’t send a challenge for your security key. Update Nekko Agent on \(name).")
+            }
+            // Turned off on the computer meanwhile: the signed call is enough.
+            if !challenge.required { return try await call(change: channel, args, timeout: timeout) }
+            guard challenge.acceptsFido2 || challenge.acceptsTotp else {
+                throw ChangeRefused(code: StepUpCode.required.rawValue,
+                                    message: "\(name) asks for a security key or a code, but none it has can be used from this iPhone. Check Settings → Security on \(name).")
+            }
+            let chats = summaries
+            let action = StepUp.actionName(channel: channel, args: args, computer: name) { id in
+                chats.first { $0.id == id }?.title
+            }
+            let request = StepUpRequest(action: action, computer: name, challenge: challenge, attempt: attempt, problem: problem)
+            guard let proof = await prompt(request) else {
+                throw ChangeRefused(code: "step-up-cancelled", message: "Not confirmed, so nothing changed on \(name).")
+            }
+            do {
+                return try await call(change: channel, args, stepUp: proof.json, timeout: timeout)
+            } catch let e as ChangeRefused where StepUp.isStepUpCode(e.code) {
+                last = e
+                problem = e.message
+            }
+        }
+        throw last
+    }
+
+    // MARK: Security (SK-6)
+
+    /// Settings → Security: whether the active computer asks for a step-up and
+    /// the kinds of method it has (never which ones), with the offer to
+    /// register from this phone when it makes one. Spends one challenge.
+    public func stepUpStatus() async throws -> StepUpChallenge {
+        let reply = try await call(read: Channels.securityChallenge)
+        guard let status = StepUpChallenge.from(reply) else {
+            throw RelayError("\(active?.name ?? "Your computer") didn’t say how it’s protected. Update Nekko Agent on it.")
+        }
+        return status
+    }
+
+    /// Hand a key or passkey this phone just registered to the computer that
+    /// offered it, as a guarded change (so a step-up is asked when it is on).
+    public func register(_ credential: StepUpRegistration, offer: StepUpRegistrationOffer) async throws {
+        _ = try await call(guarded: offer.channel, [credential.json])
+    }
+
+    // MARK: Safety exits (SK-8)
+
+    /// *Stop remote access on the computer*: `remote:stop` (no proof, no
+    /// step-up). The computer turns remote access off and drops every phone;
+    /// only the desktop can turn it back on.
+    public func stopRemoteAccess() async throws {
+        try await useSafetyExit(Channels.remoteStop, kind: .stoppedRemote)
+    }
+
+    /// *Quit Nekko Agent on the computer*: `app:quit`. Refused
+    /// `quit-disabled` unless the owner allowed it there (`quitFromPhone`).
+    public func quitComputer() async throws {
+        try await useSafetyExit(Channels.appQuit, kind: .quit)
+    }
+
+    private func useSafetyExit(_ channel: String, kind: SafetyExit.Kind) async throws {
+        guard let id = activeId else { throw RelayError("Not connected to a computer.") }
+        do {
+            _ = try await remote().call(channel, [], timeout: 15)
+        } catch let e as RelayError where !e.fromComputer && activeId == id && conn != .online {
+            // The computer dropped this phone before its answer arrived: that is the exit working.
+            guard kind == .stoppedRemote || conn == .offline else { throw e }
+        } catch {
+            throw readable(error)
+        }
+        safetyExit = SafetyExit(computerId: id, kind: kind, at: now())
+    }
+
+    /// *Sign out this phone*: tell the computer (`device:signOut`, which
+    /// revokes this phone there) when it can be reached now, and forget it
+    /// here either way: pairing material, drafts, outbox, saved chats and
+    /// files. Unheard, the sign-out waits in the Keychain and goes on the next
+    /// connection (`flushSignOuts`). Returns whether the computer heard it now.
+    @discardableResult
+    public func signOut(_ id: String) async -> Bool {
+        guard let computer = computers.first(where: { $0.id == id }), let secret = secret(id) else { return false }
+        var heard = false
+        if id == activeId, conn == .online, let c = client {
+            do {
+                _ = try await c.call(Channels.deviceSignOut, [], timeout: 8)
+                heard = true
+            } catch let e as RelayError where e.fromComputer {
+                // It answered, so it knows (an unknown phone has nothing to sign out of).
+                heard = true
+            } catch {
+                heard = false
+            }
+        }
+        // A phone the computer never welcomed (it still holds a pairing code) is unknown there.
+        if !heard && secret.pair == nil {
+            var list = decodeSignOuts().filter { $0.computerId != id }
+            list.append(PendingSignOut(computerId: id, name: computer.name, relayUrl: computer.relayUrl, alts: computer.alts,
+                                       room: secret.room, key: secret.key, keyHex: secret.keyHex, at: now()))
+            saveSignOuts(list)
+        }
+        forget(id)
+        return heard
+    }
+
+    /// Send the sign-outs that wait (SK-8): one short connection each, only
+    /// for `device:signOut`, then closed. Called on load, on return to the
+    /// foreground and after a network change. Dropped once the computer
+    /// answers or turns this phone away (it is already signed out there).
+    public func flushSignOuts(timeout: TimeInterval = 10) async {
+        guard !flushingSignOuts else { return }
+        let list = decodeSignOuts()
+        guard !list.isEmpty else { return }
+        flushingSignOuts = true
+        defer { flushingSignOuts = false }
+        var done: Set<String> = []
+        for p in list {
+            guard let keyBytes = E2E.fromHex(p.keyHex) else {
+                done.insert(p.computerId)
+                continue
+            }
+            var config = RelayConfig(relayUrl: p.relayUrl, room: p.room, key: p.key, keyBytes: keyBytes,
+                                     deviceId: deviceId(), deviceName: deviceName(), pairCode: nil, platform: platform)
+            config.alternates = p.alts
+            config.app = app
+            if await Self.deliverSignOut(makeConnection(config), timeout: timeout) { done.insert(p.computerId) }
+        }
+        // Signed out of again meanwhile: keep the newer record.
+        saveSignOuts(decodeSignOuts().filter { !(done.contains($0.computerId) && list.contains($0)) })
+    }
+
+    /// One sign-out on its own socket: open, wait for the computer (or
+    /// `timeout`), send, close. True when nothing is left to send.
+    static func deliverSignOut(_ c: RemoteConnection, timeout: TimeInterval) async -> Bool {
+        let box = HelloBox()
+        let s: RelayStatus? = await withCheckedContinuation { (cont: CheckedContinuation<RelayStatus?, Never>) in
+            box.cont = cont
+            c.setHandlers(onStatus: { s in if s.state == .online || s.state == .denied { box.finish(s) } }, onEvent: nil, onWelcome: nil)
+            c.connect()
+            DispatchQueue.global().asyncAfter(deadline: .now() + timeout) { box.finish(nil) }
+        }
+        defer { c.close() }
+        switch s?.state {
+        case .denied?:
+            // Revoked, removed or unknown there: already signed out. An app too old to be let in can't say it yet.
+            return s?.denied != .updateRequired
+        case .online?:
+            do {
+                _ = try await c.call(Channels.deviceSignOut, [], timeout: 8)
+                return true
+            } catch let e as RelayError where e.fromComputer {
+                return true
+            } catch {
+                return false
+            }
+        default:
+            return false
+        }
+    }
+
+    private static let signOutsKey = "nekko.pendingSignOuts"
+
+    private func decodeSignOuts() -> [PendingSignOut] {
+        store.get(Self.signOutsKey).flatMap { try? JSONDecoder().decode([PendingSignOut].self, from: Data($0.utf8)) } ?? []
+    }
+
+    private func saveSignOuts(_ list: [PendingSignOut]) {
+        let data = list.isEmpty ? nil : (try? JSONEncoder().encode(list)).map { String(decoding: $0, as: UTF8.self) }
+        store.set(Self.signOutsKey, data)
+        pendingSignOuts = list.map(\.name)
     }
 
     /// The computer's refusal of a plain call (`change-off`, `read-off`, ...)
@@ -375,7 +585,9 @@ public final class ComputersStore {
         let last = store.get(Self.activeKey)
         activeId = [preferredId, last].compactMap { $0 }.first { ids.contains($0) } ?? ids.first
         ready = true
+        pendingSignOuts = decodeSignOuts().map(\.name)
         if let activeId { connect(activeId) }
+        if !pendingSignOuts.isEmpty { Task { await flushSignOuts() } }
     }
 
     /// Save a scanned/pasted pairing and connect. Returns the computer's id.
@@ -510,6 +722,8 @@ public final class ComputersStore {
                 outbox.handBackAll(reason: "This phone is no longer paired with \(active?.name ?? "your computer").")
             }
             if s.state == .online {
+                // Back on: whatever stopped it from this phone is over.
+                if safetyExit?.computerId == computerId { safetyExit = nil }
                 Task {
                     await refresh()
                     await outbox.flush()
@@ -566,6 +780,7 @@ public final class ComputersStore {
     public func nudge() {
         resume()
         client?.nudge()
+        if !pendingSignOuts.isEmpty { Task { await flushSignOuts() } }
         if conn == .online {
             scheduleSummaries()
             flushOutbox()
@@ -581,6 +796,7 @@ public final class ComputersStore {
         networkPath = path
         guard !suspended else { return }
         client?.networkChanged(path)
+        if !pendingSignOuts.isEmpty { Task { await flushSignOuts() } }
     }
 
     /// The first network the phone reports: not a move, so the socket stays
@@ -745,6 +961,7 @@ public final class ComputersStore {
             for (sid, p) in PendingInput.map(r.5) where p.approval != nil || p.question != nil { activity[sid] = .needsYou }
             let appInfo = AppInfo.from(r.4)
             hostVersion = appInfo.version
+            quitFromPhone = appInfo.quitFromPhone
             learnPlatform(appInfo.platform)
             summariesLoading = false
             summariesLoaded = true
@@ -878,6 +1095,7 @@ public final class ComputersStore {
         hostVersion = nil
         hostProtocol = nil
         relayDelivers = nil
+        quitFromPhone = false
         lastError = nil
     }
 

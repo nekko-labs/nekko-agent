@@ -1,4 +1,4 @@
-import { IpcChannels, IpcEvents, type AgentEvent, type AppSettings, type WorkflowsSnapshot } from '@nekko-agent/shared';
+import { IpcChannels, IpcEvents, safetyExitNotice, type AgentEvent, type AppSettings, type RemoteSafetyExit, type WorkflowsSnapshot } from '@nekko-agent/shared';
 import { decideNotification, decideRunNotice, type Notice } from '../notificationPolicy.js';
 import type { EngineEndpoint } from './engine-process.js';
 
@@ -73,6 +73,21 @@ export function startMainNotifications(
     for (const id of toldRuns) if (!kept.has(id)) toldRuns.delete(id);
   };
 
+  /**
+   * A phone's safety exit (SK-3/SK-4): always told, whatever the
+   * notification switch says, since it is how the owner learns a phone
+   * stopped remote access, signed out or quit the app. A click opens Settings.
+   */
+  const notifySafetyExit = (exit: RemoteSafetyExit) => {
+    if (typeof exit?.at !== 'number' || exit.at < since - 60_000) return;
+    const text = safetyExitNotice(exit);
+    if (!text) return;
+    const key = `safety:${exit.channel}:${exit.deviceId}:${exit.at}`;
+    if (recent.has(key)) return;
+    recent.set(key, Date.now());
+    post({ sessionId: `safety:${exit.deviceId}`, kind: 'safety-exit', ...text, link: 'nekko-agent://settings' });
+  };
+
   const schedule = () => {
     if (disposed) return;
     clearTimeout(timer);
@@ -111,6 +126,8 @@ export function startMainNotifications(
             void notify(frame.payload as AgentEvent);
           } else if (frame.channel === IpcEvents.workflowsUpdated && frame.payload) {
             void notifyRuns(frame.payload as WorkflowsSnapshot);
+          } else if (frame.channel === IpcEvents.remoteSafetyExit && frame.payload) {
+            notifySafetyExit(frame.payload as RemoteSafetyExit);
           }
         } catch { /* Ignore malformed or unrelated frames. */ }
       };

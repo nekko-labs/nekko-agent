@@ -47,6 +47,13 @@ final class AppModel {
     /// First run, step 3 (IO-31): shown right after the first pairing, where
     /// notification permission is asked.
     var showNotificationStep = false
+    /// The step-up sheet's question (SK-6), while the store waits for the owner's answer.
+    private(set) var stepUpRequest: StepUpRequest?
+    private var stepUpAnswer: CheckedContinuation<StepUpProof?, Never>?
+    /// A safety exit waiting for its confirmation (SK-8).
+    var safetyAsk: SafetyAsk?
+    /// What a safety exit did, said once.
+    var safetyNotice: String?
     private let shareInbox = ShareInbox(defaults: UserDefaults(suiteName: StatusSnapshot.appGroup) ?? .standard)
 
     init() {
@@ -114,6 +121,8 @@ final class AppModel {
             Task { await self.store.registerActivity(sessionId: sid, token: token) }
         }
         _ = store.subscribe { [weak self] e in self?.onEvent(e) }
+        // A mode raise the computer wants a security key or a code for (SK-6).
+        store.stepUpPrompt = { [weak self] request in await self?.askStepUp(request) }
         store.pushKinds = prefs.pushKinds
         store.onDismiss = { tag in Task { await Notifier.dismissNeedsYou(tag: tag) } }
         WatchBridge.shared.start()
@@ -345,8 +354,61 @@ final class AppModel {
         store.setPushToken(deviceToken.map { String(format: "%02x", $0) }.joined())
     }
 
+    // MARK: Step-up and safety exits (SK-6, SK-8)
+
+    /// Show the step-up sheet and wait for the owner: an answer, or nil on
+    /// Cancel. A question still open is cancelled first.
+    func askStepUp(_ request: StepUpRequest) async -> StepUpProof? {
+        answerStepUp(nil)
+        return await withCheckedContinuation { (cont: CheckedContinuation<StepUpProof?, Never>) in
+            stepUpAnswer = cont
+            stepUpRequest = request
+        }
+    }
+
+    func answerStepUp(_ proof: StepUpProof?) {
+        let cont = stepUpAnswer
+        stepUpAnswer = nil
+        stepUpRequest = nil
+        cont?.resume(returning: proof)
+    }
+
+    /// *Stop remote access on the computer*: the banner says what happened.
+    func stopRemoteAccess() async {
+        do {
+            try await store.stopRemoteAccess()
+        } catch {
+            safetyNotice = error.localizedDescription
+        }
+    }
+
+    /// *Quit Nekko Agent on the computer*, after its confirm sheet.
+    func quitComputer() async {
+        do {
+            try await store.quitComputer()
+        } catch {
+            safetyNotice = error.localizedDescription
+        }
+    }
+
+    /// *Sign out this phone*: the computer is told now or on the next
+    /// connection, and this iPhone forgets it as *Forget* does.
+    func signOutThisPhone(_ id: String) async {
+        let name = store.computers.first { $0.id == id }?.name ?? "your computer"
+        let heard = await store.signOut(id)
+        forgotten(id)
+        safetyNotice = heard
+            ? "Signed out of \(name). To use it from this iPhone again, pair with a new code from the computer."
+            : "Signed out of \(name) on this iPhone. \(name) is told the next time this iPhone reaches it."
+    }
+
     func forget(_ id: String) {
         store.forget(id)
+        forgotten(id)
+    }
+
+    /// The app's own state for a computer that is gone from the list.
+    private func forgotten(_ id: String) {
         if prefs.defaultComputer == id { prefs.defaultComputer = store.activeId }
         prefs.lastModel[id] = nil
         if store.computers.isEmpty { activities.endAll() }
@@ -390,6 +452,13 @@ final class AppModel {
         #endif
         let configured = Bundle.main.object(forInfoDictionaryKey: "NekkoCloudURL") as? String
         return URL(string: configured ?? "") ?? URL(string: "https://nekko-agent-api.fly.dev")!
+    }
+
+    /// *Send feedback → Quick note* (#1004): to Nekko Cloud, never through a
+    /// computer, and with no credentials (not the Cloud sign-in, not a pairing key).
+    /// `info` is nil unless *Include app info* is on.
+    func sendFeedback(_ message: String, info: Feedback.AppInfo?) async -> Feedback.Outcome {
+        await Feedback.send(message: message, info: info, api: Self.cloudURL)
     }
 
     /// Offer *Open Tailscale* (TS-4): the active computer is on the tailnet and

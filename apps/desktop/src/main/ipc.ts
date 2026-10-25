@@ -61,6 +61,7 @@ export function shellBridge(quit: () => void): ShellBridge {
     },
     dialog: drawDialog,
     quitForUpdate: () => setImmediate(quit),
+    quit: () => setImmediate(quit),
   };
 }
 

@@ -53,6 +53,16 @@ final class Prefs {
     var expertMode: Bool { didSet { d.set(expertMode, forKey: "expertMode") } }
     /// Per computer, the last model chosen for a new chat: `providerId::modelId`.
     var lastModel: [String: String] { didSet { d.set(lastModel, forKey: "lastModel") } }
+    /// How the chat list is grouped, sorted and what it shows (the desktop Agents panel's view menu).
+    var chatListView: ChatListView { didSet { d.set(chatListView.encoded, forKey: "chatListView") } }
+    /// Per computer, the project groups' order as dragged on this iPhone (folder ids and `ChatGroup.general`).
+    var groupOrder: [String: [String]] { didSet { d.set(groupOrder, forKey: "groupOrder") } }
+    /// Per computer, the two panes on a folding phone or iPad (`PaneLayout` JSON, FD-3). Never leaves this iPhone.
+    var paneLayouts: [String: Data] { didSet { d.set(paneLayouts, forKey: "paneLayouts") } }
+    /// The one-time tip offering *Chat + Chat* was shown.
+    var paneTipShown: Bool { didSet { d.set(paneTipShown, forKey: "paneTipShown") } }
+    /// The note that the panes were made without a foldable to test on was dismissed (on this device).
+    var foldNoteDismissed: Bool { didSet { d.set(foldNoteDismissed, forKey: "foldNoteDismissed") } }
 
     init(defaults: UserDefaults = .standard) {
         d = defaults
@@ -74,6 +84,11 @@ final class Prefs {
         onboarded = flag("onboarded", false)
         expertMode = flag("expertMode", false)
         lastModel = d.dictionary(forKey: "lastModel") as? [String: String] ?? [:]
+        chatListView = ChatListView.parse(d.data(forKey: "chatListView"))
+        groupOrder = d.dictionary(forKey: "groupOrder") as? [String: [String]] ?? [:]
+        paneLayouts = d.dictionary(forKey: "paneLayouts") as? [String: Data] ?? [:]
+        paneTipShown = flag("paneTipShown", false)
+        foldNoteDismissed = flag("foldNoteDismissed", false)
         // On unless the user turned them off: an install that never touched a switch has nothing stored.
         func choice(_ k: String) -> Bool? { defaults.object(forKey: k) == nil ? nil : defaults.bool(forKey: k) }
         keepChatList = OfflineSetting.isOn(stored: choice("keepChatList"))
@@ -91,4 +106,14 @@ final class Prefs {
 
     /// What the relay is asked to push.
     var pushKinds: [PushKind] { PushKind.choosable.filter(wants) }
+
+    /// The panes last used with `computerId`, else the first-open default (*Chats + Chat*).
+    func paneLayout(_ computerId: String?) -> PaneLayout {
+        computerId.flatMap { PaneLayout.parse(paneLayouts[$0]) } ?? .standard
+    }
+
+    func setPaneLayout(_ layout: PaneLayout, for computerId: String?) {
+        guard let computerId, let data = layout.encoded, paneLayouts[computerId] != data else { return }
+        paneLayouts[computerId] = data
+    }
 }

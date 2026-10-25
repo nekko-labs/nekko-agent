@@ -26,11 +26,13 @@ pub type Dispatcher =
 
 /// Who is calling, for a welcomed phone's request: the device the HELLO
 /// welcomed on that connection, and the request's signed Change proof
-/// (`proof: { ts, sig }` beside `args`), when it sent one (IO-33).
-#[derive(Debug, Clone, PartialEq)]
+/// (`proof: { ts, sig }` beside `args`), when it sent one (IO-33), and its
+/// step-up (`stepUp`, a FIDO2 assertion or `{ totp }`, SK-2).
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct PhoneCall {
     pub device_id: String,
     pub proof: Option<Value>,
+    pub step_up: Option<Value>,
 }
 
 /// Runs a welcomed phone's request (`phone::gate` over a `Dispatcher`).
@@ -138,6 +140,14 @@ impl LinkHandle for RelayAgent {
         }
     }
 
+    fn disconnect_device(&self, device_id: &str) {
+        let core = &mut lock(&self.shared.core);
+        if let Some(core) = core.as_mut() {
+            let frames = core.disconnect_device(device_id);
+            self.shared.send_all(frames);
+        }
+    }
+
     fn connected_devices(&self) -> Vec<String> {
         lock(&self.shared.core).as_ref().map(AgentCore::connected_devices).unwrap_or_default()
     }
@@ -160,18 +170,47 @@ async fn run(shared: Arc<Shared>, spec: Spawn, mut stopped: watch::Receiver<bool
     };
     let iv: crate::agent::IvSource = Box::new(e2e::random_iv);
     *lock(&shared.core) = Some(AgentCore::new(key, iv).with_terminals(terminals));
+    const ID: &str = "phone-relay";
+    let host = url
+        .parse::<tokio_tungstenite::tungstenite::http::Uri>()
+        .ok()
+        .and_then(|u| u.host().map(str::to_string))
+        .unwrap_or_default();
+    // One "blocked" event per blocked streak, not one per redial.
+    let mut blocked = false;
     loop {
         if *stopped.borrow() {
             return;
         }
-        let connect = tokio::select! {
-            r = tokio_tungstenite::connect_async(url.as_str()) => r,
-            _ = stopped.changed() => return,
-        };
-        let (code, reason) = match connect {
-            Ok((ws, _)) => serve(&shared, ws, &verify, &dispatch, &mut events, &mut stopped).await,
-            // A browser WebSocket that cannot connect closes with 1006 and no reason.
-            Err(_) => (1006, String::new()),
+        let (code, reason) = if !nekko_net::allowed_to(ID, Some(&host)) {
+            if !blocked {
+                blocked = true;
+                let _ = nekko_net::check(ID, &host);
+            }
+            (1006, nekko_net::blocked_message(ID))
+        } else {
+            blocked = false;
+            let connect = tokio::select! {
+                r = tokio_tungstenite::connect_async(url.as_str()) => r,
+                _ = stopped.changed() => return,
+            };
+            match connect {
+                Ok((ws, _)) => {
+                    nekko_net::record(ID, nekko_net::Event::new("connect").host(&host));
+                    let (code, reason) = serve(&shared, ws, &verify, &dispatch, &mut events, &mut stopped).await;
+                    let mut ev = nekko_net::Event::new("close").host(&host);
+                    if code != 1000 {
+                        ev = ev.error(if reason.is_empty() { format!("code {code}") } else { reason.clone() });
+                    }
+                    nekko_net::record(ID, ev);
+                    (code, reason)
+                }
+                // A browser WebSocket that cannot connect closes with 1006 and no reason.
+                Err(e) => {
+                    nekko_net::record(ID, nekko_net::Event::new("connect").host(&host).error(&e));
+                    (1006, String::new())
+                }
+            }
         };
         shared.online.store(false, Ordering::SeqCst);
         *lock(&shared.out) = None;
@@ -264,10 +303,10 @@ fn on_text(shared: &Arc<Shared>, text: &str, verify: &Verifier, dispatch: &Phone
     for out in core.on_relay(text, verify.as_ref()) {
         match out {
             Out::Send(f) => shared.send_all(vec![f]),
-            Out::Dispatch { cid, id, device_id, channel, args, proof } => {
+            Out::Dispatch { cid, id, device_id, channel, args, proof, step_up } => {
                 let (shared, dispatch) = (shared.clone(), dispatch.clone());
                 tokio::spawn(async move {
-                    let result = dispatch(PhoneCall { device_id, proof }, channel, args).await;
+                    let result = dispatch(PhoneCall { device_id, proof, step_up }, channel, args).await;
                     if let Some(core) = lock(&shared.core).as_mut() {
                         let frame = core.reply(&cid, id, result);
                         shared.send_all(vec![frame]);

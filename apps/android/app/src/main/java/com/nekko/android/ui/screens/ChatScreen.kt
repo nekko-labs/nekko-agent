@@ -33,7 +33,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -67,6 +66,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nekko.android.chat.ChatViewModel
 import com.nekko.android.ui.chat.ApprovalCard
 import com.nekko.android.ui.chat.BlockView
+import com.nekko.android.ui.chat.ChatColumns
 import com.nekko.android.ui.chat.Composer
 import com.nekko.android.ui.chat.QuestionCard
 import com.nekko.android.ui.components.Notice
@@ -74,10 +74,36 @@ import com.nekko.android.ui.components.Tone
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.Block
 import java.util.Locale
+import android.content.ClipData
+import android.content.ClipDescription
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.draganddrop.dragAndDropSource
+import androidx.compose.foundation.draganddrop.dragAndDropTarget
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.draganddrop.DragAndDropEvent
+import androidx.compose.ui.draganddrop.DragAndDropTarget
+import androidx.compose.ui.draganddrop.DragAndDropTransferData
+import androidx.compose.ui.draganddrop.mimeTypes
+import androidx.compose.ui.draganddrop.toAndroidDragEvent
+import androidx.compose.ui.draw.alpha
+import com.nekko.android.ui.components.Dot
+import com.nekko.android.ui.panes.PaneSlot
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, dictationOn: Boolean = false, onBack: () -> Unit) {
+fun ChatScreen(
+    vm: ChatViewModel,
+    initialDraft: String? = null,
+    dictationOn: Boolean = false,
+    onBack: () -> Unit,
+    /** Set when the chat is one of an open folding phone's two panes (header actions, drag and drop, tabletop). */
+    pane: PaneSlot? = null,
+) {
     val chat by vm.ui.collectAsStateWithLifecycle()
     val completedAt by vm.completedAt.collectAsStateWithLifecycle()
     val changesAllowed by vm.changesAllowed.collectAsStateWithLifecycle()
@@ -141,6 +167,7 @@ fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, dictationOn: Boo
                             Icon(Icons.Filled.Difference, contentDescription = "Changes")
                         }
                     }
+                    pane?.actions?.invoke(this)
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -149,7 +176,13 @@ fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, dictationOn: Boo
                 },
                 title = {
                     Column {
-                        Text(chat.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            // In a pane: the status dot, pulsing for a pending approval or question while the other pane has the keyboard.
+                            if (pane != null) {
+                                PaneStatusDot(waiting = chat.approval != null || chat.question != null, running = chat.running, pulse = !pane.focused)
+                            }
+                            Text(chat.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             Icon(Icons.Filled.Computer, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(12.dp))
                             Text(
@@ -165,10 +198,8 @@ fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, dictationOn: Boo
             )
         },
     ) { padding ->
-        Column(Modifier.fillMaxSize().padding(top = padding.calculateTopPadding()).imePadding()) {
-            // Full width as well as the remaining height: without fillMaxWidth the box
-            // wraps its content, so the loading spinner sat at the left edge.
-            Box(Modifier.weight(1f).fillMaxWidth()) {
+        val transcript: @Composable (Modifier) -> Unit = { transcriptModifier ->
+            Box(transcriptModifier) {
                 when {
                     !chat.ready -> CircularProgressIndicator(color = p.accent, modifier = Modifier.align(Alignment.Center))
                     keyed.isEmpty() && chat.error == null -> Text(
@@ -196,7 +227,10 @@ fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, dictationOn: Boo
                                 )
                             }
                         }
-                        itemsIndexed(keyed, key = { _, (k, _) -> k }) { _, (_, block) -> BlockView(block) }
+                        itemsIndexed(keyed, key = { _, (k, _) -> k }) { _, (_, block) ->
+                            // In a pane a message can be dragged into the other pane's message box.
+                            if (pane == null) BlockView(block) else Box(Modifier.messageDragSource(block, vm.sessionId)) { BlockView(block) }
+                        }
                         item(key = "footer") {
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 chat.error?.let { Notice(it, Tone.DANGER) }
@@ -213,6 +247,8 @@ fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, dictationOn: Boo
                     }
                 }
             }
+        }
+        val controls: @Composable () -> Unit = {
             chat.approval?.let { ApprovalCard(it, onDecide = vm::approve) }
             chat.question?.let { QuestionCard(it, onAnswer = vm::answer) }
             // A completed chat reads like the desktop's: no message box until it is restored.
@@ -242,7 +278,8 @@ fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, dictationOn: Boo
                 queued = chat.queued,
                 onSend = { text, skill, images -> vm.send(text, skill, images) },
                 onStop = vm::stop,
-                modifier = Modifier.navigationBarsPadding(),
+                // In a pane, text dragged from the other pane lands here (never sent by itself).
+                modifier = Modifier.navigationBarsPadding().then(if (pane == null) Modifier else Modifier.messageDropTarget(vm.sessionId, vm::quote)),
                 mic = mic,
                 skills = chat.skills,
                 insert = insert,
@@ -250,7 +287,65 @@ fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, dictationOn: Boo
                 attach = attach,
             )
         }
+        ChatColumns(top = padding.calculateTopPadding(), tabletop = pane?.tabletop, transcript = transcript, controls = controls)
     }
+}
+
+/** A chat pane's status dot: waiting on the owner (pulsing while the other pane has the keyboard), working, or idle (none). */
+@Composable
+private fun PaneStatusDot(waiting: Boolean, running: Boolean, pulse: Boolean) {
+    if (!waiting && !running) return
+    val alpha = if (waiting && pulse) {
+        val t = rememberInfiniteTransition(label = "pane-dot")
+        t.animateFloat(1f, 0.3f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "pane-dot-alpha").value
+    } else {
+        1f
+    }
+    Dot(if (waiting) Tone.WARNING else Tone.ACCENT, Modifier.alpha(alpha))
+}
+
+/** What a dragged message carries: its text, as plain text another pane's message box takes. */
+internal fun dragText(block: Block): String = when (block) {
+    is Block.User -> block.text
+    is Block.Assistant -> block.text
+    is Block.Tool -> block.label
+}
+
+/**
+ * Long-press a message in a pane and drag it: its text goes as plain text. The
+ * chat's id rides along as the local state, so dropping on its own pane does nothing.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+private fun Modifier.messageDragSource(block: Block, sessionId: String): Modifier = dragAndDropSource { _ ->
+    val text = dragText(block)
+    if (text.isBlank()) null else DragAndDropTransferData(ClipData.newPlainText("Message", text), localState = sessionId)
+}
+
+/**
+ * The message box as a drop target for text dragged from the other pane: the text is
+ * added after what is typed ([ChatViewModel.quote]) and never sent by a drop.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun Modifier.messageDropTarget(sessionId: String, onText: (String) -> Unit): Modifier {
+    val current by rememberUpdatedState(onText)
+    val target = remember(sessionId) {
+        object : DragAndDropTarget {
+            override fun onDrop(event: DragAndDropEvent): Boolean {
+                val drag = event.toAndroidDragEvent()
+                if (drag.localState == sessionId) return false
+                val clip = drag.clipData ?: return false
+                val text = (0 until clip.itemCount).mapNotNull { clip.getItemAt(it).text?.toString() }.joinToString("\n").trim()
+                if (text.isEmpty()) return false
+                current(text)
+                return true
+            }
+        }
+    }
+    return dragAndDropTarget(
+        shouldStartDragAndDrop = { e -> e.mimeTypes().any { it == ClipDescription.MIMETYPE_TEXT_PLAIN || it.startsWith("text/") } },
+        target = target,
+    )
 }
 
 /** In place of the message box for a completed chat: say so, and offer Restore. */

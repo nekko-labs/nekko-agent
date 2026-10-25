@@ -31,7 +31,8 @@ function askReply(call: ToolCall, message: ChatMessage): ChatMessage | undefined
 /** One step of an assistant turn: a tool call, a reasoning block, or a bit of
  *  narration text between tools. Grouped into a single collapsible section. */
 export type Activity =
-  | { kind: 'tool'; call: ToolCall; result?: ToolResult }
+  /** `startedAt`/`endedAt`: when the call was made and when its result came back, for the row's elapsed time. */
+  | { kind: 'tool'; call: ToolCall; result?: ToolResult; startedAt?: number; endedAt?: number }
   | { kind: 'reasoning'; text: string; duration: number | null }
   | { kind: 'note'; text: string };
 
@@ -59,6 +60,7 @@ export function toStreamBlocks(messages: ChatMessage[], context: ChatMessage[] =
     if (reply) { replies.set(m, reply); answered.add(m.toolResult.toolCallId); }
   }
   const results = new Map(messages.flatMap((m) => m.toolResult ? [[m.toolResult.toolCallId, m.toolResult] as const] : []));
+  const resultAt = new Map(messages.flatMap((m) => m.toolResult ? [[m.toolResult.toolCallId, m.createdAt] as const] : []));
   const blocks: StreamBlock[] = [];
   let run: Activity[] = [];
   let runKey = '';
@@ -106,7 +108,7 @@ export function toStreamBlocks(messages: ChatMessage[], context: ChatMessage[] =
       // splits the run in two: what led up to it, and what it went on to do.
       if (m.content.trim() && !isFinalAnswer) say(m, i);
       // Delegations, watches and memory saves show their outcome on the step itself.
-      m.toolCalls.forEach((c) => run.push({ kind: 'tool', call: c, ...((c.name === 'spawn_agent' || c.name === 'agent_watch' || c.name === 'remember') && results.has(c.id) ? { result: results.get(c.id) } : {}) }));
+      m.toolCalls.forEach((c) => run.push({ kind: 'tool', call: c, startedAt: m.createdAt, endedAt: resultAt.get(c.id), ...((c.name === 'spawn_agent' || c.name === 'agent_watch' || c.name === 'remember') && results.has(c.id) ? { result: results.get(c.id) } : {}) }));
       if (isFinalAnswer) { flush(); blocks.push({ type: 'msg', message: m }); }
     } else {
       flush();
@@ -315,4 +317,12 @@ export function fmtTime(ts: number): string {
 export function fmtDateTime(ts: number): string {
   try { return formatter('datetime')?.format(ts) ?? new Date(ts).toLocaleString(); }
   catch { return ''; }
+}
+
+/** When a transcript row happened, for the swipe-left times: a message's send time, or a step run's first call. */
+export function transcriptRowStamp(row: TranscriptRow): string | undefined {
+  const at = row.kind === 'msg' || row.kind === 'compaction' ? row.message.createdAt
+    : row.kind === 'activity' ? row.items.find((it) => it.kind === 'tool')?.startedAt
+      : undefined;
+  return at ? fmtTime(at) || undefined : undefined;
 }

@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
-import { pairingLink, phoneDeviceAccess, PHONE_KEY_CHANNEL, relayHost, relayUrlProblem, type LocalRelayStatus, type NetworkVisibilityStatus, type PairingGrant, type PhoneActivityEntry, type RemoteDevice, type RemoteStatus } from '@nekko-agent/shared';
+import { pairingLink, phoneDeviceAccess, PHONE_KEY_CHANNEL, PROTECT_COMPUTER_DOCS_URL, relayHost, relayUrlProblem, remoteStoppedBanner, type SecurityStatus, type LocalRelayStatus, type NetworkVisibilityStatus, type PairingGrant, type PhoneActivityEntry, type RemoteDevice, type RemoteStatus } from '@nekko-agent/shared';
 import { Badge } from './primitives/index.js';
 import { Toggle } from './primitives/Toggle.js';
 import { useStore } from '../store.js';
 import { PhoneIcon } from '../icons.js';
+import { SECURITY_SECTION_ID } from './security/SecuritySettings.js';
 
 /**
  * Settings card for phone remote control: expose this machine over a relay,
@@ -72,6 +73,12 @@ export function RemoteAccess() {
   const [link, setLink] = useState('');
   const [urlProblem, setUrlProblem] = useState<string | undefined>();
   const [localRelay, setLocalRelay] = useState<LocalRelayStatus | null>(null);
+  const [security, setSecurity] = useState<SecurityStatus | null>(null);
+
+  // Whether step-up is on, for the one-time *Protect this computer* prompt (SK-10).
+  useEffect(() => {
+    void window.nekko.securityStatus?.().then(setSecurity).catch(() => {});
+  }, [status.enabled]);
 
   const refresh = async () => {
     setStatus(await window.nekko.getRemoteStatus());
@@ -167,7 +174,7 @@ export function RemoteAccess() {
     void refresh();
   };
   const rotate = async () => {
-    if (!confirm('Rotate the pairing secret? Every paired device is removed and must pair again with a fresh QR.')) return;
+    if (!confirm('Sign out all phones? The room is re-keyed: every paired device is removed and must pair again with a fresh QR.')) return;
     setGrant(null);
     setStatus(await window.nekko.rotateRemoteSecret());
   };
@@ -197,6 +204,7 @@ export function RemoteAccess() {
         Run and manage your chats, training runs, and goals from your phone. Everything is end-to-end encrypted;
         inference and tools keep running here, under this machine's guardrails.{!status.enabled && ' Pick how your phone connects:'}
       </p>
+      {!status.enabled && status.stoppedBy && <RemoteStoppedBanner stoppedBy={status.stoppedBy} />}
       {status.error && !status.online && (
         <p className="mt-2 rounded border border-line px-2 py-1.5 text-[12px] text-ink-soft">{status.error}</p>
       )}
@@ -217,6 +225,7 @@ export function RemoteAccess() {
         />
       ) : (
         <div className="mt-3 space-y-4">
+          {security && !security.enabled && <ProtectComputerPrompt />}
           {/* Paired devices */}
           <div data-shot="phone-pairing">
             <div className="flex items-center justify-between">
@@ -305,13 +314,15 @@ export function RemoteAccess() {
           <NetworkVisibilitySwitch />
           <PhoneChangesSwitch />
           <PhoneAccess devices={active} onChanged={() => void refresh()} />
+          <LockPhonesSwitch devices={active} onChanged={() => void refresh()} />
+          <QuitFromPhoneSwitch />
 
           <div className="flex flex-wrap gap-2">
             <button className="btn btn-ghost py-1.5 text-[12px]" onClick={disable} disabled={busy}>
               Disable remote access
             </button>
-            <button className="btn btn-ghost py-1.5 text-[12px]" title="New secret; all devices must re-pair" onClick={rotate}>
-              Rotate secret…
+            <button className="btn btn-ghost py-1.5 text-[12px]" title="Re-keys the room with a new secret; every phone must pair again" onClick={rotate}>
+              Sign out all phones…
             </button>
           </div>
         </div>
@@ -851,6 +862,144 @@ export function PhoneChangesSwitch() {
         </p>
       </div>
       <Toggle value={on} onChange={set} label="Let phones see changes" />
+    </div>
+  );
+}
+
+/**
+ * After a phone pressed *Stop remote access on the computer* (SK-3): who
+ * stopped it and when, until remote access is turned on again here.
+ */
+export function RemoteStoppedBanner({ stoppedBy, time }: { stoppedBy: { name?: string | null; at: number }; time?: (at: number) => string }) {
+  return (
+    <p data-shot="remote-stopped" role="status" className="mt-2 rounded border px-2 py-1.5 text-[12px] text-ink-soft" style={{ borderColor: 'var(--warning)' }}>
+      {remoteStoppedBanner(stoppedBy, time)}
+    </p>
+  );
+}
+
+/**
+ * *Lock phones*: every paired phone keeps Read and loses Change, with one
+ * switch instead of each phone's Change switch (`remote:setAccess` for every
+ * device, guarded by step-up when it is on: one confirmation covers them all).
+ * On while every phone has Change off.
+ */
+export function LockPhonesSwitch({ devices, onChanged }: { devices: RemoteDevice[]; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const set = async (lock: boolean) => {
+    setBusy(true);
+    try {
+      for (const d of devices) {
+        if (phoneDeviceAccess(d).change === !lock) continue;
+        await window.nekko.setRemoteAccess(d.id, { change: !lock });
+      }
+    } catch (e) {
+      useStore.getState().pushToast('error', String((e as Error)?.message ?? e));
+    } finally {
+      setBusy(false);
+      onChanged();
+    }
+  };
+  return <LockPhonesView devices={devices} busy={busy} onChange={(v) => void set(v)} />;
+}
+
+export function LockPhonesView({ devices, busy, onChange }: { devices: RemoteDevice[]; busy?: boolean; onChange: (lock: boolean) => void }) {
+  if (devices.length === 0) return null;
+  const locked = devices.every((d) => !phoneDeviceAccess(d).change);
+  return (
+    <div data-shot="lock-phones" className="flex items-start justify-between gap-3 rounded-md border border-line p-3">
+      <div className="min-w-0">
+        <div className="text-[13px] font-medium">Lock phones</div>
+        <p className="mt-0.5 text-[12px] text-ink-faint">
+          Every paired phone can still read, but can’t change anything: no prompts, approvals, file or git changes.
+          Turn it off to give each phone its Change switch back.
+        </p>
+      </div>
+      <Toggle value={locked} onChange={onChange} disabled={busy} label="Lock phones" />
+    </div>
+  );
+}
+
+/**
+ * *Let a phone quit Nekko Agent* (`quitFromPhone`, SK-3): off by default, so
+ * a phone cannot shut down a computer whose owner did not opt in. A phone
+ * can never change it.
+ */
+export function QuitFromPhoneSwitch() {
+  const on = useStore((s) => s.settings?.quitFromPhone === true);
+  const set = (v: boolean) => {
+    void window.nekko.updateSettings({ quitFromPhone: v })
+      .then(() => useStore.getState().refreshSettings())
+      .catch((e) => useStore.getState().pushToast('error', String(e)));
+  };
+  return <QuitFromPhoneView on={on} onChange={set} />;
+}
+
+export function QuitFromPhoneView({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div data-shot="quit-from-phone" className="flex items-start justify-between gap-3 rounded-md border border-line p-3">
+      <div className="min-w-0">
+        <div className="text-[13px] font-medium">Let a phone quit Nekko Agent</div>
+        <p className="mt-0.5 text-[12px] text-ink-faint">
+          A paired phone can quit the app on this computer in an emergency; running chats stop and you start it again
+          here. Stopping remote access from a phone always works, with this on or off.
+        </p>
+      </div>
+      <Toggle value={on} onChange={onChange} label="Let a phone quit Nekko Agent" />
+    </div>
+  );
+}
+
+const PROTECT_PROMPT_KEY = 'nekko.protectComputerPrompt.dismissed';
+
+/**
+ * The one-time *Protect this computer* prompt (SK-10): shown while remote
+ * access is on and step-up is off, until dismissed (remembered on this
+ * device). Points to Settings → Security and the docs page.
+ */
+export function ProtectComputerPrompt() {
+  const [hidden, setHidden] = useState(() => {
+    try {
+      return localStorage.getItem(PROTECT_PROMPT_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  if (hidden) return null;
+  const dismiss = () => {
+    try {
+      localStorage.setItem(PROTECT_PROMPT_KEY, '1');
+    } catch {
+      /* private mode: it shows again next time */
+    }
+    setHidden(true);
+  };
+  const setUp = () => {
+    document.getElementById(SECURITY_SECTION_ID)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    dismiss();
+  };
+  return <ProtectComputerPromptView onSetUp={setUp} onDismiss={dismiss} />;
+}
+
+export function ProtectComputerPromptView({ onSetUp, onDismiss }: { onSetUp: () => void; onDismiss: () => void }) {
+  return (
+    <div data-shot="protect-computer" className="rounded-md border border-line p-3" style={{ background: 'var(--surface-2)' }}>
+      <div className="text-[13px] font-medium">Protect this computer</div>
+      <p className="mt-0.5 text-[12px] text-ink-faint">
+        Remote access is on. Add a security key so pairing a phone, signing phones out, changing what a phone may do or
+        touching a provider key needs the key in your hand, not only this computer’s login.
+      </p>
+      <div className="mt-2 flex flex-wrap items-center gap-3 text-[12.5px]">
+        <button className="btn btn-primary py-1 text-[12px]" onClick={onSetUp}>
+          Set up in Security
+        </button>
+        <a className="underline" href={PROTECT_COMPUTER_DOCS_URL} target="_blank" rel="noreferrer">
+          How it works
+        </a>
+        <button className="btn btn-ghost py-1 text-[12px]" onClick={onDismiss}>
+          Not now
+        </button>
+      </div>
     </div>
   );
 }

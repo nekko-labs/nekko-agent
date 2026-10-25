@@ -7,13 +7,14 @@ area: desktop
 
 User intent: find the QR code that links a phone without hunting through one long Settings page, and see Settings split into clear sections.
 
-- Settings has a section list on the left: **General**, **Phone pairing**, **Style**, **Agents**, **Safety**, **Tools**, **System**. Clicking one jumps to that section with a fast scroll (about 200ms, ease-out; instant when the system asks for reduced motion), and the clicked item stays highlighted through the jump; the item for the section at the top of the page stays highlighted as you scroll. In a narrow window the list becomes a wrapping row above the page.
+- Settings has a section list on the left: **General**, **Phone pairing**, **Style**, **Agents**, **Safety**, **Connections**, **Tools**, **System**. Clicking one jumps to that section with a fast scroll (about 200ms, ease-out; instant when the system asks for reduced motion), and the clicked item stays highlighted through the jump; the item for the section at the top of the page stays highlighted as you scroll. In a narrow window the list becomes a wrapping row above the page.
 - The page is grouped to match, each group under a small heading with a divider between groups:
   - General: Appearance, Desktop behavior, Fun, Agents wall, Customization, Dictation, Notifications.
   - Phone pairing: Remote access, then Sync.
   - Style: Fonts and text ([Style](style-fonts-and-text-size.md)).
   - Agents: Chat modes, Agent loop, Hooks, Spec-driven development, Agent orchestration, Delegation routes, Automations.
   - Safety: Sandbox, Guardrails.
+  - Connections: All connections off and every connection with its log ([Connections](../platform/connections-switch-and-activity-log.md)).
   - Tools: Git management, Project management, Pull requests, Terminal, MCP servers.
   - System: Updates, Developer, Experimental, Backup & restore, Data & privacy.
 - Phone pairing is second in the list on purpose, so the QR is one click from opening Settings.

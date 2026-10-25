@@ -23,6 +23,7 @@ mod claude_policy;
 mod cli_install;
 mod compaction;
 mod config;
+mod connections;
 mod connectors;
 mod context;
 mod datalock;
@@ -31,6 +32,7 @@ mod decisions;
 mod desktop;
 mod downloads;
 mod engine;
+mod feedback;
 mod gcp;
 mod harness;
 mod hub;
@@ -58,6 +60,7 @@ mod resource_queue;
 mod routes;
 mod runtimes;
 mod sandbox;
+mod security;
 mod settings;
 mod side;
 mod sideband;
@@ -65,6 +68,7 @@ mod skill_sources;
 mod small_services;
 mod spawn;
 mod speeds;
+mod telemetry;
 mod tooling;
 mod turns;
 mod voice;
@@ -175,6 +179,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             Err(e) => eprintln!("nekkod: Claude sign-in cleanup failed: {e}"),
         }
     }
+    // Settings > Connections: the switch, before anything below reaches the network.
+    connections::start(cfg.data_dir.as_deref().map(std::path::Path::new), settings.as_ref());
     // Voice reads its settings from the daemon's store.
     let voice = cfg.data_dir.clone().zip(settings.clone()).map(|(d, s)| {
         let store = s.store.clone();
@@ -201,10 +207,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             Some(nekko_cloud::Cloud::new(nekko_cloud::Options {
                 vault: nekko_cloud::vault::default_vault(&dir),
                 dir,
-                api_url: std::env::var("NEKKO_CLOUD_URL")
-                    .ok()
-                    .filter(|u| !u.is_empty())
-                    .unwrap_or_else(|| "https://nekko-agent-api.fly.dev".into()),
+                api_url: feedback::cloud_url(),
                 device_label: gethostname::gethostname().to_string_lossy().chars().take(40).collect(),
                 sessions: store.clone(),
                 publish: Arc::new(move |status| publish_hub.publish(nekko_cloud::EVENT, status, false)),
@@ -243,6 +246,14 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     let library = settings.clone().map(|s| library::Library::new(s, machine.clone(), engine.clone()));
     if let Some(library) = &library {
         let _ = engine.speeds.sink.set(speeds::Speeds::new(machine.clone(), library.clone()));
+        // Abandoned downloads can be GBs each (#1035).
+        let dir = std::path::PathBuf::from(library.models_dir());
+        tokio::task::spawn_blocking(move || {
+            let freed = downloads::sweep_stale_parts(&dir, std::time::SystemTime::now());
+            if freed > 0 {
+                logs::note(&format!("nekkod: removed {freed} bytes of abandoned downloads"));
+            }
+        });
     }
     let model_downloads = library.clone().zip(catalog.clone()).map(|(library, catalog)| {
         let fetch =
@@ -337,6 +348,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         )),
         automation: automation.clone(),
         remote: remote.clone(),
+        security: Arc::new(security::Security::new(remote.security_store(), nekko_remote::system_clock())),
         sandboxes,
         compactions,
         image_turns: image_turns::ImageTurns::new(),
@@ -444,6 +456,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         let c = ctx.clone();
         tokio::spawn(async move { d.start(&c).await });
     }
+    connections::follow(ctx.clone());
+    telemetry::start(ctx.clone());
     // Claude Agent chats' idle Claude Code children are ended after 15 minutes.
     ctx.turns.harness.start_reaper();
     // Claude Agent's approval bridge: the app's own CLI, else `nekko-agent` on PATH.
@@ -580,5 +594,6 @@ async fn shutdown_signal(watch_stdin: bool, signals: &mut Signals) -> &'static s
     tokio::select! {
         _ = stdin_closed => "stdin closed",
         why = signals.next() => why,
+        _ = small_services::QUIT.notified() => "app:quit from a phone",
     }
 }

@@ -382,6 +382,15 @@ public final class ChatModel {
         return insert
     }
 
+    /// Photos dropped on the chat (from the other pane, or another app), as
+    /// JPEG data URLs: taken once by the composer, never sent by the drop.
+    public private(set) var insertImages: [String] = []
+    public func attach(images: [String]) { insertImages += images }
+    public func takeImages() -> [String] {
+        defer { insertImages = [] }
+        return insertImages
+    }
+
     /// The prompt to put back in the composer after a failed send, once.
     public func takeUnsent() -> UnsentPrompt? {
         defer { unsent = nil }

@@ -10,11 +10,15 @@ struct ComputerDetailView: View {
     let computerId: String
     @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
+    @Environment(CloudSync.self) private var cloud
     @Environment(\.palette) private var palette
     @State private var model: MachineModel?
     @State private var renaming = false
     @State private var name = ""
     @State private var forgetting: Computer?
+    @State private var addingProvider = false
+    @State private var setup: ProviderSetupModel?
+    @State private var switching: Set<String> = []
 
     var body: some View {
         Group {
@@ -33,6 +37,15 @@ struct ComputerDetailView: View {
         .onDisappear { model?.stop() }
         .onChange(of: store.conn) { _, s in if s == .online { Task { await model?.refresh() } } }
         .forgetDialog($forgetting)
+        .sheet(isPresented: $addingProvider) {
+            if let model {
+                AddProviderSheet(computer: store.computers.first { $0.id == computerId }?.name ?? "your computer",
+                                 existing: model.providers.map(\.id)) { await model.refresh() }
+            }
+        }
+        .alert("Couldn’t change that", isPresented: Binding(get: { setup?.failed != nil }, set: { if !$0 { setup = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: { Text(setup?.failed ?? "") }
     }
 
     @ViewBuilder private func content(_ c: Computer, _ m: MachineModel) -> some View {
@@ -60,9 +73,13 @@ struct ComputerDetailView: View {
                     ForEach(m.models) { info in modelRow(info, loaded: m.loadedIds.contains(info.id) || info.loaded, m) }
                 } header: { SectionTitle("Models") }
                 Section {
-                    ForEach(m.providers) { p in providerRow(p, c) }
+                    ForEach(m.providers) { p in providerRow(p, c, m) }
+                    if m.isActive {
+                        Button { addingProvider = true } label: { Label("Add a provider", systemImage: "plus") }
+                            .accessibilityIdentifier("computer.addProvider")
+                    }
                 } header: { SectionTitle("Providers") } footer: {
-                    Text("Keys stay on \(c.name). Adding a provider from this iPhone is coming next.").foregroundStyle(palette.inkSoft)
+                    Text("A key you add here is sealed to \(c.name) before it leaves this iPhone, and never kept on the phone.").foregroundStyle(palette.inkSoft)
                 }
             }
             if let s {
@@ -83,6 +100,9 @@ struct ComputerDetailView: View {
                     if let free = s.diskFreeBytes { LabeledContent("Free for models", value: bytes(free)) }
                 } header: { SectionTitle("Hardware") }
             }
+            if let machine = cloud.machine(forComputer: computerId) {
+                CloudMachineSections(machine: machine, computerId: computerId)
+            }
             Section {
                 NavigationLink(value: Route.connection) {
                     LabeledContent("Route", value: "\(routeName(c.route)) · \(c.relayHost)")
@@ -93,6 +113,8 @@ struct ComputerDetailView: View {
                     LabeledContent("Nekko Agent", value: [v, s?.edition].compactMap { $0 }.joined(separator: " · "))
                 }
             } header: { SectionTitle("Connection") }
+            // Settings → This computer (SK-8): Security, sign out, stop remote access, quit.
+            ThisComputerSection(computerId: c.id)
         }
         .listStyle(.plain)
         .listRowSeparatorTint(palette.line)
@@ -202,16 +224,28 @@ struct ComputerDetailView: View {
         .accessibilityElement(children: .combine)
     }
 
-    private func providerRow(_ p: PublicProvider, _ c: Computer) -> some View {
-        HStack {
+    private func providerRow(_ p: PublicProvider, _ c: Computer, _ m: MachineModel) -> some View {
+        // The switch is a change on the computer (Face ID, like every change); the row waits for its answer.
+        Toggle(isOn: Binding(get: { p.enabled }, set: { on in flip(p, on, m) })) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(p.label).font(.body).foregroundStyle(p.enabled ? palette.ink : palette.inkSoft)
                 Text(kindName(p.kind)).font(.caption).foregroundStyle(palette.inkFaint)
             }
-            Spacer()
-            Text(p.enabled ? "On" : "Off").font(.subheadline).foregroundStyle(palette.inkFaint)
         }
-        .accessibilityElement(children: .combine)
+        .disabled(!m.isActive || switching.contains(p.id))
+        .tint(palette.success)
+        .accessibilityIdentifier("computer.provider.\(p.id)")
+    }
+
+    private func flip(_ p: PublicProvider, _ on: Bool, _ m: MachineModel) {
+        let model = setup ?? ProviderSetupModel(store: store)
+        setup = model
+        switching.insert(p.id)
+        Task {
+            _ = await model.setEnabled(p.id, on)
+            await m.refresh()
+            switching.remove(p.id)
+        }
     }
 
     private var dot: Color {
@@ -318,6 +352,204 @@ struct Sparkline: View {
                 .stroke(palette.accent, lineWidth: 1.5)
                 Circle().fill(palette.accent).frame(width: 4, height: 4).position(last)
             }
+        }
+    }
+}
+
+/// Add a provider to the computer from this iPhone: pick a kind, paste the
+/// key, name it. The key is sealed to the computer before it leaves the phone.
+struct AddProviderSheet: View {
+    let computer: String
+    let existing: [String]
+    var done: () async -> Void
+    @Environment(ComputersStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.palette) private var palette
+    @State private var model: ProviderSetupModel?
+    @State private var kind = ProviderSetup.kinds[0]
+    @State private var key = ""
+    @State private var label = ""
+    @State private var url = ""
+    @State private var models: [ProviderSaveResult.Model] = []
+    @FocusState private var keyFocused: Bool
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                        ForEach(ProviderSetup.kinds) { k in
+                            Button { pick(k) } label: {
+                                Text(k.label).font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 44)
+                                    .foregroundStyle(k.id == kind.id ? palette.onAccent : palette.ink)
+                                    .background(k.id == kind.id ? palette.accent : palette.surface2, in: RoundedRectangle(cornerRadius: 12))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityAddTraits(k.id == kind.id ? .isSelected : [])
+                        }
+                    }
+                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                    .listRowBackground(Color.clear)
+                } header: { Text("Kind") }
+                if kind.needsKey {
+                    Section {
+                        SecureField("Paste the API key", text: $key)
+                            .textContentType(.password).autocorrectionDisabled().textInputAutocapitalization(.never)
+                            .focused($keyFocused)
+                            .accessibilityIdentifier("provider.key")
+                    } header: { Text("API key") } footer: {
+                        Label("Sealed to \(computer) before it leaves this iPhone. The key is encrypted to the computer’s own key, sent once over the end-to-end encrypted relay, and never written on this phone. \(computer) tests it and keeps it in its own keychain.", systemImage: "lock.fill")
+                            .foregroundStyle(palette.inkSoft)
+                    }
+                }
+                if kind.takesUrl {
+                    Section {
+                        TextField(kind.defaultUrl, text: $url).keyboardType(.URL).autocorrectionDisabled().textInputAutocapitalization(.never)
+                            .accessibilityIdentifier("provider.url")
+                    } header: { Text("Address") } footer: {
+                        Text("As \(computer) reaches it: localhost means the computer itself.").foregroundStyle(palette.inkSoft)
+                    }
+                }
+                Section {
+                    TextField(kind.label, text: $label)
+                        .accessibilityIdentifier("provider.label")
+                } header: { Text("Name") }
+                if let failed = model?.failed {
+                    Section { Label(failed, systemImage: "exclamationmark.triangle").foregroundStyle(palette.danger) }
+                }
+                if !models.isEmpty {
+                    Section {
+                        ForEach(models.prefix(12)) { m in Text(m.name).foregroundStyle(palette.ink) }
+                        if models.count > 12 { Text("and \(models.count - 12) more").foregroundStyle(palette.inkFaint) }
+                    } header: { Text("Saved · models \(computer) can use") }
+                }
+            }
+            .navigationTitle("Add a provider")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button(models.isEmpty ? "Cancel" : "Done") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    if models.isEmpty {
+                        Button { save() } label: {
+                            if model?.busy == true { ProgressView() } else { Text("Save to \(computer)") }
+                        }
+                        .disabled(model?.busy == true || (kind.needsKey && key.trimmingCharacters(in: .whitespaces).isEmpty))
+                        .accessibilityIdentifier("provider.save")
+                    }
+                }
+            }
+            .onAppear { if model == nil { model = ProviderSetupModel(store: store) }; keyFocused = kind.needsKey }
+        }
+        .presentationDetents([.large])
+    }
+
+    private func pick(_ k: ProviderSetup.Kind) {
+        kind = k
+        if !k.needsKey { key = "" }
+        if !k.takesUrl { url = "" }
+    }
+
+    private func save() {
+        guard let model else { return }
+        let name = label.trimmingCharacters(in: .whitespaces).isEmpty ? kind.label : label
+        let id = ProviderSetup.id(for: name, kind: kind.id, existing: existing)
+        Task {
+            let ok = await model.save(id: id, kind: kind.id, label: name, baseUrl: kind.takesUrl ? (url.isEmpty ? kind.defaultUrl : url) : nil, key: kind.needsKey ? key : nil)
+            // The key is dropped the moment the call returns, whatever happened.
+            key = ""
+            if ok {
+                models = model.saved?.models ?? []
+                Haptics.tap()
+                await done()
+            }
+        }
+    }
+}
+
+/// A Nekko Cloud machine's own sections on its computer page: the machine,
+/// and what the cloud may see (decision 0017), each change a call to Nekko Cloud.
+struct CloudMachineSections: View {
+    let machine: CloudSync.Machine
+    let computerId: String
+    @Environment(CloudSync.self) private var cloud
+    @Environment(ComputersStore.self) private var store
+    @Environment(\.palette) private var palette
+    @Environment(\.dismiss) private var dismiss
+    @State private var repo = ""
+    @State private var busy = false
+    @State private var error: String?
+    @State private var confirmDelete = false
+
+    var body: some View {
+        Section {
+            LabeledContent("State", value: machine.state.capitalized)
+            LabeledContent("Region", value: machine.region.uppercased())
+            LabeledContent("Hours this month", value: "\(machine.hoursUsed.formatted(.number.precision(.fractionLength(1)))) of \(Int(machine.hoursIncluded))")
+            LabeledContent("Sandbox", value: "Jailed · no LAN · stops when idle")
+            if machine.state == "running" {
+                Button { run { try await cloud.stopMachine(machine) } } label: { Label("Stop", systemImage: "stop.circle") }.disabled(busy)
+            } else {
+                Button { run { try await cloud.startMachine(machine); store.connect(computerId) } } label: { Label("Start", systemImage: "play.circle") }.disabled(busy)
+            }
+        } header: { SectionTitle("Nekko Cloud machine") } footer: {
+            Text("Stopping keeps its disk; the chat stays readable from the synced copy.").foregroundStyle(palette.inkSoft)
+        }
+        Section {
+            ForEach(machine.scope.repos, id: \.self) { r in
+                Text(r).font(.body.monospaced()).foregroundStyle(palette.ink)
+                    .swipeActions { Button(role: .destructive) { setScope { $0.repos.removeAll { $0 == r } } } label: { Label("Remove", systemImage: "trash") } }
+            }
+            HStack {
+                TextField("owner/repo", text: $repo).autocorrectionDisabled().textInputAutocapitalization(.never).font(.body.monospaced())
+                    .accessibilityIdentifier("cloud.repo")
+                Button("Allow") {
+                    let r = repo.trimmingCharacters(in: .whitespaces)
+                    guard r.contains("/") else { return }
+                    setScope { if !$0.repos.contains(r) { $0.repos.append(r) } }
+                    repo = ""
+                }
+                .disabled(busy || !repo.contains("/"))
+            }
+            Toggle("Privacy Shield on every cloud model request", isOn: Binding(get: { machine.scope.privacyShield }, set: { v in setScope { $0.privacyShield = v } }))
+                .disabled(busy)
+            Toggle("Memory, rules and prompts from my computers", isOn: Binding(get: { machine.scope.memory }, set: { v in setScope { $0.memory = v } }))
+                .disabled(busy)
+            Toggle("Sync chats back to my account", isOn: Binding(get: { machine.scope.syncBack }, set: { v in setScope { $0.syncBack = v } }))
+                .disabled(busy)
+            if let error { Text(error).font(.footnote).foregroundStyle(palette.danger) }
+        } header: { SectionTitle("What the cloud may see") } footer: {
+            Text("Only what is listed here reaches the machine: these repositories, your own provider keys (sealed to it), and nothing from your computers unless you turn it on. A change applies when the machine next starts.")
+                .foregroundStyle(palette.inkSoft)
+        }
+        Section {
+            Button(role: .destructive) { confirmDelete = true } label: { Label("Stop and delete this machine", systemImage: "trash") }
+                .disabled(busy)
+                .confirmationDialog("Delete this machine?", isPresented: $confirmDelete, titleVisibility: .visible) {
+                    Button("Delete", role: .destructive) {
+                        run {
+                            try await cloud.deleteMachine(machine)
+                            store.forget(computerId)
+                            dismiss()
+                        }
+                    }
+                } message: {
+                    Text("Its disk and its pairing go with it. Synced chats stay on your account.")
+                }
+        }
+    }
+
+    private func setScope(_ change: (inout CloudSync.MachineScope) -> Void) {
+        var scope = machine.scope
+        change(&scope)
+        run { try await cloud.setScope(machine, scope) }
+    }
+
+    private func run(_ work: @escaping () async throws -> Void) {
+        busy = true
+        error = nil
+        Task {
+            do { try await work() } catch { self.error = error.localizedDescription }
+            busy = false
         }
     }
 }

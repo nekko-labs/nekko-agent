@@ -7,6 +7,7 @@ import com.nekko.android.data.SecureStore
 import com.nekko.protocol.RelayConfig
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.RelayStatus
+import com.nekko.protocol.StepUpProof
 import com.nekko.protocol.WelcomedDevice
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -24,7 +25,7 @@ class FakeStore : SecureStore {
     }
 }
 
-data class Call(val channel: String, val args: List<JsonElement>, val timeoutMs: Long?)
+data class Call(val channel: String, val args: List<JsonElement>, val timeoutMs: Long?, val stepUp: StepUpProof? = null)
 
 /** Records every call; [handler] answers (or throws, or suspends). */
 open class FakeCaller(
@@ -55,6 +56,12 @@ class FakeRemote(val config: RelayConfig, handler: suspend (Call) -> JsonElement
     var closed = false
     var nudges = 0
     var reconnects = 0
+
+    override suspend fun callWithStepUp(stepUp: StepUpProof, channel: String, vararg args: JsonElement): JsonElement {
+        val c = Call(channel, args.toList(), null, stepUp)
+        calls += c
+        return handler(c)
+    }
 
     override fun connect() {
         connected = true

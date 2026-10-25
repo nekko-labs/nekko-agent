@@ -7,7 +7,7 @@ area: phone
 
 **User intent:** Philip asked (2026-10-24) for the phone's chat to get a mode switch at the top left, like the desktop's, toggling between **Simple** and **Expert**. In Simple mode the user picks the model and effort, from one control at the bottom with the model's name and a gauge for the effort. Expert mode adds a monitor panel of gauges for the computer's hardware, and a models monitor like the desktop's: the models loaded, unloading them, the hardware they use and their context size. The chat's context usage is shown in both modes, always.
 
-**Status `[implemented 2026-10-24 on the native iPhone app and the computer's phone gate; the gate's TS and Rust editions unit-tested; the Swift package tests (protocol parsing, the monitor store, the chat's context and effort) pass on Linux; the SwiftUI views were written but not yet built or driven in the simulator from this change: macOS CI builds them; Android not started]`**
+**Status `[implemented 2026-10-24 on the native iPhone app and the computer's phone gate; the gate's TS and Rust editions unit-tested; the Swift package tests (protocol parsing, the monitor store, the chat's context and effort) pass on Linux and macOS; the hardware store is named HardwareMonitorModel to coexist with the folding-phone Monitors pane; the SwiftUI views were written but not yet built or driven in the simulator from this change: macOS CI builds them; Android not started]`**
 
 ## Behaviour
 
@@ -19,7 +19,7 @@ area: phone
 
 ## Phone access (decided in this change)
 
-Recorded in [docs/decisions/0020](../../docs/decisions/0020-phones-read-the-monitors-and-unload-models.md).
+Recorded in [docs/decisions/0024](../../docs/decisions/0024-phones-read-the-monitors-and-unload-models.md).
 
 - `system:stats`, `gpu:stats`, `engine:status` and `context:preview` join `PHONE_CHANNELS` as **Read** (`PHONE_MONITOR_READ_CHANNELS`), each through a narrow projection made on the computer (`phone-views.ts`, `phone_views.rs`):
   - hardware: `PHONE_SYSTEM_VIEW`, `PHONE_TEMPS_VIEW`, `PHONE_GPU_VIEW`, `PHONE_GPU_DEVICE_VIEW`: numbers only, never a CPU or GPU model name (as `monitor:summary`);

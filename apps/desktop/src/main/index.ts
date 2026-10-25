@@ -1,7 +1,7 @@
 // First, so every module below sees the real packaging state in dev.
 import './devRuntime.js';
 import { NOTIFICATION_VISIBILITY_CHANNEL, visibleNotificationSession, visibleNotificationView, notificationWindowContext, trustedNotificationReporter } from '../notificationVisibility.js';
-import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, screen, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, screen, shell, systemPreferences } from 'electron';
 import { fileURLToPath } from 'url';
 import { join, resolve, sep } from 'path';
 import { existsSync, readFileSync } from 'fs';
@@ -16,14 +16,19 @@ import { startAppLog } from './appLog.js';
 import { createDesktopTray } from './tray.js';
 import { createTrayCompanion } from './trayCompanion.js';
 import { startAgentBrowser } from './agentBrowser.js';
+import { guardSession } from './connectionsGuard.js';
 import { registerArtifactPreview } from './artifactPreview.js';
 import { offerLegacyCleanup } from './legacyPrompt.js';
 import { createCloseIntent, readWParam, WM_CLOSE, WM_SYSCOMMAND } from './closeIntent.js';
 import { startMainNotifications, createNativeNotificationPoster } from './notifications.js';
-import { createDisplayWindows, type DisplayWindows } from './displayWindows.js';
+import { runCeremonyWindow } from './webauthnWindow.js';
+import { WEBAUTHN_CEREMONY_CHANNEL } from '../webauthnCeremony.js';
+import { createDisplayWindows, type DisplayWindows, type SpacesApi } from './displayWindows.js';
+import { readSpaces, switchDesktop } from './spaces.js';
 import {
   DISPLAY_ARG, DISPLAYS_CHANGED_EVENT, DISPLAYS_CLAIM_CHANNEL, DISPLAYS_LIST_CHANNEL, DISPLAYS_PLACED_EVENT,
   DISPLAYS_PLACEMENT_CHANNEL, DISPLAYS_REPORT_CHANNEL, DISPLAYS_TOGGLE_CHANNEL, MAIN_KEY,
+  DISPLAYS_DESKTOP_CHANNEL, DISPLAYS_GO_CHANNEL, DISPLAYS_SPACES_MODE_CHANNEL, type GoTarget,
 } from '../displayWindows.js';
 const applicationWindows = new Set<number>();
 
@@ -48,6 +53,15 @@ function showWindow(): void {
 
 /** The engine (nekkod); set once the app is ready. */
 let engine: EngineProcess | null = null;
+/** Settings > Connections, for the pages Chromium loads itself (connectionsGuard.ts). */
+const readConnections = async () => (await engine?.call<AppSettings>(IpcChannels.settingsGet))?.connections;
+const webviewGuests = new Set<number>();
+// Opt-in crash reports (telemetry.rs drops them while reports are off). A
+// monitor only: Node still crashes the way it did.
+process.on('uncaughtExceptionMonitor', (err) => {
+  void engine?.call(IpcChannels.telemetryCapture, 'error', { source: 'main', message: String(err?.message ?? err), stack: String(err?.stack ?? '') }).catch(() => {});
+});
+let webviewGuarded = false;
 /** True once the engine has been stopped for quit, so the second quit goes through. */
 let engineStopped = false;
 import {
@@ -123,8 +137,9 @@ function deliverLink(url: string): void {
 
 /**
  * macOS keeps the system menu bar. Electron's default app menu is kept for
- * everything else, but its "Nekko Agent" menu gains Settings… (⌘,) and its
- * About item opens the in-app About page instead of the stock panel.
+ * everything else, but its "Nekko Agent" menu gains Settings… (⌘,), its
+ * About item opens the in-app About page instead of the stock panel, and
+ * Help holds Send Feedback….
  */
 function installMacAppMenu(): void {
   const send = (url: string) => () => deliverLink(url);
@@ -148,6 +163,7 @@ function installMacAppMenu(): void {
     { role: 'editMenu' },
     { role: 'viewMenu' },
     { role: 'windowMenu' },
+    { role: 'help', submenu: [{ label: 'Send Feedback…', click: send('nekko-agent://feedback') }] },
   ]));
 }
 
@@ -252,6 +268,15 @@ function wireAppWindow(win: BrowserWindow): void {
     event.preventDefault();
     if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
   });
+  // The browser pane's pages share the default session: guard only theirs.
+  win.webContents.on('did-attach-webview', (_event, guest) => {
+    webviewGuests.add(guest.id);
+    guest.once('destroyed', () => webviewGuests.delete(guest.id));
+    if (!webviewGuarded) {
+      webviewGuarded = true;
+      guardSession(guest.session, 'browser-pane', readConnections, (id: number | undefined) => id != null && webviewGuests.has(id));
+    }
+  });
   win.webContents.on('will-attach-webview', (event, webPreferences, params) => {
     if (!/^https?:\/\//i.test(params.src) && params.src !== 'about:blank') {
       event.preventDefault();
@@ -339,6 +364,7 @@ function createWindow(): void {
   // Hidden to the tray: the other screens' windows go with it, and come back with it.
   win.on('hide', () => displayWindows?.setVisible(false));
   win.on('show', () => displayWindows?.setVisible(true));
+  win.on('focus', () => displayWindows?.mainFocused());
 
   wireAppWindow(win);
 }
@@ -359,6 +385,7 @@ function registerDisplayWindows(dataDir: string): void {
         if (!win.isDestroyed() && applicationWindows.has(win.webContents.id)) win.webContents.send(DISPLAYS_CHANGED_EVENT, state(win.webContents.id));
       }
     },
+    spaces: process.platform === 'darwin' ? macSpaces() : undefined,
     placed: (key, sessionId) => {
       const target = key === MAIN_KEY ? mainWindow : windows.windowFor(key);
       if (target && !target.isDestroyed()) target.webContents.send(DISPLAYS_PLACED_EVENT, sessionId);
@@ -381,8 +408,38 @@ function registerDisplayWindows(dataDir: string): void {
     if (!trusted(e) || typeof sessionId !== 'string') throw new Error('bad request');
     return windows.claim(e.sender.id, sessionId, mode === 'self' || mode === 'place' ? mode : 'auto');
   });
+  ipcMain.handle(DISPLAYS_DESKTOP_CHANNEL, async (e, id: unknown, on: unknown) => {
+    if (!trusted(e) || typeof id !== 'string') throw new Error('bad request');
+    await windows.toggleDesktop(id, on === true);
+    return windows.state(e.sender.id);
+  });
+  ipcMain.handle(DISPLAYS_SPACES_MODE_CHANNEL, (e, mode: unknown) => {
+    if (!trusted(e)) throw new Error('untrusted');
+    windows.setSpacesMode(mode === 'switch' ? 'switch' : 'arrive');
+    return windows.state(e.sender.id);
+  });
+  ipcMain.handle(DISPLAYS_GO_CHANNEL, (e, target: unknown) => {
+    if (!trusted(e)) throw new Error('untrusted');
+    const t = (target && typeof target === 'object' ? target : {}) as Record<string, unknown>;
+    const n = typeof t.n === 'number' && Number.isInteger(t.n) && t.n > 0 && t.n < 100 ? t.n : null;
+    const go: GoTarget | null = t.kind === 'screen' && n ? { kind: 'screen', n }
+      : t.kind === 'desktop' && n ? { kind: 'desktop', n }
+      : t.kind === 'desktop' && (t.step === 1 || t.step === -1) ? { kind: 'desktop', step: t.step } : null;
+    if (!go) throw new Error('bad request');
+    return windows.go(go);
+  });
   ipcMain.on(DISPLAYS_REPORT_CHANNEL, (e, panes: unknown) => { if (trusted(e) && typeof panes === 'number') windows.report(e.sender.id, panes); });
   windows.start();
+}
+
+/** macOS desktops for the screen windows: live prefs, Accessibility, keystroke switching, the switch notification. */
+function macSpaces(): SpacesApi {
+  return {
+    read: () => readSpaces(),
+    trusted: (prompt) => systemPreferences.isTrustedAccessibilityClient(prompt),
+    switchTo: (from, to) => switchDesktop(from, to),
+    onChange: (listener) => { systemPreferences.subscribeWorkspaceNotification('NSWorkspaceActiveSpaceDidChangeNotification', listener); },
+  };
 }
 
 /**
@@ -455,6 +512,43 @@ function claimSingleInstance(): boolean {
   return true;
 }
 
+/**
+ * Settings → Security's security keys and passkeys (SK-4): WebAuthn runs in
+ * a small loopback window (webauthnWindow.ts), since the app's `file://`
+ * page has no origin WebAuthn accepts. Only the app's own windows may ask.
+ */
+function registerWebAuthnCeremony(): void {
+  ipcMain.handle(WEBAUTHN_CEREMONY_CHANNEL, (event, request: unknown) => {
+    if (!applicationWindows.has(event.sender.id)) throw new Error('untrusted');
+    const parent = BrowserWindow.fromWebContents(event.sender) ?? undefined;
+    return runCeremonyWindow(request, {
+      openWindow: (title) => new BrowserWindow({
+        parent,
+        modal: !!parent,
+        title,
+        width: 420,
+        height: 300,
+        resizable: false,
+        minimizable: false,
+        maximizable: false,
+        fullscreenable: false,
+        show: false,
+        autoHideMenuBar: true,
+        backgroundColor: DEFAULT_OVERLAY.color,
+        icon: resolveWindowIcon(),
+        webPreferences: {
+          // Its own in-memory session: the page keeps nothing and shares nothing with the app.
+          partition: 'nekko-webauthn',
+          sandbox: true,
+          contextIsolation: true,
+          nodeIntegration: false,
+          devTools: !app.isPackaged,
+        },
+      }),
+    });
+  });
+}
+
 /** False in a second copy launched by a link; that one hands over and exits. */
 const isPrimary = claimSingleInstance();
 if (!isPrimary) app.quit();
@@ -507,7 +601,7 @@ app.whenReady().then(async () => {
   // The bridge also carries what nekkod asks of the window shell: the app
   // window's handle for owning its dialogs, dialogs it cannot draw (macOS),
   // and quitting so an update can install.
-  const agentBrowser = await startAgentBrowser({ pickFolder: pickFolderDialog, shell: shellBridge(() => app.quit()) });
+  const agentBrowser = await startAgentBrowser({ pickFolder: pickFolderDialog, shell: shellBridge(() => app.quit()), guard: (s) => guardSession(s, 'web-tools', readConnections) });
   app.once('will-quit', () => agentBrowser.close());
   engine = new EngineProcess({
     browserBridge: { url: agentBrowser.url, token: agentBrowser.token },
@@ -543,6 +637,7 @@ app.whenReady().then(async () => {
     notificationViews.set(event.sender.id, visibleNotificationView(report));
   });
   registerIpc(engine, (sender) => applicationWindows.has(sender.id));
+  registerWebAuthnCeremony();
   setWindowStateDir(dataDir);
   registerTitleBarOverlaySync();
   // A link that launched the app is already on this process's command line
@@ -557,6 +652,7 @@ app.whenReady().then(async () => {
       engine,
       showUi: showWindow,
       newChat: () => deliverLink('nekko-agent://chat/new'),
+      feedback: () => deliverLink('nekko-agent://feedback'),
       serviceStarted: () => { for (const win of BrowserWindow.getAllWindows()) win.webContents.reload(); },
       quit: () => app.quit(),
       onError: message => dialog.showErrorBox('Nekko Agent', message),

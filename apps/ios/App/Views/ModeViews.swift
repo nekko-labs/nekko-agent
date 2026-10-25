@@ -407,7 +407,7 @@ struct ContextBreakdown: View {
 /// Hardware readings as dials, in the desktop Hardware monitor's order: CPU,
 /// memory, each GPU, then GPU memory.
 struct HardwareDials: View {
-    let monitor: MonitorModel
+    let monitor: HardwareMonitorModel
     var size: CGFloat = 64
 
     var body: some View {
@@ -424,7 +424,7 @@ struct HardwareDials: View {
         let temp: Double?
     }
 
-    static func rows(_ m: MonitorModel) -> [Row] {
+    static func rows(_ m: HardwareMonitorModel) -> [Row] {
         let pct = { (f: Double?) in f.map { "\(Int(($0 * 100).rounded()))%" } ?? "–" }
         var rows = [
             Row(label: String(localized: "CPU"), fraction: m.system.map { min(1, max(0, $0.cpuPct / 100)) },
@@ -448,7 +448,7 @@ struct HardwareDials: View {
 /// Expert mode's panel under the chat's title: the computer's hardware as
 /// small dials and how many models it holds. Tap for the whole monitor.
 struct MonitorPanel: View {
-    let monitor: MonitorModel
+    let monitor: HardwareMonitorModel
     let chat: ChatModel
     @Environment(ComputersStore.self) private var store
     @Environment(\.palette) private var palette
@@ -457,15 +457,7 @@ struct MonitorPanel: View {
     var body: some View {
         Button { open = true } label: {
             HStack(alignment: .top, spacing: 10) {
-                if monitor.system == nil && monitor.gpu == nil {
-                    Label(monitor.error ?? String(localized: "Reading \(store.active?.name ?? "your computer")…"), systemImage: "gauge.with.dots.needle.33percent")
-                        .font(.footnote).foregroundStyle(palette.inkSoft).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                } else {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(alignment: .top, spacing: 12) { HardwareDials(monitor: monitor, size: 40) }
-                    }
-                    .allowsHitTesting(false)
-                }
+                hardware
                 VStack(spacing: 2) {
                     Image(systemName: "cube.fill").font(.body).foregroundStyle(palette.accent)
                     Text("\(monitor.engine?.resident.count ?? 0)").font(.caption.weight(.semibold).monospacedDigit()).foregroundStyle(palette.ink)
@@ -489,12 +481,26 @@ struct MonitorPanel: View {
         .accessibilityIdentifier("chat.monitor")
         .sheet(isPresented: $open) { MonitorSheet(monitor: monitor, chat: chat) }
     }
+
+    @ViewBuilder private var hardware: some View {
+        if monitor.system == nil && monitor.gpu == nil {
+            let reading = String(localized: "Reading \(store.active?.name ?? "your computer")…")
+            Label(monitor.error ?? reading, systemImage: "gauge.with.dots.needle.33percent")
+                .font(.footnote).foregroundStyle(palette.inkSoft)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 12) { HardwareDials(monitor: monitor, size: 40) }
+            }
+            .allowsHitTesting(false)
+        }
+    }
 }
 
 /// The whole monitor: hardware dials, the models the Model Server holds (with
 /// Unload, where they run, their context and memory), and this chat's context.
 struct MonitorSheet: View {
-    let monitor: MonitorModel
+    let monitor: HardwareMonitorModel
     let chat: ChatModel?
     @Environment(ComputersStore.self) private var store
     @Environment(\.dismiss) private var dismiss

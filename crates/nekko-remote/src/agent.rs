@@ -67,7 +67,16 @@ pub enum Out {
     /// `device_id` is the device the HELLO welcomed on `cid`, so the phone
     /// gate knows who is calling; `proof` is the request's signed Change
     /// proof, when it carried one (IO-33).
-    Dispatch { cid: String, id: Option<Value>, device_id: String, channel: String, args: Value, proof: Option<Value> },
+    Dispatch {
+        cid: String,
+        id: Option<Value>,
+        device_id: String,
+        channel: String,
+        args: Value,
+        proof: Option<Value>,
+        /// The request's step-up (`stepUp`), when it carried one (SK-2).
+        step_up: Option<Value>,
+    },
 }
 
 /// The first phone protocol version whose HELLO must answer the agent's
@@ -328,7 +337,8 @@ impl AgentCore {
                 // Welcomed above, so the connection has its device.
                 let device_id = self.conn(cid).device.clone().unwrap_or_default();
                 let proof = f.get("proof").filter(|p| !p.is_null()).cloned();
-                vec![Out::Dispatch { cid: cid.to_string(), id, device_id, channel, args, proof }]
+                let step_up = f.get("stepUp").filter(|p| !p.is_null()).cloned();
+                vec![Out::Dispatch { cid: cid.to_string(), id, device_id, channel, args, proof, step_up }]
             }
             _ => Vec::new(),
         }
@@ -548,14 +558,21 @@ impl AgentCore {
 
     /// Revocation: kick the device's live connections and drop its push token.
     pub fn kick_device(&mut self, device_id: &str) -> Vec<String> {
-        let mut out: Vec<String> = self
-            .welcomed()
+        let mut out = self.disconnect_device(device_id);
+        out.push(frame(json!({ "type": "push-remove", "deviceId": device_id })));
+        out
+    }
+
+    /// Kick the device's live connections and keep its push token, so the
+    /// phone is still told about chats when remote access comes back
+    /// (`remote:stop`). Only an intentional disconnect (revoke, sign out)
+    /// drops push.
+    pub fn disconnect_device(&self, device_id: &str) -> Vec<String> {
+        self.welcomed()
             .into_iter()
             .filter(|cid| self.conns[cid].device.as_deref() == Some(device_id))
             .map(|cid| frame(json!({ "type": "kick", "cid": cid })))
-            .collect();
-        out.push(frame(json!({ "type": "push-remove", "deviceId": device_id })));
-        out
+            .collect()
     }
 
     /// Device ids with a welcomed live connection, each once.
@@ -671,6 +688,7 @@ mod tests {
                 channel: "tasks:list".into(),
                 args: json!([]),
                 proof: None,
+                step_up: None,
             }]
         );
     }
@@ -680,12 +698,15 @@ mod tests {
         let (mut core, key) = core();
         core.on_relay(&client(&key, "c1", json!({ "type": "hello", "deviceId": "phone-1" })), &welcome_all);
         let proof = json!({ "ts": 1, "sig": "c2ln" });
-        let req = json!({ "type": "req", "id": 1, "channel": "file:write", "args": ["a"], "proof": proof });
+        let step = json!({ "totp": "123456" });
+        let req =
+            json!({ "type": "req", "id": 1, "channel": "file:write", "args": ["a"], "proof": proof, "stepUp": step });
         match core.on_relay(&client(&key, "c1", req), &welcome_all).pop() {
-            Some(Out::Dispatch { device_id, args, proof: p, .. }) => {
+            Some(Out::Dispatch { device_id, args, proof: p, step_up, .. }) => {
                 assert_eq!(device_id, "phone-1");
                 assert_eq!(args, json!(["a"]), "the proof is not one of the args");
                 assert_eq!(p, Some(proof));
+                assert_eq!(step_up, Some(step), "the step-up travels beside the proof (SK-2)");
             }
             other => panic!("{other:?}"),
         }

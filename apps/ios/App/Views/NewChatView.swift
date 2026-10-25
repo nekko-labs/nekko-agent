@@ -26,6 +26,9 @@ struct NewChatView: View {
     @State private var restored = false
     /// Why the computer turned down a chat started offline (it came back here).
     @State private var refusal: String?
+    @Environment(CloudSync.self) private var cloud
+    @State private var cloudBusy = false
+    @State private var cloudError: String?
     @Environment(\.dismiss) private var dismiss
 
     private var offline: Bool { store.conn != .online }
@@ -82,6 +85,34 @@ struct NewChatView: View {
                 } footer: {
                     Text("A local model runs on the computer’s own hardware. Choosing another computer shows its models and folders.")
                         .foregroundStyle(palette.inkSoft)
+                }
+            }
+            if cloud.account?.canSync == true {
+                // A chat can run on a Nekko Cloud machine instead of a paired computer (decision 0017).
+                Section {
+                    if let m = cloud.machines.first, let id = cloud.computerId(for: m), store.computers.contains(where: { $0.id == id }) {
+                        Button {
+                            switchComputer(id)
+                        } label: {
+                            HStack {
+                                Label(m.name, systemImage: "cloud")
+                                Spacer()
+                                if store.activeId == id { Image(systemName: "checkmark").foregroundStyle(palette.accent) }
+                            }
+                        }
+                        .accessibilityIdentifier("newChat.cloud")
+                    } else {
+                        Button { Task { await makeCloudMachine() } } label: {
+                            if cloudBusy { ProgressView() } else { Label("Run on a new Nekko Cloud machine", systemImage: "cloud") }
+                        }
+                        .disabled(cloudBusy)
+                        .accessibilityIdentifier("newChat.cloud")
+                    }
+                    if let cloudError { Text(cloudError).font(.footnote).foregroundStyle(palette.danger) }
+                } header: {
+                    SectionHeader("Nekko Cloud")
+                } footer: {
+                    Text("A sandboxed machine in the cloud, with no computer needed. It sees only what you put in its scope.").foregroundStyle(palette.inkSoft)
                 }
             }
             Section {
@@ -169,6 +200,20 @@ struct NewChatView: View {
 
     /// Start the chat on another paired computer: its own models and folders,
     /// so those are chosen again there; the words carry over.
+    /// Make a Nekko Cloud machine, pair it and point this chat at it.
+    private func makeCloudMachine() async {
+        cloudBusy = true
+        cloudError = nil
+        defer { cloudBusy = false }
+        do {
+            let made = try await cloud.createMachine(name: "Nekko Cloud", region: "nrt", scope: CloudSync.MachineScope())
+            let id = await store.pair(made.link)
+            store.rename(id, to: made.machine.name)
+            cloud.link(made.machine, computer: id)
+            switchComputer(id)
+        } catch { cloudError = error.localizedDescription }
+    }
+
     private func switchComputer(_ id: String) {
         guard id != store.activeId else { return }
         pickedComputer = true

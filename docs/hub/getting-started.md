@@ -34,6 +34,10 @@ The quickest way to start is the installer.
 
 macOS builds are signed and notarized, so they open normally. If Windows shows an "unknown publisher" prompt for an unsigned build, choose **More info**, then **Run anyway**.
 
+## Typing in a new agent window
+
+Opening an agent composer puts the caret after any restored draft once a usable model provider is available. If you are already typing in another visible text field, that field keeps focus. Normal background agent and provider updates do not pull you back into the composer.
+
 ## Run it from source
 
 Running from source gives you the newest code and is how you work on Nekko Agent itself. It takes four steps: install the prerequisites, clone the repo, install the dependencies, and run `npm run dev`.
@@ -148,3 +152,11 @@ Completed work groups keep their step summary visible when space is tight; tool 
 ### Answering agent questions
 
 When an agent needs a choice, its question opens at the bottom of the conversation. Scroll the conversation to read the reply and question together; the question has no separate scrollbar. Choose an option or type something else, then send your answer. Multiple questions show one step at a time, with Back and Next. The pixel question-mark icon identifies the question.
+
+### Agent panel shortcuts
+
+Click the plus button in the Agents panel to open a new agent window. Hover over it for the Agent, Photos and Videos, and Terminal choices. Terminals and photo/video projects appear in separate groups at the top of the panel only when there are items to show.
+
+### Compact agent row and monitor controls
+
+In the horizontal Agents row, the controls sit in a compact two-column strip beside the cards, leaving no unused band below them. Configure monitors stays within the window even when the dock is at either edge. Press Escape or click outside to close it. Dragging monitor headers keeps the scroll surface steady while the landing outline opens.

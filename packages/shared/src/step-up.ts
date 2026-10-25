@@ -15,19 +15,17 @@
  * Uses WebCrypto only (browser and Node 20+), like `e2e.ts`.
  */
 
-import { PHONE_MODE_PROOF } from './phone-access.js';
-
 // ---- the guarded actions ----
 
 /**
  * A guarded action from a phone: raising a chat's mode or the default mode
- * (`PHONE_MODE_PROOF`: `session:setOptions` setting `mode`, `settings:update`
+ * (`PHONE_MODE_PROOF`, the same channels, held equal by a test: `session:setOptions` setting `mode`, `settings:update`
  * setting `defaultChatMode`, to a more permissive mode). The computer checks
  * the Change proof first, then the step-up, when `security.json` has
  * `enabled: true`. Every other phone channel keeps today's rules.
  */
 export const STEP_UP_PHONE_GUARDED = {
-  modeRaise: { channels: PHONE_MODE_PROOF.channels, keys: { 'session:setOptions': 'mode', 'settings:update': 'defaultChatMode' } },
+  modeRaise: { channels: ['session:setOptions', 'settings:update'], keys: { 'session:setOptions': 'mode', 'settings:update': 'defaultChatMode' } },
 } as const;
 
 /**
@@ -86,6 +84,10 @@ export interface StepUpChallengeReply {
   required: boolean;
   /** The kinds of method registered (never their ids or names). */
   methods: Array<SecurityCredentialKind | 'totp'>;
+  /** The computer's relying-party id (`nekko-computer:<installId>`), for a phone's native FIDO2 client. */
+  rpId?: string;
+  /** Whether the computer offers registering a method from the phone. */
+  register?: boolean;
 }
 
 /** A challenge the computer issued, as its book keeps it. */
@@ -143,6 +145,13 @@ export interface SecurityCredential {
   lastUsedAt?: number;
   /** Set when an assertion's counter did not rise: shown as *possibly cloned*. */
   cloned?: boolean;
+  /**
+   * The relying-party id it was registered under, when not the computer's
+   * (SK-4): a browser only accepts a domain, so a credential registered from
+   * the desktop's ceremony window or the Local Web UI is bound to that page's
+   * host (`localhost`). The verifiers check `rpIdHash` against this when set.
+   */
+  rpId?: string;
 }
 
 /** The TOTP method and its rate limit, per computer. */
@@ -417,7 +426,8 @@ export async function checkStepUp(state: SecurityState, issued: StepUpIssued[], 
   if (now - entry.issuedAt > STEP_UP_CHALLENGE.ttlMs) return out('step-up-stale');
   if (typeof client.origin !== 'string' || !st.origins.includes(client.origin)) return out('step-up-invalid', { why: 'origin' });
   if (authData.length < 37) return out('step-up-invalid', { why: 'authenticatorData' });
-  if (!equal(authData.subarray(0, 32), await sha256(new TextEncoder().encode(st.rpId)))) return out('step-up-invalid', { why: 'rpId' });
+  const rpId = typeof cred.rpId === 'string' ? cred.rpId : st.rpId;
+  if (!equal(authData.subarray(0, 32), await sha256(new TextEncoder().encode(rpId)))) return out('step-up-invalid', { why: 'rpId' });
   const flags = authData[32];
   if (!(flags & 0x01)) return out('step-up-invalid', { why: 'user presence' });
   const raw = derToRaw(sigDer);
@@ -435,7 +445,8 @@ export async function checkStepUp(state: SecurityState, issued: StepUpIssued[], 
   }
   if (!ok) return out('step-up-invalid', { why: 'signature' });
   const counter = ((authData[33] << 24) >>> 0) + (authData[34] << 16) + (authData[35] << 8) + authData[36];
-  if (!(counter === 0 && cred.counter === 0) && counter <= cred.counter) {
+  const stored = typeof cred.counter === 'number' ? cred.counter : Infinity;
+  if (!(counter === 0 && stored === 0) && counter <= stored) {
     cred.cloned = true;
     return out('step-up-invalid', { why: 'counter', cloned: cred.id });
   }

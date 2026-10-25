@@ -177,10 +177,36 @@ async fn call(
             }
         }
     };
-    match route(&app.ctx, &channel, args).await {
+    match route_from(&app.ctx, crate::security::Surface::Web, &channel, args).await {
         Ok(v) => axum::Json(v).into_response(),
         Err(e) => (StatusCode::BAD_REQUEST, axum::Json(json!({ "error": e }))).into_response(),
     }
+}
+
+/// A call from the desktop window or the Local Web UI: the step-up check
+/// first (security.rs), then Settings → Security's own channels, which only
+/// these two surfaces reach, or the router.
+async fn route_from(
+    ctx: &Ctx,
+    surface: crate::security::Surface,
+    channel: &str,
+    args: Vec<Value>,
+) -> Result<Value, String> {
+    if crate::security::CHANNELS.contains(&channel) {
+        let (security, ch) = (ctx.security.clone(), channel.to_string());
+        // security.json is a file: off the async workers.
+        return tokio::task::spawn_blocking(move || {
+            security.guard(surface, &ch)?;
+            security.route(surface, &ch, &args)
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+    }
+    if crate::security::action_of(channel).is_some() {
+        let (security, ch) = (ctx.security.clone(), channel.to_string());
+        tokio::task::spawn_blocking(move || security.guard(surface, &ch)).await.map_err(|e| e.to_string())??;
+    }
+    route(ctx, channel, args).await
 }
 
 async fn events(
@@ -450,7 +476,7 @@ async fn rpc_socket(socket: WebSocket, app: App, term_data: bool, mut subs: Subs
         // Each call runs on its own task, so one slow channel never holds up
         // the rest of the socket.
         tokio::spawn(async move {
-            let reply = match route(&ctx, &channel, args).await {
+            let reply = match route_from(&ctx, crate::security::Surface::Desktop, &channel, args).await {
                 Ok(result) => json!({ "id": id, "result": result }),
                 Err(error) => json!({ "id": id, "error": error }),
             };

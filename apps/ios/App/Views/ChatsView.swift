@@ -3,17 +3,26 @@ import NekkoProtocol
 import SwiftUI
 
 /// The computer's chats, grouped like the desktop's sidebar (General, then
-/// each project folder), with Working / Needs you badges, search, swipe to
-/// complete / delete, and the computer switcher in the title.
+/// each project folder) or as the view menu says, with Working / Needs you
+/// badges, search, swipe to complete / delete, and the computer switcher in the title.
 struct ChatsView: View {
     @Binding var path: [Route]
     /// iPad (regular width): the split view's selected chat. Nil on iPhone, where rows push.
     var selection: Binding<Route?>? = nil
+    /// In a pane: the chat open in the other pane, marked like a selection.
+    var highlighted: String? = nil
     @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
     @Environment(\.palette) private var palette
     @State private var query = ""
-    @State private var showCompleted: Set<String> = []
+    /// Groups folded shut by a tap on their heading; every group starts open.
+    @State private var collapsed: Set<String> = []
+    /// Groups showing every chat, past the first few recent ones.
+    @State private var expanded: Set<String> = []
+    @State private var reorderingGroups = false
+    @State private var sendingFeedback = false
+    /// The heading a dragged group is over.
+    @State private var dropTarget: String?
     @State private var renaming: SessionSummary?
     @State private var renameText = ""
     @State private var confirmDelete: SessionSummary?
@@ -36,7 +45,8 @@ struct ChatsView: View {
         .refreshable { await store.refresh() }
         .navigationTitle("Chats")
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) { ComputerMenu(path: $path) }
+            ToolbarItem(placement: .topBarLeading) { ComputerMenu(path: $path, feedback: $sendingFeedback) }
+            ToolbarItem(placement: .topBarTrailing) { viewMenu }
             ToolbarItem(placement: .topBarTrailing) {
                 // Offline too: a chat started now begins when the computer is back.
                 Button { open(.newChat) } label: { Image(systemName: "square.and.pencil") }
@@ -45,6 +55,10 @@ struct ChatsView: View {
         }
         .overlay(alignment: .top) { if store.summariesLoading && store.summaries.isEmpty { ProgressView().padding(.top, 80) } }
         .modifier(dialogs)
+        .sheet(isPresented: $reorderingGroups) {
+            ReorderGroupsSheet(groups: sections.map { GroupName(key: $0.key, name: $0.name) }) { setGroupOrder($0) }
+        }
+        .sheet(isPresented: $sendingFeedback) { FeedbackSheet() }
     }
 
     private func open(_ r: Route) {
@@ -108,46 +122,176 @@ struct ChatsView: View {
                     Text("Waiting to send")
                 }
             }
-            if query.isEmpty, let last = ChatSearch.continueChat(store.summaries), store.activity[last.id] != .needsYou {
-                Section {
-                    ContinueCard(summary: last, activity: store.activity[last.id]) { open(.chat(last.id)) }
-                        .listRowSeparator(.hidden).listRowBackground(Color.clear).listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-                }
-            }
-            if !needsYou.isEmpty && query.isEmpty {
+            // Status groups lead with their own Needs you group.
+            if !needsYou.isEmpty && query.isEmpty && view.groupBy != .status {
                 Section { ForEach(needsYou) { row($0) } } header: { GroupHeading("Needs you", count: "\(needsYou.count)") }
             }
-            ForEach(query.isEmpty || !filtered.isEmpty ? groups : []) { g in
+            ForEach(query.isEmpty || !filtered.isEmpty ? sections : []) { g in
                 Section {
-                    if g.active.isEmpty && g.completed.isEmpty {
-                        Text("No active agents").font(.footnote).foregroundStyle(palette.inkFaint)
-                    }
-                    ForEach(g.active) { row($0) }
-                    if !g.completed.isEmpty {
-                        DisclosureGroup(isExpanded: Binding(get: { showCompleted.contains(g.key) || !query.isEmpty },
-                                                            set: { if $0 { showCompleted.insert(g.key) } else { showCompleted.remove(g.key) } })) {
-                            ForEach(g.completed) { row($0) }
-                        } label: {
-                            Text("Completed · \(g.completed.count)").font(.footnote.weight(.medium)).foregroundStyle(palette.inkFaint)
-                        }
-                        .tint(palette.inkFaint)
-                    }
+                    if !collapsed.contains(g.key) || !query.isEmpty { sectionRows(g) }
                 } header: {
-                    GroupHeading(g.name, count: counts(g))
+                    sectionHeading(g)
                 }
             }
+            // The computer's Monitors (FD-5): hardware, running chats, what needs you, the next automations.
+            if query.isEmpty && !store.computers.isEmpty {
+                Section {
+                    NavigationLink(value: Route.monitors) {
+                        Label("Monitors", systemImage: "gauge.with.dots.needle.50percent").foregroundStyle(palette.ink)
+                    }
+                    .listRowBackground(Color.clear)
+                    .accessibilityIdentifier("chats.monitors")
+                }
+            }
+    }
+
+    /// A group's chats: the recent few unless it was expanded or a search is on, then Show more / Show fewer.
+    @ViewBuilder private func sectionRows(_ g: ChatSection) -> some View {
+        let split = ChatSections.split(g, activity: store.activity, now: nowMs)
+        let all = !query.isEmpty || expanded.contains(g.key)
+        if g.chats.isEmpty {
+            Text("No active agents").font(.footnote).foregroundStyle(palette.inkFaint).listRowBackground(Color.clear)
+        }
+        ForEach(all ? g.chats : split.shown) { row($0) }
+        if query.isEmpty && split.hidden > 0 {
+            Button {
+                withAnimation { flip(&expanded, g.key) }
+            } label: {
+                Label(all ? String(localized: "Show fewer") : String(localized: "Show \(split.hidden) more"),
+                      systemImage: all ? "chevron.up" : "chevron.down")
+                    .font(.footnote.weight(.medium)).foregroundStyle(palette.inkSoft)
+            }
+            .buttonStyle(.plain)
+            .listRowBackground(Color.clear)
+            .accessibilityIdentifier("chats.showMore")
+        }
+    }
+
+    /// A group's heading: tap to fold it, and on project groups, drag it to a new place.
+    @ViewBuilder private func sectionHeading(_ g: ChatSection) -> some View {
+        let open = !collapsed.contains(g.key) || !query.isEmpty
+        let heading = Button {
+            withAnimation { flip(&collapsed, g.key) }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(palette.inkFaint)
+                    .rotationEffect(.degrees(open ? 90 : 0))
+                GroupHeading(groupTitle(g), count: counts(g))
+            }
+            .contentShape(Rectangle())
+            .overlay(alignment: .top) {
+                // Where a dragged group lands: before this one.
+                if dropTarget == g.key { Rectangle().fill(palette.accent).frame(height: 2) }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityValue(open ? String(localized: "Expanded") : String(localized: "Collapsed"))
+        .accessibilityHint("Double-tap to fold or unfold the group.")
+        if view.canReorderGroups && query.isEmpty {
+            heading
+                .draggable(g.key)
+                .dropDestination(for: String.self) { keys, _ in
+                    guard let key = keys.first, key != g.key, sections.contains(where: { $0.key == key }) else { return false }
+                    setGroupOrder(ChatGroupOrder.move(sections.map(\.key), key, before: g.key))
+                    return true
+                } isTargeted: { over in
+                    if over { dropTarget = g.key } else if dropTarget == g.key { dropTarget = nil }
+                }
+                .accessibilityAction(named: "Reorder groups") { reorderingGroups = true }
+        } else {
+            heading
+        }
+    }
+
+    /// Group by, sort by, and what is shown: the desktop Agents panel's view menu.
+    private var viewMenu: some View {
+        Menu {
+            Picker("Group by", selection: bind(\.groupBy)) {
+                ForEach(ChatListView.GroupBy.allCases, id: \.self) { Text(Self.groupName($0)).tag($0) }
+            }
+            .pickerStyle(.menu)
+            Picker("Sort by", selection: Binding(get: { view.sortBy }, set: { app.prefs.chatListView = view.withSort($0) })) {
+                ForEach(ChatListView.SortBy.allCases, id: \.self) { Text(Self.sortName($0)).tag($0) }
+            }
+            .pickerStyle(.menu)
+            // Manual order has no direction: it is whatever was dragged on the computer.
+            if view.sortBy != .manual {
+                Picker("Order", selection: bind(\.ascending)) {
+                    Text(view.sortBy == .name ? String(localized: "A to Z") : String(localized: "Oldest first")).tag(true)
+                    Text(view.sortBy == .name ? String(localized: "Z to A") : String(localized: "Newest first")).tag(false)
+                }
+                .pickerStyle(.menu)
+            }
+            Menu("Show") {
+                Toggle("Previews", isOn: bind(\.showPreviews))
+                Toggle("Completed chats", isOn: bind(\.showCompleted))
+                Toggle("Empty groups", isOn: bind(\.showEmptyGroups))
+            }
+            if view.canReorderGroups {
+                Button { reorderingGroups = true } label: { Label("Reorder groups…", systemImage: "arrow.up.arrow.down") }
+            }
+            Divider()
+            Button("Reset to defaults") { app.prefs.chatListView = .standard }.disabled(view.isStandard)
+        } label: {
+            Image(systemName: view.isStandard ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+        }
+        .accessibilityLabel("View options")
+        .accessibilityIdentifier("chats.view")
+    }
+
+    private var view: ChatListView { app.prefs.chatListView }
+
+    private func bind<T>(_ key: WritableKeyPath<ChatListView, T>) -> Binding<T> {
+        Binding(get: { app.prefs.chatListView[keyPath: key] }, set: { app.prefs.chatListView[keyPath: key] = $0 })
+    }
+
+    static func groupName(_ g: ChatListView.GroupBy) -> String {
+        switch g {
+        case .project: String(localized: "Project")
+        case .status: String(localized: "Status")
+        case .date: String(localized: "Date")
+        case .none: String(localized: "None")
+        }
+    }
+
+    static func sortName(_ s: ChatListView.SortBy) -> String {
+        switch s {
+        case .manual: String(localized: "Manual")
+        case .updated: String(localized: "Last updated")
+        case .name: String(localized: "Name")
+        }
+    }
+
+    /// A folder's own name, or the list's built-in group names in the phone's language.
+    private func groupTitle(_ g: ChatSection) -> String {
+        store.workspaces.contains { $0.id == g.key } ? g.name : String(localized: String.LocalizationValue(g.name))
+    }
+
+    private var nowMs: Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
+
+    private var sections: [ChatSection] {
+        ChatSections.make(filtered, folders: store.workspaces, view: view, activity: store.activity,
+                          groupOrder: app.prefs.groupOrder[store.activeId ?? ""] ?? [], now: nowMs)
+    }
+
+    private func flip(_ set: inout Set<String>, _ key: String) {
+        if set.contains(key) { set.remove(key) } else { set.insert(key) }
+    }
+
+    private func setGroupOrder(_ keys: [String]) {
+        guard let id = store.activeId else { return }
+        withAnimation { app.prefs.groupOrder[id] = keys }
+        dropTarget = nil
     }
 
     /// Every word of the search, in the title, first prompt or last reply; completed chats too.
     private var filtered: [SessionSummary] { ChatSearch.matches(store.summaries, query) }
 
-    private var groups: [ChatGroup] { ChatGroup.of(filtered, folders: store.workspaces) }
-
     /// "3 active · 12 done", as the desktop's group headings count.
-    private func counts(_ g: ChatGroup) -> String {
+    private func counts(_ g: ChatSection) -> String {
         var parts: [String] = []
-        if !g.active.isEmpty { parts.append(g.active.count == 1 ? String(localized: "1 active") : String(localized: "\(g.active.count) active")) }
-        if !g.completed.isEmpty { parts.append(String(localized: "\(g.completed.count) done")) }
+        if g.activeCount > 0 { parts.append(g.activeCount == 1 ? String(localized: "1 active") : String(localized: "\(g.activeCount) active")) }
+        if g.doneCount > 0 { parts.append(String(localized: "\(g.doneCount) done")) }
         return parts.joined(separator: " · ")
     }
 
@@ -155,8 +299,11 @@ struct ChatsView: View {
 
     private func row(_ s: SessionSummary) -> some View {
         NavigationLink(value: Route.chat(s.id)) {
-            ChatRow(summary: s, activity: store.activity[s.id], waiting: store.outbox.count(for: s.id))
+            ChatRow(summary: s, activity: store.activity[s.id], waiting: store.outbox.count(for: s.id), showPreview: view.showPreviews)
         }
+        // On the paper like the rest of the list, with the attention bar on a chat that needs you.
+        .listRowBackground(RowBackground(needsYou: store.activity[s.id] == .needsYou,
+                                         selected: selection.map { $0.wrappedValue == .chat(s.id) } ?? (highlighted == s.id)))
         .accessibilityIdentifier("chats.row")
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             if s.archived {
@@ -202,6 +349,7 @@ struct ChatRow: View {
     let activity: Activity?
     /// Prompts for this chat waiting on the phone (the outbox).
     var waiting = 0
+    var showPreview = true
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -214,7 +362,7 @@ struct ChatRow: View {
                     if summary.pinned { Image(systemName: "pin.fill").font(.caption2).foregroundStyle(palette.warning).accessibilityLabel("Pinned") }
                     Text(title).font(.body.weight(.semibold)).foregroundStyle(summary.archived ? palette.inkSoft : palette.ink).lineLimit(1)
                 }
-                if let preview { Text(preview).font(.footnote).foregroundStyle(palette.inkFaint).lineLimit(2) }
+                if showPreview, let preview { Text(preview).font(.footnote).foregroundStyle(palette.inkFaint).lineLimit(2) }
                 if activity != nil || waiting > 0 {
                     HStack(spacing: 6) {
                         badge
@@ -269,6 +417,64 @@ struct ChatRow: View {
     }
 }
 
+/// A chat row's ground: the list's paper, the selection on iPad, and for a chat
+/// that needs you a warning bar down its leading edge (the desktop's attention colour).
+struct RowBackground: View {
+    let needsYou: Bool
+    var selected = false
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            if selected { palette.accent.opacity(0.12) } else if needsYou { palette.warning.opacity(0.07) } else { Color.clear }
+            if needsYou { Rectangle().fill(palette.warning).frame(width: 3).accessibilityHidden(true) }
+        }
+    }
+}
+
+struct GroupName: Identifiable {
+    let key: String
+    let name: String
+    var id: String { key }
+}
+
+/// Project groups in the order this iPhone lists them, dragged by their handles.
+struct ReorderGroupsSheet: View {
+    @State var groups: [GroupName]
+    var save: ([String]) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.palette) private var palette
+
+    init(groups: [GroupName], save: @escaping ([String]) -> Void) {
+        _groups = State(initialValue: groups)
+        self.save = save
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(groups) { g in Text(g.name).foregroundStyle(palette.ink) }
+                        .onMove { groups.move(fromOffsets: $0, toOffset: $1) }
+                } footer: {
+                    Text("The order is kept on this iPhone. Touch and hold a group’s heading in the list to drag it there too.")
+                        .foregroundStyle(palette.inkSoft)
+                }
+            }
+            .environment(\.editMode, .constant(.active))
+            .navigationTitle("Reorder groups")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { save(groups.map(\.key)); dismiss() }.accessibilityIdentifier("groups.done")
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+}
+
 /// A chat started while the computer was out of reach: its first prompt, and
 /// Edit (back to New chat), Delete and Send now. It becomes a normal row once
 /// the computer has created it.
@@ -318,9 +524,11 @@ struct PendingChatRow: View {
     }
 }
 
-/// Switch computers, pair another, open settings.
+/// Switch computers, pair another, open settings, send feedback.
 struct ComputerMenu: View {
     @Binding var path: [Route]
+    /// Presents *Send feedback*; the sheet hangs on the chat list, not on the toolbar item.
+    @Binding var feedback: Bool
     @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
     @Environment(\.palette) private var palette
@@ -349,6 +557,16 @@ struct ComputerMenu: View {
                 .accessibilityIdentifier("computer.logs")
             Button { path.append(.computers) } label: { Label("Computers", systemImage: "desktopcomputer") }
             Button { path.append(.settings) } label: { Label("Settings", systemImage: "gearshape") }
+            Button { feedback = true } label: { Label("Send feedback", systemImage: "envelope") }
+                .accessibilityIdentifier("computer.feedback")
+            // The safety exits for the active computer (SK-8), a submenu away from any chat list.
+            if store.active != nil {
+                Divider()
+                Menu {
+                    SafetyExitItems()
+                } label: { Label("Sign out or stop", systemImage: "hand.raised") }
+                    .accessibilityIdentifier("chats.menu.safety")
+            }
         } label: {
             // The computer is the title's companion: its state, its name, and a chevron into the menu.
             HStack(spacing: 6) {
@@ -356,8 +574,7 @@ struct ComputerMenu: View {
                 Text(store.active?.name ?? String(localized: "Computers")).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
                 Image(systemName: "chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(palette.inkFaint)
             }
-            .padding(.horizontal, 10).padding(.vertical, 5)
-            .background(palette.surface2, in: Capsule())
+            .modifier(PillChrome())
             // One element with one label: the name inside the pill must not be read
             // (or matched by the UI tests) as a second label beside the menu's own.
             .accessibilityElement(children: .ignore)
@@ -375,6 +592,20 @@ struct ComputerMenu: View {
         case .offline: return palette.warning
         case .denied: return palette.danger
         case .idle: return palette.inkFaint
+        }
+    }
+}
+
+/// The computer pill's own capsule, before iOS 26. From iOS 26 the toolbar draws
+/// a glass capsule around the item itself, and a second one inside it read as a double border.
+struct PillChrome: ViewModifier {
+    @Environment(\.palette) private var palette
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.padding(.horizontal, 4)
+        } else {
+            content.padding(.horizontal, 10).padding(.vertical, 5).background(palette.surface2, in: Capsule())
         }
     }
 }
