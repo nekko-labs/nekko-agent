@@ -106,12 +106,13 @@ it like any red check below, push the fix, and it re-queues.
   "improper code sanitization" on an `apps/desktop/scripts/*-sandbox.cjs` that
   splices `JSON.stringify(...)` into `executeJavaScript`; escape it with the `js()`
   helper the other sandboxes use (see `monitors-trio-sandbox.cjs`) and the thread
-  resolves on the rescan. To see the blocker, call the enqueue that
-  `queue-sweeper.yml` uses (`gh api -X PUT repos/nekko-labs/nekko-agent/pulls/<n>/merge-async
-  -f merge_action=merge_queue`): it names the reason, and queues the PR once it
-  is clear. It is also the only enqueue GitHub accepts for the bottom layer of a
-  stack; `gh pr merge --auto` and the `enqueuePullRequest` mutation refuse
-  stacked PRs. Auto-merge armed with a merge method also sits
+  resolves on the rescan. To see the blocker, call the `enqueuePullRequest`
+  GraphQL mutation (the one in `queue-sweeper.yml`): it names the reason, and
+  queues the PR once it is clear.
+- **A stack's bottom layer is never queued by the bots.** `gh pr merge --auto`
+  and the `enqueuePullRequest` mutation refuse stacked PRs, and the merge-async
+  REST API they point to refuses the repo's App ("Enqueuer is not authorized to
+  merge"). Once its `gate` is green, run `gh stack merge <pr> --yes` yourself. Auto-merge armed with a merge method also sits
   here forever; re-arm with plain `gh pr merge --auto`.
 - **No PR CI after a push** means a conflict with `main` (`mergeable_state:
   dirty`): GitHub computes no merge ref and triggers nothing. Merge `main` in.
