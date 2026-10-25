@@ -1,0 +1,848 @@
+{
+  "moe8": {
+    "hardware": {
+      "devices": [
+        {
+          "name": "Test GPU",
+          "totalBytes": 8589934592.0,
+          "freeBytes": 8053063680.0
+        }
+      ],
+      "unified": false,
+      "ramTotalBytes": 34359738368.0,
+      "ramFreeBytes": 26306674688.0
+    },
+    "facts": {
+      "weightsBytes": 48318382080.0,
+      "layers": 48.0,
+      "headDim": 256.0,
+      "kvPerToken": 12288.0,
+      "maxContext": 262144.0,
+      "weightLayout": {
+        "expertShare": 0.4666666666666667,
+        "ffnShare": 0,
+        "tableShare": 0.4666666666666667,
+        "experts": 512,
+        "expertsUsed": 10
+      }
+    },
+    "autoFit": {
+      "request": {
+        "contextTokens": 2048,
+        "parallelSlots": 1,
+        "kvCacheDtype": "q8_0",
+        "gpuLayerFraction": 0
+      },
+      "plan": {
+        "deviceName": "Test GPU",
+        "deviceTotalBytes": 8589934592,
+        "deviceFreeBytes": 6039797760,
+        "totalLayers": 48,
+        "verdict": "wont-load",
+        "weightsBytes": 48318382080,
+        "kvCacheBytes": 25165824,
+        "overheadBytes": 369098752,
+        "requiredBytes": 48712646656,
+        "spillBytes": 42672848896,
+        "reasons": [
+          {
+            "code": "weights-exceed-device",
+            "bytes": 48318382080
+          },
+          {
+            "code": "exceeds-total-memory",
+            "bytes": 48712646656
+          }
+        ],
+        "suggestions": [],
+        "gpuLayers": 0
+      },
+      "headline": "Will not load at 2k of context.",
+      "tradeoff": "It needs about 45.4 GB, which is more than this machine has free.",
+      "compromises": [
+        "This model does not fit on this machine even at the smallest context."
+      ]
+    },
+    "planFit": {
+      "deviceName": "Test GPU",
+      "deviceTotalBytes": 8589934592,
+      "deviceFreeBytes": 8053063680,
+      "totalLayers": 48,
+      "verdict": "wont-load",
+      "weightsBytes": 48318382080,
+      "kvCacheBytes": 805306368,
+      "overheadBytes": 671088640,
+      "requiredBytes": 49794777088,
+      "spillBytes": 41741713408,
+      "reasons": [
+        {
+          "code": "weights-exceed-device",
+          "bytes": 48318382080
+        },
+        {
+          "code": "exceeds-total-memory",
+          "bytes": 49794777088
+        }
+      ],
+      "suggestions": [],
+      "gpuLayers": 0
+    },
+    "speed": {
+      "request": {
+        "runOn": "hybrid",
+        "contextTokens": 32768,
+        "sessions": 1,
+        "kvCacheDtype": "q8_0",
+        "gpuLayers": 48,
+        "cpuMoeLayers": 40,
+        "cpuFfnLayers": 0,
+        "kvOnGpu": true,
+        "mmap": true,
+        "pin": false,
+        "tablesOnDisk": true,
+        "moeCacheBytes": 0
+      },
+      "plan": {
+        "verdict": "tight",
+        "unified": false,
+        "deviceName": "Test GPU",
+        "vram": {
+          "totalBytes": 8589934592,
+          "otherBytes": 536870912,
+          "availBytes": 8053063680,
+          "model": {
+            "weightsBytes": 6979321856,
+            "kvCacheBytes": 402653184,
+            "overheadBytes": 671088640,
+            "pinnedBytes": 0
+          }
+        },
+        "ram": {
+          "totalBytes": 34359738368,
+          "otherBytes": 8053063680,
+          "availBytes": 24159191040,
+          "model": {
+            "weightsBytes": 18790481920,
+            "kvCacheBytes": 0,
+            "overheadBytes": 536870912,
+            "pinnedBytes": 0
+          }
+        },
+        "disk": {
+          "tableBytes": 22548578304,
+          "overflowBytes": 0
+        },
+        "spareVramBytes": 0
+      },
+      "why": [
+        {
+          "field": "Run on",
+          "value": "Hybrid",
+          "sentence": "It is too big for graphics memory alone, so the graphics card and system memory share it."
+        },
+        {
+          "field": "How to split it",
+          "value": "Experts of 40 of 48 layers in RAM",
+          "sentence": "This model uses only a few of its experts for each word, so they can wait in system memory while the graphics card does the core work."
+        },
+        {
+          "field": "Lookup table",
+          "value": "21.0 GB stays on your SSD",
+          "sentence": "This model ships a large table it reads only a few KB of per word, so it is read from disk instead of filling memory."
+        },
+        {
+          "field": "Context",
+          "value": "32K per session",
+          "sentence": "The most that fits beside the model. Lower it to free memory."
+        },
+        {
+          "field": "Sessions at once",
+          "value": "1",
+          "sentence": "One at a time keeps the most memory for context on this machine."
+        },
+        {
+          "field": "Memory precision",
+          "value": "Balanced",
+          "sentence": "Stores the conversation more compactly so the context fits. The difference is rarely noticeable."
+        },
+        {
+          "field": "Keep in memory",
+          "value": "Keep loaded",
+          "sentence": "The model stays ready between messages. It still runs on the graphics card."
+        }
+      ]
+    },
+    "context": {
+      "request": {
+        "runOn": "hybrid",
+        "contextTokens": 262144,
+        "sessions": 1,
+        "kvCacheDtype": "q8_0",
+        "gpuLayers": 48,
+        "cpuMoeLayers": 46,
+        "cpuFfnLayers": 0,
+        "kvOnGpu": true,
+        "mmap": true,
+        "pin": false,
+        "tablesOnDisk": true,
+        "moeCacheBytes": 0
+      },
+      "plan": {
+        "verdict": "tight",
+        "unified": false,
+        "deviceName": "Test GPU",
+        "vram": {
+          "totalBytes": 8589934592,
+          "otherBytes": 536870912,
+          "availBytes": 8053063680,
+          "model": {
+            "weightsBytes": 4160749568,
+            "kvCacheBytes": 3221225472,
+            "overheadBytes": 671088640,
+            "pinnedBytes": 0
+          }
+        },
+        "ram": {
+          "totalBytes": 34359738368,
+          "otherBytes": 8053063680,
+          "availBytes": 24159191040,
+          "model": {
+            "weightsBytes": 21609054208,
+            "kvCacheBytes": 0,
+            "overheadBytes": 536870912,
+            "pinnedBytes": 0
+          }
+        },
+        "disk": {
+          "tableBytes": 22548578304,
+          "overflowBytes": 0
+        },
+        "spareVramBytes": 0
+      },
+      "why": [
+        {
+          "field": "Run on",
+          "value": "Hybrid",
+          "sentence": "It is too big for graphics memory alone, so the graphics card and system memory share it."
+        },
+        {
+          "field": "How to split it",
+          "value": "Experts of 46 of 48 layers in RAM",
+          "sentence": "This model uses only a few of its experts for each word, so they can wait in system memory while the graphics card does the core work."
+        },
+        {
+          "field": "Lookup table",
+          "value": "21.0 GB stays on your SSD",
+          "sentence": "This model ships a large table it reads only a few KB of per word, so it is read from disk instead of filling memory."
+        },
+        {
+          "field": "Context",
+          "value": "256K per session",
+          "sentence": "The most this model supports, and it fits."
+        },
+        {
+          "field": "Sessions at once",
+          "value": "1",
+          "sentence": "One at a time keeps the most memory for context on this machine."
+        },
+        {
+          "field": "Memory precision",
+          "value": "Balanced",
+          "sentence": "Stores the conversation more compactly so the context fits. The difference is rarely noticeable."
+        },
+        {
+          "field": "Keep in memory",
+          "value": "Keep loaded",
+          "sentence": "The model stays ready between messages. It still runs on the graphics card."
+        }
+      ]
+    },
+    "speedPlace": {
+      "verdict": "tight",
+      "unified": false,
+      "deviceName": "Test GPU",
+      "vram": {
+        "totalBytes": 8589934592,
+        "otherBytes": 536870912,
+        "availBytes": 8053063680,
+        "model": {
+          "weightsBytes": 6979321856,
+          "kvCacheBytes": 402653184,
+          "overheadBytes": 671088640,
+          "pinnedBytes": 0
+        }
+      },
+      "ram": {
+        "totalBytes": 34359738368,
+        "otherBytes": 8053063680,
+        "availBytes": 24159191040,
+        "model": {
+          "weightsBytes": 18790481920,
+          "kvCacheBytes": 0,
+          "overheadBytes": 536870912,
+          "pinnedBytes": 0
+        }
+      },
+      "disk": {
+        "tableBytes": 22548578304,
+        "overflowBytes": 0
+      },
+      "spareVramBytes": 0
+    }
+  },
+  "dense24": {
+    "hardware": {
+      "devices": [
+        {
+          "name": "Test GPU",
+          "totalBytes": 25769803776.0,
+          "freeBytes": 24696061952.0
+        }
+      ],
+      "unified": false,
+      "ramTotalBytes": 68719476736.0,
+      "ramFreeBytes": 53687091200.0
+    },
+    "facts": {
+      "weightsBytes": 9019431321.6,
+      "layers": 40.0,
+      "headDim": 128.0,
+      "kvPerToken": 81920.0,
+      "maxContext": 131072.0,
+      "weightLayout": {
+        "expertShare": 0,
+        "ffnShare": 0.62,
+        "tableShare": 0
+      }
+    },
+    "autoFit": {
+      "request": {
+        "contextTokens": 65536,
+        "parallelSlots": 1,
+        "kvCacheDtype": "q8_0",
+        "gpuLayerFraction": 1
+      },
+      "plan": {
+        "deviceName": "Test GPU",
+        "deviceTotalBytes": 25769803776,
+        "deviceFreeBytes": 18522046464,
+        "totalLayers": 40,
+        "verdict": "fits",
+        "weightsBytes": 9019431321.6,
+        "kvCacheBytes": 5368709120,
+        "overheadBytes": 436207616,
+        "requiredBytes": 14824348057.6,
+        "spillBytes": 0,
+        "reasons": [
+          {
+            "code": "kv-cache-dominates",
+            "bytes": 5368709120,
+            "sharePct": 36.2
+          }
+        ],
+        "suggestions": [],
+        "gpuLayers": 40
+      },
+      "headline": "64k of context, entirely on the GPU.",
+      "tradeoff": "About 13.8 GB of VRAM, leaving 9.2 GB for everything else.",
+      "compromises": [
+        "Used a smaller KV cache element (q8_0) to keep this much context.",
+        "Context is 64k rather than the model's 128k, which would not fit in this budget."
+      ]
+    },
+    "planFit": {
+      "deviceName": "Test GPU",
+      "deviceTotalBytes": 25769803776,
+      "deviceFreeBytes": 24696061952,
+      "totalLayers": 40,
+      "verdict": "fits",
+      "weightsBytes": 9019431321.6,
+      "kvCacheBytes": 5368709120,
+      "overheadBytes": 436207616,
+      "requiredBytes": 14824348057.6,
+      "spillBytes": 0,
+      "reasons": [
+        {
+          "code": "kv-cache-dominates",
+          "bytes": 5368709120,
+          "sharePct": 36.2
+        }
+      ],
+      "suggestions": [],
+      "gpuLayers": 40
+    },
+    "speed": {
+      "request": {
+        "runOn": "gpu",
+        "contextTokens": 65536,
+        "sessions": 2,
+        "kvCacheDtype": "q8_0",
+        "gpuLayers": 40,
+        "cpuMoeLayers": 0,
+        "cpuFfnLayers": 0,
+        "kvOnGpu": true,
+        "mmap": true,
+        "pin": false,
+        "tablesOnDisk": true,
+        "moeCacheBytes": 0
+      },
+      "plan": {
+        "verdict": "fits",
+        "unified": false,
+        "deviceName": "Test GPU",
+        "vram": {
+          "totalBytes": 25769803776,
+          "otherBytes": 1073741824,
+          "availBytes": 24696061952,
+          "model": {
+            "weightsBytes": 9019431321.6,
+            "kvCacheBytes": 10737418240,
+            "overheadBytes": 436207616,
+            "pinnedBytes": 0
+          }
+        },
+        "ram": {
+          "totalBytes": 68719476736,
+          "otherBytes": 15032385536,
+          "availBytes": 51539607552,
+          "model": {
+            "weightsBytes": 0,
+            "kvCacheBytes": 0,
+            "overheadBytes": 0,
+            "pinnedBytes": 0
+          }
+        },
+        "disk": {
+          "tableBytes": 0,
+          "overflowBytes": 0
+        },
+        "spareVramBytes": 3697698406.4000015
+      },
+      "why": [
+        {
+          "field": "Run on",
+          "value": "GPU only",
+          "sentence": "The whole model fits in graphics memory, which is the fastest place to run it."
+        },
+        {
+          "field": "Context",
+          "value": "64K per session",
+          "sentence": "The most that fits beside the model. Lower it to free memory."
+        },
+        {
+          "field": "Sessions at once",
+          "value": "2",
+          "sentence": "Room for agents and chats to answer at the same time, each with its full context."
+        },
+        {
+          "field": "Memory precision",
+          "value": "Balanced",
+          "sentence": "Stores the conversation more compactly so the context fits. The difference is rarely noticeable."
+        },
+        {
+          "field": "Keep in memory",
+          "value": "Keep loaded",
+          "sentence": "The model stays ready between messages. It still runs on the graphics card."
+        }
+      ]
+    },
+    "context": {
+      "request": {
+        "runOn": "hybrid",
+        "contextTokens": 131072,
+        "sessions": 1,
+        "kvCacheDtype": "f16",
+        "gpuLayers": 31,
+        "cpuMoeLayers": 0,
+        "cpuFfnLayers": 0,
+        "kvOnGpu": true,
+        "mmap": true,
+        "pin": false,
+        "tablesOnDisk": true,
+        "moeCacheBytes": 0
+      },
+      "plan": {
+        "verdict": "tight",
+        "unified": false,
+        "deviceName": "Test GPU",
+        "vram": {
+          "totalBytes": 25769803776,
+          "otherBytes": 1073741824,
+          "availBytes": 24696061952,
+          "model": {
+            "weightsBytes": 6990059274.24,
+            "kvCacheBytes": 16642998272,
+            "overheadBytes": 436207616,
+            "pinnedBytes": 0
+          }
+        },
+        "ram": {
+          "totalBytes": 68719476736,
+          "otherBytes": 15032385536,
+          "availBytes": 51539607552,
+          "model": {
+            "weightsBytes": 2029372047.3600006,
+            "kvCacheBytes": 4831838208,
+            "overheadBytes": 536870912,
+            "pinnedBytes": 0
+          }
+        },
+        "disk": {
+          "tableBytes": 0,
+          "overflowBytes": 0
+        },
+        "spareVramBytes": 0
+      },
+      "why": [
+        {
+          "field": "Run on",
+          "value": "Hybrid",
+          "sentence": "It is too big for graphics memory alone, so the graphics card and system memory share it."
+        },
+        {
+          "field": "How to split it",
+          "value": "31 of 40 layers on the GPU",
+          "sentence": "As many layers as fit go on the graphics card; the rest run on the processor."
+        },
+        {
+          "field": "Context",
+          "value": "128K per session",
+          "sentence": "The most this model supports, and it fits."
+        },
+        {
+          "field": "Sessions at once",
+          "value": "1",
+          "sentence": "One at a time keeps the most memory for context on this machine."
+        },
+        {
+          "field": "Memory precision",
+          "value": "Most reliable",
+          "sentence": "There is room to store the conversation exactly."
+        },
+        {
+          "field": "Keep in memory",
+          "value": "Keep loaded",
+          "sentence": "The model stays ready between messages. It still runs on the graphics card."
+        }
+      ]
+    },
+    "speedPlace": {
+      "verdict": "fits",
+      "unified": false,
+      "deviceName": "Test GPU",
+      "vram": {
+        "totalBytes": 25769803776,
+        "otherBytes": 1073741824,
+        "availBytes": 24696061952,
+        "model": {
+          "weightsBytes": 9019431321.6,
+          "kvCacheBytes": 10737418240,
+          "overheadBytes": 436207616,
+          "pinnedBytes": 0
+        }
+      },
+      "ram": {
+        "totalBytes": 68719476736,
+        "otherBytes": 15032385536,
+        "availBytes": 51539607552,
+        "model": {
+          "weightsBytes": 0,
+          "kvCacheBytes": 0,
+          "overheadBytes": 0,
+          "pinnedBytes": 0
+        }
+      },
+      "disk": {
+        "tableBytes": 0,
+        "overflowBytes": 0
+      },
+      "spareVramBytes": 3697698406.4000015
+    }
+  },
+  "dense8": {
+    "hardware": {
+      "devices": [
+        {
+          "name": "Test GPU",
+          "totalBytes": 8589934592.0,
+          "freeBytes": 8053063680.0
+        }
+      ],
+      "unified": false,
+      "ramTotalBytes": 34359738368.0,
+      "ramFreeBytes": 26306674688.0
+    },
+    "facts": {
+      "weightsBytes": 9019431321.6,
+      "layers": 40.0,
+      "headDim": 128.0,
+      "kvPerToken": 81920.0,
+      "maxContext": 131072.0,
+      "weightLayout": {
+        "expertShare": 0,
+        "ffnShare": 0.62,
+        "tableShare": 0
+      }
+    },
+    "autoFit": {
+      "request": {
+        "contextTokens": 2048,
+        "parallelSlots": 1,
+        "kvCacheDtype": "q8_0",
+        "gpuLayerFraction": 0.6
+      },
+      "plan": {
+        "deviceName": "Test GPU",
+        "deviceTotalBytes": 8589934592,
+        "deviceFreeBytes": 6039797760,
+        "totalLayers": 40,
+        "verdict": "spills",
+        "weightsBytes": 9019431321.6,
+        "kvCacheBytes": 167772160,
+        "overheadBytes": 310378496,
+        "requiredBytes": 9497581977.6,
+        "spillBytes": 3457784217.6000004,
+        "reasons": [
+          {
+            "code": "weights-exceed-device",
+            "bytes": 9019431321.6
+          },
+          {
+            "code": "partial-offload",
+            "bytes": 3457784217.6000004,
+            "sharePct": 36.4
+          }
+        ],
+        "suggestions": [],
+        "gpuLayers": 24
+      },
+      "headline": "2k of context, 24 of 40 layers on the GPU.",
+      "tradeoff": "About 8.8 GB of VRAM, leaving 1.9 GB for everything else.",
+      "compromises": [
+        "Part of the model will run on the CPU, which is much slower than the GPU."
+      ]
+    },
+    "planFit": {
+      "deviceName": "Test GPU",
+      "deviceTotalBytes": 8589934592,
+      "deviceFreeBytes": 8053063680,
+      "totalLayers": 40,
+      "verdict": "spills",
+      "weightsBytes": 9019431321.6,
+      "kvCacheBytes": 5368709120,
+      "overheadBytes": 436207616,
+      "requiredBytes": 14824348057.6,
+      "spillBytes": 6771284377.6,
+      "reasons": [
+        {
+          "code": "kv-cache-dominates",
+          "bytes": 5368709120,
+          "sharePct": 36.2
+        },
+        {
+          "code": "weights-exceed-device",
+          "bytes": 9019431321.6
+        },
+        {
+          "code": "partial-offload",
+          "bytes": 6771284377.6,
+          "sharePct": 45.7
+        }
+      ],
+      "suggestions": [],
+      "gpuLayers": 9
+    },
+    "speed": {
+      "request": {
+        "runOn": "hybrid",
+        "contextTokens": 32768,
+        "sessions": 1,
+        "kvCacheDtype": "q8_0",
+        "gpuLayers": 40,
+        "cpuMoeLayers": 0,
+        "cpuFfnLayers": 30,
+        "kvOnGpu": true,
+        "mmap": true,
+        "pin": false,
+        "tablesOnDisk": true,
+        "moeCacheBytes": 0
+      },
+      "plan": {
+        "verdict": "tight",
+        "unified": false,
+        "deviceName": "Test GPU",
+        "vram": {
+          "totalBytes": 8589934592,
+          "otherBytes": 536870912,
+          "availBytes": 8053063680,
+          "model": {
+            "weightsBytes": 4825395757.056,
+            "kvCacheBytes": 2684354560,
+            "overheadBytes": 436207616,
+            "pinnedBytes": 0
+          }
+        },
+        "ram": {
+          "totalBytes": 34359738368,
+          "otherBytes": 8053063680,
+          "availBytes": 24159191040,
+          "model": {
+            "weightsBytes": 4194035564.5440006,
+            "kvCacheBytes": 0,
+            "overheadBytes": 536870912,
+            "pinnedBytes": 0
+          }
+        },
+        "disk": {
+          "tableBytes": 0,
+          "overflowBytes": 0
+        },
+        "spareVramBytes": 0
+      },
+      "why": [
+        {
+          "field": "Run on",
+          "value": "Hybrid",
+          "sentence": "It is too big for graphics memory alone, so the graphics card and system memory share it."
+        },
+        {
+          "field": "How to split it",
+          "value": "Feed-forward of 30 of 40 layers in RAM",
+          "sentence": "The attention math and the context stay on the graphics card, which matters most for speed; the bulkiest part of some layers moves to system memory."
+        },
+        {
+          "field": "Context",
+          "value": "32K per session",
+          "sentence": "The most that fits beside the model. Lower it to free memory."
+        },
+        {
+          "field": "Sessions at once",
+          "value": "1",
+          "sentence": "One at a time keeps the most memory for context on this machine."
+        },
+        {
+          "field": "Memory precision",
+          "value": "Balanced",
+          "sentence": "Stores the conversation more compactly so the context fits. The difference is rarely noticeable."
+        },
+        {
+          "field": "Keep in memory",
+          "value": "Keep loaded",
+          "sentence": "The model stays ready between messages. It still runs on the graphics card."
+        }
+      ]
+    },
+    "context": {
+      "request": {
+        "runOn": "hybrid",
+        "contextTokens": 131072,
+        "sessions": 1,
+        "kvCacheDtype": "q8_0",
+        "gpuLayers": 15,
+        "cpuMoeLayers": 0,
+        "cpuFfnLayers": 0,
+        "kvOnGpu": true,
+        "mmap": true,
+        "pin": false,
+        "tablesOnDisk": true,
+        "moeCacheBytes": 0
+      },
+      "plan": {
+        "verdict": "tight",
+        "unified": false,
+        "deviceName": "Test GPU",
+        "vram": {
+          "totalBytes": 8589934592,
+          "otherBytes": 536870912,
+          "availBytes": 8053063680,
+          "model": {
+            "weightsBytes": 3382286745.6000004,
+            "kvCacheBytes": 4026531840,
+            "overheadBytes": 436207616,
+            "pinnedBytes": 0
+          }
+        },
+        "ram": {
+          "totalBytes": 34359738368,
+          "otherBytes": 8053063680,
+          "availBytes": 24159191040,
+          "model": {
+            "weightsBytes": 5637144576,
+            "kvCacheBytes": 6710886400,
+            "overheadBytes": 536870912,
+            "pinnedBytes": 0
+          }
+        },
+        "disk": {
+          "tableBytes": 0,
+          "overflowBytes": 0
+        },
+        "spareVramBytes": 0
+      },
+      "why": [
+        {
+          "field": "Run on",
+          "value": "Hybrid",
+          "sentence": "It is too big for graphics memory alone, so the graphics card and system memory share it."
+        },
+        {
+          "field": "How to split it",
+          "value": "15 of 40 layers on the GPU",
+          "sentence": "As many layers as fit go on the graphics card; the rest run on the processor."
+        },
+        {
+          "field": "Context",
+          "value": "128K per session",
+          "sentence": "The most this model supports, and it fits."
+        },
+        {
+          "field": "Sessions at once",
+          "value": "1",
+          "sentence": "One at a time keeps the most memory for context on this machine."
+        },
+        {
+          "field": "Memory precision",
+          "value": "Balanced",
+          "sentence": "Stores the conversation more compactly so the context fits. The difference is rarely noticeable."
+        },
+        {
+          "field": "Keep in memory",
+          "value": "Keep loaded",
+          "sentence": "The model stays ready between messages. It still runs on the graphics card."
+        }
+      ]
+    },
+    "speedPlace": {
+      "verdict": "tight",
+      "unified": false,
+      "deviceName": "Test GPU",
+      "vram": {
+        "totalBytes": 8589934592,
+        "otherBytes": 536870912,
+        "availBytes": 8053063680,
+        "model": {
+          "weightsBytes": 4825395757.056,
+          "kvCacheBytes": 2684354560,
+          "overheadBytes": 436207616,
+          "pinnedBytes": 0
+        }
+      },
+      "ram": {
+        "totalBytes": 34359738368,
+        "otherBytes": 8053063680,
+        "availBytes": 24159191040,
+        "model": {
+          "weightsBytes": 4194035564.5440006,
+          "kvCacheBytes": 0,
+          "overheadBytes": 536870912,
+          "pinnedBytes": 0
+        }
+      },
+      "disk": {
+        "tableBytes": 0,
+        "overflowBytes": 0
+      },
+      "spareVramBytes": 0
+    }
+  }
+}
