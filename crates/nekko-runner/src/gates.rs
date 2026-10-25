@@ -59,6 +59,9 @@ pub struct Signals {
     /// A tunnel leads the Mac's default route (a full-tunnel VPN or an exit
     /// node), from `nekko-vm egress`.
     pub vpn_carries_default: bool,
+    /// The host state, egress interface and host addresses are all known. When
+    /// false no new VM starts; a running job is not stopped by it alone.
+    pub host_known: bool,
 }
 
 /// Why a gate failed. Declared in the order the UI lists them.
@@ -80,6 +83,7 @@ pub enum Reason {
     DiskFloor,
     SecurityUpdate,
     MemoryHeadroom,
+    HostStateUnknown,
     UserActive,
     UserBusy,
 }
@@ -143,6 +147,7 @@ pub fn evaluate(s: &RunnerSettings, sig: &Signals, running: bool) -> Decision {
     if !running {
         let tier2: Vec<Reason> = [
             (sig.security_update_overdue_days.is_some_and(|d| d > SECURITY_GRACE_DAYS), Reason::SecurityUpdate),
+            (!sig.host_known, Reason::HostStateUnknown),
             (!(sig.available_memory_mb >= f64::from(s.memory_per_vm_mb) + VM_START_MARGIN_MB), Reason::MemoryHeadroom),
         ]
         .into_iter()

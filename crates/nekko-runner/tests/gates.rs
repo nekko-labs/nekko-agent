@@ -22,6 +22,7 @@ fn quiet() -> Signals {
         available_memory_mb: 32768.0,
         paused_all: false,
         vpn_carries_default: false,
+        host_known: true,
     }
 }
 
@@ -351,4 +352,13 @@ fn memory_headroom_and_security_update_are_both_listed() {
 fn nan_available_memory_holds() {
     let sig = Signals { available_memory_mb: f64::NAN, ..quiet() };
     assert_eq!(evaluate(&with(Balanced), &sig, false), Decision::Hold { why: vec![Reason::MemoryHeadroom] });
+}
+
+#[test]
+fn unknown_host_state_holds_new_vms_only() {
+    let sig = Signals { host_known: false, ..quiet() };
+    for p in ALL {
+        assert_eq!(evaluate(&with(p), &sig, false), Decision::Hold { why: vec![Reason::HostStateUnknown] });
+        assert_eq!(evaluate(&with(p), &sig, true), Decision::Take);
+    }
 }

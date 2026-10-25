@@ -1,8 +1,8 @@
 //! Slot, CPU and warm-VM budgets for a host.
 
 use nekko_runner::{
-    HostFacts, Priority, RunnerSettings, cpus_per_vm, macos_slots_available, recommended_runner_memory_mb,
-    runner_memory_mb, warm_slots,
+    HostFacts, Priority, RunnerSettings, SlotLimit, cpus_per_vm, macos_slots_available, macos_slots_explained,
+    recommended_runner_memory_mb, runner_memory_mb, usual_memory_mb, vms_wanted, warm_slots,
 };
 
 #[test]
@@ -97,4 +97,40 @@ fn warm_slots_by_mode() {
         (0, 1, 2)
     );
     assert_eq!(warm_slots(&s(Priority::Balanced), 0), 0);
+}
+
+#[test]
+fn slot_limit_names_the_binding_bound() {
+    let big = HostFacts { ram_mb: 131072, cores: 16, other_macos_vms: 0, user_memory_mb: None };
+    let two = RunnerSettings { macos_slots: 2, ..Default::default() };
+    assert_eq!(macos_slots_explained(&two, &HostFacts { other_macos_vms: 1, ..big }), (1, Some(SlotLimit::OtherApps)));
+    assert_eq!(macos_slots_explained(&two, &HostFacts { other_macos_vms: 2, ..big }), (0, Some(SlotLimit::OtherApps)));
+    assert_eq!(macos_slots_explained(&two, &HostFacts { ram_mb: 16384, ..big }), (1, Some(SlotLimit::Memory)));
+    assert_eq!(
+        macos_slots_explained(&RunnerSettings { macos_slots: 7, ..Default::default() }, &big),
+        (2, Some(SlotLimit::AppleCap))
+    );
+    assert_eq!(macos_slots_explained(&RunnerSettings::default(), &big), (1, None));
+}
+
+#[test]
+fn vms_wanted_by_warmth_and_demand() {
+    assert_eq!(
+        [
+            vms_wanted(2, 0, 0, 0),
+            vms_wanted(2, 0, 0, 1),
+            vms_wanted(2, 1, 0, 0),
+            vms_wanted(2, 1, 1, 0),
+            vms_wanted(2, 1, 1, 3),
+            vms_wanted(1, 2, 0, 5),
+            vms_wanted(0, 2, 0, 5)
+        ],
+        [0, 1, 1, 1, 2, 1, 0]
+    );
+}
+
+#[test]
+fn usual_memory_is_the_95th_percentile() {
+    assert_eq!(usual_memory_mb(&(1..=100).collect::<Vec<u64>>()), Some(95));
+    assert_eq!(usual_memory_mb(&[8000; 35]), None);
 }
