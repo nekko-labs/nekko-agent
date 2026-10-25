@@ -4,6 +4,7 @@ import { MONITOR_HINTS, MONITOR_KINDS, MONITOR_LABELS, gpuMemoryLabel, monitorSo
 import { readBrandKey } from '../brandStorage.js';
 import { useStore } from '../store.js';
 import { ChevronIcon } from '../icons.js';
+import { BackgroundChip, useBackgroundState } from './BackgroundChip.js';
 
 /**
  * Resource monitoring: one sampler, two surfaces.
@@ -311,6 +312,7 @@ export function ResourceDock({ standalone = false }: { standalone?: boolean } = 
 export function ResourceHud() {
   const monitors = useMonitors();
   const { gpu, system } = useResourceSample();
+  const background = useBackgroundState();
   const dock = useStore((s) => s.monitorDockRect);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -438,6 +440,7 @@ export function ResourceHud() {
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
       >
+        <BackgroundChip state={background} compact />
         {!anyOn && <span className="text-ink-faint">Monitors off</span>}
         {monitors.cpu && (
           <span className="flex items-center gap-1">
