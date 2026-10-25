@@ -58,12 +58,14 @@ fn verification(value: Option<&Value>) -> Option<Value> {
     }
     if let Some(link) = v.get("evidenceUrl").and_then(Value::as_str).map(js::trim) {
         let lower = link.to_ascii_lowercase();
-        if link.encode_utf16().count() <= 2048 && (lower.starts_with("https://") || lower.starts_with("http://")) {
-            if let Ok(url) = url::Url::parse(link) {
-                if matches!(url.scheme(), "http" | "https") && url.username().is_empty() && url.password().is_none() {
-                    result.insert("evidenceUrl".into(), json!(link));
-                }
-            }
+        if link.encode_utf16().count() <= 2048
+            && (lower.starts_with("https://") || lower.starts_with("http://"))
+            && let Ok(url) = url::Url::parse(link)
+            && matches!(url.scheme(), "http" | "https")
+            && url.username().is_empty()
+            && url.password().is_none()
+        {
+            result.insert("evidenceUrl".into(), json!(link));
         }
     }
     Some(Value::Object(result))
