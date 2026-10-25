@@ -5,13 +5,15 @@ const report={kind,revision:process.env.NEKKO_EVIDENCE_REVISION,checks:[],errors
 app.whenReady().then(async()=>{session.defaultSession.webRequest.onBeforeRequest((r,done)=>done({cancel:!/^(file:|data:|blob:)/.test(r.url)}));session.defaultSession.setPermissionRequestHandler((w,p,d)=>d(false));session.defaultSession.setPermissionCheckHandler(()=>false);
 const left=Math.min(...screen.getAllDisplays().map(d=>d.bounds.x));const win=new BrowserWindow({width:1280,height:H,useContentSize:true,show:false,focusable:false,skipTaskbar:true,x:left-5000,y:-3000,title:'Isolated connections evidence',webPreferences:{contextIsolation:true,sandbox:true,backgroundThrottling:false}});win.on('focus',()=>report.errors.push('OS focus taken'));win.webContents.setWindowOpenHandler(()=>({action:'deny'}));win.webContents.on('console-message',e=>{if(e.level==='error')report.errors.push(e.message)});
 const run=s=>win.webContents.executeJavaScript(s,true);
+// JSON.stringify leaves <, >, / and U+2028/2029 raw; escape them before splicing into evaluated code.
+const js=v=>JSON.stringify(v).replace(/[<>/\u2028\u2029]/g,c=>'\\u'+c.charCodeAt(0).toString(16).padStart(4,'0'));
 const stable=()=>run(`(async()=>{await document.fonts.ready;let last='',n=0;for(let i=0;i<180;i++){await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));const x=JSON.stringify([document.documentElement.dataset.theme,innerWidth,innerHeight,scrollY,[...document.querySelectorAll('label,input,button')].map(e=>{const r=e.getBoundingClientRect();return [r.x,r.y,r.width,r.height]})]);n=x===last?n+1:0;last=x;if(n>=6)return true}throw Error('unstable frames')})()`);
 const resize=async width=>{win.setContentSize(width,H);for(let i=0;i<6;i++){await sleep(100);const v=await run("({w:innerWidth,h:innerHeight})");if(v.w===width&&v.h===H)return;const b=win.getBounds();win.setBounds({...b,width:b.width+width-v.w,height:b.height+H-v.h})}throw Error('viewport mismatch')};
 const capture=async name=>{await stable();await win.capturePage(undefined,{stayHidden:true,stayAwake:true});await stable();const image=await win.capturePage(undefined,{stayHidden:true,stayAwake:true});if(image.isEmpty())throw Error('empty capture');const file=path.join(dir,name+'.png');fs.writeFileSync(file,image.toPNG());report.captures.push({file,size:image.getSize()})};
 const check=async(name,s)=>{try{report.checks.push({name,passed:!!await run(s)})}catch(e){report.checks.push({name,passed:false,error:String(e)})}};
 try{await win.loadFile(path.join(dir,'index.html'));win.showInactive();await sleep(800);await stable();
-const click=sel=>run(`(()=>{const e=document.querySelector(${JSON.stringify(sel)});if(!e)throw Error('missing '+${JSON.stringify(sel)});e.click();return true})()`);
-const scrollTo=sel=>run(`document.querySelector(${JSON.stringify(sel)}).scrollIntoView({block:'start'})`);
+const click=sel=>run(`(()=>{const e=document.querySelector(${js(sel)});if(!e)throw Error('missing '+${js(sel)});e.click();return true})()`);
+const scrollTo=sel=>run(`document.querySelector(${js(sel)}).scrollIntoView({block:'start'})`);
 for(const width of [1280,480])for(const theme of ['light','dark']){await resize(width);await run(`document.documentElement.dataset.theme='${theme}'`);await stable();const label=`${width}-${theme}`;
 await check(label+' every connection has a row',`document.querySelectorAll('[data-connection]').length===25`);
 await check(label+' MCP shows off',`document.querySelector('[data-connection=mcp] [role=switch]').getAttribute('aria-checked')==='false'`);

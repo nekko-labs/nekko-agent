@@ -2690,7 +2690,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           </div>}
           {cleanStart && <div className="clean-start-greeting fade-in" data-clean-start-greeting>
             <h2>What should we work on?</h2>
-            <p>Describe the task. The full chat opens once you send.</p>
           </div>}
           <div className={`composer-column mx-auto ${commandCenter ? 'w-[98%]' : 'w-[90%]'}`} style={cleanStart ? undefined : commandCenter ? { width: '98%' } : undefined}>
             {surface !== 'composer' && planChangeOpen && !question && (

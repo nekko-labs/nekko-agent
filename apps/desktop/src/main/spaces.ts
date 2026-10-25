@@ -1,11 +1,13 @@
 import { execFile } from 'child_process';
 
 /**
- * macOS desktops (Spaces), read and switched without private APIs.
+ * macOS desktops (Spaces), read and switched.
  *
- * The desktop list and the current desktop come from the `com.apple.spaces`
- * preferences (read through `defaults`, so cfprefsd's live copy, not a stale
- * file). Switching sends Mission Control's own shortcuts through System
+ * The desktop list comes from the `com.apple.spaces` preferences (read through
+ * `defaults`). The Dock rewrites that file lazily, so its current desktop can
+ * lag a switch indefinitely; the current desktop is asked of the window server
+ * (`CGSGetActiveSpace`, through JXA) and the preference is only the fallback.
+ * Switching sends Mission Control's own shortcuts through System
  * Events: Ctrl+number when "Switch to Desktop n" is enabled, else Ctrl+arrow
  * steps. Sending keystrokes needs the Accessibility permission.
  */
@@ -54,12 +56,19 @@ const run: Run = (file, args) => new Promise((resolve, reject) => {
   execFile(file, args, { timeout: 5000 }, (error, stdout) => (error ? reject(error) : resolve(stdout)));
 });
 
+/** The window server's active desktop id. Private SPI, but stable for years (yabai and Hammerspoon rely on it). */
+const ACTIVE_SPACE_JXA = "ObjC.bindFunction('CGSMainConnectionID',['int',[]]);ObjC.bindFunction('CGSGetActiveSpace',['unsigned long long',['int']]);String($.CGSGetActiveSpace($.CGSMainConnectionID()))";
+
 /** The live desktop list, or null off macOS or when it cannot be read. */
 export async function readSpaces(exec: Run = run): Promise<Spaces | null> {
   if (process.platform !== 'darwin') return null;
   try {
     const json = await exec('/bin/sh', ['-c', 'defaults export com.apple.spaces - | plutil -extract SpacesDisplayConfiguration json -o - -']);
-    return parseSpaces(JSON.parse(json));
+    const parsed = parseSpaces(JSON.parse(json));
+    if (!parsed) return null;
+    const live = await exec('osascript', ['-l', 'JavaScript', '-e', ACTIVE_SPACE_JXA]).then((out) => out.trim(), () => '');
+    // A full-screen app or another screen's desktop is not in the list: no current desktop, as parseSpaces does.
+    return live ? { ...parsed, current: parsed.desktops.includes(live) ? live : null } : parsed;
   } catch { return null; }
 }
 

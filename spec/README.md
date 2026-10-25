@@ -74,7 +74,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Model picker, tool categories, Artifacts tab and wall polish (2026-10-15)](desktop/model-picker-tool-categories-artifacts-tab-and-wall-polish.md) (5 KB)
 - [Nav wings and wall action clarity](desktop/nav-wings-and-wall-action-clarity.md) (1 KB)
 - [Navigation panel, media fade and macOS app menu (2026-10-16)](desktop/navigation-panel-media-fade-and-macos-app-menu.md) (2 KB)
-- [New agent window defaults](desktop/new-agent-window-defaults.md) (1 KB)
+- [New agent window defaults](desktop/new-agent-window-defaults.md) (2 KB)
 - [Search within Settings (desktop)](desktop/search-within-settings-desktop.md) (2 KB)
 - [Settings section nav and phone pairing placement (desktop)](desktop/settings-section-nav.md) (3 KB)
 - [Slim wave rail, tighter Agents spacing, composer snap points](desktop/slim-wave-rail-tighter-agents-spacing-composer-snap-points.md) (4 KB)
@@ -92,7 +92,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 Agents panel, monitors, subagents and delegation.
 
 - [Agent activity and panel polish](agents/agent-activity-and-panel-polish.md) (39 KB)
-- [Agent Monitor Project group, hardware temperatures and multi-monitor Dynamic mode (2026-10-18)](agents/agent-monitor-project-group-hardware-temperatures-and-multi-moni.md) (9 KB)
+- [Agent Monitor Project group, hardware temperatures and multi-monitor Dynamic mode (2026-10-18)](agents/agent-monitor-project-group-hardware-temperatures-and-multi-moni.md) (10 KB)
 - [Agent panel view options (2026-10-17)](agents/agent-panel-view-options.md) (4 KB)
 - [Agents dashboard simplification (2026-10-06)](agents/agents-dashboard-simplification.md) (3 KB)
 - [Approval retention and delegation navigation](agents/approval-retention-and-delegation-navigation.md) (1 KB)

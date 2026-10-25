@@ -25,10 +25,17 @@ describe('macOS desktops', () => {
     expect(switchScript(1, 11, true)).toContain('key code 124');
     expect(switchScript(2, 2, true)).toBeNull();
   });
+  it('takes the current desktop from the window server, since the preference lags a switch', async () => {
+    if (process.platform !== 'darwin') return;
+    const json = JSON.stringify(config([{ 'Display Identifier': 'Main', 'Current Space': space(1), Spaces: [space(1), space(2)] }]));
+    expect(await readSpaces(async (file) => (file === 'osascript' ? '2\n' : json))).toEqual({ current: '2', desktops: ['1', '2'] });
+    // A full-screen app's space is not a desktop.
+    expect(await readSpaces(async (file) => (file === 'osascript' ? '9\n' : json))).toEqual({ current: null, desktops: ['1', '2'] });
+  });
   it('reads through defaults and plutil, and gives up quietly', async () => {
     if (process.platform !== 'darwin') return;
     const json = JSON.stringify(config([{ 'Display Identifier': 'Main', 'Current Space': space(1), Spaces: [space(1), space(2)] }]));
-    expect(await readSpaces(async () => json)).toEqual({ current: '1', desktops: ['1', '2'] });
+    expect(await readSpaces(async (file) => (file === 'osascript' ? Promise.reject(new Error('no JXA')) : json))).toEqual({ current: '1', desktops: ['1', '2'] });
     expect(await readSpaces(async () => { throw new Error('no defaults'); })).toBeNull();
   });
 });
