@@ -45,3 +45,14 @@ A Mac running Nekko Agent can become a CI runner ([spec](../../spec/automation/c
 - No helper to install means no extra permission prompt, and a smaller review.
 - If a user must run more than 2 macOS VMs or rent capacity, the license, not this design, is the limit (see the spec).
 - We were wrong if the NAT cannot hold download-heavy jobs at usable speed, or a guest reaches a non-public address.
+
+## Implementation notes (T211)
+
+Added 2026-10-24. These record how T211 built the decision above; the decision itself is unchanged.
+
+- P1 guests are IPv4 only (10.233.0.2/24, gateway 10.233.0.1). Every IPv6 frame from the guest is dropped.
+- DNS goes through the gateway: 53/udp and 53/tcp are forwarded to the host's resolvers, chosen by the supervisor and never a loopback resolver or 100.100.100.100. The gateway answers DHCP and DNS only.
+- At most 256 flows per VM, a 15 s host connect timeout, and an idle TCP timeout (60 s, with 30 s keep-alive probes) that resets a guest connection that stops answering and frees its slot.
+- `nekko-vm` alone carries `com.apple.security.virtualization`. Dev builds ad-hoc sign it; release packaging and signing land with T213/T214 together with a signed release dry-run.
+- The supervisor refuses to start a VM if the host's addresses cannot be read; there is no empty-list fallback.
+- Known limit until T212: public address ranges routed through a VPN or tunnel (split-tunnel corporate VPN, Tailscale exit node or subnet routes) are not yet refused. T212 will refuse destinations whose route leaves through a tunnel or a non-primary interface.

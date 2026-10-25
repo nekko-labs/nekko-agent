@@ -1393,7 +1393,10 @@ Verification: `npm run typecheck` across workspaces, host tests (`oauth`, `downl
 A Mac running Nekko Agent becomes a sandboxed GitHub Actions self-hosted runner, each job in a throwaway macOS VM. The existing "Local CI runner" template ([docs/git-runner.md](docs/git-runner.md)) stays; it is not a self-hosted runner. Planned 2026-10-24.
 
 - [ ] **T210** Layer A: the spec and decision 0022, and the pure-logic crate `nekko-runner` (settings, slots, gates, keep awake, guest address rules). Added: 2026-10-24. Issue #1038.
-- [ ] **T211** VM helper and userspace network: Swift `nekko-vm` on Virtualization.framework (clone, boot, delete, seed disk) and the NAT in `nekkod`. Added: 2026-10-24. Issue #1038.
+- [ ] **T211** VM helper and userspace network: Swift `nekko-vm` on Virtualization.framework (clone, boot, seed disk) and the NAT in `nekkod`. Added: 2026-10-24. Issue #1038.
+  - Done: `crates/nekkod/vm/nekko-vm.swift` (clone, run, count-vms; no shared folders, clipboard, graphics or audio) with its entitlements and `test-nekko-vm.sh`; dev-only staging and ad-hoc signing in `stage-daemon.mjs`; the IPv4-only NAT in `crates/nekkod/src/runner/net.rs` (DHCP, DNS over 53/udp and 53/tcp, 256 flows, 15 s connect and 60 s idle TCP timeouts) checked by `guest_may_connect`, host networks in `hostnets.rs` (`try_current` only), tests in `crates/nekkod/tests/runner_net.rs`, and the `runner_vm_spike` example.
+  - No `delete` subcommand: clone cleanup is the T212 reaper. Release packaging and signing of `nekko-vm` move to T213/T214 with a signed release dry-run.
+  - Pending: the real-VM boot run (spike example against a macOS bundle). Known limit until T212: VPN or tunnel routed public ranges are not yet refused.
 - [ ] **T212** Supervisor and GitHub: GitHub App connect, JIT configs, the supervisor loop in `nekkod`, keychain key. Added: 2026-10-24. Issue #1038.
 - [ ] **T213** CI section UI in the Workflows tab: connect sheet, runner card, settings, menu bar indicator. Added: 2026-10-24. Issue #1038.
 - [ ] **T214** Images, picker and pilot: golden image builder, picker job, the P0 pilot on our own CI. Added: 2026-10-24. Issue #1038.
