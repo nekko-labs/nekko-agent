@@ -8,10 +8,11 @@
 //! the suffix.
 //!
 //! After the pairs comes the tensor table (name, dimensions, type, offset),
-//! which gives the KV cache layer by layer ([`KvLayout`]). A table that cannot
-//! be read leaves the layout out and changes nothing else.
+//! which gives the KV cache layer by layer ([`KvLayout`]) and what the weights
+//! are made of ([`WeightLayout`]). A table that cannot be read leaves both
+//! layouts out and changes nothing else.
 
-use crate::capacity::KvLayout;
+use crate::capacity::{KvLayout, WeightLayout};
 use crate::num;
 use serde_json::{Map, Value};
 use std::io::Read;
@@ -36,6 +37,8 @@ pub struct GgufMetadata {
     pub chat_template: Option<String>,
     /// The KV cache layer by layer, when the tensor table was read.
     pub kv_layout: Option<KvLayout>,
+    /// Expert, feed-forward and lookup-table shares, when the tensor table was read.
+    pub weight_layout: Option<WeightLayout>,
 }
 
 impl GgufMetadata {
@@ -63,6 +66,9 @@ impl GgufMetadata {
         text(&mut m, "chatTemplate", &self.chat_template);
         if let Some(l) = &self.kv_layout {
             m.insert("kvLayout".into(), l.to_value());
+        }
+        if let Some(w) = &self.weight_layout {
+            m.insert("weightLayout".into(), w.to_value());
         }
         Value::Object(m)
     }
@@ -214,20 +220,122 @@ fn parse(buf: &[u8], last: bool) -> Parsed {
     };
     let mut meta = to_metadata(&kv);
     match tensor_table(&mut r, tensors) {
-        Ok(attn) => meta.kv_layout = kv_layout(&kv, &arrays, &attn, tensors),
+        Ok((attn, bytes)) => {
+            meta.kv_layout = kv_layout(&kv, &arrays, &attn, tensors);
+            meta.weight_layout = bytes.layout(&kv);
+        }
         Err(Stop::Eof) if !last => return Parsed::Truncated,
         Err(_) => {}
     }
     Parsed::Done(Some(Box::new(meta)))
 }
 
+/// `(elements per block, bytes per block)` for a ggml tensor type.
+fn ggml_block(kind: u32) -> Option<(f64, f64)> {
+    Some(match kind {
+        0 => (1.0, 4.0),     // F32
+        1 => (1.0, 2.0),     // F16
+        2 => (32.0, 18.0),   // Q4_0
+        3 => (32.0, 20.0),   // Q4_1
+        6 => (32.0, 22.0),   // Q5_0
+        7 => (32.0, 24.0),   // Q5_1
+        8 => (32.0, 34.0),   // Q8_0
+        9 => (32.0, 36.0),   // Q8_1
+        10 => (256.0, 84.0), // Q2_K
+        11 => (256.0, 110.0),
+        12 => (256.0, 144.0),
+        13 => (256.0, 176.0),
+        14 => (256.0, 210.0),
+        15 => (256.0, 292.0),
+        16 => (256.0, 66.0), // IQ2_XXS
+        17 => (256.0, 74.0),
+        18 => (256.0, 98.0),
+        19 => (256.0, 50.0),
+        20 => (32.0, 18.0), // IQ4_NL
+        21 => (256.0, 110.0),
+        22 => (256.0, 82.0),
+        23 => (256.0, 136.0),
+        24 => (1.0, 1.0), // I8
+        25 => (1.0, 2.0),
+        26 => (1.0, 4.0),
+        27 => (1.0, 8.0),
+        28 => (1.0, 8.0), // F64
+        29 => (256.0, 56.0),
+        30 => (1.0, 2.0), // BF16
+        34 => (256.0, 54.0),
+        35 => (256.0, 66.0),
+        39 => (32.0, 17.0), // MXFP4
+        _ => return None,
+    })
+}
+
+/// Lookup tables over this size are what `--lazy-mode auto` pages from disk.
+const LAZY_TABLE_BYTES: f64 = 4.0 * 1024.0 * 1024.0 * 1024.0;
+
+/// Tensor bytes by what they are for, summed over the table.
+#[derive(Default)]
+struct WeightBytes {
+    total: f64,
+    expert: f64,
+    ffn: f64,
+    table: f64,
+    /// A tensor of a type we cannot size: no shares rather than wrong ones.
+    unknown_type: bool,
+}
+
+impl WeightBytes {
+    fn add(&mut self, name: &str, shape: &[f64], kind: u32) {
+        let Some((block, size)) = ggml_block(kind) else {
+            self.unknown_type = true;
+            return;
+        };
+        let bytes = shape.iter().product::<f64>() / block * size;
+        self.total += bytes;
+        let tail = name.strip_prefix("blk.").and_then(|r| r.split_once('.')).map(|(_, t)| t);
+        match tail {
+            // llama.cpp's own `--cpu-moe` pattern: `\.ffn_(up|down|gate|gate_up)_(ch|)exps`.
+            Some(t) if t.starts_with("ffn_") && (t.contains("_exps") || t.contains("_chexps")) => self.expert += bytes,
+            Some(t) if ["ffn_up.", "ffn_down.", "ffn_gate.", "ffn_gate_up."].iter().any(|p| t.starts_with(p)) => {
+                self.ffn += bytes
+            }
+            Some(_) => {}
+            None if name.contains("embd")
+                && (name.contains("ngram")
+                    || name.contains("per_layer")
+                    || (bytes >= LAZY_TABLE_BYTES && name != "token_embd.weight")) =>
+            {
+                self.table += bytes
+            }
+            None => {}
+        }
+    }
+
+    /// Shares of the bytes this header lists.
+    // shortcut: a split model's shares come from its first shard, which holds the
+    // earliest layers; read every shard if a split MoE ever plans visibly wrong.
+    fn layout(&self, kv: &[(String, Val)]) -> Option<WeightLayout> {
+        if self.unknown_type || self.total <= 0.0 {
+            return None;
+        }
+        Some(WeightLayout {
+            expert_share: self.expert / self.total,
+            ffn_share: self.ffn / self.total,
+            table_share: self.table / self.total,
+            experts: num_of(kv, "expert_count"),
+            experts_used: num_of(kv, "expert_used_count"),
+        })
+    }
+}
+
 /// The tensor table's attention projections (`blk.N.attn_k`, `attn_v`,
-/// `attn_qkv`), and which layers are recurrent (`blk.N.ssm_*`).
-fn tensor_table(r: &mut Reader, count: f64) -> Result<Vec<AttnTensor>, Stop> {
+/// `attn_qkv`), which layers are recurrent (`blk.N.ssm_*`), and the bytes of
+/// every tensor by kind.
+fn tensor_table(r: &mut Reader, count: f64) -> Result<(Vec<AttnTensor>, WeightBytes), Stop> {
     if count > 1_000_000.0 {
         return Err(Stop::Bad);
     }
     let mut out = Vec::new();
+    let mut bytes = WeightBytes::default();
     for _ in 0..count as u64 {
         let name = r.string()?;
         let dims = r.u32()?;
@@ -238,8 +346,9 @@ fn tensor_table(r: &mut Reader, count: f64) -> Result<Vec<AttnTensor>, Stop> {
         for _ in 0..dims {
             shape.push(r.u64()? as f64);
         }
-        r.u32()?; // type
+        let kind = r.u32()?;
         r.u64()?; // offset
+        bytes.add(&name, &shape, kind);
         let Some(rest) = name.strip_prefix("blk.") else { continue };
         let Some((layer, tail)) = rest.split_once('.') else { continue };
         let kind = match tail {
@@ -253,7 +362,7 @@ fn tensor_table(r: &mut Reader, count: f64) -> Result<Vec<AttnTensor>, Stop> {
             out.push(AttnTensor { layer, kind, width });
         }
     }
-    Ok(out)
+    Ok((out, bytes))
 }
 
 /// Every second or sixth layer slides where the file has a window but no
@@ -355,6 +464,7 @@ fn to_metadata(kv: &[(String, Val)]) -> GgufMetadata {
         parameter_size: str_of(kv, "general.size_label"),
         chat_template: str_of(kv, "tokenizer.chat_template"),
         kv_layout: None,
+        weight_layout: None,
     }
 }
 

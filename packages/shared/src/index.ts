@@ -42,6 +42,7 @@ export * from './logs.js';
 export * from './privacy.js';
 export * from './design.js';
 export * from './tasks.js';
+export * from './background.js';
 export * from './training.js';
 export * from './workflows.js';
 export * from './workflow-access.js';

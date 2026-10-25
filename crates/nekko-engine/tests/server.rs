@@ -456,3 +456,100 @@ async fn runs_the_model_server_as_the_host_does() {
         std::fs::remove_dir_all(&root).ok();
     }
 }
+
+/* ------------------------------------------- residency: pins and free memory */
+
+/// A scripted engine for the residency rules: llama.cpp installed, these
+/// models, and a GPU probe that always reads `free_mb` free.
+fn residency_rig(name: &str, models: Value, settings: Value, free_mb: Option<f64>) -> (Arc<Fake>, Arc<ModelServer>) {
+    let g = golden();
+    let root = scratch(name);
+    write_files(&root, &g["files"]);
+    let mut s = json!({ "port": 11500, "bind": "local", "autoStart": false, "jitLoad": true, "idleTtlSeconds": 900, "maxLoaded": 2 });
+    for (k, v) in settings.as_object().unwrap() {
+        s[k] = v.clone();
+    }
+    let gpu = free_mb.map_or(Value::Null, |f| json!({ "before": f, "after": f }));
+    let fake = Arc::new(Fake {
+        case: json!({ "bins": { "llama": true }, "gpu": gpu }),
+        root: root.clone(),
+        clock: Mutex::new(1_700_000_000_000.0),
+        landed: Mutex::new(false),
+        settings: Mutex::new(s),
+        models: denorm(&root, &models).as_array().unwrap().clone(),
+        flags: Arc::new(HashSet::new()),
+        serving: Mutex::new(true),
+        children: Mutex::default(),
+        calls: Mutex::default(),
+        spawns: Mutex::default(),
+        n: Mutex::new(0),
+    });
+    let server = ModelServer::new(fake.clone(), fake.clone(), false);
+    (fake, server)
+}
+
+/// A chat model the planner can size: `gb` of weights, 36 layers, 8 KV heads
+/// of 128, at 8k context (about 1.2 GB of f16 KV cache).
+fn sized(id: &str, gb: f64) -> Value {
+    json!({ "id": id, "name": id, "path": "<root>/models/chat/qwen/qwen.gguf", "sizeBytes": gb * 1e9, "layers": 36,
+        "kvHeads": 8, "headDim": 128, "maxContext": 32768, "addedAt": 1_600_000_000_123u64, "architecture": "qwen3",
+        "preset": { "contextTokens": 8192 } })
+}
+
+fn kills(fake: &Fake) -> Vec<String> {
+    fake.calls.lock().unwrap().iter().filter_map(|c| c["kill"].as_str().map(str::to_string)).collect()
+}
+
+fn advance(fake: &Fake, ms: f64) {
+    *fake.clock.lock().unwrap() += ms;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_model_kept_resident_is_never_unloaded_to_make_room() {
+    let models = json!([sized("kept", 2.0), sized("b", 2.0), sized("c", 2.0)]);
+    let (fake, server) = residency_rig("pinned", models, json!({ "maxLoaded": 2 }), None);
+    assert_eq!(server.load("kept", json!({})).await["ok"], true);
+    assert_eq!(server.set_resident_ttl("kept", Some(&json!(0)))["ok"], true);
+    advance(&fake, 1000.0);
+    assert_eq!(server.load("b", json!({})).await["ok"], true);
+    advance(&fake, 1000.0);
+    // "kept" is the least recently used, but it is pinned: "b" goes instead.
+    assert_eq!(server.load("c", json!({})).await["ok"], true);
+    assert_eq!(kills(&fake), vec!["b".to_string()]);
+    let resident: Vec<String> = server.resident().iter().map(|r| r["id"].as_str().unwrap().to_string()).collect();
+    assert!(resident.contains(&"kept".to_string()) && resident.contains(&"c".to_string()), "{resident:?}");
+
+    // With every other slot pinned too, the load is refused and says why.
+    assert_eq!(server.set_resident_ttl("c", Some(&json!(0)))["ok"], true);
+    let refused = server.load("b", json!({})).await;
+    assert_eq!(refused["ok"], false);
+    assert!(refused["message"].as_str().unwrap().contains("kept resident"), "{refused}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_model_that_needs_the_memory_unloads_idle_ones_first() {
+    // 10,000 MB free on the GPU; each small model needs about 3.3 GB, the big one about 21 GB.
+    let models = json!([sized("small1", 2.0), sized("small2", 2.0), sized("big", 20.0)]);
+    let (fake, server) = residency_rig("memory", models, json!({ "maxLoaded": 4 }), Some(10_000.0));
+    assert_eq!(server.load("small1", json!({})).await["ok"], true);
+    advance(&fake, 1000.0);
+    assert_eq!(server.load("small2", json!({})).await["ok"], true);
+    assert!(kills(&fake).is_empty(), "under the limit and both fit: nothing goes");
+    advance(&fake, 1000.0);
+    // The big one does not fit: the idle ones go, oldest first, and it loads
+    // anyway once nothing is left to unload, saying so.
+    assert_eq!(server.load("big", json!({})).await["ok"], true);
+    assert_eq!(kills(&fake), vec!["small1".to_string(), "small2".to_string()]);
+    let log = server.status()["log"].to_string();
+    assert!(log.contains("Unloading small1 to free memory for big."), "{log}");
+    assert!(log.contains("big may not fit in free memory"), "{log}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn without_a_gpu_reading_only_the_resident_limit_counts() {
+    let models = json!([sized("small1", 2.0), sized("big", 20.0)]);
+    let (fake, server) = residency_rig("no-gpu", models, json!({ "maxLoaded": 4 }), None);
+    assert_eq!(server.load("small1", json!({})).await["ok"], true);
+    assert_eq!(server.load("big", json!({})).await["ok"], true);
+    assert!(kills(&fake).is_empty());
+}

@@ -61,6 +61,22 @@ resident; a request for one that is not loaded loads it; an idle one is evicted 
 timer; and the address survives every load and unload. It is OpenAI-compatible, so point
 Claude Code, Cursor, Continue or anything else at it and name a model from `/v1/models`.
 
+**What stays loaded.** A model has to make room before it loads, in two ways:
+
+- **The resident limit:** if the limit is reached, the least recently used idle model is
+  unloaded first.
+- **Free GPU memory:** if the engine can size the model and the GPU reading says it will not
+  fit, idle models are unloaded, least recently used first, until it fits. On Apple Silicon
+  this is unified memory. If nothing idle is left, the model loads anyway and the log says
+  it may not fit.
+
+A model marked **Keep resident** in Model Server is never unloaded to make room for
+another. If every slot is busy or kept resident, a new load is refused with a message
+that says so.
+
+A paused background automation keeps no request open, so its model counts as idle: it
+goes on the idle timer, or sooner when a chat of yours needs the room.
+
 **Two ways to configure a load.** *Simple* asks one question, how much of this machine
 the model may use, and solves it into a real context length, GPU offload and KV cache
 type, then says what it chose and what it costs. *Advanced* is every llama.cpp flag:
