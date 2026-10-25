@@ -4,5 +4,8 @@
 
 pub mod egress;
 pub mod hostnets;
+pub mod lan;
 pub mod net;
+pub mod signals;
 pub mod store;
+pub mod updates;

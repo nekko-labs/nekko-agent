@@ -12,6 +12,8 @@
 //   count-vms                                  {"count":N}
 //   egress                                     {"physical":{"name","index"}|null,"vpnCarriesDefault",
 //                                               "expensive","constrained"} now and on every change
+//   host                                       {"thermal":"nominal|fair|serious|critical","lowPowerMode",
+//                                               "memoryPressure":"normal|warning|critical"} now and on every change
 //
 // A bundle is a directory with config.json (keys hardwareModel and ecid as base64
 // of the framework's data representations, plus macAddress), disk.img and
@@ -132,6 +134,62 @@ func egress() -> Never {
     watch.setEventHandler { if getppid() != parent { exit(0) } }
     watch.resume()
     withExtendedLifetime((physical, all, watch)) { dispatchMain() }
+}
+
+// MARK: host
+
+/// Streams the Mac's thermal state, Low Power Mode and memory pressure for the
+/// runner gates: ProcessInfo and its change notifications, a memory pressure
+/// dispatch source for changes, and kern.memorystatus_vm_pressure_level
+/// (1 normal, 2 warning, 4 critical) for the current level. Each is also
+/// re-read every second, so a missed notification costs at most a second.
+/// Runs until nekkod goes away.
+func host() -> Never {
+    let queue = DispatchQueue(label: "host")
+    var last = ""
+    func pressure() -> String {
+        var level: Int32 = 0
+        var size = MemoryLayout<Int32>.size
+        // Unreadable or unknown: exit, so nekkod treats the host state as unknown (holds new VMs only).
+        guard sysctlbyname("kern.memorystatus_vm_pressure_level", &level, &size, nil, 0) == 0 else { exit(1) }
+        switch level {
+        case 1: return "normal"
+        case 2: return "warning"
+        case 4: return "critical"
+        default: exit(1)
+        }
+    }
+    func report() {
+        let thermal: String
+        switch ProcessInfo.processInfo.thermalState {
+        case .nominal: thermal = "nominal"
+        case .fair: thermal = "fair"
+        case .serious: thermal = "serious"
+        default: thermal = "critical"
+        }
+        let pairs: KeyValuePairs<String, Any> = [
+            "thermal": thermal,
+            "lowPowerMode": ProcessInfo.processInfo.isLowPowerModeEnabled,
+            "memoryPressure": pressure(),
+        ]
+        let line = pairs.map { "\($0.key)=\($0.value)" }.joined()
+        if line != last { last = line; emit(pairs) }
+    }
+    let ops = OperationQueue()
+    ops.underlyingQueue = queue
+    let names = [ProcessInfo.thermalStateDidChangeNotification, Notification.Name.NSProcessInfoPowerStateDidChange]
+    let observers = names.map { NotificationCenter.default.addObserver(forName: $0, object: nil, queue: ops) { _ in report() } }
+    let memory = DispatchSource.makeMemoryPressureSource(eventMask: [.normal, .warning, .critical], queue: queue)
+    memory.setEventHandler { report() }
+    memory.resume()
+    queue.async { report() }
+    // Reparented means nekkod is gone; nothing else would end this process.
+    let parent = getppid()
+    let watch = DispatchSource.makeTimerSource(queue: queue)
+    watch.schedule(deadline: .now() + 1, repeating: 1)
+    watch.setEventHandler { if getppid() != parent { exit(0) }; report() }
+    watch.resume()
+    withExtendedLifetime((observers, memory, watch)) { dispatchMain() }
 }
 
 // MARK: run
@@ -319,7 +377,8 @@ case "clone": clone()
 case "run": run()
 case "count-vms": countVms()
 case "egress": egress()
+case "host": host()
 default:
-    emit(["ok": false, "error": "usage: nekko-vm clone|run|count-vms|egress"])
+    emit(["ok": false, "error": "usage: nekko-vm clone|run|count-vms|egress|host"])
     exit(1)
 }

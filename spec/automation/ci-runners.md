@@ -46,7 +46,7 @@ Exact labels. The default is the first.
 | **Balanced: in the background** | Takes jobs while you work if there is headroom; keeps one VM ready | 10 min | 1 | 6 |
 | **Runner first** | For a docked Mac that mostly runs CI; jobs finish even when you are busy | until max job time | all slots | all but 2 |
 
-The host always keeps at least 2 cores. A supervisor checks a chain of gates every 5 seconds (switched on, schedule, power, network, headroom, your activity); a slot takes a new job only when every gate passes, and the mode sets the thresholds. Signals come from public macOS APIs and are read on the device only.
+The host always keeps at least 2 cores. A supervisor checks a chain of gates every 5 seconds (switched on, schedule, power, network, headroom, your activity); a slot takes a new job only when every gate passes, and the mode sets the thresholds. Signals come from public macOS APIs and are read on the device only. Input idle time and power come from the activity sampler; CPU and memory from the system stats, with the job VMs' own processes taken out; thermal state, Low Power Mode and memory pressure from the VM helper's `host` stream (ProcessInfo and a memory pressure source); a pending macOS security update from `softwareupdate --list --no-scan`, where the 7 days count from the first time nekkod saw it listed; and a trusted network is identified by its router's hardware address (`route` and `arp`), which needs no Location access.
 
 **Hard limits for every mode.** These stop a running VM at once: memory pressure critical, thermal state critical, free disk below the floor, Low Power Mode, Off, and Pause all automations. A macOS security update available for more than **7** days blocks new VMs until the Mac is updated.
 

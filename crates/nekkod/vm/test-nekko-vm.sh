@@ -1,7 +1,8 @@
 #!/bin/bash
 # CLI checks for nekko-vm (crates/nekkod/vm/nekko-vm.swift). Builds the helper
 # into a temp dir, ad-hoc signs it with its entitlement, runs clone, run and
-# count-vms against small fake bundle files, and reads egress's first line.
+# count-vms against small fake bundle files, and reads the first line of egress
+# and host.
 # Never boots a VM.
 set -uo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
@@ -67,6 +68,15 @@ kill "$egress_pid" 2>/dev/null; wait "$egress_pid" 2>/dev/null
 out=$(head -n 1 "$tmp/egress.out")
 check "egress prints the four keys ($out)" \
   "python3 -c 'import json, sys; d = json.loads(sys.argv[1]); assert set(d) == {\"physical\", \"vpnCarriesDefault\", \"expensive\", \"constrained\"}' '$out' 2>/dev/null"
+
+# host prints its first JSON line within 2 s
+"$helper" host >"$tmp/host.out" 2>/dev/null &
+host_pid=$!
+for _ in $(seq 20); do [ -s "$tmp/host.out" ] && break; sleep 0.1; done
+kill "$host_pid" 2>/dev/null; wait "$host_pid" 2>/dev/null
+out=$(head -n 1 "$tmp/host.out")
+check "host prints the three keys ($out)" \
+  "python3 -c 'import json, sys; d = json.loads(sys.argv[1]); assert set(d) == {\"thermal\", \"lowPowerMode\", \"memoryPressure\"}; assert d[\"thermal\"] in (\"nominal\", \"fair\", \"serious\", \"critical\"); assert d[\"memoryPressure\"] in (\"normal\", \"warning\", \"critical\"); assert isinstance(d[\"lowPowerMode\"], bool)' '$out' 2>/dev/null"
 
 # an unknown command fails
 "$helper" bogus >/dev/null; code=$?
