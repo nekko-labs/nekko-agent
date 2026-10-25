@@ -357,3 +357,13 @@ final class NotificationPrefsTests: XCTestCase {
         XCTAssertEqual(p.pushKinds, [])
     }
 }
+
+final class ChatStatusIconTests: XCTestCase {
+    func testStatusLabelsAndPrecedence() {
+        XCTAssertEqual(ChatStatusIcon(activity: .running, completed: true, waiting: true).label, "Working")
+        XCTAssertEqual(ChatStatusIcon(activity: .needsYou, completed: true, waiting: true).label, "Needs you")
+        XCTAssertEqual(ChatStatusIcon(activity: nil, completed: true, waiting: true).label, "Waiting to send")
+        XCTAssertEqual(ChatStatusIcon(activity: nil, completed: true).label, "Done")
+        XCTAssertEqual(ChatStatusIcon(activity: nil).label, "Idle")
+    }
+}

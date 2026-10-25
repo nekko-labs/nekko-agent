@@ -556,3 +556,14 @@ NEKKO_RELAY_URL=wss://your-relay NEKKO_ROOM=myroom NEKKO_PAIR_KEY=<secret> npx n
 
 It prints a one-time pairing code (10 minutes) at boot and keeps the same persistent device
 registry as the desktop app.
+
+### Chat status on native iOS
+
+The icon to the left of each chat reads like desktop: a rocket means working,
+a question mark means the agent needs you, “Zz” means idle, and a checkmark marks
+a completed chat. A clock means a prompt is waiting to send.
+
+Nekko sits at the top-left of the Chats screen beside the computer menu. Tap the
+pixel cat for a brief greeting. This is a local animation, not a message to an
+agent. The mascot respects Reduce Motion and pauses its animation in the
+background.
