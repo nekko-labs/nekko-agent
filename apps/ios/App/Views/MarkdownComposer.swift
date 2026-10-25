@@ -193,6 +193,10 @@ struct MarkdownEditor: UIViewRepresentable {
         tv.smartQuotesType = .no
         tv.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         tv.accessibilityIdentifier = identifier
+        tv.accessibilityCustomActions = [UIAccessibilityCustomAction(name: "Hide keyboard") { [weak tv] _ in
+            tv?.resignFirstResponder()
+            return true
+        }]
         tv.text = text
         editor.textView = tv
         context.coordinator.colors(context.environment.palette)
@@ -203,15 +207,13 @@ struct MarkdownEditor: UIViewRepresentable {
     func updateUIView(_ tv: MarkdownTextView, context: Context) {
         context.coordinator.parent = self
         editor.textView = tv
-        tv.accessibilityLabel = placeholder
+        // Accessibility properties only when they change: the composer updates with every
+        // streamed token, and resetting them each time kept VoiceOver (and UI tests) busy.
+        if tv.accessibilityLabel != placeholder { tv.accessibilityLabel = placeholder }
         tv.onPasteImages = onPasteImages
         tv.onRichPaste = { range, plain, markdown in
             editor.pasteOffer = MarkdownEditorState.PasteOffer(range: range, plain: plain, markdown: markdown)
         }
-        tv.accessibilityCustomActions = [UIAccessibilityCustomAction(name: "Hide keyboard") { _ in
-            tv.resignFirstResponder()
-            return true
-        }]
         if tv.text != text {
             // Set from outside (a draft restored, dictation, Edit on a waiting prompt): not an undoable edit.
             tv.text = text
