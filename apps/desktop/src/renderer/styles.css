@@ -667,7 +667,7 @@
   color: var(--ink-faint);
 }
 
-/* A single rounded surface: only width and label opacity animate. */
+/* A winged surface: only viewport width and label opacity animate. */
 .rail {
   --rail-w-rest: 52px;
   --rail-w-open: 198px;
@@ -684,17 +684,29 @@
   padding-inline: 6px;
   justify-content: flex-start;
   isolation: isolate;
-  pointer-events: auto;
+  pointer-events: none;
   z-index: 1;
   top: 5%; bottom: 5%;
-  border-radius: 22px;
-  background: color-mix(in srgb, color-mix(in srgb, var(--paper) 92%, black) 97%, transparent);
   transition: width var(--rail-close-ms) var(--rail-ease) var(--rail-close-delay);
 }
+.rail-feedback { pointer-events: auto; }
 .rail-space-before { flex: 1 1 0; }
 .rail-space-after { flex: 4 1 0; }
 .rail-group { position: relative; display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; }
-.rail-backdrop { display: none; }
+/* The same static wings at rest and open. Stretch the SVG viewport, never d. */
+.rail-backdrop {
+  position: absolute;
+  left: -6px;
+  width: var(--rail-w-rest);
+  z-index: -1;
+  overflow: visible;
+  pointer-events: none;
+  transition: width var(--rail-close-ms) var(--rail-ease) var(--rail-close-delay);
+  & path {
+    fill: color-mix(in srgb, color-mix(in srgb, var(--paper) 92%, black) 97%, transparent);
+    pointer-events: visiblePainted;
+  }
+}
 
 .rail-destinations {
   position: relative;
@@ -763,6 +775,10 @@
   width: var(--rail-w-open);
   padding-right: 16px;
   transition: width var(--rail-open-ms) var(--rail-ease) var(--rail-open-delay);
+  & .rail-backdrop {
+    width: var(--rail-w-open);
+    transition: width var(--rail-open-ms) var(--rail-ease) var(--rail-open-delay);
+  }
   & .rail-label {
     opacity: 1;
     transform: none;
@@ -2370,6 +2386,9 @@
   pointer-events: none;
   transition: opacity 200ms ease;
 }
+.vt-revealing .vt-list {
+  transform: translateX(calc(-1 * var(--vt-reveal, 0px)));
+}
 .vt-list {
   transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -2631,6 +2650,30 @@
 @keyframes composer-question-open { from { opacity: 0; transform: scale(.08, 0); } to { opacity: 1; transform: scale(1); } }
 @keyframes composer-question-close { to { opacity: 0; transform: scale(.08, 0); } }
 @media (max-width: 640px) { .composer-column { width: 100%; } .composer-question { width: 94%; } }
+/* The agent plan is a card tucked behind the composer: the dock clips at the
+   composer's top edge (plus the overlap) so the card rises out from under it.
+   No borders; spacing does the separating. Finished steps squeeze to their
+   title and every one opens while the pointer or focus is anywhere on the card,
+   via a 0fr -> 1fr row, kept fast. */
+.plan-sheet-dock { position: relative; width: 92%; margin: 0 auto -10px; overflow: hidden; border-radius: 14px 14px 0 0; }
+.plan-sheet { background: var(--surface-2); border-radius: 14px 14px 0 0; padding: 6px 10px 16px; font-size: 12.5px; line-height: 1.45; animation: plan-sheet-rise 160ms ease-out; }
+@keyframes plan-sheet-rise { from { transform: translateY(100%); } }
+.plan-sheet-head { display: flex; align-items: center; gap: 6px; padding: 0 2px 2px; font-size: 11px; color: var(--ink-faint); }
+.plan-sheet-toggle { display: flex; min-width: 0; flex: 1; align-items: center; gap: 6px; text-align: left; border-radius: 6px; }
+.plan-sheet-action { display: inline-flex; flex-shrink: 0; align-items: center; gap: 4px; border-radius: 6px; padding: 1px 6px; color: var(--ink-soft); }
+.plan-sheet-action:hover:not(:disabled), .plan-sheet-chip:hover { background: color-mix(in srgb, var(--ink) 10%, transparent); color: var(--ink); }
+.plan-sheet-steps { max-height: 40vh; overflow-y: auto; }
+.plan-sheet-step { display: grid; grid-template-columns: 12px minmax(0, 1fr); column-gap: 8px; border-radius: 8px; padding: 2px 4px; outline: none; }
+.plan-sheet-step:focus-visible { box-shadow: inset 0 0 0 1px var(--accent); }
+.plan-sheet-more { display: grid; grid-template-rows: 1fr; opacity: 1; transition: grid-template-rows 120ms ease-out, opacity 120ms ease-out; }
+.plan-sheet-more > div { min-height: 0; overflow: hidden; }
+.plan-sheet-step[data-plan-step="done"] .plan-sheet-more { grid-template-rows: 0fr; opacity: 0; }
+.plan-sheet:is(:hover, :focus-within) .plan-sheet-step[data-plan-step="done"] .plan-sheet-more { grid-template-rows: 1fr; opacity: 1; }
+.plan-sheet-chips { display: flex; gap: 6px; overflow: hidden; padding: 3px 0 1px; }
+.plan-sheet-chip { display: inline-flex; flex-shrink: 0; align-items: center; gap: 5px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 7%, transparent); padding: 0 8px; font-size: 11px; line-height: 18px; color: var(--ink-soft); white-space: nowrap; }
+.plan-sheet-dot { width: 6px; height: 6px; border-radius: 50%; }
+@media (max-width: 640px) { .plan-sheet-dock { width: 96%; } }
+@media (prefers-reduced-motion: reduce) { .plan-sheet, .plan-sheet-more { animation: none; transition: none; } }
 @media (prefers-reduced-motion: reduce) { .composer-question.is-open, .composer-question.is-closing { animation: none; } .composer-question.is-closing { visibility: hidden; } }
 
 /* Preserve markdown text while painting a real bullet on the editable surface. */
@@ -3371,9 +3414,9 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
   [data-clean-start][data-chat-surface] .clean-start .composer { background: var(--win, var(--surface)); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
 .clean-start-greeting { display: flex; align-items: center; justify-content: center; gap: 14px; max-width: 100%; margin: 0 auto 18px; text-align: left; }
-.greeting-nekko { position: absolute; z-index: 3; top: -50px; left: 24px; display: block; width: 64px; height: 60px; pointer-events: none; }
-.clean-start-greeting h2 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
-@media (max-width: 600px) { .clean-start-greeting { margin-bottom: 56px; } }
+.greeting-nekko { display: block; flex: 0 0 64px; width: 64px; height: 60px; pointer-events: none; }
+.clean-start-greeting h2 { display: flex; align-items: center; width: 300px; min-height: 60px; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
+@media (max-width: 600px) { .clean-start-greeting { gap: 10px; } .clean-start-greeting h2 { width: 230px; max-width: calc(100vw - 130px); } }
 .clean-start-greeting p { margin-top: 6px; font-size: 13px; color: var(--ink-faint); }
 [data-clean-start] .clean-start-model { opacity: 0.8; transition: opacity 0.2s vas (--ease-out)}
 [data-clean-start] .clean-start-model:hover,

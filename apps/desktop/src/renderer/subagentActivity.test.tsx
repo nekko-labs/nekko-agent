@@ -18,7 +18,7 @@ it('keeps chat and rail identical across working, waiting, failure and completio
   foldSubagentActivity({ type: 'tool_call', sessionId: 'p', call }, 100);
   const check = () => {
     const sentence = activitySentence(childActivity(child));
-    const rail = renderToStaticMarkup(<PlanRail sessionId="p" session={null} streaming={false} />);
+    const rail = renderToStaticMarkup(<PlanRail sessionId="p" session={null} />);
     const chat = renderToStaticMarkup(<SubagentParentContext.Provider value={[child]}><ActivityGroup items={[{ kind: 'tool', call }]} streaming /></SubagentParentContext.Provider>);
     expect(rail).toContain(sentence);
     expect(chat).toContain(sentence);

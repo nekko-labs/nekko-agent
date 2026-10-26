@@ -44,6 +44,7 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 - [Chat suggestions, progress and code access](chat/chat-suggestions-progress-and-code-access.md) (4 KB)
 - [Chat transcript width (2026-10-19)](chat/chat-transcript-width.md) (1 KB)
 - [Clarification answers remain visible in chat](chat/clarification-answers-remain-visible-in-chat.md) (2 KB)
+- [Completed chat retention and storage controls](chat/completed-history-retention-and-storage.md) (3 KB)
 - [Completion and interruption reconciliation](chat/completion-and-interruption-reconciliation.md) (1 KB)
 - [Composer containment and compact subagent activity (2026-10-13)](chat/composer-containment-and-compact-subagent-activity.md) (2 KB)
 - [Composer Markdown editing tools (implemented; isolated interaction checks verified, visual inspection pending)](chat/composer-markdown-editing-tools.md) (2 KB)
@@ -54,6 +55,7 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 - [Muted pending-change badge](chat/muted-pending-change-badge.md) (1 KB)
 - [One copy of the reply being written](chat/one-copy-of-the-reply-being-written.md) (1 KB)
 - [Per-step plan working icons (2026-10-17)](chat/per-step-plan-working-icons.md) (3 KB)
+- [Plan sheet on the composer (2026-10-25)](chat/plan-sheet-on-the-composer.md) (3 KB)
 - [Sleeping chats and image-bearing replies](chat/sleeping-chats-and-image-bearing-replies.md) (2 KB)
 - [Tool calls grouped by what they are for](chat/tool-calls-grouped-by-purpose.md) (17 KB)
 - [Verification checklists and PR progress in chat](chat/verification-and-pr-progress.md) (5 KB)
@@ -68,7 +70,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Agent board: pick up and drop windows](desktop/agent-board-pick-up-and-drop.md) (3 KB)
 - [Agent window controls refresh (2026-10-15)](desktop/agent-window-controls-refresh.md) (6 KB)
 - [Composer and desktop rail regression fixes (2026-10-07)](desktop/composer-and-desktop-rail-regression-fixes.md) (3 KB)
-- [Empty wall opens the new-chat screen; glass prism composer (2026-10-18)](desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md) (7 KB)
+- [Empty wall opens the new-chat screen; glass prism composer (2026-10-18)](desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md) (8 KB)
 - [Focused mode transitions, calmer focus ring and layout controls (2026-10-17)](desktop/focused-mode-transitions-calmer-focus-ring-and-layout-controls.md) (7 KB)
 - [Grid model selection and chat-mode menus (2026-10-07)](desktop/grid-model-selection-and-chat-mode-menus.md) (1 KB)
 - [Inline agent-window creation](desktop/inline-agent-window-creation.md) (3 KB)
@@ -82,7 +84,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Slim wave rail, tighter Agents spacing, composer snap points](desktop/slim-wave-rail-tighter-agents-spacing-composer-snap-points.md) (5 KB)
 - [Style: universal fonts, text size and your own fonts (desktop)](desktop/style-fonts-and-text-size.md) (3 KB)
 - [Subtle rail and compact board gutters](desktop/subtle-rail-and-compact-board-gutters.md) (3 KB)
-- [Swoop navigation rail (2026-10-17)](desktop/swoop-navigation-rail.md) (2 KB)
+- [Swoop navigation rail (2026-10-17)](desktop/swoop-navigation-rail.md) (4 KB)
 - [Wall model controls and drafting layout](desktop/wall-model-controls-and-drafting-layout.md) (3 KB)
 - [Wall new-chat details placement](desktop/wall-new-chat-details-placement.md) (1 KB)
 - [Wall push and navigation shoulders](desktop/wall-push-and-navigation-shoulders.md) (1 KB)
@@ -156,7 +158,7 @@ Working in a codebase: files, editor, diffs, pull requests, design workspace.
 
 Workflows, goals, integrations and tools.
 
-- [Automating repeatable work (Workflows tab)](automation/automating-repeatable-work-workflows-tab.md) (4 KB)
+- [Automating repeatable work (Workflows tab)](automation/automating-repeatable-work-workflows-tab.md) (6 KB)
 - [Background automations yield to the user](automation/background-automations-yield-to-the-user.md) (13 KB)
 - [CI runners](automation/ci-runners.md) (14 KB)
 - [Experimental outbound resource queue](automation/experimental-outbound-resource-queue.md) (3 KB)
