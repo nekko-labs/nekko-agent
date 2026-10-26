@@ -12,6 +12,9 @@ import com.nekko.protocol.Events
 import com.nekko.protocol.PairingLink
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.SavedChatList
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
@@ -343,6 +346,98 @@ class ComputersRepositoryTest {
         assertEquals(before + 1, remote.channels().count { it == Channels.SESSIONS_SUMMARIES })
         assertEquals(3, seen.size)
         job.cancel()
+    }
+
+    @Test
+    fun `pending summary invalidations read stale one then final zero without extra requests`() = runTest {
+        val remotes = FakeRemotes()
+        val repo = repo(remotes = remotes)
+        repo.pair(link)
+        val remote = remotes.last
+        remote.goOnline()
+        runCurrent()
+        val pending = CompletableDeferred<kotlinx.serialization.json.JsonElement>()
+        var requests = 0
+        remotes.handler = { call ->
+            if (call.channel != Channels.SESSIONS_SUMMARIES) FakeRemotes.defaultAnswer(call)
+            else if (++requests == 1) pending.await()
+            else Json.parseToJsonElement("""[{"id":"s1","activeWatchCount":0}]""")
+        }
+        suspend fun notify(type: String) {
+            remote.events.emit(Events.AGENT_EVENT to buildJsonObject { put("sessionId", "s1"); put("type", type) })
+            runCurrent()
+        }
+        notify("session_meta")
+        notify("done")
+        advanceTimeBy(601); runCurrent()
+        assertEquals(1, requests)
+        notify("session_meta")
+        notify("done")
+        pending.complete(Json.parseToJsonElement("""[{"id":"s1","activeWatchCount":1}]"""))
+        runCurrent()
+        assertEquals(1L, repo.state.value.summaries.single().activeWatchCount)
+        advanceTimeBy(601); runCurrent()
+        assertEquals(0L, repo.state.value.summaries.single().activeWatchCount)
+        assertEquals(2, requests)
+        advanceTimeBy(5_000); runCurrent()
+        assertEquals(2, requests)
+    }
+
+    @Test
+    fun `reconnect drops old dirty work and failed summaries only retry on invalidation`() = runTest {
+        val remotes = FakeRemotes()
+        val repo = repo(remotes = remotes)
+        val id = repo.pair(link)
+        val old = remotes.last
+        old.goOnline(); runCurrent()
+        val pending = CompletableDeferred<kotlinx.serialization.json.JsonElement>()
+        var oldRequests = 0
+        old.handler = { call ->
+            if (call.channel != Channels.SESSIONS_SUMMARIES) FakeRemotes.defaultAnswer(call)
+            else {
+                oldRequests++
+                // Simulate a transport that still returns after cancellation.
+                withContext(NonCancellable) { pending.await() }
+            }
+        }
+        suspend fun notify(remote: FakeRemote, type: String) {
+            remote.events.emit(Events.AGENT_EVENT to buildJsonObject { put("sessionId", "s1"); put("type", type) })
+            runCurrent()
+        }
+        notify(old, "done")
+        advanceTimeBy(601); runCurrent()
+        notify(old, "session_meta")
+        repo.connect(id); runCurrent()
+        val fresh = remotes.last
+        fresh.goOnline(); runCurrent()
+        val freshPending = CompletableDeferred<kotlinx.serialization.json.JsonElement>()
+        var freshRequests = 0
+        fresh.handler = { call ->
+            if (call.channel != Channels.SESSIONS_SUMMARIES) FakeRemotes.defaultAnswer(call)
+            else {
+                freshRequests++
+                if (freshRequests == 1) freshPending.await() else error("failed")
+            }
+        }
+        notify(fresh, "done")
+        advanceTimeBy(601); runCurrent()
+        pending.complete(Json.parseToJsonElement("""[{"id":"s1","activeWatchCount":99}]"""))
+        runCurrent()
+        assertTrue(repo.state.value.summaries.isEmpty())
+        assertEquals(1, oldRequests)
+        notify(fresh, "session_meta")
+        advanceTimeBy(601); runCurrent()
+        assertEquals(1, freshRequests)
+        freshPending.completeExceptionally(IllegalStateException("failed"))
+        runCurrent()
+        advanceTimeBy(601); runCurrent()
+        assertEquals("a pending invalidation survives failure", 2, freshRequests)
+        advanceTimeBy(5_000); runCurrent()
+        assertEquals("failure alone must not loop", 2, freshRequests)
+        notify(fresh, "done")
+        advanceTimeBy(601); runCurrent()
+        assertEquals(3, freshRequests)
+        assertEquals(1, oldRequests)
     }
 
     @Test

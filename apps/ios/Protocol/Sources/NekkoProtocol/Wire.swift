@@ -401,6 +401,7 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
     /// Manual position from the desktop sidebar's drag order.
     public let order: Double?
     public var pinned: Bool
+    public let activeWatchCount: Int64
 
     /// Real, top-level chats, active or completed: what the phone lists.
     public var isVisible: Bool { parentSessionId == nil && taskId == nil && trainingRunId == nil }
@@ -413,7 +414,7 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
             lastReplyText: v.str("lastReplyText"), firstUserText: v.str("firstUserText"), archived: archivedAt != nil,
             parentSessionId: v.str("parentSessionId"), taskId: v.str("taskId"), trainingRunId: v.str("trainingRunId"),
             providerId: v.str("providerId"), workspaceId: v.str("workspaceId"), archivedAt: archivedAt,
-            order: v.dbl("order"), pinned: v.flag("pinned"))
+            order: v.dbl("order"), pinned: v.flag("pinned"), activeWatchCount: v.long("activeWatchCount") ?? 0)
     }
 
     /// Every chat the computer listed, children and task chats included, as sent.
