@@ -55,16 +55,18 @@ Terminal. Stop the VM and copy the three files as above.
 
 ## What provision.sh does
 
-1. Checks it runs as root on Apple silicon with macOS 14 or later, that this macOS has
-   `sysadminctl -autologin`, and that no Xcode is named `Xcode_*.app` (rename it to `Xcode.app`:
-   the job user cannot `sudo xcode-select`). When `/Applications/Xcode.app` exists it selects it
+1. Checks it runs as root on Apple silicon with macOS 14 or later, that no Xcode is named
+   `Xcode_*.app` (rename it to `Xcode.app`: the job user cannot `sudo xcode-select`), and that
+   `/Users/runner` is free. Cirrus images link `/Users/runner` to the admin's home for
+   GitHub-hosted compatibility; that link is replaced, a real folder there stops the script. When `/Applications/Xcode.app` exists it selects it
    and accepts its license.
 2. Creates the job user `runner`, a standard account (not an admin) with a random password that
    is never shown or saved. It copies the existing admin's Setup Assistant answers so `runner`'s
    first login shows no assistant, and turns its screen saver off.
 3. Logs `runner` in automatically at boot, so jobs get a real GUI session for simulators and the
-   keychain. macOS keeps that password in `/etc/kcpassword`, readable only by root; that is fine
-   because `runner` is not an admin and cannot become root.
+   keychain. It writes `/etc/kcpassword` (root only, mode 0600) and `autoLoginUser` itself:
+   `sysadminctl -autologin set` writes nothing on macOS 15 in a VM and still reports success.
+   That file is fine because `runner` is not an admin and cannot become root.
 4. Downloads the pinned GitHub Actions runner, checks its SHA-256, and unpacks it into
    `/Users/runner/actions-runner`. It never registers it: each job's one-time config does that.
 5. Downloads the pinned `gitlab-runner` to `/usr/local/bin`, checks its SHA-256. Not registered,
@@ -73,12 +75,17 @@ Terminal. Stop the VM and copy the three files as above.
    `dev.nekkolabs.runner-boot`. At each boot of a clone it reads the seed, starts one job as
    `runner`, and powers the VM off when the job ends, fails, or the seed is wrong.
 7. Gives `runner` ownership of `/opt/homebrew`, so jobs can `brew install` without sudo.
-8. Turns off sleep, Spotlight indexing and scheduled software updates.
-9. Locks the guest down: every admin gets a new random password nobody knows, every file in
+8. Turns off sleep, Spotlight indexing and automatic update downloads. macOS 15 restores the
+   automatic update check at boot, so a job VM may still check for updates; it never downloads
+   them.
+9. Locks the guest down: every admin account is disabled (a base image's admin password is
+   public, Cirrus's is `admin`, and root cannot change a secure-token admin's password without the
+   old one, so disabling is what stops a job from `su admin`), every file in
    `/etc/sudoers.d` goes (and it fails if `/etc/sudoers` still allows passwordless sudo), SSH,
    Screen Sharing and Apple Remote Desktop are turned off, and Cirrus Labs' LaunchDaemons,
    LaunchAgents and the Tart guest agent are removed. Then it checks the result: it fails unless
-   `sudo -l -U runner` says `runner` may not use sudo and `runner` is not in the `admin` group.
+   `sudo -l -U runner` says `runner` may not use sudo, `runner` is not in the `admin` group, and
+   every admin is refused authentication.
 10. Writes `/usr/local/share/nekko-runner-image.json` with the build date and the macOS, Xcode,
     Actions runner and gitlab-runner versions.
 
@@ -133,3 +140,40 @@ It prints `{"event":"started"}`, then within 10 minutes `{"event":"stopped"...}`
 nobody touching the VM: the guest logged in, read the seed, the runner rejected the config, and
 the guest powered off. Past 10 minutes it failed: stop it, boot the clone in Tart with graphics,
 and read `/var/log/nekko-runner-boot.log`.
+
+Use the literal `not-a-config`. A well-formed JIT config that GitHub does not know (a made-up
+one, or a runner that was deleted) makes the runner retry every 30 s forever ("Runner connect
+error: The resource cannot be found.. Retrying until reconnected."), so that VM only stops at
+the max job time.
+
+## Verified on
+
+2026-10-25, on a Mac with Apple silicon running macOS 27.0.1, guest Cirrus
+`macos-sequoia-base` (macOS 15.7.7, no Xcode). Tart was not installed, so the image was built
+with `nekko-vm` through the spike example
+(`cargo run -p nekkod --features spike --example runner_vm_spike -- --bundle <dir> --seed <iso> --keep`),
+which forwards 127.0.0.1:2222 to the guest's SSH for the build and copies
+`scripts/runner-image` in with `scp` in place of `--dir`.
+
+- Build: SSH up about 30 s after boot; `provision.sh` ran in 2 min (most of it the runner
+  download and handing `/opt/homebrew` over), then `shutdown -h now`, and the helper reported
+  `stopped`, reason `guest`.
+- Checked in the guest as root before shutdown: `runner` is uid 502, not in `admin`, may not
+  run sudo; `/etc/sudoers.d` is empty and `/etc/sudoers` has no `NOPASSWD`; both admins
+  (`admin`, `_mbsetupuser`) are refused authentication and `su admin` as `runner` with the
+  public password fails; `/etc/kcpassword` is root 0600 and `autoLoginUser` is `runner`; sshd and
+  Screen Sharing are disabled in launchd and Remote Login is off; no `org.cirruslabs.*` plists
+  and no `tart-guest-agent` on `PATH`; the boot script (root:wheel 0755), its LaunchDaemon
+  (root:wheel 0644), gitlab-runner (root:wheel 0755) and `nekko-runner-image.json` are in place.
+- Boot with the `not-a-config` seed: `started` to `stopped`, reason `guest`, in 49 s with nobody
+  touching the VM. The runner was started about 8 s after `started` (the boot script waits for
+  the auto-login session, so `runner` was logged in by then), rejected the config, and the guest
+  powered off. Read from the clone's disk afterwards: the boot log shows start, the runner's
+  error, `runner exited with 0`, `shutting down`; `~runner/.nekko` is empty.
+- Boot with a well-formed fake JIT config: the runner started 4 s after `started`, reached
+  GitHub, got a 404 and retried every 30 s; stopped by hand after 16 min (see above).
+- Every clone gets its own MAC address (`nekko-vm clone` writes a new one into `config.json`).
+- Found and fixed on the way: the `/Users/runner` link, `sysadminctl -autologin`, the admin
+  password change (`dscl -passwd` asks for the old password of a secure-token admin), and
+  `softwareupdate --schedule off` doing nothing. Left alone: the Tart guest agent's Homebrew
+  Cellar folder stays on disk, with nothing that starts it.

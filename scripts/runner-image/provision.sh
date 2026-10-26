@@ -16,6 +16,18 @@ GITLAB_RUNNER_SHA256=1635a9d8791626bd3fe630ec09e3d5b4d9950fe6d6fa59f5f03367c02e0
 src="$(cd "$(dirname "${BASH_SOURCE[0]:-.}")" && pwd)"
 runner_home=/Users/runner
 
+# /etc/kcpassword's format: the password XORed with Apple's fixed key, NUL-padded to a multiple of 12.
+kcpassword() {
+  local key=(125 137 82 35 210 188 221 234 163 185 31) p="$1" n i c
+  n=$(((${#p} + 11) / 12 * 12))
+  for ((i = 0; i < n; i++)); do
+    c=0
+    if [ "$i" -lt "${#p}" ]; then c="$(LC_ALL=C printf %d "'${p:i:1}")"; fi
+    # shellcheck disable=SC2059 # the format is the octal escape being built
+    printf "\\$(printf %03o $((c ^ key[i % 11])))"
+  done
+}
+
 die() {
   echo "provision: $*" >&2
   exit 1
@@ -30,11 +42,15 @@ major="$(sw_vers -productVersion | cut -d. -f1)"
 for app in /Applications/Xcode_*.app; do
   [ -e "$app" ] && die "rename $app to /Applications/Xcode.app: the job user has no sudo, and ios-native.yml only switches Xcode for the Xcode_* pattern"
 done
-sysadminctl -h 2>&1 | grep -- -autologin >/dev/null || die "this macOS has no sysadminctl -autologin"
 for f in nekko-runner-boot.sh dev.nekkolabs.runner-boot.plist; do
   [ -f "$src/$f" ] || die "missing $src/$f"
 done
 id runner >/dev/null 2>&1 && die "user runner already exists: rebuild from a fresh base image"
+# Cirrus images link /Users/runner to the admin's home (GitHub-hosted path compatibility); step 2
+# replaces the link. A real directory there is someone's data: refuse.
+if [ -e "$runner_home" ] && [ ! -L "$runner_home" ]; then
+  die "$runner_home already exists: rebuild from a fresh base image"
+fi
 if [ -d /Applications/Xcode.app ]; then
   step "selecting /Applications/Xcode.app"
   xcode-select -s /Applications/Xcode.app
@@ -43,6 +59,9 @@ fi
 
 # 2. The job user: a standard account. Its password lives only in this shell.
 step "creating user runner"
+if [ -L "$runner_home" ]; then
+  rm "$runner_home"
+fi
 runner_pw="$(openssl rand -base64 24)"
 sysadminctl -addUser runner -fullName "CI runner" -home "$runner_home" -password "$runner_pw"
 createhomedir -c -u runner >/dev/null
@@ -63,8 +82,14 @@ sudo -u runner defaults -currentHost write com.apple.screensaver idleTime -int 0
 
 # 3. Auto-login, so the job has a GUI session (simulators, keychain).
 step "auto-login as runner"
-sysadminctl -autologin set -userName runner -password "$runner_pw"
+# Not sysadminctl -autologin: on macOS 15 in a VM it fails (SACSetAutoLoginPassword error:22),
+# writes nothing and still exits 0. This is what it would write.
+rm -f /etc/kcpassword
+(umask 077 && kcpassword "$runner_pw" >/etc/kcpassword)
 unset runner_pw
+chown root:wheel /etc/kcpassword
+chmod 0600 /etc/kcpassword
+defaults write /Library/Preferences/com.apple.loginwindow autoLoginUser runner
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
@@ -101,16 +126,19 @@ fi
 step "power, Spotlight, software update"
 pmset -a sleep 0 displaysleep 0 disksleep 0 powernap 0
 mdutil -a -i off >/dev/null
-softwareupdate --schedule off
+# Not softwareupdate --schedule off: on macOS 15 it changes nothing. softwareupdated drops
+# AutomaticCheckEnabled again at the next boot (a clone may still check); AutomaticDownload stays off.
+defaults write /Library/Preferences/com.apple.SoftwareUpdate AutomaticCheckEnabled -bool false
+defaults write /Library/Preferences/com.apple.SoftwareUpdate AutomaticDownload -bool false
 
-# 9. Lock down: no admin password anyone knows, no passwordless sudo, no way in from the host.
+# 9. Lock down: no admin anyone can log in as, no passwordless sudo, no way in from the host.
+# Disabled, not given a new password: root cannot reset a secure-token admin's password without the
+# old one, and a base image's admin password is public (Cirrus: admin), so a job could `su admin`.
 step "locking down"
 for u in ${admins[@]+"${admins[@]}"}; do
-  pw="$(openssl rand -base64 24)"
-  [ -n "$pw" ] || die "no random password"
-  dscl . -passwd "/Users/$u" "$pw"
+  pwpolicy -u "$u" -disableuser >/dev/null
+  [[ "$(pwpolicy -u "$u" -authentication-allowed 2>&1)" == *"not allowed to authenticate"* ]] || die "cannot disable $u"
 done
-unset pw
 find /etc/sudoers.d -mindepth 1 -delete
 # Not grep -q: under pipefail its early exit can SIGPIPE the first grep and hide a match.
 if grep -v '^[[:space:]]*#' /etc/sudoers | grep NOPASSWD >/dev/null; then

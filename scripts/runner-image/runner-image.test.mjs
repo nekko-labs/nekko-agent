@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -239,7 +239,9 @@ test('provision_locks_the_guest_down', () => {
     '"$kickstart" -deactivate -stop',
     'org.cirruslabs',
     '/etc/sudoers.d',
-    '-autologin set -userName runner',
+    'defaults write /Library/Preferences/com.apple.loginwindow autoLoginUser runner',
+    'chmod 0600 /etc/kcpassword',
+    'pwpolicy -u "$u" -disableuser',
     '/usr/local/libexec/nekko-runner-boot.sh',
     '/Library/LaunchDaemons/dev.nekkolabs.runner-boot.plist',
   ])
@@ -271,4 +273,31 @@ test('lockdown_bans_trip_on_planted_lines', () => {
     'echo "$runner_pw"',
   ])
     assert.notDeepEqual(lockdownProblems(`${p}\n${line}\n`), [], line);
+});
+
+// Cirrus images link /Users/runner to the admin's home (found by the T214 VM boot check):
+// creating runner over that link would hand it the admin's home.
+test('provision_replaces_the_runner_home_link', () => {
+  const p = provision();
+  const at = (s) => {
+    const i = p.indexOf(s);
+    assert.ok(i >= 0, s);
+    return i;
+  };
+  const refuse = at('if [ -e "$runner_home" ] && [ ! -L "$runner_home" ]; then\n  die ');
+  const unlink = at('if [ -L "$runner_home" ]; then\n  rm "$runner_home"\nfi');
+  const add = at('sysadminctl -addUser runner');
+  assert.ok(refuse < at('# 2. The job user'), 'refuses a real home in the preflight');
+  assert.ok(unlink < add, 'removes the link before creating the user');
+});
+
+// The T214 VM boot check found sysadminctl -autologin writes nothing on macOS 15, so the script
+// writes /etc/kcpassword itself. "admin" checked against the kcpassword in Cirrus's base image.
+test('provision_writes_kcpassword_in_apples_format', () => {
+  const fn = provision().match(/^kcpassword\(\) \{[\s\S]*?^\}$/m)?.[0];
+  assert.ok(fn, 'kcpassword function');
+  const kc = (pw) => execFileSync('/bin/bash', ['-c', `${fn}\nkcpassword "$1"`, '_', pw]).toString('hex');
+  assert.equal(kc('admin'), '1ced3f4abcbcddeaa3b91f7d');
+  assert.equal(kc('a'.repeat(12)).length, 24, 'a multiple of 12 gets no extra block');
+  assert.equal(kc('a'.repeat(32)).length, 72);
 });
