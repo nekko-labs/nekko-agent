@@ -145,7 +145,9 @@ public final class ChatModel {
             async let pendingRaw = orNil { try await r.call(Channels.chatPending) }
             let (s, p) = (try await raw, await pendingRaw)
             Task { await loadSkills() }
-            Task { await loadContext() }
+            // Between turns only: while one runs the live estimate covers it, and the
+            // computer is busy with the reply (done, send and session_meta all re-read).
+            if !turn.running { Task { await loadContext() } }
             guard let session = Session.from(s) else {
                 loadError = "This chat was deleted on your computer."
                 store.transcripts.remove(sessionId)
@@ -186,11 +188,16 @@ public final class ChatModel {
         PhoneChanges.from(try await store.remote().call(Channels.changesList, [.string(sessionId)]))
     }
 
+    /// One `context:preview` at a time; a re-read asked for meanwhile is dropped.
     public func loadContext() async {
+        guard !readingContext else { return }
+        readingContext = true
+        defer { readingContext = false }
         guard let r = try? store.remote(), let raw = try? await r.call(MonitorChannels.contextPreview, [.string(sessionId)]),
               let c = ContextUsage.from(raw) else { return }
         context = c
     }
+    private var readingContext = false
 
     /// Tokens in the window now: the computer's count, plus what the running
     /// reply has streamed since (about four characters a token, as the
