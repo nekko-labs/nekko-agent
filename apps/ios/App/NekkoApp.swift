@@ -80,13 +80,15 @@ struct NekkoApp: App {
 
     private var spooky: Bool { Prefs.preset(app.prefs.theme, computer: app.store.appearance)?.isSpooky == true }
 
-    /// The app, or (Debug builds, `-uiTestMarkdownLab`) the Markdown fixture the UI tests photograph.
+    /// The app, or (Debug builds) a fixture the UI tests photograph.
     @ViewBuilder private var root: some View {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("-uiTestMarkdownLab") {
             MarkdownLab()
         } else if ProcessInfo.processInfo.arguments.contains("-uiTestChatStatus") {
             ChatStatusFixture()
+        } else if ProcessInfo.processInfo.arguments.contains("-uiTestPurposeGroups") {
+            PurposeGroupsFixture()
         } else { RootView() }
         #else
         RootView()
@@ -104,7 +106,7 @@ struct NekkoApp: App {
                 .onOpenURL { app.handle(url: $0) }
                 .task {
                     #if DEBUG
-                    if ProcessInfo.processInfo.arguments.contains("-uiTestChatStatus") { return }
+                    if ProcessInfo.processInfo.arguments.contains("-uiTestPurposeGroups") || ProcessInfo.processInfo.arguments.contains("-uiTestChatStatus") { return }
                     #endif
                     app.start()
                 }
