@@ -21,7 +21,8 @@ app.whenReady().then(async () => {
   const shot = async name => { const file = path.join(out, name + '.png'); fs.writeFileSync(file, (await win.capturePage(undefined, { stayHidden: true })).toPNG()); report.captures.push(file); };
   try {
     await win.loadFile(path.join(out, 'index.html'));
-    for (let i = 0; i < 80 && !await run('!!window.layoutFixture && !!document.querySelector("[data-command-wall]")'); i++) await sleep(100);
+    for (let i = 0; i < 80 && !await run('!!window.layoutFixture && !!document.querySelector("[data-chat-surface]")'); i++) await sleep(100);
+    await sleep(1500);
     await shot('default-empty');
     await run(`(() => { const f = layoutFixture, s = f.store.getState(); f.store.setState({ settings: {...s.settings, themePreset: 'lilac', theme: 'light', backgroundAnimation: true, mascotEnabled: true} }); })()`);
     if (!await run(`!!document.querySelector('[data-chat-surface]')`)) throw Error('App fixture did not render agent panels');
@@ -72,6 +73,9 @@ app.whenReady().then(async () => {
     await sleep(250); await shot('default-working');
     fs.mkdirSync(path.join(out, 'motion-working'), { recursive: true });
     for (let i = 0; i < 16; i++) { fs.writeFileSync(path.join(out, 'motion-working', String(i).padStart(3, '0') + '.png'), (await win.capturePage(undefined, { stayHidden: true })).resize({width:1440}).toPNG()); await sleep(150); }
+    await run(`document.querySelector('button[title^="Dynamic ("]')?.click()`); await sleep(500);
+    await shot('default-dynamic-working');
+    assert(await run(`document.querySelectorAll('.composer-beam-ring').length === 0`), 'dynamic-no-working-beams');
     report.checks.bounds = win.getBounds();
     report.checks.visible = win.isVisible();
     await shot('active-agent');
