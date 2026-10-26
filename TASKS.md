@@ -803,7 +803,7 @@ Extends `../../knowledgebase/principles/coding.md` (which these override).
 
 ## Now / In Progress
 
-- [ ] **HISTORY1156**: [Completed history retention and storage](spec/chat/completed-history-retention-and-storage.md). Added 2026-10-25. Keep completed chats indefinitely, measure local chat storage, and add confirmed Settings cleanup ranges and a 1 GB warning. Backend and shared renderer checks passing; Settings evidence and merge pending.
+- [ ] **HISTORY1156**: [Completed history retention and storage](spec/chat/completed-history-retention-and-storage.md). Added 2026-10-25. Keep completed chats indefinitely, measure local chat storage, and add confirmed Settings cleanup ranges and a 1 GB warning. Backend, full workspace typecheck, Settings interaction checks and wide/narrow renderer evidence passing; merge pending.
 
 - [x] **THINK-DIAGRAM-1120**: cloud reasoning always on, local default-on thinking only in Expert model options, no composer toggle; chat-matched dotted, borderless Mermaid canvases with subtle shadows and themed diagrams. Implemented 2026-10-25. [Thinking spec](spec/models/models-providers.md), [diagram spec](spec/code/rich-responses-reports-and-design-workspace.md). Verified desktop typecheck, 19 focused renderer tests, 61 provider tests, 4 admission tests, daemon request regression, hidden before/after renderer evidence and Expert interaction/load payload checks. No live inference or native phone UI verification.
 

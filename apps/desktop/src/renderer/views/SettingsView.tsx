@@ -25,6 +25,7 @@ import { SettingsSearch } from '../components/SettingsSearch.js';
 import { ProjectManagementToggles, PullRequestToggles } from '../components/WorkTrackingToggles.js';
 import { WallLayoutSettings } from './WallLayoutSettings.js';
 import { DesktopBehaviorSection, FunSection } from './DesktopBehaviorSections.js';
+import { HistorySettings } from '../components/HistorySettings.js';
 import { StyleSection } from './StyleSection.js';
 
 const SANDBOX_OPTS: Array<{ value: SandboxMode; label: string; desc: string }> = [
@@ -262,6 +263,7 @@ export function SettingsView() {
               <ErrorBoundary label="Customization"><CustomizationSection settings={settings} update={update} /></ErrorBoundary>
               <ErrorBoundary label="Voice settings"><VoiceSettings /></ErrorBoundary>
               <ErrorBoundary label="Notifications"><NotificationsSection settings={settings} update={update} /></ErrorBoundary>
+              <ErrorBoundary label="Chat history"><HistorySettings openSync={() => goTo('phone')} refreshSessions={() => useStore.getState().refreshSessions()} /></ErrorBoundary>
             </SettingsGroup>
             <SettingsGroup id="phone">
               {/* Remote access (relay) */}
