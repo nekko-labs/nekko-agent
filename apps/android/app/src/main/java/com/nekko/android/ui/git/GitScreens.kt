@@ -29,6 +29,14 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.CompareArrows
+import androidx.compose.material.icons.automirrored.filled.MergeType
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Checklist
+import androidx.compose.material.icons.filled.Difference
+import androidx.compose.material.icons.filled.RemoveCircleOutline
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -52,6 +60,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -83,6 +92,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.graphics.luminance
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -100,6 +110,10 @@ import com.nekko.protocol.GitCompare
 import com.nekko.protocol.GitDiff
 import com.nekko.protocol.GitFile
 import com.nekko.protocol.PhoneChanges
+import com.nekko.protocol.PrAction
+import com.nekko.protocol.PrCheck
+import com.nekko.protocol.PrCheckList
+import com.nekko.protocol.PullRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
@@ -111,21 +125,27 @@ private sealed interface GitPage {
     data class Commit(val commit: GitCommit) : GitPage
     data object Branches : GitPage
     data object Compare : GitPage
+    data object CreatePr : GitPage
+    data class Pr(val pr: PullRequest) : GitPage
+    data class PrChecks(val url: String) : GitPage
+    data class PrFiles(val url: String) : GitPage
 }
 
 /**
  * Git on a chat's folder (AN-30, the iPhone's `GitView`), full screen from
  * the chat's menu: the branch, changed files (staged and not), the commit
- * box, and the way to history, branches and compare. Every change asks for
+ * box, and the way to history, branches, compare and pull requests; or
+ * straight at one pull request ([pr], from the chat's pull request chip),
+ * where back closes it. Every change asks for
  * the fingerprint, face or screen lock (once per 5 minutes) and shows in this
  * phone's activity on the computer.
  */
 @Composable
-fun GitDialog(git: GitController, onDismiss: () -> Unit) {
-    val stack = remember { mutableStateListOf<GitPage>(GitPage.Status) }
+fun GitDialog(git: GitController, onDismiss: () -> Unit, pr: PullRequest? = null) {
+    val stack = remember { mutableStateListOf(if (pr != null) GitPage.Pr(pr) else GitPage.Status) }
     val open: (GitPage) -> Unit = { stack.add(it) }
     val back: () -> Unit = { if (stack.size > 1) stack.removeAt(stack.lastIndex) else onDismiss() }
-    LaunchedEffect(git) { git.load() }
+    LaunchedEffect(git) { if (pr == null) git.load() }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         BackHandler(onBack = back)
         // The dialog has its own window: its status bar icons follow the app's theme, as the activity's do.
@@ -149,6 +169,10 @@ fun GitDialog(git: GitController, onDismiss: () -> Unit) {
                 is GitPage.Commit -> CommitPage(git, page.commit, back, open)
                 GitPage.Branches -> BranchesPage(git, back)
                 GitPage.Compare -> ComparePage(git, back, open)
+                GitPage.CreatePr -> CreatePrPage(git, back)
+                is GitPage.Pr -> PrPage(git, page.pr, back, close = stack.size == 1, open = open)
+                is GitPage.PrChecks -> PrChecksPage(git, page.url, back)
+                is GitPage.PrFiles -> PrFilesPage(git, page.url, back, open)
             }
             }
         }
@@ -248,6 +272,9 @@ private fun StatusList(git: GitController, s: GitState, open: (GitPage) -> Unit,
                         }
                     }
                 }
+                st?.pr?.let { pr ->
+                    Link(Icons.AutoMirrored.Filled.MergeType, pr.summary) { open(GitPage.Pr(pr)) }
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TextButton(onClick = { scope.launch { git.push() } }, enabled = enabled, modifier = Modifier.testTag("git.push")) {
                         Icon(Icons.Filled.Upload, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -278,6 +305,8 @@ private fun StatusList(git: GitController, s: GitState, open: (GitPage) -> Unit,
                 Link(Icons.Filled.AccountTree, "Branches") { open(GitPage.Branches) }
                 HorizontalDivider(color = p.line)
                 Link(Icons.AutoMirrored.Filled.CompareArrows, "Compare") { open(GitPage.Compare) }
+                HorizontalDivider(color = p.line)
+                Link(Icons.AutoMirrored.Filled.MergeType, "Open a pull request", Modifier.testTag("git.openPr")) { open(GitPage.CreatePr) }
             }
             Text(
                 "Changes from this phone ask for your fingerprint or screen lock, and show in this phone’s activity on the computer.",
@@ -533,7 +562,7 @@ private fun CommitPage(git: GitController, commit: GitCommit, onBack: () -> Unit
     }
 }
 
-private fun diffFiles(scope: LazyListScope, d: GitDiff, open: ((GitPage) -> Unit)?) {
+private fun diffFiles(scope: LazyListScope, d: GitDiff, open: ((GitPage) -> Unit)?, where: String = "your computer") {
     scope.item(key = "files-h") {
         Text(
             "${d.files.size + d.omittedFiles} FILES · +${d.additions} −${d.deletions}",
@@ -549,7 +578,7 @@ private fun diffFiles(scope: LazyListScope, d: GitDiff, open: ((GitPage) -> Unit
         ) { FileRow(f, Modifier.weight(1f)) }
     }
     if (d.omittedFiles > 0) {
-        scope.item(key = "files-o") { Text("${d.omittedFiles} more files. See them on your computer.", style = MaterialTheme.typography.bodySmall, color = Nekko.palette.inkFaint) }
+        scope.item(key = "files-o") { Text("${d.omittedFiles} more files. See them on $where.", style = MaterialTheme.typography.bodySmall, color = Nekko.palette.inkFaint) }
     }
 }
 
@@ -720,6 +749,203 @@ private fun BranchPicker(label: String, value: String, names: List<String>, onPi
     }
 }
 
+// ---- pull requests ----
+
+/** A pull request from the current branch, pushed first if it isn't yet. */
+@Composable
+private fun CreatePrPage(git: GitController, onBack: () -> Unit) {
+    val p = Nekko.palette
+    val s by git.state.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+    val uri = LocalUriHandler.current
+    var title by remember { mutableStateOf("") }
+    var body by remember { mutableStateOf("") }
+    var base by remember { mutableStateOf("") }
+    var draft by remember { mutableStateOf(false) }
+    var opened by remember { mutableStateOf<String?>(null) }
+    var tried by remember { mutableStateOf(false) }
+    Page(
+        "New pull request", onBack,
+        actions = {
+            if (opened == null) {
+                TextButton(
+                    onClick = { scope.launch { tried = true; opened = git.createPr(title, body, base.trim().ifEmpty { null }, draft) } },
+                    enabled = title.isNotBlank() && s.busy == null,
+                    modifier = Modifier.testTag("pr.create"),
+                ) { Text("Open") }
+            }
+        },
+    ) { padding ->
+        LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            val url = opened
+            if (url != null) {
+                item { Notice("Pull request opened.", Tone.SUCCESS) }
+                item { Card { Link(Icons.AutoMirrored.Filled.OpenInNew, "Open on GitHub") { uri.openUri(url) } } }
+            } else {
+                item {
+                    Card {
+                        OutlinedTextField(title, { title = it }, label = { Text("Title") }, singleLine = true, enabled = s.busy == null,
+                            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                            modifier = Modifier.fillMaxWidth().testTag("pr.title"))
+                        OutlinedTextField(body, { body = it }, label = { Text("Description") }, minLines = 3, maxLines = 10, enabled = s.busy == null,
+                            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences), modifier = Modifier.fillMaxWidth())
+                    }
+                }
+                item {
+                    Card {
+                        OutlinedTextField(base, { base = it }, label = { Text("Base branch") }, singleLine = true, enabled = s.busy == null,
+                            placeholder = { Text("The repository’s default") },
+                            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
+                            modifier = Modifier.fillMaxWidth())
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Draft", style = MaterialTheme.typography.bodyLarge, color = p.ink, modifier = Modifier.weight(1f))
+                            Switch(draft, { draft = it }, enabled = s.busy == null)
+                        }
+                    }
+                    Text("Opened from the branch the chat is on. Push it first if it isn’t on GitHub yet.",
+                        style = MaterialTheme.typography.bodySmall, color = p.inkFaint, modifier = Modifier.padding(top = 8.dp, start = 4.dp))
+                }
+                val n = s.notice
+                if (tried && n != null && !n.ok) item { Notice(n.text, Tone.DANGER) }
+                if (s.busy != null) item { CircularProgressIndicator(color = p.accent) }
+            }
+        }
+    }
+}
+
+/** A pull request: its checks, its files and the actions a phone may take. */
+@Composable
+private fun PrPage(git: GitController, pr: PullRequest, onBack: () -> Unit, close: Boolean, open: (GitPage) -> Unit) {
+    val p = Nekko.palette
+    val s by git.state.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+    val uri = LocalUriHandler.current
+    var current by remember { mutableStateOf(pr) }
+    var acted by remember { mutableStateOf(false) }
+    var confirm by remember { mutableStateOf<PrAction?>(null) }
+    Page("#${current.number}", onBack, close = close) { padding ->
+        LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            item {
+                Card {
+                    Text(current.title, style = MaterialTheme.typography.titleMedium, color = p.ink)
+                    Text(current.summary, style = MaterialTheme.typography.bodyMedium, color = p.inkSoft)
+                    Link(Icons.AutoMirrored.Filled.OpenInNew, "Open on GitHub") { uri.openUri(current.url) }
+                }
+            }
+            item {
+                Card {
+                    Link(Icons.Filled.Checklist, "Checks", Modifier.testTag("pr.checks")) { open(GitPage.PrChecks(current.url)) }
+                    HorizontalDivider(color = p.line)
+                    Link(Icons.Filled.Difference, "Files changed", Modifier.testTag("pr.files")) { open(GitPage.PrFiles(current.url)) }
+                }
+            }
+            if (current.actions.isNotEmpty()) {
+                item {
+                    Card {
+                        current.actions.forEachIndexed { i, a ->
+                            if (i > 0) HorizontalDivider(color = p.line)
+                            TextButton(onClick = { confirm = a }, enabled = s.busy == null, modifier = Modifier.fillMaxWidth().testTag("pr.action.${a.wire}")) {
+                                Text(a.label, color = if (a == PrAction.CLOSE) p.danger else p.accent, modifier = Modifier.weight(1f))
+                            }
+                        }
+                    }
+                    Text("Asks for your fingerprint or screen lock. GitHub’s own rules (reviews, required checks) still apply.",
+                        style = MaterialTheme.typography.bodySmall, color = p.inkFaint, modifier = Modifier.padding(top = 8.dp, start = 4.dp))
+                }
+            }
+            val n = s.notice
+            if (acted && n != null) item { Notice(n.text, if (n.ok) Tone.SUCCESS else Tone.DANGER, Modifier.testTag("pr.notice")) }
+            if (s.busy != null) item { CircularProgressIndicator(color = p.accent) }
+        }
+    }
+    confirm?.let { a ->
+        AlertDialog(
+            onDismissRequest = { confirm = null },
+            title = { Text("${a.label} #${current.number}?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirm = null
+                    scope.launch {
+                        acted = true
+                        git.prAction(current.url, a)?.pr?.let { current = it.copy(title = it.title.ifEmpty { current.title }) }
+                    }
+                }) { Text(a.label, color = if (a == PrAction.CLOSE) p.danger else p.accent) }
+            },
+            dismissButton = { TextButton(onClick = { confirm = null }) { Text("Cancel") } },
+        )
+    }
+}
+
+@Composable
+private fun PrChecksPage(git: GitController, url: String, onBack: () -> Unit) {
+    val p = Nekko.palette
+    val scope = rememberCoroutineScope()
+    val uri = LocalUriHandler.current
+    var list by remember { mutableStateOf<PrCheckList?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    suspend fun load() {
+        try { list = git.checks(url); error = null } catch (e: CancellationException) { throw e } catch (e: Exception) { error = e.message }
+    }
+    LaunchedEffect(url) { load() }
+    Page(
+        "Checks", onBack,
+        actions = { IconButton(onClick = { scope.launch { load() } }) { Icon(Icons.Filled.Refresh, contentDescription = "Refresh") } },
+    ) { padding ->
+        LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            val l = list
+            when {
+                l != null -> {
+                    if (l.items.isEmpty()) item { Text("No checks on this pull request.", color = p.inkSoft) }
+                    itemsIndexed(l.items, key = { i, c -> "$i:${c.name}" }) { _, c ->
+                        val (icon, tint) = when (c.state) {
+                            PrCheck.State.PASS -> Icons.Filled.CheckCircle to p.success
+                            PrCheck.State.FAIL -> Icons.Filled.Cancel to p.danger
+                            PrCheck.State.PENDING -> Icons.Filled.Schedule to p.running
+                            else -> Icons.Filled.RemoveCircleOutline to p.inkFaint
+                        }
+                        Row(
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(p.surface).border(1.dp, p.line, RoundedCornerShape(12.dp))
+                                .then(if (c.link != null) Modifier.clickable { uri.openUri(c.link!!) } else Modifier).padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(c.name, style = MaterialTheme.typography.bodyMedium, color = p.ink)
+                                Text(listOfNotNull(c.state.label, c.workflow, c.description).joinToString(" · "),
+                                    style = MaterialTheme.typography.bodySmall, color = p.inkSoft, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            }
+                            if (c.link != null) Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = "Open ${c.name}", tint = p.inkFaint, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                    if (l.omitted > 0) item { Text("${l.omitted} more checks on GitHub.", style = MaterialTheme.typography.bodySmall, color = p.inkFaint) }
+                }
+                error != null -> item { Notice(error!!, Tone.DANGER) }
+                else -> item { CircularProgressIndicator(color = p.accent) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PrFilesPage(git: GitController, url: String, onBack: () -> Unit, open: (GitPage) -> Unit) {
+    val p = Nekko.palette
+    var diff by remember { mutableStateOf<GitDiff?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(url) {
+        try { diff = git.prDiff(url) } catch (e: CancellationException) { throw e } catch (e: Exception) { error = e.message }
+    }
+    Page("Files changed", onBack) { padding ->
+        LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            val d = diff
+            when {
+                d != null -> diffFiles(this, d, open, where = "GitHub")
+                error != null -> item { Notice(error!!, Tone.DANGER) }
+                else -> item { CircularProgressIndicator(color = p.accent) }
+            }
+        }
+    }
+}
+
 // ---- small parts ----
 
 @Composable
@@ -732,10 +958,10 @@ private fun Card(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun Link(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, onClick: () -> Unit) {
+private fun Link(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val p = Nekko.palette
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onClick).padding(horizontal = 4.dp),
+        modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onClick).padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {

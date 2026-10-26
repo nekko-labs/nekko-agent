@@ -11,6 +11,8 @@ import com.nekko.protocol.GitFile
 import com.nekko.protocol.GitRequest
 import com.nekko.protocol.GitResult
 import com.nekko.protocol.GitStatus
+import com.nekko.protocol.PrAction
+import com.nekko.protocol.PrCheckList
 import com.nekko.protocol.RelayException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
@@ -51,8 +53,8 @@ data class GitState(
 
 /**
  * Git on one chat's folder from the phone (AN-30, the iPhone's `GitModel`):
- * its status and changed files, history, branches and compare, and the Change
- * actions. Reads are plain calls; every change goes through [change], which
+ * its status and changed files, history, branches, compare and a pull
+ * request's checks and files, and the Change actions. Reads are plain calls; every change goes through [change], which
  * signs it, so the phone asks for the fingerprint, face or screen lock (once
  * per 5 minutes) and the computer checks the signature. The logic without
  * Android, like [com.nekko.android.monitors.MonitorsController].
@@ -100,6 +102,11 @@ class GitController(
     suspend fun compare(base: String, head: String): GitCompare =
         GitCompare.from(read(GitRequest.compare(chatId, base, head))) ?: throw RelayException("Nothing to compare.")
 
+    suspend fun checks(url: String): PrCheckList =
+        PrCheckList.from(read(GitRequest.prChecks(url))) ?: throw RelayException("No checks for this pull request.")
+
+    suspend fun prDiff(url: String): GitDiff = GitDiff.from(read(GitRequest.prDiff(url)))
+
     // ---- changes ----
 
     suspend fun stage(paths: List<String>) { act(GitRequest.stage(chatId, paths)) }
@@ -138,6 +145,15 @@ class GitController(
     suspend fun switchTo(branch: String, create: Boolean = false): Boolean = act(GitRequest.switchBranch(chatId, branch, create))?.ok == true
 
     suspend fun abortMerge() { act(GitRequest.mergeAbort(chatId)) }
+
+    /** Open a PR from the current branch (pushed first if it has no upstream). Its address, when it worked. */
+    suspend fun createPr(title: String, body: String, base: String?, draft: Boolean): String? {
+        val r = act(GitRequest.createPr(chatId, title.trim(), body, base, draft))
+        return if (r?.ok == true) r.url ?: r.pr?.url else null
+    }
+
+    /** Approve, merge, close or reopen; the status isn't read again (it is the PR that changed). */
+    suspend fun prAction(url: String, action: PrAction): GitResult? = act(GitRequest.prAction(url, action), reload = false)
 
     /** Run one change, say what happened, and read the status again. */
     private suspend fun act(request: GitRequest, reload: Boolean = true): GitResult? {

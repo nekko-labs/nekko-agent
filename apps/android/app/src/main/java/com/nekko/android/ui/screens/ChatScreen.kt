@@ -16,6 +16,7 @@ import androidx.core.content.ContextCompat
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.DisposableEffect
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -100,6 +101,9 @@ import androidx.compose.ui.draw.alpha
 import com.nekko.android.ui.components.Dot
 import com.nekko.android.git.GitController
 import com.nekko.android.ui.git.GitDialog
+import com.nekko.android.ui.git.PrChip
+import com.nekko.android.ui.git.PrSheet
+import com.nekko.protocol.PullRequest
 import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.ui.platform.testTag
@@ -124,6 +128,16 @@ fun ChatScreen(
     var showChanges by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
     var git by remember { mutableStateOf<GitController?>(null) }
+    /** Opened from the pull request chip straight at one pull request. */
+    var gitPr by remember { mutableStateOf<PullRequest?>(null) }
+    var prs by remember(vm.sessionId) { mutableStateOf<List<PullRequest>>(emptyList()) }
+    var showPrs by remember { mutableStateOf(false) }
+    // The chat's pull request chip: read when the chat opens, after each turn, and when Git or the
+    // pull request sheet closes (a merge or close from the phone changes it).
+    var prReads by remember { mutableIntStateOf(0) }
+    LaunchedEffect(vm.sessionId, chat.running, prReads) {
+        if (!chat.running) try { prs = vm.pullRequests(refresh = prReads > 0) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) {}
+    }
     var restoring by remember { mutableStateOf(false) }
     var restoreError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -191,7 +205,14 @@ fun ChatScreen(
         )
     }
 
-    git?.let { g -> GitDialog(g, onDismiss = { git = null }) }
+    git?.let { g -> GitDialog(g, onDismiss = { git = null; gitPr = null; prReads++ }, pr = gitPr) }
+    if (showPrs) {
+        PrSheet(
+            prs, onDismiss = { showPrs = false; prReads++ },
+            onGit = { pr -> showPrs = false; gitPr = pr; git = vm.git() },
+            onAsk = { text -> vm.send(text) },
+        )
+    }
 
     Scaffold(
         containerColor = p.paper,
@@ -307,6 +328,7 @@ fun ChatScreen(
         val controls: @Composable () -> Unit = {
             chat.approval?.let { ApprovalCard(it, onDecide = vm::approve) }
             chat.question?.let { QuestionCard(it, onAnswer = vm::answer) }
+            prs.firstOrNull()?.let { pr -> PrChip(pr) { showPrs = true } }
             // A completed chat reads like the desktop's: no message box until it is restored.
             if (completedAt != null && !chat.running) CompletedBar(
                 restoring = restoring,
