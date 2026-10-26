@@ -2375,7 +2375,9 @@
   position: absolute;
   top: 2px;
   left: 100%;
-  padding-left: 16px;
+  width: 96px;
+  box-sizing: border-box;
+  padding-left: 12px;
   white-space: nowrap;
   /* Tool rows sit in a monospace block; every time reads the same. */
   font-family: var(--font-sans);
@@ -2386,6 +2388,8 @@
   pointer-events: none;
   transition: opacity 200ms ease;
 }
+[data-transcript-scroll] { touch-action: pan-y pinch-zoom; }
+.vt-swiping { user-select: none; }
 .vt-list {
   transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }

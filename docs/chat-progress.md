@@ -27,3 +27,16 @@ The PR panel shows finished/total head checks, successful/neutral/skipped, pendi
 Unknown means GitHub data could not be read completely, not that there are zero checks or threads. No checks reported is shown only for a complete empty response. The panel uses existing cached polling while the chat is visible. Its checked time is the local observation time, not GitHub's PR edit time. Failed refreshes can retain older observations, which become stale. Sign in to `gh` or reconnect GitHub if metadata remains unavailable, and confirm access to the repository.
 
 The initial presentation is shared by desktop and Local Web UI. Native phone progress presentation is not included. Links open in the normal external-link flow and do not approve or merge a PR.
+
+## Reveal message and tool times
+
+Swipe horizontally on the trackpad, or drag left from non-interactive chat space,
+to reveal local timestamps beside messages and working steps. Expand working
+steps and purpose groups to see each tool call's start time. The gutter leaves
+room for the full time, including AM/PM.
+
+A mouse or touch drag keeps the times visible while held still, then springs
+back on release. Vertical scrolling, buttons, links, editors and code blocks keep
+their normal behavior. Trackpad wheel events do not report finger release to the
+renderer, so the reveal returns after 450ms without horizontal input rather than
+using an exact finger-up event.

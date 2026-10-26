@@ -17,10 +17,12 @@ import '../src/renderer/styles.css';
 // message text.
 const provider = { id: 'fixture', kind: 'ollama', baseUrl: 'http://127.0.0.1:11434', enabled: true, label: 'Fixture provider', auth: 'subscription', tokenKey: 'fixture' };
 const models = [{ id: 'fixture-model', providerId: 'fixture', name: 'Fixture model', contextWindow: 128000 }];
-const at = Date.now() - 3_600_000;
-const TURNS = 60;
+const timestampFixture = location.hash === '#timestamp-swipe';
+const at = timestampFixture ? new Date('2026-10-25T15:00:00Z').getTime() : Date.now() - 3_600_000;
+const TURNS = timestampFixture ? 1 : 60;
 
 function reply(i: number): string {
+  if (timestampFixture) return 'Checked the chat layout and tool timestamps.';
   const parts = [`## Step ${i}`, `Looking at the layout. The scroller and autoscroll code both changed; the list scrolled once.`];
   // Every 5th reply mentions the word, in a different case, inside formatting.
   if (i % 5 === 0) parts.push(`The **Scroll** position is what we fix here. ${i % 10 === 0 ? 'SCROLL again.' : ''}`);
@@ -37,6 +39,11 @@ function makeSession() {
       const call = { id: `c${i}`, name: 'grep', input: { pattern: 'scroll' } };
       messages.push({ id: `a${i}x`, role: 'assistant', content: 'Checking the code.', createdAt: at + i * 20_000 + 1000, toolCalls: [call] });
       messages.push({ id: `t${i}`, role: 'tool', content: '', createdAt: at + i * 20_000 + 2000, toolResult: { toolCallId: call.id, output: 'scroll scroll scroll' } });
+      if (timestampFixture) {
+        const next = { id: 'nested-call', name: 'grep', input: { pattern: 'timestamp' } };
+        messages.push({ id: 'nested-assistant', role: 'assistant', content: '', createdAt: at + 3000, toolCalls: [next] });
+        messages.push({ id: 'nested-tool', role: 'tool', content: '', createdAt: at + 4000, toolResult: { toolCallId: next.id, output: 'Found timestamp styles.' } });
+      }
     }
     messages.push({ id: `a${i}`, role: 'assistant', content: reply(i), createdAt: at + i * 20_000 + 5000 });
   }
