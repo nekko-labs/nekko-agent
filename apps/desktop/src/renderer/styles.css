@@ -3352,8 +3352,10 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 @media (prefers-reduced-transparency: reduce) {
   [data-clean-start][data-chat-surface] .clean-start .composer { background: var(--win, var(--surface)); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
-.clean-start-greeting { display: flex; align-items: center; justify-content: center; gap: 14px; max-width: 100%; margin: 0 auto 18px; text-align: left; }
-.greeting-nekko { display: block; flex: 0 0 64px; width: 64px; height: 60px; pointer-events: none; }
+.clean-start-greeting { display: flex; align-items: flex-end; justify-content: center; gap: 14px; max-width: 100%; margin: 0 auto 18px; text-align: left; }
+.greeting-nekko-slot { position: relative; display: block; flex: 0 0 64px; width: 64px; height: 60px; pointer-events: none; }
+/* The paws straddle viewBox y=25 at the border, 18px below the greeting. */
+.greeting-nekko { position: absolute; z-index: 3; left: -8px; top: 15.5px; display: block; width: 80px; height: 75px; pointer-events: none; }
 .clean-start-greeting h2 { display: flex; align-items: center; width: 300px; min-height: 60px; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
 @media (max-width: 600px) { .clean-start-greeting { gap: 10px; } .clean-start-greeting h2 { width: 230px; max-width: calc(100vw - 130px); } }
 .clean-start-greeting p { margin-top: 6px; font-size: 13px; color: var(--ink-faint); }
