@@ -52,12 +52,11 @@ describe('agent window identity and activity', () => {
     expect(windowBody(wall, 'b')).toMatch(/data-frame-icon[^]*numbered-agent-icon[^]*aria-label="Window 2"/);
     expect(wall).not.toContain('numbered-chat-icon');
   });
-  it('gives a working window a quieter copy of the composer beam', async () => {
+  it('keeps working status without an animated colored border', async () => {
     const wall = (await loadWall()).render(two, { sessions: [summary('a'), summary('b')], running: ['a'] });
-    expect(windowBody(wall, 'a')).toContain('class="composer-beam-ring wall-window-beam"');
-    expect(windowBody(wall, 'b')).not.toContain('wall-window-beam');
-    expect(cssRule(styles, '.wall-window-beam').opacity).toBe('0.55');
-    expect(cssRule(styles, '.wall-window-beam .composer-beam-spin')['animation-duration']).toBe('5s');
+    expect(windowBody(wall, 'a')).toContain('data-wall-working="true"');
+    expect(wall).not.toContain('composer-beam');
+    expect(hasSelector(styles, /composer-beam|wall-window-beam/)).toBe(false);
   });
 });
 

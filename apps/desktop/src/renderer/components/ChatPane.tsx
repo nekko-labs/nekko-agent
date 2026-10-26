@@ -1,4 +1,3 @@
-import { PixelWaveBackground, pixelWaveFor } from './PixelWaveBackground.js';
 import { CleanStartGreeting } from './CleanStartGreeting.js';
 import { PrWatchContinuation } from './PrWatchContinuation.js';
 import { canOfferPrWatch } from '../prWatchContinuation.js';
@@ -27,6 +26,7 @@ import { useGitStatus } from '../useGitStatus.js';
 import { clearLiveRun, getLiveRun, takeFinishedRun, useLiveRun, type LiveRun } from '../liveRuns.js';
 import { getCachedSession, loadSession, putCachedSession } from '../sessionCache.js';
 import { usePaneVisible } from '../paneVisibility.js';
+import { reportAgentWorking } from '../workingAgents.js';
 import { useAgentEventClaim } from '../agentSubscription.js';
 import { ComposerFocus } from './ComposerFocus.js';
 import { afterPaint } from '../afterPaint.js';
@@ -80,6 +80,7 @@ import { PromptAnalyzer } from './PromptAnalyzer.js';
 import { ScheduleTaskModal } from './ScheduleTaskModal.js';
 import { PrCard, PrActionDock } from './PrCard.js';
 import { NekkoAvatar } from './Mascot.js';
+import { PixelWaveBackground, pixelWaveFor, showEmptyAgentWave } from './PixelWaveBackground.js';
 import { Modal } from './primitives/index.js';
 import { WorktreeChip } from './WorktreeChip.js';
 import { FolderPicker } from './FolderPicker.js';
@@ -1122,6 +1123,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
 
   const finalizingReply = useRef(false);
   const endTurn = () => {
+    reportAgentWorking(sessionId, false);
     finalizingReply.current = true;
     streamingRef.current = false;
     setStreaming(false);
@@ -1408,6 +1410,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // dependency because the textarea is disabled until providers have loaded.
 
   const beginTurn = () => {
+    reportAgentWorking(sessionId, true);
     streamingRef.current = true;
     setStreaming(true);
     // Whatever was held from the last reply is about to be replaced.
@@ -2369,7 +2372,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const estimate = useCallback((row: TranscriptRow) => estimateRowHeight(row, columnWidth), [columnWidth]);
   const hasLive = !!(held || getLiveRun(sessionId));
   const welcomeState = chatWelcomeState({ messages: session?.messages.length ?? 0, streaming, hasLive, hasProvider, modelId, imageMode });
-  const wave = settings?.backgroundAnimation === false ? null : pixelWaveFor(settings?.themePreset);
+  const emptyWave = showEmptyAgentWave({ loaded: !!session, messages: session?.messages.length ?? 0, running: streaming || hasLive, readOnly: readOnly || !!session?.archivedAt, composer: surface === 'composer', enabled: settings?.backgroundAnimation !== false }) ? pixelWaveFor(settings?.themePreset) : null;
   const cleanStart = cleanStartWanted && surface === 'full' && !readOnly && welcomeState.welcome && hasProvider && !welcomeState.modelChoice && !imageMode && !!session && !question && !approval;
   // Leaving the clean start because the user sent (the welcome is gone, it is
   // still the same focused chat) plays the composer-into-chat expansion once.
@@ -2446,8 +2449,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         <ContextAction onClick={() => { void navigator.clipboard.writeText(chatMarkdown()).catch(() => useStore.getState().pushToast('error', "Couldn't copy chat.")); setChatMenu(null); }}><CopyIcon className="mr-2 inline h-3.5 w-3.5" />Copy chat</ContextAction>
         <ContextAction onClick={() => { exportChat(); setChatMenu(null); }}><DownloadIcon className="mr-2 inline h-3.5 w-3.5" />Export as Markdown</ContextAction>
       </ContextMenu>}
-      <section className={`flex min-w-0 w-full flex-1 flex-col overflow-x-hidden ${cleanStart ? 'clean-start justify-center' : ''}`}>
-        {cleanStart && paneShown && wave && <PixelWaveBackground wave={wave} />}
+      <section className={`relative isolate flex min-w-0 w-full flex-1 flex-col overflow-x-hidden ${cleanStart ? 'clean-start justify-center' : ''}`}>
+        {emptyWave && <PixelWaveBackground wave={emptyWave} visible={paneShown} />}
         {/* One bar per window. Inside a workspace these ride in the frame's
             title strip, which already shows the chat's name; standalone, the
             chat still needs a header of its own. */}
@@ -2705,12 +2708,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             )}
 
             <div className="composer relative">
-            {/* While the agent works, a violet→cyan beam laps the border. The
-                gradient is a square that rotates on the compositor, clipped
-                to the ring by the mask on its wrapper; animating the gradient
-                angle itself repainted the whole composer every frame, in every
-                working window on the wall at once. */}
-            {streaming && <span className="composer-beam-ring" aria-hidden><span className="composer-beam-spin" /></span>}
             {compact && (
               <div className="composer-summary">
                 <button

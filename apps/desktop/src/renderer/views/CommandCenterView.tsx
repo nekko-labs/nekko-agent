@@ -545,7 +545,7 @@ export function CommandCenterView() {
   const composerRow = <div className="wall-composer-row" data-dock={`${wall.composer.side}-${wall.composer.align}`}>{composer}</div>;
 
   return (
-    <div ref={viewRef} className="flex h-full min-h-0 flex-col gap-2 pb-0 pl-[3px] pr-px pt-1">
+    <div ref={viewRef} className="flex h-full min-h-0 flex-col -mt-px gap-2 pb-0 pl-[3px] pr-px pt-0">
       <WallToolbar wall={wall} setWall={setWall} addOpen={addOpen} setAddOpen={setAddOpen}
         onAdd={(kind) => {
           setCompletedId(null);

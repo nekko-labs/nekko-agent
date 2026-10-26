@@ -221,7 +221,7 @@ export function EffortSlider({ modelId, onChanged, session, onSessionChange }: {
   // A dial with one notch per level the model takes, as on the phone; the
   // levels themselves are stops in the popover, and the arrow keys step them.
   return (
-    <div className="effort-slider flex shrink-0 items-center rounded-r-lg border border-l-0 border-line text-[11px]" title={session ? 'Reasoning effort for this chat' : 'Reasoning effort (the app default; a chat can set its own)'}>
+    <div className="effort-slider flex shrink-0 items-center rounded-lg border border-line text-[11px]" title={session ? 'Reasoning effort for this chat' : 'Reasoning effort (the app default; a chat can set its own)'}>
       <button
         ref={pop.anchor}
         type="button"
