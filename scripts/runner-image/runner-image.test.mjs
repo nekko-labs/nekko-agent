@@ -251,8 +251,11 @@ test('provision_locks_the_guest_down', () => {
     'm="$(dsmemberutil checkmembership -U "$u" -G admin 2>&1 || true)"',
     '*) die "cannot tell whether $u is an admin',
     '[ "$u" != runner ] || die ',
-    'done < <(dscl . -list /Users)',
-    '[[ "$(fdesetup status 2>&1)" == *"FileVault is Off."* ]] || die ',
+    'users="$(dscl . -list /Users)"',
+    '[ -n "$users" ] || die ',
+    'done <<<"$users"',
+    '[ "$disabled" -gt 0 ] || die ',
+    '[ "$(fdesetup status 2>&1)" = "FileVault is Off." ] || die ',
     '/usr/local/libexec/nekko-runner-boot.sh',
     '/Library/LaunchDaemons/dev.nekkolabs.runner-boot.plist',
   ])

@@ -47,7 +47,7 @@ for f in nekko-runner-boot.sh dev.nekkolabs.runner-boot.plist; do
 done
 id runner >/dev/null 2>&1 && die "user runner already exists: rebuild from a fresh base image"
 # Step 9 disables every admin, so with FileVault on nobody could unlock the disk at boot.
-[[ "$(fdesetup status 2>&1)" == *"FileVault is Off."* ]] || die "turn FileVault off in the base image first"
+[ "$(fdesetup status 2>&1)" = "FileVault is Off." ] || die "turn FileVault off in the base image first"
 # Cirrus images link /Users/runner to the admin's home (GitHub-hosted path compatibility); step 2
 # replaces the link. A real directory there is someone's data: refuse.
 if [ -e "$runner_home" ] && [ ! -L "$runner_home" ]; then
@@ -142,6 +142,10 @@ defaults write /Library/Preferences/com.apple.SoftwareUpdate AutomaticallyInstal
 step "locking down"
 # Every account in admin however it got there (GroupMembership, primary group 80, a nested group),
 # root included. Anything dsmemberutil does not answer plainly stops the build.
+# Captured first: set -e does not see a failing command inside < <(...).
+users="$(dscl . -list /Users)"
+[ -n "$users" ] || die "cannot list local users"
+disabled=0
 while read -r u; do
   m="$(dsmemberutil checkmembership -U "$u" -G admin 2>&1 || true)"
   case "$m" in
@@ -152,7 +156,9 @@ while read -r u; do
   [ "$u" != runner ] || die "runner is an admin"
   pwpolicy -u "$u" -disableuser >/dev/null 2>&1 || true
   [[ "$(pwpolicy -u "$u" -authentication-allowed 2>&1)" == *"not allowed to authenticate"* ]] || die "cannot disable $u"
-done < <(dscl . -list /Users)
+  disabled=$((disabled + 1))
+done <<<"$users"
+[ "$disabled" -gt 0 ] || die "found no admin to disable"
 [[ "$(pwpolicy -u root -authentication-allowed 2>&1)" == *"not allowed to authenticate"* ]] || die "root can authenticate"
 find /etc/sudoers.d -mindepth 1 -delete
 # Not grep -q: under pipefail its early exit can SIGPIPE the first grep and hide a match.
