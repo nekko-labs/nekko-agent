@@ -2701,7 +2701,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             )}
 
             <div className="composer relative">
-
             {compact && (
               <div className="composer-summary">
                 <button
