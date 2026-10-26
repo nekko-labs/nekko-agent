@@ -10,7 +10,7 @@
 //! functions; packages/shared's `engine-data.golden.test.ts` keeps the accents
 //! in the embedded defaults current.
 
-use serde_json::{Map, Value};
+use serde_json::{Map, Value, json};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -83,6 +83,12 @@ fn parse(text: &str) -> Option<Map<String, Value>> {
         if d.legacy_accents.iter().any(|l| *l == accent.to_lowercase()) {
             s.insert("accent".into(), Value::String(d.accent.clone()));
         }
+    }
+    if s.contains_key("autoResumeOnInternetRestore") {
+        s.insert(
+            "autoResumeOnInternetRestore".into(),
+            json!(s.get("autoResumeOnInternetRestore") == Some(&Value::Bool(true))),
+        );
     }
     Some(s)
 }
@@ -212,6 +218,12 @@ pub fn merge(current: &Map<String, Value>, patch: &Value) -> Result<Map<String, 
                 defaults.insert("gitIsolation".into(), Value::Bool(value.as_str() == Some("worktree")));
             }
         }
+    }
+    if next.contains_key("autoResumeOnInternetRestore") {
+        next.insert(
+            "autoResumeOnInternetRestore".into(),
+            json!(next.get("autoResumeOnInternetRestore") == Some(&Value::Bool(true))),
+        );
     }
     Ok(next)
 }
