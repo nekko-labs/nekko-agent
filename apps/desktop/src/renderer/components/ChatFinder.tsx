@@ -1,3 +1,4 @@
+import { SHORTCUTS } from '../shortcuts.js';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useShallow } from 'zustand/react/shallow';
@@ -69,7 +70,8 @@ export function ChatFinder({ anchorRef, onOpen, onClose }: {
     return () => window.removeEventListener('resize', place);
   }, [anchorRef]);
 
-  useEffect(() => { inputRef.current?.focus(); }, []);
+  const placed = pos !== null;
+  useEffect(() => { if (placed) inputRef.current?.focus(); }, [placed]);
 
   // Search once typing pauses, not on every key.
   useEffect(() => {
@@ -307,6 +309,7 @@ export function ChatFinder({ anchorRef, onOpen, onClose }: {
       onKeyDown={onKeyDown}
     >
       <div className="flex items-center gap-1 px-1 pb-1.5">
+        <kbd className="kbd shrink-0">{SHORTCUTS.searchChats.label}</kbd>
         <input
           ref={inputRef}
           className="chat-finder-input min-w-0 flex-1 bg-transparent px-1.5 py-1.5 text-[13px] outline-none"

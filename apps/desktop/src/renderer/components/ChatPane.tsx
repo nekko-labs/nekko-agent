@@ -1,5 +1,4 @@
-import { PixelWaveBackground, pixelWaveFor } from './PixelWaveBackground.js';
-import { GreetingNekko } from './GreetingNekko.js';
+import { CleanStartGreeting } from './CleanStartGreeting.js';
 import { PrWatchContinuation } from './PrWatchContinuation.js';
 import { canOfferPrWatch } from '../prWatchContinuation.js';
 import { chatArtifacts } from '../chatArtifacts.js';
@@ -18,7 +17,7 @@ import { createPortal } from 'react-dom';
 import { DictationButton } from './DictationButton.js';
 import { decideApproval, type ApprovalScope } from './agent-console/approval-decision.js';
 import type { AgentEvent, AskAnswer, AskRequest, AutoQuality, Session, ContextBundle, IndexedFile, ModelInfo, ProviderConfig, SkillDef, PrInfo, QueuePayload, QueuedPrompt } from '@nekko-agent/shared';
-import { archiveDaysLeft, CLAUDE_CODE_PROVIDER_KIND, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
+import { CLAUDE_CODE_PROVIDER_KIND, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
 import type { AutoProviderPick, ProviderPool } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { approvalAfterResult } from './ChatPane.approval.js';
@@ -27,6 +26,7 @@ import { useGitStatus } from '../useGitStatus.js';
 import { clearLiveRun, getLiveRun, takeFinishedRun, useLiveRun, type LiveRun } from '../liveRuns.js';
 import { getCachedSession, loadSession, putCachedSession } from '../sessionCache.js';
 import { usePaneVisible } from '../paneVisibility.js';
+import { reportAgentWorking } from '../workingAgents.js';
 import { useAgentEventClaim } from '../agentSubscription.js';
 import { ComposerFocus } from './ComposerFocus.js';
 import { afterPaint } from '../afterPaint.js';
@@ -63,6 +63,7 @@ import { cutPrompt, messageCuts, type MessageCuts } from './agent-console/messag
 import { estimateRowHeight, toTranscriptRows, transcriptBeforeLiveTurn, transcriptRowStamp, type TranscriptRow } from './agent-console/transcript.js';
 import { ContextGauge, EffortSlider } from './ChatMetrics.js';
 import { PlanRail } from './PlanRail.js';
+import { PlanSheet } from './PlanSheet.js';
 import { VerificationChecklist } from './WorkProgress.js';
 import { PlanChangePrompt, planChangeMessage } from './PlanChangePrompt.js';
 import { TurnStatsLine } from './agent-console/TurnStatsLine.js';
@@ -78,6 +79,7 @@ import { PromptAnalyzer } from './PromptAnalyzer.js';
 import { ScheduleTaskModal } from './ScheduleTaskModal.js';
 import { PrCard, PrActionDock } from './PrCard.js';
 import { NekkoAvatar } from './Mascot.js';
+import { PixelWaveBackground, pixelWaveFor, showEmptyAgentWave } from './PixelWaveBackground.js';
 import { Modal } from './primitives/index.js';
 import { WorktreeChip } from './WorktreeChip.js';
 import { FolderPicker } from './FolderPicker.js';
@@ -1115,6 +1117,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
 
   const finalizingReply = useRef(false);
   const endTurn = () => {
+    reportAgentWorking(sessionId, false);
     finalizingReply.current = true;
     streamingRef.current = false;
     setStreaming(false);
@@ -1401,6 +1404,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // dependency because the textarea is disabled until providers have loaded.
 
   const beginTurn = () => {
+    reportAgentWorking(sessionId, true);
     streamingRef.current = true;
     setStreaming(true);
     // Whatever was held from the last reply is about to be replaced.
@@ -2362,7 +2366,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const estimate = useCallback((row: TranscriptRow) => estimateRowHeight(row, columnWidth), [columnWidth]);
   const hasLive = !!(held || getLiveRun(sessionId));
   const welcomeState = chatWelcomeState({ messages: session?.messages.length ?? 0, streaming, hasLive, hasProvider, modelId, imageMode });
-  const wave = settings?.backgroundAnimation === false ? null : pixelWaveFor(settings?.themePreset);
+  const emptyWave = showEmptyAgentWave({ loaded: !!session, messages: session?.messages.length ?? 0, running: streaming || hasLive, readOnly: readOnly || !!session?.archivedAt, composer: surface === 'composer', enabled: settings?.backgroundAnimation !== false }) ? pixelWaveFor(settings?.themePreset) : null;
   const cleanStart = cleanStartWanted && surface === 'full' && !readOnly && welcomeState.welcome && hasProvider && !welcomeState.modelChoice && !imageMode && !!session && !question && !approval;
   // Leaving the clean start because the user sent (the welcome is gone, it is
   // still the same focused chat) plays the composer-into-chat expansion once.
@@ -2439,8 +2443,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         <ContextAction onClick={() => { void navigator.clipboard.writeText(chatMarkdown()).catch(() => useStore.getState().pushToast('error', "Couldn't copy chat.")); setChatMenu(null); }}><CopyIcon className="mr-2 inline h-3.5 w-3.5" />Copy chat</ContextAction>
         <ContextAction onClick={() => { exportChat(); setChatMenu(null); }}><DownloadIcon className="mr-2 inline h-3.5 w-3.5" />Export as Markdown</ContextAction>
       </ContextMenu>}
-      <section className={`flex min-w-0 w-full flex-1 flex-col overflow-x-hidden ${cleanStart ? 'clean-start justify-center' : ''}`}>
-        {cleanStart && paneShown && wave && <PixelWaveBackground wave={wave} />}
+      <section className={`relative isolate flex min-w-0 w-full flex-1 flex-col overflow-x-hidden ${cleanStart ? 'clean-start justify-center' : ''}`}>
+        {emptyWave && <PixelWaveBackground wave={emptyWave} visible={paneShown} />}
         {/* One bar per window. Inside a workspace these ride in the frame's
             title strip, which already shows the chat's name; standalone, the
             chat still needs a header of its own. */}
@@ -2687,22 +2691,16 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             <span className="absolute inset-x-0 top-[5px] h-0.5 opacity-0 transition-opacity group-hover:opacity-100" style={{ background: 'color-mix(in srgb, var(--accent) 45%, transparent)' }} />
             <span className="absolute left-1/2 top-[3px] h-1.5 w-10 -translate-x-1/2 rounded-full opacity-0 transition-opacity group-hover:opacity-100" style={{ background: 'var(--accent)' }} />
           </div>}
-          {cleanStart && <div className="clean-start-greeting fade-in" data-clean-start-greeting>
-            <h2>What should we work on?</h2>
-          </div>}
+          {cleanStart && <CleanStartGreeting key={sessionId} paused={!!draft || pendingImages.length > 0 || pendingVideos.length > 0} />}
           <div className={`composer-column mx-auto ${commandCenter ? 'w-[98%]' : 'w-[90%]'}`} style={cleanStart ? undefined : commandCenter ? { width: '98%' } : undefined}>
+            {surface !== 'composer' && !cleanStart && !planChangeOpen && !question && (
+              <PlanSheet key={sessionId + '-plan'} sessionId={sessionId} session={session} streaming={streaming} prs={prs} basePath={artifactBasePath} onChangePlan={() => setPlanChangeOpen(true)} />
+            )}
             {surface !== 'composer' && planChangeOpen && !question && (
               <div className="composer-question is-open" data-plan-change-pop><div className="composer-question-body"><PlanChangePrompt running={streaming} onSend={(change) => { void sendPlanChange(change); }} onCancel={() => { setPlanChangeOpen(false); composerRef.current?.focus(); }} /></div></div>
             )}
 
             <div className="composer relative">
-            {cleanStart && <GreetingNekko />}
-            {/* While the agent works, a violet→cyan beam laps the border. The
-                gradient is a square that rotates on the compositor, clipped
-                to the ring by the mask on its wrapper; animating the gradient
-                angle itself repainted the whole composer every frame, in every
-                working window on the wall at once. */}
-            {streaming && <span className="composer-beam-ring" aria-hidden><span className="composer-beam-spin" /></span>}
             {compact && (
               <div className="composer-summary">
                 <button
@@ -3321,8 +3319,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           <PlanRail
             sessionId={sessionId}
             session={session}
-            streaming={streaming}
-            onChangePlan={readOnly ? undefined : () => setPlanChangeOpen(true)}
             onMinimize={() => useStore.getState().togglePlanRail(sessionId)}
           />
         </div>
@@ -3358,24 +3354,21 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
 }
 
 /**
- * What sits where the composer would, in an archived chat: when it goes, and
+ * What sits where the composer would, in an archived chat: indefinite retention and
  * the two ways out. Delete forever asks first, since it is the one action in
  * the archive that cannot be taken back.
  */
-function ArchivedChatBar({ sessionId, contentWidth, archivedAt }: { sessionId: string; contentWidth: string; archivedAt: number | null }) {
+function ArchivedChatBar({ sessionId, contentWidth }: { sessionId: string; contentWidth: string; archivedAt: number | null }) {
   const restoreChat = useStore((s) => s.restoreChat);
   const deleteChatForever = useStore((s) => s.deleteChatForever);
   const [busy, setBusy] = useState(false);
-  const days = archivedAt ? archiveDaysLeft(archivedAt) : null;
   return (
     <div className="border-t border-line px-4 py-3">
       <div className={`${contentWidth} flex flex-wrap items-center gap-2 rounded-xl px-3 py-2.5`} style={{ background: 'var(--surface-2)' }}>
         <CheckIcon className="h-4 w-4 shrink-0 text-ink-faint" />
         <p className="min-w-0 flex-1 text-[12px] text-ink-soft">
           Completed and read-only.
-          {days !== null && (
-            <span className="text-ink-faint"> {days === 0 ? 'Deleted today' : `Deleted in ${days} day${days === 1 ? '' : 's'}`} unless restored.</span>
-          )}
+          <span className="text-ink-faint"> Kept until you delete it.</span>
         </p>
         <button
           className="btn btn-outline h-8 px-3 py-0 text-[12px] text-(--danger)"
