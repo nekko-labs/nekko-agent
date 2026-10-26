@@ -1,14 +1,29 @@
 @import 'tailwindcss';
 
-/* New-chat decoration only. The containing clean-start surface clips the field. */
+/* Bounded empty-agent texture: one image, no canvas loop or per-dot elements. */
 .pixel-wave-background {
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
+  overflow: hidden;
   pointer-events: none;
   z-index: -1;
+  contain: paint;
+}
+.pixel-wave-texture {
+  position: absolute;
+  left: calc(50% - 360px);
+  top: calc(50% - 180px);
+  max-width: none;
   image-rendering: pixelated;
+  animation: empty-agent-wave 22.5s steps(36, end) infinite alternate paused;
+}
+@keyframes empty-agent-wave {
+  from { transform: translateX(-18px); }
+  to { transform: translateX(18px); }
+}
+.pixel-wave-background[data-wave-paused] .pixel-wave-texture { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+  .pixel-wave-texture { animation: none; }
 }
 
 /* Context menus remain neutral even when a preset gives the page a vivid tint. */
@@ -347,86 +362,6 @@
       0 0 0 2px var(--ring),
       var(--shadow-sm);
   }
-}
-
-/* Border beam: while the agent works, a violet→cyan beam laps the composer's
-   border (the border-beam pattern, in brand colors). It's the border only, no
-   surface wash, so the composer reads as "busy" without the interior shifting
-   color as you type.
-
-   The ring is a masked wrapper filled by the gradient, and what turns is the
-   gradient's start angle (a registered property, so it interpolates). The
-   version before this rotated a square twice the ring's longest side: pure
-   compositing, but every working window carried a GPU layer of
-   (2 * max(w, h))^2 device pixels, ~70 MB for a wide wall window at 150%
-   scaling. A few busy windows blew Chromium's tile budget ("tile memory
-   limits exceeded") and starved the whole desktop of GPU memory. Now the
-   ring is the only layer, the size of its own box, and it is promoted so
-   each step repaints just the ring, never the composer around it (the
-   repaint that sank the original gradient-angle version). */
-@property --beam-angle {
-  syntax: '<angle>';
-  inherits: false;
-  initial-value: 0deg;
-}
-.composer-beam-ring {
-  position: absolute;
-  will-change: transform;
-  inset: -1px;
-  border-radius: 1rem; /* track the composer's rounded-2xl corners */
-  padding: 1.5px;
-  overflow: hidden;
-  pointer-events: none;
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-}
-.composer-beam-spin {
-  position: absolute;
-  inset: 0;
-  background: conic-gradient(
-    from var(--beam-angle),
-    transparent 0% 58%,
-    var(--accent-2) 74%,
-    var(--accent) 88%,
-    color-mix(in srgb, var(--accent) 55%, #f0abfc) 95%,
-    transparent 100%
-  );
-  /* Stepped, not linear: a linear spin re-composites the masked ring at the
-     display's full refresh (120 Hz on ProMotion), which measured ~40% of a
-     core in the GPU process for one composer. 48 steps a lap is 15 fps,
-     still reads as a sweep, and costs a few percent. */
-  animation: composer-beam-spin 3.2s steps(48, end) infinite;
-}
-@keyframes composer-beam-spin {
-  from { --beam-angle: 0deg; }
-  to { --beam-angle: 360deg; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .composer-beam-spin { animation: none; }
-}
-/* The same beam on a working agent window, quieter than the composer's: a
-   thinner line, softer colours and a slower lap, so a wall of busy windows
-   reads as busy without strobing. It sits over the window's own outline. */
-.wall-window-beam {
-  inset: 0;
-  z-index: 11;
-  border-radius: var(--pane-radius);
-  padding: 1px;
-  opacity: 0.55;
-}
-.wall-window-beam .composer-beam-spin {
-  animation-duration: 5s;
-  animation-timing-function: steps(60, end); /* 12 fps over the slower lap */
-  background: conic-gradient(
-    from var(--beam-angle),
-    transparent 0% 62%,
-    color-mix(in srgb, var(--accent-2) 70%, var(--line)) 76%,
-    color-mix(in srgb, var(--accent) 75%, var(--line)) 90%,
-    transparent 100%
-  );
 }
 
 /* The queue grows as part of the composer rather than floating above it. */
@@ -3240,7 +3175,6 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
    slivers at the top corners. Inside it, focus is the border alone: an inset
    ring on top of the accent border doubled it into a heavy 2px line. */
 .wall-composer .composer, .wall-composer .composer:focus-within { box-shadow: none; }
-.wall-composer .composer-beam-ring { inset: 0; }
 
 /* Prompt suggestions as one chip among the composer's actions. */
 .composer-suggestions-chip {
@@ -3372,12 +3306,25 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 /* Focus mode, new chat: one centered composer on a quiet page. The first send
    drops data-clean-start and the window becomes the full chat. */
 [data-clean-start] .clean-start { position: relative; isolation: isolate; align-items: center; padding: 0 24px 12vh; }
+@property --new-chat-top { syntax: '<color>'; inherits: false; initial-value: rgb(7 59 64 / .12); }
+@property --new-chat-mid { syntax: '<color>'; inherits: false; initial-value: rgb(21 78 80 / .10); }
+@property --new-chat-bottom { syntax: '<color>'; inherits: false; initial-value: rgb(179 139 59 / .10); }
+@keyframes new-chat-colors {
+  0%, 100% { --new-chat-top: rgb(7 59 64 / .12); --new-chat-mid: rgb(21 78 80 / .10); --new-chat-bottom: rgb(179 139 59 / .10); }
+  25% { --new-chat-top: rgb(54 43 125 / .12); --new-chat-mid: rgb(98 57 130 / .10); --new-chat-bottom: rgb(173 79 119 / .10); }
+  50% { --new-chat-top: rgb(30 69 126 / .12); --new-chat-mid: rgb(35 105 123 / .10); --new-chat-bottom: rgb(75 145 118 / .10); }
+  75% { --new-chat-top: rgb(116 57 88 / .12); --new-chat-mid: rgb(151 88 68 / .10); --new-chat-bottom: rgb(164 137 76 / .10); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-clean-start] .clean-start::before { animation: none !important; }
+}
 /* Translucent prism frost, with a separate static grain layer to dither
    colour steps. Both stay behind the content and never intercept input. */
 [data-clean-start] .clean-start::before {
   content: ''; position: absolute; inset: 0; z-index: -2; pointer-events: none;
   background: linear-gradient(to bottom,
-    rgb(7 59 64 / .12) 0%, rgb(21 78 80 / .10) 45%, rgb(179 139 59 / .10) 100%);
+    var(--new-chat-top) 0%, var(--new-chat-mid) 45%, var(--new-chat-bottom) 100%);
+  animation: new-chat-colors 120s ease-in-out infinite;
 }
 [data-clean-start] .clean-start::after {
   content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
@@ -3418,9 +3365,13 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 .clean-start-greeting h2 { display: flex; align-items: center; width: 300px; min-height: 60px; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
 @media (max-width: 600px) { .clean-start-greeting { gap: 10px; } .clean-start-greeting h2 { width: 230px; max-width: calc(100vw - 130px); } }
 .clean-start-greeting p { margin-top: 6px; font-size: 13px; color: var(--ink-faint); }
-[data-clean-start] .clean-start-model { opacity: 0.8; transition: opacity 0.2s vas (--ease-out)}
-[data-clean-start] .clean-start-model:hover,
-[data-clean-start] .clean-start-model:focus-within { opacity: 1; }
+/* Solid, readable controls above the decorative field. Never dim their text. */
+[data-clean-start] .clean-start-model { max-width: 100%; color: var(--ink); }
+[data-clean-start] .clean-start-model > div { flex-wrap: wrap; justify-content: center; }
+[data-clean-start] .clean-start-model :is(button[aria-haspopup='listbox'], .effort-slider) { background: var(--surface); color: var(--ink); border-color: var(--ink-faint); }
+[data-clean-start] .clean-start-model :is(.text-ink-faint, .text-ink-soft),
+[data-clean-start] .clean-start-model .effort-slider :is(label, span.text-ink-soft) { color: var(--ink); }
+
 
 /*
   Mode panel: saved modes down a rail, then Environment + Model, Privacy and
@@ -3608,3 +3559,7 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
   background-size: 18px 18px;
 }
 .diagram-card { box-shadow: var(--shadow-sm); }
+
+/* Working is a steady accent fill, never a new animation or GPU layer. */
+.pixel-mascot[data-mascot-pose="working"] [data-part="pixel-head"] > path:first-child { fill: var(--accent); stroke: var(--accent); }
+.pixel-mascot[data-mascot-pose="working"] [data-part="pixel-eyes"] { fill: var(--on-accent); }

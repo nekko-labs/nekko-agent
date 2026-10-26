@@ -38,3 +38,11 @@ Implemented; 53 focused unit tests and isolated Electron interaction checks pass
 Acceptance: neutral menus remain legible in vivid page themes; the selected chat is visible even in a long panel; the background gradient runs vertically from dark teal to gold; pixel waves exist only inside a visible clean-start chat, never in existing chats or the app background. No new settings, network access, permissions or host mutations are introduced. Verification uses a synthetic full-App bridge in a hidden, non-focusable Electron window with a disposable profile and blocked network. Packaged and non-macOS desktop verification remain untested.
 
 Integration with #1150 preserves its vertical teal-to-gold colour direction and new-chat-only pixel waves, with translucent gradient stops for the frost treatment. Updated merged-base renderer evidence covers this combined appearance.
+
+## Slow color cycle and readable controls (issue #1178)
+
+Implemented, superseding the static-gradient description above. The translucent new-chat wash continuously interpolates teal/gold, violet/rose, blue/mint and rose/amber palettes over a 120-second loop. Only registered CSS color stops animate; grain remains static and the animation stays scoped to an untouched new chat. Reduced motion holds the original palette still; the existing inactive-app policy pauses decorative animation. No remote assets, canvas loop or per-frame React updates are added.
+
+The model and effort controls no longer dim as a group. They use an opaque theme surface, readable foreground labels and visible borders; effort has its own complete rounded border rather than a missing left edge. Controls can wrap on narrow widths. The shared Agents workspace loses 4px of top padding and moves up another 1px, lifting the agent windows and both side panels together by 5px without changing their internal gutters.
+
+Verified: 120-second CSS duration, interpolated intermediate stops and matching loop endpoints, reduced-motion static behavior, matched desktop/narrow hidden Electron captures. The GIF samples the full cycle at 10x speed for review, not real-time playback. Other themes, packaged builds and Windows/Linux have not been visually checked.

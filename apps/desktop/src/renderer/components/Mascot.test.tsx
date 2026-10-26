@@ -70,12 +70,21 @@ describe('Pixel Nekko', () => {
   });
   it('keeps working feedback, greeting, and the visibility setting', () => {
     expect(renderToStaticMarkup(<MiniNekko size={16} />)).toContain('pixel-working');
-    const working = renderToStaticMarkup(<Mascot mood="thinking" enabled />);
+    const working = renderToStaticMarkup(<Mascot mood="thinking" working enabled />);
     expect(working).toContain('data-mascot-pose="working"');
     expect(working).toContain('Nekko is working');
     expect(working).toContain('<button type="button"');
     expect(renderToStaticMarkup(<Mascot mood="waving" enabled />)).toContain('data-mascot-pose="happy"');
     expect(renderToStaticMarkup(<Mascot mood="idle" enabled={false} />)).toBe('');
+  });
+
+  it('ignores stale per-chat thinking mood and uses a steady aggregate working pose', () => {
+    expect(renderToStaticMarkup(<Mascot mood="thinking" enabled />)).toContain('data-mascot-pose="idle"');
+    const active = renderToStaticMarkup(<Mascot mood="idle" working enabled />);
+    expect(active).toContain('data-mascot-pose="working"');
+    expect(active).toContain('pixel-stationary');
+    expect(active).not.toContain('pixel-quiet');
+    expect(cssRule(stylesheet('styles.css'), '.pixel-mascot[data-mascot-pose="working"] [data-part="pixel-head"] > path:first-child')).toMatchObject({ fill: 'var(--accent)', stroke: 'var(--accent)' });
   });
 
   it('uses matching head and eye geometry on marketing', () => {
