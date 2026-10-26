@@ -4,6 +4,18 @@
 
 use crate::common::*;
 
+// VMs run only on macOS; elsewhere the runner channels are unknown, which the UI shows as unavailable.
+#[cfg(windows)]
+#[tokio::test(flavor = "multi_thread")]
+async fn runner_channels_are_unknown_on_windows() {
+    let data = tempfile::tempdir().unwrap();
+    let d = start_with(Some(data.path()));
+    let (status, body) = post(d.port, "runner:list", json!([]), Some(TOKEN)).await;
+    assert!(status >= 400, "{status}");
+    assert_eq!(body["error"], "unknown channel runner:list");
+}
+
+#[cfg(unix)]
 #[tokio::test(flavor = "multi_thread")]
 async fn runner_channels_round_trip() {
     let data = tempfile::tempdir().unwrap();
