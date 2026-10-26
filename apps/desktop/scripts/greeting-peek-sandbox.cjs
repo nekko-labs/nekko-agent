@@ -39,8 +39,22 @@ app.whenReady().then(async () => {
     await sleep(500);
     await check(`document.querySelector('.composer [contenteditable="plaintext-only"]').value==='Plan a small project with a friendly cat'`, 'Composer accepts text');
     if (!before) {
+      // The editor restores selection after painting input. Move the caret only
+      // after that paint, then wait for the observable selection and gaze.
+      const select = async offset => {
+        await run(`document.querySelector('.composer [contenteditable="plaintext-only"]').setSelectionRange(${offset},${offset})`);
+        for (let n=0;n<40;n++) {
+          await sleep(50);
+          if (await run(`document.querySelector('.composer [contenteditable="plaintext-only"]').selectionStart === ${offset}`)) {
+            await sleep(100);
+            return;
+          }
+        }
+        throw Error('Caret did not settle at ' + offset);
+      };
+      await select(0);
       const start = await run(`document.querySelector('[data-nekko-look]').getAttribute('transform')`);
-      await run(`document.querySelector('.composer [contenteditable="plaintext-only"]').setSelectionRange(38,38)`);
+      await select(38);
       await sleep(500);
       await check(`document.querySelector('[data-nekko-look]').getAttribute('transform') !== ${JSON.stringify(start)}`, 'Eyes follow selection movement');
       const { PNG } = require('pngjs');

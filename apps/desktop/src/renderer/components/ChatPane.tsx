@@ -1,3 +1,4 @@
+import { PixelWaveBackground, pixelWaveFor } from './PixelWaveBackground.js';
 import { GreetingNekko } from './GreetingNekko.js';
 import { PrWatchContinuation } from './PrWatchContinuation.js';
 import { canOfferPrWatch } from '../prWatchContinuation.js';
@@ -2361,6 +2362,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const estimate = useCallback((row: TranscriptRow) => estimateRowHeight(row, columnWidth), [columnWidth]);
   const hasLive = !!(held || getLiveRun(sessionId));
   const welcomeState = chatWelcomeState({ messages: session?.messages.length ?? 0, streaming, hasLive, hasProvider, modelId, imageMode });
+  const wave = settings?.backgroundAnimation === false ? null : pixelWaveFor(settings?.themePreset);
   const cleanStart = cleanStartWanted && surface === 'full' && !readOnly && welcomeState.welcome && hasProvider && !welcomeState.modelChoice && !imageMode && !!session && !question && !approval;
   // Leaving the clean start because the user sent (the welcome is gone, it is
   // still the same focused chat) plays the composer-into-chat expansion once.
@@ -2438,6 +2440,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         <ContextAction onClick={() => { exportChat(); setChatMenu(null); }}><DownloadIcon className="mr-2 inline h-3.5 w-3.5" />Export as Markdown</ContextAction>
       </ContextMenu>}
       <section className={`flex min-w-0 w-full flex-1 flex-col overflow-x-hidden ${cleanStart ? 'clean-start justify-center' : ''}`}>
+        {cleanStart && paneShown && wave && <PixelWaveBackground wave={wave} />}
         {/* One bar per window. Inside a workspace these ride in the frame's
             title strip, which already shows the chat's name; standalone, the
             chat still needs a header of its own. */}
