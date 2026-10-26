@@ -18,11 +18,11 @@ Implemented. Matching unchanged-base and working-tree Electron window captures i
 
 ## Peeking greeting Nekko
 
-`[implemented; isolated renderer interaction checks passed at 1280px and 460px; matched before/after renderer screenshots visually reviewed at both widths]`
+`[implemented; 3 focused unit tests and 10 isolated renderer checks passed at 1280px and 460px; matched before/after renderer screenshots visually reviewed at both widths; caret movement GIF captured]`
 
-- The new-chat greeting places Nekko to the left of “What should we work on?”, reusing the pixel head and edge-resting paws from Travis's website beta-signup design (PR #763). The eyes glance right toward the heading. Model Providers is unchanged.
-- The small static SVG inherits the active theme's surface, ink, line and accent colors. It has no extra animation, settings, network requests, permissions or host calls.
-- Acceptance: cat and heading remain side by side without clipping at desktop and narrow widths; the heading remains readable, the SVG is decorative and non-focusable, and composing a message still works. Existing clean-start visibility rules remain unchanged, so transcript views do not gain artwork.
+- The new-chat greeting centers “What should we work on?” above the composer. Nekko peeks over the actual composer top border with her paws overlapping it, without a separate illustrated ledge, reusing the pixel head and paws from Travis's website beta-signup design (PR #763). The eyes follow the composer text insertion caret during typing and selection movement, with a bounded glance inside the face. Model Providers is unchanged.
+- The small decorative SVG inherits the active theme's surface, ink, line and accent colors. Caret updates are coalesced per animation frame and scoped to this composer; listeners are removed when the greeting unmounts. There are no looping animations, settings, network requests, permissions or host calls.
+- Acceptance: cat paws stay on the composer border without clipping at desktop and narrow widths; the heading remains readable, the SVG is decorative and non-focusable, and composing a message still works. Existing clean-start visibility rules remain unchanged, so transcript views do not gain artwork.
 - Verified through a synthetic full-App fixture with an isolated profile, blocked networking and a hidden, non-focusable Electron window. Packaged desktop and physical mobile devices are not part of this check. Native capture source enumeration failed on the host; evidence covers Electron renderer pixels, not OS window chrome.
 
 ## Menu, tab and background follow-up (issue #1147)
