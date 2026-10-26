@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { navOrder, moveNav } from './nav-order.js';
+import { navOrder, moveNav, sidebarViewVisible } from './nav-order.js';
 import { useStore, viewEnabled, type View } from './store.js';
 import { startLiveRuns } from './liveRuns.js';
 import { startSessionSummaryRefresh } from './sessionSummaryRefresh.js';
@@ -96,7 +96,7 @@ export function App() {
   const [draggedNav, setDraggedNav] = useState<View | null>(null);
   const [dropNav, setDropNav] = useState<View | null>(null);
   const order = navOrder(NAV.map(n => n.view), settings?.navOrder);
-  const visibleNav = order.map(v => NAV.find(n => n.view === v)!).filter(n => viewEnabled(n.view, settings));
+  const visibleNav = order.map(v => NAV.find(n => n.view === v)!).filter(n => viewEnabled(n.view, settings) && sidebarViewVisible(n.view, settings?.sidebarViews));
   const activeNavIndex = visibleNav.findIndex(n => n.view === (view === 'modelserver' ? 'models' : view));
   const reorder = async (from: View, to: View) => {
     const previous = settings;

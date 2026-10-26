@@ -3329,12 +3329,25 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 /* Focus mode, new chat: one centered composer on a quiet page. The first send
    drops data-clean-start and the window becomes the full chat. */
 [data-clean-start] .clean-start { position: relative; isolation: isolate; align-items: center; padding: 0 24px 12vh; }
+@property --new-chat-top { syntax: '<color>'; inherits: false; initial-value: rgb(7 59 64 / .12); }
+@property --new-chat-mid { syntax: '<color>'; inherits: false; initial-value: rgb(21 78 80 / .10); }
+@property --new-chat-bottom { syntax: '<color>'; inherits: false; initial-value: rgb(179 139 59 / .10); }
+@keyframes new-chat-colors {
+  0%, 100% { --new-chat-top: rgb(7 59 64 / .12); --new-chat-mid: rgb(21 78 80 / .10); --new-chat-bottom: rgb(179 139 59 / .10); }
+  25% { --new-chat-top: rgb(54 43 125 / .12); --new-chat-mid: rgb(98 57 130 / .10); --new-chat-bottom: rgb(173 79 119 / .10); }
+  50% { --new-chat-top: rgb(30 69 126 / .12); --new-chat-mid: rgb(35 105 123 / .10); --new-chat-bottom: rgb(75 145 118 / .10); }
+  75% { --new-chat-top: rgb(116 57 88 / .12); --new-chat-mid: rgb(151 88 68 / .10); --new-chat-bottom: rgb(164 137 76 / .10); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-clean-start] .clean-start::before { animation: none !important; }
+}
 /* Translucent prism frost, with a separate static grain layer to dither
    colour steps. Both stay behind the content and never intercept input. */
 [data-clean-start] .clean-start::before {
   content: ''; position: absolute; inset: 0; z-index: -2; pointer-events: none;
   background: linear-gradient(to bottom,
-    rgb(7 59 64 / .12) 0%, rgb(21 78 80 / .10) 45%, rgb(179 139 59 / .10) 100%);
+    var(--new-chat-top) 0%, var(--new-chat-mid) 45%, var(--new-chat-bottom) 100%);
+  animation: new-chat-colors 120s ease-in-out infinite;
 }
 [data-clean-start] .clean-start::after {
   content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
@@ -3375,9 +3388,13 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 .clean-start-greeting h2 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
 @media (max-width: 600px) { .clean-start-greeting { margin-bottom: 56px; } }
 .clean-start-greeting p { margin-top: 6px; font-size: 13px; color: var(--ink-faint); }
-[data-clean-start] .clean-start-model { opacity: 0.8; transition: opacity 0.2s vas (--ease-out)}
-[data-clean-start] .clean-start-model:hover,
-[data-clean-start] .clean-start-model:focus-within { opacity: 1; }
+/* Solid, readable controls above the decorative field. Never dim their text. */
+[data-clean-start] .clean-start-model { max-width: 100%; color: var(--ink); }
+[data-clean-start] .clean-start-model > div { flex-wrap: wrap; justify-content: center; }
+[data-clean-start] .clean-start-model :is(button[aria-haspopup='listbox'], .effort-slider) { background: var(--surface); color: var(--ink); border-color: var(--ink-faint); }
+[data-clean-start] .clean-start-model :is(.text-ink-faint, .text-ink-soft),
+[data-clean-start] .clean-start-model .effort-slider :is(label, span.text-ink-soft) { color: var(--ink); }
+
 
 /*
   Mode panel: saved modes down a rail, then Environment + Model, Privacy and
