@@ -5,7 +5,7 @@ const repo = path.resolve(__dirname, '../../..');
 const modules = process.env.NEKKO_TEST_MODULES || path.join(repo, 'node_modules');
 const out = path.join(repo, '.shots/tool-groups');
 async function main() {
-  require('./check-sandbox-syntax.cjs').checkSandboxSyntax(path.join(__dirname, 'tool-groups-sandbox.cjs'));
+  require('./check-sandbox-syntax.cjs').checkSandboxSyntax(path.join(__dirname, process.env.NEKKO_TOOL_GROUP_SANDBOX || 'tool-groups-sandbox.cjs'));
   fs.mkdirSync(out, { recursive: true });
   let entry = path.join(__dirname, 'tool-groups-fixture.tsx');
   let shared = path.join(repo, 'packages/shared/src/index.ts');
@@ -15,7 +15,7 @@ async function main() {
       fs.mkdirSync(source, { recursive: true });
       const zip = path.join(out, 'base.zip');
       cp.execFileSync('git', ['archive', '--format=zip', `--output=${zip}`, process.env.NEKKO_TEST_REVISION, 'apps/desktop/src', 'packages/shared/src'], { cwd: repo });
-      cp.execFileSync('python', ['-c', 'import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])', zip, source]);
+      cp.execFileSync('python3', ['-c', 'import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])', zip, source]);
     }
     entry = path.join(out, 'base-fixture.tsx');
     fs.writeFileSync(entry, fs.readFileSync(path.join(__dirname, 'tool-groups-fixture.tsx'), 'utf8').replaceAll('../src/renderer', path.join(source, 'apps/desktop/src/renderer').replaceAll('\\', '/')).replace(/^import .*styles\.css';\r?\n/m, ''));
@@ -32,7 +32,7 @@ async function main() {
   fs.writeFileSync(path.join(out, 'index.html'), '<!doctype html><html data-theme="light"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'self\' data: blob:; script-src \'self\'; style-src \'self\' \'unsafe-inline\'; connect-src \'none\'"><link rel="stylesheet" href="styled.css"></head><body><div id="root"></div><script src="fixture.js"></script></body></html>');
   const env = { ...process.env, NEKKO_COMPONENT_OUT: out }; delete env.ELECTRON_RUN_AS_NODE;
   const electron = path.join(modules, 'electron');
-  const result = cp.spawnSync(require(electron), [path.join(__dirname, 'tool-groups-sandbox.cjs')], { cwd: repo, env, windowsHide: true, stdio: 'inherit', timeout: 120000 });
+  const result = cp.spawnSync(require(electron), [path.join(__dirname, process.env.NEKKO_TOOL_GROUP_SANDBOX || 'tool-groups-sandbox.cjs')], { cwd: repo, env, windowsHide: true, stdio: 'inherit', timeout: 120000 });
   if (result.error) throw result.error;
   process.exitCode = result.status ?? 1;
 }

@@ -6,6 +6,11 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Chat swipe and welcoming questions (#1174)
+
+- [x] **CG-1, Reveal the whole row and full time.** Either horizontal wheel direction moves the transcript left up to 112px through CSS state; focused Electron checks cover row/child displacement, timestamp bounds, spring-back and no horizontal scroll at 1100px and 460px. Spec: [Swipe for times](spec/chat/chat-suggestions-progress-and-code-access.md).
+- [x] **CG-2, Center Nekko beside rotating questions.** Ten local questions on an eight-second idle timer, paused for drafts/attachments, hidden documents and reduced motion; caret-following scoped to the composer section. Focused unit and isolated renderer checks; packaged app/physical trackpad remain unverified. Spec: [Centered greeting](spec/desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md).
+
 ## Verification and PR progress (added 2026-10-25)
 
 Issue #1115. Spec: [Verification checklists and PR progress](spec/chat/verification-and-pr-progress.md).
@@ -2405,6 +2410,9 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 
 - [x] Remove the retired Expo app and its dedicated Mobile CI; keep native phone workflows, relay/push infrastructure and shared protocol coverage. Update merge-gate accounting and desktop icon/test references. See [native phone decision](spec/phone/native-phone-implementation-decision.md) and [decision 0026](docs/decisions/0026-retire-expo-in-favor-of-native-phone-apps.md). Tracked in #1124.
 
+### Inline thoughts in chat (#1138) · [spec](spec/chat/tool-calls-grouped-by-purpose.md)
+
+- [x] Show provider-supplied thoughts with the thought icon outside collapsible tool groups in live and saved desktop/Local Web UI conversations. Preserve ordering and avoid repeating a final message's thought. Verified with all 217 chat component tests, desktop typechecking and hidden Electron before/after captures at 1000/390 px; native phones unchanged.
 ## Compact Monitors and new-chat frost (#1152)
 
 - [x] Reduce the default/snap dock width to 276px, trim the monitor right inset by 2px, and avoid unused Focus scrollbar space. Keep budget ranges on one row and metric values readable. See [spacing spec](spec/desktop/slim-wave-rail-tighter-agents-spacing-composer-snap-points.md).
