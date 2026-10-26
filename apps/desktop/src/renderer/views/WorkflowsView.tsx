@@ -284,9 +284,11 @@ export function WorkflowsView() {
 
       {/* List */}
       <div className="min-w-0 flex-1 overflow-y-auto p-4">
-        {!loaded ? <p className="p-4 text-[13px] text-ink-soft" role="status">{loadFailed ? 'Could not load workflows. Reopen this tab to try again.' : 'Loading workflows…'}</p> : workflows.length === 0 ? (
+        {!loaded ? <p className="p-4 text-[13px] text-ink-soft" role="status">{loadFailed ? 'Could not load workflows. Reopen this tab to try again.' : 'Loading workflows…'}</p> : workflows.length === 0 ? (<>
+          {/* The wizard replaces the list header, so keep the switcher: CI runners must stay reachable with no workflows. */}
+          <div className="mx-auto max-w-4xl px-4 sm:px-8"><SectionSegment value={section} onChange={setSection} /></div>
           <FirstWorkflowWizard onCreate={(seed) => setCreating({ seed })} onBrowse={() => setPicking(true)} />
-        ) : <div className="mx-auto max-w-5xl">
+        </>) : <div className="mx-auto max-w-5xl">
           <div className="flex flex-wrap items-baseline gap-2">
             {!hasAppChrome && <h1 className="view-title">Workflows</h1>}
             <SectionSegment value={section} onChange={setSection} />
