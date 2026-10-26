@@ -57,7 +57,11 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > connects to it and shows its models and folders; what you typed stays.
 >
 > In a chat on the iPhone, what the agent does reads as it does on the desktop: each tool step is
-> one quiet line (a mark, the command or file, a chevron when there is output), subagents are a
+> one quiet line (a mark, the command or file, a chevron when there is output), and adjacent steps
+> with one purpose fold into one row that says the goal (*Read the project's guidance*, *Looked
+> through the code*, *Ran the tests · 1 failed*) and opens to its steps; Android shows the same
+> groups as cards. A step waiting for your approval, a question and a lone step stay on their own,
+> and a group with a failed step starts open. Subagents are a
 > group with one row per child and its model, and an armed watch shows what it watches, what wakes
 > it and a live countdown (*≤ 42 min left*, *overdue*, *triggered*); the wake-up itself is a
 > *Watch triggered* row, not a message from you. Only your own bubbles and an approval or question

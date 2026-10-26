@@ -19,6 +19,7 @@ mod git;
 mod lifecycle;
 mod native;
 mod remote;
+mod runner;
 mod sandbox;
 mod sessions;
 mod settings;

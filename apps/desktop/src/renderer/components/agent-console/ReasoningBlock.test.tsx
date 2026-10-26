@@ -26,3 +26,18 @@ describe('inline thoughts', () => {
     expect(html.indexOf('aria-expanded')).toBeLessThan(html.indexOf('Second thought'));
   });
 });
+
+// Intermediate frames, not just the final projection: each new thought is visible
+// immediately, and repeated calls already have a purpose row before done.
+it('renders thoughts and purpose groups at every live event boundary', () => {
+  const items: any[] = [{ kind: 'reasoning', text: 'Inspect guidance now.', duration: null }];
+  const html = () => renderToStaticMarkup(<ActivityGroup streaming items={[...items]} />);
+  expect(html()).toContain('Inspect guidance now.');
+  items.push({ kind: 'tool', call: { id: 'a', name: 'read_file', input: { path: 'AGENTS.md' } } });
+  expect(html()).toContain('AGENTS.md');
+  items.push({ kind: 'tool', call: { id: 'b', name: 'read_file', input: { path: 'CLAUDE.md' } } });
+  expect(html()).toContain('data-purpose-group="guidance"');
+  items.push({ kind: 'reasoning', text: 'Now inspect the source.', duration: null });
+  expect(html()).toContain('Now inspect the source.');
+  expect(html().match(/data-chat-thought/g)).toHaveLength(2);
+});

@@ -1,3 +1,4 @@
+import { attachTimestampSwipe } from './timestampSwipe.js';
 import React, { memo, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { RowKeyContext, RowMemoryContext } from './rowState.js';
@@ -87,47 +88,11 @@ export interface VirtualTranscriptProps<R extends VirtualRow> {
   ref?: React.Ref<VirtualTranscriptHandle>;
 }
 
-/** Room for a full localized time plus its gap, including AM/PM. */
-const REVEAL_PX = 112;
-/** No horizontal wheel input for this long means the fingers left the trackpad. */
-const REVEAL_RELEASE_MS = 120;
-
-/**
- * Swipe horizontally on the trackpad to see when each row was sent, as chat apps do:
- * either direction slides the whole row left, then springs back on release. Driven
- * through CSS variables on the scroller, so a swipe re-renders nothing.
- */
+/** Keep gesture listeners out of React's render path; see timestampSwipe.ts. */
 function useSwipeToRevealTimes(scrollRef: React.RefObject<HTMLDivElement | null>) {
   useEffect(() => {
     const el = scrollRef.current;
-    if (!el) return;
-    let reveal = 0;
-    let release: ReturnType<typeof setTimeout> | undefined;
-    let settle: ReturnType<typeof setTimeout> | undefined;
-    const paint = (px: number) => {
-      el.style.setProperty('--vt-reveal', `${px}px`);
-      el.style.setProperty('--vt-reveal-o', String(px / REVEAL_PX));
-      // Only while moved: a transform at rest would trap fixed popovers in rows.
-      el.classList.toggle('vt-revealing', px > 0);
-    };
-    const onWheel = (e: WheelEvent) => {
-      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
-      e.preventDefault();
-      clearTimeout(release);
-      clearTimeout(settle);
-      el.classList.add('vt-swiping');
-      reveal = Math.min(REVEAL_PX, Math.max(0, reveal + Math.abs(e.deltaX)));
-      paint(reveal);
-      release = setTimeout(() => {
-        el.classList.remove('vt-swiping');
-        reveal = 0;
-        el.style.setProperty('--vt-reveal-o', '0');
-        el.style.setProperty('--vt-reveal', '0px');
-        settle = setTimeout(() => paint(0), 250);
-      }, REVEAL_RELEASE_MS);
-    };
-    el.addEventListener('wheel', onWheel, { passive: false });
-    return () => { el.removeEventListener('wheel', onWheel); clearTimeout(release); clearTimeout(settle); };
+    if (el) return attachTimestampSwipe(el);
   }, [scrollRef]);
 }
 

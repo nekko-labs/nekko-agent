@@ -38,6 +38,8 @@ export type LiveBlock = { kind: 'text'; text: string } | { kind: 'activity'; ite
 /** One session's in-flight turn, as much of it as a pane needs to redraw. */
 export interface LiveRun {
   sessionId: string;
+  /** Saved tail before a user-initiated resume; never hide this work. */
+  transcriptThroughId?: string;
   /** Progress text and working steps in the order they arrive. */
   blocks: LiveBlock[];
   /** The assistant text streamed so far this turn. */
@@ -126,6 +128,14 @@ function emptyRun(sessionId: string, now: number): LiveRun {
     activity: emptyLiveActivity(now),
     stepMark: { blocks: [], text: '', reasoning: '' },
   };
+}
+
+/** Seed a resumed run before its first event, keeping its saved transcript visible. */
+export function beginResumedRun(sessionId: string, transcriptThroughId?: string): void {
+  startSubagentActivity(sessionId);
+  finished.delete(sessionId);
+  runs.set(sessionId, { ...emptyRun(sessionId, Date.now()), transcriptThroughId });
+  markDirty(sessionId);
 }
 
 /**
@@ -297,9 +307,12 @@ export function applyReplay(replay: AgentReplay): void {
   const events = replay.events ?? [];
   if (!events.length) return;
   const keepStart = runs.get(id)?.startedAt;
+  const transcriptThroughId = runs.get(id)?.transcriptThroughId;
   runs.delete(id);
   resetSubagentActivityFor(id);
   events.forEach((e, i) => applyEvent({ ...e, sessionId: id } as AgentEvent, replay.at?.[i] ?? Date.now()));
+  const replayed = runs.get(id);
+  if (replayed && transcriptThroughId) runs.set(id, { ...replayed, transcriptThroughId });
   const run = runs.get(id);
   if (run && keepStart !== undefined && keepStart < run.startedAt) runs.set(id, { ...run, startedAt: keepStart });
   markDirty(id);

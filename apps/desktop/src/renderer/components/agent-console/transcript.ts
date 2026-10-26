@@ -132,7 +132,12 @@ export function toStreamBlocks(messages: ChatMessage[], context: ChatMessage[] =
  * once as a settled bubble with a Done row, once streaming below it. The
  * persisted tail comes back as soon as the live run is released.
  */
-export function transcriptBeforeLiveTurn(messages: ChatMessage[]): ChatMessage[] {
+export function transcriptBeforeLiveTurn(messages: ChatMessage[], transcriptThroughId?: string): ChatMessage[] {
+  if (transcriptThroughId) {
+    const tail = messages.findIndex((m) => m.id === transcriptThroughId);
+    // A missing anchor (for example after compaction) must not hide saved history.
+    return tail < 0 || tail === messages.length - 1 ? messages : messages.slice(0, tail + 1);
+  }
   for (let i = messages.length - 1; i >= 0; i--) {
     if (messages[i].role === 'user') return i === messages.length - 1 ? messages : messages.slice(0, i + 1);
   }

@@ -1,5 +1,5 @@
+import { ActiveWatchChips } from './ActiveWatchChips.js';
 import { ConnectivityNotices, mergeConnectivityNotices, rememberedConnectivityNotices } from './ConnectivityNotices.js';
-import { PixelWaveBackground, pixelWaveFor } from './PixelWaveBackground.js';
 import { CleanStartGreeting } from './CleanStartGreeting.js';
 import { PrWatchContinuation } from './PrWatchContinuation.js';
 import { canOfferPrWatch } from '../prWatchContinuation.js';
@@ -25,9 +25,10 @@ import { useShallow } from 'zustand/react/shallow';
 import { approvalAfterResult } from './ChatPane.approval.js';
 import { useStore } from '../store.js';
 import { useGitStatus } from '../useGitStatus.js';
-import { clearLiveRun, getLiveRun, takeFinishedRun, useLiveRun, type LiveRun } from '../liveRuns.js';
+import { beginResumedRun, clearLiveRun, getLiveRun, takeFinishedRun, useLiveRun, type LiveRun } from '../liveRuns.js';
 import { getCachedSession, loadSession, putCachedSession } from '../sessionCache.js';
 import { usePaneVisible } from '../paneVisibility.js';
+import { reportAgentWorking } from '../workingAgents.js';
 import { useAgentEventClaim } from '../agentSubscription.js';
 import { ComposerFocus } from './ComposerFocus.js';
 import { afterPaint } from '../afterPaint.js';
@@ -58,7 +59,7 @@ import { PhotoViewer } from './PhotoViewer.js';
 import { ChatImages, imageFileName, loadRemoteImage, remoteImageEvidence, urlSeenIn, type ChatImageItem, type ChatImagesApi } from '../remoteImages.js';
 import { CompactionSummary } from './agent-console/CompactionSummary.js';
 import { promptHistory, recallPrompt, type HistoryCursor } from './agent-console/promptHistory.js';
-import { PERSISTED_INTERRUPTION, shouldShowPersistedInterruption, reconcileInterruptionNotice, describeInterruption, suggestedReplyClassName } from './agent-console/interruption.js';
+import { PERSISTED_INTERRUPTION, shouldShowPersistedInterruption, reconcileInterruptionNotice, describeInterruption } from './agent-console/interruption.js';
 import { cutPrompt, messageCuts, type MessageCuts } from './agent-console/messageCut.js';
 
 import { estimateRowHeight, toTranscriptRows, transcriptBeforeLiveTurn, transcriptRowStamp, type TranscriptRow } from './agent-console/transcript.js';
@@ -80,6 +81,7 @@ import { PromptAnalyzer } from './PromptAnalyzer.js';
 import { ScheduleTaskModal } from './ScheduleTaskModal.js';
 import { PrCard, PrActionDock } from './PrCard.js';
 import { NekkoAvatar } from './Mascot.js';
+import { PixelWaveBackground, pixelWaveFor, showEmptyAgentWave } from './PixelWaveBackground.js';
 import { Modal } from './primitives/index.js';
 import { WorktreeChip } from './WorktreeChip.js';
 import { FolderPicker } from './FolderPicker.js';
@@ -687,7 +689,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // What the model thinks the user will say next: the composer's ghost text.
   // Pinned to the reply it was written for (forId) so
   // a newer turn can't inherit stale suggestions.
-  const [suggestions, setSuggestions] = useState<{ forId: string; options: string[]; next: string | null } | null>(null);
+  const [suggestions, setSuggestions] = useState<{ forId: string; next: string | null } | null>(null);
   // A failed reply stays in the transcript with a retry, instead of vanishing
   // with the toast.
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
@@ -1120,6 +1122,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
 
   const finalizingReply = useRef(false);
   const endTurn = () => {
+    reportAgentWorking(sessionId, false);
     finalizingReply.current = true;
     streamingRef.current = false;
     setStreaming(false);
@@ -1190,13 +1193,13 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const requestSuggestions = async () => {
     try {
       const res = await window.nekko.suggestReplies(sessionId);
-      if (!res || (res.options.length === 0 && !res.next)) return;
+      if (!res?.next) return;
       const fresh = await window.nekko.getSession(sessionId);
       const last = fresh?.messages[fresh.messages.length - 1];
       // A turn that started while the call was in flight (a queued prompt, a
       // send from another pane) makes the suggestions stale; drop them.
       if (!last || last.role !== 'assistant') return;
-      setSuggestions({ forId: last.id, options: res.options, next: res.next });
+      setSuggestions({ forId: last.id, next: res.next });
     } catch {
       /* suggestions are nice-to-have */
     }
@@ -1406,6 +1409,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // dependency because the textarea is disabled until providers have loaded.
 
   const beginTurn = () => {
+    reportAgentWorking(sessionId, true);
     streamingRef.current = true;
     setStreaming(true);
     // Whatever was held from the last reply is about to be replaced.
@@ -1768,14 +1772,22 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     const brain = requireBrain(lastUser?.content ?? '');
     if (!brain) return;
     setErrorNotice(null);
+    beginResumedRun(sessionId, session?.messages.at(-1)?.id);
     beginTurn();
-    await window.nekko.sendChat({
-      sessionId,
-      providerId: brain.providerId,
-      modelId: brain.modelId,
-      text: '',
-      resume: true,
-    });
+    try {
+      await window.nekko.sendChat({
+        sessionId,
+        providerId: brain.providerId,
+        modelId: brain.modelId,
+        text: '',
+        resume: true,
+      });
+    } catch (error) {
+      clearLiveRun(sessionId);
+      streamingRef.current = false;
+      setStreaming(false);
+      useStore.getState().pushToast('error', `Could not retry: ${String(error)}`);
+    }
   };
 
   const chatMarkdown = () => {
@@ -1978,11 +1990,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     if (errorNotice || dismissedInterruption === lastMsgId) return;
     if (interrupted) setErrorNotice(PERSISTED_INTERRUPTION);
   }, [session, streaming, held, errorNotice, lastMsgId, dismissedInterruption, question]);
-  const canContinueWork = !streaming && !held && !session?.activeRun && !errorNotice &&
-    session?.messages.at(-1)?.role === 'assistant' && hasResumableProgress(session.messages);
-  // Suppress suggestions while recovery actions are visible.
-  const suggestedOptions = errorNotice ? [] : liveSuggestions?.options ?? [];
-
   // The model's single most likely next message, shown as the composer's
   // placeholder while the box is empty; ArrowRight types it in.
   const ghostSuggestion = !draft && !errorNotice && liveSuggestions?.next ? liveSuggestions.next : null;
@@ -2296,10 +2303,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // --- The transcript, as windowed rows ---
   const messages = session?.messages;
   // While the live run draws the newest turn (streaming, or held until its
-  // persisted copy has replaced it), the transcript stops at that turn's prompt:
-  // the checkpointed tail would be the same narration and steps drawn twice.
+  // persisted copy has replaced it), stop at its prompt or the saved resume
+  // boundary: only the new checkpointed tail would duplicate the live steps.
   const liveTurn = streaming || !!held;
-  const settled = useMemo(() => (messages && liveTurn ? transcriptBeforeLiveTurn(messages) : messages), [messages, liveTurn]);
+  const transcriptThroughId = (getLiveRun(sessionId) ?? held)?.transcriptThroughId;
+  const settled = useMemo(() => (messages && liveTurn ? transcriptBeforeLiveTurn(messages, transcriptThroughId) : messages), [messages, liveTurn, transcriptThroughId]);
   const rows = useMemo(
     () => (settled ? toTranscriptRows(settled, extractPrUrls, collectSessionPrUrls, prs) : []),
     [settled, prs],
@@ -2367,7 +2375,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const estimate = useCallback((row: TranscriptRow) => estimateRowHeight(row, columnWidth), [columnWidth]);
   const hasLive = !!(held || getLiveRun(sessionId));
   const welcomeState = chatWelcomeState({ messages: session?.messages.length ?? 0, streaming, hasLive, hasProvider, modelId, imageMode });
-  const wave = settings?.backgroundAnimation === false ? null : pixelWaveFor(settings?.themePreset);
+  const emptyWave = showEmptyAgentWave({ loaded: !!session, messages: session?.messages.length ?? 0, running: streaming || hasLive, readOnly: readOnly || !!session?.archivedAt, composer: surface === 'composer', enabled: settings?.backgroundAnimation !== false }) ? pixelWaveFor(settings?.themePreset) : null;
   const cleanStart = cleanStartWanted && surface === 'full' && !readOnly && welcomeState.welcome && hasProvider && !welcomeState.modelChoice && !imageMode && !!session && !question && !approval;
   // Leaving the clean start because the user sent (the welcome is gone, it is
   // still the same focused chat) plays the composer-into-chat expansion once.
@@ -2444,8 +2452,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         <ContextAction onClick={() => { void navigator.clipboard.writeText(chatMarkdown()).catch(() => useStore.getState().pushToast('error', "Couldn't copy chat.")); setChatMenu(null); }}><CopyIcon className="mr-2 inline h-3.5 w-3.5" />Copy chat</ContextAction>
         <ContextAction onClick={() => { exportChat(); setChatMenu(null); }}><DownloadIcon className="mr-2 inline h-3.5 w-3.5" />Export as Markdown</ContextAction>
       </ContextMenu>}
-      <section className={`flex min-w-0 w-full flex-1 flex-col overflow-x-hidden ${cleanStart ? 'clean-start justify-center' : ''}`}>
-        {cleanStart && paneShown && wave && <PixelWaveBackground wave={wave} />}
+      <section className={`relative isolate flex min-w-0 w-full flex-1 flex-col overflow-x-hidden ${cleanStart ? 'clean-start justify-center' : ''}`}>
+        {emptyWave && <PixelWaveBackground wave={emptyWave} visible={paneShown} />}
         {/* One bar per window. Inside a workspace these ride in the frame's
             title strip, which already shows the chat's name; standalone, the
             chat still needs a header of its own. */}
@@ -2703,12 +2711,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             )}
 
             <div className="composer relative">
-            {/* While the agent works, a violet→cyan beam laps the border. The
-                gradient is a square that rotates on the compositor, clipped
-                to the ring by the mask on its wrapper; animating the gradient
-                angle itself repainted the whole composer every frame, in every
-                working window on the wall at once. */}
-            {streaming && <span className="composer-beam-ring" aria-hidden><span className="composer-beam-spin" /></span>}
             {compact && (
               <div className="composer-summary">
                 <button
@@ -2932,22 +2934,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   )}
                 </div>
               )}
-            {/* Recovery is separate from the placeholder suggestion. The wall
-                composer shows no "Continue work" box: the window's error banner
-                carries Retry when a turn actually stopped. */}
-            {!imageMode && surface !== 'composer' && (canContinueReply || canContinueWork) && !streaming && (
-              <div className="flex items-center border-b border-line px-3 py-2.5">
-                <button
-                  className={canContinueReply ? suggestedReplyClassName : 'btn btn-outline py-1 text-[12px]'}
-                  title={canContinueReply ? 'Continue this reply, keeping the work already done' : 'Ask the agent to continue any remaining work from this conversation'}
-                  onClick={() => canContinueReply ? void resumeRun() : void send('Continue the remaining work from this conversation. Preserve what is already done; if the task is complete or blocked, explain that instead of repeating it.')}
-                >
-                  {canContinueReply ? 'Retry' : 'Continue work'}
-                </button>
-              </div>
-            )}
-
-                {/* Attachments ride inside the composer, at the top, separated by
+                 <ActiveWatchChips sessionId={sessionId} />
+                 {subagentChildren.map(child => <ActiveWatchChips key={child.id} sessionId={child.id} owner={child.title || "Sub-agent"} />)}
+                 {/* Attachments ride inside the composer, at the top, separated by
                     a hairline. Floated above it they covered the instrument
                     strip. */}
                 {(pendingImages.length > 0 || pendingVideos.length > 0 || (session?.attachedPaths?.length ?? 0) > 0) && (

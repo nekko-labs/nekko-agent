@@ -24,7 +24,7 @@ describe('chatPaneSettings', () => {
     expect(shallow(chatPaneSettings(base), chatPaneSettings(next))).toBe(false);
   });
 
-  it('tracks the theme and animation toggle for the new-chat-only wave', () => {
+  it('updates empty-agent decoration when its appearance settings change', () => {
     expect(shallow(chatPaneSettings(base), chatPaneSettings({ ...base, themePreset: 'lilac' }))).toBe(false);
     expect(shallow(chatPaneSettings(base), chatPaneSettings({ ...base, backgroundAnimation: false }))).toBe(false);
   });

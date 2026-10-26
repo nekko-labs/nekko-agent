@@ -1,3 +1,4 @@
+import { CreateMenu } from '../components/CreateMenu.js';
 import { AgentWindowDropdown, defaultFolderIds, type AgentWindowSelection } from '../components/AgentWindowPicker.js';
 import { AgentSidebar } from './WorkspacesView.js';
 import { ChatPane } from '../components/ChatPane.js';
@@ -11,9 +12,8 @@ import { addCreatedSession, useStore } from '../store.js';
 import { putCachedSession } from '../sessionCache.js';
 import { newAgentSetup } from '../newAgentSetup.js';
 import { runningSessionIds } from '../liveRuns.js';
-import { PhotoIcon, TerminalIcon, FocusLayoutIcon, BoltIcon, MagnetIcon } from '../icons.js';
+import { FocusLayoutIcon, BoltIcon, MagnetIcon } from '../icons.js';
 import { HoverTip } from '../components/HoverTip.js';
-import { NekkoAvatar } from '../components/Mascot.js';
 import { AgentPanelControls } from '../components/AgentPanelControls.js';
 import { CommandWall } from '../components/CommandWall.js';
 import { WallComposer, type WallAgent } from '../components/WallComposer.js';
@@ -32,6 +32,7 @@ import { reusableEmptyChat, shouldStartFromEmptyWall } from '../emptyWallStart.j
 import { allPanes, type PaneKind } from '../layout.js';
 import {
   applySnap,
+  minimizeFinishedReply,
   DEFAULT_ASPECT,
   openWallPane,
   loadWallState,
@@ -224,11 +225,25 @@ export function CommandCenterView() {
     return m;
   }, [tasks]);
 
+  const eventVersions = useRef(new Map<string, number>());
+
   // Track running sessions live; a freshly spawned sub-agent re-lists sessions,
   // which is how it reaches the wall.
   useEffect(() => {
-    const known = new Set(sessions.map((s) => s.id));
+    const known = new Set(useStore.getState().sessions.map((s) => s.id));
+    let live = true;
     const off = window.nekko.onAgentEvent((e: AgentEvent) => {
+      const version = (eventVersions.current.get(e.sessionId) ?? 0) + 1;
+      eventVersions.current.set(e.sessionId, version);
+      if (e.type === 'done' && (!e.stop || e.stop === 'complete')) {
+        // Recheck the host: a question can still be pending when a turn ends.
+        // Ignore stale answers if another event/turn arrived or the view left.
+        void window.nekko.pendingInput().then((inputs) => {
+          if (!live || eventVersions.current.get(e.sessionId) !== version) return;
+          setPending(inputs);
+          setWall((w) => minimizeFinishedReply(w, e, inputs));
+        }).catch(() => {}); // An unavailable input state must not hide a window.
+      }
       if (e.type === 'question' || e.type === 'tool_approval_required' || e.type === 'question_resolved' || e.type === 'tool_result') refreshPending();
       if (e.type === 'done' || e.type === 'error') {
         setRunning((r) => { const n = new Set(r); n.delete(e.sessionId); return n; });
@@ -240,8 +255,8 @@ export function CommandCenterView() {
       }
       if (!known.has(e.sessionId)) { known.add(e.sessionId); refreshSessions(); }
     });
-    return off;
-  }, [sessions, refreshSessions]);
+    return () => { live = false; off(); };
+  }, [refreshSessions, setWall]);
 
   // The automation countdowns tick every 30s.
   useEffect(() => {
@@ -477,6 +492,10 @@ export function CommandCenterView() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [wall.root, selected, selectAgent, setWall]);
+  const chatFinderOpen = useStore((s) => s.chatFinderOpen);
+  useEffect(() => {
+    if (chatFinderOpen) setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), show: true } }));
+  }, [chatFinderOpen, setWall]);
   const composerRef = useRef<HTMLDivElement>(null);
   const agentList = useMemo<WallAgent[]>(() => agentsOnWall.flatMap((p, i) => {
     const session = sessions.find((x) => x.id === p.refId);
@@ -545,7 +564,7 @@ export function CommandCenterView() {
   const composerRow = <div className="wall-composer-row" data-dock={`${wall.composer.side}-${wall.composer.align}`}>{composer}</div>;
 
   return (
-    <div ref={viewRef} className="flex h-full min-h-0 flex-col gap-2 pb-0 pl-[3px] pr-px pt-1">
+    <div ref={viewRef} className="flex h-full min-h-0 flex-col -mt-px gap-2 pb-0 pl-[3px] pr-px pt-0">
       <WallToolbar wall={wall} setWall={setWall} addOpen={addOpen} setAddOpen={setAddOpen}
         onAdd={(kind) => {
           setCompletedId(null);
@@ -670,9 +689,7 @@ export function WallToolbar({
             terminal of its own. An agent's Changes, Files and Browser live in that agent's own
             header beside Logs. The empty wall can still open the full picker. */}
         <div className="wall-add-bar" role="group" aria-label="Add to the wall">
-          <button type="button" className="wall-add-icon" title="New agent" aria-label="New agent" onClick={() => onAdd('chat')}><NekkoAvatar size={16} stationary eyes={false} /></button>
-          <button type="button" className="wall-add-icon" title="New image session" aria-label="New image session" onClick={() => onAdd('image')}><PhotoIcon className="h-4 w-4" /></button>
-          <button type="button" className="wall-add-icon" title="New terminal" aria-label="New terminal" ref={addButtonRef} onClick={() => onAdd('terminal')}><TerminalIcon className="h-4 w-4" /></button>
+          <CreateMenu anchorRef={addButtonRef} onCreate={onAdd} />
         </div>
         {addOpen && onPick && <AgentWindowDropdown anchorRef={addButtonRef} onClose={() => setAddOpen(false)} onAdd={onPick} />}
         <div className="wall-layout-control">

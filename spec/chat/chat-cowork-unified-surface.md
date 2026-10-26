@@ -74,3 +74,9 @@ split-from: SPEC.md (2026-10-22)
 ### Work-summary readability
 
 Implemented and verified with 19 focused tests and a hidden isolated Electron fixture at 390px and 1000px in light and dark themes: ordinary activity-group headers keep their summary (for example, “Worked on 8 steps”) visible and truncate the secondary tool-name list first. Hovering or keyboard-focusing the header reveals the full summary followed by one bullet line per distinct tool name. Existing click-to-expand behavior remains intact. The tooltip uses local transcript data only, with no additional model calls or network access. Delegation and watch headlines retain their existing truncation behavior.
+
+## Retry keeps saved work visible (#1194)
+
+[Implemented; focused regression tests and isolated renderer retry interaction passed; live-provider and packaged-app verification unverified.]
+
+A user-initiated Retry records the last saved message as the resumed live run's display boundary before sending `resume: true` with no new user prompt. Existing narration, thoughts and completed calls remain in the settled transcript; only new checkpoints beyond that boundary are hidden while their live equivalents render. The boundary survives renderer replay, tab remounts in the same window, and the finished-run handoff. Normal new prompts retain the existing prompt boundary. A missing anchor falls back to showing saved history, not dropping it. Failed send requests release the provisional live run and report the failure. No saved messages or provider history are deleted or rewritten by this display fix.
