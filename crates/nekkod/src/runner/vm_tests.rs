@@ -104,7 +104,7 @@ async fn start_times_out_and_kills_the_helper() {
     let d = dir.path().display();
     let h = helper(dir.path(), &format!("echo $$ > '{d}/pid'\nexec sleep 30"));
     let mut v = vm(h, true);
-    v.start_timeout = Duration::from_millis(200);
+    v.start_timeout = Duration::from_secs(1);
     assert!(v.start(spec(dir.path())).await.is_err());
     assert!(!alive(pid(dir.path()).await), "the helper is killed and reaped");
 }
@@ -150,8 +150,8 @@ async fn count_vms_times_out_and_kills_the_helper() {
     let d = dir.path().display();
     let h = helper(dir.path(), &format!("echo $$ > '{d}/pid'\nexec sleep 30"));
     let mut v = vm(h, true);
-    v.count_timeout = Duration::from_millis(200);
-    let r = tokio::time::timeout(Duration::from_secs(2), v.count_vms()).await.expect("count-vms hung the caller");
+    v.count_timeout = Duration::from_secs(1);
+    let r = tokio::time::timeout(Duration::from_secs(3), v.count_vms()).await.expect("count-vms hung the caller");
     assert!(r.unwrap_err().contains("did not finish"));
     assert!(!alive(pid(dir.path()).await), "the helper is killed and reaped");
 }

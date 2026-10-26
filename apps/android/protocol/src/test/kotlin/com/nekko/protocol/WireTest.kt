@@ -8,6 +8,12 @@ import org.junit.Test
 import java.io.File
 
 class WireTest {
+    @Test fun `active watch count defaults to zero for older hosts`() {
+        assertEquals(0L, SessionSummary.from(json("""{"id":"chat"}"""))!!.activeWatchCount)
+        assertEquals(0L, SessionSummary.from(json("""{"id":"chat","activeWatchCount":0}"""))!!.activeWatchCount)
+        assertEquals(2L, SessionSummary.from(json("""{"id":"chat","activeWatchCount":2}"""))!!.activeWatchCount)
+    }
+
     private fun json(s: String) = WireJson.parseToJsonElement(s)
 
     /** Every channel the phone calls must exist in the shared IPC contract. */

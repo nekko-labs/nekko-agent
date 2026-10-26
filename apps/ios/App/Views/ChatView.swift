@@ -441,8 +441,9 @@ struct BlockView: View {
                 HStack {
                     Spacer(minLength: 48)
                     VStack(alignment: .trailing, spacing: 4) {
-                        // No text selection here: touch and hold opens the menu (Copy, Edit in a new chat).
-                        Text(text).foregroundStyle(palette.userInk)
+                        // Markdown, as on the desktop (T101). No text selection here: touch and
+                        // hold opens the menu (Copy, Edit in a new chat); a table keeps its own menu.
+                        MarkdownText(text: text, bubble: true, selectable: false).foregroundStyle(palette.userInk)
                         if photos.contains(where: { !$0.isEmpty }) {
                             PhotoStrip(photos: photos, open: openPhoto)
                         } else if images > 0 {
@@ -703,7 +704,8 @@ struct Composer: View {
     @State private var error: String?
     @State private var dictation = Dictation()
     @Environment(Prefs.self) private var prefs
-    @FocusState private var focused: Bool
+    /// The message box has the keyboard (its formatting toolbar shows then).
+    @State private var focused = false
     /// Why the computer turned down the prompt now in the box (it came back from the outbox).
     @State private var refusal: String?
     /// The draft as last saved from here: a different one in the store was handed back (Edit, a refusal).
@@ -810,14 +812,11 @@ struct Composer: View {
                         .frame(width: 44, height: 44).contentShape(Rectangle())
                 }
                 .accessibilityLabel("Add")
-                TextField(chat.running ? "Queue a follow-up" : "Message", text: $text, axis: .vertical)
-                    .lineLimit(1...6)
-                    .accessibilityIdentifier("chat.message")
-                    .focused($focused)
-                    .accessibilityAction(named: "Hide keyboard") { focused = false }
-                    .padding(.horizontal, 12).padding(.vertical, 8)
-                    .background(palette.surface, in: RoundedRectangle(cornerRadius: 20))
-                    .overlay(RoundedRectangle(cornerRadius: 20).stroke(palette.line))
+                // Markdown source with a formatting toolbar in the card (MD-3); VoiceOver's
+                // "Hide keyboard" action is on the text view itself.
+                MarkdownComposerField(text: $text, focused: $focused,
+                                      placeholder: chat.running ? "Queue a follow-up" : "Message",
+                                      onPasteImages: pasteImages)
                 if dictation.transcribing {
                     ProgressView().frame(width: 44, height: 44).accessibilityLabel("Transcribing")
                 } else if prefs.dictationHold && dictation.available && (text.isEmpty || dictation.recording) {

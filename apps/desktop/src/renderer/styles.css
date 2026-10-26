@@ -1,19 +1,25 @@
 @import 'tailwindcss';
 
-/* Lilac / Lavender: the website's drifting pixel-dot field. It sits BEHIND
-   the app (z-index -1, above only the page background), so it shows in the
-   field around the floating panels while chat windows and every other panel,
-   which paint their own solid surface, cover it and keep text clear. Never
-   intercepts input. */
+/* New-chat decoration only. The containing clean-start surface clips the field. */
 .pixel-wave-background {
-  position: fixed;
+  position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   pointer-events: none;
   z-index: -1;
-  /* Drawn at one pixel per CSS pixel; keep the dots crisp on high-DPI screens. */
   image-rendering: pixelated;
+}
+
+/* Context menus remain neutral even when a preset gives the page a vivid tint. */
+.context-menu { background: #ffffff; color: #17191f; }
+[data-theme='dark'] .context-menu { background: #191c23; color: #f3f4f6; }
+.context-menu [role^="menuitem"]:not(:disabled):is(:hover, :focus-visible),
+.context-menu [role^="menuitem"][aria-checked="true"],
+.context-menu [role="menuitem"][aria-expanded="true"] {
+  background: var(--accent);
+  color: var(--on-accent, white);
+  outline: none;
 }
 
 /* Faint seasonal decoration; never intercepts app input. */
@@ -2345,16 +2351,18 @@
 }
 /* Swipe-left times (useSwipeToRevealTimes): a pseudo-element, so the margin
    rules above still see the row's real first and last parts. */
-.vt-row[data-vt-stamp] {
+[data-vt-stamp] {
   position: relative;
 }
-.vt-row[data-vt-stamp]::after {
+[data-vt-stamp]::after {
   content: attr(data-vt-stamp);
   position: absolute;
   top: 2px;
   left: 100%;
   padding-left: 16px;
   white-space: nowrap;
+  /* Tool rows sit in a monospace block; every time reads the same. */
+  font-family: var(--font-sans);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   color: var(--ink-faint);
@@ -2366,12 +2374,12 @@
   transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .vt-swiping .vt-list,
-.vt-swiping .vt-row[data-vt-stamp]::after {
+.vt-swiping [data-vt-stamp]::after {
   transition: none;
 }
 @media (prefers-reduced-motion: reduce) {
   .vt-list,
-  .vt-row[data-vt-stamp]::after {
+  [data-vt-stamp]::after {
     transition: none;
   }
 }
@@ -3321,14 +3329,12 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 /* Focus mode, new chat: one centered composer on a quiet page. The first send
    drops data-clean-start and the window becomes the full chat. */
 [data-clean-start] .clean-start { position: relative; isolation: isolate; align-items: center; padding: 0 24px 12vh; }
-/* Full-surface prism gradient, with a separate static grain layer to dither
+/* Translucent prism frost, with a separate static grain layer to dither
    colour steps. Both stay behind the content and never intercept input. */
 [data-clean-start] .clean-start::before {
   content: ''; position: absolute; inset: 0; z-index: -2; pointer-events: none;
-  background: linear-gradient(135deg,
-    color-mix(in srgb, var(--accent) 22%, var(--win, var(--surface))) 0%,
-    color-mix(in srgb, var(--accent-2) 14%, var(--win, var(--surface))) 52%,
-    color-mix(in srgb, #ff7eb6 16%, var(--win, var(--surface))) 100%);
+  background: linear-gradient(to bottom,
+    rgb(7 59 64 / .12) 0%, rgb(21 78 80 / .10) 45%, rgb(179 139 59 / .10) 100%);
 }
 [data-clean-start] .clean-start::after {
   content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
@@ -3338,8 +3344,7 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 }
 [data-clean-start] .clean-start .composer-section { width: min(720px, 100%); padding: 0; }
 [data-clean-start] .clean-start .composer-column { width: 100% !important; }
-/* The composer is frosted glass: a translucent tint over a blur of the light
-   behind it, a top highlight, and a prism hairline as its only edge. */
+/* A quiet translucent composer, with diffuse depth instead of a hard edge. */
 [data-clean-start][data-chat-surface] .clean-start .composer,
 [data-clean-start][data-chat-surface] .clean-start .composer:focus-within {
   position: relative;
@@ -3349,24 +3354,16 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
   -webkit-backdrop-filter: blur(22px) saturate(160%);
   backdrop-filter: blur(22px) saturate(160%);
   box-shadow:
-    inset 0 1px 0 color-mix(in srgb, #fff 9%, transparent),
     0 18px 50px -22px color-mix(in srgb, var(--accent) 45%, transparent),
     0 2px 10px -4px color-mix(in srgb, #000 30%, transparent);
 }
-[data-clean-start] .clean-start .composer::after {
-  content: ''; position: absolute; inset: -1px; border-radius: inherit; padding: 1px; pointer-events: none;
-  background: linear-gradient(120deg, var(--accent), var(--accent-2) 40%, #46e0bd 58%, #ffbe5c 76%, #ff7eb6);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor; mask-composite: exclude;
-  opacity: 0.38; transition: opacity 0.25s var(--ease-out);
-}
-[data-clean-start] .clean-start .composer:focus-within::after { opacity: 0.9; }
-/* Light themes: a whiter glass and a brighter highlight. */
+/* Frost has no prism outline, including while typing. */
+[data-clean-start] .clean-start .composer::after { display: none; }
+/* Light themes use a whiter glass with the same soft, borderless depth. */
 [data-theme='light'] [data-clean-start][data-chat-surface] .clean-start .composer,
 [data-theme='light'] [data-clean-start][data-chat-surface] .clean-start .composer:focus-within {
   background: color-mix(in srgb, #fff 62%, transparent);
   box-shadow:
-    inset 0 1px 0 color-mix(in srgb, #fff 85%, transparent),
     0 18px 50px -22px color-mix(in srgb, var(--accent) 38%, transparent),
     0 2px 8px -4px color-mix(in srgb, #1e1450 10%, transparent);
 }
@@ -3374,8 +3371,9 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
   [data-clean-start][data-chat-surface] .clean-start .composer { background: var(--win, var(--surface)); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
 .clean-start-greeting { display: flex; align-items: center; justify-content: center; gap: 14px; max-width: 100%; margin: 0 auto 18px; text-align: left; }
-.greeting-nekko { display: block; flex: 0 0 64px; pointer-events: none; }
+.greeting-nekko { position: absolute; z-index: 3; top: -50px; left: 24px; display: block; width: 64px; height: 60px; pointer-events: none; }
 .clean-start-greeting h2 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
+@media (max-width: 600px) { .clean-start-greeting { margin-bottom: 56px; } }
 .clean-start-greeting p { margin-top: 6px; font-size: 13px; color: var(--ink-faint); }
 [data-clean-start] .clean-start-model { opacity: 0.8; transition: opacity 0.2s vas (--ease-out)}
 [data-clean-start] .clean-start-model:hover,
@@ -3507,6 +3505,18 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
   --panel-ring-width: 0px !important;
 }
 .command-wall-layout[data-wall-layout='focus'] .command-wall-window > .panel::after { display: none; }
+/* Only untouched chats frost the agent window. Transcript windows keep --win. */
+.command-wall-layout[data-wall-layout='focus'] .command-wall-window > .panel:has([data-clean-start]) {
+  background: color-mix(in srgb, var(--win) 38%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(120%);
+  backdrop-filter: blur(24px) saturate(120%);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .command-wall-layout[data-wall-layout='focus'] .command-wall-window > .panel:has([data-clean-start]) {
+    background: var(--win); -webkit-backdrop-filter: none; backdrop-filter: none;
+  }
+}
+
 .command-wall-layout[data-wall-layout='focus'] [data-pane-title-strip] { display: none; }
 
 /* The pending question shares the transcript scroll, with no outer panel. */
@@ -3547,3 +3557,11 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
   .models-add-strip { gap: 6px; padding-left: 12px; }
   .models-add-provider { width: 36px; height: 36px; border-radius: 10px; }
 }
+
+/* Transparent sandboxed SVG frames let the chat-matched dotted canvas show through. */
+.diagram-canvas {
+  background-color: var(--surface);
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--ink-faint) 25%, transparent) 0.75px, transparent 0.85px);
+  background-size: 18px 18px;
+}
+.diagram-card { box-shadow: var(--shadow-sm); }

@@ -29,7 +29,8 @@ import { useStore } from '../store.js';
 import { Badge, EmptyHint, StatusDot, Toggle } from '../components/primitives/index.js';
 import { WorkflowCanvas } from '../components/WorkflowCanvas.js';
 import { WorkflowEditor, type WorkflowSeed } from '../components/WorkflowEditor.js';
-import { TemplateCards, TemplateGallery, TemplateSetup, templateSeed } from '../components/TemplateGallery.js';
+import { TemplateGallery, TemplateSetup, templateSeed } from '../components/TemplateGallery.js';
+import { FirstWorkflowWizard } from '../components/FirstWorkflowWizard.js';
 import { setAutomationsPaused } from '../automationsPause.js';
 import { PlusIcon } from '../icons.js';
 import { STATUS } from '../tokens.js';
@@ -85,6 +86,8 @@ export function WorkflowsView() {
   /** What a skill step can run: built-in, installs, other tools' and Claude Code plugins' (read when the editor or a template opens). */
   const [skillDefs, setSkillDefs] = useState<SkillDef[] | null>(null);
   const skills = skillDefs ?? installedSkills;
+  const [loaded, setLoaded] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [snapshot, setSnapshot] = useState<WorkflowsSnapshot>({ workflows: [], runs: [] });
   const [filter, setFilter] = useState<WorkflowFilter>({});
   const [grouping, setGrouping] = useState<WorkflowGrouping>('category');
@@ -101,8 +104,8 @@ export function WorkflowsView() {
   const [focusRun, setFocusRun] = useState<{ workflowId: string; runId: string } | null>(null);
 
   useEffect(() => {
-    void window.nekko.listWorkflows().then(setSnapshot).catch(() => {});
-    return window.nekko.onWorkflowsUpdated(setSnapshot);
+    void window.nekko.listWorkflows().then((next) => { setSnapshot(next); setLoaded(true); }).catch(() => setLoadFailed(true));
+    return window.nekko.onWorkflowsUpdated((next) => { setSnapshot(next); setLoaded(true); });
   }, []);
 
   // Re-read each time a sheet opens: a plugin enabled meanwhile shows up.
@@ -195,7 +198,7 @@ export function WorkflowsView() {
     <div className="flex h-full min-h-0">
       {section === 'ciRunners' ? <CiRunnersView segment={<SectionSegment value={section} onChange={setSection} />} /> : <>
       {/* Filters */}
-      <aside className="flex w-60 shrink-0 flex-col overflow-y-auto border-r border-(--line) px-3 py-3">
+      {workflows.length > 0 && <aside className="flex w-60 shrink-0 flex-col overflow-y-auto border-r border-(--line) px-3 py-3">
         <input
           className="input w-full text-[12.5px]"
           placeholder="Search workflows…"
@@ -277,11 +280,13 @@ export function WorkflowsView() {
             ))}
           </div>
         </FilterGroup>
-      </aside>
+      </aside>}
 
       {/* List */}
       <div className="min-w-0 flex-1 overflow-y-auto p-4">
-        <div className="mx-auto max-w-5xl">
+        {!loaded ? <p className="p-4 text-[13px] text-ink-soft" role="status">{loadFailed ? 'Could not load workflows. Reopen this tab to try again.' : 'Loading workflows…'}</p> : workflows.length === 0 ? (
+          <FirstWorkflowWizard onCreate={(seed) => setCreating({ seed })} onBrowse={() => setPicking(true)} />
+        ) : <div className="mx-auto max-w-5xl">
           <div className="flex flex-wrap items-baseline gap-2">
             {!hasAppChrome && <h1 className="view-title">Workflows</h1>}
             <SectionSegment value={section} onChange={setSection} />
@@ -363,18 +368,6 @@ export function WorkflowsView() {
             </dl>
           </details>
 
-          {workflows.length === 0 && (
-            <div className="mt-4">
-              <EmptyHint>
-                Nothing here yet. Pick a ready-made automation below, or{' '}
-                <button className="underline" onClick={() => setPicking(true)}>build your own</button>.
-              </EmptyHint>
-              <div className="mt-3">
-                <TemplateCards onPick={setSetup} />
-              </div>
-            </div>
-          )}
-
           {workflows.length > 0 && visible.length === 0 && (
             <EmptyHint className="mt-4">
               Nothing matches those filters.{' '}
@@ -402,7 +395,7 @@ export function WorkflowsView() {
               />
             ))}
           </div>
-        </div>
+        </div>}
       </div>
       </>}
 
