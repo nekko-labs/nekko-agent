@@ -131,6 +131,7 @@ function emptyRun(sessionId: string, now: number): LiveRun {
 
 /** Seed a resumed run before its first event, keeping its saved transcript visible. */
 export function beginResumedRun(sessionId: string, transcriptThroughId?: string): void {
+  startSubagentActivity(sessionId);
   finished.delete(sessionId);
   runs.set(sessionId, { ...emptyRun(sessionId, Date.now()), transcriptThroughId });
   markDirty(sessionId);
