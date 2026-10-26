@@ -811,6 +811,8 @@ Extends `../../knowledgebase/principles/coding.md` (which these override).
 
 ## Now / In Progress
 
+- [ ] **HISTORY1156**: [Completed history retention and storage](spec/chat/completed-history-retention-and-storage.md). Added 2026-10-25. Keep completed chats indefinitely, measure local chat storage, and add confirmed Settings cleanup ranges and a 1 GB warning. Backend, full workspace typecheck, Settings interaction checks and wide/narrow renderer evidence passing; merge pending.
+
 - [x] **THINK-DIAGRAM-1120**: cloud reasoning always on, local default-on thinking only in Expert model options, no composer toggle; chat-matched dotted, borderless Mermaid canvases with subtle shadows and themed diagrams. Implemented 2026-10-25. [Thinking spec](spec/models/models-providers.md), [diagram spec](spec/code/rich-responses-reports-and-design-workspace.md). Verified desktop typecheck, 19 focused renderer tests, 61 provider tests, 4 admission tests, daemon request regression, hidden before/after renderer evidence and Expert interaction/load payload checks. No live inference or native phone UI verification.
 
 - [ ] **IOS-STATUS-MASCOT** (added 2026-10-25): desktop-style leading chat status icons and a top-left interactive pixel mascot on native iOS. [Spec](spec/phone/native-ios-app.md#desktop-style-chat-status-and-top-left-nekko-2026-10-25). Native build, status precedence test and simulator greeting/touch-target test pass; native fixture before/after evidence captured. Landing tracked by #1093. Physical-device VoiceOver and release delivery remain unverified.
@@ -2403,6 +2405,9 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 
 - [x] Remove the retired Expo app and its dedicated Mobile CI; keep native phone workflows, relay/push infrastructure and shared protocol coverage. Update merge-gate accounting and desktop icon/test references. See [native phone decision](spec/phone/native-phone-implementation-decision.md) and [decision 0026](docs/decisions/0026-retire-expo-in-favor-of-native-phone-apps.md). Tracked in #1124.
 
+### Inline thoughts in chat (#1138) · [spec](spec/chat/tool-calls-grouped-by-purpose.md)
+
+- [x] Show provider-supplied thoughts with the thought icon outside collapsible tool groups in live and saved desktop/Local Web UI conversations. Preserve ordering and avoid repeating a final message's thought. Verified with all 217 chat component tests, desktop typechecking and hidden Electron before/after captures at 1000/390 px; native phones unchanged.
 ## Compact Monitors and new-chat frost (#1152)
 
 - [x] Reduce the default/snap dock width to 276px, trim the monitor right inset by 2px, and avoid unused Focus scrollbar space. Keep budget ranges on one row and metric values readable. See [spacing spec](spec/desktop/slim-wave-rail-tighter-agents-spacing-composer-snap-points.md).
