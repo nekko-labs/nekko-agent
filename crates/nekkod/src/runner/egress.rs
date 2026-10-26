@@ -54,11 +54,22 @@ pub fn parse(line: &str) -> Option<Egress> {
 /// Runs `helper egress` for as long as the runtime runs, restarting it when it
 /// exits, and keeps the shared state at its latest line.
 pub fn spawn_watch(helper: &Path) -> Arc<RwLock<Option<Egress>>> {
+    spawn_line_watch(helper, "egress", parse)
+}
+
+/// Runs `helper <sub>` for as long as the runtime runs, restarting it when it
+/// exits, and keeps the shared state at its latest parsed line. The state is
+/// `None` until the first line, and again while the helper restarts.
+pub fn spawn_line_watch<T: Send + Sync + 'static>(
+    helper: &Path,
+    sub: &'static str,
+    parse: fn(&str) -> Option<T>,
+) -> Arc<RwLock<Option<T>>> {
     let state = Arc::new(RwLock::new(None));
     let (helper, shared) = (helper.to_path_buf(), state.clone());
     tokio::spawn(async move {
         loop {
-            watch_once(&helper, &shared).await;
+            watch_once(&helper, sub, parse, &shared).await;
             set(&shared, None);
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
@@ -67,9 +78,9 @@ pub fn spawn_watch(helper: &Path) -> Arc<RwLock<Option<Egress>>> {
 }
 
 /// One run of the helper, until it exits or its output stops parsing.
-async fn watch_once(helper: &Path, state: &RwLock<Option<Egress>>) {
+async fn watch_once<T>(helper: &Path, sub: &str, parse: fn(&str) -> Option<T>, state: &RwLock<Option<T>>) {
     let child = tokio::process::Command::new(helper)
-        .arg("egress")
+        .arg(sub)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -79,14 +90,14 @@ async fn watch_once(helper: &Path, state: &RwLock<Option<Egress>>) {
     let Some(out) = child.stdout.take() else { return };
     let mut lines = BufReader::new(out).lines();
     while let Ok(Some(line)) = lines.next_line().await {
-        let Some(e) = parse(&line) else { return };
-        set(state, Some(e));
+        let Some(v) = parse(&line) else { return };
+        set(state, Some(v));
     }
 }
 
-fn set(state: &RwLock<Option<Egress>>, e: Option<Egress>) {
+fn set<T>(state: &RwLock<Option<T>>, v: Option<T>) {
     if let Ok(mut s) = state.write() {
-        *s = e;
+        *s = v;
     }
 }
 
