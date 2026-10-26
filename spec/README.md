@@ -56,7 +56,7 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 - [Muted pending-change badge](chat/muted-pending-change-badge.md) (1 KB)
 - [One copy of the reply being written](chat/one-copy-of-the-reply-being-written.md) (1 KB)
 - [Per-step plan working icons (2026-10-17)](chat/per-step-plan-working-icons.md) (3 KB)
-- [Plan sheet on the composer (2026-10-25)](chat/plan-sheet-on-the-composer.md) (3 KB)
+- [Plan sheet on the composer (2026-10-25)](chat/plan-sheet-on-the-composer.md) (4 KB)
 - [Sleeping chats and image-bearing replies](chat/sleeping-chats-and-image-bearing-replies.md) (2 KB)
 - [Tool calls grouped by what they are for](chat/tool-calls-grouped-by-purpose.md) (18 KB)
 - [Verification checklists and PR progress in chat](chat/verification-and-pr-progress.md) (5 KB)
@@ -99,7 +99,7 @@ Agents panel, monitors, subagents and delegation.
 
 - [Agent activity and panel polish](agents/agent-activity-and-panel-polish.md) (39 KB)
 - [Agent Monitor Project group, hardware temperatures and multi-monitor Dynamic mode (2026-10-18)](agents/agent-monitor-project-group-hardware-temperatures-and-multi-moni.md) (10 KB)
-- [Agent panel view options (2026-10-17)](agents/agent-panel-view-options.md) (4 KB)
+- [Agent panel view options (2026-10-17)](agents/agent-panel-view-options.md) (7 KB)
 - [Agents dashboard simplification (2026-10-06)](agents/agents-dashboard-simplification.md) (3 KB)
 - [Approval retention and delegation navigation](agents/approval-retention-and-delegation-navigation.md) (1 KB)
 - [Chat finder in the Agents panel (2026-10-16)](agents/chat-finder-in-the-agents-panel.md) (6 KB)

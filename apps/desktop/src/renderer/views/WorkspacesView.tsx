@@ -22,6 +22,7 @@ import { completedDate, completedInGroup } from './completedChats.js';
 import { leftGroup, moveGroupBefore } from './groupDrag.js';
 import { AgentPanelViewMenu } from '../components/AgentPanelViewMenu.js';
 import { endAgentDrag, startAgentDrag } from '../agentDrag.js';
+import { CARD_ATTR, flyMovedCards, measureCards, type CardSpot } from './agentCardMotion.js';
 import {
   DATE_GROUPS, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, readAgentPanelView, saveAgentPanelView, statusGroupOf,
   type AgentPanelView, type SortableCard,
@@ -497,6 +498,23 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
     ];
   })()];
 
+  // When a card changes group (Working to Done), note where every card was
+  // before this render commits, then fly the movers from there. Not when the
+  // grouping itself changed: then every card moves and none of them is news.
+  const listRef = useRef<HTMLDivElement>(null);
+  const layoutSig = view.groupBy + '|' + groups.map((g) => g.key + ':' + g.items.map((e) => e.key).join(',')).join('|');
+  const lastLayout = useRef(layoutSig);
+  const cardsBefore = useRef<Map<string, CardSpot> | null>(null);
+  if (lastLayout.current !== layoutSig) {
+    const sameGrouping = lastLayout.current.split('|', 1)[0] === view.groupBy;
+    cardsBefore.current = sameGrouping && view.groupBy !== 'project' ? measureCards(listRef.current) : null;
+    lastLayout.current = layoutSig;
+  }
+  useLayoutEffect(() => {
+    if (cardsBefore.current) flyMovedCards(listRef.current, cardsBefore.current);
+    cardsBefore.current = null;
+  }, [layoutSig]);
+
   const activeRowRef = useRef<HTMLDivElement>(null);
   const selectedGroup = groups.find((g) => g.items.some((e) => e.s?.id === selectedId || e.t?.id === selectedId || (e.s && childrenOf.get(e.s.id)?.some((kid) => kid.id === selectedId))) || g.done.some((s) => s.id === selectedId));
   const selectedGroupKey = selectedGroup?.key;
@@ -650,7 +668,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
           )}
         </div>
       </div>
-      <div className={horizontal ? 'agent-panel-row flex min-w-0 flex-1 items-start gap-3 overflow-x-auto overflow-y-hidden px-2 py-1.5' : 'agent-panel-list min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-2 pb-3'} data-agent-panel-list onWheel={horizontal ? scrollRowWithWheel : undefined}>
+      <div ref={listRef} className={horizontal ? 'agent-panel-row flex min-w-0 flex-1 items-start gap-3 overflow-x-auto overflow-y-hidden px-2 py-1.5' : 'agent-panel-list min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-2 pb-3'} data-agent-panel-list onWheel={horizontal ? scrollRowWithWheel : undefined}>
         {groups.map((b) => {
           const { items, done } = b;
           const byProject = view.groupBy === 'project' && !utilityGroups.includes(b);
@@ -721,7 +739,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
               {/* Collapsed means gone: hidden, out of the tab order, and taking
                   no room in the row layout either, not just squashed to 0fr. */}
               <div className={`collapse-wrap ${isCollapsed ? 'collapsed' : ''}`} data-group-cards data-collapsed={isCollapsed || undefined} inert={isCollapsed || undefined} aria-hidden={isCollapsed || undefined}>
-                <div className="min-h-0 space-y-0.5 overflow-hidden pb-1">
+                <div className="min-h-0 space-y-1 overflow-hidden pb-1">
                   {items.length === 0 && !completedGroup && (
                     <p className="px-3.5 py-1 text-[11px] text-ink-faint">No active agents</p>
                   )}
@@ -737,6 +755,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                         onClickCapture={s ? (e) => { if (selectRow(e, s.id)) e.stopPropagation(); } : undefined}
                         style={s && selected.includes(s.id) ? {background:'var(--accent-soft)', borderRadius:8, boxShadow:'inset 0 0 0 1px var(--accent)'} : undefined}
                         draggable={reorderable || !!s || !!entry.t}
+                        {...{ [CARD_ATTR]: entry.key }}
                         onDragStart={(e) => {
                           if (reorderable) startDrag(e, { kind: 'workspace', id: entry.key, ws: b.ws?.id });
                           // Any agent or terminal row can also be dropped into a zone on the board.

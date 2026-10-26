@@ -1,6 +1,6 @@
 ---
 status: active
-last-updated: 2026-10-24
+last-updated: 2026-10-26
 owner:
 ---
 
@@ -15,6 +15,10 @@ owner:
 - [ ] **DZ-3, Intro.** First-visit dialog with three looping demos (next layer of the stack).
 - [ ] **DZ-4, Narrow window strips.** At about 380px wide, a window's title-strip actions (Zen, Minimize, Complete) are clipped; three zones reach that width on a 1440px screen. Pre-existing, more visible with zones.
 
+## Agents panel by activity (#1202)
+
+- [x] **APA-1, Activity default, Done group, chiplet cards, arced moves.** The panel defaults to Activity grouping (Needs input, Working, Error, Done; Idle renamed Done), cards are bordered chip tiles, and a card that changes group flies there on a fixed-layer copy along a right-bowing curve (`agentCardMotion.ts`), skipped for grouping switches, folded groups and reduced motion. Unit tests for the default, the Done mapping and the arc path; hidden-fixture before/after stills and motion frames (`agent-activity-motion-sandbox.cjs`). Spec: [Agent panel view options](spec/agents/agent-panel-view-options.md). Saved views keep their old grouping; packaged app unverified. Done: 2026-10-26
+
 ## Automatic Dynamic window minimization (#1200)
 
 - [x] **DWM-1, Minimize successful replies.** Dynamic (including Fixed grid) removes the finished chat pane without completing the chat. Focused, errors, abnormal stops, pending input, unavailable input state and newer events remain visible. Pure wall tests, hidden 1440px/390px completion/restore/race checks, and inspected matched PNG/GIF evidence. Spec: [Minimize agent windows](spec/desktop/minimize-agent-windows.md). Packaged app/live-provider verification remains untested; baseline macOS shortcut assertion is tracked in #900.
@@ -24,7 +28,8 @@ owner:
 [Specification](spec/chat/internet-recovery.md). Prefix **NR** (network recovery).
 
 - [x] **NR-1 (#1163), Daemon detection and notices.** Credential-free debounced reachability, model-only interruption, checkpoint-safe metadata and ISO command logs; strict default-off recovery primitive and deterministic tests.
-- [ ] **NR-2 (#1164), Shared-renderer setting and notices.** Accessible cost-warning opt-in and timestamped history, component tests and hidden desktop/narrow before/after evidence. UI slice follows the daemon PR; visual signoff and landing pending.
+- [x] **NR-2 (#1164), Shared-renderer implementation.** Accessible cost-warning opt-in and timestamped history; component/event tests, typecheck and hidden desktop/narrow interaction checks pass.
+- [ ] **NR-2 evidence signoff and landing.** Matching hidden 1280/640px before/after captures exist; actual PNG visual review and PR landing pending.
 - [ ] **NR-3 (#1179), Broader transport/platform verification.** Opaque Claude Code harness, images/voice/tool-specific internet and physical Wi-Fi/native device testing are outside the native model wrapper; track follow-up explicitly.
 
 ## Chat swipe and welcoming questions (#1174)
@@ -254,7 +259,7 @@ See [SPEC](spec/desktop/focused-mode-transitions-calmer-focus-ring-and-layout-co
 Issue #1149. See [SPEC](spec/chat/plan-sheet-on-the-composer.md).
 
 - [x] ✅ 2026-10-25 `PlanSheet.tsx` renders the agent plan as a card tucked behind the composer (`.plan-sheet-dock` clips at the composer edge, `plan-sheet-rise`); title, one-line note and an optional chip row per step; finished steps squeeze and every one opens while the card is hovered or focused (120 ms `grid-template-rows`). `planStepLinks.ts` replays the transcript's `update_plan` calls and gives created PRs and linked files to the step active at the time. The plan leaves `PlanRail.tsx`. Tests: `planStepLinks.test.ts`, `PlanRail.test.tsx`. Evidence: `apps/desktop/scripts/plan-sheet-sandbox.cjs` via `layout-evidence-integration.cjs` (keeps `data-app-inactive` off, or every animation stays paused in the hidden window).
-- [ ] Second PR: move the Verification panel and CI status into the card as per-step chips, and retire the panel under the composer.
+- [x] ✅ 2026-10-25 Second PR: `PlanSheet.tsx` adds verification chips (explicit reports only, safe evidence links) and a one-row CI chip strip under the last verification step; the Verification panel and its `work-progress-*` harness are removed; `PrProgress` drops CI lines when the card shows them (`checksInPlan`). Tests: `PlanSheet.test.tsx`, `WorkProgress.test.tsx`. The shared wall composer carries the selected agent's plan card and plan-change prompt; PR actions start tucked when the card shows the PR; the PR row and footer strip lose their borders. Evidence covers Focused and Grid (`NEKKO_PLAN_LAYOUT=grid`).
 - [ ] Check the card in a packaged build and at narrow widths.
 
 ## Flaky daemon integration tests (added 2026-10-17)
