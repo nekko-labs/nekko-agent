@@ -8,7 +8,7 @@ vi.mock('./primitives/index.js', async (original) => ({
   Modal: ({ children }: { children: React.ReactNode }) => <div role="dialog">{children}</div>,
 }));
 
-import { SettingsBody, saveSettings, shownSettings, trustNetwork } from './RunnerSettingsSheet.js';
+import { SettingsBody, editDraft, saveSettings, shownSettings, trustNetwork } from './RunnerSettingsSheet.js';
 
 const host: HostView = {
   ramMb: 36864, cores: 12, recommendedMemoryMb: 24576, runnerMemoryMb: 18432, cpusPerVm: 4,
@@ -55,7 +55,7 @@ describe('RunnerSettingsSheet', () => {
     expect(html).not.toContain('aria-label="Total runner memory in GB"');
     for (const s of ['0 GB Mac', 'of 0', ' 0 GB']) expect(html).not.toContain(s);
     const updateRunner = vi.fn(async () => v);
-    await saveSettings(v, shownSettings(v, null), { updateRunner, pushToast: vi.fn() });
+    await saveSettings(v, v.config.settings, shownSettings(v, null), { updateRunner, pushToast: vi.fn() });
     expect(updateRunner).toHaveBeenCalledWith('r1', {}); // nothing changed, so nothing is overwritten
   });
 
@@ -67,12 +67,23 @@ describe('RunnerSettingsSheet', () => {
     expect(shownSettings(pushed, edits)).toBe(edits);
   });
 
-  it('save does not revert a network the daemon added meanwhile', async () => {
+  it('a push during an edit is not reverted by Save', async () => {
+    // Open with A, edit max job time (the draft and its base are A then), a push adds network B, Save.
     const opened = view({}, { trustedNetworks: [] });
-    const draft = { ...opened.config.settings, maxJobMinutes: 360 };
-    const updateRunner = vi.fn(async (_id: string, _patch: object) => opened);
-    await saveSettings(opened, draft, { updateRunner, pushToast: vi.fn() });
-    expect(updateRunner).toHaveBeenCalledWith('r1', { maxJobMinutes: 360 });
+    let edits = editDraft(null, opened, { ...opened.config.settings, maxJobMinutes: 360 });
+    const pushed = view({}, { trustedNetworks: ['gw:b'] });
+    edits = editDraft(edits, pushed, { ...edits.draft, rerunLostJobs: false }); // a later edit keeps the first base
+    expect(edits.base).toBe(opened.config.settings);
+    const updateRunner = vi.fn(async (_id: string, _patch: object) => pushed);
+    await saveSettings(pushed, edits.base, edits.draft, { updateRunner, pushToast: vi.fn() });
+    expect(updateRunner).toHaveBeenCalledWith('r1', { maxJobMinutes: 360, rerunLostJobs: false });
+  });
+
+  it('before the first sample memory per VM is shown, not offered', () => {
+    const zero: HostView = { ...host, ramMb: 0, cores: 0, recommendedMemoryMb: 0, runnerMemoryMb: 0, cpusPerVm: 0, networkId: null };
+    const html = render(view({ host: zero }));
+    expect(html).not.toContain('aria-label="Memory per VM in GB"');
+    expect(html).toContain('8 GB per VM');
   });
 
   it('without VM support the sheet says why instead of waiting', () => {
@@ -105,7 +116,7 @@ describe('RunnerSettingsSheet', () => {
     const draft = { ...v.config.settings, maxJobMinutes: 5, enabled: false };
     const kept = view({}, { maxJobMinutes: 10 });
     const updateRunner = vi.fn(async () => kept);
-    const res = await saveSettings(v, draft, { updateRunner, pushToast: vi.fn() });
+    const res = await saveSettings(v, v.config.settings, draft, { updateRunner, pushToast: vi.fn() });
     expect(updateRunner).toHaveBeenCalledWith('r1', { maxJobMinutes: 5 }); // never `enabled`: that is the switch's
     expect(res?.draft.maxJobMinutes).toBe(10);
     expect(res?.view).toBe(kept);
@@ -113,7 +124,7 @@ describe('RunnerSettingsSheet', () => {
 
   it('save_failure_is_a_toast', async () => {
     const pushToast = vi.fn();
-    const res = await saveSettings(view(), view().config.settings, { updateRunner: () => Promise.reject(new Error('The daemon said no.')), pushToast });
+    const res = await saveSettings(view(), view().config.settings, view().config.settings, { updateRunner: () => Promise.reject(new Error('The daemon said no.')), pushToast });
     expect(res).toBeNull();
     expect(pushToast).toHaveBeenCalledWith('error', 'Could not save runner settings: The daemon said no.');
   });

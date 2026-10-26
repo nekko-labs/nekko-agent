@@ -29,17 +29,19 @@ export function trustNetwork(draft: RunnerSettings, host: HostView): RunnerSetti
 }
 
 /**
- * Save sends only the keys the owner changed (never `enabled`, which is the
- * switch's), so a change the daemon made meanwhile is not reverted; the result
- * is what the daemon kept after clamping.
+ * Save sends only the keys the owner changed against `base`, the settings as
+ * they were when editing began (never `enabled`, which is the switch's), so a
+ * push during the edit is not reverted; the result is what the daemon kept
+ * after clamping.
  */
 export async function saveSettings(
   view: RunnerView,
+  base: RunnerSettings,
   draft: RunnerSettings,
   deps: { updateRunner(id: string, s: Partial<RunnerSettings>): Promise<RunnerView>; pushToast(kind: 'error', message: string): void },
 ): Promise<{ view: RunnerView; draft: RunnerSettings } | null> {
   try {
-    const { enabled: _switch, ...patch } = settingsPatch(view.config.settings, draft);
+    const { enabled: _switch, ...patch } = settingsPatch(base, draft);
     const kept = await deps.updateRunner(view.config.id, patch);
     return { view: kept, draft: kept.config.settings };
   } catch (e) {
@@ -147,13 +149,20 @@ export function SettingsBody({ view, draft, onDraft, onEnabled, onSave, onRemove
         {view.limit && <p className="mt-1 text-[11.5px] text-ink-faint">{slotLimitText(view.limit)}</p>}
       </Row>
       <Row label="Memory per VM" hint={sampled ? `${Math.round(host.ramMb / GB)} GB Mac, runner cap ${Math.round(host.runnerMemoryMb / GB)} GB` : undefined}>
-        <div className="flex items-center">
-          <input
-            type="range" className="flex-1" min={4} max={64} step={1} aria-label="Memory per VM in GB"
-            value={Math.round(draft.memoryPerVmMb / GB)} onChange={(e) => set('memoryPerVmMb', Number(e.target.value) * GB)}
-          />
-          <Val>{`${Math.round(draft.memoryPerVmMb / GB)} GB`}</Val>
-        </div>
+        {sampled ? (
+          <div className="flex items-center">
+            <input
+              type="range" className="flex-1" min={4} max={64} step={1} aria-label="Memory per VM in GB"
+              value={Math.round(draft.memoryPerVmMb / GB)} onChange={(e) => set('memoryPerVmMb', Number(e.target.value) * GB)}
+            />
+            <Val>{`${Math.round(draft.memoryPerVmMb / GB)} GB`}</Val>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="font-mono text-[12px] text-ink-soft">{`${Math.round(draft.memoryPerVmMb / GB)} GB per VM`}</span>
+            <Unsampled error={view.error} />
+          </div>
+        )}
       </Row>
       <Row label="Total runner memory">
         <div role="radiogroup" aria-label="Total runner memory" className="flex flex-wrap items-center gap-3 text-[13px] text-ink">
@@ -262,11 +271,15 @@ export function SettingsBody({ view, draft, onDraft, onEnabled, onSave, onRemove
  */
 export const shownSettings = (view: RunnerView, edits: RunnerSettings | null): RunnerSettings => edits ?? view.config.settings;
 
+export interface Edits { base: RunnerSettings; draft: RunnerSettings }
+/** The first edit snapshots the settings it started from; later edits keep that base. */
+export const editDraft = (edits: Edits | null, view: RunnerView, draft: RunnerSettings): Edits => ({ base: edits?.base ?? view.config.settings, draft });
+
 /** Runner settings for one runner. After Save, the form shows what the daemon kept. */
 export function RunnerSettingsSheet({ view, onClose, beginReply }: { view: RunnerView; onClose(): void; beginReply(): (v: RunnerView) => void }) {
   const pushToast = useStore((s) => s.pushToast);
-  const [edits, setEdits] = useState<RunnerSettings | null>(null);
-  const draft = shownSettings(view, edits);
+  const [edits, setEdits] = useState<Edits | null>(null);
+  const draft = shownSettings(view, edits?.draft ?? null);
   const [saving, setSaving] = useState(false);
 
   const [toggling, setToggling] = useState(false);
@@ -285,7 +298,7 @@ export function RunnerSettingsSheet({ view, onClose, beginReply }: { view: Runne
   const save = async () => {
     setSaving(true);
     const reply = beginReply();
-    const res = await saveSettings(view, draft, { updateRunner: window.nekko.updateRunner, pushToast });
+    const res = await saveSettings(view, edits?.base ?? view.config.settings, draft, { updateRunner: window.nekko.updateRunner, pushToast });
     setSaving(false);
     if (!res) return;
     setEdits(null); // the view now carries what the daemon kept
@@ -306,7 +319,7 @@ export function RunnerSettingsSheet({ view, onClose, beginReply }: { view: Runne
       <SettingsBody
         view={view}
         draft={draft}
-        onDraft={setEdits}
+        onDraft={(d) => setEdits((e) => editDraft(e, view, d))}
         onEnabled={(v) => void setEnabled(v)}
         onSave={() => void save()}
         onRemove={() => void remove()}
