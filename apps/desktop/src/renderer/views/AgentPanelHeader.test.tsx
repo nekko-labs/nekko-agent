@@ -62,6 +62,8 @@ describe('Agents panel header', () => {
   });
 
   it('offers the view menu from the sliders button, and says so on each group header', () => {
+    expect(renderSidebar()).toMatch(/title="Right-click for view options"/);
+    localStorage.setItem(AGENT_PANEL_VIEW_KEY, JSON.stringify({ ...DEFAULT_AGENT_PANEL_VIEW, groupBy: 'project' }));
     const html = renderSidebar();
     expect(tag(header(html), 'Agent panel view options')).toContain('aria-haspopup="menu"');
     expect(header(html)).toMatch(/aria-label="Agent panel view options"[^>]*><svg[^>]*class="h-4 w-4"/);
@@ -71,14 +73,18 @@ describe('Agents panel header', () => {
   it('only drags cards into order where that order is what the panel shows', () => {
     const cards = (html: string) => [...html.matchAll(/<div data-completion-row="[^"]+" draggable="(true|false)"/g)].map((m) => m[1]);
     const sessions = [agentSummary('a'), agentSummary('b')];
+    const byProject = { ...DEFAULT_AGENT_PANEL_VIEW, groupBy: 'project' };
+    localStorage.setItem(AGENT_PANEL_VIEW_KEY, JSON.stringify(byProject));
     expect(cards(renderSidebar({ sessions }))).toEqual(['true', 'true']);
-    localStorage.setItem(AGENT_PANEL_VIEW_KEY, JSON.stringify({ ...DEFAULT_AGENT_PANEL_VIEW, sortBy: 'name' }));
+    localStorage.setItem(AGENT_PANEL_VIEW_KEY, JSON.stringify({ ...byProject, sortBy: 'name' }));
     const byName = renderSidebar({ sessions });
     // Still draggable, but only into a zone on the board: the panel does not reorder by name.
     expect(cards(byName)).toEqual(['true', 'true']);
     // Project headers stay draggable while grouped by project.
     expect(byName).toMatch(/<div class="agent-panel-group-heading group flex items-center[^"]*" draggable="true"/);
-    localStorage.setItem(AGENT_PANEL_VIEW_KEY, JSON.stringify({ ...DEFAULT_AGENT_PANEL_VIEW, groupBy: 'status' }));
+    localStorage.removeItem(AGENT_PANEL_VIEW_KEY);
+    // Activity grouping does not reorder either; the cards still drag into zones.
+    expect(cards(renderSidebar({ sessions }))).toEqual(['true', 'true']);
     expect(renderSidebar({ sessions })).not.toMatch(/<div class="agent-panel-group-heading group flex items-center[^"]*" draggable="true"/);
   });
 

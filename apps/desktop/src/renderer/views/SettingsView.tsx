@@ -505,6 +505,7 @@ function AgentLoopSection({ settings, update }: { settings: AppSettings; update:
         Nekko Agent keeps working until the task is finished or you press Stop. Loop detection catches repeated tool
         calls and error streaks; output safeguards remain active.
       </p>
+      <InternetRecoverySetting settings={settings} update={update} />
       <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
         <div className="min-w-0">
           <span className="text-[13px]">Prompt caching</span>
@@ -1475,4 +1476,19 @@ export function NotificationsSection({ settings, update }: { settings: AppSettin
       </div>
     </section>
   );
+}
+
+/** Explicit opt-in: unlike ordinary provider retries this can restart a call after an outage. */
+export function InternetRecoverySetting({ settings, update }: { settings: AppSettings; update: (patch: Partial<AppSettings>) => void }) {
+  return <div id="internet-recovery" className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
+    <div className="min-w-0">
+      <span className="text-[13px]">Automatically resume after internet restoration</span>
+      <p id="internet-recovery-hint" className="text-[11px] text-ink-faint">
+        Off by default. Continue the same interrupted online model request when this computer reconnects (up to 30 minutes).
+        Additional provider usage may incur charges. Completed tools are not replayed. Ordinary provider retries are unchanged.
+      </p>
+    </div>
+    <Toggle on={settings.autoResumeOnInternetRestore === true} onChange={(v) => update({ autoResumeOnInternetRestore: v })}
+      aria-label="Automatically resume after internet restoration" aria-describedby="internet-recovery-hint" />
+  </div>;
 }

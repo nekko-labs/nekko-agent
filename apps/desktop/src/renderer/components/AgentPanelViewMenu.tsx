@@ -156,7 +156,7 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
           }}
         >
           {sub === 'group' && <>
-            {(['project', 'status', 'date'] as AgentGroupBy[]).map((g) => (
+            {(['status', 'project', 'date'] as AgentGroupBy[]).map((g) => (
               <Choice key={g} checked={view.groupBy === g} onClick={() => set({ groupBy: g })}>{GROUP_BY_LABELS[g]}</Choice>
             ))}
             <Divider />

@@ -19,7 +19,7 @@ const bridge: any = {
   onAgentEvent: (listener: (event: any) => void) => { agentListeners.add(listener); return () => agentListeners.delete(listener); },
   sendChat: async (opts: any) => { (window as any).layoutFixture.lastSend = opts; },
   getAppInfo: async () => ({ version: '0.0.0-fixture', platform: 'darwin' }),
-  getSettings: async () => settings, updateSettings: async (p: any) => Object.assign(settings, p), listProviders: async () => [provider],
+  getSettings: async () => settings, updateSettings: async (p: any) => ({ ...Object.assign(settings, p) }), listProviders: async () => [provider],
   listSessionSummaries: async () => [],
   getSession: async (id: string) => records.find(s => s.id === id), listModels: async () => [{ id: 'gpt-fixture', providerId: 'fixture', name: 'GPT fixture', contextWindow: 500000 }],
   listTerminals: async () => [],
