@@ -285,6 +285,7 @@ impl Drop for TitleFlight {
 }
 
 pub struct Turns {
+    connectivity: Arc<crate::connectivity::Connectivity>,
     title_flights: TitleFlights,
     store: Option<Arc<SessionStore>>,
     data_dir: Option<PathBuf>,
@@ -359,6 +360,7 @@ impl Turns {
         decide: Arc<DecideService>,
     ) -> Self {
         Self {
+            connectivity: crate::connectivity::Connectivity::new(),
             title_flights: TitleFlights::default(),
             store,
             data_dir,
@@ -513,6 +515,7 @@ impl Turns {
     pub fn abort(&self, turn_id: &str) -> bool {
         let Some(shared) = lock(&self.running).get(turn_id).cloned() else { return false };
         shared.cancel.cancel();
+        self.connectivity.forget(&shared.session_id);
         self.pending.release(&shared.session_id);
         true
     }
@@ -520,6 +523,7 @@ impl Turns {
     /// `chat:abort`: stop this session's turns here (a Claude Agent chat's
     /// may have one waiting behind a wake-up), if it has any.
     pub fn abort_session(&self, session_id: &str) -> bool {
+        self.connectivity.forget(session_id);
         let turns: Vec<Arc<Shared>> =
             lock(&self.running).values().filter(|s| s.session_id == session_id).cloned().collect();
         for shared in &turns {
@@ -687,6 +691,7 @@ impl Turns {
         if !nekko_store::valid_id(&session_id) {
             return Err("Session not found.".into());
         }
+        self.connectivity.forget(&session_id);
         let claude_code = spec.pointer("/facts/provider/kind").and_then(Value::as_str) == Some("claude-code");
         let (tx, rx) = mpsc::unbounded_channel();
         let shared = Arc::new(Shared {
@@ -747,7 +752,9 @@ impl Turns {
     /// on them) and the linked spec kept in sync with the chat. A sandbox turn
     /// runs neither.
     fn after_turn_hooks(self: &Arc<Self>, store: &Arc<SessionStore>, spec: &Value, summary: &Value) {
-        if spec.pointer("/facts/sandbox") == Some(&Value::Bool(true)) {
+        if spec.pointer("/facts/sandbox") == Some(&Value::Bool(true))
+            || summary.get("stop").and_then(Value::as_str) == Some("connectivity")
+        {
             return;
         }
         let session_id = str_at(&spec["opts"], "sessionId").unwrap_or_default().to_string();
@@ -796,7 +803,9 @@ impl Turns {
         turn_id: &str,
         mut summary: Value,
     ) -> Value {
-        if summary.get("early") == Some(&Value::Bool(true)) {
+        if summary.get("early") == Some(&Value::Bool(true))
+            || summary.get("stop").and_then(Value::as_str) == Some("connectivity")
+        {
             return summary;
         }
         let opts = &spec["opts"];
@@ -1117,6 +1126,90 @@ impl Turns {
             .filter(|_| facts.get("provider").is_some_and(crate::admission::offline_provider_allowed))
             .and_then(|mode| self.background.get().map(|b| b.gate(mode) as Arc<dyn nekko_chat::YieldGate>));
         let client = nekko_chat::YieldingClient::new(client, gate);
+        let internet =
+            crate::connectivity::needs_internet(&facts["provider"]) && !crate::connections::offline(&lock(&session));
+        let sink: crate::connectivity::Sink = {
+            let (st, sid, hub, logs) = (store.clone(), session_id.clone(), hub.clone(), self.agent_logs.clone());
+            Arc::new(move |notice: Value| {
+                let (st, sid, hub, logs) = (st.clone(), sid.clone(), hub.clone(), logs.clone());
+                Box::pin(async move {
+                    let n = notice.clone();
+                    let id = sid.clone();
+                    let written = if incognito {
+                        true
+                    } else {
+                        tokio::task::spawn_blocking(move || st.connectivity_notice(&id, n))
+                            .await
+                            .ok()
+                            .and_then(Result::ok)
+                            .unwrap_or(false)
+                    };
+                    if written {
+                        if !incognito && let Some(logs) = logs {
+                            let at = notice["createdAt"]
+                                .as_i64()
+                                .and_then(chrono::DateTime::from_timestamp_millis)
+                                .map(|d| d.to_rfc3339())
+                                .unwrap_or_default();
+                            let line = format!("\n[{at}] {}\n", notice["content"].as_str().unwrap_or_default());
+                            let id = sid.clone();
+                            let _ = tokio::task::spawn_blocking(move || logs.notice(&id, &line)).await;
+                        }
+                        hub.publish(
+                            "agent:event",
+                            json!({ "type": "session_meta", "sessionId": sid, "connectivityNotice": notice }),
+                            false,
+                        );
+                    }
+                })
+            })
+        };
+        let _connectivity =
+            internet.then(|| self.connectivity.observe(&session_id, shared.cancel.clone(), sink.clone()));
+        let allowed: crate::connectivity::Allowed = {
+            let admitted = lock(&session);
+            let (settings, st, sid, pid, spid, smid) = (
+                self.settings.clone(),
+                store.clone(),
+                session_id.clone(),
+                opts["providerId"].clone(),
+                admitted.get("providerId").cloned(),
+                admitted.get("modelId").cloned(),
+            );
+            Arc::new(move || {
+                let (settings, st, sid, pid, spid, smid) =
+                    (settings.clone(), st.clone(), sid.clone(), pid.clone(), spid.clone(), smid.clone());
+                Box::pin(async move {
+                    tokio::task::spawn_blocking(move || {
+                        let Some(settings) = &settings else { return false };
+                        let settings = settings.shared();
+                        if settings.get("autoResumeOnInternetRestore") != Some(&Value::Bool(true)) {
+                            return false;
+                        }
+                        let provider =
+                            settings["providers"].as_array().and_then(|ps| ps.iter().find(|p| p["id"] == pid));
+                        if !provider.is_some_and(|p| p["enabled"] == true) {
+                            return false;
+                        }
+                        st.meta(&sid).is_some_and(|s| {
+                            !js::truthy(s.get("archivedAt"))
+                                && !js::truthy(s.get("offline"))
+                                && nekko_net::allowed("model-providers")
+                                && s.get("providerId") == spid.as_ref()
+                                && s.get("modelId") == smid.as_ref()
+                        })
+                    })
+                    .await
+                    .unwrap_or(false)
+                })
+            })
+        };
+        let client = crate::connectivity::ConnectedClient::new(
+            client,
+            internet.then(|| self.connectivity.clone()),
+            allowed,
+            sink,
+        );
         // In code mode the tools behind `run_code` are still this chat's tools.
         let names: HashSet<String> = tools
             .iter()
@@ -1413,6 +1506,9 @@ impl Turns {
         let mut summary = json!({ "aborted": shared.cancel.is_cancelled() });
         if let Some(stop) = last_stop {
             summary["stop"] = stop;
+        }
+        if lock(&shared.last_error).as_deref() == Some(crate::connectivity::LOST) {
+            summary["stop"] = json!("connectivity");
         }
         summary
     }
