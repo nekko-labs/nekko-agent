@@ -87,17 +87,17 @@ export interface VirtualTranscriptProps<R extends VirtualRow> {
   ref?: React.Ref<VirtualTranscriptHandle>;
 }
 
-/** How far a left swipe slides the rows, which is the room the times get. */
-const REVEAL_PX = 72;
+/** Room for a full localized time plus its gap, including AM/PM. */
+const REVEAL_PX = 112;
 /** No horizontal wheel input for this long means the fingers left the trackpad. */
 const REVEAL_RELEASE_MS = 120;
 
 /**
- * Swipe left on the trackpad to see when each row was sent, as chat apps do:
- * the rows slide left under the gesture and spring back on release. Driven
+ * Swipe horizontally on the trackpad to see when each row was sent, as chat apps do:
+ * either direction slides the whole row left, then springs back on release. Driven
  * through CSS variables on the scroller, so a swipe re-renders nothing.
  */
-function useSwipeToRevealTimes(scrollRef: React.RefObject<HTMLDivElement | null>, listRef: React.RefObject<HTMLDivElement | null>) {
+function useSwipeToRevealTimes(scrollRef: React.RefObject<HTMLDivElement | null>) {
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -108,7 +108,7 @@ function useSwipeToRevealTimes(scrollRef: React.RefObject<HTMLDivElement | null>
       el.style.setProperty('--vt-reveal', `${px}px`);
       el.style.setProperty('--vt-reveal-o', String(px / REVEAL_PX));
       // Only while moved: a transform at rest would trap fixed popovers in rows.
-      if (listRef.current) listRef.current.style.transform = px ? `translateX(${-px}px)` : '';
+      el.classList.toggle('vt-revealing', px > 0);
     };
     const onWheel = (e: WheelEvent) => {
       if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
@@ -116,19 +116,19 @@ function useSwipeToRevealTimes(scrollRef: React.RefObject<HTMLDivElement | null>
       clearTimeout(release);
       clearTimeout(settle);
       el.classList.add('vt-swiping');
-      reveal = Math.min(REVEAL_PX, Math.max(0, reveal + e.deltaX));
+      reveal = Math.min(REVEAL_PX, Math.max(0, reveal + Math.abs(e.deltaX)));
       paint(reveal);
       release = setTimeout(() => {
         el.classList.remove('vt-swiping');
         reveal = 0;
         el.style.setProperty('--vt-reveal-o', '0');
-        if (listRef.current) listRef.current.style.transform = 'translateX(0)';
+        el.style.setProperty('--vt-reveal', '0px');
         settle = setTimeout(() => paint(0), 250);
       }, REVEAL_RELEASE_MS);
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => { el.removeEventListener('wheel', onWheel); clearTimeout(release); clearTimeout(settle); };
-  }, [scrollRef, listRef]);
+  }, [scrollRef]);
 }
 
 function VirtualTranscriptImpl<R extends VirtualRow>({
@@ -351,7 +351,7 @@ function VirtualTranscriptImpl<R extends VirtualRow>({
     };
   }, []);
 
-  useSwipeToRevealTimes(scrollRef, listRef);
+  useSwipeToRevealTimes(scrollRef);
 
   const visible = rows.slice(range.start, range.end);
   const tailGap = rows[rows.length - 1]?.gapAfter;

@@ -6,6 +6,11 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Chat swipe and welcoming questions (#1174)
+
+- [x] **CG-1, Reveal the whole row and full time.** Either horizontal wheel direction moves the transcript left up to 112px through CSS state; focused Electron checks cover row/child displacement, timestamp bounds, spring-back and no horizontal scroll at 1100px and 460px. Spec: [Swipe for times](spec/chat/chat-suggestions-progress-and-code-access.md).
+- [x] **CG-2, Center Nekko beside rotating questions.** Ten local questions on an eight-second idle timer, paused for drafts/attachments, hidden documents and reduced motion; caret-following scoped to the composer section. Focused unit and isolated renderer checks; packaged app/physical trackpad remain unverified. Spec: [Centered greeting](spec/desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md).
+
 ## Verification and PR progress (added 2026-10-25)
 
 Issue #1115. Spec: [Verification checklists and PR progress](spec/chat/verification-and-pr-progress.md).

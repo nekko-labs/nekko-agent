@@ -33,3 +33,9 @@ The PR panel shows finished/total head checks, successful/neutral/skipped, pendi
 Unknown means GitHub data could not be read completely, not that there are zero checks or threads. No checks reported is shown only for a complete empty response. The panel uses existing cached polling while the chat is visible. Its checked time is the local observation time, not GitHub's PR edit time. Failed refreshes can retain older observations, which become stale. Sign in to `gh` or reconnect GitHub if metadata remains unavailable, and confirm access to the repository.
 
 The initial presentation is shared by desktop and Local Web UI. Native phone progress presentation is not included. Links open in the normal external-link flow and do not approve or merge a PR.
+
+## Message times and starting a chat
+
+Swipe horizontally over the desktop or Local Web UI transcript to reveal local times beside messages and tool activity. Swiping right or left shifts the whole row left; letting go returns it to place. Vertical scrolling is unchanged. This uses trackpad wheel gestures, not mouse dragging or touch swipes.
+
+A new, empty focused chat places Nekko beside a welcoming question. Ten questions rotate every eight seconds while idle. Starting a draft or attaching a file pauses the questions. Reduced-motion preferences and hidden windows disable automatic rotation. The questions are bundled text, not requests sent to a model.
