@@ -2399,3 +2399,9 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 ## Expo retirement
 
 - [x] Remove the retired Expo app and its dedicated Mobile CI; keep native phone workflows, relay/push infrastructure and shared protocol coverage. Update merge-gate accounting and desktop icon/test references. See [native phone decision](spec/phone/native-phone-implementation-decision.md) and [decision 0026](docs/decisions/0026-retire-expo-in-favor-of-native-phone-apps.md). Tracked in #1124.
+
+## Compact Monitors and new-chat frost (#1152)
+
+- [x] Reduce the default/snap dock width to 276px, trim the monitor right inset by 2px, and avoid unused Focus scrollbar space. Keep budget ranges on one row and metric values readable. See [spacing spec](spec/desktop/slim-wave-rail-tighter-agents-spacing-composer-snap-points.md).
+- [x] Replace the new-chat opaque wash and hard composer edge with translucent frost and a reduced-transparency fallback. See [new-chat spec](spec/desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md).
+- [x] Check layout/range unit tests, desktop typechecking, hidden Electron resize/reset/range/typing interactions and matched default-theme desktop/narrow evidence. Packaged OS chrome and physical mobile devices remain unverified.

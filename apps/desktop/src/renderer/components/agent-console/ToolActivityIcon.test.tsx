@@ -21,6 +21,18 @@ describe('tool activity icons', () => {
     expect(toolIconKind({ name, input })).toBe(expected);
   });
 
+  it.each(['read', 'search', 'list', 'edit', 'check', 'terminal', 'git', 'web', 'plan', 'other'] as const)('uses the primary accent by default for %s child icons', (kind) => {
+    const html = renderToStaticMarkup(<ToolActivityIcon kind={kind} />);
+    expect(html).toContain('text-accent');
+    expect(html).not.toContain('text-ink-faint');
+  });
+
+  it('preserves an explicit icon color override', () => {
+    const html = renderToStaticMarkup(<ToolActivityIcon kind="check" className="h-3 w-3 text-danger" />);
+    expect(html).toContain('text-danger');
+    expect(html).not.toContain('text-accent');
+  });
+
   it('shows a common icon for homogeneous groups and purpose for mixed groups', () => {
     expect(purposeIconKind('explore', [{ name: 'read_file' }, { name: 'Read' }])).toBe('read');
     expect(purposeIconKind('explore', [{ name: 'read_file' }, { name: 'grep' }])).toBe('search');
