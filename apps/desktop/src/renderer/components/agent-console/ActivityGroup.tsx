@@ -38,7 +38,7 @@ export const ActivityGroup = memo(function ActivityGroup({ items, ...props }: Ac
   let tools: Activity[] = [];
   const flush = (index: number) => {
     if (tools.length) {
-      parts.push(<ToolActivityGroup key={`tools_${index - tools.length}`} items={tools} {...props} streaming={!!props.streaming && index === items.length} />);
+      parts.push(<ToolActivityGroup key={`tools_${index - tools.length}`} items={tools} stateKey={index - tools.length === 0 ? 'group-open' : `group-open-${index - tools.length}`} {...props} streaming={!!props.streaming && index === items.length} />);
       tools = [];
     }
   };
@@ -52,11 +52,11 @@ export const ActivityGroup = memo(function ActivityGroup({ items, ...props }: Ac
   return <>{parts}</>;
 });
 
-const ToolActivityGroup = memo(function ToolActivityGroup({ items, streaming = false, toolActivity, pendingCallId, turnRunning = streaming }: { items: Activity[]; streaming?: boolean; turnRunning?: boolean; toolActivity?: LiveActivity; pendingCallId?: string }) {
+const ToolActivityGroup = memo(function ToolActivityGroup({ items, streaming = false, toolActivity, pendingCallId, turnRunning = streaming, stateKey = 'group-open' }: { stateKey?: string; items: Activity[]; streaming?: boolean; turnRunning?: boolean; toolActivity?: LiveActivity; pendingCallId?: string }) {
   // Open while the turn runs (watching it work is the point), folded away
   // afterwards so a finished transcript reads as answers. Remembered per row,
   // so scrolling a transcript row out of the window and back keeps it as left.
-  const [open, setOpen] = useRowState(`group-open-${stepKey(items[0], 0)}`, streaming && !items.some(it => it.kind === 'tool' && it.call.name === 'spawn_agent'));
+  const [open, setOpen] = useRowState(stateKey, streaming && !items.some(it => it.kind === 'tool' && it.call.name === 'spawn_agent'));
   const tools = items.filter((it): it is Extract<Activity, { kind: 'tool' }> => it.kind === 'tool');
   const toolCount = tools.length;
   const agents = tools.filter((it) => it.call.name === 'spawn_agent');

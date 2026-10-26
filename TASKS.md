@@ -2394,4 +2394,4 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 
 ### Inline thoughts in chat (#1138) · [spec](spec/chat/tool-calls-grouped-by-purpose.md)
 
-- [x] Show provider-supplied thoughts with the thought icon outside collapsible tool groups in live and saved desktop/Local Web UI conversations. Preserve ordering and avoid repeating a final message's thought. Verified with 40 focused tests, desktop typechecking and hidden Electron before/after captures at 1000/390 px; native phones unchanged.
+- [x] Show provider-supplied thoughts with the thought icon outside collapsible tool groups in live and saved desktop/Local Web UI conversations. Preserve ordering and avoid repeating a final message's thought. Verified with all 217 chat component tests, desktop typechecking and hidden Electron before/after captures at 1000/390 px; native phones unchanged.
