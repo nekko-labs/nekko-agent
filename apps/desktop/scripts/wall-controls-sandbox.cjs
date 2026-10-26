@@ -65,7 +65,7 @@ app.whenReady().then(async () => {
       await sleep(400);
       if (current && process.env.NEKKO_FOCUS_SURFACES) {
         await check('focus has rounded translucent surface', "(()=>{const s=getComputedStyle(document.querySelector('.command-wall-window > .panel'));return s.borderTopLeftRadius==='24px' && s.backgroundColor!=='transparent'})()");
-        await check('navigation is 90% height without SVG morph', "(()=>{const r=document.querySelector('.rail'),p=r.parentElement;return Math.abs(r.getBoundingClientRect().height/p.getBoundingClientRect().height-.9)<.01 && !r.querySelector('svg.rail-backdrop')})()");
+        await check('navigation is 90% height without SVG morph', "(()=>{const r=document.querySelector('.rail'),p=r.parentElement;return Math.abs(r.getBoundingClientRect().height/p.getBoundingClientRect().height-.9)<.01 && !!r.querySelector('svg.rail-backdrop') && getComputedStyle(r.querySelector('.rail-backdrop path')).transitionDuration==='0s'})()");
         const before = await run("document.querySelector('.wall-agents-presence').getBoundingClientRect().width");
         await run("document.querySelector('[aria-label=\"Hide the agent panel\"], [aria-label=\"Show the agent panel\"]').click(); document.querySelector('.wall-agents-presence')?.getBoundingClientRect()");
         await sleep(100);

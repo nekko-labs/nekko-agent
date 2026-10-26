@@ -36,11 +36,13 @@ macOS builds are signed and notarized, so they open normally. If Windows shows a
 
 ## Typing in a new agent window
 
-A new chat greets you with “What should we work on?” and a small pixel Nekko peeking beside it, looking toward the heading. Type your request in the composer below. The new-chat surface has a vertical dark-teal-to-gold gradient. Themes with moving dots show them only here, not behind existing conversations. Context menus use a neutral light or dark background with accent-colored highlighted rows. Switching to a chat also highlights and reveals its row in the Agents panel.
+A new chat greets you with “What should we work on?” and a small pixel Nekko peeking beside it, looking toward the heading. Type your request in the composer below. The new-chat surface slowly fades through teal/gold, violet/rose, blue/mint and rose/amber palettes over two minutes. Reduced motion holds the colors still. Themes with moving dots show them only here, not behind existing conversations. Context menus use a neutral light or dark background with accent-colored highlighted rows. Switching to a chat also highlights and reveals its row in the Agents panel.
 
 Opening an agent composer puts the caret after any restored draft once a usable model provider is available. If you are already typing in another visible text field, that field keeps focus. Normal background agent and provider updates do not pull you back into the composer.
 
 ## Following tool activity
+
+The agent's plan sits on top of the message box as a card. Each step shows its title, one line of detail, and chips for what that step produced: the PRs the agent opened (with their CI status) and the files or previews it linked. Finished steps shrink to their title; hover the card to see their details. **Change plan** tells the agent what to do differently.
 
 Chat tool calls use icons for what the agent is doing: reading files, searching, editing, running checks, Git, web access or planning. Shell execution, including Python, uses the same terminal artwork as the current-work indicator. Transcript icons stay still; expand a tool row to read its output. Unknown tools keep the generic tool icon.
 
@@ -131,7 +133,7 @@ The 2026-10-13 batch is implemented and unit/fixture interaction tested, not yet
 
 ### Create an agent, media session or terminal
 
-Hover anywhere on the left navigation panel to open it and see each destination's name. On macOS, **Nekko Agent → Settings…** (⌘,) opens Settings and **About Nekko Agent** shows the About page.
+Hover over the left navigation panel, including its curved top and bottom wings, to open it and see each destination's name. Keyboard focus opens the same panel; reduced motion disables its width and label transitions. On macOS, **Nekko Agent → Settings…** (⌘,) opens Settings and **About Nekko Agent** shows the About page.
 
 Hover over the sidebar **+** to choose **Agent**, **Create or Edit Photos and Videos** or **Terminal**. Moving away closes the menu after a short grace period. Terminal uses your default shell; choose its type in **Settings → Terminal → Default shell**, or leave **Auto-detect** selected. Create or Edit Photos and Videos opens an image session; video generation is not available.
 
@@ -163,6 +165,18 @@ When an agent needs a choice, its question opens at the bottom of the conversati
 
 Click the plus button in the Agents panel to open a new agent window. Hover over it for the Agent, Photos and Videos, and Terminal choices. Terminals and photo/video projects appear in separate groups at the top of the panel only when there are items to show.
 
+The Agent Board header also has a single **+**: hover or click it for the same three choices. Both menus use a neutral light/dark background and highlight the hovered or keyboard-focused row in your primary color. The shortcut appears beside every choice:
+
+| Action | macOS | Windows/Linux |
+| --- | --- | --- |
+| New agent | Cmd+T | Ctrl+T |
+| New photo/video session (image tools available; video planned) | Cmd+Shift+I | Ctrl+Shift+I |
+| New terminal | Cmd+Shift+T | Ctrl+Shift+T |
+| Search chats | Cmd+Shift+F | Ctrl+Shift+F |
+
+Hover or focus the search icon to see its shortcut; opening search shows it beside the input too. The search shortcut returns to the Agent Board and reveals its panel when necessary. Cmd/Ctrl+F still searches within the focused chat.
+
+
 ### Compact agent row and monitor controls
 
 In the horizontal Agents row, the controls sit in a compact two-column strip beside the cards, leaving no unused band below them. Configure monitors stays within the window even when the dock is at either edge. Press Escape or click outside to close it. Dragging monitor headers keeps the scroll surface steady while the landing outline opens.
@@ -188,3 +202,7 @@ and wake-up details wrap the same way on desktop and the Local Web UI.
 ### Resizing the side panels
 
 Hover the edge between the agent list and chat wall, or the edge beside Monitors, to reveal a bright vertical resize line. Drag it to change the panel width, or focus the separator and use the left/right arrow keys. The line disappears when you leave the edge; there is no permanent divider beside the agent list. Monitors starts at 276px wide, with all six Budget time ranges on one row. Resize near that width to snap back, or double-click its separator (Home on the keyboard) to reset. In Focus, untouched new chats use a quiet, borderless frosted surface; reduced-transparency preferences restore a solid background.
+
+### Skills and Connectors shortcuts
+
+Open **Settings** to find large **Skills** and **Connectors** chips at the top. They are no longer shown in the left sidebar by default. To bring either shortcut back, use **Settings > General > View settings** and turn on its sidebar toggle. Hiding these shortcuts does not disable their features or command-palette access.

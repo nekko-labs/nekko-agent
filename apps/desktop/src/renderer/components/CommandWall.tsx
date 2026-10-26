@@ -725,7 +725,6 @@ export function CommandWall({
         data-wall-logs-open={logsOpen || undefined}
       >
         {/* The composer's beam, quieter: a working agent window says so at a glance. */}
-        {agentStatus === 'working' && <span className="composer-beam-ring wall-window-beam" aria-hidden><span className="composer-beam-spin" /></span>}
         <PaneFrame
           pane={pane}
           title={title}
