@@ -1,3 +1,4 @@
+import { PixelWaveBackground, pixelWaveFor } from './PixelWaveBackground.js';
 import { GreetingNekko } from './GreetingNekko.js';
 import { PrWatchContinuation } from './PrWatchContinuation.js';
 import { canOfferPrWatch } from '../prWatchContinuation.js';
@@ -2691,7 +2692,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             <span className="absolute left-1/2 top-[3px] h-1.5 w-10 -translate-x-1/2 rounded-full opacity-0 transition-opacity group-hover:opacity-100" style={{ background: 'var(--accent)' }} />
           </div>}
           {cleanStart && <div className="clean-start-greeting fade-in" data-clean-start-greeting>
-            <GreetingNekko />
             <h2>What should we work on?</h2>
           </div>}
           <div className={`composer-column mx-auto ${commandCenter ? 'w-[98%]' : 'w-[90%]'}`} style={cleanStart ? undefined : commandCenter ? { width: '98%' } : undefined}>
@@ -2700,6 +2700,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             )}
 
             <div className="composer relative">
+            {cleanStart && <GreetingNekko />}
             {compact && (
               <div className="composer-summary">
                 <button

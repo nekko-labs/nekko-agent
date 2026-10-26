@@ -73,6 +73,16 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > full screen to zoom and scroll; touch and hold any table for **Copy as Markdown**, **Copy as
 > text** (tab-separated, so it pastes into Numbers or Sheets as cells) and **Share**.
 >
+> The iPhone message box writes Markdown: what you type is what is sent, shown with light styling
+> (bold looks bold with its `**` dimmed, headings larger, list markers tinted). While it has the
+> keyboard, a formatting bar sits inside the box above the text: bold, italic, strikethrough, inline
+> code, link, heading, bulleted, numbered and task lists, indent and outdent, quote, code block and
+> table. **Aa** hides or shows the bar, and the choice is kept. Return continues a list (the next
+> number, an empty task box) and ends it on an empty item; inside a table the bar adds **+ Row** and
+> **+ Column**, and Tab moves to the next cell. A normal paste stays plain text; after pasting rich
+> text (from Safari, Notes, Mail or Docs) a chip offers **Use formatting** for a few seconds. Touch
+> and hold for **Paste as Markdown** or **Paste as plain text**. Undo takes back any of it.
+>
 > Tables in a reply show as a grid (it scrolls sideways when wide). When the agent links a file it
 > made on your computer (an HTML prototype, an image, a PDF, Markdown, text, JSON or CSV) or a
 > preview server it started there (`http://localhost:5173`), the reply gets a card for it, with a

@@ -36,7 +36,7 @@ macOS builds are signed and notarized, so they open normally. If Windows shows a
 
 ## Typing in a new agent window
 
-A new chat greets you with “What should we work on?” and a small pixel Nekko peeking beside it, looking toward the heading. Type your request in the composer below.
+A new chat greets you with “What should we work on?” and a small pixel Nekko peeking beside it, looking toward the heading. Type your request in the composer below. The new-chat surface has a vertical dark-teal-to-gold gradient. Themes with moving dots show them only here, not behind existing conversations. Context menus use a neutral light or dark background with accent-colored highlighted rows. Switching to a chat also highlights and reveals its row in the Agents panel.
 
 Opening an agent composer puts the caret after any restored draft once a usable model provider is available. If you are already typing in another visible text field, that field keeps focus. Normal background agent and provider updates do not pull you back into the composer.
 

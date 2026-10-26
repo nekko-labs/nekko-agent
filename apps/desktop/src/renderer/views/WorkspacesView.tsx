@@ -518,6 +518,24 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
     ];
   })()];
 
+  const activeRowRef = useRef<HTMLDivElement>(null);
+  const selectedGroup = groups.find((g) => g.items.some((e) => e.s?.id === selectedId || e.t?.id === selectedId || (e.s && childrenOf.get(e.s.id)?.some((kid) => kid.id === selectedId))) || g.done.some((s) => s.id === selectedId));
+  const selectedGroupKey = selectedGroup?.key;
+  const selectedCompleted = !!selectedGroup?.done.some((s) => s.id === selectedId);
+  useEffect(() => {
+    setSelected([]);
+    if (!selectedGroupKey) return;
+    setCollapsed((previous) => {
+      if (!previous.has(selectedGroupKey)) return previous;
+      const next = new Set(previous); next.delete(selectedGroupKey); return next;
+    });
+    if (selectedCompleted) setShowCompleted((previous) => new Set(previous).add(selectedGroupKey));
+  }, [selectedId, selectedGroupKey, selectedCompleted]);
+  useLayoutEffect(() => {
+    const frame = requestAnimationFrame(() => activeRowRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' }));
+    return () => cancelAnimationFrame(frame);
+  }, [selectedId, collapsed, showCompleted, horizontal]);
+
   // --- Sidebar drag-and-drop (reorder projects; reorder / re-file workspaces) ---
   const startDrag = (e: React.DragEvent, item: DragItem) => {
     e.stopPropagation();
@@ -757,6 +775,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                     return (
                       <div
                         key={entry.key}
+                        ref={(s?.id === selectedId || entry.t?.id === selectedId) ? activeRowRef : undefined}
                         {...(s ? { [COMPLETION_ROW_ATTR]: s.id } : {})}
                         onContextMenu={s ? (e) => contextRow(e, s.id) : undefined}
                         onClickCapture={s ? (e) => { if (selectRow(e, s.id)) e.stopPropagation(); } : undefined}
@@ -792,13 +811,12 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                         />
                         {/* Sub-agents this chat spawned, one line each. */}
                         {kids.map((kid) => (
-                          <SubAgentRow
-                            key={kid.id}
+                          <div key={kid.id} ref={kid.id === selectedId ? activeRowRef : undefined}><SubAgentRow
                             session={kid}
                             status={statuses.get(kid.id)}
                             isActive={kid.id === selectedId}
                             onOpen={() => onOpenChat(kid.id)}
-                          />
+                          /></div>
                         ))}
                       </div>
                     );
@@ -826,14 +844,13 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                         <button className="ml-2 text-accent" onClick={() => useStore.setState({ completionTipSessionId: null })}>Dismiss</button>
                       </div>}
                       {completedOpen && done.map((s) => (
-                        <CompletedRow
-                          key={s.id}
+                        <div key={s.id} ref={s.id === selectedId ? activeRowRef : undefined}><CompletedRow
                           session={s}
                           now={now}
                           isActive={selectedId === s.id}
                           onOpen={() => { onOpenChat(s.id); setMobileNav(false); }}
                           onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setMenu(null); setDoneMenu({ x: e.clientX, y: e.clientY, id: s.id }); }}
-                        />
+                        /></div>
                       ))}
                     </div>
                   )}
