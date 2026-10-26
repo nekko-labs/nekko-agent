@@ -21,11 +21,14 @@ The agent's plan was split from the place the user works: it sat in the Agent Mo
 - The Agent Monitor no longer shows the plan; it keeps artifacts, project, sub-agents and queued follow-ups.
 - Step status marks are unchanged from [per-step plan working icons](per-step-plan-working-icons.md) and still do not animate.
 - An archived chat has no composer, so it shows no plan card.
-- The card is not shown in the wall's compact composer or on a clean-start chat.
+- In Grid and Dynamic layouts the agent windows show only their transcripts, so the shared composer carries the selected agent's plan card, and **Change plan** opens its prompt there. The card is not shown on a clean-start chat.
 
-## Planned (second PR)
+## Verification and CI on the card (implemented, second PR)
 
-Move the Verification panel and CI status under the composer into the card, as chips on each step's third row (tests run, passing or failing, and CI checks), and retire the separate Verification panel.
+- A step with an explicit verification report shows a chip: Verified, Checking, Check failed, Check blocked, Check pending or Check unknown, with the device ("Verified on macOS"). Its tooltip says it is agent-reported and gives the report's age (stale for waiting reports). It opens the evidence link only when that link is safe. The report's detail replaces the step's note on the detail row. A done step without a report shows no chip.
+- CI checks of each open PR sit in one slim row under the last step that has a verification report (else the step that opened the PR, else the running step): failing and running checks by name, failing first, and the passing ones folded into "N passed", which opens the PR's checks page.
+- The separate Verification panel under the composer (and inside each agent window) is gone. When the card shows CI, the PR card keeps its actions and review threads but drops its CI lines, and the PR actions start tucked away behind their slim "1 pull request · Show actions" row; without a plan the PR card still shows CI and opens as before.
+- Below the composer the agent window reads as one surface: the PR row has no border or shadow, and the footer controls have no divider or separate background.
 
 ## Verification
 

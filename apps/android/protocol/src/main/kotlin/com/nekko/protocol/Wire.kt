@@ -64,11 +64,35 @@ object Channels {
     const val REMOTE_STOP = "remote:stop"
     const val APP_QUIT = "app:quit"
 
+    /** AN-30 git on a chat's folder ([GitRequest]): reads, then Change actions (signed). */
+    const val WORKSPACE_GIT_STATUS = "workspace:gitStatus"
+    const val GIT_DIFF = "git:diff"
+    const val GIT_LOG = "git:log"
+    const val GIT_SHOW = "git:show"
+    const val GIT_BRANCHES = "git:branches"
+    const val GIT_COMPARE = "git:compare"
+    const val GIT_STAGE = "git:stage"
+    const val GIT_UNSTAGE = "git:unstage"
+    const val GIT_COMMIT = "git:commit"
+    /** A message for what is staged, written by the computer's model: a Change, it spends its tokens. */
+    const val GIT_COMMIT_MESSAGE = "git:commitMessage"
+    const val GIT_PUSH = "git:push"
+    const val GIT_SWITCH = "git:switch"
+    const val GIT_MERGE_ABORT = "git:mergeAbort"
+
+    /** The git channels the computer treats as Change (`PHONE_CHANGE_CHANNELS`): each one is signed. */
+    val GIT_CHANGE = setOf(GIT_STAGE, GIT_UNSTAGE, GIT_COMMIT, GIT_COMMIT_MESSAGE, GIT_PUSH, GIT_SWITCH, GIT_MERGE_ABORT)
+
+    /** Every Change channel this phone calls ([ChangeProof]). */
+    val CHANGE = GIT_CHANGE
+
     val ALL = listOf(
         SETTINGS_GET, SETTINGS_UPDATE, SESSION_DELETE, VOICE_STATUS, VOICE_TRANSCRIBE, PROVIDERS_LIST, MODELS_LIST, SESSIONS_SUMMARIES, SESSION_CREATE, SESSION_GET,
         SESSION_SET_OPTIONS, CHAT_SEND, CHAT_ABORT, CHAT_QUEUE, CHAT_PENDING, CHAT_ANSWER, TOOL_APPROVE,
         WORKSPACE_LIST, APP_INFO, SKILLS_RUNNABLE, CHANGES_LIST, MONITOR_SUMMARY,
         SECURITY_CHALLENGE, DEVICE_SIGN_OUT, REMOTE_STOP, APP_QUIT,
+        WORKSPACE_GIT_STATUS, GIT_DIFF, GIT_LOG, GIT_SHOW, GIT_BRANCHES, GIT_COMPARE,
+        GIT_STAGE, GIT_UNSTAGE, GIT_COMMIT, GIT_COMMIT_MESSAGE, GIT_PUSH, GIT_SWITCH, GIT_MERGE_ABORT,
     )
 }
 

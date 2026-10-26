@@ -70,8 +70,8 @@ describe('plan change prompt', () => {
   it('pops up where questions do, in both the full chat and a wall window, and steers a running agent (source pin)', () => {
     const pane = readFileSync(new URL('./ChatPane.tsx', import.meta.url), 'utf8');
     expect(pane).toMatch(/surface === 'transcript' && planChangeOpen && !question/);
-    expect(pane).toMatch(/surface !== 'composer' && planChangeOpen && !question/);
-    expect(pane).toMatch(/surface !== 'composer' && !cleanStart && !planChangeOpen && !question && \(\s*<PlanSheet/);
+    expect(pane).toMatch(/\{planChangeOpen && !question && \(\s*<div className="composer-question is-open" data-plan-change-pop>/);
+    expect(pane).toMatch(/\{!cleanStart && !planChangeOpen && !question && \(\s*<PlanSheet/);
     expect(pane).toMatch(/if \(streamingRef\.current\) \{\s*const updated = await window\.nekko\.steerChat\(sessionId, text\)/);
     expect(pane).toMatch(/await send\(text\);/);
   });

@@ -17,8 +17,9 @@ const agentListeners = new Set<(event: any) => void>();
 const emitAgent = (event: any) => { for (const listener of agentListeners) listener(event); };
 const bridge: any = {
   onAgentEvent: (listener: (event: any) => void) => { agentListeners.add(listener); return () => agentListeners.delete(listener); },
+  sendChat: async (opts: any) => { (window as any).layoutFixture.lastSend = opts; },
   getAppInfo: async () => ({ version: '0.0.0-fixture', platform: 'darwin' }),
-  getSettings: async () => settings, updateSettings: async (p: any) => Object.assign(settings, p), listProviders: async () => [provider],
+  getSettings: async () => settings, updateSettings: async (p: any) => ({ ...Object.assign(settings, p) }), listProviders: async () => [provider],
   listSessionSummaries: async () => [],
   getSession: async (id: string) => records.find(s => s.id === id), listModels: async () => [{ id: 'gpt-fixture', providerId: 'fixture', name: 'GPT fixture', contextWindow: 500000 }],
   listTerminals: async () => [],
@@ -38,7 +39,23 @@ import('@nekko-agent/shared').then(async ({ summarizeSession }) => {
   document.documentElement.dataset.theme = 'dark';
   const root = createRoot(document.getElementById('root')!);
   root.render(React.createElement(UpdateProvider, null, React.createElement(App)));
-  (window as any).layoutFixture = { store: useStore, records, bridge, putCachedSession, emitAgent, showGreeting: async () => {
+  (window as any).layoutFixture = { store: useStore, records, bridge, putCachedSession, emitAgent, showRetry: async () => {
+    const { ChatPane } = await import('../src/renderer/components/ChatPane');
+    const record = records[0] as any;
+    record.messages = [
+      { id: 'u0', role: 'user', content: 'Earlier question', createdAt: now - 6000 },
+      { id: 'a0', role: 'assistant', content: 'Earlier answer remains saved.', createdAt: now - 5000 },
+      { id: 'u1', role: 'user', content: 'Continue the implementation', createdAt: now - 4000 },
+      { id: 'a1', role: 'assistant', content: 'Completed the first step before interruption.', createdAt: now - 3000 },
+      { id: 'interrupted', role: 'assistant', content: '_This reply was cut off before it finished. Everything above is kept, resume to carry on from here._', interrupted: true, createdAt: now - 2000 },
+    ];
+    putCachedSession(record);
+    useStore.setState({ providers: [provider], models: [{ id: 'gpt-fixture', providerId: 'fixture', name: 'GPT fixture', contextWindow: 500000 }], settings, activeSessionId: 'a' } as any);
+    root.render(React.createElement('div', { style: { height: '100vh' } }, React.createElement(ChatPane, { sessionId: 'a' })));
+    const { applyEvent } = await import('../src/renderer/liveRuns');
+    (window as any).layoutFixture.emit = (event: any) => { applyEvent({ ...event, sessionId: 'a' }); emitAgent({ ...event, sessionId: 'a' }); };
+  }, showGreeting: async () => {
+
     const { ChatPane } = await import('../src/renderer/components/ChatPane');
     useStore.setState({ providers: [provider], models: [{ id: 'gpt-fixture', providerId: 'fixture', name: 'GPT fixture', contextWindow: 500000 }], settings, activeSessionId: 'd' } as any);
     root.render(React.createElement('div', { style: { height: '100vh' } }, React.createElement(ChatPane, { sessionId: 'd', cleanStart: true })));

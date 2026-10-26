@@ -239,6 +239,15 @@ impl AgentLogs {
     /// `appendAgentTerminal` (with `loopLog`'s refusal for a sandbox chat):
     /// the output shown at once and written to the chat's log.
     pub fn append(&self, session_id: &str, workspace_id: Option<&str>, data: &str) {
+        self.append_status(session_id, workspace_id, data, true);
+    }
+
+    /// A status notice must not make an idle command terminal look running.
+    pub fn notice(&self, session_id: &str, data: &str) {
+        self.append_status(session_id, None, data, false);
+    }
+
+    fn append_status(&self, session_id: &str, workspace_id: Option<&str>, data: &str, running: bool) {
         let session = self.store.as_ref().and_then(|s| s.get(session_id));
         if session.as_ref().is_some_and(|s| crate::worktrees::execution_mode(s) == "sandbox") {
             return;
@@ -258,11 +267,13 @@ impl AgentLogs {
                 info.insert("shell".into(), json!("agent"));
                 info.insert("agentSessionId".into(), json!(session_id));
                 info.insert("createdAt".into(), json!(now_ms()));
-                info.insert("running".into(), json!(true));
+                info.insert("running".into(), json!(running));
                 Term { info, buffer: String::new() }
             });
-            term.info.insert("running".into(), json!(true));
-            term.info.shift_remove("exitCode");
+            if running {
+                term.info.insert("running".into(), json!(true));
+                term.info.shift_remove("exitCode");
+            }
             term.buffer = keep_tail(std::mem::take(&mut term.buffer) + data);
         }
         self.hub.publish("terminal:event", json!({ "type": "data", "terminalId": id, "data": data }), false);
@@ -417,6 +428,23 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         d
+    }
+
+    #[tokio::test]
+    async fn a_connectivity_notice_does_not_restart_an_idle_terminal() {
+        let dir = temp("notice");
+        let l = logs(&dir);
+        l.notice("s1", "[2026-06-17T10:00:00Z] Internet reachability lost\n");
+        assert_eq!(l.list()[0]["running"], false);
+        l.append("s1", None, "$ local work\n");
+        l.notice("s1", "Internet reachability restored\n");
+        assert_eq!(l.list()[0]["running"], true);
+        l.finish("s1");
+        l.notice("s1", "Manual Continue available\n");
+        assert_eq!(l.list()[0]["running"], false);
+        assert!(l.snapshot("agent_s1").await.unwrap()["buffer"].as_str().unwrap().contains("Manual Continue"));
+        l.delete_blocking("s1").unwrap();
+        std::fs::remove_dir_all(dir).ok();
     }
 
     #[tokio::test]

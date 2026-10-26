@@ -26,6 +26,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Button
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,6 +40,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -66,6 +69,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nekko.android.chat.ChatViewModel
 import com.nekko.android.ui.chat.ApprovalCard
 import com.nekko.android.ui.chat.BlockView
+import com.nekko.android.ui.chat.PurposeGroupCard
 import com.nekko.android.ui.chat.ChatColumns
 import com.nekko.android.ui.chat.Composer
 import com.nekko.android.ui.chat.QuestionCard
@@ -73,6 +77,8 @@ import com.nekko.android.ui.components.Notice
 import com.nekko.android.ui.components.Tone
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.Block
+import com.nekko.protocol.Purpose
+import com.nekko.protocol.PurposeRun
 import java.util.Locale
 import android.content.ClipData
 import android.content.ClipDescription
@@ -92,6 +98,13 @@ import androidx.compose.ui.draganddrop.mimeTypes
 import androidx.compose.ui.draganddrop.toAndroidDragEvent
 import androidx.compose.ui.draw.alpha
 import com.nekko.android.ui.components.Dot
+import com.nekko.android.git.GitController
+import com.nekko.android.ui.git.GitDialog
+import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.ui.platform.testTag
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
 import com.nekko.android.ui.panes.PaneSlot
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -109,6 +122,8 @@ fun ChatScreen(
     val changesAllowed by vm.changesAllowed.collectAsStateWithLifecycle()
     val insert by vm.insert.collectAsStateWithLifecycle()
     var showChanges by remember { mutableStateOf(false) }
+    var showMenu by remember { mutableStateOf(false) }
+    var git by remember { mutableStateOf<GitController?>(null) }
     var restoring by remember { mutableStateOf(false) }
     var restoreError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -135,17 +150,37 @@ fun ChatScreen(
     // A note above the messages when the computer sent only the newest ones.
     val headerCount = if (chat.omittedMessages > 0) 1 else 0
     val footerCount = 1
-    val lastIndex = headerCount + keyed.size + footerCount - 1
+    // Adjacent calls with one purpose fold into one card (spec/chat/tool-calls-grouped-by-purpose.md).
+    val rows = remember(keyed) { Purpose.group(keyed) { Purpose.role(it.second) } }
+    val lastIndex = headerCount + rows.size + footerCount - 1
 
-    // Follow the reply while it streams, unless the user scrolled up to read.
+    // Open at the newest message, then follow the reply while it streams, unless the user scrolled up to read.
     val streamTick = (chat.blocks.lastOrNull() as? Block.Assistant)?.let { it.text.length + (it.reasoning?.length ?: 0) } ?: 0
-    LaunchedEffect(keyed.size, streamTick, chat.error) {
-        if (keyed.isEmpty()) return@LaunchedEffect
+    var openedAtBottom by remember(vm.sessionId) { mutableStateOf(false) }
+    LaunchedEffect(rows.size, keyed.size, streamTick, chat.error, chat.ready) {
+        if (!chat.ready || keyed.isEmpty()) return@LaunchedEffect
+        if (!openedAtBottom) {
+            // The list replaces the spinner in this frame: wait until it has items, then jump without animating.
+            snapshotFlow { list.layoutInfo.totalItemsCount }.first { it > 0 }
+            list.scrollToItem(lastIndex)
+            openedAtBottom = true
+            return@LaunchedEffect
+        }
         val info = list.layoutInfo
         val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: -1
         val nearBottom = lastVisible >= info.totalItemsCount - 3
-        // totalItemsCount is 0 on the first frame: start at the bottom.
-        if (nearBottom || info.totalItemsCount == 0) list.scrollToItem(lastIndex)
+        if (nearBottom) list.scrollToItem(lastIndex)
+    }
+
+    // Keep the newest message in view when the list gets shorter (the keyboard opens, the message box grows),
+    // if it was at the bottom; a list scrolled up to read stays where it is.
+    LaunchedEffect(list) {
+        var height = 0
+        var atBottom = false
+        snapshotFlow { list.layoutInfo.viewportSize.height to !list.canScrollForward }.collect { (h, bottom) ->
+            if (h < height && atBottom) list.scrollBy((height - h).toFloat()) else atBottom = bottom
+            height = h
+        }
     }
 
     if (showChanges && changesAllowed) {
@@ -156,6 +191,8 @@ fun ChatScreen(
         )
     }
 
+    git?.let { g -> GitDialog(g, onDismiss = { git = null }) }
+
     Scaffold(
         containerColor = p.paper,
         topBar = {
@@ -165,6 +202,19 @@ fun ChatScreen(
                     if (changesAllowed) {
                         IconButton(onClick = { vm.loadChanges(); showChanges = true }) {
                             Icon(Icons.Filled.Difference, contentDescription = "Changes")
+                        }
+                    }
+                    Box {
+                        IconButton(onClick = { showMenu = true }, modifier = Modifier.testTag("chat.more")) {
+                            Icon(Icons.Filled.MoreVert, contentDescription = "More")
+                        }
+                        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                            DropdownMenuItem(
+                                text = { Text("Git") },
+                                leadingIcon = { Icon(Icons.Filled.AccountTree, contentDescription = null) },
+                                onClick = { showMenu = false; git = vm.git() },
+                                modifier = Modifier.testTag("chat.git"),
+                            )
                         }
                     }
                     pane?.actions?.invoke(this)
@@ -227,9 +277,15 @@ fun ChatScreen(
                                 )
                             }
                         }
-                        itemsIndexed(keyed, key = { _, (k, _) -> k }) { _, (_, block) ->
-                            // In a pane a message can be dragged into the other pane's message box.
-                            if (pane == null) BlockView(block) else Box(Modifier.messageDragSource(block, vm.sessionId)) { BlockView(block) }
+                        itemsIndexed(rows, key = { _, run -> rowKey(run) }) { _, run ->
+                            when (run) {
+                                is PurposeRun.Single -> {
+                                    val block = run.item.second
+                                    // In a pane a message can be dragged into the other pane's message box.
+                                    if (pane == null) BlockView(block) else Box(Modifier.messageDragSource(block, vm.sessionId)) { BlockView(block) }
+                                }
+                                is PurposeRun.Group -> PurposeGroupCard(run.purpose, run.items.map { it.second }, run.calls)
+                            }
                         }
                         item(key = "footer") {
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -460,3 +516,9 @@ private fun rememberAttach(vm: ChatViewModel): AttachUi {
 
 private fun cameraUri(context: Context, file: File): Uri =
     FileProvider.getUriForFile(context, "${context.packageName}.photos", file)
+
+/** A list key for a transcript row: the block's own key, or its first block's for a purpose group. */
+private fun rowKey(run: PurposeRun<Pair<String, Block>>): String = when (run) {
+    is PurposeRun.Single -> run.item.first
+    is PurposeRun.Group -> "purpose:" + run.items.first().first
+}
