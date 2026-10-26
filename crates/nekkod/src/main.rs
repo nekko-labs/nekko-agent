@@ -534,6 +534,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     if let Some(d) = &after.desktop {
         d.shutdown(&after).await;
     }
+    #[cfg(unix)]
     if let Some(r) = &after.runners {
         r.shutdown().await;
     }
