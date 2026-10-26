@@ -162,6 +162,8 @@ jobs:
             TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" TEST_RUNNER_NEKKO_ITEST_THEME="$THEME" \
               xcodebuild "${COMMON[@]}" -resultBundlePath "evidence/live-$THEME.xcresult" test-without-building \
               -only-testing:NekkoNativeUITests/LiveRelayTests/testPairStreamAndApproveFromThePhone || { failed=1; stack_logs "live-$THEME"; }
+            # How long each Live Activity request took (RunActivities): it once froze the app after Send (#1019).
+            xcrun simctl spawn "$DEVICE" log show --style compact --last 15m --predicate 'subsystem == "dev.nekkolabs.nekkoagent" AND category == "activity"' | tail -n 20 || true
             kill $NEKKO_ITEST_PIDS 2>/dev/null || true
             # The app is reinstalled per run; wipe it so the next theme pairs from scratch.
             xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true

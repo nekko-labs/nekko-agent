@@ -14,6 +14,10 @@ final class LiveRelayTests: XCTestCase {
     /// with the rest of the journey green (#831); the edited queued prompt,
     /// which follows a whole slow reply, gets twice this.
     private let computerWait: TimeInterval = 120
+    /// How long the phone itself may take to react (a card or sheet closing, a
+    /// line appearing) while a run is in flight: on a loaded runner one query of
+    /// the tree has taken 3 to 12 s there, so a 10 or 15 s wait saw two reads (#1019).
+    private let busyWait: TimeInterval = 60
 
     func testPairStreamAndApproveFromThePhone() throws {
         guard let raw = ProcessInfo.processInfo.environment["NEKKO_ITEST_LINK"], let link = URL(string: raw) else {
@@ -92,7 +96,7 @@ final class LiveRelayTests: XCTestCase {
         // waiting for the keyboard to settle). Excluded only here; see the PR.
         auditAccessibility(app, "\(theme)-approval", ignoring: ["Run rm -rf ./nekko-itest-dist"])
         app.buttons["Deny"].tap()
-        XCTAssertTrue(waitGone(card, 15))
+        XCTAssertTrue(waitGone(card, busyWait), "the card closes after Deny")
         attach(app, "\(theme)-6-denied")
 
         // The agent asks; the phone answers.
@@ -110,7 +114,7 @@ final class LiveRelayTests: XCTestCase {
         auditAccessibility(app, "\(theme)-question", ignoring: ["Run rm -rf ./nekko-itest-dist"])
         app.buttons["iOS"].firstMatch.tap()
         app.buttons["Answer"].tap()
-        XCTAssertTrue(waitGone(question, 15))
+        XCTAssertTrue(waitGone(question, busyWait), "the question closes after Answer")
         XCTAssertTrue(app.staticTexts["Hello from your computer."].firstMatch.waitForExistence(timeout: computerWait))
 
         // The agent writes a file; the phone reads the change, read only (the
@@ -131,12 +135,12 @@ final class LiveRelayTests: XCTestCase {
         auditAccessibility(app, "\(theme)-changes")
         // Ask about a change: the quote lands in the message box, unsent, and the sheet closes.
         let line = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Added line 2")).firstMatch
-        XCTAssertTrue(line.waitForExistence(timeout: 5))
+        XCTAssertTrue(line.waitForExistence(timeout: busyWait), "the diff shows its lines")
         let ask = app.buttons["Ask about this change"].firstMatch
         XCTAssertTrue(contextMenuItem(ask, afterLongPressOn: line), "the line's menu offers to ask about it")
         ask.tap()
-        XCTAssertTrue(waitGone(note, 10))
-        XCTAssertTrue(message.waitForExistence(timeout: 5))
+        XCTAssertTrue(waitGone(note, busyWait), "the changes sheet closes after Ask")
+        XCTAssertTrue(message.waitForExistence(timeout: busyWait))
         XCTAssertTrue((message.value as? String ?? "").contains("+written by the agent"), "the quote is in the message box: \(message.value ?? "")")
         attach(app, "\(theme)-6e-asked")
         // Left in the box: the next prompt follows the quote, and the fake model still hears "slow".
