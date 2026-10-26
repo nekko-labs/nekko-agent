@@ -35,15 +35,15 @@ const view = (over: Partial<RunnerView> = {}): RunnerView => ({
   ],
   ...over,
 });
-const render = (v: RunnerView) => renderToStaticMarkup(<RunnerCard view={v} now={now} onSettings={() => {}} onChanged={() => {}} />);
+const render = (v: RunnerView) => renderToStaticMarkup(<RunnerCard view={v} now={now} onSettings={() => {}} beginReply={() => () => {}} />);
 
 describe('RunnerCard', () => {
   it('running_card_matches_mockup_3', () => {
     const html = render(view());
     for (const s of [
       'This Mac · GitHub · nekko-labs/nekko-agent', 'Slot 1 · macOS', 'ios-native · PR #904 · 6 min', 'Waiting: you&#x27;re using the Mac',
-      '8 GB · 4 cores', 'On AC', 'Trusted · home', '14 jobs · 2 h 10 min', 'role="switch" aria-checked="true" aria-label="Runner on"',
-      'data-runner-card="r1"', 'aria-label="Runner settings"', 'ci · darwin daemon · stopped after 2 min',
+      '8 GB · 4 cores', 'On AC', 'Trusted · home', '14 jobs · 2 h 10 min', 'role="switch" aria-checked="true" aria-label="Runner on for nekko-labs/nekko-agent"',
+      'data-runner-card="r1"', 'aria-label="Runner settings for nekko-labs/nekko-agent"', 'ci · darwin daemon · stopped after 2 min',
     ]) expect(html).toContain(s);
   });
 
@@ -54,6 +54,17 @@ describe('RunnerCard', () => {
   it('an off runner still shows the daemon error', () => {
     const html = render(view({ state: 'off', error: 'VM support unavailable: the nekko-vm helper is not installed.', slots: [] }));
     expect(html).toMatch(/role="alert"[^>]*>[^<]*VM support unavailable: the nekko-vm helper is not installed\./);
+  });
+
+  it('an unsampled host with an error reads Unavailable', () => {
+    const zero = { ramMb: 0, cores: 0, recommendedMemoryMb: 0, runnerMemoryMb: 0, cpusPerVm: 0, onBattery: null, batteryPct: null, networkId: null, networkTrusted: false };
+    const html = render(view({ state: 'off', host: zero, error: 'VM support unavailable: the nekko-vm helper is not installed.' }));
+    expect(html).toContain('>Unavailable<');
+    expect(html).not.toContain('Not known yet');
+  });
+
+  it('rounds the battery percent', () => {
+    expect(render(view({ host: { ...view().host, onBattery: true, batteryPct: 61.6 } }))).toContain('On battery, 62%');
   });
 
   it('waiting_card_lists_every_reason', () => {

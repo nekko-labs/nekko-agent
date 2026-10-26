@@ -73,7 +73,7 @@ describe('ConnectRunnerSheet', () => {
     const updateRunner = vi.fn(async () => updated);
     const res = await submitConnect(form({ priority: 'runnerFirst' }), { connectRunner, updateRunner, pushToast: vi.fn() });
     expect(connectRunner).toHaveBeenCalledTimes(1);
-    expect(updateRunner).toHaveBeenCalledWith('r1', { ...view.config.settings, priority: 'runnerFirst' });
+    expect(updateRunner).toHaveBeenCalledWith('r1', { priority: 'runnerFirst' });
     expect(res).toEqual({ view: updated, form: emptyConnectForm() });
 
     const update2 = vi.fn();

@@ -5,6 +5,7 @@ import {
   PRIORITY_LABELS,
   VPN_DIRECT_LABEL,
   formatMinutes,
+  settingsPatch,
   recommendationText,
   slotLimitText,
   type HostView,
@@ -27,14 +28,19 @@ export function trustNetwork(draft: RunnerSettings, host: HostView): RunnerSetti
   return { ...draft, trustedNetworks: [...draft.trustedNetworks, id] };
 }
 
-/** Save: `enabled` is the runner switch's, not the draft's; the result is what the daemon kept after clamping. */
+/**
+ * Save sends only the keys the owner changed (never `enabled`, which is the
+ * switch's), so a change the daemon made meanwhile is not reverted; the result
+ * is what the daemon kept after clamping.
+ */
 export async function saveSettings(
   view: RunnerView,
   draft: RunnerSettings,
-  deps: { updateRunner(id: string, s: RunnerSettings): Promise<RunnerView>; pushToast(kind: 'error', message: string): void },
+  deps: { updateRunner(id: string, s: Partial<RunnerSettings>): Promise<RunnerView>; pushToast(kind: 'error', message: string): void },
 ): Promise<{ view: RunnerView; draft: RunnerSettings } | null> {
   try {
-    const kept = await deps.updateRunner(view.config.id, { ...draft, enabled: view.config.settings.enabled });
+    const { enabled: _switch, ...patch } = settingsPatch(view.config.settings, draft);
+    const kept = await deps.updateRunner(view.config.id, patch);
     return { view: kept, draft: kept.config.settings };
   } catch (e) {
     deps.pushToast('error', `Could not save runner settings: ${e instanceof Error ? e.message : String(e)}`);
@@ -86,7 +92,8 @@ const Check = ({ label, checked, onChange, disabled }: { label: string; checked:
 );
 
 const UNSAMPLED = "Waiting for this Mac's first reading.";
-const Unsampled = () => <span className="text-[12px] text-ink-faint">{UNSAMPLED}</span>;
+/** A Mac without VM support is never sampled: its error says why, where waiting would never end. */
+const Unsampled = ({ error }: { error: string | null }) => <span className="text-[12px] text-ink-faint">{error ?? UNSAMPLED}</span>;
 
 const Val = ({ children }: { children: React.ReactNode }) => <span className="ml-2.5 whitespace-nowrap font-mono text-[12px] text-ink-soft">{children}</span>;
 
@@ -94,7 +101,7 @@ const PRIORITIES: Priority[] = ['doNotDisturb', 'balanced', 'runnerFirst'];
 const KEEP_AWAKE: KeepAwake[] = ['systemDefault', 'whileActive', 'always'];
 
 /** The settings form (mockup 4); pure so tests render it statically. */
-export function SettingsBody({ view, draft, onDraft, onEnabled, onSave, onRemove, onCancel, saving }: {
+export function SettingsBody({ view, draft, onDraft, onEnabled, onSave, onRemove, onCancel, saving, toggling = false }: {
   view: RunnerView;
   draft: RunnerSettings;
   onDraft(d: RunnerSettings): void;
@@ -103,6 +110,7 @@ export function SettingsBody({ view, draft, onDraft, onEnabled, onSave, onRemove
   onRemove(): void;
   onCancel?(): void;
   saving: boolean;
+  toggling?: boolean;
 }) {
   const { host } = view;
   const set = <K extends keyof RunnerSettings>(k: K, v: RunnerSettings[K]) => onDraft({ ...draft, [k]: v });
@@ -119,7 +127,7 @@ export function SettingsBody({ view, draft, onDraft, onEnabled, onSave, onRemove
 
       <Row label="Runner">
         <div className="flex items-center gap-2.5">
-          <Toggle value={enabled} onChange={onEnabled} label="Runner on" />
+          <Toggle value={enabled} disabled={toggling} onChange={onEnabled} label="Runner on" />
           <span className="text-[12.5px] text-ink-faint">{enabled ? 'On. Turning off stops and deletes any running VM.' : 'Off.'}</span>
         </div>
       </Row>
@@ -168,7 +176,7 @@ export function SettingsBody({ view, draft, onDraft, onEnabled, onSave, onRemove
               {draft.runnerMemoryMb !== null && `${Math.round(draft.runnerMemoryMb / GB)} GB`}
             </label>
           )}
-          {!sampled && <Unsampled />}
+          {!sampled && <Unsampled error={view.error} />}
         </div>
         {recommendation && <p className="mt-1 text-[11.5px] text-ink-faint">{recommendation}</p>}
       </Row>
@@ -189,7 +197,7 @@ export function SettingsBody({ view, draft, onDraft, onEnabled, onSave, onRemove
           ) : (
             <>
               {draft.cpusPerVm !== null && <Val>{`${draft.cpusPerVm} per VM`}</Val>}
-              <Unsampled />
+              <Unsampled error={view.error} />
             </>
           )}
         </div>
@@ -255,26 +263,33 @@ export function SettingsBody({ view, draft, onDraft, onEnabled, onSave, onRemove
 export const shownSettings = (view: RunnerView, edits: RunnerSettings | null): RunnerSettings => edits ?? view.config.settings;
 
 /** Runner settings for one runner. After Save, the form shows what the daemon kept. */
-export function RunnerSettingsSheet({ view, onClose, onChanged }: { view: RunnerView; onClose(): void; onChanged(v: RunnerView): void }) {
+export function RunnerSettingsSheet({ view, onClose, beginReply }: { view: RunnerView; onClose(): void; beginReply(): (v: RunnerView) => void }) {
   const pushToast = useStore((s) => s.pushToast);
   const [edits, setEdits] = useState<RunnerSettings | null>(null);
   const draft = shownSettings(view, edits);
   const [saving, setSaving] = useState(false);
 
+  const [toggling, setToggling] = useState(false);
   const setEnabled = async (enabled: boolean) => {
+    if (toggling) return;
+    setToggling(true);
     try {
-      onChanged(await window.nekko.setRunnerEnabled(view.config.id, enabled));
+      const reply = beginReply();
+      reply(await window.nekko.setRunnerEnabled(view.config.id, enabled));
     } catch (e) {
       pushToast('error', `Couldn't turn the runner ${enabled ? 'on' : 'off'}: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setToggling(false);
     }
   };
   const save = async () => {
     setSaving(true);
+    const reply = beginReply();
     const res = await saveSettings(view, draft, { updateRunner: window.nekko.updateRunner, pushToast });
     setSaving(false);
     if (!res) return;
     setEdits(null); // the view now carries what the daemon kept
-    onChanged(res.view);
+    reply(res.view);
   };
   const remove = async () => {
     if (!(await confirmDeletion('Remove this runner? Its VMs stop and its GitHub registration is removed.'))) return;
@@ -297,6 +312,7 @@ export function RunnerSettingsSheet({ view, onClose, onChanged }: { view: Runner
         onRemove={() => void remove()}
         onCancel={onClose}
         saving={saving}
+        toggling={toggling}
       />
     </Modal>
   );

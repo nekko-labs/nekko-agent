@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { PRIORITY_LABELS, type RunnerView } from '@nekko-agent/shared';
 import { Badge, EmptyHint } from '../components/primitives/index.js';
 import { RunnerCard } from '../components/RunnerCard.js';
@@ -37,7 +37,7 @@ export function CiRunnersFirstVisit({ onConnect }: { onConnect(): void }) {
 /** The section body for each load state; pure so tests can render it without effects. */
 export function runnersBody(
   state: RunnersState,
-  { now, onConnect, onSettings, onChanged }: { now: number; onConnect(): void; onSettings(id: string): void; onChanged(v: RunnerView): void },
+  { now, onConnect, onSettings, beginReply }: { now: number; onConnect(): void; onSettings(id: string): void; beginReply(): (v: RunnerView) => void },
 ): React.ReactNode {
   if (state.kind === 'loading') return null;
   if (state.kind === 'unavailable') {
@@ -49,14 +49,29 @@ export function runnersBody(
   }
   if (!state.views.length) return <CiRunnersFirstVisit onConnect={onConnect} />;
   return state.views.map((v) => (
-    <RunnerCard key={v.config.id} view={v} now={now} onSettings={() => onSettings(v.config.id)} onChanged={onChanged} />
+    <RunnerCard key={v.config.id} view={v} now={now} onSettings={() => onSettings(v.config.id)} beginReply={beginReply} />
   ));
 }
 
-/** Applies the one `listRunners` result: a push that already arrived is newer, so it wins. */
+/** Applies a `listRunners` result (the first, or a retry after "unavailable"): a push that already arrived is newer, so it wins. */
 export function afterList(current: RunnersState, listed: RunnersState): RunnersState {
-  return current.kind === 'loading' ? listed : current;
+  return current.kind === 'ready' ? current : listed;
 }
+
+/**
+ * Applies a channel reply (or a new runner) unless a `runner:changed` push
+ * arrived after its request started: that push is newer, and the daemon will
+ * not push again for a state it already sent. `since` and `seq` count pushes.
+ */
+export function afterReply(current: RunnersState, v: RunnerView, since: number, seq: number): RunnersState {
+  if (since !== seq) return current;
+  const views = current.kind === 'ready' ? current.views : [];
+  const id = v.config.id;
+  return { kind: 'ready', views: views.some((x) => x.config.id === id) ? views.map((x) => (x.config.id === id ? v : x)) : [...views, v] };
+}
+
+/** Retry an unavailable list every 2 s, doubling, at most every minute (no reconnect event reaches the renderer). */
+export const retryDelay = (attempt: number) => Math.min(60_000, 2000 * 2 ** attempt);
 
 const nowSecs = () => Date.now() / 1000;
 
@@ -67,15 +82,27 @@ export function CiRunnersView({ segment, now = nowSecs }: { segment?: React.Reac
   const [connecting, setConnecting] = useState(false);
   const [settingsFor, setSettingsFor] = useState<string | null>(null);
 
+  const pushes = useRef(0);
   useEffect(() => {
     let live = true;
-    window.nekko.listRunners().then(
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const list = (attempt: number) => window.nekko.listRunners().then(
       (views) => live && setState((s) => afterList(s, { kind: 'ready', views })),
-      (e: unknown) => live && setState((s) => afterList(s, { kind: 'unavailable', message: e instanceof Error ? e.message : String(e) })),
+      (e: unknown) => {
+        if (!live) return;
+        setState((s) => afterList(s, { kind: 'unavailable', message: e instanceof Error ? e.message : String(e) }));
+        timer = setTimeout(() => void list(attempt + 1), retryDelay(attempt));
+      },
     );
-    const off = window.nekko.onRunnersChanged((views) => setState({ kind: 'ready', views }));
+    void list(0);
+    const off = window.nekko.onRunnersChanged((views) => {
+      pushes.current += 1;
+      clearTimeout(timer);
+      setState({ kind: 'ready', views });
+    });
     return () => {
       live = false;
+      clearTimeout(timer);
       off();
     };
   }, []);
@@ -88,15 +115,10 @@ export function CiRunnersView({ segment, now = nowSecs }: { segment?: React.Reac
     return () => clearInterval(t);
   }, [running, now]);
 
-  const onChanged = (v: RunnerView) =>
-    setState((s) => (s.kind === 'ready' ? { kind: 'ready', views: s.views.map((x) => (x.config.id === v.config.id ? v : x)) } : s));
-  // A new runner may beat its `runner:changed` push here, so add it when it is not listed yet.
-  const onConnected = (v: RunnerView) => {
-    setConnecting(false);
-    setState((s) => {
-      const views = s.kind === 'ready' ? s.views : [];
-      return { kind: 'ready', views: views.some((x) => x.config.id === v.config.id) ? views.map((x) => (x.config.id === v.config.id ? v : x)) : [...views, v] };
-    });
+  // Called as a request starts; its answer applies only if no push overtook it. A new runner may beat its push, so it is added.
+  const beginReply = () => {
+    const since = pushes.current;
+    return (v: RunnerView) => setState((s) => afterReply(s, v, since, pushes.current));
   };
   const hasRunners = state.kind === 'ready' && state.views.length > 0;
   // A removed runner's push drops it from the list, which closes its sheet.
@@ -114,13 +136,13 @@ export function CiRunnersView({ segment, now = nowSecs }: { segment?: React.Reac
             </button>
           )}
         </div>
-        {runnersBody(state, { now: clock, onConnect: () => setConnecting(true), onSettings: setSettingsFor, onChanged })}
+        {runnersBody(state, { now: clock, onConnect: () => setConnecting(true), onSettings: setSettingsFor, beginReply })}
       </div>
       {connecting && (
         // shortcut: views do not carry the GitHub app id yet, so connect always asks for the key; pass a real lookup once they do.
-        <ConnectRunnerSheet onClose={() => setConnecting(false)} onConnected={onConnected} keyStoredFor={() => false} />
+        <ConnectRunnerSheet onClose={() => setConnecting(false)} onConnected={() => setConnecting(false)} beginReply={beginReply} keyStoredFor={() => false} />
       )}
-      {settingsView && <RunnerSettingsSheet view={settingsView} onClose={() => setSettingsFor(null)} onChanged={onChanged} />}
+      {settingsView && <RunnerSettingsSheet view={settingsView} onClose={() => setSettingsFor(null)} beginReply={beginReply} />}
     </div>
   );
 }

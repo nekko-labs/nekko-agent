@@ -25,7 +25,7 @@ export const emptyConnectForm = (): ConnectForm => ({
 
 export interface ConnectDeps {
   connectRunner(req: ConnectRequest): Promise<RunnerView>;
-  updateRunner(id: string, settings: RunnerSettings): Promise<RunnerView>;
+  updateRunner(id: string, settings: Partial<RunnerSettings>): Promise<RunnerView>;
   pushToast(kind: 'error' | 'success' | 'info', message: string): void;
 }
 
@@ -59,7 +59,7 @@ export async function submitConnect(
   }
   if (form.priority !== 'doNotDisturb') {
     try {
-      view = await deps.updateRunner(view.config.id, { ...view.config.settings, priority: form.priority });
+      view = await deps.updateRunner(view.config.id, { priority: form.priority });
     } catch (e) {
       deps.pushToast('error', `Connected, but could not set the mode: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -210,7 +210,7 @@ export function ConnectBody({
 }
 
 /** The Connect GitHub sheet. The pasted key lives only in this sheet's form, and only until it closes or connects. */
-export function ConnectRunnerSheet({ onClose, onConnected, keyStoredFor }: { onClose(): void; onConnected(v: RunnerView): void; keyStoredFor: (appId: number) => boolean }) {
+export function ConnectRunnerSheet({ onClose, onConnected, beginReply, keyStoredFor }: { onClose(): void; onConnected(): void; beginReply(): (v: RunnerView) => void; keyStoredFor: (appId: number) => boolean }) {
   const pushToast = useStore((s) => s.pushToast);
   const [form, setForm] = useState(emptyConnectForm);
   const [step, setStep] = useState<ConnectStep>(1);
@@ -225,6 +225,7 @@ export function ConnectRunnerSheet({ onClose, onConnected, keyStoredFor }: { onC
     if (busy) return;
     setBusy(true);
     setError(null);
+    const reply = beginReply();
     const res = await submitConnect(form, { connectRunner: window.nekko.connectRunner, updateRunner: window.nekko.updateRunner, pushToast }, keyStoredFor(Number(form.appId.trim())));
     setBusy(false);
     if ('error' in res) {
@@ -233,7 +234,8 @@ export function ConnectRunnerSheet({ onClose, onConnected, keyStoredFor }: { onC
       return;
     }
     setForm(res.form);
-    onConnected(res.view);
+    reply(res.view);
+    onConnected();
   };
 
   return (

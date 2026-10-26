@@ -457,12 +457,12 @@ export function WorkflowsView() {
 /** Switches the tab between workflows and this Mac's CI runners. */
 export function SectionSegment({ value, onChange }: { value: 'workflows' | 'ciRunners'; onChange(v: 'workflows' | 'ciRunners'): void }) {
   return (
-    <div role="tablist" aria-label="Section" className="flex gap-1">
+    <div role="group" aria-label="Section" className="flex gap-1">
       {(['workflows', 'ciRunners'] as const).map((v) => (
         <button
           key={v}
-          role="tab"
-          aria-selected={value === v}
+          type="button"
+          aria-pressed={value === v}
           className={`rounded-lg border px-2 py-1 text-[11.5px] transition ${value === v ? 'border-transparent' : 'border-line text-ink-faint'}`}
           style={value === v ? { background: 'var(--accent-soft)', color: 'var(--accent)' } : undefined}
           onClick={() => onChange(v)}

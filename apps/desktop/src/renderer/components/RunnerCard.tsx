@@ -6,6 +6,7 @@ import {
   reasonText,
   runnerSubtitle,
   runnerTitle,
+  scopeName,
   slotLines,
   todayText,
   type RunnerState,
@@ -26,18 +27,23 @@ const hhmm = (ts: number) => {
 };
 
 /** One connected runner (mockup 3): state, slots, the Mac's facts and recent jobs. */
-export function RunnerCard({ view, now, onSettings, onChanged }: { view: RunnerView; now: number; onSettings(): void; onChanged(v: RunnerView): void }) {
+/**
+ * `beginReply` is called as a request starts and returns where its answer goes,
+ * so the section can drop an answer a newer push has already overtaken.
+ */
+export function RunnerCard({ view, now, onSettings, beginReply }: { view: RunnerView; now: number; onSettings(): void; beginReply(): (v: RunnerView) => void }) {
   const [busy, setBusy] = useState(false);
   const pushToast = useStore((s) => s.pushToast);
   const { config, state, host, today } = view;
   const sampled = host.ramMb > 0;
-  const power = host.onBattery === null ? 'Unknown' : host.onBattery ? `On battery, ${host.batteryPct ?? 0}%` : 'On AC';
+  const power = host.onBattery === null ? 'Unknown' : host.onBattery ? `On battery, ${Math.round(host.batteryPct ?? 0)}%` : 'On AC';
   const network = networkText(host);
 
   const setEnabled = async (enabled: boolean) => {
     setBusy(true);
     try {
-      onChanged(await window.nekko.setRunnerEnabled(config.id, enabled));
+      const reply = beginReply();
+      reply(await window.nekko.setRunnerEnabled(config.id, enabled));
     } catch (e) {
       pushToast('error', `Couldn't turn the runner ${enabled ? 'on' : 'off'}: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
@@ -57,8 +63,8 @@ export function RunnerCard({ view, now, onSettings, onChanged }: { view: RunnerV
         </div>
         <div className="flex items-center gap-2">
           <Badge tone={TONE[state] ?? 'neutral'}>{STATE_LABELS[state] ?? state}</Badge>
-          <Toggle value={config.settings.enabled} disabled={busy} onChange={(v) => void setEnabled(v)} label="Runner on" />
-          <button className="btn btn-outline px-2! py-1!" aria-label="Runner settings" title="Runner settings" onClick={onSettings}>
+          <Toggle value={config.settings.enabled} disabled={busy} onChange={(v) => void setEnabled(v)} label={`Runner on for ${scopeName(config.scope)}`} />
+          <button className="btn btn-outline px-2! py-1!" aria-label={`Runner settings for ${scopeName(config.scope)}`} title="Runner settings" onClick={onSettings}>
             <GearIcon className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -96,7 +102,7 @@ export function RunnerCard({ view, now, onSettings, onChanged }: { view: RunnerV
       <div className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-2 text-[12.5px] text-ink-soft">
         <div>
           <b className="block text-[13px] text-ink">
-            {sampled ? `${Math.round(config.settings.memoryPerVmMb / 1024)} GB · ${host.cpusPerVm} cores` : 'Not known yet'}
+            {sampled ? `${Math.round(config.settings.memoryPerVmMb / 1024)} GB · ${host.cpusPerVm} cores` : view.error ? 'Unavailable' : 'Not known yet'}
           </b>
           per VM
         </div>

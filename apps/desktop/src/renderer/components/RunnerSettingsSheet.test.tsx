@@ -56,7 +56,7 @@ describe('RunnerSettingsSheet', () => {
     for (const s of ['0 GB Mac', 'of 0', ' 0 GB']) expect(html).not.toContain(s);
     const updateRunner = vi.fn(async () => v);
     await saveSettings(v, shownSettings(v, null), { updateRunner, pushToast: vi.fn() });
-    expect(updateRunner).toHaveBeenCalledWith('r1', expect.objectContaining({ cpusPerVm: 6, runnerMemoryMb: 20480 }));
+    expect(updateRunner).toHaveBeenCalledWith('r1', {}); // nothing changed, so nothing is overwritten
   });
 
   it('a_push_while_unedited_replaces_the_form', () => {
@@ -65,6 +65,21 @@ describe('RunnerSettingsSheet', () => {
     expect(shownSettings(pushed, null).maxJobMinutes).toBe(360);
     const edits = { ...before.config.settings, maxJobMinutes: 30 };
     expect(shownSettings(pushed, edits)).toBe(edits);
+  });
+
+  it('save does not revert a network the daemon added meanwhile', async () => {
+    const opened = view({}, { trustedNetworks: [] });
+    const draft = { ...opened.config.settings, maxJobMinutes: 360 };
+    const updateRunner = vi.fn(async (_id: string, _patch: object) => opened);
+    await saveSettings(opened, draft, { updateRunner, pushToast: vi.fn() });
+    expect(updateRunner).toHaveBeenCalledWith('r1', { maxJobMinutes: 360 });
+  });
+
+  it('without VM support the sheet says why instead of waiting', () => {
+    const zero: HostView = { ...host, ramMb: 0, cores: 0, recommendedMemoryMb: 0, runnerMemoryMb: 0, cpusPerVm: 0, networkId: null };
+    const html = render(view({ host: zero, error: 'VM support unavailable: the nekko-vm helper is not installed.' }));
+    expect(html).toContain('VM support unavailable: the nekko-vm helper is not installed.');
+    expect(html).not.toContain('first reading');
   });
 
   it('offers_to_trust_the_current_network', () => {
@@ -91,7 +106,7 @@ describe('RunnerSettingsSheet', () => {
     const kept = view({}, { maxJobMinutes: 10 });
     const updateRunner = vi.fn(async () => kept);
     const res = await saveSettings(v, draft, { updateRunner, pushToast: vi.fn() });
-    expect(updateRunner).toHaveBeenCalledWith('r1', { ...draft, enabled: true });
+    expect(updateRunner).toHaveBeenCalledWith('r1', { maxJobMinutes: 5 }); // never `enabled`: that is the switch's
     expect(res?.draft.maxJobMinutes).toBe(10);
     expect(res?.view).toBe(kept);
   });

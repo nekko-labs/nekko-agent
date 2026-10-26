@@ -41,6 +41,7 @@ const scenes: Record<string, () => Promise<RunnerView[]>> = {
   })],
   error: async () => [view({ state: 'error', error: 'No VM image yet.', today: { jobs: 0, seconds: 0 } }, { macosSlots: 1 })],
   'off-no-vm-support': async () => [view({ state: 'off', error: 'VM support unavailable: the nekko-vm helper is not installed.', host: unsampled, reasons: ['off'] }, { enabled: false, macosSlots: 1 })],
+  'settings-no-vm-support': async () => [view({ state: 'off', error: 'VM support unavailable: the nekko-vm helper is not installed.', host: unsampled, reasons: ['off'] }, { enabled: false, macosSlots: 1 })],
   unavailable: async () => { throw new Error('unknown channel runner:list'); },
   'connect-step-3': async () => [],
   settings: async () => [view({ limit: 'memory', available: 1 })],

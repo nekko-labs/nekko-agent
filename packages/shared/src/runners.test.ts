@@ -10,6 +10,7 @@ import {
   VPN_DIRECT_LABEL,
   auditText,
   formatMinutes,
+  settingsPatch,
   todayText,
   reasonText,
   networkText,
@@ -108,14 +109,19 @@ describe('runner helpers', () => {
     const line = (over: Partial<AuditLine>): AuditLine => ({ ts: now, runnerId: 'r', repo: 'o/r', workflow: 'ci', job: 'darwin daemon', result: 'finished', seconds: 120, reason: [], ...over });
     expect(auditText(line({ workflow: 'mobile', job: 'iOS build', seconds: 660 }))).toBe('mobile · iOS build · finished · 11 min · VM deleted');
     expect(auditText(line({ result: 'stopped', reason: ['userBusy'] }))).toBe('ci · darwin daemon · stopped after 2 min (your apps are busy) · VM deleted');
-    expect(auditText(line({ result: 'lost', reason: ['slept'] }))).toBe('ci · darwin daemon · lost (this Mac slept) · re-run queued');
-    expect(auditText(line({ result: 'lost', reason: ['slept'] }), false)).toBe('ci · darwin daemon · lost (this Mac slept) · not re-run');
+    // AuditLine does not say whether that job was re-run; only the current setting is known.
+    expect(auditText(line({ result: 'lost', reason: ['slept'] }))).toBe('ci · darwin daemon · lost (this Mac slept) · re-run if allowed');
+    expect(auditText(line({ result: 'lost', reason: ['slept'] }), false)).toBe('ci · darwin daemon · lost (this Mac slept)');
     expect(auditText(line({ result: 'stopped', reason: ['maxJobTime'] }))).toBe('ci · darwin daemon · stopped at the max job time · VM deleted');
     expect(auditText(line({ result: 'failedToStart', workflow: null, job: null }))).toBe('A VM failed to start');
     expect(auditText(line({ result: 'stopped', reason: ['bootTimeout'] }))).toBe('ci · darwin daemon · stopped after 2 min (the VM never started) · VM deleted');
     expect(auditText(line({ result: 'stopped', reason: ['idle'] }))).toBe('ci · darwin daemon · stopped after 2 min (idle too long) · VM deleted');
-    expect(auditText(line({ result: 'lost', reason: ['signal'] }))).toBe('ci · darwin daemon · lost (the daemon stopped it) · re-run queued');
-    expect(auditText(line({ result: 'lost', reason: ['removed'] }))).toBe('ci · darwin daemon · lost (the runner was removed) · re-run queued');
+    expect(auditText(line({ result: 'lost', reason: ['signal'] }))).toBe('ci · darwin daemon · lost (the daemon stopped it) · re-run if allowed');
+    expect(auditText(line({ result: 'lost', reason: ['removed'] }))).toBe('ci · darwin daemon · lost (the runner was removed) · re-run if allowed');
+    // The supervisor writes free-form error text as a reason: show it, bounded, not a generic phrase.
+    expect(auditText(line({ result: 'stopped', reason: ['clone failed: disk full'] }))).toBe('ci · darwin daemon · stopped after 2 min (clone failed: disk full) · VM deleted');
+    expect(auditText(line({ result: 'stopped', reason: ['x'.repeat(200)] }))).toBe(`ci · darwin daemon · stopped after 2 min (${'x'.repeat(79)}…) · VM deleted`);
+    expect(auditText(line({ result: 'stopped', reason: ['memoryCritical'] }))).toContain('(memory is critically low)');
   });
 
   it('names the network with its trust state', () => {
@@ -166,5 +172,15 @@ describe('todayText', () => {
     expect(todayText({ jobs: 0, seconds: 0 })).toBe('No jobs yet');
     expect(todayText({ jobs: 1, seconds: 600 })).toBe('1 job · 10 min');
     expect(todayText({ jobs: 14, seconds: 7800 })).toBe('14 jobs · 2 h 10 min');
+  });
+});
+
+describe('settingsPatch', () => {
+  it('sends only what the owner changed, arrays by value', () => {
+    const base = { ...DEFAULT_RUNNER_SETTINGS, trustedNetworks: ['gw:a'] };
+    expect(settingsPatch(base, { ...base, trustedNetworks: ['gw:a'] })).toEqual({});
+    expect(settingsPatch(base, { ...base, maxJobMinutes: 30, trustedNetworks: ['gw:a', 'gw:b'] })).toEqual({ maxJobMinutes: 30, trustedNetworks: ['gw:a', 'gw:b'] });
+    expect(settingsPatch(base, { ...base, cpusPerVm: 4 })).toEqual({ cpusPerVm: 4 });
+    expect(settingsPatch({ ...base, cpusPerVm: 4 }, { ...base, cpusPerVm: null })).toEqual({ cpusPerVm: null });
   });
 });

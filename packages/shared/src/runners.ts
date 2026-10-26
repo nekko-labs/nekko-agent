@@ -261,9 +261,14 @@ const AUDIT_REASONS: Record<string, string> = {
   idle: 'idle too long',
   signal: 'the daemon stopped it',
 };
-const auditWhy = (reasons: string[]) => reasons.map((r) => (own(AUDIT_REASONS, r) ? AUDIT_REASONS[r] : reasonText(r).short)).join(', ');
+/** Known names read as phrases; anything else is the supervisor's own error text, shown as written. */
+const auditWhy = (reasons: string[]) => reasons.map((r) => {
+  if (own(REASONS, r)) return REASONS[r].short;
+  if (Object.prototype.hasOwnProperty.call(AUDIT_REASONS, r)) return AUDIT_REASONS[r];
+  return r.length > 80 ? `${r.slice(0, 79)}…` : r;
+}).join(', ');
 
-/** One recent-jobs row. `rerun` is the runner's `rerunLostJobs`. */
+/** One recent-jobs row. `rerun` is the runner's current `rerunLostJobs`; the line does not say whether that job was re-run. */
 export function auditText(l: AuditLine, rerun = true): string {
   if (l.result === 'failedToStart') return 'A VM failed to start';
   const name = [l.workflow, l.job].filter(Boolean).join(' · ') || l.repo || 'A job';
@@ -271,7 +276,7 @@ export function auditText(l: AuditLine, rerun = true): string {
   const took = formatMinutes(l.seconds);
   switch (l.result) {
     case 'finished': return `${name} · finished · ${took} · VM deleted`;
-    case 'lost': return `${name} · lost${why} · ${rerun ? 're-run queued' : 'not re-run'}`;
+    case 'lost': return `${name} · lost${why}${rerun ? ' · re-run if allowed' : ''}`;
     default:
       if (l.reason.includes('maxJobTime')) return `${name} · stopped at the max job time · VM deleted`;
       return `${name} · stopped after ${took}${why} · VM deleted`;
@@ -291,6 +296,15 @@ export function networkText(h: HostView): string {
 export function recommendationText(h: HostView): string {
   const gb = Math.round(h.recommendedMemoryMb / 1024);
   return gb > 0 ? `Recommended: ${gb} GB for this Mac` : '';
+}
+
+/** The keys of `draft` that differ from `base` (arrays by value): `runner:update` merges a patch, so unchanged keys a push moved meanwhile stay as the daemon has them. */
+export function settingsPatch(base: RunnerSettings, draft: RunnerSettings): Partial<RunnerSettings> {
+  return Object.fromEntries(
+    (Object.keys(draft) as (keyof RunnerSettings)[])
+      .filter((k) => JSON.stringify(draft[k]) !== JSON.stringify(base[k]))
+      .map((k) => [k, draft[k]]),
+  ) as Partial<RunnerSettings>;
 }
 
 export function runnerActivity(views: RunnerView[]): { vms: number; awake: boolean } {

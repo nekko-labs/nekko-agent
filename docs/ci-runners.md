@@ -139,7 +139,8 @@ kept: if you save a value outside its range, the saved value is the nearest allo
 - **Max job time**: 30 min, 1 h, 2 h or 6 h (the runner accepts 10 minutes to 24 hours).
 
 Until the runner has read this Mac once, memory and CPU show "Waiting for this Mac's first
-reading." instead of numbers.
+reading." instead of numbers. On a Mac that cannot run VMs they show the reason instead, and the
+runner card's VM size reads "Unavailable".
 
 Not in this version: Linux slots, a schedule, a switch for fork pull requests and a build cache
 switch. Their stored values are kept as they are.

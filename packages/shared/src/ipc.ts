@@ -1063,7 +1063,8 @@ export interface NekkoApi {
   listRunners(): Promise<RunnerView[]>;
   connectRunner(req: ConnectRequest): Promise<RunnerView>;
   /** Resolves with the settings the daemon kept, which may be clamped. */
-  updateRunner(id: string, settings: RunnerSettings): Promise<RunnerView>;
+  /** A patch: only the keys to change. */
+  updateRunner(id: string, settings: Partial<RunnerSettings>): Promise<RunnerView>;
   removeRunner(id: string): Promise<null>;
   setRunnerEnabled(id: string, enabled: boolean): Promise<RunnerView>;
 
