@@ -52,7 +52,8 @@ app.whenReady().then(async () => {
     // (html[data-app-inactive]); keep it active so the sheet's motion is real.
     await run(`(() => { const h = document.documentElement; const off = () => h.removeAttribute('data-app-inactive'); off(); new MutationObserver(off).observe(h, { attributes: true, attributeFilter: ['data-app-inactive'] }); })()`);
     await run(SEED);
-    await run(`(async () => { await layoutFixture.store.getState().refreshSessions(); if (${JSON.stringify(process.env.NEKKO_PLAN_LAYOUT !== 'grid')}) layoutFixture.store.setState({ focusRequest: { sessionId: 'a' } }); })()`);
+    await run(`layoutFixture.store.getState().refreshSessions()`);
+    if (process.env.NEKKO_PLAN_LAYOUT !== 'grid') await run(`layoutFixture.store.setState({ focusRequest: { sessionId: 'a' } })`);
     await run(`layoutFixture.store.setState({settings:{...layoutFixture.store.getState().settings,theme:'dark',themePreset:'x-blueberry-dark'}}); layoutFixture.store.getState().applyTheme()`);
     await sleep(1200);
     await shot('plan-focused');
