@@ -23,35 +23,12 @@ final class KeychainStoreTests: XCTestCase {
 }
 
 final class MarkdownTests: XCTestCase {
-    func testParsesTheBlocksAgentRepliesUse() {
-        let md = """
-        # Plan
-        Some **bold** text
-        continued.
-
-        - one
-          - nested
-        - [x] done
-        2. second
-
-        ```swift
-        let x = 1
-        ```
-        > quoted
-        ---
-        """
-        let p = MarkdownText.parse(md)
-        XCTAssertEqual(p, [
-            .heading(1, "Plan"),
-            .paragraph("Some **bold** text\ncontinued."),
-            .bullet(0, "•", "one"),
-            .bullet(1, "•", "nested"),
-            .bullet(0, "☑", "done"),
-            .bullet(0, "2.", "second"),
-            .code("swift", "let x = 1"),
-            .quote("quoted"),
-            .rule,
-        ])
+    // The block parser itself is NekkoProtocol's (MarkdownTests there, run on Linux too).
+    func testTheRendererReadsTheParsersTree() {
+        let blocks = MarkdownParser.blocks("- one\n  - nested\n\n| a | b |\n|---|---|\n| 1 | 2 |")
+        guard case .list(let list) = blocks.first, case .table(let table) = blocks.last else { return XCTFail("a list and a table") }
+        XCTAssertEqual(list.items.first?.children.first?.items.first?.text, "nested")
+        XCTAssertEqual(table.rows, [["1", "2"]])
     }
 
     func testInlineMarkdownIsParsedOnceAndStaysTheSame() {
@@ -63,7 +40,7 @@ final class MarkdownTests: XCTestCase {
     }
 
     func testTablesAndPathLinksRender() {
-        XCTAssertEqual(MarkdownText.parse("| a | b |\n|---|:-:|\n| 1 | 2 |"),
+        XCTAssertEqual(MarkdownParser.blocks("| a | b |\n|---|:-:|\n| 1 | 2 |"),
                        [.table(MarkdownTable(header: ["a", "b"], alignments: [.leading, .center], rows: [["1", "2"]]))])
         // A Windows path with a space would not be a URL: it is rewritten to a file: link that routes back to the path.
         let link = InlineMarkdown.attributed("Open [the design](C:\\p\\my work\\index.html)")?.runs.compactMap { $0.link }.first
@@ -72,7 +49,7 @@ final class MarkdownTests: XCTestCase {
     }
 
     func testAnUnclosedFenceStillShowsItsCode() {
-        XCTAssertEqual(MarkdownText.parse("```\nstreaming…"), [.code("", "streaming…")])
+        XCTAssertEqual(MarkdownParser.blocks("```\nstreaming…"), [.code(language: "", body: "streaming…", closed: false)])
     }
 }
 
@@ -368,11 +345,32 @@ final class NotificationPrefsTests: XCTestCase {
 }
 
 final class ChatStatusIconTests: XCTestCase {
+    @MainActor
+    func testArchivedDoneUsesTheSameGrayCheckAsUnarchivedDone() throws {
+        func render(_ completed: Bool) throws -> Data {
+            let icon = ChatStatusIcon(activity: nil, completed: completed)
+                .frame(width: 32, height: 32)
+            return try XCTUnwrap(ImageRenderer(content: icon).uiImage?.pngData())
+        }
+        let grayCheck = Image(systemName: "checkmark")
+            .foregroundStyle(Palette.make(dark: false, accent: nil).inkFaint)
+            .font(.caption.weight(.semibold))
+            .frame(width: 32, height: 32)
+        let expected = try XCTUnwrap(ImageRenderer(content: grayCheck).uiImage?.pngData())
+        XCTAssertEqual(try render(true), expected)
+        XCTAssertEqual(try render(false), expected)
+    }
+
     func testStatusLabelsAndPrecedence() {
         XCTAssertEqual(ChatStatusIcon(activity: .running, completed: true, waiting: true).label, "Working")
         XCTAssertEqual(ChatStatusIcon(activity: .needsYou, completed: true, waiting: true).label, "Needs you")
         XCTAssertEqual(ChatStatusIcon(activity: nil, completed: true, waiting: true).label, "Waiting to send")
         XCTAssertEqual(ChatStatusIcon(activity: nil, completed: true).label, "Done")
-        XCTAssertEqual(ChatStatusIcon(activity: nil).label, "Idle")
+        XCTAssertEqual(ChatStatusIcon(activity: nil).label, "Done")
+        XCTAssertEqual(ChatStatusIcon(activity: nil, activeWatchCount: 1).label, "Idle")
+        XCTAssertEqual(ChatStatusIcon(activity: nil, completed: true, activeWatchCount: 1).label, "Idle")
+        XCTAssertEqual(ChatStatusIcon(activity: .running, completed: true, activeWatchCount: 1).label, "Working")
+        XCTAssertEqual(ChatStatusIcon(activity: .needsYou, completed: true, activeWatchCount: 1).label, "Needs you")
+        XCTAssertEqual(ChatStatusIcon(activity: nil, completed: true, waiting: true, activeWatchCount: 1).label, "Waiting to send")
     }
 }

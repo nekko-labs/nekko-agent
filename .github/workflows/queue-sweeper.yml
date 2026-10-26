@@ -97,6 +97,7 @@ jobs:
                   echo "#$n: already re-queued once at ${head:0:8} and dropped out again; waiting for a new push."
                   continue
                 fi
+                # A stacked PR fails here; a person queues it with `gh stack merge` (see auto-merge.yml).
                 if gh api graphql -f query='mutation($id:ID!,$head:GitObjectID){enqueuePullRequest(input:{pullRequestId:$id,expectedHeadOid:$head}){mergeQueueEntry{position}}}' \
                      -f id="$(jq -r .id <<<"$pr")" -f head="$head" >/dev/null; then
                   echo "#$n: gate is green and it was not queued; enqueued."

@@ -1,3 +1,4 @@
+import { setChatOptionsAndDefaults, settingsPatchWithModeReset } from '../chatDefaults.js';
 import { NOTIFICATION_VISIBILITY_CHANNEL } from '../notificationVisibility.js';
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import { PREVIEW_CHANNEL } from '../previewPolicy.js';
@@ -61,7 +62,7 @@ const bus = {
 
 const api: NekkoApi = {
   getSettings: () => inv(IpcChannels.settingsGet),
-  updateSettings: (patch) => inv(IpcChannels.settingsUpdate, patch),
+  updateSettings: (patch) => inv(IpcChannels.settingsUpdate, settingsPatchWithModeReset(patch)),
 
   listProviders: () => inv(IpcChannels.providersList),
   saveProvider: (p: ProviderConfig) => inv(IpcChannels.providersSave, p),
@@ -167,6 +168,7 @@ const api: NekkoApi = {
 
   listSessions: () => inv(IpcChannels.sessionsList),
   nextAgentWatchAt: (sessionId) => inv(IpcChannels.sessionNextWatch, sessionId),
+  cancelAgentWatch: (sessionId, id) => inv(IpcChannels.sessionCancelWatch, sessionId, id),
   listAgentWatches: (sessionId) => inv(IpcChannels.sessionWatches, sessionId),
   listSessionSummaries: () => inv(IpcChannels.sessionsSummaries),
   createSession: (workspaceId) => inv(IpcChannels.sessionCreate, workspaceId),
@@ -223,7 +225,10 @@ const api: NekkoApi = {
   sandboxStatus: (id) => inv(IpcChannels.sandboxStatus, id),
   sandboxDiff: (id) => inv(IpcChannels.sandboxDiff, id),
   applySandboxDiff: (id, identity, diffId, paths) => inv(IpcChannels.sandboxApplyDiff, id, identity, diffId, paths) as Promise<never>,
-  setSessionOptions: (id, patch) => inv(IpcChannels.sessionSetOptions, id, patch),
+  setSessionOptions: (id, patch) => setChatOptionsAndDefaults({
+    setSessionOptions: (id, patch) => inv(IpcChannels.sessionSetOptions, id, patch),
+    updateSettings: (patch) => inv(IpcChannels.settingsUpdate, settingsPatchWithModeReset(patch)),
+  }, id, patch),
   truncateSession: (id, messageId) => inv(IpcChannels.sessionTruncate, id, messageId),
   clearSessions: (scope) => inv(IpcChannels.sessionsClear, scope),
   purgeExpiredArchives: () => inv(IpcChannels.sessionsPurgeArchived),

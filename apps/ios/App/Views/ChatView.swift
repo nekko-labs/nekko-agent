@@ -441,8 +441,9 @@ struct BlockView: View {
                 HStack {
                     Spacer(minLength: 48)
                     VStack(alignment: .trailing, spacing: 4) {
-                        // No text selection here: touch and hold opens the menu (Copy, Edit in a new chat).
-                        Text(text).foregroundStyle(palette.userInk)
+                        // Markdown, as on the desktop (T101). No text selection here: touch and
+                        // hold opens the menu (Copy, Edit in a new chat); a table keeps its own menu.
+                        MarkdownText(text: text, bubble: true, selectable: false).foregroundStyle(palette.userInk)
                         if photos.contains(where: { !$0.isEmpty }) {
                             PhotoStrip(photos: photos, open: openPhoto)
                         } else if images > 0 {

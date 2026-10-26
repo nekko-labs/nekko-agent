@@ -568,6 +568,8 @@ export interface LocalModel {
  * optional, absent meaning "decide from the budget" rather than "use zero".
  */
 export interface EngineLoadPreset {
+  /** Local model reasoning. Default on; configurable only under Expert. */
+  thinking?: boolean;
   contextTokens?: number;
   gpuLayers?: number;
   kvCacheDtype?: KvCacheDtype;

@@ -412,6 +412,18 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         "session:nextWatch" if ctx.turns.watches.is_some() => {
             Ok(ctx.turns.watches.as_ref().expect("checked").next_wake_at(str_arg(&args, 0).unwrap_or_default()))
         }
+        "session:cancelWatch" if ctx.turns.watches.is_some() => {
+            ctx.turns
+                .watches
+                .as_ref()
+                .expect("checked")
+                .tool(
+                    str_arg(&args, 0).unwrap_or_default(),
+                    &json!({ "action": "cancel", "id": str_arg(&args, 1).unwrap_or_default() }),
+                )
+                .await?;
+            Ok(Value::Null)
+        }
         "session:watches" if ctx.turns.watches.is_some() => {
             Ok(ctx.turns.watches.as_ref().expect("checked").views(str_arg(&args, 0).unwrap_or_default()))
         }
@@ -438,6 +450,8 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             Some(voice) => voice.route(c, &args).await,
             None => Err("voice needs the data directory".into()),
         },
+        // What the agent linked in a chat, for a phone (#1095).
+        c if crate::artifacts::CHANNELS.contains(&c) => crate::artifacts::route(ctx, c, &args).await,
         c if ctx.workspace.serves(c) => crate::workspace::route(ctx, c, &args).await,
         c if crate::logs::CHANNELS.contains(&c) && ctx.workspace.data_dir().is_some() => {
             crate::logs::route(ctx, c, &args).await
@@ -480,7 +494,21 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             {
                 ctx.turns.harness.close(id).await;
             }
-            session_op(ctx.sessions.clone().expect("checked"), ctx.turns.agent_logs.clone(), channel, args).await
+            let closing = c == "session:delete"
+                || (c == "session:setOptions" && arg(&args, 1).get("archivedAt").is_some_and(|v| !v.is_null()));
+            let id = str_arg(&args, 0).unwrap_or_default().to_string();
+            let result = session_op(
+                ctx.sessions.clone().expect("checked"),
+                ctx.turns.agent_logs.clone(),
+                ctx.turns.watches.clone(),
+                channel,
+                args,
+            )
+            .await?;
+            if closing {
+                stop_chat(ctx, &id).await?;
+            }
+            Ok(result)
         }
         _ => {
             if let Some(r) = crate::engine::route(&ctx.engine, channel, &args).await {
@@ -507,13 +535,37 @@ const NO_SESSIONS: &str = "this needs the daemon to know the data directory";
 /// `chat:abort`: stop the daemon's turn at once (and its image turn and its
 /// admission) and the chat's dev servers.
 pub async fn stop_chat(ctx: &Ctx, session_id: &str) -> Result<Value, String> {
-    if let Some(admission) = &ctx.admission {
-        admission.abort(session_id);
+    // Include detached delegated descendants: their parent turn may already have ended.
+    let mut ids = vec![session_id.to_string()];
+    if let Some(store) = &ctx.sessions {
+        let metas = store.list_meta();
+        loop {
+            let before = ids.len();
+            for meta in &metas {
+                if let (Some(parent), Some(id)) =
+                    (meta.get("parentSessionId").and_then(Value::as_str), meta.get("id").and_then(Value::as_str))
+                    && ids.iter().any(|s| s == parent)
+                    && !ids.iter().any(|s| s == id)
+                {
+                    ids.push(id.to_string());
+                }
+            }
+            if ids.len() == before {
+                break;
+            }
+        }
     }
-    ctx.image_turns.abort(session_id);
-    ctx.turns.abort_session(session_id);
-    // A dev server the agent started belongs to the work it was doing.
-    ctx.turns.processes.kill_session(session_id);
+    for id in &ids {
+        if let Some(admission) = &ctx.admission {
+            admission.abort(id);
+        }
+        ctx.image_turns.abort(id);
+        ctx.turns.abort_session(id);
+        ctx.turns.processes.kill_session(id);
+        if let Some(watches) = &ctx.turns.watches {
+            watches.cancel_session(id).await?;
+        }
+    }
     Ok(Value::Null)
 }
 
@@ -828,9 +880,11 @@ pub async fn create_session(
         }
     }
     let (w, p) = (workspace_id.map(str::to_string), parent_id.map(str::to_string));
-    tokio::task::spawn_blocking(move || store.create_with(w.as_deref(), p.as_deref(), supporting.as_ref(), &settings))
-        .await
-        .map_err(|e| e.to_string())?
+    tokio::task::spawn_blocking(move || {
+        store.create_with_mode_defaults(w.as_deref(), p.as_deref(), supporting.as_ref(), &settings, true)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// `deleteAgentLog` for a chat being removed, from a blocking caller.
@@ -846,6 +900,7 @@ pub fn delete_agent_log(logs: Option<&crate::agent_logs::AgentLogs>, id: &str) -
 async fn session_op(
     store: Arc<nekko_store::SessionStore>,
     logs: Option<Arc<crate::agent_logs::AgentLogs>>,
+    watches: Option<Arc<crate::watches::Watches>>,
     channel: &str,
     args: Vec<Value>,
 ) -> Result<Value, String> {
@@ -855,8 +910,27 @@ async fn session_op(
         let delete_log = |id: &str| delete_agent_log(logs.as_deref(), id);
         let or_null = |r: Result<Option<Value>, String>| r.map(|v| v.unwrap_or(Value::Null));
         match channel.as_str() {
-            "sessions:summaries" => Ok(Value::Array(store.summaries())),
-            "sessions:list" => Ok(Value::Array(store.list())),
+            "sessions:summaries" | "sessions:list" => {
+                let mut sessions = if channel == "sessions:summaries" { store.summaries() } else { store.list() };
+                // One watch-file read per listing, not per chat. A due or pending
+                // delivery is still active until the scheduler finishes it.
+                let mut counts = std::collections::HashMap::<String, usize>::new();
+                for watch in watches.as_ref().and_then(|w| w.list(None).ok()).unwrap_or_default() {
+                    if watch.get("status").and_then(Value::as_str) == Some("active")
+                        && let Some(id) = watch.get("sessionId").and_then(Value::as_str)
+                    {
+                        *counts.entry(id.to_string()).or_default() += 1;
+                    }
+                }
+                for session in &mut sessions {
+                    let count =
+                        session.get("id").and_then(Value::as_str).and_then(|id| counts.get(id)).copied().unwrap_or(0);
+                    if let Some(obj) = session.as_object_mut() {
+                        obj.insert("activeWatchCount".into(), json!(count));
+                    }
+                }
+                Ok(Value::Array(sessions))
+            }
             "sessions:clear" => store.clear_with(id, delete_log).map(|n| json!(n)),
             "sessions:purgeArchived" => store.purge_archived(delete_log).map(|n| json!(n)),
             "session:get" => Ok(store.get(id).unwrap_or(Value::Null)),
@@ -887,6 +961,79 @@ async fn session_op(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn session_listings_count_only_active_watches_and_preserve_phone_summaries() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Arc::new(nekko_store::SessionStore::new(tmp.path()));
+        std::fs::create_dir_all(store.dir()).unwrap();
+        for (id, updated) in [("s1", 1), ("s2", 2), ("s3", 3)] {
+            let session = json!({ "id": id, "title": id, "updatedAt": updated, "workspaceId": "w1",
+                "archivedAt": 42, "activeWatchCount": 99,
+                "messages": [{ "role": "assistant", "content": "reply", "createdAt": 1 }] });
+            std::fs::write(store.dir().join(format!("{id}.json")), session.to_string()).unwrap();
+        }
+        let path = tmp.path().join("agent-watches.json");
+        std::fs::write(&path, json!([
+            { "sessionId": "s1", "status": "active", "kind": "timer", "deadlineAt": 9999999999999_u64, "prompt": "private continuation" },
+            { "sessionId": "s1", "status": "active", "kind": "pr", "deadlineAt": 0 },
+            { "sessionId": "s1", "status": "active", "pending": true, "deadlineAt": 0, "failures": 2, "lastError": "private error" },
+            { "sessionId": "s1", "status": "done" },
+            { "sessionId": "s1", "status": "cancelled", "pending": true },
+            { "sessionId": "s1", "status": "error" },
+            { "sessionId": "s2", "status": "active" },
+            { "sessionId": "s3", "status": "done" },
+            { "sessionId": "missing", "status": "active" },
+            { "status": "active" },
+            { "sessionId": "s1" }
+        ]).to_string()).unwrap();
+        let watches = crate::watches::Watches::new(tmp.path().to_path_buf(), store.clone(), Hub::new());
+        for channel in ["sessions:list", "sessions:summaries"] {
+            let got = session_op(store.clone(), None, Some(watches.clone()), channel, vec![]).await.unwrap();
+            let rows = got.as_array().unwrap();
+            assert_eq!(rows.iter().map(|s| s["id"].as_str().unwrap()).collect::<Vec<_>>(), ["s3", "s2", "s1"]);
+            assert_eq!(rows.iter().map(|s| s["activeWatchCount"].as_u64().unwrap()).collect::<Vec<_>>(), [0, 1, 3]);
+            let mut expected = if channel == "sessions:list" { store.list() } else { store.summaries() };
+            for (session, count) in expected.iter_mut().zip([0, 1, 3]) {
+                session["activeWatchCount"] = json!(count);
+            }
+            assert_eq!(got, json!(expected), "all other metadata and transcript behavior stays unchanged");
+            if channel == "sessions:summaries" {
+                assert!(nekko_remote::phone::screen(channel, &[]).is_ok());
+                let phone = nekko_remote::phone::redact(channel, got.clone());
+                assert_eq!(phone, got);
+                for row in phone.as_array().unwrap() {
+                    assert!(row.get("messages").is_none());
+                    assert!(row.get("prompt").is_none());
+                    assert!(row.get("lastError").is_none());
+                }
+                assert!(!phone.to_string().contains("private"));
+            }
+        }
+        // Counts are live even when the session summaries came from the cache.
+        std::fs::write(path, "[]").unwrap();
+        let got = session_op(store, None, Some(watches), "sessions:summaries", vec![]).await.unwrap();
+        assert!(got.as_array().unwrap().iter().all(|s| s["activeWatchCount"] == 0));
+    }
+
+    #[tokio::test]
+    async fn session_listings_default_watch_counts_to_zero_when_unavailable() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Arc::new(nekko_store::SessionStore::new(tmp.path()));
+        store.create(None).unwrap();
+        let watches = crate::watches::Watches::new(tmp.path().to_path_buf(), store.clone(), Hub::new());
+        for state in [None, Some("not json")] {
+            if let Some(state) = state {
+                std::fs::write(tmp.path().join("agent-watches.json"), state).unwrap();
+            }
+            for channel in ["sessions:list", "sessions:summaries"] {
+                for watches in [None, Some(watches.clone())] {
+                    let got = session_op(store.clone(), None, watches, channel, vec![]).await.unwrap();
+                    assert_eq!(got[0]["activeWatchCount"], 0);
+                }
+            }
+        }
+    }
 
     #[test]
     fn cwd_prefers_the_explicit_directory_then_the_project() {

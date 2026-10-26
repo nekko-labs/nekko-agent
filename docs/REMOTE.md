@@ -66,6 +66,13 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > list that opens the computer menu. A chat that needs you has a coloured bar down its left edge
 > and the raised hand.
 >
+> Replies and your own messages on the iPhone render Markdown as the desktop does: nested lists
+> mark each level differently (•, ◦, ▪ and 1., a., i.) with wrapped lines hanging under the text,
+> task items are checkboxes, and tables are a native grid with a bold header that scrolls sideways
+> inside its own frame. A table with more than 4 columns or 12 rows has **Expand**, which opens it
+> full screen to zoom and scroll; touch and hold any table for **Copy as Markdown**, **Copy as
+> text** (tab-separated, so it pastes into Numbers or Sheets as cells) and **Share**.
+>
 > Tables in a reply show as a grid (it scrolls sideways when wide). When the agent links a file it
 > made on your computer (an HTML prototype, an image, a PDF, Markdown, text, JSON or CSV) or a
 > preview server it started there (`http://localhost:5173`), the reply gets a card for it, with a
@@ -245,17 +252,14 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > connected. If Android restricts Nekko in the background, Settings says so and opens the app's
 > system page.
 
-The iOS and Android app (`apps/mobile`) is built for the phone rather than being the desktop on a
-small screen: your computer's chats with **Working** / **Needs you** badges, new chats on any of the
-computer's models and folders, live replies, **Allow this?** cards for risky commands, the agent's
-questions as tap-to-answer choices, follow-ups that queue while a run is going, and Stop. It can
-pair several computers and talks to one at a time.
+The phone clients are native apps: SwiftUI in `apps/ios` and Kotlin/Jetpack Compose in
+`apps/android`. They drive chats on your computer over the encrypted relay. The former
+Expo app and its dedicated CI have been removed. This does not implement on-phone
+inference or close the native apps' remaining feature and release gaps; see the
+[native iOS spec](../spec/phone/native-ios-app.md) and
+[native Android spec](../spec/phone/native-android-app.md).
 
-It also runs **models on the phone itself** (llama.cpp, curated small GGUF models from Hugging Face
-sized to the phone's memory), so you can keep chatting when the computer is off. Those chats never
-leave the phone and don't use the relay.
-
-**The native iPhone app** (`apps/ios`, SwiftUI) does the same over the same encrypted relay, and
+**The native iPhone app** (`apps/ios`, SwiftUI) runs chats over the encrypted relay, and
 adds what only iOS can: a **Live Activity** for each running chat on the Lock Screen and in the
 Dynamic Island, with **Allow / Deny** for a waiting tool and **Stop**; notifications with Allow /
 Deny actions while the app is in the background (Allow asks you to unlock first); photo attachments;
@@ -567,11 +571,18 @@ NEKKO_RELAY_URL=wss://your-relay NEKKO_ROOM=myroom NEKKO_PAIR_KEY=<secret> npx n
 It prints a one-time pairing code (10 minutes) at boot and keeps the same persistent device
 registry as the desktop app.
 
-### Chat status on native iOS
+### Chat status on the phone
 
-The icon to the left of each chat reads like desktop: a rocket means working,
-a question mark means the agent needs you, “Zz” means idle, and a checkmark marks
-a completed chat. A clock means a prompt is waiting to send.
+Chat status follows desktop: a rocket (or Working/Running badge) means working,
+and a question mark or Needs you badge means the agent needs your input.
+A quiet gray checkmark means **Done**: no active work and no armed watcher.
+**Zz · Idle** means no active work, but a watcher is armed to wake the chat later.
+Triggered, cancelled and failed watches no longer keep a chat idle. Done does not
+archive the chat; you can still continue it. An older computer that does not send
+watch counts treats inactive chats as Done until it is updated.
+
+On native iOS, a clock means a prompt is waiting to send. Running work, input
+requests and waiting prompts take priority over the inactive status.
 
 Nekko sits at the top-left of the Chats screen beside the computer menu. Tap the
 pixel cat for a brief greeting. This is a local animation, not a message to an

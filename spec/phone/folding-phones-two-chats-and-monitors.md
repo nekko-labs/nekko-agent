@@ -70,7 +70,7 @@ Titles and labels are cut to 120 UTF-16 units (`PHONE_MONITOR_VIEW`). The step l
 
 - **iPhone (folding model)**: SwiftUI. `RootView`'s `size == .regular` branch becomes a `PanesView` that reads a `Posture` environment value; the hinge is read from `UIScreen` / the scene's `interfaceOrientation` and, when Apple exposes it, the fold API in the SDK of the year the phone ships (the posture model is written so the hinge source is one function). Until a folding iPhone exists, the same code is exercised on iPad (every open posture without a hinge) and in the simulator with a hinge faked by a launch argument for the UI tests.
 - **Android**: Compose with `androidx.window:window` (`WindowInfoTracker.windowLayoutInfo` → `FoldingFeature`) and `material3-adaptive`'s `calculateWindowSizeClass`; a `Posture` state the nav host reads. Samsung's Flex mode and Pixel Fold tabletop both arrive as `HALF_OPENED` with a horizontal hinge. Surface Duo's two screens arrive as a `FoldingFeature` with `isSeparating`, so the divider is the gap. Tested with the emulator's foldable profiles (7.6" Fold-in, 8" Fold-out, Surface Duo) in the instrumented UI tests.
-- **Expo app**: no posture work (being retired).
+- **Former Expo app**: removed; no posture work.
 - **Desktop and Local Web UI**: unchanged; the desktop already has the Agent board and the Monitors dock.
 
 ## Acceptance criteria

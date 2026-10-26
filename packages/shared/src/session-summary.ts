@@ -28,6 +28,8 @@ const LAST_REPLY_CHARS = 200;
 export type SessionMeta = Omit<Session, 'messages'>;
 
 export interface SessionSummary extends SessionMeta {
+  /** Armed watches, including ones due while the chat is busy. Supplied by the host. */
+  activeWatchCount?: number;
   /** Messages in the transcript, every role included. */
   messageCount: number;
   /** User and assistant messages only: the exchange a card counts. */

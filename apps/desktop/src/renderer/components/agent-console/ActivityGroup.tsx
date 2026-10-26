@@ -1,11 +1,12 @@
 import { memo, useEffect, useMemo, useState } from 'react';
 import { purposeHeadline, shortLiveStatus, summarizePurposes, summarizeThought, summarizeToolCall, toolPurpose, truncateWords, type LiveActivity, type PurposeCall } from '@nekko-agent/shared';
+import { ToolActivityIcon, toolIconKind, purposeIconKind } from './ToolActivityIcon.js';
 import { ToolProgressChip } from './ToolProgressChip.js';
-import { toolQuietSince } from './toolProgress.js';
-import { ChatIcon, ThoughtIcon, ToolStepIcon } from '../../icons.js';
+import { isRunningTool, toolQuietSince, watchToolElapsed } from './toolProgress.js';
+import { ChatIcon, ThoughtIcon } from '../../icons.js';
 import { Markdown } from '../Markdown.js';
 import type { Activity, ActivityRow, IndexedActivity } from './transcript.js';
-import { activityRows, stepKey } from './transcript.js';
+import { activityRows, fmtTime, stepKey } from './transcript.js';
 import { SubagentCue, SubagentModelChip, subagentSummary, SubagentHeadline, SubagentOpenButton } from './SubagentCue.js';
 import { WatchClockChip, WatchDetail, WatchIcon, WatchThen, watchCallHeadline } from './WatchRow.js';
 import { parseWatchCall, thenSummary } from '../../agentWatches.js';
@@ -28,7 +29,7 @@ export const LeadDots = () => <span className="dots dots-lead" aria-hidden="true
  * collapses to the old one-liner, so a 40-step turn doesn't take over the
  * transcript.
  */
-export const ActivityGroup = memo(function ActivityGroup({ items, streaming = false, toolActivity, pendingCallId }: { items: Activity[]; streaming?: boolean; toolActivity?: LiveActivity; pendingCallId?: string }) {
+export const ActivityGroup = memo(function ActivityGroup({ items, streaming = false, toolActivity, pendingCallId, turnRunning = streaming }: { items: Activity[]; streaming?: boolean; turnRunning?: boolean; toolActivity?: LiveActivity; pendingCallId?: string }) {
   // Open while the turn runs (watching it work is the point), folded away
   // afterwards so a finished transcript reads as answers. Remembered per row,
   // so scrolling a transcript row out of the window and back keeps it as left.
@@ -46,11 +47,22 @@ export const ActivityGroup = memo(function ActivityGroup({ items, streaming = fa
   const rows = useMemo(() => activityRows(items, pendingCallId), [items, pendingCallId]);
   const calls = tools.map(callOf);
   const failed = calls.filter((c) => c.failed).length;
-  const lastRow = [...rows].reverse().find((r) => r.kind === 'group' || r.step.item.kind === 'tool');
+  const rowRunning = (r: ActivityRow) => turnRunning && (r.kind === 'group'
+    ? r.steps.some((s) => isRunningTool(s.item, pendingCallId))
+    : isRunningTool(r.step.item, pendingCallId));
+  const lastRow = [...rows].reverse().find(rowRunning);
+  const iconRow = lastRow ?? rows[rows.length - 1];
+  const tail = items[items.length - 1];
+  const modelActive = streaming && !paused && !pendingCallId && !tools.some((t) => isRunningTool(t))
+    && toolActivity?.steps.at(-1)?.label !== 'Retrying'
+    && (tail?.kind === 'reasoning' || tail?.kind === 'tool');
+  // Only the existing public reasoning event text, never provider carry/metadata.
+  const publicReasoning = modelActive && tail?.kind === 'reasoning' ? tail.text : '';
+  const modelLabel = publicReasoning ? 'Thinking' : 'Waiting for model';
   const summary = paused
     ? 'Paused until this computer is free'
     : streaming
-    ? (lastRow ? rowHeadline(lastRow, true) : 'Thinking')
+    ? (lastRow ? rowHeadline(lastRow, true) : modelActive ? modelLabel : summarizePurposes(calls))
     : (toolCount ? summarizePurposes(calls) : 'Thought it through');
   const ordinary = agents.length === 0 && !watchOnly;
   // The tip lists each group with its count, then lone calls by their purpose.
@@ -65,8 +77,8 @@ export const ActivityGroup = memo(function ActivityGroup({ items, streaming = fa
           aria-expanded={open}
         >
           <span className="w-3 shrink-0 text-[10px]">{open ? '▾' : '▸'}</span>
-          {agents.length ? <SubagentCue /> : watchOnly ? <WatchIcon /> : <ToolStepIcon className="h-3 w-3 shrink-0 text-accent" />}
-          {streaming && !paused && <LeadDots />}
+          {agents.length ? <SubagentCue /> : watchOnly ? <WatchIcon /> : <ToolActivityIcon kind={iconRow ? rowIconKind(iconRow) : 'other'} className="h-3 w-3 shrink-0 text-accent" />}
+          {streaming && !paused && !!lastRow && <LeadDots />}
           <span className="min-w-0 truncate font-medium text-ink-soft">{agents.length ? <SubagentHeadline call={agents[agents.length - 1].call} result={agents[agents.length - 1].result} /> : watchOnly ? watchCallHeadline(lastWatch.call, lastWatch.result) : summary}</span>
           {ordinary && failed > 0 && <span className="shrink-0 text-danger" data-activity-failed>· {failed} failed</span>}
           {agents.length > 0 && <SubagentModelChip call={agents[agents.length - 1].call} />}
@@ -80,6 +92,10 @@ export const ActivityGroup = memo(function ActivityGroup({ items, streaming = fa
         </HoverTip>
         {agents.length === 1 && <SubagentOpenButton call={agents[0].call} />}
       </div>
+      {modelActive && <div className="ml-[22px] border-l border-line py-1 pl-2 text-ink-soft" data-model-activity>
+        <div className="flex items-center gap-1.5"><LeadDots /><span>{publicReasoning ? 'Thinking' : toolCount ? 'Tools finished. Waiting for the model…' : 'Waiting for the model…'}</span></div>
+        {publicReasoning && <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap font-sans text-[12px] leading-relaxed" data-public-reasoning>{publicReasoning}</pre>}
+      </div>}
       {tools.filter((it) => it.call.name === 'remember').map((it) => <MemoryCard key={it.call.id} call={it.call} result={it.result} />)}
       {!open && watchOnly && <WatchThen text={thenSummary(parseWatchCall(lastWatch.call).prompt)} className="pl-[38px]" />}
       {open && (
@@ -88,16 +104,17 @@ export const ActivityGroup = memo(function ActivityGroup({ items, streaming = fa
             <PurposeGroupRow
               key={`g_${stepKey(r.steps[0].item, r.steps[0].index - 1)}`}
               row={r}
-              // A group holding the newest step is the one happening now.
-              live={streaming && r.steps[r.steps.length - 1].index === items.length}
-              streaming={streaming}
-              total={items.length}
+              // A group stays live while any of its own calls is unfinished.
+              live={rowRunning(r)}
+              streaming={turnRunning}
+              pendingCallId={pendingCallId}
+              total={streaming ? items.length : -1}
               toolActivity={toolActivity}
             />
           ) : (
-            <IndexedStepRow key={stepKey(r.step.item, r.step.index - 1)} step={r.step} streaming={streaming} total={items.length} toolActivity={toolActivity} />
+            <IndexedStepRow key={stepKey(r.step.item, r.step.index - 1)} step={r.step} streaming={turnRunning} pendingCallId={pendingCallId} total={streaming ? items.length : -1} toolActivity={toolActivity} />
           )) : items.map((it, i) => (
-            <IndexedStepRow key={stepKey(it, i)} step={{ item: it, index: i + 1 }} streaming={streaming} total={items.length} toolActivity={toolActivity} />
+            <IndexedStepRow key={stepKey(it, i)} step={{ item: it, index: i + 1 }} streaming={turnRunning} pendingCallId={pendingCallId} total={streaming ? items.length : -1} toolActivity={toolActivity} />
           ))}
         </ol>
       )}
@@ -116,15 +133,20 @@ function rowHeadline(row: ActivityRow, running: boolean): string {
   return it.kind === 'tool' ? purposeHeadline(toolPurpose(it.call), [callOf(it)], running).headline : '';
 }
 
-function IndexedStepRow({ step, streaming, total, toolActivity }: { step: IndexedActivity; streaming: boolean; total: number; toolActivity?: LiveActivity }) {
+function rowIconKind(row: ActivityRow) {
+  if (row.kind === 'group') return purposeIconKind(row.purpose, row.calls);
+  return row.step.item.kind === 'tool' ? toolIconKind(row.step.item.call) : 'other';
+}
+
+function IndexedStepRow({ step, streaming, total, toolActivity, pendingCallId }: { step: IndexedActivity; streaming: boolean; total: number; toolActivity?: LiveActivity; pendingCallId?: string }) {
   const { item, index } = step;
   return (
     <StepRow
       index={index}
       item={item}
       quietSince={item.kind === 'tool' ? toolQuietSince(toolActivity, item.call.id) : undefined}
-      // The last row of a live run is the one happening now.
-      live={streaming && index === total}
+      // Tools stay live until their own result, not until a newer row arrives.
+      live={streaming && (item.kind === 'tool' ? isRunningTool(item, pendingCallId) : index === total)}
     />
   );
 }
@@ -136,7 +158,7 @@ function IndexedStepRow({ step, streaming, total, toolActivity }: { step: Indexe
  * row. A group with a failed call says so and starts open, so the failure is
  * not hidden.
  */
-function PurposeGroupRow({ row, live, streaming, total, toolActivity }: { row: Extract<ActivityRow, { kind: 'group' }>; live: boolean; streaming: boolean; total: number; toolActivity?: LiveActivity }) {
+function PurposeGroupRow({ row, live, streaming, total, toolActivity, pendingCallId }: { row: Extract<ActivityRow, { kind: 'group' }>; live: boolean; streaming: boolean; total: number; toolActivity?: LiveActivity; pendingCallId?: string }) {
   const first = row.steps[0].index;
   const failed = row.calls.filter((c) => c.failed).length;
   const [openState, setOpen] = useRowState<boolean | null>(`purpose-${first}-open`, null);
@@ -150,7 +172,7 @@ function PurposeGroupRow({ row, live, streaming, total, toolActivity }: { row: E
   const endedAt = ends.every((e) => e !== undefined) ? Math.max(...(ends as number[])) : undefined;
   const quiets = tools.map((t) => toolQuietSince(toolActivity, t.call.id)).filter((q): q is number => q !== undefined);
   return (
-    <li className="list-none" data-purpose-group={row.purpose}>
+    <li className="list-none" data-purpose-group={row.purpose} data-vt-stamp={startedAt ? fmtTime(startedAt) || undefined : undefined}>
       <button
         className="flex w-full min-w-0 items-baseline gap-1.5 py-0.5 text-left text-ink-faint hover:text-ink-soft"
         onClick={() => setOpen(!open)}
@@ -160,7 +182,7 @@ function PurposeGroupRow({ row, live, streaming, total, toolActivity }: { row: E
         <span className="w-4 shrink-0 text-right text-[10px] tabular-nums opacity-60">{first}</span>
         <ToolElapsed startedAt={startedAt} endedAt={endedAt} live={live} />
         <span className="w-3 shrink-0 text-[10px]">{open ? '▾' : '▸'}</span>
-        <span className="self-center"><ToolStepIcon className="h-3 w-3 shrink-0 text-ink-faint" /></span>
+        <span className="self-center"><ToolActivityIcon kind={purposeIconKind(row.purpose, row.calls)} /></span>
         {live && <LeadDots />}
         <span className={`min-w-0 max-w-[70%] shrink-0 truncate font-medium ${live ? 'text-accent' : 'text-ink-soft'}`}>{headline}</span>
         {quiet && <span className="min-w-0 truncate" title={quiet}>· {quiet}</span>}
@@ -171,7 +193,7 @@ function PurposeGroupRow({ row, live, streaming, total, toolActivity }: { row: E
       {open && (
         <ol className="ml-[7px] border-l border-line pl-2.5">
           {row.steps.map((s) => (
-            <IndexedStepRow key={stepKey(s.item, s.index - 1)} step={s} streaming={streaming} total={total} toolActivity={toolActivity} />
+            <IndexedStepRow key={stepKey(s.item, s.index - 1)} step={s} streaming={streaming} pendingCallId={pendingCallId} total={total} toolActivity={toolActivity} />
           ))}
         </ol>
       )}
@@ -190,16 +212,15 @@ export function fmtElapsed(ms: number): string {
 
 /** How long a tool call took, ticking while it runs. Blank when no start was recorded. */
 function ToolElapsed({ startedAt, endedAt, live }: { startedAt?: number; endedAt?: number; live: boolean }) {
-  const running = live && endedAt === undefined;
+  const running = live && startedAt !== undefined && endedAt === undefined;
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
     if (!running) return;
-    const t = setInterval(() => setNow(Date.now()), 100);
-    return () => clearInterval(t);
+    return watchToolElapsed(setNow);
   }, [running]);
   const end = endedAt ?? (running ? now : undefined);
-  const text = startedAt && end ? fmtElapsed(end - startedAt) : '';
-  return <span className="w-11 shrink-0 text-right text-[10px] tabular-nums opacity-70" data-tool-elapsed title={text ? `Took ${text}` : undefined}>{text}</span>;
+  const text = startedAt !== undefined && end !== undefined ? fmtElapsed(end - startedAt) : '';
+  return <span className="w-11 shrink-0 text-right text-[10px] tabular-nums opacity-70" data-tool-elapsed data-running={running || undefined} title={text ? `${running ? 'Running for' : 'Took'} ${text}` : undefined}>{text}</span>;
 }
 
 /**
@@ -233,11 +254,11 @@ function StepRow({ index, item, live, quietSince }: { index: number; item: Activ
       : kind === 'agent' ? <SubagentCue />
         : kind === 'watch' ? <WatchIcon />
           : kind === 'note' ? <ChatIcon className="h-3 w-3 shrink-0 text-ink-faint" />
-            : <ToolStepIcon className="h-3 w-3 shrink-0 text-ink-faint" />;
+            : <ToolActivityIcon kind={item.kind === 'tool' ? toolIconKind(item.call) : 'other'} />;
   const then = kind === 'watch' && item.kind === 'tool' && parseWatchCall(item.call).action === 'create' && !item.result?.isError ? thenSummary(parseWatchCall(item.call).prompt) : '';
 
   return (
-    <li className="list-none">
+    <li className="list-none" data-vt-stamp={item.kind === 'tool' && item.startedAt ? fmtTime(item.startedAt) || undefined : undefined}>
       <div className="flex min-w-0 items-center gap-1">
         <button
           className="flex min-w-0 flex-1 items-baseline gap-1.5 py-0.5 text-left text-ink-faint hover:text-ink-soft"
@@ -262,7 +283,7 @@ function StepRow({ index, item, live, quietSince }: { index: number; item: Activ
         kind === 'agent' && item.kind === 'tool' ? (
           <div className="ml-[84px] space-y-2 py-1">
             <div className="text-ink-soft">Task</div>
-            <pre className="max-h-60 overflow-auto whitespace-pre-wrap text-ink-soft">{typeof item.call.input.task === 'string' ? item.call.input.task : JSON.stringify(item.call.input, null, 2)}</pre>
+            <pre className="max-h-60 overflow-auto whitespace-pre-wrap [overflow-wrap:anywhere] text-ink-soft">{typeof item.call.input.task === 'string' ? item.call.input.task : JSON.stringify(item.call.input, null, 2)}</pre>
             <div className="text-ink-soft">{item.result?.isError ? 'Delegation tool error' : item.result ? 'Delegation tool result' : 'No delegation tool result recorded'}</div>
             {item.result && <div className="max-h-60 overflow-auto font-sans text-[13px] text-ink-soft"><Markdown text={item.result.output} /></div>}
           </div>
@@ -273,7 +294,7 @@ function StepRow({ index, item, live, quietSince }: { index: number; item: Activ
             <Markdown text={item.text} />
           </div>
         ) : (
-          <pre className="ml-[84px] mt-0.5 max-h-60 overflow-auto whitespace-pre-wrap border-l border-line pl-2 text-[12px] leading-relaxed text-ink-faint">
+          <pre className="ml-[84px] mt-0.5 max-h-60 overflow-auto whitespace-pre-wrap [overflow-wrap:anywhere] border-l border-line pl-2 text-[12px] leading-relaxed text-ink-faint">
             {item.kind === 'reasoning' ? item.text : JSON.stringify(item.call.input, null, 2)}
           </pre>
         )

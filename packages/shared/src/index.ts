@@ -71,6 +71,8 @@ export * from './phone-files.js';
 export * from './phone-views.js';
 export * from './phone-terminal.js';
 export * from './phone-git.js';
+export * from './phone-artifacts.js';
+export * from './chat-links.js';
 export * from './step-up.js';
 export * from './step-up-desktop.js';
 export * from './untested-hardware-notes.js';

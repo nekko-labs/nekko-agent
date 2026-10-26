@@ -725,7 +725,7 @@ function SegTabs<T extends string>({
 }
 
 /** Every remaining flag, grouped, each with a sentence and the flag it sets. */
-function ExpertControls({
+export function ExpertControls({
   model,
   params,
   runOn,
@@ -785,6 +785,14 @@ function ExpertControls({
           We work out where everything goes before loading and pass it to llama.cpp as is (<span className="font-mono">--fit off</span>), so the meter above is what you get.
         </p>
       </Group>
+
+      {model.format !== 'mlx' && (
+        <Group title="Reasoning">
+          <Row label="Thinking" flag="chat_template_kwargs.enable_thinking" hint="On by default. Lets reasoning-capable local models think before answering. Applies to this model, not individual chats; models without reasoning may ignore it.">
+            <Toggle value={params.thinking !== false} onChange={(v) => onChange({ thinking: v })} label="Thinking" />
+          </Row>
+        </Group>
+      )}
 
       <Group title="Speed">
         <Row label="Flash attention" flag="--flash-attn" hint="A faster, leaner way to do the attention math. The smaller memory precisions need it. Auto turns it on where this engine supports it.">

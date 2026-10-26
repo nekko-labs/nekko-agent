@@ -54,7 +54,7 @@ export function waveField(cols: number, rows: number, t: number, peak: number, o
  * behind other windows, stops while hidden, and holds one still frame for
  * reduced motion. Settings → Appearance can turn it off entirely.
  *
- * Cost matters because it runs all the time: colours are built once per
+ * Mounted only inside a visible new-chat surface. Cost still matters: colours are built once per
  * column (opacity goes through globalAlpha, not a new colour string per dot),
  * the trigonometry is precomputed per row and column, and the canvas is drawn
  * at one pixel per CSS pixel with crisp scaling rather than at device
@@ -131,12 +131,15 @@ export function PixelWaveBackground({ wave: { from, to, peak, speed = 0.8 } }: {
     const onBlur = () => { focused = false; };
 
     size(); draw(); start();
+    const observer = new ResizeObserver(onResize);
+    observer.observe(canvas);
     window.addEventListener('resize', onResize);
     window.addEventListener('focus', onFocus);
     window.addEventListener('blur', onBlur);
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
       stop();
+      observer.disconnect();
       window.removeEventListener('resize', onResize);
       window.removeEventListener('focus', onFocus);
       window.removeEventListener('blur', onBlur);

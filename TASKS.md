@@ -6,6 +6,16 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Verification and PR progress (added 2026-10-25)
+
+Issue #1115. Spec: [Verification checklists and PR progress](spec/chat/verification-and-pr-progress.md).
+
+- [x] **VP-1, Complete PR observations.** Paginated GraphQL check contexts and review threads, conservative unknown results, local observation time and stale-cache retention; Rust transport/unit coverage.
+- [x] **VP-2, Explicit verification metadata.** Optional structured reports on existing plan steps, matching Rust/TS sanitization and persistence tests; tool guidance never equates tool completion with inspection.
+- [x] **VP-3, Shared-renderer presentation.** Footer checklist and linked CI/thread progress, bounded disclosures and safe links; focused component checks and hidden isolated 900px/390px interaction fixtures.
+- [ ] **VP-4, Evidence signoff and landing.** Capture PNG/GIF before/after, inspect actual pixels/motion, publish media and queue the stack. Published PNG/GIF evidence and parent pixel signoff cover baseline desktop/narrow, original desktop active, responsive-v2 narrow updated and desktop GIF active/updated frames. Narrow full-width content and changing counts/status are readable with no layout issue. Renderer-only signoff; packaged app and real paired device remain untested. Main synchronization and landing in progress.
+- [ ] **VP-5, Packaged/device follow-up.** Exercise a real paired-device verification flow; native phone presentation is outside this desktop/shared-renderer scope.
+
 ## Model tuning controls (added 2026-10-25)
 
 Philip asked for a simpler load drawer (one recommended button explained in plain words, a VRAM and RAM meter, GPU only or Hybrid plus context first, simple then expert controls) and for the trick of running a big MoE model on an 8 GB card by keeping experts in RAM and the n-gram table on disk. Spec: [Setting up a local model](spec/models/setting-up-a-local-model.md). Decision: [0023](docs/decisions/0023-place-bytes-in-three-places-and-pass-placement-explicitly.md). #1069
@@ -32,8 +42,8 @@ Philip asked for an agent's tool calls to be grouped by what they are doing, wit
 
 Philip asked for the iPhone chat to write in Markdown with a styles toolbar, nested bullets, good tables and a paste-as-Markdown or plain-text choice, and for Mermaid diagrams on the phone. Specs: [iPhone Markdown composer and rich replies](spec/phone/iphone-markdown-composer-and-rich-replies.md) (#1073), [Mermaid diagrams on the phone](spec/phone/mermaid-diagrams-on-the-phone.md) (#1074).
 
-- [ ] **MD-1, Block parser with real nesting and tables.** Replace the line scanner's flat `Piece` list in `Markdown.swift` with a small block tree (nested lists with continuation lines, pipe tables with alignment), moved into `NekkoProtocol` so it is tested on Linux; `MarkdownTests`.
-- [ ] **MD-2, Rendering.** Nested list markers by depth, task checkboxes, the native table grid (sideways scroll, Expand full screen, Copy as Markdown / as text), user bubbles rendered as Markdown; streaming stays incremental.
+- [x] **MD-1, Block parser with real nesting and tables.** Replace the line scanner's flat `Piece` list in `Markdown.swift` with a small block tree (nested lists with continuation lines, pipe tables with alignment), moved into `NekkoProtocol` so it is tested on Linux; `MarkdownTests`. Done: `MarkdownParser` in `NekkoProtocol/Markdown.swift` (cached per segment, so a streaming reply re-parses only its last segment), `MarkdownTests` passing on Linux (Swift 6.1).
+- [ ] **MD-2, Rendering.** Nested list markers by depth, task checkboxes, the native table grid (sideways scroll, Expand full screen, Copy as Markdown / as text), user bubbles rendered as Markdown; streaming stays incremental. Implemented (`Markdown.swift`, UI test `MarkdownTests` on the `-uiTestMarkdownLab` fixture); unverified until the macOS CI run.
 - [ ] **MD-3, Composer editor and toolbar.** A `UITextView`-backed composer with live source styling and the in-card toolbar (styles, link, heading, lists, indent/outdent, quote, code block, table, add row/column), list continuation on Return, undo; the edit functions are pure and Linux-tested.
 - [ ] **MD-4, Paste choice.** *Paste as Markdown* / *Paste as plain text* in the edit menu, the *Use formatting* chip after a rich paste; HTML/RTF→Markdown converter with the security cases.
 - [ ] **MD-5, Evidence.** UI test and screenshots (light, dark, largest text) from macOS CI.
@@ -45,6 +55,8 @@ Philip asked for the iPhone chat to write in Markdown with a styles toolbar, nes
 
 ## Chat timing and GPT reasoning (added 2026-10-24)
 
+- [x] **#1107, Accurate parallel tool timers and model continuation:** unfinished calls tick independently until their own result; finished calls freeze. A separate waiting/thinking preview keeps model work visible, using only public provider reasoning. Focused tests, production build and typecheck pass; matching base/head desktop captures and a six-second recording inspected. Live provider cadence and packaged/non-macOS checks remain unverified.
+
 Philip found GPT-6.1 chats slow, quiet between tool calls, and missing their tokens/sec readout during tool work, and asked for step times and swipe-to-see times. Local logs showed the tools were fast (69 ms median for a trivial shell read) and the model calls slow (7.5 s per step against 4.6 s for Opus) because GPT re-reasoned from scratch after every tool. Spec: [Chat suggestions, progress and code access](SPEC.md#chat-suggestions-progress-and-code-access). #1058
 
 - [x] **CT-1, Carry GPT reasoning between tool steps (2026-10-24).** `chatgpt.rs` asks for `reasoning.encrypted_content` and emits each reasoning item as a new `ProviderChunk::Carry`; the loop stores them on the step's message as `carry: { model, items }` and the provider replays them before the call they led to, for the same model only. `drop_carry_before_last_prompt` strips them once a new prompt starts a turn, so session files stay small. Golden request bodies for ChatGPT gained `include`.
@@ -53,6 +65,7 @@ Philip found GPT-6.1 chats slow, quiet between tool calls, and missing their tok
 - [x] **CT-4, Elapsed time on tool rows (2026-10-24).** Each tool step row leads with how long it took (`fmtElapsed`, `ToolElapsed` in `ActivityGroup.tsx`), ticking while it runs; persisted times come from the call and result messages' `createdAt`, live ones from `liveRuns.ts`.
 - [x] **CT-5, Swipe left for times (2026-10-24).** A horizontal trackpad swipe slides the transcript up to 72px left and fades in each row's time; letting go springs it back (`useSwipeToRevealTimes` in `VirtualTranscript.tsx`, `data-vt-stamp` + `::after` in `styles.css`). Evidence: `apps/desktop/scripts/chat-timing-sandbox.cjs`.
 - [ ] **CT-6, Live check against a signed-in ChatGPT plan:** confirm the backend accepts the replayed reasoning, and compare per-step time and narration with the 2026-10-24 baseline.
+- [x] **CT-8, Swipe times on tool calls (2026-10-25).** #1141. An opened run's tool rows and purpose groups carry their own `data-vt-stamp` (the call's `startedAt`), so a swipe shows a time on every call, not only the run's first; the stamp CSS now applies to any `[data-vt-stamp]` and uses the sans font inside the monospace activity block. The timing sandbox checks it, finds activity headers by structure instead of the retired "Worked on" label, and its base build archives all of `apps/desktop/src`.
 - [ ] **CT-7, Touch and mouse-drag reveal.** Only trackpad and wheel swipes reveal times today; a mouse drag is left for text selection.
 
 ## Chat page removed (added 2026-10-24)
@@ -202,6 +215,8 @@ PRs sat in draft waiting on CI. Run history showed the cause: Linux and Windows 
 
 ## Focused mode transitions and layout controls (added 2026-10-17)
 
+- [x] **#1108, Full new-chat gradient:** replaced corner lighting orbs with a static full-surface diagonal gradient and fixed-seed embedded SVG grain. Matched default-dark Electron screenshots inspected at 1440×900 and 900×900; gradient/grain, bounds and typing checks pass. Production build and desktop typecheck pass. Other themes and packaged/non-macOS rendering remain unverified.
+
 See [SPEC](spec/desktop/focused-mode-transitions-calmer-focus-ring-and-layout-controls.md).
 
 - [x] ✅ 2026-10-17 `CommandWall.tsx` marks panes added after mount as entering (Focus only) and `styles.css` fades the hero in; `ChatPane.tsx` plays `composer-expand-in` once when clean start ends on send; calmer Focus ring mix; Monitors dock header; Grid removed from the toolbar into `WallLayoutSettings.tsx`, Dynamic uses `BoltIcon`. Tests: `focusTransitions.test.ts`, `WallLayoutSettings.test.tsx`. Evidence: `apps/desktop/scripts/focus-transitions-sandbox.cjs` via `agent-window-controls-integration.cjs` (`NEKKO_CONTROLS_SANDBOX`, `NEKKO_TEST_REVISION=main` for before).
@@ -282,6 +297,8 @@ Tracked in [#680](https://github.com/nekko-labs/nekko-agent/issues/680), part of
 - [ ] Original-session/live-provider recovery and other packaged platforms remain unverified; reproduce with an explicitly provided affected transcript or isolated provider session.
 
 ## New agent window defaults
+
+- [x] **#1106, Latest Mode defaults:** desktop and Local Web UI persist changed Mode choices, including effort, to the daemon; new top-level chats snapshot current choices. Cross-window field merging, saved-mode reset, sandbox normalization, unchanged old-chat records and restart persistence covered by 28 desktop helper/ModePanel tests and 31 Rust settings/store tests. Desktop typecheck, production build and daemon compilation pass. Live multi-window/package checks remain unverified.
 
 - [x] Persist explicit ChatPane and Add window model choices as provider/model pairs without changing other panes; preserve Auto and session-specific choices. See [SPEC](spec/desktop/new-agent-window-defaults.md).
 - [x] Save permission default only after a successful session update; restore settings before startup catalog selection. Keep effort/execution persistence and session-only incognito/offline boundaries.
@@ -785,6 +802,8 @@ Extends `../../knowledgebase/principles/coding.md` (which these override).
 - [ ] Cut the **v1.0 release** once the above land (bump versions + tag). *Status 2026-09-30: PR #203 (`chore/release-v0.8.0`) sits open and mergeable as the next version bump, a pure 5-file version change; merging it fires the public release workflow, so it waits on the same credentials below (npm publish cred, remaining Windows signing, macOS notary trio) plus an explicit go. The GUI pass above is the only functional gate left on the list.*
 
 ## Now / In Progress
+
+- [x] **THINK-DIAGRAM-1120**: cloud reasoning always on, local default-on thinking only in Expert model options, no composer toggle; chat-matched dotted, borderless Mermaid canvases with subtle shadows and themed diagrams. Implemented 2026-10-25. [Thinking spec](spec/models/models-providers.md), [diagram spec](spec/code/rich-responses-reports-and-design-workspace.md). Verified desktop typecheck, 19 focused renderer tests, 61 provider tests, 4 admission tests, daemon request regression, hidden before/after renderer evidence and Expert interaction/load payload checks. No live inference or native phone UI verification.
 
 - [ ] **IOS-STATUS-MASCOT** (added 2026-10-25): desktop-style leading chat status icons and a top-left interactive pixel mascot on native iOS. [Spec](spec/phone/native-ios-app.md#desktop-style-chat-status-and-top-left-nekko-2026-10-25). Native build, status precedence test and simulator greeting/touch-target test pass; native fixture before/after evidence captured. Landing tracked by #1093. Physical-device VoiceOver and release delivery remain unverified.
 
@@ -2365,3 +2384,13 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [x] **T205a** Chat command logs cut to their last 4 MB of whole lines past 5 MB (`keep_file_tail` in `agent_logs.rs`). Test: `a_long_command_log_keeps_its_last_whole_lines`. Done: 2026-10-24
 - [x] **T205b** `quota-history.jsonl` keeps 30 days, pruned at startup (`prune_quota_history`). Test: `quota_history_keeps_thirty_days`. Done: 2026-10-24
 - [x] **T205c** Abandoned `.part` downloads untouched for 7 days removed at startup (`sweep_stale_parts`). Test: `only_old_part_files_go`. Done: 2026-10-24
+
+### Unified Models workspace (2026-10-25, #1102) · [spec](spec/models/models-providers.md)
+
+- [x] Combine provider setup and Model Server under one Models rail entry, retaining existing destinations and title-bar highlighting.
+- [x] Add local/cloud subnavigation, current-provider chips, a divider, five filled provider shortcuts and the full overflow chooser; retain existing connection and model controls.
+- [x] Verify desktop typechecking, focused provider/navigation tests, hidden Electron interactions and matching 1440/390 px before/after evidence. Live credential sign-in and server lifecycle actions are not exercised by this layout change.
+
+## Expo retirement
+
+- [x] Remove the retired Expo app and its dedicated Mobile CI; keep native phone workflows, relay/push infrastructure and shared protocol coverage. Update merge-gate accounting and desktop icon/test references. See [native phone decision](spec/phone/native-phone-implementation-decision.md) and [decision 0026](docs/decisions/0026-retire-expo-in-favor-of-native-phone-apps.md). Tracked in #1124.

@@ -464,7 +464,7 @@
   },
   "updatePlan": {
    "name": "update_plan",
-   "description": "Publish the plan you are working to. Call it with replace=true and the full ordered step list to write the initial plan (AFTER you have read the request and looked at what it touches, BEFORE execution work) or to re-plan. Without replace, steps are upserted by id: mark the step you are working \"active\", mark it \"done\" the moment it is verifiably complete (add a one-line note), or \"skipped\" with the reason. Keep the plan current; the tool result echoes the plan so you know each step's id.",
+   "description": "Publish the plan you are working to. Call it with replace=true and the full ordered step list to write the initial plan (AFTER you have read the request and looked at what it touches, BEFORE execution work) or to re-plan. Without replace, steps are upserted by id: mark the step you are working \"active\", mark it \"done\" the moment it is verifiably complete (add a one-line note), or \"skipped\" with the reason. Keep the plan current; the tool result echoes the plan so you know each step's id. Before a verification flow, publish explicit verification steps with verification.status. Update verification.detail with what is happening and verification.device with the device being checked. Mark verification.status passed only after actual inspection: a tool return is not proof. Generic status done can coexist with verification, but verification progress counts only verification.status passed. Use step.updatedAt for freshness; never infer verification from tool completion.",
    "parameters": {
     "type": "object",
     "properties": {
@@ -498,6 +498,39 @@
         "note": {
          "type": "string",
          "description": "One-line outcome, blocker, or skip reason."
+        },
+        "verification": {
+         "type": "object",
+         "description": "Explicit inspection state, independent of generic step status. Invalid metadata is ignored safely.",
+         "properties": {
+          "status": {
+           "type": "string",
+           "enum": [
+            "pending",
+            "active",
+            "passed",
+            "failed",
+            "blocked",
+            "unknown"
+           ]
+          },
+          "device": {
+           "type": "string",
+           "maxLength": 160
+          },
+          "detail": {
+           "type": "string",
+           "maxLength": 1000
+          },
+          "evidenceUrl": {
+           "type": "string",
+           "maxLength": 2048,
+           "description": "Absolute http(s) evidence URL without credentials."
+          }
+         },
+         "required": [
+          "status"
+         ]
         }
        },
        "required": [

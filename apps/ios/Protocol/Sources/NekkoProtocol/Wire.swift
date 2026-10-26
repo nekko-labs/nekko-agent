@@ -104,6 +104,10 @@ public enum Channels {
     public static let logsRead = "logs:read"
     /// The change-class channels among these.
     public static let filesChange: Set<String> = [filesWrite]
+    /// What the agent linked in a chat (#1095), read only: a linked file, or a file a
+    /// linked page loads from its folder, and a GET/HEAD to a linked local preview server.
+    public static let artifactRead = "artifact:read"
+    public static let previewFetch = "preview:fetch"
     /// A provider added or switched from the phone (`PHONE_PROVIDER_CHANGE_CHANNELS`): change class, with a proof.
     public static let providersChange: Set<String> = [providersSaveSealed, providersSetEnabled]
     /// Every change-class channel the phone calls (`PHONE_CHANGE_CHANNELS`): signed, so Face ID or the passcode is asked.
@@ -119,6 +123,7 @@ public enum Channels {
         workspaceGitStatus, gitDiff, gitLog, gitShow, gitBranches, gitCompare, prChecks, prDiff,
         gitStage, gitUnstage, gitCommit, gitCommitMessage, gitPush, gitSwitch, gitMergeAbort, prCreate, prAction,
         filesList, filesSearch, filesRead, filesWrite, logsList, logsRead,
+        artifactRead, previewFetch,
         // IO-33 FA-3, FA-6 (Terminal.swift).
         TerminalChannels.list, TerminalChannels.tail, TerminalChannels.sshHosts, TerminalChannels.create, TerminalChannels.sshOpen,
         TerminalChannels.write, TerminalChannels.resize, TerminalChannels.signal, TerminalChannels.close,
@@ -390,6 +395,7 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
     /// Manual position from the desktop sidebar's drag order.
     public let order: Double?
     public var pinned: Bool
+    public let activeWatchCount: Int64
 
     /// Real, top-level chats, active or completed: what the phone lists.
     public var isVisible: Bool { parentSessionId == nil && taskId == nil && trainingRunId == nil }
@@ -402,7 +408,7 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
             lastReplyText: v.str("lastReplyText"), firstUserText: v.str("firstUserText"), archived: archivedAt != nil,
             parentSessionId: v.str("parentSessionId"), taskId: v.str("taskId"), trainingRunId: v.str("trainingRunId"),
             providerId: v.str("providerId"), workspaceId: v.str("workspaceId"), archivedAt: archivedAt,
-            order: v.dbl("order"), pinned: v.flag("pinned"))
+            order: v.dbl("order"), pinned: v.flag("pinned"), activeWatchCount: v.long("activeWatchCount") ?? 0)
     }
 
     /// Every chat the computer listed, children and task chats included, as sent.
