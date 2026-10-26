@@ -32,6 +32,7 @@ import { reusableEmptyChat, shouldStartFromEmptyWall } from '../emptyWallStart.j
 import { allPanes, type PaneKind } from '../layout.js';
 import {
   applySnap,
+  minimizeFinishedReply,
   DEFAULT_ASPECT,
   openWallPane,
   loadWallState,
@@ -224,11 +225,25 @@ export function CommandCenterView() {
     return m;
   }, [tasks]);
 
+  const eventVersions = useRef(new Map<string, number>());
+
   // Track running sessions live; a freshly spawned sub-agent re-lists sessions,
   // which is how it reaches the wall.
   useEffect(() => {
-    const known = new Set(sessions.map((s) => s.id));
+    const known = new Set(useStore.getState().sessions.map((s) => s.id));
+    let live = true;
     const off = window.nekko.onAgentEvent((e: AgentEvent) => {
+      const version = (eventVersions.current.get(e.sessionId) ?? 0) + 1;
+      eventVersions.current.set(e.sessionId, version);
+      if (e.type === 'done' && (!e.stop || e.stop === 'complete')) {
+        // Recheck the host: a question can still be pending when a turn ends.
+        // Ignore stale answers if another event/turn arrived or the view left.
+        void window.nekko.pendingInput().then((inputs) => {
+          if (!live || eventVersions.current.get(e.sessionId) !== version) return;
+          setPending(inputs);
+          setWall((w) => minimizeFinishedReply(w, e, inputs));
+        }).catch(() => {}); // An unavailable input state must not hide a window.
+      }
       if (e.type === 'question' || e.type === 'tool_approval_required' || e.type === 'question_resolved' || e.type === 'tool_result') refreshPending();
       if (e.type === 'done' || e.type === 'error') {
         setRunning((r) => { const n = new Set(r); n.delete(e.sessionId); return n; });
@@ -240,8 +255,8 @@ export function CommandCenterView() {
       }
       if (!known.has(e.sessionId)) { known.add(e.sessionId); refreshSessions(); }
     });
-    return off;
-  }, [sessions, refreshSessions]);
+    return () => { live = false; off(); };
+  }, [refreshSessions, setWall]);
 
   // The automation countdowns tick every 30s.
   useEffect(() => {
