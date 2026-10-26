@@ -28,7 +28,6 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | [0017](0017-nekko-cloud-machines-run-tools-in-a-per-user-jail.md) | Nekko Cloud machines run tools in a per-user jail; the phone decides what the cloud may see | accepted |
 | [0018](0018-the-computer-is-the-relying-party-for-step-up.md) | The computer is the relying party for hardware keys and step-up; safety exits are never guarded | proposed |
 | [0019](0019-folding-phones-get-panes-not-a-new-app.md) | Folding phones get posture-driven panes in the existing apps, not a tablet app or a device list | proposed |
-| [0024](0024-phones-read-the-monitors-and-unload-models.md) | Let phones read the hardware, the Model Server and a chat's context, and unload a model | accepted |
 | [0020](0020-one-network-switch-enforced-in-the-engine.md) | One network switch for every connection, enforced in the engine; All connections off is offline except loopback | accepted |
 | [0021](0021-opt-in-reports-sent-by-the-engine.md) | Opt-in usage and crash reports, sent by the engine with an allow-list and scrubbing; no PostHog SDK | accepted |
 | [0022](0022-ci-runners-vm-and-network.md) | CI runners use our own `nekko-vm` helper, a userspace public-only NAT in nekkod and a read-only seed disk; no privileged helper | accepted |
@@ -37,3 +36,4 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | [0026](0026-thinking-on-with-local-expert-overrides.md) | Thinking on for cloud turns, local overrides only in model Expert settings | accepted |
 | [0025](0025-the-computer-serves-what-the-agent-linked-to-the-phone.md) | The computer serves the phone what the agent linked in a chat (files, a page's assets, loopback previews), and nothing more | proposed |
 | [0026](0026-retire-expo-in-favor-of-native-phone-apps.md) | Retire Expo in favor of native phone apps | accepted |
+| [0028](0028-phones-read-the-monitors-and-unload-models.md) | Let phones read the hardware, the Model Server and a chat's context, and unload a model | accepted |
