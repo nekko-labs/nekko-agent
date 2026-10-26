@@ -348,22 +348,24 @@ fn local_midnight(ts: u64) -> u64 {
 
 /// This install's id (8 lowercase hex, `<runners>/install-id`), made once, so
 /// our runner names never match another Mac's, even one with the same name.
-fn install_id(runners_dir: &Path) -> String {
+/// No randomness, no id: a fixed one would collide with every other such Mac.
+fn install_id(runners_dir: &Path) -> Result<String, String> {
     let path = runners_dir.join("install-id");
     if let Ok(id) = std::fs::read_to_string(&path) {
         let id = id.trim();
         if id.len() == 8 && id.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')) {
-            return id.to_owned();
+            return Ok(id.to_owned());
         }
     }
     let mut b = [0u8; 4];
-    let _ = getrandom::fill(&mut b);
+    getrandom::fill(&mut b)
+        .map_err(|e| format!("CI runners are unavailable: this Mac could not make its runner id ({e})."))?;
     let id: String = b.iter().map(|x| format!("{x:02x}")).collect();
     let saved = std::fs::create_dir_all(runners_dir).and_then(|()| write_atomic(&path, id.as_bytes()));
     if let Err(e) = saved {
         eprintln!("runner: cannot save {}: {e}", path.display());
     }
-    id
+    Ok(id)
 }
 
 /// Where a record's registrations live, for a person deleting them by hand.
@@ -392,8 +394,14 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
         awake: Box<dyn Awake>,
         host_name: String,
     ) -> Self {
+        let install = install_id(&runners_dir);
+        // Without an id nothing may start: every runner shows why.
+        let vm = match &install {
+            Ok(_) => vm,
+            Err(e) => Err(e.clone()),
+        };
         Supervisor {
-            install: install_id(&runners_dir),
+            install: install.unwrap_or_default(),
             runners_dir,
             sense,
             vm,
@@ -504,7 +512,8 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             // Held ones wait for a reconnect, which a removed record never gets.
             let all_held = mine().all(|q| q.held);
             let early = now < since + REMOVE_FOR.as_secs_f64();
-            let live = self.overlaps_live(&r);
+            // GitLab's sweep deletes whatever its status; GitHub's only offline runners, so it never waits.
+            let live = r.gitlab().is_some() && self.overlaps_live(&r);
             // Its credentials are forgotten once handed back: until then the retries keep going.
             if early && ((pending && !all_held) || live) {
                 self.gone.push((r, since));
@@ -577,6 +586,11 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             q.next_at = 0.0;
             q.backoff = RERUN_EVERY.as_secs_f64();
         }
+    }
+
+    /// The records of registrations still waiting for removal: their credentials stay.
+    pub fn queued_removals(&self) -> impl Iterator<Item = &RunnerRecord> {
+        self.removals.iter().map(|q| &q.record)
     }
 
     /// The wall clock of the last tick (0 before the first).

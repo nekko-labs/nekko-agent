@@ -83,6 +83,10 @@ pub struct Runners<S: Sense = HostSense, V: Vm = HelperVm, P: Provider = ByLink<
     views: std::sync::Mutex<Vec<RunnerView>>,
     /// Vault items a connect is storing, with how many connects are in flight.
     connecting: std::sync::Mutex<HashMap<String, u32>>,
+    /// Vault items queued registration removals still sign with, as of the last step.
+    queued_keys: std::sync::Mutex<Vec<String>>,
+    /// Vault items to forget once no queued removal needs them.
+    deferred: std::sync::Mutex<Vec<String>>,
     running_vm_mb: Arc<AtomicU64>,
     /// Why no VM can run here, shown on every enabled runner.
     vm_error: Option<String>,
@@ -226,6 +230,8 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
             pending: std::sync::Mutex::new(None),
             views: std::sync::Mutex::new(views),
             connecting: std::sync::Mutex::new(HashMap::new()),
+            queued_keys: std::sync::Mutex::default(),
+            deferred: std::sync::Mutex::default(),
             edit: tokio::sync::Mutex::new(()),
             hub,
             wake: tokio::sync::Notify::new(),
@@ -251,6 +257,11 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
                     (s.views(), gone)
                 };
                 forget.extend(gone.iter().map(secret_key));
+                if let (Ok(mut d), Ok(q)) = (r.deferred.lock(), r.queued_keys.lock()) {
+                    let (ready, wait) = std::mem::take(&mut *d).into_iter().partition(|k| !q.contains(k));
+                    *d = wait;
+                    forget.extend::<Vec<String>>(ready);
+                }
                 if !forget.is_empty() {
                     let _g = r.edit.lock().await;
                     let saved = r.store.load();
@@ -283,7 +294,11 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
         if tick {
             s.tick().await;
         }
-        s.take_gone().await
+        let gone = s.take_gone().await;
+        if let Ok(mut q) = self.queued_keys.lock() {
+            *q = s.queued_removals().map(secret_key).collect();
+        }
+        gone
     }
 
     /// Marks a connect storing vault item `key` in progress until the guard drops.
@@ -294,10 +309,18 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
         ConnectGuard { set: &self.connecting, key }
     }
 
-    /// Deletes each vault item no saved record uses and no connect is adding. Call under `edit`.
+    /// Deletes each vault item no saved record uses and no connect is adding. One a queued
+    /// removal still signs with is deferred until that removal is done. Call under `edit`.
     fn forget_keys(&self, saved: &[RunnerRecord], keys: impl Iterator<Item = String>) {
         let connecting = self.connecting.lock().map(|c| c.clone()).unwrap_or_default();
+        let queued = self.queued_keys.lock().map(|q| q.clone()).unwrap_or_default();
         for key in keys {
+            if queued.contains(&key) {
+                if let Ok(mut d) = self.deferred.lock() {
+                    d.push(key);
+                }
+                continue;
+            }
             if !connecting.contains_key(&key) && !saved.iter().any(|r| secret_key(r) == key) {
                 self.vault.delete(&key);
             }
@@ -494,13 +517,16 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
         let _g = self.edit.lock().await;
         let mut records = self.store.load();
         let mut replaced = None;
+        // (vault item, what it held) to put back if the save fails.
+        let mut undo = None;
         let id = match records.iter_mut().find(|r| same_target(r, &rec)) {
             Some(old) => {
                 // A connect that did not see this record stored its token under its own new id.
                 if rec.gitlab().is_some() && old.config.id != rec.config.id {
-                    let new = token_key(&rec.config.id);
+                    let (new, kept) = (token_key(&rec.config.id), token_key(&old.config.id));
                     let token = self.vault.get(&new).ok_or("The GitLab access token was not stored.")?;
-                    self.vault.set(&token_key(&old.config.id), &token)?;
+                    undo = Some((kept.clone(), self.vault.get(&kept)));
+                    self.vault.set(&kept, &token)?;
                     self.vault.delete(&new);
                 }
                 let before = secret_key(old);
@@ -520,7 +546,21 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
                 id
             }
         };
-        let view = self.commit(records.clone(), Some(&id)).await?;
+        let view = match self.commit(records.clone(), Some(&id)).await {
+            Ok(v) => v,
+            Err(e) => {
+                match undo {
+                    Some((key, Some(was))) => {
+                        if let Err(e) = self.vault.set(&key, &was) {
+                            eprintln!("runner: could not put the previous GitLab token back: {e}");
+                        }
+                    }
+                    Some((key, None)) => self.vault.delete(&key),
+                    None => {}
+                }
+                return Err(e);
+            }
+        };
         // The scope moved to another app: the old app's key goes once nothing uses it.
         self.forget_keys(&records, replaced.into_iter());
         Ok(view)

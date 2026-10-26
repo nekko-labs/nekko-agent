@@ -435,9 +435,9 @@ async fn group_stale_sweep_spares_an_ancestor_groups_runner() {
                 {"id":3,"description":"nekko-mac1-3-0","status":"offline"}]),
         ),
         (200, json!({"id": 1, "groups": [{"id": 9}]})),
-        (204, Value::Null),
         (200, json!({"id": 2, "groups": [{"id": 5}]})),
         (500, json!({})),
+        (204, Value::Null),
     ]);
     assert_eq!(t.gl.remove_stale(&group_rec(&[]), "nekko-mac1-").await.unwrap(), 1);
     assert_eq!(
@@ -445,9 +445,9 @@ async fn group_stale_sweep_spares_an_ancestor_groups_runner() {
         vec![
             "GET https://gitlab.com/api/v4/groups/9/runners?type=group_type&per_page=100&page=1",
             "GET https://gitlab.com/api/v4/runners/1",
-            "DELETE https://gitlab.com/api/v4/runners/1",
             "GET https://gitlab.com/api/v4/runners/2",
             "GET https://gitlab.com/api/v4/runners/3",
+            "DELETE https://gitlab.com/api/v4/runners/1",
         ]
     );
 }
@@ -544,7 +544,9 @@ fn probe() -> Vec<(u16, Value)> {
 
 #[tokio::test]
 async fn connect_project_end_to_end() {
-    let c = connect_rig([vec![found(42, "private"), scopes(&["create_runner", "manage_runner"])], probe()].concat());
+    let c = connect_rig(
+        [vec![found(42, "private"), scopes(&["create_runner", "manage_runner", "read_api"])], probe()].concat(),
+    );
     let r = c.connect(req_project("a/b", "c", "glpat-x")).await.unwrap();
     assert!(r.config.id.starts_with("gl-") && r.config.id.len() == 15, "{}", r.config.id);
     assert_eq!(
@@ -808,4 +810,41 @@ async fn redirects_are_refused_without_following() {
         ProviderError::Other("GitLab redirected the request to evil.example. Use the instance's own address.".into())
     );
     assert!(t.http.last().no_redirect);
+}
+
+#[tokio::test]
+async fn stale_reads_every_page_before_deleting() {
+    // Deleting while paging would shift page 2 under us and skip runners.
+    let page1: Vec<Value> = (1..=100).map(|i| json!({"id": i, "description": format!("nekko-mac1-{i}-0")})).collect();
+    let mut replies = vec![(200, Value::Array(page1)), (200, json!([{"id": 101, "description": "nekko-mac1-101-0"}]))];
+    replies.extend((1..=101).map(|_| (204, Value::Null)));
+    let t = rig(replies);
+    assert_eq!(t.gl.remove_stale(&project_rec(), "nekko-mac1-").await.unwrap(), 101);
+    let urls = t.http.urls();
+    assert_eq!(urls[1], "GET https://gitlab.com/api/v4/projects/42/runners?type=project_type&per_page=100&page=2");
+    assert_eq!(urls[2], "DELETE https://gitlab.com/api/v4/runners/1");
+    assert_eq!(urls.len(), 103);
+}
+
+#[tokio::test]
+async fn a_forbidden_job_list_names_manage_runner() {
+    let t = rig(vec![(200, json!({"status": "online", "paused": false})), (403, json!({}))]);
+    let e = t.gl.status(&project_rec(), 77).await.unwrap_err();
+    assert!(matches!(&e, ProviderError::Auth(m) if m.contains(NO_MANAGE_TEXT)), "{e:?}");
+    let t = rig(vec![(403, json!({}))]);
+    let e = t.gl.job(&project_rec(), 77, "n").await.unwrap_err();
+    assert!(matches!(&e, ProviderError::Auth(m) if m.contains(NO_MANAGE_TEXT)), "{e:?}");
+}
+
+#[tokio::test]
+async fn a_token_without_read_api_is_refused_by_name() {
+    let c = connect_rig(vec![(403, json!({"message": "403 Forbidden"}))]);
+    let e = c.connect(req_project("a/b", "c", "glpat-x")).await.unwrap_err();
+    assert!(e.contains("read_api"), "{e}");
+    let c = connect_rig(vec![found(9, "private"), (403, json!({}))]);
+    assert!(c.connect(req_group("g", &["g/a"])).await.unwrap_err().contains("read_api"));
+    let c = connect_rig(vec![found(42, "private"), scopes(&["create_runner", "manage_runner"])]);
+    let e = c.connect(req_project("a/b", "c", "glpat-x")).await.unwrap_err();
+    assert!(e.contains("read_api"), "{e}");
+    assert!(c.stored_nothing() && !c.posted());
 }

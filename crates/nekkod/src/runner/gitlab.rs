@@ -30,6 +30,8 @@ const BRANCH_TTL: u64 = 600;
 const NOT_PUBLIC: &str = "This GitLab instance is not on the public internet, so a job VM could not reach it.";
 const NOT_FOUND: &str = "GitLab cannot find that project or group with this token.";
 const PUBLIC: &str = "This project or group is public. Tick Allow public projects to run its jobs here.";
+const NO_READ: &str =
+    "GitLab would not let this token read the project or group. The token needs the read_api scope (api covers it).";
 const NO_ACCESS_TOKEN: &str = "Paste a GitLab access token.";
 const BAD_TOKEN: &str = "That is not a GitLab access token.";
 const PAGE: usize = 100;
@@ -282,6 +284,7 @@ impl<H: Http> GitLab<H> {
                     Ok(v)
                 }
                 404 => Err(missing),
+                403 => Err(NO_READ.into()),
                 s => Err(refused(s).to_string()),
             }
         };
@@ -299,6 +302,9 @@ impl<H: Http> GitLab<H> {
                 }
                 if let Some(have) = v["scopes"].as_array() {
                     let has = |s: &str| have.iter().any(|x| x.as_str() == Some(s) || x.as_str() == Some("api"));
+                    if !has("read_api") {
+                        return Err(NO_READ.into());
+                    }
                     if !has("create_runner") {
                         return Err(NO_CREATE.into());
                     }
@@ -371,7 +377,11 @@ impl<H: Http> GitLab<H> {
     }
 
     async fn running(&self, r: &RunnerRecord, runner_id: u64) -> Result<Option<Value>, ProviderError> {
-        let v = self.get(r, &format!("/runners/{runner_id}/jobs?status=running&per_page=1")).await?;
+        let v = match self.call(r, "GET", &format!("/runners/{runner_id}/jobs?status=running&per_page=1"), None).await?
+        {
+            (s, v) if ok(s) => v,
+            (s, _) => return Err(unmanaged(s)),
+        };
         Ok(v.as_array().and_then(|a| a.first()).cloned())
     }
 
@@ -565,7 +575,8 @@ impl<H: Http + 'static> Provider for GitLab<H> {
             Scope::Org { .. } => format!("/groups/{}/runners?type=group_type", l.namespace_id),
         };
         let group = matches!(r.config.scope, Scope::Org { .. });
-        let mut removed = 0;
+        // Every page first: deleting while paging would shift later pages and skip runners.
+        let mut ids = Vec::new();
         for page in 1..=MAX_PAGES {
             let v = match self.call(r, "GET", &format!("{list}&per_page={PAGE}&page={page}"), None).await? {
                 (s, v) if ok(s) => v,
@@ -578,15 +589,17 @@ impl<H: Http + 'static> Provider for GitLab<H> {
                     if group && !self.in_group(r, id, l.namespace_id).await {
                         continue;
                     }
-                    self.remove(r, id).await?;
-                    removed += 1;
+                    ids.push(id);
                 }
             }
             if runners.len() < PAGE {
                 break;
             }
         }
-        Ok(removed)
+        for &id in &ids {
+            self.remove(r, id).await?;
+        }
+        Ok(ids.len() as u32)
     }
 
     async fn rerun(&self, r: &RunnerRecord, job: &JobRef) -> Result<(), ProviderError> {

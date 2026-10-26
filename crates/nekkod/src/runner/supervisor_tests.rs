@@ -1421,3 +1421,63 @@ async fn a_failed_gitlab_save_puts_the_previous_token_back() {
     assert!(runners.save_gitlab(gitlab("gl-9", "other"), None, None).await.is_err());
     assert_eq!(vault.get("gitlab-token-gl-9"), None);
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_removed_github_record_is_swept_at_once_beside_a_live_runner() {
+    // GitHub's sweep removes offline runners only, so a busy one of the same scope is safe.
+    let mut h = harness(vec![record("a", Priority::RunnerFirst, 1), record("b", Priority::RunnerFirst, 1)]);
+    h.sup.start().await;
+    h.mac(|m| m.paused_all = true);
+    h.tick_for(5).await;
+    h.mac(|m| m.paused_all = false);
+    h.sup.set_records(vec![record("a", Priority::RunnerFirst, 1)]);
+    h.running().await;
+    let swept = h.count("remove_stale");
+    let gone = h.sup.take_gone().await;
+    assert_eq!(gone.iter().map(|r| r.config.id.as_str()).collect::<Vec<_>>(), ["b"]);
+    assert_eq!(h.count("remove_stale"), swept + 1);
+    assert!(h.audit().iter().all(|l| l.result != AuditResult::NotRemoved));
+}
+
+#[test]
+fn install_id_is_made_once_and_a_damaged_one_replaced() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("install-id");
+    std::fs::write(&path, "zz").unwrap();
+    let id = install_id(dir.path()).unwrap();
+    assert!(id.len() == 8 && id != "00000000" && id.bytes().all(|b| b.is_ascii_hexdigit()), "{id}");
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), id);
+    assert_eq!(install_id(dir.path()).unwrap(), id);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_failed_save_after_a_racing_reconnect_keeps_the_old_token() {
+    let Rig { runners, dir, vault, .. } = mixed_rig(harness(vec![]));
+    std::fs::create_dir(dir.path().join("runners.json.tmp")).unwrap();
+    vault.set("gitlab-token-gl-3", "glpat-z").unwrap();
+    assert!(runners.save_connected(gitlab("gl-3", "acme"), None).await.is_err());
+    assert_eq!(vault.get("gitlab-token-gl-1").as_deref(), Some("glpat-x"), "gl-1 keeps the token it had");
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_app_key_stays_while_a_queued_removal_needs_it() {
+    let h = harness(vec![]);
+    h.vm.0.lock().unwrap().hold_done = true;
+    // The reconnect re-arms the removal at once (`reset`); that retry fails too.
+    fail_removes(&h, 100, vec![down(), down()]);
+    let sense = h.sense.clone();
+    let Rig { runners, vm, log, vault, dir: _dir } = runners_rig(h);
+    wait_for("a VM start", || log.lock().unwrap().iter().any(|l| l.starts_with("start"))).await;
+    vm.finish(0, Stopped::Guest);
+    wait_for("the failed remove", || log.lock().unwrap().iter().any(|l| l == "remove 100")).await;
+    // The scope moves to app 2 while app 1's registration still waits for removal.
+    let mut moved = record("new-id", Priority::RunnerFirst, 1);
+    moved.link = Link::Github(GithubLink { app_id: 2, ..moved.github().unwrap().clone() });
+    vault.set("github-app-2", "pem2").unwrap();
+    runners.save_connected(moved, None).await.unwrap();
+    tokio::time::sleep(Duration::from_secs(30)).await;
+    assert_eq!(vault.get("github-app-1").as_deref(), Some("pem"), "the queued removal still signs with it");
+    sense.0.lock().unwrap().wall_secs += 60.0;
+    wait_for("the key forgotten", || vault.get("github-app-1").is_none()).await;
+    assert_eq!(log.lock().unwrap().iter().filter(|l| *l == "remove 100").count(), 3);
+}
