@@ -342,6 +342,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         downloads: model_downloads.clone(),
         installs: installs.clone(),
         server: server.clone(),
+        #[cfg(unix)]
         runners: cfg.data_dir.clone().map(|d| {
             runner::Runners::start(
                 d.into(),
