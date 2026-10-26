@@ -50,3 +50,7 @@ tests pass. Screenshots are captured but not visually inspected because the
 available tools cannot display image content. Packaged-app/navigation coverage is
 not claimed. The retired Expo app is out of scope: main removed it in #1125 during this work;
 its independent prototype and tests were discarded rather than resurrecting it.
+
+## Composer controls and teardown (2026-10-25)
+
+An active watch also appears as an expandable composer chip, independent of whether its arming call exists in the loaded transcript. It offers owned cancellation and a PR link; immediate child-agent watches are labeled by owner. Watch subscriptions share a poller per session. Removing the final subscriber clears the poll interval/event listener/cache entry and late responses cannot recreate that entry. Closing/completing an agent cancels work and watches through the engine lifecycle; minimize remains hide-only.
