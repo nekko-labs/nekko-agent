@@ -12,7 +12,9 @@
 //
 // No-op on Windows/Linux.
 const { execFileSync } = require('node:child_process');
+const { existsSync } = require('node:fs');
 const { join } = require('node:path');
+const { vmEntitlements } = require('./sign-mac.cjs');
 
 exports.default = async function afterPack(context) {
   if (context.electronPlatformName !== 'darwin') return;
@@ -26,6 +28,13 @@ exports.default = async function afterPack(context) {
   const appPath = join(context.appOutDir, appName);
   try {
     execFileSync('codesign', ['--deep', '--force', '--sign', '-', appPath], { stdio: 'inherit' });
+    // --deep re-signed nekko-vm without its entitlement, which Virtualization
+    // needs: sign it again with its own file, then reseal the app around it.
+    const vm = join(appPath, 'Contents', 'Resources', 'bin', 'nekko-vm');
+    if (existsSync(vm)) {
+      execFileSync('codesign', ['--force', '--sign', '-', '--entitlements', vmEntitlements, vm], { stdio: 'inherit' });
+      execFileSync('codesign', ['--force', '--sign', '-', appPath], { stdio: 'inherit' });
+    }
     console.log(`[after-pack] ad-hoc signed ${appName} (unsigned build)`);
   } catch (e) {
     console.warn(`[after-pack] ad-hoc signing failed (continuing): ${e.message}`);
