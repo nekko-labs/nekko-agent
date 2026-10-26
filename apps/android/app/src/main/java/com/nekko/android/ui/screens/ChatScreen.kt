@@ -98,6 +98,13 @@ import androidx.compose.ui.draganddrop.mimeTypes
 import androidx.compose.ui.draganddrop.toAndroidDragEvent
 import androidx.compose.ui.draw.alpha
 import com.nekko.android.ui.components.Dot
+import com.nekko.android.git.GitController
+import com.nekko.android.ui.git.GitDialog
+import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.ui.platform.testTag
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
 import com.nekko.android.ui.panes.PaneSlot
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -115,6 +122,8 @@ fun ChatScreen(
     val changesAllowed by vm.changesAllowed.collectAsStateWithLifecycle()
     val insert by vm.insert.collectAsStateWithLifecycle()
     var showChanges by remember { mutableStateOf(false) }
+    var showMenu by remember { mutableStateOf(false) }
+    var git by remember { mutableStateOf<GitController?>(null) }
     var restoring by remember { mutableStateOf(false) }
     var restoreError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -182,6 +191,8 @@ fun ChatScreen(
         )
     }
 
+    git?.let { g -> GitDialog(g, onDismiss = { git = null }) }
+
     Scaffold(
         containerColor = p.paper,
         topBar = {
@@ -191,6 +202,19 @@ fun ChatScreen(
                     if (changesAllowed) {
                         IconButton(onClick = { vm.loadChanges(); showChanges = true }) {
                             Icon(Icons.Filled.Difference, contentDescription = "Changes")
+                        }
+                    }
+                    Box {
+                        IconButton(onClick = { showMenu = true }, modifier = Modifier.testTag("chat.more")) {
+                            Icon(Icons.Filled.MoreVert, contentDescription = "More")
+                        }
+                        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                            DropdownMenuItem(
+                                text = { Text("Git") },
+                                leadingIcon = { Icon(Icons.Filled.AccountTree, contentDescription = null) },
+                                onClick = { showMenu = false; git = vm.git() },
+                                modifier = Modifier.testTag("chat.git"),
+                            )
                         }
                     }
                     pane?.actions?.invoke(this)

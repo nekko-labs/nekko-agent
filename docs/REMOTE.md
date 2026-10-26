@@ -190,6 +190,10 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 >   **Merge**, **Close** or **Reopen**. **Abort merge** shows while a merge stopped on a conflict.
 >   Every one of these changes asks for Face ID or your passcode (once per 5 minutes) and shows in
 >   the phone's *Activity* on the computer.
+>   On Android, **⋮ → Git** in a chat has the same status, files and diffs, **Stage** / **Stage all**,
+>   **Write message**, **Commit**, **Push**, **Abort merge**, **History**, **Branches** and
+>   **Compare**; each change asks for your fingerprint, face or screen lock (once per 5 minutes).
+>   Pull requests from Android are coming.
 > - **Files:** **More → Files** in a chat opens that chat's folder (its worktree when the chat is
 >   isolated); **Computers and settings → Files** lists the computer's saved folders. Tap through
 >   folders, or search by file name. A file opens in monospace with line numbers (Markdown can be
@@ -381,7 +385,7 @@ changes how the computer itself is set up:
 
 ### What phones can do: Read and Change, per phone
 
-Git, files, logs, terminals and SSH are on the iPhone now (above); task boards are coming.
+Git, files, logs, terminals and SSH are on the iPhone now (above), and Git on Android; task boards are coming.
 *Remote access → What phones can do* on the computer lists each paired phone with two switches:
 
 - **Read:** see your chats and their messages, settings, models, automations, usage and limits, and
