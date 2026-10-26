@@ -14,7 +14,7 @@ app.whenReady().then(async () => {
   win.webContents.on('console-message', e => { if (e.level === 'error' && !e.message.startsWith('ResizeObserver loop')) report.errors.push(e.message); });
   const run = s => win.webContents.executeJavaScript(s, true);
   const shot = async name => fs.writeFileSync(path.join(out, name + '.png'), (await win.capturePage(undefined, { stayHidden: true })).toPNG());
-  const clickText = text => run(`(()=>{const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===${JSON.stringify(text)});if(!b)throw Error('Missing button');b.click()})()`);
+  const clickCancel = () => run(`(()=>{const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Cancel watcher');if(!b)throw Error('Missing button');b.click()})()`);
   try {
     await win.loadFile(path.join(out, 'index.html'));
     for (let i = 0; i < 50 && !(await run('!!window.watchFixture && !!document.querySelector("[data-session-id]")')); i++) await sleep(100);
@@ -33,7 +33,7 @@ app.whenReady().then(async () => {
       await run('watchFixture.due()'); await sleep(200);
       assert.ok(await run('document.querySelector("[data-active-watch-chips]").innerText.includes("waiting for the chat")'));
       await shot('due');
-      await clickText('Cancel watcher'); await sleep(200);
+      await clickCancel(); await sleep(200);
       assert.equal(await run('!!document.querySelector("[data-active-watch-chips]")'), false);
       report.checks.push('live watch without transcript; expand; pending delivery status; cancel removes chip; no response row');
       await shot('cancelled');
