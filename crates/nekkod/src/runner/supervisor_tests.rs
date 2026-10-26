@@ -2,7 +2,8 @@ use super::*;
 use crate::runner::egress::Egress;
 use crate::runner::provider::Minted;
 use crate::runner::signals::HostState;
-use crate::runner::store::GithubLink;
+use crate::runner::store::{GithubLink, Link};
+use crate::runner::vm::GITHUB_SEED;
 use crate::runner::vm::Halt;
 use nekko_cloud::vault::Vault;
 use nekko_machine::activity::Power;
@@ -54,7 +55,13 @@ fn record(id: &str, priority: Priority, slots: u8) -> RunnerRecord {
                 ..Default::default()
             },
         },
-        github: GithubLink { app_id: 1, installation_id: 2, group_id: None, repos: vec![], allow_public: false },
+        link: Link::Github(GithubLink {
+            app_id: 1,
+            installation_id: 2,
+            group_id: None,
+            repos: vec![],
+            allow_public: false,
+        }),
         image: None,
     }
 }
@@ -115,8 +122,8 @@ impl Vm for FakeVm {
         std::fs::write(to.join("disk.img"), b"clone").map_err(|e| e.to_string())
     }
 
-    async fn write_seed(&self, path: &Path, jit: &str) -> Result<(), String> {
-        self.1.lock().unwrap().push(format!("write_seed {}", self.rel(path)));
+    async fn write_seed(&self, path: &Path, file: &str, jit: &str) -> Result<(), String> {
+        self.1.lock().unwrap().push(format!("write_seed {} {file}", self.rel(path)));
         std::fs::write(path, jit).map_err(|e| e.to_string())
     }
 
@@ -184,14 +191,14 @@ impl Provider for FakeProvider {
         let mut st = self.0.lock().unwrap();
         st.next_id += 1;
         let id = st.next_id;
-        st.mint.pop_front().unwrap_or(Ok(Minted { runner_id: id, jit_config: "jit".into() }))
+        st.mint.pop_front().unwrap_or(Ok(Minted { runner_id: id, seed_file: GITHUB_SEED, jit_config: "jit".into() }))
     }
 
     async fn status(&self, _: &RunnerRecord, _: u64) -> Result<RunnerStatus, ProviderError> {
         Ok(self.0.lock().unwrap().status)
     }
 
-    async fn job(&self, _: &RunnerRecord, _: &str) -> Result<Option<JobRef>, ProviderError> {
+    async fn job(&self, _: &RunnerRecord, _: u64, _: &str) -> Result<Option<JobRef>, ProviderError> {
         self.1.lock().unwrap().push("job".into());
         let st = self.0.lock().unwrap();
         st.job.clone().unwrap_or(Ok((st.status == RunnerStatus::Busy).then(job_ref)))
@@ -353,7 +360,7 @@ async fn takes_a_job_when_gates_pass_and_deletes_vm_after() {
         log[1..],
         [
             format!("mint {name}"),
-            format!("write_seed vms/{name}/seed.iso"),
+            format!("write_seed vms/{name}/seed.iso jit-config"),
             format!("clone_bundle images/default vms/{name}/bundle"),
             "start 10 8192".into(),
         ]
@@ -1010,12 +1017,12 @@ async fn removing_keeps_the_key_until_the_runner_is_cleaned() {
 async fn reconnecting_a_scope_to_another_app_forgets_the_old_key() {
     let Rig { runners, dir, vault, .. } = runners_rig(harness(vec![]));
     let mut moved = record("new-id", Priority::RunnerFirst, 1);
-    moved.github.app_id = 2;
+    moved.link = Link::Github(GithubLink { app_id: 2, ..moved.github().unwrap().clone() });
     moved.config.scope = Scope::Org { org: "ACME".into() };
     let view = runners.save_connected(moved, None).await.unwrap();
     assert_eq!(view["config"]["id"], "r1", "the scope keeps its id");
     let saved = crate::runner::store::Store::new(dir.path()).load();
-    assert_eq!(saved[0].github.app_id, 2);
+    assert_eq!(saved[0].github().unwrap().app_id, 2);
     assert_eq!(vault.get("github-app-1"), None);
 }
 

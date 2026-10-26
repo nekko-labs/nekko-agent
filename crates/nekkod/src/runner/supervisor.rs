@@ -723,7 +723,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                             slot.busy_since = Some(now);
                             slot.idle_since = None;
                             slot.set_state(SlotState::Running, now);
-                            match call(self.provider.job(&r.record, &slot.name)).await {
+                            match call(self.provider.job(&r.record, slot.runner_id, &slot.name)).await {
                                 Ok(job) => slot.job = job,
                                 Err(ProviderError::Auth(e)) => r.error = Some(e),
                                 Err(e) => eprintln!("runner {}: {e}", r.record.config.id),
@@ -804,7 +804,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                 .mode(0o700)
                 .create(&dir)
                 .map_err(|e| format!("cannot make {}: {e}", dir.display()))?;
-            vm.write_seed(&seed, &minted.jit_config).await?;
+            vm.write_seed(&seed, minted.seed_file, &minted.jit_config).await?;
             vm.clone_bundle(image, &bundle).await?;
             vm.start(RunSpec { bundle: bundle.clone(), cpus, memory_mb, seed: seed.clone() }).await
         }
@@ -883,7 +883,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
         let record = self.runners[ri].record.clone();
         // An online VM we stopped may have taken a job since its last status poll.
         if slot.stop.is_some() && slot.busy_since.is_none() {
-            match call(self.provider.job(&record, &slot.name)).await {
+            match call(self.provider.job(&record, slot.runner_id, &slot.name)).await {
                 Ok(Some(job)) => {
                     slot.job = Some(job);
                     slot.busy_since = Some(slot.polled_at);

@@ -1,62 +1,11 @@
 use super::*;
 use crate::runner::store::same_scope;
+use crate::runner::test_http::Scripted;
 use nekko_cloud::vault::FileVault;
-use nekko_connectors::http::{BoxFut, Response};
 use nekko_runner::{RunnerSettings, Scope};
 use serde_json::json;
-use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
-
-/// Replies in order and the requests seen; with `watch`, whether the vault
-/// file held the app key when each request went out.
-#[derive(Clone, Default)]
-struct Scripted(Arc<Inner>);
-
-#[derive(Default)]
-struct Inner {
-    replies: Mutex<VecDeque<(u16, String)>>,
-    seen: Mutex<Vec<Request>>,
-    watch: Mutex<Option<PathBuf>>,
-    key_seen: Mutex<Vec<bool>>,
-}
-
-impl Scripted {
-    fn new(replies: Vec<(u16, Value)>) -> Self {
-        let s = Self::default();
-        for (status, body) in replies {
-            s.push(status, body);
-        }
-        s
-    }
-    fn push(&self, status: u16, body: Value) {
-        self.0.replies.lock().unwrap().push_back((status, body.to_string()));
-    }
-    fn urls(&self) -> Vec<String> {
-        self.0.seen.lock().unwrap().iter().map(|r| format!("{} {}", r.method, r.url)).collect()
-    }
-    fn last(&self) -> Request {
-        self.0.seen.lock().unwrap().last().unwrap().clone()
-    }
-    fn body(&self, i: usize) -> Value {
-        serde_json::from_str(self.0.seen.lock().unwrap()[i].body.as_deref().unwrap()).unwrap()
-    }
-}
-
-impl Http for Scripted {
-    fn send(&self, req: Request) -> BoxFut<'_, Result<Response, String>> {
-        if let Some(p) = self.0.watch.lock().unwrap().as_ref() {
-            let held = std::fs::read_to_string(p).is_ok_and(|t| t.contains("github-app-123"));
-            self.0.key_seen.lock().unwrap().push(held);
-        }
-        self.0.seen.lock().unwrap().push(req);
-        let next = self.0.replies.lock().unwrap().pop_front();
-        Box::pin(async move {
-            let (status, body) = next.ok_or_else(|| "fetch failed".to_string())?;
-            Ok(Response { status, body, location: None })
-        })
-    }
-}
 
 struct FakeSigner;
 
@@ -120,22 +69,27 @@ fn repo_record() -> RunnerRecord {
             label: "nekko-mac".into(),
             settings: RunnerSettings::default(),
         },
-        github: GithubLink {
+        link: Link::Github(GithubLink {
             app_id: 123,
             installation_id: 9,
             group_id: None,
             repos: vec!["o/r".into()],
             allow_public: false,
-        },
+        }),
         image: None,
     }
+}
+
+fn gh_mut(r: &mut RunnerRecord) -> &mut GithubLink {
+    let Link::Github(g) = &mut r.link else { unreachable!("a GitHub record") };
+    g
 }
 
 fn org_record() -> RunnerRecord {
     let mut r = repo_record();
     r.config.scope = Scope::Org { org: "acme".into() };
-    r.github.group_id = Some(7);
-    r.github.repos = vec!["acme/a".into()];
+    gh_mut(&mut r).group_id = Some(7);
+    gh_mut(&mut r).repos = vec!["acme/a".into()];
     r
 }
 
@@ -198,7 +152,7 @@ async fn jit_config_request_has_labels_and_group() {
     let jit = (201, json!({ "runner": { "id": 23 }, "encoded_jit_config": "abc" }));
     let t = rig(vec![token(), (200, json!({ "id": 5, "private": true })), jit.clone()], true);
     let minted = t.gh.mint(&repo_record(), "nekko-mac1-1-1").await.unwrap();
-    assert_eq!(minted, Minted { runner_id: 23, jit_config: "abc".into() });
+    assert_eq!(minted, Minted { runner_id: 23, seed_file: GITHUB_SEED, jit_config: "abc".into() });
     assert_eq!(t.http.urls()[0], "POST https://api.github.com/app/installations/9/access_tokens");
     let last = t.http.last();
     assert_eq!(
@@ -254,8 +208,8 @@ async fn org_scope_creates_group_limited_to_repos() {
             "allows_public_repositories": false,
         })
     );
-    assert_eq!(rec.github.group_id, Some(7));
-    assert_eq!(rec.github.repos, vec!["acme/a".to_string(), "acme/b".to_string()]);
+    assert_eq!(rec.github().unwrap().group_id, Some(7));
+    assert_eq!(rec.github().unwrap().repos, vec!["acme/a".to_string(), "acme/b".to_string()]);
 }
 
 #[tokio::test]
@@ -277,7 +231,7 @@ async fn org_with_our_group_updates_it_instead() {
     assert_eq!(urls[5], "PATCH https://api.github.com/orgs/acme/actions/runner-groups/8");
     assert_eq!(urls[6], "PUT https://api.github.com/orgs/acme/actions/runner-groups/8/repositories");
     assert_eq!(t.http.body(6), json!({ "selected_repository_ids": [11, 12] }));
-    assert_eq!(rec.github.group_id, Some(8));
+    assert_eq!(rec.github().unwrap().group_id, Some(8));
     assert!(rec.config.settings.trusted_networks.is_empty());
 }
 
@@ -311,7 +265,7 @@ async fn public_repo_needs_explicit_allow() {
 
     let t = rig(replies(), false);
     let rec = t.gh.connect(repo_request(true), None).await.unwrap();
-    assert!(rec.github.allow_public);
+    assert!(rec.github().unwrap().allow_public);
 }
 
 #[tokio::test]
@@ -349,7 +303,7 @@ async fn connect_stores_the_key_only_after_github_accepts_it() {
     assert_eq!(rec.config.label, "nekko-mac");
     assert_eq!(rec.config.scope, Scope::Repo { owner: "o".into(), repo: "r".into() });
     assert_eq!(
-        rec.github,
+        *rec.github().unwrap(),
         GithubLink { app_id: 123, installation_id: 9, group_id: None, repos: vec!["o/r".into()], allow_public: false }
     );
     assert!(!rec.config.id.is_empty());
@@ -391,7 +345,7 @@ async fn installation_token_is_cached_until_near_expiry() {
     // Expires an hour after NOW.
     let tok = (201, json!({ "token": "ghs_1", "expires_at": "2027-01-15T09:00:00Z" }));
     let t = rig_at(vec![tok.clone(), (200, json!({ "runners": [] })), (200, json!({ "runners": [] }))], true, clock);
-    let link = repo_record().github;
+    let link = repo_record().github().unwrap().clone();
     assert_eq!(t.gh.installation_token(&link).await.unwrap(), "ghs_1");
     CLOCK.store(NOW + 3600 - 301, Ordering::SeqCst);
     assert_eq!(t.gh.installation_token(&link).await.unwrap(), "ghs_1");
@@ -492,14 +446,14 @@ async fn job_finds_the_runner_by_name() {
     replies.extend(in_progress());
     let t = rig(replies, true);
     let r = repo_record();
-    let job = t.gh.job(&r, "nekko-mac1-1-1").await.unwrap();
+    let job = t.gh.job(&r, 0, "nekko-mac1-1-1").await.unwrap();
     assert_eq!(
         job,
         Some(JobRef { repo: "o/r".into(), run_id: 100, job_id: 5, workflow: "CI".into(), job: "build".into() })
     );
     assert_eq!(t.http.urls()[1], "GET https://api.github.com/repos/o/r/actions/runs?status=in_progress&per_page=10");
     // A runner that never took a job has none.
-    assert_eq!(t.gh.job(&r, "nekko-mac1-9-9").await, Ok(None));
+    assert_eq!(t.gh.job(&r, 0, "nekko-mac1-9-9").await, Ok(None));
 }
 
 #[tokio::test]
@@ -558,7 +512,7 @@ async fn a_failed_connect_leaves_no_token_behind() {
         true,
     );
     assert!(t.gh.connect(repo_request(false), None).await.is_err());
-    assert_eq!(t.gh.installation_token(&repo_record().github).await.unwrap(), "ghs_fresh");
+    assert_eq!(t.gh.installation_token(repo_record().github().unwrap()).await.unwrap(), "ghs_fresh");
 }
 
 #[test]
@@ -626,7 +580,7 @@ async fn a_repo_that_went_public_is_refused_at_mint() {
     assert!(!t.http.urls().iter().any(|u| u.contains("generate-jitconfig")));
 
     let mut allowed = repo_record();
-    allowed.github.allow_public = true;
+    gh_mut(&mut allowed).allow_public = true;
     let jit = (201, json!({ "runner": { "id": 23 }, "encoded_jit_config": "abc" }));
     let t = rig(vec![token(), jit], true);
     assert!(t.gh.mint(&allowed, "n").await.is_ok());

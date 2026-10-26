@@ -15,6 +15,8 @@ pub mod provider;
 pub mod signals;
 pub mod store;
 pub mod supervisor;
+#[cfg(test)]
+pub mod test_http;
 pub mod updates;
 pub mod vm;
 
@@ -226,7 +228,7 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
                     r.running_vm_mb.store(s.running_vm_mb(), Ordering::SeqCst);
                     (s.views(), gone)
                 };
-                forget.extend(gone.iter().map(|g| g.github.app_id));
+                forget.extend(gone.iter().filter_map(|g| g.github()).map(|g| g.app_id));
                 if !forget.is_empty() {
                     let _g = r.edit.lock().await;
                     let saved = r.store.load();
@@ -274,7 +276,7 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
     fn forget_keys(&self, saved: &[RunnerRecord], apps: impl Iterator<Item = u64>) {
         let connecting = self.connecting.lock().map(|c| c.clone()).unwrap_or_default();
         for app in apps {
-            if !connecting.contains_key(&app) && !saved.iter().any(|r| r.github.app_id == app) {
+            if !connecting.contains_key(&app) && !saved.iter().any(|r| r.github().is_some_and(|g| g.app_id == app)) {
                 self.vault.delete(&key_name(app));
             }
         }
@@ -344,7 +346,7 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
             // No loop (no VM support): nothing else holds the supervisor.
             let mut s = self.sup.lock().await;
             let gone = self.step(&mut s, false).await;
-            self.forget_keys(&records, gone.iter().map(|g| g.github.app_id));
+            self.forget_keys(&records, gone.iter().filter_map(|g| g.github()).map(|g| g.app_id));
             s.views()
         };
         let view = id.map_or(Value::Null, |id| json!(views.iter().find(|v| v.config.id == id)));
@@ -409,8 +411,9 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
         let mut replaced_app = None;
         let id = match records.iter_mut().find(|r| same_scope(&r.config.scope, &rec.config.scope)) {
             Some(old) => {
-                replaced_app = Some(old.github.app_id).filter(|a| *a != rec.github.app_id);
-                old.github = rec.github;
+                let new_app = rec.github().map(|g| g.app_id);
+                replaced_app = old.github().map(|g| g.app_id).filter(|a| Some(*a) != new_app);
+                old.link = rec.link;
                 old.config.label = rec.config.label;
                 let nets = &mut old.config.settings.trusted_networks;
                 if let Some(n) = network.filter(|n| !nets.contains(n)) {
