@@ -134,8 +134,8 @@ export const STATUS_GROUPS = [
   { key: 'status:idle', name: 'Idle' },
 ] as const;
 
-export function statusGroupOf(status: 'working' | 'input' | 'error' | undefined): string {
-  return status ? `status:${status}` : 'status:idle';
+export function statusGroupOf(status: 'working' | 'input' | 'error' | 'done' | 'idle' | undefined): string {
+  return !status || status === 'done' || status === 'idle' ? 'status:idle' : `status:${status}`;
 }
 
 /** The date groups, newest first. */

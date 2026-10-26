@@ -1,3 +1,4 @@
+import { PixelWaveBackground, pixelWaveFor } from './PixelWaveBackground.js';
 import { GreetingNekko } from './GreetingNekko.js';
 import { PrWatchContinuation } from './PrWatchContinuation.js';
 import { canOfferPrWatch } from '../prWatchContinuation.js';
@@ -2361,6 +2362,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const estimate = useCallback((row: TranscriptRow) => estimateRowHeight(row, columnWidth), [columnWidth]);
   const hasLive = !!(held || getLiveRun(sessionId));
   const welcomeState = chatWelcomeState({ messages: session?.messages.length ?? 0, streaming, hasLive, hasProvider, modelId, imageMode });
+  const wave = settings?.backgroundAnimation === false ? null : pixelWaveFor(settings?.themePreset);
   const cleanStart = cleanStartWanted && surface === 'full' && !readOnly && welcomeState.welcome && hasProvider && !welcomeState.modelChoice && !imageMode && !!session && !question && !approval;
   // Leaving the clean start because the user sent (the welcome is gone, it is
   // still the same focused chat) plays the composer-into-chat expansion once.
@@ -2438,6 +2440,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         <ContextAction onClick={() => { exportChat(); setChatMenu(null); }}><DownloadIcon className="mr-2 inline h-3.5 w-3.5" />Export as Markdown</ContextAction>
       </ContextMenu>}
       <section className={`flex min-w-0 w-full flex-1 flex-col overflow-x-hidden ${cleanStart ? 'clean-start justify-center' : ''}`}>
+        {cleanStart && paneShown && wave && <PixelWaveBackground wave={wave} />}
         {/* One bar per window. Inside a workspace these ride in the frame's
             title strip, which already shows the chat's name; standalone, the
             chat still needs a header of its own. */}
@@ -2685,7 +2688,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             <span className="absolute left-1/2 top-[3px] h-1.5 w-10 -translate-x-1/2 rounded-full opacity-0 transition-opacity group-hover:opacity-100" style={{ background: 'var(--accent)' }} />
           </div>}
           {cleanStart && <div className="clean-start-greeting fade-in" data-clean-start-greeting>
-            <GreetingNekko />
             <h2>What should we work on?</h2>
           </div>}
           <div className={`composer-column mx-auto ${commandCenter ? 'w-[98%]' : 'w-[90%]'}`} style={cleanStart ? undefined : commandCenter ? { width: '98%' } : undefined}>
@@ -2694,6 +2696,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             )}
 
             <div className="composer relative">
+            {cleanStart && <GreetingNekko />}
             {/* While the agent works, a violet→cyan beam laps the border. The
                 gradient is a square that rotates on the compositor, clipped
                 to the ring by the mask on its wrapper; animating the gradient

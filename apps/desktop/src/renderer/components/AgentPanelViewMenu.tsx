@@ -110,8 +110,8 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
         aria-label="Agent panel view"
         tabIndex={-1}
         data-agent-view-menu
-        className="card fixed z-[1000] p-1.5 shadow-xl outline-hidden"
-        style={{ left, top, width: MENU_W, background: 'var(--paper)' }}
+        className="context-menu card fixed z-[1000] p-1.5 shadow-xl outline-hidden"
+        style={{ left, top, width: MENU_W }}
         onContextMenu={(e) => e.preventDefault()}
         onKeyDown={(e) => {
           if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
@@ -141,8 +141,8 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
           role="menu"
           aria-label={sub === 'group' ? 'Group by' : sub === 'sort' ? 'Sort by' : 'Show'}
           data-agent-view-submenu={sub}
-          className="card fixed z-[1001] p-1.5 shadow-xl"
-          style={{ width: SUB_W, background: 'var(--paper)', left: subPos?.left ?? -9999, top: subPos?.top ?? -9999 }}
+          className="context-menu card fixed z-[1001] p-1.5 shadow-xl"
+          style={{ width: SUB_W, left: subPos?.left ?? -9999, top: subPos?.top ?? -9999 }}
           onMouseEnter={keepSub}
           onMouseLeave={closeSubSoon}
           onContextMenu={(e) => e.preventDefault()}
