@@ -83,6 +83,16 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > full screen to zoom and scroll; touch and hold any table for **Copy as Markdown**, **Copy as
 > text** (tab-separated, so it pastes into Numbers or Sheets as cells) and **Share**.
 >
+> The iPhone message box writes Markdown: what you type is what is sent, shown with light styling
+> (bold looks bold with its `**` dimmed, headings larger, list markers tinted). While it has the
+> keyboard, a formatting bar sits inside the box above the text: bold, italic, strikethrough, inline
+> code, link, heading, bulleted, numbered and task lists, indent and outdent, quote, code block and
+> table. **Aa** hides or shows the bar, and the choice is kept. Return continues a list (the next
+> number, an empty task box) and ends it on an empty item; inside a table the bar adds **+ Row** and
+> **+ Column**, and Tab moves to the next cell. A normal paste stays plain text; after pasting rich
+> text (from Safari, Notes, Mail or Docs) a chip offers **Use formatting** for a few seconds. Touch
+> and hold for **Paste as Markdown** or **Paste as plain text**. Undo takes back any of it.
+>
 > Tables in a reply show as a grid (it scrolls sideways when wide). When the agent links a file it
 > made on your computer (an HTML prototype, an image, a PDF, Markdown, text, JSON or CSV) or a
 > preview server it started there (`http://localhost:5173`), the reply gets a card for it, with a
@@ -593,11 +603,18 @@ NEKKO_RELAY_URL=wss://your-relay NEKKO_ROOM=myroom NEKKO_PAIR_KEY=<secret> npx n
 It prints a one-time pairing code (10 minutes) at boot and keeps the same persistent device
 registry as the desktop app.
 
-### Chat status on native iOS
+### Chat status on the phone
 
-The icon to the left of each chat reads like desktop: a rocket means working,
-a question mark means the agent needs you, “Zz” means idle, and a checkmark marks
-a completed chat. A clock means a prompt is waiting to send.
+Chat status follows desktop: a rocket (or Working/Running badge) means working,
+and a question mark or Needs you badge means the agent needs your input.
+A quiet gray checkmark means **Done**: no active work and no armed watcher.
+**Zz · Idle** means no active work, but a watcher is armed to wake the chat later.
+Triggered, cancelled and failed watches no longer keep a chat idle. Done does not
+archive the chat; you can still continue it. An older computer that does not send
+watch counts treats inactive chats as Done until it is updated.
+
+On native iOS, a clock means a prompt is waiting to send. Running work, input
+requests and waiting prompts take priority over the inactive status.
 
 Nekko sits at the top-left of the Chats screen beside the computer menu. Tap the
 pixel cat for a brief greeting. This is a local animation, not a message to an

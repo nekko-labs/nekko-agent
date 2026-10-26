@@ -203,6 +203,7 @@ struct ModelEffortSheet: View {
     @Environment(ComputersStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
+    @Environment(\.horizontalSizeClass) private var hClass
     @State private var picking = false
     @State private var error: String?
     @State private var busy: Effort?
@@ -275,7 +276,8 @@ struct ModelEffortSheet: View {
             }
             .task { await store.loadAllModels() }
         }
-        .presentationDetents([.medium, .large])
+        // A form sheet on iPad or an open foldable: at medium height in landscape the levels fell below the fold.
+        .presentationDetents(hClass == .regular ? [.large] : [.medium, .large])
     }
 
     private func set(_ e: Effort) {
@@ -328,7 +330,7 @@ struct ContextGauge: View {
         .accessibilityValue(contextDescription(used: used, window: window))
         .accessibilityIdentifier("chat.context")
         .popover(isPresented: $open) {
-            ContextBreakdown(chat: chat).frame(minWidth: 280).presentationCompactAdaptation(.popover)
+            ContextBreakdown(chat: chat).frame(minWidth: 280).fixedSize(horizontal: false, vertical: true).presentationCompactAdaptation(.popover)
         }
     }
 }

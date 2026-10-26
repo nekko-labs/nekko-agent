@@ -54,8 +54,8 @@ Philip asked for the iPhone chat to write in Markdown with a styles toolbar, nes
 
 - [x] **MD-1, Block parser with real nesting and tables.** Replace the line scanner's flat `Piece` list in `Markdown.swift` with a small block tree (nested lists with continuation lines, pipe tables with alignment), moved into `NekkoProtocol` so it is tested on Linux; `MarkdownTests`. Done: `MarkdownParser` in `NekkoProtocol/Markdown.swift` (cached per segment, so a streaming reply re-parses only its last segment), `MarkdownTests` passing on Linux (Swift 6.1).
 - [ ] **MD-2, Rendering.** Nested list markers by depth, task checkboxes, the native table grid (sideways scroll, Expand full screen, Copy as Markdown / as text), user bubbles rendered as Markdown; streaming stays incremental. Implemented (`Markdown.swift`, UI test `MarkdownTests` on the `-uiTestMarkdownLab` fixture); unverified until the macOS CI run.
-- [ ] **MD-3, Composer editor and toolbar.** A `UITextView`-backed composer with live source styling and the in-card toolbar (styles, link, heading, lists, indent/outdent, quote, code block, table, add row/column), list continuation on Return, undo; the edit functions are pure and Linux-tested.
-- [ ] **MD-4, Paste choice.** *Paste as Markdown* / *Paste as plain text* in the edit menu, the *Use formatting* chip after a rich paste; HTML/RTF→Markdown converter with the security cases.
+- [ ] **MD-3, Composer editor and toolbar.** A `UITextView`-backed composer with live source styling and the in-card toolbar (styles, link, heading, lists, indent/outdent, quote, code block, table, add row/column), list continuation on Return, undo; the edit functions are pure and Linux-tested. Implemented (`MarkdownComposer.swift`; `MarkdownEditing`, `MarkdownHighlight` and `MarkdownEditingTests` in NekkoProtocol, passing on Linux); the UI is unverified until the macOS CI run.
+- [ ] **MD-4, Paste choice.** *Paste as Markdown* / *Paste as plain text* in the edit menu, the *Use formatting* chip after a rich paste; HTML/RTF→Markdown converter with the security cases. Implemented (`RichPaste`, `RichPasteTests` passing on Linux; RTF goes through `NSAttributedString` and is described as simple HTML); the paste UI is unverified until the macOS CI run.
 - [ ] **MD-5, Evidence.** UI test and screenshots (light, dark, largest text) from macOS CI.
 - [ ] **MD-6, Android parity.** The same parser, rendering, toolbar and paste choice in `Markdown.kt`, `MarkdownText.kt` and `Composer.kt`.
 - [ ] **MM-1, Offline Mermaid renderer.** Bundled `mermaid.min.js` (12.x), one locked off-screen `WKWebView` (no network, no navigation, strict), a render queue, SVG→image cache keyed by source, theme and width.
@@ -2404,3 +2404,9 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 ## Expo retirement
 
 - [x] Remove the retired Expo app and its dedicated Mobile CI; keep native phone workflows, relay/push infrastructure and shared protocol coverage. Update merge-gate accounting and desktop icon/test references. See [native phone decision](spec/phone/native-phone-implementation-decision.md) and [decision 0026](docs/decisions/0026-retire-expo-in-favor-of-native-phone-apps.md). Tracked in #1124.
+
+## Compact Monitors and new-chat frost (#1152)
+
+- [x] Reduce the default/snap dock width to 276px, trim the monitor right inset by 2px, and avoid unused Focus scrollbar space. Keep budget ranges on one row and metric values readable. See [spacing spec](spec/desktop/slim-wave-rail-tighter-agents-spacing-composer-snap-points.md).
+- [x] Replace the new-chat opaque wash and hard composer edge with translucent frost and a reduced-transparency fallback. See [new-chat spec](spec/desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md).
+- [x] Check layout/range unit tests, desktop typechecking, hidden Electron resize/reset/range/typing interactions and matched default-theme desktop/narrow evidence. Packaged OS chrome and physical mobile devices remain unverified.

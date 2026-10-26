@@ -69,7 +69,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Agent window controls refresh (2026-10-15)](desktop/agent-window-controls-refresh.md) (6 KB)
 - [Composer and desktop rail regression fixes (2026-10-07)](desktop/composer-and-desktop-rail-regression-fixes.md) (3 KB)
 - [Desktop: Simple and Expert modes, the effort dial, the context ring and the hardware strip (2026-10-25)](desktop/desktop-simple-and-expert-modes.md) (3 KB)
-- [Empty wall opens the new-chat screen; glass prism composer (2026-10-18)](desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md) (4 KB)
+- [Empty wall opens the new-chat screen; glass prism composer (2026-10-18)](desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md) (7 KB)
 - [Focused mode transitions, calmer focus ring and layout controls (2026-10-17)](desktop/focused-mode-transitions-calmer-focus-ring-and-layout-controls.md) (7 KB)
 - [Grid model selection and chat-mode menus (2026-10-07)](desktop/grid-model-selection-and-chat-mode-menus.md) (1 KB)
 - [Inline agent-window creation](desktop/inline-agent-window-creation.md) (3 KB)
@@ -80,7 +80,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [New agent window defaults](desktop/new-agent-window-defaults.md) (5 KB)
 - [Search within Settings (desktop)](desktop/search-within-settings-desktop.md) (2 KB)
 - [Settings section nav and phone pairing placement (desktop)](desktop/settings-section-nav.md) (3 KB)
-- [Slim wave rail, tighter Agents spacing, composer snap points](desktop/slim-wave-rail-tighter-agents-spacing-composer-snap-points.md) (4 KB)
+- [Slim wave rail, tighter Agents spacing, composer snap points](desktop/slim-wave-rail-tighter-agents-spacing-composer-snap-points.md) (5 KB)
 - [Style: universal fonts, text size and your own fonts (desktop)](desktop/style-fonts-and-text-size.md) (3 KB)
 - [Subtle rail and compact board gutters](desktop/subtle-rail-and-compact-board-gutters.md) (3 KB)
 - [Swoop navigation rail (2026-10-17)](desktop/swoop-navigation-rail.md) (2 KB)
@@ -104,7 +104,7 @@ Agents panel, monitors, subagents and delegation.
 - [Monitors dock naming and header polish (2026-10-16)](agents/monitors-dock-naming-and-header-polish.md) (6 KB)
 - [Subagent transcript identity](agents/subagent-transcript-identity.md) (2 KB)
 - [Watch lifecycle and delegation failure recovery](agents/watch-lifecycle-and-delegation-recovery.md) (2 KB)
-- [Watch rows and subagent models](agents/watch-rows-and-subagent-models.md) (2 KB)
+- [Watch rows and subagent models](agents/watch-rows-and-subagent-models.md) (5 KB)
 
 ### context
 
@@ -174,7 +174,7 @@ Phone remote control and the native iOS and Android apps.
 - [Driving your home model from your phone (remote control)](phone/driving-your-home-model-from-your-phone-remote-control.md) (13 KB)
 - [Folding phones: two chats at once, a Monitors pane and vertical mode (2026-10-24)](phone/folding-phones-two-chats-and-monitors.md) (13 KB)
 - [iPhone chat: tables, and previews of files and local pages the agent links (2026-10-26)](phone/iphone-chat-tables-and-link-previews.md) (8 KB)
-- [iPhone Markdown composer and rich replies (planned 2026-10-25)](phone/iphone-markdown-composer-and-rich-replies.md) (7 KB)
+- [iPhone Markdown composer and rich replies (planned 2026-10-25)](phone/iphone-markdown-composer-and-rich-replies.md) (8 KB)
 - [iPhone: Simple and Expert modes, the model and effort control, the context gauge and the hardware monitor (2026-10-24)](phone/iphone-simple-and-expert-modes.md) (8 KB)
 - [iPhone: the desktop's languages and themes, and New chat's effort and computer (2026-10-23)](phone/iphone-languages-themes-and-new-chat-choices.md) (5 KB)
 - [Mermaid diagrams on the phone (planned 2026-10-25)](phone/mermaid-diagrams-on-the-phone.md) (4 KB)

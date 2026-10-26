@@ -345,11 +345,32 @@ final class NotificationPrefsTests: XCTestCase {
 }
 
 final class ChatStatusIconTests: XCTestCase {
+    @MainActor
+    func testArchivedDoneUsesTheSameGrayCheckAsUnarchivedDone() throws {
+        func render(_ completed: Bool) throws -> Data {
+            let icon = ChatStatusIcon(activity: nil, completed: completed)
+                .frame(width: 32, height: 32)
+            return try XCTUnwrap(ImageRenderer(content: icon).uiImage?.pngData())
+        }
+        let grayCheck = Image(systemName: "checkmark")
+            .foregroundStyle(Palette.make(dark: false, accent: nil).inkFaint)
+            .font(.caption.weight(.semibold))
+            .frame(width: 32, height: 32)
+        let expected = try XCTUnwrap(ImageRenderer(content: grayCheck).uiImage?.pngData())
+        XCTAssertEqual(try render(true), expected)
+        XCTAssertEqual(try render(false), expected)
+    }
+
     func testStatusLabelsAndPrecedence() {
         XCTAssertEqual(ChatStatusIcon(activity: .running, completed: true, waiting: true).label, "Working")
         XCTAssertEqual(ChatStatusIcon(activity: .needsYou, completed: true, waiting: true).label, "Needs you")
         XCTAssertEqual(ChatStatusIcon(activity: nil, completed: true, waiting: true).label, "Waiting to send")
         XCTAssertEqual(ChatStatusIcon(activity: nil, completed: true).label, "Done")
-        XCTAssertEqual(ChatStatusIcon(activity: nil).label, "Idle")
+        XCTAssertEqual(ChatStatusIcon(activity: nil).label, "Done")
+        XCTAssertEqual(ChatStatusIcon(activity: nil, activeWatchCount: 1).label, "Idle")
+        XCTAssertEqual(ChatStatusIcon(activity: nil, completed: true, activeWatchCount: 1).label, "Idle")
+        XCTAssertEqual(ChatStatusIcon(activity: .running, completed: true, activeWatchCount: 1).label, "Working")
+        XCTAssertEqual(ChatStatusIcon(activity: .needsYou, completed: true, activeWatchCount: 1).label, "Needs you")
+        XCTAssertEqual(ChatStatusIcon(activity: nil, completed: true, waiting: true, activeWatchCount: 1).label, "Waiting to send")
     }
 }
