@@ -211,11 +211,32 @@ test('provision_pins_official_downloads', () => {
   }
 });
 
+// The one line allowed to name NOPASSWD: step 9's fatal check.
+const NOPASSWD_CHECK = "if grep -v '^[[:space:]]*#' /etc/sudoers | grep NOPASSWD >/dev/null; then";
+
+// Every way the script could hand runner root, a credential or a printed password.
+function lockdownProblems(text) {
+  const lines = text.split('\n').filter((l) => !/^\s*#/.test(l));
+  const bad = [];
+  const flag = (why, test) => {
+    for (const l of lines) if (test(l)) bad.push(`${why}: ${l.trim()}`);
+  };
+  flag('NOPASSWD', (l) => l.includes('NOPASSWD') && l.trim() !== NOPASSWD_CHECK);
+  flag('writes sudoers', (l) => /sudoers/.test(l) && l.trim() !== NOPASSWD_CHECK && (/>|\btee\b|\bvisudo\b|\bcp\b|\bmv\b|\binstall\b|\bln\b/.test(l)));
+  flag('runner admin', (l) => /\bdseditgroup\b[^\n]*\badmin\b/.test(l) || /-append\s+\/Groups\/admin/.test(l));
+  flag('runner admin', (l) => /\brunner\b/.test(l) && (/GroupMembership/.test(l) || /(^|\s)-admin\b/.test(l)));
+  flag('registers', (l) => l.includes('--jitconfig') || l.includes('config.sh'));
+  flag('prints a password', (l) => /\b(echo|printf)\b.*\$\{?\w*(pass|pw)\w*/i.test(l));
+  return bad;
+}
+
 test('provision_locks_the_guest_down', () => {
   const p = provision();
   for (const s of [
     'launchctl disable system/com.openssh.sshd',
     'launchctl disable system/com.apple.screensharing',
+    'ARDAgent.app/Contents/Resources/kickstart',
+    '"$kickstart" -deactivate -stop',
     'org.cirruslabs',
     '/etc/sudoers.d',
     '-autologin set -userName runner',
@@ -223,9 +244,31 @@ test('provision_locks_the_guest_down', () => {
     '/Library/LaunchDaemons/dev.nekkolabs.runner-boot.plist',
   ])
     assert.ok(p.includes(s), s);
-  const addUser = p.split('\n').find((l) => l.includes('sysadminctl -addUser'));
-  assert.ok(addUser, 'creates the runner user');
-  assert.doesNotMatch(addUser, /-admin/);
-  for (const s of ['NOPASSWD', '--jitconfig', 'config.sh']) assert.ok(!p.split('\n').some((l) => l.includes(s) && !/^\s*#/.test(l) && !/grep/.test(l)), s);
-  assert.doesNotMatch(p, /\b(echo|printf)\b[^\n]*\$\{?\w*(pass|pw)\w*/i, 'never prints a password');
+  assert.ok(p.includes(`${NOPASSWD_CHECK}\n  die `), 'the NOPASSWD check is fatal');
+  assert.ok(p.split('\n').some((l) => l.includes('sysadminctl -addUser runner')), 'creates the runner user');
+  assert.deepEqual(lockdownProblems(p), []);
+});
+
+test('provision_verifies_runner_has_no_sudo_and_no_admin', () => {
+  const p = provision();
+  assert.match(p, /sudo_l="\$\(sudo -l -U runner 2>&1 \|\| true\)"\n\[\[ "\$sudo_l" == \*"is not allowed to run sudo"\* \]\] \|\| die /);
+  assert.match(p, /membership="\$\(dsmemberutil checkmembership -U runner -G admin 2>&1 \|\| true\)"\n\[\[ "\$membership" == \*"is not a member"\* \]\] \|\| die /);
+});
+
+test('lockdown_bans_trip_on_planted_lines', () => {
+  const p = provision();
+  for (const line of [
+    'echo "runner ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/runner',
+    'grep -q x /etc/hosts && echo NOPASSWD',
+    'echo "runner ALL=(ALL) ALL" | tee -a /etc/sudoers',
+    'cp ./extra /etc/sudoers.d/extra',
+    'EDITOR=true visudo -f /etc/sudoers',
+    'dseditgroup -o edit -a runner -t user admin',
+    'dscl . -append /Groups/admin GroupMembership runner',
+    'sysadminctl -addUser runner -fullName "CI runner" -admin',
+    'sysadminctl -adminUser x -adminPassword y; sysadminctl -edit runner -admin',
+    'sudo -u runner "$runner_home/actions-runner/config.sh" --unattended',
+    'echo "$runner_pw"',
+  ])
+    assert.notDeepEqual(lockdownProblems(`${p}\n${line}\n`), [], line);
 });

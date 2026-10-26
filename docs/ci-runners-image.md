@@ -22,7 +22,7 @@ From the root of this repo:
 
 ```bash
 tart clone ghcr.io/cirruslabs/macos-sequoia-xcode:<tag> nekko-golden
-tart run --no-graphics --dir runner-image:scripts/runner-image nekko-golden &
+tart run --no-graphics --dir runner-image:scripts/runner-image:ro nekko-golden &
 tart exec nekko-golden sudo bash "/Volumes/My Shared Files/runner-image/provision.sh"
 tart stop nekko-golden
 mkdir -p ~/.nekko-agent/runners/images/default
@@ -30,7 +30,7 @@ cp -c ~/.tart/vms/nekko-golden/{config.json,disk.img,nvram.bin} ~/.nekko-agent/r
 ```
 
 Pick `<tag>` from the [Cirrus image list](https://github.com/cirruslabs/macos-image-templates)
-for the Xcode your jobs need. `--dir` shares `scripts/runner-image` into the guest, so
+for the Xcode your jobs need. `--dir` shares `scripts/runner-image` into the guest read-only, so
 `provision.sh` finds the boot script and LaunchDaemon beside it. `tart exec` works only once:
 `provision.sh` removes the Tart guest agent it runs through.
 
@@ -63,7 +63,8 @@ Terminal. Stop the VM and copy the three files as above.
    is never shown or saved. It copies the existing admin's Setup Assistant answers so `runner`'s
    first login shows no assistant, and turns its screen saver off.
 3. Logs `runner` in automatically at boot, so jobs get a real GUI session for simulators and the
-   keychain.
+   keychain. macOS keeps that password in `/etc/kcpassword`, readable only by root; that is fine
+   because `runner` is not an admin and cannot become root.
 4. Downloads the pinned GitHub Actions runner, checks its SHA-256, and unpacks it into
    `/Users/runner/actions-runner`. It never registers it: each job's one-time config does that.
 5. Downloads the pinned `gitlab-runner` to `/usr/local/bin`, checks its SHA-256. Not registered,
@@ -74,9 +75,10 @@ Terminal. Stop the VM and copy the three files as above.
 7. Gives `runner` ownership of `/opt/homebrew`, so jobs can `brew install` without sudo.
 8. Turns off sleep, Spotlight indexing and scheduled software updates.
 9. Locks the guest down: every admin gets a new random password nobody knows, every file in
-   `/etc/sudoers.d` goes (and it fails if `/etc/sudoers` still allows passwordless sudo), SSH and
-   Screen Sharing are disabled, and Cirrus Labs' LaunchDaemons, LaunchAgents and the Tart guest
-   agent are removed.
+   `/etc/sudoers.d` goes (and it fails if `/etc/sudoers` still allows passwordless sudo), SSH,
+   Screen Sharing and Apple Remote Desktop are turned off, and Cirrus Labs' LaunchDaemons,
+   LaunchAgents and the Tart guest agent are removed. Then it checks the result: it fails unless
+   `sudo -l -U runner` says `runner` may not use sudo and `runner` is not in the `admin` group.
 10. Writes `/usr/local/share/nekko-runner-image.json` with the build date and the macOS, Xcode,
     Actions runner and gitlab-runner versions.
 
@@ -111,12 +113,13 @@ every job already has. See [decision 0022](decisions/0022-ci-runners-vm-and-netw
 
 ## Check it
 
-Boot a clone with a fake seed and no network, and watch it shut itself down. From the repo root,
+Boot a clone of the image Nekko uses with a fake seed and no network, and watch it shut itself
+down. From the repo root,
 after `node apps/desktop/scripts/stage-daemon.mjs --dev`:
 
 ```bash
 mkdir -p target/runner-image-check
-target/dev-daemon/nekko-vm clone --from ~/.tart/vms/nekko-golden --to target/runner-image-check/vm
+target/dev-daemon/nekko-vm clone --from ~/.nekko-agent/runners/images/default --to target/runner-image-check/vm
 seed="$(mktemp -d)" && chmod 700 "$seed" && printf not-a-config > "$seed/jit-config"
 hdiutil makehybrid -iso -joliet -default-volume-name NEKKOSEED -o target/runner-image-check/seed.iso "$seed"
 perl -MSocket -MPOSIX -e 'socketpair(my $a, my $b, AF_UNIX, SOCK_DGRAM, 0) or die $!;

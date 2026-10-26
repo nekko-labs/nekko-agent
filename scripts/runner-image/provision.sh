@@ -30,7 +30,7 @@ major="$(sw_vers -productVersion | cut -d. -f1)"
 for app in /Applications/Xcode_*.app; do
   [ -e "$app" ] && die "rename $app to /Applications/Xcode.app: the job user has no sudo, and ios-native.yml only switches Xcode for the Xcode_* pattern"
 done
-sysadminctl -h 2>&1 | grep -q -- -autologin || die "this macOS has no sysadminctl -autologin"
+sysadminctl -h 2>&1 | grep -- -autologin >/dev/null || die "this macOS has no sysadminctl -autologin"
 for f in nekko-runner-boot.sh dev.nekkolabs.runner-boot.plist; do
   [ -f "$src/$f" ] || die "missing $src/$f"
 done
@@ -51,7 +51,7 @@ admins=()
 for u in $(dscl . -read /Groups/admin GroupMembership | cut -d: -f2-); do
   [ "$u" = root ] || admins+=("$u")
 done
-for u in "${admins[@]}"; do
+for u in ${admins[@]+"${admins[@]}"}; do
   sa="/Users/$u/Library/Preferences/com.apple.SetupAssistant.plist"
   if [ -f "$sa" ]; then
     cp "$sa" "$runner_home/Library/Preferences/"
@@ -105,26 +105,41 @@ softwareupdate --schedule off
 
 # 9. Lock down: no admin password anyone knows, no passwordless sudo, no way in from the host.
 step "locking down"
-for u in "${admins[@]}"; do
-  dscl . -passwd "/Users/$u" "$(openssl rand -base64 24)"
+for u in ${admins[@]+"${admins[@]}"}; do
+  pw="$(openssl rand -base64 24)"
+  [ -n "$pw" ] || die "no random password"
+  dscl . -passwd "/Users/$u" "$pw"
 done
+unset pw
 find /etc/sudoers.d -mindepth 1 -delete
-if grep -v '^[[:space:]]*#' /etc/sudoers | grep -q NOPASSWD; then
+# Not grep -q: under pipefail its early exit can SIGPIPE the first grep and hide a match.
+if grep -v '^[[:space:]]*#' /etc/sudoers | grep NOPASSWD >/dev/null; then
   die "/etc/sudoers grants passwordless sudo: remove it from the base image"
 fi
 launchctl disable system/com.openssh.sshd
 systemsetup -f -setremotelogin off
 launchctl disable system/com.apple.screensharing
+kickstart=/System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart
+if [ -x "$kickstart" ]; then
+  "$kickstart" -deactivate -stop >/dev/null
+fi
 rm -f /Library/LaunchDaemons/org.cirruslabs.* /Library/LaunchAgents/org.cirruslabs.*
 for d in ${PATH//:/ } /usr/local/bin /opt/homebrew/bin; do
   rm -f "$d/tart-guest-agent"
 done
 
+# Check the outcome, not just the steps: runner has no sudo and is not an admin.
+sudo_l="$(sudo -l -U runner 2>&1 || true)"
+[[ "$sudo_l" == *"is not allowed to run sudo"* ]] || die "runner can use sudo"
+membership="$(dsmemberutil checkmembership -U runner -G admin 2>&1 || true)"
+[[ "$membership" == *"is not a member"* ]] || die "runner is an admin"
+
 # 10. What this image holds, for the app and for whoever debugs it.
 xcode=null
 if [ -d /Applications/Xcode.app ]; then
-  xcode="\"$(xcodebuild -version | head -1)\""
+  xcode="\"$(xcodebuild -version | sed -n 1p)\""
 fi
+mkdir -p /usr/local/share
 printf '{"built":"%s","macos":"%s","xcode":%s,"actionsRunner":"%s","gitlabRunner":"%s"}\n' \
   "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(sw_vers -productVersion)" "$xcode" "$RUNNER_VERSION" "$GITLAB_RUNNER_VERSION" \
   >/usr/local/share/nekko-runner-image.json
