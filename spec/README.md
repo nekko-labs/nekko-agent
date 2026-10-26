@@ -210,6 +210,6 @@ Brand, website, onboarding and the mascot.
 - [Brand refresh and website redesign (2026-10-18)](brand/brand-refresh-and-website-redesign.md) (7 KB)
 - [First-run setup (planned onboarding wizard)](brand/first-run-setup.md) (2 KB)
 - [Local marketing website preview (2026-10-17)](brand/local-marketing-website-preview.md) (1 KB)
-- [Mascot, polish & onboarding](brand/mascot-polish-onboarding.md) (10 KB)
+- [Mascot, polish & onboarding](brand/mascot-polish-onboarding.md) (12 KB)
 
 <!-- index:end -->

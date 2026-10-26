@@ -1,22 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { THEME_PRESETS } from '@nekko-agent/shared';
-import { pixelWaveFor, waveField } from './PixelWaveBackground.js';
+import { pixelWaveFor, waveTexture, WAVE_TEXTURE, showEmptyAgentWave } from './PixelWaveBackground.js';
 
 describe('pixel wave', () => {
-  it('draws the same wave as the original per-cell formula', () => {
-    // The original drew, for every cell, sin(x/110 - 1.4t + 1.6 sin(y/150 + 0.5t)), cubed and scaled by peak.
-    const CELL = 9, cols = 40, rows = 25, peak = 0.3;
-    const colSin = new Float32Array(cols), colCos = new Float32Array(cols);
-    for (let c = 0; c < cols; c++) { colSin[c] = Math.sin((c * CELL) / 110); colCos[c] = Math.cos((c * CELL) / 110); }
-    const out = new Float32Array(cols * rows);
-    for (const t of [0, 1.7, 42.3]) {
-      waveField(cols, rows, t, peak, out, colSin, colCos);
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          const w = Math.sin((c * CELL) / 110 - t * 1.4 + Math.sin((r * CELL) / 150 + t * 0.5) * 1.6);
-          expect(out[r * cols + c]).toBeCloseTo(Math.max(0, w) ** 3 * peak, 5);
-        }
-      }
+  it('builds one bounded deterministic texture, not an animated SVG or sprite sheet', () => {
+    const wave = pixelWaveFor('lilac')!;
+    const svg = decodeURIComponent(waveTexture(wave).split(',').slice(1).join(','));
+    expect(WAVE_TEXTURE).toEqual({ width: 720, height: 360, pitch: 9 });
+    expect(svg).toContain('viewBox="0 0 720 360"');
+    expect(svg).not.toMatch(/animate|script|filter|foreignObject/);
+    expect(waveTexture(wave)).toBe(waveTexture(wave));
+  });
+
+  it('only decorates loaded empty agent windows, never running turns or the shared composer', () => {
+    const empty = { loaded: true, messages: 0, running: false, composer: false, enabled: true };
+    expect(showEmptyAgentWave(empty)).toBe(true);
+    for (const patch of [{ loaded: false }, { messages: 1 }, { running: true }, { composer: true }, { enabled: false }]) {
+      expect(showEmptyAgentWave({ ...empty, ...patch })).toBe(false);
     }
   });
 

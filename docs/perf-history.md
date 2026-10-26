@@ -1084,3 +1084,16 @@ Conditions: Ryzen9 9950X3D32threads,Windows,HeadlessChrome151.0.7922.34,release 
 Matched invalidation-tracked base/explicit vacancy-marker p95 6.8/6.1ms (341/357frames),p50 4.5/4.4ms,max19.5/20.2ms. Affected-by-:has invalidations134/0. Instrumentation adds overhead; single samples do not prove Linux-gate improvement. Marker replaces the exact empty-wall descendant selectors while retaining state semantics. No containment or beam change retained. Saved reports/traces .shots/stream-containment/{invalidation,explicit-empty}; expected static appearance unchanged,20matching Electron capture pairs byte-identical. Full gate pending.
 
 Full local candidate gate (same hardware/browser/release daemon,no GPU): all budgets pass. Composer p95 7.8ms,terminal18.9ms,streaming5.4ms347frames,warm8.0ms,cold10.9ms. Layer ratio0.15x,tile memory206.61MB,heap slope0.06MB/lap,DOM/listener slopes0.00. This build predates the latest unrelated main visual refinements; final Linux CI remains the release criterion.
+
+### Empty-agent dot texture and steady working cat (2026-10-25)
+
+Issue: [#1157](https://github.com/nekko-labs/nekko-agent/issues/1157). Base `1935c659`. Removed the full-app canvas wave and composer/window border beams. Empty agents use a fixed 720×360 precomputed SVG image moved by stepped CSS transform; inactive windows/panels pause it. The aggregate working cat has a steady accent fill with no animation.
+
+Matched diagnostic full-App fixture: macOS arm64, Electron 45, 1440×900 DIP, default dark chrome with supplemental Lilac wave, four synthetic empty agents (one visible Focus pane), hidden non-focusable isolated window, network blocked. Before/after sequential six-second CPU deltas, no full test/build running concurrently. The focused condition overrides `document.hasFocus` and dispatches a synthetic renderer focus event; no real desktop focus is taken. Raw `app.getAppMetrics().cpu.cumulativeCPUUsage` deltas:
+
+| Condition | GPU-process CPU before → after (%) | Renderer CPU before → after (%) |
+| --- | --- | --- |
+| Unfocused empty | 2.8794867522079652 → 1.0229385307346324 | 1.8395434094317615 → 1.731884057971014 |
+| Synthetic focused empty | 8.872568287808127 → 3.2341605596269134 | 8.273600932711526 → 8.454946702198532 |
+
+These short single samples suggest lower GPU-process CPU overhead, **not measured GPU utilization, energy, or battery savings**. Renderer CPU did not improve in the synthetic focused case. No distribution, live user-profile A/B, or cross-platform performance claim is established. Earlier blank cross-worktree captures were rejected: the harness now aliases React consistently across the fixture and alternate source tree. Stub `getAppInfo` and installed/external skills lists are defined so final before/after runs have no console errors. Reproduce via `NEKKO_TEST_LABEL=<label> NEKKO_LAYOUT_SANDBOX=empty-agent-wave-sandbox.cjs node apps/desktop/scripts/layout-evidence-integration.cjs`, with `NEKKO_TEST_SOURCE=<base-worktree>` for base and `NEKKO_EXPECT_WAVE_NEW=1` for assertions on head. Local JSON reports and PNG/GIF frames are under ignored `.shots/layout-evidence/`; published media belongs in the PR, never git. The texture edge-fade polish after these samples does not change geometry or scheduling; its performance is not separately measured.

@@ -1,19 +1,29 @@
 @import 'tailwindcss';
 
-/* Lilac / Lavender: the website's drifting pixel-dot field. It sits BEHIND
-   the app (z-index -1, above only the page background), so it shows in the
-   field around the floating panels while chat windows and every other panel,
-   which paint their own solid surface, cover it and keep text clear. Never
-   intercepts input. */
+/* Bounded empty-agent texture: one image, no canvas loop or per-dot elements. */
 .pixel-wave-background {
-  position: fixed;
+  position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
+  overflow: hidden;
   pointer-events: none;
   z-index: -1;
-  /* Drawn at one pixel per CSS pixel; keep the dots crisp on high-DPI screens. */
+  contain: paint;
+}
+.pixel-wave-texture {
+  position: absolute;
+  left: calc(50% - 360px);
+  top: calc(50% - 180px);
+  max-width: none;
   image-rendering: pixelated;
+  animation: empty-agent-wave 22.5s steps(36, end) infinite alternate;
+}
+@keyframes empty-agent-wave {
+  from { transform: translateX(-18px); }
+  to { transform: translateX(18px); }
+}
+.pixel-wave-background[data-wave-paused] .pixel-wave-texture { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+  .pixel-wave-texture { animation: none; }
 }
 
 /* Faint seasonal decoration; never intercepts app input. */
@@ -341,86 +351,6 @@
       0 0 0 2px var(--ring),
       var(--shadow-sm);
   }
-}
-
-/* Border beam: while the agent works, a violet→cyan beam laps the composer's
-   border (the border-beam pattern, in brand colors). It's the border only, no
-   surface wash, so the composer reads as "busy" without the interior shifting
-   color as you type.
-
-   The ring is a masked wrapper filled by the gradient, and what turns is the
-   gradient's start angle (a registered property, so it interpolates). The
-   version before this rotated a square twice the ring's longest side: pure
-   compositing, but every working window carried a GPU layer of
-   (2 * max(w, h))^2 device pixels, ~70 MB for a wide wall window at 150%
-   scaling. A few busy windows blew Chromium's tile budget ("tile memory
-   limits exceeded") and starved the whole desktop of GPU memory. Now the
-   ring is the only layer, the size of its own box, and it is promoted so
-   each step repaints just the ring, never the composer around it (the
-   repaint that sank the original gradient-angle version). */
-@property --beam-angle {
-  syntax: '<angle>';
-  inherits: false;
-  initial-value: 0deg;
-}
-.composer-beam-ring {
-  position: absolute;
-  will-change: transform;
-  inset: -1px;
-  border-radius: 1rem; /* track the composer's rounded-2xl corners */
-  padding: 1.5px;
-  overflow: hidden;
-  pointer-events: none;
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-}
-.composer-beam-spin {
-  position: absolute;
-  inset: 0;
-  background: conic-gradient(
-    from var(--beam-angle),
-    transparent 0% 58%,
-    var(--accent-2) 74%,
-    var(--accent) 88%,
-    color-mix(in srgb, var(--accent) 55%, #f0abfc) 95%,
-    transparent 100%
-  );
-  /* Stepped, not linear: a linear spin re-composites the masked ring at the
-     display's full refresh (120 Hz on ProMotion), which measured ~40% of a
-     core in the GPU process for one composer. 48 steps a lap is 15 fps,
-     still reads as a sweep, and costs a few percent. */
-  animation: composer-beam-spin 3.2s steps(48, end) infinite;
-}
-@keyframes composer-beam-spin {
-  from { --beam-angle: 0deg; }
-  to { --beam-angle: 360deg; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .composer-beam-spin { animation: none; }
-}
-/* The same beam on a working agent window, quieter than the composer's: a
-   thinner line, softer colours and a slower lap, so a wall of busy windows
-   reads as busy without strobing. It sits over the window's own outline. */
-.wall-window-beam {
-  inset: 0;
-  z-index: 11;
-  border-radius: var(--pane-radius);
-  padding: 1px;
-  opacity: 0.55;
-}
-.wall-window-beam .composer-beam-spin {
-  animation-duration: 5s;
-  animation-timing-function: steps(60, end); /* 12 fps over the slower lap */
-  background: conic-gradient(
-    from var(--beam-angle),
-    transparent 0% 62%,
-    color-mix(in srgb, var(--accent-2) 70%, var(--line)) 76%,
-    color-mix(in srgb, var(--accent) 75%, var(--line)) 90%,
-    transparent 100%
-  );
 }
 
 /* The queue grows as part of the composer rather than floating above it. */
@@ -3191,7 +3121,6 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
    slivers at the top corners. Inside it, focus is the border alone: an inset
    ring on top of the accent border doubled it into a heavy 2px line. */
 .wall-composer .composer, .wall-composer .composer:focus-within { box-shadow: none; }
-.wall-composer .composer-beam-ring { inset: 0; }
 
 /* Prompt suggestions as one chip among the composer's actions. */
 .composer-suggestions-chip {
@@ -3557,3 +3486,7 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
   background-size: 18px 18px;
 }
 .diagram-card { box-shadow: var(--shadow-sm); }
+
+/* Working is a steady accent fill, never a new animation or GPU layer. */
+.pixel-mascot[data-mascot-pose="working"] [data-part="pixel-head"] > path:first-child { fill: var(--accent); stroke: var(--accent); }
+.pixel-mascot[data-mascot-pose="working"] [data-part="pixel-eyes"] { fill: var(--on-accent); }

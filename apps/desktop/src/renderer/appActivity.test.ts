@@ -49,9 +49,11 @@ describe('looping decorations stay cheap to composite', () => {
   it('pauses every animation while the app is inactive', () => {
     expect(css).toContain('html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inactive] *::after { animation-play-state: paused !important; }');
   });
-  it('steps the always-running working indicators instead of animating every frame', () => {
-    expect(css).toContain('animation: composer-beam-spin 3.2s steps(48, end) infinite;');
-    expect(css).toMatch(/\.wall-window-beam \.composer-beam-spin \{[^}]*animation-timing-function: steps\(60, end\);/);
+  it('removes working beams and bounds empty-agent motion to a translated texture', () => {
+    expect(css).not.toContain('composer-beam');
+    expect(css).toContain('animation: empty-agent-wave 22.5s steps(36, end) infinite alternate;');
+    expect(css).toContain('.pixel-wave-background[data-wave-paused] .pixel-wave-texture { animation-play-state: paused; }');
+    expect(css).toContain('.pixel-wave-texture { animation: none; }');
     expect(css).toContain('animation: wall-needs-you-pulse 2.4s steps(12, end) infinite;');
     expect(css).not.toMatch(/\.status-rocket[^{]*\{[^}]*(ease-in-out|linear) infinite/);
   });

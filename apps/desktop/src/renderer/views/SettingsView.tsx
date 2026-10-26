@@ -168,8 +168,8 @@ export function SettingsView() {
                     <span className="text-[13px]">Background animation</span>
                     <p id="background-animation-hint" className="text-[11px] text-ink-faint">
                       {pixelWaveFor(settings.themePreset)
-                        ? 'The moving pixel dots behind this theme. Turn off for a still background and lower power use.'
-                        : 'The moving pixel dots behind Lilac, Lavender and the Experimental themes. This theme has none.'}
+                        ? 'Moving pixel dots only in empty new-agent windows. Turn off for lower power use.'
+                        : 'Pixel dots in empty new-agent windows with Lilac, Lavender and Experimental themes. This theme has none.'}
                     </p>
                   </div>
                   <Toggle

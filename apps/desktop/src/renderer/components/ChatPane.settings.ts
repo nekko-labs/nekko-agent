@@ -11,6 +11,8 @@ import type { AppSettings, Session } from '@nekko-agent/shared';
 export function chatPaneSettings(settings: AppSettings | null | undefined) {
   if (!settings) return null;
   return {
+    themePreset: settings.themePreset,
+    backgroundAnimation: settings.backgroundAnimation,
     localCostBenchmark: settings.localCostBenchmark,
     favoriteModels: settings.favoriteModels,
     prompts: settings.prompts,
