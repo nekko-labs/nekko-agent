@@ -28,6 +28,7 @@ app.whenReady().then(async () => {
       if (!process.env.NEKKO_BEFORE) {
         await check("['terminal','read','search','edit','check','git','web','plan','other'].every(k=>document.querySelector('[data-tool-icon='+k+']'))", 'All activity kinds render at ' + width);
         await check("!document.querySelector('[data-tool-icon] .reply-terminal-lines')", 'Transcript terminal stays static');
+        await check("[...document.querySelectorAll('[data-tool-icon]')].every(e => getComputedStyle(e).color === getComputedStyle(document.querySelector('[data-tool-icon]')).color)", 'Nested and parent icons share the primary accent');
       }
       const file = path.join(out, 'tool-icons-' + width + '.png');
       fs.writeFileSync(file, (await win.capturePage(undefined, { stayHidden: true })).toPNG()); report.captures.push(file);
