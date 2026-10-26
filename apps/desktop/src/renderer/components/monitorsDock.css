@@ -3,8 +3,8 @@
   z-index: 5;
   display: flex;
   flex-direction: column;
-  flex: 0 0 var(--dock-width, 408px);
-  width: var(--dock-width, 408px);
+  flex: 0 0 var(--dock-width, 276px);
+  width: var(--dock-width, 276px);
   max-width: 100%;
   min-width: 0;
   min-height: 0;
@@ -87,7 +87,7 @@
 .monitors-dock__popover input[type='checkbox'] { flex-shrink: 0; }
 .monitors-dock__option { display: grid; gap: 2px; }
 .monitors-dock__option > span { color: var(--ink-soft); white-space: normal; overflow-wrap: anywhere; }
-.monitors-dock__monitors { display: flex; flex-direction: column; gap: 12px; padding: 8px; min-height: 0; overflow: auto; }
+.monitors-dock__monitors { display: flex; flex-direction: column; gap: 12px; padding: 8px 6px 8px 8px; min-height: 0; overflow: auto; }
 .monitors-dock__monitor { flex: 0 0 auto; min-width: 0; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); overflow: hidden; }
 .monitors-dock__monitor-header { justify-content: space-between; }
 .monitors-dock__monitor-header h2 { margin: 0 auto 0 0; font-size: 12px; font-weight: 600; }
@@ -231,3 +231,11 @@
 
 /* The grip lives just outside the dock, beyond the presence animation clip. */
 .monitors-dock__resize > .pane-grip { background: color-mix(in srgb, var(--accent) 70%, white); box-shadow: 0 0 5px color-mix(in srgb, var(--accent) 65%, transparent); }
+
+/* Keep all six budget durations on one row at the default dock width.
+   Smaller custom sizes may still wrap instead of clipping controls. */
+.monitors-dock__budget [role="group"] button { padding-inline: 4px; font-size: 11px; white-space: nowrap; }
+/* Let long budget labels/values take another line, not split short amounts. */
+.monitors-dock__budget .monitors-dock__metric-row { flex-wrap: wrap; gap: 4px 8px; }
+.monitors-dock__budget .monitors-dock__metric-row > span { flex: 1 1 110px; }
+.monitors-dock__budget .monitors-dock__metric-row strong { flex-shrink: 0; max-width: 100%; margin-left: auto; }
