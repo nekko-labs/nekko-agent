@@ -7,7 +7,7 @@ area: phone
 
 **User intent:** Philip asked (2026-10-24) for the phone's chat to get a mode switch at the top left, like the desktop's, toggling between **Simple** and **Expert**. In Simple mode the user picks the model and effort, from one control at the bottom with the model's name and a gauge for the effort. Expert mode adds a monitor panel of gauges for the computer's hardware, and a models monitor like the desktop's: the models loaded, unloading them, the hardware they use and their context size. The chat's context usage is shown in both modes, always.
 
-**Status `[implemented 2026-10-24 on the native iPhone app and the computer's phone gate; the gate's TS and Rust editions unit-tested; the Swift package tests (protocol parsing, the monitor store, the chat's context and effort) pass on Linux and macOS; the hardware store is named HardwareMonitorModel to coexist with the folding-phone Monitors pane; the SwiftUI views were written but not yet built or driven in the simulator from this change: macOS CI builds them. Android implemented 2026-10-25 (T204b), see *Android* below]`**
+**Status `[implemented 2026-10-24 on the native iPhone app and the computer's phone gate; the gate's TS and Rust editions unit-tested; the Swift package tests (protocol parsing, the monitor store, the chat's context and effort) pass on Linux and macOS; the hardware store is named HardwareMonitorModel to coexist with the folding-phone Monitors pane; the views driven in the simulator by LiveRelayTests/testSimpleAndExpertModes against a live stack (2026-10-25); Android implemented 2026-10-25 (T217b), see *Android* below]`**
 
 ## Behaviour
 
@@ -19,7 +19,7 @@ area: phone
 
 ## Phone access (decided in this change)
 
-Recorded in [docs/decisions/0024](../../docs/decisions/0024-phones-read-the-monitors-and-unload-models.md).
+Recorded in [docs/decisions/0028](../../docs/decisions/0028-phones-read-the-monitors-and-unload-models.md).
 
 - `system:stats`, `gpu:stats`, `engine:status` and `context:preview` join `PHONE_CHANNELS` as **Read** (`PHONE_MONITOR_READ_CHANNELS`), each through a narrow projection made on the computer (`phone-views.ts`, `phone_views.rs`):
   - hardware: `PHONE_SYSTEM_VIEW`, `PHONE_TEMPS_VIEW`, `PHONE_GPU_VIEW`, `PHONE_GPU_DEVICE_VIEW`: numbers only, never a CPU or GPU model name (as `monitor:summary`);
@@ -27,7 +27,7 @@ Recorded in [docs/decisions/0024](../../docs/decisions/0024-phones-read-the-moni
   - a chat's context: `usedTokens` (the included items), `contextWindow` and tokens per source kind (`PHONE_CONTEXT_SOURCES`); never an item's label, origin or preview. The computer always calls it with no attached paths.
 - `model:unload` joins as **Change without a proof** (`PHONE_AGENT_CHANNELS`): it takes a provider id and a model id (both non-empty strings, else `value-invalid`) and returns only `ok` and `message`. Loading, downloading, deleting models and the Model Server's settings stay refused.
 
-## Android (2026-10-25, T204b)
+## Android (2026-10-25, T217b)
 
 **Status `[implemented on the native Android app; Kotlin unit tests (parsing, the polling model, the chat's context and effort) pass; ChatModesTest driven on a local 7.6" foldable emulator (two chat panes) and a Pixel 5 phone emulator against an in-test computer, not yet on hardware or a live computer]`**
 
@@ -40,7 +40,6 @@ The same design as the iPhone, in the native app (`apps/android`), wide foldable
 
 ## Not yet
 
-- Building and driving the new views in the simulator, with screenshots (needs macOS; the iOS Native workflow builds them).
 - Android on a real foldable and against a live computer; one shared hardware read for two chat panes instead of one each.
 - The desktop has the same design since 2026-10-25: [Desktop Simple and Expert modes](../desktop/desktop-simple-and-expert-modes.md).
 - Clearing a chat's effort back to the computer's default from the phone (needs the gate to accept a clear).

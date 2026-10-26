@@ -1,7 +1,7 @@
 //! The gates: one test per row of the decision table, so a rule change shows
 //! up as exactly one failing test.
 
-use nekko_runner::{Decision, Pressure, Priority, Reason, RunnerSettings, Signals, Thermal, evaluate};
+use nekko_runner::{Decision, Pressure, Priority, Reason, RunnerSettings, Signals, Thermal, evaluate, keep_idle};
 
 const ALL: [Priority; 3] = [Priority::DoNotDisturb, Priority::Balanced, Priority::RunnerFirst];
 
@@ -21,6 +21,8 @@ fn quiet() -> Signals {
         security_update_overdue_days: None,
         available_memory_mb: 32768.0,
         paused_all: false,
+        vpn_carries_default: false,
+        host_known: true,
     }
 }
 
@@ -240,6 +242,41 @@ fn hotspot_and_untrusted_network_hold() {
 }
 
 #[test]
+fn vpn_carrying_all_traffic_holds() {
+    let sig = Signals { vpn_carries_default: true, ..quiet() };
+    for p in ALL {
+        assert_eq!(evaluate(&with(p), &sig, false), Decision::Hold { why: vec![Reason::VpnCarriesAllTraffic] });
+    }
+    // A soft gate, listed after the hotspot.
+    let sig = Signals { network_expensive: true, ..sig };
+    assert_eq!(
+        evaluate(&with(Balanced), &sig, false),
+        Decision::Hold { why: vec![Reason::Hotspot, Reason::VpnCarriesAllTraffic] }
+    );
+}
+
+#[test]
+fn vpn_setting_allows_jobs() {
+    let s = |p| RunnerSettings { allow_direct_with_vpn: true, ..with(p) };
+    let sig = Signals { vpn_carries_default: true, ..quiet() };
+    for p in ALL {
+        assert_eq!(evaluate(&s(p), &sig, false), Decision::Take);
+        assert_eq!(evaluate(&s(p), &sig, true), Decision::Take);
+    }
+}
+
+#[test]
+fn vpn_drains_running_job_with_mode_grace() {
+    let sig = Signals { vpn_carries_default: true, ..quiet() };
+    let why = vec![Reason::VpnCarriesAllTraffic];
+    assert_eq!(evaluate(&with(DoNotDisturb), &sig, true), Decision::Drain { grace_secs: 120, why: why.clone() });
+    assert_eq!(evaluate(&with(Balanced), &sig, true), Decision::Drain { grace_secs: 600, why });
+    // Runner first keeps a running job through soft gates, this one included.
+    assert_eq!(evaluate(&with(RunnerFirst), &sig, true), Decision::Take);
+    assert_eq!(serde_json::to_value(Reason::VpnCarriesAllTraffic).unwrap(), "vpnCarriesAllTraffic");
+}
+
+#[test]
 fn reasons_serialize_camel_case() {
     assert_eq!(serde_json::to_value(Reason::MemoryWarning).unwrap(), "memoryWarning");
 }
@@ -315,4 +352,45 @@ fn memory_headroom_and_security_update_are_both_listed() {
 fn nan_available_memory_holds() {
     let sig = Signals { available_memory_mb: f64::NAN, ..quiet() };
     assert_eq!(evaluate(&with(Balanced), &sig, false), Decision::Hold { why: vec![Reason::MemoryHeadroom] });
+}
+
+#[test]
+fn unknown_host_state_holds_new_vms_only() {
+    let sig = Signals { host_known: false, ..quiet() };
+    for p in ALL {
+        assert_eq!(evaluate(&with(p), &sig, false), Decision::Hold { why: vec![Reason::HostStateUnknown] });
+        assert_eq!(evaluate(&with(p), &sig, true), Decision::Take);
+    }
+}
+
+#[test]
+fn unknown_host_and_low_memory_list_in_ui_order() {
+    let sig = Signals { host_known: false, available_memory_mb: 0.0, ..quiet() };
+    assert_eq!(
+        evaluate(&with(DoNotDisturb), &sig, false),
+        Decision::Hold { why: vec![Reason::MemoryHeadroom, Reason::HostStateUnknown] }
+    );
+}
+
+#[test]
+fn an_idle_vm_stays_through_start_only_gates() {
+    let mut sig = quiet();
+    sig.available_memory_mb = 1000.0;
+    sig.host_known = false;
+    sig.security_update_overdue_days = Some(30);
+    for p in [DoNotDisturb, Balanced, RunnerFirst] {
+        assert!(matches!(evaluate(&with(p), &sig, false), Decision::Hold { .. }));
+        assert_eq!(keep_idle(&with(p), &sig), Decision::Take, "{p:?}");
+    }
+}
+
+#[test]
+fn an_idle_vm_still_stops_for_hard_limits_and_the_mode() {
+    let mut hot = quiet();
+    hot.thermal = Thermal::Critical;
+    assert_eq!(keep_idle(&with(RunnerFirst), &hot), Decision::Hold { why: vec![Reason::ThermalCritical] });
+    let mut typing = quiet();
+    typing.idle_seconds = Some(10.0);
+    typing.available_memory_mb = 1000.0;
+    assert_eq!(keep_idle(&with(DoNotDisturb), &typing), Decision::Hold { why: vec![Reason::UserActive] });
 }

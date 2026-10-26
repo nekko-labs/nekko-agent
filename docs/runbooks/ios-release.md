@@ -32,4 +32,22 @@ While a run is pending, finish independent verification and documentation. Regis
 
 The workflow uses the repository's App Store Connect API key and Apple team configuration. Never print private keys or export credentials into documentation. If Xcode reports the certificate quota is full or provisioning profiles cannot be created, stop retrying. Reuse an existing signing certificate and private key, or have the owner identify an unused certificate safe to revoke. Do not revoke certificates autonomously: other releases may depend on them.
 
-On 2026-10-25, [run 40186663943](https://github.com/nekko-labs/nekko-agent/actions/runs/40186663943) failed during archive because the account had reached its certificate limit and profiles were unavailable for the app and its extensions. Treat this as a known signing blocker until a later run proves it resolved.
+### Why the certificate quota kept filling (fixed 2026-10-26)
+
+`xcodebuild archive` with automatic signing signs every target with an **Apple Development** identity first; the App Store export re-signs afterwards with the cloud-managed distribution certificate. A GitHub runner starts with an empty keychain, so on every run Xcode created a new `Apple Development: Created via API` certificate through the API key, and its private key was thrown away with the runner. Twelve uploads from 2026-10-23 filled the team's development certificate cap, and from 2026-10-25 every archive failed with "Your account has reached the maximum number of certificates". Revoking certificates only bought a few more runs.
+
+The workflow now imports one fixed CI development identity before archiving, and Xcode reuses it instead of minting one. It lives in two repository secrets:
+
+| Secret | What it is |
+| --- | --- |
+| `IOS_DEV_CERT_P12` | base64 of a `.p12` holding an `Apple Development` certificate on team `3HM5598S99` **and its private key** |
+| `IOS_DEV_CERT_PASSWORD` | that `.p12`'s password |
+
+Without them the run still works but logs a warning, and mints a certificate as before. To set them (one command at a time, see the stdin warning in [docs/signing.md](../signing.md)):
+
+```sh
+gh secret set IOS_DEV_CERT_P12 --repo nekko-labs/nekko-agent < <(base64 -i nekko-agent-ci-dev.p12)
+read -rs "P?p12 password: " && gh secret set IOS_DEV_CERT_PASSWORD --repo nekko-labs/nekko-agent --body "$P" && unset P
+```
+
+The certificate expires after a year; when it does, the archive fails on signing. Make a new one, re-set the two secrets, and revoke the old one. The CI certificate is id `BJMUJ524N9` (created 2026-10-26, expires 2027-10-26; Apple names it `Apple Development: Created via API` too). Any other `Created via API` development certificate is an orphan from a past run (its key is gone) and is safe to revoke.

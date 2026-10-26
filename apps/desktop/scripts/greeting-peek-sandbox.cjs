@@ -22,23 +22,35 @@ app.whenReady().then(async () => {
     // Hidden app pauses its entrance animation at opacity zero; settle it for stills.
     await win.webContents.insertCSS('.clean-start-greeting.fade-in { animation: none; opacity: 1; }');
     for (let n = 0; n < 60 && !await run('!!window.layoutFixture'); n++) await sleep(100);
-    await run(`(() => { const s=layoutFixture.store.getState(); layoutFixture.store.setState({settings:{...s.settings,commandWall:{...s.settings.commandWall,layout:{...s.settings.commandWall?.layout,mode:'focus'}}}}); layoutFixture.store.getState().focusChatOnWall('d'); })()`);
+    await run('layoutFixture.showGreeting()');
     for (let n = 0; n < 60 && !await run('!!document.querySelector("[data-clean-start-greeting]")'); n++) await sleep(100);
     for (const [width, height] of [[1280, 900], [460, 900]]) {
       win.setContentSize(width, height); await sleep(700);
       await check(`document.querySelector('[data-clean-start-greeting] h2')?.textContent === 'What should we work on?'`, 'Greeting renders at ' + width);
       if (!before) {
-        await check(`(() => { const svg=document.querySelector('.greeting-nekko'), composer=svg?.closest('.composer'); if(!svg||!composer)return false; const a=svg.getBoundingClientRect(),b=composer.getBoundingClientRect(); return Math.abs(a.top+50-b.top)<=2 && a.left>b.left && a.right<b.right && svg.getAttribute('aria-hidden')==='true'; })()`, 'Paws overlap actual composer edge at ' + width);
-        await check(`(() => { const a=document.querySelector('.greeting-nekko').getBoundingClientRect(), b=document.querySelector('[data-clean-start-greeting] h2').getBoundingClientRect(); return a.right<=b.left || a.top>=b.bottom; })()`, 'Cat does not overlap heading at ' + width);
+        await check(`(() => { const svg=document.querySelector('.greeting-nekko'), composer=svg?.closest('.composer-section'); if(!svg||!composer)return false; const a=svg.getBoundingClientRect(),b=composer.getBoundingClientRect(); return a.left>b.left && a.right<b.right && svg.getAttribute('aria-hidden')==='true'; })()`, 'Cat stays within composer section at ' + width);
+        await check(`(() => { const a=document.querySelector('.greeting-nekko-slot').getBoundingClientRect(), b=document.querySelector('[data-clean-start-greeting] h2').getBoundingClientRect(); const g=document.querySelector('[data-clean-start-greeting]').getBoundingClientRect(); return a.right<=b.left && Math.abs((a.left+b.right)/2-(g.left+g.width/2))<3; })()`, 'Cat does not overlap heading at ' + width);
+        await check(`(() => { const a=document.querySelector('.greeting-nekko').getBoundingClientRect(), b=document.querySelector('.composer').getBoundingClientRect(); return a.width===80 && Math.abs(a.top+a.height*25/30-b.top)<2; })()`, 'Larger paws straddle composer border at ' + width);
         await check(`!document.querySelector('.greeting-nekko path[d="M0 25H32"]')`, 'No artificial ledge at ' + width);
       }
       const file = path.join(out, 'greeting-' + width + '.png');
       fs.writeFileSync(file, (await win.capturePage(undefined, { stayHidden: true })).toPNG()); report.captures.push(file);
     }
-    await run(`(() => { const ed=document.querySelector('.composer [contenteditable="plaintext-only"]'); ed.focus(); ed.textContent='Plan a small project with a friendly cat'; ed.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText'})); ed.setSelectionRange(0,0); })()`);
+    if (!before) {
+      await run(`Object.defineProperty(document, 'hidden', { configurable: true, get: () => false }); document.dispatchEvent(new Event('visibilitychange'))`);
+      const rotationFrames = [(await win.capturePage(undefined, {stayHidden:true})).resize({width:460}).toPNG()];
+      await sleep(8300);
+      rotationFrames.push((await win.capturePage(undefined, {stayHidden:true})).resize({width:460}).toPNG());
+      require('./evidence-gif.cjs')(path.join(out,'question-rotation.gif'), rotationFrames, 800);
+      await check(`document.querySelector('[data-clean-start-greeting] h2').textContent !== 'What should we work on?'`, 'Idle question rotates');
+    }
+    await run(`(() => { const ed=document.querySelector('.composer [contenteditable="plaintext-only"]'); ed.focus(); ed.textContent='Plan a small project with a friendly cat'; ed.dispatchEvent(new Event('input',{bubbles:true})); ed.setSelectionRange(0,0); })()`);
     await sleep(500);
     await check(`document.querySelector('.composer [contenteditable="plaintext-only"]').value==='Plan a small project with a friendly cat'`, 'Composer accepts text');
     if (!before) {
+      const heading = await run(`document.querySelector('[data-clean-start-greeting] h2').textContent`);
+      await sleep(8200);
+      await check(`document.querySelector('[data-clean-start-greeting] h2').textContent === ${JSON.stringify(heading)}`, 'Typing pauses question rotation');
       // The editor restores selection after painting input. Move the caret only
       // after that paint, then wait for the observable selection and gaze.
       const select = async offset => {
@@ -57,22 +69,23 @@ app.whenReady().then(async () => {
       await select(38);
       await sleep(500);
       await check(`document.querySelector('[data-nekko-look]').getAttribute('transform') !== ${JSON.stringify(start)}`, 'Eyes follow selection movement');
-      const { PNG } = require('pngjs');
-      const { GifWriter } = require('omggif');
       const frames = [];
       for (const offset of [0, 8, 18, 28, 38, 28, 18, 8, 0]) {
         await run(`document.querySelector('.composer [contenteditable="plaintext-only"]').setSelectionRange(${offset},${offset})`);
         await sleep(120);
-        frames.push(PNG.sync.read((await win.capturePage(undefined, {stayHidden:true})).toPNG()));
+        frames.push((await win.capturePage(undefined, {stayHidden:true})).resize({width:460}).toPNG());
       }
-      const colors = new Map();
-      for(const f of frames) for(let i=0;i<f.data.length;i+=4){const c=(f.data[i]<<16)|(f.data[i+1]<<8)|f.data[i+2];colors.set(c,(colors.get(c)||0)+1);}
-      const palette=[...colors].sort((a,b)=>b[1]-a[1]).slice(0,256).map(x=>x[0]); while(palette.length<256)palette.push(0);
-      const cache=new Map();
-      const buffer=Buffer.alloc(frames[0].width*frames[0].height*frames.length*2);
-      const gif=new GifWriter(buffer,frames[0].width,frames[0].height,{palette,loop:0});
-      for(const f of frames){const pixels=new Uint8Array(f.width*f.height);for(let i=0;i<pixels.length;i++){const c=(f.data[i*4]<<16)|(f.data[i*4+1]<<8)|f.data[i*4+2];if(!cache.has(c)){let best=0,dist=Infinity;for(let j=0;j<palette.length;j++){const p=palette[j],d=((c>>16)-(p>>16))**2+(((c>>8)&255)-((p>>8)&255))**2+((c&255)-(p&255))**2;if(d<dist){best=j;dist=d;}}cache.set(c,best);}pixels[i]=cache.get(c);}gif.addFrame(0,0,f.width,f.height,pixels,{delay:18});}
-      fs.writeFileSync(path.join(out,'caret-gaze.gif'),buffer.subarray(0,gif.end()));
+      require('./evidence-gif.cjs')(path.join(out,'caret-gaze.gif'),frames,18);
+    }
+    if (!before) {
+      win.webContents.debugger.attach('1.3');
+      await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia', {features:[{name:'prefers-reduced-motion',value:'reduce'}]});
+      await run(`(() => { const ed=document.querySelector('.composer [contenteditable="plaintext-only"]'); ed.textContent=''; ed.dispatchEvent(new Event('input',{bubbles:true})); })()`);
+      await sleep(300);
+      const heading = await run(`document.querySelector('[data-clean-start-greeting] h2').textContent`);
+      await sleep(8300);
+      await check(`document.querySelector('[data-clean-start-greeting] h2').textContent === ${JSON.stringify(heading)}`, 'Reduced motion disables automatic rotation');
+      win.webContents.debugger.detach();
     }
     report.background = { visible: win.isVisible(), focused: win.isFocused(), bounds: win.getBounds() };
     if (win.isVisible() || win.isFocused()) throw Error('Isolation failed');

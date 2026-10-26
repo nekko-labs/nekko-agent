@@ -1,17 +1,18 @@
+import { HoverTip } from '../components/HoverTip.js';
+import { CreateMenuRows } from '../components/CreateMenu.js';
 import { confirmDeletion } from '../components/DeleteConfirmation.js';
 import { AgentPanelControls } from '../components/AgentPanelControls.js';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { AgentEvent, SessionSummary, TerminalInfo, WorkspaceFolder } from '@nekko-agent/shared';
-import { AUTO_MODEL_ID, archiveDaysLeft, archiveDeletesAt } from '@nekko-agent/shared';
+import { AUTO_MODEL_ID } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore, type Workspace } from '../store.js';
 import { runningSessionIds } from '../liveRuns.js';
 import { StatusIcon, WorkspaceCard, agentStatusOfLane, type AgentStatus } from '../components/WorkspaceCard.js';
 import { ChatFinder } from '../components/ChatFinder.js';
-import { CheckIcon, PhotoIcon, TerminalIcon, PlusIcon, SearchIcon, SlidersIcon } from '../icons.js';
+import { CheckIcon, TerminalIcon, PlusIcon, SearchIcon, SlidersIcon } from '../icons.js';
 import { SHORTCUTS } from '../shortcuts.js';
-import { NekkoAvatar } from '../components/Mascot.js';
 import { COMPLETION_ROW_ATTR, completeWithExit, findCompletionRow } from '../completionExit.js';
 import { ContextMenu, ContextAction } from '../components/ContextMenu.js';
 import { ModelPicker } from '../components/agent-console/ModelPicker.js';
@@ -20,6 +21,7 @@ import { sidebarWorkspaces, unopenedChats } from './unopenedChats.js';
 import { completedDate, completedInGroup } from './completedChats.js';
 import { leftGroup, moveGroupBefore } from './groupDrag.js';
 import { AgentPanelViewMenu } from '../components/AgentPanelViewMenu.js';
+import { CARD_ATTR, flyMovedCards, measureCards, type CardSpot } from './agentCardMotion.js';
 import {
   DATE_GROUPS, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, readAgentPanelView, saveAgentPanelView, statusGroupOf,
   type AgentPanelView, type SortableCard,
@@ -77,33 +79,6 @@ function readSidebarWidth(): number {
     if (Number.isFinite(saved) && saved > 0) return clampSidebarWidth(saved);
   } catch { /* private mode */ }
   return SIDEBAR_DEFAULT_W;
-}
-
-/** One colored row of the create menu: a tinted icon tile and a label. */
-function CreateRow({
-  tone,
-  icon,
-  label,
-  title,
-  onClick,
-}: {
-  tone: string;
-  icon: React.ReactNode;
-  label: string;
-  title?: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      className="create-row flex w-full items-center gap-2 rounded-md px-2 py-1 text-left"
-      style={{ '--row-tone': tone } as React.CSSProperties}
-      title={title}
-      onClick={onClick}
-    >
-      <span className="create-tile">{icon}</span>
-      <span className="min-w-0 flex-1 whitespace-nowrap text-[13px] font-medium leading-snug">{label}</span>
-    </button>
-  );
 }
 
 /**
@@ -327,9 +302,13 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   const newMenuPopRef = useRef<HTMLDivElement>(null);
   const newMenuButtonRef = useRef<HTMLButtonElement>(null);
   const newMenuTimer = useRef<number>(0);
-  const [finderOpen, setFinderOpen] = useState(false);
+  const finderOpen = useStore((s) => s.chatFinderOpen);
   const finderButtonRef = useRef<HTMLButtonElement>(null);
-  const closeFinder = useCallback(() => setFinderOpen(false), []);
+  const closeFinder = useCallback(() => useStore.setState({ chatFinderOpen: false }), []);
+  useEffect(() => {
+    if (finderOpen && window.matchMedia('(max-width: 767px)').matches) setMobileNav(true);
+  }, [finderOpen]);
+
   // The menu renders in a portal at the document root, positioned under the +.
   // The panel clips its overflow and the wall's windows stack above it, so a
   // menu drawn inside the panel was cut off or hidden behind them.
@@ -339,7 +318,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
     const place = () => {
       const r = newMenuButtonRef.current?.getBoundingClientRect();
       if (!r) return;
-      const width = 256;
+      const width = newMenuPopRef.current?.getBoundingClientRect().width ?? 256;
       setNewMenuPos({ top: r.bottom + 6, left: Math.max(8, Math.min(window.innerWidth - width - 8, r.right - width)) });
     };
     place();
@@ -518,6 +497,23 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
     ];
   })()];
 
+  // When a card changes group (Working to Done), note where every card was
+  // before this render commits, then fly the movers from there. Not when the
+  // grouping itself changed: then every card moves and none of them is news.
+  const listRef = useRef<HTMLDivElement>(null);
+  const layoutSig = view.groupBy + '|' + groups.map((g) => g.key + ':' + g.items.map((e) => e.key).join(',')).join('|');
+  const lastLayout = useRef(layoutSig);
+  const cardsBefore = useRef<Map<string, CardSpot> | null>(null);
+  if (lastLayout.current !== layoutSig) {
+    const sameGrouping = lastLayout.current.split('|', 1)[0] === view.groupBy;
+    cardsBefore.current = sameGrouping && view.groupBy !== 'project' ? measureCards(listRef.current) : null;
+    lastLayout.current = layoutSig;
+  }
+  useLayoutEffect(() => {
+    if (cardsBefore.current) flyMovedCards(listRef.current, cardsBefore.current);
+    cardsBefore.current = null;
+  }, [layoutSig]);
+
   const activeRowRef = useRef<HTMLDivElement>(null);
   const selectedGroup = groups.find((g) => g.items.some((e) => e.s?.id === selectedId || e.t?.id === selectedId || (e.s && childrenOf.get(e.s.id)?.some((kid) => kid.id === selectedId))) || g.done.some((s) => s.id === selectedId));
   const selectedGroupKey = selectedGroup?.key;
@@ -620,18 +616,17 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
           >
             <SlidersIcon className="h-4 w-4" />
           </button>
-          <button
+          <HoverTip label={`Search chats (${SHORTCUTS.searchChats.label})`}><span className="inline-flex"><button
             ref={finderButtonRef}
             className={`agent-panel-view btn btn-ghost px-1.5 py-1 ${finderOpen ? 'is-open text-ink' : 'text-ink-faint hover:text-ink'}`}
-            title="Search chats"
             aria-label="Search chats"
             aria-haspopup="dialog"
             aria-expanded={finderOpen}
             data-chat-finder-toggle
-            onClick={() => { closeNewMenu(); setFinderOpen((o) => !o); }}
+            onClick={() => { closeNewMenu(); useStore.setState((s) => ({ chatFinderOpen: !s.chatFinderOpen })); }}
           >
             <SearchIcon className="h-4 w-4" />
-          </button>
+          </button></span></HoverTip>
           {finderOpen && (
             <ChatFinder
               anchorRef={finderButtonRef}
@@ -657,44 +652,22 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
             <div
               ref={newMenuPopRef}
               data-new-agent-menu
-              className="card fixed z-[1000] w-max min-w-48 p-1 shadow-lg"
-              style={{ background: 'var(--paper)', top: newMenuPos.top, left: newMenuPos.left }}
+              className="create-menu card fixed z-[1000] w-max min-w-48 p-1 shadow-lg"
+              style={{ top: newMenuPos.top, left: newMenuPos.left }}
               onMouseEnter={openNewMenu}
               onMouseLeave={closeNewMenuSoon}
             >
-              {/* The hero row. Everything else in this menu opens a window; this
-                  one starts the work, so it gets the brand wash and the rest
-                  get a hue apiece rather than four identical grey lines. */}
-              <button
-                className="create-row create-row-hero flex w-full items-center gap-2 rounded-md px-2 py-1 text-left"
-                title="A fresh chat, with room for windows around it"
-                onClick={() => { closeNewMenu(); void Promise.resolve(newChat()).catch((e: Error) => useStore.getState().pushToast('error', `Could not start an agent: ${e.message}`)); }}
-              >
-                <span className="create-tile">
-                  <NekkoAvatar size={16} stationary eyes={false} />
-                </span>
-                <span className="min-w-0 flex-1 text-[13px] font-semibold leading-snug">Agent</span>
-                <kbd className="kbd">{SHORTCUTS.newAgent.label}</kbd>
-              </button>
-
-              <CreateRow
-                tone="var(--accent)"
-                icon={<PhotoIcon className="h-4 w-4" />}
-                label="Create or Edit Photos and Videos"
-                onClick={() => { closeNewMenu(); void newImageChat().catch((e: Error) => useStore.getState().pushToast('error', e.message)); }}
-              />
-              <CreateRow
-                tone="var(--success)"
-                icon={<TerminalIcon className="h-4 w-4" />}
-                label="Terminal"
-                onClick={() => { closeNewMenu(); void newTerminalWorkspace().catch((e: Error) => useStore.getState().pushToast('error', e.message)); }}
-              />
+              <CreateMenuRows onCreate={(kind) => {
+                closeNewMenu();
+                const action = kind === 'chat' ? newChat() : kind === 'image' ? newImageChat() : newTerminalWorkspace();
+                void Promise.resolve(action).catch((e: Error) => useStore.getState().pushToast('error', e.message));
+              }} />
             </div>,
             document.body,
           )}
         </div>
       </div>
-      <div className={horizontal ? 'agent-panel-row flex min-w-0 flex-1 items-start gap-3 overflow-x-auto overflow-y-hidden px-2 py-1.5' : 'agent-panel-list min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-2 pb-3'} data-agent-panel-list onWheel={horizontal ? scrollRowWithWheel : undefined}>
+      <div ref={listRef} className={horizontal ? 'agent-panel-row flex min-w-0 flex-1 items-start gap-3 overflow-x-auto overflow-y-hidden px-2 py-1.5' : 'agent-panel-list min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-2 pb-3'} data-agent-panel-list onWheel={horizontal ? scrollRowWithWheel : undefined}>
         {groups.map((b) => {
           const { items, done } = b;
           const byProject = view.groupBy === 'project' && !utilityGroups.includes(b);
@@ -765,7 +738,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
               {/* Collapsed means gone: hidden, out of the tab order, and taking
                   no room in the row layout either, not just squashed to 0fr. */}
               <div className={`collapse-wrap ${isCollapsed ? 'collapsed' : ''}`} data-group-cards data-collapsed={isCollapsed || undefined} inert={isCollapsed || undefined} aria-hidden={isCollapsed || undefined}>
-                <div className="min-h-0 space-y-0.5 overflow-hidden pb-1">
+                <div className="min-h-0 space-y-1 overflow-hidden pb-1">
                   {items.length === 0 && !completedGroup && (
                     <p className="px-3.5 py-1 text-[11px] text-ink-faint">No active agents</p>
                   )}
@@ -781,6 +754,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                         onClickCapture={s ? (e) => { if (selectRow(e, s.id)) e.stopPropagation(); } : undefined}
                         style={s && selected.includes(s.id) ? {background:'var(--accent-soft)', borderRadius:8, boxShadow:'inset 0 0 0 1px var(--accent)'} : undefined}
                         draggable={reorderable}
+                        {...{ [CARD_ATTR]: entry.key }}
                         onDragStart={reorderable ? (e) => startDrag(e, { kind: 'workspace', id: entry.key, ws: b.ws?.id }) : undefined}
                         onDragEnd={endDrag}
                         onDragOver={reorderable ? (e) => overTarget(e, 'card:' + entry.key, (d) => d.kind === 'workspace') : undefined}
@@ -975,14 +949,13 @@ function CompletedRow({
   session: SessionSummary; now: number; isActive: boolean; onOpen: () => void; onContextMenu?: (e: React.MouseEvent) => void;
 }) {
   const at = s.archivedAt as number;
-  const days = archiveDaysLeft(at, now);
   return (
     <button
       onClick={onOpen}
       onContextMenu={onContextMenu}
       data-completed-row={s.id}
       className={`flex w-full items-center gap-1.5 rounded-lg py-1 pl-2 pr-2 text-left transition-colors duration-150 ${isActive ? 'bg-accent-soft' : 'hover:bg-surface-2'}`}
-      title={`${s.title}\nCompleted ${new Date(at).toLocaleString()}\nDeleted on ${new Date(archiveDeletesAt(at)).toLocaleDateString()} unless restored (${days} day${days === 1 ? '' : 's'} left)`}
+      title={`${s.title}\nCompleted ${new Date(at).toLocaleString()}\nKept until you delete it`}
     >
       <span className="inline-grid shrink-0 place-items-center" style={{ color: 'var(--success)' }} aria-label="Completed" role="img">
         <CheckIcon className="h-3 w-3" />
@@ -990,7 +963,7 @@ function CompletedRow({
       <span className={`min-w-0 flex-1 truncate text-[12px] line-through ${isActive ? 'text-ink-soft' : 'text-ink-faint'}`}>{s.title}</span>
       <time
         className="shrink-0 text-[10px] tabular-nums"
-        style={{ color: days <= 7 ? 'var(--warning)' : 'var(--ink-faint)' }}
+        style={{ color: 'var(--ink-faint)' }}
         dateTime={new Date(at).toISOString()}
       >
         {completedDate(at, now)}

@@ -95,6 +95,20 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-10
 
+### T211 Runner VM NAT: guest-facing TCP send buffer 16 to 64 KiB (2026-10-25)
+Area: engine daemon
+Result: improvement
+Conditions: Apple M1 Max, 64 GB, macOS 27.0.1; guest Cirrus `macos-sequoia-base` (macOS 15.7.7), 4 vCPU, 8 GiB, booted by `nekko-vm` with the runner NAT (`runner_vm_spike` example, `dev-daemon` optimized profile). Throughput is 200,000,000 bytes over SSH through the spike's 127.0.0.1:2222 forward, so the NAT is measured without the internet link; 3 runs per side, each a fresh SSH session. Before and after are separate VM boots.
+
+| Metric (Mbit/s) | Before (16 KiB) | After (64 KiB) |
+|---|---|---|
+| NAT to guest (`cat > /dev/null` in the guest), runs | 85.4, 89.1, 90.9 | 200.7, 206.1, 202.6 |
+| Guest to NAT (`head -c 200000000 /dev/zero` in the guest), runs | 611.1, 683.7, 696.3 | 694.0, 702.6, 701.1 |
+
+Internet downloads were limited by the host link, not the NAT. With 64 KiB, 20 s of `https://proof.ovh.net/files/1Gb.dat` alternating host then guest gave, in run order, host 3202000, guest 3105736, host 2610439, guest 2622182, host 3077573, guest 2956506 B/s (guest 98% of host in total, about 23 Mbit/s). `ash-speed.hetzner.com` swung between 212934 and 2738628 B/s on either side across four pairs, so it supports no comparison. A debug build gave 68.2 to 103.1 Mbit/s NAT to guest at 16 KiB, about the same as optimized, so the cap was the window, not CPU.
+
+Why: the smoltcp send buffer toward the guest bounds bytes in flight on a sub-millisecond leg; guest-to-host keeps 16 KiB. Worst-case socket memory is 20 MiB per VM at 256 flows. Source: commit 11395dc6 (`nekkod: runner NAT sends to the guest from a 64 KiB TCP buffer`), PR #1065.
+
 ### Phone Markdown parser: block tree, cached per segment (MD-1, 2026-10-25)
 Area: renderer
 Result: mixed
@@ -1084,3 +1098,22 @@ Conditions: Ryzen9 9950X3D32threads,Windows,HeadlessChrome151.0.7922.34,release 
 Matched invalidation-tracked base/explicit vacancy-marker p95 6.8/6.1ms (341/357frames),p50 4.5/4.4ms,max19.5/20.2ms. Affected-by-:has invalidations134/0. Instrumentation adds overhead; single samples do not prove Linux-gate improvement. Marker replaces the exact empty-wall descendant selectors while retaining state semantics. No containment or beam change retained. Saved reports/traces .shots/stream-containment/{invalidation,explicit-empty}; expected static appearance unchanged,20matching Electron capture pairs byte-identical. Full gate pending.
 
 Full local candidate gate (same hardware/browser/release daemon,no GPU): all budgets pass. Composer p95 7.8ms,terminal18.9ms,streaming5.4ms347frames,warm8.0ms,cold10.9ms. Layer ratio0.15x,tile memory206.61MB,heap slope0.06MB/lap,DOM/listener slopes0.00. This build predates the latest unrelated main visual refinements; final Linux CI remains the release criterion.
+
+### Empty-agent dot texture and steady working cat (2026-10-25)
+
+Issue: [#1157](https://github.com/nekko-labs/nekko-agent/issues/1157). Base `1935c659`. Removed the full-app canvas wave and composer/window border beams. Empty agents use a fixed 720×360 precomputed SVG image moved by stepped CSS transform; inactive windows/panels pause it. The aggregate working cat has a steady accent fill with no animation.
+
+Matched diagnostic full-App fixture: macOS arm64, Electron 45, 1440×900 DIP, default dark chrome with supplemental Lilac wave, four synthetic empty agents (one visible Focus pane), hidden non-focusable isolated window, network blocked. Before/after sequential six-second CPU deltas, no full test/build running concurrently. The focused condition overrides `document.hasFocus` and dispatches a synthetic renderer focus event; no real desktop focus is taken. Raw `app.getAppMetrics().cpu.cumulativeCPUUsage` deltas:
+
+| Condition | GPU-process CPU before → after (%) | Renderer CPU before → after (%) |
+| --- | --- | --- |
+| Unfocused empty | 2.8794867522079652 → 1.0229385307346324 | 1.8395434094317615 → 1.731884057971014 |
+| Synthetic focused empty | 8.872568287808127 → 3.2341605596269134 | 8.273600932711526 → 8.454946702198532 |
+
+These short single samples suggest lower GPU-process CPU overhead, **not measured GPU utilization, energy, or battery savings**. Renderer CPU did not improve in the synthetic focused case. No distribution, live user-profile A/B, or cross-platform performance claim is established. Earlier blank cross-worktree captures were rejected: the harness now aliases React consistently across the fixture and alternate source tree. Stub `getAppInfo` and installed/external skills lists are defined so final before/after runs have no console errors. Reproduce via `NEKKO_TEST_LABEL=<label> NEKKO_LAYOUT_SANDBOX=empty-agent-wave-sandbox.cjs node apps/desktop/scripts/layout-evidence-integration.cjs`, with `NEKKO_TEST_SOURCE=<base-worktree>` for base and `NEKKO_EXPECT_WAVE_NEW=1` for assertions on head. Local JSON reports and PNG/GIF frames are under ignored `.shots/layout-evidence/`; published media belongs in the PR, never git. A second sequential sample after texture edge fading (after first, then base; same six-second conditions) recorded GPU-process CPU unfocused 2.8918693768743755 → 0.7673163418290863%, focused 6.20781406197934 → 2.7728135932033955%; renderer CPU unfocused 2.4742919026991013 → 1.2345827086456764%, focused 5.300233255581473 → 7.023354989172079%. The focused renderer increase reinforces that this is not an across-the-board CPU win. These are separate diagnostic samples, not a statistical distribution.
+
+
+After merging concurrent main changes (base `974ad4e8`, which already scopes the old canvas to clean-start), repeated against that newer base: unfocused GPU-process CPU 2.1987173080126605 → 0.8032784157097687%, renderer 2.3422955189072123 → 1.8271759028124495%; synthetic-focused GPU-process CPU 4.680159920039981 → 2.5662389601733047%, renderer 4.137214725970347 → 7.275287452091319%. Thus not all of the original global-wave reduction belongs to this PR alone. A `will-change: transform` experiment then recorded unfocused GPU-process/renderer CPU 0.6353882039320237/1.7538820393202272%, focused 2.8200766411196265/7.11802732422526%: no persuasive focused improvement, so the explicit promotion was reverted rather than retaining extra layer memory. Focused renderer overhead remains a verification limitation to profile with longer traces; no budget has been loosened.
+
+
+Final scheduling refinement: keep the CSS transform animation paused and advance its Web Animations timeline only on a dot-step boundary (625 ms for Lilac), stopping the timer on blur, hidden document/pane, or reduced motion. No per-frame canvas draw or JS animation dependency. On the current merged renderer, the same six-second fixture measured unfocused GPU-process/renderer CPU 0.7196434521826046/1.7811896034655113%, focused 2.752915694768412/5.78202265911363%. This reduced the previous candidate's 7.275287452091319% focused renderer overhead, but is still not a controlled improvement over the 4.137214725970347% newer-base sample (the intervening main merge also changed monitor styling). Treat performance attribution as diagnostic, not a guaranteed win. The acceptance assertions additionally check that the paused timeline actually advances while focused and stays frozen while offscreen/unfocused, not just its CSS play-state.

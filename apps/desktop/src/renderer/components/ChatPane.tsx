@@ -1,5 +1,6 @@
-import { PixelWaveBackground, pixelWaveFor } from './PixelWaveBackground.js';
-import { GreetingNekko } from './GreetingNekko.js';
+import { ActiveWatchChips } from './ActiveWatchChips.js';
+import { ConnectivityNotices, mergeConnectivityNotices, rememberedConnectivityNotices } from './ConnectivityNotices.js';
+import { CleanStartGreeting } from './CleanStartGreeting.js';
 import { PrWatchContinuation } from './PrWatchContinuation.js';
 import { canOfferPrWatch } from '../prWatchContinuation.js';
 import { chatArtifacts } from '../chatArtifacts.js';
@@ -18,15 +19,16 @@ import { createPortal } from 'react-dom';
 import { DictationButton } from './DictationButton.js';
 import { decideApproval, type ApprovalScope } from './agent-console/approval-decision.js';
 import type { AgentEvent, AskAnswer, AskRequest, AutoQuality, Session, ContextBundle, IndexedFile, ModelInfo, ProviderConfig, SkillDef, PrInfo, QueuePayload, QueuedPrompt } from '@nekko-agent/shared';
-import { archiveDaysLeft, CLAUDE_CODE_PROVIDER_KIND, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
+import { CLAUDE_CODE_PROVIDER_KIND, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
 import type { AutoProviderPick, ProviderPool } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { approvalAfterResult } from './ChatPane.approval.js';
 import { useStore } from '../store.js';
 import { useGitStatus } from '../useGitStatus.js';
-import { clearLiveRun, getLiveRun, takeFinishedRun, useLiveRun, type LiveRun } from '../liveRuns.js';
+import { beginResumedRun, clearLiveRun, getLiveRun, takeFinishedRun, useLiveRun, type LiveRun } from '../liveRuns.js';
 import { getCachedSession, loadSession, putCachedSession } from '../sessionCache.js';
 import { usePaneVisible } from '../paneVisibility.js';
+import { reportAgentWorking } from '../workingAgents.js';
 import { useAgentEventClaim } from '../agentSubscription.js';
 import { ComposerFocus } from './ComposerFocus.js';
 import { afterPaint } from '../afterPaint.js';
@@ -57,14 +59,14 @@ import { PhotoViewer } from './PhotoViewer.js';
 import { ChatImages, imageFileName, loadRemoteImage, remoteImageEvidence, urlSeenIn, type ChatImageItem, type ChatImagesApi } from '../remoteImages.js';
 import { CompactionSummary } from './agent-console/CompactionSummary.js';
 import { promptHistory, recallPrompt, type HistoryCursor } from './agent-console/promptHistory.js';
-import { PERSISTED_INTERRUPTION, shouldShowPersistedInterruption, reconcileInterruptionNotice, describeInterruption, suggestedReplyClassName } from './agent-console/interruption.js';
+import { PERSISTED_INTERRUPTION, shouldShowPersistedInterruption, reconcileInterruptionNotice, describeInterruption } from './agent-console/interruption.js';
 import { cutPrompt, messageCuts, type MessageCuts } from './agent-console/messageCut.js';
 
 import { estimateRowHeight, toTranscriptRows, transcriptBeforeLiveTurn, transcriptRowStamp, type TranscriptRow } from './agent-console/transcript.js';
 import { ContextGauge, EffortSlider } from './ChatMetrics.js';
 import { ExpertMonitor, ModeToggle, useExpertMode } from './ModeViews.js';
 import { PlanRail } from './PlanRail.js';
-import { VerificationChecklist } from './WorkProgress.js';
+import { PlanSheet } from './PlanSheet.js';
 import { PlanChangePrompt, planChangeMessage } from './PlanChangePrompt.js';
 import { TurnStatsLine } from './agent-console/TurnStatsLine.js';
 import { QuestionCard } from './QuestionCard.js';
@@ -79,6 +81,7 @@ import { PromptAnalyzer } from './PromptAnalyzer.js';
 import { ScheduleTaskModal } from './ScheduleTaskModal.js';
 import { PrCard, PrActionDock } from './PrCard.js';
 import { NekkoAvatar } from './Mascot.js';
+import { PixelWaveBackground, pixelWaveFor, showEmptyAgentWave } from './PixelWaveBackground.js';
 import { Modal } from './primitives/index.js';
 import { WorktreeChip } from './WorktreeChip.js';
 import { FolderPicker } from './FolderPicker.js';
@@ -589,6 +592,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // Painted straight from the session cache when this chat was open recently;
   // the host copy is fetched regardless and replaces it (stale-while-revalidate).
   const [session, setSession] = useState<Session | null>(() => getCachedSession(sessionId) ?? null);
+  const [liveConnectivity, setLiveConnectivity] = useState<import('@nekko-agent/shared').ConnectivityNotice[]>(() => rememberedConnectivityNotices(sessionId));
+  useEffect(() => { setLiveConnectivity(rememberedConnectivityNotices(sessionId)); }, [sessionId]);
   // Seed the composer from whatever was parked for this chat, so an unsent
   // message survives a tab switch or a restart.
   const [draft, setDraft] = useState(() => loadDraft(sessionId)?.text ?? '');
@@ -688,7 +693,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // What the model thinks the user will say next: the composer's ghost text.
   // Pinned to the reply it was written for (forId) so
   // a newer turn can't inherit stale suggestions.
-  const [suggestions, setSuggestions] = useState<{ forId: string; options: string[]; next: string | null } | null>(null);
+  const [suggestions, setSuggestions] = useState<{ forId: string; next: string | null } | null>(null);
   // A failed reply stays in the transcript with a retry, instead of vanishing
   // with the toast.
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
@@ -1108,6 +1113,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           void requestSuggestions();
           break;
         case 'session_meta':
+          if (e.connectivityNotice) setLiveConnectivity((notices) => mergeConnectivityNotices(notices, [e.connectivityNotice!]));
           // The session record changed mid-turn — a new agent plan, or a fresh
           // title — so re-read it and refresh the sidebar/boards alongside.
           loadSession(sessionId).then((s) => { if (s) setSession(s); }).catch(() => {});
@@ -1121,6 +1127,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
 
   const finalizingReply = useRef(false);
   const endTurn = () => {
+    reportAgentWorking(sessionId, false);
     finalizingReply.current = true;
     streamingRef.current = false;
     setStreaming(false);
@@ -1191,13 +1198,13 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const requestSuggestions = async () => {
     try {
       const res = await window.nekko.suggestReplies(sessionId);
-      if (!res || (res.options.length === 0 && !res.next)) return;
+      if (!res?.next) return;
       const fresh = await window.nekko.getSession(sessionId);
       const last = fresh?.messages[fresh.messages.length - 1];
       // A turn that started while the call was in flight (a queued prompt, a
       // send from another pane) makes the suggestions stale; drop them.
       if (!last || last.role !== 'assistant') return;
-      setSuggestions({ forId: last.id, options: res.options, next: res.next });
+      setSuggestions({ forId: last.id, next: res.next });
     } catch {
       /* suggestions are nice-to-have */
     }
@@ -1407,6 +1414,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // dependency because the textarea is disabled until providers have loaded.
 
   const beginTurn = () => {
+    reportAgentWorking(sessionId, true);
     streamingRef.current = true;
     setStreaming(true);
     // Whatever was held from the last reply is about to be replaced.
@@ -1769,14 +1777,22 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     const brain = requireBrain(lastUser?.content ?? '');
     if (!brain) return;
     setErrorNotice(null);
+    beginResumedRun(sessionId, session?.messages.at(-1)?.id);
     beginTurn();
-    await window.nekko.sendChat({
-      sessionId,
-      providerId: brain.providerId,
-      modelId: brain.modelId,
-      text: '',
-      resume: true,
-    });
+    try {
+      await window.nekko.sendChat({
+        sessionId,
+        providerId: brain.providerId,
+        modelId: brain.modelId,
+        text: '',
+        resume: true,
+      });
+    } catch (error) {
+      clearLiveRun(sessionId);
+      streamingRef.current = false;
+      setStreaming(false);
+      useStore.getState().pushToast('error', `Could not retry: ${String(error)}`);
+    }
   };
 
   const chatMarkdown = () => {
@@ -1979,11 +1995,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     if (errorNotice || dismissedInterruption === lastMsgId) return;
     if (interrupted) setErrorNotice(PERSISTED_INTERRUPTION);
   }, [session, streaming, held, errorNotice, lastMsgId, dismissedInterruption, question]);
-  const canContinueWork = !streaming && !held && !session?.activeRun && !errorNotice &&
-    session?.messages.at(-1)?.role === 'assistant' && hasResumableProgress(session.messages);
-  // Suppress suggestions while recovery actions are visible.
-  const suggestedOptions = errorNotice ? [] : liveSuggestions?.options ?? [];
-
   // The model's single most likely next message, shown as the composer's
   // placeholder while the box is empty; ArrowRight types it in.
   const ghostSuggestion = !draft && !errorNotice && liveSuggestions?.next ? liveSuggestions.next : null;
@@ -2297,10 +2308,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // --- The transcript, as windowed rows ---
   const messages = session?.messages;
   // While the live run draws the newest turn (streaming, or held until its
-  // persisted copy has replaced it), the transcript stops at that turn's prompt:
-  // the checkpointed tail would be the same narration and steps drawn twice.
+  // persisted copy has replaced it), stop at its prompt or the saved resume
+  // boundary: only the new checkpointed tail would duplicate the live steps.
   const liveTurn = streaming || !!held;
-  const settled = useMemo(() => (messages && liveTurn ? transcriptBeforeLiveTurn(messages) : messages), [messages, liveTurn]);
+  const transcriptThroughId = (getLiveRun(sessionId) ?? held)?.transcriptThroughId;
+  const settled = useMemo(() => (messages && liveTurn ? transcriptBeforeLiveTurn(messages, transcriptThroughId) : messages), [messages, liveTurn, transcriptThroughId]);
   const rows = useMemo(
     () => (settled ? toTranscriptRows(settled, extractPrUrls, collectSessionPrUrls, prs) : []),
     [settled, prs],
@@ -2368,7 +2380,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const estimate = useCallback((row: TranscriptRow) => estimateRowHeight(row, columnWidth), [columnWidth]);
   const hasLive = !!(held || getLiveRun(sessionId));
   const welcomeState = chatWelcomeState({ messages: session?.messages.length ?? 0, streaming, hasLive, hasProvider, modelId, imageMode });
-  const wave = settings?.backgroundAnimation === false ? null : pixelWaveFor(settings?.themePreset);
+  const emptyWave = showEmptyAgentWave({ loaded: !!session, messages: session?.messages.length ?? 0, running: streaming || hasLive, readOnly: readOnly || !!session?.archivedAt, composer: surface === 'composer', enabled: settings?.backgroundAnimation !== false }) ? pixelWaveFor(settings?.themePreset) : null;
   const cleanStart = cleanStartWanted && surface === 'full' && !readOnly && welcomeState.welcome && hasProvider && !welcomeState.modelChoice && !imageMode && !!session && !question && !approval;
   // Leaving the clean start because the user sent (the welcome is gone, it is
   // still the same focused chat) plays the composer-into-chat expansion once.
@@ -2445,8 +2457,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         <ContextAction onClick={() => { void navigator.clipboard.writeText(chatMarkdown()).catch(() => useStore.getState().pushToast('error', "Couldn't copy chat.")); setChatMenu(null); }}><CopyIcon className="mr-2 inline h-3.5 w-3.5" />Copy chat</ContextAction>
         <ContextAction onClick={() => { exportChat(); setChatMenu(null); }}><DownloadIcon className="mr-2 inline h-3.5 w-3.5" />Export as Markdown</ContextAction>
       </ContextMenu>}
-      <section className={`flex min-w-0 w-full flex-1 flex-col overflow-x-hidden ${cleanStart ? 'clean-start justify-center' : ''}`}>
-        {cleanStart && paneShown && wave && <PixelWaveBackground wave={wave} />}
+      <section className={`relative isolate flex min-w-0 w-full flex-1 flex-col overflow-x-hidden ${cleanStart ? 'clean-start justify-center' : ''}`}>
+        {emptyWave && <PixelWaveBackground wave={emptyWave} visible={paneShown} />}
         {/* One bar per window. Inside a workspace these ride in the frame's
             title strip, which already shows the chat's name; standalone, the
             chat still needs a header of its own. */}
@@ -2566,6 +2578,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   persisted={!streaming && !![...(session?.messages ?? [])].reverse().find((m) => m.role === 'assistant')?.turnStats}
                   blocked={errorNotice ? 'Needs attention' : approval ? 'Waiting for approval' : question ? 'Waiting for your answer' : null}
                 />
+                <ConnectivityNotices notices={mergeConnectivityNotices(session?.connectivityNotices, liveConnectivity)} />
                 {question && <div className="conversation-question" data-agent-question>
                   <QuestionCard key={question.callId} request={question} onAnswer={(answers) => { void answerQuestion(answers); }} onSkip={() => { void answerQuestion([]); }} tone="attention" />
                 </div>}
@@ -2694,22 +2707,17 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             <span className="absolute inset-x-0 top-[5px] h-0.5 opacity-0 transition-opacity group-hover:opacity-100" style={{ background: 'color-mix(in srgb, var(--accent) 45%, transparent)' }} />
             <span className="absolute left-1/2 top-[3px] h-1.5 w-10 -translate-x-1/2 rounded-full opacity-0 transition-opacity group-hover:opacity-100" style={{ background: 'var(--accent)' }} />
           </div>}
-          {cleanStart && <div className="clean-start-greeting fade-in" data-clean-start-greeting>
-            <h2>What should we work on?</h2>
-          </div>}
+          {cleanStart && <CleanStartGreeting key={sessionId} paused={!!draft || pendingImages.length > 0 || pendingVideos.length > 0} />}
           <div className={`composer-column mx-auto ${commandCenter ? 'w-[98%]' : 'w-[90%]'}`} style={cleanStart ? undefined : commandCenter ? { width: '98%' } : undefined}>
-            {surface !== 'composer' && planChangeOpen && !question && (
+            {/* In the wall the shared composer carries the selected agent's plan. */}
+            {!cleanStart && !planChangeOpen && !question && (
+              <PlanSheet key={sessionId + '-plan'} sessionId={sessionId} session={session} streaming={streaming} prs={prs} basePath={artifactBasePath} onChangePlan={() => setPlanChangeOpen(true)} />
+            )}
+            {planChangeOpen && !question && (
               <div className="composer-question is-open" data-plan-change-pop><div className="composer-question-body"><PlanChangePrompt running={streaming} onSend={(change) => { void sendPlanChange(change); }} onCancel={() => { setPlanChangeOpen(false); composerRef.current?.focus(); }} /></div></div>
             )}
 
             <div className="composer relative">
-            {cleanStart && <GreetingNekko />}
-            {/* While the agent works, a violet→cyan beam laps the border. The
-                gradient is a square that rotates on the compositor, clipped
-                to the ring by the mask on its wrapper; animating the gradient
-                angle itself repainted the whole composer every frame, in every
-                working window on the wall at once. */}
-            {streaming && <span className="composer-beam-ring" aria-hidden><span className="composer-beam-spin" /></span>}
             {compact && (
               <div className="composer-summary">
                 <button
@@ -2933,22 +2941,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   )}
                 </div>
               )}
-            {/* Recovery is separate from the placeholder suggestion. The wall
-                composer shows no "Continue work" box: the window's error banner
-                carries Retry when a turn actually stopped. */}
-            {!imageMode && surface !== 'composer' && (canContinueReply || canContinueWork) && !streaming && (
-              <div className="flex items-center border-b border-line px-3 py-2.5">
-                <button
-                  className={canContinueReply ? suggestedReplyClassName : 'btn btn-outline py-1 text-[12px]'}
-                  title={canContinueReply ? 'Continue this reply, keeping the work already done' : 'Ask the agent to continue any remaining work from this conversation'}
-                  onClick={() => canContinueReply ? void resumeRun() : void send('Continue the remaining work from this conversation. Preserve what is already done; if the task is complete or blocked, explain that instead of repeating it.')}
-                >
-                  {canContinueReply ? 'Retry' : 'Continue work'}
-                </button>
-              </div>
-            )}
-
-                {/* Attachments ride inside the composer, at the top, separated by
+                 <ActiveWatchChips sessionId={sessionId} />
+                 {subagentChildren.map(child => <ActiveWatchChips key={child.id} sessionId={child.id} owner={child.title || "Sub-agent"} />)}
+                 {/* Attachments ride inside the composer, at the top, separated by
                     a hairline. Floated above it they covered the instrument
                     strip. */}
                 {(pendingImages.length > 0 || pendingVideos.length > 0 || (session?.attachedPaths?.length ?? 0) > 0) && (
@@ -3272,10 +3267,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             folder and usage controls live in the agent window), so it draws no
             chrome of its own: empty, it used to show as a bare band under the
             composer. */}
-        {/* The PR deck sits above the strip and rises from its top divider. */}
-        {!cleanStart && <VerificationChecklist key={sessionId + '-verification'} steps={session?.agentPlan} />}
-        {!cleanStart && <PrActionDock key={sessionId} sessionId={sessionId} prs={prs} urls={sessionPrUrls} floating={surface === 'composer'} />}
-        {!cleanStart && <div className={surface === 'composer' ? 'shrink-0' : 'shrink-0 border-t border-line bg-surface px-3 py-1.5'} aria-label="Chat actions and information">
+        {/* The PR deck sits between the composer and the footer controls, on the window surface. */}
+        {!cleanStart && <PrActionDock key={sessionId} sessionId={sessionId} prs={prs} urls={sessionPrUrls} floating={surface === 'composer'} checksInPlan={!!session?.agentPlan?.length} />}
+        {!cleanStart && <div className={surface === 'composer' ? 'shrink-0' : 'shrink-0 px-3 py-1.5'} aria-label="Chat actions and information">
           {/* Said once, next to the control that fixes it, in the window being driven. */}
           {modelHint && !imageMode && surface !== 'composer' && <p role="status" data-model-note className="mb-1.5 flex items-center gap-1.5 text-[11.5px]" style={{ color: unavailableModel ? 'var(--warning)' : 'var(--accent)' }}><span aria-hidden>●</span>{modelHint}</p>}
           {!imageMode && surface !== 'composer' && <div className="flex flex-wrap items-center gap-2">
@@ -3328,8 +3322,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           <PlanRail
             sessionId={sessionId}
             session={session}
-            streaming={streaming}
-            onChangePlan={readOnly ? undefined : () => setPlanChangeOpen(true)}
             onMinimize={() => useStore.getState().togglePlanRail(sessionId)}
           />
         </div>
@@ -3365,24 +3357,21 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
 }
 
 /**
- * What sits where the composer would, in an archived chat: when it goes, and
+ * What sits where the composer would, in an archived chat: indefinite retention and
  * the two ways out. Delete forever asks first, since it is the one action in
  * the archive that cannot be taken back.
  */
-function ArchivedChatBar({ sessionId, contentWidth, archivedAt }: { sessionId: string; contentWidth: string; archivedAt: number | null }) {
+function ArchivedChatBar({ sessionId, contentWidth }: { sessionId: string; contentWidth: string; archivedAt: number | null }) {
   const restoreChat = useStore((s) => s.restoreChat);
   const deleteChatForever = useStore((s) => s.deleteChatForever);
   const [busy, setBusy] = useState(false);
-  const days = archivedAt ? archiveDaysLeft(archivedAt) : null;
   return (
     <div className="border-t border-line px-4 py-3">
       <div className={`${contentWidth} flex flex-wrap items-center gap-2 rounded-xl px-3 py-2.5`} style={{ background: 'var(--surface-2)' }}>
         <CheckIcon className="h-4 w-4 shrink-0 text-ink-faint" />
         <p className="min-w-0 flex-1 text-[12px] text-ink-soft">
           Completed and read-only.
-          {days !== null && (
-            <span className="text-ink-faint"> {days === 0 ? 'Deleted today' : `Deleted in ${days} day${days === 1 ? '' : 's'}`} unless restored.</span>
-          )}
+          <span className="text-ink-faint"> Kept until you delete it.</span>
         </p>
         <button
           className="btn btn-outline h-8 px-3 py-0 text-[12px] text-(--danger)"

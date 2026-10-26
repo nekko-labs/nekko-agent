@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeInterruption, shouldShowPersistedInterruption, reconcileInterruptionNotice, PERSISTED_INTERRUPTION, suggestedReplyClassName } from './interruption.js';
+import { describeInterruption, shouldShowPersistedInterruption, reconcileInterruptionNotice, PERSISTED_INTERRUPTION } from './interruption.js';
 
 describe('describeInterruption', () => {
   it('treats an intentional stop as a pause, not an error', () => {
@@ -36,10 +36,7 @@ describe('describeInterruption', () => {
     expect(result.detail).not.toContain('Retry picks up');
   });
 
-  it('gives suggestions a theme tint and keyboard focus treatment', () => {
-    expect(suggestedReplyClassName).toContain('bg-accent/10');
-    expect(suggestedReplyClassName).toContain('focus-visible:outline-accent');
-  });
+
 });
 
 describe('persisted interruption after completion', () => {

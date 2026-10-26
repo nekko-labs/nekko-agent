@@ -1,19 +1,34 @@
 @import 'tailwindcss';
 
-/* New-chat decoration only. The containing clean-start surface clips the field. */
+/* Bounded empty-agent texture: one image, no canvas loop or per-dot elements. */
 .pixel-wave-background {
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
+  overflow: hidden;
   pointer-events: none;
   z-index: -1;
+  contain: paint;
+}
+.pixel-wave-texture {
+  position: absolute;
+  left: calc(50% - 360px);
+  top: calc(50% - 180px);
+  max-width: none;
   image-rendering: pixelated;
+  animation: empty-agent-wave 22.5s steps(36, end) infinite alternate paused;
+}
+@keyframes empty-agent-wave {
+  from { transform: translateX(-18px); }
+  to { transform: translateX(18px); }
+}
+.pixel-wave-background[data-wave-paused] .pixel-wave-texture { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+  .pixel-wave-texture { animation: none; }
 }
 
 /* Context menus remain neutral even when a preset gives the page a vivid tint. */
-.context-menu { background: #ffffff; color: #17191f; }
-[data-theme='dark'] .context-menu { background: #191c23; color: #f3f4f6; }
+.context-menu, .create-menu { background: #ffffff; color: #17191f; }
+[data-theme='dark'] :is(.context-menu, .create-menu) { background: #191c23; color: #f3f4f6; }
 .context-menu [role^="menuitem"]:not(:disabled):is(:hover, :focus-visible),
 .context-menu [role^="menuitem"][aria-checked="true"],
 .context-menu [role="menuitem"][aria-expanded="true"] {
@@ -268,36 +283,24 @@
   }
 }
 
+/* Creation menus use the standard light/dark surface, never the canvas tint. */
+.create-menu {
+  max-width: calc(100vw - 16px);
+}
+
 @utility create-row {
-  /* A row of the sidebar's create menu. Each one carries its own hue in
-     --row-tone, which the tile wears at rest and the whole row picks up under
-     the cursor: the menu is a short list of *different* things, and four
-     identical grey lines said the opposite. */
-  --row-tone: var(--accent);
   border: 1px solid transparent;
-  transition:
-    background var(--dur-fast) ease,
-    border-color var(--dur-fast) ease,
-    transform var(--dur-fast) var(--ease-out);
-  &:hover {
-    background: color-mix(in srgb, var(--row-tone) 12%, transparent);
-    border-color: color-mix(in srgb, var(--row-tone) 30%, transparent);
-  }
-  &:active {
-    transform: scale(0.985);
+  transition: background var(--dur-fast) ease, border-color var(--dur-fast) ease;
+  &:hover, &:focus-visible {
+    background: var(--accent);
+    color: var(--on-accent);
+    border-color: var(--accent);
+    outline: none;
   }
 }
 
-@utility create-row-hero {
-  /* Starting an agent is the reason this menu exists, so it reads as the
-     headline: a brand wash at rest, not only on hover. */
-  background: color-mix(in srgb, var(--accent) 9%, transparent);
-  border-color: color-mix(in srgb, var(--accent) 22%, transparent);
-  &:hover {
-    background: color-mix(in srgb, var(--accent) 16%, transparent);
-    border-color: color-mix(in srgb, var(--accent) 42%, transparent);
-  }
-}
+.create-row:is(:hover, :focus-visible) .create-tile { color: inherit; }
+.create-row .kbd { background: transparent; color: inherit; border-color: currentColor; opacity: .75; }
 
 @utility create-tile {
   /* Bare glyph in the row's hue: tiles behind each icon made a three-row menu
@@ -347,86 +350,6 @@
       0 0 0 2px var(--ring),
       var(--shadow-sm);
   }
-}
-
-/* Border beam: while the agent works, a violet→cyan beam laps the composer's
-   border (the border-beam pattern, in brand colors). It's the border only, no
-   surface wash, so the composer reads as "busy" without the interior shifting
-   color as you type.
-
-   The ring is a masked wrapper filled by the gradient, and what turns is the
-   gradient's start angle (a registered property, so it interpolates). The
-   version before this rotated a square twice the ring's longest side: pure
-   compositing, but every working window carried a GPU layer of
-   (2 * max(w, h))^2 device pixels, ~70 MB for a wide wall window at 150%
-   scaling. A few busy windows blew Chromium's tile budget ("tile memory
-   limits exceeded") and starved the whole desktop of GPU memory. Now the
-   ring is the only layer, the size of its own box, and it is promoted so
-   each step repaints just the ring, never the composer around it (the
-   repaint that sank the original gradient-angle version). */
-@property --beam-angle {
-  syntax: '<angle>';
-  inherits: false;
-  initial-value: 0deg;
-}
-.composer-beam-ring {
-  position: absolute;
-  will-change: transform;
-  inset: -1px;
-  border-radius: 1rem; /* track the composer's rounded-2xl corners */
-  padding: 1.5px;
-  overflow: hidden;
-  pointer-events: none;
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-}
-.composer-beam-spin {
-  position: absolute;
-  inset: 0;
-  background: conic-gradient(
-    from var(--beam-angle),
-    transparent 0% 58%,
-    var(--accent-2) 74%,
-    var(--accent) 88%,
-    color-mix(in srgb, var(--accent) 55%, #f0abfc) 95%,
-    transparent 100%
-  );
-  /* Stepped, not linear: a linear spin re-composites the masked ring at the
-     display's full refresh (120 Hz on ProMotion), which measured ~40% of a
-     core in the GPU process for one composer. 48 steps a lap is 15 fps,
-     still reads as a sweep, and costs a few percent. */
-  animation: composer-beam-spin 3.2s steps(48, end) infinite;
-}
-@keyframes composer-beam-spin {
-  from { --beam-angle: 0deg; }
-  to { --beam-angle: 360deg; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .composer-beam-spin { animation: none; }
-}
-/* The same beam on a working agent window, quieter than the composer's: a
-   thinner line, softer colours and a slower lap, so a wall of busy windows
-   reads as busy without strobing. It sits over the window's own outline. */
-.wall-window-beam {
-  inset: 0;
-  z-index: 11;
-  border-radius: var(--pane-radius);
-  padding: 1px;
-  opacity: 0.55;
-}
-.wall-window-beam .composer-beam-spin {
-  animation-duration: 5s;
-  animation-timing-function: steps(60, end); /* 12 fps over the slower lap */
-  background: conic-gradient(
-    from var(--beam-angle),
-    transparent 0% 62%,
-    color-mix(in srgb, var(--accent-2) 70%, var(--line)) 76%,
-    color-mix(in srgb, var(--accent) 75%, var(--line)) 90%,
-    transparent 100%
-  );
 }
 
 /* The queue grows as part of the composer rather than floating above it. */
@@ -613,7 +536,7 @@
   color: var(--ink-faint);
 }
 
-/* A single rounded surface: only width and label opacity animate. */
+/* A winged surface: only viewport width and label opacity animate. */
 .rail {
   --rail-w-rest: 52px;
   --rail-w-open: 198px;
@@ -630,17 +553,29 @@
   padding-inline: 6px;
   justify-content: flex-start;
   isolation: isolate;
-  pointer-events: auto;
+  pointer-events: none;
   z-index: 1;
   top: 5%; bottom: 5%;
-  border-radius: 22px;
-  background: color-mix(in srgb, color-mix(in srgb, var(--paper) 92%, black) 97%, transparent);
   transition: width var(--rail-close-ms) var(--rail-ease) var(--rail-close-delay);
 }
+.rail-feedback { pointer-events: auto; }
 .rail-space-before { flex: 1 1 0; }
 .rail-space-after { flex: 4 1 0; }
 .rail-group { position: relative; display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; }
-.rail-backdrop { display: none; }
+/* The same static wings at rest and open. Stretch the SVG viewport, never d. */
+.rail-backdrop {
+  position: absolute;
+  left: -6px;
+  width: var(--rail-w-rest);
+  z-index: -1;
+  overflow: visible;
+  pointer-events: none;
+  transition: width var(--rail-close-ms) var(--rail-ease) var(--rail-close-delay);
+  & path {
+    fill: color-mix(in srgb, color-mix(in srgb, var(--paper) 92%, black) 97%, transparent);
+    pointer-events: visiblePainted;
+  }
+}
 
 .rail-destinations {
   position: relative;
@@ -709,6 +644,10 @@
   width: var(--rail-w-open);
   padding-right: 16px;
   transition: width var(--rail-open-ms) var(--rail-ease) var(--rail-open-delay);
+  & .rail-backdrop {
+    width: var(--rail-w-open);
+    transition: width var(--rail-open-ms) var(--rail-ease) var(--rail-open-delay);
+  }
   & .rail-label {
     opacity: 1;
     transform: none;
@@ -2305,7 +2244,9 @@
   position: absolute;
   top: 2px;
   left: 100%;
-  padding-left: 16px;
+  width: 96px;
+  box-sizing: border-box;
+  padding-left: 12px;
   white-space: nowrap;
   /* Tool rows sit in a monospace block; every time reads the same. */
   font-family: var(--font-sans);
@@ -2315,6 +2256,11 @@
   opacity: var(--vt-reveal-o, 0);
   pointer-events: none;
   transition: opacity 200ms ease;
+}
+[data-transcript-scroll] { touch-action: pan-y pinch-zoom; }
+.vt-swiping { user-select: none; }
+.vt-revealing .vt-list {
+  transform: translateX(calc(-1 * var(--vt-reveal, 0px)));
 }
 .vt-list {
   transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -2577,6 +2523,30 @@
 @keyframes composer-question-open { from { opacity: 0; transform: scale(.08, 0); } to { opacity: 1; transform: scale(1); } }
 @keyframes composer-question-close { to { opacity: 0; transform: scale(.08, 0); } }
 @media (max-width: 640px) { .composer-column { width: 100%; } .composer-question { width: 94%; } }
+/* The agent plan is a card tucked behind the composer: the dock clips at the
+   composer's top edge (plus the overlap) so the card rises out from under it.
+   No borders; spacing does the separating. Finished steps squeeze to their
+   title and every one opens while the pointer or focus is anywhere on the card,
+   via a 0fr -> 1fr row, kept fast. */
+.plan-sheet-dock { position: relative; width: 92%; margin: 0 auto -10px; overflow: hidden; border-radius: 14px 14px 0 0; }
+.plan-sheet { background: var(--surface-2); border-radius: 14px 14px 0 0; padding: 6px 10px 16px; font-size: 12.5px; line-height: 1.45; animation: plan-sheet-rise 160ms ease-out; }
+@keyframes plan-sheet-rise { from { transform: translateY(100%); } }
+.plan-sheet-head { display: flex; align-items: center; gap: 6px; padding: 0 2px 2px; font-size: 11px; color: var(--ink-faint); }
+.plan-sheet-toggle { display: flex; min-width: 0; flex: 1; align-items: center; gap: 6px; text-align: left; border-radius: 6px; }
+.plan-sheet-action { display: inline-flex; flex-shrink: 0; align-items: center; gap: 4px; border-radius: 6px; padding: 1px 6px; color: var(--ink-soft); }
+.plan-sheet-action:hover:not(:disabled), .plan-sheet-chip:hover { background: color-mix(in srgb, var(--ink) 10%, transparent); color: var(--ink); }
+.plan-sheet-steps { max-height: 40vh; overflow-y: auto; }
+.plan-sheet-step { display: grid; grid-template-columns: 12px minmax(0, 1fr); column-gap: 8px; border-radius: 8px; padding: 2px 4px; outline: none; }
+.plan-sheet-step:focus-visible { box-shadow: inset 0 0 0 1px var(--accent); }
+.plan-sheet-more { display: grid; grid-template-rows: 1fr; opacity: 1; transition: grid-template-rows 120ms ease-out, opacity 120ms ease-out; }
+.plan-sheet-more > div { min-height: 0; overflow: hidden; }
+.plan-sheet-step[data-plan-step="done"] .plan-sheet-more { grid-template-rows: 0fr; opacity: 0; }
+.plan-sheet:is(:hover, :focus-within) .plan-sheet-step[data-plan-step="done"] .plan-sheet-more { grid-template-rows: 1fr; opacity: 1; }
+.plan-sheet-chips { display: flex; gap: 6px; overflow: hidden; padding: 3px 0 1px; }
+.plan-sheet-chip { display: inline-flex; flex-shrink: 0; align-items: center; gap: 5px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 7%, transparent); padding: 0 8px; font-size: 11px; line-height: 18px; color: var(--ink-soft); white-space: nowrap; }
+.plan-sheet-dot { width: 6px; height: 6px; border-radius: 50%; }
+@media (max-width: 640px) { .plan-sheet-dock { width: 96%; } }
+@media (prefers-reduced-motion: reduce) { .plan-sheet, .plan-sheet-more { animation: none; transition: none; } }
 @media (prefers-reduced-motion: reduce) { .composer-question.is-open, .composer-question.is-closing { animation: none; } .composer-question.is-closing { visibility: hidden; } }
 
 /* Preserve markdown text while painting a real bullet on the editable surface. */
@@ -2636,12 +2606,12 @@
 .composer-summary-meta { color: var(--ink-faint); font-weight: 400; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (prefers-reduced-motion: reduce) { .pane-flash { animation: none; } }
 
-/* The PR deck rises from the footer divider: a tab whose open bottom edge sits
-   on the strip's top border (the -1px margin covers that line), its toggle on
-   the divider and its cards growing upward. With no strip below (the wall
-   composer) it closes into a full rounded card. */
-.pr-action-deck { position: relative; z-index: 1; flex-shrink: 0; display: flex; flex-direction: column; width: 90%; margin: 6px auto -1px; padding: 0 8px; border: 1px solid var(--line); border-bottom: 0; border-radius: 10px 10px 0 0; background: var(--surface); box-shadow: 0 -3px 14px rgb(0 0 0 / 6%); }
-.pr-action-deck[data-floating=true] { margin-bottom: 6px; border-bottom: 1px solid var(--line); border-radius: 10px; }
+/* The PR deck sits between the composer and the footer controls on the agent
+   window's own surface: no border or shadow, its toggle a slim row and its
+   cards growing upward. With no strip below (the wall composer) it closes into
+   a full rounded card. */
+.pr-action-deck { position: relative; z-index: 1; flex-shrink: 0; display: flex; flex-direction: column; width: 90%; margin: 2px auto 0; padding: 0 8px; border-radius: 10px; }
+.pr-action-deck[data-floating=true] { margin-bottom: 6px; border: 1px solid var(--line); background: var(--surface); box-shadow: 0 -3px 14px rgb(0 0 0 / 6%); }
 .pr-deck-toggle { display: flex; align-items: center; gap: 7px; width: 100%; min-height: 32px; padding: 5px 3px; font-size: 11px; color: var(--ink-soft); border-radius: 8px; }
 .pr-deck-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .pr-deck-chevron { transition: transform 220ms ease; }
@@ -3143,7 +3113,6 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
    slivers at the top corners. Inside it, focus is the border alone: an inset
    ring on top of the accent border doubled it into a heavy 2px line. */
 .wall-composer .composer, .wall-composer .composer:focus-within { box-shadow: none; }
-.wall-composer .composer-beam-ring { inset: 0; }
 
 /* Prompt suggestions as one chip among the composer's actions. */
 .composer-suggestions-chip {
@@ -3275,12 +3244,25 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 /* Focus mode, new chat: one centered composer on a quiet page. The first send
    drops data-clean-start and the window becomes the full chat. */
 [data-clean-start] .clean-start { position: relative; isolation: isolate; align-items: center; padding: 0 24px 12vh; }
+@property --new-chat-top { syntax: '<color>'; inherits: false; initial-value: rgb(7 59 64 / .12); }
+@property --new-chat-mid { syntax: '<color>'; inherits: false; initial-value: rgb(21 78 80 / .10); }
+@property --new-chat-bottom { syntax: '<color>'; inherits: false; initial-value: rgb(179 139 59 / .10); }
+@keyframes new-chat-colors {
+  0%, 100% { --new-chat-top: rgb(7 59 64 / .12); --new-chat-mid: rgb(21 78 80 / .10); --new-chat-bottom: rgb(179 139 59 / .10); }
+  25% { --new-chat-top: rgb(54 43 125 / .12); --new-chat-mid: rgb(98 57 130 / .10); --new-chat-bottom: rgb(173 79 119 / .10); }
+  50% { --new-chat-top: rgb(30 69 126 / .12); --new-chat-mid: rgb(35 105 123 / .10); --new-chat-bottom: rgb(75 145 118 / .10); }
+  75% { --new-chat-top: rgb(116 57 88 / .12); --new-chat-mid: rgb(151 88 68 / .10); --new-chat-bottom: rgb(164 137 76 / .10); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-clean-start] .clean-start::before { animation: none !important; }
+}
 /* Translucent prism frost, with a separate static grain layer to dither
    colour steps. Both stay behind the content and never intercept input. */
 [data-clean-start] .clean-start::before {
   content: ''; position: absolute; inset: 0; z-index: -2; pointer-events: none;
   background: linear-gradient(to bottom,
-    rgb(7 59 64 / .12) 0%, rgb(21 78 80 / .10) 45%, rgb(179 139 59 / .10) 100%);
+    var(--new-chat-top) 0%, var(--new-chat-mid) 45%, var(--new-chat-bottom) 100%);
+  animation: new-chat-colors 120s ease-in-out infinite;
 }
 [data-clean-start] .clean-start::after {
   content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
@@ -3316,14 +3298,20 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 @media (prefers-reduced-transparency: reduce) {
   [data-clean-start][data-chat-surface] .clean-start .composer { background: var(--win, var(--surface)); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
-.clean-start-greeting { display: flex; align-items: center; justify-content: center; gap: 14px; max-width: 100%; margin: 0 auto 18px; text-align: left; }
-.greeting-nekko { position: absolute; z-index: 3; top: -50px; left: 24px; display: block; width: 64px; height: 60px; pointer-events: none; }
-.clean-start-greeting h2 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
-@media (max-width: 600px) { .clean-start-greeting { margin-bottom: 56px; } }
+.clean-start-greeting { display: flex; align-items: flex-end; justify-content: center; gap: 14px; max-width: 100%; margin: 0 auto 18px; text-align: left; }
+.greeting-nekko-slot { position: relative; display: block; flex: 0 0 64px; width: 64px; height: 60px; pointer-events: none; }
+/* The paws straddle viewBox y=25 at the border, 18px below the greeting. */
+.greeting-nekko { position: absolute; z-index: 3; left: -8px; top: 15.5px; display: block; width: 80px; height: 75px; pointer-events: none; }
+.clean-start-greeting h2 { display: flex; align-items: center; width: 300px; min-height: 60px; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
+@media (max-width: 600px) { .clean-start-greeting { gap: 10px; } .clean-start-greeting h2 { width: 230px; max-width: calc(100vw - 130px); } }
 .clean-start-greeting p { margin-top: 6px; font-size: 13px; color: var(--ink-faint); }
-[data-clean-start] .clean-start-model { opacity: 0.8; transition: opacity 0.2s vas (--ease-out)}
-[data-clean-start] .clean-start-model:hover,
-[data-clean-start] .clean-start-model:focus-within { opacity: 1; }
+/* Solid, readable controls above the decorative field. Never dim their text. */
+[data-clean-start] .clean-start-model { max-width: 100%; color: var(--ink); }
+[data-clean-start] .clean-start-model > div { flex-wrap: wrap; justify-content: center; }
+[data-clean-start] .clean-start-model :is(button[aria-haspopup='listbox'], .effort-slider) { background: var(--surface); color: var(--ink); border-color: var(--ink-faint); }
+[data-clean-start] .clean-start-model :is(.text-ink-faint, .text-ink-soft),
+[data-clean-start] .clean-start-model .effort-slider :is(label, span.text-ink-soft) { color: var(--ink); }
+
 
 /*
   Mode panel: saved modes down a rail, then Environment + Model, Privacy and
@@ -3511,3 +3499,7 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
   background-size: 18px 18px;
 }
 .diagram-card { box-shadow: var(--shadow-sm); }
+
+/* Working is a steady accent fill, never a new animation or GPU layer. */
+.pixel-mascot[data-mascot-pose="working"] [data-part="pixel-head"] > path:first-child { fill: var(--accent); stroke: var(--accent); }
+.pixel-mascot[data-mascot-pose="working"] [data-part="pixel-eyes"] { fill: var(--on-accent); }
