@@ -173,6 +173,7 @@ struct ProvState {
     queued: u32,
     mint: VecDeque<Result<Minted, ProviderError>>,
     rerun: VecDeque<Result<(), ProviderError>>,
+    remove: VecDeque<Result<(), ProviderError>>,
     /// `None`: the runner's job while `status` is `Busy`, else none (as GitHub answers).
     job: Option<Result<Option<JobRef>, ProviderError>>,
     next_id: u64,
@@ -210,7 +211,7 @@ impl Provider for FakeProvider {
 
     async fn remove(&self, _: &RunnerRecord, runner_id: u64) -> Result<(), ProviderError> {
         self.1.lock().unwrap().push(format!("remove {runner_id}"));
-        Ok(())
+        self.0.lock().unwrap().remove.pop_front().unwrap_or(Ok(()))
     }
 
     async fn remove_stale(&self, _: &RunnerRecord, prefix: &str) -> Result<u32, ProviderError> {
@@ -256,6 +257,7 @@ fn harness_with(records: Vec<RunnerRecord>, no_vm: Option<&str>) -> H {
             queued: 0,
             mint: VecDeque::new(),
             rerun: VecDeque::new(),
+            remove: VecDeque::new(),
             job: None,
             next_id: 99,
         })),
@@ -590,6 +592,41 @@ async fn lost_job_is_rerun_once() {
     assert_eq!(h.count("rerun"), 3);
     h.tick_for(600).await;
     assert_eq!(h.count("rerun"), 3);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_failed_remove_is_retried_until_it_works() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    let other = || Err(ProviderError::Other("GitLab answered 502".into()));
+    h.prov.0.lock().unwrap().remove = VecDeque::from([other(), other(), Ok(())]);
+    sleep_through_a_job(&mut h).await;
+    assert_eq!(h.count("remove 100"), 1);
+    h.tick_for(55).await;
+    assert_eq!(h.count("remove 100"), 1);
+    h.tick_for(5).await;
+    assert_eq!(h.count("remove 100"), 2);
+    h.tick_for(60).await;
+    assert_eq!(h.count("remove 100"), 3);
+    h.tick_for(600).await;
+    assert_eq!(h.count("remove 100"), 3, "cleared once it worked");
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_removed_record_drains_its_failed_removes_before_it_is_handed_back() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    h.prov.0.lock().unwrap().remove = VecDeque::from([Err(ProviderError::Other("down".into()))]);
+    sleep_through_a_job(&mut h).await;
+    h.sup.set_records(vec![]);
+    h.tick_for(5).await;
+    assert_eq!(h.count("remove 100"), 1);
+    let gone = h.sup.take_gone().await;
+    assert_eq!(gone.len(), 1);
+    let log = h.log.lock().unwrap().clone();
+    let retried = log.iter().rposition(|l| l == "remove 100").unwrap();
+    let swept = log.iter().rposition(|l| l.starts_with("remove_stale")).unwrap();
+    assert!(retried < swept && log.iter().filter(|l| *l == "remove 100").count() == 2);
+    h.tick_for(120).await;
+    assert_eq!(h.count("remove 100"), 2, "nothing left to retry");
 }
 
 #[tokio::test(start_paused = true)]

@@ -20,12 +20,13 @@ const NO_TOKEN: &str = "The GitLab access token is missing; connect again.";
 pub const REFUSED: &str =
     "GitLab refused this access token. It may have expired or been revoked; connect again with a new token.";
 const NO_CREATE: &str = "GitLab would not create a runner here. The token needs the create_runner and manage_runner scopes and you need the Owner role.";
-/// How long a branch's protected answer is trusted.
+const NO_MANAGE: &str = "GitLab would not pause, list or remove this runner. The token needs the manage_runner scope; connect again with one that has it.";
+/// How long a branch's or tag's protected answer is trusted.
 const BRANCH_TTL: u64 = 600;
 const PAGE: usize = 100;
 const MAX_PAGES: u32 = 10;
 
-/// (project path, ref) to (protected, checked at).
+/// (project path, `branches/<ref>` or `tags/<ref>`) to (protected, checked at).
 type Branches = HashMap<(String, String), (bool, u64)>;
 
 pub struct GitLab<H: Http> {
@@ -64,6 +65,11 @@ fn refused(status: u16) -> ProviderError {
     } else {
         ProviderError::Other(format!("GitLab answered {status}"))
     }
+}
+
+/// For the calls that need manage_runner: 403 means the token lacks it.
+fn unmanaged(status: u16) -> ProviderError {
+    if status == 403 { ProviderError::Auth(NO_MANAGE.into()) } else { refused(status) }
 }
 
 fn link(r: &RunnerRecord) -> Result<&GitlabLink, ProviderError> {
@@ -122,18 +128,38 @@ impl<H: Http> GitLab<H> {
         Ok(v.as_array().and_then(|a| a.first()).cloned())
     }
 
-    /// Whether `git_ref` is a protected branch of `project`, cached for `BRANCH_TTL`.
+    /// Whether runner `id` belongs to group `group_id` itself. A group's list
+    /// also holds its ancestors' runners, which are never ours to delete;
+    /// any doubt answers no.
+    async fn in_group(&self, r: &RunnerRecord, id: u64, group_id: u64) -> bool {
+        match self.call(r, "GET", &format!("/runners/{id}"), None).await {
+            Ok((s, v)) if ok(s) => {
+                v["groups"].as_array().into_iter().flatten().any(|g| g["id"].as_u64() == Some(group_id))
+            }
+            _ => false,
+        }
+    }
+
+    /// Whether `git_ref` is a protected branch (or tag) of `project`, cached for `BRANCH_TTL`.
     // shortcut: the protected-branch cache is per process and 10 min old at worst, a newly protected branch may wait that long
-    async fn protected(&self, r: &RunnerRecord, project: &str, git_ref: &str) -> Result<bool, ProviderError> {
-        let key = (project.to_string(), git_ref.to_string());
+    async fn protected(
+        &self,
+        r: &RunnerRecord,
+        project: &str,
+        git_ref: &str,
+        tag: bool,
+    ) -> Result<bool, ProviderError> {
+        let kind = if tag { "tags" } else { "branches" };
+        let key = (project.to_string(), format!("{kind}/{git_ref}"));
         let now = (self.now)();
-        let cached = self.branches.lock().ok().and_then(|c| c.get(&key).copied());
-        if let Some((p, at)) = cached
-            && now < at + BRANCH_TTL
-        {
+        let cached = self.branches.lock().ok().and_then(|mut c| {
+            c.retain(|_, (_, at)| now < *at + BRANCH_TTL);
+            c.get(&key).copied()
+        });
+        if let Some((p, _)) = cached {
             return Ok(p);
         }
-        let path = format!("/projects/{}/repository/branches/{}", enc(project), enc(git_ref));
+        let path = format!("/projects/{}/repository/{kind}/{}", enc(project), enc(git_ref));
         let p = match self.call(r, "GET", &path, None).await? {
             (404, _) => false,
             (s, v) if ok(s) => v["protected"].as_bool() == Some(true),
@@ -143,6 +169,13 @@ impl<H: Http> GitLab<H> {
             c.insert(key, (p, now));
         }
         Ok(p)
+    }
+}
+
+#[cfg(test)]
+impl<H: Http> GitLab<H> {
+    fn refs_cached(&self) -> usize {
+        self.branches.lock().map_or(0, |c| c.len())
     }
 }
 
@@ -191,29 +224,33 @@ impl<H: Http + 'static> Provider for GitLab<H> {
             (s, v) if ok(s) => v,
             (s, _) => return Err(refused(s)),
         };
-        if v["status"].as_str() != Some("online") {
+        // A runner we paused reports "paused" while its job still runs.
+        if !matches!(v["status"].as_str(), Some("online" | "paused")) {
             return Ok(RunnerStatus::Offline);
         }
         if self.running(r, runner_id).await?.is_none() {
             return Ok(RunnerStatus::Idle);
         }
         // Paused once busy, so a token read out of the guest takes no second job.
-        if v["paused"].as_bool() == Some(false) {
+        if v["paused"].as_bool() != Some(true) {
             match self.call(r, "PUT", &format!("/runners/{runner_id}"), Some(json!({ "paused": true }))).await? {
                 (s, _) if ok(s) => {}
-                (s, _) => return Err(refused(s)),
+                (s, _) => return Err(unmanaged(s)),
             }
         }
         Ok(RunnerStatus::Busy)
     }
 
     async fn job(&self, r: &RunnerRecord, runner_id: u64, _runner_name: &str) -> Result<Option<JobRef>, ProviderError> {
-        Ok(self.running(r, runner_id).await?.map(|j| JobRef {
-            repo: j["project"]["path_with_namespace"].as_str().unwrap_or_default().to_string(),
-            run_id: j["pipeline"]["id"].as_u64().unwrap_or_default(),
-            job_id: j["id"].as_u64().unwrap_or_default(),
-            workflow: j["ref"].as_str().unwrap_or_default().to_string(),
-            job: j["name"].as_str().unwrap_or_default().to_string(),
+        // No id, no job: a re-run of job 0 would only fail.
+        Ok(self.running(r, runner_id).await?.and_then(|j| {
+            Some(JobRef {
+                repo: j["project"]["path_with_namespace"].as_str().unwrap_or_default().to_string(),
+                run_id: j["pipeline"]["id"].as_u64().unwrap_or_default(),
+                job_id: j["id"].as_u64()?,
+                workflow: j["ref"].as_str().unwrap_or_default().to_string(),
+                job: j["name"].as_str().unwrap_or_default().to_string(),
+            })
         }))
     }
 
@@ -222,19 +259,31 @@ impl<H: Http + 'static> Provider for GitLab<H> {
         let tags = tag_list(&r.config.label);
         let ours: Vec<&str> = tags.split(',').collect();
         let mut n = 0u32;
+        let group = matches!(r.config.scope, Scope::Org { .. });
         for project in projects(r, l) {
-            let v = self.get(r, &format!("/projects/{}/jobs?scope[]=pending&per_page=100", enc(&project))).await?;
+            let path = format!("/projects/{}/jobs?scope[]=pending&per_page=100", enc(&project));
+            let v = match self.call(r, "GET", &path, None).await? {
+                (s, v) if ok(s) => v,
+                // One project of a group gone or hidden: the others still count.
+                (s @ (403 | 404), _) if group => {
+                    eprintln!("runner {}: cannot read the jobs of {project} (GitLab answered {s})", r.config.id);
+                    continue;
+                }
+                (s, _) => return Err(refused(s)),
+            };
             for job in v.as_array().into_iter().flatten() {
                 let want = job["tag_list"].as_array().cloned().unwrap_or_default();
                 let covered = !want.is_empty() && want.iter().all(|t| t.as_str().is_some_and(|t| ours.contains(&t)));
                 if !covered {
                     continue;
                 }
-                if l.protected_only && job["tag"].as_bool() != Some(true) {
+                // A ref_protected runner never takes a job of an unprotected branch or tag.
+                if l.protected_only {
                     let git_ref = job["ref"].as_str().unwrap_or_default();
+                    let tag = job["tag"].as_bool() == Some(true);
                     if git_ref.is_empty()
                         || git_ref.starts_with("refs/merge-requests/")
-                        || !self.protected(r, &project, git_ref).await?
+                        || !self.protected(r, &project, git_ref, tag).await?
                     {
                         continue;
                     }
@@ -248,7 +297,7 @@ impl<H: Http + 'static> Provider for GitLab<H> {
     async fn remove(&self, r: &RunnerRecord, runner_id: u64) -> Result<(), ProviderError> {
         match self.call(r, "DELETE", &format!("/runners/{runner_id}"), None).await? {
             (s, _) if ok(s) || s == 404 => Ok(()),
-            (s, _) => Err(refused(s)),
+            (s, _) => Err(unmanaged(s)),
         }
     }
 
@@ -259,13 +308,20 @@ impl<H: Http + 'static> Provider for GitLab<H> {
             Scope::Repo { .. } => format!("/projects/{}/runners?type=project_type", l.namespace_id),
             Scope::Org { .. } => format!("/groups/{}/runners?type=group_type", l.namespace_id),
         };
+        let group = matches!(r.config.scope, Scope::Org { .. });
         let mut removed = 0;
         for page in 1..=MAX_PAGES {
-            let v = self.get(r, &format!("{list}&per_page={PAGE}&page={page}")).await?;
+            let v = match self.call(r, "GET", &format!("{list}&per_page={PAGE}&page={page}"), None).await? {
+                (s, v) if ok(s) => v,
+                (s, _) => return Err(unmanaged(s)),
+            };
             let runners = v.as_array().cloned().unwrap_or_default();
             for x in &runners {
                 let ours = x["description"].as_str().is_some_and(|d| is_ours(d, name_prefix));
                 if let (true, Some(id)) = (ours, x["id"].as_u64()) {
+                    if group && !self.in_group(r, id, l.namespace_id).await {
+                        continue;
+                    }
                     self.remove(r, id).await?;
                     removed += 1;
                 }

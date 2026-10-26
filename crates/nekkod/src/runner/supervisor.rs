@@ -270,6 +270,14 @@ struct Rerun {
     next_at: f64,
 }
 
+/// A registration whose removal failed; a live one still accepts jobs, so it is retried.
+struct Removal {
+    record: RunnerRecord,
+    runner_id: u64,
+    name: String,
+    next_at: f64,
+}
+
 pub struct Supervisor<S: Sense, V: Vm, P: Provider> {
     runners_dir: PathBuf,
     sense: S,
@@ -281,6 +289,8 @@ pub struct Supervisor<S: Sense, V: Vm, P: Provider> {
     runners: Vec<Runner>,
     // shortcut: queued re-runs live in memory, lost on daemon restart; persist if pilots show it matters.
     reruns: Vec<Rerun>,
+    // shortcut: like `reruns`, lost on restart; `start()`'s stale sweep removes what is left.
+    removals: Vec<Removal>,
     /// (repo, job id) of every job ever queued, so each is re-run at most once.
     rerun_seen: HashSet<(String, u64)>,
     /// The wall clock and the monotonic clock at the last tick: the wall
@@ -370,6 +380,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             host: name_host(&host_name),
             runners: Vec::new(),
             reruns: Vec::new(),
+            removals: Vec::new(),
             rerun_seen: HashSet::new(),
             last_wall: None,
             swept: HashSet::new(),
@@ -462,6 +473,16 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
         let gone = std::mem::take(&mut self.gone);
         let prefix = self.prefix();
         for r in &gone {
+            // The last chance while the credentials exist; the stale sweep below catches what still fails.
+            let (mine, keep) = std::mem::take(&mut self.removals)
+                .into_iter()
+                .partition::<Vec<_>, _>(|q| q.record.config.id == r.config.id);
+            self.removals = keep;
+            for q in mine {
+                if let Err(e) = call(self.provider.remove(&q.record, q.runner_id)).await {
+                    eprintln!("runner {}: cannot remove runner {} ({}): {e}", r.config.id, q.runner_id, q.name);
+                }
+            }
             if let Err(e) = call(self.provider.remove_stale(r, &prefix)).await {
                 eprintln!("runner {}: cannot remove stale runners: {e}", r.config.id);
             }
@@ -773,6 +794,25 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
         }
         self.retire();
         self.retry_reruns(now).await;
+        self.retry_removals(now).await;
+    }
+
+    /// Removes a registration; a failure is retried every `RERUN_EVERY` (a gone one is `Ok`).
+    async fn remove(&mut self, record: RunnerRecord, runner_id: u64, name: String, now: f64) {
+        if let Err(e) = call(self.provider.remove(&record, runner_id)).await {
+            eprintln!("runner {}: cannot remove runner {runner_id} ({name}): {e}", record.config.id);
+            self.removals.push(Removal { record, runner_id, name, next_at: now + RERUN_EVERY.as_secs_f64() });
+        }
+    }
+
+    async fn retry_removals(&mut self, now: f64) {
+        for q in std::mem::take(&mut self.removals) {
+            if now < q.next_at {
+                self.removals.push(q);
+            } else {
+                self.remove(q.record, q.runner_id, q.name, now).await;
+            }
+        }
     }
 
     /// Mint, seed, clone, start. A failure removes whatever it made, the
@@ -836,9 +876,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                 {
                     eprintln!("runner: cannot remove {}: {err}", dir.display());
                 }
-                if let Err(err) = call(self.provider.remove(&record, minted.runner_id)).await {
-                    eprintln!("runner {}: cannot remove runner {}: {err}", record.config.id, minted.runner_id);
-                }
+                self.remove(record, minted.runner_id, name, now).await;
                 self.start_failed(ri, e, now);
             }
         }
@@ -898,9 +936,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
         {
             eprintln!("runner: cannot remove {}: {e}", dir.display());
         }
-        if let Err(e) = call(self.provider.remove(&record, slot.runner_id)).await {
-            eprintln!("runner {}: cannot remove runner {}: {e}", record.config.id, slot.runner_id);
-        }
+        self.remove(record.clone(), slot.runner_id, slot.name.clone(), now).await;
         // A guest that shut down on its own ran its one job, even if no poll saw it busy.
         let ran = slot.busy_since.is_some() || (stopped == Stopped::Guest && slot.stop.is_none());
         if !ran {

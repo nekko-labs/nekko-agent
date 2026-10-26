@@ -9,8 +9,19 @@ const UNAUTHORIZED: &str =
     "GitLab refused this access token. It may have expired or been revoked; connect again with a new token.";
 const FORBIDDEN: &str = "GitLab would not create a runner here. The token needs the create_runner and manage_runner scopes and you need the Owner role.";
 
+const NO_MANAGE_TEXT: &str = "manage_runner";
+
+thread_local! {
+    /// Each `#[tokio::test]` runs on its own thread, so each test has its own clock.
+    static CLOCK: std::cell::Cell<u64> = const { std::cell::Cell::new(1_800_000_000) };
+}
+
 fn now() -> u64 {
-    1_800_000_000
+    CLOCK.with(|c| c.get())
+}
+
+fn advance(secs: u64) {
+    CLOCK.with(|c| c.set(c.get() + secs));
 }
 
 struct T {
@@ -170,9 +181,9 @@ async fn status_maps_states() {
         (200, json!({"status": "never_contacted"})),
         (200, json!({"status": "offline"})),
         (404, json!({"message": "404 Not found"})),
-        (200, json!({"status": "online", "paused": true})),
+        (200, json!({"status": "online", "paused": false})),
         (200, json!([])),
-        (200, json!({"status": "online", "paused": true})),
+        (200, json!({"status": "paused", "paused": true})),
         (200, json!([{"id": 501}])),
     ]);
     let r = project_rec();
@@ -191,15 +202,48 @@ async fn busy_runner_is_paused_once() {
         (200, json!({"status": "online", "paused": false})),
         (200, json!([{"id": 501}])),
         (200, json!({"id": 77, "paused": true})),
-        (200, json!({"status": "online", "paused": true})),
+        (200, json!({"status": "paused", "paused": true})),
         (200, json!([{"id": 501}])),
+        (200, json!({"status": "online"})),
+        (200, json!([{"id": 501}])),
+        (200, json!({"id": 77, "paused": true})),
     ]);
     let r = project_rec();
     assert_eq!(t.gl.status(&r, 77).await.unwrap(), RunnerStatus::Busy);
     assert_eq!(t.http.urls()[2], "PUT https://gitlab.com/api/v4/runners/77");
     assert_eq!(t.http.body(2), json!({"paused": true}));
     assert_eq!(t.gl.status(&r, 77).await.unwrap(), RunnerStatus::Busy);
-    assert_eq!(t.http.urls().len(), 5);
+    assert_eq!(t.http.urls().len(), 5, "a paused runner is not paused again");
+    assert_eq!(t.gl.status(&r, 77).await.unwrap(), RunnerStatus::Busy);
+    assert_eq!(t.http.urls()[7], "PUT https://gitlab.com/api/v4/runners/77", "no paused field: pause anyway");
+}
+
+#[tokio::test]
+async fn a_failed_pause_is_an_error() {
+    let t = rig(vec![
+        (200, json!({"status": "online", "paused": false})),
+        (200, json!([{"id": 501}])),
+        (403, json!({"message": "403 Forbidden"})),
+    ]);
+    let e = t.gl.status(&project_rec(), 77).await.unwrap_err();
+    assert!(matches!(&e, ProviderError::Auth(m) if m.contains(NO_MANAGE_TEXT)), "{e:?}");
+}
+
+#[tokio::test]
+async fn forbidden_delete_and_list_name_manage_runner() {
+    let t = rig(vec![(403, json!({})), (403, json!({}))]);
+    for e in [
+        t.gl.remove(&project_rec(), 77).await.unwrap_err(),
+        t.gl.remove_stale(&project_rec(), "nekko-mac1-").await.unwrap_err(),
+    ] {
+        assert!(matches!(&e, ProviderError::Auth(m) if m.contains(NO_MANAGE_TEXT)), "{e:?}");
+    }
+}
+
+#[tokio::test]
+async fn job_without_an_id_is_none() {
+    let t = rig(vec![(200, json!([{"name": "build", "ref": "main", "pipeline": {"id": 900}}]))]);
+    assert_eq!(t.gl.job(&project_rec(), 77, "n").await.unwrap(), None);
 }
 
 #[tokio::test]
@@ -246,21 +290,54 @@ async fn queued_skips_unprotected_refs_when_protected_only() {
         {"id": 2, "ref": "feature", "tag": false, "tag_list": ["nekko-mac"]},
         {"id": 3, "ref": "refs/merge-requests/3/head", "tag": false, "tag_list": ["nekko-mac"]},
         {"id": 4, "ref": "v1.0", "tag": true, "tag_list": ["nekko-mac"]},
+        {"id": 5, "ref": "v2/rc", "tag": true, "tag_list": ["nekko-mac"]},
+        {"id": 6, "ref": "gone", "tag": true, "tag_list": ["nekko-mac"]},
     ]);
     let t = rig(vec![
         (200, jobs.clone()),
         (200, json!({"name": "main", "protected": true})),
         (200, json!({"name": "feature", "protected": false})),
+        (200, json!({"name": "v1.0", "protected": true})),
+        (200, json!({"name": "v2/rc", "protected": false})),
+        (404, json!({"message": "404 Tag Not Found"})),
         (200, jobs),
     ]);
     let r = project_rec();
-    assert_eq!(t.gl.queued(&r).await.unwrap(), 2);
+    assert_eq!(t.gl.queued(&r).await.unwrap(), 2, "main and the protected tag");
     let urls = t.http.urls();
     assert_eq!(urls[1], "GET https://gitlab.com/api/v4/projects/a%2Fb%2Fc/repository/branches/main");
     assert_eq!(urls[2], "GET https://gitlab.com/api/v4/projects/a%2Fb%2Fc/repository/branches/feature");
-    assert_eq!(urls.len(), 3);
+    assert_eq!(urls[3], "GET https://gitlab.com/api/v4/projects/a%2Fb%2Fc/repository/tags/v1.0");
+    assert_eq!(urls[4], "GET https://gitlab.com/api/v4/projects/a%2Fb%2Fc/repository/tags/v2%2Frc");
+    assert_eq!(urls.len(), 6);
     assert_eq!(t.gl.queued(&r).await.unwrap(), 2);
-    assert_eq!(t.http.urls().len(), 4, "the branch answers are cached");
+    assert_eq!(t.http.urls().len(), 7, "the ref answers are cached");
+}
+
+#[tokio::test]
+async fn protected_answers_expire_after_ten_minutes() {
+    let jobs = json!([{"id": 1, "ref": "main", "tag": false, "tag_list": ["nekko-mac"]}]);
+    let dev = json!([{"id": 2, "ref": "dev", "tag": false, "tag_list": ["nekko-mac"]}]);
+    let t = rig(vec![
+        (200, jobs.clone()),
+        (200, json!({"protected": true})),
+        (200, jobs.clone()),
+        (200, jobs),
+        (200, json!({"protected": false})),
+        (200, dev),
+        (200, json!({"protected": true})),
+    ]);
+    let r = project_rec();
+    assert_eq!(t.gl.queued(&r).await.unwrap(), 1);
+    advance(599);
+    assert_eq!(t.gl.queued(&r).await.unwrap(), 1);
+    assert_eq!(t.http.urls().len(), 3, "still cached at 599 s");
+    advance(1);
+    assert_eq!(t.gl.queued(&r).await.unwrap(), 0, "asked again at 600 s");
+    assert!(t.http.urls()[4].ends_with("/repository/branches/main"));
+    advance(600);
+    assert_eq!(t.gl.queued(&r).await.unwrap(), 1);
+    assert_eq!(t.gl.refs_cached(), 1, "the expired main entry was dropped");
 }
 
 #[tokio::test]
@@ -279,6 +356,20 @@ async fn group_queue_polls_each_listed_project() {
             "GET https://gitlab.com/api/v4/projects/g%2Fb/jobs?scope[]=pending&per_page=100",
         ]
     );
+}
+
+#[tokio::test]
+async fn group_queue_skips_a_project_it_cannot_read() {
+    let t = rig(vec![
+        (404, json!({"message": "404 Project Not Found"})),
+        (403, json!({"message": "403 Forbidden"})),
+        (200, json!([job_tags(&["nekko-mac"])])),
+    ]);
+    let mut r = group_rec(&["g/gone", "g/hidden", "g/b"]);
+    if let Link::Gitlab(l) = &mut r.link {
+        l.protected_only = false;
+    }
+    assert_eq!(t.gl.queued(&r).await.unwrap(), 1);
 }
 
 #[tokio::test]
@@ -321,6 +412,32 @@ async fn stale_pages_a_group() {
         vec![
             "GET https://gitlab.com/api/v4/groups/9/runners?type=group_type&per_page=100&page=1",
             "GET https://gitlab.com/api/v4/groups/9/runners?type=group_type&per_page=100&page=2",
+        ]
+    );
+}
+
+#[tokio::test]
+async fn group_stale_sweep_spares_an_ancestor_groups_runner() {
+    let t = rig(vec![
+        (
+            200,
+            json!([{"id":1,"description":"nekko-mac1-1-0","status":"offline"},{"id":2,"description":"nekko-mac1-2-0","status":"online"},
+                {"id":3,"description":"nekko-mac1-3-0","status":"offline"}]),
+        ),
+        (200, json!({"id": 1, "groups": [{"id": 9}]})),
+        (204, Value::Null),
+        (200, json!({"id": 2, "groups": [{"id": 5}]})),
+        (500, json!({})),
+    ]);
+    assert_eq!(t.gl.remove_stale(&group_rec(&[]), "nekko-mac1-").await.unwrap(), 1);
+    assert_eq!(
+        t.http.urls(),
+        vec![
+            "GET https://gitlab.com/api/v4/groups/9/runners?type=group_type&per_page=100&page=1",
+            "GET https://gitlab.com/api/v4/runners/1",
+            "DELETE https://gitlab.com/api/v4/runners/1",
+            "GET https://gitlab.com/api/v4/runners/2",
+            "GET https://gitlab.com/api/v4/runners/3",
         ]
     );
 }
