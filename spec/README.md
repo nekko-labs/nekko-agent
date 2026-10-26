@@ -35,7 +35,7 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 
 - [Automatic title requests during queued turns (2026-10-13)](chat/automatic-title-requests-during-queued-turns.md) (1 KB)
 - [Background notification and panel batch (2026-10-13)](chat/background-notification-and-panel-batch.md) (8 KB)
-- [Chat & cowork (unified surface)](chat/chat-cowork-unified-surface.md) (73 KB)
+- [Chat & cowork (unified surface)](chat/chat-cowork-unified-surface.md) (74 KB)
 - [Chat actions and persistent reply measurements](chat/chat-actions-and-persistent-reply-measurements.md) (25 KB)
 - [Chat artifact cards and session-local documents](chat/chat-artifact-cards-and-session-local-documents.md) (8 KB)
 - [Chat chrome and composer refinement (implemented; desktop verification pending)](chat/chat-chrome-and-composer-refinement.md) (3 KB)

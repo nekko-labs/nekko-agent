@@ -37,6 +37,7 @@ app.whenReady().then(async () => {
         await run(`document.querySelector('[aria-label="Automatically resume after internet restoration"]').click()`);
         await sleep(250);
         check(`opt-in persisted (${width})`, await run(`layoutFixture.store.getState().settings.autoResumeOnInternetRestore === true`));
+        check(`toggle renders on (${width})`, await run(`document.querySelector('[aria-label="Automatically resume after internet restoration"]').getAttribute('aria-checked') === 'true'`));
         await capture(`settings-on-${width}`);
         await run(`document.querySelector('[aria-label="Automatically resume after internet restoration"]').click()`);
       }

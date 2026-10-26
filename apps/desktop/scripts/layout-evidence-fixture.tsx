@@ -14,7 +14,7 @@ const session = (id: string, title: string, workspaceId?: string) => ({ id, titl
 const records = [session('a', 'Persist quota history'), session('b', 'Diagnose failed build'), session('c', 'Audit sandbox policy'), session('d', 'New chat')];
 const settings = { providers: [provider], workspaceFolders: [], workspaces: [], theme: 'dark', experimental: {}, agent: {}, ui: { onboarded: true }, onboarded: true };
 const bridge: any = {
-  getSettings: async () => settings, updateSettings: async (p: any) => Object.assign(settings, p), listProviders: async () => [provider],
+  getSettings: async () => settings, updateSettings: async (p: any) => ({ ...Object.assign(settings, p) }), listProviders: async () => [provider],
   listSessionSummaries: async () => [],
   getSession: async (id: string) => records.find(s => s.id === id), listModels: async () => [{ id: 'gpt-fixture', providerId: 'fixture', name: 'GPT fixture', contextWindow: 500000 }],
   listTerminals: async () => [],
