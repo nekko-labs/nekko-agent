@@ -44,3 +44,11 @@ Integration with #1150 preserves its vertical teal-to-gold colour direction and 
 [Implemented; 15 isolated hidden-renderer interaction/geometry checks passed at 1280px and 460px; matched desktop/narrow before/after screenshots inspected. Packaged builds, native phone layouts and other OSes unverified.]
 
 The greeting's pixel mascot is 80×75px (25% larger), centered over its unchanged 64×60px layout slot so its horizontal center and question text allocation remain unchanged. Its paws straddle the composer top edge rather than floating above it. The greeting aligns at its bottom edge so wrapped questions do not lift the paws off the composer. Existing caret gaze, idle question rotation, draft pause and reduced-motion behavior are retained.
+
+## Slow color cycle and readable controls (issue #1178)
+
+Implemented, superseding the static-gradient description above. The translucent new-chat wash continuously interpolates teal/gold, violet/rose, blue/mint and rose/amber palettes over a 120-second loop. Only registered CSS color stops animate; grain remains static and the animation stays scoped to an untouched new chat. Reduced motion holds the original palette still; the existing inactive-app policy pauses decorative animation. No remote assets, canvas loop or per-frame React updates are added.
+
+The model and effort controls no longer dim as a group. They use an opaque theme surface, readable foreground labels and visible borders; effort has its own complete rounded border rather than a missing left edge. Controls can wrap on narrow widths. The shared Agents workspace loses 4px of top padding and moves up another 1px, lifting the agent windows and both side panels together by 5px without changing their internal gutters.
+
+Verified: 120-second CSS duration, interpolated intermediate stops and matching loop endpoints, reduced-motion static behavior, matched desktop/narrow hidden Electron captures. The GIF samples the full cycle at 10x speed for review, not real-time playback. Other themes, packaged builds and Windows/Linux have not been visually checked.

@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { navOrder, moveNav } from './nav-order.js';
+import { navOrder, moveNav, sidebarViewVisible } from './nav-order.js';
 import { useStore, viewEnabled, type View } from './store.js';
 import { startLiveRuns } from './liveRuns.js';
+import { useAnyAgentWorking } from './workingAgents.js';
 import { startSessionSummaryRefresh } from './sessionSummaryRefresh.js';
 import { startAgentSubscription } from './agentSubscription.js';
 import { startDesktopNotifications } from './notifications.js';
@@ -90,13 +91,14 @@ export function App() {
       refreshTerminals: s.refreshTerminals,
     })),
   );
+  const working = useAnyAgentWorking();
   const t = useT();
 
   // Experimental surfaces only exist in the nav once their Settings flag is on.
   const [draggedNav, setDraggedNav] = useState<View | null>(null);
   const [dropNav, setDropNav] = useState<View | null>(null);
   const order = navOrder(NAV.map(n => n.view), settings?.navOrder);
-  const visibleNav = order.map(v => NAV.find(n => n.view === v)!).filter(n => viewEnabled(n.view, settings));
+  const visibleNav = order.map(v => NAV.find(n => n.view === v)!).filter(n => viewEnabled(n.view, settings) && sidebarViewVisible(n.view, settings?.sidebarViews));
   const activeNavIndex = visibleNav.findIndex(n => n.view === (view === 'modelserver' ? 'models' : view));
   const reorder = async (from: View, to: View) => {
     const previous = settings;
@@ -173,9 +175,15 @@ export function App() {
       if (SHORTCUTS.palette.matches(e)) {
         e.preventDefault();
         useStore.getState().setPaletteOpen(!useStore.getState().paletteOpen);
+      } else if (SHORTCUTS.searchChats.matches(e)) {
+        e.preventDefault();
+        useStore.setState((s) => ({ view: 'command', chatFinderOpen: s.view !== 'command' || !s.chatFinderOpen }));
       } else if (SHORTCUTS.newAgent.matches(e)) {
         e.preventDefault();
         useStore.getState().newChat();
+      } else if (SHORTCUTS.newMedia.matches(e)) {
+        e.preventDefault();
+        void useStore.getState().newImageChat().catch((error: Error) => useStore.getState().pushToast('error', error.message));
       } else if (SHORTCUTS.newTerminal.matches(e)) {
         e.preventDefault();
         useStore.getState().newTerminal();
@@ -379,7 +387,7 @@ export function App() {
       <ErrorBoundary label="Notices"><AppNotices /></ErrorBoundary>
       <ErrorBoundary label="Pairing"><RelayPairing /></ErrorBoundary>
       {view !== 'command' && <ErrorBoundary label="Resource monitor"><ResourceHud /></ErrorBoundary>}
-      <ErrorBoundary label="Nekko"><Mascot mood={mascotMood} enabled={settings?.mascotEnabled ?? true} wizardHat={settings?.themePreset === 'autumn'} /></ErrorBoundary>
+      <ErrorBoundary label="Nekko"><Mascot mood={mascotMood} working={working} enabled={settings?.mascotEnabled ?? true} wizardHat={settings?.themePreset === 'autumn'} /></ErrorBoundary>
       <ErrorBoundary label="Command palette"><CommandPalette /></ErrorBoundary>
       <ErrorBoundary label="Links"><DeepLinkListener /></ErrorBoundary>
       <ErrorBoundary label="Claude plan"><ClaudePlanSheet /></ErrorBoundary>

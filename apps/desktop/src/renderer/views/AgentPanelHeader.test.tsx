@@ -56,7 +56,7 @@ describe('Agents panel header', () => {
   it('portals the + menu above the wall and opens the view menu from a group header right-click (source pin)', () => {
     const source = readFileSync(new URL('./WorkspacesView.tsx', import.meta.url), 'utf8');
     expect(source).toMatch(/newMenuOpen && newMenuPos && createPortal\(/);
-    expect(source).toMatch(/className="card fixed z-\[1000\] w-max min-w-48 p-1 shadow-lg"/);
+    expect(source).toMatch(/className="create-menu card fixed z-\[1000\] w-max min-w-48 p-1 shadow-lg"/);
     expect(source).toMatch(/onContextMenu=\{\(e\) => \{ e\.preventDefault\(\); e\.stopPropagation\(\); setViewMenu\(\{ x: e\.clientX, y: e\.clientY \}\)/);
     expect(source).toMatch(/<AgentPanelViewMenu x=\{viewMenu\.x\} y=\{viewMenu\.y\}/);
   });
