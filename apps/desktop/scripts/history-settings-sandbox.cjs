@@ -59,11 +59,13 @@ app.whenReady().then(async () => {
       await check('no clear when history empty', "document.querySelector('[data-history-clear]').disabled");
     }
     win.setContentSize(1200, 900);
-    await run(`(() => { const f = layoutFixture; const s = f.records[0]; s.archivedAt = Date.now() - 70 * 86400000; f.putCachedSession(s); f.store.setState({ view: 'command', sessions: f.records.map(s => ({...s})) }); })()`);
+    await run(`(async () => { const f = layoutFixture; const s = f.records[0]; s.archivedAt = Date.now() - 70 * 86400000; f.putCachedSession(s); await f.store.getState().refreshSessions(); f.store.setState({ view: 'command' }); })()`);
     await sleep(700);
-    await run("[...document.querySelectorAll('button')].find(e => e.textContent.includes('Show completed'))?.click()"); await sleep(200);
+    await run("if (!document.querySelector('[data-completed-row]')) [...document.querySelectorAll('button')].find(e => e.textContent.includes('Show completed'))?.click()");
+    for (let i = 0; i < 30 && !(await run("!!document.querySelector('[data-completed-row]')")); i++) await sleep(100);
     await shot('completed-rows-desktop');
-    await run("document.querySelector('[data-completed-row]')?.click()"); await sleep(300);
+    await run("document.querySelector('[data-completed-row]').click()");
+    for (let i = 0; i < 30 && !(await run("document.body.textContent.includes('Completed and read-only.')")); i++) await sleep(100);
     await shot('completed-chat-desktop');
     await check('completed chat is read-only', "document.body.textContent.includes('Completed and read-only.')");
     win.setContentSize(390, 844); await sleep(200); await shot('completed-chat-mobile');
