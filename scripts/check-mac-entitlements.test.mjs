@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { chmodSync, mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const script = join(dirname(fileURLToPath(import.meta.url)), 'check-mac-entitlements.sh');
@@ -12,8 +12,12 @@ const VIRT = '<plist><dict><key>com.apple.security.virtualization</key><true/></
 // A fake app tree plus a stub codesign first on PATH. The stub reads fixtures
 // keyed by basename from a separate dir, so they never count as binaries:
 // <name>.ents is printed, <name>.fail makes it exit 1, else an empty plist.
+const roots = [];
+after(() => roots.forEach((d) => rmSync(d, { recursive: true, force: true })));
+
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'ents-'));
+  roots.push(root);
   const app = join(root, 'Nekko Agent.app');
   const bin = join(app, 'Contents', 'Resources', 'bin');
   for (const d of [join(app, 'Contents', 'MacOS'), join(app, 'Contents', 'Frameworks', 'Nekko Agent Helper.app', 'Contents', 'MacOS'), bin])

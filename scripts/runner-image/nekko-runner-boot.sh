@@ -91,6 +91,7 @@ case "$name" in
     rm -f "$conf_dir/jit-config"
     seed_copy=""
     log "starting the GitHub Actions runner"
+    # The JIT config on argv shows in ps inside this single-tenant guest; it is single-use, so that is intended.
     launchctl asuser "$uid" sudo -u "$NEKKO_RUNNER_USER" -H -- "$NEKKO_RUNNER_HOME/actions-runner/run.sh" --jitconfig "$jit"
     rc=$?
     unset jit

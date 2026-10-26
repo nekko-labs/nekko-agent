@@ -96,7 +96,8 @@ To fall back to a GitHub-hosted Mac when yours is busy or away, add a small job 
 runner first: [`.github/actions/pick-runner`](https://github.com/nekko-labs/nekko-agent/tree/main/.github/actions/pick-runner)
 outputs your runner's labels when one is online and idle, and the hosted label otherwise. It
 needs a read-only token in a secret (repository **Administration: Read-only** for a repo runner;
-for an org runner, set its `org` input and use organization **Self-hosted runners: Read-only**), and it never fails the run: no token (as on a fork pull
+for an org runner, set its `org` input and use organization **Self-hosted runners: Read-only**
+from an org admin, since for anyone else GitHub answers 403 and every run goes to hosted), and it never fails the run: no token (as on a fork pull
 request), an API error or a timeout all give the hosted runner. Nekko Agent's own
 `ios-native.yml` uses it.
 
@@ -107,7 +108,9 @@ repo's **Settings > Actions > General**, connect the runner to an org, and in th
 **Settings > Actions > Runner groups**, set the runner's group to **Selected workflows** listing
 only the workflows on your default branch that may use it. See GitHub's
 [managing access to self-hosted runners](https://docs.github.com/en/enterprise-cloud@latest/actions/how-tos/manage-runners/self-hosted-runners/manage-access).
-The VM is the second layer: a job that gets in still only reaches the public internet.
+Every branch you list there is trusted: a branch that collects other people's unreviewed changes
+(such as a batch branch built from open pull requests) lets anyone with write access run code on
+your Mac. The VM is the second layer: a job that gets in still only reaches the public internet.
 
 ## How this Mac helps
 

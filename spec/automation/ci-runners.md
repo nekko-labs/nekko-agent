@@ -100,7 +100,7 @@ None can stop sleep when the lid closes on battery, when Low Power Mode turns on
 | A job poisons the build cache | One cache volume per scope, attached only for trusted runs (never fork PRs), size-capped, wipeable from the runner card. |
 | A job eats the Mac | Fixed vCPU, RAM and disk per VM, the disk floor, memory and thermal hard limits, max job time. |
 | Stolen runner credentials | A JIT config works for one job and expires. The GitHub App private key lives in the macOS keychain and never reaches a guest. |
-| Fork PRs run on your Mac | Off by default, and a repo scope shows a warning when it is public. |
+| Fork PRs run on your Mac | A PR runs its own workflow file, so the picker is no boundary. On a public repo: GitHub's approval for all external contributors, and the runner's org group restricted to selected workflows on trusted branches. The VM is the second layer. The connect sheet refuses public repos unless allowed, and then shows the approval callout. |
 | A tampered image | Images are pinned by digest and checked before cloning. |
 
 **Guest network, exactly.** Public unicast internet only. Never RFC 1918, loopback, link-local, 100.64.0.0/10, multicast, broadcast, 0.0.0.0/8, 240.0.0.0/4, 198.18.0.0/15, fc00::/7, fe80::/10, or any host address. "Host address" covers the Mac's own interface addresses, every on-link prefix of every host interface, and known WAN or gateway public addresses, because most LANs give devices global IPv6 addresses that the static list allows. The NAT refreshes that list whenever the Mac's network changes.

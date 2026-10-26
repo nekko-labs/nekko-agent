@@ -106,13 +106,17 @@ layer, and every one must be checked before `NEKKO_MAC_RUNNERS` is turned on:
    # expect: ["nekko-labs/nekko-agent"]
    ```
 
-   Reconnecting the runner keeps the workflow access (Nekko only updates repository access), but
-   re-run the check after any reconnect.
+   Nekko keeps the group's workflow access when it updates the group; re-run the check after
+   any reconnect.
 
 With the restriction on, a run of `ios-native.yml` from any other ref (a labeled pull request
 runs from `refs/pull/<n>/merge`, a branch dispatch from that branch) cannot use the Mac. So the
 `pick` job runs only for the schedule and for dispatches on `main` or `ci/ios-batch`; a labeled
 pull request never asks the picker and always runs on `macos-14`.
+
+Allowing `ci/ios-batch` means the Mac trusts everyone with write access to the repo, not only
+`main`: the batch branch carries the unreviewed code of open same-repo PRs (`ios-batch.yml` drops
+fork PRs).
 
 The second layer is the VM sandbox: each job runs in a throwaway clone whose only network is
 the public internet through Nekko's NAT (no LAN, no host, no VPN routes), with no SSH, no agent
@@ -124,7 +128,8 @@ and the [Probe job](#probe-job) below.
 The runner is an org runner, which the repo's runner list does not show, so the picker lists
 the org's runners.
 
-1. A fine-grained personal access token: resource owner `nekko-labs`, organization permission
+1. A fine-grained personal access token from an **org admin** of `nekko-labs` (for anyone else the
+   org runners endpoint answers 403 and the picker always falls back to hosted): resource owner `nekko-labs`, organization permission
    **Self-hosted runners: Read-only**, nothing else, 90-day expiry. See GitHub's
    [permissions required for fine-grained personal access tokens](https://docs.github.com/en/rest/authentication/permissions-required-for-fine-grained-personal-access-tokens)
    ("Organization permissions for Self-hosted runners", read, for
@@ -187,7 +192,8 @@ Testing R3. **[Philip]**, on the physical Mac.
 - **(c) Timings.** Note the time from lid close to GitHub marking the job failed, and from wake
   to the re-run starting. Record that the re-run lands on the Mac, not hosted: the re-run keeps
   the first attempt's `pick` output (a hosted re-run would need a whole-run re-run, a follow-up
-  only if waits are long).
+  only if waits are long). If the Mac does not come back, that re-run waits in the queue for up to
+  24 hours: cancel it and re-run the whole run, so the picker asks again and picks hosted.
 
 ## Probe job
 
