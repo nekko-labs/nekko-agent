@@ -9,7 +9,8 @@ name: Native iOS
 # A PR or batch verifies dark mode only when it changes colours or a PR carries
 # `ci:theme`; the schedule and a branch dispatch run light and dark.
 # A `pick` job asks for the owner's idle Mac runner (scripts/pick-runner.mjs) and falls
-# back to macos-14; it only runs for trusted events and only when vars.NEKKO_MAC_RUNNERS is 'on'.
+# back to macos-14; only for the schedule and dispatches on main or ci/ios-batch, and only when
+# vars.NEKKO_MAC_RUNNERS is 'on'.
 on:
   pull_request:
     types: [labeled]
@@ -39,11 +40,12 @@ concurrency:
   cancel-in-progress: ${{ !inputs.batch }}
 jobs:
   pick:
-    # Off until the pilot Mac is live (vars.NEKKO_MAC_RUNNERS). The picker routes trusted runs
-    # only. It is not the boundary against fork code (a fork PR's own workflow file could name
-    # the runner directly): that is the repo's fork-approval setting and the runner group,
-    # restricted to selected workflows on the default branch (see the pilot runbook).
-    if: vars.NEKKO_MAC_RUNNERS == 'on' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, 'ci:macos') && contains(fromJSON('["ci:macos","ci:theme"]'), github.event.label.name)))
+    # Off until the pilot Mac is live (vars.NEKKO_MAC_RUNNERS). Only the schedule and dispatches on
+    # main or ci/ios-batch ask the picker: those are the refs the runner group allows (selected
+    # workflows), so a labeled PR always runs hosted. The picker is not the boundary against fork
+    # code (a fork PR's own workflow file could name the runner directly): that is the repo's
+    # fork-approval setting and the runner group (see docs/runbooks/ci-runner-pilot.md).
+    if: vars.NEKKO_MAC_RUNNERS == 'on' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ci/ios-batch')
     # A failed picker leaves its output empty (protocol-and-build falls back) and must not fail the run.
     continue-on-error: true
     runs-on: ubuntu-latest
@@ -61,6 +63,7 @@ jobs:
         uses: ./.github/actions/pick-runner
         with:
           token: ${{ secrets.NEKKO_PICKER_TOKEN }}
+          org: ${{ vars.NEKKO_MAC_RUNNER_ORG }}
           fallback: macos-14
   protocol-and-build:
     needs: pick

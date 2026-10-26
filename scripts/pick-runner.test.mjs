@@ -39,6 +39,20 @@ test('main_asks_the_repo_runners_api', async () => {
   assert.deepEqual(seen, [['https://api.github.com/repos/nekko-labs/nekko-agent/actions/runners?per_page=100', 'Bearer secret']]);
 });
 
+test('main_in_org_mode_asks_the_org_runners_api', async () => {
+  const seen = [];
+  const out = await main({ PICK_TOKEN: 'secret', PICK_REPO: 'nekko-labs/nekko-agent', PICK_ORG: 'nekko-labs' },
+    async (url) => { seen.push(url); return Response.json({ runners: [r()] }); });
+  assert.equal(out, '["self-hosted","nekko-mac"]');
+  assert.deepEqual(seen, ['https://api.github.com/orgs/nekko-labs/actions/runners?per_page=100']);
+});
+
+test('main_in_org_mode_falls_back_on_403_and_bad_org', async () => {
+  const env = { PICK_TOKEN: 't', PICK_REPO: 'nekko-labs/nekko-agent', PICK_ORG: 'nekko-labs', PICK_FALLBACK: 'macos-14' };
+  assert.equal(await main(env, async () => new Response('{"message":"Resource not accessible"}', { status: 403 })), '"macos-14"');
+  assert.equal(await main({ ...env, PICK_ORG: 'a/b' }, async () => assert.fail('called')), '"macos-14"');
+});
+
 test('cli_writes_runs_on_and_never_prints_the_token', () => {
   const script = new URL('./pick-runner.mjs', import.meta.url).pathname;
   const run = (extra) => {
@@ -61,7 +75,11 @@ test('ios_native_calls_the_picker_only_for_trusted_events', () => {
   const y = readFileSync(new URL('../.github/workflows/ios-native.yml', import.meta.url), 'utf8');
   const pickIf = y.match(/\n  pick:\n(?:.*\n)*?    if: (.*)\n/)[1];
   assert.match(pickIf, /^vars\.NEKKO_MAC_RUNNERS == 'on' && /);
-  assert.match(pickIf, /github\.event\.pull_request\.head\.repo\.full_name == github\.repository/);
+  // Only refs the runner group allows; a labeled PR always runs hosted.
+  assert.match(pickIf, /\(github\.event_name == 'schedule' \|\| github\.event_name == 'workflow_dispatch'\)/);
+  assert.match(pickIf, /\(github\.ref == 'refs\/heads\/main' \|\| github\.ref == 'refs\/heads\/ci\/ios-batch'\)/);
+  assert.doesNotMatch(pickIf, /pull_request/);
+  assert.match(pickBlock(y), /org: \$\{\{ vars\.NEKKO_MAC_RUNNER_ORG \}\}/);
   assert.match(pickBlock(y), /\n    continue-on-error: true\n/);
   assert.match(y, /token: \$\{\{ secrets\.NEKKO_PICKER_TOKEN \}\}/);
   assert.match(y, /runs-on: \$\{\{ fromJSON\(needs\.pick\.outputs\.runs-on \|\| '"macos-14"'\) \}\}/);

@@ -110,9 +110,9 @@ layer, and every one must be checked before `NEKKO_MAC_RUNNERS` is turned on:
    re-run the check after any reconnect.
 
 With the restriction on, a run of `ios-native.yml` from any other ref (a labeled pull request
-runs from `refs/pull/<n>/merge`, a branch dispatch from that branch) cannot use the Mac. If the
-picker sends one there, the job waits in the queue: cancel it and re-run on hosted with the
-switch off, and note it in the day's table.
+runs from `refs/pull/<n>/merge`, a branch dispatch from that branch) cannot use the Mac. So the
+`pick` job runs only for the schedule and for dispatches on `main` or `ci/ios-batch`; a labeled
+pull request never asks the picker and always runs on `macos-14`.
 
 The second layer is the VM sandbox: each job runs in a throwaway clone whose only network is
 the public internet through Nekko's NAT (no LAN, no host, no VPN routes), with no SSH, no agent
@@ -121,20 +121,24 @@ and the [Probe job](#probe-job) below.
 
 ## Picker token and switch [Philip]
 
-1. A fine-grained personal access token: resource owner `nekko-labs`, repository
-   `nekko-labs/nekko-agent` only, repository permission **Administration: Read-only**, 90-day
-   expiry.
+The runner is an org runner, which the repo's runner list does not show, so the picker lists
+the org's runners.
+
+1. A fine-grained personal access token: resource owner `nekko-labs`, organization permission
+   **Self-hosted runners: Read-only**, nothing else, 90-day expiry. See GitHub's
+   [permissions required for fine-grained personal access tokens](https://docs.github.com/en/rest/authentication/permissions-required-for-fine-grained-personal-access-tokens)
+   ("Organization permissions for Self-hosted runners", read, for
+   `GET /orgs/{org}/actions/runners`).
 2. `gh secret set NEKKO_PICKER_TOKEN -R nekko-labs/nekko-agent` (paste the token at the prompt).
-3. Only after [Security](#security-before-the-switch-goes-on) passes:
+3. `gh variable set NEKKO_MAC_RUNNER_ORG --body nekko-labs -R nekko-labs/nekko-agent`. Without
+   it the picker reads the repo's own runners (a repo runner, with a token holding repository
+   **Administration: Read-only**).
+4. Only after [Security](#security-before-the-switch-goes-on) passes:
    `gh variable set NEKKO_MAC_RUNNERS --body on -R nekko-labs/nekko-agent`.
 
 Off again at any time: `gh variable set NEKKO_MAC_RUNNERS --body off -R nekko-labs/nekko-agent`.
-With it off, the `pick` job is skipped and every run uses `macos-14` as before.
-
-The picker reads `GET /repos/nekko-labs/nekko-agent/actions/runners`. GitHub documents that
-endpoint as the runners "configured in a repository"; whether it also lists an org runner the
-repo may use is not confirmed. If the first job's `pick` log says `no idle runner` while the card
-shows a ready slot, that is this gap: turn the switch off and file it against T214.
+With it off, the `pick` job is skipped and every run uses `macos-14` as before. A token that
+lacks the permission gets a 403, and the picker falls back to hosted with `api 403` in its log.
 
 ## First job
 
