@@ -19,7 +19,10 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1200, 400])
     const card = (title: string) => page.locator(`div[role=button][title*="${title}"]`).first();
 
     await scenario.resize(width);
-    await page.evaluate('integration.reset()');
+    // Completed chats folded under their project, project + buttons and drag to
+    // refile all belong to Project grouping, no longer the default. The reset
+    // remounts on the next render, so the panel reads this view when it mounts.
+    await page.evaluate(`integration.reset(); localStorage.setItem('nekko.agentPanelView', JSON.stringify({ groupBy: 'project' }))`);
     await page.evaluate(`(() => {
       document.documentElement.dataset.theme = '${theme}';
       const completed = integration.records()[0];
