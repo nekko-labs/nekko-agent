@@ -40,6 +40,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -155,6 +156,17 @@ fun ChatScreen(
         val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: -1
         val nearBottom = lastVisible >= info.totalItemsCount - 3
         if (nearBottom) list.scrollToItem(lastIndex)
+    }
+
+    // Keep the newest message in view when the list gets shorter (the keyboard opens, the message box grows),
+    // if it was at the bottom; a list scrolled up to read stays where it is.
+    LaunchedEffect(list) {
+        var height = 0
+        var atBottom = false
+        snapshotFlow { list.layoutInfo.viewportSize.height to !list.canScrollForward }.collect { (h, bottom) ->
+            if (h < height && atBottom) list.scrollBy((height - h).toFloat()) else atBottom = bottom
+            height = h
+        }
     }
 
     if (showChanges && changesAllowed) {
