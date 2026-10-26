@@ -21,6 +21,7 @@ fn quiet() -> Signals {
         security_update_overdue_days: None,
         available_memory_mb: 32768.0,
         paused_all: false,
+        vpn_carries_default: false,
     }
 }
 
@@ -237,6 +238,41 @@ fn hotspot_and_untrusted_network_hold() {
     let relaxed = RunnerSettings { trusted_networks_only: false, never_on_hotspot: false, ..with(Balanced) };
     let sig = Signals { network_trusted: false, network_expensive: true, ..quiet() };
     assert_eq!(evaluate(&relaxed, &sig, false), Decision::Take);
+}
+
+#[test]
+fn vpn_carrying_all_traffic_holds() {
+    let sig = Signals { vpn_carries_default: true, ..quiet() };
+    for p in ALL {
+        assert_eq!(evaluate(&with(p), &sig, false), Decision::Hold { why: vec![Reason::VpnCarriesAllTraffic] });
+    }
+    // A soft gate, listed after the hotspot.
+    let sig = Signals { network_expensive: true, ..sig };
+    assert_eq!(
+        evaluate(&with(Balanced), &sig, false),
+        Decision::Hold { why: vec![Reason::Hotspot, Reason::VpnCarriesAllTraffic] }
+    );
+}
+
+#[test]
+fn vpn_setting_allows_jobs() {
+    let s = |p| RunnerSettings { allow_direct_with_vpn: true, ..with(p) };
+    let sig = Signals { vpn_carries_default: true, ..quiet() };
+    for p in ALL {
+        assert_eq!(evaluate(&s(p), &sig, false), Decision::Take);
+        assert_eq!(evaluate(&s(p), &sig, true), Decision::Take);
+    }
+}
+
+#[test]
+fn vpn_drains_running_job_with_mode_grace() {
+    let sig = Signals { vpn_carries_default: true, ..quiet() };
+    let why = vec![Reason::VpnCarriesAllTraffic];
+    assert_eq!(evaluate(&with(DoNotDisturb), &sig, true), Decision::Drain { grace_secs: 120, why: why.clone() });
+    assert_eq!(evaluate(&with(Balanced), &sig, true), Decision::Drain { grace_secs: 600, why });
+    // Runner first keeps a running job through soft gates, this one included.
+    assert_eq!(evaluate(&with(RunnerFirst), &sig, true), Decision::Take);
+    assert_eq!(serde_json::to_value(Reason::VpnCarriesAllTraffic).unwrap(), "vpnCarriesAllTraffic");
 }
 
 #[test]

@@ -6,6 +6,11 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Chat swipe and welcoming questions (#1174)
+
+- [x] **CG-1, Reveal the whole row and full time.** Either horizontal wheel direction moves the transcript left up to 112px through CSS state; focused Electron checks cover row/child displacement, timestamp bounds, spring-back and no horizontal scroll at 1100px and 460px. Spec: [Swipe for times](spec/chat/chat-suggestions-progress-and-code-access.md).
+- [x] **CG-2, Center Nekko beside rotating questions.** Ten local questions on an eight-second idle timer, paused for drafts/attachments, hidden documents and reduced motion; caret-following scoped to the composer section. Focused unit and isolated renderer checks; packaged app/physical trackpad remain unverified. Spec: [Centered greeting](spec/desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md).
+
 ## Verification and PR progress (added 2026-10-25)
 
 Issue #1115. Spec: [Verification checklists and PR progress](spec/chat/verification-and-pr-progress.md).
@@ -66,7 +71,7 @@ Philip found GPT-6.1 chats slow, quiet between tool calls, and missing their tok
 - [x] **CT-5, Swipe left for times (2026-10-24).** A horizontal trackpad swipe slides the transcript up to 72px left and fades in each row's time; letting go springs it back (`useSwipeToRevealTimes` in `VirtualTranscript.tsx`, `data-vt-stamp` + `::after` in `styles.css`). Evidence: `apps/desktop/scripts/chat-timing-sandbox.cjs`.
 - [ ] **CT-6, Live check against a signed-in ChatGPT plan:** confirm the backend accepts the replayed reasoning, and compare per-step time and narration with the 2026-10-24 baseline.
 - [x] **CT-8, Swipe times on tool calls (2026-10-25).** #1141. An opened run's tool rows and purpose groups carry their own `data-vt-stamp` (the call's `startedAt`), so a swipe shows a time on every call, not only the run's first; the stamp CSS now applies to any `[data-vt-stamp]` and uses the sans font inside the monospace activity block. The timing sandbox checks it, finds activity headers by structure instead of the retired "Worked on" label, and its base build archives all of `apps/desktop/src`.
-- [ ] **CT-7, Touch and mouse-drag reveal.** Only trackpad and wheel swipes reveal times today; a mouse drag is left for text selection.
+- [x] **CT-7, Touch and mouse-drag reveal (2026-10-26).** #1190. Primary left drags hold timestamps stationary until release/cancel/blur. Vertical drags and interactive controls retain their behavior. The 112px gutter fits full nested-tool times. Focused unit tests and hidden Electron desktop/narrow drag evidence pass; physical trackpad and touch hardware remain unverified. Wheel input uses a 450ms idle fallback because it has no finger-up event. See [swipe times](spec/chat/chat-suggestions-progress-and-code-access.md#swipe-left-for-times).
 
 ## Chat page removed (added 2026-10-24)
 
@@ -222,6 +227,14 @@ See [SPEC](spec/desktop/focused-mode-transitions-calmer-focus-ring-and-layout-co
 - [x] ✅ 2026-10-17 `CommandWall.tsx` marks panes added after mount as entering (Focus only) and `styles.css` fades the hero in; `ChatPane.tsx` plays `composer-expand-in` once when clean start ends on send; calmer Focus ring mix; Monitors dock header; Grid removed from the toolbar into `WallLayoutSettings.tsx`, Dynamic uses `BoltIcon`. Tests: `focusTransitions.test.ts`, `WallLayoutSettings.test.tsx`. Evidence: `apps/desktop/scripts/focus-transitions-sandbox.cjs` via `agent-window-controls-integration.cjs` (`NEKKO_CONTROLS_SANDBOX`, `NEKKO_TEST_REVISION=main` for before).
 - [x] ✅ 2026-10-23 The replaced hero collapses onto the new composer and dissolves: `CommandWall.tsx` marks it `data-wall-leaving` while parked and measures `--collapse-inset` from the new window's `.composer`; `styles.css` draws it (`content-visibility: visible`) and plays `focus-collapse-into-composer`. Tests: `focusTransitions.test.tsx`; sandbox checks added to `focus-transitions-sandbox.cjs`, and the baseline archive now includes `apps/desktop/src/displayWindows.ts`.
 - [ ] Check all three animations in a packaged desktop build and at narrow widths.
+
+## Plan sheet on the composer (added 2026-10-25)
+
+Issue #1149. See [SPEC](spec/chat/plan-sheet-on-the-composer.md).
+
+- [x] ✅ 2026-10-25 `PlanSheet.tsx` renders the agent plan as a card tucked behind the composer (`.plan-sheet-dock` clips at the composer edge, `plan-sheet-rise`); title, one-line note and an optional chip row per step; finished steps squeeze and every one opens while the card is hovered or focused (120 ms `grid-template-rows`). `planStepLinks.ts` replays the transcript's `update_plan` calls and gives created PRs and linked files to the step active at the time. The plan leaves `PlanRail.tsx`. Tests: `planStepLinks.test.ts`, `PlanRail.test.tsx`. Evidence: `apps/desktop/scripts/plan-sheet-sandbox.cjs` via `layout-evidence-integration.cjs` (keeps `data-app-inactive` off, or every animation stays paused in the hidden window).
+- [ ] Second PR: move the Verification panel and CI status into the card as per-step chips, and retire the panel under the composer.
+- [ ] Check the card in a packaged build and at narrow widths.
 
 ## Flaky daemon integration tests (added 2026-10-17)
 
@@ -802,6 +815,8 @@ Extends `../../knowledgebase/principles/coding.md` (which these override).
 - [ ] Cut the **v1.0 release** once the above land (bump versions + tag). *Status 2026-09-30: PR #203 (`chore/release-v0.8.0`) sits open and mergeable as the next version bump, a pure 5-file version change; merging it fires the public release workflow, so it waits on the same credentials below (npm publish cred, remaining Windows signing, macOS notary trio) plus an explicit go. The GUI pass above is the only functional gate left on the list.*
 
 ## Now / In Progress
+
+- [ ] **HISTORY1156**: [Completed history retention and storage](spec/chat/completed-history-retention-and-storage.md). Added 2026-10-25. Keep completed chats indefinitely, measure local chat storage, and add confirmed Settings cleanup ranges and a 1 GB warning. Backend, full workspace typecheck, Settings interaction checks and wide/narrow renderer evidence passing; merge pending.
 
 - [x] **THINK-DIAGRAM-1120**: cloud reasoning always on, local default-on thinking only in Expert model options, no composer toggle; chat-matched dotted, borderless Mermaid canvases with subtle shadows and themed diagrams. Implemented 2026-10-25. [Thinking spec](spec/models/models-providers.md), [diagram spec](spec/code/rich-responses-reports-and-design-workspace.md). Verified desktop typecheck, 19 focused renderer tests, 61 provider tests, 4 admission tests, daemon request regression, hidden before/after renderer evidence and Expert interaction/load payload checks. No live inference or native phone UI verification.
 
@@ -1469,7 +1484,12 @@ Verification: `npm run typecheck` across workspaces, host tests (`oauth`, `downl
 A Mac running Nekko Agent becomes a sandboxed GitHub Actions self-hosted runner, each job in a throwaway macOS VM. The existing "Local CI runner" template ([docs/git-runner.md](docs/git-runner.md)) stays; it is not a self-hosted runner. Planned 2026-10-24.
 
 - [ ] **T210** Layer A: the spec and decision 0022, and the pure-logic crate `nekko-runner` (settings, slots, gates, keep awake, guest address rules). Added: 2026-10-24. Issue #1038.
-- [ ] **T211** VM helper and userspace network: Swift `nekko-vm` on Virtualization.framework (clone, boot, delete, seed disk) and the NAT in `nekkod`. Added: 2026-10-24. Issue #1038.
+- [ ] **T211** VM helper and userspace network: Swift `nekko-vm` on Virtualization.framework (clone, boot, seed disk) and the NAT in `nekkod`. Added: 2026-10-24. Issue #1038.
+  - Done: `crates/nekkod/vm/nekko-vm.swift` (clone, run, count-vms, egress; no shared folders, clipboard or audio, and a display device with no view or input devices) with its entitlements and `test-nekko-vm.sh`; dev-only staging and ad-hoc signing in `stage-daemon.mjs`; the IPv4-only NAT in `crates/nekkod/src/runner/net.rs` (DHCP, DNS over 53/udp and 53/tcp, 256 flows, 15 s connect and 60 s idle TCP timeouts) checked by `guest_may_connect`, host networks in `hostnets.rs` (`try_current` only), tests in `crates/nekkod/tests/runner_net.rs`, and the `runner_vm_spike` example.
+  - No `delete` subcommand: clone cleanup is the T212 reaper. Release packaging and signing of `nekko-vm` move to T213/T214 with a signed release dry-run.
+  - Done 2026-10-25: VPN routes never carry job traffic. `nekko-vm egress` streams the physical interface; `runner/egress.rs` keeps it current; `net::Direct` binds every host socket and DNS upstream to it (`IP_BOUND_IF`) and refuses every flow without one. `nekko-runner` gains `allowDirectWithVpn` (default off) and the soft gate `vpnCarriesAllTraffic`. Tests in `runner_net.rs`, `nekko-runner/tests/{gates,settings}.rs` and `test-nekko-vm.sh`; wiring the gate to the helper is T212.
+  - Done 2026-10-25: the real-VM run (spike example against Cirrus `macos-sequoia-base`, macOS 15.7.7, 5aac88fa). The guest boots once `nekko-vm` has a viewless display device, gets 10.233.0.2 by DHCP, resolves over 53/udp and 53/tcp through the gateway and reaches api.github.com. From the guest, the host's LAN address, the router, the host's Tailscale address and a Tailscale peer, 100.100.100.100, the gateway's other ports, link-local metadata and DNS-rebinding names (nip.io to LAN and loopback) were all refused. SIGKILL of the example: the helper exits about 0.56 s later and `count-vms` returns to 0; SIGKILL of the helper: the VM is gone about 0.05 s later. Throughput in [docs/perf-history.md](docs/perf-history.md) (about 200 Mbit/s NAT to guest after the 64 KiB buffer, internet downloads at 98% of the host).
+  - Pending: the VPN binding checked against a real tunnel (Tailscale exit node and subnet route, and a packet-tunnel VPN that enforces routes), owned by T212.
 - [ ] **T212** Supervisor and GitHub: GitHub App connect, JIT configs, the supervisor loop in `nekkod`, keychain key. Added: 2026-10-24. Issue #1038.
 - [ ] **T213** CI section UI in the Workflows tab: connect sheet, runner card, settings, menu bar indicator. Added: 2026-10-24. Issue #1038.
 - [ ] **T214** Images, picker and pilot: golden image builder, picker job, the P0 pilot on our own CI. Added: 2026-10-24. Issue #1038.
@@ -2395,8 +2415,13 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 
 - [x] Remove the retired Expo app and its dedicated Mobile CI; keep native phone workflows, relay/push infrastructure and shared protocol coverage. Update merge-gate accounting and desktop icon/test references. See [native phone decision](spec/phone/native-phone-implementation-decision.md) and [decision 0026](docs/decisions/0026-retire-expo-in-favor-of-native-phone-apps.md). Tracked in #1124.
 
+### Inline thoughts in chat (#1138) · [spec](spec/chat/tool-calls-grouped-by-purpose.md)
+
+- [x] Show provider-supplied thoughts with the thought icon outside collapsible tool groups in live and saved desktop/Local Web UI conversations. Preserve ordering and avoid repeating a final message's thought. Verified with all 217 chat component tests, desktop typechecking and hidden Electron before/after captures at 1000/390 px; native phones unchanged.
 ## Compact Monitors and new-chat frost (#1152)
 
 - [x] Reduce the default/snap dock width to 276px, trim the monitor right inset by 2px, and avoid unused Focus scrollbar space. Keep budget ranges on one row and metric values readable. See [spacing spec](spec/desktop/slim-wave-rail-tighter-agents-spacing-composer-snap-points.md).
 - [x] Replace the new-chat opaque wash and hard composer edge with translucent frost and a reduced-transparency fallback. See [new-chat spec](spec/desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md).
 - [x] Check layout/range unit tests, desktop typechecking, hidden Electron resize/reset/range/typing interactions and matched default-theme desktop/narrow evidence. Packaged OS chrome and physical mobile devices remain unverified.
+
+- [x] UI1178: Settings-first Skills/Connectors shortcuts, optional rail links, slow new-chat palette cycling, readable model/effort controls and 5px tighter wall top inset. Focused tests, typecheck and isolated desktop/narrow renderer verification; packaged and other-platform checks remain unverified. See [settings navigation](spec/desktop/settings-section-nav.md) and [new-chat surface](spec/desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md).

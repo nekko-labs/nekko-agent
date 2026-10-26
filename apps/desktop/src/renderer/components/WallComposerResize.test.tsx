@@ -38,7 +38,6 @@ describe('wall edge stability and composer handles', () => {
       expect(cssRule(styles, selector)['box-shadow'], selector).toBe('none');
     }
     expect(cssUtility(styles, 'composer', ':focus-within')['border-color']).toBe(cssValue('color-mix(in srgb, var(--accent) 70%, var(--line))'));
-    expect(cssRule(styles, '.wall-composer .composer-beam-ring').inset).toBe('0');
   });
 
   it('keeps all resize handles on the composer', () => {

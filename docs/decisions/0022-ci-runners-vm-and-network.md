@@ -45,3 +45,16 @@ A Mac running Nekko Agent can become a CI runner ([spec](../../spec/automation/c
 - No helper to install means no extra permission prompt, and a smaller review.
 - If a user must run more than 2 macOS VMs or rent capacity, the license, not this design, is the limit (see the spec).
 - We were wrong if the NAT cannot hold download-heavy jobs at usable speed, or a guest reaches a non-public address.
+
+## Implementation notes (T211)
+
+Added 2026-10-24. These record how T211 built the decision above; the decision itself is unchanged.
+
+- P1 guests are IPv4 only (10.233.0.2/24, gateway 10.233.0.1). Every IPv6 frame from the guest is dropped.
+- DNS goes through the gateway: 53/udp and 53/tcp are forwarded to the host's resolvers, chosen by the supervisor and never a loopback resolver or 100.100.100.100. The gateway answers DHCP and DNS only.
+- At most 256 flows per VM, a 15 s host connect timeout, and an idle TCP timeout (60 s, with 30 s keep-alive probes) that resets a guest connection that stops answering and frees its slot.
+- `nekko-vm` alone carries `com.apple.security.virtualization`. Dev builds ad-hoc sign it; release packaging and signing land with T213/T214 together with a signed release dry-run.
+- The supervisor refuses to start a VM if the host's addresses cannot be read; there is no empty-list fallback.
+- `nekko-vm` gives the guest a display device with no view and no input devices: one `VZMacGraphicsDeviceConfiguration` (1024x768 at 72 ppi), no `VZVirtualMachineView`, no keyboard or pointing device. A macOS guest does not boot without a graphics device (measured in T211: with none it never brought up its network); with no view, nothing of its screen reaches the host. The device is a paravirtualized GPU, so the guest's GPU commands are processed in the host's VM process against the host GPU stack; that is an accepted risk, needed for macOS guests to boot, and it supersedes the original "no graphics" constraint. There is still no shared folder, clipboard, serial console, audio or USB.
+- A guest with a logged-in console session ignores `requestStop`, so SIGTERM ends in the helper's 20 s hard stop. That is acceptable: the clone is deleted after every job.
+- VPN routes never carry job traffic (decided by Philip 2026-10-25). `nekko-vm egress` reports the physical egress interface from `NWPathMonitor` (first wifi, wired or cellular interface on a monitor that prohibits `.other`) and whether a tunnel leads the default path. `net::Direct` binds every host socket, DNS upstreams included, to that interface with `IP_BOUND_IF` before connecting, and refuses every flow with no interface or before the first report. A full-tunnel VPN or exit node pauses the runner (soft gate `vpnCarriesAllTraffic`) unless the runner setting `allowDirectWithVpn` is on; either way traffic leaves by the physical interface. This replaces the earlier plan to refuse destinations by route. Implemented and unit-tested (binding on lo0); a check against a real tunnel (Tailscale exit node and subnet route, or a packet-tunnel VPN that enforces routes) is pending, owned by T212. Known risk: a packet-tunnel VPN with includeAllNetworks or enforceRoutes may capture or drop sockets bound to the physical interface (dropping is fail-safe).

@@ -10,3 +10,8 @@ export function moveNav<T extends string>(order: readonly T[], from: T, to: T): 
   next.splice(b, 0, from);
   return next;
 }
+
+/** Hiding a shortcut never disables the destination itself. */
+export function sidebarViewVisible(view: string, preferences?: { skills?: boolean; connectors?: boolean }): boolean {
+  return view === 'skills' || view === 'connectors' ? preferences?.[view] === true : true;
+}
