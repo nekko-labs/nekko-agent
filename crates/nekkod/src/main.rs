@@ -60,6 +60,8 @@ mod repository_review;
 mod resource_queue;
 mod routes;
 // The runner supervisor that calls into it lands with the VM pool (T211, T212).
+// Unix only: VMs run only on macOS, and the NAT is built on Unix sockets.
+#[cfg(unix)]
 #[allow(dead_code)]
 mod runner;
 mod runtimes;
