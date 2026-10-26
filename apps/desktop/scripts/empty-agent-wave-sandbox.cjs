@@ -17,7 +17,7 @@ app.whenReady().then(async () => {
   const run = s => win.webContents.executeJavaScript(s);
   const assert = (value, label) => { report.checks[label] = value; if (expectNew && !value) throw Error(label); };
   const cpu = () => Object.fromEntries(['GPU', 'Tab'].map(type => [type, app.getAppMetrics().filter(m => m.type === type).reduce((sum, m) => sum + (m.cpu.cumulativeCPUUsage || 0), 0)]));
-  const measure = async name => { const a = cpu(), start = Date.now(); await sleep(Number(process.env.NEKKO_WAVE_SAMPLE_MS || 6000)); const b = cpu(), seconds = (Date.now() - start) / 1000; report.cpu.push({name, seconds, gpuProcessCpu: (b.GPU-a.GPU)/seconds*100, rendererCpu: (b.Tab-a.Tab)/seconds*100}); };
+  const measure = async name => { if (process.env.NEKKO_WAVE_SKIP_CPU === '1') return; const a = cpu(), start = Date.now(); await sleep(Number(process.env.NEKKO_WAVE_SAMPLE_MS || 6000)); const b = cpu(), seconds = (Date.now() - start) / 1000; report.cpu.push({name, seconds, gpuProcessCpu: (b.GPU-a.GPU)/seconds*100, rendererCpu: (b.Tab-a.Tab)/seconds*100}); };
   const shot = async name => { const file = path.join(out, name + '.png'); fs.writeFileSync(file, (await win.capturePage(undefined, { stayHidden: true })).toPNG()); report.captures.push(file); };
   try {
     await win.loadFile(path.join(out, 'index.html'));
@@ -31,15 +31,25 @@ app.whenReady().then(async () => {
     report.checks.initial = await run(`({waves:document.querySelectorAll('.pixel-wave-background').length, panes:[...document.querySelectorAll('[data-chat-surface]')].map(e=>({id:e.dataset.sessionId,surface:e.dataset.chatSurface,empty:e.hasAttribute('data-clean-start')})),hidden:document.hidden,focused:document.hasFocus()})`);
     await measure('unfocused-empty');
     assert(await run(`Array.from(document.querySelectorAll('.pixel-wave-texture')).every(e => getComputedStyle(e).animationPlayState === 'paused')`), 'unfocused-paused');
+    if (expectNew) assert(await run(`Array.from(document.querySelectorAll('.pixel-wave-texture')).every(e => !Number(e.getAnimations()[0]?.currentTime))`), 'unfocused-clock-stopped');
     await run(`Object.defineProperty(document, 'hasFocus', {configurable:true,value:()=>true}); window.dispatchEvent(new Event('focus')); document.documentElement.removeAttribute('data-app-inactive')`); // Synthetic active-state CSS, never focus the real desktop.
     fs.mkdirSync(path.join(out, 'motion'), { recursive: true });
     for (let i = 0; i < 12; i++) { fs.writeFileSync(path.join(out, 'motion', String(i).padStart(3, '0') + '.png'), (await win.capturePage(undefined, { stayHidden: true })).toPNG()); await sleep(180); }
+    if (expectNew) assert(await run(`Array.from(document.querySelectorAll('.pixel-wave-texture')).some(e => Number(e.getAnimations()[0]?.currentTime) > 0)`), 'focused-wave-advances');
     assert(await run(`Array.from(document.querySelectorAll('.pixel-wave-texture')).every(e => e.getBoundingClientRect().width === 720 && e.getBoundingClientRect().height === 360)`), 'bounded-textures');
     await measure('synthetic-focused-empty');
     if (expectNew) {
-      await run(`document.querySelector('.pixel-wave-background').style.display='none'`); await sleep(150);
+      await run(`Object.defineProperty(document,'hasFocus',{configurable:true,value:()=>false});window.dispatchEvent(new Event('blur'))`);
+      const blurTime = await run(`Number(document.querySelector('.pixel-wave-texture').getAnimations()[0]?.currentTime)`);
+      await sleep(900);
+      assert(await run(`Number(document.querySelector('.pixel-wave-texture').getAnimations()[0]?.currentTime) === ${blurTime}`), 'blur-freezes-clock');
+      await run(`Object.defineProperty(document,'hasFocus',{configurable:true,value:()=>true});window.dispatchEvent(new Event('focus'))`);
+      await run(`document.querySelector('.pixel-wave-background').style.transform='translateX(-20000px)'`); await sleep(150);
       assert(await run(`document.querySelector('.pixel-wave-background').hasAttribute('data-wave-paused')`), 'offscreen-panel-paused');
-      await run(`document.querySelector('.pixel-wave-background').style.display=''`); await sleep(150);
+      const pausedTime = await run(`Number(document.querySelector('.pixel-wave-texture').getAnimations()[0]?.currentTime)`);
+      await sleep(900);
+      assert(await run(`Number(document.querySelector('.pixel-wave-texture').getAnimations()[0]?.currentTime) === ${pausedTime}`), 'offscreen-clock-stopped');
+      await run(`document.querySelector('.pixel-wave-background').style.transform=''`); await sleep(150);
     }
     assert(await run(`Array.from(document.querySelectorAll('.pixel-wave-background')).every(e => !!e.closest('[data-chat-surface]'))`), 'waves-only-in-agent-panels');
     await win.webContents.debugger.attach('1.3');
@@ -51,7 +61,12 @@ app.whenReady().then(async () => {
     assert(await run(`document.querySelectorAll('.pixel-wave-background').length === 0`), 'setting-disables-wave');
     await run(`(() => {const f=layoutFixture; f.store.setState({settings:{...f.store.getState().settings,backgroundAnimation:true}})})()`);
     await sleep(150);
-    // First send: record a user message then emit the running turn, without any host.
+    // Exercise the real send path through the composer inbox, before any host token.
+    await run(`layoutFixture.bridge.sendChat = () => new Promise(() => {}); layoutFixture.store.setState({composerInbox:{sessionId:'a',text:'Check the synthetic workspace',run:true}})`);
+    await sleep(300);
+    assert(await run(`!document.querySelector('[data-session-id="a"] .pixel-wave-background')`), 'send-removes-wave-before-token');
+    assert(await run(`document.querySelector('.pixel-mascot')?.dataset.mascotPose === 'working'`), 'send-colors-cat-before-token');
+    // Persist the synthetic user message then emit a running token, without a host.
     await run(`(() => {const f=layoutFixture, s=f.records[0]; s.messages=[{id:'user-1',role:'user',content:'Check the synthetic workspace',createdAt:Date.now()}]; f.putCachedSession(s); f.emitAgent({type:'session_meta',sessionId:'a'}); f.emitAgent({type:'text',sessionId:'a',delta:'Inspecting the workspace.'});})()`);
     await sleep(500);
     assert(await run(`!document.querySelector('[data-session-id="a"] .pixel-wave-background')`), 'first-message-removes-wave');

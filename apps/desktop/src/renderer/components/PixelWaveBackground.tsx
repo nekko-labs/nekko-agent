@@ -45,8 +45,8 @@ export function waveTexture({ from, to, peak }: PixelWave): string {
 }
 
 /** Eligibility is deliberately independent of a welcome screen's model/setup UI. */
-export function showEmptyAgentWave({ loaded, messages, running, composer, enabled }: { loaded: boolean; messages: number; running: boolean; composer: boolean; enabled: boolean }): boolean {
-  return loaded && messages === 0 && !running && !composer && enabled;
+export function showEmptyAgentWave({ loaded, messages, running, composer, enabled, readOnly = false }: { loaded: boolean; messages: number; running: boolean; composer: boolean; enabled: boolean; readOnly?: boolean }): boolean {
+  return loaded && messages === 0 && !running && !composer && enabled && !readOnly;
 }
 
 /** Empty-agent decoration only. Pane visibility and app activity pause CSS motion. */
@@ -61,6 +61,35 @@ export function PixelWaveBackground({ wave, visible = true }: { wave: PixelWave;
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
+  useEffect(() => {
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let timer = 0;
+    // A stepped CSS animation can still tick Chromium every vsync. Hold it and
+    // advance the transform only when the next precomputed step changes.
+    const schedule = () => {
+      window.clearInterval(timer);
+      timer = 0;
+      if (!visible || !intersecting || document.hidden || !document.hasFocus() || reduced.matches) return;
+      const animation = ref.current?.querySelector('img')?.getAnimations()[0];
+      if (!animation) return;
+      const stepMs = 18_000 / (wave.speed ?? 0.8) / 36;
+      timer = window.setInterval(() => {
+        animation.currentTime = Number(animation.currentTime ?? 0) + stepMs;
+      }, stepMs);
+    };
+    schedule();
+    window.addEventListener('focus', schedule);
+    window.addEventListener('blur', schedule);
+    document.addEventListener('visibilitychange', schedule);
+    reduced.addEventListener('change', schedule);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', schedule);
+      window.removeEventListener('blur', schedule);
+      document.removeEventListener('visibilitychange', schedule);
+      reduced.removeEventListener('change', schedule);
+    };
+  }, [visible, intersecting, wave.speed]);
   return <div ref={ref} className="pixel-wave-background" data-wave-paused={!visible || !intersecting || undefined} aria-hidden="true">
     <img className="pixel-wave-texture" src={texture} width={720} height={360} alt="" draggable={false}
       style={{ animationDuration: `${18 / (wave.speed ?? 0.8)}s` }} />

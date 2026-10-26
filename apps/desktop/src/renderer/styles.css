@@ -15,7 +15,7 @@
   top: calc(50% - 180px);
   max-width: none;
   image-rendering: pixelated;
-  animation: empty-agent-wave 22.5s steps(36, end) infinite alternate;
+  animation: empty-agent-wave 22.5s steps(36, end) infinite alternate paused;
 }
 @keyframes empty-agent-wave {
   from { transform: translateX(-18px); }

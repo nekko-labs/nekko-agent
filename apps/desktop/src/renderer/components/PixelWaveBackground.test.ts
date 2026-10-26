@@ -15,7 +15,7 @@ describe('pixel wave', () => {
   it('only decorates loaded empty agent windows, never running turns or the shared composer', () => {
     const empty = { loaded: true, messages: 0, running: false, composer: false, enabled: true };
     expect(showEmptyAgentWave(empty)).toBe(true);
-    for (const patch of [{ loaded: false }, { messages: 1 }, { running: true }, { composer: true }, { enabled: false }]) {
+    for (const patch of [{ loaded: false }, { messages: 1 }, { running: true }, { composer: true }, { enabled: false }, { readOnly: true }]) {
       expect(showEmptyAgentWave({ ...empty, ...patch })).toBe(false);
     }
   });
