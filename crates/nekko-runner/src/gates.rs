@@ -56,6 +56,9 @@ pub struct Signals {
     /// Free plus reclaimable memory macOS reports now. A NaN holds new VMs.
     pub available_memory_mb: f64,
     pub paused_all: bool,
+    /// A tunnel leads the Mac's default route (a full-tunnel VPN or an exit
+    /// node), from `nekko-vm egress`.
+    pub vpn_carries_default: bool,
 }
 
 /// Why a gate failed. Declared in the order the UI lists them.
@@ -69,6 +72,7 @@ pub enum Reason {
     LowPowerMode,
     Network,
     Hotspot,
+    VpnCarriesAllTraffic,
     MemoryWarning,
     MemoryCritical,
     ThermalSerious,
@@ -162,6 +166,7 @@ pub fn evaluate(s: &RunnerSettings, sig: &Signals, running: bool) -> Decision {
         (battery, Reason::OnBattery),
         (s.trusted_networks_only && !sig.network_trusted, Reason::Network),
         (s.never_on_hotspot && sig.network_expensive, Reason::Hotspot),
+        (sig.vpn_carries_default && !s.allow_direct_with_vpn, Reason::VpnCarriesAllTraffic),
     ]
     .into_iter()
     .filter_map(|(hit, r)| hit.then_some(r))

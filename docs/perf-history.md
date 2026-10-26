@@ -95,6 +95,20 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-10
 
+### T211 Runner VM NAT: guest-facing TCP send buffer 16 to 64 KiB (2026-10-25)
+Area: engine daemon
+Result: improvement
+Conditions: Apple M1 Max, 64 GB, macOS 27.0.1; guest Cirrus `macos-sequoia-base` (macOS 15.7.7), 4 vCPU, 8 GiB, booted by `nekko-vm` with the runner NAT (`runner_vm_spike` example, `dev-daemon` optimized profile). Throughput is 200,000,000 bytes over SSH through the spike's 127.0.0.1:2222 forward, so the NAT is measured without the internet link; 3 runs per side, each a fresh SSH session. Before and after are separate VM boots.
+
+| Metric (Mbit/s) | Before (16 KiB) | After (64 KiB) |
+|---|---|---|
+| NAT to guest (`cat > /dev/null` in the guest), runs | 85.4, 89.1, 90.9 | 200.7, 206.1, 202.6 |
+| Guest to NAT (`head -c 200000000 /dev/zero` in the guest), runs | 611.1, 683.7, 696.3 | 694.0, 702.6, 701.1 |
+
+Internet downloads were limited by the host link, not the NAT. With 64 KiB, 20 s of `https://proof.ovh.net/files/1Gb.dat` alternating host then guest gave, in run order, host 3202000, guest 3105736, host 2610439, guest 2622182, host 3077573, guest 2956506 B/s (guest 98% of host in total, about 23 Mbit/s). `ash-speed.hetzner.com` swung between 212934 and 2738628 B/s on either side across four pairs, so it supports no comparison. A debug build gave 68.2 to 103.1 Mbit/s NAT to guest at 16 KiB, about the same as optimized, so the cap was the window, not CPU.
+
+Why: the smoltcp send buffer toward the guest bounds bytes in flight on a sub-millisecond leg; guest-to-host keeps 16 KiB. Worst-case socket memory is 20 MiB per VM at 256 flows. Source: commit 11395dc6 (`nekkod: runner NAT sends to the guest from a 64 KiB TCP buffer`), PR #1065.
+
 ### Phone Markdown parser: block tree, cached per segment (MD-1, 2026-10-25)
 Area: renderer
 Result: mixed

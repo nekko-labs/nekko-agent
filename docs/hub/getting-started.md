@@ -165,6 +165,18 @@ When an agent needs a choice, its question opens at the bottom of the conversati
 
 Click the plus button in the Agents panel to open a new agent window. Hover over it for the Agent, Photos and Videos, and Terminal choices. Terminals and photo/video projects appear in separate groups at the top of the panel only when there are items to show.
 
+The Agent Board header also has a single **+**: hover or click it for the same three choices. Both menus use a neutral light/dark background and highlight the hovered or keyboard-focused row in your primary color. The shortcut appears beside every choice:
+
+| Action | macOS | Windows/Linux |
+| --- | --- | --- |
+| New agent | Cmd+T | Ctrl+T |
+| New photo/video session (image tools available; video planned) | Cmd+Shift+I | Ctrl+Shift+I |
+| New terminal | Cmd+Shift+T | Ctrl+Shift+T |
+| Search chats | Cmd+Shift+F | Ctrl+Shift+F |
+
+Hover or focus the search icon to see its shortcut; opening search shows it beside the input too. The search shortcut returns to the Agent Board and reveals its panel when necessary. Cmd/Ctrl+F still searches within the focused chat.
+
+
 ### Compact agent row and monitor controls
 
 In the horizontal Agents row, the controls sit in a compact two-column strip beside the cards, leaving no unused band below them. Configure monitors stays within the window even when the dock is at either edge. Press Escape or click outside to close it. Dragging monitor headers keeps the scroll surface steady while the landing outline opens.
@@ -177,6 +189,11 @@ when completed. Minimize only hides a window and deliberately lets work continue
 Stop cannot undo tokens already consumed. A later intentional run can arm new
 watches; a failed delegation should explain its failure and continue directly
 when safe, never silently switch provider or model.
+
+Active watches appear above the chat draft as expandable chips. Open one to see
+its wake condition, follow the PR, or cancel that watcher without stopping the
+chat. Child-agent watchers show their owner. Suggested response buttons are gone;
+the gray draft placeholder and Right Arrow acceptance remain.
 
 ### Reading expanded tool details
 
