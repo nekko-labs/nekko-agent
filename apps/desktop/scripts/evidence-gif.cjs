@@ -9,7 +9,9 @@ module.exports = function writeGif(file, buffers, delay = 8) {
     const c = (f.data[i] << 16) | (f.data[i + 1] << 8) | f.data[i + 2];
     counts.set(c, (counts.get(c) || 0) + 1);
   }
-  const palette = [...counts].sort((a, b) => b[1] - a[1]).slice(0, 256).map(x => x[0]);
+  // Gradients dominate counts; reserve neutral ink shades so small white text survives.
+  const neutrals = Array.from({ length: 16 }, (_, i) => (i * 17) * 0x010101);
+  const palette = [...neutrals, ...[...counts].sort((a, b) => b[1] - a[1]).map(x => x[0]).filter(c => !neutrals.includes(c)).slice(0, 240)];
   while (palette.length < 256) palette.push(0);
   const cache = new Map();
   const buffer = Buffer.alloc(frames[0].width * frames[0].height * frames.length * 2);
