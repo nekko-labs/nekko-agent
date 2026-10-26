@@ -273,6 +273,7 @@ function WorkspaceCardImpl({
             : 'color-mix(in srgb, var(--accent) 30%, transparent)'
           : 'transparent',
       }}
+      data-agent-active={isActive || undefined}
       title={title}
     >
       <div className="flex items-center gap-1.5">

@@ -1,19 +1,25 @@
 @import 'tailwindcss';
 
-/* Lilac / Lavender: the website's drifting pixel-dot field. It sits BEHIND
-   the app (z-index -1, above only the page background), so it shows in the
-   field around the floating panels while chat windows and every other panel,
-   which paint their own solid surface, cover it and keep text clear. Never
-   intercepts input. */
+/* New-chat decoration only. The containing clean-start surface clips the field. */
 .pixel-wave-background {
-  position: fixed;
+  position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   pointer-events: none;
   z-index: -1;
-  /* Drawn at one pixel per CSS pixel; keep the dots crisp on high-DPI screens. */
   image-rendering: pixelated;
+}
+
+/* Context menus remain neutral even when a preset gives the page a vivid tint. */
+.context-menu { background: #ffffff; color: #17191f; }
+[data-theme='dark'] .context-menu { background: #191c23; color: #f3f4f6; }
+.context-menu [role^="menuitem"]:not(:disabled):is(:hover, :focus-visible),
+.context-menu [role^="menuitem"][aria-checked="true"],
+.context-menu [role="menuitem"][aria-expanded="true"] {
+  background: var(--accent);
+  color: var(--on-accent, white);
+  outline: none;
 }
 
 /* Faint seasonal decoration; never intercepts app input. */
@@ -3327,10 +3333,7 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
    colour steps. Both stay behind the content and never intercept input. */
 [data-clean-start] .clean-start::before {
   content: ''; position: absolute; inset: 0; z-index: -2; pointer-events: none;
-  background: linear-gradient(135deg,
-    color-mix(in srgb, var(--accent) 22%, var(--win, var(--surface))) 0%,
-    color-mix(in srgb, var(--accent-2) 14%, var(--win, var(--surface))) 52%,
-    color-mix(in srgb, #ff7eb6 16%, var(--win, var(--surface))) 100%);
+  background: linear-gradient(to bottom, #073b40 0%, #154e50 45%, #b38b3b 100%);
 }
 [data-clean-start] .clean-start::after {
   content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
