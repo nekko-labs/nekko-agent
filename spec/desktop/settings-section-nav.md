@@ -24,3 +24,9 @@ User intent: find the QR code that links a phone without hunting through one lon
 - Privacy and safety: layout only. No setting, pairing secret or relay behavior changes.
 
 Status: implemented. The animated jump `[2026-10-23]` was checked in the same hidden renderer at 1280 and 640 wide: clicking System passes through intermediate scroll positions and lands on the section in about 195ms, with System highlighted. Checked in a hidden renderer of the full app with a stub bridge (dark theme, 1280×900 and 640×900): clicking Phone pairing highlights it and brings the card into view, Pair a device shows the QR fully on screen, no horizontal overflow. Not yet checked: light theme, the installed app, and the Local Web UI.
+
+## Optional sidebar shortcuts (issue #1178)
+
+Implemented. Skills and Connectors are large, wrapping chips at the very top of Settings, before the section navigation. Both sidebar shortcuts are hidden by default, including for existing settings with no saved preference. General > View settings independently opts each shortcut into the left rail. Hiding a shortcut does not disable its view or change access through Settings, the command palette or chat skill menus. Preferences persist through the existing settings API as `sidebarViews`; no credentials, permissions or remote calls are added.
+
+Acceptance: both chips navigate to their views, each toggle saves independently, and both desktop and narrow layouts keep them legible. Verified with focused navigation tests and hidden, network-blocked Electron fixture interaction checks and matching screenshots. Packaged apps and native phone clients are not verified.

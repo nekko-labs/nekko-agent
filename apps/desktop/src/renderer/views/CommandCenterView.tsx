@@ -1,3 +1,4 @@
+import { CreateMenu } from '../components/CreateMenu.js';
 import { AgentWindowDropdown, defaultFolderIds, type AgentWindowSelection } from '../components/AgentWindowPicker.js';
 import { AgentSidebar } from './WorkspacesView.js';
 import { ChatPane } from '../components/ChatPane.js';
@@ -11,9 +12,8 @@ import { addCreatedSession, useStore } from '../store.js';
 import { putCachedSession } from '../sessionCache.js';
 import { newAgentSetup } from '../newAgentSetup.js';
 import { runningSessionIds } from '../liveRuns.js';
-import { PhotoIcon, TerminalIcon, FocusLayoutIcon, BoltIcon, MagnetIcon } from '../icons.js';
+import { FocusLayoutIcon, BoltIcon, MagnetIcon } from '../icons.js';
 import { HoverTip } from '../components/HoverTip.js';
-import { NekkoAvatar } from '../components/Mascot.js';
 import { AgentPanelControls } from '../components/AgentPanelControls.js';
 import { CommandWall } from '../components/CommandWall.js';
 import { WallComposer, type WallAgent } from '../components/WallComposer.js';
@@ -477,6 +477,10 @@ export function CommandCenterView() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [wall.root, selected, selectAgent, setWall]);
+  const chatFinderOpen = useStore((s) => s.chatFinderOpen);
+  useEffect(() => {
+    if (chatFinderOpen) setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), show: true } }));
+  }, [chatFinderOpen, setWall]);
   const composerRef = useRef<HTMLDivElement>(null);
   const agentList = useMemo<WallAgent[]>(() => agentsOnWall.flatMap((p, i) => {
     const session = sessions.find((x) => x.id === p.refId);
@@ -545,7 +549,7 @@ export function CommandCenterView() {
   const composerRow = <div className="wall-composer-row" data-dock={`${wall.composer.side}-${wall.composer.align}`}>{composer}</div>;
 
   return (
-    <div ref={viewRef} className="flex h-full min-h-0 flex-col gap-2 pb-0 pl-[3px] pr-px pt-1">
+    <div ref={viewRef} className="flex h-full min-h-0 flex-col -mt-px gap-2 pb-0 pl-[3px] pr-px pt-0">
       <WallToolbar wall={wall} setWall={setWall} addOpen={addOpen} setAddOpen={setAddOpen}
         onAdd={(kind) => {
           setCompletedId(null);
@@ -670,9 +674,7 @@ export function WallToolbar({
             terminal of its own. An agent's Changes, Files and Browser live in that agent's own
             header beside Logs. The empty wall can still open the full picker. */}
         <div className="wall-add-bar" role="group" aria-label="Add to the wall">
-          <button type="button" className="wall-add-icon" title="New agent" aria-label="New agent" onClick={() => onAdd('chat')}><NekkoAvatar size={16} stationary eyes={false} /></button>
-          <button type="button" className="wall-add-icon" title="New image session" aria-label="New image session" onClick={() => onAdd('image')}><PhotoIcon className="h-4 w-4" /></button>
-          <button type="button" className="wall-add-icon" title="New terminal" aria-label="New terminal" ref={addButtonRef} onClick={() => onAdd('terminal')}><TerminalIcon className="h-4 w-4" /></button>
+          <CreateMenu anchorRef={addButtonRef} onCreate={onAdd} />
         </div>
         {addOpen && onPick && <AgentWindowDropdown anchorRef={addButtonRef} onClose={() => setAddOpen(false)} onAdd={onPick} />}
         <div className="wall-layout-control">

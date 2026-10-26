@@ -200,6 +200,8 @@
  "session:truncate",
  "session:watches",
  "sessions:clear",
+ "sessions:clearHistory",
+ "sessions:historyUsage",
  "sessions:list",
  "sessions:purgeArchived",
  "sessions:summaries",

@@ -110,7 +110,8 @@ export function toStreamBlocks(messages: ChatMessage[], context: ChatMessage[] =
       if (m.content.trim() && !isFinalAnswer) say(m, i);
       // Delegations, watches and memory saves show their outcome on the step itself.
       m.toolCalls.forEach((c) => run.push({ kind: 'tool', call: c, startedAt: m.createdAt, endedAt: resultAt.get(c.id), ...(results.get(c.id)?.isError ? { failed: true } : {}), ...((c.name === 'spawn_agent' || c.name === 'agent_watch' || c.name === 'remember') && results.has(c.id) ? { result: results.get(c.id) } : {}) }));
-      if (isFinalAnswer) { flush(); blocks.push({ type: 'msg', message: m }); }
+      // Reasoning already has its inline activity projection above.
+      if (isFinalAnswer) { flush(); blocks.push({ type: 'msg', message: { ...m, reasoning: undefined } }); }
     } else {
       flush();
       blocks.push({ type: 'msg', message: m });

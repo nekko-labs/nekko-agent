@@ -29,7 +29,7 @@ describe('workspace card completion control', () => {
   it('shows an X for completion, keeping the Complete name and retention title', () => {
     const html = card();
     expect(html).toContain('aria-label="Complete Chat"');
-    expect(html).toContain('title="Complete this chat (kept for 60 days)"');
+    expect(html).toContain('title="Complete this chat (kept until you delete it)"');
     // The status may be a done check, but the action must remain an X.
     const action = html.match(/<button[^>]*aria-label="Complete Chat"[^]*?<\/button>/)?.[0] ?? '';
     expect(action).toContain('M18 6 6 18M6 6l12 12');

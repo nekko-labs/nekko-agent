@@ -481,6 +481,8 @@ function makeWebClient(): NekkoApi {
     truncateSession: (id, messageId) => call(IpcChannels.sessionTruncate, id, messageId),
     clearSessions: (scope) => call(IpcChannels.sessionsClear, scope),
     purgeExpiredArchives: () => call(IpcChannels.sessionsPurgeArchived),
+  getHistoryUsage: () => call(IpcChannels.sessionsHistoryUsage),
+  clearHistory: (range) => call(IpcChannels.sessionsClearHistory, range),
     forkSession: (id, beforeMessageId) => call(IpcChannels.sessionFork, id, beforeMessageId),
     resetSettings: () => call(IpcChannels.settingsReset),
     listFonts: () => call(IpcChannels.fontsList),

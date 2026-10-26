@@ -10,6 +10,8 @@ use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+type ProtectedSession = Arc<dyn Fn(&str) -> bool + Send + Sync>;
+
 #[derive(Clone)]
 pub struct Ctx {
     pub terminals: Arc<Registry>,
@@ -51,6 +53,7 @@ pub struct Ctx {
     /// recommendations (`gpu:stats`, `system:stats`, `machine:*`).
     pub machine: Arc<nekko_machine::Machine>,
     /// CI runners (`runner:*`), when the data directory is known.
+    #[cfg(unix)]
     pub runners: Option<Arc<crate::runner::Runners>>,
     /// The experimental resource-queue client, when the data directory is known.
     pub resource_queue: Option<Arc<crate::resource_queue::ResourceQueue>>,
@@ -398,6 +401,8 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             crate::catalog::route(ctx.catalog.as_ref().expect("checked"), c, &args).await
         }
         c if crate::tooling::CHANNELS.contains(&c) => crate::tooling::route(ctx, c, &args).await,
+        // Elsewhere runner:* falls through to the unknown-channel reply.
+        #[cfg(unix)]
         c if crate::runner::CHANNELS.contains(&c) && ctx.runners.is_some() => {
             ctx.runners.clone().expect("checked").route(c, &args).await
         }
@@ -502,10 +507,22 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             let closing = c == "session:delete"
                 || (c == "session:setOptions" && arg(&args, 1).get("archivedAt").is_some_and(|v| !v.is_null()));
             let id = str_arg(&args, 0).unwrap_or_default().to_string();
+            let protected: Option<ProtectedSession> = if c == "sessions:clearHistory" {
+                let (turns, image_turns, admission) =
+                    (ctx.turns.clone(), ctx.image_turns.clone(), ctx.admission.clone());
+                Some(Arc::new(move |id| {
+                    turns.running_sessions().iter().any(|running| running == id)
+                        || image_turns.running_sessions().iter().any(|running| running == id)
+                        || admission.as_ref().is_some_and(|admission| admission.is_admitting(id))
+                }))
+            } else {
+                None
+            };
             let result = session_op(
                 ctx.sessions.clone().expect("checked"),
                 ctx.turns.agent_logs.clone(),
                 ctx.turns.watches.clone(),
+                protected,
                 channel,
                 args,
             )
@@ -846,6 +863,8 @@ const SESSION_CHANNELS: &[&str] = &[
     "sessions:summaries",
     "sessions:list",
     "sessions:clear",
+    "sessions:clearHistory",
+    "sessions:historyUsage",
     "sessions:purgeArchived",
     "session:get",
     "session:images",
@@ -906,6 +925,7 @@ async fn session_op(
     store: Arc<nekko_store::SessionStore>,
     logs: Option<Arc<crate::agent_logs::AgentLogs>>,
     watches: Option<Arc<crate::watches::Watches>>,
+    protected: Option<ProtectedSession>,
     channel: &str,
     args: Vec<Value>,
 ) -> Result<Value, String> {
@@ -937,6 +957,13 @@ async fn session_op(
                 Ok(Value::Array(sessions))
             }
             "sessions:clear" => store.clear_with(id, delete_log).map(|n| json!(n)),
+            "sessions:clearHistory" => store
+                .clear_history_with(id, |id| protected.as_ref().is_some_and(|protected| protected(id)), delete_log)
+                .map(|n| json!(n)),
+            "sessions:historyUsage" => {
+                let (bytes, count) = store.history_usage();
+                Ok(json!({ "bytes": bytes, "count": count }))
+            }
             "sessions:purgeArchived" => store.purge_archived(delete_log).map(|n| json!(n)),
             "session:get" => Ok(store.get(id).unwrap_or(Value::Null)),
             "session:images" => Ok(Value::Array(store.images(id, arg(&args, 1).as_f64().unwrap_or(1.0)))),
@@ -994,7 +1021,7 @@ mod tests {
         ]).to_string()).unwrap();
         let watches = crate::watches::Watches::new(tmp.path().to_path_buf(), store.clone(), Hub::new());
         for channel in ["sessions:list", "sessions:summaries"] {
-            let got = session_op(store.clone(), None, Some(watches.clone()), channel, vec![]).await.unwrap();
+            let got = session_op(store.clone(), None, Some(watches.clone()), None, channel, vec![]).await.unwrap();
             let rows = got.as_array().unwrap();
             assert_eq!(rows.iter().map(|s| s["id"].as_str().unwrap()).collect::<Vec<_>>(), ["s3", "s2", "s1"]);
             assert_eq!(rows.iter().map(|s| s["activeWatchCount"].as_u64().unwrap()).collect::<Vec<_>>(), [0, 1, 3]);
@@ -1017,7 +1044,7 @@ mod tests {
         }
         // Counts are live even when the session summaries came from the cache.
         std::fs::write(path, "[]").unwrap();
-        let got = session_op(store, None, Some(watches), "sessions:summaries", vec![]).await.unwrap();
+        let got = session_op(store, None, Some(watches), None, "sessions:summaries", vec![]).await.unwrap();
         assert!(got.as_array().unwrap().iter().all(|s| s["activeWatchCount"] == 0));
     }
 
@@ -1033,11 +1060,36 @@ mod tests {
             }
             for channel in ["sessions:list", "sessions:summaries"] {
                 for watches in [None, Some(watches.clone())] {
-                    let got = session_op(store.clone(), None, watches, channel, vec![]).await.unwrap();
+                    let got = session_op(store.clone(), None, watches, None, channel, vec![]).await.unwrap();
                     assert_eq!(got[0]["activeWatchCount"], 0);
                 }
             }
         }
+    }
+
+    #[tokio::test]
+    async fn clear_history_skips_a_protected_running_chat() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Arc::new(nekko_store::SessionStore::new(tmp.path()));
+        std::fs::create_dir_all(store.dir()).unwrap();
+        for id in ["s_busy", "s_idle"] {
+            let session = json!({ "id": id, "updatedAt": 1, "archivedAt": 1, "messages": [] });
+            std::fs::write(store.dir().join(format!("{id}.json")), session.to_string()).unwrap();
+        }
+        let protected: ProtectedSession = Arc::new(|id| id == "s_busy");
+        let removed = session_op(
+            store.clone(),
+            None,
+            None,
+            Some(protected),
+            "sessions:clearHistory",
+            vec![json!("older-2-weeks")],
+        )
+        .await
+        .unwrap();
+        assert_eq!(removed, json!(1));
+        assert!(store.dir().join("s_busy.json").exists());
+        assert!(!store.dir().join("s_idle.json").exists());
     }
 
     #[test]
