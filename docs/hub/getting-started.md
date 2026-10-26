@@ -36,7 +36,7 @@ macOS builds are signed and notarized, so they open normally. If Windows shows a
 
 ## Typing in a new agent window
 
-A new chat greets you with “What should we work on?” and a small pixel Nekko peeking beside it, looking toward the heading. Type your request in the composer below.
+A new chat greets you with “What should we work on?” and a small pixel Nekko peeking beside it, looking toward the heading. Type your request in the composer below. The new-chat surface has a vertical dark-teal-to-gold gradient. Themes with moving dots show them only here, not behind existing conversations. Context menus use a neutral light or dark background with accent-colored highlighted rows. Switching to a chat also highlights and reveals its row in the Agents panel.
 
 Opening an agent composer puts the caret after any restored draft once a usable model provider is available. If you are already typing in another visible text field, that field keeps focus. Normal background agent and provider updates do not pull you back into the composer.
 
@@ -167,6 +167,24 @@ Click the plus button in the Agents panel to open a new agent window. Hover over
 
 In the horizontal Agents row, the controls sit in a compact two-column strip beside the cards, leaving no unused band below them. Configure monitors stays within the window even when the dock is at either edge. Press Escape or click outside to close it. Dragging monitor headers keeps the scroll surface steady while the landing outline opens.
 
+### Stopping agents and their watchers
+
+Completing or closing an agent stops its active work and cancels pending durable
+watches, including watches owned by delegated descendants. The chat is retained
+when completed. Minimize only hides a window and deliberately lets work continue.
+Stop cannot undo tokens already consumed. A later intentional run can arm new
+watches; a failed delegation should explain its failure and continue directly
+when safe, never silently switch provider or model.
+
+### Reading expanded tool details
+
+Click a tool activity row's chevron to see its full inputs or task. Expanded
+details wrap long paths, URLs and unbroken text to the chat width, while keeping
+indentation and line breaks. Longer details scroll vertically inside a bounded
+area. Tool inputs shown as JSON keep JSON escaping (for example, `\n` inside a
+string); the display does not rewrite the original input. Watch prompts, results
+and wake-up details wrap the same way on desktop and the Local Web UI.
+
 ### Resizing the side panels
 
-Hover the edge between the agent list and chat wall, or the edge beside Monitors, to reveal a bright vertical resize line. Drag it to change the panel width, or focus the separator and use the left/right arrow keys. The line disappears when you leave the edge; there is no permanent divider beside the agent list.
+Hover the edge between the agent list and chat wall, or the edge beside Monitors, to reveal a bright vertical resize line. Drag it to change the panel width, or focus the separator and use the left/right arrow keys. The line disappears when you leave the edge; there is no permanent divider beside the agent list. Monitors starts at 276px wide, with all six Budget time ranges on one row. Resize near that width to snap back, or double-click its separator (Home on the keyboard) to reset. In Focus, untouched new chats use a quiet, borderless frosted surface; reduced-transparency preferences restore a solid background.

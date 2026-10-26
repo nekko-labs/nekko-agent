@@ -186,6 +186,7 @@
  "sandbox:status",
  "security:challenge",
  "server:stop",
+ "session:cancelWatch",
  "session:create",
  "session:delete",
  "session:fork",

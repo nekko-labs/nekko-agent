@@ -119,11 +119,8 @@ impl ChatGptProvider {
             }
             EffortLevel::Normal => {}
         }
-        // Summaries are on unless the chat turned thinking off: without them a
-        // reasoning model works in silence between tool calls.
-        if req.think != Some(false) {
-            reasoning.insert("summary".into(), json!("auto"));
-        }
+        // Cloud reasoning stays on, including for callers carrying a legacy off flag.
+        reasoning.insert("summary".into(), json!("auto"));
         if !reasoning.is_empty() {
             body.insert("reasoning".into(), Value::Object(reasoning));
         }

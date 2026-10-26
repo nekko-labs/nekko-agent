@@ -142,7 +142,23 @@ async fn udp_echo() -> SocketAddr {
 
 /// A DNS upstream answering `ans:` + query + `tail`.
 async fn fake_dns(tail: &'static [u8]) -> SocketAddr {
-    let s = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+    fake_dns_on(UdpSocket::bind("127.0.0.1:0").await.unwrap(), tail)
+}
+
+/// A fake DNS upstream live on the same port number over UDP and TCP. TCP is bound first on
+/// port 0 and UDP follows on that port; a collision on either side retries with a fresh port.
+async fn fake_dns_dual(tail: &'static [u8]) -> (SocketAddr, TcpListener) {
+    for _ in 0..20 {
+        let tcp = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = tcp.local_addr().unwrap();
+        if let Ok(udp) = UdpSocket::bind(addr).await {
+            return (fake_dns_on(udp, tail), tcp);
+        }
+    }
+    panic!("no port free on both UDP and TCP");
+}
+
+fn fake_dns_on(s: UdpSocket, tail: &'static [u8]) -> SocketAddr {
     let addr = s.local_addr().unwrap();
     tokio::spawn(async move {
         let mut buf = [0u8; 4096];
@@ -342,9 +358,9 @@ async fn dns_query_is_forwarded_and_answered() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn dns_upstream_that_turns_on_link_is_refused() {
-    let (up, local) = (sa(RESOLVER, 53), fake_dns(b"").await);
     // A live TCP server on the upstream too, so a refusal is not a timeout.
-    let _tcp_up = TcpListener::bind(local).await.unwrap();
+    let (local, _tcp_up) = fake_dns_dual(b"").await;
+    let up = sa(RESOLVER, 53);
     let host = Arc::new(RwLock::new(HostNets::default()));
     let conn = TestConnector::new([(up, local)]);
     let (g, n) = UnixDatagram::pair().unwrap();
@@ -889,8 +905,7 @@ async fn assert_direct_refuses(d: Direct) {
     assert_eq!(d.udp(udp_dst).await.unwrap_err().kind(), io::ErrorKind::PermissionDenied);
     // End to end: a public upstream (so the policy allows it), live locally on UDP and TCP.
     let (up, web) = (sa(RESOLVER, 53), sa(PUBLIC, 443));
-    let local_dns = fake_dns(b"").await;
-    let _tcp_up = TcpListener::bind(local_dns).await.unwrap();
+    let (local_dns, _tcp_up) = fake_dns_dual(b"").await;
     let calls = Arc::new(Mutex::new(vec![]));
     let via = DirectVia { inner: d, map: [(up, local_dns), (web, pong_server().await)].into(), calls: calls.clone() };
     let (g, n) = UnixDatagram::pair().unwrap();
