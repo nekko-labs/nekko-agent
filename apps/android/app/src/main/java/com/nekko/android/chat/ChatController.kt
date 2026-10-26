@@ -9,8 +9,11 @@ import com.nekko.protocol.AskAnswer
 import com.nekko.protocol.AskRequest
 import com.nekko.protocol.Block
 import com.nekko.protocol.Channels
+import com.nekko.protocol.ContextUsage
 import com.nekko.protocol.DenyReason
+import com.nekko.protocol.Effort
 import com.nekko.protocol.LiveTurn
+import com.nekko.protocol.ModelInfo
 import com.nekko.protocol.PendingInput
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.RemoteDefaults
@@ -30,6 +33,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /** A turn can run for hours (long agent runs); don't time the request out. */
 const val TURN_TIMEOUT_MS: Long = 12L * 60 * 60 * 1000
@@ -41,6 +46,8 @@ data class ChatState(
     val loadError: String? = null,
     /** The computer's runnable skills, re-read with the chat; empty until loaded or on an older computer. */
     val skills: List<SkillSummary> = emptyList(),
+    /** The computer's count of the chat's context window (`context:preview`); null until it answers or on an older computer. */
+    val context: ContextUsage? = null,
 )
 
 /** Connection facts the chat screen reads from the computers store. */
@@ -49,6 +56,8 @@ data class ChatEnv(
     val denied: DenyReason? = null,
     val defaults: RemoteDefaults = RemoteDefaults(),
     val computerName: String = "your computer",
+    /** The computer's model lists by provider, for the model's name. */
+    val models: Map<String, List<ModelInfo>> = emptyMap(),
 )
 
 /** Everything the chat screen renders. Pure projection of [ChatState] + [ChatEnv]. */
@@ -67,6 +76,15 @@ data class ChatUi(
     val skills: List<SkillSummary> = emptyList(),
     /** Older messages the computer kept back from the phone; they stay on the computer. */
     val omittedMessages: Int = 0,
+    val providerId: String? = null,
+    val modelId: String? = null,
+    /** The model's name from the computer's list, else its id. */
+    val modelName: String? = null,
+    /** The chat's own effort; null follows the computer's setting. */
+    val effort: Effort? = null,
+    val context: ContextUsage? = null,
+    /** [context]'s count plus about one token per four characters streamed this turn; null until the computer answers. */
+    val contextTokens: Long? = null,
 )
 
 /**
@@ -102,6 +120,7 @@ class ChatController(
                 s.await() to p.await()
             }
             scope.launch { loadSkills() }
+            scope.launch { loadContext() }
             val session = Session.from(raw)
             if (session == null) {
                 _state.update { it.copy(loadError = "This chat was deleted on your computer.") }
@@ -144,6 +163,37 @@ class ChatController(
         } catch (_: Exception) {
             // Keep the previous list; the menu just offers what it last knew.
         }
+    }
+
+    /**
+     * The chat's context totals, the same estimate as the desktop's gauge, read with
+     * the chat and after each turn. An older computer refuses it; the ring stays empty.
+     */
+    suspend fun loadContext() {
+        try {
+            val c = ContextUsage.from(caller.call(Channels.CONTEXT_PREVIEW, JsonPrimitive(sessionId))) ?: return
+            _state.update { it.copy(context = c) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // Keep the last count.
+        }
+    }
+
+    /**
+     * Change this chat's model or effort on the computer, then re-read it. The computer
+     * takes only a level, so the phone can't go back to "computer default". Throws so
+     * the sheet can say why.
+     */
+    suspend fun setOptions(providerId: String? = null, modelId: String? = null, effort: Effort? = null) {
+        val patch = buildJsonObject {
+            providerId?.let { put("providerId", it) }
+            modelId?.let { put("modelId", it) }
+            effort?.let { put("effort", it.wire) }
+        }
+        if (patch.isEmpty()) return
+        caller.call(Channels.SESSION_SET_OPTIONS, JsonPrimitive(sessionId), patch)
+        reload()
     }
 
     /** Fold one event; returns true when the caller should [reload]. */
@@ -215,6 +265,20 @@ class ChatController(
             return providerId to modelId
         }
 
+        /** Mid-turn the computer's count lags: add about one token per four characters streamed, as the desktop's live gauge does. */
+        fun liveTokens(context: ContextUsage?, turn: LiveTurn): Long? {
+            val used = context?.usedTokens ?: return null
+            if (!turn.running) return used
+            val chars = turn.blocks.sumOf { b ->
+                when (b) {
+                    is Block.User -> b.text.length
+                    is Block.Assistant -> b.text.length + (b.reasoning?.length ?: 0)
+                    is Block.Tool -> b.label.length + (b.output?.length ?: 0)
+                }
+            }
+            return used + (chars + 3) / 4
+        }
+
         fun project(state: ChatState, env: ChatEnv): ChatUi {
             val (providerId, modelId) = resolveModel(state.session, env.defaults)
             val blocked = when {
@@ -240,6 +304,12 @@ class ChatController(
                 rate = turn.rate,
                 skills = state.skills,
                 omittedMessages = state.session?.omittedMessages ?: 0,
+                providerId = providerId,
+                modelId = modelId,
+                modelName = modelId?.let { id -> env.models[providerId]?.firstOrNull { it.id == id }?.name ?: id },
+                effort = Effort.parse(state.session?.effort),
+                context = state.context,
+                contextTokens = liveTokens(state.context, turn),
             )
         }
     }

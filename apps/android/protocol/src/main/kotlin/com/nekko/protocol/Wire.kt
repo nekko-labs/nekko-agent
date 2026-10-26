@@ -52,6 +52,13 @@ object Channels {
     const val CHANGES_LIST = "changes:list"
     /** The Monitors pane: hardware, running chats, what needs the owner, next automations ([MonitorSummary]); read class. */
     const val MONITOR_SUMMARY = "monitor:summary"
+    /** The Expert monitor ([SystemStats], [GpuStats], [EngineStatus]) and a chat's context totals ([ContextUsage]); read class. */
+    const val SYSTEM_STATS = "system:stats"
+    const val GPU_STATS = "gpu:stats"
+    const val ENGINE_STATUS = "engine:status"
+    const val CONTEXT_PREVIEW = "context:preview"
+    /** Agent class without a proof: unloading frees memory, and the next reply loads the model again. */
+    const val MODEL_UNLOAD = "model:unload"
     /** SK-7: a single-use step-up challenge and the kinds of method registered ([StepUpChallenge]). Read class. */
     const val SECURITY_CHALLENGE = StepUp.CHALLENGE_CHANNEL
     /**
@@ -68,6 +75,7 @@ object Channels {
         SETTINGS_GET, SETTINGS_UPDATE, SESSION_DELETE, VOICE_STATUS, VOICE_TRANSCRIBE, PROVIDERS_LIST, MODELS_LIST, SESSIONS_SUMMARIES, SESSION_CREATE, SESSION_GET,
         SESSION_SET_OPTIONS, CHAT_SEND, CHAT_ABORT, CHAT_QUEUE, CHAT_PENDING, CHAT_ANSWER, TOOL_APPROVE,
         WORKSPACE_LIST, APP_INFO, SKILLS_RUNNABLE, CHANGES_LIST, MONITOR_SUMMARY,
+        SYSTEM_STATS, GPU_STATS, ENGINE_STATUS, CONTEXT_PREVIEW, MODEL_UNLOAD,
         SECURITY_CHALLENGE, DEVICE_SIGN_OUT, REMOTE_STOP, APP_QUIT,
     )
 }
@@ -185,6 +193,8 @@ data class Session(
     val omittedMessages: Int = 0,
     val queue: List<String>,
     val updatedAt: Long,
+    /** The chat's effort (`EffortLevel`); null follows the computer's setting. */
+    val effort: String? = null,
 ) {
     companion object {
         fun from(e: JsonElement?): Session? {
@@ -202,6 +212,7 @@ data class Session(
                     (q as? JsonPrimitive)?.contentOrNull ?: q.obj()?.str("text")
                 } ?: emptyList(),
                 updatedAt = o.long("updatedAt") ?: 0,
+                effort = o.str("effort"),
             )
         }
     }

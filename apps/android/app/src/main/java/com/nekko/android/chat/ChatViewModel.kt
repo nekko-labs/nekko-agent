@@ -5,11 +5,14 @@ import androidx.lifecycle.viewModelScope
 import com.nekko.android.data.ComputersRepository
 import com.nekko.android.data.ComputersState
 import com.nekko.android.data.PhonePrefs
+import com.nekko.android.monitors.EXPERT_MODE
+import com.nekko.android.monitors.HardwareMonitorController
 import com.nekko.android.voice.Dictation
 import com.nekko.android.voice.DictationController
 import com.nekko.android.voice.MicHardware
 import com.nekko.protocol.AskAnswer
 import com.nekko.protocol.Channels
+import com.nekko.protocol.Effort
 import com.nekko.protocol.PhoneChanges
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.SkillSummary
@@ -35,7 +38,7 @@ class ChatViewModel(
     private val repo: ComputersRepository,
     /** The phone's microphone and its settings; null keeps dictation off (tests, previews). */
     mic: MicHardware? = null,
-    phonePrefs: PhonePrefs? = null,
+    private val phonePrefs: PhonePrefs? = null,
 ) : ViewModel() {
     private val controller = ChatController(sessionId, repo.caller, viewModelScope, { env(repo.state.value) })
 
@@ -51,6 +54,26 @@ class ChatViewModel(
         },
         computerName = { repo.state.value.active?.name ?: "your computer" },
     )
+
+    /** Simple or Expert (the phone's choice, every chat); always Simple without prefs (tests, previews). */
+    val expert: StateFlow<Boolean> = phonePrefs?.flow(EXPERT_MODE) ?: MutableStateFlow(false)
+    fun setExpert(on: Boolean) { phonePrefs?.set(EXPERT_MODE, on) }
+
+    /** Expert mode's hardware and loaded models; the screen polls it only while Expert is on and the chat is visible. */
+    val hardware = HardwareMonitorController(repo.caller) { repo.state.value.active?.name ?: "your computer" }
+
+    /** The model and effort sheet: change the chat's model or effort on the computer. Throws so the sheet can say why. */
+    suspend fun setOptions(providerId: String? = null, modelId: String? = null, effort: Effort? = null) =
+        controller.setOptions(providerId, modelId, effort)
+
+    /** The computer's state, for the model picker and the Monitor's model names. */
+    val computers: StateFlow<ComputersState> = repo.state
+
+    /** A loaded model's name from the computer's lists, else its id. */
+    fun modelName(id: String): String = repo.state.value.models.values.firstNotNullOfOrNull { l -> l.firstOrNull { it.id == id }?.name } ?: id
+
+    /** The model picker in the sheet lists every enabled provider's models. */
+    suspend fun loadModels() = repo.loadAllModels()
 
     override fun onCleared() {
         dictation?.cancel()
@@ -142,5 +165,6 @@ class ChatViewModel(
         denied = s.denied,
         defaults = s.defaults,
         computerName = s.active?.name ?: "your computer",
+        models = s.models,
     )
 }
