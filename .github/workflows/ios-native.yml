@@ -40,7 +40,9 @@ jobs:
   protocol-and-build:
     if: github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'ci:macos') && contains(fromJSON('["ci:macos","ci:theme"]'), github.event.label.name))
     runs-on: macos-14
-    timeout-minutes: 50
+    # Light and dark live tests alone take 35-45 min on macos-14 (2026-10-25), so 50 cut
+    # passing runs off mid-test.
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
         with:

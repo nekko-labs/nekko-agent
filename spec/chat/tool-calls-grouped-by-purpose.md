@@ -82,6 +82,26 @@ area: chat
   - streaming into an open group
 - Desktop visual evidence in the PR shows a turn that reads guidance, explores, edits and runs tests, before and after, in light and dark. It also includes a short recording of a group filling while live. The phones have screenshots from CI simulators and emulators. Status stays *unverified* there until they are run.
 
+## Expanded detail wrapping (desktop and Local Web UI, issue #1103)
+
+User intent: expanded tool usage should use multiple lines and available height,
+not a single horizontally scrolling row.
+
+Implemented: expanded activity inputs, reasoning, delegation tasks, standalone
+ToolCard inputs, watch prompts/results and watch wake details preserve whitespace
+and indentation while wrapping even unbroken paths, URLs and long tokens to the
+available width. Existing height caps remain (10, 15 or 18 rem by well), with
+vertical scrolling for longer content. JSON inputs retain their original JSON
+serialization, including escaped newlines inside string values; literal backslash
+sequences are not interpreted as display instructions. This is presentation only:
+no transcript mutation, tool execution, new data access or network requests.
+
+Acceptance: desktop (960 px) and narrow (440 px) isolated renderer checks must
+show no horizontal overflow in expanded detail wells, retained text and bounded
+vertical scrolling. Native phone tool cards are outside this change. Verification
+status and before/after evidence are recorded in the linked PR; screenshots still
+require visual inspection, not just successful capture.
+
 ## Tool timing and model continuation (#1107)
 
 **Status: implemented in the desktop/shared Local Web UI renderer; focused regression tests pass. Matched desktop screenshots and timing recordings have been captured and inspected. Live-provider verification is unverified.**
@@ -102,6 +122,7 @@ Verification for #1107: focused timing/activity tests and desktop typecheck pass
 
 - Individual tool calls show what is happening: a file for reads/guidance, folder for directory listings, magnifier for search, pencil for edits, checkmark for checks, branch for Git, globe for web access, and list for planning. Unknown/MCP tools keep the generic tool glyph.
 - Shell execution (including Python) reuses the live current-work terminal artwork, rendered statically in the transcript so completed calls never appear to be running. Tests and Git commands use their more specific purpose icons. The existing animated current-work indicator is unchanged.
+- Desktop and Local Web UI tool icons at every nesting level use the theme's primary accent, matching the outer summary. This includes completed calls and collapsed purpose groups; timestamps, disclosure arrows, quiet labels and failure text retain their existing colors. Explicit icon color overrides remain supported. No new data access or execution behavior is involved.
 - Purpose groups use the common icon when their calls agree, or their purpose icon for a mixed group (for example, a magnifier for mixed code exploration). The outer summary uses its latest tool/group icon. Dedicated watch, subagent, thought and narration treatments are preserved.
 - Selection is deterministic from tool name and the existing shared purpose classifier, with native and Claude Code aliases and `functions.` prefixes handled. This is renderer-only: grouping, tool execution, outputs, permissions and network behavior are unchanged. Icons remain decorative beside the existing textual labels.
 - Verified via a synthetic real-ActivityGroup Electron fixture with blocked networking, isolated profile, hidden/non-focusable window, expanded read/search group, and collapse/reopen interaction. Packaged-app and physical-device verification are not included. Native capture source enumeration failed on this host; screenshots cover Electron renderer pixels, not OS window chrome.

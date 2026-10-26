@@ -64,9 +64,9 @@ export function WatchDetail({ call, result }: { call: ToolCall; result?: ToolRes
       {pr && parsed.url && <div className="text-ink-soft">Watching <a className="underline" href={parsed.url} target="_blank" rel="noreferrer">{pr.full}</a></div>}
       {parsed.prompt && <>
         <div className="text-ink-soft">When it fires</div>
-        <pre className="max-h-60 overflow-auto whitespace-pre-wrap text-ink-faint">{parsed.prompt}</pre>
+        <pre className="max-h-60 overflow-auto whitespace-pre-wrap [overflow-wrap:anywhere] text-ink-faint">{parsed.prompt}</pre>
       </>}
-      {result && <pre className={`max-h-40 overflow-auto whitespace-pre-wrap ${result.isError ? 'text-[color:var(--danger)]' : 'text-ink-faint'}`}>{result.output}</pre>}
+      {result && <pre className={`max-h-40 overflow-auto whitespace-pre-wrap [overflow-wrap:anywhere] ${result.isError ? 'text-[color:var(--danger)]' : 'text-ink-faint'}`}>{result.output}</pre>}
     </div>
   );
 }
@@ -89,7 +89,7 @@ export function WatchWakeRow({ content, createdAt }: { content: string; createdA
         {createdAt > 0 && <span className="ml-auto shrink-0 text-[10px] tabular-nums" title={fmtDateTime(createdAt)}>{fmtTime(createdAt)}</span>}
       </button>
       <WatchThen text={then} className="pl-[38px]" />
-      {open && <pre className="ml-[18px] mt-1 max-h-72 overflow-auto whitespace-pre-wrap text-ink-faint">{content}</pre>}
+      {open && <pre className="ml-[18px] mt-1 max-h-72 overflow-auto whitespace-pre-wrap [overflow-wrap:anywhere] text-ink-faint">{content}</pre>}
     </div>
   );
 }

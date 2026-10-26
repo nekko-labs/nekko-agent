@@ -1,3 +1,4 @@
+import { PixelWaveBackground, pixelWaveFor } from './PixelWaveBackground.js';
 import { GreetingNekko } from './GreetingNekko.js';
 import { PrWatchContinuation } from './PrWatchContinuation.js';
 import { canOfferPrWatch } from '../prWatchContinuation.js';
@@ -17,7 +18,7 @@ import { createPortal } from 'react-dom';
 import { DictationButton } from './DictationButton.js';
 import { decideApproval, type ApprovalScope } from './agent-console/approval-decision.js';
 import type { AgentEvent, AskAnswer, AskRequest, AutoQuality, Session, ContextBundle, IndexedFile, ModelInfo, ProviderConfig, SkillDef, PrInfo, QueuePayload, QueuedPrompt } from '@nekko-agent/shared';
-import { archiveDaysLeft, CLAUDE_CODE_PROVIDER_KIND, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, modelSupportsThinking, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
+import { archiveDaysLeft, CLAUDE_CODE_PROVIDER_KIND, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
 import type { AutoProviderPick, ProviderPool } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { approvalAfterResult } from './ChatPane.approval.js';
@@ -2240,13 +2241,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const isCloudModel = !providerKind || !isLocalProvider(providerKind);
   // A cloud-only chat's picker lists cloud providers only (the engine refuses the rest).
   const cloudOnlyFilter = useMemo(() => (session?.cloudOnly ? cloudProviderAllowed : undefined), [session?.cloudOnly]);
-  // Reasoning toggle: offered only for a concrete, reasoning-capable model.
   const selectedModelInfo = modelId && modelId !== AUTO_MODEL_ID ? models.find((m) => m.id === modelId) : undefined;
-  const thinkingSupported = !!modelId && modelId !== AUTO_MODEL_ID && modelSupportsThinking({ id: modelId, name: selectedModelInfo?.name });
-  const thinkingOn = session?.thinking !== false;
-  const setThinkingPref = (value: boolean) => {
-    window.nekko.setSessionOptions(sessionId, { thinking: value }).then((s) => { if (s) setSession(s); }).catch(() => {});
-  };
 
   // Auto mode: the model the next message will actually run on. Shown whether or
   // not anything is typed yet - "Auto" alone tells you nothing, and the pick
@@ -2367,6 +2362,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const estimate = useCallback((row: TranscriptRow) => estimateRowHeight(row, columnWidth), [columnWidth]);
   const hasLive = !!(held || getLiveRun(sessionId));
   const welcomeState = chatWelcomeState({ messages: session?.messages.length ?? 0, streaming, hasLive, hasProvider, modelId, imageMode });
+  const wave = settings?.backgroundAnimation === false ? null : pixelWaveFor(settings?.themePreset);
   const cleanStart = cleanStartWanted && surface === 'full' && !readOnly && welcomeState.welcome && hasProvider && !welcomeState.modelChoice && !imageMode && !!session && !question && !approval;
   // Leaving the clean start because the user sent (the welcome is gone, it is
   // still the same focused chat) plays the composer-into-chat expansion once.
@@ -2444,6 +2440,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         <ContextAction onClick={() => { exportChat(); setChatMenu(null); }}><DownloadIcon className="mr-2 inline h-3.5 w-3.5" />Export as Markdown</ContextAction>
       </ContextMenu>}
       <section className={`flex min-w-0 w-full flex-1 flex-col overflow-x-hidden ${cleanStart ? 'clean-start justify-center' : ''}`}>
+        {cleanStart && paneShown && wave && <PixelWaveBackground wave={wave} />}
         {/* One bar per window. Inside a workspace these ride in the frame's
             title strip, which already shows the chat's name; standalone, the
             chat still needs a header of its own. */}
@@ -2691,7 +2688,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             <span className="absolute left-1/2 top-[3px] h-1.5 w-10 -translate-x-1/2 rounded-full opacity-0 transition-opacity group-hover:opacity-100" style={{ background: 'var(--accent)' }} />
           </div>}
           {cleanStart && <div className="clean-start-greeting fade-in" data-clean-start-greeting>
-            <GreetingNekko />
             <h2>What should we work on?</h2>
           </div>}
           <div className={`composer-column mx-auto ${commandCenter ? 'w-[98%]' : 'w-[90%]'}`} style={cleanStart ? undefined : commandCenter ? { width: '98%' } : undefined}>
@@ -2700,6 +2696,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             )}
 
             <div className="composer relative">
+            {cleanStart && <GreetingNekko />}
             {/* While the agent works, a violet→cyan beam laps the border. The
                 gradient is a square that rotates on the compositor, clipped
                 to the ring by the mask on its wrapper; animating the gradient
@@ -2717,7 +2714,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   <span className="composer-summary-model">{imageMode ? 'Image' : modelId === AUTO_MODEL_ID ? 'Auto' : selectedModelInfo?.name ?? modelId ?? 'Pick a model'}</span>
                   <span className="composer-summary-meta">
                     {!imageMode && ` \u00b7 ${MODE_LABEL[session?.mode ?? settings?.defaultChatMode ?? 'guardrails']}`}
-                    {thinkingSupported && ` \u00b7 Thinking ${thinkingOn ? 'on' : 'off'}`}
                     {session?.offline && ' \u00b7 Offline'}
                     {session?.incognito && ' \u00b7 Incognito'}
                   </span>
@@ -2791,17 +2787,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   → {autoPick.name}{autoPick.switched ? ` · ${autoPick.providerLabel}` : ''}
                 </span>
               )}
-              {thinkingSupported ? (
-                <button
-                  className="ctl-toggle whitespace-nowrap"
-                  onClick={() => setThinkingPref(!thinkingOn)}
-                  aria-pressed={thinkingOn}
-                  title={thinkingOn ? 'Reasoning is on for this chat — click to turn off' : 'Reasoning is off for this chat — click to turn on'}
-                >
-                  <span className={`ctl-dot ${thinkingOn && streaming ? 'animate-pulse' : ''}`} />
-                  <ThoughtIcon className="h-3 w-3" /> Thinking {thinkingOn ? 'on' : 'off'}
-                </button>
-              ) : thinking ? (
+              {thinking ? (
                 <span
                   className="ctl-toggle ctl-toggle-on whitespace-nowrap"
                   title="The model streamed reasoning while writing this reply"

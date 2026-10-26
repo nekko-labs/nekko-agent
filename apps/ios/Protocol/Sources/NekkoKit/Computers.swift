@@ -239,6 +239,7 @@ public final class ComputersStore {
     private var generation = 0
     private var pump: Task<Void, Never>?
     private var summariesTask: Task<Void, Never>?
+    private var summariesDirty = false
     private var listeners: [UUID: (AgentEvent) -> Void] = [:]
     /// Open terminal screens (IO-33 FA-3): the computer sends only the output of terminals this phone opened.
     private var terminalListeners: [UUID: (TerminalEvent) -> Void] = [:]
@@ -767,6 +768,7 @@ public final class ComputersStore {
         pump = nil
         summariesTask?.cancel()
         summariesTask = nil
+        summariesDirty = false
         graceTask?.cancel()
         graceTask = nil
         suspended = false
@@ -1127,17 +1129,29 @@ public final class ComputersStore {
     }
 
     private func scheduleSummaries() {
-        guard summariesTask == nil, let c = client else { return }
+        guard let c = client else { return }
+        summariesDirty = true
+        guard summariesTask == nil else { return }
         let delay = summariesDebounce
+        let gen = generation
         summariesTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(delay * 1e9))
             guard let self else { return }
-            defer { self.summariesTask = nil }
-            guard self.client === c, !Task.isCancelled else { return }
-            if let list = try? await c.call(Channels.sessionsSummaries), self.client === c {
-                self.summaries = SessionSummary.visible(list)
-                self.saveList()
+            defer {
+                if self.generation == gen { self.summariesTask = nil }
             }
+            repeat {
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1e9))
+                guard self.client === c, !Task.isCancelled else { return }
+                // Notifications during the debounce are covered by this call.
+                self.summariesDirty = false
+                let list = try? await c.call(Channels.sessionsSummaries)
+                guard self.client === c, !Task.isCancelled else { return }
+                if let list {
+                    self.summaries = SessionSummary.visible(list)
+                    self.saveList()
+                }
+                // Only a new invalidation retries, never a failed call alone.
+            } while self.summariesDirty
         }
     }
 

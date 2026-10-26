@@ -65,6 +65,7 @@ Philip found GPT-6.1 chats slow, quiet between tool calls, and missing their tok
 - [x] **CT-4, Elapsed time on tool rows (2026-10-24).** Each tool step row leads with how long it took (`fmtElapsed`, `ToolElapsed` in `ActivityGroup.tsx`), ticking while it runs; persisted times come from the call and result messages' `createdAt`, live ones from `liveRuns.ts`.
 - [x] **CT-5, Swipe left for times (2026-10-24).** A horizontal trackpad swipe slides the transcript up to 72px left and fades in each row's time; letting go springs it back (`useSwipeToRevealTimes` in `VirtualTranscript.tsx`, `data-vt-stamp` + `::after` in `styles.css`). Evidence: `apps/desktop/scripts/chat-timing-sandbox.cjs`.
 - [ ] **CT-6, Live check against a signed-in ChatGPT plan:** confirm the backend accepts the replayed reasoning, and compare per-step time and narration with the 2026-10-24 baseline.
+- [x] **CT-8, Swipe times on tool calls (2026-10-25).** #1141. An opened run's tool rows and purpose groups carry their own `data-vt-stamp` (the call's `startedAt`), so a swipe shows a time on every call, not only the run's first; the stamp CSS now applies to any `[data-vt-stamp]` and uses the sans font inside the monospace activity block. The timing sandbox checks it, finds activity headers by structure instead of the retired "Worked on" label, and its base build archives all of `apps/desktop/src`.
 - [ ] **CT-7, Touch and mouse-drag reveal.** Only trackpad and wheel swipes reveal times today; a mouse drag is left for text selection.
 
 ## Chat page removed (added 2026-10-24)
@@ -801,6 +802,8 @@ Extends `../../knowledgebase/principles/coding.md` (which these override).
 - [ ] Cut the **v1.0 release** once the above land (bump versions + tag). *Status 2026-09-30: PR #203 (`chore/release-v0.8.0`) sits open and mergeable as the next version bump, a pure 5-file version change; merging it fires the public release workflow, so it waits on the same credentials below (npm publish cred, remaining Windows signing, macOS notary trio) plus an explicit go. The GUI pass above is the only functional gate left on the list.*
 
 ## Now / In Progress
+
+- [x] **THINK-DIAGRAM-1120**: cloud reasoning always on, local default-on thinking only in Expert model options, no composer toggle; chat-matched dotted, borderless Mermaid canvases with subtle shadows and themed diagrams. Implemented 2026-10-25. [Thinking spec](spec/models/models-providers.md), [diagram spec](spec/code/rich-responses-reports-and-design-workspace.md). Verified desktop typecheck, 19 focused renderer tests, 61 provider tests, 4 admission tests, daemon request regression, hidden before/after renderer evidence and Expert interaction/load payload checks. No live inference or native phone UI verification.
 
 - [ ] **IOS-STATUS-MASCOT** (added 2026-10-25): desktop-style leading chat status icons and a top-left interactive pixel mascot on native iOS. [Spec](spec/phone/native-ios-app.md#desktop-style-chat-status-and-top-left-nekko-2026-10-25). Native build, status precedence test and simulator greeting/touch-target test pass; native fixture before/after evidence captured. Landing tracked by #1093. Physical-device VoiceOver and release delivery remain unverified.
 
@@ -2391,3 +2394,9 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 ## Expo retirement
 
 - [x] Remove the retired Expo app and its dedicated Mobile CI; keep native phone workflows, relay/push infrastructure and shared protocol coverage. Update merge-gate accounting and desktop icon/test references. See [native phone decision](spec/phone/native-phone-implementation-decision.md) and [decision 0026](docs/decisions/0026-retire-expo-in-favor-of-native-phone-apps.md). Tracked in #1124.
+
+## Compact Monitors and new-chat frost (#1152)
+
+- [x] Reduce the default/snap dock width to 276px, trim the monitor right inset by 2px, and avoid unused Focus scrollbar space. Keep budget ranges on one row and metric values readable. See [spacing spec](spec/desktop/slim-wave-rail-tighter-agents-spacing-composer-snap-points.md).
+- [x] Replace the new-chat opaque wash and hard composer edge with translucent frost and a reduced-transparency fallback. See [new-chat spec](spec/desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md).
+- [x] Check layout/range unit tests, desktop typechecking, hidden Electron resize/reset/range/typing interactions and matched default-theme desktop/narrow evidence. Packaged OS chrome and physical mobile devices remain unverified.

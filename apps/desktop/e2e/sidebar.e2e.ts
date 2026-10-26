@@ -123,6 +123,11 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1200, 400])
       await called(`(c) => c.method === 'abort' && c.id === 'active'`);
       await called(`(c) => c.method === 'options' && c.id === 'active' && !!c.options.archivedAt`);
       expect(await state<boolean>(`(i) => i.state().sessions.some((s) => s.id === 'active' && s.archivedAt)`)).toBe(true);
+      // The confirmation toast sits over the sidebar's lower rows for 5 s; dismiss it
+      // as a user would, or a slow runner's next click lands on it (#1131).
+      const toast = page.locator('.fade-in.card', { hasText: 'Chat completed.' });
+      await toast.click();
+      await expect(toast).toHaveCount(0);
     });
 
     await test.step('completed rows offer Restore chat and Delete forever', async () => {
@@ -131,7 +136,9 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1200, 400])
       const rowMenu = async (id: string) => {
         await expandCompleted();
         const row = page.locator(`[data-completed-row=${id}]`);
-        await row.click({ button: 'right', position: { x: 40, y: 10 } });
+        // At the row's centre: the fixed mascot covers the sidebar's bottom-left
+        // corner, where x: 40 lands when the row is the list's last (#1131).
+        await row.click({ button: 'right' });
       };
       await rowMenu('project-completed');
       await shot(`completed-menu-${theme}-${width}`);

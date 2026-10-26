@@ -91,6 +91,7 @@ pub fn view(w: &Value) -> Value {
 /// a PR's state, and continuing a chat. [`HostSide`] is the real one.
 pub trait WatchHost: Send + Sync {
     fn exists(&self, session_id: &str) -> bool;
+    fn status_changed(&self, _session_id: &str) {}
     fn busy<'a>(&'a self, turns: Option<&'a Turns>, session_id: &'a str) -> BoxFut<'a, bool>;
     fn snapshot<'a>(&'a self, url: &'a str) -> BoxFut<'a, Result<String, String>>;
     fn resume<'a>(&'a self, session_id: &'a str, text: &'a str) -> BoxFut<'a, Result<(), String>>;
@@ -107,6 +108,10 @@ pub struct HostSide {
 }
 
 impl WatchHost for HostSide {
+    fn status_changed(&self, session_id: &str) {
+        self.hub.publish("agent:event", json!({ "type": "session_meta", "sessionId": session_id }), false);
+    }
+
     fn exists(&self, session_id: &str) -> bool {
         self.store.get(session_id).is_some_and(|s| !js::truthy(s.get("archivedAt")))
     }
@@ -167,6 +172,7 @@ pub struct Watches {
     /// One tick at a time (`polling`), and one writer at a time.
     polling: AtomicBool,
     write: tokio::sync::Mutex<()>,
+    registrations: std::sync::Mutex<std::collections::HashMap<String, std::sync::Weak<AtomicBool>>>,
 }
 
 impl Watches {
@@ -186,6 +192,7 @@ impl Watches {
             now,
             polling: AtomicBool::new(false),
             write: tokio::sync::Mutex::new(()),
+            registrations: std::sync::Mutex::new(std::collections::HashMap::new()),
         })
     }
 
@@ -238,6 +245,31 @@ impl Watches {
         views_of(&self.path, session_id)
     }
 
+    /// Stop pending wakes durably before a stopped chat's view is removed.
+    pub async fn cancel_session(&self, session_id: &str) -> Result<(), String> {
+        let _guard = self.write.lock().await;
+        if let Some(flag) =
+            self.registrations.lock().unwrap_or_else(|e| e.into_inner()).remove(session_id).and_then(|w| w.upgrade())
+        {
+            flag.store(true, Ordering::Release);
+        }
+        let mut watches = self.list(None)?;
+        let mut changed = false;
+        for w in &mut watches {
+            if str_of(w, "sessionId") == Some(session_id) && str_of(w, "status") == Some("active") {
+                w["status"] = json!("cancelled");
+                w["pending"] = Value::Null;
+                w["lastError"] = json!("Chat stopped or closed");
+                changed = true;
+            }
+        }
+        self.save(&watches)?;
+        if changed {
+            self.host.status_changed(session_id);
+        }
+        Ok(())
+    }
+
     /// `patch(id, patch)`: only an active watch changes. `null` removes a key
     /// (an `undefined` in TS, which `JSON.stringify` drops).
     async fn patch(&self, id: &str, patch: Value) {
@@ -256,7 +288,14 @@ impl Watches {
                 }
             }
         }
-        let _ = self.save(&watches);
+        let ended_session = matches!(str_of(w, "status"), Some("done" | "cancelled" | "error"))
+            .then(|| str_of(w, "sessionId").map(str::to_string))
+            .flatten();
+        if self.save(&watches).is_ok()
+            && let Some(session_id) = ended_session
+        {
+            self.host.status_changed(&session_id);
+        }
     }
 
     /// `tool(sessionId, input)`: create, list or cancel; an error is the
@@ -276,9 +315,13 @@ impl Watches {
             else {
                 return Err("No watch with that id belongs to this chat".into());
             };
+            let changed = str_of(w, "status") != Some("cancelled");
             w["status"] = json!("cancelled");
             let id = str_of(w, "id").unwrap_or_default().to_string();
             self.save(&watches)?;
+            if changed {
+                self.host.status_changed(session_id);
+            }
             return Ok(format!("Cancelled watch {id}"));
         }
         let kind = match input.get("kind").map(js::display) {
@@ -310,12 +353,26 @@ impl Watches {
         if kind == "pr" && !url.as_deref().is_some_and(is_pr_url) {
             return Err("A valid GitHub PR URL is required".into());
         }
+        // In-flight baseline reads must not arm a new watch after close returns.
+        let cancelled = {
+            let mut registrations = self.registrations.lock().unwrap_or_else(|e| e.into_inner());
+            registrations.retain(|_, flag| flag.strong_count() > 0);
+            let flag = registrations
+                .get(session_id)
+                .and_then(|w| w.upgrade())
+                .unwrap_or_else(|| Arc::new(AtomicBool::new(false)));
+            registrations.insert(session_id.to_string(), Arc::downgrade(&flag));
+            flag
+        };
         // A baseline before saving; an auth or network failure is not one.
         let fingerprint = match &url {
             Some(u) => Some(self.host.snapshot(u).await?),
             None => None,
         };
         let _guard = self.write.lock().await;
+        if cancelled.load(Ordering::Acquire) || !self.host.exists(session_id) {
+            return Err("Chat stopped or closed while registering watch".into());
+        }
         let mut watches = self.list(None)?;
         let same = |w: &Value| {
             str_of(w, "sessionId") == Some(session_id)
@@ -356,6 +413,7 @@ impl Watches {
         w.insert("failures".into(), json!(0));
         watches.push(Value::Object(w));
         self.save(&watches)?;
+        self.host.status_changed(session_id);
         let when = nekko_usage::date::iso_string(deadline).unwrap_or_default();
         Ok(format!(
             "Watch armed: {id}. {} {when}. The host must be running; overdue watches recover at startup.",
@@ -422,9 +480,11 @@ impl Watches {
             self.patch(id, json!({ "pending": p })).await;
         }
         // Re-read: a cancellation during polling must not resume the chat.
+        if self.host.busy(turns, session_id).await {
+            return Ok(());
+        }
         let still = self.list(None)?.into_iter().find(|x| str_of(x, "id") == Some(id));
-        if still.as_ref().and_then(|x| str_of(x, "status")) != Some("active") || self.host.busy(turns, session_id).await
-        {
+        if still.as_ref().and_then(|x| str_of(x, "status")) != Some("active") || !self.host.exists(session_id) {
             return Ok(());
         }
         let text = format!(
@@ -465,9 +525,20 @@ mod tests {
         snapshot: Mutex<Option<Result<String, String>>>,
         resumes: Mutex<Vec<String>>,
         fail_resume: Mutex<Option<String>>,
+        status_changes: Mutex<Vec<String>>,
+        expected_saved_status: Mutex<Option<(PathBuf, String)>>,
+        snapshot_gate: Mutex<Option<(Arc<tokio::sync::Notify>, Arc<tokio::sync::Notify>)>>,
     }
 
     impl WatchHost for Fake {
+        fn status_changed(&self, session_id: &str) {
+            if let Some((path, status)) = &*self.expected_saved_status.lock().unwrap() {
+                let saved: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+                let watch = saved.iter().rev().find(|w| str_of(w, "sessionId") == Some(session_id)).unwrap();
+                assert_eq!(str_of(watch, "status"), Some(status.as_str()));
+            }
+            self.status_changes.lock().unwrap().push(session_id.to_string());
+        }
         fn exists(&self, _: &str) -> bool {
             !self.gone.load(Ordering::SeqCst)
         }
@@ -475,7 +546,14 @@ mod tests {
             Box::pin(async move { self.busy.load(Ordering::SeqCst) })
         }
         fn snapshot<'a>(&'a self, _: &'a str) -> BoxFut<'a, Result<String, String>> {
-            Box::pin(async move { self.snapshot.lock().unwrap().clone().unwrap_or_else(|| Ok("pending".into())) })
+            Box::pin(async move {
+                let gate = self.snapshot_gate.lock().unwrap().take();
+                if let Some((entered, release)) = gate {
+                    entered.notify_one();
+                    release.notified().await;
+                }
+                self.snapshot.lock().unwrap().clone().unwrap_or_else(|| Ok("pending".into()))
+            })
         }
         fn resume<'a>(&'a self, _: &'a str, text: &'a str) -> BoxFut<'a, Result<(), String>> {
             Box::pin(async move {
@@ -520,6 +598,12 @@ mod tests {
         fn advance(&self, ms: u64) {
             self.now.fetch_add(ms, Ordering::SeqCst);
         }
+        fn expect_saved_status(&self, status: &str) {
+            *self.fake.expected_saved_status.lock().unwrap() = Some((self.w.path.clone(), status.to_string()));
+        }
+        fn changes(&self) -> Vec<String> {
+            std::mem::take(&mut *self.fake.status_changes.lock().unwrap())
+        }
         fn resumes(&self) -> Vec<String> {
             self.fake.resumes.lock().unwrap().clone()
         }
@@ -537,6 +621,141 @@ mod tests {
 
     fn timer(prompt: &str, delay: u64) -> Value {
         json!({ "action": "create", "kind": "timer", "prompt": prompt, "delay_seconds": delay })
+    }
+
+    #[test]
+    fn host_status_change_publishes_only_session_metadata() {
+        let r = rig("host-status");
+        let hub = crate::hub::Hub::new();
+        let mut events = hub.subscribe();
+        let host = HostSide { store: Arc::new(SessionStore::new(&r.dir)), hub: hub.clone(), dispatch: Arc::default() };
+        host.status_changed("s");
+        let event = events.try_recv().unwrap();
+        assert_eq!(
+            serde_json::from_str::<Value>(&event.text).unwrap(),
+            json!({ "channel": "agent:event", "payload": { "type": "session_meta", "sessionId": "s" } })
+        );
+        assert!(matches!(event.scope, crate::hub::Scope::Session { id, summary: true, .. } if &*id == "s"));
+        assert!(hub.status(&|_| false).is_empty());
+        assert!(events.try_recv().is_err());
+    }
+
+    #[tokio::test]
+    async fn notifies_create_cancel_but_not_list_duplicate_or_no_op() {
+        let r = rig("status-tools");
+        r.expect_saved_status("active");
+        r.w.tool("s", &timer("Private continuation", 60)).await.unwrap();
+        assert_eq!(r.changes(), ["s"]);
+        let id = r.all()[0]["id"].clone();
+        r.w.tool("s", &timer("Private continuation", 60)).await.unwrap();
+        r.w.tool("s", &json!({ "action": "list" })).await.unwrap();
+        r.w.views("s");
+        r.w.next_wake_at("s");
+        assert!(r.w.tool("other", &json!({ "action": "cancel", "id": id })).await.is_err());
+        assert!(r.changes().is_empty());
+        r.expect_saved_status("cancelled");
+        r.w.tool("s", &json!({ "action": "cancel", "id": id })).await.unwrap();
+        assert_eq!(r.all()[0]["status"], "cancelled");
+        assert_eq!(r.changes(), ["s"]);
+        r.w.tool("s", &json!({ "action": "cancel", "id": id })).await.unwrap();
+        r.w.patch(id.as_str().unwrap(), json!({ "status": "done" })).await;
+        r.w.patch("missing", json!({ "status": "error" })).await;
+        r.advance(61_000);
+        r.w.tick(None).await;
+        assert!(r.changes().is_empty());
+    }
+
+    #[tokio::test]
+    async fn notifies_delivery_and_terminal_error_but_not_polling_or_retry() {
+        let r = rig("status-delivery");
+        r.w.tool("s", &pr()).await.unwrap();
+        assert_eq!(r.changes(), ["s"]);
+        r.advance(61_000);
+        r.w.tick(None).await;
+        assert!(r.changes().is_empty());
+        r.snapshot(Err("offline"));
+        r.advance(61_000);
+        r.w.tick(None).await;
+        assert!(r.changes().is_empty());
+        r.snapshot(Ok("passed"));
+        r.expect_saved_status("done");
+        r.advance(130_000);
+        r.w.tick(None).await;
+        assert_eq!(r.all()[0]["status"], "done");
+        assert_eq!(r.changes(), ["s"]);
+
+        r.expect_saved_status("active");
+        r.w.tool("other", &timer("Continue", 60)).await.unwrap();
+        assert_eq!(r.changes(), ["other"]);
+        r.advance(61_000);
+        r.expect_saved_status("error");
+        for attempt in 0..3 {
+            *r.fake.fail_resume.lock().unwrap() = Some("provider offline".into());
+            r.w.tick(None).await;
+            if attempt < 2 {
+                assert_eq!(r.all()[1]["status"], "active");
+                assert!(r.changes().is_empty());
+                r.advance(500_000);
+            }
+        }
+        assert_eq!(r.all()[1]["status"], "error");
+        assert_eq!(r.changes(), ["other"]);
+        r.w.tick(None).await;
+        assert!(r.changes().is_empty());
+    }
+
+    #[tokio::test]
+    async fn close_blocks_registration_that_was_waiting_on_network() {
+        let r = rig("close-register");
+        let entered = Arc::new(tokio::sync::Notify::new());
+        let release = Arc::new(tokio::sync::Notify::new());
+        *r.fake.snapshot_gate.lock().unwrap() = Some((entered.clone(), release.clone()));
+        let w = r.w.clone();
+        let register = tokio::spawn(async move { w.tool("s", &pr()).await });
+        entered.notified().await;
+        r.w.cancel_session("s").await.unwrap();
+        release.notify_one();
+        assert!(register.await.unwrap().unwrap_err().contains("stopped or closed"));
+        assert!(r.all().is_empty());
+        // A later intentional run can arm again; cancellation isn't a permanent ban.
+        r.w.tool("s", &timer("new run", 60)).await.unwrap();
+        assert_eq!(r.all().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn close_cancels_pending_wakes_durably_and_isolates_other_chats() {
+        let r = rig("close-pending");
+        r.w.tool("s", &timer("resume", 60)).await.unwrap();
+        r.w.tool("other", &timer("other resume", 60)).await.unwrap();
+        let id = r.all()[0]["id"].as_str().unwrap().to_string();
+        r.w.patch(&id, json!({ "pending": "deadline" })).await;
+        r.changes();
+        r.expect_saved_status("cancelled");
+        r.w.cancel_session("s").await.unwrap();
+        assert_eq!(r.changes(), ["s"]);
+        r.w.cancel_session("s").await.unwrap();
+        assert!(r.changes().is_empty());
+        *r.fake.expected_saved_status.lock().unwrap() = None;
+        let reopened = reopen(&r.dir, &r.fake, &r.now);
+        assert_eq!(reopened.views("s")[0]["status"], "cancelled");
+        assert_eq!(reopened.views("s")[0]["pending"], false);
+        r.advance(61_000);
+        reopened.tick(None).await;
+        assert_eq!(r.resumes().len(), 1);
+        assert!(r.resumes()[0].contains("other resume"));
+    }
+
+    #[tokio::test]
+    async fn cancelled_snapshot_cannot_be_delivered() {
+        let r = rig("close-poll");
+        r.w.tool("s", &pr()).await.unwrap();
+        let w = r.all()[0].clone();
+        let id = w["id"].as_str().unwrap();
+        r.w.cancel_session("s").await.unwrap();
+        r.snapshot(Ok("changed"));
+        r.w.deliver(None, &w, id, "s").await.unwrap();
+        assert!(r.resumes().is_empty());
+        assert_eq!(r.all()[0]["status"], "cancelled");
     }
 
     #[tokio::test]
@@ -600,6 +819,7 @@ mod tests {
         r.snapshot(Err("401"));
         assert_eq!(r.w.tool("s", &pr()).await.unwrap_err(), "401");
         assert!(r.all().is_empty());
+        assert!(r.changes().is_empty());
         r.snapshot(Ok("pending"));
         r.w.tool("s", &pr()).await.unwrap();
         r.snapshot(Err("401"));
@@ -640,6 +860,7 @@ mod tests {
         r.w.tick(None).await;
         assert_eq!(r.all()[0]["status"], "cancelled");
         assert_eq!(r.all()[0]["lastError"], "Chat deleted or archived");
+        assert_eq!(r.changes(), ["s", "s"]);
     }
 
     #[tokio::test]
