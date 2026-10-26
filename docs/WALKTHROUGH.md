@@ -193,6 +193,12 @@ Hover a window's lifecycle buttons to see the action and hotkey. Shortcuts targe
 
 Settings has **Show tips**, enabled by default. Your first successful completion highlights Show completed with a dismissible explanation. On a narrow screen, the existing agent list drawer opens automatically to reveal Show completed without taking focus. If you close it, the highlighted Agents button lets you return to the destination. Opening or closing the drawer does not dismiss the tip. Turning tips off does not disable deletion warnings. The in-app delete dialog offers **Skip future deletion confirmations**; only choose it if you want permanent deletions without another prompt. Re-enable **Confirm deletions** in Settings at any time. General chats no longer display a redundant missing-project label.
 
+### Manage local chat history
+
+Settings → General → **Chat history** shows local conversation and command-log storage, plus the number of completed chats. Completed chats are never automatically deleted. At 1 GB or more, a banner suggests clearing old history or opening **Nekko Cloud sync**. Sync is separately opt-in and does not automatically free local space. The measurement excludes models, caches, project files and other app data.
+
+Choose **Today**, **Last week (past 7 days)**, **Older than 2 weeks**, **Older than 1 month**, or **Older than 6 months**, then **Clear history…**. Review the selected range and confirm **Delete permanently**, or cancel without changing anything. This confirmation is always required, even if individual deletion confirmations are disabled. Only completed chats in that last-activity range are removed, together with their command logs. Active and running chats, project files and settings are kept. Today starts at the computer/server's local midnight; month ranges use calendar months. **Refresh storage** updates the measurement after other activity.
+
 ### A composer that follows your draft
 
 In the Agent board, one docked composer targets the selected agent window.
