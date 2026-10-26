@@ -94,7 +94,7 @@ class MiscTest {
         val other = com.nekko.protocol.RelayException("no such session")
         assertTrue(com.nekko.android.data.PlainRefusals.reword(other, "Studio") === other)
         // A code this app has no words for keeps the computer's message.
-        val unknown = com.nekko.protocol.RelayException("Not allowed from a paired phone (key-mismatch): chat:send")
+        val unknown = com.nekko.protocol.RelayException("Not allowed from a paired phone (value-invalid): chat:send")
         assertTrue(com.nekko.android.data.PlainRefusals.reword(unknown, "Studio") === unknown)
     }
 }

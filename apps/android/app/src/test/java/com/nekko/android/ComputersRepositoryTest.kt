@@ -50,9 +50,14 @@ class ComputersRepositoryTest {
 
     private val forgotten = mutableListOf<String>()
 
-    private fun TestScope.repo(store: FakeStore = FakeStore(), remotes: FakeRemotes = FakeRemotes()): ComputersRepository {
+    private fun TestScope.repo(
+        store: FakeStore = FakeStore(),
+        remotes: FakeRemotes = FakeRemotes(),
+        signer: com.nekko.protocol.ChangeSigner? = null,
+    ): ComputersRepository {
         var n = 0
         return ComputersRepository(
+            changeSigner = signer,
             onForget = { forgotten += it },
             store = store,
             remotes = remotes,
@@ -567,7 +572,7 @@ class ComputersRepositoryTest {
     }
 
     @Test
-    fun `raising the mode without a proof is refused in plain words and the old mode stays`() = runTest {
+    fun `raising the mode on a phone that can't sign is refused in plain words and the old mode stays`() = runTest {
         val remotes = FakeRemotes { c ->
             when (c.channel) {
                 Channels.SETTINGS_GET -> buildJsonObject { put("defaultChatMode", "ask"); put("chatPaneAction", "complete") }
@@ -584,12 +589,102 @@ class ComputersRepositoryTest {
         val e = runCatching {
             repo.updatePcSettings(com.nekko.protocol.PcSettings.patch(mode = com.nekko.protocol.PcSettings.ChatMode.YOLO))
         }.exceptionOrNull() as com.nekko.protocol.RelayException
-        assertEquals("Switching to Guardrails or YOLO needs a confirmation this phone can’t give yet. Change the mode on $name.", e.message)
+        assertEquals("Confirm with your fingerprint or screen lock to let chats on $name run with fewer approvals.", e.message)
         assertEquals("proof-required", e.refusal?.code)
         assertEquals(com.nekko.protocol.PcSettings.ChatMode.ASK, repo.state.value.pcSettings.defaultChatMode)
         // A read refused by the computer's switch says where to turn it on, for every caller.
         val read = runCatching { repo.caller.call(Channels.CHANGES_LIST, JsonPrimitive("s1")) }.exceptionOrNull()
         assertEquals("Reading from this phone is turned off on $name. Turn it on in Remote access → What phones can do.", read?.message)
+    }
+
+    @Test
+    fun `raising the mode is sent again signed, after registering this phone's key once`() = runTest {
+        val signer = com.nekko.protocol.SoftwareChangeSigner.generate()
+        val key = java.util.Base64.getEncoder().encodeToString(kotlinx.coroutines.runBlocking { signer.publicKey() })
+        var mode = "ask"
+        val remotes = FakeRemotes { c ->
+            when (c.channel) {
+                Channels.SETTINGS_GET -> buildJsonObject { put("defaultChatMode", mode); put("chatPaneAction", "complete") }
+                com.nekko.protocol.ChangeProof.KEY_CHANNEL -> buildJsonObject { put("registered", true) }
+                Channels.SETTINGS_UPDATE ->
+                    if (c.proof == null) throw com.nekko.protocol.RelayException("Not allowed from a paired phone (proof-required): settings:update")
+                    else buildJsonObject { put("defaultChatMode", "yolo"); put("chatPaneAction", "complete") }.also { mode = "yolo" }
+                else -> FakeRemotes.defaultAnswer(c)
+            }
+        }
+        val repo = repo(remotes = remotes, signer = signer)
+        repo.pair(link)
+        remotes.last.goOnline()
+        runCurrent()
+        val yolo = com.nekko.protocol.PcSettings.patch(mode = com.nekko.protocol.PcSettings.ChatMode.YOLO)
+        repo.updatePcSettings(yolo)
+        assertEquals(com.nekko.protocol.PcSettings.ChatMode.YOLO, repo.state.value.pcSettings.defaultChatMode)
+
+        val sent = remotes.last.calls.filter { it.channel == Channels.SETTINGS_UPDATE || it.channel == com.nekko.protocol.ChangeProof.KEY_CHANNEL }
+        assertEquals(listOf(Channels.SETTINGS_UPDATE, com.nekko.protocol.ChangeProof.KEY_CHANNEL, Channels.SETTINGS_UPDATE), sent.map { it.channel })
+        assertNull("plain first", sent[0].proof)
+        assertEquals(key, sent[1].args.single().jsonPrimitive.content)
+        // Each proof is this phone's signature over what was sent, as the computer checks it.
+        val deviceId = remotes.last.config.deviceId
+        for (c in sent.drop(1)) {
+            val p = c.proof!!
+            val text = com.nekko.protocol.ChangeProof.payload(deviceId, c.channel, kotlinx.serialization.json.JsonArray(c.args), p["ts"]!!.jsonPrimitive.content.toLong())
+            val sig = java.util.Base64.getDecoder().decode(p["sig"]!!.jsonPrimitive.content)
+            assertTrue(com.nekko.protocol.ChangeProof.verify(java.util.Base64.getDecoder().decode(key), text, sig))
+        }
+
+        // A second raise on the same connection signs again without registering again.
+        mode = "guardrails"
+        repo.updatePcSettings(yolo)
+        assertEquals(1, remotes.last.calls.count { it.channel == com.nekko.protocol.ChangeProof.KEY_CHANNEL })
+        assertEquals("the key, then two raises", 3, signer.signatures)
+    }
+
+    @Test
+    fun `a step-up the computer asks for rides beside the proof`() = runTest {
+        val signer = com.nekko.protocol.SoftwareChangeSigner.generate()
+        val remotes = FakeRemotes { c ->
+            when (c.channel) {
+                Channels.SETTINGS_GET -> buildJsonObject { put("defaultChatMode", "ask"); put("chatPaneAction", "complete") }
+                com.nekko.protocol.ChangeProof.KEY_CHANNEL -> buildJsonObject { put("registered", true) }
+                Channels.SETTINGS_UPDATE -> when {
+                    c.proof == null -> throw com.nekko.protocol.RelayException("Not allowed from a paired phone (proof-required): settings:update")
+                    c.stepUp == null -> throw com.nekko.protocol.RelayException("Not allowed from a paired phone (step-up-required): settings:update")
+                    else -> buildJsonObject { put("defaultChatMode", "yolo"); put("chatPaneAction", "complete") }
+                }
+                else -> FakeRemotes.defaultAnswer(c)
+            }
+        }
+        val repo = repo(remotes = remotes, signer = signer)
+        repo.pair(link)
+        remotes.last.goOnline()
+        runCurrent()
+        val yolo = com.nekko.protocol.PcSettings.patch(mode = com.nekko.protocol.PcSettings.ChatMode.YOLO)
+        val e = runCatching { repo.updatePcSettings(yolo) }.exceptionOrNull() as com.nekko.protocol.RelayException
+        assertTrue("the step-up sheet takes it from here", e.refusal!!.asksForStepUp)
+        repo.updatePcSettings(yolo, com.nekko.protocol.StepUpProof.Totp("123456"))
+        val last = remotes.last.calls.last()
+        assertEquals(Channels.SETTINGS_UPDATE, last.channel)
+        assertEquals(com.nekko.protocol.StepUpProof.Totp("123456"), last.stepUp)
+        assertTrue(last.proof != null)
+        assertEquals(com.nekko.protocol.PcSettings.ChatMode.YOLO, repo.state.value.pcSettings.defaultChatMode)
+    }
+
+    @Test
+    fun `forgetting the last computer deletes the Change key`() = runTest {
+        var forgot = 0
+        val signer = object : com.nekko.protocol.ChangeSigner {
+            override suspend fun publicKey() = ByteArray(65)
+            override suspend fun sign(message: ByteArray) = ByteArray(64)
+            override suspend fun forget() { forgot++ }
+        }
+        val repo = repo(signer = signer)
+        repo.pair(link)
+        repo.pair(PairingLink("wss://other.example.dev", "ffffffffffffffff", key))
+        repo.forget(repo.state.value.computers.first().id)
+        assertEquals("another computer still knows the key", 0, forgot)
+        repo.forget(repo.state.value.computers.single().id)
+        assertEquals(1, forgot)
     }
 
     @Test
