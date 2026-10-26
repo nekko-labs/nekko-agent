@@ -8,6 +8,8 @@ name: Native iOS
 # (to tell which PR broke a red batch); pushes do not re-run it.
 # A PR or batch verifies dark mode only when it changes colours or a PR carries
 # `ci:theme`; the schedule and a branch dispatch run light and dark.
+# A `pick` job asks for the owner's idle Mac runner (scripts/pick-runner.mjs) and falls
+# back to macos-14; it only runs for trusted events and only when vars.NEKKO_MAC_RUNNERS is 'on'.
 on:
   pull_request:
     types: [labeled]
@@ -36,9 +38,31 @@ concurrency:
   group: ios-native-${{ inputs.batch && 'batch' || github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ !inputs.batch }}
 jobs:
+  pick:
+    # Off until the pilot Mac is live (vars.NEKKO_MAC_RUNNERS). Trusted runs only: a fork's
+    # PR never asks, so its job always runs hosted.
+    if: vars.NEKKO_MAC_RUNNERS == 'on' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, 'ci:macos') && contains(fromJSON('["ci:macos","ci:theme"]'), github.event.label.name)))
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      runs-on: ${{ steps.pick.outputs.runs-on }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github/actions/pick-runner
+            scripts/pick-runner.mjs
+          sparse-checkout-cone-mode: false
+      - id: pick
+        uses: ./.github/actions/pick-runner
+        with:
+          token: ${{ secrets.NEKKO_PICKER_TOKEN }}
+          fallback: macos-14
   protocol-and-build:
-    if: github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'ci:macos') && contains(fromJSON('["ci:macos","ci:theme"]'), github.event.label.name))
-    runs-on: macos-14
+    needs: pick
+    # !cancelled(): a skipped or failed picker must not skip this job.
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'ci:macos') && contains(fromJSON('["ci:macos","ci:theme"]'), github.event.label.name))) }}
+    runs-on: ${{ fromJSON(needs.pick.outputs.runs-on || '"macos-14"') }}
     timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
