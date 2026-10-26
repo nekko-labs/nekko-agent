@@ -79,10 +79,18 @@ describe('compact board and navigation spacing', () => {
     expect(198 - 6 - 16).toBe(188 - 12);
   });
 
-  it('uses a darker nearly opaque rounded surface without a morph or observer', () => {
-    expect(cssRule(styles, '.rail')).toMatchObject({ top: '5%', bottom: '5%', 'border-radius': '22px', 'pointer-events': 'auto' });
-    expect(cssRule(styles, '.rail').background).toBe(cssValue('color-mix(in srgb, color-mix(in srgb, var(--paper) 92%, black) 97%, transparent)'));
-    expect(cssRule(styles, '.rail-backdrop').display).toBe('none');
+  it('paints static wings with the darker fill and only widens their viewport', () => {
+    expect(cssRule(styles, '.rail')).toMatchObject({ top: '5%', bottom: '5%', 'pointer-events': 'none' });
+    expect(cssRule(styles, '.rail').background).toBeUndefined();
+    expect(cssRule(styles, '.rail-feedback')['pointer-events']).toBe('auto');
+    expect(cssRule(styles, '.rail-backdrop')).toMatchObject({ width: 'var(--rail-w-rest)', 'pointer-events': 'none' });
+    expect(cssRule(styles, '.rail-backdrop path').fill).toBe(cssValue('color-mix(in srgb, color-mix(in srgb, var(--paper) 92%, black) 97%, transparent)'));
+    expect(cssRule(styles, `${OPEN} .rail-backdrop`).width).toBe('var(--rail-w-open)');
+    for (const selector of ['.rail-backdrop', '.rail-backdrop path', `${OPEN} .rail-backdrop`]) {
+      expect(cssRule(styles, selector)['clip-path']).toBeUndefined();
+      expect(cssRule(styles, selector).d).toBeUndefined();
+      expect(cssRule(styles, selector)['backdrop-filter']).toBeUndefined();
+    }
   });
 
   it('has no per-row entrance animation and snaps open and shut under reduced motion', () => {
@@ -97,7 +105,8 @@ describe('compact board and navigation spacing', () => {
     const nav = html.slice(html.indexOf('<nav'), html.indexOf('</nav>'));
     expect(nav).toMatch(/^<nav class="[^"]*\bw-\[52px\][^"]*\bmd:block/);
     const group = nav.slice(nav.indexOf('class="rail-group"'));
-    expect(group).not.toContain('class="rail-backdrop"');
+    expect(group).toContain('class="rail-backdrop"');
+    expect(group).toContain('preserveAspectRatio="none"');
     // On the active (first) row; each row carries its index for the label stagger.
     expect(nav.match(/class="rail-indicator"/g)).toHaveLength(1);
     expect(nav).toMatch(/class="rail-indicator"[^>]*style="--i:0;/);

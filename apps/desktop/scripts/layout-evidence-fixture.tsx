@@ -36,6 +36,11 @@ import('@nekko-agent/shared').then(async ({ summarizeSession }) => {
   await import('../src/renderer/styles.css');
   records.forEach(putCachedSession);
   document.documentElement.dataset.theme = 'dark';
-  createRoot(document.getElementById('root')!).render(React.createElement(UpdateProvider, null, React.createElement(App)));
-  (window as any).layoutFixture = { store: useStore, records, bridge, putCachedSession, emitAgent };
+  const root = createRoot(document.getElementById('root')!);
+  root.render(React.createElement(UpdateProvider, null, React.createElement(App)));
+  (window as any).layoutFixture = { store: useStore, records, bridge, putCachedSession, emitAgent, showGreeting: async () => {
+    const { ChatPane } = await import('../src/renderer/components/ChatPane');
+    useStore.setState({ providers: [provider], models: [{ id: 'gpt-fixture', providerId: 'fixture', name: 'GPT fixture', contextWindow: 500000 }], settings, activeSessionId: 'd' } as any);
+    root.render(React.createElement('div', { style: { height: '100vh' } }, React.createElement(ChatPane, { sessionId: 'd', cleanStart: true })));
+  } };
 });

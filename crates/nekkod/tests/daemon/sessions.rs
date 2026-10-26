@@ -73,7 +73,7 @@ async fn serves_session_reads_from_disk_when_it_knows_the_data_dir() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn forks_chats_and_purges_expired_archives_itself() {
+async fn forks_chats_and_keeps_completed_history_indefinitely() {
     let data = std::env::temp_dir().join(format!("nekkod-fork-purge-{}", std::process::id()));
     let sessions = data.join("sessions");
     std::fs::create_dir_all(&sessions).unwrap();
@@ -83,7 +83,7 @@ async fn forks_chats_and_purges_expired_archives_itself() {
     ] });
     let src_bytes = serde_json::to_vec_pretty(&chat).unwrap();
     std::fs::write(sessions.join("s_src.json"), &src_bytes).unwrap();
-    // Archived long ago (gone), archived just now (kept), never archived (kept).
+    // Old and recent completed chats both remain until explicitly cleared.
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
     for (id, archived) in [("s_old", json!(1)), ("s_recent", json!(now)), ("s_live", Value::Null)] {
         let s = json!({ "id": id, "title": id, "updatedAt": 1, "messages": [], "archivedAt": archived });
@@ -105,15 +105,61 @@ async fn forks_chats_and_purges_expired_archives_itself() {
     assert_eq!(none, Value::Null);
 
     let (status, purged) = post(d.port, "sessions:purgeArchived", json!([]), Some(TOKEN)).await;
-    assert_eq!((status, purged), (200, json!(1)));
-    assert!(!sessions.join("s_old.json").exists());
+    assert_eq!((status, purged), (200, json!(0)));
+    assert!(sessions.join("s_old.json").exists());
     assert!(sessions.join("s_recent.json").exists() && sessions.join("s_live.json").exists());
     drop(d);
     std::fs::remove_dir_all(data).ok();
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_command_log_that_cannot_be_removed_retains_json_for_delete_and_clear() {
+async fn reports_completed_history_usage_and_clears_via_canonical_log_cleanup() {
+    let data = std::env::temp_dir().join(format!("nekkod-history-{}", std::process::id()));
+    let sessions = data.join("sessions");
+    std::fs::create_dir_all(&sessions).unwrap();
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as i64;
+    let old = serde_json::to_vec(&json!({
+        "id": "s_old", "updatedAt": now - 20 * 24 * 60 * 60 * 1000_i64, "archivedAt": 1, "messages": []
+    }))
+    .unwrap();
+    let recent = serde_json::to_vec(&json!({
+        "id": "s_recent", "updatedAt": now - 24 * 60 * 60 * 1000_i64, "archivedAt": now, "messages": []
+    }))
+    .unwrap();
+    let live = serde_json::to_vec(&json!({ "id": "s_live", "updatedAt": 1, "messages": [] })).unwrap();
+    let old_log = b"old commands\n";
+    let recent_log = b"recent commands\n";
+    let live_log = b"active commands\n";
+    std::fs::write(sessions.join("s_old.json"), &old).unwrap();
+    std::fs::write(sessions.join("s_recent.json"), &recent).unwrap();
+    std::fs::write(sessions.join("s_live.json"), &live).unwrap();
+    std::fs::write(sessions.join("s_old.commands.log"), old_log).unwrap();
+    std::fs::write(sessions.join("s_recent.commands.log"), recent_log).unwrap();
+    std::fs::write(sessions.join("s_live.commands.log"), live_log).unwrap();
+    let d = start_with(Some(&data));
+
+    let (status, usage) = post(d.port, "sessions:historyUsage", json!([]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{usage}");
+    assert_eq!(
+        usage,
+        json!({ "bytes": old.len() + recent.len() + live.len() + old_log.len() + recent_log.len() + live_log.len(), "count": 2 })
+    );
+
+    let (status, cleared) = post(d.port, "sessions:clearHistory", json!(["older-2-weeks"]), Some(TOKEN)).await;
+    assert_eq!((status, cleared), (200, json!(1)));
+    assert!(!sessions.join("s_old.json").exists());
+    assert!(!sessions.join("s_old.commands.log").exists());
+    assert!(sessions.join("s_recent.json").exists());
+    assert!(sessions.join("s_live.json").exists());
+    let (_, usage) = post(d.port, "sessions:historyUsage", json!([]), Some(TOKEN)).await;
+    assert_eq!(usage, json!({ "bytes": recent.len() + live.len() + recent_log.len() + live_log.len(), "count": 1 }));
+
+    drop(d);
+    std::fs::remove_dir_all(data).ok();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_command_log_that_cannot_be_removed_retains_json_for_every_delete_path() {
     let data = std::env::temp_dir().join(format!("nekkod-retention-{}", std::process::id()));
     let sessions = data.join("sessions");
     std::fs::create_dir_all(&sessions).unwrap();
@@ -121,12 +167,16 @@ async fn a_command_log_that_cannot_be_removed_retains_json_for_delete_and_clear(
     std::fs::create_dir_all(sessions.join("callback_fail.commands.log/stuck")).unwrap();
     let path = sessions.join("callback_fail.json");
     let bytes = serde_json::to_vec_pretty(&json!({
-        "id": "callback_fail", "title": "Keep me", "updatedAt": 5, "messages": []
+        "id": "callback_fail", "title": "Keep me", "updatedAt": 5, "archivedAt": 1, "messages": []
     }))
     .unwrap();
     std::fs::write(&path, &bytes).unwrap();
     let d = start_with(Some(&data));
-    for (channel, args) in [("session:delete", json!(["callback_fail"])), ("sessions:clear", json!(["all"]))] {
+    for (channel, args) in [
+        ("session:delete", json!(["callback_fail"])),
+        ("sessions:clear", json!(["all"])),
+        ("sessions:clearHistory", json!(["older-2-weeks"])),
+    ] {
         let (status, body) = post(d.port, channel, args, Some(TOKEN)).await;
         assert_eq!(status, 400, "{channel}: {body}");
         assert_eq!(std::fs::read(&path).unwrap(), bytes, "{channel} must retain unchanged JSON");
