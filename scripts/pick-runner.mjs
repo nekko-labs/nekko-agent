@@ -20,6 +20,7 @@ export async function main(env = process.env, fetchFn = globalThis.fetch) {
   if (!env.PICK_TOKEN) return done(hosted, 'no token');
   if (!/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(repo) || !/^[A-Za-z0-9._-]{1,64}$/.test(label)) return done(hosted, 'bad input');
   try {
+    // shortcut: one page is enough for a handful of Macs, paginate past 100 runners.
     const res = await fetchFn(`${env.GITHUB_API_URL || 'https://api.github.com'}/repos/${repo}/actions/runners?per_page=100`, {
       headers: { Authorization: `Bearer ${env.PICK_TOKEN}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
       signal: AbortSignal.timeout(10000),

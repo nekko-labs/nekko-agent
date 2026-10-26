@@ -39,9 +39,13 @@ concurrency:
   cancel-in-progress: ${{ !inputs.batch }}
 jobs:
   pick:
-    # Off until the pilot Mac is live (vars.NEKKO_MAC_RUNNERS). Trusted runs only: a fork's
-    # PR never asks, so its job always runs hosted.
+    # Off until the pilot Mac is live (vars.NEKKO_MAC_RUNNERS). The picker routes trusted runs
+    # only. It is not the boundary against fork code (a fork PR's own workflow file could name
+    # the runner directly): that is the repo's fork-approval setting and the runner group,
+    # restricted to selected workflows on the default branch (see the pilot runbook).
     if: vars.NEKKO_MAC_RUNNERS == 'on' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, 'ci:macos') && contains(fromJSON('["ci:macos","ci:theme"]'), github.event.label.name)))
+    # A failed picker leaves its output empty (protocol-and-build falls back) and must not fail the run.
+    continue-on-error: true
     runs-on: ubuntu-latest
     timeout-minutes: 3
     outputs:

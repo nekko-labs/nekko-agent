@@ -55,11 +55,14 @@ test('cli_writes_runs_on_and_never_prints_the_token', () => {
   assert.ok(!(p.stdout + p.stderr).includes('tok-123'));
 });
 
+const pickBlock = (y) => y.match(/\n  pick:\n(?:.*\n)*?  protocol-and-build:/)[0];
+
 test('ios_native_calls_the_picker_only_for_trusted_events', () => {
   const y = readFileSync(new URL('../.github/workflows/ios-native.yml', import.meta.url), 'utf8');
   const pickIf = y.match(/\n  pick:\n(?:.*\n)*?    if: (.*)\n/)[1];
   assert.match(pickIf, /^vars\.NEKKO_MAC_RUNNERS == 'on' && /);
   assert.match(pickIf, /github\.event\.pull_request\.head\.repo\.full_name == github\.repository/);
+  assert.match(pickBlock(y), /\n    continue-on-error: true\n/);
   assert.match(y, /token: \$\{\{ secrets\.NEKKO_PICKER_TOKEN \}\}/);
   assert.match(y, /runs-on: \$\{\{ fromJSON\(needs\.pick\.outputs\.runs-on \|\| '"macos-14"'\) \}\}/);
   assert.match(y, /needs: pick\n    # .*\n    if: \$\{\{ !cancelled\(\) && /);
