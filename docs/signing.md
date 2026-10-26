@@ -87,9 +87,12 @@ runs:
   Developer ID, followed by `codesign --verify --deep --strict`, the check, and
   `nekko-vm count-vms`.
 
-By hand, on an Apple silicon Mac, with no credentials:
+By hand, on an Apple silicon Mac, with no credentials (build first: the
+workspace `dist` packages what `npm run build` left, and the root `npm run dist`
+does both):
 
 ```bash
+npm run build
 CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist -w @nekko-agent/desktop -- --publish never
 scripts/check-mac-entitlements.sh "apps/desktop/release/mac-arm64/Nekko Agent.app"
 ditto "apps/desktop/release/mac-arm64/Nekko Agent.app" /tmp/dry-run.app
@@ -98,7 +101,8 @@ node apps/desktop/scripts/sign-mac-dry-run.cjs /tmp/dry-run.app
 
 Still needs Philip (Developer ID certificate, a real release):
 
-- [ ] `CSC_NAME="Nekko Labs LLC (3HM5598S99)" npm run dist -w @nekko-agent/desktop -- --publish never`,
+- [ ] `npm run build`, then
+  `CSC_NAME="Nekko Labs LLC (3HM5598S99)" npm run dist -w @nekko-agent/desktop -- --publish never`,
   then the check above exits 0 and `codesign --verify --deep --strict --verbose=2`
   passes on the app; open it, connect a runner and see one VM boot from the
   signed `nekko-vm`.

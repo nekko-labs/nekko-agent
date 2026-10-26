@@ -21,7 +21,8 @@ You find it in **Workflows**, under the **Workflows | CI runners** switch at the
 **What is not verified yet.** The pieces are built and tested, and a VM has been booted and
 checked on a real macOS 15 guest, but one real GitHub job has not yet run end to end, and the
 rule that keeps job traffic off a VPN has not yet been checked against a real tunnel. Both are
-part of the pilot (T214). The golden image builder and the job picker also come with T214.
+part of the pilot (T214). The [image guide](ci-runners-image.md) and the job picker are in place;
+the image itself has not yet been booted in a VM.
 
 ## Before you start
 
@@ -31,8 +32,9 @@ part of the pilot (T214). The golden image builder and the job picker also come 
   download in this version: you build the image yourself with the
   [image guide](ci-runners-image.md). Until an image exists, the runner card shows `No VM image yet.`
 - **A build with VM support.** The `nekko-vm` helper needs Apple's virtualization entitlement.
-  Development builds sign it themselves; packaged release builds report "VM support unavailable"
-  until release signing for the helper lands (T214).
+  Development builds sign it themselves, and packaged builds sign it with its own entitlement
+  (see [signing](signing.md#the-vm-helpers-entitlement)). A Developer ID signed release with it
+  has not shipped yet.
 
 ## Create the GitHub App
 
@@ -70,8 +72,9 @@ In **Workflows > CI runners**, choose **Connect GitHub**. The sheet has three st
 2. **Org or repo.** Choose **A repo** (`owner/name`) or **An org** and list the org's repos the
    runner may serve (names or `org/name`, comma or newline separated). Public repos are refused
    unless you tick **Allow public repos**: anyone can open a pull request on a public repo, and its
-   workflows could ask for this Mac. If you allow them, keep "Require approval for all outside
-   collaborators" on in the repo's Actions settings so fork pull requests wait for you. The
+   workflows could ask for this Mac. If you allow them, keep "Require approval for all external
+   contributors" on in the repo's Actions settings so fork pull requests wait for you, and see
+   [Use it in a workflow](#use-it-in-a-workflow). The
    **Runner label** defaults to `nekko-mac`; letters, digits, dot, dash and underscore, up to 64.
 3. **How this Mac helps.** Pick a mode (below), then **Start runner**. If GitHub refuses (a
    revoked key, a public repo you did not allow, the wrong account), its reason shows on this
@@ -88,6 +91,22 @@ jobs:
 ```
 
 Use your own label in place of `nekko-mac` if you changed it.
+
+To fall back to a GitHub-hosted Mac when yours is busy or away, add a small job that picks the
+runner first: [`.github/actions/pick-runner`](https://github.com/nekko-labs/nekko-agent/tree/main/.github/actions/pick-runner)
+outputs your runner's labels when one is online and idle, and the hosted label otherwise. It
+needs a read-only token in a secret, and it never fails the run: no token (as on a fork pull
+request), an API error or a timeout all give the hosted runner. Nekko Agent's own
+`ios-native.yml` uses it.
+
+**On a public repo, the picker does not keep fork code off your Mac.** A pull request runs its
+own copy of the workflow file, so a fork could name your runner directly. Before you point a
+public repo's jobs at this Mac, turn on **Require approval for all external contributors** in the
+repo's **Settings > Actions > General**, connect the runner to an org, and in the org's
+**Settings > Actions > Runner groups**, set the runner's group to **Selected workflows** listing
+only the workflows on your default branch that may use it. See GitHub's
+[managing access to self-hosted runners](https://docs.github.com/en/enterprise-cloud@latest/actions/how-tos/manage-runners/self-hosted-runners/manage-access).
+The VM is the second layer: a job that gets in still only reaches the public internet.
 
 ## How this Mac helps
 
