@@ -27,8 +27,8 @@
 }
 
 /* Context menus remain neutral even when a preset gives the page a vivid tint. */
-.context-menu { background: #ffffff; color: #17191f; }
-[data-theme='dark'] .context-menu { background: #191c23; color: #f3f4f6; }
+.context-menu, .create-menu { background: #ffffff; color: #17191f; }
+[data-theme='dark'] :is(.context-menu, .create-menu) { background: #191c23; color: #f3f4f6; }
 .context-menu [role^="menuitem"]:not(:disabled):is(:hover, :focus-visible),
 .context-menu [role^="menuitem"][aria-checked="true"],
 .context-menu [role="menuitem"][aria-expanded="true"] {
@@ -283,36 +283,24 @@
   }
 }
 
+/* Creation menus use the standard light/dark surface, never the canvas tint. */
+.create-menu {
+  max-width: calc(100vw - 16px);
+}
+
 @utility create-row {
-  /* A row of the sidebar's create menu. Each one carries its own hue in
-     --row-tone, which the tile wears at rest and the whole row picks up under
-     the cursor: the menu is a short list of *different* things, and four
-     identical grey lines said the opposite. */
-  --row-tone: var(--accent);
   border: 1px solid transparent;
-  transition:
-    background var(--dur-fast) ease,
-    border-color var(--dur-fast) ease,
-    transform var(--dur-fast) var(--ease-out);
-  &:hover {
-    background: color-mix(in srgb, var(--row-tone) 12%, transparent);
-    border-color: color-mix(in srgb, var(--row-tone) 30%, transparent);
-  }
-  &:active {
-    transform: scale(0.985);
+  transition: background var(--dur-fast) ease, border-color var(--dur-fast) ease;
+  &:hover, &:focus-visible {
+    background: var(--accent);
+    color: var(--on-accent);
+    border-color: var(--accent);
+    outline: none;
   }
 }
 
-@utility create-row-hero {
-  /* Starting an agent is the reason this menu exists, so it reads as the
-     headline: a brand wash at rest, not only on hover. */
-  background: color-mix(in srgb, var(--accent) 9%, transparent);
-  border-color: color-mix(in srgb, var(--accent) 22%, transparent);
-  &:hover {
-    background: color-mix(in srgb, var(--accent) 16%, transparent);
-    border-color: color-mix(in srgb, var(--accent) 42%, transparent);
-  }
-}
+.create-row:is(:hover, :focus-visible) .create-tile { color: inherit; }
+.create-row .kbd { background: transparent; color: inherit; border-color: currentColor; opacity: .75; }
 
 @utility create-tile {
   /* Bare glyph in the row's hue: tiles behind each icon made a three-row menu

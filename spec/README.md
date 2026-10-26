@@ -73,7 +73,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Empty wall opens the new-chat screen; glass prism composer (2026-10-18)](desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md) (9 KB)
 - [Focused mode transitions, calmer focus ring and layout controls (2026-10-17)](desktop/focused-mode-transitions-calmer-focus-ring-and-layout-controls.md) (7 KB)
 - [Grid model selection and chat-mode menus (2026-10-07)](desktop/grid-model-selection-and-chat-mode-menus.md) (1 KB)
-- [Inline agent-window creation](desktop/inline-agent-window-creation.md) (3 KB)
+- [Inline agent-window creation](desktop/inline-agent-window-creation.md) (6 KB)
 - [Minimize agent windows](desktop/minimize-agent-windows.md) (1 KB)
 - [Model picker, tool categories, Artifacts tab and wall polish (2026-10-15)](desktop/model-picker-tool-categories-artifacts-tab-and-wall-polish.md) (5 KB)
 - [Nav wings and wall action clarity](desktop/nav-wings-and-wall-action-clarity.md) (1 KB)
