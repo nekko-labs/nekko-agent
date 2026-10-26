@@ -2,7 +2,7 @@ import { CreateMenu } from '../components/CreateMenu.js';
 import { AgentWindowDropdown, defaultFolderIds, type AgentWindowSelection } from '../components/AgentWindowPicker.js';
 import { AgentSidebar } from './WorkspacesView.js';
 import { ChatPane } from '../components/ChatPane.js';
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { AgentEvent, AutomationTask, PendingInput, SessionSummary, UsageSummary } from '@nekko-agent/shared';
 import type { AgentType } from '@nekko-agent/shared';
@@ -45,6 +45,9 @@ import {
   toWallSetting,
   type CommandWallState,
 } from '../commandWall.js';
+
+// Remotion is only needed for the one-time intro, so it loads with it.
+const ZonesIntro = lazy(() => import('../components/ZonesIntro.js'));
 
 const HOUR = 60 * 60_000;
 
@@ -480,6 +483,8 @@ export function CommandCenterView() {
     return () => window.removeEventListener('keydown', onKey);
   }, [wall.root, selected, selectAgent, setWall]);
   const chatFinderOpen = useStore((s) => s.chatFinderOpen);
+  const onAgentsView = useStore((s) => s.view) === 'command';
+  const showZonesIntro = listsReady && onAgentsView && !isScreenWindow && !!wall.zones && !wall.zonesIntro;
   useEffect(() => {
     if (chatFinderOpen) setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), show: true } }));
   }, [chatFinderOpen, setWall]);
@@ -552,6 +557,7 @@ export function CommandCenterView() {
 
   return (
     <div ref={viewRef} className="flex h-full min-h-0 flex-col -mt-px gap-2 pb-0 pl-[3px] pr-px pt-0">
+      {showZonesIntro && <Suspense fallback={null}><ZonesIntro onClose={() => setWall((w) => ({ ...w, zonesIntro: true }))} /></Suspense>}
       <WallToolbar wall={wall} setWall={setWall} addOpen={addOpen} setAddOpen={setAddOpen}
         onAdd={(kind) => {
           setCompletedId(null);

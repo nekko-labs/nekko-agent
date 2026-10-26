@@ -21,12 +21,13 @@ User intent: "there are too many at once right now. that's not how people realis
 - **Empty zones.** Closing, completing or minimizing the agent in a zone (by hand, or automatically after a successful reply, see *Minimize agent windows*) leaves the zone in place with a dotted border, the text "Empty zone", a hint, and a New agent button that starts an agent in that zone.
 - **Moving and resizing zones.** Zones move the way windows did (*Agent board: pick up and drop windows*), now also by their name bar, and dividers between zones resize them. Dropped at a board edge, a zone now fits the row (or column) under the pointer at that end; holding Shift spans the whole side instead. A hint on the landing zone says which ("Hold Shift to span the full height" / "Spans the full height. Let go of Shift to fit the row.").
 - **Closing a zone.** Right-clicking a zone's name bar offers Close zone. The agent in it is minimized, not stopped or completed. The last zone cannot be closed.
-- **Intro (planned, next layer).** The first time the Agents page shows the zoned board, a dialog walks through three short looping animations (two zones and adding a third; moving and closing a zone; changing a zone's agent from the panel, by click and by drag), each with its explanation underneath, with Back, Next and Get started. Closing it any way marks it seen for good (saved with the wall, so it is shared across the editions of one install). It is never shown on a second screen's window. With reduced motion the animations show one still frame.
+- **Intro.** The first time the Agents page shows the zoned board, a dialog walks through three short looping animations (two zones and adding a third; moving and closing a zone; changing a zone's agent from the panel, by click and by drag), each with its explanation underneath, with Back, Next and Get started. Closing it any way marks it seen for good (saved with the wall, so it is shared across the editions of one install). It is never shown on a second screen's window. With reduced motion the animations show one still frame.
 
 ## Boundaries
 
 - Zones and the intro are renderer-only: the wall setting gains `zones`, `activeZone` and `zonesIntro`; the host stores it unchanged. No new host actions, permissions or network access.
 - Minimizing, emptying or closing a zone never changes a chat's lifecycle. Only Complete and Delete do.
+- The intro's animations are drawn live with Remotion's player from the app's own colour variables (they follow light and dark themes). They are silent; they fetch nothing.
 - Multi-monitor: a chat made in one window and placed on another screen still opens there. New chats are no longer claimed by any screen automatically.
 
 ## Unchanged
