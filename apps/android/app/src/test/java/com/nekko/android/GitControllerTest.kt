@@ -53,6 +53,13 @@ class GitControllerTest {
                     put("files", JsonArray(if (stagedSide) staged else unstaged))
                     put("truncated", false)
                 }
+                Channels.PR_CHECKS -> buildJsonObject {
+                    put("url", r.args[0].jsonPrimitive.content); put("checks", "failing")
+                    putJsonArray("items") {
+                        add(buildJsonObject { put("name", "lint"); put("state", "pass") })
+                        add(buildJsonObject { put("name", "test"); put("state", "fail"); put("link", "https://example.invalid/run/1") })
+                    }
+                }
                 Channels.GIT_LOG -> buildJsonArray { add(buildJsonObject { put("sha", "abc"); put("author", "Ada"); put("subject", "First"); putJsonArray("parents") {} }) }
                 else -> JsonNull
             }
@@ -74,6 +81,11 @@ class GitControllerTest {
                         put("ok", true); put("message", "Committed abc.")
                         putJsonObject("commit") { put("sha", "abc"); put("author", "Ada"); put("subject", "Add b") }
                     } else buildJsonObject { put("ok", false); put("message", "nothing to commit") }
+                Channels.PR_CREATE -> buildJsonObject { put("ok", true); put("message", "Opened."); put("url", "https://github.com/o/r/pull/9") }
+                Channels.PR_ACTION -> buildJsonObject {
+                    put("ok", true); put("message", "Merged.")
+                    putJsonObject("pr") { put("url", r.args[0].jsonPrimitive.content); put("number", 9); put("state", "merged") }
+                }
                 else -> buildJsonObject { put("ok", true); put("message", "Done.") }
             }
         }
@@ -137,6 +149,22 @@ class GitControllerTest {
         val g = controller(repo)
         assertEquals("Ada", g.history().first().author)
         assertEquals("""["session:s1",{"limit":50,"skip":0}]""", JsonArray(repo.reads.single().args).toString())
+    }
+
+    @Test fun `opens a pull request, reads its checks failing first, and merges it`() = runTest {
+        val repo = Repo()
+        val g = controller(repo)
+        assertEquals("https://github.com/o/r/pull/9", g.createPr("  Add b ", "", "main", draft = true))
+        assertEquals("""["session:s1",{"title":"Add b","draft":true,"base":"main"}]""", JsonArray(repo.changes.single().args).toString())
+        val checks = g.checks("https://github.com/o/r/pull/9")
+        assertEquals(listOf("test", "lint"), checks.items.map { it.name })
+        val readsBefore = repo.reads.size
+        val merged = g.prAction("https://github.com/o/r/pull/9", com.nekko.protocol.PrAction.MERGE)
+        assertEquals(com.nekko.protocol.PullRequest.State.MERGED, merged?.pr?.state)
+        assertEquals(GitNotice(true, "Merged."), g.state.value.notice)
+        assertEquals("""["https://github.com/o/r/pull/9","merge"]""", JsonArray(repo.changes.last().args).toString())
+        assertEquals("a PR action doesn't re-read the folder", readsBefore, repo.reads.size)
+        assertTrue(repo.changes.all { it.isChange })
     }
 
     /** Git changes signed for real and checked by the computer's rules (the same proof checks as nekkod). */

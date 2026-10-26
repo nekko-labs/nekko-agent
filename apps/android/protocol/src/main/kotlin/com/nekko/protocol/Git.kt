@@ -10,9 +10,10 @@ import java.time.Instant
 
 // Git on a chat's folder from the phone (AN-30, the iPhone's IO-33 FA-2), as
 // the computer projects it for phones (packages/shared/src/phone-git.ts):
-// status, diffs, history, branches and compare to read; stage, commit, a
-// model-written message, push, switch and abort a merge as Change actions
-// (signed: the fingerprint, face or screen lock). Mirrors `Git.swift`.
+// status, diffs, history, branches, compare and a PR's checks to read;
+// stage, commit, a model-written message, push, switch, abort a merge, open a
+// PR and act on one as Change actions (signed: the fingerprint, face or
+// screen lock). Mirrors `Git.swift`.
 //
 // A phone always names the chat (`session:<chatId>`), never a folder: the
 // computer refuses anything else. Paths are relative to the chat's folder.
@@ -72,6 +73,106 @@ data class GitRequest(val channel: String, val args: List<JsonElement>) {
             GitRequest(Channels.GIT_SWITCH, listOf(folder(chat), JsonPrimitive(name), buildJsonObject { put("create", create) }))
 
         fun mergeAbort(chat: String) = GitRequest(Channels.GIT_MERGE_ABORT, listOf(folder(chat)))
+
+        fun createPr(chat: String, title: String, body: String = "", base: String? = null, draft: Boolean = false) =
+            GitRequest(Channels.PR_CREATE, listOf(folder(chat), buildJsonObject {
+                put("title", title)
+                put("draft", draft)
+                if (body.isNotEmpty()) put("body", body)
+                if (!base.isNullOrEmpty()) put("base", base)
+            }))
+
+        fun prChecks(url: String) = GitRequest(Channels.PR_CHECKS, listOf(JsonPrimitive(url)))
+        fun prDiff(url: String) = GitRequest(Channels.PR_DIFF, listOf(JsonPrimitive(url)))
+        fun prAction(url: String, action: PrAction) = GitRequest(Channels.PR_ACTION, listOf(JsonPrimitive(url), JsonPrimitive(action.wire)))
+    }
+}
+
+/** What a phone may do to a pull request (`PHONE_PR_ACTIONS`). */
+enum class PrAction(val wire: String, val label: String) {
+    APPROVE("approve", "Approve"),
+    MERGE("merge", "Merge"),
+    CLOSE("close", "Close"),
+    REOPEN("reopen", "Reopen"),
+}
+
+/** A chat's pull request (`pr:sessionList`, and the one on its branch in `workspace:gitStatus`): its state and checks. */
+data class PullRequest(
+    val url: String,
+    val number: Int,
+    val title: String = "",
+    val state: State = State.OPEN,
+    val isDraft: Boolean = false,
+    val checks: Checks = Checks.NONE,
+    val reviewDecision: String? = null,
+    val additions: Int = 0,
+    val deletions: Int = 0,
+    val changedFiles: Int = 0,
+) {
+    enum class State(val wire: String) { OPEN("open"), MERGED("merged"), CLOSED("closed") }
+    enum class Checks(val wire: String) { PASSING("passing"), FAILING("failing"), PENDING("pending"), NONE("none") }
+
+    /** The chip's words: `#12 Open · checks failing`. */
+    val summary: String
+        get() {
+            val s = when (state) {
+                State.OPEN -> if (isDraft) "Draft" else "Open"
+                State.MERGED -> "Merged"
+                State.CLOSED -> "Closed"
+            }
+            val c = when (checks) {
+                Checks.PASSING -> "checks passing"
+                Checks.FAILING -> "checks failing"
+                Checks.PENDING -> "checks running"
+                Checks.NONE -> null
+            }
+            return listOfNotNull("#$number $s", c).joinToString(" · ")
+        }
+
+    /** What a phone may do to it now. */
+    val actions: List<PrAction>
+        get() = when (state) {
+            State.OPEN -> listOf(PrAction.APPROVE, PrAction.MERGE, PrAction.CLOSE)
+            State.CLOSED -> listOf(PrAction.REOPEN)
+            State.MERGED -> emptyList()
+        }
+
+    companion object {
+        fun from(v: JsonElement?): PullRequest? {
+            val p = v.obj() ?: return null
+            val url = p.str("url") ?: return null
+            val n = p.long("number") ?: return null
+            return PullRequest(
+                url = url, number = n.toInt(), title = p.str("title").orEmpty(),
+                state = State.entries.firstOrNull { it.wire == p.str("state") } ?: State.OPEN, isDraft = p.bool("isDraft"),
+                checks = Checks.entries.firstOrNull { it.wire == p.str("checks") } ?: Checks.NONE,
+                reviewDecision = p.str("reviewDecision"), additions = p.long("additions")?.toInt() ?: 0,
+                deletions = p.long("deletions")?.toInt() ?: 0, changedFiles = p.long("changedFiles")?.toInt() ?: 0,
+            )
+        }
+
+        fun list(v: JsonElement?): List<PullRequest> = v.arr().orEmpty().mapNotNull(::from)
+    }
+}
+
+/**
+ * Git through the agent: what the pull request chip's *Ask the agent* sends,
+ * as ordinary prompts, so the chat's approvals apply to every command the
+ * agent runs for them. The iPhone's `GitPrompt`.
+ */
+enum class GitPrompt(val label: String, val text: String) {
+    COMMIT("Commit these changes", "Commit the changes you made in this chat with a clear commit message. Don’t push yet."),
+    OPEN_PR("Open a PR", "Push this branch and open a pull request for the changes in this chat, with a short description. Then share its link."),
+    FIX_CHECKS("Fix the failing checks", "The pull request’s checks are failing. Find out why from the failing runs, fix it, and push the fix."),
+    ;
+
+    companion object {
+        /** What to offer for a chat's pull requests: commit always, open one when none is open, fix when one fails. */
+        fun offered(prs: List<PullRequest>): List<GitPrompt> = buildList {
+            add(COMMIT)
+            if (prs.none { it.state == PullRequest.State.OPEN }) add(OPEN_PR)
+            if (prs.any { it.state == PullRequest.State.OPEN && it.checks == PullRequest.Checks.FAILING }) add(FIX_CHECKS)
+        }
     }
 }
 
@@ -86,6 +187,8 @@ data class GitStatus(
     val behind: Int = 0,
     /** The linked worktree's folder name, when the chat works in one. */
     val worktree: String? = null,
+    /** The pull request open from this branch, when there is one. */
+    val pr: PullRequest? = null,
 ) {
     /** `main`, or `detached at abc1234`. */
     val position: String get() = branch ?: head?.let { "detached at $it" } ?: "no commits yet"
@@ -103,7 +206,7 @@ data class GitStatus(
             return GitStatus(
                 repo = o.bool("repo"), branch = o.str("branch"), head = o.str("head"),
                 dirtyCount = o.long("dirtyCount")?.toInt() ?: 0, ahead = o.long("ahead")?.toInt() ?: 0,
-                behind = o.long("behind")?.toInt() ?: 0, worktree = o["worktree"].obj()?.str("name"),
+                behind = o.long("behind")?.toInt() ?: 0, worktree = o["worktree"].obj()?.str("name"), pr = PullRequest.from(o["pr"]),
             )
         }
     }
@@ -336,11 +439,46 @@ data class GitResult(
     val branch: String? = null,
     val upstream: String? = null,
     val commit: GitCommit? = null,
+    /** A new pull request's address (`pr:create`). */
+    val url: String? = null,
+    val pr: PullRequest? = null,
 ) {
     companion object {
         fun from(v: JsonElement?): GitResult {
             val o = v as? JsonObject ?: return GitResult(false, "Your computer didn’t answer.")
-            return GitResult(o.bool("ok"), o.str("message").orEmpty(), o.str("branch"), o.str("upstream"), o["commit"]?.let(GitCommit::from))
+            return GitResult(
+                o.bool("ok"), o.str("message").orEmpty(), o.str("branch"), o.str("upstream"), o["commit"]?.let(GitCommit::from),
+                o.str("url"), PullRequest.from(o["pr"]),
+            )
+        }
+    }
+}
+
+/** One check on a pull request's head commit. */
+data class PrCheck(val name: String, val state: State, val workflow: String? = null, val link: String? = null, val description: String? = null) {
+    enum class State(val wire: String, val label: String) {
+        PASS("pass", "Passed"), FAIL("fail", "Failed"), PENDING("pending", "Running"), SKIPPING("skipping", "Skipped"), CANCEL("cancel", "Cancelled"),
+    }
+}
+
+/** The checks on a pull request (`pr:checks`), failing first. */
+data class PrCheckList(val url: String, val rollup: PullRequest.Checks, val items: List<PrCheck>, val omitted: Int) {
+    companion object {
+        private val ORDER = listOf(PrCheck.State.FAIL, PrCheck.State.PENDING, PrCheck.State.CANCEL, PrCheck.State.PASS, PrCheck.State.SKIPPING)
+
+        fun from(v: JsonElement?): PrCheckList? {
+            val o = v.obj() ?: return null
+            val url = o.str("url") ?: return null
+            val items = o["items"].arr().orEmpty().mapNotNull { e ->
+                val c = e.obj() ?: return@mapNotNull null
+                val name = c.str("name") ?: return@mapNotNull null
+                PrCheck(name, PrCheck.State.entries.firstOrNull { it.wire == c.str("state") } ?: PrCheck.State.PENDING,
+                    c.str("workflow"), c.str("link"), c.str("description"))
+            }
+            // Stable: equal states keep the computer's order.
+            val sorted = items.sortedBy { ORDER.indexOf(it.state).let { i -> if (i < 0) 9 else i } }
+            return PrCheckList(url, PullRequest.Checks.entries.firstOrNull { it.wire == o.str("checks") } ?: PullRequest.Checks.NONE,
+                sorted, o.long("omittedItems")?.toInt() ?: 0)
         }
     }
 }

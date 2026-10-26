@@ -40,6 +40,13 @@ class GitTest {
         assertEquals("""["session:s1",{"message":"Fix"}]""", args(GitRequest.commit("s1", "Fix")))
         assertEquals("""["session:s1",{"setUpstream":true}]""", args(GitRequest.push("s1")))
         assertEquals("""["session:s1","feat",{"create":true}]""", args(GitRequest.switchBranch("s1", "feat", create = true)))
+        assertEquals("""["session:s1",{"title":"T","draft":true}]""", args(GitRequest.createPr("s1", "T", draft = true)))
+        assertEquals("""["session:s1",{"title":"T","draft":false,"body":"B","base":"main"}]""", args(GitRequest.createPr("s1", "T", "B", "main")))
+        assertEquals("""["https://github.com/o/r/pull/1","merge"]""", args(GitRequest.prAction("https://github.com/o/r/pull/1", PrAction.MERGE)))
+        assertTrue(GitRequest.prAction("u", PrAction.APPROVE).isChange)
+        assertTrue(GitRequest.createPr("s1", "t").isChange)
+        assertFalse(GitRequest.prChecks("u").isChange)
+        assertFalse(GitRequest.prDiff("u").isChange)
         // The Change actions are the ones the computer asks a signature for.
         assertTrue("it spends the computer's model tokens", GitRequest.commitMessage("s1").isChange)
         assertFalse(GitRequest.diff("s1", staged = false).isChange)
@@ -48,6 +55,7 @@ class GitTest {
         for (r in listOf(
             GitRequest.stage("s1", listOf("a")), GitRequest.commit("s1", "m"), GitRequest.push("s1"), GitRequest.switchBranch("s1", "b"),
             GitRequest.mergeAbort("s1"), GitRequest.commitMessage("s1"), GitRequest.unstage("s1", listOf("a")),
+            GitRequest.createPr("s1", "t"), GitRequest.prAction("u", PrAction.CLOSE),
         )) {
             assertTrue(r.channel, r.isChange)
             ChangeProof.canonicalJson(JsonArray(r.args))
@@ -62,7 +70,10 @@ class GitTest {
         val change = set("changeChannels")
         assertEquals("every Change channel this phone calls is signed, and nothing else is", change.filter { it in Channels.ALL }.toSet(), Channels.CHANGE)
         val read = set("readChannels")
-        for (ch in listOf(Channels.WORKSPACE_GIT_STATUS, Channels.GIT_DIFF, Channels.GIT_LOG, Channels.GIT_SHOW, Channels.GIT_BRANCHES, Channels.GIT_COMPARE)) {
+        for (ch in listOf(
+            Channels.WORKSPACE_GIT_STATUS, Channels.GIT_DIFF, Channels.GIT_LOG, Channels.GIT_SHOW, Channels.GIT_BRANCHES, Channels.GIT_COMPARE,
+            Channels.PR_SESSION_LIST, Channels.PR_CHECKS, Channels.PR_DIFF,
+        )) {
             assertTrue("$ch is a plain read", ch in read)
         }
     }
@@ -72,6 +83,7 @@ class GitTest {
         assertEquals("feat", status.position)
         assertEquals("1 to push · 2 to pull", status.drift)
         assertEquals("feat-wt", status.worktree)
+        assertEquals(7, status.pr?.number)
         assertFalse(GitStatus.from(view("workspace:gitStatus", 1))!!.repo)
 
         val diff = GitDiff.from(view("git:diff"))
@@ -114,6 +126,12 @@ class GitTest {
         assertFalse(refused.ok)
         assertEquals(4000, refused.message.length)
         assertEquals("Fix it\n\nBecause.", GitCommitMessage.from(view("git:commitMessage"))?.message)
+
+        val checks = PrCheckList.from(view("pr:checks"))!!
+        assertEquals(PullRequest.Checks.FAILING, checks.rollup)
+        assertEquals("failing first", listOf(PrCheck.State.FAIL, PrCheck.State.PASS), checks.items.map { it.state })
+        assertEquals("https://github.com/o/r/pull/7", GitResult.from(view("pr:create")).url)
+        assertEquals(PullRequest.State.MERGED, GitResult.from(view("pr:action")).pr?.state)
     }
 
     @Test fun `draws git patches as hunks`() {
@@ -140,5 +158,17 @@ class GitTest {
         assertEquals(listOf("feat"), b.remoteOnly.map { it.localName })
         assertEquals("main", b.compareBase)
         assertEquals("develop", b.copy(defaultBranch = "develop").compareBase)
+    }
+
+    @Test fun `a pull request's words and what a phone may do to it`() {
+        val pr = PullRequest("u", 12, state = PullRequest.State.OPEN, checks = PullRequest.Checks.FAILING)
+        assertEquals("#12 Open · checks failing", pr.summary)
+        assertEquals("#12 Draft", pr.copy(isDraft = true, checks = PullRequest.Checks.NONE).summary)
+        assertEquals(listOf(PrAction.APPROVE, PrAction.MERGE, PrAction.CLOSE), pr.actions)
+        assertEquals(listOf(PrAction.REOPEN), pr.copy(state = PullRequest.State.CLOSED).actions)
+        assertTrue(pr.copy(state = PullRequest.State.MERGED).actions.isEmpty())
+        assertEquals(listOf(GitPrompt.COMMIT, GitPrompt.FIX_CHECKS), GitPrompt.offered(listOf(pr)))
+        assertEquals(listOf(GitPrompt.COMMIT, GitPrompt.OPEN_PR), GitPrompt.offered(emptyList()))
+        assertEquals(listOf(GitPrompt.COMMIT, GitPrompt.OPEN_PR), GitPrompt.offered(listOf(pr.copy(state = PullRequest.State.MERGED))))
     }
 }
