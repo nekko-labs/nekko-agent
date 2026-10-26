@@ -606,6 +606,7 @@ async fn a_create_only_token_is_refused() {
     let c = connect_rig(vec![found(42, "private"), (404, json!({})), probe()[0].clone(), (403, json!({}))]);
     let e = c.connect(req_project("a/b", "c", "glpat-x")).await.unwrap_err();
     assert!(e.contains(NO_MANAGE_TEXT), "{e}");
+    assert!(e.contains("paused check runner"), "says what is left behind: {e}");
     assert!(c.stored_nothing());
     // `api` covers both.
     let c = connect_rig([vec![found(42, "private"), scopes(&["api"])], probe()].concat());
@@ -782,4 +783,29 @@ fn connect_request_reads_every_field_the_app_sends() {
         (r.base_url.as_deref(), r.projects.len(), r.allow_public, r.protected_only, r.label.as_deref()),
         (Some("https://gitlab.example.com"), 1, true, Some(false), Some("studio"))
     );
+}
+
+#[tokio::test]
+async fn redirects_are_refused_without_following() {
+    for (to, host) in [
+        ("https://evil.example/api/v4/projects/1", "evil.example"),
+        ("http://gitlab.com/api/v4/projects/1", "gitlab.com"),
+    ] {
+        let c = connect_rig(vec![]);
+        c.http.push_redirect(302, to);
+        let e = c.connect(req_project("a/b", "c", "glpat-x")).await.unwrap_err();
+        assert_eq!(e, format!("GitLab redirected the request to {host}. Use the instance's own address."));
+        assert_eq!(c.http.urls().len(), 1);
+        assert!(c.http.last().no_redirect, "the client must not follow it with the token");
+        assert!(c.stored_nothing());
+    }
+    // The supervisor's calls too.
+    let t = rig(vec![]);
+    t.http.push_redirect(301, "https://evil.example/x");
+    let e = t.gl.status(&project_rec(), 77).await.unwrap_err();
+    assert_eq!(
+        e,
+        ProviderError::Other("GitLab redirected the request to evil.example. Use the instance's own address.".into())
+    );
+    assert!(t.http.last().no_redirect);
 }

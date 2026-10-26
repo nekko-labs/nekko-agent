@@ -429,7 +429,7 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
         let c = self.connectors.as_ref().ok_or("Connecting is not available here.")?;
         // Held through the save, so a removed record's cleanup never deletes the token being stored.
         let _connecting;
-        let (rec, network) = match req["provider"].as_str() {
+        let (rec, network, previous) = match req["provider"].as_str() {
             Some("github") => {
                 let req: ConnectRequest = serde_json::from_value(req).map_err(|_| INVALID)?;
                 let _connecting = self.connect_guard(key_name(req.app_id));
@@ -447,21 +447,43 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
                         && same_scope(&r.config.scope, &req.scope)
                 });
                 _connecting = existing.as_ref().map(|e| self.connect_guard(token_key(&e.config.id)));
+                // Put back if the save fails: the connect overwrites it before the record is saved.
+                let previous = existing.as_ref().and_then(|e| self.vault.get(&token_key(&e.config.id)));
                 // Read now, not from the VM's copy: a Mac without VM support never fills that.
                 let nets = hostnets::try_current().map_err(|e| format!("Cannot read this Mac's networks: {e}"))?;
                 let network = signals::read_network_id().await;
                 let resolve = async |h: &str| Ok(tokio::net::lookup_host((h, 443)).await?.map(|a| a.ip()).collect());
                 let rec =
                     c.gitlab.connect(req, existing.as_ref(), &self.prefix, network.clone(), &nets, resolve).await?;
-                (rec, network)
+                (rec, network, previous)
             }
             _ => return Err("Unknown CI provider.".into()),
         };
+        self.save_gitlab(rec, network, previous).await
+    }
+
+    /// Saves a GitLab record whose token is stored; a failed save leaves the
+    /// vault as before the connect: the `previous` token back, or none.
+    async fn save_gitlab(
+        &self,
+        rec: RunnerRecord,
+        network: Option<String>,
+        previous: Option<String>,
+    ) -> Result<Value, String> {
         let key = secret_key(&rec);
         let saved = self.save_connected(rec, network).await;
-        if saved.is_err() && !self.store.load().iter().any(|r| secret_key(r) == key) && !self.store.is_unreadable() {
-            // Nothing saved uses the token just stored: a failed connect keeps nothing.
-            self.vault.delete(&key);
+        if saved.is_err() {
+            match previous {
+                Some(p) => {
+                    if let Err(e) = self.vault.set(&key, &p) {
+                        eprintln!("runner: could not put the previous GitLab token back: {e}");
+                    }
+                }
+                None if !self.store.load().iter().any(|r| secret_key(r) == key) && !self.store.is_unreadable() => {
+                    self.vault.delete(&key);
+                }
+                None => {}
+            }
         }
         saved
     }

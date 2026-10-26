@@ -351,12 +351,11 @@ async fn installation_token_is_cached_until_near_expiry() {
     assert_eq!(t.gh.installation_token(&link).await.unwrap(), "ghs_1");
     assert_eq!(t.http.urls().len(), 1);
     CLOCK.store(NOW + 3600 - 300, Ordering::SeqCst);
-    t.http
-        .0
-        .replies
-        .lock()
-        .unwrap()
-        .push_front((201, json!({ "token": "ghs_2", "expires_at": "2030-01-01T00:00:00Z" }).to_string()));
+    t.http.0.replies.lock().unwrap().push_front((
+        201,
+        json!({ "token": "ghs_2", "expires_at": "2030-01-01T00:00:00Z" }).to_string(),
+        None,
+    ));
     assert_eq!(t.gh.installation_token(&link).await.unwrap(), "ghs_2");
     assert_eq!(t.http.urls().len(), 2);
 }

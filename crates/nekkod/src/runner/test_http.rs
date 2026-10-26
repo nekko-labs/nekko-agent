@@ -14,7 +14,7 @@ pub struct Scripted(pub Arc<Inner>);
 
 #[derive(Default)]
 pub struct Inner {
-    pub replies: Mutex<VecDeque<(u16, String)>>,
+    pub replies: Mutex<VecDeque<(u16, String, Option<String>)>>,
     pub seen: Mutex<Vec<Request>>,
     pub watch: Mutex<Option<PathBuf>>,
     pub key_seen: Mutex<Vec<bool>>,
@@ -29,7 +29,11 @@ impl Scripted {
         s
     }
     pub fn push(&self, status: u16, body: Value) {
-        self.0.replies.lock().unwrap().push_back((status, body.to_string()));
+        self.0.replies.lock().unwrap().push_back((status, body.to_string(), None));
+    }
+    /// A redirect to `location`.
+    pub fn push_redirect(&self, status: u16, location: &str) {
+        self.0.replies.lock().unwrap().push_back((status, String::new(), Some(location.into())));
     }
     pub fn urls(&self) -> Vec<String> {
         self.0.seen.lock().unwrap().iter().map(|r| format!("{} {}", r.method, r.url)).collect()
@@ -51,8 +55,8 @@ impl Http for Scripted {
         self.0.seen.lock().unwrap().push(req);
         let next = self.0.replies.lock().unwrap().pop_front();
         Box::pin(async move {
-            let (status, body) = next.ok_or_else(|| "fetch failed".to_string())?;
-            Ok(Response { status, body, location: None })
+            let (status, body, location) = next.ok_or_else(|| "fetch failed".to_string())?;
+            Ok(Response { status, body, location })
         })
     }
 }

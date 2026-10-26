@@ -1386,3 +1386,38 @@ async fn removing_a_gitlab_runner_forgets_its_token_once_handed_back() {
     sense.0.lock().unwrap().wall_secs += 60.0;
     wait_for("the token forgotten", || vault.get("gitlab-token-gl-1").is_none()).await;
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_removed_group_left_unswept_behind_a_busy_overlap_is_audited() {
+    let mut h = harness(vec![gitlab("a", "g"), gitlab("b", "h")]);
+    h.sup.start().await;
+    h.mac(|m| m.paused_all = true);
+    h.tick_for(5).await;
+    h.mac(|m| m.paused_all = false);
+    h.sup.set_records(vec![gitlab("a", "g")]);
+    h.running().await;
+    h.status(RunnerStatus::Busy);
+    let swept = h.count("remove_stale");
+    h.tick_for(3600).await;
+    let gone = h.sup.take_gone().await;
+    assert_eq!(gone.iter().map(|r| r.config.id.as_str()).collect::<Vec<_>>(), ["b"]);
+    assert_eq!(h.count("remove_stale"), swept, "never swept over a live runner");
+    let line = h.audit().into_iter().find(|l| l.result == AuditResult::NotRemoved).expect("an audit line");
+    assert_eq!(line.runner_id, "b");
+    let why = line.reason.join(" ");
+    assert!(why.contains("group h") && why.contains("nekko-mac1-"), "{why}");
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_failed_gitlab_save_puts_the_previous_token_back() {
+    let Rig { runners, dir, vault, .. } = mixed_rig(harness(vec![]));
+    // The connect already wrote its token; then saving `runners.json` fails.
+    std::fs::create_dir(dir.path().join("runners.json.tmp")).unwrap();
+    vault.set("gitlab-token-gl-1", "glpat-new").unwrap();
+    assert!(runners.save_gitlab(gitlab("gl-1", "acme"), None, Some("glpat-x".into())).await.is_err());
+    assert_eq!(vault.get("gitlab-token-gl-1").as_deref(), Some("glpat-x"), "the reconnect's token is undone");
+    // A new record's token goes.
+    vault.set("gitlab-token-gl-9", "glpat-y").unwrap();
+    assert!(runners.save_gitlab(gitlab("gl-9", "other"), None, None).await.is_err());
+    assert_eq!(vault.get("gitlab-token-gl-9"), None);
+}

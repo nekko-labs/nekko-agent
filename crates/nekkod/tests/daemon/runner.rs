@@ -83,13 +83,20 @@ async fn gitlab_record_lists_and_removes() {
     let runners = data.path().join("runners");
     std::fs::create_dir_all(&runners).unwrap();
     let record = json!([{
-            "id": "gl-42",
-            "scope": { "kind": "org", "org": "g" },
-            "label": "nekko-mac",
+        "id": "gl-42",
+        "scope": { "kind": "org", "org": "g" },
+        "label": "nekko-mac",
         "settings": { "enabled": true },
         "gitlab": { "baseUrl": "https://gitlab.com", "namespaceId": 42, "projects": ["g/a"] },
     }]);
     std::fs::write(runners.join("runners.json"), record.to_string()).unwrap();
+    // The runner vault is a file only where there is no OS keystore; tests never write the login keychain.
+    let file_vault = !cfg!(any(target_os = "macos", windows));
+    use nekko_cloud::vault::Vault;
+    let vault = nekko_cloud::vault::FileVault::new(runners.join("secrets.json"));
+    if file_vault {
+        vault.set("gitlab-token-gl-42", "glpat-x").unwrap();
+    }
     let d = start_with(Some(data.path()));
     let (status, list) = post(d.port, "runner:list", json!([]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{list}");
@@ -104,4 +111,7 @@ async fn gitlab_record_lists_and_removes() {
     assert_eq!((status, gone), (200, Value::Null));
     let (_, list) = post(d.port, "runner:list", json!([]), Some(TOKEN)).await;
     assert_eq!(list, json!([]));
+    if file_vault {
+        assert_eq!(vault.get("gitlab-token-gl-42"), None, "the token goes with the record");
+    }
 }

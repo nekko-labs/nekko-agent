@@ -366,6 +366,18 @@ fn install_id(runners_dir: &Path) -> String {
     id
 }
 
+/// Where a record's registrations live, for a person deleting them by hand.
+fn place(r: &RunnerRecord) -> String {
+    match (&r.config.scope, r.gitlab()) {
+        (nekko_runner::Scope::Repo { owner, repo }, None) => format!("repo {owner}/{repo}"),
+        (nekko_runner::Scope::Org { org }, None) => format!("org {org}"),
+        (nekko_runner::Scope::Repo { owner, repo }, Some(g)) => {
+            format!("project {owner}/{repo} (id {}) at {}", g.namespace_id, g.base_url)
+        }
+        (nekko_runner::Scope::Org { org }, Some(g)) => format!("group {org} (id {}) at {}", g.namespace_id, g.base_url),
+    }
+}
+
 /// `<host>` in runner names: lowercase `[a-z0-9-]`.
 pub(super) fn name_host(host: &str) -> String {
     host.to_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect()
@@ -502,7 +514,11 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                 self.abandon_removals(&r, now);
             }
             if live {
-                eprintln!("runner {id}: stale runners not swept, another runner of the same scope is busy");
+                let what = format!(
+                    "stale runners named {prefix}* in {} were not swept while an overlapping runner was busy; delete them by hand",
+                    place(&r)
+                );
+                self.not_removed(&r, now, what);
             } else if let Err(e) = call(self.provider.remove_stale(&r, &prefix)).await {
                 eprintln!("runner {id}: cannot remove stale runners: {e}");
             }
@@ -517,32 +533,28 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             .into_iter()
             .partition::<Vec<_>, _>(|q| q.record.config.id == r.config.id);
         self.removals = keep;
-        let place = match (&r.config.scope, r.gitlab()) {
-            (nekko_runner::Scope::Repo { owner, repo }, None) => format!("repo {owner}/{repo}"),
-            (nekko_runner::Scope::Org { org }, None) => format!("org {org}"),
-            (nekko_runner::Scope::Repo { owner, repo }, Some(g)) => {
-                format!("project {owner}/{repo} (id {}) at {}", g.namespace_id, g.base_url)
-            }
-            (nekko_runner::Scope::Org { org }, Some(g)) => {
-                format!("group {org} (id {}) at {}", g.namespace_id, g.base_url)
-            }
-        };
+        let place = place(r);
         for q in mine {
             let what =
                 format!("runner {} ({}) in {place} could not be removed; delete it by hand", q.runner_id, q.name);
-            eprintln!("runner {}: {what}", r.config.id);
-            let line = AuditLine {
-                ts: now as u64,
-                runner_id: r.config.id.clone(),
-                repo: None,
-                workflow: None,
-                job: None,
-                result: AuditResult::NotRemoved,
-                seconds: 0,
-                reason: vec![what],
-            };
-            self.audit(&line);
+            self.not_removed(r, now, what);
         }
+    }
+
+    /// Logs and audits something of `r` left registered for deletion by hand.
+    fn not_removed(&mut self, r: &RunnerRecord, now: f64, what: String) {
+        eprintln!("runner {}: {what}", r.config.id);
+        let line = AuditLine {
+            ts: now as u64,
+            runner_id: r.config.id.clone(),
+            repo: None,
+            workflow: None,
+            job: None,
+            result: AuditResult::NotRemoved,
+            seconds: 0,
+            reason: vec![what],
+        };
+        self.audit(&line);
     }
 
     /// The daemon is stopping: the failed removals of removed records are audited, since

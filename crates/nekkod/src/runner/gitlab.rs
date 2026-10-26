@@ -166,13 +166,22 @@ impl<H: Http> GitLab<H> {
         if body.is_some() {
             h.push(("Content-Type", "application/json"));
         }
-        let req = match method {
+        let mut req = match method {
             "POST" => Request::post(url, &h, body),
             "PUT" => Request::put(url, &h, body),
             "DELETE" => Request::delete(url, &h),
             _ => Request::get(url, &h),
         };
+        // Never follow a redirect: the client would carry PRIVATE-TOKEN to another host or over http.
+        req.no_redirect = true;
         let res = self.http.send(req).await.map_err(|e| ProviderError::Other(format!("GitLab did not answer: {e}")))?;
+        if (300..400).contains(&res.status) {
+            let to = res.location.as_deref().and_then(|l| url::Url::parse(base).ok()?.join(l).ok());
+            let host = to.as_ref().and_then(|u| u.host_str()).unwrap_or("another address");
+            return Err(ProviderError::Other(format!(
+                "GitLab redirected the request to {host}. Use the instance's own address."
+            )));
+        }
         Ok((res.status, serde_json::from_str(&res.body).unwrap_or(Value::Null)))
     }
 
@@ -244,7 +253,18 @@ impl<H: Http> GitLab<H> {
             }
         };
 
-        // 2. Reach: a job VM must be able to talk to the instance.
+        let id = match existing {
+            Some(e) => e.config.id.clone(),
+            None => {
+                let mut b = [0u8; 6];
+                // A fixed fallback would give every record one token slot.
+                getrandom::fill(&mut b).map_err(|e| format!("Could not make a runner id: {e}"))?;
+                format!("gl-{}", b.iter().map(|x| format!("{x:02x}")).collect::<String>())
+            }
+        };
+
+        // 2. Reach: a job VM must be able to talk to the instance. This is not an SSRF guard;
+        // the token's boundary is TLS plus never following a redirect (`send`).
         let host = parse_url(&base).map(|u| u.hostname).unwrap_or_default();
         let addrs = resolve(host.trim_start_matches('[').trim_end_matches(']')).await.unwrap_or_default();
         if addrs.is_empty() || !addrs.iter().all(|ip| guest_may_connect(*ip, nets)) {
@@ -308,27 +328,27 @@ impl<H: Http> GitLab<H> {
         let probe =
             match self.send(&base, &token, "POST", "/user/runners", Some(body)).await.map_err(|e| e.to_string())? {
                 (403, _) => return Err(NO_CREATE.into()),
-                (s, v) if ok(s) => v["id"].as_u64().ok_or("GitLab gave no runner id.")?,
+                (s, v) if ok(s) => v["id"].as_u64().ok_or_else(|| {
+                    eprintln!("runner: GitLab made a check runner without an id; the next sweep may find it");
+                    "GitLab gave no runner id."
+                })?,
                 (s, _) => return Err(refused(s).to_string()),
             };
         match self.send(&base, &token, "DELETE", &format!("/runners/{probe}"), None).await {
             Ok((s, _)) if ok(s) || s == 404 => {}
-            Ok((401, _)) => return Err(REFUSED.into()),
-            Ok((403, _)) => return Err(NO_MANAGE.into()),
+            Ok((s @ (401 | 403), _)) => {
+                eprintln!("runner: cannot remove the check runner {probe} (GitLab answered {s}); it is left paused");
+                let why = if s == 401 { REFUSED } else { NO_MANAGE };
+                return Err(format!(
+                    "{why} One paused check runner may be left; a reconnect with a working token removes it."
+                ));
+            }
             // Paused and named like ours: the stale sweep removes it later.
             Ok((s, _)) => eprintln!("runner: cannot remove the check runner {probe} (GitLab answered {s})"),
             Err(e) => eprintln!("runner: cannot remove the check runner {probe}: {e}"),
         }
 
         // 5. Store.
-        let id = match existing {
-            Some(e) => e.config.id.clone(),
-            None => {
-                let mut b = [0u8; 6];
-                let _ = getrandom::fill(&mut b);
-                format!("gl-{}", b.iter().map(|x| format!("{x:02x}")).collect::<String>())
-            }
-        };
         self.vault.set(&token_key(&id), &token)?;
         let settings = match existing {
             Some(e) => e.config.settings.clone(),
