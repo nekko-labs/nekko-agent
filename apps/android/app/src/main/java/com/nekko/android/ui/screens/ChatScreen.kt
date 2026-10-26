@@ -26,6 +26,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Button
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -137,15 +139,22 @@ fun ChatScreen(
     val footerCount = 1
     val lastIndex = headerCount + keyed.size + footerCount - 1
 
-    // Follow the reply while it streams, unless the user scrolled up to read.
+    // Open at the newest message, then follow the reply while it streams, unless the user scrolled up to read.
     val streamTick = (chat.blocks.lastOrNull() as? Block.Assistant)?.let { it.text.length + (it.reasoning?.length ?: 0) } ?: 0
-    LaunchedEffect(keyed.size, streamTick, chat.error) {
-        if (keyed.isEmpty()) return@LaunchedEffect
+    var openedAtBottom by remember(vm.sessionId) { mutableStateOf(false) }
+    LaunchedEffect(keyed.size, streamTick, chat.error, chat.ready) {
+        if (!chat.ready || keyed.isEmpty()) return@LaunchedEffect
+        if (!openedAtBottom) {
+            // The list replaces the spinner in this frame: wait until it has items, then jump without animating.
+            snapshotFlow { list.layoutInfo.totalItemsCount }.first { it > 0 }
+            list.scrollToItem(lastIndex)
+            openedAtBottom = true
+            return@LaunchedEffect
+        }
         val info = list.layoutInfo
         val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: -1
         val nearBottom = lastVisible >= info.totalItemsCount - 3
-        // totalItemsCount is 0 on the first frame: start at the bottom.
-        if (nearBottom || info.totalItemsCount == 0) list.scrollToItem(lastIndex)
+        if (nearBottom) list.scrollToItem(lastIndex)
     }
 
     if (showChanges && changesAllowed) {
