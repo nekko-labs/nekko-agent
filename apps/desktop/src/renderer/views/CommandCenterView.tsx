@@ -392,6 +392,9 @@ export function CommandCenterView() {
     if (completedId && listsReady && !sessions.some((s) => s.id === completedId && s.archivedAt)) setCompletedId(null);
   }, [completedId, listsReady, sessions]);
   const [selected, setSelected] = useState<string | null>(() => wall.hero);
+  useEffect(() => {
+    if (wall.hero) setSelected(wall.hero);
+  }, [wall.hero]);
   const selectAgent = useCallback((id: string | null) => {
     setCompletedId(null);
     setSelected(id);
