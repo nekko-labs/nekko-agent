@@ -109,7 +109,7 @@ struct RootView: View {
 
     @ViewBuilder private var content: some View {
         if !store.ready && !(app.prefs.appLock && app.lock.locked) {
-            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity).background(palette.paper)
+            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity).background { AppBackdrop() }
         } else if store.computers.isEmpty {
             NavigationStack {
                 if app.prefs.onboarded || introDone { WelcomeView() } else { FirstRunIntroView { introDone = true } }
@@ -266,7 +266,7 @@ struct LockView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(palette.paper.ignoresSafeArea())
+        .background { AppBackdrop() }
         // Ask once per return to the app: the Face ID sheet itself makes the
         // scene inactive and active again, which used to ask again after Cancel.
         .task(id: phase) {
