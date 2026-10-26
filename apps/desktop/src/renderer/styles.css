@@ -667,7 +667,7 @@
   color: var(--ink-faint);
 }
 
-/* A single rounded surface: only width and label opacity animate. */
+/* A winged surface: only viewport width and label opacity animate. */
 .rail {
   --rail-w-rest: 52px;
   --rail-w-open: 198px;
@@ -684,17 +684,29 @@
   padding-inline: 6px;
   justify-content: flex-start;
   isolation: isolate;
-  pointer-events: auto;
+  pointer-events: none;
   z-index: 1;
   top: 5%; bottom: 5%;
-  border-radius: 22px;
-  background: color-mix(in srgb, color-mix(in srgb, var(--paper) 92%, black) 97%, transparent);
   transition: width var(--rail-close-ms) var(--rail-ease) var(--rail-close-delay);
 }
+.rail-feedback { pointer-events: auto; }
 .rail-space-before { flex: 1 1 0; }
 .rail-space-after { flex: 4 1 0; }
 .rail-group { position: relative; display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; }
-.rail-backdrop { display: none; }
+/* The same static wings at rest and open. Stretch the SVG viewport, never d. */
+.rail-backdrop {
+  position: absolute;
+  left: -6px;
+  width: var(--rail-w-rest);
+  z-index: -1;
+  overflow: visible;
+  pointer-events: none;
+  transition: width var(--rail-close-ms) var(--rail-ease) var(--rail-close-delay);
+  & path {
+    fill: color-mix(in srgb, color-mix(in srgb, var(--paper) 92%, black) 97%, transparent);
+    pointer-events: visiblePainted;
+  }
+}
 
 .rail-destinations {
   position: relative;
@@ -763,6 +775,10 @@
   width: var(--rail-w-open);
   padding-right: 16px;
   transition: width var(--rail-open-ms) var(--rail-ease) var(--rail-open-delay);
+  & .rail-backdrop {
+    width: var(--rail-w-open);
+    transition: width var(--rail-open-ms) var(--rail-ease) var(--rail-open-delay);
+  }
   & .rail-label {
     opacity: 1;
     transform: none;
