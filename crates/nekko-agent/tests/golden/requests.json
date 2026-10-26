@@ -25827,7 +25827,10 @@
         "store": false,
         "include": [
           "reasoning.encrypted_content"
-        ]
+        ],
+        "reasoning": {
+          "summary": "auto"
+        }
       }
     },
     "opus-5-normal": {

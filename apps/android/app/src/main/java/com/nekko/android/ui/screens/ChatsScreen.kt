@@ -51,6 +51,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -319,7 +320,7 @@ private fun ChatActionDialog(title: String, delete: Boolean, computer: String, o
 }
 
 @Composable
-private fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> Unit, onClick: () -> Unit) {
+internal fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> Unit, onClick: () -> Unit) {
     val p = Nekko.palette
     val preview = plainText(s.lastReplyText ?: s.firstUserText ?: "")
     Row(
@@ -353,7 +354,14 @@ private fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> U
             when (activity) {
                 Activity.NEEDS_YOU -> Box(Modifier.padding(top = 4.dp)) { Pill("Needs you", Tone.WARNING, Icons.Filled.Warning) }
                 Activity.RUNNING -> Box(Modifier.padding(top = 4.dp)) { Pill("Running", Tone.ACCENT, Icons.Filled.Bolt) }
-                null -> Unit
+                null -> Box(Modifier.padding(top = 4.dp)) {
+                    if (s.activeWatchCount > 0) {
+                        Text("Zz", style = MaterialTheme.typography.labelMedium, color = p.inkFaint,
+                            modifier = Modifier.semantics { contentDescription = "Idle" })
+                    } else {
+                        Icon(Icons.Filled.Check, contentDescription = "Done", tint = p.inkFaint, modifier = Modifier.size(14.dp))
+                    }
+                }
             }
         }
     }
