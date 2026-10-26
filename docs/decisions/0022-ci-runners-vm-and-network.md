@@ -70,3 +70,12 @@ Added 2026-10-25. The decision itself is unchanged.
 - The GitHub App key is kept through `keyring` under a runner vault of its own (`nekko_cloud::vault::scoped_vault`, service `dev.nekkolabs.nekko-agent.runner.<hash of the data folder>`; a 0600 `runners/secrets.json` only where there is no keystore), as Cloud keeps its keys. It is written only after GitHub accepted it and connect passed every check.
 - The App JWT is signed RS256 with Security.framework (`SecKeyCreateWithData` and `SecKeyCreateSignature`); no crypto crate is added. GitHub calls go through `nekko_connectors::Http`, which gains PUT and DELETE.
 - nekkod starts the runner wiring (host readings, the helper's `egress` and `host` streams, the host-network refresh with the router's WAN address, every 5 min and on a gateway change) only when `nekko-vm` is staged beside it on Apple silicon; otherwise every runner reports that VM support is unavailable.
+
+## Implementation notes (T215)
+
+Added 2026-10-25. The decision itself is unchanged.
+
+- GitLab has no single-use runner, so each VM gets its own runner and its own `glrt-` token. The job can read that token, so the runner is locked, protected-only by default, paused once nekkod sees it busy and deleted when the VM ends. Failed deletes are retried with backoff and a removed record is held up to 1 hour, after which a `notRemoved` audit line names the runner for manual deletion. Start-up deletes every `nekko-<host>-` runner in the scope; a group sweep never deletes a runner its own group does not own, and group records on one instance never sweep each other.
+- The access token is kept in the runner vault as `gitlab-token-<record id>`, written only after every connect check passes, and never sent to a guest. No request carrying it follows a redirect.
+- The instance must resolve only to public addresses, so a LAN, Tailscale or loopback GitLab is refused at connect. That check is about guest reachability; TLS and no redirects protect the token.
+- Known limits: never run against a live GitLab; no desktop connect sheet yet; the guest side (`gitlab-runner` in the image, seed file `gitlab-runner.toml`) is in the Layer E scripts and unverified in a real guest.

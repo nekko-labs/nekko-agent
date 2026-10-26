@@ -1487,6 +1487,13 @@ A Mac running Nekko Agent becomes a sandboxed GitHub Actions self-hosted runner,
   - Done 2026-10-25: the menu bar dot and docs. `apps/desktop/src/main/trayDot.ts` and the tray's CI lines (a failed `runner:list` means none), [docs/ci-runners.md](docs/ci-runners.md) on the docs hub, renderer evidence from `apps/desktop/scripts/ci-runners-integration.cjs` (light and dark). Tests in `trayDot.test.ts`, `tray.test.ts` and the docs check in `runners.golden.test.ts`.
   - Pending: seen against a live runner in the T214 pilot.
 - [ ] **T214** Images, picker and pilot: golden image builder, picker job, the P0 pilot on our own CI. Added: 2026-10-24. Issue #1038.
+- [ ] **T215** GitLab runners: a GitLab project or group connects with an access token; one runner per VM, paused when busy, deleted afterward. Added: 2026-10-25. Issue #1038.
+  - Done 2026-10-25: runner records hold a GitHub or a GitLab link and old `runners.json` files load unchanged; the seed file name comes from the provider; `ByLink` routes by record. Tests in `store.rs`, `provider.rs`, `vm_tests.rs`.
+  - Done 2026-10-25: the GitLab provider (`runner/gitlab.rs`): per-VM runner, busy pause, delete, stale sweep by exact name, queue counting with protected branch and tag lookups, removal retries with backoff and a 1 h audited deadline. Tests in `gitlab_tests.rs`, `supervisor_tests.rs`, `store.rs`.
+  - Done 2026-10-25: GitLab connect (https only, public addresses only, no redirects, scope probe, token in the vault as `gitlab-token-<id>`), provider-aware matching, `runner:connect` with `provider: "github" | "gitlab"`, typed in `packages/shared/src/runners.ts`. Tests in `gitlab_tests.rs` and `tests/daemon/runner.rs`.
+  - Done 2026-10-25: spec, decision 0022 notes and the guest image requirements.
+  - Pending: one real GitLab job end to end, with the guest image (T214 or Layer E).
+  - Pending: a GitLab connect sheet in the desktop UI.
 
 ### Chat completion X icons ([#533](https://github.com/nekko-labs/nekko-agent/issues/533))
 
