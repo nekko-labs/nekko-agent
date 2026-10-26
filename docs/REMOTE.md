@@ -196,6 +196,12 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 >   lock (once per 5 minutes). A chat's pull request shows as a chip above the message box, with the
 >   same sheet as on the iPhone: its checks, files, **Approve**, **Merge**, **Close** or **Reopen**,
 >   and the prompts that ask the agent to commit, open a PR or fix failing checks.
+>   **⋮ → Terminals** lists the chat's terminals and the agent's command log, starts a **New
+>   terminal** in the chat's folder, and opens **SSH** to the hosts in your computer's
+>   `~/.ssh/config`. A terminal shows its output in colour with a row of keys (esc, tab, ctrl, ^C,
+>   the arrows, backspace, return, paste) and a line to type or dictate a command; it follows the
+>   phone's size, also when you open or fold a folding phone. Opening asks for your fingerprint,
+>   face or screen lock (once per 5 minutes); typing doesn't.
 > - **Files:** **More → Files** in a chat opens that chat's folder (its worktree when the chat is
 >   isolated); **Computers and settings → Files** lists the computer's saved folders. Tap through
 >   folders, or search by file name. A file opens in monospace with line numbers (Markdown can be

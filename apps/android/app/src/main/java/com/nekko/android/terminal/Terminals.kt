@@ -54,9 +54,29 @@ data class TerminalsState(
 )
 
 /** A chat's terminals and the computer's SSH hosts (chat → ⋮ → Terminals). The iPhone's `TerminalsModel`. */
-class TerminalsController(val sessionId: String, private val backend: TerminalBackend, private val scope: CoroutineScope) {
+class TerminalsController(
+    val sessionId: String,
+    private val backend: TerminalBackend,
+    /** Outlives the screens: leaving a terminal runs here after its page is gone. */
+    val scope: CoroutineScope,
+) {
     private val _state = MutableStateFlow(TerminalsState())
     val state: StateFlow<TerminalsState> = _state.asStateFlow()
+
+    /** The terminal on screen, kept here so opening or folding the phone (a new activity) keeps it open. */
+    private val _active = MutableStateFlow<TerminalSession?>(null)
+    val active: StateFlow<TerminalSession?> = _active.asStateFlow()
+
+    fun show(session: TerminalSession) {
+        _active.value = session
+    }
+
+    /** Back to the list: stop watching the terminal that was on screen. */
+    fun hide() {
+        val s = _active.value ?: return
+        _active.value = null
+        scope.launch { s.leave() }
+    }
 
     suspend fun load() {
         _state.update { it.copy(loading = true) }
