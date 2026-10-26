@@ -72,6 +72,9 @@ app.whenReady().then(async () => {
     await run(`document.querySelector('[data-sidebar-group]').click(); layoutFixture.store.setState({focusRequest:{sessionId:'row-0'}})`);
     await sleep(500);
     await check('switch expands collapsed group', `document.querySelector('[data-sidebar-group]').getAttribute('aria-expanded') === 'true' && !!document.querySelector('[data-agent-active="true"]')?.textContent.includes('Agent 00')`);
+    await run(`document.querySelector('[data-completion-row="row-44"] [role="button"]').click()`);
+    await sleep(400);
+    await check('wall tab change synchronizes panel highlight', `document.querySelector('[data-agent-active="true"]')?.textContent.includes('Agent 44') === true`);
     report.hidden = !win.isVisible(); report.focused = win.isFocused(); report.bounds = win.getBounds();
     if (!report.hidden || report.focused) throw Error('Isolation invariant failed');
     report.success = true;
