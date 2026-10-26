@@ -3,18 +3,22 @@
 //! VM gets its own locked, tagged runner (`POST /user/runners`); its `glrt-`
 //! token reaches the guest only inside `gitlab-runner.toml` on the seed.
 
-use super::github::is_ours;
+use super::github::{is_ours, plain_name};
 use super::keychain::token_key;
 use super::provider::{JobRef, Minted, Provider, ProviderError, RunnerStatus};
-use super::store::{GitlabLink, RunnerRecord};
+use super::store::{GitlabLink, Link, RunnerRecord};
 use super::vm::GITLAB_SEED;
 use nekko_cloud::vault::Vault;
-use nekko_connectors::js::encode_uri_component as enc;
+use nekko_connectors::connectors::gitlab_base;
+use nekko_connectors::js::{encode_uri_component as enc, parse_url};
 use nekko_connectors::{Http, Request};
-use nekko_runner::Scope;
+use nekko_runner::{HostNets, RunnerConfig, RunnerSettings, Scope, guest_may_connect};
+use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::io;
+use std::net::IpAddr;
+use std::sync::{Arc, Mutex};
 
 const NO_TOKEN: &str = "The GitLab access token is missing; connect again.";
 pub const REFUSED: &str =
@@ -23,15 +27,61 @@ const NO_CREATE: &str = "GitLab would not create a runner here. The token needs 
 const NO_MANAGE: &str = "GitLab would not pause, list or remove this runner. The token needs the manage_runner scope; connect again with one that has it.";
 /// How long a branch's or tag's protected answer is trusted.
 const BRANCH_TTL: u64 = 600;
+const NOT_PUBLIC: &str = "This GitLab instance is not on the public internet, so a job VM could not reach it.";
+const NOT_FOUND: &str = "GitLab cannot find that project or group with this token.";
+const PUBLIC: &str = "This project or group is public. Tick Allow public projects to run its jobs here.";
+const NO_ACCESS_TOKEN: &str = "Paste a GitLab access token.";
+const BAD_TOKEN: &str = "That is not a GitLab access token.";
 const PAGE: usize = 100;
 const MAX_PAGES: u32 = 10;
 
 /// (project path, `branches/<ref>` or `tags/<ref>`) to (protected, checked at).
 type Branches = HashMap<(String, String), (bool, u64)>;
 
+/// What the connect sheet sends for GitLab.
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitlabConnectRequest {
+    pub provider: String,
+    pub scope: Scope,
+    #[serde(default)]
+    pub base_url: Option<String>,
+    /// Omitted to reuse the token stored for the record being reconnected.
+    #[serde(default)]
+    pub access_token: Option<String>,
+    #[serde(default)]
+    pub projects: Vec<String>,
+    #[serde(default)]
+    pub allow_public: bool,
+    #[serde(default)]
+    pub protected_only: Option<bool>,
+    #[serde(default)]
+    pub label: Option<String>,
+}
+
+impl std::fmt::Debug for GitlabConnectRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GitlabConnectRequest")
+            .field("provider", &self.provider)
+            .field("scope", &self.scope)
+            .field("base_url", &self.base_url)
+            .field("access_token", &self.access_token.as_ref().map(|_| "(redacted)"))
+            .field("projects", &self.projects)
+            .field("allow_public", &self.allow_public)
+            .field("protected_only", &self.protected_only)
+            .field("label", &self.label)
+            .finish()
+    }
+}
+
+/// A GitLab path (`group/sub/project`): every segment a plain name.
+fn gitlab_path(s: &str) -> bool {
+    s.len() <= 1024 && s.split('/').all(|seg| plain_name(seg, 255))
+}
+
 pub struct GitLab<H: Http> {
     http: H,
-    vault: Box<dyn Vault>,
+    vault: Arc<dyn Vault>,
     now: fn() -> u64,
     branches: Mutex<Branches>,
 }
@@ -85,7 +135,7 @@ fn projects(r: &RunnerRecord, l: &GitlabLink) -> Vec<String> {
 }
 
 impl<H: Http> GitLab<H> {
-    pub fn new(http: H, vault: Box<dyn Vault>, now: fn() -> u64) -> Self {
+    pub fn new(http: H, vault: Arc<dyn Vault>, now: fn() -> u64) -> Self {
         GitLab { http, vault, now, branches: Mutex::default() }
     }
 
@@ -99,8 +149,19 @@ impl<H: Http> GitLab<H> {
     ) -> Result<(u16, Value), ProviderError> {
         let base = link(r)?.base_url.trim_end_matches('/');
         let token = self.vault.get(&token_key(&r.config.id)).ok_or_else(|| ProviderError::Auth(NO_TOKEN.into()))?;
+        self.send(base, &token, method, path, body).await
+    }
+
+    async fn send(
+        &self,
+        base: &str,
+        token: &str,
+        method: &str,
+        path: &str,
+        body: Option<Value>,
+    ) -> Result<(u16, Value), ProviderError> {
         let url = format!("{base}/api/v4{path}");
-        let mut h = vec![("PRIVATE-TOKEN", token.as_str()), ("User-Agent", "nekko-agent")];
+        let mut h = vec![("PRIVATE-TOKEN", token), ("User-Agent", "nekko-agent")];
         let body = body.map(|b| b.to_string());
         if body.is_some() {
             h.push(("Content-Type", "application/json"));
@@ -121,6 +182,172 @@ impl<H: Http> GitLab<H> {
             (s, v) if ok(s) => Ok(v),
             (s, _) => Err(refused(s)),
         }
+    }
+
+    /// Checks the instance, the project or group, and the token (by creating
+    /// and deleting one paused runner named like a VM's, `<prefix><secs>-0`),
+    /// then stores the token. Any failure leaves nothing stored or registered.
+    /// `existing` is the record of the same instance and scope being reconnected.
+    pub async fn connect(
+        &self,
+        req: GitlabConnectRequest,
+        existing: Option<&RunnerRecord>,
+        prefix: &str,
+        network: Option<String>,
+        nets: &HostNets,
+        resolve: impl AsyncFn(&str) -> io::Result<Vec<IpAddr>>,
+    ) -> Result<RunnerRecord, String> {
+        // 1. Validate.
+        if req.provider != "gitlab" {
+            return Err("Unknown CI provider.".into());
+        }
+        let base = gitlab_base(Some(&json!({ "site": req.base_url.clone().unwrap_or_default() })))?;
+        let label = req.label.clone().or_else(|| existing.map(|e| e.config.label.clone()));
+        let label = label.unwrap_or_else(|| "nekko-mac".into());
+        if !plain_name(&label, 64) {
+            return Err("The label may use letters, digits, '.', '_' and '-' only (at most 64).".into());
+        }
+        let token = match &req.access_token {
+            Some(t) => t.trim().to_string(),
+            None => existing.and_then(|e| self.vault.get(&token_key(&e.config.id))).unwrap_or_default(),
+        };
+        if token.is_empty() {
+            return Err(NO_ACCESS_TOKEN.into());
+        }
+        if token.len() > 1024 || !token.bytes().all(|b| b.is_ascii_graphic()) {
+            return Err(BAD_TOKEN.into());
+        }
+        let (lookup, projects) = match &req.scope {
+            Scope::Repo { owner, repo } => {
+                let path = format!("{owner}/{repo}");
+                if !gitlab_path(&path) {
+                    return Err("That is not a GitLab project path.".into());
+                }
+                (format!("/projects/{}", enc(&path)), Vec::new())
+            }
+            Scope::Org { org } => {
+                if !gitlab_path(org) {
+                    return Err("That is not a GitLab group path.".into());
+                }
+                if !(1..=20).contains(&req.projects.len()) {
+                    return Err("Choose 1 to 20 projects in the group.".into());
+                }
+                let mut full = Vec::new();
+                for p in &req.projects {
+                    let inside = p.get(..org.len() + 1).is_some_and(|h| h.eq_ignore_ascii_case(&format!("{org}/")));
+                    if !inside || !gitlab_path(p) {
+                        return Err(format!("{p} is not in {org}."));
+                    }
+                    full.push(format!("{org}/{}", &p[org.len() + 1..]));
+                }
+                (format!("/groups/{}", enc(org)), full)
+            }
+        };
+
+        // 2. Reach: a job VM must be able to talk to the instance.
+        let host = parse_url(&base).map(|u| u.hostname).unwrap_or_default();
+        let addrs = resolve(host.trim_start_matches('[').trim_end_matches(']')).await.unwrap_or_default();
+        if addrs.is_empty() || !addrs.iter().all(|ip| guest_may_connect(*ip, nets)) {
+            return Err(NOT_PUBLIC.into());
+        }
+
+        // 3. Look up the project or group, then each listed project.
+        let get = async |path: &str| self.send(&base, &token, "GET", path, None).await.map_err(|e| e.to_string());
+        let found = |(s, v): (u16, Value), missing: String| -> Result<Value, String> {
+            match s {
+                s if ok(s) => {
+                    if v["visibility"].as_str() == Some("public") && !req.allow_public {
+                        return Err(PUBLIC.into());
+                    }
+                    Ok(v)
+                }
+                404 => Err(missing),
+                s => Err(refused(s).to_string()),
+            }
+        };
+        let v = found(get(&lookup).await?, NOT_FOUND.into())?;
+        let namespace_id = v["id"].as_u64().ok_or("GitLab gave no id for that project or group.")?;
+        for p in &projects {
+            found(get(&format!("/projects/{}", enc(p))).await?, format!("GitLab cannot find {p} with this token."))?;
+        }
+
+        // 4. Prove the token can create and manage runners here.
+        match get("/personal_access_tokens/self").await? {
+            (s, v) if ok(s) => {
+                if v["active"].as_bool() == Some(false) {
+                    return Err(REFUSED.into());
+                }
+                if let Some(have) = v["scopes"].as_array() {
+                    let has = |s: &str| have.iter().any(|x| x.as_str() == Some(s) || x.as_str() == Some("api"));
+                    if !has("create_runner") {
+                        return Err(NO_CREATE.into());
+                    }
+                    if !has("manage_runner") {
+                        return Err(NO_MANAGE.into());
+                    }
+                }
+            }
+            (401, _) => return Err(REFUSED.into()),
+            // Not every token or GitLab version answers this; the probe below decides.
+            _ => {}
+        }
+        let mut body = match &req.scope {
+            Scope::Repo { .. } => json!({ "runner_type": "project_type", "project_id": namespace_id }),
+            Scope::Org { .. } => json!({ "runner_type": "group_type", "group_id": namespace_id }),
+        };
+        let fields = json!({
+            "description": format!("{prefix}{}-0", (self.now)()),
+            "paused": true,
+            "locked": true,
+            "run_untagged": false,
+            "tag_list": tag_list(&label),
+        });
+        if let (Some(b), Some(f)) = (body.as_object_mut(), fields.as_object()) {
+            b.extend(f.clone());
+        }
+        let probe =
+            match self.send(&base, &token, "POST", "/user/runners", Some(body)).await.map_err(|e| e.to_string())? {
+                (403, _) => return Err(NO_CREATE.into()),
+                (s, v) if ok(s) => v["id"].as_u64().ok_or("GitLab gave no runner id.")?,
+                (s, _) => return Err(refused(s).to_string()),
+            };
+        match self.send(&base, &token, "DELETE", &format!("/runners/{probe}"), None).await {
+            Ok((s, _)) if ok(s) || s == 404 => {}
+            Ok((401, _)) => return Err(REFUSED.into()),
+            Ok((403, _)) => return Err(NO_MANAGE.into()),
+            // Paused and named like ours: the stale sweep removes it later.
+            Ok((s, _)) => eprintln!("runner: cannot remove the check runner {probe} (GitLab answered {s})"),
+            Err(e) => eprintln!("runner: cannot remove the check runner {probe}: {e}"),
+        }
+
+        // 5. Store.
+        let id = match existing {
+            Some(e) => e.config.id.clone(),
+            None => {
+                let mut b = [0u8; 6];
+                let _ = getrandom::fill(&mut b);
+                format!("gl-{}", b.iter().map(|x| format!("{x:02x}")).collect::<String>())
+            }
+        };
+        self.vault.set(&token_key(&id), &token)?;
+        let settings = match existing {
+            Some(e) => e.config.settings.clone(),
+            None => {
+                RunnerSettings { enabled: true, trusted_networks: network.into_iter().collect(), ..Default::default() }
+            }
+        };
+        let protected_only = req.protected_only.or_else(|| existing.and_then(|e| e.gitlab()).map(|g| g.protected_only));
+        Ok(RunnerRecord {
+            config: RunnerConfig { id, scope: req.scope, label, settings: settings.sanitized() },
+            link: Link::Gitlab(GitlabLink {
+                base_url: base,
+                namespace_id,
+                projects,
+                allow_public: req.allow_public,
+                protected_only: protected_only.unwrap_or(true),
+            }),
+            image: existing.and_then(|e| e.image.clone()),
+        })
     }
 
     async fn running(&self, r: &RunnerRecord, runner_id: u64) -> Result<Option<Value>, ProviderError> {

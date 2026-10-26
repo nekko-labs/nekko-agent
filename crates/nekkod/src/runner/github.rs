@@ -156,7 +156,7 @@ impl<H: Http> Clone for GitHub<H> {
 }
 
 /// `[A-Za-z0-9._-]{1,max}`: a label, an owner, an org or a repo name.
-fn plain_name(s: &str, max: usize) -> bool {
+pub(super) fn plain_name(s: &str, max: usize) -> bool {
     (1..=max).contains(&s.len())
         && s.bytes().all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b))
         && s != ".."

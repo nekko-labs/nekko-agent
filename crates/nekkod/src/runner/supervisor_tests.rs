@@ -2,7 +2,7 @@ use super::*;
 use crate::runner::egress::Egress;
 use crate::runner::provider::Minted;
 use crate::runner::signals::HostState;
-use crate::runner::store::{GithubLink, Link};
+use crate::runner::store::{GithubLink, GitlabLink, Link};
 use crate::runner::vm::GITHUB_SEED;
 use crate::runner::vm::Halt;
 use nekko_cloud::vault::Vault;
@@ -1228,12 +1228,161 @@ async fn keys_are_kept_while_runners_json_is_unreadable() {
 #[tokio::test(start_paused = true)]
 async fn overlapping_connects_for_one_app_keep_its_key() {
     let Rig { runners, vault, dir: _dir, .. } = runners_rig(harness(vec![]));
-    let first = runners.connect_guard(1);
-    let second = runners.connect_guard(1);
+    let first = runners.connect_guard("github-app-1".into());
+    let second = runners.connect_guard("github-app-1".into());
     drop(first);
-    runners.forget_keys(&[], [1].into_iter());
+    runners.forget_keys(&[], ["github-app-1".to_string()].into_iter());
     assert_eq!(vault.get("github-app-1").as_deref(), Some("pem"), "the second connect still needs it");
     drop(second);
-    runners.forget_keys(&[], [1].into_iter());
+    runners.forget_keys(&[], ["github-app-1".to_string()].into_iter());
     assert_eq!(vault.get("github-app-1"), None);
+}
+
+fn gitlab(id: &str, org: &str) -> RunnerRecord {
+    let mut r = record(id, Priority::RunnerFirst, 1);
+    r.config.scope = Scope::Org { org: org.into() };
+    r.link = Link::Gitlab(GitlabLink {
+        base_url: "https://gitlab.com".into(),
+        namespace_id: 9,
+        projects: vec![format!("{org}/app")],
+        allow_public: false,
+        protected_only: true,
+    });
+    r
+}
+
+#[tokio::test(start_paused = true)]
+async fn gitlab_groups_on_one_instance_never_sweep_each_others_live_runners() {
+    let mut h = harness(vec![gitlab("a", "g")]);
+    h.sup.start().await;
+    h.running().await;
+    let mut dnd = gitlab("b", "g/sub");
+    dnd.config.settings.priority = Priority::DoNotDisturb;
+    // A GitHub org of the same name is another service: swept at once.
+    let mut gh = record("c", Priority::DoNotDisturb, 1);
+    gh.config.scope = Scope::Org { org: "g".into() };
+    h.sup.set_records(vec![gitlab("a", "g"), dnd.clone(), gh.clone()]);
+    h.tick_for(30).await;
+    assert_eq!(h.count("remove_stale"), 2, "a, then c; b waits");
+    h.vm.finish(0, Stopped::Guest);
+    h.mac(|m| m.paused_all = true);
+    h.tick_for(10).await;
+    assert_eq!(h.count("remove_stale"), 3);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_removed_record_waits_to_sweep_while_an_overlapping_runner_is_live() {
+    let mut h = harness(vec![gitlab("a", "g"), gitlab("b", "h")]);
+    h.sup.start().await;
+    h.mac(|m| m.paused_all = true);
+    h.tick_for(5).await;
+    h.mac(|m| m.paused_all = false);
+    h.sup.set_records(vec![gitlab("a", "g")]);
+    h.running().await;
+    let swept = h.count("remove_stale");
+    h.tick_for(5).await;
+    assert!(h.sup.take_gone().await.is_empty(), "a's live runner would be swept by b's");
+    assert_eq!(h.count("remove_stale"), swept);
+    h.vm.finish(0, Stopped::Guest);
+    h.mac(|m| m.paused_all = true);
+    h.tick_for(10).await;
+    assert_eq!(h.sup.take_gone().await.len(), 1);
+    assert_eq!(h.count("remove_stale"), swept + 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn removals_all_held_on_auth_are_abandoned_at_once() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    fail_removes(&h, 100, vec![ProviderError::Auth("GitLab refused this access token.".into())]);
+    sleep_through_a_job(&mut h).await;
+    h.sup.set_records(vec![]);
+    h.tick_for(5).await;
+    let gone = h.sup.take_gone().await;
+    assert_eq!(gone.len(), 1, "nothing will retry it before a reconnect, and the record is gone");
+    assert!(h.audit().iter().any(|l| l.result == AuditResult::NotRemoved && l.runner_id == "r1"));
+}
+
+#[tokio::test(start_paused = true)]
+async fn shutdown_audits_the_removals_left_behind() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1), record("r2", Priority::RunnerFirst, 1)]);
+    fail_removes(&h, 100, (0..5).map(|_| down()).collect());
+    sleep_through_a_job(&mut h).await;
+    h.sup.set_records(vec![record("r2", Priority::RunnerFirst, 1)]);
+    h.tick_for(5).await;
+    assert!(h.sup.take_gone().await.is_empty());
+    h.sup.shutdown();
+    let lines: Vec<_> = h.audit().into_iter().filter(|l| l.result == AuditResult::NotRemoved).collect();
+    assert_eq!(lines.len(), 1);
+    assert!(lines[0].ts > 0, "stamped with the clock, not 0");
+}
+
+/// `Runners` over the fakes with one GitHub (`r1`, app 1) and one GitLab (`gl-1`, group `acme`) record.
+fn mixed_rig(h: H) -> Rig {
+    let rig = runners_rig(h);
+    let store = crate::runner::store::Store::new(rig.dir.path());
+    let mut gl = gitlab("gl-1", "acme");
+    gl.config.settings.enabled = false;
+    store.save(&[record("r1", Priority::RunnerFirst, 1), gl]).unwrap();
+    rig.vault.set("gitlab-token-gl-1", "glpat-x").unwrap();
+    rig
+}
+
+#[tokio::test(start_paused = true)]
+async fn another_provider_over_the_same_scope_is_a_new_record() {
+    let Rig { runners, dir, vault, .. } = mixed_rig(harness(vec![]));
+    let mut gh = record("gh-new", Priority::RunnerFirst, 1);
+    gh.link = Link::Github(GithubLink { app_id: 2, ..gh.github().unwrap().clone() });
+    gh.config.scope = Scope::Org { org: "ACME".into() };
+    // A GitHub connect over acme reuses the GitHub record, never the GitLab one.
+    let view = runners.save_connected(gh, None).await.unwrap();
+    assert_eq!(view["config"]["id"], "r1");
+    // A GitLab connect over acme on another instance is a new record.
+    let mut other = gitlab("gl-2", "acme");
+    other.link =
+        Link::Gitlab(GitlabLink { base_url: "https://gitlab.example.com".into(), ..other.gitlab().unwrap().clone() });
+    vault.set("gitlab-token-gl-2", "glpat-y").unwrap();
+    let view = runners.save_connected(other, None).await.unwrap();
+    assert_eq!(view["config"]["id"], "gl-2");
+    let saved = crate::runner::store::Store::new(dir.path()).load();
+    let ids: Vec<&str> = saved.iter().map(|r| r.config.id.as_str()).collect();
+    assert_eq!(ids, ["r1", "gl-1", "gl-2"]);
+    assert_eq!(
+        saved[1],
+        {
+            let mut g = gitlab("gl-1", "acme");
+            g.config.settings.enabled = false;
+            g
+        },
+        "untouched"
+    );
+    assert_eq!(vault.get("gitlab-token-gl-1").as_deref(), Some("glpat-x"));
+    // A GitLab reconnect of the same instance and group keeps gl-1 and moves the new token to it.
+    vault.set("gitlab-token-gl-3", "glpat-z").unwrap();
+    let view = runners.save_connected(gitlab("gl-3", "acme"), None).await.unwrap();
+    assert_eq!(view["config"]["id"], "gl-1");
+    assert_eq!((vault.get("gitlab-token-gl-1").as_deref(), vault.get("gitlab-token-gl-3")), (Some("glpat-z"), None));
+    let saved = crate::runner::store::Store::new(dir.path()).load();
+    assert_eq!(saved[0].github().unwrap().app_id, 2, "the GitHub record is untouched by GitLab connects");
+}
+
+#[tokio::test(start_paused = true)]
+async fn removing_a_gitlab_runner_forgets_its_token_once_handed_back() {
+    let h = harness(vec![]);
+    fail_removes(&h, 100, vec![down()]);
+    h.vm.0.lock().unwrap().hold_done = true;
+    let sense = h.sense.clone();
+    let Rig { runners, vault, vm, log, dir } = runners_rig(h);
+    let store = crate::runner::store::Store::new(dir.path());
+    store.save(&[gitlab("gl-1", "acme")]).unwrap();
+    vault.set("gitlab-token-gl-1", "glpat-x").unwrap();
+    runners.route("runner:update", &[json!("gl-1"), json!({})]).await.unwrap();
+    wait_for("a VM start", || log.lock().unwrap().iter().any(|l| l.starts_with("start"))).await;
+    assert_eq!(runners.route("runner:remove", &[json!("gl-1")]).await, Ok(Value::Null));
+    wait_for("the VM killed", || log.lock().unwrap().iter().any(|l| l.starts_with("kill"))).await;
+    vm.finish(0, Stopped::Error("killed".into()));
+    wait_for("the failed remove", || log.lock().unwrap().iter().any(|l| l == "remove 100")).await;
+    tokio::time::sleep(Duration::from_secs(30)).await;
+    assert_eq!(vault.get("gitlab-token-gl-1").as_deref(), Some("glpat-x"), "kept while its registration remains");
+    sense.0.lock().unwrap().wall_secs += 60.0;
+    wait_for("the token forgotten", || vault.get("gitlab-token-gl-1").is_none()).await;
 }

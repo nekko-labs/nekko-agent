@@ -37,7 +37,7 @@ fn rig_with(replies: Vec<(u16, Value)>, with_token: bool) -> T {
         FileVault::new(secrets.clone()).set(&token_key("r1"), "glpat-x").unwrap();
     }
     let http = Scripted::new(replies);
-    let gl = GitLab::new(http.clone(), Box::new(FileVault::new(secrets)), now);
+    let gl = GitLab::new(http.clone(), Arc::new(FileVault::new(secrets)), now);
     T { http, gl, _dir: dir }
 }
 
@@ -464,4 +464,322 @@ async fn rerun_retries_the_job() {
 async fn rate_limited_is_other() {
     let t = rig(vec![(429, json!({"message": "Retry later"}))]);
     assert_eq!(t.gl.status(&project_rec(), 77).await.unwrap_err(), ProviderError::Other("GitLab answered 429".into()));
+}
+
+// Connect.
+
+const NOT_PUBLIC: &str = "This GitLab instance is not on the public internet, so a job VM could not reach it.";
+const PREFIX: &str = "nekko-mac1-0a1b2c3d-";
+
+struct C {
+    http: Scripted,
+    gl: GitLab<Scripted>,
+    vault: FileVault,
+    secrets: std::path::PathBuf,
+    _dir: tempfile::TempDir,
+}
+
+fn connect_rig(replies: Vec<(u16, Value)>) -> C {
+    let dir = tempfile::tempdir().unwrap();
+    let secrets = dir.path().join("runners/secrets.json");
+    let http = Scripted::new(replies);
+    let gl = GitLab::new(http.clone(), Arc::new(FileVault::new(secrets.clone())), now);
+    C { http, gl, vault: FileVault::new(secrets.clone()), secrets, _dir: dir }
+}
+
+impl C {
+    async fn connect(&self, req: GitlabConnectRequest) -> Result<RunnerRecord, String> {
+        self.connect_with(req, None, public_ip).await
+    }
+
+    async fn connect_with(
+        &self,
+        req: GitlabConnectRequest,
+        existing: Option<&RunnerRecord>,
+        resolve: impl AsyncFn(&str) -> std::io::Result<Vec<std::net::IpAddr>>,
+    ) -> Result<RunnerRecord, String> {
+        let network = Some("gw:0a:1b:2c:3d:4e:05".to_string());
+        self.gl.connect(req, existing, PREFIX, network, &nekko_runner::HostNets::default(), resolve).await
+    }
+
+    /// Nothing at all was stored.
+    fn stored_nothing(&self) -> bool {
+        !self.secrets.exists() || std::fs::read_to_string(&self.secrets).unwrap().trim() == "{}"
+    }
+
+    fn posted(&self) -> bool {
+        self.http.urls().iter().any(|u| u.starts_with("POST"))
+    }
+}
+
+async fn public_ip(_: &str) -> std::io::Result<Vec<std::net::IpAddr>> {
+    Ok(vec!["93.184.216.34".parse().unwrap()])
+}
+
+fn req_from(v: Value) -> GitlabConnectRequest {
+    let mut v = v;
+    v["provider"] = json!("gitlab");
+    serde_json::from_value(v).unwrap()
+}
+
+fn req_project(owner: &str, repo: &str, token: &str) -> GitlabConnectRequest {
+    req_from(json!({"scope": {"kind": "repo", "owner": owner, "repo": repo}, "accessToken": token}))
+}
+
+fn req_group(org: &str, projects: &[&str]) -> GitlabConnectRequest {
+    req_from(json!({"scope": {"kind": "org", "org": org}, "projects": projects, "accessToken": "glpat-x"}))
+}
+
+fn found(id: u64, visibility: &str) -> (u16, Value) {
+    (200, json!({"id": id, "visibility": visibility}))
+}
+
+fn scopes(s: &[&str]) -> (u16, Value) {
+    (200, json!({"scopes": s, "active": true}))
+}
+
+fn probe() -> Vec<(u16, Value)> {
+    vec![(201, json!({"id": 5, "token": "glrt-z"})), (204, Value::Null)]
+}
+
+#[tokio::test]
+async fn connect_project_end_to_end() {
+    let c = connect_rig([vec![found(42, "private"), scopes(&["create_runner", "manage_runner"])], probe()].concat());
+    let r = c.connect(req_project("a/b", "c", "glpat-x")).await.unwrap();
+    assert!(r.config.id.starts_with("gl-") && r.config.id.len() == 15, "{}", r.config.id);
+    assert_eq!(
+        r.gitlab().unwrap(),
+        &GitlabLink {
+            base_url: "https://gitlab.com".into(),
+            namespace_id: 42,
+            projects: vec![],
+            allow_public: false,
+            protected_only: true
+        }
+    );
+    assert_eq!(r.config.settings.trusted_networks, vec!["gw:0a:1b:2c:3d:4e:05".to_string()]);
+    assert!(r.config.settings.enabled);
+    assert_eq!(r.config.label, "nekko-mac");
+    assert_eq!(c.vault.get(&token_key(&r.config.id)).as_deref(), Some("glpat-x"));
+    assert_eq!(
+        c.http.urls(),
+        vec![
+            "GET https://gitlab.com/api/v4/projects/a%2Fb%2Fc",
+            "GET https://gitlab.com/api/v4/personal_access_tokens/self",
+            "POST https://gitlab.com/api/v4/user/runners",
+            "DELETE https://gitlab.com/api/v4/runners/5",
+        ]
+    );
+    let b = c.http.body(2);
+    assert_eq!(
+        (b["paused"].as_bool(), b["runner_type"].as_str(), b["project_id"].as_u64()),
+        (Some(true), Some("project_type"), Some(42))
+    );
+    // Named like a VM's runner, so the stale sweep removes it if the DELETE never lands.
+    assert!(is_ours(b["description"].as_str().unwrap(), PREFIX), "{b}");
+    assert!(c.http.last().headers.contains(&("PRIVATE-TOKEN".into(), "glpat-x".into())));
+}
+
+#[tokio::test]
+async fn bad_token_is_refused_and_not_stored() {
+    let c = connect_rig(vec![(401, json!({"message": "401 Unauthorized"}))]);
+    assert_eq!(c.connect(req_project("a/b", "c", "glpat-x")).await.unwrap_err(), UNAUTHORIZED);
+    assert!(c.stored_nothing() && !c.posted());
+    assert_eq!(c.http.urls().len(), 1);
+}
+
+#[tokio::test]
+async fn not_owner_is_refused_and_not_stored() {
+    let c = connect_rig(vec![found(42, "private"), (404, json!({})), (403, json!({"message": "403 Forbidden"}))]);
+    assert_eq!(c.connect(req_project("a/b", "c", "glpat-x")).await.unwrap_err(), FORBIDDEN);
+    assert!(c.stored_nothing());
+}
+
+#[tokio::test]
+async fn a_create_only_token_is_refused() {
+    // The token says what it may do.
+    let c = connect_rig(vec![found(42, "private"), scopes(&["create_runner", "read_api"])]);
+    let e = c.connect(req_project("a/b", "c", "glpat-x")).await.unwrap_err();
+    assert!(e.contains(NO_MANAGE_TEXT), "{e}");
+    assert!(c.stored_nothing() && !c.posted());
+    // It does not (a project or group token on an older GitLab): the probe's DELETE finds out.
+    let c = connect_rig(vec![found(42, "private"), (404, json!({})), probe()[0].clone(), (403, json!({}))]);
+    let e = c.connect(req_project("a/b", "c", "glpat-x")).await.unwrap_err();
+    assert!(e.contains(NO_MANAGE_TEXT), "{e}");
+    assert!(c.stored_nothing());
+    // `api` covers both.
+    let c = connect_rig([vec![found(42, "private"), scopes(&["api"])], probe()].concat());
+    c.connect(req_project("a/b", "c", "glpat-x")).await.unwrap();
+    // A token GitLab says is inactive.
+    let c = connect_rig(vec![found(42, "private"), (200, json!({"scopes": ["api"], "active": false}))]);
+    assert_eq!(c.connect(req_project("a/b", "c", "glpat-x")).await.unwrap_err(), UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn public_project_needs_explicit_allow() {
+    let c = connect_rig(vec![found(42, "public")]);
+    let e = c.connect(req_project("a/b", "c", "glpat-x")).await.unwrap_err();
+    assert_eq!(e, "This project or group is public. Tick Allow public projects to run its jobs here.");
+    assert!(c.stored_nothing() && !c.posted());
+    let c = connect_rig([vec![found(42, "public"), scopes(&["api"])], probe()].concat());
+    let mut req = req_project("a/b", "c", "glpat-x");
+    req.allow_public = true;
+    let r = c.connect(req).await.unwrap();
+    assert!(r.gitlab().unwrap().allow_public);
+}
+
+#[tokio::test]
+async fn lan_instance_is_refused() {
+    async fn lan(_: &str) -> std::io::Result<Vec<std::net::IpAddr>> {
+        Ok(vec!["93.184.216.34".parse().unwrap(), "192.168.1.20".parse().unwrap()])
+    }
+    async fn tailscale(_: &str) -> std::io::Result<Vec<std::net::IpAddr>> {
+        Ok(vec!["100.101.102.103".parse().unwrap()])
+    }
+    async fn loopback(_: &str) -> std::io::Result<Vec<std::net::IpAddr>> {
+        Ok(vec!["::1".parse().unwrap()])
+    }
+    async fn nothing(_: &str) -> std::io::Result<Vec<std::net::IpAddr>> {
+        Ok(vec![])
+    }
+    async fn unknown(_: &str) -> std::io::Result<Vec<std::net::IpAddr>> {
+        Err(std::io::Error::other("no such host"))
+    }
+    let req = || {
+        req_from(
+            json!({"scope": {"kind": "repo", "owner": "a", "repo": "b"}, "baseUrl": "https://gitlab.lan", "accessToken": "glpat-x"}),
+        )
+    };
+    let c = connect_rig(vec![]);
+    assert_eq!(c.connect_with(req(), None, lan).await.unwrap_err(), NOT_PUBLIC);
+    assert_eq!(c.connect_with(req(), None, tailscale).await.unwrap_err(), NOT_PUBLIC);
+    assert_eq!(c.connect_with(req(), None, loopback).await.unwrap_err(), NOT_PUBLIC);
+    assert_eq!(c.connect_with(req(), None, nothing).await.unwrap_err(), NOT_PUBLIC);
+    assert_eq!(c.connect_with(req(), None, unknown).await.unwrap_err(), NOT_PUBLIC);
+    // A global address that is this Mac's own network (a LAN with global IPv6).
+    let nets = nekko_runner::HostNets::new(vec![], vec![("2a00:1450::".parse().unwrap(), 32)]);
+    async fn lan6(_: &str) -> std::io::Result<Vec<std::net::IpAddr>> {
+        Ok(vec!["2a00:1450::20".parse().unwrap()])
+    }
+    let e = c.gl.connect(req(), None, PREFIX, None, &nets, lan6).await.unwrap_err();
+    assert_eq!(e, NOT_PUBLIC);
+    assert!(c.http.urls().is_empty() && c.stored_nothing());
+}
+
+#[tokio::test]
+async fn http_instance_is_refused() {
+    let c = connect_rig(vec![]);
+    let req = req_from(
+        json!({"scope": {"kind": "repo", "owner": "a", "repo": "b"}, "baseUrl": "http://gitlab.example.com", "accessToken": "glpat-x"}),
+    );
+    assert_eq!(c.connect(req).await.unwrap_err(), "The GitLab instance URL must be https.");
+    assert!(c.http.urls().is_empty());
+}
+
+#[tokio::test]
+async fn bad_fields_are_refused_before_any_request() {
+    let c = connect_rig(vec![]);
+    let bad = |v: Value| {
+        let mut m = json!({"provider": "gitlab", "scope": {"kind": "repo", "owner": "a", "repo": "b"}, "accessToken": "glpat-x"});
+        for (k, x) in v.as_object().unwrap() {
+            m[k] = x.clone();
+        }
+        serde_json::from_value::<GitlabConnectRequest>(m).unwrap()
+    };
+    for (v, want) in [
+        (json!({"accessToken": null}), "Paste a GitLab access token."),
+        (json!({"accessToken": "x".repeat(1025)}), "That is not a GitLab access token."),
+        (json!({"accessToken": "glpat-x\nX-Evil: 1"}), "That is not a GitLab access token."),
+        (json!({"label": "bad label"}), "The label may use letters, digits, '.', '_' and '-' only (at most 64)."),
+        (json!({"scope": {"kind": "repo", "owner": "a/../b", "repo": "c"}}), "That is not a GitLab project path."),
+        (json!({"provider": "github"}), "Unknown CI provider."),
+    ] {
+        assert_eq!(c.connect(bad(v)).await.unwrap_err(), want);
+    }
+    assert!(c.http.urls().is_empty());
+}
+
+#[tokio::test]
+async fn group_needs_listed_projects_inside_it() {
+    let c = connect_rig(vec![]);
+    assert_eq!(c.connect(req_group("g", &[])).await.unwrap_err(), "Choose 1 to 20 projects in the group.");
+    assert_eq!(c.connect(req_group("g", &["other/x"])).await.unwrap_err(), "other/x is not in g.");
+    let many: Vec<String> = (0..21).map(|i| format!("g/p{i}")).collect();
+    let many: Vec<&str> = many.iter().map(String::as_str).collect();
+    assert_eq!(c.connect(req_group("g", &many)).await.unwrap_err(), "Choose 1 to 20 projects in the group.");
+    assert!(c.http.urls().is_empty());
+
+    let c = connect_rig(vec![found(9, "private"), (404, json!({}))]);
+    assert_eq!(c.connect(req_group("g", &["g/a"])).await.unwrap_err(), "GitLab cannot find g/a with this token.");
+    let c = connect_rig(vec![found(9, "private"), found(11, "public")]);
+    assert!(c.connect(req_group("g", &["g/a"])).await.unwrap_err().contains("public"));
+
+    let c = connect_rig([vec![found(9, "private"), found(11, "private"), scopes(&["api"])], probe()].concat());
+    let r = c.connect(req_group("g", &["G/sub/a"])).await.unwrap();
+    assert_eq!(
+        c.http.urls()[..2],
+        ["GET https://gitlab.com/api/v4/groups/g", "GET https://gitlab.com/api/v4/projects/g%2Fsub%2Fa"]
+    );
+    let b = c.http.body(3);
+    assert_eq!((b["runner_type"].as_str(), b["group_id"].as_u64()), (Some("group_type"), Some(9)));
+    let l = r.gitlab().unwrap();
+    assert_eq!((l.namespace_id, l.projects.clone()), (9, vec!["g/sub/a".to_string()]));
+}
+
+#[tokio::test]
+async fn group_not_found_is_a_plain_sentence() {
+    let c = connect_rig(vec![(404, json!({"message": "404 Group Not Found"}))]);
+    assert_eq!(
+        c.connect(req_group("g", &["g/a"])).await.unwrap_err(),
+        "GitLab cannot find that project or group with this token."
+    );
+}
+
+#[tokio::test]
+async fn reconnect_keeps_settings_and_id() {
+    let c = connect_rig([vec![found(43, "private"), scopes(&["api"])], probe()].concat());
+    let mut old =
+        rec(Scope::Repo { owner: "a/b".into(), repo: "c".into() }, GitlabLink { protected_only: false, ..link() });
+    old.config.id = "gl-0123456789ab".into();
+    old.config.label = "studio".into();
+    old.config.settings.max_job_minutes = 30;
+    c.vault.set(&token_key("gl-0123456789ab"), "glpat-old").unwrap();
+    let r = c.connect_with(req_project("a/b", "c", ""), Some(&old), public_ip).await;
+    assert_eq!(r.unwrap_err(), "Paste a GitLab access token.", "an empty token is not the stored one");
+    let mut req = req_project("a/b", "c", "x");
+    req.access_token = None;
+    let r = c.connect_with(req, Some(&old), public_ip).await.unwrap();
+    assert_eq!(r.config.id, "gl-0123456789ab");
+    assert_eq!((r.config.settings.max_job_minutes, r.config.label.as_str()), (30, "studio"));
+    let l = r.gitlab().unwrap();
+    assert_eq!((l.namespace_id, l.protected_only), (43, false));
+    assert!(c.http.0.seen.lock().unwrap()[0].headers.contains(&("PRIVATE-TOKEN".into(), "glpat-old".into())));
+    assert_eq!(c.vault.get(&token_key("gl-0123456789ab")).as_deref(), Some("glpat-old"));
+}
+
+#[tokio::test]
+async fn failed_probe_delete_still_connects() {
+    let c = connect_rig(vec![found(42, "private"), scopes(&["api"]), probe()[0].clone(), (500, json!({}))]);
+    let r = c.connect(req_project("a/b", "c", "glpat-x")).await.unwrap();
+    assert_eq!(c.vault.get(&token_key(&r.config.id)).as_deref(), Some("glpat-x"));
+}
+
+#[test]
+fn connect_request_debug_redacts_the_token() {
+    let s = format!("{:?}", req_project("a/b", "c", "glpat-secret"));
+    assert!(!s.contains("glpat-secret") && s.contains("redacted"), "{s}");
+}
+
+#[test]
+fn connect_request_reads_every_field_the_app_sends() {
+    // The field names of `GitlabConnectRequest` in packages/shared/src/runners.ts.
+    let r: GitlabConnectRequest = serde_json::from_value(json!({
+        "provider": "gitlab", "scope": {"kind": "org", "org": "g"}, "baseUrl": "https://gitlab.example.com",
+        "accessToken": "glpat-x", "projects": ["g/a"], "allowPublic": true, "protectedOnly": false, "label": "studio"
+    }))
+    .unwrap();
+    assert_eq!(
+        (r.base_url.as_deref(), r.projects.len(), r.allow_public, r.protected_only, r.label.as_deref()),
+        (Some("https://gitlab.example.com"), 1, true, Some(false), Some("studio"))
+    );
 }

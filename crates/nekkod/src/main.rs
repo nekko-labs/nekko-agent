@@ -531,6 +531,9 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     if let Some(d) = &after.desktop {
         d.shutdown(&after).await;
     }
+    if let Some(r) = &after.runners {
+        r.shutdown().await;
+    }
     remote.stop();
     if let Some(m) = &messaging {
         m.stop();

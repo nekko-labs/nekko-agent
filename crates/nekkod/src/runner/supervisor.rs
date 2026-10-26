@@ -10,7 +10,7 @@ use super::audit::{self, AuditLine, AuditResult, Today};
 use super::awake::Awake;
 use super::provider::{JobRef, Provider, ProviderError, RunnerStatus};
 use super::signals::{MacState, Sense, signals_for};
-use super::store::{RunnerRecord, same_scope};
+use super::store::{RunnerRecord, overlaps};
 use super::updates::write_atomic;
 use super::vm::{RunHandle, RunSpec, Stopped, Vm, reap};
 use nekko_runner::{
@@ -297,7 +297,8 @@ pub struct Supervisor<S: Sense, V: Vm, P: Provider> {
     runners: Vec<Runner>,
     // shortcut: queued re-runs live in memory, lost on daemon restart; persist if pilots show it matters.
     reruns: Vec<Rerun>,
-    // shortcut: like `reruns`, lost on restart; `start()`'s stale sweep removes what is left.
+    // shortcut: like `reruns`, lost on a crash. A live record's are swept by `start()`; a removed
+    // record is not swept after a restart (its credentials may be gone), so `shutdown` audits them.
     removals: Vec<Removal>,
     /// (repo, job id) of every job ever queued, so each is re-run at most once.
     rerun_seen: HashSet<(String, u64)>,
@@ -402,7 +403,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
     }
 
     /// `nekko-<host>-<install>-`: our runner names are this plus `<unix secs>-<n>`.
-    fn prefix(&self) -> String {
+    pub(super) fn prefix(&self) -> String {
         format!("nekko-{}-{}-", self.host, self.install)
     }
 
@@ -421,18 +422,19 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
         self.roll_day(now);
     }
 
+    /// Whether a runner whose sweep could reach `r`'s registrations has a VM out.
+    fn overlaps_live(&self, r: &RunnerRecord) -> bool {
+        self.runners.iter().any(|o| overlaps(&o.record, r) && !o.slots.is_empty())
+    }
+
     /// Removes stale registrations of each record not yet swept. The prefix
-    /// matches every VM of ours, so a record waits while one of ours with the
-    /// same scope is live.
+    /// matches every VM of ours, so a record waits while one of ours it
+    /// overlaps is live.
     async fn sweep(&mut self) {
         let prefix = self.prefix();
         for i in 0..self.runners.len() {
             let r = &self.runners[i];
-            let scope = &r.record.config.scope;
-            if r.dropped
-                || self.swept.contains(&r.record.config.id)
-                || self.runners.iter().any(|o| same_scope(&o.record.config.scope, scope) && !o.slots.is_empty())
-            {
+            if r.dropped || self.swept.contains(&r.record.config.id) || self.overlaps_live(&r.record) {
                 continue;
             }
             self.swept.insert(r.record.config.id.clone());
@@ -485,16 +487,23 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
         let mut out = Vec::new();
         for (r, since) in std::mem::take(&mut self.gone) {
             let id = &r.config.id;
-            let pending = self.removals.iter().any(|q| &q.record.config.id == id);
+            let mine = || self.removals.iter().filter(|q| &q.record.config.id == id);
+            let pending = mine().next().is_some();
+            // Held ones wait for a reconnect, which a removed record never gets.
+            let all_held = mine().all(|q| q.held);
+            let early = now < since + REMOVE_FOR.as_secs_f64();
+            let live = self.overlaps_live(&r);
             // Its credentials are forgotten once handed back: until then the retries keep going.
-            if pending && now < since + REMOVE_FOR.as_secs_f64() {
+            if early && ((pending && !all_held) || live) {
                 self.gone.push((r, since));
                 continue;
             }
             if pending {
                 self.abandon_removals(&r, now);
             }
-            if let Err(e) = call(self.provider.remove_stale(&r, &prefix)).await {
+            if live {
+                eprintln!("runner {id}: stale runners not swept, another runner of the same scope is busy");
+            } else if let Err(e) = call(self.provider.remove_stale(&r, &prefix)).await {
                 eprintln!("runner {id}: cannot remove stale runners: {e}");
             }
             out.push(r);
@@ -533,6 +542,15 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                 reason: vec![what],
             };
             self.audit(&line);
+        }
+    }
+
+    /// The daemon is stopping: the failed removals of removed records are audited, since
+    /// nothing retries or sweeps them after a restart.
+    pub fn shutdown(&mut self) {
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f64());
+        for (r, _) in std::mem::take(&mut self.gone) {
+            self.abandon_removals(&r, now);
         }
     }
 

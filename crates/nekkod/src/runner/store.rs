@@ -90,6 +90,29 @@ pub fn same_scope(a: &Scope, b: &Scope) -> bool {
     }
 }
 
+fn same_instance(a: &GitlabLink, b: &GitlabLink) -> bool {
+    a.base_url.trim_end_matches('/').eq_ignore_ascii_case(b.base_url.trim_end_matches('/'))
+}
+
+/// One runner target: the same CI service (and GitLab instance) and scope. A
+/// connect over a saved target updates that record; anything else is a new one.
+pub fn same_target(a: &RunnerRecord, b: &RunnerRecord) -> bool {
+    let service = match (&a.link, &b.link) {
+        (Link::Github(_), Link::Github(_)) => true,
+        (Link::Gitlab(x), Link::Gitlab(y)) => same_instance(x, y),
+        _ => false,
+    };
+    service && same_scope(&a.config.scope, &b.config.scope)
+}
+
+/// Whether one record's stale sweep could see the other's runners: the same
+/// target, or two GitLab groups on one instance (one may be the other's
+/// ancestor, which nekkod does not track).
+pub fn overlaps(a: &RunnerRecord, b: &RunnerRecord) -> bool {
+    let groups = matches!((&a.config.scope, &b.config.scope), (Scope::Org { .. }, Scope::Org { .. }));
+    same_target(a, b) || (groups && a.gitlab().zip(b.gitlab()).is_some_and(|(x, y)| same_instance(x, y)))
+}
+
 pub struct Store {
     path: PathBuf,
     /// The last load could not read the file, so saving would overwrite real data.
@@ -382,5 +405,26 @@ mod tests {
         assert_eq!(std::fs::read(&path).unwrap(), before);
         assert_eq!(store.load().len(), 1);
         store.save(&[record("b")]).unwrap();
+    }
+
+    #[test]
+    fn targets_and_overlaps_know_the_provider_and_instance() {
+        let gh = record("a");
+        let gl = gitlab_record("b");
+        let mut gl_repo = gitlab_record("c");
+        gl_repo.config.scope = Scope::Repo { owner: "acme".into(), repo: "app".into() };
+        let mut gl_other = gitlab_record("d");
+        gl_other.link =
+            Link::Gitlab(GitlabLink { base_url: "https://gitlab.com".into(), ..gl.gitlab().unwrap().clone() });
+        let mut gl_sub = gitlab_record("e");
+        gl_sub.config.scope = Scope::Org { org: "acme/sub".into() };
+        // Same scope string, other provider or other instance: another target, no overlap.
+        assert!(!same_target(&gh, &gl) && !overlaps(&gh, &gl));
+        assert!(!same_target(&gl, &gl_other) && !overlaps(&gl, &gl_other));
+        assert!(same_target(&gl, &gitlab_record("x")) && same_target(&gh, &record("y")));
+        // Two groups on one instance overlap whatever their paths; a project and a group do not.
+        assert!(overlaps(&gl, &gl_sub) && !same_target(&gl, &gl_sub));
+        assert!(!overlaps(&gl, &gl_repo));
+        assert!(overlaps(&gh, &record("z")));
     }
 }
