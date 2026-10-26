@@ -1,3 +1,4 @@
+import { CreateMenu } from '../components/CreateMenu.js';
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('../store.js', () => ({ useStore: Object.assign(() => ({}), { getState: () => ({}) }) }));
 vi.mock('../components/AgentWindowPicker.js', () => ({ AgentWindowPicker: () => null, AgentWindowDropdown: () => null, defaultFolderIds: () => [] }));
@@ -16,7 +17,7 @@ import { DEFAULT_WALL_STATE } from '../commandWall.js';
 import { AgentWindowDropdown } from '../components/AgentWindowPicker.js';
 import { readFileSync } from 'node:fs';
 
-it.each(['focus', 'grid', 'fixed'] as const)('direct creation replaces More without changing the %s layout', (mode) => {
+it.each(['focus', 'grid', 'fixed'] as const)('plus menu forwards all creation kinds without changing the %s layout', (mode) => {
   vi.mocked(useState).mockReturnValueOnce([null, vi.fn()]);
   const setWall = vi.fn(); const setAddOpen = vi.fn();
   const tree = WallToolbar({ wall: { ...DEFAULT_WALL_STATE, layout: { ...DEFAULT_WALL_STATE.layout, mode: mode === 'fixed' ? 'grid' as const : mode, fixedGrid: mode === 'fixed' } }, setWall, setAddOpen, addOpen: false, onAdd: vi.fn() });
@@ -27,11 +28,9 @@ it.each(['focus', 'grid', 'fixed'] as const)('direct creation replaces More with
   });
   walk(tree);
   expect(elements.some((e) => e.props['aria-label'] === 'Add window')).toBe(false);
-  for (const label of ['New agent', 'New image session', 'New terminal']) {
-    const button = elements.find((e) => e.props['aria-label'] === label)!;
-    expect(button).toBeDefined();
-    button.props.onClick();
-  }
+  const menu = elements.find((e) => e.type === CreateMenu)!;
+  expect(menu).toBeDefined();
+  for (const kind of ['chat', 'image', 'terminal']) menu.props.onCreate(kind);
   expect(setAddOpen).not.toHaveBeenCalled();
   expect(setWall).not.toHaveBeenCalled();
 });
@@ -48,8 +47,8 @@ it('hosts the detailed picker in the toolbar rather than a wall tile', () => {
   // Open, the picker hangs off the toolbar's New terminal button.
   const picker = elements.find((e) => e.type === AgentWindowDropdown);
   expect(picker).toBeDefined();
-  const terminal = elements.find((e) => e.props['aria-label'] === 'New terminal')!;
-  expect(picker!.props.anchorRef).toBe(terminal.props.ref ?? (terminal as unknown as { ref: unknown }).ref);
+  const menu = elements.find((e) => e.type === CreateMenu)!;
+  expect(picker!.props.anchorRef).toBe(menu.props.anchorRef);
   // That the page never hands the wall an add tile is rendered in newAgentSetup.test.ts.
 });
 

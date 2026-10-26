@@ -57,7 +57,7 @@ export function MiniNekko({ size = 18 }: { size?: number }) {
 }
 
 /** The corner mascot is the one place a seasonal theme dresses Nekko up (Spooky adds the wizard hat). */
-export function Mascot({ mood, enabled, wizardHat = false }: { mood: MascotMood; enabled: boolean; wizardHat?: boolean }) {
+export function Mascot({ mood, enabled, working = false, wizardHat = false }: { mood: MascotMood; enabled: boolean; working?: boolean; wizardHat?: boolean }) {
   const [sleeping, setSleeping] = useState(false);
   const [greeting, setGreeting] = useState(false);
   useEffect(() => {
@@ -66,7 +66,7 @@ export function Mascot({ mood, enabled, wizardHat = false }: { mood: MascotMood;
     const wake = () => {
       setSleeping(false);
       clearTimeout(timer);
-      if (mood !== 'thinking') timer = setTimeout(() => setSleeping(true), 60_000);
+      if (!working) timer = setTimeout(() => setSleeping(true), 60_000);
     };
     wake();
     window.addEventListener('pointerdown', wake);
@@ -76,14 +76,14 @@ export function Mascot({ mood, enabled, wizardHat = false }: { mood: MascotMood;
       window.removeEventListener('pointerdown', wake);
       window.removeEventListener('keydown', wake);
     };
-  }, [enabled, mood]);
+  }, [enabled, working]);
   useEffect(() => {
     if (!greeting) return;
     const timer = setTimeout(() => setGreeting(false), 1200);
     return () => clearTimeout(timer);
   }, [greeting]);
   if (!enabled) return null;
-  const pose = mood === 'thinking' ? 'working' : greeting || mood === 'waving' ? 'happy' : sleeping ? 'sleeping' : 'idle';
+  const pose = working ? 'working' : greeting || mood === 'waving' ? 'happy' : sleeping ? 'sleeping' : 'idle';
   return (
     // left-[11px]: the drawing's ink starts ~6px into its box and its feet sit
     // ~17px above the window edge, so this evens the gap on both sides.
@@ -91,7 +91,7 @@ export function Mascot({ mood, enabled, wizardHat = false }: { mood: MascotMood;
       data-mascot-pose={pose} aria-label={pose === 'working' ? 'Nekko is working' : 'Say hello to Nekko'}
       title={pose === 'sleeping' ? 'Nekko is sleeping' : 'Say hello to Nekko'}
       onClick={() => { setSleeping(false); setGreeting(true); }}>
-      <NekkoAvatar size={64} quiet wizardHat={wizardHat} />
+      <NekkoAvatar size={64} quiet={!working} stationary={working} wizardHat={wizardHat} />
     </button>
   );
 }

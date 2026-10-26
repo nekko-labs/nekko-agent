@@ -219,7 +219,7 @@ export function EffortSlider({ modelId, onChanged, session, onSessionChange }: {
   const level = options.length > 1 ? index / (options.length - 1) : 0;
   const atMax = options.length > 1 && index === options.length - 1;
   return (
-    <div className="effort-slider flex shrink-0 items-center gap-1 rounded-r-lg border border-l-0 border-line px-2 py-1 text-[11px]" title={session ? 'Reasoning effort for this chat' : 'Reasoning effort (the app default; a chat can set its own)'}>
+    <div className="effort-slider flex shrink-0 items-center gap-1 rounded-lg border border-line px-2 py-1 text-[11px]" title={session ? 'Reasoning effort for this chat' : 'Reasoning effort (the app default; a chat can set its own)'}>
       <label htmlFor="composer-effort" className="text-ink-faint">Effort</label>
       <span
         className="effort-track"

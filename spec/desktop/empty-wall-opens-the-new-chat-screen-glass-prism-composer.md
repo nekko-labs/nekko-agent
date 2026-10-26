@@ -16,14 +16,15 @@ split-from: SPEC.md (2026-10-22)
 
 Implemented. Matching unchanged-base and working-tree Electron window captures in default dark at 1440×900 and 900×900 were inspected. The earlier full-surface diagonal gradient and fixed-seed grain leave the glass composer and its prism edge intact. Automated renderer checks confirm the linear gradient, embedded SVG grain, no grain animation, pointer pass-through, visible composer bounds and successful typing. The sandbox is hidden, off-screen, non-focusable, network-blocked and uses a separate profile. The shared full-App fixture emits the same unrelated missing app-info/list-data warnings on base and head. Other themes, Windows/Linux and packaged rendering are not visually verified. Reproduce with `NEKKO_LAYOUT_SANDBOX=new-chat-gradient-sandbox.cjs node apps/desktop/scripts/layout-evidence-integration.cjs`; point `NEKKO_TEST_SOURCE` at an unchanged archive for the baseline.
 
-## Peeking greeting Nekko
+## Centered greeting Nekko and rotating questions
 
-`[implemented; 3 focused unit tests and 10 isolated renderer checks passed at 1280px and 460px; matched before/after renderer screenshots visually reviewed at both widths; caret movement GIF captured]`
+`[implemented; focused tests and isolated renderer checks at 1280px and 460px; matched screenshots inspected; packaged desktop and physical trackpad not checked]`
 
-- The new-chat greeting centers “What should we work on?” above the composer. Nekko peeks over the actual composer top border with her paws overlapping it, without a separate illustrated ledge, reusing the pixel head and paws from Travis's website beta-signup design (PR #763). The eyes follow the composer text insertion caret during typing and selection movement, with a bounded glance inside the face. Model Providers is unchanged.
-- The small decorative SVG inherits the active theme's surface, ink, line and accent colors. Caret updates are coalesced per animation frame and scoped to this composer; listeners are removed when the greeting unmounts. There are no looping animations, settings, network requests, permissions or host calls.
-- Acceptance: cat paws stay on the composer border without clipping at desktop and narrow widths; the heading remains readable, the SVG is decorative and non-focusable, and composing a message still works. Existing clean-start visibility rules remain unchanged, so transcript views do not gain artwork.
-- Verified through a synthetic full-App fixture with an isolated profile, blocked networking and a hidden, non-focusable Electron window. Packaged desktop and physical mobile devices are not part of this check. Native capture source enumeration failed on the host; evidence covers Electron renderer pixels, not OS window chrome.
+- The new-chat greeting centers Nekko immediately to the left of the question above the composer. The pixel head and paws reuse Travis's website beta-signup design (PR #763), without a separate illustrated ledge. The eyes follow this composer's text insertion caret during typing and selection movement, with a bounded glance inside the face. Model Providers is unchanged.
+- Ten bundled welcoming questions rotate every eight seconds while the composer is empty and visible. Draft text or attachments pause rotation; hidden documents and reduced-motion preferences disable automatic rotation. Copy changes are instant, without animated transitions or live-region announcements. The heading reserves room for wrapped questions so the composer does not jump.
+- The decorative, non-focusable SVG inherits theme colors. Caret updates are coalesced per animation frame and scoped to this composer section; listeners and timers are removed on unmount. No model calls, network access, permissions, settings or persisted user data are added.
+- Acceptance: mascot stays beside the readable question without clipping at desktop and narrow widths; composing and caret-following still work; questions rotate only while idle. Existing clean-start visibility rules remain unchanged, so transcript views do not gain artwork.
+- Verification uses real ChatPane components with a synthetic bridge in an isolated profile, blocked networking and a hidden, non-focusable Electron window. Evidence covers renderer pixels, not OS chrome or native phone apps.
 
 ## Borderless new-chat frost (issue #1152)
 
@@ -37,3 +38,11 @@ Implemented; 53 focused unit tests and isolated Electron interaction checks pass
 Acceptance: neutral menus remain legible in vivid page themes; the selected chat is visible even in a long panel; the background gradient runs vertically from dark teal to gold; pixel waves exist only inside a visible clean-start chat, never in existing chats or the app background. No new settings, network access, permissions or host mutations are introduced. Verification uses a synthetic full-App bridge in a hidden, non-focusable Electron window with a disposable profile and blocked network. Packaged and non-macOS desktop verification remain untested.
 
 Integration with #1150 preserves its vertical teal-to-gold colour direction and new-chat-only pixel waves, with translucent gradient stops for the frost treatment. Updated merged-base renderer evidence covers this combined appearance.
+
+## Slow color cycle and readable controls (issue #1178)
+
+Implemented, superseding the static-gradient description above. The translucent new-chat wash continuously interpolates teal/gold, violet/rose, blue/mint and rose/amber palettes over a 120-second loop. Only registered CSS color stops animate; grain remains static and the animation stays scoped to an untouched new chat. Reduced motion holds the original palette still; the existing inactive-app policy pauses decorative animation. No remote assets, canvas loop or per-frame React updates are added.
+
+The model and effort controls no longer dim as a group. They use an opaque theme surface, readable foreground labels and visible borders; effort has its own complete rounded border rather than a missing left edge. Controls can wrap on narrow widths. The shared Agents workspace loses 4px of top padding and moves up another 1px, lifting the agent windows and both side panels together by 5px without changing their internal gutters.
+
+Verified: 120-second CSS duration, interpolated intermediate stops and matching loop endpoints, reduced-motion static behavior, matched desktop/narrow hidden Electron captures. The GIF samples the full cycle at 10x speed for review, not real-time playback. Other themes, packaged builds and Windows/Linux have not been visually checked.
