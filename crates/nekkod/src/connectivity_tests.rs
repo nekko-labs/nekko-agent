@@ -99,7 +99,7 @@ fn only_public_model_endpoints_need_internet() {
 async fn notices_are_deduplicated_timestamped_and_survive_turn_end_until_restoration() {
     let m = monitor();
     let (sink, notices) = sink();
-    let observation = m.observe("s1", Cancel::default(), sink);
+    let observation = m.observe("s1", Cancel::default(), sink).await;
     lost(&m).await;
     m.sample(false).await;
     assert_eq!(lock(&notices).len(), 1);
@@ -118,16 +118,15 @@ async fn notices_are_deduplicated_timestamped_and_survive_turn_end_until_restora
 async fn stop_or_a_new_turn_invalidates_old_observers() {
     let m = monitor();
     let (sink, notices) = sink();
-    let old = m.observe("s1", Cancel::default(), sink.clone());
+    let old = m.observe("s1", Cancel::default(), sink.clone()).await;
     lost(&m).await;
     drop(old);
-    let next = m.observe("s1", Cancel::default(), sink);
-    drop(next);
+    m.forget("s1");
     restored(&m).await;
     assert_eq!(lock(&notices).len(), 1, "no stale restored notice for the old run");
     let (sink, notices) = self::sink();
     let cancel = Cancel::default();
-    let _o = m.observe("s2", cancel.clone(), sink);
+    let _o = m.observe("s2", cancel.clone(), sink).await;
     lost(&m).await;
     cancel.cancel();
     restored(&m).await;
@@ -303,4 +302,17 @@ async fn the_real_loop_retains_completed_tools_across_a_connectivity_pause() {
     assert!(events.iter().any(|e| e["type"] == "done"));
     assert!(!events.iter().any(|e| e["type"] == "error"));
     assert_eq!(history.last().unwrap()["content"], "Finished");
+}
+
+#[tokio::test]
+async fn registering_during_an_existing_outage_records_loss_before_gating_the_call() {
+    let m = monitor();
+    let (sink, notices) = sink();
+    lost(&m).await;
+    let observation = m.observe("new", Cancel::default(), sink).await;
+    assert_eq!(lock(&notices).len(), 1);
+    assert_eq!(lock(&notices)[0]["kind"], "lost");
+    drop(observation);
+    restored(&m).await;
+    assert_eq!(lock(&notices).len(), 2);
 }

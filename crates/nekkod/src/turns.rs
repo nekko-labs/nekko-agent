@@ -1164,8 +1164,11 @@ impl Turns {
                 })
             })
         };
-        let _connectivity =
-            internet.then(|| self.connectivity.observe(&session_id, shared.cancel.clone(), sink.clone()));
+        let _connectivity = if internet {
+            Some(self.connectivity.observe(&session_id, shared.cancel.clone(), sink.clone()).await)
+        } else {
+            None
+        };
         let allowed: crate::connectivity::Allowed = {
             let admitted = lock(&session);
             let (settings, st, sid, pid, spid, smid) = (

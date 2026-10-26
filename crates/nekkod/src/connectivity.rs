@@ -111,16 +111,17 @@ impl Connectivity {
         Arc::new(Self { inner: Mutex::default(), next: AtomicU64::new(1), state, probe })
     }
 
-    pub fn observe(self: &Arc<Self>, session: &str, cancel: Cancel, sink: Sink) -> Observation {
+    pub async fn observe(self: &Arc<Self>, session: &str, cancel: Cancel, sink: Sink) -> Observation {
         let id = self.next.fetch_add(1, Ordering::Relaxed);
+        let lost = *self.state.borrow() == State::Offline;
+        let initial_sink = sink.clone();
         let start = {
             let mut inner = lock(&self.inner);
             // A manual Continue/new turn supersedes any old restoration observer.
             inner.observations.retain(|_, o| o.session != session);
-            inner.observations.insert(
-                id,
-                Observer { session: session.into(), cancel, sink, active: true, lost: false, expires: None },
-            );
+            inner
+                .observations
+                .insert(id, Observer { session: session.into(), cancel, sink, active: true, lost, expires: None });
             let start = !inner.running;
             inner.running = true;
             start
@@ -150,6 +151,9 @@ impl Connectivity {
                     tokio::time::sleep(POLL).await;
                 }
             });
+        }
+        if lost {
+            initial_sink(notice("lost", "Internet reachability is unavailable on this computer. Saved work is retained. Automatic restoration recovery is off unless enabled in Settings.")).await;
         }
         Observation { monitor: self.clone(), id }
     }
