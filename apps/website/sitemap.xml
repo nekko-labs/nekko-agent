@@ -123,6 +123,11 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://nekkoagent.com/docs/ci-runners-image</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://nekkoagent.com/docs/decision-models</loc>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>

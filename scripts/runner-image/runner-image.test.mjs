@@ -29,7 +29,22 @@ function stubs() {
   stub('launchctl', 'shift 2; exec "$@"');
   // Exec only commands inside the temp root, so a real /usr/local/bin/gitlab-runner never runs.
   stub('sudo', `shift 4; case "$1" in '${root}'/*) exec "$@";; esac`);
-  writeFileSync(join(home, 'actions-runner/run.sh'), `#!/bin/bash\necho "run.sh $*" >> '${log}'\nexit "\${FAKE_EXIT:-0}"\n`, { mode: 0o755 });
+  // The fake job records whether the seed copy still exists while it runs, and with FAKE_HOSTILE
+  // swaps ~/.nekko for a symlink to a victim directory the root-owned cleanup must not touch.
+  const victim = join(root, 'victim');
+  writeFileSync(
+    join(home, 'actions-runner/run.sh'),
+    `#!/bin/bash
+echo "run.sh $*" >> '${log}'
+if [ -e '${home}/.nekko/jit-config' ]; then echo "run.sh saw jit-config" >> '${log}'; fi
+if [ -n "\${FAKE_HOSTILE:-}" ]; then
+  mkdir -p '${victim}' && echo keep > '${victim}/jit-config' && echo keep > '${victim}/gitlab-runner.toml'
+  rm -rf '${home}/.nekko' && ln -s '${victim}' '${home}/.nekko'
+fi
+exit "\${FAKE_EXIT:-0}"
+`,
+    { mode: 0o755 },
+  );
 }
 
 function seed(files) {
@@ -86,9 +101,14 @@ function startsRunSh(calls) {
 test('github_seed_starts_run_sh_as_runner_then_shuts_down', () => {
   const { calls, out } = run({ seed: { 'jit-config': 'QUJD' } });
   startsRunSh(calls);
-  assert.ok(!existsSync(join(home, '.nekko/jit-config'))); // the copy is gone before the job
+  assert.ok(!calls.includes('run.sh saw jit-config'), 'the copy is gone before the job starts');
   assert.ok(!out.includes('QUJD'), 'the JIT config is never logged');
   assert.match(out, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ /m);
+});
+
+test('cleanup_never_follows_a_job_controlled_path', () => {
+  run({ seed: { 'jit-config': 'QUJD' }, env: { FAKE_HOSTILE: '1' } });
+  assert.equal(readFileSync(join(root, 'victim/jit-config'), 'utf8'), 'keep\n');
 });
 
 test('seed_name_is_matched_case_insensitively', () => {
@@ -163,4 +183,49 @@ test('scripts_pass_shellcheck', (t) => {
   const r = spawnSync('shellcheck', files);
   if (r.error?.code === 'ENOENT') return t.skip('shellcheck not installed'); // ubuntu-latest ships it
   assert.equal(r.status, 0, r.stdout.toString());
+});
+
+const provision = () => readFileSync(join(dir, 'provision.sh'), 'utf8');
+
+test('provision_pins_official_downloads', () => {
+  const p = provision();
+  const pin = (name) => p.match(new RegExp(`^${name}=["']?([^"'\\s]+)["']?$`, 'm'))?.[1];
+  assert.match(pin('RUNNER_SHA256') ?? '', /^[0-9a-f]{64}$/);
+  assert.match(pin('GITLAB_RUNNER_SHA256') ?? '', /^[0-9a-f]{64}$/);
+  assert.match(pin('RUNNER_VERSION') ?? '', /^\d+\.\d+\.\d+$/);
+  const gitlab = pin('GITLAB_RUNNER_VERSION') ?? '';
+  assert.match(gitlab, /^\d+\.\d+\.\d+$/);
+  const [major, minor] = gitlab.split('.').map(Number);
+  assert.ok(major > 17 || (major === 17 && minor >= 1), `gitlab-runner ${gitlab} is older than 17.1`);
+  const lines = p.split('\n');
+  const curls = lines.map((l, i) => [l, i]).filter(([l]) => /^\s*curl\b/.test(l));
+  assert.equal(curls.length, 2, 'one download each');
+  for (const [line, i] of curls) {
+    const url = line.match(/https?:\/\/\S+/)?.[0] ?? '';
+    assert.ok(
+      url.startsWith('https://github.com/actions/runner/releases/download/') ||
+        url.startsWith('https://gitlab-runner-downloads.s3.amazonaws.com/'),
+      url,
+    );
+    assert.match(lines[i + 1] ?? '', /shasum -a 256 -c/, `no hash check right after: ${line}`);
+  }
+});
+
+test('provision_locks_the_guest_down', () => {
+  const p = provision();
+  for (const s of [
+    'launchctl disable system/com.openssh.sshd',
+    'launchctl disable system/com.apple.screensharing',
+    'org.cirruslabs',
+    '/etc/sudoers.d',
+    '-autologin set -userName runner',
+    '/usr/local/libexec/nekko-runner-boot.sh',
+    '/Library/LaunchDaemons/dev.nekkolabs.runner-boot.plist',
+  ])
+    assert.ok(p.includes(s), s);
+  const addUser = p.split('\n').find((l) => l.includes('sysadminctl -addUser'));
+  assert.ok(addUser, 'creates the runner user');
+  assert.doesNotMatch(addUser, /-admin/);
+  for (const s of ['NOPASSWD', '--jitconfig', 'config.sh']) assert.ok(!p.split('\n').some((l) => l.includes(s) && !/^\s*#/.test(l) && !/grep/.test(l)), s);
+  assert.doesNotMatch(p, /\b(echo|printf)\b[^\n]*\$\{?\w*(pass|pw)\w*/i, 'never prints a password');
 });

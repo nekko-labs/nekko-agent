@@ -14,11 +14,14 @@ MAX_SEED_BYTES=65536
 
 conf_dir="$NEKKO_RUNNER_HOME/.nekko"
 stay_up=0
+# The seed copy to remove on exit. Cleared before the job starts: after that the path is the
+# job's to control, and root must not delete through it.
+seed_copy=""
 
 log() { echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $*"; }
 
 finish() {
-  rm -f "$conf_dir/jit-config"
+  if [ -n "$seed_copy" ]; then rm -f "$seed_copy"; fi
   if [ "$stay_up" != 1 ]; then
     log "shutting down"
     shutdown -h now
@@ -59,6 +62,7 @@ fi
 
 # 3. Copy it where only the runner user can read it, then let go of the seed.
 rm -rf "$conf_dir"
+seed_copy="$conf_dir/$name"
 (umask 077 && mkdir -p "$conf_dir" && cp "${entries[0]}" "$conf_dir/$name")
 chmod 700 "$conf_dir"
 chmod 600 "$conf_dir/$name"
@@ -85,12 +89,14 @@ case "$name" in
   jit-config)
     jit="$(cat "$conf_dir/jit-config")"
     rm -f "$conf_dir/jit-config"
+    seed_copy=""
     log "starting the GitHub Actions runner"
     launchctl asuser "$uid" sudo -u "$NEKKO_RUNNER_USER" -H -- "$NEKKO_RUNNER_HOME/actions-runner/run.sh" --jitconfig "$jit"
     rc=$?
     unset jit
     ;;
   gitlab-runner.toml)
+    seed_copy=""
     log "starting the GitLab runner"
     launchctl asuser "$uid" sudo -u "$NEKKO_RUNNER_USER" -H -- /usr/local/bin/gitlab-runner run-single -c "$conf_dir/gitlab-runner.toml" -r nekko --max-builds 1
     rc=$?

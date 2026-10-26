@@ -28,8 +28,8 @@ part of the pilot (T214). The golden image builder and the job picker also come 
 - **An Apple silicon Mac.** Windows and Linux show "CI runners aren't available here", and a Mac
   that cannot run VMs shows "VM support unavailable" on the runner card.
 - **A VM image.** Jobs run in clones of a macOS image stored in Nekko's data folder. There is no
-  download in this version: you build the image yourself with the image guide that lands with
-  T214. Until an image exists, the runner card shows `No VM image yet.`
+  download in this version: you build the image yourself with the
+  [image guide](ci-runners-image.md). Until an image exists, the runner card shows `No VM image yet.`
 - **A build with VM support.** The `nekko-vm` helper needs Apple's virtualization entitlement.
   Development builds sign it themselves; packaged release builds report "VM support unavailable"
   until release signing for the helper lands (T214).
