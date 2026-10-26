@@ -53,9 +53,15 @@ pub struct RunnerSettings {
     pub only_on_power: bool,
     pub trusted_networks_only: bool,
     pub never_on_hotspot: bool,
+    /// "Let jobs use the internet directly while a VPN is on": take jobs while
+    /// a VPN carries all the Mac's traffic. Job traffic still leaves by the
+    /// physical interface, never the tunnel.
+    pub allow_direct_with_vpn: bool,
     pub allow_fork_prs: bool,
     pub rerun_lost_jobs: bool,
     pub trusted_cache: bool,
+    /// Networks the owner approved, as `gw:<router MAC>` ids.
+    pub trusted_networks: Vec<String>,
 }
 
 impl Default for RunnerSettings {
@@ -75,10 +81,36 @@ impl Default for RunnerSettings {
             only_on_power: true,
             trusted_networks_only: true,
             never_on_hotspot: true,
+            allow_direct_with_vpn: false,
             allow_fork_prs: false,
             rerun_lost_jobs: true,
             trusted_cache: true,
+            trusted_networks: Vec::new(),
         }
+    }
+}
+
+impl RunnerSettings {
+    /// Clamp a hand-edited or UI-supplied value into the ranges the spec allows.
+    pub fn sanitized(mut self) -> Self {
+        self.macos_slots = self.macos_slots.min(crate::slots::MAX_MACOS_VMS);
+        self.linux_slots = 0; // P1 has no Linux slots
+        self.memory_per_vm_mb =
+            if self.memory_per_vm_mb == 0 { 8192 } else { self.memory_per_vm_mb.clamp(4096, 65536) };
+        self.runner_memory_mb = self.runner_memory_mb.filter(|m| *m >= 4096);
+        self.cpus_per_vm = self.cpus_per_vm.map(|v| v.max(2));
+        self.disk_budget_gb = self.disk_budget_gb.clamp(50, 4000);
+        self.disk_floor_gb = self.disk_floor_gb.clamp(10, 1000);
+        self.max_job_minutes = self.max_job_minutes.clamp(10, 1440);
+        let mut seen = std::collections::HashSet::new();
+        self.trusted_networks = self
+            .trusted_networks
+            .iter()
+            .map(|n| n.trim().to_string())
+            .filter(|n| !n.is_empty() && seen.insert(n.clone()))
+            .take(32)
+            .collect();
+        self
     }
 }
 

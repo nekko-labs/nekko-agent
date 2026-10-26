@@ -6,6 +6,18 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Automatic Dynamic window minimization (#1200)
+
+- [x] **DWM-1, Minimize successful replies.** Dynamic (including Fixed grid) removes the finished chat pane without completing the chat. Focused, errors, abnormal stops, pending input, unavailable input state and newer events remain visible. Pure wall tests, hidden 1440px/390px completion/restore/race checks, and inspected matched PNG/GIF evidence. Spec: [Minimize agent windows](spec/desktop/minimize-agent-windows.md). Packaged app/live-provider verification remains untested; baseline macOS shortcut assertion is tracked in #900.
+
+## Internet reachability recovery
+
+[Specification](spec/chat/internet-recovery.md). Prefix **NR** (network recovery).
+
+- [x] **NR-1 (#1163), Daemon detection and notices.** Credential-free debounced reachability, model-only interruption, checkpoint-safe metadata and ISO command logs; strict default-off recovery primitive and deterministic tests.
+- [ ] **NR-2 (#1164), Shared-renderer setting and notices.** Accessible cost-warning opt-in and timestamped history, component tests and hidden desktop/narrow before/after evidence. UI slice follows the daemon PR; visual signoff and landing pending.
+- [ ] **NR-3 (#1179), Broader transport/platform verification.** Opaque Claude Code harness, images/voice/tool-specific internet and physical Wi-Fi/native device testing are outside the native model wrapper; track follow-up explicitly.
+
 ## Chat swipe and welcoming questions (#1174)
 
 - [x] **CG-1, Reveal the whole row and full time.** Either horizontal wheel direction moves the transcript left up to 112px through CSS state; focused Electron checks cover row/child displacement, timestamp bounds, spring-back and no horizontal scroll at 1100px and 460px. Spec: [Swipe for times](spec/chat/chat-suggestions-progress-and-code-access.md).
@@ -38,9 +50,9 @@ Philip asked for an agent's tool calls to be grouped by what they are doing, wit
 
 - [ ] **TG-1, Shared purpose classifier.** `toolPurpose(call)` in `packages/shared/src/agent-steps.ts` (guidance, explore, edit, check, run, git, web, plan, delegate, other), the call's own `description` preferred as the goal; fixture `packages/shared/fixtures/tool-purpose.json` (60+ cases).
 - [ ] **TG-2, Desktop and Local Web UI groups.** `transcript.ts` splits an activity run into purpose groups; `ActivityGroup.tsx` renders them and its headline summarises them; approval, question and failure exceptions.
-- [ ] **TG-3, iPhone groups.** Swift port of the classifier in `NekkoProtocol` (runs the shared fixture), `TranscriptRow.of` groups adjacent same-purpose rows; the subagent group becomes the Delegate purpose.
-- [ ] **TG-4, Android groups.** Kotlin port in `protocol` (runs the shared fixture), grouped rows in `ChatScreen.kt` / `BlockViews.kt`.
-- [ ] **TG-5, Evidence.** Desktop before/after and a live recording; simulator and emulator screenshots from CI.
+- [x] **TG-3, iPhone groups.** (2026-10-26, PR #1081; native offline simulator fixture verified.) Swift port of the classifier in `NekkoProtocol` (runs the shared fixture), `TranscriptRow.of` groups adjacent same-purpose rows; the subagent group becomes the Delegate purpose.
+- [x] **TG-4, Android groups.** (2026-10-26, PR #1081; native offline emulator fixture verified.) Kotlin port in `protocol` (runs the shared fixture), grouped rows in `ChatScreen.kt` / `BlockViews.kt`.
+- [x] **TG-5, Evidence.** (2026-10-26) Desktop before/after and live recording in #1078; matched local native simulator/emulator screenshots and expand/collapse recordings in #1081. Offline renderer fixtures, not physical hardware or live pairing.
 - [ ] **TG-6, Engine `intent` argument (later, needs a decision).** Optional `intent` on the engine's own tools so Nekko's runs get model-written goals; changes the prompt goldens.
 
 ## Phone Markdown composer, rich replies and Mermaid (added 2026-10-25)
@@ -71,7 +83,7 @@ Philip found GPT-6.1 chats slow, quiet between tool calls, and missing their tok
 - [x] **CT-5, Swipe left for times (2026-10-24).** A horizontal trackpad swipe slides the transcript up to 72px left and fades in each row's time; letting go springs it back (`useSwipeToRevealTimes` in `VirtualTranscript.tsx`, `data-vt-stamp` + `::after` in `styles.css`). Evidence: `apps/desktop/scripts/chat-timing-sandbox.cjs`.
 - [ ] **CT-6, Live check against a signed-in ChatGPT plan:** confirm the backend accepts the replayed reasoning, and compare per-step time and narration with the 2026-10-24 baseline.
 - [x] **CT-8, Swipe times on tool calls (2026-10-25).** #1141. An opened run's tool rows and purpose groups carry their own `data-vt-stamp` (the call's `startedAt`), so a swipe shows a time on every call, not only the run's first; the stamp CSS now applies to any `[data-vt-stamp]` and uses the sans font inside the monospace activity block. The timing sandbox checks it, finds activity headers by structure instead of the retired "Worked on" label, and its base build archives all of `apps/desktop/src`.
-- [ ] **CT-7, Touch and mouse-drag reveal.** Only trackpad and wheel swipes reveal times today; a mouse drag is left for text selection.
+- [x] **CT-7, Touch and mouse-drag reveal (2026-10-26).** #1190. Primary left drags hold timestamps stationary until release/cancel/blur. Vertical drags and interactive controls retain their behavior. The 112px gutter fits full nested-tool times. Focused unit tests and hidden Electron desktop/narrow drag evidence pass; physical trackpad and touch hardware remain unverified. Wheel input uses a 450ms idle fallback because it has no finger-up event. See [swipe times](spec/chat/chat-suggestions-progress-and-code-access.md#swipe-left-for-times).
 
 ## Chat page removed (added 2026-10-24)
 
@@ -1484,8 +1496,20 @@ Verification: `npm run typecheck` across workspaces, host tests (`oauth`, `downl
 A Mac running Nekko Agent becomes a sandboxed GitHub Actions self-hosted runner, each job in a throwaway macOS VM. The existing "Local CI runner" template ([docs/git-runner.md](docs/git-runner.md)) stays; it is not a self-hosted runner. Planned 2026-10-24.
 
 - [ ] **T210** Layer A: the spec and decision 0022, and the pure-logic crate `nekko-runner` (settings, slots, gates, keep awake, guest address rules). Added: 2026-10-24. Issue #1038.
-- [ ] **T211** VM helper and userspace network: Swift `nekko-vm` on Virtualization.framework (clone, boot, delete, seed disk) and the NAT in `nekkod`. Added: 2026-10-24. Issue #1038.
+- [ ] **T211** VM helper and userspace network: Swift `nekko-vm` on Virtualization.framework (clone, boot, seed disk) and the NAT in `nekkod`. Added: 2026-10-24. Issue #1038.
+  - Done: `crates/nekkod/vm/nekko-vm.swift` (clone, run, count-vms, egress; no shared folders, clipboard or audio, and a display device with no view or input devices) with its entitlements and `test-nekko-vm.sh`; dev-only staging and ad-hoc signing in `stage-daemon.mjs`; the IPv4-only NAT in `crates/nekkod/src/runner/net.rs` (DHCP, DNS over 53/udp and 53/tcp, 256 flows, 15 s connect and 60 s idle TCP timeouts) checked by `guest_may_connect`, host networks in `hostnets.rs` (`try_current` only), tests in `crates/nekkod/tests/runner_net.rs`, and the `runner_vm_spike` example.
+  - No `delete` subcommand: clone cleanup is the T212 reaper. Release packaging and signing of `nekko-vm` move to T213/T214 with a signed release dry-run.
+  - Done 2026-10-25: VPN routes never carry job traffic. `nekko-vm egress` streams the physical interface; `runner/egress.rs` keeps it current; `net::Direct` binds every host socket and DNS upstream to it (`IP_BOUND_IF`) and refuses every flow without one. `nekko-runner` gains `allowDirectWithVpn` (default off) and the soft gate `vpnCarriesAllTraffic`. Tests in `runner_net.rs`, `nekko-runner/tests/{gates,settings}.rs` and `test-nekko-vm.sh`; wiring the gate to the helper is T212.
+  - Done 2026-10-25: the real-VM run (spike example against Cirrus `macos-sequoia-base`, macOS 15.7.7, 5aac88fa). The guest boots once `nekko-vm` has a viewless display device, gets 10.233.0.2 by DHCP, resolves over 53/udp and 53/tcp through the gateway and reaches api.github.com. From the guest, the host's LAN address, the router, the host's Tailscale address and a Tailscale peer, 100.100.100.100, the gateway's other ports, link-local metadata and DNS-rebinding names (nip.io to LAN and loopback) were all refused. SIGKILL of the example: the helper exits about 0.56 s later and `count-vms` returns to 0; SIGKILL of the helper: the VM is gone about 0.05 s later. Throughput in [docs/perf-history.md](docs/perf-history.md) (about 200 Mbit/s NAT to guest after the 64 KiB buffer, internet downloads at 98% of the host).
+  - Pending: the VPN binding checked against a real tunnel (Tailscale exit node and subnet route, and a packet-tunnel VPN that enforces routes), owned by T212.
 - [ ] **T212** Supervisor and GitHub: GitHub App connect, JIT configs, the supervisor loop in `nekkod`, keychain key. Added: 2026-10-24. Issue #1038.
+  - Done 2026-10-25: runner records and settings bounds. `runner/store.rs` loads `runners.json` sanitized, skips broken records into `runners.json.bad` and never overwrites an unreadable file; `nekko-runner` sanitizes settings and names the slot limit. Tests in `store.rs`, `nekko-runner/tests/{settings,slots,gates}.rs`.
+  - Done 2026-10-25: the Mac's signals. `runner/signals.rs` (`HostSense`: idle, CPU minus VM processes, usual memory, power, `nekko-vm host`, egress, network id, security updates in `updates.rs`). Tests in `signals_tests.rs`, `updates.rs` and `test-nekko-vm.sh`.
+  - Done 2026-10-25: the VM lifecycle. `runner/vm.rs` (`HelperVm`: clone, ISO seed, start, count-vms, all time-limited; the reaper), `lan.rs` (DNS upstreams, WAN address by NAT-PMP or UPnP), `raise_nofile`. Tests in `vm_tests.rs`, `lan.rs`, `hostnets.rs`, `tests/runner_net.rs`.
+  - Done 2026-10-25: the supervisor. `runner/supervisor.rs` (gates, hard limits, grace, max job time, wake after sleep, re-runs, the 2-VM cap), `audit.rs`, `awake.rs`, `provider.rs`. Tests in `supervisor_tests.rs`.
+  - Done 2026-10-25: GitHub connect and the channels. `runner/github.rs` (App JWT through Security.framework, cached installation tokens, JIT configs, connect checks, the runner group), `keychain.rs`, `runner::Runners` and the `runner:*` channels wired into nekkod; scopes compare in any case. `nekko-connectors` sends PUT and DELETE; `nekko-cloud` gains `scoped_vault`. Tests in `github_tests.rs`, `supervisor_tests.rs`, `tests/daemon/runner.rs`, `nekko-connectors` `http.rs`, `nekko-cloud` `vault.rs`.
+  - Pending: one real job end to end (T214 pilot).
+  - Pending: the VPN binding checked against a real tunnel (Tailscale exit node and subnet route, and a packet-tunnel VPN that enforces routes).
 - [ ] **T213** CI section UI in the Workflows tab: connect sheet, runner card, settings, menu bar indicator. Added: 2026-10-24. Issue #1038.
 - [ ] **T214** Images, picker and pilot: golden image builder, picker job, the P0 pilot on our own CI. Added: 2026-10-24. Issue #1038.
 
@@ -2418,3 +2442,5 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [x] Reduce the default/snap dock width to 276px, trim the monitor right inset by 2px, and avoid unused Focus scrollbar space. Keep budget ranges on one row and metric values readable. See [spacing spec](spec/desktop/slim-wave-rail-tighter-agents-spacing-composer-snap-points.md).
 - [x] Replace the new-chat opaque wash and hard composer edge with translucent frost and a reduced-transparency fallback. See [new-chat spec](spec/desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md).
 - [x] Check layout/range unit tests, desktop typechecking, hidden Electron resize/reset/range/typing interactions and matched default-theme desktop/narrow evidence. Packaged OS chrome and physical mobile devices remain unverified.
+
+- [x] UI1178: Settings-first Skills/Connectors shortcuts, optional rail links, slow new-chat palette cycling, readable model/effort controls and 5px tighter wall top inset. Focused tests, typecheck and isolated desktop/narrow renderer verification; packaged and other-platform checks remain unverified. See [settings navigation](spec/desktop/settings-section-nav.md) and [new-chat surface](spec/desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md).

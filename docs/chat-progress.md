@@ -36,6 +36,8 @@ The initial presentation is shared by desktop and Local Web UI. Native phone pro
 
 ## Message times and starting a chat
 
-Swipe horizontally over the desktop or Local Web UI transcript to reveal local times beside messages and tool activity. Swiping right or left shifts the whole row left; letting go returns it to place. Vertical scrolling is unchanged. This uses trackpad wheel gestures, not mouse dragging or touch swipes.
+Swipe horizontally on the trackpad, or drag left from non-interactive chat space, to reveal local times beside messages and working steps in the desktop or Local Web UI transcript. Swiping right or left shifts the whole row left. Expand working steps and purpose groups to see each tool call's start time. The gutter leaves room for the full time, including AM/PM.
+
+A mouse or touch drag keeps the times visible while held still, then springs back on release. Vertical scrolling, buttons, links, editors and code blocks keep their normal behavior. Trackpad wheel events do not report finger release to the renderer, so the reveal returns after 450ms without horizontal input rather than using an exact finger-up event.
 
 A new, empty focused chat places Nekko beside a welcoming question. Ten questions rotate every eight seconds while idle. Starting a draft or attaching a file pauses the questions. Reduced-motion preferences and hidden windows disable automatic rotation. The questions are bundled text, not requests sent to a model.
