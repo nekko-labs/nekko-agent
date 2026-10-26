@@ -14,3 +14,22 @@ split-from: SPEC.md (2026-10-22)
 - **Labels** fade in from a 2px blur and 6px to the left as the edge passes them, top row first, 18ms apart.
 - **Active destination:** one shared tile (a 12% accent tint with the brand-gradient notch on the wall) slides between rows with a small spring when the view changes, instead of each row painting its own highlight. Where no title bar carries the brand mark (web and phone builds) the tile starts below the brand row.
 - Reduced motion removes every transition. No host calls, settings, permissions or network use change.
+
+
+## Wing restoration after animation simplification
+
+Implemented; 18 focused tests, desktop typecheck, and seven hidden macOS Electron
+interaction checks passed. Matched default-theme rest/open captures and sampled
+opening/closing motion frames inspected; 900px and 390px layout checks passed.
+Packaged builds and Windows/Linux rendering remain unverified:
+the animation simplification accidentally replaced the shaped backdrop with a
+rounded rectangle. Restore the upper and lower swooping wings using the existing
+layout geometry, both at rest and when expanded. The SVG viewport widens from
+52px to 198px with the rail; its path stays static during hover. Keep the darker,
+nearly opaque paper fill, 180ms width transitions, delayed opacity-only labels,
+and reduced-motion support. No path morph, animated clip, text blur, backdrop
+blur, frame loop, or per-frame React state updates. Observe layout owners only
+when their height changes. Hover over painted wings, keyboard focus, and pinning
+must all open the rail; mobile keeps its existing navigation. Renderer-only,
+with no new permissions, network requests, settings, or data access. This section
+supersedes the historical morph, fill, and label-motion details above.

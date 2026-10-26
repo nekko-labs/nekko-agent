@@ -131,7 +131,7 @@ The 2026-10-13 batch is implemented and unit/fixture interaction tested, not yet
 
 ### Create an agent, media session or terminal
 
-Hover anywhere on the left navigation panel to open it and see each destination's name. On macOS, **Nekko Agent → Settings…** (⌘,) opens Settings and **About Nekko Agent** shows the About page.
+Hover over the left navigation panel, including its curved top and bottom wings, to open it and see each destination's name. Keyboard focus opens the same panel; reduced motion disables its width and label transitions. On macOS, **Nekko Agent → Settings…** (⌘,) opens Settings and **About Nekko Agent** shows the About page.
 
 Hover over the sidebar **+** to choose **Agent**, **Create or Edit Photos and Videos** or **Terminal**. Moving away closes the menu after a short grace period. Terminal uses your default shell; choose its type in **Settings → Terminal → Default shell**, or leave **Auto-detect** selected. Create or Edit Photos and Videos opens an image session; video generation is not available.
 
