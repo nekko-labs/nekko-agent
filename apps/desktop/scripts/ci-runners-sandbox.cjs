@@ -13,6 +13,7 @@ const profile = fs.mkdtempSync(path.join(dir, 'profile-'));
 app.setPath('userData', profile);
 app.setPath('sessionData', profile);
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+const js = v => JSON.stringify(v).replace(/[<>\/\u2028\u2029]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
 app.whenReady().then(async () => {
   const report = { revision: 'working-tree', checks: [], errors: [], captures: [], blockedNetwork: [], windowBounds: null };
   session.defaultSession.webRequest.onBeforeRequest((r, done) => {
@@ -37,13 +38,13 @@ app.whenReady().then(async () => {
     fs.writeFileSync(file, image.toPNG()); report.captures.push({ file, size: image.getSize() });
   };
   const click = sel => run(`(()=>{const e=${sel};e&&e.click();return !!e})()`);
-  const byText = (tag, text) => `[...document.querySelectorAll('${tag}')].find(e=>e.textContent.trim()===${JSON.stringify(text)})`;
+  const byText = (tag, text) => `[...document.querySelectorAll(${js(tag)})].find(e=>e.textContent.trim()===${js(text)})`;
   // React tracks input values itself: set through the native setter, then fire input.
-  const type = (sel, value) => run(`(()=>{const e=${sel};const p=e instanceof HTMLTextAreaElement?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;Object.getOwnPropertyDescriptor(p,'value').set.call(e,${JSON.stringify(value)});e.dispatchEvent(new Event('input',{bubbles:true}))})()`);
-  const field = label => `[...document.querySelectorAll('[role=dialog] label')].find(l=>l.firstChild&&l.firstChild.textContent===${JSON.stringify(label)}).querySelector('input,textarea')`;
+  const type = (sel, value) => run(`(()=>{const e=${sel};const p=e instanceof HTMLTextAreaElement?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;Object.getOwnPropertyDescriptor(p,'value').set.call(e,${js(value)});e.dispatchEvent(new Event('input',{bubbles:true}))})()`);
+  const field = label => `[...document.querySelectorAll('[role=dialog] label')].find(l=>l.firstChild&&l.firstChild.textContent===${js(label)}).querySelector('input,textarea')`;
   const open = async (scene, theme) => {
-    await run(`integration.show('${scene}')`); await sleep(400);
-    await run(`document.documentElement.dataset.theme='${theme}'`);
+    await run(`integration.show(${js(scene)})`); await sleep(400);
+    await run(`document.documentElement.dataset.theme=${js(theme)}`);
     await click(byText('[aria-label=Section] button', 'CI runners')); await sleep(700);
   };
   const scenes = {
