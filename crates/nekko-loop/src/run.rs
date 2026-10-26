@@ -213,9 +213,11 @@ fn trim_runaway(s: &str) -> String {
 /// again from where it stood, at once and without spending an attempt: the
 /// client holds the next call until it may run.
 pub const YIELDED: &str = "Paused while someone uses this computer";
+/// A connectivity gate holds only the same model call, never tools or a new turn.
+pub const INTERNET_PAUSED: &str = "Paused until internet connectivity returns";
 
 pub fn is_yield(message: &str) -> bool {
-    message == YIELDED
+    message == YIELDED || message == INTERNET_PAUSED
 }
 
 /// Attempts a model call gets before the reply ends as interrupted

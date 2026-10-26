@@ -6,6 +6,14 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Internet reachability recovery
+
+[Specification](spec/chat/internet-recovery.md). Prefix **NR** (network recovery).
+
+- [x] **NR-1 (#1163), Daemon detection and notices.** Credential-free debounced reachability, model-only interruption, checkpoint-safe metadata and ISO command logs; strict default-off recovery primitive and deterministic tests.
+- [ ] **NR-2 (#1164), Shared-renderer setting and notices.** Accessible cost-warning opt-in and timestamped history, component tests and hidden desktop/narrow before/after evidence. UI slice follows the daemon PR; visual signoff and landing pending.
+- [ ] **NR-3 (#1179), Broader transport/platform verification.** Opaque Claude Code harness, images/voice/tool-specific internet and physical Wi-Fi/native device testing are outside the native model wrapper; track follow-up explicitly.
+
 ## Chat swipe and welcoming questions (#1174)
 
 - [x] **CG-1, Reveal the whole row and full time.** Either horizontal wheel direction moves the transcript left up to 112px through CSS state; focused Electron checks cover row/child displacement, timestamp bounds, spring-back and no horizontal scroll at 1100px and 460px. Spec: [Swipe for times](spec/chat/chat-suggestions-progress-and-code-access.md).

@@ -51,6 +51,7 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 - [Default modes: where the models run (2026-10-22)](chat/default-modes-where-the-models-run.md) (4 KB)
 - [End-to-end encrypted sync for Pro and Team (2026-10-22)](chat/end-to-end-encrypted-sync-for-pro-and-team.md) (9 KB)
 - [Find in this chat (2026-10-16)](chat/find-in-this-chat.md) (3 KB)
+- [Internet reachability and restoration recovery](chat/internet-recovery.md) (6 KB)
 - [Live streaming token rate](chat/live-streaming-token-rate.md) (1 KB)
 - [Muted pending-change badge](chat/muted-pending-change-badge.md) (1 KB)
 - [One copy of the reply being written](chat/one-copy-of-the-reply-being-written.md) (1 KB)
