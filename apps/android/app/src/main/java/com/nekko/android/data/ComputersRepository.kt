@@ -138,6 +138,22 @@ class ComputersRepository(
     /** Every `agent:event` from the active computer. Chat screens filter by session. */
     val events: SharedFlow<AgentEvent> = _events.asSharedFlow()
 
+    /**
+     * What is open over each chat (Git, the Terminals), by chat id. Kept here,
+     * not in a chat screen, so opening or folding the phone (a new activity,
+     * and a chat pane instead of a full screen) keeps it open and its
+     * terminals attached.
+     */
+    private val _overlays = MutableStateFlow<Map<String, Any>>(emptyMap())
+    val overlays: StateFlow<Map<String, Any>> = _overlays.asStateFlow()
+
+    fun setOverlay(chatId: String, overlay: Any?) {
+        _overlays.update { if (overlay == null) it - chatId else it + (chatId to overlay) }
+    }
+
+    /** Work that outlives a screen (leaving a terminal after its page is gone). */
+    val appScope: CoroutineScope get() = scope
+
     private val _terminalEvents = MutableSharedFlow<TerminalEvent>(extraBufferCapacity = 512)
     /** The output of the terminals this phone opened on the active computer (AN-31). */
     val terminalEvents: SharedFlow<TerminalEvent> = _terminalEvents.asSharedFlow()

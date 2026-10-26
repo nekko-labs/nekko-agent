@@ -99,8 +99,9 @@ import androidx.compose.ui.draganddrop.mimeTypes
 import androidx.compose.ui.draganddrop.toAndroidDragEvent
 import androidx.compose.ui.draw.alpha
 import com.nekko.android.ui.components.Dot
-import com.nekko.android.git.GitController
 import com.nekko.android.ui.git.GitDialog
+import com.nekko.android.ui.terminal.TerminalsDialog
+import androidx.compose.material.icons.filled.Terminal
 import com.nekko.android.ui.git.PrChip
 import com.nekko.android.ui.git.PrSheet
 import com.nekko.protocol.PullRequest
@@ -127,9 +128,6 @@ fun ChatScreen(
     val insert by vm.insert.collectAsStateWithLifecycle()
     var showChanges by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
-    var git by remember { mutableStateOf<GitController?>(null) }
-    /** Opened from the pull request chip straight at one pull request. */
-    var gitPr by remember { mutableStateOf<PullRequest?>(null) }
     var prs by remember(vm.sessionId) { mutableStateOf<List<PullRequest>>(emptyList()) }
     var showPrs by remember { mutableStateOf(false) }
     // The chat's pull request chip: read when the chat opens, after each turn, and when Git or the
@@ -205,11 +203,17 @@ fun ChatScreen(
         )
     }
 
-    git?.let { g -> GitDialog(g, onDismiss = { git = null; gitPr = null; prReads++ }, pr = gitPr) }
+    val terminals by vm.terminalsOpen.collectAsStateWithLifecycle()
+    terminals?.let { t ->
+        val online by vm.online.collectAsStateWithLifecycle()
+        TerminalsDialog(t, online, vm.computerName, onDismiss = vm::closeTerminals)
+    }
+    val git by vm.gitOpen.collectAsStateWithLifecycle()
+    git?.let { o -> GitDialog(o.git, onDismiss = { vm.closeGit(); prReads++ }, pr = o.pr) }
     if (showPrs) {
         PrSheet(
             prs, onDismiss = { showPrs = false; prReads++ },
-            onGit = { pr -> showPrs = false; gitPr = pr; git = vm.git() },
+            onGit = { pr -> showPrs = false; vm.openGit(pr) },
             onAsk = { text -> vm.send(text) },
         )
     }
@@ -233,8 +237,14 @@ fun ChatScreen(
                             DropdownMenuItem(
                                 text = { Text("Git") },
                                 leadingIcon = { Icon(Icons.Filled.AccountTree, contentDescription = null) },
-                                onClick = { showMenu = false; git = vm.git() },
+                                onClick = { showMenu = false; vm.openGit() },
                                 modifier = Modifier.testTag("chat.git"),
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Terminals") },
+                                leadingIcon = { Icon(Icons.Filled.Terminal, contentDescription = null) },
+                                onClick = { showMenu = false; vm.openTerminals() },
+                                modifier = Modifier.testTag("chat.terminals"),
                             )
                         }
                     }

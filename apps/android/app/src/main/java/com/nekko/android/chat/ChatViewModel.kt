@@ -1,6 +1,11 @@
 package com.nekko.android.chat
 
 import com.nekko.android.git.GitController
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.CoroutineScope
+import com.nekko.android.terminal.TerminalsController
+import com.nekko.android.terminal.RepoTerminalBackend
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -62,6 +67,36 @@ class ChatViewModel(
         // A model-written message can take a while; a push or a switch too.
         change = { r -> repo.callChange(r.channel, r.args, timeoutMs = if (r.channel == Channels.GIT_COMMIT_MESSAGE) 90_000 else 150_000) },
     )
+
+    /** Git (AN-30) over this chat, at its status or straight at one pull request (from the chip). */
+    data class GitOverlay(val git: GitController, val pr: PullRequest?)
+
+    /**
+     * Git and the Terminals (AN-31) open over this chat. They live in the
+     * repository by chat id, so opening or folding the phone keeps them open.
+     */
+    val gitOpen: StateFlow<GitOverlay?> = repo.overlays.map { it[sessionId] as? GitOverlay }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, repo.overlays.value[sessionId] as? GitOverlay)
+
+    fun openGit(pr: PullRequest? = null) = repo.setOverlay(sessionId, GitOverlay(git(), pr))
+
+    fun closeGit() = repo.setOverlay(sessionId, null)
+
+    val terminalsOpen: StateFlow<TerminalsController?> = repo.overlays.map { it[sessionId] as? TerminalsController }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, repo.overlays.value[sessionId] as? TerminalsController)
+
+    fun openTerminals() = repo.setOverlay(sessionId, TerminalsController(sessionId, RepoTerminalBackend(repo), repo.appScope))
+
+    fun closeTerminals() {
+        (repo.overlays.value[sessionId] as? TerminalsController)?.hide()
+        repo.setOverlay(sessionId, null)
+    }
+
+    /** Whether the active computer is connected (the terminal screens open and reopen on it). */
+    val online: StateFlow<Boolean> = repo.state.map { it.conn == RelayState.ONLINE }.distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, repo.state.value.conn == RelayState.ONLINE)
+
+    val computerName: String get() = repo.state.value.active?.name ?: "your computer"
 
     /** The pull requests this chat opened, with their state and checks (read only, `pr:sessionList`). */
     suspend fun pullRequests(refresh: Boolean = false): List<PullRequest> =
