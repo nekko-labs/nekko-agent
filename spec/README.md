@@ -44,6 +44,7 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 - [Chat suggestions, progress and code access](chat/chat-suggestions-progress-and-code-access.md) (4 KB)
 - [Chat transcript width (2026-10-19)](chat/chat-transcript-width.md) (1 KB)
 - [Clarification answers remain visible in chat](chat/clarification-answers-remain-visible-in-chat.md) (2 KB)
+- [Completed chat retention and storage controls](chat/completed-history-retention-and-storage.md) (3 KB)
 - [Completion and interruption reconciliation](chat/completion-and-interruption-reconciliation.md) (1 KB)
 - [Composer containment and compact subagent activity (2026-10-13)](chat/composer-containment-and-compact-subagent-activity.md) (2 KB)
 - [Composer Markdown editing tools (implemented; isolated interaction checks verified, visual inspection pending)](chat/composer-markdown-editing-tools.md) (2 KB)

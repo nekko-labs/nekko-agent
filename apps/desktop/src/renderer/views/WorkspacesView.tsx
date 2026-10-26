@@ -3,7 +3,7 @@ import { AgentPanelControls } from '../components/AgentPanelControls.js';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { AgentEvent, SessionSummary, TerminalInfo, WorkspaceFolder } from '@nekko-agent/shared';
-import { AUTO_MODEL_ID, archiveDaysLeft, archiveDeletesAt } from '@nekko-agent/shared';
+import { AUTO_MODEL_ID } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore, type Workspace } from '../store.js';
 import { runningSessionIds } from '../liveRuns.js';
@@ -958,14 +958,13 @@ function CompletedRow({
   session: SessionSummary; now: number; isActive: boolean; onOpen: () => void; onContextMenu?: (e: React.MouseEvent) => void;
 }) {
   const at = s.archivedAt as number;
-  const days = archiveDaysLeft(at, now);
   return (
     <button
       onClick={onOpen}
       onContextMenu={onContextMenu}
       data-completed-row={s.id}
       className={`flex w-full items-center gap-1.5 rounded-lg py-1 pl-2 pr-2 text-left transition-colors duration-150 ${isActive ? 'bg-accent-soft' : 'hover:bg-surface-2'}`}
-      title={`${s.title}\nCompleted ${new Date(at).toLocaleString()}\nDeleted on ${new Date(archiveDeletesAt(at)).toLocaleDateString()} unless restored (${days} day${days === 1 ? '' : 's'} left)`}
+      title={`${s.title}\nCompleted ${new Date(at).toLocaleString()}\nKept until you delete it`}
     >
       <span className="inline-grid shrink-0 place-items-center" style={{ color: 'var(--success)' }} aria-label="Completed" role="img">
         <CheckIcon className="h-3 w-3" />
@@ -973,7 +972,7 @@ function CompletedRow({
       <span className={`min-w-0 flex-1 truncate text-[12px] line-through ${isActive ? 'text-ink-soft' : 'text-ink-faint'}`}>{s.title}</span>
       <time
         className="shrink-0 text-[10px] tabular-nums"
-        style={{ color: days <= 7 ? 'var(--warning)' : 'var(--ink-faint)' }}
+        style={{ color: 'var(--ink-faint)' }}
         dateTime={new Date(at).toISOString()}
       >
         {completedDate(at, now)}

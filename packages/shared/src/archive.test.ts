@@ -27,18 +27,16 @@ describe('archive retention', () => {
     expect(isArchived({ archivedAt: 1 })).toBe(true);
   });
 
-  it('counts whole days left, rounding a partial day up', () => {
+  it('keeps expiry display helpers compatible without an expiry date', () => {
     const at = 1_000_000_000_000;
-    expect(archiveDaysLeft(at, at)).toBe(ARCHIVE_RETENTION_DAYS);
-    expect(archiveDaysLeft(at, at + DAY)).toBe(ARCHIVE_RETENTION_DAYS - 1);
-    expect(archiveDaysLeft(at, at + (ARCHIVE_RETENTION_DAYS - 1) * DAY + 1)).toBe(1);
-    expect(archiveDaysLeft(at, at + ARCHIVE_RETENTION_DAYS * DAY + 5)).toBe(0);
+    expect(ARCHIVE_RETENTION_DAYS).toBe(Number.POSITIVE_INFINITY);
+    expect(archiveDaysLeft(at, at)).toBe(Number.POSITIVE_INFINITY);
+    expect(archiveDaysLeft(at, Number.MAX_SAFE_INTEGER)).toBe(Number.POSITIVE_INFINITY);
   });
 
-  it('expires only archived chats past the window', () => {
+  it('never expires archived chats automatically', () => {
     const at = 1_000_000_000_000;
-    expect(archiveExpired({ archivedAt: at }, at + (ARCHIVE_RETENTION_DAYS * DAY) - 1)).toBe(false);
-    expect(archiveExpired({ archivedAt: at }, at + ARCHIVE_RETENTION_DAYS * DAY)).toBe(true);
+    expect(archiveExpired({ archivedAt: at }, Number.MAX_SAFE_INTEGER)).toBe(false);
     expect(archiveExpired({}, Number.MAX_SAFE_INTEGER)).toBe(false);
   });
 });

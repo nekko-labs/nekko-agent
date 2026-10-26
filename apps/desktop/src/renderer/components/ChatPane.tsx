@@ -17,7 +17,7 @@ import { createPortal } from 'react-dom';
 import { DictationButton } from './DictationButton.js';
 import { decideApproval, type ApprovalScope } from './agent-console/approval-decision.js';
 import type { AgentEvent, AskAnswer, AskRequest, AutoQuality, Session, ContextBundle, IndexedFile, ModelInfo, ProviderConfig, SkillDef, PrInfo, QueuePayload, QueuedPrompt } from '@nekko-agent/shared';
-import { archiveDaysLeft, CLAUDE_CODE_PROVIDER_KIND, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
+import { CLAUDE_CODE_PROVIDER_KIND, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
 import type { AutoProviderPick, ProviderPool } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { approvalAfterResult } from './ChatPane.approval.js';
@@ -3355,24 +3355,21 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
 }
 
 /**
- * What sits where the composer would, in an archived chat: when it goes, and
+ * What sits where the composer would, in an archived chat: indefinite retention and
  * the two ways out. Delete forever asks first, since it is the one action in
  * the archive that cannot be taken back.
  */
-function ArchivedChatBar({ sessionId, contentWidth, archivedAt }: { sessionId: string; contentWidth: string; archivedAt: number | null }) {
+function ArchivedChatBar({ sessionId, contentWidth }: { sessionId: string; contentWidth: string; archivedAt: number | null }) {
   const restoreChat = useStore((s) => s.restoreChat);
   const deleteChatForever = useStore((s) => s.deleteChatForever);
   const [busy, setBusy] = useState(false);
-  const days = archivedAt ? archiveDaysLeft(archivedAt) : null;
   return (
     <div className="border-t border-line px-4 py-3">
       <div className={`${contentWidth} flex flex-wrap items-center gap-2 rounded-xl px-3 py-2.5`} style={{ background: 'var(--surface-2)' }}>
         <CheckIcon className="h-4 w-4 shrink-0 text-ink-faint" />
         <p className="min-w-0 flex-1 text-[12px] text-ink-soft">
           Completed and read-only.
-          {days !== null && (
-            <span className="text-ink-faint"> {days === 0 ? 'Deleted today' : `Deleted in ${days} day${days === 1 ? '' : 's'}`} unless restored.</span>
-          )}
+          <span className="text-ink-faint"> Kept until you delete it.</span>
         </p>
         <button
           className="btn btn-outline h-8 px-3 py-0 text-[12px] text-(--danger)"

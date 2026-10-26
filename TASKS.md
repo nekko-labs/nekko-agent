@@ -803,6 +803,8 @@ Extends `../../knowledgebase/principles/coding.md` (which these override).
 
 ## Now / In Progress
 
+- [ ] **HISTORY1156**: [Completed history retention and storage](spec/chat/completed-history-retention-and-storage.md). Added 2026-10-25. Keep completed chats indefinitely, measure local chat storage, and add confirmed Settings cleanup ranges and a 1 GB warning. Backend and shared renderer checks passing; Settings evidence and merge pending.
+
 - [x] **THINK-DIAGRAM-1120**: cloud reasoning always on, local default-on thinking only in Expert model options, no composer toggle; chat-matched dotted, borderless Mermaid canvases with subtle shadows and themed diagrams. Implemented 2026-10-25. [Thinking spec](spec/models/models-providers.md), [diagram spec](spec/code/rich-responses-reports-and-design-workspace.md). Verified desktop typecheck, 19 focused renderer tests, 61 provider tests, 4 admission tests, daemon request regression, hidden before/after renderer evidence and Expert interaction/load payload checks. No live inference or native phone UI verification.
 
 - [ ] **IOS-STATUS-MASCOT** (added 2026-10-25): desktop-style leading chat status icons and a top-left interactive pixel mascot on native iOS. [Spec](spec/phone/native-ios-app.md#desktop-style-chat-status-and-top-left-nekko-2026-10-25). Native build, status precedence test and simulator greeting/touch-target test pass; native fixture before/after evidence captured. Landing tracked by #1093. Physical-device VoiceOver and release delivery remain unverified.
