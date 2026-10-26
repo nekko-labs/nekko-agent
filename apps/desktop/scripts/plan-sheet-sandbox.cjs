@@ -26,8 +26,10 @@ const SEED = `(() => {
     { id: 'm5', role: 'assistant', content: 'The changes are in place and the desktop TypeScript check passes. Next I will verify menu contrast.', toolCalls: [call4], createdAt: t + 4000 },
   ];
   s.agentPlan = steps.map((title, i) => ({ id: 'step_' + (i + 1), title, status: i < 2 ? 'done' : i === 2 ? 'active' : 'pending', note: [call2.input.steps[0].note, call4.input.steps[0].note, call4.input.steps[1].note, undefined][i], createdAt: t, updatedAt: t + 4000 }));
+  s.agentPlan[0].verification = { status: 'passed', device: 'macOS', detail: 'Traced both menus against the merged PR.', evidenceUrl: 'https://example.test/evidence/trace' };
+  s.agentPlan[2].verification = { status: 'active', device: 'macOS', detail: 'Comparing base and head gradient captures.' };
   f.putCachedSession(s);
-  f.store.setState({ planRailOpen: true, prsBySession: { a: [{ url: 'https://github.com/nekko-labs/nekko-agent/pull/1150', owner: 'nekko-labs', repo: 'nekko-agent', number: 1150, title: 'Neutral menus', state: 'open', isDraft: false, additions: 120, deletions: 40, changedFiles: 6, checks: 'pending', checkProgress: { total: 9, completed: 6, pending: 3, failing: 0, unknown: 0, items: [] } }] } });
+  f.store.setState({ planRailOpen: true, prsBySession: { a: [{ url: 'https://github.com/nekko-labs/nekko-agent/pull/1150', owner: 'nekko-labs', repo: 'nekko-agent', number: 1150, title: 'Neutral menus', state: 'open', isDraft: false, additions: 120, deletions: 40, changedFiles: 6, checks: 'failing', checkProgress: { total: 6, completed: 4, pending: 1, failing: 1, unknown: 0, items: [{ name: 'build', state: 'completed', link: null }, { name: 'lint', state: 'completed', link: null }, { name: 'capture (windows)', state: 'failing', link: null }, { name: 'gate', state: 'pending', link: null }, { name: 'daemon', state: 'completed', link: null }, { name: 'CodeQL', state: 'completed', link: null }] } }] } });
 })()`;
 app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeRequest((d, done) => done({ cancel: !/^(file:|data:|blob:)/.test(d.url) }));
@@ -60,6 +62,10 @@ app.whenReady().then(async () => {
     await check('right column has no agent plan', `!document.querySelector('[aria-label="Plan and sub-agents"]')?.textContent.includes('Agent plan')`);
     await check('done steps squeezed', `[...document.querySelectorAll('[data-plan-step="done"] [data-plan-more]')].every(e => e.getBoundingClientRect().height < 1)`);
     await check('PR chip on step 2', `!!document.querySelector('[data-plan-step-id="step_2"] [data-plan-chip="pr"]')`);
+    await check('verification panel is gone', `!document.querySelector('[data-verification-checklist]')`);
+    await check('verification chips on steps 1 and 3', `!!document.querySelector('[data-plan-step-id="step_1"] [data-plan-chip="verify"]') && !!document.querySelector('[data-plan-step-id="step_3"] [data-plan-chip="verify"]')`);
+    await check('CI chips on the last verification step', `document.querySelectorAll('[data-plan-step-id="step_3"] [data-plan-chip="ci"]').length === 3 && document.querySelectorAll('[data-plan-chip="ci"]').length === 3`);
+    await check('PR card leaves CI to the plan', `!document.querySelector('[data-pr-progress]')?.textContent.includes('CI checks')`);
     await check('design link on step 1', `!!document.querySelector('[data-plan-step-id="step_1"] [data-plan-chip="link"]')`);
     const hover = await run(`(() => { const r = document.querySelector('[data-plan-step-id="step_3"]')?.getBoundingClientRect(); return r ? { x: Math.round(r.x + 40), y: Math.round(r.y + 8) } : { x: 1, y: 1 }; })()`);
     win.webContents.sendInputEvent({ type: 'mouseMove', ...hover });

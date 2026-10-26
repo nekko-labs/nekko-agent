@@ -228,7 +228,7 @@ See [SPEC](spec/desktop/focused-mode-transitions-calmer-focus-ring-and-layout-co
 Issue #1149. See [SPEC](spec/chat/plan-sheet-on-the-composer.md).
 
 - [x] ✅ 2026-10-25 `PlanSheet.tsx` renders the agent plan as a card tucked behind the composer (`.plan-sheet-dock` clips at the composer edge, `plan-sheet-rise`); title, one-line note and an optional chip row per step; finished steps squeeze and every one opens while the card is hovered or focused (120 ms `grid-template-rows`). `planStepLinks.ts` replays the transcript's `update_plan` calls and gives created PRs and linked files to the step active at the time. The plan leaves `PlanRail.tsx`. Tests: `planStepLinks.test.ts`, `PlanRail.test.tsx`. Evidence: `apps/desktop/scripts/plan-sheet-sandbox.cjs` via `layout-evidence-integration.cjs` (keeps `data-app-inactive` off, or every animation stays paused in the hidden window).
-- [ ] Second PR: move the Verification panel and CI status into the card as per-step chips, and retire the panel under the composer.
+- [x] ✅ 2026-10-25 Second PR: `PlanSheet.tsx` adds verification chips (explicit reports only, safe evidence links) and a one-row CI chip strip under the last verification step; the Verification panel and its `work-progress-*` harness are removed; `PrProgress` drops CI lines when the card shows them (`checksInPlan`). Tests: `PlanSheet.test.tsx`, `WorkProgress.test.tsx`.
 - [ ] Check the card in a packaged build and at narrow widths.
 
 ## Flaky daemon integration tests (added 2026-10-17)

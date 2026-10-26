@@ -65,7 +65,7 @@ export function PrCard({ url, info, event = 'created' }: { url: string; info?: P
 }
 
 /** Live actions stay above the composer and disappear when the PR is resolved. */
-export function PrActionCard({ url, info, sessionId, onDismiss }: { url: string; info?: PrInfo; sessionId: string; onDismiss: () => void }) {
+export function PrActionCard({ url, info, sessionId, onDismiss, checksInPlan = false }: { url: string; info?: PrInfo; sessionId: string; onDismiss: () => void; checksInPlan?: boolean }) {
   const parsed = parsePrUrl(url);
   const openPrPane = useStore((s) => s.openPrPane);
   const [busy, setBusy] = useState<PrAction | 'continue' | 'stack' | null>(null);
@@ -115,7 +115,7 @@ export function PrActionCard({ url, info, sessionId, onDismiss }: { url: string;
           {!info?.checkProgress && check.dot && <span className="text-[10px]" style={{ color: check.color }}>{check.dot} {check.label}</span>}
         </div>
         {info?.title && <p className="truncate text-[12px]">{info.title}</p>}
-        <PrProgress url={url} info={info} />
+        <PrProgress url={url} info={info} checks={!checksInPlan} />
         {info?.stack && <span className="text-[10px] text-ink-soft">GitHub stack · {info.stack.size} PRs</span>}
         {parent && <a className="block truncate text-[10px] text-ink-soft hover:underline" href={parent.url} onClick={(e) => { e.preventDefault(); openExternally(parent.url); }}>Builds on {parent.branch}</a>}
       </div>
@@ -144,7 +144,8 @@ export function PrActionCard({ url, info, sessionId, onDismiss }: { url: string;
  * and the cards stack above it. `floating` closes it into a standalone card
  * where there is no divider below (the wall composer).
  */
-export function PrActionDock({ sessionId, prs, urls, floating = false }: { sessionId: string; prs: PrInfo[]; urls: string[]; floating?: boolean }) {
+/** checksInPlan: the plan card above shows this PR's CI, so the card leaves it out. */
+export function PrActionDock({ sessionId, prs, urls, floating = false, checksInPlan = false }: { sessionId: string; prs: PrInfo[]; urls: string[]; floating?: boolean; checksInPlan?: boolean }) {
   const storageKey = 'nekko.pr-dismissed.' + sessionId;
   const load = () => {
     try { const value = JSON.parse(localStorage.getItem(storageKey) ?? '[]'); return new Set<string>(Array.isArray(value) ? value.filter((x) => typeof x === 'string') : []); }
@@ -190,7 +191,7 @@ export function PrActionDock({ sessionId, prs, urls, floating = false }: { sessi
     <div className="pr-deck-reveal" id={'pr-deck-' + sessionId} inert={!expanded}>
       <div className="pr-deck-clip"><div className="pr-deck-list">
         {active.map((url) => <div key={url} className="pr-deck-slot" data-closing={closing.has(url)} onAnimationEnd={(event) => { if (event.target === event.currentTarget && event.animationName === 'pr-deck-retract') finishDismiss(url); }}>
-          <PrActionCard url={url} info={byUrl.get(url)} sessionId={sessionId} onDismiss={() => dismiss(url)} />
+          <PrActionCard url={url} info={byUrl.get(url)} sessionId={sessionId} onDismiss={() => dismiss(url)} checksInPlan={checksInPlan} />
         </div>)}
       </div></div>
     </div>
