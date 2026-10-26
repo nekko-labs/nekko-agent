@@ -102,6 +102,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.nekko.protocol.RelayState
+import com.nekko.protocol.ENGINE_PROVIDER_ID
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -127,6 +128,10 @@ fun ChatScreen(
     // Expert re-reads the hardware every 3 s, only while it is on, this chat is on screen and the computer is reachable.
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val online = computers.conn == RelayState.ONLINE
+    // The model's name for the row under the message box (the computer's list, cached for the connection).
+    LaunchedEffect(chat.providerId, online) { if (online) chat.providerId?.let { vm.loadModels(it) } }
+    // The Monitor names loaded models from the Model Server's own list.
+    LaunchedEffect(showMonitor, online) { if (showMonitor && online) vm.loadModels(ENGINE_PROVIDER_ID) }
     if (expert && online) {
         LaunchedEffect(vm, lifecycle) { lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { vm.hardware.poll() } }
     }
@@ -203,7 +208,7 @@ fun ChatScreen(
                             IconButton(onClick = onBack) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                             }
-                            ModeToggle(expert, vm::setExpert)
+                            ModeToggle(expert, vm::setExpert, compact = pane != null)
                         }
                     },
                     title = {

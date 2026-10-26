@@ -175,7 +175,7 @@ Phone remote control and the native iOS and Android apps.
 - [Folding phones: two chats at once, a Monitors pane and vertical mode (2026-10-24)](phone/folding-phones-two-chats-and-monitors.md) (13 KB)
 - [iPhone chat: tables, and previews of files and local pages the agent links (2026-10-26)](phone/iphone-chat-tables-and-link-previews.md) (8 KB)
 - [iPhone Markdown composer and rich replies (planned 2026-10-25)](phone/iphone-markdown-composer-and-rich-replies.md) (7 KB)
-- [iPhone: Simple and Expert modes, the model and effort control, the context gauge and the hardware monitor (2026-10-24)](phone/iphone-simple-and-expert-modes.md) (6 KB)
+- [iPhone: Simple and Expert modes, the model and effort control, the context gauge and the hardware monitor (2026-10-24)](phone/iphone-simple-and-expert-modes.md) (8 KB)
 - [iPhone: the desktop's languages and themes, and New chat's effort and computer (2026-10-23)](phone/iphone-languages-themes-and-new-chat-choices.md) (5 KB)
 - [Mermaid diagrams on the phone (planned 2026-10-25)](phone/mermaid-diagrams-on-the-phone.md) (4 KB)
 - [Native Android app (2026-10-11)](phone/native-android-app.md) (41 KB)

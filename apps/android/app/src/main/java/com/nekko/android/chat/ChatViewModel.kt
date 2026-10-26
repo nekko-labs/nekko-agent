@@ -75,6 +75,16 @@ class ChatViewModel(
     /** The model picker in the sheet lists every enabled provider's models. */
     suspend fun loadModels() = repo.loadAllModels()
 
+    /** One provider's models, for the chat's model name; a failed read leaves the id showing. */
+    suspend fun loadModels(providerId: String) {
+        try {
+            repo.loadModels(providerId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+        }
+    }
+
     override fun onCleared() {
         dictation?.cancel()
     }

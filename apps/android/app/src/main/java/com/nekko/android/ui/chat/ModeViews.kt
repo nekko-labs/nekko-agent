@@ -107,7 +107,7 @@ object ModeTags {
  * computer's hardware and the models its Model Server holds.
  */
 @Composable
-fun ModeToggle(expert: Boolean, onChange: (Boolean) -> Unit) {
+fun ModeToggle(expert: Boolean, onChange: (Boolean) -> Unit, compact: Boolean = false) {
     val p = Nekko.palette
     var open by remember { mutableStateOf(false) }
     val simple = stringResource(R.string.mode_simple)
@@ -121,9 +121,12 @@ fun ModeToggle(expert: Boolean, onChange: (Boolean) -> Unit) {
                 stateDescription = if (expert) expertLabel else simple
             },
         ) {
-            Icon(Icons.Filled.Speed, contentDescription = null, tint = if (expert) p.accent else p.ink, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(4.dp))
-            Text(if (expert) expertLabel else simple, style = MaterialTheme.typography.labelLarge, color = if (expert) p.accent else p.ink)
+            Icon(Icons.Filled.Speed, contentDescription = null, tint = if (expert) p.accent else p.ink, modifier = Modifier.size(if (compact) 20.dp else 16.dp))
+            // A pane's header is narrow: the dial alone, coloured in Expert, keeps the title readable.
+            if (!compact) {
+                Spacer(Modifier.width(4.dp))
+                Text(if (expert) expertLabel else simple, style = MaterialTheme.typography.labelLarge, color = if (expert) p.accent else p.ink)
+            }
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             listOf(false to simple, true to expertLabel).forEach { (on, label) ->
@@ -306,7 +309,7 @@ fun ModelEffortSheet(
     }
     LaunchedEffect(picking) { if (picking) runCatching { onLoadModels() } }
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = p.paper) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(stringResource(R.string.model_effort), style = MaterialTheme.typography.titleMedium, color = p.ink)
             SectionTitle(stringResource(R.string.model_section))
             Row(
