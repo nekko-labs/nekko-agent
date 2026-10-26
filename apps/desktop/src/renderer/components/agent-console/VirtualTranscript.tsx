@@ -88,13 +88,12 @@ export interface VirtualTranscriptProps<R extends VirtualRow> {
   ref?: React.Ref<VirtualTranscriptHandle>;
 }
 
-/** Keep gesture listeners out of React's render path. */
-function useSwipeToRevealTimes(scrollRef: React.RefObject<HTMLDivElement | null>, listRef: React.RefObject<HTMLDivElement | null>) {
+/** Keep gesture listeners out of React's render path; see timestampSwipe.ts. */
+function useSwipeToRevealTimes(scrollRef: React.RefObject<HTMLDivElement | null>) {
   useEffect(() => {
     const el = scrollRef.current;
-    const list = listRef.current;
-    if (el && list) return attachTimestampSwipe(el, list);
-  }, [scrollRef, listRef]);
+    if (el) return attachTimestampSwipe(el);
+  }, [scrollRef]);
 }
 
 function VirtualTranscriptImpl<R extends VirtualRow>({
@@ -317,7 +316,7 @@ function VirtualTranscriptImpl<R extends VirtualRow>({
     };
   }, []);
 
-  useSwipeToRevealTimes(scrollRef, listRef);
+  useSwipeToRevealTimes(scrollRef);
 
   const visible = rows.slice(range.start, range.end);
   const tailGap = rows[rows.length - 1]?.gapAfter;

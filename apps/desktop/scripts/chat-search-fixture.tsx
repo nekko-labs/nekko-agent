@@ -18,7 +18,7 @@ import '../src/renderer/styles.css';
 const provider = { id: 'fixture', kind: 'ollama', baseUrl: 'http://127.0.0.1:11434', enabled: true, label: 'Fixture provider', auth: 'subscription', tokenKey: 'fixture' };
 const models = [{ id: 'fixture-model', providerId: 'fixture', name: 'Fixture model', contextWindow: 128000 }];
 const timestampFixture = location.hash === '#timestamp-swipe';
-const at = timestampFixture ? new Date('2026-10-25T15:00:00Z').getTime() : Date.now() - 3_600_000;
+const at = timestampFixture ? Date.UTC(2026, 9, 25, 15, 0) : Date.UTC(2026, 9, 25, 12, 0);
 const TURNS = timestampFixture ? 1 : 60;
 
 function reply(i: number): string {

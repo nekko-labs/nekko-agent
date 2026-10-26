@@ -76,7 +76,7 @@ app.whenReady().then(async () => {
       win.webContents.sendInputEvent({type:'mouseUp',x:origin.x-112,y:origin.y,button:'left',clickCount:1});
       if (!base && width===1100) for(let i=0;i<9;i++){await frame();await sleep(40);}
       await sleep(600);
-      if (!base) check('release settles at '+width, await run(`!document.querySelector('[data-transcript-scroll]').classList.contains('vt-swiping') && !document.querySelector('.vt-list').style.transform`));
+      if (!base) check('release settles at '+width, await run(`!document.querySelector('[data-transcript-scroll]').classList.contains('vt-swiping') && !document.querySelector('[data-transcript-scroll]').classList.contains('vt-revealing')`));
       await capture('released-'+width);
       if(frames.length) {
         const {PNG}=require('pngjs');const {GifWriter}=require('omggif');

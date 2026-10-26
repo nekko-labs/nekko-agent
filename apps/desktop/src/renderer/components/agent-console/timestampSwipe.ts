@@ -4,7 +4,7 @@ export const TIMESTAMP_REVEAL_PX = 112;
 export const WHEEL_RELEASE_MS = 450;
 
 /** Renderer-only gesture. Pointer drags settle on release, never on an idle timer. */
-export function attachTimestampSwipe(el: HTMLElement, list: HTMLElement) {
+export function attachTimestampSwipe(el: HTMLElement) {
   let reveal = 0;
   let pointer: { id: number; x: number; y: number; active: boolean } | undefined;
   let release: ReturnType<typeof setTimeout> | undefined;
@@ -12,8 +12,8 @@ export function attachTimestampSwipe(el: HTMLElement, list: HTMLElement) {
   const paint = (px: number) => {
     el.style.setProperty('--vt-reveal', `${px}px`);
     el.style.setProperty('--vt-reveal-o', String(px / TIMESTAMP_REVEAL_PX));
-    // No transform at rest: fixed tool popovers must keep their viewport anchor.
-    list.style.transform = px ? `translateX(${-px}px)` : '';
+    // Only while moved: a transform at rest would trap fixed popovers in rows.
+    el.classList.toggle('vt-revealing', px > 0);
   };
   const move = (px: number) => {
     clearTimeout(release);
@@ -28,7 +28,6 @@ export function attachTimestampSwipe(el: HTMLElement, list: HTMLElement) {
     reveal = 0;
     el.style.setProperty('--vt-reveal', '0px');
     el.style.setProperty('--vt-reveal-o', '0');
-    list.style.transform = 'translateX(0)';
     settle = setTimeout(() => paint(0), 250);
   };
   const onWheel = (e: WheelEvent) => {
