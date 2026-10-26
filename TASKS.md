@@ -6,6 +6,18 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Automatic Dynamic window minimization (#1200)
+
+- [x] **DWM-1, Minimize successful replies.** Dynamic (including Fixed grid) removes the finished chat pane without completing the chat. Focused, errors, abnormal stops, pending input, unavailable input state and newer events remain visible. Pure wall tests, hidden 1440px/390px completion/restore/race checks, and inspected matched PNG/GIF evidence. Spec: [Minimize agent windows](spec/desktop/minimize-agent-windows.md). Packaged app/live-provider verification remains untested; baseline macOS shortcut assertion is tracked in #900.
+
+## Internet reachability recovery
+
+[Specification](spec/chat/internet-recovery.md). Prefix **NR** (network recovery).
+
+- [x] **NR-1 (#1163), Daemon detection and notices.** Credential-free debounced reachability, model-only interruption, checkpoint-safe metadata and ISO command logs; strict default-off recovery primitive and deterministic tests.
+- [ ] **NR-2 (#1164), Shared-renderer setting and notices.** Accessible cost-warning opt-in and timestamped history, component tests and hidden desktop/narrow before/after evidence. UI slice follows the daemon PR; visual signoff and landing pending.
+- [ ] **NR-3 (#1179), Broader transport/platform verification.** Opaque Claude Code harness, images/voice/tool-specific internet and physical Wi-Fi/native device testing are outside the native model wrapper; track follow-up explicitly.
+
 ## Chat swipe and welcoming questions (#1174)
 
 - [x] **CG-1, Reveal the whole row and full time.** Either horizontal wheel direction moves the transcript left up to 112px through CSS state; focused Electron checks cover row/child displacement, timestamp bounds, spring-back and no horizontal scroll at 1100px and 460px. Spec: [Swipe for times](spec/chat/chat-suggestions-progress-and-code-access.md).
@@ -38,9 +50,9 @@ Philip asked for an agent's tool calls to be grouped by what they are doing, wit
 
 - [ ] **TG-1, Shared purpose classifier.** `toolPurpose(call)` in `packages/shared/src/agent-steps.ts` (guidance, explore, edit, check, run, git, web, plan, delegate, other), the call's own `description` preferred as the goal; fixture `packages/shared/fixtures/tool-purpose.json` (60+ cases).
 - [ ] **TG-2, Desktop and Local Web UI groups.** `transcript.ts` splits an activity run into purpose groups; `ActivityGroup.tsx` renders them and its headline summarises them; approval, question and failure exceptions.
-- [ ] **TG-3, iPhone groups.** Swift port of the classifier in `NekkoProtocol` (runs the shared fixture), `TranscriptRow.of` groups adjacent same-purpose rows; the subagent group becomes the Delegate purpose.
-- [ ] **TG-4, Android groups.** Kotlin port in `protocol` (runs the shared fixture), grouped rows in `ChatScreen.kt` / `BlockViews.kt`.
-- [ ] **TG-5, Evidence.** Desktop before/after and a live recording; simulator and emulator screenshots from CI.
+- [x] **TG-3, iPhone groups.** (2026-10-26, PR #1081; native offline simulator fixture verified.) Swift port of the classifier in `NekkoProtocol` (runs the shared fixture), `TranscriptRow.of` groups adjacent same-purpose rows; the subagent group becomes the Delegate purpose.
+- [x] **TG-4, Android groups.** (2026-10-26, PR #1081; native offline emulator fixture verified.) Kotlin port in `protocol` (runs the shared fixture), grouped rows in `ChatScreen.kt` / `BlockViews.kt`.
+- [x] **TG-5, Evidence.** (2026-10-26) Desktop before/after and live recording in #1078; matched local native simulator/emulator screenshots and expand/collapse recordings in #1081. Offline renderer fixtures, not physical hardware or live pairing.
 - [ ] **TG-6, Engine `intent` argument (later, needs a decision).** Optional `intent` on the engine's own tools so Nekko's runs get model-written goals; changes the prompt goldens.
 
 ## Phone Markdown composer, rich replies and Mermaid (added 2026-10-25)

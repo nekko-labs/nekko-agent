@@ -56,7 +56,8 @@ const ToolActivityGroup = memo(function ToolActivityGroup({ items, streaming = f
   // Open while the turn runs (watching it work is the point), folded away
   // afterwards so a finished transcript reads as answers. Remembered per row,
   // so scrolling a transcript row out of the window and back keeps it as left.
-  const [open, setOpen] = useRowState(stateKey, streaming && !items.some(it => it.kind === 'tool' && it.call.name === 'spawn_agent'));
+  const [openState, setOpen] = useRowState<boolean | null>(stateKey, null);
+  const open = openState ?? (streaming && !items.some(it => it.kind === 'tool' && it.call.name === 'spawn_agent'));
   const tools = items.filter((it): it is Extract<Activity, { kind: 'tool' }> => it.kind === 'tool');
   const toolCount = tools.length;
   const agents = tools.filter((it) => it.call.name === 'spawn_agent');
@@ -96,7 +97,7 @@ const ToolActivityGroup = memo(function ToolActivityGroup({ items, streaming = f
         <HoverTip label={ordinary ? hoverText : agents.length ? subagentSummary(agents[agents.length - 1].call) : watchCallHeadline(lastWatch.call, lastWatch.result)} multiline>
         <button
           className="flex min-w-0 flex-1 items-center gap-1.5 py-0.5 text-left text-ink-faint hover:text-ink-soft"
-          onClick={() => setOpen((o) => !o)}
+          onClick={() => setOpen(!open)}
           aria-expanded={open}
         >
           <span className="w-3 shrink-0 text-[10px]">{open ? '▾' : '▸'}</span>

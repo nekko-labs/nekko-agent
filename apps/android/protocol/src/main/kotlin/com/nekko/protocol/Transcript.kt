@@ -1,5 +1,6 @@
 package com.nekko.protocol
 
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 
@@ -33,6 +34,8 @@ sealed interface Block {
         val label: String,
         val status: ToolStatus,
         val output: String? = null,
+        /** The call's arguments, for grouping calls by purpose (ToolPurpose.kt). */
+        val input: JsonObject = JsonObject(emptyMap()),
     ) : Block
 }
 
@@ -66,7 +69,7 @@ object Transcript {
                     }
                     for (call in m.toolCalls) {
                         toolIndex[call.id] = out.size
-                        out += Block.Tool(call.id, call.name, toolLabel(call), ToolStatus.OK)
+                        out += Block.Tool(call.id, call.name, toolLabel(call), ToolStatus.OK, input = call.input)
                     }
                 }
                 "tool" -> {
@@ -86,7 +89,7 @@ object Transcript {
         is AgentEvent.Reasoning -> appendStream(turn) { it.copy(reasoning = (it.reasoning ?: "") + e.delta) }
         is AgentEvent.ToolCallStarted -> turn.copy(
             running = true,
-            blocks = settle(turn.blocks) + Block.Tool(e.call.id, e.call.name, toolLabel(e.call), ToolStatus.RUNNING),
+            blocks = settle(turn.blocks) + Block.Tool(e.call.id, e.call.name, toolLabel(e.call), ToolStatus.RUNNING, input = e.call.input),
         )
         is AgentEvent.ApprovalRequired -> turn.copy(
             running = true,
@@ -136,7 +139,7 @@ object Transcript {
         if (blocks.any { it is Block.Tool && it.id == call.id }) {
             blocks.map { if (it is Block.Tool && it.id == call.id) it.copy(status = status) else it }
         } else {
-            settle(blocks) + Block.Tool(call.id, call.name, toolLabel(call), status)
+            settle(blocks) + Block.Tool(call.id, call.name, toolLabel(call), status, input = call.input)
         }
 
     /**

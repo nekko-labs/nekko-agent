@@ -25,6 +25,7 @@ mod cli_install;
 mod compaction;
 mod config;
 mod connections;
+mod connectivity;
 mod connectors;
 mod context;
 mod datalock;

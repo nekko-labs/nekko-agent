@@ -186,9 +186,18 @@ In the horizontal Agents row, the controls sit in a compact two-column strip bes
 Completing or closing an agent stops its active work and cancels pending durable
 watches, including watches owned by delegated descendants. The chat is retained
 when completed. Minimize only hides a window and deliberately lets work continue.
+In Dynamic View (including Fixed grid), a window also minimizes automatically
+when its agent finishes a successful reply. Errors and requests for input stay
+visible, and Focused View keeps finished replies open. Select the chat in the
+Agents list to restore a minimized window; this does not mark it Complete.
 Stop cannot undo tokens already consumed. A later intentional run can arm new
 watches; a failed delegation should explain its failure and continue directly
 when safe, never silently switch provider or model.
+
+Active watches appear above the chat draft as expandable chips. Open one to see
+its wake condition, follow the PR, or cancel that watcher without stopping the
+chat. Child-agent watchers show their owner. Suggested response buttons are gone;
+the gray draft placeholder and Right Arrow acceptance remain.
 
 ### Reading expanded tool details
 
