@@ -7,9 +7,9 @@ import {
 const card = (title: string, updatedAt: number, createdAt: number, order?: number): SortableCard => ({ title, updatedAt, createdAt, order });
 
 describe('agent panel view', () => {
-  it('defaults to the panel as it always was', () => {
+  it('defaults to grouping by activity', () => {
     expect(DEFAULT_AGENT_PANEL_VIEW).toEqual({
-      groupBy: 'project', sortBy: 'manual', direction: 'desc',
+      groupBy: 'status', sortBy: 'manual', direction: 'desc',
       showMetadata: true, showProvider: true, showAutomations: true, showEmptyGroups: true,
     });
     expect(isDefaultView(DEFAULT_AGENT_PANEL_VIEW)).toBe(true);
@@ -19,14 +19,15 @@ describe('agent panel view', () => {
   it('reads a saved view and drops anything no longer valid', () => {
     expect(parseAgentPanelView(null)).toBe(DEFAULT_AGENT_PANEL_VIEW);
     expect(parseAgentPanelView('not json')).toBe(DEFAULT_AGENT_PANEL_VIEW);
-    expect(parseAgentPanelView(JSON.stringify({ groupBy: 'status', sortBy: 'bogus', direction: 'asc', showMetadata: false, showProvider: false, showAutomations: 'yes' })))
-      .toEqual({ ...DEFAULT_AGENT_PANEL_VIEW, groupBy: 'status', direction: 'asc', showMetadata: false, showProvider: false });
+    expect(parseAgentPanelView(JSON.stringify({ groupBy: 'project', sortBy: 'bogus', direction: 'asc', showMetadata: false, showProvider: false, showAutomations: 'yes' })))
+      .toEqual({ ...DEFAULT_AGENT_PANEL_VIEW, groupBy: 'project', direction: 'asc', showMetadata: false, showProvider: false });
   });
 
   it('only lets cards be dragged into order where that order is what the panel shows', () => {
-    expect(canReorder(DEFAULT_AGENT_PANEL_VIEW)).toBe(true);
-    expect(canReorder({ ...DEFAULT_AGENT_PANEL_VIEW, sortBy: 'name' })).toBe(false);
-    expect(canReorder({ ...DEFAULT_AGENT_PANEL_VIEW, groupBy: 'status' })).toBe(false);
+    const byProject = { ...DEFAULT_AGENT_PANEL_VIEW, groupBy: 'project' as const };
+    expect(canReorder(byProject)).toBe(true);
+    expect(canReorder({ ...byProject, sortBy: 'name' })).toBe(false);
+    expect(canReorder(DEFAULT_AGENT_PANEL_VIEW)).toBe(false);
   });
 
   it('starts names A to Z and dates newest first when a sort is picked', () => {
@@ -51,9 +52,11 @@ describe('agent panel view', () => {
     expect(titles('name', 'desc')).toEqual(['gamma 10', 'gamma 9', 'beta', 'Alpha']);
   });
 
-  it('files a card under its status, idle when nothing is running', () => {
+  it('files a card under its activity, done when nothing is running', () => {
     expect(statusGroupOf('input')).toBe('status:input');
-    expect(statusGroupOf(undefined)).toBe('status:idle');
+    expect(statusGroupOf('done')).toBe('status:done');
+    expect(statusGroupOf('idle')).toBe('status:done');
+    expect(statusGroupOf(undefined)).toBe('status:done');
   });
 
   it('files a time under calendar-day date groups', () => {

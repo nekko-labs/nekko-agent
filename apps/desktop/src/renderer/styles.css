@@ -2606,12 +2606,12 @@
 .composer-summary-meta { color: var(--ink-faint); font-weight: 400; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (prefers-reduced-motion: reduce) { .pane-flash { animation: none; } }
 
-/* The PR deck rises from the footer divider: a tab whose open bottom edge sits
-   on the strip's top border (the -1px margin covers that line), its toggle on
-   the divider and its cards growing upward. With no strip below (the wall
-   composer) it closes into a full rounded card. */
-.pr-action-deck { position: relative; z-index: 1; flex-shrink: 0; display: flex; flex-direction: column; width: 90%; margin: 6px auto -1px; padding: 0 8px; border: 1px solid var(--line); border-bottom: 0; border-radius: 10px 10px 0 0; background: var(--surface); box-shadow: 0 -3px 14px rgb(0 0 0 / 6%); }
-.pr-action-deck[data-floating=true] { margin-bottom: 6px; border-bottom: 1px solid var(--line); border-radius: 10px; }
+/* The PR deck sits between the composer and the footer controls on the agent
+   window's own surface: no border or shadow, its toggle a slim row and its
+   cards growing upward. With no strip below (the wall composer) it closes into
+   a full rounded card. */
+.pr-action-deck { position: relative; z-index: 1; flex-shrink: 0; display: flex; flex-direction: column; width: 90%; margin: 2px auto 0; padding: 0 8px; border-radius: 10px; }
+.pr-action-deck[data-floating=true] { margin-bottom: 6px; border: 1px solid var(--line); background: var(--surface); box-shadow: 0 -3px 14px rgb(0 0 0 / 6%); }
 .pr-deck-toggle { display: flex; align-items: center; gap: 7px; width: 100%; min-height: 32px; padding: 5px 3px; font-size: 11px; color: var(--ink-soft); border-radius: 8px; }
 .pr-deck-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .pr-deck-chevron { transition: transform 220ms ease; }
