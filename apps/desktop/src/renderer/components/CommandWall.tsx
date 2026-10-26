@@ -742,12 +742,12 @@ export function CommandWall({
           ringColor={flashing ? 'color-mix(in srgb, var(--accent) 60%, var(--line))' : undefined}
           stripStyle={needsYou ? { background: 'color-mix(in srgb, var(--warning) 10%, transparent)' } : undefined}
           addable={WALL_ADDABLE}
-          closeTitle={openable ? 'Remove from the wall (the chat stays)' : 'Remove from the wall'}
+          closeTitle={pane.kind === 'chat' ? 'Stop agent and watchers, then remove from the wall (chat is kept)' : 'Remove from the wall'}
           onPickUp={pickable ? (e) => pickUp(e, pane, title) : undefined}
           canSplit={(dir) => wallArrangement(state.layout) === 'grid' && !inDeck && canSplit(state.root, pane.id, dir)}
           onAddWindow={() => live.current.setState((s) => s.layout.mode === 'focus' ? { ...s, layout: { ...s.layout, mode: 'grid' } } : s)}
           onSplit={(dir, kind) => { void live.current.addWindow(kind, { paneId: pane.id, dir }); }}
-          onClose={() => live.current.update((root) => removePane(root, pane.id))}
+          onClose={() => { void closeWallAgent(pane, () => live.current.update((root) => removePane(root, pane.id))); }}
           focusAction={openable && <button type="button" className="command-wall-action agent-zen-action" title="Zen: focus this window (Ctrl+Shift+1)" aria-label={`Focus ${title}`} onClick={() => live.current.focusWindow(pane)}><TargetIcon className="h-5 w-5" /></button>}
           onMinimize={() => live.current.update((root) => removePane(root, pane.id))}
           onFocus={() => { if (pane.kind === 'chat') live.current.onSelect(pane.refId); }}
@@ -843,4 +843,14 @@ export function CommandWall({
       </div>
     </div>
   );
+}
+
+/** Closing stops work before removing its view; minimizing only hides it. */
+export async function closeWallAgent(pane: WbPane, remove: () => void): Promise<void> {
+  try {
+    if (pane.kind === 'chat') await window.nekko.abortChat(pane.refId);
+    remove();
+  } catch (error) {
+    useStore.getState().pushToast('error', `Could not stop agent and watchers: ${String(error)}`);
+  }
 }

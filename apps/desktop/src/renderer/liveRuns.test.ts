@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentEvent } from '@nekko-agent/shared';
-import { LIVE_STREAM_MAX, __resetLiveRuns, applyEvent, clampLive, clearLiveRun, getLiveRun, runningSessionIds, takeFinishedRun } from './liveRuns.js';
+import { LIVE_STREAM_MAX, __resetLiveRuns, applyEvent, beginResumedRun, applyReplay, clampLive, clearLiveRun, getLiveRun, runningSessionIds, takeFinishedRun } from './liveRuns.js';
 
 // The registry repaints on an animation frame; the folding itself is synchronous
 // and is what these tests are about, so the scheduler is stubbed out.
@@ -30,6 +30,18 @@ describe('liveRuns', () => {
     expect(blocks[2]).toEqual({ kind: 'text', text: 'I found the problem. Updating the composer.' });
     applyEvent({ type: 'done', sessionId: 'a', messageId: 'reply' });
     expect(takeFinishedRun('a')!.blocks).toEqual(blocks);
+  });
+
+  it('retains a resume boundary through events, replay and the persisted handoff', () => {
+    beginResumedRun('a', 'saved-tool-result');
+    expect(getLiveRun('a')?.transcriptThroughId).toBe('saved-tool-result');
+    applyEvent(text('a', 'Continuing'));
+    applyReplay({ sessionId: 'a', events: [{ type: 'text', delta: 'Continuing' }] } as any);
+    expect(getLiveRun('a')?.transcriptThroughId).toBe('saved-tool-result');
+    applyEvent({ type: 'done', sessionId: 'a', messageId: 'reply' });
+    expect(takeFinishedRun('a')?.transcriptThroughId).toBe('saved-tool-result');
+    applyEvent(text('a', 'Next turn'));
+    expect(getLiveRun('a')?.transcriptThroughId).toBeUndefined();
   });
 
   it('times each tool call from its call to its result', () => {
