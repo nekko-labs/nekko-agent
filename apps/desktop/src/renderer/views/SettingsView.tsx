@@ -25,6 +25,7 @@ import { SettingsSearch } from '../components/SettingsSearch.js';
 import { ProjectManagementToggles, PullRequestToggles } from '../components/WorkTrackingToggles.js';
 import { WallLayoutSettings } from './WallLayoutSettings.js';
 import { DesktopBehaviorSection, FunSection } from './DesktopBehaviorSections.js';
+import { SkillsColorIcon, ConnectorsColorIcon } from '../navIcons.js';
 import { HistorySettings } from '../components/HistorySettings.js';
 import { StyleSection } from './StyleSection.js';
 
@@ -143,6 +144,13 @@ export function SettingsView() {
       <div ref={pageRef} className="mx-auto max-w-5xl px-8 py-8">
         {settingsError && <ServiceLoadState label="settings" error={settingsError} retry={reload} />}
         {!hasAppChrome && <h1 className="view-title">{tr('settings.title')}</h1>}
+        <div aria-label="Skills and connectors" className="mb-7 flex flex-wrap gap-3">
+          {([{ view: 'skills', label: tr('nav.skills'), Icon: SkillsColorIcon }, { view: 'connectors', label: tr('nav.connectors'), Icon: ConnectorsColorIcon }] as const).map(({ view, label, Icon }) => (
+            <button key={view} type="button" onClick={() => useStore.getState().setView(view)} className="flex min-h-16 flex-1 items-center gap-3 rounded-2xl border border-line bg-surface px-5 py-4 text-left text-[16px] font-semibold hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
+              <Icon className="h-7 w-7 shrink-0" />{label}<span aria-hidden="true" className="ml-auto">↗</span>
+            </button>
+          ))}
+        </div>
         <div className="flex flex-col gap-6 md:flex-row md:gap-8">
           <nav aria-label="Settings sections" className="settings-nav" data-settings-search>
             {SETTINGS_GROUPS.map((g) => (
@@ -159,6 +167,16 @@ export function SettingsView() {
           </nav>
           <div className="min-w-0 max-w-3xl flex-1">
             <SettingsGroup id="general">
+              <section className="card mt-6 p-5">
+                <h2 className="font-semibold">View settings</h2>
+                <p className="mt-1 text-[12px] text-ink-faint">Optional sidebar shortcuts. Skills and Connectors are always available at the top of Settings.</p>
+                {(['skills', 'connectors'] as const).map((view) => (
+                  <div key={view} className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
+                    <span className="text-[13px]">Show {tr(`nav.${view}`)} in sidebar</span>
+                    <Toggle aria-label={`Show ${view === 'skills' ? 'Skills' : 'Connectors'} in sidebar`} on={settings.sidebarViews?.[view] === true} onChange={(v) => update({ sidebarViews: { ...settings.sidebarViews, [view]: v } })} />
+                  </div>
+                ))}
+              </section>
               {/* Appearance */}
               <section className="card mt-6 p-5">
                 <div className="flex items-center gap-2"><SunIcon className="h-4 w-4" /><h2 className="font-semibold">{tr('settings.appearance')}</h2><SettingsSearch root={pageRef} /></div>

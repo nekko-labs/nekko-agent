@@ -235,6 +235,8 @@ export interface AppSettings {
   pullRequests?: { linkIssue?: boolean; includePrompt?: boolean; includeScreenshots?: boolean };
   theme: ThemeMode;
   navOrder?: string[];
+  /** Optional sidebar shortcuts. Both remain available from Settings. */
+  sidebarViews?: { skills?: boolean; connectors?: boolean };
   accent: string;
   /** Secondary accent used for the brand gradient and border beam. */
   accent2?: string;
