@@ -173,9 +173,15 @@ export function App() {
       if (SHORTCUTS.palette.matches(e)) {
         e.preventDefault();
         useStore.getState().setPaletteOpen(!useStore.getState().paletteOpen);
+      } else if (SHORTCUTS.searchChats.matches(e)) {
+        e.preventDefault();
+        useStore.setState((s) => ({ view: 'command', chatFinderOpen: s.view !== 'command' || !s.chatFinderOpen }));
       } else if (SHORTCUTS.newAgent.matches(e)) {
         e.preventDefault();
         useStore.getState().newChat();
+      } else if (SHORTCUTS.newMedia.matches(e)) {
+        e.preventDefault();
+        void useStore.getState().newImageChat().catch((error: Error) => useStore.getState().pushToast('error', error.message));
       } else if (SHORTCUTS.newTerminal.matches(e)) {
         e.preventDefault();
         useStore.getState().newTerminal();

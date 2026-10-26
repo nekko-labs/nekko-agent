@@ -285,9 +285,10 @@ interface UiState {
   pushToast: (kind: Toast['kind'], message: string) => void;
   dismissToast: (id: string) => void;
   setPaletteOpen: (open: boolean) => void;
+  chatFinderOpen: boolean;
   newChat: (workspaceId?: string) => Promise<void>;
   /** A new Image chat on this image model, starting from its family's tuned steps and CFG. */
-  newImageChat: (modelId: string, defaults?: { steps: number; cfgScale: number }) => Promise<void>;
+  newImageChat: (modelId?: string, defaults?: { steps: number; cfgScale: number }) => Promise<void>;
   setMascotMood: (m: MascotMood) => void;
   setView: (v: View) => void;
   setOnboardingOpen: (open: boolean) => void;
@@ -669,6 +670,7 @@ export const useStore = create<UiState>((set, get) => ({
   openLocalModelSettings: (modelId) =>
     set((s) => (viewEnabled('modelserver', s.settings) ? { view: 'modelserver', localModelFocus: modelId } : { view: 'command' })),
   clearLocalModelFocus: () => set({ localModelFocus: null }),
+  chatFinderOpen: false,
   newChat: async (workspaceId) => {
     await get().refreshProviders();
     if (needsProviderSetup(get().providers, get().activeModelId ?? get().models[0]?.id)) {
@@ -693,7 +695,7 @@ export const useStore = create<UiState>((set, get) => ({
     const created = await window.nekko.createSession(defaultChatFolder(get()));
     const s = (await window.nekko.setSessionOptions(created.id, {
       chatType: 'image',
-      imageParams: { ...DEFAULT_IMAGE_CHAT_PARAMS, modelId, ...(defaults ?? {}) },
+      imageParams: { ...DEFAULT_IMAGE_CHAT_PARAMS, ...(modelId ? { modelId } : {}), ...(defaults ?? {}) },
     })) ?? created;
     putCachedSession(s);
     addCreatedSession(s);
