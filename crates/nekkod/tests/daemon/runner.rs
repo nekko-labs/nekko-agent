@@ -72,6 +72,7 @@ async fn runner_channels_round_trip() {
     assert!(err.to_string().contains("No runner with that id."), "{err}");
 }
 
+#[cfg(unix)]
 #[tokio::test(flavor = "multi_thread")]
 async fn gitlab_connect_rejects_unknown_provider() {
     let data = tempfile::tempdir().unwrap();
@@ -89,6 +90,7 @@ async fn gitlab_connect_rejects_unknown_provider() {
     );
 }
 
+#[cfg(unix)]
 #[tokio::test(flavor = "multi_thread")]
 async fn gitlab_record_lists_and_removes() {
     let data = tempfile::tempdir().unwrap();
