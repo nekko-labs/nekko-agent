@@ -36,6 +36,8 @@ use tokio::task::JoinHandle;
 
 const GUEST_MAC: EthernetAddress = EthernetAddress([0x02, 0, 0, 0, 0, 0x02]);
 const PUBLIC: Ipv4Addr = Ipv4Addr::new(93, 184, 216, 34);
+/// A public resolver address; the test connector maps it to a local fake.
+const RESOLVER: Ipv4Addr = Ipv4Addr::new(9, 9, 9, 9);
 
 #[derive(Clone, Default)]
 struct TestConnector {
@@ -141,7 +143,23 @@ async fn udp_echo() -> SocketAddr {
 
 /// A DNS upstream answering `ans:` + query + `tail`.
 async fn fake_dns(tail: &'static [u8]) -> SocketAddr {
-    let s = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+    fake_dns_on(UdpSocket::bind("127.0.0.1:0").await.unwrap(), tail)
+}
+
+/// A fake DNS upstream live on the same port number over UDP and TCP. TCP is bound first on
+/// port 0 and UDP follows on that port; a collision on either side retries with a fresh port.
+async fn fake_dns_dual(tail: &'static [u8]) -> (SocketAddr, TcpListener) {
+    for _ in 0..20 {
+        let tcp = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = tcp.local_addr().unwrap();
+        if let Ok(udp) = UdpSocket::bind(addr).await {
+            return (fake_dns_on(udp, tail), tcp);
+        }
+    }
+    panic!("no port free on both UDP and TCP");
+}
+
+fn fake_dns_on(s: UdpSocket, tail: &'static [u8]) -> SocketAddr {
     let addr = s.local_addr().unwrap();
     tokio::spawn(async move {
         let mut buf = [0u8; 4096];
@@ -328,8 +346,8 @@ async fn dhcp_offers_the_guest_address_and_gateway() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn dns_query_is_forwarded_and_answered() {
-    let up = fake_dns(b"").await;
-    let mut r = start(HostNets::default(), 16, vec![up], TestConnector::new([(up, up)]), true);
+    let (up, local) = (sa(RESOLVER, 53), fake_dns(b"").await);
+    let mut r = start(HostNets::default(), 16, vec![up], TestConnector::new([(up, local)]), true);
     let h = r.guest.udp(5353);
     r.guest.udp_sock(h).send_slice(b"query1", ep(GATEWAY, 53)).unwrap();
     let (data, from) = r.guest.udp_recv(h, 5).await.expect("no DNS answer");
@@ -337,6 +355,29 @@ async fn dns_query_is_forwarded_and_answered() {
     assert_eq!(from, ep(GATEWAY, 53));
     // Through the connector, so the upstream socket is bound to the egress interface too.
     assert_eq!(r.conn.calls(), vec![("udp", up)]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn dns_upstream_that_turns_on_link_is_refused() {
+    // A live TCP server on the upstream too, so a refusal is not a timeout.
+    let (local, _tcp_up) = fake_dns_dual(b"").await;
+    let up = sa(RESOLVER, 53);
+    let host = Arc::new(RwLock::new(HostNets::default()));
+    let conn = TestConnector::new([(up, local)]);
+    let (g, n) = UnixDatagram::pair().unwrap();
+    let cfg = NetConfig { dns_upstream: vec![up], ..NetConfig::default() };
+    let _nat = tokio::spawn(serve_with(n, host.clone(), cfg, conn.clone()));
+    let mut guest = Guest::new(g, true);
+    let q = guest.udp(5353);
+    guest.udp_sock(q).send_slice(b"before", ep(GATEWAY, 53)).unwrap();
+    assert!(guest.udp_recv(q, 5).await.is_some(), "public upstream answers");
+    // The Mac joins a network whose prefix holds the resolver.
+    *host.write().unwrap() = HostNets::new(vec![], vec![(IpAddr::V4(RESOLVER), 24)]);
+    guest.udp_sock(q).send_slice(b"after", ep(GATEWAY, 53)).unwrap();
+    assert!(guest.udp_recv(q, 1).await.is_none(), "DNS reached an on-link resolver");
+    let h = guest.connect(GATEWAY, 53, 42003);
+    assert!(guest.refused(h).await, "DNS over TCP reached an on-link resolver");
+    assert_eq!(conn.calls(), vec![("udp", up)], "nothing dialed after the refresh");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -387,8 +428,8 @@ async fn tcp_to_public_address_is_forwarded() {
 #[tokio::test(flavor = "multi_thread")]
 async fn net_refuses_private_after_dns() {
     let server = pong_server().await;
-    let up = fake_dns(&[192, 168, 1, 1]).await;
-    let conn = TestConnector::new([(sa(Ipv4Addr::new(192, 168, 1, 1), 80), server), (up, up)]);
+    let (up, local) = (sa(RESOLVER, 53), fake_dns(&[192, 168, 1, 1]).await);
+    let conn = TestConnector::new([(sa(Ipv4Addr::new(192, 168, 1, 1), 80), server), (up, local)]);
     let mut r = start(HostNets::default(), 16, vec![up], conn, true);
     let q = r.guest.udp(5353);
     r.guest.udp_sock(q).send_slice(b"router.lan", ep(GATEWAY, 53)).unwrap();
@@ -453,7 +494,7 @@ async fn udp_to_private_is_dropped() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn gateway_ports_other_than_dns_are_reset() {
-    let up = fake_dns(b"").await;
+    let up = sa(RESOLVER, 53);
     let mut r = start(HostNets::default(), 16, vec![up], TestConnector::default(), true);
     for (i, port) in [22u16, 80, 67, 8080].into_iter().enumerate() {
         let h = r.guest.connect(GATEWAY, port, 41000 + i as u16);
@@ -832,26 +873,58 @@ async fn host_sockets_are_bound_to_the_egress_interface_ipv6() {
     assert_eq!(&buf[..n], b"hi");
 }
 
-/// A live server behind every refused address, so a refusal is not a timeout.
+/// Direct behind a recording map: public-looking addresses are handed to
+/// Direct as their live local stand-ins, so only Direct's refusal keeps the
+/// guest from them, and the record shows every flow went through the connector.
+struct DirectVia {
+    inner: Direct,
+    map: HashMap<SocketAddr, SocketAddr>,
+    calls: Arc<Mutex<Vec<(&'static str, SocketAddr)>>>,
+}
+
+impl DirectVia {
+    fn target(&self, kind: &'static str, dst: SocketAddr) -> SocketAddr {
+        self.calls.lock().unwrap().push((kind, dst));
+        self.map.get(&dst).copied().unwrap_or(dst)
+    }
+}
+
+impl Connector for DirectVia {
+    async fn tcp(&self, dst: SocketAddr) -> io::Result<TcpStream> {
+        self.inner.tcp(self.target("tcp", dst)).await
+    }
+    async fn udp(&self, dst: SocketAddr) -> io::Result<UdpSocket> {
+        self.inner.udp(self.target("udp", dst)).await
+    }
+}
+
+/// A live server behind every refused address, so a refusal is not a timeout
+/// and a leak would be answered.
 async fn assert_direct_refuses(d: Direct) {
     let (tcp_dst, udp_dst) = (pong_server().await, udp_echo().await);
     assert_eq!(d.tcp(tcp_dst).await.unwrap_err().kind(), io::ErrorKind::PermissionDenied);
     assert_eq!(d.udp(udp_dst).await.unwrap_err().kind(), io::ErrorKind::PermissionDenied);
-    // End to end: the guest's TCP gets RST and its DNS goes unanswered.
-    let up = fake_dns(b"").await;
+    // End to end: a public upstream (so the policy allows it), live locally on UDP and TCP.
+    let (up, web) = (sa(RESOLVER, 53), sa(PUBLIC, 443));
+    let (local_dns, _tcp_up) = fake_dns_dual(b"").await;
+    let calls = Arc::new(Mutex::new(vec![]));
+    let via = DirectVia { inner: d, map: [(up, local_dns), (web, pong_server().await)].into(), calls: calls.clone() };
     let (g, n) = UnixDatagram::pair().unwrap();
     let cfg = NetConfig { dns_upstream: vec![up], ..NetConfig::default() };
-    let _nat = tokio::spawn(serve_with(n, Arc::new(RwLock::new(HostNets::default())), cfg, d));
+    let _nat = tokio::spawn(serve_with(n, Arc::new(RwLock::new(HostNets::default())), cfg, via));
     let mut guest = Guest::new(g, true);
     let h = guest.connect(PUBLIC, 443, 42001);
     assert!(guest.refused(h).await, "a guest flow left without an egress interface");
     let q = guest.udp(5353);
     guest.udp_sock(q).send_slice(b"query", ep(GATEWAY, 53)).unwrap();
     assert!(guest.udp_recv(q, 1).await.is_none(), "DNS left without an egress interface");
-    // 53/tcp too, with a live TCP server on the upstream's address.
-    let _tcp_up = TcpListener::bind(up).await.unwrap();
     let h = guest.connect(GATEWAY, 53, 42002);
     assert!(guest.refused(h).await, "DNS over TCP left without an egress interface");
+    assert_eq!(
+        *calls.lock().unwrap(),
+        [("tcp", web), ("udp", up), ("tcp", up)],
+        "every flow goes through the connector"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]

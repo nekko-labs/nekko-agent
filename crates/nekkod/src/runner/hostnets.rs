@@ -2,16 +2,24 @@
 //! ([`nekko_runner::guest_may_connect`]): every interface address and every
 //! on-link prefix, read with `getifaddrs`. A stale list lets a guest reach the
 //! Mac's new addresses, so the supervisor keeps it fresh with [`spawn_refresh`].
+//! The router's public address is not on any interface; the supervisor learns
+//! it from the router (`lan::discover_wan`) and passes it in as `extra`.
 
 use nekko_runner::HostNets;
 use std::io;
+use std::net::IpAddr;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 /// Every address on every interface, and its prefix.
 pub fn try_current() -> io::Result<HostNets> {
+    try_current_with(&[])
+}
+
+/// [`try_current`] plus `extra` addresses (the router's WAN address).
+pub fn try_current_with(extra: &[IpAddr]) -> io::Result<HostNets> {
     let ifs = if_addrs::get_if_addrs()?;
-    let addrs = ifs.iter().map(|i| i.ip()).collect();
+    let addrs = ifs.iter().map(|i| i.ip()).chain(extra.iter().copied()).collect();
     let prefixes = ifs
         .iter()
         .map(|i| match &i.addr {
@@ -22,13 +30,19 @@ pub fn try_current() -> io::Result<HostNets> {
     Ok(HostNets::new(addrs, prefixes))
 }
 
-/// Re-reads the host's networks every `every` (5 s in P1) for as long as the runtime runs.
-pub fn spawn_refresh(host: Arc<RwLock<HostNets>>, every: Duration) -> tokio::task::JoinHandle<()> {
+/// Re-reads the host's networks, plus `extra`, every `every` (5 s in P1) for
+/// as long as the runtime runs.
+pub fn spawn_refresh(
+    host: Arc<RwLock<HostNets>>,
+    every: Duration,
+    extra: Arc<RwLock<Vec<IpAddr>>>,
+) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut tick = tokio::time::interval(every);
         loop {
             tick.tick().await;
-            refresh(&host, try_current);
+            let extra = extra.read().map(|e| e.clone()).unwrap_or_default();
+            refresh(&host, || try_current_with(&extra));
         }
     })
 }
@@ -47,7 +61,7 @@ fn refresh(host: &RwLock<HostNets>, read: impl FnOnce() -> io::Result<HostNets>)
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::net::{IpAddr, Ipv4Addr};
+    use std::net::Ipv4Addr;
 
     #[test]
     fn try_current_includes_loopback() {
@@ -62,5 +76,15 @@ mod tests {
         assert!(host.read().unwrap().contains(mac));
         refresh(&host, || Ok(HostNets::default()));
         assert!(!host.read().unwrap().contains(mac));
+    }
+
+    #[test]
+    fn refresh_adds_the_wan_addresses() {
+        let wan = IpAddr::V4(Ipv4Addr::new(203, 0, 113, 7));
+        let host = RwLock::new(HostNets::default());
+        refresh(&host, || try_current_with(&[wan]));
+        assert!(host.read().unwrap().contains(wan));
+        refresh(&host, || Err(io::Error::other("getifaddrs failed")));
+        assert!(host.read().unwrap().contains(wan));
     }
 }

@@ -12,6 +12,8 @@
 //   count-vms                                  {"count":N}
 //   egress                                     {"physical":{"name","index"}|null,"vpnCarriesDefault",
 //                                               "expensive","constrained"} now and on every change
+//   host                                       {"thermal":"nominal|fair|serious|critical","lowPowerMode",
+//                                               "memoryPressure":"normal|warning|critical"} now and on every change
 //
 // A bundle is a directory with config.json (keys hardwareModel and ecid as base64
 // of the framework's data representations, plus macAddress), disk.img and
@@ -53,11 +55,14 @@ func clone() -> Never {
     if let missing = names.first(where: { !fm.fileExists(atPath: "\(from)/\($0)") }) {
         emit(["ok": false, "error": "\(from) is not a VM bundle: no \(missing)"]); exit(1)
     }
-    if fm.fileExists(atPath: to) {
-        emit(["ok": false, "error": "\(to) already exists"]); exit(1)
+    // mkdir is the existence check: no gap between checking and creating, so
+    // the catch below only ever removes a folder this run created.
+    if mkdir(to, 0o755) != 0 {
+        let e = errno
+        emit(["ok": false, "error": e == EEXIST ? "\(to) already exists" : "cannot create \(to): \(String(cString: strerror(e)))"])
+        exit(1)
     }
     do {
-        try fm.createDirectory(atPath: to, withIntermediateDirectories: false)
         for name in ["disk.img", "nvram.bin"] where clonefile("\(from)/\(name)", "\(to)/\(name)", 0) != 0 {
             throw Failure(description: "clonefile \(name): \(String(cString: strerror(errno))) (the clone must be on the same APFS volume)")
         }
@@ -132,6 +137,64 @@ func egress() -> Never {
     watch.setEventHandler { if getppid() != parent { exit(0) } }
     watch.resume()
     withExtendedLifetime((physical, all, watch)) { dispatchMain() }
+}
+
+// MARK: host
+
+/// Streams the Mac's thermal state, Low Power Mode and memory pressure for the
+/// runner gates: ProcessInfo and its change notifications, a memory pressure
+/// dispatch source for changes, and kern.memorystatus_vm_pressure_level
+/// (1 normal, 2 warning, 4 critical) for the current level. Each is also
+/// re-read every second, so a missed notification costs at most a second.
+/// Runs until nekkod goes away.
+func host() -> Never {
+    let queue = DispatchQueue(label: "host")
+    var last = ""
+    func pressure() -> String {
+        var level: Int32 = 0
+        var size = MemoryLayout<Int32>.size
+        // Unreadable or unknown: exit, so nekkod treats the host state as unknown (holds new VMs only).
+        guard sysctlbyname("kern.memorystatus_vm_pressure_level", &level, &size, nil, 0) == 0 else { exit(1) }
+        switch level {
+        case 1: return "normal"
+        case 2: return "warning"
+        case 4: return "critical"
+        default: exit(1)
+        }
+    }
+    func report() {
+        let thermal: String
+        switch ProcessInfo.processInfo.thermalState {
+        case .nominal: thermal = "nominal"
+        case .fair: thermal = "fair"
+        case .serious: thermal = "serious"
+        case .critical: thermal = "critical"
+        // Unknown: exit, so nekkod treats the host state as unknown (holds new VMs only).
+        @unknown default: exit(1)
+        }
+        let pairs: KeyValuePairs<String, Any> = [
+            "thermal": thermal,
+            "lowPowerMode": ProcessInfo.processInfo.isLowPowerModeEnabled,
+            "memoryPressure": pressure(),
+        ]
+        let line = pairs.map { "\($0.key)=\($0.value)" }.joined()
+        if line != last { last = line; emit(pairs) }
+    }
+    let ops = OperationQueue()
+    ops.underlyingQueue = queue
+    let names = [ProcessInfo.thermalStateDidChangeNotification, Notification.Name.NSProcessInfoPowerStateDidChange]
+    let observers = names.map { NotificationCenter.default.addObserver(forName: $0, object: nil, queue: ops) { _ in report() } }
+    let memory = DispatchSource.makeMemoryPressureSource(eventMask: [.normal, .warning, .critical], queue: queue)
+    memory.setEventHandler { report() }
+    memory.resume()
+    queue.async { report() }
+    // Reparented means nekkod is gone; nothing else would end this process.
+    let parent = getppid()
+    let watch = DispatchSource.makeTimerSource(queue: queue)
+    watch.schedule(deadline: .now() + 1, repeating: 1)
+    watch.setEventHandler { if getppid() != parent { exit(0) }; report() }
+    watch.resume()
+    withExtendedLifetime((observers, memory, watch)) { dispatchMain() }
 }
 
 // MARK: run
@@ -319,7 +382,8 @@ case "clone": clone()
 case "run": run()
 case "count-vms": countVms()
 case "egress": egress()
+case "host": host()
 default:
-    emit(["ok": false, "error": "usage: nekko-vm clone|run|count-vms|egress"])
+    emit(["ok": false, "error": "usage: nekko-vm clone|run|count-vms|egress|host"])
     exit(1)
 }

@@ -38,7 +38,7 @@ use smoltcp::wire::{
 use std::collections::{HashMap, VecDeque};
 use std::future::Future;
 use std::io;
-use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -387,7 +387,7 @@ impl<C: Connector> Nat<C> {
     }
 
     /// Fails closed: a poisoned lock refuses everything.
-    fn allowed(&self, dst: Ipv4Addr) -> bool {
+    fn allowed(&self, dst: impl Into<IpAddr>) -> bool {
         self.host.read().map(|h| guest_may_connect(dst.into(), &h)).unwrap_or(false)
     }
 
@@ -454,7 +454,11 @@ impl<C: Connector> Nat<C> {
         let new_syn = tcp.control == smoltcp::wire::TcpControl::Syn && tcp.ack_number.is_none();
         if new_syn && tcp.dst_port != 0 && !self.flows.contains_key(&key) {
             if dst.ip() == &GATEWAY {
-                if let (53, Some(&up)) = (dst.port(), self.cfg.dns_upstream.first()) {
+                // The upstream is checked like any destination: DNS over TCP is a raw
+                // pipe, and a resolver can turn on-link when the Mac changes networks.
+                if let (53, Some(&up)) = (dst.port(), self.cfg.dns_upstream.first())
+                    && self.allowed(up.ip())
+                {
                     let c = self.connector.clone();
                     self.open_tcp(key, async move { c.tcp(up).await });
                 }
@@ -694,13 +698,13 @@ impl<C: Connector> Nat<C> {
             return;
         }
         let Ok(slot) = self.dns_slots.clone().try_acquire_owned() else { return };
-        let (query, upstream, back, wake, c) = (
-            query.to_vec(),
-            self.cfg.dns_upstream.clone(),
-            self.udp_back_tx.clone(),
-            self.wake.clone(),
-            self.connector.clone(),
-        );
+        let upstream: Vec<SocketAddr> =
+            self.cfg.dns_upstream.iter().copied().filter(|u| self.allowed(u.ip())).collect();
+        if upstream.is_empty() {
+            return;
+        }
+        let (query, upstream, back, wake, c) =
+            (query.to_vec(), upstream, self.udp_back_tx.clone(), self.wake.clone(), self.connector.clone());
         tokio::spawn(async move {
             let _slot = slot;
             let mut buf = vec![0u8; DNS_MAX];
