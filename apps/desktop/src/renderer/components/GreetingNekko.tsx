@@ -7,13 +7,13 @@ export function greetingGaze(dx: number, dy: number) {
   return { x: Math.round(dx * scale * 2 * 10) / 10, y: Math.round(dy * scale * 2 * 10) / 10 };
 }
 
-/** Paws rest on the real composer border; gaze follows its local text caret. */
+/** Decorative greeting cat; gaze follows the text caret in this composer section. */
 export function GreetingNekko() {
   const ref = useRef<SVGSVGElement>(null);
   const [look, setLook] = useState({ x: 0, y: 1 });
   useEffect(() => {
     const svg = ref.current;
-    const composer = svg?.closest('.composer');
+    const composer = svg?.closest('.composer-section');
     if (!svg || !composer) return;
     let frame = 0;
     const update = () => {

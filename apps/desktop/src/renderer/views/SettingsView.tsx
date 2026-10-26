@@ -25,6 +25,7 @@ import { SettingsSearch } from '../components/SettingsSearch.js';
 import { ProjectManagementToggles, PullRequestToggles } from '../components/WorkTrackingToggles.js';
 import { WallLayoutSettings } from './WallLayoutSettings.js';
 import { DesktopBehaviorSection, FunSection } from './DesktopBehaviorSections.js';
+import { HistorySettings } from '../components/HistorySettings.js';
 import { StyleSection } from './StyleSection.js';
 
 const SANDBOX_OPTS: Array<{ value: SandboxMode; label: string; desc: string }> = [
@@ -199,7 +200,7 @@ export function SettingsView() {
                 <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3">
                   <div className="min-w-0">
                     <label htmlFor="chat-pane-action" className="text-[13px]">Chat pane top-right action</label>
-                    <p className="text-[11px] text-ink-faint">The X completes a chat and keeps it under Completed for 60 days. Delete asks for confirmation unless you explicitly skip it. Close remains in the title-bar menu.</p>
+                    <p className="text-[11px] text-ink-faint">The X completes a chat and keeps it under Completed until you delete it. Delete asks for confirmation unless you explicitly skip it. Close remains in the title-bar menu.</p>
                   </div>
                   <select
                     id="chat-pane-action"
@@ -262,6 +263,7 @@ export function SettingsView() {
               <ErrorBoundary label="Customization"><CustomizationSection settings={settings} update={update} /></ErrorBoundary>
               <ErrorBoundary label="Voice settings"><VoiceSettings /></ErrorBoundary>
               <ErrorBoundary label="Notifications"><NotificationsSection settings={settings} update={update} /></ErrorBoundary>
+              <ErrorBoundary label="Chat history"><HistorySettings openSync={() => goTo('phone')} refreshSessions={() => useStore.getState().refreshSessions()} /></ErrorBoundary>
             </SettingsGroup>
             <SettingsGroup id="phone">
               {/* Remote access (relay) */}

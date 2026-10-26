@@ -42,6 +42,8 @@ Opening an agent composer puts the caret after any restored draft once a usable 
 
 ## Following tool activity
 
+The agent's plan sits on top of the message box as a card. Each step shows its title, one line of detail, and chips for what that step produced: the PRs the agent opened (with their CI status) and the files or previews it linked. Finished steps shrink to their title; hover the card to see their details. **Change plan** tells the agent what to do differently.
+
 Chat tool calls use icons for what the agent is doing: reading files, searching, editing, running checks, Git, web access or planning. Shell execution, including Python, uses the same terminal artwork as the current-work indicator. Transcript icons stay still; expand a tool row to read its output. Unknown tools keep the generic tool icon.
 
 ## Run it from source
@@ -131,7 +133,7 @@ The 2026-10-13 batch is implemented and unit/fixture interaction tested, not yet
 
 ### Create an agent, media session or terminal
 
-Hover anywhere on the left navigation panel to open it and see each destination's name. On macOS, **Nekko Agent → Settings…** (⌘,) opens Settings and **About Nekko Agent** shows the About page.
+Hover over the left navigation panel, including its curved top and bottom wings, to open it and see each destination's name. Keyboard focus opens the same panel; reduced motion disables its width and label transitions. On macOS, **Nekko Agent → Settings…** (⌘,) opens Settings and **About Nekko Agent** shows the About page.
 
 Hover over the sidebar **+** to choose **Agent**, **Create or Edit Photos and Videos** or **Terminal**. Moving away closes the menu after a short grace period. Terminal uses your default shell; choose its type in **Settings → Terminal → Default shell**, or leave **Auto-detect** selected. Create or Edit Photos and Videos opens an image session; video generation is not available.
 

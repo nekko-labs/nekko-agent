@@ -56,7 +56,7 @@ area: chat
   - on the desktop, delegations, watches and memory saves, which keep the rows they have today
 
   A failed call stays in its group, marks the group *1 failed*, and its own row is drawn in the failure colour. A group with a failure starts open, so the failure is not hidden after the turn ends.
-- **Reasoning and narration between calls** still fold into the activity group as today. A thought between two calls of the same purpose folds into their group; it does not break up a purpose group unless the purpose changes.
+- **Thoughts are visible inline in chat**, prefixed with the thought icon, during streaming and in saved conversations. They are not hidden inside collapsible tool rows. A thought splits the surrounding tool groups to preserve conversation order. This is a display-only projection of provider-supplied reasoning text; it does not create another persisted message, resend text to the model, or reveal private provider metadata. Narration remains ordinary chat text. Desktop and Local Web UI implemented; native phone changes are outside this update. Verification is tracked in issue #1138.
 - **All four surfaces get the same groups:** the desktop, the Local Web UI, the iPhone and Android. The phones use the same headlines and open to the existing rows. The iPhone's subagent group becomes the Delegate purpose, unchanged.
 
 ## Planned later (not in this change)
