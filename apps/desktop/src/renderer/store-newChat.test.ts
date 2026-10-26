@@ -93,3 +93,13 @@ it('explicit repository overrides active and saved default folders without chang
   expect(window.nekko.createSession).toHaveBeenCalledWith('b');
   expect(useStore.getState().activeProjectId).toBe('a');
 });
+
+
+it('creates an unconfigured media session without inventing a model id', async () => {
+  window.nekko = { createSession: vi.fn().mockResolvedValue(created), setSessionOptions: vi.fn().mockResolvedValue({ ...created, chatType: 'image' }) } as unknown as typeof window.nekko;
+  await useStore.getState().newImageChat();
+  expect(window.nekko.setSessionOptions).toHaveBeenCalledWith(created.id, expect.objectContaining({ chatType: 'image' }));
+  const options = vi.mocked(window.nekko.setSessionOptions).mock.calls[0][1];
+  expect(options.imageParams).not.toHaveProperty('modelId');
+  expect(useStore.getState().view).toBe('command');
+});

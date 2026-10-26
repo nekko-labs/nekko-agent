@@ -50,4 +50,4 @@ gh secret set IOS_DEV_CERT_P12 --repo nekko-labs/nekko-agent < <(base64 -i nekko
 read -rs "P?p12 password: " && gh secret set IOS_DEV_CERT_PASSWORD --repo nekko-labs/nekko-agent --body "$P" && unset P
 ```
 
-The certificate expires after a year; when it does, the archive fails on signing. Make a new one, re-set the two secrets, and revoke the old one. Any `Apple Development: Created via API` certificate on the account other than the CI one is an orphan from a past run (its key is gone) and is safe to revoke.
+The certificate expires after a year; when it does, the archive fails on signing. Make a new one, re-set the two secrets, and revoke the old one. The CI certificate is id `BJMUJ524N9` (created 2026-10-26, expires 2027-10-26; Apple names it `Apple Development: Created via API` too). Any other `Created via API` development certificate is an orphan from a past run (its key is gone) and is safe to revoke.
