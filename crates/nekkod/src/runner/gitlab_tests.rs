@@ -373,6 +373,16 @@ async fn group_queue_skips_a_project_it_cannot_read() {
 }
 
 #[tokio::test]
+async fn group_queue_fails_when_no_project_can_be_read() {
+    let t = rig(vec![(404, json!({})), (403, json!({}))]);
+    let mut r = group_rec(&["g/gone", "g/hidden"]);
+    if let Link::Gitlab(l) = &mut r.link {
+        l.protected_only = false;
+    }
+    assert_eq!(t.gl.queued(&r).await.unwrap_err(), ProviderError::Other("GitLab answered 403".into()));
+}
+
+#[tokio::test]
 async fn remove_tolerates_404() {
     let t = rig(vec![(404, json!({"message": "404 Not found"})), (204, Value::Null)]);
     t.gl.remove(&project_rec(), 77).await.unwrap();

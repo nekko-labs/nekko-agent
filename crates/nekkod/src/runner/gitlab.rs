@@ -260,13 +260,18 @@ impl<H: Http + 'static> Provider for GitLab<H> {
         let ours: Vec<&str> = tags.split(',').collect();
         let mut n = 0u32;
         let group = matches!(r.config.scope, Scope::Org { .. });
-        for project in projects(r, l) {
-            let path = format!("/projects/{}/jobs?scope[]=pending&per_page=100", enc(&project));
+        let list = projects(r, l);
+        let mut unread = 0;
+        let mut last = 0;
+        for project in &list {
+            let project = project.as_str();
+            let path = format!("/projects/{}/jobs?scope[]=pending&per_page=100", enc(project));
             let v = match self.call(r, "GET", &path, None).await? {
                 (s, v) if ok(s) => v,
                 // One project of a group gone or hidden: the others still count.
                 (s @ (403 | 404), _) if group => {
                     eprintln!("runner {}: cannot read the jobs of {project} (GitLab answered {s})", r.config.id);
+                    (unread, last) = (unread + 1, s);
                     continue;
                 }
                 (s, _) => return Err(refused(s)),
@@ -283,13 +288,17 @@ impl<H: Http + 'static> Provider for GitLab<H> {
                     let tag = job["tag"].as_bool() == Some(true);
                     if git_ref.is_empty()
                         || git_ref.starts_with("refs/merge-requests/")
-                        || !self.protected(r, &project, git_ref, tag).await?
+                        || !self.protected(r, project, git_ref, tag).await?
                     {
                         continue;
                     }
                 }
                 n = n.saturating_add(1);
             }
+        }
+        // Not one project readable: an error, not an empty queue.
+        if unread > 0 && unread == list.len() {
+            return Err(refused(last));
         }
         Ok(n)
     }

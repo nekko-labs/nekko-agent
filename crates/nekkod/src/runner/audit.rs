@@ -13,6 +13,8 @@ pub enum AuditResult {
     Stopped,
     Lost,
     FailedToStart,
+    /// A registration that could not be removed before its runner was forgotten: delete it by hand.
+    NotRemoved,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -37,7 +39,7 @@ pub struct Today {
 
 impl Today {
     pub fn add(&mut self, line: &AuditLine) {
-        if line.result != AuditResult::FailedToStart {
+        if !matches!(line.result, AuditResult::FailedToStart | AuditResult::NotRemoved) {
             self.jobs += 1;
             self.seconds += line.seconds;
         }

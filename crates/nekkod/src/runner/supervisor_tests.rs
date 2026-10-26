@@ -173,7 +173,8 @@ struct ProvState {
     queued: u32,
     mint: VecDeque<Result<Minted, ProviderError>>,
     rerun: VecDeque<Result<(), ProviderError>>,
-    remove: VecDeque<Result<(), ProviderError>>,
+    /// Scripted answers per runner id; any other remove works.
+    remove: std::collections::HashMap<u64, VecDeque<Result<(), ProviderError>>>,
     /// `None`: the runner's job while `status` is `Busy`, else none (as GitHub answers).
     job: Option<Result<Option<JobRef>, ProviderError>>,
     next_id: u64,
@@ -211,7 +212,7 @@ impl Provider for FakeProvider {
 
     async fn remove(&self, _: &RunnerRecord, runner_id: u64) -> Result<(), ProviderError> {
         self.1.lock().unwrap().push(format!("remove {runner_id}"));
-        self.0.lock().unwrap().remove.pop_front().unwrap_or(Ok(()))
+        self.0.lock().unwrap().remove.get_mut(&runner_id).and_then(|q| q.pop_front()).unwrap_or(Ok(()))
     }
 
     async fn remove_stale(&self, _: &RunnerRecord, prefix: &str) -> Result<u32, ProviderError> {
@@ -257,7 +258,7 @@ fn harness_with(records: Vec<RunnerRecord>, no_vm: Option<&str>) -> H {
             queued: 0,
             mint: VecDeque::new(),
             rerun: VecDeque::new(),
-            remove: VecDeque::new(),
+            remove: Default::default(),
             job: None,
             next_id: 99,
         })),
@@ -594,39 +595,93 @@ async fn lost_job_is_rerun_once() {
     assert_eq!(h.count("rerun"), 3);
 }
 
-#[tokio::test(start_paused = true)]
-async fn a_failed_remove_is_retried_until_it_works() {
-    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
-    let other = || Err(ProviderError::Other("GitLab answered 502".into()));
-    h.prov.0.lock().unwrap().remove = VecDeque::from([other(), other(), Ok(())]);
-    sleep_through_a_job(&mut h).await;
-    assert_eq!(h.count("remove 100"), 1);
-    h.tick_for(55).await;
-    assert_eq!(h.count("remove 100"), 1);
-    h.tick_for(5).await;
-    assert_eq!(h.count("remove 100"), 2);
-    h.tick_for(60).await;
-    assert_eq!(h.count("remove 100"), 3);
-    h.tick_for(600).await;
-    assert_eq!(h.count("remove 100"), 3, "cleared once it worked");
+fn fail_removes(h: &H, id: u64, errs: Vec<ProviderError>) {
+    h.prov.0.lock().unwrap().remove.insert(id, errs.into_iter().map(Err).collect());
+}
+
+fn down() -> ProviderError {
+    ProviderError::Other("GitLab answered 502".into())
+}
+
+/// Ticks of 5 s for `secs`, returning the seconds (from the start) at which `remove <id>` was called.
+async fn remove_times(h: &mut H, id: u64, secs: u64) -> Vec<u64> {
+    let tag = format!("remove {id}");
+    let mut at = Vec::new();
+    for t in (5..=secs).step_by(5) {
+        let before = h.count(&tag);
+        h.tick_for(5).await;
+        if h.count(&tag) > before {
+            at.push(t);
+        }
+    }
+    at
 }
 
 #[tokio::test(start_paused = true)]
-async fn a_removed_record_drains_its_failed_removes_before_it_is_handed_back() {
+async fn a_failed_remove_backs_off_doubling_to_ten_minutes() {
     let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
-    h.prov.0.lock().unwrap().remove = VecDeque::from([Err(ProviderError::Other("down".into()))]);
+    fail_removes(&h, 100, (0..7).map(|_| down()).collect());
     sleep_through_a_job(&mut h).await;
+    assert_eq!(h.count("remove 100"), 1);
+    let at = remove_times(&mut h, 100, 4000).await;
+    // 60, 120, 240, 480, then capped at 600; the 8th call works and nothing follows.
+    assert_eq!(at, vec![60, 180, 420, 900, 1500, 2100, 2700]);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_removed_record_is_kept_until_its_removals_work() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    fail_removes(&h, 100, vec![down(), down()]);
+    sleep_through_a_job(&mut h).await;
+    let swept = h.count("remove_stale");
     h.sup.set_records(vec![]);
     h.tick_for(5).await;
-    assert_eq!(h.count("remove 100"), 1);
+    assert!(h.sup.take_gone().await.is_empty(), "its runner is still registered");
+    assert_eq!(h.count("remove_stale"), swept);
+    h.tick_for(55).await;
+    assert_eq!(h.count("remove 100"), 2);
+    assert!(h.sup.take_gone().await.is_empty(), "the retry failed too");
+    h.tick_for(120).await;
+    assert_eq!(h.count("remove 100"), 3);
+    let gone = h.sup.take_gone().await;
+    assert_eq!(gone.iter().map(|r| r.config.id.as_str()).collect::<Vec<_>>(), ["r1"]);
+    assert_eq!(h.count("remove_stale"), swept + 1, "swept once its queue is empty");
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_removal_failing_for_an_hour_is_handed_back_with_an_audit_line() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    fail_removes(&h, 100, (0..50).map(|_| down()).collect());
+    sleep_through_a_job(&mut h).await;
+    h.sup.set_records(vec![]);
+    h.tick_for(3590).await;
+    assert!(h.sup.take_gone().await.is_empty());
+    h.tick_for(10).await;
     let gone = h.sup.take_gone().await;
     assert_eq!(gone.len(), 1);
-    let log = h.log.lock().unwrap().clone();
-    let retried = log.iter().rposition(|l| l == "remove 100").unwrap();
-    let swept = log.iter().rposition(|l| l.starts_with("remove_stale")).unwrap();
-    assert!(retried < swept && log.iter().filter(|l| *l == "remove 100").count() == 2);
-    h.tick_for(120).await;
-    assert_eq!(h.count("remove 100"), 2, "nothing left to retry");
+    let line = h.audit().into_iter().find(|l| l.result == AuditResult::NotRemoved).expect("an audit line");
+    assert_eq!(line.runner_id, "r1");
+    let why = line.reason.join(" ");
+    assert!(why.contains("runner 100") && why.contains("nekko-mac1-") && why.contains("acme"), "{why}");
+    h.tick_for(1200).await;
+    let calls = h.count("remove 100");
+    h.tick_for(1200).await;
+    assert_eq!(h.count("remove 100"), calls, "dropped after the hand-back");
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_auth_failure_holds_removals_until_reset() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    fail_removes(&h, 100, vec![ProviderError::Auth("GitLab refused this access token.".into())]);
+    sleep_through_a_job(&mut h).await;
+    assert_eq!(h.view().error.as_deref(), Some("GitLab refused this access token."));
+    h.tick_for(1800).await;
+    assert_eq!(h.count("remove 100"), 1, "held, not retried");
+    h.sup.reset("r1");
+    h.tick_for(5).await;
+    assert_eq!(h.count("remove 100"), 2, "re-armed by reconnect");
+    h.tick_for(1200).await;
+    assert_eq!(h.count("remove 100"), 2);
 }
 
 #[tokio::test(start_paused = true)]
@@ -1048,6 +1103,26 @@ async fn removing_keeps_the_key_until_the_runner_is_cleaned() {
     assert_eq!(vault.get("github-app-1").as_deref(), Some("pem"), "kept while its VM may still deregister");
     vm.finish(0, Stopped::Error("killed".into()));
     wait_for("the key forgotten", || vault.get("github-app-1").is_none()).await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_failed_removal_keeps_the_key_until_a_retry_works() {
+    let h = harness(vec![]);
+    h.vm.0.lock().unwrap().hold_done = true;
+    fail_removes(&h, 100, vec![down()]);
+    let sense = h.sense.clone();
+    let Rig { runners, vm, log, vault, dir: _dir } = runners_rig(h);
+    wait_for("a VM start", || log.lock().unwrap().iter().any(|l| l.starts_with("start"))).await;
+    assert_eq!(runners.route("runner:remove", &[json!("r1")]).await, Ok(Value::Null));
+    wait_for("the VM killed", || log.lock().unwrap().iter().any(|l| l.starts_with("kill"))).await;
+    vm.finish(0, Stopped::Error("killed".into()));
+    wait_for("the failed remove", || log.lock().unwrap().iter().any(|l| l == "remove 100")).await;
+    tokio::time::sleep(Duration::from_secs(30)).await;
+    assert_eq!(vault.get("github-app-1").as_deref(), Some("pem"), "kept while its registration remains");
+    // The rig's wall clock stands still; the retry is due a minute later on it.
+    sense.0.lock().unwrap().wall_secs += 60.0;
+    wait_for("the key forgotten", || vault.get("github-app-1").is_none()).await;
+    assert_eq!(log.lock().unwrap().iter().filter(|l| *l == "remove 100").count(), 2);
 }
 
 #[tokio::test(start_paused = true)]

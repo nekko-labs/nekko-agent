@@ -69,7 +69,7 @@ export interface HostView {
   networkId: string | null;
   networkTrusted: boolean;
 }
-export type AuditResult = 'finished' | 'stopped' | 'lost' | 'failedToStart';
+export type AuditResult = 'finished' | 'stopped' | 'lost' | 'failedToStart' | 'notRemoved';
 export interface AuditLine {
   ts: number;
   runnerId: string;
@@ -271,6 +271,8 @@ const auditWhy = (reasons: string[]) => reasons.map((r) => {
 /** One recent-jobs row. `rerun` is the runner's current `rerunLostJobs`; the line does not say whether that job was re-run. */
 export function auditText(l: AuditLine, rerun = true): string {
   if (l.result === 'failedToStart') return 'A VM failed to start';
+  // The reason names the registration and where it lives, for deleting it by hand.
+  if (l.result === 'notRemoved') return l.reason.join(', ') || 'A runner registration could not be removed; delete it by hand';
   const name = [l.workflow, l.job].filter(Boolean).join(' · ') || l.repo || 'A job';
   const why = l.reason.length ? ` (${auditWhy(l.reason)})` : '';
   const took = formatMinutes(l.seconds);

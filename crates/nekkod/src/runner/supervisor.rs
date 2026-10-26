@@ -35,6 +35,10 @@ pub const IDLE_READY_SECS: u64 = 180;
 pub const BOOT_TIMEOUT: Duration = Duration::from_secs(600);
 pub const RERUN_EVERY: Duration = Duration::from_secs(60);
 pub const RERUN_FOR: Duration = Duration::from_secs(30 * 60);
+/// A failed registration removal backs off from `RERUN_EVERY`, doubling up to this.
+pub const REMOVE_BACKOFF_MAX: Duration = Duration::from_secs(10 * 60);
+/// How long a removed record waits for its failed removals before it is handed back anyway.
+pub const REMOVE_FOR: Duration = Duration::from_secs(60 * 60);
 pub const MAX_START_FAILURES: u32 = 3;
 /// Bounds every provider call, so a slow CI service never holds up the next
 /// tick's hard limits for long.
@@ -276,6 +280,10 @@ struct Removal {
     runner_id: u64,
     name: String,
     next_at: f64,
+    /// Seconds to the next try after this one fails.
+    backoff: f64,
+    /// The credentials were refused: wait for a reconnect (`reset`).
+    held: bool,
 }
 
 pub struct Supervisor<S: Sense, V: Vm, P: Provider> {
@@ -299,7 +307,8 @@ pub struct Supervisor<S: Sense, V: Vm, P: Provider> {
     /// Records whose stale registrations were swept (once per id).
     swept: HashSet<String>,
     /// Removed records whose VMs are all cleaned, for [`Supervisor::take_gone`].
-    gone: Vec<RunnerRecord>,
+    /// With the wall clock at removal; held while its failed removals are retried.
+    gone: Vec<(RunnerRecord, f64)>,
     serial: u64,
     day_start: u64,
     today: HashMap<String, Today>,
@@ -464,30 +473,67 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
         let (gone, keep): (Vec<Runner>, Vec<Runner>) =
             std::mem::take(&mut self.runners).into_iter().partition(|r| r.dropped && r.slots.is_empty());
         self.runners = keep;
-        self.gone.extend(gone.into_iter().map(|r| r.record));
+        let now = self.wall_now();
+        self.gone.extend(gone.into_iter().map(|r| (r.record, now)));
     }
 
     /// Removed runners whose VMs are all cleaned, each handed back once after
     /// its offline registrations are swept; the caller may then forget its key.
     pub async fn take_gone(&mut self) -> Vec<RunnerRecord> {
-        let gone = std::mem::take(&mut self.gone);
+        let now = self.wall_now();
         let prefix = self.prefix();
-        for r in &gone {
-            // The last chance while the credentials exist; the stale sweep below catches what still fails.
-            let (mine, keep) = std::mem::take(&mut self.removals)
-                .into_iter()
-                .partition::<Vec<_>, _>(|q| q.record.config.id == r.config.id);
-            self.removals = keep;
-            for q in mine {
-                if let Err(e) = call(self.provider.remove(&q.record, q.runner_id)).await {
-                    eprintln!("runner {}: cannot remove runner {} ({}): {e}", r.config.id, q.runner_id, q.name);
-                }
+        let mut out = Vec::new();
+        for (r, since) in std::mem::take(&mut self.gone) {
+            let id = &r.config.id;
+            let pending = self.removals.iter().any(|q| &q.record.config.id == id);
+            // Its credentials are forgotten once handed back: until then the retries keep going.
+            if pending && now < since + REMOVE_FOR.as_secs_f64() {
+                self.gone.push((r, since));
+                continue;
             }
-            if let Err(e) = call(self.provider.remove_stale(r, &prefix)).await {
-                eprintln!("runner {}: cannot remove stale runners: {e}", r.config.id);
+            if pending {
+                self.abandon_removals(&r, now);
             }
+            if let Err(e) = call(self.provider.remove_stale(&r, &prefix)).await {
+                eprintln!("runner {id}: cannot remove stale runners: {e}");
+            }
+            out.push(r);
         }
-        gone
+        out
+    }
+
+    /// Never silent: each registration left behind is logged and audited for deletion by hand.
+    fn abandon_removals(&mut self, r: &RunnerRecord, now: f64) {
+        let (mine, keep) = std::mem::take(&mut self.removals)
+            .into_iter()
+            .partition::<Vec<_>, _>(|q| q.record.config.id == r.config.id);
+        self.removals = keep;
+        let place = match (&r.config.scope, r.gitlab()) {
+            (nekko_runner::Scope::Repo { owner, repo }, None) => format!("repo {owner}/{repo}"),
+            (nekko_runner::Scope::Org { org }, None) => format!("org {org}"),
+            (nekko_runner::Scope::Repo { owner, repo }, Some(g)) => {
+                format!("project {owner}/{repo} (id {}) at {}", g.namespace_id, g.base_url)
+            }
+            (nekko_runner::Scope::Org { org }, Some(g)) => {
+                format!("group {org} (id {}) at {}", g.namespace_id, g.base_url)
+            }
+        };
+        for q in mine {
+            let what =
+                format!("runner {} ({}) in {place} could not be removed; delete it by hand", q.runner_id, q.name);
+            eprintln!("runner {}: {what}", r.config.id);
+            let line = AuditLine {
+                ts: now as u64,
+                runner_id: r.config.id.clone(),
+                repo: None,
+                workflow: None,
+                job: None,
+                result: AuditResult::NotRemoved,
+                seconds: 0,
+                reason: vec![what],
+            };
+            self.audit(&line);
+        }
     }
 
     /// The owner reconnected: a sticky error is cleared even if the record did not change.
@@ -496,6 +542,16 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             r.error = None;
             r.start_failures = 0;
         }
+        for q in self.removals.iter_mut().filter(|q| q.record.config.id == id) {
+            q.held = false;
+            q.next_at = 0.0;
+            q.backoff = RERUN_EVERY.as_secs_f64();
+        }
+    }
+
+    /// The wall clock of the last tick (0 before the first).
+    fn wall_now(&self) -> f64 {
+        self.last_wall.map_or(0.0, |(w, _)| w)
     }
 
     pub fn views(&self) -> Vec<RunnerView> {
@@ -576,6 +632,8 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
         } else if !self.runners.is_empty() {
             self.run(&m, now).await;
         }
+        // Also with no runner left: a removed record's registrations still need removing.
+        self.retry_removals(now).await;
         // 7. Keep awake.
         let mut hold = false;
         for r in self.runners.iter_mut().filter(|r| !r.dropped) {
@@ -794,23 +852,37 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
         }
         self.retire();
         self.retry_reruns(now).await;
-        self.retry_removals(now).await;
     }
 
     /// Removes a registration; a failure is retried every `RERUN_EVERY` (a gone one is `Ok`).
     async fn remove(&mut self, record: RunnerRecord, runner_id: u64, name: String, now: f64) {
-        if let Err(e) = call(self.provider.remove(&record, runner_id)).await {
-            eprintln!("runner {}: cannot remove runner {runner_id} ({name}): {e}", record.config.id);
-            self.removals.push(Removal { record, runner_id, name, next_at: now + RERUN_EVERY.as_secs_f64() });
+        let q = Removal { record, runner_id, name, next_at: 0.0, backoff: RERUN_EVERY.as_secs_f64(), held: false };
+        self.try_removal(q, now).await;
+    }
+
+    /// One try; a failure is queued again: held on `Auth` (shown as the runner's
+    /// error) until `reset`, else after `backoff`, which doubles up to `REMOVE_BACKOFF_MAX`.
+    async fn try_removal(&mut self, mut q: Removal, now: f64) {
+        let Err(e) = call(self.provider.remove(&q.record, q.runner_id)).await else { return };
+        eprintln!("runner {}: cannot remove runner {} ({}): {e}", q.record.config.id, q.runner_id, q.name);
+        if let ProviderError::Auth(_) = &e {
+            q.held = true;
+            if let Some(r) = self.runners.iter_mut().find(|r| r.record.config.id == q.record.config.id) {
+                r.note(e);
+            }
+        } else {
+            q.next_at = now + q.backoff;
+            q.backoff = (q.backoff * 2.0).min(REMOVE_BACKOFF_MAX.as_secs_f64());
         }
+        self.removals.push(q);
     }
 
     async fn retry_removals(&mut self, now: f64) {
         for q in std::mem::take(&mut self.removals) {
-            if now < q.next_at {
+            if q.held || now < q.next_at {
                 self.removals.push(q);
             } else {
-                self.remove(q.record, q.runner_id, q.name, now).await;
+                self.try_removal(q, now).await;
             }
         }
     }
