@@ -25,7 +25,8 @@ app.whenReady().then(async () => {
   });
   win.on('focus', () => { globalThis.__nekkoE2E.tookFocus = true; });
   await win.loadFile(index, { query: { scenario } });
-  win.showInactive();
+  // macOS moves shown off-screen windows onto a display. Keep its fixture hidden.
+  if (process.platform !== 'darwin') win.showInactive();
 });
 
 app.on('window-all-closed', () => app.quit());

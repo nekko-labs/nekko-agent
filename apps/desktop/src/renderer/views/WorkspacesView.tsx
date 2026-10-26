@@ -304,7 +304,9 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   const finderOpen = useStore((s) => s.chatFinderOpen);
   const finderButtonRef = useRef<HTMLButtonElement>(null);
   const closeFinder = useCallback(() => useStore.setState({ chatFinderOpen: false }), []);
-  useEffect(() => { if (finderOpen) setMobileNav(true); }, [finderOpen]);
+  useEffect(() => {
+    if (finderOpen && window.matchMedia('(max-width: 767px)').matches) setMobileNav(true);
+  }, [finderOpen]);
 
   // The menu renders in a portal at the document root, positioned under the +.
   // The panel clips its overflow and the wall's windows stack above it, so a
