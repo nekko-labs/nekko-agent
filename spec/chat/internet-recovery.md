@@ -1,3 +1,8 @@
+---
+title: "Internet reachability and restoration recovery"
+area: chat
+---
+
 # Internet reachability and restoration recovery
 
 Status: implemented in the Rust daemon with deterministic Rust tests. Shared-renderer setting/notices and their rendered/isolated-fixture checks are the follow-up NR-2 slice. Physical Wi-Fi loss, native phone and Windows/Linux desktop remain unverified.
