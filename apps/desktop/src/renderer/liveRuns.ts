@@ -1,3 +1,4 @@
+import { rememberConnectivityNotice } from './components/ConnectivityNotices.js';
 /**
  * Every running turn, folded and kept alive for as long as the host is running
  * it, not for as long as somebody is looking at it.
@@ -174,6 +175,7 @@ const STARTS_RUN = new Set<AgentEvent['type']>([
  * a DOM or an IPC bridge.
  */
 export function applyEvent(event: AgentEvent, now = Date.now()): void {
+  if (event.type === 'session_meta' && event.connectivityNotice) rememberConnectivityNotice(event.sessionId, event.connectivityNotice);
   const id = event.sessionId;
   if (!runs.has(id) && STARTS_RUN.has(event.type)) startSubagentActivity(id);
   foldSubagentActivity(event, now);
