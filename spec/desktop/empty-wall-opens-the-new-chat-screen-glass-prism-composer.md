@@ -38,3 +38,9 @@ Implemented; 53 focused unit tests and isolated Electron interaction checks pass
 Acceptance: neutral menus remain legible in vivid page themes; the selected chat is visible even in a long panel; the background gradient runs vertically from dark teal to gold; pixel waves exist only inside a visible clean-start chat, never in existing chats or the app background. No new settings, network access, permissions or host mutations are introduced. Verification uses a synthetic full-App bridge in a hidden, non-focusable Electron window with a disposable profile and blocked network. Packaged and non-macOS desktop verification remain untested.
 
 Integration with #1150 preserves its vertical teal-to-gold colour direction and new-chat-only pixel waves, with translucent gradient stops for the frost treatment. Updated merged-base renderer evidence covers this combined appearance.
+
+## Composer-holding mascot adjustment (#1194)
+
+[Implemented; 15 isolated hidden-renderer interaction/geometry checks passed at 1280px and 460px; matched desktop/narrow before/after screenshots inspected. Packaged builds, native phone layouts and other OSes unverified.]
+
+The greeting's pixel mascot is 80×75px (25% larger), centered over its unchanged 64×60px layout slot so its horizontal center and question text allocation remain unchanged. Its paws straddle the composer top edge rather than floating above it. The greeting aligns at its bottom edge so wrapped questions do not lift the paws off the composer. Existing caret gaze, idle question rotation, draft pause and reduced-motion behavior are retained.

@@ -13,7 +13,10 @@ const provider = { id: 'fixture', kind: 'openai', enabled: true, label: 'ChatGPT
 const session = (id: string, title: string, workspaceId?: string) => ({ id, title, createdAt: now, updatedAt: now - 3600e3, providerId: 'fixture', modelId: 'gpt-fixture', mode: 'agent', chatType: 'multimodal', workspaceId, messages: [], attachments: [], queuedPrompts: [] });
 const records = [session('a', 'Persist quota history'), session('b', 'Diagnose failed build'), session('c', 'Audit sandbox policy'), session('d', 'New chat')];
 const settings = { providers: [provider], workspaceFolders: [], workspaces: [], theme: 'dark', experimental: {}, agent: {}, ui: { onboarded: true }, onboarded: true };
+const eventListeners = new Set<(e: any) => void>();
 const bridge: any = {
+  onAgentEvent: (cb: (e: any) => void) => { eventListeners.add(cb); return () => eventListeners.delete(cb); },
+  sendChat: async (opts: any) => { (window as any).layoutFixture.lastSend = opts; },
   getSettings: async () => settings, updateSettings: async (p: any) => Object.assign(settings, p), listProviders: async () => [provider],
   listSessionSummaries: async () => [],
   getSession: async (id: string) => records.find(s => s.id === id), listModels: async () => [{ id: 'gpt-fixture', providerId: 'fixture', name: 'GPT fixture', contextWindow: 500000 }],
@@ -34,7 +37,22 @@ import('@nekko-agent/shared').then(async ({ summarizeSession }) => {
   document.documentElement.dataset.theme = 'dark';
   const root = createRoot(document.getElementById('root')!);
   root.render(React.createElement(UpdateProvider, null, React.createElement(App)));
-  (window as any).layoutFixture = { store: useStore, records, bridge, putCachedSession, showGreeting: async () => {
+  (window as any).layoutFixture = { store: useStore, records, bridge, putCachedSession, showRetry: async () => {
+    const { ChatPane } = await import('../src/renderer/components/ChatPane');
+    const record = records[0] as any;
+    record.messages = [
+      { id: 'u0', role: 'user', content: 'Earlier question', createdAt: now - 6000 },
+      { id: 'a0', role: 'assistant', content: 'Earlier answer remains saved.', createdAt: now - 5000 },
+      { id: 'u1', role: 'user', content: 'Continue the implementation', createdAt: now - 4000 },
+      { id: 'a1', role: 'assistant', content: 'Completed the first step before interruption.', createdAt: now - 3000 },
+      { id: 'interrupted', role: 'assistant', content: '_This reply was cut off before it finished. Everything above is kept, resume to carry on from here._', interrupted: true, createdAt: now - 2000 },
+    ];
+    putCachedSession(record);
+    useStore.setState({ providers: [provider], models: [{ id: 'gpt-fixture', providerId: 'fixture', name: 'GPT fixture', contextWindow: 500000 }], settings, activeSessionId: 'a' } as any);
+    root.render(React.createElement('div', { style: { height: '100vh' } }, React.createElement(ChatPane, { sessionId: 'a' })));
+    const { applyEvent } = await import('../src/renderer/liveRuns');
+    (window as any).layoutFixture.emit = (event: any) => { applyEvent({ ...event, sessionId: 'a' }); for (const cb of eventListeners) cb({ ...event, sessionId: 'a' }); };
+  }, showGreeting: async () => {
     const { ChatPane } = await import('../src/renderer/components/ChatPane');
     useStore.setState({ providers: [provider], models: [{ id: 'gpt-fixture', providerId: 'fixture', name: 'GPT fixture', contextWindow: 500000 }], settings, activeSessionId: 'd' } as any);
     root.render(React.createElement('div', { style: { height: '100vh' } }, React.createElement(ChatPane, { sessionId: 'd', cleanStart: true })));

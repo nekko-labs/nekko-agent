@@ -46,6 +46,14 @@ describe('toTranscriptRows', () => {
     expect(r.filter((x) => x.kind === 'msg' && x.message.role === 'assistant')).toHaveLength(1);
   });
 
+  it('keeps the interrupted reply on retry, hiding only new checkpoints', () => {
+    const saved = [msg('u', 'user', 'Fix it'), msg('a', 'assistant', 'Completed the first step.'), msg('t', 'tool', 'saved result')];
+    expect(transcriptBeforeLiveTurn(saved, 't')).toBe(saved);
+    const checkpoint = [...saved, msg('new', 'assistant', 'Continuing')];
+    expect(transcriptBeforeLiveTurn(checkpoint, 't')).toEqual(saved);
+    expect(transcriptBeforeLiveTurn(saved, 'compacted-away')).toBe(saved);
+  });
+
   it('anchors discoveries including tool-only PRs instead of moving them after new messages', () => {
     const pr1 = 'https://github.com/o/r/pull/1';
     const pr2 = 'https://github.com/o/r/pull/2';

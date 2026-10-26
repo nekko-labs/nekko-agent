@@ -24,7 +24,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { approvalAfterResult } from './ChatPane.approval.js';
 import { useStore } from '../store.js';
 import { useGitStatus } from '../useGitStatus.js';
-import { clearLiveRun, getLiveRun, takeFinishedRun, useLiveRun, type LiveRun } from '../liveRuns.js';
+import { beginResumedRun, clearLiveRun, getLiveRun, takeFinishedRun, useLiveRun, type LiveRun } from '../liveRuns.js';
 import { getCachedSession, loadSession, putCachedSession } from '../sessionCache.js';
 import { usePaneVisible } from '../paneVisibility.js';
 import { useAgentEventClaim } from '../agentSubscription.js';
@@ -1764,14 +1764,22 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     const brain = requireBrain(lastUser?.content ?? '');
     if (!brain) return;
     setErrorNotice(null);
+    beginResumedRun(sessionId, session?.messages.at(-1)?.id);
     beginTurn();
-    await window.nekko.sendChat({
-      sessionId,
-      providerId: brain.providerId,
-      modelId: brain.modelId,
-      text: '',
-      resume: true,
-    });
+    try {
+      await window.nekko.sendChat({
+        sessionId,
+        providerId: brain.providerId,
+        modelId: brain.modelId,
+        text: '',
+        resume: true,
+      });
+    } catch (error) {
+      clearLiveRun(sessionId);
+      streamingRef.current = false;
+      setStreaming(false);
+      useStore.getState().pushToast('error', `Could not retry: ${String(error)}`);
+    }
   };
 
   const chatMarkdown = () => {
@@ -2292,10 +2300,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // --- The transcript, as windowed rows ---
   const messages = session?.messages;
   // While the live run draws the newest turn (streaming, or held until its
-  // persisted copy has replaced it), the transcript stops at that turn's prompt:
-  // the checkpointed tail would be the same narration and steps drawn twice.
+  // persisted copy has replaced it), stop at its prompt or the saved resume
+  // boundary: only the new checkpointed tail would duplicate the live steps.
   const liveTurn = streaming || !!held;
-  const settled = useMemo(() => (messages && liveTurn ? transcriptBeforeLiveTurn(messages) : messages), [messages, liveTurn]);
+  const transcriptThroughId = (getLiveRun(sessionId) ?? held)?.transcriptThroughId;
+  const settled = useMemo(() => (messages && liveTurn ? transcriptBeforeLiveTurn(messages, transcriptThroughId) : messages), [messages, liveTurn, transcriptThroughId]);
   const rows = useMemo(
     () => (settled ? toTranscriptRows(settled, extractPrUrls, collectSessionPrUrls, prs) : []),
     [settled, prs],
