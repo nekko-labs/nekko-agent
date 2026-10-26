@@ -265,16 +265,10 @@ impl Serialize for Chat<'_> {
     }
 }
 
-/// `ARCHIVE_RETENTION_DAYS` in shared/archive.ts, in milliseconds.
-const ARCHIVE_RETENTION_MS: f64 = 60.0 * 24.0 * 60.0 * 60.0 * 1000.0;
+const DAY_MS: i64 = 24 * 60 * 60 * 1000;
 
-/// `archiveExpired(s, now)`: archived (`typeof archivedAt === 'number'` and
-/// above 0) and at or past the end of the retention window.
-fn archive_expired(s: &Value, now: f64) -> bool {
-    match s.get("archivedAt").and_then(Value::as_f64) {
-        Some(at) if at > 0.0 => now >= at + ARCHIVE_RETENTION_MS,
-        _ => false,
-    }
+fn is_archived(s: &Value) -> bool {
+    s.get("archivedAt").and_then(Value::as_f64).is_some_and(|at| at > 0.0)
 }
 
 fn now_ms() -> u64 {
@@ -338,6 +332,47 @@ fn clear_cutoff<T: chrono::TimeZone>(zone: &T, now_ms: i64, scope: &str) -> f64 
     // JS resolves setHours first, then setDate retains the resolved clock.
     let boundary = if scope == "month" { today.naive_local().with_day(1).unwrap() } else { today.naive_local() };
     resolve_local(zone, boundary).timestamp_millis() as f64
+}
+
+/// Whether `updatedAt` belongs to one of Settings' completed-history ranges.
+/// Recent ranges include their boundary; "older" ranges are strictly before it.
+fn history_range_matches<T: chrono::TimeZone>(
+    zone: &T,
+    now_ms: i64,
+    range: &str,
+    updated: f64,
+) -> Result<bool, String> {
+    let now = zone.timestamp_millis_opt(now_ms).single().ok_or("invalid current time")?;
+    let (cutoff, older) = match range {
+        "today" => {
+            let midnight = resolve_local(zone, now.date_naive().and_hms_opt(0, 0, 0).unwrap());
+            (midnight.timestamp_millis() as f64, false)
+        }
+        "last-week" => ((now_ms - 7 * DAY_MS) as f64, false),
+        "older-2-weeks" => ((now_ms - 14 * DAY_MS) as f64, true),
+        "older-1-month" => (
+            resolve_local(
+                zone,
+                now.naive_local()
+                    .checked_sub_months(chrono::Months::new(1))
+                    .ok_or("could not calculate one month ago")?,
+            )
+            .timestamp_millis() as f64,
+            true,
+        ),
+        "older-6-months" => (
+            resolve_local(
+                zone,
+                now.naive_local()
+                    .checked_sub_months(chrono::Months::new(6))
+                    .ok_or("could not calculate six months ago")?,
+            )
+            .timestamp_millis() as f64,
+            true,
+        ),
+        _ => return Err("Invalid history range".into()),
+    };
+    Ok(if older { updated < cutoff } else { updated >= cutoff })
 }
 
 fn resolve_local<T: chrono::TimeZone>(zone: &T, local: chrono::NaiveDateTime) -> chrono::DateTime<T> {
@@ -729,25 +764,78 @@ impl SessionStore {
         Ok(count)
     }
 
-    /// `purgeExpiredArchives(now)`: delete every archived chat that has
-    /// outlived the retention window (`archiveExpired` in shared/archive.ts).
-    /// `before_delete` runs first for each, as `clear_with`'s does, so the
-    /// host can drop the chat's command log before its JSON goes; a failure
-    /// there keeps the chat. A chat whose id would not name a file in the
-    /// sessions folder is skipped (the TS version would build a path from it).
-    pub fn purge_archived_with(
+    /// Total chat-owned storage: every regular session JSON and command-log
+    /// sidecar, including active chats. The count remains completed chats only.
+    /// Symlinks and unrelated files in the sessions folder are not charged.
+    pub fn history_usage(&self) -> (u64, usize) {
+        let _all = self.all.read().unwrap_or_else(|e| e.into_inner());
+        let Ok(entries) = std::fs::read_dir(&self.dir) else { return (0, 0) };
+        let mut bytes = 0_u64;
+        let mut completed_count = 0_usize;
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let Ok(meta) = std::fs::symlink_metadata(&path) else { continue };
+            if !meta.file_type().is_file() {
+                continue;
+            }
+            let Some(name) = path.file_name().and_then(|name| name.to_str()) else { continue };
+            if let Some(id) = name.strip_suffix(".json").filter(|id| valid_id(id)) {
+                bytes = bytes.saturating_add(meta.len());
+                if Self::read(&path)
+                    .filter(is_archived)
+                    .is_some_and(|session| session.get("id").and_then(Value::as_str) == Some(id))
+                {
+                    completed_count += 1;
+                }
+            } else if name.strip_suffix(".commands.log").is_some_and(valid_id) {
+                bytes = bytes.saturating_add(meta.len());
+            }
+        }
+        (bytes, completed_count)
+    }
+
+    /// Delete archived chats selected by their `updatedAt`, coordinating the
+    /// same host-owned sidecar cleanup as explicit delete and legacy clear.
+    /// Protected chats are skipped, for example while a turn is running.
+    pub fn clear_history_with(
         &self,
-        now: f64,
+        range: &str,
+        protected: impl Fn(&str) -> bool,
         before_delete: impl Fn(&str) -> Result<(), String>,
     ) -> Result<usize, String> {
-        // Every chat's writes held; the transcripts are not needed to choose.
+        self.clear_history_at_with(
+            &chrono::Local,
+            chrono::Local::now().timestamp_millis(),
+            range,
+            protected,
+            before_delete,
+        )
+    }
+
+    fn clear_history_at_with<T: chrono::TimeZone>(
+        &self,
+        zone: &T,
+        now_ms: i64,
+        range: &str,
+        protected: impl Fn(&str) -> bool,
+        before_delete: impl Fn(&str) -> Result<(), String>,
+    ) -> Result<usize, String> {
+        // Validate even when the store is empty.
+        history_range_matches(zone, now_ms, range, now_ms as f64)?;
         let _all = self.all.write().unwrap_or_else(|e| e.into_inner());
         let mut count = 0;
         for session in self.list_meta() {
-            if !archive_expired(&session, now) {
+            if !is_archived(&session) {
+                continue;
+            }
+            let Some(updated) = session.get("updatedAt").and_then(Value::as_f64) else { continue };
+            if !history_range_matches(zone, now_ms, range, updated)? {
                 continue;
             }
             let Some(id) = session.get("id").and_then(Value::as_str).filter(|id| valid_id(id)) else { continue };
+            if protected(id) {
+                continue;
+            }
             before_delete(id)?;
             let file = self.path(id);
             match std::fs::remove_file(&file) {
@@ -760,7 +848,16 @@ impl SessionStore {
         Ok(count)
     }
 
-    /// `purgeExpiredArchives()` at the current time.
+    /// Compatibility no-op: completed history is retained indefinitely.
+    pub fn purge_archived_with(
+        &self,
+        _now: f64,
+        _before_delete: impl Fn(&str) -> Result<(), String>,
+    ) -> Result<usize, String> {
+        Ok(0)
+    }
+
+    /// Compatibility no-op at the current time.
     pub fn purge_archived(&self, before_delete: impl Fn(&str) -> Result<(), String>) -> Result<usize, String> {
         self.purge_archived_with(now_ms() as f64, before_delete)
     }
@@ -1293,5 +1390,124 @@ mod tests {
         assert_eq!(base36(0), "0");
         assert_eq!(base36(1_790_782_518_274), "muo9oagy");
         assert_eq!(base64url(&[0xfb, 0xff, 0xbf, 0x00, 0x10, 0x83]), "-_-_ABCD");
+    }
+
+    #[test]
+    fn history_ranges_use_local_midnight_fixed_days_and_calendar_months() {
+        use chrono::TimeZone;
+        let zone = chrono_tz::America::New_York;
+        let now = zone.with_ymd_and_hms(2026, 3, 31, 15, 0, 0).single().unwrap().timestamp_millis();
+        let at =
+            |y, m, d, h, min| zone.with_ymd_and_hms(y, m, d, h, min, 0).single().unwrap().timestamp_millis() as f64;
+
+        assert!(history_range_matches(&zone, now, "today", at(2026, 3, 31, 0, 0)).unwrap());
+        assert!(!history_range_matches(&zone, now, "today", at(2026, 3, 30, 23, 59)).unwrap());
+        assert!(history_range_matches(&zone, now, "last-week", (now - 7 * DAY_MS) as f64).unwrap());
+        assert!(!history_range_matches(&zone, now, "last-week", (now - 7 * DAY_MS - 1) as f64).unwrap());
+        assert!(!history_range_matches(&zone, now, "older-2-weeks", (now - 14 * DAY_MS) as f64).unwrap());
+        assert!(history_range_matches(&zone, now, "older-2-weeks", (now - 14 * DAY_MS - 1) as f64).unwrap());
+        assert!(!history_range_matches(&zone, now, "older-1-month", at(2026, 2, 28, 15, 0)).unwrap());
+        assert!(history_range_matches(&zone, now, "older-1-month", at(2026, 2, 28, 14, 59)).unwrap());
+        assert!(!history_range_matches(&zone, now, "older-6-months", at(2025, 9, 30, 15, 0)).unwrap());
+        assert!(history_range_matches(&zone, now, "older-6-months", at(2025, 9, 30, 14, 59)).unwrap());
+        assert!(history_range_matches(&zone, now, "unknown", 0.0).is_err());
+    }
+
+    #[test]
+    fn history_month_ranges_resolve_ambiguous_and_missing_local_times() {
+        use chrono::TimeZone;
+        let zone = chrono_tz::America::New_York;
+
+        // One month earlier lands in the repeated 01:30 during the fall-back.
+        let ambiguous_now = zone.with_ymd_and_hms(2025, 12, 2, 1, 30, 0).single().unwrap().timestamp_millis();
+        let first_0130 = zone.with_ymd_and_hms(2025, 11, 2, 1, 30, 0).earliest().unwrap().timestamp_millis() as f64;
+        assert!(!history_range_matches(&zone, ambiguous_now, "older-1-month", first_0130).unwrap());
+        assert!(history_range_matches(&zone, ambiguous_now, "older-1-month", first_0130 - 1.0).unwrap());
+
+        // One month earlier lands in the missing 02:30 during the spring-forward.
+        let gap_now = zone.with_ymd_and_hms(2026, 4, 8, 2, 30, 0).single().unwrap().timestamp_millis();
+        let shifted_0330 = zone.with_ymd_and_hms(2026, 3, 8, 3, 30, 0).single().unwrap().timestamp_millis() as f64;
+        assert!(!history_range_matches(&zone, gap_now, "older-1-month", shifted_0330).unwrap());
+        assert!(history_range_matches(&zone, gap_now, "older-1-month", shifted_0330 - 1.0).unwrap());
+    }
+
+    #[test]
+    fn history_clear_only_removes_unprotected_archived_chats_in_the_selected_updated_range() {
+        let dir = std::env::temp_dir().join(format!("nekko-history-clear-{}", std::process::id()));
+        let sessions = dir.join("sessions");
+        std::fs::create_dir_all(&sessions).unwrap();
+        let now = 1_800_000_000_000_i64;
+        for (id, updated, archived) in [
+            ("s_recent", now - DAY_MS, true),
+            ("s_old", now - 20 * DAY_MS, true),
+            ("s_busy", now - 20 * DAY_MS, true),
+            ("s_live", now - 20 * DAY_MS, false),
+        ] {
+            let mut chat = json!({ "id": id, "updatedAt": updated, "messages": [] });
+            if archived {
+                chat["archivedAt"] = json!(1);
+            }
+            std::fs::write(sessions.join(format!("{id}.json")), chat.to_string()).unwrap();
+        }
+        let store = SessionStore::new(&dir);
+        let seen = Mutex::new(Vec::new());
+        let removed = store
+            .clear_history_at_with(
+                &chrono::Utc,
+                now,
+                "older-2-weeks",
+                |id| id == "s_busy",
+                |id| {
+                    seen.lock().unwrap().push(id.to_string());
+                    Ok(())
+                },
+            )
+            .unwrap();
+        assert_eq!(removed, 1);
+        assert_eq!(*seen.lock().unwrap(), vec!["s_old"]);
+        assert!(!sessions.join("s_old.json").exists());
+        assert!(sessions.join("s_busy.json").exists());
+        assert!(sessions.join("s_recent.json").exists());
+        assert!(sessions.join("s_live.json").exists());
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn history_usage_counts_all_chat_files_but_only_completed_chats() {
+        let dir = std::env::temp_dir().join(format!("nekko-history-usage-{}", std::process::id()));
+        let sessions = dir.join("sessions");
+        std::fs::create_dir_all(&sessions).unwrap();
+        let archived = br#"{"id":"s_done","updatedAt":1,"archivedAt":1,"messages":[]}"#;
+        let live = br#"{"id":"s_live","updatedAt":1,"messages":[]}"#;
+        let done_log = b"completed command output\n";
+        let live_log = b"active command output\n";
+        let orphan_log = b"orphaned command output\n";
+        let unrelated = b"not chat storage";
+        std::fs::write(sessions.join("s_done.json"), archived).unwrap();
+        std::fs::write(sessions.join("s_done.commands.log"), done_log).unwrap();
+        std::fs::write(sessions.join("s_live.json"), live).unwrap();
+        std::fs::write(sessions.join("s_live.commands.log"), live_log).unwrap();
+        std::fs::write(sessions.join("s_orphan.commands.log"), orphan_log).unwrap();
+        std::fs::write(sessions.join("other.txt"), unrelated).unwrap();
+        let bytes = archived.len() + live.len() + done_log.len() + live_log.len() + orphan_log.len();
+        assert_eq!(SessionStore::new(&dir).history_usage(), (bytes as u64, 1));
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn history_usage_does_not_follow_symlinks() {
+        use std::os::unix::fs::symlink;
+        let dir = std::env::temp_dir().join(format!("nekko-history-symlink-{}", std::process::id()));
+        let sessions = dir.join("sessions");
+        std::fs::create_dir_all(&sessions).unwrap();
+        let outside = dir.join("outside.json");
+        std::fs::write(&outside, br#"{"id":"s_link","updatedAt":1,"archivedAt":1,"messages":[]}"#).unwrap();
+        symlink(&outside, sessions.join("s_link.json")).unwrap();
+        let regular = br#"{"id":"s_done","updatedAt":1,"archivedAt":1,"messages":[]}"#;
+        std::fs::write(sessions.join("s_done.json"), regular).unwrap();
+        symlink(&outside, sessions.join("s_done.commands.log")).unwrap();
+        assert_eq!(SessionStore::new(&dir).history_usage(), (regular.len() as u64, 1));
+        std::fs::remove_dir_all(dir).ok();
     }
 }

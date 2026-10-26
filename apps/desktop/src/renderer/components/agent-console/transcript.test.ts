@@ -303,3 +303,13 @@ describe('purpose groups (spec/chat/tool-calls-grouped-by-purpose.md)', () => {
     expect(shape(items)).toEqual(['guidance:1,2,3']);
   });
 });
+
+describe('inline thought projection', () => {
+  it('does not repeat the thought in a final answer that also called a tool', () => {
+    const blocks = toStreamBlocks([msg('a', 'assistant', 'Finished', {
+      reasoning: 'Check first', toolCalls: [{ id: 'c', name: 'read_file', input: {} }],
+    })]);
+    expect(blocks[0].type === 'activity' && blocks[0].items[0]).toMatchObject({ kind: 'reasoning', text: 'Check first' });
+    expect(blocks[1].type === 'msg' && blocks[1].message.reasoning).toBeUndefined();
+  });
+});
