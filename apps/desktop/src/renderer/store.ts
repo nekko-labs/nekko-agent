@@ -1243,7 +1243,7 @@ export const useStore = create<UiState>((set, get) => ({
         } catch { /* Leave the tip eligible if its seen state could not be saved. */ }
         finally { completionTipPending = false; }
       }
-      get().pushToast('success', 'Chat completed. Find it under Show completed in the left panel for 60 days.');
+      get().pushToast('success', 'Chat completed. Find it under Show completed in the left panel until you delete it.');
     } catch (e) {
       get().pushToast('error', `Could not complete the chat: ${(e as Error).message}`);
     }

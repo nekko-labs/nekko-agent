@@ -132,19 +132,6 @@ export function App() {
   // Step the looping decorations on a clock of their own, not every frame.
   useEffect(() => startDecorClock(), []);
 
-  // Archived chats past the retention window are deleted at launch and every
-  // few hours after, whichever view the app opens on, so a long-running window
-  // still lets them go on time. The list is re-read only when something went.
-  useEffect(() => {
-    const purge = () =>
-      void window.nekko.purgeExpiredArchives?.()
-        .then((n) => { if (n > 0) void useStore.getState().refreshSessions(); })
-        .catch(() => { /* an older host without the channel */ });
-    purge();
-    const t = window.setInterval(purge, 6 * 60 * 60 * 1000);
-    return () => window.clearInterval(t);
-  }, []);
-
   // Agents idle past Settings → Complete idle agents after (a month unless
   // changed) are completed: the same reversible archive the window's X does.
   // Waits for settings and the chat list so the user's choice is the one used.
