@@ -51,6 +51,7 @@ pub struct Ctx {
     /// recommendations (`gpu:stats`, `system:stats`, `machine:*`).
     pub machine: Arc<nekko_machine::Machine>,
     /// CI runners (`runner:*`), when the data directory is known.
+    #[cfg(unix)]
     pub runners: Option<Arc<crate::runner::Runners>>,
     /// The experimental resource-queue client, when the data directory is known.
     pub resource_queue: Option<Arc<crate::resource_queue::ResourceQueue>>,
@@ -398,6 +399,8 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             crate::catalog::route(ctx.catalog.as_ref().expect("checked"), c, &args).await
         }
         c if crate::tooling::CHANNELS.contains(&c) => crate::tooling::route(ctx, c, &args).await,
+        // Elsewhere runner:* falls through to the unknown-channel reply.
+        #[cfg(unix)]
         c if crate::runner::CHANNELS.contains(&c) && ctx.runners.is_some() => {
             ctx.runners.clone().expect("checked").route(c, &args).await
         }
