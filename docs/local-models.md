@@ -111,6 +111,13 @@ remaining flag, each with a sentence and the flag it sets. Controls a build does
 fall back to `--override-tensor` patterns or are left out. Any of it can be saved as that
 model's default.
 
+**Thinking** is on by default. For a built-in llama.cpp model, open **More controls >
+Expert > Thinking** to turn it off for that model, then load or save the settings.
+The preference applies across chats using that model and is not available for MLX.
+Other connected local servers default to thinking on; models without reasoning may
+ignore the request. There is no per-chat thinking switch in the composer. Cloud
+models keep thinking on, regardless of any old chat-level off preference.
+
 **Seeing what is loaded from anywhere.** The Agents view's **Panels** dock has a **Local
 models** monitor, under Hardware: each model the engine holds in memory, whether it runs on
 the GPU, split across GPU and CPU (with the layer count, in amber), or on the CPU, plus its

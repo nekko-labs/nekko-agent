@@ -5,7 +5,7 @@ area: phone
 
 # Phone access classes and relay replay protection
 
-`[implemented 2026-10-22; Rust, TS, Swift (`swift test`) and Android protocol and app unit tests pass, plus the daemon's end-to-end relay test; not yet run on a device, against the managed relay, or from the Expo app]` Decided by Philip on 2026-10-22 after a security review of the phone path. Decision record: [docs/decisions/0012-phone-access-classes-and-relay-replay-protection.md](../../docs/decisions/0012-phone-access-classes-and-relay-replay-protection.md). Builds on *Full phone access, the foundation (IO-33)* in [native-ios-app.md](native-ios-app.md) and *What a paired phone may do* in [how-its-built-the-window-and-the-engine-daemon.md](../platform/how-its-built-the-window-and-the-engine-daemon.md).
+`[implemented 2026-10-22; Rust, TS, Swift (`swift test`) and Android protocol and app unit tests pass, plus the daemon's end-to-end relay test; not yet run on a device, against the managed relay]` Decided by Philip on 2026-10-22 after a security review of the phone path. Decision record: [docs/decisions/0012-phone-access-classes-and-relay-replay-protection.md](../../docs/decisions/0012-phone-access-classes-and-relay-replay-protection.md). Builds on *Full phone access, the foundation (IO-33)* in [native-ios-app.md](native-ios-app.md) and *What a paired phone may do* in [how-its-built-the-window-and-the-engine-daemon.md](../platform/how-its-built-the-window-and-the-engine-daemon.md).
 
 ## User intent
 

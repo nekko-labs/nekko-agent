@@ -6,13 +6,14 @@ import { isRunningTool, toolQuietSince, watchToolElapsed } from './toolProgress.
 import { ChatIcon, ThoughtIcon } from '../../icons.js';
 import { Markdown } from '../Markdown.js';
 import type { Activity, ActivityRow, IndexedActivity } from './transcript.js';
-import { activityRows, stepKey } from './transcript.js';
+import { activityRows, fmtTime, stepKey } from './transcript.js';
 import { SubagentCue, SubagentModelChip, subagentSummary, SubagentHeadline, SubagentOpenButton } from './SubagentCue.js';
 import { WatchClockChip, WatchDetail, WatchIcon, WatchThen, watchCallHeadline } from './WatchRow.js';
 import { parseWatchCall, thenSummary } from '../../agentWatches.js';
 import { useRowState } from './rowState.js';
 import { HoverTip } from '../HoverTip.js';
 import { MemoryCard } from './MemoryCard.js';
+import { ReasoningBlock } from './ReasoningBlock.js';
 
 /** Running dots ahead of a live row's text, in a fixed box so nothing shifts. */
 export const LeadDots = () => <span className="dots dots-lead" aria-hidden="true" />;
@@ -29,11 +30,33 @@ export const LeadDots = () => <span className="dots dots-lead" aria-hidden="true
  * collapses to the old one-liner, so a 40-step turn doesn't take over the
  * transcript.
  */
-export const ActivityGroup = memo(function ActivityGroup({ items, streaming = false, toolActivity, pendingCallId, turnRunning = streaming }: { items: Activity[]; streaming?: boolean; turnRunning?: boolean; toolActivity?: LiveActivity; pendingCallId?: string }) {
+type ActivityGroupProps = { items: Activity[]; streaming?: boolean; turnRunning?: boolean; toolActivity?: LiveActivity; pendingCallId?: string };
+
+/** Thoughts stay visible in conversation order, outside collapsible tool groups. */
+export const ActivityGroup = memo(function ActivityGroup({ items, ...props }: ActivityGroupProps) {
+  const parts: React.ReactNode[] = [];
+  let tools: Activity[] = [];
+  const flush = (index: number) => {
+    if (tools.length) {
+      parts.push(<ToolActivityGroup key={`tools_${index - tools.length}`} items={tools} stateKey={index - tools.length === 0 ? 'group-open' : `group-open-${index - tools.length}`} {...props} streaming={!!props.streaming && index === items.length} />);
+      tools = [];
+    }
+  };
+  items.forEach((item, index) => {
+    if (item.kind === 'reasoning') {
+      flush(index);
+      parts.push(<ReasoningBlock key={`thought_${index}`} text={item.text} live={!!props.streaming && index === items.length - 1} duration={item.duration} />);
+    } else tools.push(item);
+  });
+  flush(items.length);
+  return <>{parts}</>;
+});
+
+const ToolActivityGroup = memo(function ToolActivityGroup({ items, streaming = false, toolActivity, pendingCallId, turnRunning = streaming, stateKey = 'group-open' }: { stateKey?: string; items: Activity[]; streaming?: boolean; turnRunning?: boolean; toolActivity?: LiveActivity; pendingCallId?: string }) {
   // Open while the turn runs (watching it work is the point), folded away
   // afterwards so a finished transcript reads as answers. Remembered per row,
   // so scrolling a transcript row out of the window and back keeps it as left.
-  const [open, setOpen] = useRowState('group-open', streaming && !items.some(it => it.kind === 'tool' && it.call.name === 'spawn_agent'));
+  const [open, setOpen] = useRowState(stateKey, streaming && !items.some(it => it.kind === 'tool' && it.call.name === 'spawn_agent'));
   const tools = items.filter((it): it is Extract<Activity, { kind: 'tool' }> => it.kind === 'tool');
   const toolCount = tools.length;
   const agents = tools.filter((it) => it.call.name === 'spawn_agent');
@@ -172,7 +195,7 @@ function PurposeGroupRow({ row, live, streaming, total, toolActivity, pendingCal
   const endedAt = ends.every((e) => e !== undefined) ? Math.max(...(ends as number[])) : undefined;
   const quiets = tools.map((t) => toolQuietSince(toolActivity, t.call.id)).filter((q): q is number => q !== undefined);
   return (
-    <li className="list-none" data-purpose-group={row.purpose}>
+    <li className="list-none" data-purpose-group={row.purpose} data-vt-stamp={startedAt ? fmtTime(startedAt) || undefined : undefined}>
       <button
         className="flex w-full min-w-0 items-baseline gap-1.5 py-0.5 text-left text-ink-faint hover:text-ink-soft"
         onClick={() => setOpen(!open)}
@@ -258,7 +281,7 @@ function StepRow({ index, item, live, quietSince }: { index: number; item: Activ
   const then = kind === 'watch' && item.kind === 'tool' && parseWatchCall(item.call).action === 'create' && !item.result?.isError ? thenSummary(parseWatchCall(item.call).prompt) : '';
 
   return (
-    <li className="list-none">
+    <li className="list-none" data-vt-stamp={item.kind === 'tool' && item.startedAt ? fmtTime(item.startedAt) || undefined : undefined}>
       <div className="flex min-w-0 items-center gap-1">
         <button
           className="flex min-w-0 flex-1 items-baseline gap-1.5 py-0.5 text-left text-ink-faint hover:text-ink-soft"
@@ -283,7 +306,7 @@ function StepRow({ index, item, live, quietSince }: { index: number; item: Activ
         kind === 'agent' && item.kind === 'tool' ? (
           <div className="ml-[84px] space-y-2 py-1">
             <div className="text-ink-soft">Task</div>
-            <pre className="max-h-60 overflow-auto whitespace-pre-wrap text-ink-soft">{typeof item.call.input.task === 'string' ? item.call.input.task : JSON.stringify(item.call.input, null, 2)}</pre>
+            <pre className="max-h-60 overflow-auto whitespace-pre-wrap [overflow-wrap:anywhere] text-ink-soft">{typeof item.call.input.task === 'string' ? item.call.input.task : JSON.stringify(item.call.input, null, 2)}</pre>
             <div className="text-ink-soft">{item.result?.isError ? 'Delegation tool error' : item.result ? 'Delegation tool result' : 'No delegation tool result recorded'}</div>
             {item.result && <div className="max-h-60 overflow-auto font-sans text-[13px] text-ink-soft"><Markdown text={item.result.output} /></div>}
           </div>
@@ -294,7 +317,7 @@ function StepRow({ index, item, live, quietSince }: { index: number; item: Activ
             <Markdown text={item.text} />
           </div>
         ) : (
-          <pre className="ml-[84px] mt-0.5 max-h-60 overflow-auto whitespace-pre-wrap border-l border-line pl-2 text-[12px] leading-relaxed text-ink-faint">
+          <pre className="ml-[84px] mt-0.5 max-h-60 overflow-auto whitespace-pre-wrap [overflow-wrap:anywhere] border-l border-line pl-2 text-[12px] leading-relaxed text-ink-faint">
             {item.kind === 'reasoning' ? item.text : JSON.stringify(item.call.input, null, 2)}
           </pre>
         )

@@ -3,11 +3,11 @@ import { AgentPanelControls } from '../components/AgentPanelControls.js';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { AgentEvent, SessionSummary, TerminalInfo, WorkspaceFolder } from '@nekko-agent/shared';
-import { AUTO_MODEL_ID, archiveDaysLeft, archiveDeletesAt } from '@nekko-agent/shared';
+import { AUTO_MODEL_ID } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore, type Workspace } from '../store.js';
 import { runningSessionIds } from '../liveRuns.js';
-import { StatusIcon, WorkspaceCard, type AgentStatus } from '../components/WorkspaceCard.js';
+import { StatusIcon, WorkspaceCard, agentStatusOfLane, type AgentStatus } from '../components/WorkspaceCard.js';
 import { ChatFinder } from '../components/ChatFinder.js';
 import { CheckIcon, PhotoIcon, TerminalIcon, PlusIcon, SearchIcon, SlidersIcon } from '../icons.js';
 import { SHORTCUTS } from '../shortcuts.js';
@@ -137,6 +137,7 @@ function projectOfWorkspace(w: Workspace, sessions: SessionSummary[], terminals:
  */
 export function statusFromEvent(type: AgentEvent['type'], prev?: AgentStatus): AgentStatus | null | undefined {
   switch (type) {
+    case 'session_meta': return undefined;
     case 'tool_approval_required':
     case 'question': return 'input';
     case 'question_resolved':
@@ -517,6 +518,24 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
     ];
   })()];
 
+  const activeRowRef = useRef<HTMLDivElement>(null);
+  const selectedGroup = groups.find((g) => g.items.some((e) => e.s?.id === selectedId || e.t?.id === selectedId || (e.s && childrenOf.get(e.s.id)?.some((kid) => kid.id === selectedId))) || g.done.some((s) => s.id === selectedId));
+  const selectedGroupKey = selectedGroup?.key;
+  const selectedCompleted = !!selectedGroup?.done.some((s) => s.id === selectedId);
+  useEffect(() => {
+    setSelected([]);
+    if (!selectedGroupKey) return;
+    setCollapsed((previous) => {
+      if (!previous.has(selectedGroupKey)) return previous;
+      const next = new Set(previous); next.delete(selectedGroupKey); return next;
+    });
+    if (selectedCompleted) setShowCompleted((previous) => new Set(previous).add(selectedGroupKey));
+  }, [selectedId, selectedGroupKey, selectedCompleted]);
+  useLayoutEffect(() => {
+    const frame = requestAnimationFrame(() => activeRowRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' }));
+    return () => cancelAnimationFrame(frame);
+  }, [selectedId, collapsed, showCompleted, horizontal]);
+
   // --- Sidebar drag-and-drop (reorder projects; reorder / re-file workspaces) ---
   const startDrag = (e: React.DragEvent, item: DragItem) => {
     e.stopPropagation();
@@ -756,6 +775,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                     return (
                       <div
                         key={entry.key}
+                        ref={(s?.id === selectedId || entry.t?.id === selectedId) ? activeRowRef : undefined}
                         {...(s ? { [COMPLETION_ROW_ATTR]: s.id } : {})}
                         onContextMenu={s ? (e) => contextRow(e, s.id) : undefined}
                         onClickCapture={s ? (e) => { if (selectRow(e, s.id)) e.stopPropagation(); } : undefined}
@@ -791,13 +811,12 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                         />
                         {/* Sub-agents this chat spawned, one line each. */}
                         {kids.map((kid) => (
-                          <SubAgentRow
-                            key={kid.id}
+                          <div key={kid.id} ref={kid.id === selectedId ? activeRowRef : undefined}><SubAgentRow
                             session={kid}
                             status={statuses.get(kid.id)}
                             isActive={kid.id === selectedId}
                             onOpen={() => onOpenChat(kid.id)}
-                          />
+                          /></div>
                         ))}
                       </div>
                     );
@@ -825,14 +844,13 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                         <button className="ml-2 text-accent" onClick={() => useStore.setState({ completionTipSessionId: null })}>Dismiss</button>
                       </div>}
                       {completedOpen && done.map((s) => (
-                        <CompletedRow
-                          key={s.id}
+                        <div key={s.id} ref={s.id === selectedId ? activeRowRef : undefined}><CompletedRow
                           session={s}
                           now={now}
                           isActive={selectedId === s.id}
                           onOpen={() => { onOpenChat(s.id); setMobileNav(false); }}
                           onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setMenu(null); setDoneMenu({ x: e.clientX, y: e.clientY, id: s.id }); }}
-                        />
+                        /></div>
                       ))}
                     </div>
                   )}
@@ -903,7 +921,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
         aria-valuemax={SIDEBAR_MAX_W}
         aria-valuenow={sidebarW}
         tabIndex={0}
-        className="group relative hidden shrink-0 cursor-col-resize md:block"
+        className="agent-list-resize group relative hidden shrink-0 cursor-col-resize md:block"
         style={{ width: 'var(--pane-gap)', marginInline: 'calc(-1 * var(--pane-gap))' }}
         onPointerDown={(e) => {
           e.preventDefault();
@@ -957,14 +975,13 @@ function CompletedRow({
   session: SessionSummary; now: number; isActive: boolean; onOpen: () => void; onContextMenu?: (e: React.MouseEvent) => void;
 }) {
   const at = s.archivedAt as number;
-  const days = archiveDaysLeft(at, now);
   return (
     <button
       onClick={onOpen}
       onContextMenu={onContextMenu}
       data-completed-row={s.id}
       className={`flex w-full items-center gap-1.5 rounded-lg py-1 pl-2 pr-2 text-left transition-colors duration-150 ${isActive ? 'bg-accent-soft' : 'hover:bg-surface-2'}`}
-      title={`${s.title}\nCompleted ${new Date(at).toLocaleString()}\nDeleted on ${new Date(archiveDeletesAt(at)).toLocaleDateString()} unless restored (${days} day${days === 1 ? '' : 's'} left)`}
+      title={`${s.title}\nCompleted ${new Date(at).toLocaleString()}\nKept until you delete it`}
     >
       <span className="inline-grid shrink-0 place-items-center" style={{ color: 'var(--success)' }} aria-label="Completed" role="img">
         <CheckIcon className="h-3 w-3" />
@@ -972,7 +989,7 @@ function CompletedRow({
       <span className={`min-w-0 flex-1 truncate text-[12px] line-through ${isActive ? 'text-ink-soft' : 'text-ink-faint'}`}>{s.title}</span>
       <time
         className="shrink-0 text-[10px] tabular-nums"
-        style={{ color: days <= 7 ? 'var(--warning)' : 'var(--ink-faint)' }}
+        style={{ color: 'var(--ink-faint)' }}
         dateTime={new Date(at).toISOString()}
       >
         {completedDate(at, now)}
@@ -999,7 +1016,7 @@ function SubAgentRow({
         className={`h-[5px] w-[5px] shrink-0 rounded-full bg-transparent ring-1 ${isActive ? 'ring-accent' : 'ring-ink-faint'}`}
       />
       <span className="min-w-0 flex-1 truncate">{session.title}</span>
-      {status && <StatusIcon status={status} />}
+      <StatusIcon status={status ?? agentStatusOfLane('idle', undefined, session.activeWatchCount)} />
     </button>
   );
 }

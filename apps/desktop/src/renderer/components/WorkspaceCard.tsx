@@ -5,7 +5,7 @@ import { useStore, type Workspace } from '../store.js';
 import { allPanes } from '../layout.js';
 import { useGitStatus } from '../useGitStatus.js';
 import {
-  BranchIcon, CloseIcon, CompactIcon, QuestionIcon, RobotIcon, RocketIcon, SleepIcon, TerminalIcon,
+  BranchIcon, CheckIcon, CloseIcon, CompactIcon, QuestionIcon, RobotIcon, RocketIcon, SleepIcon, TerminalIcon,
   WarningIcon, WorktreeIcon,
 } from '../icons.js';
 import { COMPLETION_ROW_ATTR, completeWithExit } from '../completionExit.js';
@@ -42,20 +42,20 @@ import { SessionPrLinks } from './SessionPrLinks.js';
  * about and a sidebar where everything shouts says nothing.
  */
 
-export type AgentStatus = 'working' | 'input' | 'error';
+export type AgentStatus = 'working' | 'input' | 'error' | 'done' | 'idle';
 
 /** A board lane as the glyph `StatusIcon` draws: an interrupted turn is an error, any other block needs input. */
-export function agentStatusOfLane(lane: SessionLane, blocked?: BlockedReason): AgentStatus | undefined {
+export function agentStatusOfLane(lane: SessionLane, blocked?: BlockedReason, activeWatchCount = 0): AgentStatus {
   if (lane === 'working') return 'working';
-  if (lane !== 'needs-you') return undefined;
+  if (lane !== 'needs-you') return activeWatchCount > 0 ? 'idle' : 'done';
   return blocked === 'interrupted' ? 'error' : 'input';
 }
 
 /**
  * What an agent is doing, as a glyph rather than a dot, so the state reads by
  * shape before colour: a rocket in flight while it works, a question mark when
- * it is waiting on you, a warning when it stopped on an error, and "Zz" when it
- * has finished and is idle. `undefined` is the idle state.
+ * it is waiting on you, a warning when it stopped on an error, a gray check when it
+ * has finished, and "Zz" when an armed watch keeps it idle. `undefined` is done.
  */
 export function StatusIcon({ status, className = '' }: { status: AgentStatus | undefined; className?: string }) {
   const cls = `h-3 w-3 shrink-0 ${className}`;
@@ -83,8 +83,8 @@ export function StatusIcon({ status, className = '' }: { status: AgentStatus | u
     );
   }
   return (
-    <span className={`inline-grid place-items-center text-ink-faint ${cls}`} title="Done · idle" role="img" aria-label="Done, idle">
-      <SleepIcon className="h-3 w-3" />
+    <span className={`inline-grid place-items-center text-ink-faint ${cls}`} title={status === 'idle' ? 'Idle · watching' : 'Done'} role="img" aria-label={status === 'idle' ? 'Idle, watching' : 'Done'}>
+      {status === 'idle' ? <SleepIcon className="h-3 w-3" /> : <CheckIcon className="h-3 w-3" />}
     </span>
   );
 }
@@ -273,24 +273,25 @@ function WorkspaceCardImpl({
             : 'color-mix(in srgb, var(--accent) 30%, transparent)'
           : 'transparent',
       }}
+      data-agent-active={isActive || undefined}
       title={title}
     >
       <div className="flex items-center gap-1.5">
-        <StatusIcon status={status} />
+        <StatusIcon status={status ?? (session ? agentStatusOfLane('idle', undefined, session.activeWatchCount) : 'idle')} />
         <span className={`min-w-0 flex-1 truncate text-[13px] ${isActive ? 'font-medium text-ink' : 'text-ink-soft'}`}>
           {title}
         </span>
-        {lastReply && !status && (
+        {lastReply && (!status || status === 'done' || status === 'idle') && (
           <time className="shrink-0 text-[10px] tabular-nums text-ink-faint" dateTime={new Date(lastReply).toISOString()} title={`Last reply ${new Date(lastReply).toLocaleString()}`}>
             {timeAgo(now - lastReply)}
           </time>
         )}
         {/* A chat card archives rather than closes: closing used to look like
             deleting and then the chat was nowhere to be found. Archived chats
-            stay readable for 60 days. A shell has nothing to keep, so it closes. */}
+            stay readable until explicitly deleted. A shell has nothing to keep, so it closes. */}
         <button
           className="shrink-0 rounded-sm p-0.5 text-ink-faint opacity-0 hover:text-ink focus-visible:opacity-100 group-hover:opacity-100"
-          title={isChat ? 'Complete this chat (kept for 60 days)' : 'Close this agent'}
+          title={isChat ? 'Complete this chat (kept until you delete it)' : 'Close this agent'}
           aria-label={isChat ? `Complete ${title}` : `Close ${title}`}
           onClick={async (e) => {
             e.stopPropagation();

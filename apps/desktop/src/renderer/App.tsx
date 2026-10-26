@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { navOrder, moveNav } from './nav-order.js';
 import { useStore, viewEnabled, type View } from './store.js';
 import { startLiveRuns } from './liveRuns.js';
+import { startSessionSummaryRefresh } from './sessionSummaryRefresh.js';
 import { startAgentSubscription } from './agentSubscription.js';
 import { startDesktopNotifications } from './notifications.js';
 import { startCompactionStatus } from './compactionStatus.js';
@@ -17,7 +18,6 @@ import { AboutNekko } from './components/AboutNekko.js';
 import { FeedbackSheet, openFeedback } from './components/FeedbackSheet.js';
 import { FeedbackIcon } from './icons.js';
 import { AutumnBackground } from './components/AutumnBackground.js';
-import { PixelWaveBackground, pixelWaveFor } from './components/PixelWaveBackground.js';
 import { syncAppActivity } from './appActivity.js';
 import { startDecorClock } from './decorClock.js';
 import { Mascot, NekkoAvatar } from './components/Mascot.js';
@@ -95,8 +95,6 @@ export function App() {
   // Experimental surfaces only exist in the nav once their Settings flag is on.
   const [draggedNav, setDraggedNav] = useState<View | null>(null);
   const [dropNav, setDropNav] = useState<View | null>(null);
-  // The theme's moving background, unless turned off in Settings → Appearance.
-  const wave = settings?.backgroundAnimation === false ? null : pixelWaveFor(settings?.themePreset);
   const order = navOrder(NAV.map(n => n.view), settings?.navOrder);
   const visibleNav = order.map(v => NAV.find(n => n.view === v)!).filter(n => viewEnabled(n.view, settings));
   const activeNavIndex = visibleNav.findIndex(n => n.view === (view === 'modelserver' ? 'models' : view));
@@ -122,6 +120,7 @@ export function App() {
   // pane is a view of this; without it, switching workspaces unmounted the only
   // listener and the run's output went nowhere until the next event arrived.
   useEffect(() => startLiveRuns(), []);
+  useEffect(() => startSessionSummaryRefresh(refreshSessions), [refreshSessions]);
   // Take only the streams of the chats this window shows (agentSubscription.ts);
   // every chat's start, waits and end still arrive for the sidebar and board.
   useEffect(() => startAgentSubscription({ list: () => useStore.getState().sessions, watch: (fn) => useStore.subscribe(fn) }), []);
@@ -132,19 +131,6 @@ export function App() {
   useEffect(() => syncAppActivity(), []);
   // Step the looping decorations on a clock of their own, not every frame.
   useEffect(() => startDecorClock(), []);
-
-  // Archived chats past the retention window are deleted at launch and every
-  // few hours after, whichever view the app opens on, so a long-running window
-  // still lets them go on time. The list is re-read only when something went.
-  useEffect(() => {
-    const purge = () =>
-      void window.nekko.purgeExpiredArchives?.()
-        .then((n) => { if (n > 0) void useStore.getState().refreshSessions(); })
-        .catch(() => { /* an older host without the channel */ });
-    purge();
-    const t = window.setInterval(purge, 6 * 60 * 60 * 1000);
-    return () => window.clearInterval(t);
-  }, []);
 
   // Agents idle past Settings → Complete idle agents after (a month unless
   // changed) are completed: the same reversible archive the window's X does.
@@ -255,7 +241,7 @@ export function App() {
   }, []);
 
   return (
-    <div className="flex h-full w-full flex-col" style={{ background: wave ? 'transparent' : 'var(--paper)' }}>
+    <div className="flex h-full w-full flex-col" style={{ background: 'var(--paper)' }}>
       {/* With the Lilac / Lavender pixel field on, the shell stays see-through so
           the dots (drawn behind it) show in the space around the panels; the
           body still paints --paper beneath them. */}
@@ -389,7 +375,6 @@ export function App() {
       {/* Global overlays stay mounted even while settings load, so deep links,
           toasts, and update banners keep working on any settings failure. */}
       {settings?.themePreset === 'autumn' && <AutumnBackground />}
-      {wave && <PixelWaveBackground wave={wave} />}
       <ErrorBoundary label="Updates"><UpdateBanner /></ErrorBoundary>
       <ErrorBoundary label="Notices"><AppNotices /></ErrorBoundary>
       <ErrorBoundary label="Pairing"><RelayPairing /></ErrorBoundary>

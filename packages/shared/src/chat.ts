@@ -312,9 +312,8 @@ export interface Session {
   /** Settings for an image-generation chat. */
   imageParams?: ImageChatParams;
   /**
-   * Per-chat reasoning toggle for models that support it: `true` forces thinking
-   * on, `false` suppresses it, `undefined` leaves the model's default. Only
-   * offered in the UI when the selected model is reasoning-capable.
+   * Legacy per-chat reasoning preference, retained for saved-session compatibility.
+   * Ignored by the engine. Thinking is on, with local model overrides under Expert.
    */
   thinking?: boolean;
   /** Tool names the user disabled for this chat (subset of the builtins). */
@@ -400,9 +399,9 @@ export interface Session {
   order?: number;
   /**
    * When the chat was archived (epoch ms). An archived chat leaves the
-   * workspace list but keeps its transcript, readable from the Archived list
-   * until it is restored or `ARCHIVE_RETENTION_DAYS` pass, when it is deleted.
-   * Absent (or null, once restored) means the chat is live.
+   * workspace list but keeps its transcript indefinitely, readable from the
+   * Archived list until it is restored or explicitly deleted. Absent (or null,
+   * once restored) means the chat is live.
    */
   archivedAt?: number | null;
   createdAt: number;
