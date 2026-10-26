@@ -200,8 +200,10 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 >   the phone's *Activity* on the computer.
 >   On Android, **⋮ → Git** in a chat has the same status, files and diffs, **Stage** / **Stage all**,
 >   **Write message**, **Commit**, **Push**, **Abort merge**, **History**, **Branches** and
->   **Compare**; each change asks for your fingerprint, face or screen lock (once per 5 minutes).
->   Pull requests from Android are coming.
+>   **Compare**, and **Open a pull request**; each change asks for your fingerprint, face or screen
+>   lock (once per 5 minutes). A chat's pull request shows as a chip above the message box, with the
+>   same sheet as on the iPhone: its checks, files, **Approve**, **Merge**, **Close** or **Reopen**,
+>   and the prompts that ask the agent to commit, open a PR or fix failing checks.
 > - **Files:** **More → Files** in a chat opens that chat's folder (its worktree when the chat is
 >   isolated); **Computers and settings → Files** lists the computer's saved folders. Tap through
 >   folders, or search by file name. A file opens in monospace with line numbers (Markdown can be

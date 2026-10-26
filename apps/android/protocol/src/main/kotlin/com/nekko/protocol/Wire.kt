@@ -79,9 +79,17 @@ object Channels {
     const val GIT_PUSH = "git:push"
     const val GIT_SWITCH = "git:switch"
     const val GIT_MERGE_ABORT = "git:mergeAbort"
+    /** A chat's pull requests with their state and checks ([PullRequest]); read class. */
+    const val PR_SESSION_LIST = "pr:sessionList"
+    const val PR_CHECKS = "pr:checks"
+    const val PR_DIFF = "pr:diff"
+    /** Open a pull request from the chat's branch (pushed first when it has no upstream). */
+    const val PR_CREATE = "pr:create"
+    /** Approve, merge, close or reopen a pull request ([PrAction]). */
+    const val PR_ACTION = "pr:action"
 
     /** The git channels the computer treats as Change (`PHONE_CHANGE_CHANNELS`): each one is signed. */
-    val GIT_CHANGE = setOf(GIT_STAGE, GIT_UNSTAGE, GIT_COMMIT, GIT_COMMIT_MESSAGE, GIT_PUSH, GIT_SWITCH, GIT_MERGE_ABORT)
+    val GIT_CHANGE = setOf(GIT_STAGE, GIT_UNSTAGE, GIT_COMMIT, GIT_COMMIT_MESSAGE, GIT_PUSH, GIT_SWITCH, GIT_MERGE_ABORT, PR_CREATE, PR_ACTION)
 
     /** Every Change channel this phone calls ([ChangeProof]). */
     val CHANGE = GIT_CHANGE
@@ -93,6 +101,7 @@ object Channels {
         SECURITY_CHALLENGE, DEVICE_SIGN_OUT, REMOTE_STOP, APP_QUIT,
         WORKSPACE_GIT_STATUS, GIT_DIFF, GIT_LOG, GIT_SHOW, GIT_BRANCHES, GIT_COMPARE,
         GIT_STAGE, GIT_UNSTAGE, GIT_COMMIT, GIT_COMMIT_MESSAGE, GIT_PUSH, GIT_SWITCH, GIT_MERGE_ABORT,
+        PR_SESSION_LIST, PR_CHECKS, PR_DIFF, PR_CREATE, PR_ACTION,
     )
 }
 

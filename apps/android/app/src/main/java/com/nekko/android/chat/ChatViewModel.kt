@@ -12,6 +12,7 @@ import com.nekko.android.voice.DictationController
 import com.nekko.android.voice.MicHardware
 import com.nekko.protocol.AskAnswer
 import com.nekko.protocol.Channels
+import com.nekko.protocol.PullRequest
 import com.nekko.protocol.PhoneChanges
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.SkillSummary
@@ -61,6 +62,10 @@ class ChatViewModel(
         // A model-written message can take a while; a push or a switch too.
         change = { r -> repo.callChange(r.channel, r.args, timeoutMs = if (r.channel == Channels.GIT_COMMIT_MESSAGE) 90_000 else 150_000) },
     )
+
+    /** The pull requests this chat opened, with their state and checks (read only, `pr:sessionList`). */
+    suspend fun pullRequests(refresh: Boolean = false): List<PullRequest> =
+        PullRequest.list(repo.caller.call(Channels.PR_SESSION_LIST, JsonPrimitive(sessionId), JsonPrimitive(refresh)))
 
     override fun onCleared() {
         dictation?.cancel()
