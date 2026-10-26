@@ -53,9 +53,36 @@ function stageSpeechHelper(dirs) {
   console.log(`staged nekko-speech -> ${dirs.join(', ')}`);
 }
 
+// The CI runner VM helper (crates/nekkod/vm/nekko-vm.swift, decision 0022),
+// staged beside the dev daemon only. It is the only binary with the
+// virtualization entitlement, so it is ad-hoc signed here on its own. Release
+// packaging and signing land with the packaging task (T213/T214) together with a
+// signed release dry-run; until then packaged builds carry no nekko-vm and CI
+// runners report no VM support. Apple silicon only: macOS guests need it.
+function stageVmHelper(dirs) {
+  if (process.platform !== 'darwin' || process.arch !== 'arm64') return;
+  const source = join(repo, 'crates', 'nekkod', 'vm', 'nekko-vm.swift');
+  const entitlements = join(repo, 'crates', 'nekkod', 'vm', 'nekko-vm.entitlements');
+  const out = join(dirs[0], 'nekko-vm');
+  const fresh = existsSync(out) && statSync(out).mtimeMs >= Math.max(statSync(source).mtimeMs, statSync(entitlements).mtimeMs);
+  if (!fresh) {
+    const args = ['-O', '-target', 'arm64-apple-macos14', '-framework', 'Virtualization', source, '-o', out];
+    const built = spawnSync('xcrun', ['swiftc', ...args], { cwd: repo, stdio: 'inherit' });
+    const signed = built.status === 0 && spawnSync('codesign', ['--force', '-s', '-', '--entitlements', entitlements, out], { stdio: 'inherit' }).status === 0;
+    if (!signed) {
+      rmSync(out, { force: true });
+      console.warn('swiftc or codesign failed: CI runner VMs will be unavailable in this build');
+      return;
+    }
+  }
+  for (const dir of dirs.slice(1)) copyFileSync(out, join(dir, 'nekko-vm'));
+  console.log(`staged nekko-vm -> ${dirs.join(', ')}`);
+}
+
 if (dev) {
   execFileSync(cargo, ['build', '--profile', 'dev-daemon', '--locked', '-p', 'nekkod', '--features', 'dev-tools'], { cwd: repo, stdio: 'inherit' });
   stageSpeechHelper([join(repo, 'target', 'dev-daemon')]);
+  stageVmHelper([join(repo, 'target', 'dev-daemon')]);
   process.exit(0);
 }
 
