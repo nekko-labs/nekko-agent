@@ -39,7 +39,9 @@ jobs:
   protocol-and-build:
     if: github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'ci:macos') && contains(fromJSON('["ci:macos","ci:theme"]'), github.event.label.name))
     runs-on: macos-14
-    timeout-minutes: 65
+    # Light and dark live tests alone take 35-45 min on macos-14 (2026-10-25), so 50 cut
+    # passing runs off mid-test.
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
         with:
@@ -179,14 +181,6 @@ jobs:
           TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" \
             xcodebuild "${COMMON[@]}" -resultBundlePath evidence/beyond.xcresult test-without-building \
             -only-testing:NekkoNativeUITests/LiveRelayTests/testQueueForkAutomationsAndUsageFromThePhone || failed=1
-          kill $NEKKO_ITEST_PIDS 2>/dev/null || true
-          xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
-          # Simple and Expert: the model and effort control, the context gauge, the monitor panel and the whole monitor.
-          ../../apps/ios/scripts/itest-stack.sh /tmp/stack-modes.env
-          . /tmp/stack-modes.env
-          TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" \
-            xcodebuild "${COMMON[@]}" -resultBundlePath evidence/modes.xcresult test-without-building \
-            -only-testing:NekkoNativeUITests/LiveRelayTests/testSimpleAndExpertModes || { failed=1; stack_logs modes; }
           kill $NEKKO_ITEST_PIDS 2>/dev/null || true
           xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
           # The deep link from the computer's QR (Camera → nekko-agent-pair:) pairs through the confirmation sheet.

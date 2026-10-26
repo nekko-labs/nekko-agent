@@ -3,11 +3,16 @@ import NekkoProtocol
 import SwiftUI
 
 /// UI-test fixture (`-uiTestMarkdownLab`, Debug builds only): a reply and the
-/// user's own messages drawn by the chat's real `BlockView`, so the Markdown
-/// rendering can be exercised and photographed without a paired computer.
+/// user's own messages drawn by the chat's real `BlockView`, and the chat's
+/// real message box, so the Markdown rendering and the formatting toolbar can
+/// be exercised and photographed without a paired computer. Send puts the
+/// draft in a bubble and echoes it back as a reply.
 struct MarkdownLab: View {
     @Environment(\.palette) private var palette
     @State private var sent: [String] = [MarkdownLab.userMessage]
+    @State private var echoes: [String] = []
+    @State private var draft = ""
+    @State private var focused = false
 
     var body: some View {
         NavigationStack {
@@ -19,10 +24,35 @@ struct MarkdownLab: View {
                         BlockView(block: .user(id: "lab-user-\(i)", text: text, at: nil, images: 0))
                             .accessibilityIdentifier("lab.sent.\(i)")
                     }
+                    ForEach(Array(echoes.enumerated()), id: \.offset) { i, text in
+                        BlockView(block: .assistant(id: "lab-echo-\(i)", text: text, reasoning: nil, streaming: false, interrupted: false))
+                            .id("lab-echo-\(i)")
+                    }
                 }
                 .padding(16)
             }
+            .scrollDismissesKeyboard(.interactively)
             .background(palette.paper)
+            .safeAreaInset(edge: .bottom) {
+                HStack(alignment: .bottom, spacing: 8) {
+                    MarkdownComposerField(text: $draft, focused: $focused, placeholder: "Message")
+                    Button {
+                        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !text.isEmpty else { return }
+                        sent.append(text)
+                        echoes.append(text)
+                        draft = ""
+                        focused = false
+                    } label: {
+                        Image(systemName: "arrow.up").font(.body.weight(.bold)).frame(width: 36, height: 36)
+                            .background(palette.accent, in: Circle()).foregroundStyle(palette.onAccent)
+                            .frame(width: 44, height: 44).contentShape(Rectangle())
+                    }
+                    .accessibilityLabel("Send")
+                }
+                .padding(.horizontal, 12).padding(.vertical, 8)
+                .background(.bar)
+            }
             .navigationTitle("Markdown")
             .navigationBarTitleDisplayMode(.inline)
         }
