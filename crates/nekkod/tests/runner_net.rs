@@ -4,6 +4,7 @@
 //! redirected, by `TestConnector`, from public-looking addresses to local
 //! servers. Refusal tests map the refused address to a live local server too,
 //! so a policy hole would show up as a connection, not a timeout.
+#![cfg(unix)]
 
 #[path = "../src/runner/egress.rs"]
 #[allow(dead_code)]
