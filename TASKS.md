@@ -2405,6 +2405,9 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 
 - [x] Remove the retired Expo app and its dedicated Mobile CI; keep native phone workflows, relay/push infrastructure and shared protocol coverage. Update merge-gate accounting and desktop icon/test references. See [native phone decision](spec/phone/native-phone-implementation-decision.md) and [decision 0026](docs/decisions/0026-retire-expo-in-favor-of-native-phone-apps.md). Tracked in #1124.
 
+### Inline thoughts in chat (#1138) · [spec](spec/chat/tool-calls-grouped-by-purpose.md)
+
+- [x] Show provider-supplied thoughts with the thought icon outside collapsible tool groups in live and saved desktop/Local Web UI conversations. Preserve ordering and avoid repeating a final message's thought. Verified with all 217 chat component tests, desktop typechecking and hidden Electron before/after captures at 1000/390 px; native phones unchanged.
 ## Compact Monitors and new-chat frost (#1152)
 
 - [x] Reduce the default/snap dock width to 276px, trim the monitor right inset by 2px, and avoid unused Focus scrollbar space. Keep budget ranges on one row and metric values readable. See [spacing spec](spec/desktop/slim-wave-rail-tighter-agents-spacing-composer-snap-points.md).
