@@ -1,5 +1,5 @@
 import { PixelWaveBackground, pixelWaveFor } from './PixelWaveBackground.js';
-import { GreetingNekko } from './GreetingNekko.js';
+import { CleanStartGreeting } from './CleanStartGreeting.js';
 import { PrWatchContinuation } from './PrWatchContinuation.js';
 import { canOfferPrWatch } from '../prWatchContinuation.js';
 import { chatArtifacts } from '../chatArtifacts.js';
@@ -2687,16 +2687,13 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             <span className="absolute inset-x-0 top-[5px] h-0.5 opacity-0 transition-opacity group-hover:opacity-100" style={{ background: 'color-mix(in srgb, var(--accent) 45%, transparent)' }} />
             <span className="absolute left-1/2 top-[3px] h-1.5 w-10 -translate-x-1/2 rounded-full opacity-0 transition-opacity group-hover:opacity-100" style={{ background: 'var(--accent)' }} />
           </div>}
-          {cleanStart && <div className="clean-start-greeting fade-in" data-clean-start-greeting>
-            <h2>What should we work on?</h2>
-          </div>}
+          {cleanStart && <CleanStartGreeting key={sessionId} paused={!!draft || pendingImages.length > 0 || pendingVideos.length > 0} />}
           <div className={`composer-column mx-auto ${commandCenter ? 'w-[98%]' : 'w-[90%]'}`} style={cleanStart ? undefined : commandCenter ? { width: '98%' } : undefined}>
             {surface !== 'composer' && planChangeOpen && !question && (
               <div className="composer-question is-open" data-plan-change-pop><div className="composer-question-body"><PlanChangePrompt running={streaming} onSend={(change) => { void sendPlanChange(change); }} onCancel={() => { setPlanChangeOpen(false); composerRef.current?.focus(); }} /></div></div>
             )}
 
             <div className="composer relative">
-            {cleanStart && <GreetingNekko />}
             {/* While the agent works, a violet→cyan beam laps the border. The
                 gradient is a square that rotates on the compositor, clipped
                 to the ring by the mask on its wrapper; animating the gradient

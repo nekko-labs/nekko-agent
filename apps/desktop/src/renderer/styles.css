@@ -2370,6 +2370,9 @@
   pointer-events: none;
   transition: opacity 200ms ease;
 }
+.vt-revealing .vt-list {
+  transform: translateX(calc(-1 * var(--vt-reveal, 0px)));
+}
 .vt-list {
   transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -3379,9 +3382,9 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
   [data-clean-start][data-chat-surface] .clean-start .composer { background: var(--win, var(--surface)); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
 .clean-start-greeting { display: flex; align-items: center; justify-content: center; gap: 14px; max-width: 100%; margin: 0 auto 18px; text-align: left; }
-.greeting-nekko { position: absolute; z-index: 3; top: -50px; left: 24px; display: block; width: 64px; height: 60px; pointer-events: none; }
-.clean-start-greeting h2 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
-@media (max-width: 600px) { .clean-start-greeting { margin-bottom: 56px; } }
+.greeting-nekko { display: block; flex: 0 0 64px; width: 64px; height: 60px; pointer-events: none; }
+.clean-start-greeting h2 { display: flex; align-items: center; width: 300px; min-height: 60px; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
+@media (max-width: 600px) { .clean-start-greeting { gap: 10px; } .clean-start-greeting h2 { width: 230px; max-width: calc(100vw - 130px); } }
 .clean-start-greeting p { margin-top: 6px; font-size: 13px; color: var(--ink-faint); }
 [data-clean-start] .clean-start-model { opacity: 0.8; transition: opacity 0.2s vas (--ease-out)}
 [data-clean-start] .clean-start-model:hover,
