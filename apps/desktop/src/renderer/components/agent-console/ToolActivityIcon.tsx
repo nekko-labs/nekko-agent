@@ -37,7 +37,7 @@ export function purposeIconKind(purpose: ToolPurpose, calls: PurposeCall[]): Too
 const ICONS = { read: FileIcon, search: SearchIcon, list: FolderIcon, edit: PencilIcon, check: CheckIcon, git: BranchIcon, web: GlobeIcon, plan: ListIcon, other: ToolStepIcon };
 
 /** Transcript icons are static, including the live status terminal's shared artwork. */
-export function ToolActivityIcon({ kind, className = 'h-3 w-3 shrink-0 text-ink-faint' }: { kind: ToolIconKind; className?: string }) {
+export function ToolActivityIcon({ kind, className = 'h-3 w-3 shrink-0 text-accent' }: { kind: ToolIconKind; className?: string }) {
   const Icon = kind === 'terminal' ? null : ICONS[kind];
   return <span data-tool-icon={kind} className="inline-flex shrink-0 self-center" aria-hidden="true">
     {Icon ? <Icon className={className} /> : <span className={className}><ReplyActivityIcon state="terminal" size={12} stationary /></span>}
