@@ -35,6 +35,17 @@ describe('artifact previews', () => {
     // The full-window overlay is not mounted until the user asks for it.
     expect(renderToStaticMarkup(<MermaidDiagram code="graph TD; A-->B" />)).not.toContain('data-mermaid-fullscreen');
   });
+  it('uses a transparent, scriptless diagram document on a borderless dotted host', () => {
+    const doc = diagramDocument('<svg/>');
+    expect(doc).toContain('background:transparent');
+    expect(doc).not.toContain('background:#fff');
+    const html = renderToStaticMarkup(<MermaidDiagram code="graph TD; A-->B" />);
+    expect(html).toContain('diagram-canvas diagram-card');
+    expect(html).not.toContain('border border-line p-3');
+    const zoom = renderToStaticMarkup(<ZoomFrame srcDoc={doc} title="t" />);
+    expect(zoom).toContain('diagram-canvas');
+    expect(zoom).not.toContain('bg-white');
+  });
   it('does not read or fetch an image during message rendering', () => {
     const html = renderToStaticMarkup(<Markdown text="![Evidence](/project/shot.png)" />);
     expect(html).toContain('Loading image…');

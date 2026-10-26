@@ -38,7 +38,7 @@ export interface MonitorsDockProps {
   onOpenModels: () => void;
 }
 
-const DEFAULT_DOCK_WIDTH = 368;
+const DEFAULT_DOCK_WIDTH = 276;
 
 /**
  * The dock's show/hide button: an icon (the agent panel's pill, mirrored), with

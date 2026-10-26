@@ -364,7 +364,7 @@ struct ChatRow: View {
         // A glyph column says what the chat is doing before the title is read
         // (the desktop's StatusIcon); the facts sit under the preview as chips.
         HStack(alignment: .top, spacing: 10) {
-            ChatStatusIcon(activity: activity, completed: summary.archived, waiting: waiting > 0)
+            ChatStatusIcon(activity: activity, completed: summary.archived, waiting: waiting > 0, activeWatchCount: summary.activeWatchCount)
                 .frame(width: 22, height: 22).padding(.top, 1)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
