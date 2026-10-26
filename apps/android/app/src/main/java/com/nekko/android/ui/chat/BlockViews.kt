@@ -59,6 +59,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.Block
+import com.nekko.protocol.Purpose
+import com.nekko.protocol.PurposeCall
+import com.nekko.protocol.ToolPurpose
 import com.nekko.protocol.Transcript
 import com.nekko.protocol.ToolStatus
 import kotlinx.coroutines.CoroutineScope
@@ -245,6 +248,90 @@ private fun ToolRow(b: Block.Tool) {
                     color = p.inkFaint,
                     modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
                 )
+            }
+        }
+    }
+}
+
+/**
+ * Adjacent calls with one purpose as one card that says the goal ("Read the
+ * project's guidance", "Ran the tests") with a quiet detail line, opening to
+ * the calls as they look on their own (spec/chat/tool-calls-grouped-by-purpose.md).
+ * Present tense with a spinner while a call in it runs; a group with a failed
+ * call says so and starts open, so the failure is not hidden.
+ */
+@Composable
+fun PurposeGroupCard(purpose: ToolPurpose, blocks: List<Block>, calls: List<PurposeCall>) {
+    val p = Nekko.palette
+    val running = blocks.any { it is Block.Tool && it.status == ToolStatus.RUNNING }
+    val h = Purpose.headline(purpose, calls, running)
+    // The detail without the failure count, which is drawn in its own colour.
+    val quiet = if (h.failed > 0 && purpose == ToolPurpose.CHECK && !running) ""
+        else Purpose.headline(purpose, calls.map { it.copy(failed = false) }, running).detail
+    var chosen by rememberSaveable(blocks.firstOrNull()?.id) { mutableStateOf<Boolean?>(null) }
+    val open = chosen ?: (h.failed > 0)
+    val count = if (calls.size == 1) "1 call" else "${calls.size} calls"
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(p.surface)
+            .border(1.dp, p.line, RoundedCornerShape(12.dp)),
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable(role = Role.Button) { chosen = !open }
+                .heightIn(min = 48.dp)
+                .padding(horizontal = 12.dp, vertical = 10.dp)
+                .semantics(mergeDescendants = true) {
+                    contentDescription = listOf(h.headline, h.detail, count).filter { it.isNotEmpty() }.joinToString(", ")
+                    stateDescription = if (open) "Calls shown" else "Calls hidden"
+                },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (running) {
+                CircularProgressIndicator(color = p.running, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
+            } else {
+                Icon(
+                    if (h.failed > 0) Icons.Filled.Close else Icons.Filled.Check,
+                    contentDescription = null,
+                    tint = if (h.failed > 0) p.danger else p.success,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+            Column(Modifier.weight(1f)) {
+                Text(
+                    h.headline,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (running) p.accent else p.ink,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (quiet.isNotEmpty() || h.failed > 0) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (quiet.isNotEmpty()) {
+                            Text(quiet, style = MaterialTheme.typography.bodySmall, color = p.inkFaint, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                        }
+                        if (h.failed > 0) Text("${h.failed} failed", style = MaterialTheme.typography.bodySmall, color = p.danger)
+                    }
+                }
+            }
+            Text("${calls.size}", style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
+            Icon(
+                if (open) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = null,
+                tint = p.inkFaint,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        if (open) {
+            Column(
+                Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                blocks.forEach { BlockView(it) }
             }
         }
     }

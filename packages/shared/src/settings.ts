@@ -209,6 +209,8 @@ export interface AppNotice {
 }
 
 export interface AppSettings {
+  /** Default off: continuing a model request after internet restoration can incur charges. */
+  autoResumeOnInternetRestore?: boolean;
   /** Default on: request provider prompt/KV reuse, never store prompts on disk. */
   promptCaching?: boolean;
   voice?: import('./voice.js').VoiceSettings;

@@ -183,6 +183,7 @@ const USER_FIELDS: &[&str] = &[
     "queue",
     "archivedAt",
     "privacy",
+    "connectivityNotices",
 ];
 
 /// `queueItemPayload`: a queued prompt as `{ text, images?, skill? }`.
@@ -632,6 +633,29 @@ impl SessionStore {
             }
             true
         })
+    }
+
+    /// Connectivity notices are display-only metadata, never model messages.
+    /// Serialized with turn checkpoints and retained by `merge_disk`.
+    pub fn connectivity_notice(&self, id: &str, notice: Value) -> Result<bool, String> {
+        let mut written = false;
+        self.update_if(id, |s| {
+            if nekko_js::truthy(s.get("archivedAt")) || nekko_js::truthy(s.get("incognito")) {
+                return Ok(false);
+            }
+            let notices = s.entry("connectivityNotices").or_insert_with(|| json!([]));
+            let Some(notices) = notices.as_array_mut() else { return Ok(false) };
+            if notices.iter().any(|n| n.get("id") == notice.get("id")) {
+                return Ok(false);
+            }
+            notices.push(notice);
+            if notices.len() > 100 {
+                notices.drain(..notices.len() - 100);
+            }
+            written = true;
+            Ok(true)
+        })?;
+        Ok(written)
     }
 
     /// Read, check and change, then save, under the store's write lock, so
@@ -1317,6 +1341,28 @@ impl SessionStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn connectivity_notices_survive_checkpoints_without_entering_model_messages() {
+        let dir = std::env::temp_dir().join(format!("nekko-connectivity-store-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("sessions")).unwrap();
+        let store = SessionStore::new(&dir);
+        let mut session = store.create(None).unwrap();
+        let id = session["id"].as_str().unwrap().to_string();
+        let notice = json!({"id":"n1", "kind":"lost", "createdAt":1, "content":"Lost"});
+        assert!(store.connectivity_notice(&id, notice.clone()).unwrap());
+        assert!(!store.connectivity_notice(&id, notice.clone()).unwrap());
+        session["messages"] = json!([{"id":"a1","role":"assistant","content":"saved work"}]);
+        store.save_turn(&mut session, None).unwrap();
+        let saved = store.get(&id).unwrap();
+        assert_eq!(saved["connectivityNotices"], json!([notice]));
+        assert_eq!(saved["messages"], session["messages"]);
+        store.assign(&id, &[("incognito", json!(true))]).unwrap();
+        assert!(!store.connectivity_notice(&id, json!({"id":"private"})).unwrap());
+        store.assign(&id, &[("incognito", json!(false)), ("archivedAt", json!(1))]).unwrap();
+        assert!(!store.connectivity_notice(&id, json!({"id":"stale"})).unwrap());
+        std::fs::remove_dir_all(dir).ok();
+    }
 
     #[test]
     fn a_generated_title_lands_only_while_the_app_may_name_the_chat() {
