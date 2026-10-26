@@ -5,6 +5,8 @@ const path = require('node:path');
 const out = process.env.NEKKO_INTEGRATION_OUT;
 if (!out) throw Error('Launch through layout-evidence-integration.cjs');
 app.setPath('userData', path.join(out, 'profile'));
+// Escape JSON literals before embedding them in renderer JavaScript.
+const js = (v) => JSON.stringify(v).replace(/[<>/\u2028\u2029]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const report = { captures: [], checks: [], errors: [] };
 app.whenReady().then(async () => {
@@ -43,10 +45,10 @@ app.whenReady().then(async () => {
     await shot('history-mobile');
     if (await run("!!document.querySelector('[data-history-settings]')")) {
       for (const range of ['today', 'last-week', 'older-2-weeks', 'older-1-month', 'older-6-months']) {
-        await run(`(() => { const e = document.querySelector('#history-range'); const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; setter.call(e, ${JSON.stringify(range)}); e.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+        await run(`(() => { const e = document.querySelector('#history-range'); const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; setter.call(e, ${js(range)}); e.dispatchEvent(new Event('change', { bubbles: true })); })()`);
         await sleep(50); await run("document.querySelector('[data-history-clear]').click()"); await sleep(50);
         await run("document.querySelector('[data-history-confirm]').click()"); await sleep(100);
-        await check('range ' + range, `window.historyRange === ${JSON.stringify(range)}`);
+        await check('range ' + range, `window.historyRange === ${js(range)}`);
       }
       await run("layoutFixture.bridge.clearHistory = async () => { throw Error('fixture disk failure'); }; document.querySelector('[data-history-clear]').click()"); await sleep(50);
       await run("document.querySelector('[data-history-confirm]').click()"); await sleep(200);
