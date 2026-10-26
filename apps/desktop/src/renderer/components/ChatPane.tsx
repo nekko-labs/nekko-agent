@@ -63,6 +63,7 @@ import { cutPrompt, messageCuts, type MessageCuts } from './agent-console/messag
 import { estimateRowHeight, toTranscriptRows, transcriptBeforeLiveTurn, transcriptRowStamp, type TranscriptRow } from './agent-console/transcript.js';
 import { ContextGauge, EffortSlider } from './ChatMetrics.js';
 import { PlanRail } from './PlanRail.js';
+import { PlanSheet } from './PlanSheet.js';
 import { VerificationChecklist } from './WorkProgress.js';
 import { PlanChangePrompt, planChangeMessage } from './PlanChangePrompt.js';
 import { TurnStatsLine } from './agent-console/TurnStatsLine.js';
@@ -2691,6 +2692,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             <h2>What should we work on?</h2>
           </div>}
           <div className={`composer-column mx-auto ${commandCenter ? 'w-[98%]' : 'w-[90%]'}`} style={cleanStart ? undefined : commandCenter ? { width: '98%' } : undefined}>
+            {surface !== 'composer' && !cleanStart && !planChangeOpen && !question && (
+              <PlanSheet key={sessionId + '-plan'} sessionId={sessionId} session={session} streaming={streaming} prs={prs} basePath={artifactBasePath} onChangePlan={() => setPlanChangeOpen(true)} />
+            )}
             {surface !== 'composer' && planChangeOpen && !question && (
               <div className="composer-question is-open" data-plan-change-pop><div className="composer-question-body"><PlanChangePrompt running={streaming} onSend={(change) => { void sendPlanChange(change); }} onCancel={() => { setPlanChangeOpen(false); composerRef.current?.focus(); }} /></div></div>
             )}
@@ -3321,8 +3325,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           <PlanRail
             sessionId={sessionId}
             session={session}
-            streaming={streaming}
-            onChangePlan={readOnly ? undefined : () => setPlanChangeOpen(true)}
             onMinimize={() => useStore.getState().togglePlanRail(sessionId)}
           />
         </div>
