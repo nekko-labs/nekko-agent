@@ -227,6 +227,10 @@ function lockdownProblems(text) {
   flag('runner admin', (l) => /\brunner\b/.test(l) && (/GroupMembership/.test(l) || /(^|\s)-admin\b/.test(l)));
   flag('registers', (l) => l.includes('--jitconfig') || l.includes('config.sh'));
   flag('prints a password', (l) => /\b(echo|printf)\b.*\$\{?\w*(pass|pw)\w*/i.test(l));
+  // Found by the T214 VM boot check: each one fails silently on macOS 15.
+  flag('dscl -passwd cannot reset a secure-token admin', (l) => /\bdscl\b.*-passwd\b/.test(l));
+  flag('sysadminctl -autologin writes nothing', (l) => /\bsysadminctl\b.*-autologin\b/.test(l));
+  flag('softwareupdate --schedule off changes nothing', (l) => /\bsoftwareupdate\b.*--schedule\b/.test(l));
   return bad;
 }
 
@@ -242,6 +246,13 @@ test('provision_locks_the_guest_down', () => {
     'defaults write /Library/Preferences/com.apple.loginwindow autoLoginUser runner',
     'chmod 0600 /etc/kcpassword',
     'pwpolicy -u "$u" -disableuser',
+    '[[ "$(pwpolicy -u "$u" -authentication-allowed 2>&1)" == *"not allowed to authenticate"* ]] || die ',
+    '[[ "$(pwpolicy -u root -authentication-allowed 2>&1)" == *"not allowed to authenticate"* ]] || die ',
+    'm="$(dsmemberutil checkmembership -U "$u" -G admin 2>&1 || true)"',
+    '*) die "cannot tell whether $u is an admin',
+    '[ "$u" != runner ] || die ',
+    'done < <(dscl . -list /Users)',
+    '[[ "$(fdesetup status 2>&1)" == *"FileVault is Off."* ]] || die ',
     '/usr/local/libexec/nekko-runner-boot.sh',
     '/Library/LaunchDaemons/dev.nekkolabs.runner-boot.plist',
   ])
@@ -270,6 +281,9 @@ test('lockdown_bans_trip_on_planted_lines', () => {
     'sysadminctl -addUser runner -fullName "CI runner" -admin',
     'sysadminctl -adminUser x -adminPassword y; sysadminctl -edit runner -admin',
     'sudo -u runner "$runner_home/actions-runner/config.sh" --unattended',
+    'dscl . -passwd "/Users/$u" "$pw"',
+    'sysadminctl -autologin set -userName runner -password "$runner_pw"',
+    'softwareupdate --schedule off',
     'echo "$runner_pw"',
   ])
     assert.notDeepEqual(lockdownProblems(`${p}\n${line}\n`), [], line);
@@ -298,6 +312,12 @@ test('provision_writes_kcpassword_in_apples_format', () => {
   assert.ok(fn, 'kcpassword function');
   const kc = (pw) => execFileSync('/bin/bash', ['-c', `${fn}\nkcpassword "$1"`, '_', pw]).toString('hex');
   assert.equal(kc('admin'), '1ced3f4abcbcddeaa3b91f7d');
-  assert.equal(kc('a'.repeat(12)).length, 24, 'a multiple of 12 gets no extra block');
+  // Unverified on a real Mac: whether a 12-character password needs an extra NUL block.
   assert.equal(kc('a'.repeat(32)).length, 72);
+});
+
+test('provision_turns_off_automatic_updates', () => {
+  const p = provision();
+  for (const key of ['AutomaticCheckEnabled', 'AutomaticDownload', 'CriticalUpdateInstall', 'ConfigDataInstall', 'AutomaticallyInstallMacOSUpdates'])
+    assert.ok(p.includes(`defaults write /Library/Preferences/com.apple.SoftwareUpdate ${key} -bool false\n`), key);
 });

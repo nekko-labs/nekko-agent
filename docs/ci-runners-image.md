@@ -15,6 +15,9 @@ the image itself never runs a job, and nothing a job does survives it.
 - An Apple silicon Mac.
 - About 150 GB free: the Xcode base image is large, and building it needs room for a copy.
 - [Tart](https://tart.run), to build the image only. Nekko does not use Tart to run jobs.
+- FileVault off in the base image (Cirrus images have it off). `provision.sh` disables every
+  admin, so with FileVault on nobody could unlock the disk and the VM would wait at the unlock
+  screen forever.
 
 ## Build it
 
@@ -56,10 +59,10 @@ Terminal. Stop the VM and copy the three files as above.
 ## What provision.sh does
 
 1. Checks it runs as root on Apple silicon with macOS 14 or later, that no Xcode is named
-   `Xcode_*.app` (rename it to `Xcode.app`: the job user cannot `sudo xcode-select`), and that
-   `/Users/runner` is free. Cirrus images link `/Users/runner` to the admin's home for
-   GitHub-hosted compatibility; that link is replaced, a real folder there stops the script. When `/Applications/Xcode.app` exists it selects it
-   and accepts its license.
+   `Xcode_*.app` (rename it to `Xcode.app`: the job user cannot `sudo xcode-select`), that
+   `/Users/runner` is free, and that FileVault is off. Cirrus images link `/Users/runner` to the
+   admin's home for GitHub-hosted compatibility; that link is replaced, a real folder there stops
+   the script. When `/Applications/Xcode.app` exists it selects it and accepts its license.
 2. Creates the job user `runner`, a standard account (not an admin) with a random password that
    is never shown or saved. It copies the existing admin's Setup Assistant answers so `runner`'s
    first login shows no assistant, and turns its screen saver off.
@@ -75,17 +78,20 @@ Terminal. Stop the VM and copy the three files as above.
    `dev.nekkolabs.runner-boot`. At each boot of a clone it reads the seed, starts one job as
    `runner`, and powers the VM off when the job ends, fails, or the seed is wrong.
 7. Gives `runner` ownership of `/opt/homebrew`, so jobs can `brew install` without sudo.
-8. Turns off sleep, Spotlight indexing and automatic update downloads. macOS 15 restores the
-   automatic update check at boot, so a job VM may still check for updates; it never downloads
-   them.
-9. Locks the guest down: every admin account is disabled (a base image's admin password is
+8. Turns off sleep, Spotlight indexing and automatic update downloads and installs (macOS,
+   critical and configuration data updates). macOS 15 restores the automatic update check at
+   boot, so a job VM may still check for updates; the download and install settings stay off.
+9. Locks the guest down: every account in the `admin` group, however it got there (listed
+   members, primary group 80, nested groups) and root included, is disabled (a base image's admin password is
    public, Cirrus's is `admin`, and root cannot change a secure-token admin's password without the
    old one, so disabling is what stops a job from `su admin`), every file in
    `/etc/sudoers.d` goes (and it fails if `/etc/sudoers` still allows passwordless sudo), SSH,
    Screen Sharing and Apple Remote Desktop are turned off, and Cirrus Labs' LaunchDaemons,
    LaunchAgents and the Tart guest agent are removed. Then it checks the result: it fails unless
-   `sudo -l -U runner` says `runner` may not use sudo, `runner` is not in the `admin` group, and
-   every admin is refused authentication.
+   `sudo -l -U runner` says `runner` may not use sudo, `runner` is not in the `admin` group, every
+   admin and root are refused authentication, and every local user got a plain answer from
+   `dsmemberutil` (anything else stops it). Root keeps working for the system and for `sudo`; it
+   just cannot be logged in as.
 10. Writes `/usr/local/share/nekko-runner-image.json` with the build date and the macOS, Xcode,
     Actions runner and gitlab-runner versions.
 
@@ -175,5 +181,14 @@ which forwards 127.0.0.1:2222 to the guest's SSH for the build and copies
 - Every clone gets its own MAC address (`nekko-vm clone` writes a new one into `config.json`).
 - Found and fixed on the way: the `/Users/runner` link, `sysadminctl -autologin`, the admin
   password change (`dscl -passwd` asks for the old password of a secure-token admin), and
-  `softwareupdate --schedule off` doing nothing. Left alone: the Tart guest agent's Homebrew
-  Cellar folder stays on disk, with nothing that starts it.
+  `softwareupdate --schedule off` doing nothing.
+- Rechecked after review: a fresh build with the all-users lockdown found three admins by
+  `dsmemberutil` (`admin`, `_mbsetupuser`, root) and disabled all three. Root reported
+  "Policy allows" before (it has no password, `Password: *`) and is refused after; `sudo` still
+  works. `fdesetup status` says `FileVault is Off.`. A clone of that image with the
+  `not-a-config` seed logged in, ran the runner and powered off in 51 s, and its disk still had
+  `AutomaticDownload`, `CriticalUpdateInstall`, `ConfigDataInstall` and
+  `AutomaticallyInstallMacOSUpdates` false after the boot (`AutomaticCheckEnabled` was gone
+  again).
+- Left alone: the Tart guest agent's Homebrew Cellar folder stays on disk, with nothing that
+  starts it.

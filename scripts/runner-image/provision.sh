@@ -46,6 +46,8 @@ for f in nekko-runner-boot.sh dev.nekkolabs.runner-boot.plist; do
   [ -f "$src/$f" ] || die "missing $src/$f"
 done
 id runner >/dev/null 2>&1 && die "user runner already exists: rebuild from a fresh base image"
+# Step 9 disables every admin, so with FileVault on nobody could unlock the disk at boot.
+[[ "$(fdesetup status 2>&1)" == *"FileVault is Off."* ]] || die "turn FileVault off in the base image first"
 # Cirrus images link /Users/runner to the admin's home (GitHub-hosted path compatibility); step 2
 # replaces the link. A real directory there is someone's data: refuse.
 if [ -e "$runner_home" ] && [ ! -L "$runner_home" ]; then
@@ -122,7 +124,7 @@ if [ -d /opt/homebrew ]; then
   chown -R runner /opt/homebrew
 fi
 
-# 8. A quiet guest: no sleep, no indexing, no update checks.
+# 8. A quiet guest: no sleep, no indexing, no automatic update downloads or installs.
 step "power, Spotlight, software update"
 pmset -a sleep 0 displaysleep 0 disksleep 0 powernap 0
 mdutil -a -i off >/dev/null
@@ -130,15 +132,28 @@ mdutil -a -i off >/dev/null
 # AutomaticCheckEnabled again at the next boot (a clone may still check); AutomaticDownload stays off.
 defaults write /Library/Preferences/com.apple.SoftwareUpdate AutomaticCheckEnabled -bool false
 defaults write /Library/Preferences/com.apple.SoftwareUpdate AutomaticDownload -bool false
+defaults write /Library/Preferences/com.apple.SoftwareUpdate CriticalUpdateInstall -bool false
+defaults write /Library/Preferences/com.apple.SoftwareUpdate ConfigDataInstall -bool false
+defaults write /Library/Preferences/com.apple.SoftwareUpdate AutomaticallyInstallMacOSUpdates -bool false
 
 # 9. Lock down: no admin anyone can log in as, no passwordless sudo, no way in from the host.
 # Disabled, not given a new password: root cannot reset a secure-token admin's password without the
 # old one, and a base image's admin password is public (Cirrus: admin), so a job could `su admin`.
 step "locking down"
-for u in ${admins[@]+"${admins[@]}"}; do
-  pwpolicy -u "$u" -disableuser >/dev/null
+# Every account in admin however it got there (GroupMembership, primary group 80, a nested group),
+# root included. Anything dsmemberutil does not answer plainly stops the build.
+while read -r u; do
+  m="$(dsmemberutil checkmembership -U "$u" -G admin 2>&1 || true)"
+  case "$m" in
+    *"is not a member"*) continue ;;
+    *"is a member"*) ;;
+    *) die "cannot tell whether $u is an admin: $m" ;;
+  esac
+  [ "$u" != runner ] || die "runner is an admin"
+  pwpolicy -u "$u" -disableuser >/dev/null 2>&1 || true
   [[ "$(pwpolicy -u "$u" -authentication-allowed 2>&1)" == *"not allowed to authenticate"* ]] || die "cannot disable $u"
-done
+done < <(dscl . -list /Users)
+[[ "$(pwpolicy -u root -authentication-allowed 2>&1)" == *"not allowed to authenticate"* ]] || die "root can authenticate"
 find /etc/sudoers.d -mindepth 1 -delete
 # Not grep -q: under pipefail its early exit can SIGPIPE the first grep and hide a match.
 if grep -v '^[[:space:]]*#' /etc/sudoers | grep NOPASSWD >/dev/null; then
