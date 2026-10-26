@@ -2,6 +2,12 @@
 
 Agent chats show verification progress above the footer pull-request panel in the desktop app and Local Web UI.
 
+## Thoughts in the conversation
+
+When a provider supplies thought text, the desktop app and Local Web UI show it directly in the conversation with a thought-bubble icon. Thoughts stay visible while streaming and after the reply is saved, even when the tool activity is collapsed. They appear between tool groups in the order they arrived.
+
+This changes only the display. It does not send another chat message to the model or expose provider metadata that was not already supplied as thought text.
+
 ## Verification checklist
 
 The checklist reports **n of n passed**, followed by each check's state, device, current activity and last update. Expand it to follow individual checks or open an evidence link. You can collapse it to keep more room for the conversation.
