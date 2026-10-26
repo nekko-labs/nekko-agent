@@ -24,6 +24,11 @@ describe('chatPaneSettings', () => {
     expect(shallow(chatPaneSettings(base), chatPaneSettings(next))).toBe(false);
   });
 
+  it('tracks the theme and animation toggle for the new-chat-only wave', () => {
+    expect(shallow(chatPaneSettings(base), chatPaneSettings({ ...base, themePreset: 'lilac' }))).toBe(false);
+    expect(shallow(chatPaneSettings(base), chatPaneSettings({ ...base, backgroundAnimation: false }))).toBe(false);
+  });
+
   it('is null before settings load', () => {
     expect(chatPaneSettings(null)).toBeNull();
   });

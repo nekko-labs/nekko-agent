@@ -6,7 +6,7 @@ import { isRunningTool, toolQuietSince, watchToolElapsed } from './toolProgress.
 import { ChatIcon, ThoughtIcon } from '../../icons.js';
 import { Markdown } from '../Markdown.js';
 import type { Activity, ActivityRow, IndexedActivity } from './transcript.js';
-import { activityRows, stepKey } from './transcript.js';
+import { activityRows, fmtTime, stepKey } from './transcript.js';
 import { SubagentCue, SubagentModelChip, subagentSummary, SubagentHeadline, SubagentOpenButton } from './SubagentCue.js';
 import { WatchClockChip, WatchDetail, WatchIcon, WatchThen, watchCallHeadline } from './WatchRow.js';
 import { parseWatchCall, thenSummary } from '../../agentWatches.js';
@@ -195,7 +195,7 @@ function PurposeGroupRow({ row, live, streaming, total, toolActivity, pendingCal
   const endedAt = ends.every((e) => e !== undefined) ? Math.max(...(ends as number[])) : undefined;
   const quiets = tools.map((t) => toolQuietSince(toolActivity, t.call.id)).filter((q): q is number => q !== undefined);
   return (
-    <li className="list-none" data-purpose-group={row.purpose}>
+    <li className="list-none" data-purpose-group={row.purpose} data-vt-stamp={startedAt ? fmtTime(startedAt) || undefined : undefined}>
       <button
         className="flex w-full min-w-0 items-baseline gap-1.5 py-0.5 text-left text-ink-faint hover:text-ink-soft"
         onClick={() => setOpen(!open)}
@@ -281,7 +281,7 @@ function StepRow({ index, item, live, quietSince }: { index: number; item: Activ
   const then = kind === 'watch' && item.kind === 'tool' && parseWatchCall(item.call).action === 'create' && !item.result?.isError ? thenSummary(parseWatchCall(item.call).prompt) : '';
 
   return (
-    <li className="list-none">
+    <li className="list-none" data-vt-stamp={item.kind === 'tool' && item.startedAt ? fmtTime(item.startedAt) || undefined : undefined}>
       <div className="flex min-w-0 items-center gap-1">
         <button
           className="flex min-w-0 flex-1 items-baseline gap-1.5 py-0.5 text-left text-ink-faint hover:text-ink-soft"
@@ -306,7 +306,7 @@ function StepRow({ index, item, live, quietSince }: { index: number; item: Activ
         kind === 'agent' && item.kind === 'tool' ? (
           <div className="ml-[84px] space-y-2 py-1">
             <div className="text-ink-soft">Task</div>
-            <pre className="max-h-60 overflow-auto whitespace-pre-wrap text-ink-soft">{typeof item.call.input.task === 'string' ? item.call.input.task : JSON.stringify(item.call.input, null, 2)}</pre>
+            <pre className="max-h-60 overflow-auto whitespace-pre-wrap [overflow-wrap:anywhere] text-ink-soft">{typeof item.call.input.task === 'string' ? item.call.input.task : JSON.stringify(item.call.input, null, 2)}</pre>
             <div className="text-ink-soft">{item.result?.isError ? 'Delegation tool error' : item.result ? 'Delegation tool result' : 'No delegation tool result recorded'}</div>
             {item.result && <div className="max-h-60 overflow-auto font-sans text-[13px] text-ink-soft"><Markdown text={item.result.output} /></div>}
           </div>
@@ -317,7 +317,7 @@ function StepRow({ index, item, live, quietSince }: { index: number; item: Activ
             <Markdown text={item.text} />
           </div>
         ) : (
-          <pre className="ml-[84px] mt-0.5 max-h-60 overflow-auto whitespace-pre-wrap border-l border-line pl-2 text-[12px] leading-relaxed text-ink-faint">
+          <pre className="ml-[84px] mt-0.5 max-h-60 overflow-auto whitespace-pre-wrap [overflow-wrap:anywhere] border-l border-line pl-2 text-[12px] leading-relaxed text-ink-faint">
             {item.kind === 'reasoning' ? item.text : JSON.stringify(item.call.input, null, 2)}
           </pre>
         )
