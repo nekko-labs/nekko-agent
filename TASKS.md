@@ -1,10 +1,14 @@
 ---
 status: active
-last-updated: 2026-10-24
+last-updated: 2026-10-26
 owner:
 ---
 
 # Execution Plan, Nekko Agent
+
+## Agents panel by activity (#1202)
+
+- [x] **APA-1, Activity default, Done group, chiplet cards, arced moves.** The panel defaults to Activity grouping (Needs input, Working, Error, Done; Idle renamed Done), cards are bordered chip tiles, and a card that changes group flies there on a fixed-layer copy along a right-bowing curve (`agentCardMotion.ts`), skipped for grouping switches, folded groups and reduced motion. Unit tests for the default, the Done mapping and the arc path; hidden-fixture before/after stills and motion frames (`agent-activity-motion-sandbox.cjs`). Spec: [Agent panel view options](spec/agents/agent-panel-view-options.md). Saved views keep their old grouping; packaged app unverified. Done: 2026-10-26
 
 ## Automatic Dynamic window minimization (#1200)
 
