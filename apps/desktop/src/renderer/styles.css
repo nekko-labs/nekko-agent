@@ -433,60 +433,6 @@
   to { opacity: 1; transform: none; }
 }
 
-.effort-slider .effort-track {
-  position: relative;
-  display: inline-flex;
-}
-.effort-slider input[type='range'] {
-  position: relative;
-  appearance: none;
-  width: 58px;
-  height: 6px;
-  border-radius: 999px;
-  cursor: pointer;
-  background: linear-gradient(90deg, var(--accent) var(--effort-fill), var(--surface-2) var(--effort-fill));
-}
-/* The glow hugs only the filled run left of the thumb and stays solid (no
-   pulsing); its reach and brightness climb with the rung. */
-.effort-slider .effort-track::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 0;
-  width: var(--effort-fill, 0%);
-  height: 9px;
-  translate: 0 -50%;
-  border-radius: 999px;
-  background: var(--accent);
-  filter: blur(calc(3px + var(--effort-level, 0) * 4px));
-  opacity: calc(0.1 + var(--effort-level, 0) * 0.25);
-  pointer-events: none;
-}
-.effort-slider input[type='range']::-webkit-slider-thumb {
-  appearance: none;
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 2px var(--surface);
-}
-/* The top rung draws a small set of speed lines trailing off the thumb: a
-   static wink that the meter is maxed, not an animation. */
-.effort-slider .effort-speed {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-.effort-slider .effort-speed i {
-  position: absolute;
-  height: 1.5px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--ink) 68%, transparent);
-}
-.effort-slider .effort-speed i:nth-child(1) { top: -2px; right: 12px; width: 10px; }
-.effort-slider .effort-speed i:nth-child(2) { top: 2px; right: 16px; width: 15px; }
-.effort-slider .effort-speed i:nth-child(3) { top: 6px; right: 10px; width: 9px; }
-
 /* The send control is Aphelion herself, not a filled button: no background,
    just the avatar that lifts and brightens a touch on hover / press. */
 @utility send-avatar {

@@ -30,6 +30,7 @@ Recorded in [docs/decisions/0024](../../docs/decisions/0024-phones-read-the-moni
 ## Not yet
 
 - Building and driving the new views in the simulator, with screenshots (needs macOS; the iOS Native workflow builds them).
-- Android (the switch, the model and effort control, the context gauge and the monitor).
+- Android (the switch, the model and effort control, the context gauge and the monitor), including wide foldables.
+- The desktop has the same design since 2026-10-25: [Desktop Simple and Expert modes](../desktop/desktop-simple-and-expert-modes.md).
 - Clearing a chat's effort back to the computer's default from the phone (needs the gate to accept a clear).
 - Changing which monitors show, as the desktop's Settings → Monitors does; the phone shows them all.

@@ -61,6 +61,7 @@ import { cutPrompt, messageCuts, type MessageCuts } from './agent-console/messag
 
 import { estimateRowHeight, toTranscriptRows, transcriptBeforeLiveTurn, transcriptRowStamp, type TranscriptRow } from './agent-console/transcript.js';
 import { ContextGauge, EffortSlider } from './ChatMetrics.js';
+import { ExpertMonitor, ModeToggle, useExpertMode } from './ModeViews.js';
 import { PlanRail } from './PlanRail.js';
 import { VerificationChecklist } from './WorkProgress.js';
 import { PlanChangePrompt, planChangeMessage } from './PlanChangePrompt.js';
@@ -334,12 +335,15 @@ function initialBrain(s: Session | null | undefined): { providerId: string | nul
 function ChatHeader({
   title,
   subAgent,
+  lead,
   metadata,
   children,
   inWall = false,
 }: {
   title: string;
   subAgent: boolean;
+  /** At the top left, before the title: the Simple / Expert switch. */
+  lead?: React.ReactNode;
   metadata?: React.ReactNode;
   children: React.ReactNode;
   /**
@@ -353,7 +357,7 @@ function ChatHeader({
   if (framed || inWall) {
     return (
       <>
-        <PaneMetadata>{metadata}</PaneMetadata>
+        <PaneMetadata>{lead}{metadata}</PaneMetadata>
         <PaneActions>
           {subAgent && <span className="chip shrink-0 text-[10px]">sub-agent</span>}
           {children}
@@ -364,6 +368,7 @@ function ChatHeader({
   return (
     <header className="flex items-center justify-between gap-2 border-b border-line px-3 py-2">
       <div className="flex min-w-0 flex-1 items-center gap-2">
+        {lead}
         <span className="truncate text-[13px] font-medium">{title}</span>
         {/* The "/" names the boundary between what this is (the title) and
             where it lives (the project and git context), so it leads that
@@ -758,6 +763,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // "Jump to latest" pill: shown when new content streams in while the reader
   // has scrolled up.
   const [showJump, setShowJump] = useState(false);
+  const [expertMode] = useExpertMode();
   // Find in this chat. The bar sits over the transcript; each open mounts it
   // fresh (focused, empty), and closing it clears the highlights.
   const [searchOpen, setSearchOpen] = useState(false);
@@ -2442,7 +2448,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             title strip, which already shows the chat's name; standalone, the
             chat still needs a header of its own. */}
         {surface !== 'composer' && !cleanStart && (
-        <ChatHeader title={session?.title || 'New chat'} subAgent={Boolean(session?.parentSessionId)} inWall={commandCenter} metadata={
+        <ChatHeader title={session?.title || 'New chat'} subAgent={Boolean(session?.parentSessionId)} inWall={commandCenter} lead={<ModeToggle />} metadata={
             git && (
               <span className="flex min-w-0 shrink items-center gap-1 text-[11px]">
                 {session && <WorktreeChip session={session} git={git} disabled={hasLive} onChange={setSession} />}
@@ -2486,6 +2492,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
 
         </ChatHeader>
         )}
+        {surface !== 'composer' && !cleanStart && expertMode && <ExpertMonitor />}
 
         {/* Preserve the wall plan-change pin. An open question takes precedence. */}
         {surface === 'transcript' && planChangeOpen && !question && (

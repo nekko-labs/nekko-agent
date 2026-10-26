@@ -14,6 +14,7 @@ Philip asked for a Simple / Expert switch at the top left of the phone's chat: S
 - [x] **T204, iPhone modes, model and effort control, context gauge, monitor (2026-10-24).** `Prefs.expertMode`; `ModeViews.swift` (mode menu, `EffortGauge`, `ModelEffortButton` / sheet, `ContextGauge`, `MonitorPanel`, `MonitorSheet`); `Monitor.swift` parsing and `MonitorModel` polling; chat `effort` and `context`. Swift package tests pass on Linux; views built only by macOS CI.
 - [ ] **T204a, simulator UI test and screenshots** of the mode switch, the composer row and the monitor against a live computer.
 - [ ] **T204b, Android parity.**
+- [x] **T204g, the same design on the desktop (2026-10-25).** `ModeViews.tsx` (Simple / Expert switch before the chat title, `EffortDial`, `RingDial`, the Expert hardware strip and monitor popover over `hardwareRows` and `LocalModels`); the effort slider becomes a dial with a popover of levels (arrow keys still step it); the context bar becomes a ring. Spec: [Desktop Simple and Expert modes](spec/desktop/desktop-simple-and-expert-modes.md). Evidence harness: `chat-modes-fixture.tsx` / `chat-modes-sandbox.cjs` through `chat-search-integration.cjs` (`NEKKO_FIXTURE`).
 
 ## Verification and PR progress (added 2026-10-25)
 
