@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { navOrder, moveNav } from './nav-order.js';
 import { useStore, viewEnabled, type View } from './store.js';
 import { startLiveRuns } from './liveRuns.js';
+import { startSessionSummaryRefresh } from './sessionSummaryRefresh.js';
 import { startAgentSubscription } from './agentSubscription.js';
 import { startDesktopNotifications } from './notifications.js';
 import { startCompactionStatus } from './compactionStatus.js';
@@ -122,6 +123,7 @@ export function App() {
   // pane is a view of this; without it, switching workspaces unmounted the only
   // listener and the run's output went nowhere until the next event arrived.
   useEffect(() => startLiveRuns(), []);
+  useEffect(() => startSessionSummaryRefresh(refreshSessions), [refreshSessions]);
   // Take only the streams of the chats this window shows (agentSubscription.ts);
   // every chat's start, waits and end still arrive for the sidebar and board.
   useEffect(() => startAgentSubscription({ list: () => useStore.getState().sessions, watch: (fn) => useStore.subscribe(fn) }), []);

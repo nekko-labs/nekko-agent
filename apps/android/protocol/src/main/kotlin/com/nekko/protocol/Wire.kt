@@ -225,6 +225,7 @@ data class SessionSummary(
     val archivedAt: Long? = null,
     /** Manual position from the desktop sidebar's drag order; null when never dragged. */
     val order: Double? = null,
+    val activeWatchCount: Long = 0,
 ) {
     /** Real, top-level chats, active or completed: what the phone's list shows. */
     val isVisible: Boolean get() = parentSessionId == null && taskId == null && trainingRunId == null
@@ -248,6 +249,7 @@ data class SessionSummary(
                 workspaceId = o.str("workspaceId"),
                 archivedAt = archivedAt,
                 order = o.dbl("order"),
+                activeWatchCount = o.long("activeWatchCount") ?: 0,
             )
         }
 

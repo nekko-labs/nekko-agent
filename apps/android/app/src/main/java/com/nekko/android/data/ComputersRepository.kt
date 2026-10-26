@@ -37,6 +37,8 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -134,6 +136,7 @@ class ComputersRepository(
     @Volatile private var client: Remote? = null
     private var connJob: Job? = null
     private var summariesJob: Job? = null
+    private var summariesDirty = false
     private var cachedDeviceId: String? = null
     /** The live list has been read since connecting, so it may be saved. */
     @Volatile private var liveList = false
@@ -308,6 +311,7 @@ class ComputersRepository(
     fun disconnect() {
         connJob?.cancel(); connJob = null
         summariesJob?.cancel(); summariesJob = null
+        summariesDirty = false
         client?.close()
         client = null
         _state.update { it.copy(conn = RelayState.IDLE) }
@@ -564,22 +568,27 @@ class ComputersRepository(
     }
 
     private fun scheduleSummaries() {
-        if (summariesJob?.isActive == true) return
         val c = client ?: return
+        summariesDirty = true
+        if (summariesJob?.isActive == true) return
         summariesJob = scope.launch {
-            delay(summariesDebounceMs)
-            if (client !== c) return@launch
-            try {
-                val list = SessionSummary.visible(c.call(Channels.SESSIONS_SUMMARIES))
-                if (client === c) {
+            do {
+                delay(summariesDebounceMs)
+                if (client !== c) return@launch
+                // Notifications during the debounce are covered by this call.
+                summariesDirty = false
+                try {
+                    val list = SessionSummary.visible(c.call(Channels.SESSIONS_SUMMARIES))
+                    ensureActive()
+                    if (client !== c) return@launch
                     _state.update { it.copy(summaries = list) }
                     saveList()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    // Only a new invalidation retries, never a failed call alone.
                 }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                // The next refresh will catch up.
-            }
+            } while (isActive && client === c && summariesDirty)
         }
     }
 

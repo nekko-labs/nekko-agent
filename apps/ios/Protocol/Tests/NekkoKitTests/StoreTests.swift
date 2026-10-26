@@ -17,6 +17,7 @@ final class FakeConnection: RemoteConnection, @unchecked Sendable {
     let lock = NSLock()
     var calls: [(String, [JSONValue])] = []
     var replies: [String: ([JSONValue]) throws -> JSONValue] = [:]
+    var summariesReply: (@MainActor () async throws -> JSONValue)?
     var connected = false
     var closed = false
     var pushTokens: [String] = []
@@ -64,6 +65,7 @@ final class FakeConnection: RemoteConnection, @unchecked Sendable {
         calls.append((channel, args))
         let r = replies[channel]
         lock.unlock()
+        if channel == Channels.sessionsSummaries, let summariesReply { return try await summariesReply() }
         guard let r else { return .null }
         return try r(args)
     }
@@ -251,6 +253,89 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(seen.count, 2)
         XCTAssertGreaterThan(c.callsTo(Channels.sessionsSummaries).count, before, "a finished turn re-reads the list")
         s.unsubscribe(sub)
+    }
+
+    func testSummaryInvalidationsDuringPendingCallReadFinalWatchCount() async throws {
+        let s = makeStore()
+        await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key))
+        let c = try XCTUnwrap(connections.last)
+        c.online()
+        await settle()
+        var pending: CheckedContinuation<JSONValue, Error>?
+        var requests = 0
+        c.summariesReply = {
+            requests += 1
+            if requests == 1 {
+                return try await withCheckedThrowingContinuation { pending = $0 }
+            }
+            return [["id": "s1", "activeWatchCount": 0]]
+        }
+        c.event(["type": "session_meta", "sessionId": "s1"])
+        c.event(["type": "done", "sessionId": "s1"])
+        await settle()
+        XCTAssertEqual(requests, 1, "debounce notifications coalesce")
+        XCTAssertNotNil(pending)
+        c.event(["type": "session_meta", "sessionId": "s1"])
+        c.event(["type": "done", "sessionId": "s1"])
+        await settle()
+        pending?.resume(returning: [["id": "s1", "activeWatchCount": 1]])
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(s.summaries.first?.activeWatchCount, 1)
+        await settle()
+        XCTAssertEqual(s.summaries.first?.activeWatchCount, 0)
+        XCTAssertEqual(requests, 2)
+        await settle()
+        XCTAssertEqual(requests, 2)
+        s.disconnect()
+    }
+
+    func testSummaryReconnectDiscardsPendingReplyAndDirtyRetry() async throws {
+        let s = makeStore()
+        let id = await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key))
+        let old = try XCTUnwrap(connections.last)
+        old.online()
+        await settle()
+        var pending: CheckedContinuation<JSONValue, Error>?
+        var requests = 0
+        old.summariesReply = {
+            requests += 1
+            return try await withCheckedThrowingContinuation { pending = $0 }
+        }
+        old.event(["type": "done", "sessionId": "s1"])
+        await settle()
+        old.event(["type": "session_meta", "sessionId": "s1"])
+        await settle()
+        s.connect(id)
+        let fresh = try XCTUnwrap(connections.last)
+        fresh.online()
+        await settle()
+        var freshPending: CheckedContinuation<JSONValue, Error>?
+        var freshRequests = 0
+        fresh.summariesReply = {
+            freshRequests += 1
+            if freshRequests == 1 {
+                return try await withCheckedThrowingContinuation { freshPending = $0 }
+            }
+            return [["id": "s1", "activeWatchCount": 0]]
+        }
+        fresh.event(["type": "done", "sessionId": "s1"])
+        await settle()
+        pending?.resume(returning: [["id": "s1", "activeWatchCount": 99]])
+        await settle()
+        XCTAssertEqual(requests, 1)
+        XCTAssertEqual(s.summaries.first?.activeWatchCount, 0)
+        fresh.event(["type": "session_meta", "sessionId": "s1"])
+        await settle()
+        XCTAssertEqual(freshRequests, 1, "old cleanup must not clear the new task")
+        freshPending?.resume(throwing: RelayError("failed"))
+        await settle()
+        XCTAssertEqual(freshRequests, 2, "a pending invalidation survives failure")
+        fresh.summariesReply = { freshRequests += 1; throw RelayError("failed") }
+        fresh.event(["type": "done", "sessionId": "s1"])
+        await settle()
+        await settle()
+        XCTAssertEqual(freshRequests, 3, "failure alone must not loop")
+        s.disconnect()
     }
 
     func testDenialAndForget() async throws {

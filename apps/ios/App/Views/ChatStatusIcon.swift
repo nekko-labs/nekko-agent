@@ -6,6 +6,7 @@ struct ChatStatusIcon: View {
     let activity: Activity?
     var completed = false
     var waiting = false
+    var activeWatchCount: Int64 = 0
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -16,8 +17,8 @@ struct ChatStatusIcon: View {
                 Image(systemName: "questionmark").foregroundStyle(palette.warning)
             } else if waiting {
                 Image(systemName: "clock").foregroundStyle(palette.inkFaint)
-            } else if completed {
-                Image(systemName: "checkmark").foregroundStyle(palette.success)
+            } else if activeWatchCount <= 0 {
+                Image(systemName: "checkmark").foregroundStyle(palette.inkFaint)
             } else {
                 Text("Zz").foregroundStyle(palette.inkFaint)
             }
@@ -30,7 +31,7 @@ struct ChatStatusIcon: View {
         if activity == .running { return String(localized: "Working") }
         if activity == .needsYou { return String(localized: "Needs you") }
         if waiting { return String(localized: "Waiting to send") }
-        return completed ? String(localized: "Done") : String(localized: "Idle")
+        return activeWatchCount <= 0 ? String(localized: "Done") : String(localized: "Idle")
     }
 }
 

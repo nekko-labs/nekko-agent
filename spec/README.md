@@ -103,7 +103,7 @@ Agents panel, monitors, subagents and delegation.
 - [Monitors dock naming and header polish (2026-10-16)](agents/monitors-dock-naming-and-header-polish.md) (6 KB)
 - [Subagent transcript identity](agents/subagent-transcript-identity.md) (2 KB)
 - [Watch lifecycle and delegation failure recovery](agents/watch-lifecycle-and-delegation-recovery.md) (2 KB)
-- [Watch rows and subagent models](agents/watch-rows-and-subagent-models.md) (2 KB)
+- [Watch rows and subagent models](agents/watch-rows-and-subagent-models.md) (5 KB)
 
 ### context
 
