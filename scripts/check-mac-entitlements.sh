@@ -12,12 +12,18 @@ app="${1:-}"
 vm="$app/Contents/Resources/bin/nekko-vm"
 key='<key>com.apple.security.virtualization</key>'
 
+# The workflows pass `find ... -print -quit`, which is empty when nothing was built.
+if [ -z "$app" ]; then
+  echo 'no .app found.' >&2
+  exit 1
+fi
 if [ ! -f "$vm" ]; then
   echo "$app has no nekko-vm." >&2
   exit 1
 fi
 
 n=0
+saw_vm=0
 while IFS= read -r -d '' path; do
   if ! ents=$(codesign -d --entitlements - --xml "$path" 2>/dev/null); then
     echo "codesign could not read $path." >&2
@@ -25,6 +31,7 @@ while IFS= read -r -d '' path; do
   fi
   n=$((n + 1))
   if [ "$path" = "$vm" ]; then
+    saw_vm=1
     if [[ "$ents" != *"$key"* ]]; then
       echo 'nekko-vm lacks the virtualization entitlement.' >&2
       exit 1
@@ -38,5 +45,11 @@ done < <(
   find "$app/Contents/Frameworks" -name '*.app' -type d -prune -print0 2>/dev/null || true
   find "$app/Contents/Resources/bin" -type f -print0
 )
+
+# find -type f skips a symlink, so a symlinked nekko-vm would never be read.
+if [ "$saw_vm" -ne 1 ]; then
+  echo "$vm is not a regular file, so it was never checked." >&2
+  exit 1
+fi
 
 echo "virtualization entitlement: nekko-vm only ($n binaries checked)"

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
@@ -32,7 +32,7 @@ echo '<plist><dict/></plist>'
 `);
   chmodSync(join(stubs, 'codesign'), 0o755);
   const set = (name, ext, body = VIRT) => writeFileSync(join(fx, `${name}.${ext}`), body);
-  const run = () => spawnSync('bash', [script, app], { encoding: 'utf8', env: { ...process.env, PATH: `${stubs}:${process.env.PATH}` } });
+  const run = (arg = app) => spawnSync('bash', [script, arg], { encoding: 'utf8', env: { ...process.env, PATH: `${stubs}:${process.env.PATH}` } });
   return { app, bin, set, run };
 }
 
@@ -79,4 +79,20 @@ test('codesign_error_fails_the_check', () => {
   const r = f.run();
   assert.equal(r.status, 1);
   assert.equal(r.stderr.trim(), `codesign could not read ${join(f.bin, 'nekkod')}.`);
+});
+
+test('symlinked_nekko_vm_fails', () => {
+  const f = fixture();
+  f.set('nekko-vm', 'ents');
+  renameSync(join(f.bin, 'nekko-vm'), join(f.bin, 'nekko-vm-real'));
+  symlinkSync('nekko-vm-real', join(f.bin, 'nekko-vm'));
+  const r = f.run();
+  assert.equal(r.status, 1);
+  assert.equal(r.stderr.trim(), `${join(f.bin, 'nekko-vm')} is not a regular file, so it was never checked.`);
+});
+
+test('empty_app_path_says_no_app_found', () => {
+  const r = fixture().run('');
+  assert.equal(r.status, 1);
+  assert.equal(r.stderr.trim(), 'no .app found.');
 });
