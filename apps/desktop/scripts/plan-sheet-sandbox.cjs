@@ -45,19 +45,20 @@ app.whenReady().then(async () => {
     await win.loadURL('about:blank');
     win.webContents.debugger.attach('1.3');
     await win.webContents.debugger.sendCommand('Page.enable');
-    await win.webContents.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument', { source: `localStorage.setItem('nekko.commandWall', JSON.stringify({root:{id:'a-pane',kind:'chat',refId:'a'},hero:'a',watermark:1,autoAdd:false,layout:{mode:'focus'},dock:{show:false},agentPanel:{show:true}}));` });
+    await win.webContents.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument', { source: `localStorage.setItem('nekko.commandWall', JSON.stringify({root:${process.env.NEKKO_PLAN_LAYOUT === 'grid' ? `{id:'s1',dir:'row',children:[{id:'a-pane',kind:'chat',refId:'a'},{id:'b-pane',kind:'chat',refId:'b'}],sizes:[0.5,0.5]}` : `{id:'a-pane',kind:'chat',refId:'a'}`},hero:'a',watermark:1,autoAdd:false,layout:{mode:'${process.env.NEKKO_PLAN_LAYOUT || 'focus'}'},dock:{show:false},agentPanel:{show:true}}));` });
     await win.loadFile(path.join(out, 'index.html'));
     for (let i = 0; i < 80 && !await run('!!window.layoutFixture && !!document.querySelector("[data-chat-surface]")'); i++) await sleep(100);
     // A hidden window counts as an inactive app, which pauses every animation
     // (html[data-app-inactive]); keep it active so the sheet's motion is real.
     await run(`(() => { const h = document.documentElement; const off = () => h.removeAttribute('data-app-inactive'); off(); new MutationObserver(off).observe(h, { attributes: true, attributeFilter: ['data-app-inactive'] }); })()`);
     await run(SEED);
-    await run(`(async () => { await layoutFixture.store.getState().refreshSessions(); layoutFixture.store.setState({ focusRequest: { sessionId: 'a' } }); })()`);
+    await run(`(async () => { await layoutFixture.store.getState().refreshSessions(); if (${JSON.stringify(process.env.NEKKO_PLAN_LAYOUT !== 'grid')}) layoutFixture.store.setState({ focusRequest: { sessionId: 'a' } }); })()`);
     await run(`layoutFixture.store.setState({settings:{...layoutFixture.store.getState().settings,theme:'dark',themePreset:'x-blueberry-dark'}}); layoutFixture.store.getState().applyTheme()`);
     await sleep(1200);
     await shot('plan-focused');
     report.anims = await run(`document.getAnimations().map(a => [a.animationName || a.transitionProperty, a.playState, Math.round(a.currentTime), a.effect?.target?.className?.slice?.(0, 40)])`);
     report.sheet = await run(`(() => { const e = document.querySelector('[data-plan-sheet]'); return e && { t: getComputedStyle(e).transform, r: e.getBoundingClientRect().toJSON(), o: getComputedStyle(e.closest('[data-chat-surface]') || e).opacity }; })()`);
+    if (process.env.NEKKO_PLAN_LAYOUT === 'grid') await check('wall composer carries the plan', `!!document.querySelector('[data-wall-composer] [data-plan-sheet]')`);
     await check('sheet is tucked behind the composer', `(() => { const p = document.querySelector('.plan-sheet-dock'), c = document.querySelector('.composer'); if (!p || !c) return false; const a = p.getBoundingClientRect(), b = c.getBoundingClientRect(); const hit = document.elementFromPoint(b.left + b.width / 2, b.top + 4); return a.bottom > b.top && a.bottom <= b.top + 12 && !!hit && c.contains(hit); })()`);
     await check('right column has no agent plan', `!document.querySelector('[aria-label="Plan and sub-agents"]')?.textContent.includes('Agent plan')`);
     await check('done steps squeezed', `[...document.querySelectorAll('[data-plan-step="done"] [data-plan-more]')].every(e => e.getBoundingClientRect().height < 1)`);
@@ -66,6 +67,7 @@ app.whenReady().then(async () => {
     await check('verification chips on steps 1 and 3', `!!document.querySelector('[data-plan-step-id="step_1"] [data-plan-chip="verify"]') && !!document.querySelector('[data-plan-step-id="step_3"] [data-plan-chip="verify"]')`);
     await check('CI chips on the last verification step', `document.querySelectorAll('[data-plan-step-id="step_3"] [data-plan-chip="ci"]').length === 3 && document.querySelectorAll('[data-plan-chip="ci"]').length === 3`);
     await check('PR card leaves CI to the plan', `!document.querySelector('[data-pr-progress]')?.textContent.includes('CI checks')`);
+    await check('PR actions start tucked away', `[...document.querySelectorAll('.pr-action-deck')].every(d => d.dataset.expanded === 'false')`);
     await check('design link on step 1', `!!document.querySelector('[data-plan-step-id="step_1"] [data-plan-chip="link"]')`);
     const hover = await run(`(() => { const r = document.querySelector('[data-plan-step-id="step_3"]')?.getBoundingClientRect(); return r ? { x: Math.round(r.x + 40), y: Math.round(r.y + 8) } : { x: 1, y: 1 }; })()`);
     win.webContents.sendInputEvent({ type: 'mouseMove', ...hover });

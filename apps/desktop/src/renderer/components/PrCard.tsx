@@ -157,7 +157,8 @@ export function PrActionDock({ sessionId, prs, urls, floating = false, checksInP
   const active = tracked.filter((url) => !byUrl.has(url) || byUrl.get(url)?.state === 'open');
   const statusKey = tracked.map((url) => url + ':' + (byUrl.get(url)?.state ?? 'unknown')).sort().join('|');
   const [expansion, setExpansion] = useState<{ key: string; value: boolean } | null>(null);
-  const expanded = expansion?.key === statusKey ? expansion.value : active.length > 0;
+  // The plan card already shows these PRs and their CI, so the actions start tucked away.
+  const expanded = expansion?.key === statusKey ? expansion.value : active.length > 0 && !checksInPlan;
   const [closing, setClosing] = useState<Set<string>>(() => new Set());
   useEffect(() => { setDismissed(load()); }, [storageKey]);
   useEffect(() => subscribePrPolling(sessionId, () => useStore.getState().refreshSessionPrs(sessionId)), [sessionId]);

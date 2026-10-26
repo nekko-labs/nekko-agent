@@ -2689,10 +2689,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           </div>}
           {cleanStart && <CleanStartGreeting key={sessionId} paused={!!draft || pendingImages.length > 0 || pendingVideos.length > 0} />}
           <div className={`composer-column mx-auto ${commandCenter ? 'w-[98%]' : 'w-[90%]'}`} style={cleanStart ? undefined : commandCenter ? { width: '98%' } : undefined}>
-            {surface !== 'composer' && !cleanStart && !planChangeOpen && !question && (
+            {/* In the wall the shared composer carries the selected agent's plan. */}
+            {!cleanStart && !planChangeOpen && !question && (
               <PlanSheet key={sessionId + '-plan'} sessionId={sessionId} session={session} streaming={streaming} prs={prs} basePath={artifactBasePath} onChangePlan={() => setPlanChangeOpen(true)} />
             )}
-            {surface !== 'composer' && planChangeOpen && !question && (
+            {planChangeOpen && !question && (
               <div className="composer-question is-open" data-plan-change-pop><div className="composer-question-body"><PlanChangePrompt running={streaming} onSend={(change) => { void sendPlanChange(change); }} onCancel={() => { setPlanChangeOpen(false); composerRef.current?.focus(); }} /></div></div>
             )}
 
@@ -3266,8 +3267,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             chrome of its own: empty, it used to show as a bare band under the
             composer. */}
         {/* The PR deck sits above the strip and rises from its top divider. */}
-        {!cleanStart && <PrActionDock key={sessionId} sessionId={sessionId} prs={prs} urls={sessionPrUrls} floating={surface === 'composer'} checksInPlan={surface !== 'composer' && !!session?.agentPlan?.length} />}
-        {!cleanStart && <div className={surface === 'composer' ? 'shrink-0' : 'shrink-0 border-t border-line bg-surface px-3 py-1.5'} aria-label="Chat actions and information">
+        {!cleanStart && <PrActionDock key={sessionId} sessionId={sessionId} prs={prs} urls={sessionPrUrls} floating={surface === 'composer'} checksInPlan={!!session?.agentPlan?.length} />}
+        {!cleanStart && <div className={surface === 'composer' ? 'shrink-0' : 'shrink-0 px-3 py-1.5'} aria-label="Chat actions and information">
           {/* Said once, next to the control that fixes it, in the window being driven. */}
           {modelHint && !imageMode && surface !== 'composer' && <p role="status" data-model-note className="mb-1.5 flex items-center gap-1.5 text-[11.5px]" style={{ color: unavailableModel ? 'var(--warning)' : 'var(--accent)' }}><span aria-hidden>●</span>{modelHint}</p>}
           {!imageMode && surface !== 'composer' && <div className="flex flex-wrap items-center gap-2">
