@@ -74,7 +74,8 @@ describe('Agents panel header', () => {
     expect(cards(renderSidebar({ sessions }))).toEqual(['true', 'true']);
     localStorage.setItem(AGENT_PANEL_VIEW_KEY, JSON.stringify({ ...DEFAULT_AGENT_PANEL_VIEW, sortBy: 'name' }));
     const byName = renderSidebar({ sessions });
-    expect(cards(byName)).toEqual(['false', 'false']);
+    // Still draggable, but only into a zone on the board: the panel does not reorder by name.
+    expect(cards(byName)).toEqual(['true', 'true']);
     // Project headers stay draggable while grouped by project.
     expect(byName).toMatch(/<div class="agent-panel-group-heading group flex items-center[^"]*" draggable="true"/);
     localStorage.setItem(AGENT_PANEL_VIEW_KEY, JSON.stringify({ ...DEFAULT_AGENT_PANEL_VIEW, groupBy: 'status' }));

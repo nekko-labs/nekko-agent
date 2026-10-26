@@ -29,7 +29,7 @@ export type DropTarget = Direction | 'swap';
  * wall, where the automations list and the insights box are windows you place
  * like any other.
  */
-export type PaneKind = 'chat' | 'terminal' | 'file' | 'files' | 'browser' | 'diff' | 'pr' | 'hypergate' | 'automations' | 'insights' | 'subscriptions' | 'resources';
+export type PaneKind = 'chat' | 'terminal' | 'file' | 'files' | 'browser' | 'diff' | 'pr' | 'hypergate' | 'automations' | 'insights' | 'subscriptions' | 'resources' | 'zone';
 
 /** A leaf: one window. */
 export interface WbPane {
@@ -43,6 +43,11 @@ export interface WbPane {
   refId: string;
   /** Agent board only: preserve this window when adding or arranging. */
   pinned?: boolean;
+  /**
+   * Agent board only: the name of the zone this leaf is. A zone outlives the
+   * agent in it; an empty one is kind `zone` with no refId.
+   */
+  zone?: string;
 }
 
 /**

@@ -21,6 +21,7 @@ import { sidebarWorkspaces, unopenedChats } from './unopenedChats.js';
 import { completedDate, completedInGroup } from './completedChats.js';
 import { leftGroup, moveGroupBefore } from './groupDrag.js';
 import { AgentPanelViewMenu } from '../components/AgentPanelViewMenu.js';
+import { endAgentDrag, startAgentDrag } from '../agentDrag.js';
 import {
   DATE_GROUPS, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, readAgentPanelView, saveAgentPanelView, statusGroupOf,
   type AgentPanelView, type SortableCard,
@@ -735,9 +736,14 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                         onContextMenu={s ? (e) => contextRow(e, s.id) : undefined}
                         onClickCapture={s ? (e) => { if (selectRow(e, s.id)) e.stopPropagation(); } : undefined}
                         style={s && selected.includes(s.id) ? {background:'var(--accent-soft)', borderRadius:8, boxShadow:'inset 0 0 0 1px var(--accent)'} : undefined}
-                        draggable={reorderable}
-                        onDragStart={reorderable ? (e) => startDrag(e, { kind: 'workspace', id: entry.key, ws: b.ws?.id }) : undefined}
-                        onDragEnd={endDrag}
+                        draggable={reorderable || !!s || !!entry.t}
+                        onDragStart={(e) => {
+                          if (reorderable) startDrag(e, { kind: 'workspace', id: entry.key, ws: b.ws?.id });
+                          // Any agent or terminal row can also be dropped into a zone on the board.
+                          if (s) startAgentDrag(e, 'chat', s.id);
+                          else if (entry.t) startAgentDrag(e, 'terminal', entry.t.id);
+                        }}
+                        onDragEnd={() => { endDrag(); endAgentDrag(); }}
                         onDragOver={reorderable ? (e) => overTarget(e, 'card:' + entry.key, (d) => d.kind === 'workspace') : undefined}
                         onDrop={!reorderable ? undefined : (e) => {
                            // Project drops belong to the containing group, even over a card.

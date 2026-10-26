@@ -6,6 +6,15 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Dynamic view zones (#1204)
+
+[Specification](spec/desktop/dynamic-zones.md). Prefix **DZ**.
+
+- [x] **DZ-1, Zones model.** Every leaf of the Dynamic tree is a named zone; an empty one is kind `zone`. Close, minimize, completion and auto-minimize empty a zone instead of removing it. `openWallPane` fills the active zone (an agent already on the board trades places). No auto-add; a pre-zones wall migrates once to its two newest agents. Pure tests in `commandWall.test.ts`, `wallDrag.test.ts`, `chatSwitchPerf.test.ts`. (2026-10-26)
+- [x] **DZ-2, Board UI.** Zone name bars (drag handle, right-click Close zone), active-zone outline, dotted empty zones with New agent, add-zone rails with a live preview, Shift to span at board edges, agent rows dragged in from the panel with a chip that flies into the zone. (2026-10-26)
+- [ ] **DZ-3, Intro.** First-visit dialog with three looping demos (next layer of the stack).
+- [ ] **DZ-4, Narrow window strips.** At about 380px wide, a window's title-strip actions (Zen, Minimize, Complete) are clipped; three zones reach that width on a 1440px screen. Pre-existing, more visible with zones.
+
 ## Automatic Dynamic window minimization (#1200)
 
 - [x] **DWM-1, Minimize successful replies.** Dynamic (including Fixed grid) removes the finished chat pane without completing the chat. Focused, errors, abnormal stops, pending input, unavailable input state and newer events remain visible. Pure wall tests, hidden 1440px/390px completion/restore/race checks, and inspected matched PNG/GIF evidence. Spec: [Minimize agent windows](spec/desktop/minimize-agent-windows.md). Packaged app/live-provider verification remains untested; baseline macOS shortcut assertion is tracked in #900.
