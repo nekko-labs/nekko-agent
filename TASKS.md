@@ -6,6 +6,10 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Automatic Dynamic window minimization (#1200)
+
+- [x] **DWM-1, Minimize successful replies.** Dynamic (including Fixed grid) removes the finished chat pane without completing the chat. Focused, errors, abnormal stops, pending input, unavailable input state and newer events remain visible. Pure wall tests, hidden 1440px/390px completion/restore/race checks, and inspected matched PNG/GIF evidence. Spec: [Minimize agent windows](spec/desktop/minimize-agent-windows.md). Packaged app/live-provider verification remains untested; baseline macOS shortcut assertion is tracked in #900.
+
 ## iPhone Simple and Expert modes (added 2026-10-24)
 
 Philip asked for a Simple / Expert switch at the top left of the phone's chat: Simple picks the model and effort from one control with an effort gauge, Expert adds the computer's hardware gauges and a loaded-models monitor with Unload, and the context usage shows in both. Spec: [iPhone Simple and Expert modes](spec/phone/iphone-simple-and-expert-modes.md); why the gate opens: [decision 0020](docs/decisions/0024-phones-read-the-monitors-and-unload-models.md); issue #984.
