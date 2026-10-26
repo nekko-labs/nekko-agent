@@ -1,7 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { FIRST_WORKFLOW_CATEGORIES, FirstWorkflowWizard, firstWorkflowSeed } from './FirstWorkflowWizard.js';
+import { FIRST_WORKFLOW_CATEGORIES, FirstWorkflowWizard, firstWorkflowDetailValid, firstWorkflowSeed } from './FirstWorkflowWizard.js';
 
 describe('first workflow wizard', () => {
   it('offers categorized ideas and honest video placeholders without creating anything', () => {
@@ -16,6 +16,15 @@ describe('first workflow wizard', () => {
     expect(html).not.toContain('<iframe');
     expect(html).toContain('Browse all templates or start from scratch');
     expect(calls).toBe(0);
+  });
+
+  it('requires valid public-style http URLs without embedded credentials for web ideas', () => {
+    const stock = FIRST_WORKFLOW_CATEGORIES[0].examples[0];
+    for (const invalid of ['', '   ', 'not a url', 'file:///tmp/private', 'javascript:alert(1)', 'https://', 'https://user:password@example.com']) {
+      expect(firstWorkflowDetailValid(stock, invalid)).toBe(false);
+    }
+    expect(firstWorkflowDetailValid(stock, ' https://example.com/item?q=one ')).toBe(true);
+    expect(firstWorkflowDetailValid(FIRST_WORKFLOW_CATEGORIES[2].examples[0], 'batteries')).toBe(true);
   });
 
   it('makes every example an editable manual draft, never an automatic trigger', () => {

@@ -6,9 +6,16 @@ import '../src/renderer/styles.css';
 
 // Synthetic renderer only. No providers, connectors, host, or real user data.
 const calls: string[] = [];
+const scene = new URLSearchParams(window.location.search).get('scene');
+const workflow = { id: 'existing', name: 'Existing briefing', category: 'Research', enabled: false, createdAt: 1, updatedAt: 1, steps: [], triggers: [] };
+
 Object.assign(window, {
   nekko: {
-    listWorkflows: async () => ({ workflows: [], runs: [] }),
+    listWorkflows: async () => {
+      if (scene === 'loading') return new Promise(() => {});
+      if (scene === 'error') throw new Error('Synthetic load failure');
+      return { workflows: scene === 'existing' ? [workflow] : [], runs: [] };
+    },
     onWorkflowsUpdated: () => () => {},
     listWorkflowSkillDefs: async () => [],
     listModels: async () => [],

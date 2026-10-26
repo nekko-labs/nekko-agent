@@ -33,6 +33,17 @@ export function firstWorkflowSeed(example: Example, category: string, detail: st
   };
 }
 
+export function firstWorkflowDetailValid(example: Example, detail: string): boolean {
+  if (!detail.trim()) return false;
+  if (example.id !== 'stock' && example.id !== 'page') return true;
+  try {
+    const url = new URL(detail.trim());
+    return (url.protocol === 'https:' || url.protocol === 'http:') && !!url.hostname && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
+
 function VideoPlaceholder({ title }: { title: string }) {
   return (
     <div className="rounded-xl border border-dashed border-(--line) bg-(--surface-2) p-4" data-workflow-video-placeholder>
@@ -47,7 +58,7 @@ export function FirstWorkflowWizard({ onCreate, onBrowse }: { onCreate: (seed: W
   const [detail, setDetail] = useState('');
   const [category, setCategory] = useState<string | null>(null);
   const isUrl = selected?.example.id === 'stock' || selected?.example.id === 'page';
-  const valid = !!detail.trim() && (!isUrl || /^https?:\/\/[^\s/]+(?:\/[^\s]*)?$/.test(detail.trim()));
+  const valid = !!selected && firstWorkflowDetailValid(selected.example, detail);
   return (
     <section className="mx-auto w-full max-w-4xl p-4 sm:p-8" data-first-workflow-wizard>
       <p className="text-[11px] font-semibold uppercase tracking-wide text-(--accent)">Your first workflow</p>
@@ -84,7 +95,7 @@ export function FirstWorkflowWizard({ onCreate, onBrowse }: { onCreate: (seed: W
           <p id="first-workflow-needs" className="text-[12px] text-ink-faint">{selected.example.needs}</p>
           <VideoPlaceholder title={`${selected.example.name}: step-by-step demo`} />
           <div className="rounded-xl bg-(--surface-2) p-3 text-[12px] leading-relaxed text-ink-soft"><strong>You stay in control.</strong> Next, review the instructions, model, tools, and trigger. This draft starts manually. Creating it does not run it. Add a schedule or event only when you are ready. Tool access and connected services determine what it can read; prompts are not a security boundary.</div>
-          <button data-workflow-continue className="btn btn-primary" disabled={!valid} onClick={() => { if (valid) onCreate(firstWorkflowSeed(selected.example, selected.category, detail)); }}>Continue to editor</button>
+          <button data-workflow-continue className="btn btn-primary disabled:cursor-not-allowed disabled:opacity-45" disabled={!valid} onClick={() => { if (valid) onCreate(firstWorkflowSeed(selected.example, selected.category, detail)); }}>Continue to editor</button>
         </div>
       )}
     </section>

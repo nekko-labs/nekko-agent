@@ -24,7 +24,9 @@ async function main() {
   // NEKKO_LAYOUT_SANDBOX picks another capture script for the same fixture.
   const sandbox = path.join(__dirname, path.basename(process.env.NEKKO_LAYOUT_SANDBOX || 'first-workflow-sandbox.cjs'));
   const r = cp.spawnSync(require(path.join(modules, 'electron')), [sandbox], { cwd: repo, env, windowsHide: true, stdio: 'inherit', timeout: 120000 });
+  for (const name of fs.readdirSync(out)) if (name.startsWith('profile-')) fs.rmSync(path.join(out, name), { recursive: true, force: true });
   if (r.error) throw r.error;
-  process.exitCode = r.status || 0;
+  if (r.status === null) throw new Error(`Electron interrupted: ${r.signal}`);
+  process.exitCode = r.status;
 }
 main().catch(e => { console.error(e); process.exitCode = 1; });

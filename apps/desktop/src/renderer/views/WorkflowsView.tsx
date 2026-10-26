@@ -195,7 +195,7 @@ export function WorkflowsView() {
   return (
     <div className="flex h-full min-h-0">
       {/* Filters */}
-      {workflows.length > 0 && <aside className="hidden sm:flex w-60 shrink-0 flex-col overflow-y-auto border-r border-(--line) px-3 py-3">
+      {workflows.length > 0 && <aside className="flex w-60 shrink-0 flex-col overflow-y-auto border-r border-(--line) px-3 py-3">
         <input
           className="input w-full text-[12.5px]"
           placeholder="Search workflows…"
