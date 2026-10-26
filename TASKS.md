@@ -223,6 +223,14 @@ See [SPEC](spec/desktop/focused-mode-transitions-calmer-focus-ring-and-layout-co
 - [x] ✅ 2026-10-23 The replaced hero collapses onto the new composer and dissolves: `CommandWall.tsx` marks it `data-wall-leaving` while parked and measures `--collapse-inset` from the new window's `.composer`; `styles.css` draws it (`content-visibility: visible`) and plays `focus-collapse-into-composer`. Tests: `focusTransitions.test.tsx`; sandbox checks added to `focus-transitions-sandbox.cjs`, and the baseline archive now includes `apps/desktop/src/displayWindows.ts`.
 - [ ] Check all three animations in a packaged desktop build and at narrow widths.
 
+## Plan sheet on the composer (added 2026-10-25)
+
+Issue #1149. See [SPEC](spec/chat/plan-sheet-on-the-composer.md).
+
+- [x] ✅ 2026-10-25 `PlanSheet.tsx` renders the agent plan as a card tucked behind the composer (`.plan-sheet-dock` clips at the composer edge, `plan-sheet-rise`); title, one-line note and an optional chip row per step; finished steps squeeze and every one opens while the card is hovered or focused (120 ms `grid-template-rows`). `planStepLinks.ts` replays the transcript's `update_plan` calls and gives created PRs and linked files to the step active at the time. The plan leaves `PlanRail.tsx`. Tests: `planStepLinks.test.ts`, `PlanRail.test.tsx`. Evidence: `apps/desktop/scripts/plan-sheet-sandbox.cjs` via `layout-evidence-integration.cjs` (keeps `data-app-inactive` off, or every animation stays paused in the hidden window).
+- [ ] Second PR: move the Verification panel and CI status into the card as per-step chips, and retire the panel under the composer.
+- [ ] Check the card in a packaged build and at narrow widths.
+
 ## Flaky daemon integration tests (added 2026-10-17)
 
 - [x] ✅ 2026-10-17 Issue #705: three `crates/nekkod/tests/daemon.rs` tests failed CI on branches with no Rust changes. (1) The subscribe test read the late socket's replay before the `question` event was published (it is pending first, published a moment later), and could read the backend's session-less `hello-from-backend` or `daemon:backend` where it expected a chat frame or an ack. It now waits for the question on the all-chats socket and skips only that backend chatter (`next_chat_frame`). (2) Compaction sent each `turn:notify` on its own task, so the host could hear `done` before an earlier `running` and keep showing the chat as compacting. A real bug, not only a test one: each notify now waits for the one before (`compaction.rs`, `Job::notified`). (3) The image-turn test's engine port came from `bind(0)` and was bound only at the first load, so anything else in the run could take it first. Test ports now come from below every OS's ephemeral range. A missing image now prints the saved reply.
