@@ -172,7 +172,7 @@ body:has(.wall-drag-shield) { user-select: none; }
 .command-wall-deck-window .command-wall-content { visibility:hidden; } .command-wall-card { position:absolute; inset:0; display:flex; flex-direction:column; gap:8px; padding:12px; text-align:left; color:var(--ink-soft); font-size:12px; } .command-wall-card span { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; } .command-wall-card small { margin-top:auto; color:var(--ink-faint); }
 
 /* The deck scroll offset moves only cards, never the hero or composer. */
-.command-wall-layout[data-wall-layout="focus"] { overflow-x:clip; }
+.command-wall-layout[data-wall-layout="focus"] { overflow-x:clip; scrollbar-gutter: auto; }
 .command-wall-deck-scroll { position:absolute; left:0; right:0; height:20px; overflow-x:auto; overflow-y:hidden; }
 .command-wall-deck-scroll:focus-visible { outline:2px solid var(--accent); }
 

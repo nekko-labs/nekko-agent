@@ -4,6 +4,31 @@ A workflow runs with nobody watching it: on a schedule, from a git event, a
 connector poll or a webhook. These settings, under **Runs** in the workflow
 editor, decide which model it uses and what its agent steps may do.
 
+## Your first workflow
+
+If you have no workflows yet, the Workflows tab walks you through your first one:
+
+1. Expand **Shopping & web browsing**, **Developer**, **Research**, or **Email &
+   productivity** and pick an idea, such as checking product stock, reviewing
+   new GitHub PRs, or summarizing email.
+2. Enter the page, repository, topic, or email source. Read the requirements:
+   you may need web tools, a project folder, or a connected service.
+3. Choose **Continue to editor** to review the instructions, model, tools, and
+   trigger, then explicitly create the workflow.
+
+These starters run **manually** at first. Creating one does not run it. Try it
+with **Run** when you are ready. To automate it, add a schedule or event trigger
+in the editor. For new-PR reviews, configure a GitHub pull-request trigger and
+repository access; choosing the example alone does not enable automatic reviews.
+The starter drafts reports and does not ask to buy products, send email, or post
+reviews. Review tool permissions, since prompt instructions do not enforce access.
+
+Use **Back to ideas** to choose something else, or **Browse all templates or start
+from scratch** to use the existing template gallery. Travis's overview and example
+videos are labeled **coming soon**; the placeholders do not play or load videos.
+The guide currently appears in desktop and responsive web, not the native phone
+apps.
+
 ## Model
 
 - **Model** sets the model for every prompt and skill step. Left on

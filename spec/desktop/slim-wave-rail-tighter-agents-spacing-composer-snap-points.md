@@ -23,3 +23,9 @@ Acceptance: one host creation per pending repository action, explicit repository
 ## Streaming wall empty-state styling
 
 Implemented candidate: wall vacancy styling is derived from wall state, not a descendant selector reconsidered as streamed content grows. Empty, filtered-no-match and creation states retain their appearance. Isolated Windows Electron fixtures pass geometry checks with byte-identical static captures at desktop/narrow widths and light/dark themes. Linux CI performance and packaged cross-platform verification remain pending; budgets are unchanged.
+
+## Compact Monitors width and gutters (issue #1152)
+
+Implemented candidate: the side Monitors dock defaults to 276px, 25% narrower than its previous 368px. Dragging within 20px of that default snaps to it; Home and double-click restore the same width. The 260px minimum and 600px maximum remain unchanged, as do top/bottom and mobile dock sizing. Focus no longer reserves a scrollbar gutter when it does not need one, reducing the visible agent-window-to-monitor gap (22px to 12px in the 1440px fixture). Monitor cards have 2px less right padding (8px to 6px). The default Budget duration buttons are compact enough for all six options on one row without clipping; long metrics wrap rather than splitting short amounts.
+
+Acceptance: 276px default on side docks; six budget options on one row with each button within its monitor; resize snap, Home and double-click reset retain that default; no settings, permissions, host or networking changes. Verification: 46 focused layout/range tests, desktop typecheck, isolated hidden Electron geometry and interaction checks at 1440, 900 and 390px. Matching default-dark before/after renderer captures inspected. Packaged Windows/Linux/macOS chrome and physical mobile devices remain unverified.

@@ -129,6 +129,7 @@ export const IpcChannels = {
   sessionsList: 'sessions:list',
   sessionNextWatch: 'session:nextWatch',
   sessionWatches: 'session:watches',
+  sessionCancelWatch: 'session:cancelWatch',
   sessionsSummaries: 'sessions:summaries',
   sessionCreate: 'session:create',
   sessionGet: 'session:get',
@@ -732,6 +733,7 @@ export interface NekkoApi {
   /** Earliest deadline of this chat's active durable watches, or null. */
   nextAgentWatchAt(sessionId: string): Promise<number | null>;
   /** This chat's durable watches as the UI shows them; never their continuation prompts. */
+  cancelAgentWatch(sessionId: string, id: string): Promise<void>;
   listAgentWatches(sessionId: string): Promise<import('./chat.js').AgentWatchView[]>;
   /**
    * Every chat without its transcript: what the sidebar, the board and the
