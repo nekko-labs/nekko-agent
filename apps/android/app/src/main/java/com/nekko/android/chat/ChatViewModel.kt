@@ -1,5 +1,7 @@
 package com.nekko.android.chat
 
+import com.nekko.android.git.GitController
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nekko.android.data.ComputersRepository
@@ -50,6 +52,14 @@ class ChatViewModel(
             DictationController.computerVoice(repo.caller, s.conn == RelayState.ONLINE, s.pcSettings.voiceEnabled)
         },
         computerName = { repo.state.value.active?.name ?: "your computer" },
+    )
+
+    /** Git on this chat's folder (AN-30): reads plain, changes signed with the phone's Change key. */
+    fun git(): GitController = GitController(
+        sessionId,
+        read = { r -> repo.caller.call(r.channel, *r.args.toTypedArray()) },
+        // A model-written message can take a while; a push or a switch too.
+        change = { r -> repo.callChange(r.channel, r.args, timeoutMs = if (r.channel == Channels.GIT_COMMIT_MESSAGE) 90_000 else 150_000) },
     )
 
     override fun onCleared() {
