@@ -173,7 +173,7 @@ fn other(what: &str, status: u16, v: &Value) -> ProviderError {
 }
 
 /// Exactly `<prefix><unix secs>-<n>`, so a longer host name sharing the prefix never matches.
-fn is_ours(name: &str, prefix: &str) -> bool {
+pub(super) fn is_ours(name: &str, prefix: &str) -> bool {
     let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
     name.strip_prefix(prefix).and_then(|rest| rest.split_once('-')).is_some_and(|(a, b)| digits(a) && digits(b))
 }

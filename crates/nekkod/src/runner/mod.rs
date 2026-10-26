@@ -7,6 +7,7 @@ pub mod audit;
 pub mod awake;
 pub mod egress;
 pub mod github;
+pub mod gitlab;
 pub mod hostnets;
 pub mod keychain;
 pub mod lan;
