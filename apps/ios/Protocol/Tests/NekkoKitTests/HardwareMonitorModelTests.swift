@@ -72,4 +72,22 @@ extension BeyondTests {
         try await chat.setOptions(effort: .high)
         XCTAssertEqual(c.callsTo(Channels.sessionSetOptions).last, ["s1", ["effort": "high"]])
     }
+
+    func testTheLiveContextCountMovesInStepsWhileAReplyStreams() async throws {
+        let (s, c) = try await makeStore()
+        c.replies[MonitorChannels.contextPreview] = { _ in ["usedTokens": 4000, "contextWindow": 32000] }
+        let chat = ChatModel(sessionId: "s1", store: s)
+        chat.start()
+        defer { chat.stop() }
+        await settle()
+        // 100 characters is about 25 tokens: under a step, so the gauge stays put.
+        c.event(["type": "text", "sessionId": "s1", "delta": .string(String(repeating: "a", count: 100))])
+        await settle()
+        XCTAssertTrue(chat.turn.running)
+        XCTAssertEqual(chat.contextTokens, 4000)
+        // 2,100 characters is about 525 tokens: two whole steps.
+        c.event(["type": "text", "sessionId": "s1", "delta": .string(String(repeating: "b", count: 2000))])
+        await settle()
+        XCTAssertEqual(chat.contextTokens, 4000 + 2 * ChatModel.contextStep)
+    }
 }
