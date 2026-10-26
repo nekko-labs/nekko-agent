@@ -26,6 +26,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Button
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,6 +40,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -142,15 +145,33 @@ fun ChatScreen(
     val rows = remember(keyed) { Purpose.group(keyed) { Purpose.role(it.second) } }
     val lastIndex = headerCount + rows.size + footerCount - 1
 
-    // Follow the reply while it streams, unless the user scrolled up to read.
+    // Open at the newest message, then follow the reply while it streams, unless the user scrolled up to read.
     val streamTick = (chat.blocks.lastOrNull() as? Block.Assistant)?.let { it.text.length + (it.reasoning?.length ?: 0) } ?: 0
-    LaunchedEffect(rows.size, keyed.size, streamTick, chat.error) {
-        if (keyed.isEmpty()) return@LaunchedEffect
+    var openedAtBottom by remember(vm.sessionId) { mutableStateOf(false) }
+    LaunchedEffect(rows.size, keyed.size, streamTick, chat.error, chat.ready) {
+        if (!chat.ready || keyed.isEmpty()) return@LaunchedEffect
+        if (!openedAtBottom) {
+            // The list replaces the spinner in this frame: wait until it has items, then jump without animating.
+            snapshotFlow { list.layoutInfo.totalItemsCount }.first { it > 0 }
+            list.scrollToItem(lastIndex)
+            openedAtBottom = true
+            return@LaunchedEffect
+        }
         val info = list.layoutInfo
         val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: -1
         val nearBottom = lastVisible >= info.totalItemsCount - 3
-        // totalItemsCount is 0 on the first frame: start at the bottom.
-        if (nearBottom || info.totalItemsCount == 0) list.scrollToItem(lastIndex)
+        if (nearBottom) list.scrollToItem(lastIndex)
+    }
+
+    // Keep the newest message in view when the list gets shorter (the keyboard opens, the message box grows),
+    // if it was at the bottom; a list scrolled up to read stays where it is.
+    LaunchedEffect(list) {
+        var height = 0
+        var atBottom = false
+        snapshotFlow { list.layoutInfo.viewportSize.height to !list.canScrollForward }.collect { (h, bottom) ->
+            if (h < height && atBottom) list.scrollBy((height - h).toFloat()) else atBottom = bottom
+            height = h
+        }
     }
 
     if (showChanges && changesAllowed) {
