@@ -65,7 +65,13 @@ final class PaletteTests: XCTestCase {
         // Light: paper, surface, surface2. Dark: paper, surface, surface2.
         // Each also on the coloured ground's top, where the accent wash is strongest (AppBackdrop).
         func wash(_ paper: Int, _ accent: Int, _ share: Double) -> Int {
-            func ch(_ shift: Int) -> Int { Int((Double(paper >> shift & 0xff) * (1 - share) + Double(accent >> shift & 0xff) * share).rounded()) << shift }
+            // Split into typed steps: as one expression it timed out the CI type checker.
+            func ch(_ shift: Int) -> Int {
+                let p: Double = Double((paper >> shift) & 0xff)
+                let a: Double = Double((accent >> shift) & 0xff)
+                let mixed: Double = p * (1 - share) + a * share
+                return Int(mixed.rounded()) << shift
+            }
             return ch(16) | ch(8) | ch(0)
         }
         let light = [0xFBFBFD, 0xFFFFFF, 0xF2F2F7, wash(0xFBFBFD, 0x5A4AE8, AppBackdrop.lightWash)]
