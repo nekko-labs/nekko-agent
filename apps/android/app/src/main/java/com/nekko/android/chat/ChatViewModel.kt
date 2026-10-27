@@ -7,6 +7,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.CoroutineScope
 import com.nekko.android.terminal.TerminalsController
+import com.nekko.android.ui.files.FilesOverlay
+import com.nekko.android.ui.files.FilesPage
+import com.nekko.android.ui.files.filesOn
+import com.nekko.protocol.FileRoot
 import com.nekko.android.terminal.RepoTerminalBackend
 
 import androidx.lifecycle.ViewModel
@@ -42,7 +46,7 @@ import kotlinx.serialization.json.JsonPrimitive
 /** Android wrapper around [ChatController]: wires it to the repository's state and events. */
 class ChatViewModel(
     val sessionId: String,
-    private val repo: ComputersRepository,
+    val repo: ComputersRepository,
     /** The phone's microphone and its settings; null keeps dictation off (tests, previews). */
     mic: MicHardware? = null,
     phonePrefs: PhonePrefs? = null,
@@ -106,6 +110,14 @@ class ChatViewModel(
         (repo.overlays.value[sessionId] as? TerminalsController)?.hide()
         repo.setOverlay(sessionId, null)
     }
+
+    /** This chat's files (AN-33), over the chat like Git. */
+    val filesOpen: StateFlow<FilesOverlay?> = repo.overlays.map { it[sessionId] as? FilesOverlay }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, repo.overlays.value[sessionId] as? FilesOverlay)
+
+    fun openFiles() = repo.setOverlay(sessionId, FilesOverlay(FilesPage.Folder(filesOn(repo, FileRoot.Chat(sessionId)), "", "Files")))
+
+    fun closeFiles() = repo.setOverlay(sessionId, null)
 
     /** Whether the active computer is connected (the terminal screens open and reopen on it). */
     val online: StateFlow<Boolean> = repo.state.map { it.conn == RelayState.ONLINE }.distinctUntilChanged()

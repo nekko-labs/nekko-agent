@@ -47,6 +47,15 @@ object Channels {
     const val CHAT_EDIT_QUEUED = "chat:editQueued"
     /** A new chat from this one, before a prompt or after a reply: answers its id and title. */
     const val SESSION_FORK = "session:fork"
+    /** A chat's or saved folder's files ([FilesRequest]): list, search and read; a save is a signed Change. */
+    const val FILES_LIST = "files:list"
+    const val FILES_SEARCH = "files:search"
+    const val FILES_READ = "files:read"
+    const val FILES_WRITE = "files:write"
+    /** Save or forget a folder on the computer (signed Changes); forgetting never deletes files. */
+    const val WORKSPACE_ADD_BY_PATH = "workspace:addByPath"
+    const val WORKSPACE_REMOVE = "workspace:remove"
+
     /** The computer's automations ([AutomationTask], [AutomationWorkflow]): read, and Run now only. */
     const val TASKS_LIST = "tasks:list"
     const val TASK_RUN_NOW = "task:runNow"
@@ -104,13 +113,14 @@ object Channels {
     val GIT_CHANGE = setOf(GIT_STAGE, GIT_UNSTAGE, GIT_COMMIT, GIT_COMMIT_MESSAGE, GIT_PUSH, GIT_SWITCH, GIT_MERGE_ABORT, PR_CREATE, PR_ACTION)
 
     /** Every Change channel this phone calls ([ChangeProof]). */
-    val CHANGE = GIT_CHANGE + TerminalChannels.CHANGE
+    val CHANGE = GIT_CHANGE + TerminalChannels.CHANGE + setOf(FILES_WRITE, WORKSPACE_ADD_BY_PATH, WORKSPACE_REMOVE)
 
     val ALL = listOf(
         SETTINGS_GET, SETTINGS_UPDATE, SESSION_DELETE, VOICE_STATUS, VOICE_TRANSCRIBE, PROVIDERS_LIST, MODELS_LIST, SESSIONS_SUMMARIES, SESSION_CREATE, SESSION_GET,
         SESSION_SET_OPTIONS, CHAT_SEND, CHAT_ABORT, CHAT_QUEUE, CHAT_PENDING, CHAT_ANSWER, TOOL_APPROVE,
         WORKSPACE_LIST, APP_INFO, SKILLS_RUNNABLE, CHANGES_LIST, MONITOR_SUMMARY,
         SECURITY_CHALLENGE, DEVICE_SIGN_OUT, REMOTE_STOP, APP_QUIT,
+        FILES_LIST, FILES_SEARCH, FILES_READ, FILES_WRITE, WORKSPACE_ADD_BY_PATH, WORKSPACE_REMOVE,
         CHAT_EDIT_QUEUED, SESSION_FORK, TASKS_LIST, TASK_RUN_NOW, WORKFLOWS_LIST, WORKFLOW_RUN, USAGE_SUMMARY, LIMITS_GET,
         WORKSPACE_GIT_STATUS, GIT_DIFF, GIT_LOG, GIT_SHOW, GIT_BRANCHES, GIT_COMPARE,
         GIT_STAGE, GIT_UNSTAGE, GIT_COMMIT, GIT_COMMIT_MESSAGE, GIT_PUSH, GIT_SWITCH, GIT_MERGE_ABORT,
@@ -602,11 +612,16 @@ data class ModelInfo(val id: String, val providerId: String, val name: String, v
     }
 }
 
-data class WorkspaceFolder(val id: String, val name: String) {
+data class WorkspaceFolder(
+    val id: String,
+    val name: String,
+    /** Where it is on the computer, shown under Files; never sent back by the phone. */
+    val path: String? = null,
+) {
     companion object {
         fun list(e: JsonElement?): List<WorkspaceFolder> = e.arr()?.mapNotNull { w ->
             val o = w.obj() ?: return@mapNotNull null
-            WorkspaceFolder(o.str("id") ?: return@mapNotNull null, o.str("name") ?: "Folder")
+            WorkspaceFolder(o.str("id") ?: return@mapNotNull null, o.str("name") ?: "Folder", o.str("path"))
         } ?: emptyList()
     }
 }
