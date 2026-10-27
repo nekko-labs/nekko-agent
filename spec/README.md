@@ -79,6 +79,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Model picker, tool categories, Artifacts tab and wall polish (2026-10-15)](desktop/model-picker-tool-categories-artifacts-tab-and-wall-polish.md) (5 KB)
 - [Nav wings and wall action clarity](desktop/nav-wings-and-wall-action-clarity.md) (1 KB)
 - [Navigation panel, media fade and macOS app menu (2026-10-16)](desktop/navigation-panel-media-fade-and-macos-app-menu.md) (2 KB)
+- [Nekko Dark and the branded System theme (desktop)](desktop/nekko-dark-and-branded-system-theme.md) (3 KB)
 - [New agent window defaults](desktop/new-agent-window-defaults.md) (5 KB)
 - [Search within Settings (desktop)](desktop/search-within-settings-desktop.md) (2 KB)
 - [Settings section nav and phone pairing placement (desktop)](desktop/settings-section-nav.md) (4 KB)

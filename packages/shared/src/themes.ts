@@ -47,7 +47,8 @@ export const THEME_PRESETS: ThemePreset[] = [
     mode: 'system',
     accent: '#6d5efc',
     accent2: '#06b6d4',
-    swatch: ['#6d5efc', '#06b6d4', '#8b7dff', '#22d3ee'],
+    // Follows the computer: Nekko Dark in dark mode, Lilac in light (resolveThemePreset).
+    swatch: ['#0d0b18', '#c4b9ff', '#fbfaff', '#5b4ea7'],
     label: 'System',
   },
   {
@@ -158,6 +159,23 @@ export const THEME_PRESETS: ThemePreset[] = [
     inkSoft: '#2c2640',
     inkFaint: '#4a4366',
     line: '#c4b8ee',
+  },
+  {
+    // The marketing site's Dark look (the site default): indigo-black ground, lavender and aqua glows.
+    id: 'nekko-dark',
+    mode: 'dark',
+    accent: '#c4b9ff',
+    accent2: '#8ae4f2',
+    swatch: ['#0d0b18', '#c4b9ff', '#8ae4f2', '#181430'],
+    label: 'Nekko Dark',
+    paper: '#0d0b18',
+    surface: '#181430',
+    surface2: '#1d1a36',
+    ink: '#ffffff',
+    inkSoft: '#c0bad9',
+    inkFaint: '#8f89ab',
+    line: '#2f2d38',
+    wave: { from: '#9d8ce6', to: '#8ae4f2', peak: 0.3 },
   },
   {
     id: 'ember',
@@ -987,6 +1005,25 @@ export function experimentalFamilies(): Array<{ id: string; label: string; prese
     f.presets.push(p);
   }
   return out;
+}
+
+/**
+ * The preset whose colours actually apply. System follows the computer's
+ * light/dark mode with the branded looks, Nekko Dark or Lilac; every other id
+ * is itself.
+ */
+export function resolveThemePreset(presetId: string | undefined, prefersDark: boolean): string | undefined {
+  if (presetId !== 'system') return presetId;
+  return prefersDark ? 'nekko-dark' : 'lilac';
+}
+
+/**
+ * The preset the user picked. Nothing saved (a fresh profile) is System; a base
+ * mode saved without a preset stays without one.
+ */
+export function themePresetOf(settings: { theme?: string; themePreset?: string } | null | undefined): string | undefined {
+  if (settings?.themePreset) return settings.themePreset;
+  return !settings?.theme || settings.theme === 'system' ? 'system' : undefined;
 }
 
 /** Look up a preset by id. */
