@@ -30,6 +30,7 @@ import com.nekko.protocol.TerminalChannels
 import com.nekko.protocol.TerminalEvent
 import com.nekko.protocol.WorkspaceFolder
 import com.nekko.protocol.WorkspacePath
+import com.nekko.android.previews.PreviewLoader
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.TimeoutCancellationException
@@ -187,6 +188,9 @@ class ComputersRepository(
     }
 
     fun remote(): Remote = client ?: throw RelayException("Not connected to a computer.")
+
+    /** Files and loopback pages the agent linked, read for the preview window and cards (AN-35), cached per chat. */
+    val previews: PreviewLoader by lazy { PreviewLoader(read = { r -> caller.call(r.channel, *r.args.toTypedArray()) }) }
 
     /**
      * A Change action on the active computer (IO-33, AN-32): signed with this

@@ -101,6 +101,9 @@ import androidx.compose.ui.draw.alpha
 import com.nekko.android.ui.components.Dot
 import com.nekko.android.ui.chat.ForkAction
 import com.nekko.android.ui.files.FilesDialog
+import com.nekko.android.ui.previews.PreviewWindow
+import com.nekko.android.previews.LocalChatPreviews
+import androidx.compose.runtime.CompositionLocalProvider
 import com.nekko.android.ui.git.GitDialog
 import com.nekko.android.ui.terminal.TerminalsDialog
 import androidx.compose.material.icons.filled.Terminal
@@ -235,6 +238,8 @@ fun ChatScreen(
         val online by vm.online.collectAsStateWithLifecycle()
         TerminalsDialog(t, online, vm.computerName, onDismiss = vm::closeTerminals)
     }
+    val preview by vm.previewOpen.collectAsStateWithLifecycle()
+    preview?.let { o -> PreviewWindow(o.link, vm.sessionId, vm.repo.previews, onDismiss = vm::closePreview) }
     val files by vm.filesOpen.collectAsStateWithLifecycle()
     files?.let { f -> FilesDialog(f, vm.repo, onDismiss = vm::closeFiles) }
     val git by vm.gitOpen.collectAsStateWithLifecycle()
@@ -350,7 +355,10 @@ fun ChatScreen(
                                     // Long press: Copy, and fork the chat from a saved message.
                                     val fork = forkAction(block)
                                     // In a pane a message can be dragged into the other pane's message box.
-                                    if (pane == null) BlockView(block, fork) else Box(Modifier.messageDragSource(block, vm.sessionId)) { BlockView(block, fork) }
+                                    // A reply's links to files and loopback pages open previews from the computer (AN-35).
+                                    CompositionLocalProvider(LocalChatPreviews provides vm.previews) {
+                                        if (pane == null) BlockView(block, fork) else Box(Modifier.messageDragSource(block, vm.sessionId)) { BlockView(block, fork) }
+                                    }
                                 }
                                 is PurposeRun.Group -> PurposeGroupCard(run.purpose, run.items.map { it.second }, run.calls)
                             }
