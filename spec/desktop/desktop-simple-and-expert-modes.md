@@ -20,7 +20,7 @@ area: desktop
 ## Wide phones
 
 - **iPhone app, regular width** (an open folding phone, iPad): each pane in `PanesView` shows the same `ChatView`, so the switch, the model and effort control, the context gauge and the Expert panel apply per pane.
-- **Android** (Galaxy Fold and other foldables): not started; the Android app has none of these controls yet (T217b, Android parity).
+- **Android** (Galaxy Fold and other foldables): the same design since 2026-10-25 (T217b), see [iPhone Simple and Expert modes, Android](../phone/iphone-simple-and-expert-modes.md#android-2026-10-25-t217b).
 
 ## Not yet
 

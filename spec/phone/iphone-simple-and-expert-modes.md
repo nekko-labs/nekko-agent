@@ -7,7 +7,7 @@ area: phone
 
 **User intent:** Philip asked (2026-10-24) for the phone's chat to get a mode switch at the top left, like the desktop's, toggling between **Simple** and **Expert**. In Simple mode the user picks the model and effort, from one control at the bottom with the model's name and a gauge for the effort. Expert mode adds a monitor panel of gauges for the computer's hardware, and a models monitor like the desktop's: the models loaded, unloading them, the hardware they use and their context size. The chat's context usage is shown in both modes, always.
 
-**Status `[implemented 2026-10-24 on the native iPhone app and the computer's phone gate; the gate's TS and Rust editions unit-tested; the Swift package tests (protocol parsing, the monitor store, the chat's context and effort) pass on Linux and macOS; the hardware store is named HardwareMonitorModel to coexist with the folding-phone Monitors pane; the views driven in the simulator by LiveRelayTests/testSimpleAndExpertModes against a live stack (2026-10-25); Android not started (T217b)]`**
+**Status `[implemented 2026-10-24 on the native iPhone app and the computer's phone gate; the gate's TS and Rust editions unit-tested; the Swift package tests (protocol parsing, the monitor store, the chat's context and effort) pass on Linux and macOS; the hardware store is named HardwareMonitorModel to coexist with the folding-phone Monitors pane; the views driven in the simulator by LiveRelayTests/testSimpleAndExpertModes against a live stack (2026-10-25); Android implemented 2026-10-25 (T217b), see *Android* below]`**
 
 ## Behaviour
 
@@ -27,9 +27,20 @@ Recorded in [docs/decisions/0028](../../docs/decisions/0028-phones-read-the-moni
   - a chat's context: `usedTokens` (the included items), `contextWindow` and tokens per source kind (`PHONE_CONTEXT_SOURCES`); never an item's label, origin or preview. The computer always calls it with no attached paths.
 - `model:unload` joins as **Change without a proof** (`PHONE_AGENT_CHANNELS`): it takes a provider id and a model id (both non-empty strings, else `value-invalid`) and returns only `ok` and `message`. Loading, downloading, deleting models and the Model Server's settings stay refused.
 
+## Android (2026-10-25, T217b)
+
+**Status `[implemented on the native Android app; Kotlin unit tests (parsing, the polling model, the chat's context and effort) pass; ChatModesTest driven on a local 7.6" foldable emulator (two chat panes) and a Pixel 5 phone emulator against an in-test computer, not yet on hardware or a live computer]`**
+
+The same design as the iPhone, in the native app (`apps/android`), wide foldables first:
+
+- **The switch** sits right of Back in every chat's header and is the phone's own choice (`EXPERT_MODE`, Simple by default). In a folding phone's chat pane (Galaxy Fold, Pixel Fold open) the header is narrow, so the switch is the dial icon alone, coloured in Expert, and the title stays readable; each pane's chat follows the same choice.
+- **Model and effort** and the **context ring** sit in one row under the message box, in both modes. The row's control opens a bottom sheet: the model row opens the computer's model list (the New chat picker, every enabled provider, starred first) and the large effort dial has a button per level; both go through `session:setOptions`. The ring's breakdown opens as a small menu. The model's name comes from the chat's provider's `models:list`, read when the chat opens.
+- **Expert** adds the strip of dials under the chat's header and the **Monitor** bottom sheet (larger dials, Loaded models with Unload, models loading, the memory for models, this chat's context). The hardware is re-read every 3 s only while Expert is on, the chat is on screen (lifecycle STARTED) and the computer is online. On a folding phone each chat pane reads it on its own.
+- Strings are Android resources in English and the iPhone's six other languages, drafted from its String Catalog; the rest of the Android app is still English only, so those six languages see these controls translated in an otherwise English app.
+
 ## Not yet
 
-- Android (the switch, the model and effort control, the context gauge and the monitor), including wide foldables.
+- Android on a real foldable and against a live computer; one shared hardware read for two chat panes instead of one each.
 - The desktop has the same design since 2026-10-25: [Desktop Simple and Expert modes](../desktop/desktop-simple-and-expert-modes.md).
 - Clearing a chat's effort back to the computer's default from the phone (needs the gate to accept a clear).
 - Changing which monitors show, as the desktop's Settings → Monitors does; the phone shows them all.

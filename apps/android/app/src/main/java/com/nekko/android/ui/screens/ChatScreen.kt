@@ -117,6 +117,16 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenu
 import com.nekko.android.ui.panes.PaneSlot
+import com.nekko.android.ui.chat.ChatOptionsRow
+import com.nekko.android.ui.chat.ModeToggle
+import com.nekko.android.ui.chat.ModelEffortSheet
+import com.nekko.android.ui.chat.MonitorSheet
+import com.nekko.android.ui.chat.MonitorStrip
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
+import com.nekko.protocol.RelayState
+import com.nekko.protocol.ENGINE_PROVIDER_ID
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -135,6 +145,22 @@ fun ChatScreen(
     val changesAllowed by vm.changesAllowed.collectAsStateWithLifecycle()
     val insert by vm.insert.collectAsStateWithLifecycle()
     var showChanges by remember { mutableStateOf(false) }
+    val expert by vm.expert.collectAsStateWithLifecycle()
+    val hardware by vm.hardware.state.collectAsStateWithLifecycle()
+    val computers by vm.computers.collectAsStateWithLifecycle()
+    val computerName = computers.active?.name ?: "your computer"
+    var showModelEffort by remember { mutableStateOf(false) }
+    var showMonitor by remember { mutableStateOf(false) }
+    // Expert re-reads the hardware every 3 s, only while it is on, this chat is on screen and the computer is reachable.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val online = computers.conn == RelayState.ONLINE
+    // The model's name for the row under the message box (the computer's list, cached for the connection).
+    LaunchedEffect(chat.providerId, online) { if (online) chat.providerId?.let { vm.loadModels(it) } }
+    // The Monitor names loaded models from the Model Server's own list.
+    LaunchedEffect(showMonitor, online) { if (showMonitor && online) vm.loadModels(ENGINE_PROVIDER_ID) }
+    if (expert && online) {
+        LaunchedEffect(vm, lifecycle) { lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { vm.hardware.poll() } }
+    }
     var showMenu by remember { mutableStateOf(false) }
     var prs by remember(vm.sessionId) { mutableStateOf<List<PullRequest>>(emptyList()) }
     var showPrs by remember { mutableStateOf(false) }
@@ -233,6 +259,12 @@ fun ChatScreen(
         )
     }
 
+    if (showModelEffort) {
+        ModelEffortSheet(chat, computers, onSet = vm::setOptions, onLoadModels = { vm.loadModels() }, onDismiss = { showModelEffort = false })
+    }
+    if (showMonitor && expert) {
+        MonitorSheet(hardware, chat, computerName, vm::modelName, onUnload = vm.hardware::unload, onDismiss = { showMonitor = false })
+    }
     val terminals by vm.terminalsOpen.collectAsStateWithLifecycle()
     terminals?.let { t ->
         val online by vm.online.collectAsStateWithLifecycle()
@@ -255,68 +287,74 @@ fun ChatScreen(
     Scaffold(
         containerColor = p.paper,
         topBar = {
-            TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
-                actions = {
-                    if (changesAllowed) {
-                        IconButton(onClick = { vm.loadChanges(); showChanges = true }) {
-                            Icon(Icons.Filled.Difference, contentDescription = "Changes")
-                        }
-                    }
-                    Box {
-                        IconButton(onClick = { showMenu = true }, modifier = Modifier.testTag("chat.more")) {
-                            Icon(Icons.Filled.MoreVert, contentDescription = "More")
-                        }
-                        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                            DropdownMenuItem(
-                                text = { Text("Git") },
-                                leadingIcon = { Icon(Icons.Filled.AccountTree, contentDescription = null) },
-                                onClick = { showMenu = false; vm.openGit() },
-                                modifier = Modifier.testTag("chat.git"),
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Files") },
-                                leadingIcon = { Icon(Icons.Filled.FolderOpen, contentDescription = null) },
-                                onClick = { showMenu = false; vm.openFiles() },
-                                modifier = Modifier.testTag("chat.files"),
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Terminals") },
-                                leadingIcon = { Icon(Icons.Filled.Terminal, contentDescription = null) },
-                                onClick = { showMenu = false; vm.openTerminals() },
-                                modifier = Modifier.testTag("chat.terminals"),
-                            )
-                        }
-                    }
-                    pane?.actions?.invoke(this)
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                title = {
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            // In a pane: the status dot, pulsing for a pending approval or question while the other pane has the keyboard.
-                            if (pane != null) {
-                                PaneStatusDot(waiting = chat.approval != null || chat.question != null, running = chat.running, pulse = !pane.focused)
+            Column {
+                TopAppBar(
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
+                    actions = {
+                        if (changesAllowed) {
+                            IconButton(onClick = { vm.loadChanges(); showChanges = true }) {
+                                Icon(Icons.Filled.Difference, contentDescription = "Changes")
                             }
-                            Text(chat.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Icon(Icons.Filled.Computer, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(12.dp))
-                            Text(
-                                chat.subtitle,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = p.inkFaint,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+                        Box {
+                            IconButton(onClick = { showMenu = true }, modifier = Modifier.testTag("chat.more")) {
+                                Icon(Icons.Filled.MoreVert, contentDescription = "More")
+                            }
+                            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("Git") },
+                                    leadingIcon = { Icon(Icons.Filled.AccountTree, contentDescription = null) },
+                                    onClick = { showMenu = false; vm.openGit() },
+                                    modifier = Modifier.testTag("chat.git"),
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Files") },
+                                    leadingIcon = { Icon(Icons.Filled.FolderOpen, contentDescription = null) },
+                                    onClick = { showMenu = false; vm.openFiles() },
+                                    modifier = Modifier.testTag("chat.files"),
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Terminals") },
+                                    leadingIcon = { Icon(Icons.Filled.Terminal, contentDescription = null) },
+                                    onClick = { showMenu = false; vm.openTerminals() },
+                                    modifier = Modifier.testTag("chat.terminals"),
+                                )
+                            }
                         }
-                    }
-                },
-            )
+                        pane?.actions?.invoke(this)
+                    },
+                    navigationIcon = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = onBack) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            }
+                            ModeToggle(expert, vm::setExpert, compact = pane != null)
+                        }
+                    },
+                    title = {
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                // In a pane: the status dot, pulsing for a pending approval or question while the other pane has the keyboard.
+                                if (pane != null) {
+                                    PaneStatusDot(waiting = chat.approval != null || chat.question != null, running = chat.running, pulse = !pane.focused)
+                                }
+                                Text(chat.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Icon(Icons.Filled.Computer, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(12.dp))
+                                Text(
+                                    chat.subtitle,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = p.inkFaint,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    },
+                )
+                if (expert) MonitorStrip(hardware, computerName, onOpen = { showMonitor = true }, modifier = Modifier.background(p.paper))
+            }
         },
     ) { padding ->
         val transcript: @Composable (Modifier) -> Unit = { transcriptModifier ->
@@ -404,24 +442,27 @@ fun ChatScreen(
                     }
                 },
                 modifier = Modifier.navigationBarsPadding(),
-            ) else Composer(
-                initialText = initialDraft,
-                running = chat.running,
-                blocked = chat.blocked,
-                queued = chat.queued,
-                onSend = { text, skill, images -> vm.send(text, skill, images) },
-                onStop = vm::stop,
-                // In a pane, text dragged from the other pane lands here (never sent by itself).
-                modifier = Modifier.navigationBarsPadding().then(if (pane == null) Modifier else Modifier.messageDropTarget(vm.sessionId, vm::quote)),
-                mic = mic,
-                skills = chat.skills,
-                insert = insert,
-                onInserted = vm::inserted,
-                attach = attach,
-                prompts = prompts,
-                queuedPrompts = chat.queuedPrompts,
-                onEditQueued = vm::editQueued,
-            )
+            ) else Column(Modifier.navigationBarsPadding()) {
+                Composer(
+                    initialText = initialDraft,
+                    running = chat.running,
+                    blocked = chat.blocked,
+                    queued = chat.queued,
+                    onSend = { text, skill, images -> vm.send(text, skill, images) },
+                    onStop = vm::stop,
+                    // In a pane, text dragged from the other pane lands here (never sent by itself).
+                    modifier = if (pane == null) Modifier else Modifier.messageDropTarget(vm.sessionId, vm::quote),
+                    mic = mic,
+                    skills = chat.skills,
+                    insert = insert,
+                    onInserted = vm::inserted,
+                    attach = attach,
+                    prompts = prompts,
+                    queuedPrompts = chat.queuedPrompts,
+                    onEditQueued = vm::editQueued,
+                )
+                ChatOptionsRow(chat, enabled = online, onOpenModelEffort = { showModelEffort = true })
+            }
         }
         ChatColumns(top = padding.calculateTopPadding(), tabletop = pane?.tabletop, transcript = transcript, controls = controls)
     }

@@ -56,8 +56,8 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > **Run on**: which paired computer the chat and its model run on. Choosing another computer
 > connects to it and shows its models and folders; what you typed stays.
 >
-> **Simple and Expert** (iPhone): the switch at the top left of a chat picks the mode, and the
-> iPhone remembers it. Both modes show, under the message box, one control for the chat's **model
+> **Simple and Expert** (iPhone and Android): the switch at the top left of a chat picks the mode, and the
+> phone remembers it. On an open folding phone each chat pane has its own switch, shown as a dial icon. Both modes show, under the message box, one control for the chat's **model
 > and effort** (an effort dial beside the model's name; tap it to change either) and the chat's
 > **context window** (a ring that fills as the window does, with the tokens in use; tap it to see
 > what fills it). **Expert** adds a monitor under the chat's title: your computer's CPU, memory,
