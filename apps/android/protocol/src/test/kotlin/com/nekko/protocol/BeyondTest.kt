@@ -45,4 +45,30 @@ class BeyondTest {
         assertTrue(ChatSearch.matches(chats, "nothing like it").isEmpty())
         assertEquals("full-width letters fold too", "cafe", ChatSearch.fold("ＣＡＦÉ"))
     }
+
+    @Test fun `automations decode with their cadence and last result`() {
+        val t = AutomationTask.list(json("""[{"id":"t1","title":"Nightly tests","kind":"recurring","intervalMs":86400000,"status":"active","runCount":3,"lastResult":"All 40 passed.","lastRunAt":5},{"title":"no id"}]"""))
+        assertEquals(listOf("Nightly tests"), t.map { it.title })
+        assertEquals("Every day", t[0].cadence { "" })
+        assertEquals("All 40 passed.", t[0].lastResult)
+        assertEquals("1.5 hours", AutomationTask.interval(90 * 60_000L))
+        assertEquals("45 minutes", AutomationTask.interval(45 * 60_000L))
+        assertEquals("hour", AutomationTask.interval(60 * 60_000L))
+        assertEquals("Once", AutomationTask(id = "x", title = "x", kind = AutomationTask.Kind.SCHEDULED, status = "active").cadence { "" })
+        assertEquals("Until it’s done", AutomationTask(id = "x", title = "x", kind = AutomationTask.Kind.BACKGROUND, status = "active", untilDone = true).cadence { "" })
+        val w = AutomationWorkflow.list(json("""[{"id":"w1","name":"Review PRs","category":"Code","enabled":true,"stepCount":2,"lastStatus":"failure"}]"""))
+        assertEquals("Code · 2 steps", w[0].detail)
+        assertEquals("failure", w[0].lastStatus)
+    }
+
+    @Test fun `usage and limits`() {
+        val u = UsageSummary.from(json("""{"totalInput":1000,"totalOutput":500,"totalCost":1.25,"byModel":[{"model":"claude-opus-5.5","input":600,"output":300,"cost":1}],"daily":[{"date":"2026-10-19","input":10,"output":5,"cost":0.25}]}"""))!!
+        assertEquals(1500L, u.totalTokens)
+        assertEquals(900L, u.models.single().tokens)
+        assertEquals(15L, u.days.single().tokens)
+        val l = ProviderLimits.from(json("""{"planType":"max","windows":[{"id":"w","label":"5 hours","usedPercent":140,"resetAt":9,"status":"warning"}]}"""))!!
+        assertEquals("max", l.planType)
+        assertEquals("used percent is held to 0-100", 100.0, l.windows.single().usedPercent, 0.0)
+        assertEquals(null, ProviderLimits.from(json("null")))
+    }
 }
