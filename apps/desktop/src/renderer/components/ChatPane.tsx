@@ -17,6 +17,7 @@ import { revealEditorCaret } from './agent-console/editorCaret.js';
 import React, { memo, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { DictationButton } from './DictationButton.js';
+import { voiceComposer } from '../voiceActions.js';
 import { decideApproval, type ApprovalScope } from './agent-console/approval-decision.js';
 import type { AgentEvent, AskAnswer, AskRequest, AutoQuality, Session, ContextBundle, IndexedFile, ModelInfo, ProviderConfig, SkillDef, PrInfo, QueuePayload, QueuedPrompt } from '@nekko-agent/shared';
 import { CLAUDE_CODE_PROVIDER_KIND, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
@@ -598,12 +599,12 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // message survives a tab switch or a restart.
   const [draft, setDraft] = useState(() => loadDraft(sessionId)?.text ?? '');
   // Voice edits the draft as the next render will see it, so "Fix it. Nekko,
-  // erase that" or "... Nekko, send it" acts on the text typed a moment before.
+  // erase that" or "... Nekko, send it" acts on the text dictated a moment before.
   const voiceDraft = useRef(draft);
   voiceDraft.current = draft;
-  const lastDictated = useRef('');
-  const [voiceSends, setVoiceSends] = useState(0);
   const setVoiceDraft = (next: string) => { voiceDraft.current = next; setDraft(next); };
+  const voiceSend = useRef<(text: string) => void>(() => {});
+  const [voice] = useState(() => voiceComposer({ get: () => voiceDraft.current, set: setVoiceDraft, send: (text) => voiceSend.current(text) }));
   // What the draft implies (the analyzer, Auto's pick, the gauge's draft
   // count) renders from this, one step behind the keystroke, so
   // a keypress paints the textarea before any of that work runs.
@@ -1546,7 +1547,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       try {
         const status = await window.nekko.sandboxStatus(session.id);
         if (status.phase !== 'configured' && status.phase !== 'ready') throw new Error(status.error ?? 'Configure Sandbox before executing.');
-      } catch (e) { useStore.getState().pushToast('error', String((e as Error).message ?? e)); return; }
+      } catch (e) { useStore.getState().pushToast('error', String((e as Error).message ?? e)); return false; }
     }
     const input = override ?? draft;
     if (imageMode) {
@@ -1645,8 +1646,14 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       }
     }
   };
-  // A voice send runs after the render that holds the dictated text.
-  useEffect(() => { if (voiceSends) void send(); }, [voiceSends]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A voice send sends the draft as dictated so far; words after "send it" start the next draft.
+  voiceSend.current = (text) => {
+    clearDraft(sessionId);
+    void send(text).then((sent) => {
+      if (sent === false) { setVoiceDraft(voiceDraft.current ? `${text} ${voiceDraft.current}` : text); return; }
+      setPendingImages([]); setPendingVideos([]); setAttachmentNotes({});
+    });
+  };
 
   // Queue the draft to run after the current reply (and any earlier queued
   // items). Useful for lining up follow-ups while an agent is working.
@@ -3253,10 +3260,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     />
                   )}
                   <DictationButton key={sessionId} sessionId={sessionId}
-                    onText={(text) => { const current = voiceDraft.current; lastDictated.current = (current && !/\s$/.test(current) ? ' ' : '') + text; setVoiceDraft(current + lastDictated.current); composerRef.current?.focus(); }}
-                    onErase={() => { const last = lastDictated.current; lastDictated.current = ''; if (last && voiceDraft.current.endsWith(last)) setVoiceDraft(voiceDraft.current.slice(0, -last.length)); }}
-                    onClear={() => { lastDictated.current = ''; setVoiceDraft(''); }}
-                    onSend={() => setVoiceSends((n) => n + 1)} />
+                    onText={(text) => { voice.onText(text); composerRef.current?.focus(); }} onErase={voice.onErase} onClear={voice.onClear} onSend={voice.onSend} />
                     <button
                       className="send-avatar grid h-9 w-9 shrink-0 place-items-center rounded-xl transition-all duration-150 disabled:opacity-40"
                       onClick={() => void send()}

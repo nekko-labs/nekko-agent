@@ -30,7 +30,7 @@ app.whenReady().then(async () => {
       f.store.setState({ settings: { ...s.settings, voice: { enabled: true, commandsEnabled: true, silenceMs: 1200 } } });
       f.transcripts = 0;
       f.bridge.voiceStatus = async () => ({ installed: true });
-      f.bridge.voiceTranscribe = async () => (f.transcripts++ === 0 ? 'Fix the bug. Nekko, send it.' : '');
+      f.bridge.voiceTranscribe = async () => (f.transcripts++ === 0 ? 'Fix the bug. Nekko, send it. Then add tests.' : '');
       navigator.mediaDevices.getUserMedia = async () => {
         const ctx = new AudioContext(); const osc = ctx.createOscillator(); const gain = ctx.createGain(); const dest = ctx.createMediaStreamDestination();
         osc.frequency.value = 220; gain.gain.setValueAtTime(0.4, ctx.currentTime); gain.gain.setValueAtTime(0, ctx.currentTime + 1.2);

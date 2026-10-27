@@ -52,7 +52,7 @@ export function DictationButton(props: VoiceTarget) {
           <div className="mt-2 flex flex-wrap gap-2">
             {pending.kind === 'confirm'
               ? <button className="btn btn-primary py-1! text-[12px]!" onClick={() => void voiceListener.answer({ kind: 'yes' })}>Confirm</button>
-              : pending.options.map((option, i) => <button key={option.id} className="btn btn-outline max-w-full truncate py-1! text-[12px]!" onClick={() => void voiceListener.answer({ kind: 'pick', n: (i + 1) as 1 | 2 | 3 })}>{i + 1}. {option.title || 'Untitled chat'}</button>)}
+              : pending.options.map((option, i) => <button key={i} className="btn btn-outline max-w-full truncate py-1! text-[12px]!" onClick={() => void voiceListener.answer({ kind: 'pick', n: (i + 1) as 1 | 2 | 3 })}>{i + 1}. {option.label}</button>)}
             <button className="btn btn-outline py-1! text-[12px]!" onClick={() => void voiceListener.answer({ kind: 'no' })}>Cancel</button>
           </div>
         </div>}
