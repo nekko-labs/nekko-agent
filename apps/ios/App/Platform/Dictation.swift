@@ -77,6 +77,8 @@ final class Dictation {
     private(set) var recording = false
     /// Between the tap and the microphone opening (permissions, asking the computer).
     private(set) var starting = false
+    /// The app left the screen while starting: the microphone must not open once the waits end.
+    private var startCancelled = false
     /// Hold to talk: listening ended because the finger came up (the answer to a confirm comes in the next hold).
     private(set) var released = false
     /// A segment is being turned into words (on the computer or the phone).
@@ -155,7 +157,10 @@ final class Dictation {
         case .start:
             await start(store: store, holding: true)
             if recording {
-                if hold.didStart(at: .now) == .discard { discard() }
+                if hold.didStart(at: .now) == .discard {
+                    released = true
+                    discard()
+                }
             } else {
                 hold.failedToStart()
             }
@@ -171,6 +176,8 @@ final class Dictation {
             released = true
             stopListening()
         case .discard:
+            // Too short, but still a release: a confirm waiting for the next hold stays.
+            released = true
             discard()
             notice = "Hold the microphone while you speak, then let go."
         default:
@@ -181,6 +188,7 @@ final class Dictation {
     func start(store: ComputersStore, holding: Bool) async {
         guard !recording, !starting else { return }
         starting = true
+        startCancelled = false
         defer { starting = false }
         error = nil
         notice = nil
@@ -201,7 +209,7 @@ final class Dictation {
             return
         }
         // The waits above can outlast the screen (a lock) or the chat (closed): then nothing opens.
-        guard UIApplication.shared.applicationState == .active, sink != nil else { return }
+        guard mayOpenMicrophone else { return }
         claimMicrophone()
         let session = AVAudioSession.sharedInstance()
         do {
@@ -253,7 +261,22 @@ final class Dictation {
         return (n.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt) == AVAudioSession.InterruptionType.began.rawValue
     }
 
+    /// After start's waits: still wanted. A permission prompt makes the scene inactive without cancelling
+    /// (`leavesScreen`), so the first tap still opens the microphone once the prompts are answered.
+    var mayOpenMicrophone: Bool { starting && !startCancelled && sink != nil }
+
+    /// Whether a scene phase ends listening. While starting, `.inactive` is the permission prompt, not a leave.
+    static func leavesScreen(_ phase: ScenePhase, starting: Bool) -> Bool {
+        phase == .background || (phase == .inactive && !starting)
+    }
+
     #if DEBUG
+    /// Tests: as if start were waiting on its prompts.
+    func startingWithoutPrompts() {
+        starting = true
+        startCancelled = false
+    }
+
     /// Tests: listening as if the microphone were open, without one.
     func listenWithoutMicrophone() {
         claimMicrophone()
@@ -310,6 +333,7 @@ final class Dictation {
     /// The app left the screen: stop, and transcribe the last words (and finish the ones already on their way)
     /// only if iOS gives the time to.
     func abort() {
+        if starting { startCancelled = true }
         var tail: [[Float]] = []
         if recording {
             tail = close()

@@ -971,13 +971,10 @@ struct Composer: View {
         .onChange(of: dictation.recording) { _, on in
             if on { return voice.started() }
             let afterHold = dictation.released
-            Task {
-                await dictation.drain()
-                await voice.stopped(afterHold: afterHold)
-            }
+            Task { await voice.stopped(afterHold: afterHold, after: dictation.drain) }
         }
         // Listening never outlives the screen: lock, app switch, or leaving the chat stops it, and it never restarts by itself.
-        .onChange(of: phase) { _, p in if p != .active { dictation.abort() } }
+        .onChange(of: phase) { _, p in if Dictation.leavesScreen(p, starting: dictation.starting) { dictation.abort() } }
         .onDisappear(perform: unbindVoice)
         .task(id: voice.notice) {
             guard let said = voice.notice else { return }

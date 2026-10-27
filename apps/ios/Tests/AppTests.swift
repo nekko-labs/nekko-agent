@@ -536,15 +536,50 @@ final class VoiceTests: XCTestCase {
         let r = runner(box, prs: #"[{"url":"https://github.com/acme/app/pull/12","number":12,"state":"open"}]"#)
         await r.hear([Dictation.Words(text: "Nekko, ship it.")])
         // Hold to talk: the confirm is answered in the next hold, so letting go keeps it.
-        await r.stopped(afterHold: true)
+        await r.stopped(afterHold: true, after: {})
         XCTAssertNotNil(r.pending)
         await r.hear([Dictation.Words(text: "Nekko, yes.")])
         XCTAssertEqual(box.merged, ["https://github.com/acme/app/pull/12"])
         // Tap mode: stopping clears it, once the words already heard are applied.
         await r.hear([Dictation.Words(text: "Nekko, ship it.")])
         XCTAssertNotNil(r.pending)
-        await r.stopped(afterHold: false)
+        await r.stopped(afterHold: false, after: {})
         XCTAssertNil(r.pending)
+    }
+
+    func testAnOldStopDoesNotClearANewSessionsConfirm() async {
+        let box = Box()
+        let r = runner(box, prs: #"[{"url":"https://github.com/acme/app/pull/12","number":12,"state":"open"}]"#)
+        await r.hear([Dictation.Words(text: "Nekko, ship it.")])
+        var drained = false
+        // Stopped, and the last words are still being transcribed...
+        let stop = Task { await r.stopped(afterHold: false, after: { while !drained { try? await Task.sleep(for: .milliseconds(10)) } }) }
+        await Task.yield()
+        // ...when listening starts again and a new confirm comes up.
+        r.started()
+        await r.hear([Dictation.Words(text: "Nekko, ship it.")])
+        let fresh = r.pending?.id
+        drained = true
+        await stop.value
+        XCTAssertNotNil(fresh)
+        XCTAssertEqual(r.pending?.id, fresh, "the old stop's clear is skipped")
+    }
+
+    func testAPermissionPromptDoesNotCancelStartingButLeavingDoes() {
+        // The microphone and speech prompts make the scene inactive while listening starts.
+        XCTAssertFalse(Dictation.leavesScreen(.inactive, starting: true))
+        XCTAssertTrue(Dictation.leavesScreen(.inactive, starting: false))
+        XCTAssertTrue(Dictation.leavesScreen(.background, starting: true))
+        XCTAssertFalse(Dictation.leavesScreen(.active, starting: false))
+        let d = Dictation()
+        d.sink = { _ in }
+        d.startingWithoutPrompts()
+        XCTAssertTrue(d.mayOpenMicrophone)
+        d.abort()
+        XCTAssertFalse(d.mayOpenMicrophone, "a lock during the waits opens nothing")
+        d.startingWithoutPrompts()
+        d.sink = nil
+        XCTAssertFalse(d.mayOpenMicrophone, "the chat closed during the waits")
     }
 
     func testShipItLeavesDraftPrsAlone() {

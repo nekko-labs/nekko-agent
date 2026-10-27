@@ -75,6 +75,8 @@ final class VoiceRunner {
     private var chain: Task<Void, Never>?
     /// A command in the segment being applied left this chat (open, new chat, Settings).
     private var left = false
+    /// Counts listening sessions, so a stop's late clear skips a session that began after it.
+    private var session = 0
 
     /// Applies each segment's words after every earlier one.
     func hear(_ words: [Dictation.Words]) async {
@@ -84,14 +86,20 @@ final class VoiceRunner {
     /// A tap on Confirm, Cancel or a listed option.
     func answer(_ intent: VoiceIntent) async { await enqueue { await self.act(intent) } }
 
-    func started() { carried = nil }
+    func started() {
+        carried = nil
+        session += 1
+    }
 
-    /// Listening stopped: a confirm left up must not be answered by a later "Nekko, yes". It is cleared after
-    /// the words already heard (they may hold the "yes"). A hold's release keeps it: with hold to talk the
-    /// answer comes in the next hold, and the confirm's 60 s clock still ends it.
-    func stopped(afterHold: Bool) async {
+    /// Listening stopped: a confirm left up must not be answered by a later "Nekko, yes". It is cleared once
+    /// `drained` (the last words transcribed) and the words already heard are applied (they may hold the "yes"),
+    /// unless listening started again meanwhile. A hold's release keeps it: with hold to talk the answer comes
+    /// in the next hold, and the confirm's 60 s clock still ends it.
+    func stopped(afterHold: Bool, after drained: () async -> Void) async {
         guard !afterHold else { return }
-        await enqueue { self.setPending(nil) }
+        let stoppedSession = session
+        await drained()
+        await enqueue { if self.session == stoppedSession { self.setPending(nil) } }
     }
 
     func clearNotice(_ id: UUID) { if notice?.id == id { notice = nil } }
