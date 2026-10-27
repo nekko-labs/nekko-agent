@@ -26,8 +26,9 @@ final class LiveRelayTests: XCTestCase {
         let theme = ProcessInfo.processInfo.environment["NEKKO_ITEST_THEME"] ?? "light"
         let app = XCUIApplication()
         // Settings persist across runs on one simulator: start each from the defaults it checks.
-        app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "NO", "-notifyFinished", "YES", "-dictationHold", "NO",
-                               "-theme", theme == "dark" ? "dark" : "light", "-uiTestReset", "YES"]
+        // Live Activities stay off until the step that checks one (see there).
+        let defaults = ["-splash", "NO", "-appLock", "NO", "-notifyFinished", "YES", "-dictationHold", "NO", "-theme", theme == "dark" ? "dark" : "light"]
+        app.launchArguments = defaults + ["-onboarded", "NO", "-liveActivities", "NO", "-uiTestReset", "YES"]
         app.launch()
         allowSystemAlerts()
 
@@ -138,14 +139,24 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertTrue(line.waitForExistence(timeout: busyWait), "the diff shows its lines")
         let ask = app.buttons["Ask about this change"].firstMatch
         XCTAssertTrue(contextMenuItem(ask, afterLongPressOn: line), "the line's menu offers to ask about it")
-        ask.tap()
-        XCTAssertTrue(waitGone(note, busyWait), "the changes sheet closes after Ask")
+        XCTAssertTrue(ask.tapUntil { !note.exists }, "the changes sheet closes after Ask")
         XCTAssertTrue(message.waitForExistence(timeout: busyWait))
         XCTAssertTrue((message.value as? String ?? "").contains("+written by the agent"), "the quote is in the message box: \(message.value ?? "")")
         attach(app, "\(theme)-6e-asked")
-        // Left in the box: the next prompt follows the quote, and the fake model still hears "slow".
 
         // A longer run, then Home: the Live Activity takes over in the Dynamic Island.
+        // In a launch of its own with Live Activities on: on for the whole journey, every
+        // run started one, and on a loaded runner the simulator then stopped answering
+        // XCTest's queries for 30 s or more right after Send (the approval card, the
+        // question, the slow reply; #1019). The request itself took under 0.7 s.
+        app.terminate()
+        app.launchArguments = defaults + ["-onboarded", "YES", "-liveActivities", "YES"]
+        app.launch()
+        XCTAssertTrue(waitOnline(app, busyWait), "back online after the relaunch")
+        let chatRow = app.descendants(matching: .any).matching(identifier: "chats.row").firstMatch
+        XCTAssertTrue(chatRow.waitForExistence(timeout: busyWait))
+        chatRow.tap()
+        XCTAssertTrue(message.waitForExistence(timeout: busyWait))
         message.tap()
         message.typeText("a slow one please")
         app.buttons["Send"].tap()
@@ -161,18 +172,19 @@ final class LiveRelayTests: XCTestCase {
         add(shot)
         app.activate()
 
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+        let menu = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Computers and settings")).firstMatch
+        let back = app.navigationBars.buttons.element(boundBy: 0)
+        XCTAssertTrue(back.waitForExistence(timeout: busyWait))
+        XCTAssertTrue(back.tapUntil { menu.exists }, "back to the chats")
         attach(app, "\(theme)-7-chats-after")
 
         // Settings → Connection: the route, Tailscale on this phone, and what happened.
         // A coordinate tap: right after going back, XCTest can't "scroll to" the nav bar button.
-        let menu = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Computers and settings")).firstMatch
-        XCTAssertTrue(menu.waitForExistence(timeout: 10))
         // Mid-transition the button exists with no frame yet, and asking XCTest whether it is
         // hittable then fails the test outright; wait for a real frame instead.
         XCTAssertTrue(waitForFrame(menu, in: app, 10), "the computer menu never got a frame")
         menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        app.buttons["Settings"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["Settings"].firstMatch.tapUntil { app.navigationBars["Settings"].exists }, "the menu opens Settings")
         let connection = app.buttons["Connection"].firstMatch
         XCTAssertTrue(reveal(connection, in: app), "Settings → Connection")
         connection.tap()
@@ -420,7 +432,7 @@ final class LiveRelayTests: XCTestCase {
         let menu = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Computers and settings")).firstMatch
         XCTAssertTrue(waitForFrame(menu, in: app, 10))
         menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        app.buttons["Automations"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["Automations"].firstMatch.tapUntil { app.navigationBars["Automations"].exists }, "the menu opens Automations")
         let run = app.buttons["Run Say hello nightly now"]
         XCTAssertTrue(run.waitForExistence(timeout: 15), "the task is listed with Run now")
         attach(app, "beyond-7-automations")
@@ -434,7 +446,7 @@ final class LiveRelayTests: XCTestCase {
         app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(waitForFrame(menu, in: app, 10))
         menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        app.buttons["Usage and limits"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["Usage and limits"].firstMatch.tapUntil { app.navigationBars["Usage and limits"].exists }, "the menu opens Usage and limits")
         XCTAssertTrue(app.navigationBars["Usage and limits"].waitForExistence(timeout: 10))
         sleep(2)
         attach(app, "beyond-9-usage")
@@ -444,7 +456,7 @@ final class LiveRelayTests: XCTestCase {
         app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(waitForFrame(menu, in: app, 10))
         menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        app.buttons["computer.logs"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["computer.logs"].firstMatch.tapUntil { app.navigationBars["Logs"].exists }, "the menu opens Logs")
         XCTAssertTrue(app.navigationBars["Logs"].waitForExistence(timeout: 10))
         let log = app.buttons["logs.row"].firstMatch
         XCTAssertTrue(log.waitForExistence(timeout: computerWait), "the computer lists its logs")
