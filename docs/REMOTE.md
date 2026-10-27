@@ -182,7 +182,8 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > - **Search:** finds completed chats too, and shows every match in each group.
 > - **On Android** the queue's Edit and Remove, the fork (touch and hold a message, then **Edit in a
 >   new chat** or **Fork from here**), saved prompts in `/` and under **+**, and **Search chats** at
->   the top of the chat list work the same way.
+>   the top of the chat list work the same way, and **Settings → Automations** and **Settings → Usage
+>   and limits** show the same lists and Run now.
 > - **Automations:** **Computers and settings → Automations** lists the computer's tasks and
 >   workflows with how each last went, and **Run now**. You set them up on the computer.
 > - **Pull requests:** a chip shows the chat's pull request and its checks. **Commit these changes**,
@@ -222,10 +223,16 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 >   opened it, the phone says *Changed on the computer* and you choose **Reload** (your edits are
 >   dropped) or **Save over it**; nothing is overwritten without that choice. Files that may hold
 >   secrets are counted under the list, never shown.
+>   On Android, **⋮ → Files** in a chat and **Settings → Files** work the same way: add a saved folder
+>   by its full path on the computer, or touch and hold one to remove it (its files stay on disk);
+>   saving, adding and removing ask for your fingerprint, face or screen lock (once per 5 minutes).
+>   An open file or an unsaved edit stays open when you open or fold a folding phone.
 > - **Logs:** **Computers and settings → Logs** lists the desktop app's log, the engine's log and
 >   each chat's agent run log. A log opens at its newest lines; **Refresh** reads it again, and the
 >   search field shows the matching lines with their line numbers. Read only, with secrets already
 >   replaced by `[redacted]` on the computer.
+>   On Android it is **Settings → Logs**, with the same list, newest lines, **Refresh** and search;
+>   **Share** sends what the screen shows as text, with secrets removed again on the phone.
 > - **Usage and limits:** what each provider plan has used and when it resets, and recent usage. Read only.
 >
 > **All your chats, grouped like the desktop** (Android): the chat list shows every chat on the

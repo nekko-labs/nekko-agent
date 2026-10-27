@@ -726,6 +726,53 @@ async fn views_serialize_camel_case() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn views_carry_host_facts() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    assert_eq!(h.view().host, HostView::default(), "zeros before the first sample");
+    h.mac(|m| {
+        m.ram_mb = 32768;
+        m.cores = 12;
+        m.user_memory_mb = None;
+        m.power = Some(Power { on_battery: true, percent: Some(90.0), low: false });
+        m.network_id = Some("gw:0a:1b:2c:3d:4e:05".into());
+    });
+    let mut r = record("r1", Priority::RunnerFirst, 1);
+    r.config.settings.trusted_networks = vec!["gw:0a:1b:2c:3d:4e:05".into()];
+    h.sup.set_records(vec![r]);
+    h.tick_for(5).await;
+    let h = &h.view().host;
+    assert_eq!(
+        (h.ram_mb, h.cores, h.recommended_memory_mb, h.runner_memory_mb, h.cpus_per_vm),
+        (32768, 12, 24576, 24576, 10)
+    );
+    assert_eq!((h.on_battery, h.battery_pct, h.network_trusted), (Some(true), Some(90.0), true));
+    assert_eq!(h.network_id.as_deref(), Some("gw:0a:1b:2c:3d:4e:05"));
+}
+
+#[tokio::test(start_paused = true)]
+async fn views_carry_the_last_five_jobs() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    h.sup.start().await;
+    for i in 0..6 {
+        let line = AuditLine {
+            ts: 1_700_000_000 + i,
+            runner_id: "r1".into(),
+            repo: None,
+            workflow: None,
+            job: Some(format!("j{i}")),
+            result: AuditResult::Finished,
+            seconds: 1,
+            reason: vec![],
+        };
+        h.sup.audit(&line);
+    }
+    let r = &h.view().recent;
+    assert_eq!(r.len(), 5);
+    assert!(r.windows(2).all(|w| w[0].ts >= w[1].ts));
+    assert_eq!(r[0].job.as_deref(), Some("j5"));
+}
+
+#[tokio::test(start_paused = true)]
 async fn slow_start_is_not_a_sleep() {
     let mut h = harness(vec![record("r1", Priority::Balanced, 2)]);
     h.running().await;
