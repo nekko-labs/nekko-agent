@@ -114,6 +114,7 @@ Full docs in one file: https://nekkoagent.com/llms-full.txt. Each page is also a
 - [Automations](https://nekkoagent.com/docs/automations.md): Ready-made automations, run results and notifications, and pausing them all.
 - [Workflow runs](https://nekkoagent.com/docs/workflows.md): Pick a workflow's model, keep it on local models, and control what its unattended runs may do.
 - [Local CI runner](https://nekkoagent.com/docs/local-ci-runner.md): Run a GitHub or GitLab repo's builds and tests on your own machine.
+- [CI runners on your Mac](https://nekkoagent.com/docs/ci-runners.md): Run your GitHub Actions jobs on this Mac, each in a throwaway VM, without getting in your way.
 - [Decision models](https://nekkoagent.com/docs/decision-models.md): Typed questions answered with calibrated probabilities, in one forward pass.
 - [Local inference benchmarks](https://nekkoagent.com/docs/benchmarks.md): How fast the engine runs a model compared with Ollama and LM Studio.
 - [Floop tasks](https://nekkoagent.com/docs/floop.md): Show your team's Floop tasks in Nekko Agent and let the agent pick up, update and finish them.

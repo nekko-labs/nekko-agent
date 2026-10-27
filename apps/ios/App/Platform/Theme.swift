@@ -42,8 +42,8 @@ struct Palette {
         } else {
             p = Palette(paper: Color(hex: 0xFBFBFD), surface: .white, surface2: Color(hex: 0xF2F2F7),
                         line: Color(hex: 0xE8E8EF), ink: Color(hex: 0x17171D), inkSoft: Color(hex: 0x52525E),
-                        inkFaint: Color(hex: 0x6A6A76), accent: Color(hex: a), onAccent: onAccent,
-                        success: Color(hex: 0x1E7A4A), danger: Color(hex: 0xB42318), warning: Color(hex: 0x8F5C0A),
+                        inkFaint: Color(hex: 0x5E5E6A), accent: Color(hex: a), onAccent: onAccent,
+                        success: Color(hex: 0x1A7043), danger: Color(hex: 0xB42318), warning: Color(hex: 0x875709),
                         running: Color(hex: 0x1D4ED8), userBubble: Color(hex: a), userInk: onAccent, code: Color(hex: 0xF2F2F7))
         }
         // A preset's surfaces only fit the mode it was drawn for.
@@ -78,6 +78,32 @@ struct Palette {
 extension Color {
     init(hex: Int) {
         self.init(.sRGB, red: Double(hex >> 16 & 0xff) / 255, green: Double(hex >> 8 & 0xff) / 255, blue: Double(hex & 0xff) / 255)
+    }
+}
+
+/// The app's ground: the theme's paper washed with its accent, strongest at the top, so
+/// every theme has its own colour (the default is Nekko purple). Lists and forms sit on it
+/// as the desktop's panels sit on its paper.
+struct AppBackdrop: View {
+    /// The accent's share at the top: faint ink and coloured text keep 4.5:1 on it (`PaletteTests`).
+    static let lightWash = 0.14, darkWash = 0.16
+    @Environment(\.palette) private var palette
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let dark = scheme == .dark
+        LinearGradient(colors: [palette.accent.opacity(dark ? Self.darkWash : Self.lightWash), palette.accent.opacity(dark ? 0.05 : 0.04)],
+                       startPoint: .top, endPoint: .bottom)
+            .background(palette.paper)
+            .ignoresSafeArea()
+            .accessibilityHidden(true)
+    }
+}
+
+extension View {
+    /// A screen on the app's coloured ground (`AppBackdrop`), its list or form background hidden.
+    func appBackground() -> some View {
+        scrollContentBackground(.hidden).background { AppBackdrop() }
     }
 }
 

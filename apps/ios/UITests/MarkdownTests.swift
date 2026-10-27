@@ -101,9 +101,20 @@ final class MarkdownTests: XCTestCase {
         let box = app.input("chat.message")
         XCTAssertTrue(box.waitForExistence(timeout: 15))
         box.tap()
-        box.tap()
-        let paste = app.menuItems["Paste"].exists ? app.menuItems["Paste"] : app.buttons["Paste"]
-        XCTAssertTrue(paste.waitForExistence(timeout: 5), "the edit menu offers Paste")
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10), "the box takes focus")
+        // The edit menu item is a menu item or a button depending on the iOS version; whichever shows.
+        let paste = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@ AND (elementType == %d OR elementType == %d)", "Paste",
+                                                                         XCUIElement.ElementType.menuItem.rawValue,
+                                                                         XCUIElement.ElementType.button.rawValue)).firstMatch
+        // The second tap opens the menu once the box is focused; on a loaded simulator it
+        // has landed while the keyboard was still coming up and opened nothing (#1019).
+        // A tap on a focused box with no menu showing only opens it, so tap again if it never came.
+        func openEditMenu() {
+            var taps = 0
+            repeat { box.tap(); taps += 1 } while !paste.waitForExistence(timeout: 10) && taps < 3
+            XCTAssertTrue(paste.exists, "the edit menu offers Paste")
+        }
+        openEditMenu()
         let ours = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Paste as Markdown")).firstMatch
         XCTAssertTrue(ours.exists, "and Paste as Markdown")
         attach(app, "composer-paste-1-menu")
@@ -112,9 +123,69 @@ final class MarkdownTests: XCTestCase {
         let chip = app.buttons["composer.useFormatting"]
         XCTAssertTrue(chip.waitForExistence(timeout: 3), "the chip offers the formatting")
         attach(app, "composer-paste-2-chip")
+        // The chip lasts 4 s (the spec), and on a loaded simulator the checks and the
+        // screenshot above have used that up before the tap landed (#1019). Paste again
+        // into an empty box and use the chip at once.
+        box.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 30))
+        openEditMenu()
+        paste.tap()
+        XCTAssertTrue(chip.waitForExistence(timeout: 3), "the chip offers the formatting again")
         chip.tap()
-        XCTAssertEqual(box.value as? String, "Ship **today**\n\n- one\n  - two")
+        let formatted = expectation(for: NSPredicate(format: "value == %@", "Ship **today**\n\n- one\n  - two"), evaluatedWith: box)
+        wait(for: [formatted], timeout: 10)
         attach(app, "composer-paste-3-formatted")
+    }
+
+    /// MM-3: a flowchart and a sequence diagram draw inline, a broken one falls
+    /// back to its source with Mermaid's error, a diagram opens full screen, and
+    /// the renderer cannot reach the network. Render times go to the log.
+    func testDiagramsDrawAndABrokenOneFallsBack() {
+        for theme in uiTestThemes {
+            let app = launchLab(theme: theme, extra: ["-labDiagrams"])
+            let flowchart = app.buttons["Diagram, flowchart"]
+            // The first diagram starts the renderer (loading the bundled Mermaid).
+            XCTAssertTrue(flowchart.waitForExistence(timeout: 60), "the flowchart is drawn")
+            let sequence = app.buttons["Diagram, sequence diagram"]
+            XCTAssertTrue(sequence.waitForExistence(timeout: 30), "the sequence diagram is drawn")
+            let error = app.staticTexts["mermaid.error"]
+            XCTAssertTrue(error.waitForExistence(timeout: 30), "the broken diagram shows Mermaid's error")
+            attach(app, "mermaid-\(theme)-1-flowchart")
+            scrollTo(error, in: app)
+            attach(app, "mermaid-\(theme)-2-sequence-and-broken")
+
+            // The checks that don't depend on the theme run once (Native iOS has a 50-minute budget).
+            let first = theme == uiTestThemes.first
+            let network = app.staticTexts["lab.mermaidNetwork"]
+            if first {
+                scrollTo(network, in: app, max: 6)
+                let probed = expectation(for: NSPredicate(format: "label != %@", "Renderer network: "), evaluatedWith: network)
+                wait(for: [probed], timeout: 20)
+                XCTAssertEqual(network.label, "Renderer network: blocked", "the renderer can't reach the network")
+            }
+            let times = app.staticTexts["lab.mermaidTimes"].label
+            print("MERMAID-RENDER-TIMES \(theme): \(times)")
+            let note = XCTAttachment(string: "\(theme): \(times)")
+            note.name = "mermaid-\(theme)-render-times"
+            note.lifetime = .keepAlways
+            add(note)
+
+            app.swipeDown(velocity: .fast)
+            app.swipeDown(velocity: .fast)
+            flowchart.tap()
+            let done = app.buttons["mermaid.done"]
+            XCTAssertTrue(done.waitForExistence(timeout: 10), "the diagram opens full screen")
+            RunLoop.current.run(until: Date().addingTimeInterval(1.5))
+            attach(app, "mermaid-\(theme)-3-fullscreen")
+            if first {
+                // A navigation-bar menu: no hit point for XCTest, so tap its centre.
+                app.buttons["mermaid.actions"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+                XCTAssertTrue(app.buttons["Copy source"].waitForExistence(timeout: 5))
+                XCTAssertTrue(app.buttons["Save to Photos"].exists)
+                attach(app, "mermaid-\(theme)-4-actions")
+                app.buttons["Copy source"].tap()
+            }
+            app.terminate()
+        }
     }
 
     /// The largest accessibility text size: tables scroll rather than truncate.

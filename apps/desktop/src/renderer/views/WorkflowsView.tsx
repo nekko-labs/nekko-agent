@@ -35,6 +35,7 @@ import { setAutomationsPaused } from '../automationsPause.js';
 import { PlusIcon } from '../icons.js';
 import { STATUS } from '../tokens.js';
 import { hasAppChrome } from '../chrome.js';
+import { CiRunnersView } from './CiRunnersView.js';
 
 /**
  * The Workflows tab: automation modelled on GitHub Actions, where a step can be
@@ -90,6 +91,7 @@ export function WorkflowsView() {
   const [snapshot, setSnapshot] = useState<WorkflowsSnapshot>({ workflows: [], runs: [] });
   const [filter, setFilter] = useState<WorkflowFilter>({});
   const [grouping, setGrouping] = useState<WorkflowGrouping>('category');
+  const [section, setSection] = useState<'workflows' | 'ciRunners'>('workflows');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [editing, setEditing] = useState<Workflow | null>(null);
   const [creating, setCreating] = useState<{ seed?: WorkflowSeed } | null>(null);
@@ -194,6 +196,7 @@ export function WorkflowsView() {
 
   return (
     <div className="flex h-full min-h-0">
+      {section === 'ciRunners' ? <CiRunnersView segment={<SectionSegment value={section} onChange={setSection} />} /> : <>
       {/* Filters */}
       {workflows.length > 0 && <aside className="flex w-60 shrink-0 flex-col overflow-y-auto border-r border-(--line) px-3 py-3">
         <input
@@ -281,11 +284,14 @@ export function WorkflowsView() {
 
       {/* List */}
       <div className="min-w-0 flex-1 overflow-y-auto p-4">
-        {!loaded ? <p className="p-4 text-[13px] text-ink-soft" role="status">{loadFailed ? 'Could not load workflows. Reopen this tab to try again.' : 'Loading workflows…'}</p> : workflows.length === 0 ? (
+        {!loaded ? <p className="p-4 text-[13px] text-ink-soft" role="status">{loadFailed ? 'Could not load workflows. Reopen this tab to try again.' : 'Loading workflows…'}</p> : workflows.length === 0 ? (<>
+          {/* The wizard replaces the list header, so keep the switcher: CI runners must stay reachable with no workflows. */}
+          <div className="mx-auto max-w-4xl px-4 sm:px-8"><SectionSegment value={section} onChange={setSection} /></div>
           <FirstWorkflowWizard onCreate={(seed) => setCreating({ seed })} onBrowse={() => setPicking(true)} />
-        ) : <div className="mx-auto max-w-5xl">
+        </>) : <div className="mx-auto max-w-5xl">
           <div className="flex flex-wrap items-baseline gap-2">
             {!hasAppChrome && <h1 className="view-title">Workflows</h1>}
+            <SectionSegment value={section} onChange={setSection} />
             <span className="text-[12px] text-ink-faint">
               {visible.length === workflows.length
                 ? `${workflows.length} total`
@@ -393,6 +399,7 @@ export function WorkflowsView() {
           </div>
         </div>}
       </div>
+      </>}
 
       {picking && (
         <TemplateGallery
@@ -438,6 +445,26 @@ export function WorkflowsView() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+/** Switches the tab between workflows and this Mac's CI runners. */
+export function SectionSegment({ value, onChange }: { value: 'workflows' | 'ciRunners'; onChange(v: 'workflows' | 'ciRunners'): void }) {
+  return (
+    <div role="group" aria-label="Section" className="flex gap-1">
+      {(['workflows', 'ciRunners'] as const).map((v) => (
+        <button
+          key={v}
+          type="button"
+          aria-pressed={value === v}
+          className={`rounded-lg border px-2 py-1 text-[11.5px] transition ${value === v ? 'border-transparent' : 'border-line text-ink-faint'}`}
+          style={value === v ? { background: 'var(--accent-soft)', color: 'var(--accent)' } : undefined}
+          onClick={() => onChange(v)}
+        >
+          {v === 'workflows' ? 'Workflows' : 'CI runners'}
+        </button>
+      ))}
     </div>
   );
 }

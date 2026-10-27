@@ -73,6 +73,10 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.language == 'swift' && 'manual' || 'none' }}
+          # Third-party bundles pinned by hash (vendor/mermaid: scripts/vendor-mermaid.mjs) are not our source.
+          config: |
+            paths-ignore:
+              - vendor/mermaid
       - name: Build the Swift protocol package
         if: matrix.language == 'swift'
         working-directory: apps/ios/Protocol

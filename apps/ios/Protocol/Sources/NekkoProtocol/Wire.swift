@@ -123,6 +123,9 @@ public enum Channels {
         workspaceGitStatus, gitDiff, gitLog, gitShow, gitBranches, gitCompare, prChecks, prDiff,
         gitStage, gitUnstage, gitCommit, gitCommitMessage, gitPush, gitSwitch, gitMergeAbort, prCreate, prAction,
         filesList, filesSearch, filesRead, filesWrite, logsList, logsRead,
+        // The Expert monitor and a chat's context gauge (Monitor.swift).
+        MonitorChannels.systemStats, MonitorChannels.gpuStats, MonitorChannels.engineStatus, MonitorChannels.contextPreview,
+        MonitorChannels.modelUnload,
         artifactRead, previewFetch,
         // IO-33 FA-3, FA-6 (Terminal.swift).
         TerminalChannels.list, TerminalChannels.tail, TerminalChannels.sshHosts, TerminalChannels.create, TerminalChannels.sshOpen,
@@ -359,6 +362,8 @@ public struct Session: Equatable, Sendable {
     public var clientMessageIds: [String] = []
     /// A turn is running on the computer (`activeRun`): a prompt waits in its queue.
     public var running = false
+    /// The chat's effort (`EffortLevel`); nil follows the computer's setting.
+    public var effort: String?
 
     public static func from(_ v: JSONValue?) -> Session? {
         guard let v, let id = v.str("id") else { return nil }
@@ -372,7 +377,8 @@ public struct Session: Equatable, Sendable {
             updatedAt: v.long("updatedAt") ?? 0,
             queued: QueuedPrompt.list(v["queue"]),
             clientMessageIds: v["clientMessageIds"]?.array?.compactMap(\.string) ?? [],
-            running: v["activeRun"].map { !$0.isNull } ?? false)
+            running: v["activeRun"].map { !$0.isNull } ?? false,
+            effort: v.str("effort"))
     }
 }
 

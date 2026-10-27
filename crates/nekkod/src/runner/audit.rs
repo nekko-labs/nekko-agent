@@ -68,6 +68,17 @@ pub fn today(runners_dir: &Path, since_ts: u64) -> HashMap<String, Today> {
     out
 }
 
+/// The last `n` lines of one runner, newest first; unreadable lines are skipped.
+pub fn recent(runners_dir: &Path, runner_id: &str, n: usize) -> Vec<AuditLine> {
+    let text = std::fs::read_to_string(runners_dir.join("audit.jsonl")).unwrap_or_default();
+    text.lines()
+        .rev()
+        .filter_map(|l| serde_json::from_str::<AuditLine>(l).ok())
+        .filter(|l| l.runner_id == runner_id)
+        .take(n)
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -103,5 +114,23 @@ mod tests {
         let text = std::fs::read_to_string(dir.path().join("audit.jsonl")).unwrap();
         assert!(text.lines().next().unwrap().contains("\"runnerId\":\"r1\""));
         assert!(text.contains("\"result\":\"failedToStart\""));
+    }
+
+    #[test]
+    fn recent_reads_newest_first_for_one_runner() {
+        let dir = tempfile::tempdir().unwrap();
+        for (id, ts) in [("a", 1), ("a", 2), ("a", 3), ("b", 4)] {
+            let mut l = line(ts, AuditResult::Finished);
+            l.runner_id = id.into();
+            append(dir.path(), &l).unwrap();
+        }
+        std::fs::OpenOptions::new()
+            .append(true)
+            .open(dir.path().join("audit.jsonl"))
+            .unwrap()
+            .write_all(b"not json\n")
+            .unwrap();
+        let ts: Vec<u64> = recent(dir.path(), "a", 2).iter().map(|l| l.ts).collect();
+        assert_eq!(ts, [3, 2]);
     }
 }

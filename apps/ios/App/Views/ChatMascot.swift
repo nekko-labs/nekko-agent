@@ -67,3 +67,36 @@ private struct PixelCat: View {
         .accessibilityHidden(true)
     }
 }
+
+/// The desktop's greeting cat (GreetingNekko.tsx): a face peeking over the new chat's
+/// composer, its paws on the box's top edge. Decorative.
+struct GreetingCat: View {
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Canvas { context, size in
+            // The desktop's 32 x 30 viewBox.
+            context.scaleBy(x: size.width / 32, y: size.height / 30)
+            func polygon(_ points: [(CGFloat, CGFloat)]) -> Path {
+                var path = Path()
+                path.addLines(points.map { CGPoint(x: $0.0, y: $0.1) })
+                path.closeSubpath()
+                return path
+            }
+            func rects(_ r: [(CGFloat, CGFloat, CGFloat, CGFloat)], _ color: Color, opacity: Double = 1) {
+                for (x, y, w, h) in r { context.fill(Path(CGRect(x: x, y: y, width: w, height: h)), with: .color(color.opacity(opacity))) }
+            }
+            let face = polygon([(4,5),(6,5),(6,7),(8,7),(8,9),(11,9),(11,10),(21,10),(21,9),(24,9),(24,7),(26,7),(26,5),(28,5),(28,19),(27,19),(27,22),(25,22),(25,24),(22,24),(22,26),(10,26),(10,24),(7,24),(7,22),(5,22),(5,19),(4,19)])
+            context.fill(face, with: .color(palette.surface))
+            context.stroke(face, with: .color(palette.ink), style: StrokeStyle(lineWidth: 2, lineJoin: .miter))
+            // Eyes glance down at the message box.
+            rects([(11, 16, 2, 3), (20, 16, 2, 3)], palette.ink)
+            rects([(15, 20, 2, 1)], palette.accent)
+            rects([(7, 23, 5, 5), (20, 23, 5, 5)], palette.surface)
+            context.fill(polygon([(6,22),(13,22),(13,27),(12,27),(12,23),(7,23),(7,27),(6,27)]), with: .color(palette.ink))
+            context.fill(polygon([(19,22),(26,22),(26,27),(25,27),(25,23),(20,23),(20,27),(19,27)]), with: .color(palette.ink))
+            rects([(8.5, 23, 0.5, 1.5), (10, 23, 0.5, 1.5), (21.5, 23, 0.5, 1.5), (23, 23, 0.5, 1.5)], palette.ink, opacity: 0.55)
+        }
+        .accessibilityHidden(true)
+    }
+}

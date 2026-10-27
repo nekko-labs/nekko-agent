@@ -44,6 +44,7 @@ struct CloudView: View {
                 .refreshable { await run { try await cloud.sync() } }
             }
         }
+        .appBackground()
         .navigationTitle("Nekko Cloud")
         .navigationBarTitleDisplayMode(.inline)
         .task { if cloud.signedIn { await run { try await cloud.sync() } } }
@@ -435,7 +436,7 @@ struct SyncedChatView: View {
             }
             .padding()
         }
-        .background(palette.paper)
+        .background { AppBackdrop() }
         .navigationTitle(chat?.title ?? "Chat")
         .navigationBarTitleDisplayMode(.inline)
     }
