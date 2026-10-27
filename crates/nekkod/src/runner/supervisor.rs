@@ -15,10 +15,10 @@ use super::updates::write_atomic;
 use super::vm::{RunHandle, RunSpec, Stopped, Vm, reap};
 use nekko_runner::{
     Decision, HostFacts, MAX_MACOS_VMS, Reason, RunnerConfig, SlotLimit, cpus_per_vm, evaluate, hold_awake, keep_idle,
-    macos_slots_explained, vms_wanted, warm_slots,
+    macos_slots_explained, recommended_runner_memory_mb, runner_memory_mb, vms_wanted, warm_slots,
 };
 use serde::Serialize;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::future::Future;
 use std::os::unix::fs::DirBuilderExt;
 use std::path::{Path, PathBuf};
@@ -86,7 +86,45 @@ pub struct RunnerView {
     pub awake: bool,
     pub error: Option<String>,
     pub today: Today,
+    pub host: HostView,
+    /// This runner's last jobs, newest first.
+    pub recent: Vec<AuditLine>,
 }
+
+/// The Mac's facts as one runner sees them, for the settings sheet.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HostView {
+    pub ram_mb: u64,
+    pub cores: u8,
+    pub recommended_memory_mb: u64,
+    pub runner_memory_mb: u64,
+    pub cpus_per_vm: u8,
+    pub on_battery: Option<bool>,
+    pub battery_pct: Option<f64>,
+    pub network_id: Option<String>,
+    pub network_trusted: bool,
+}
+
+impl HostView {
+    fn of(m: &MacState, s: &nekko_runner::RunnerSettings) -> HostView {
+        let host = HostFacts { ram_mb: m.ram_mb, cores: m.cores, other_macos_vms: 0, user_memory_mb: m.user_memory_mb };
+        HostView {
+            ram_mb: m.ram_mb,
+            cores: m.cores,
+            recommended_memory_mb: recommended_runner_memory_mb(&host),
+            runner_memory_mb: runner_memory_mb(s, &host),
+            cpus_per_vm: cpus_per_vm(s, &host),
+            on_battery: m.power.map(|p| p.on_battery),
+            battery_pct: m.power.and_then(|p| p.percent),
+            network_id: m.network_id.clone(),
+            network_trusted: m.network_id.as_ref().is_some_and(|id| s.trusted_networks.contains(id)),
+        }
+    }
+}
+
+/// Lines kept per runner for `RunnerView::recent`.
+const RECENT: usize = 5;
 
 /// Why we stopped a VM.
 struct Stop {
@@ -169,6 +207,8 @@ struct Runner {
     /// After a transient mint error, no mint before this.
     mint_after: Option<f64>,
     awake: bool,
+    /// Newest first, at most `RECENT`; seeded from the audit log, then pushed to.
+    recent: VecDeque<AuditLine>,
 }
 
 impl Runner {
@@ -191,6 +231,7 @@ impl Runner {
             queue_polled_at: None,
             mint_after: None,
             awake: false,
+            recent: VecDeque::new(),
         }
     }
 
@@ -252,6 +293,8 @@ pub struct Supervisor<S: Sense, V: Vm, P: Provider> {
     serial: u64,
     day_start: u64,
     today: HashMap<String, Today>,
+    /// The last sample, for `views`; `None` before the first tick.
+    mac: Option<MacState>,
 }
 
 /// A provider call that gives up after `PROVIDER_TIMEOUT`.
@@ -334,6 +377,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             serial: 0,
             day_start: u64::MAX,
             today: HashMap::new(),
+            mac: None,
         }
     }
 
@@ -394,7 +438,11 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                     r.record = rec;
                     r.dropped = false;
                 }
-                None => self.runners.push(Runner::new(rec)),
+                None => {
+                    let mut r = Runner::new(rec);
+                    r.recent = audit::recent(&self.runners_dir, &r.record.config.id, RECENT).into();
+                    self.runners.push(r);
+                }
             }
         }
         self.retire();
@@ -457,6 +505,8 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                 awake: r.awake,
                 error: vm_error.cloned().or_else(|| r.error.clone()).or_else(|| r.blocked.clone()),
                 today: self.today.get(&r.record.config.id).copied().unwrap_or_default(),
+                host: self.mac.as_ref().map(|m| HostView::of(m, &r.record.config.settings)).unwrap_or_default(),
+                recent: r.recent.iter().cloned().collect(),
             })
             .collect()
     }
@@ -477,6 +527,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
     pub async fn tick(&mut self) {
         // 1. Read the Mac.
         let m = self.sense.sample().await;
+        self.mac = Some(m.clone());
         let now = m.wall_secs;
         let mono = tokio::time::Instant::now();
         // A slow tick (a VM start can take minutes) moves both clocks alike; only a sleep moves the wall alone.
@@ -816,6 +867,10 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
     fn audit(&mut self, line: &AuditLine) {
         if let Err(e) = audit::append(&self.runners_dir, line) {
             eprintln!("runner: cannot write the audit log: {e}");
+        }
+        if let Some(r) = self.runners.iter_mut().find(|r| r.record.config.id == line.runner_id) {
+            r.recent.push_front(line.clone());
+            r.recent.truncate(RECENT);
         }
         if line.ts >= self.day_start {
             self.today.entry(line.runner_id.clone()).or_default().add(line);

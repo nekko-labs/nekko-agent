@@ -164,7 +164,7 @@ Workflows, goals, integrations and tools.
 
 - [Automating repeatable work (Workflows tab)](automation/automating-repeatable-work-workflows-tab.md) (6 KB)
 - [Background automations yield to the user](automation/background-automations-yield-to-the-user.md) (13 KB)
-- [CI runners](automation/ci-runners.md) (27 KB)
+- [CI runners](automation/ci-runners.md) (29 KB)
 - [Experimental outbound resource queue](automation/experimental-outbound-resource-queue.md) (3 KB)
 - [Handing the agent a long-running goal](automation/handing-the-agent-a-long-running-goal.md) (2 KB)
 - [One-click setup for safe offline PC control (planned)](automation/one-click-setup-for-safe-offline-pc-control.md) (6 KB)
@@ -182,7 +182,7 @@ Phone remote control and the native iOS and Android apps.
 - [iPhone Markdown composer and rich replies (planned 2026-10-25)](phone/iphone-markdown-composer-and-rich-replies.md) (8 KB)
 - [iPhone: the desktop's languages and themes, and New chat's effort and computer (2026-10-23)](phone/iphone-languages-themes-and-new-chat-choices.md) (5 KB)
 - [Mermaid diagrams on the phone (planned 2026-10-25)](phone/mermaid-diagrams-on-the-phone.md) (4 KB)
-- [Native Android app (2026-10-11)](phone/native-android-app.md) (49 KB)
+- [Native Android app (2026-10-11)](phone/native-android-app.md) (50 KB)
 - [Native iOS app (2026-10-16)](phone/native-ios-app.md) (96 KB)
 - [Native phone implementation decision (2026-10-07)](phone/native-phone-implementation-decision.md) (2 KB)
 - [Nekko Cloud machines: a sandboxed computer the phone pairs with (2026-10-24)](phone/nekko-cloud-machines.md) (7 KB)
