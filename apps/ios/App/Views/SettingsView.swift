@@ -173,7 +173,7 @@ struct SettingsView: View {
             Section {
                 // Inline: both choices are short rows with a checkmark, never cut off.
                 Picker("Microphone", selection: $prefs.dictationHold) {
-                    Text("Tap to start and stop").tag(false)
+                    Text("Tap to keep listening").tag(false)
                     Text("Hold to talk").tag(true)
                 }
                 .pickerStyle(.inline)
@@ -181,7 +181,7 @@ struct SettingsView: View {
             } header: { SectionHeader("Dictation") } footer: {
                 Text(prefs.dictationHold
                      ? "Hold the microphone while you speak and let go to stop. With VoiceOver, double-tap starts and double-tap again stops."
-                     : "Tap the microphone to start and tap stop when you’re done.")
+                     : "Tap the microphone and talk: it keeps listening through pauses until you tap stop, lock the phone, or leave the chat. Start with “Nekko” for a command, like “Nekko, send it”. Without Whisper on the computer, speech is turned into text on this iPhone only, never on a server.")
                     .foregroundStyle(palette.inkSoft)
             }
             if store.active != nil {

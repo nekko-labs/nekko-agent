@@ -115,3 +115,20 @@ public func splitVoiceSegments(_ text: String) -> [VoiceIntent] {
     }
     return out
 }
+
+/// A transcript with a wake word said alone at its end split off (`wake`), so the next segment can carry it.
+public struct WakeTail: Equatable, Sendable {
+    public let rest: String
+    public let wake: String
+}
+
+private let wakeTail = rx(#"(?:^|(?<=[.!?])\s+)(ne[ck]k?o\b[\s,:.!?-]*)$"#)
+
+/// "Fix the bug. Nekko." → rest "Fix the bug.", wake "Nekko.". The twin of the desktop's splitWakeTail.
+public func splitWakeTail(_ text: String) -> WakeTail {
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard let m = wakeTail.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)),
+          let all = Range(m.range, in: trimmed), let wake = Range(m.range(at: 1), in: trimmed) else { return WakeTail(rest: trimmed, wake: "") }
+    return WakeTail(rest: String(trimmed[..<all.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines),
+                    wake: String(trimmed[wake]).trimmingCharacters(in: .whitespacesAndNewlines))
+}

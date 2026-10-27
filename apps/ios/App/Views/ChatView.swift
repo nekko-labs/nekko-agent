@@ -711,7 +711,7 @@ struct HoldToTalkButton: View {
             .accessibilityIdentifier("composer.holdToTalk")
             .accessibilityAction {
                 Task {
-                    if dictation.recording { await dictation.finish(store: store) } else { await dictation.start(store: store) }
+                    if dictation.recording { dictation.stopListening() } else { await dictation.start(store: store, holding: true) }
                 }
             }
     }
@@ -735,6 +735,9 @@ struct Composer: View {
     @State private var loadingPhotos = false
     @State private var error: String?
     @State private var dictation = Dictation()
+    /// "Nekko, ..." commands in what is dictated, and the words for the message box.
+    @State private var voice = VoiceRunner()
+    @Environment(\.scenePhase) private var phase
     @Environment(Prefs.self) private var prefs
     /// The message box has the keyboard (its formatting toolbar shows then).
     @State private var focused = false
@@ -860,20 +863,26 @@ struct Composer: View {
                     .accessibilityLabel("Add")
                     .accessibilityIdentifier("composer.add")
                     Spacer(minLength: 0)
-                    if dictation.transcribing {
+                    // Listening (tap mode) keeps its stop button while earlier segments are transcribed.
+                    if dictation.recording && !prefs.dictationHold {
+                        Button { dictation.stopListening() } label: {
+                            Image(systemName: "stop.circle.fill").font(.title2).foregroundStyle(palette.danger)
+                                .frame(width: 44, height: 44).contentShape(Rectangle())
+                        }
+                        .accessibilityLabel("Stop dictation")
+                        .accessibilityIdentifier("composer.stopDictation")
+                    } else if dictation.transcribing {
                         ProgressView().frame(width: 44, height: 44).accessibilityLabel("Transcribing")
                     } else if prefs.dictationHold && dictation.available && (text.isEmpty || dictation.recording) {
                         HoldToTalkButton(dictation: dictation)
-                    } else if dictation.available && text.isEmpty && !dictation.recording {
-                        Button { Task { await dictation.start(store: store) } } label: {
+                    } else if dictation.available && text.isEmpty {
+                        Button { Task { await dictation.startListening(store: store) } } label: {
                             Image(systemName: "mic.fill").font(.title3).foregroundStyle(palette.inkSoft)
                                 .frame(width: 44, height: 44).contentShape(Rectangle())
-                        }.accessibilityLabel("Dictate")
-                    } else if dictation.recording {
-                        Button { Task { await dictation.finish(store: store) } } label: {
-                            Image(systemName: "stop.circle.fill").font(.title2).foregroundStyle(palette.danger)
-                                .frame(width: 44, height: 44).contentShape(Rectangle())
-                        }.accessibilityLabel("Stop dictation")
+                        }
+                        .accessibilityLabel("Dictate")
+                        .accessibilityHint("Keeps listening until you tap stop. Start with Nekko for a command, like Nekko, send it.")
+                        .accessibilityIdentifier("composer.dictate")
                     }
                     // Stop while running with nothing to queue; a photo or skill alone can be queued.
                     if chat.running && !hasContent {
@@ -884,7 +893,7 @@ struct Composer: View {
                         }.accessibilityLabel("Stop")
                     } else if chat.sendsLater {
                         // Offline: the prompt waits on this iPhone (the outbox) and goes when the computer is back.
-                        Button(action: send) {
+                        Button { send() } label: {
                             Text("Send when online").font(.footnote.weight(.semibold)).lineLimit(1)
                                 .padding(.horizontal, 12).frame(minHeight: 36)
                                 .background(canSend ? palette.accent : palette.surface2, in: Capsule())
@@ -895,7 +904,7 @@ struct Composer: View {
                         .disabled(!canSend)
                         .accessibilityIdentifier("chat.sendLater")
                     } else {
-                        Button(action: send) {
+                        Button { send() } label: {
                             Image(systemName: "arrow.up").font(.body.weight(.bold)).frame(width: 36, height: 36)
                                 .background(canSend ? palette.accent : palette.surface2, in: Circle())
                                 .foregroundStyle(canSend ? palette.onAccent : palette.inkFaint)
@@ -917,6 +926,10 @@ struct Composer: View {
                 ContextGauge(chat: chat)
             }
             .padding(.top, -4)
+            if let pending = voice.pending { voicePending(pending) }
+            if let said = voice.notice {
+                Text(said.text).font(.caption2).foregroundStyle(palette.inkSoft).accessibilityIdentifier("composer.voiceNotice")
+            }
             if dictation.recording || dictation.transcribing { Text(dictation.status).font(.caption2).foregroundStyle(palette.inkFaint) }
             else if let n = dictation.notice { Text(n).font(.caption2).foregroundStyle(palette.inkSoft) }
         }
@@ -938,8 +951,21 @@ struct Composer: View {
         .onChange(of: refusal) { _, _ in saveDraft() }
         // Edit on a waiting prompt, or a refusal: the prompt comes back into the box.
         .onChange(of: store.drafts.drafts[chat.sessionId]) { _, d in adopt(d) }
-        // Tapped stop or hit the 30-second limit: the words go into the message, never sent.
-        .onChange(of: dictation.result) { _, r in if let r { text += (text.isEmpty ? "" : " ") + r.text } }
+        // Each segment once, in order: words into the message, "Nekko, ..." commands run.
+        .onChange(of: dictation.heard) { old, new in
+            let fresh = Array(new.dropFirst(old.count))
+            voice.host = voiceHost
+            Task { await voice.hear(fresh) }
+        }
+        .onChange(of: dictation.recording) { _, on in if on { voice.started() } else { voice.stopped() } }
+        // Listening never outlives the screen: lock, app switch, or leaving the chat stops it, and it never restarts by itself.
+        .onChange(of: phase) { _, p in if p != .active { dictation.abort() } }
+        .onDisappear { dictation.stopListening() }
+        .task(id: voice.notice) {
+            guard let said = voice.notice else { return }
+            try? await Task.sleep(for: .seconds(4))
+            voice.clearNotice(said.id)
+        }
         // "Ask about this" in Changes: the quote goes after what's typed, never sent.
         .onChange(of: chat.insert) { _, q in
             guard q != nil, let quote = chat.takeInsert() else { return }
@@ -1033,7 +1059,72 @@ struct Composer: View {
         return chat.skills.filter { q.isEmpty || $0.name.lowercased().hasPrefix(q) }.prefix(8).map { $0 }
     }
 
-    private func send() {
+    /// A confirm or a choice from a voice command: answered by voice or a tap.
+    private func voicePending(_ p: VoiceRunner.Pending) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(p.message).font(.caption).foregroundStyle(palette.ink).fixedSize(horizontal: false, vertical: true)
+            if p.confirm {
+                HStack {
+                    Button("Confirm") { answer(.yes) }.buttonStyle(.borderedProminent).accessibilityIdentifier("composer.voiceConfirm")
+                    Button("Cancel") { answer(.no) }.buttonStyle(.bordered)
+                }
+                .frame(minHeight: 44)
+            } else {
+                ForEach(Array(p.options.enumerated()), id: \.offset) { i, o in
+                    Button { answer(.pick(i + 1)) } label: {
+                        Text(o.label).font(.footnote).lineLimit(1).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain).foregroundStyle(palette.accent)
+                }
+                Button("Cancel") { answer(.no) }.font(.footnote).frame(minHeight: 44)
+            }
+        }
+        .padding(.horizontal, 10).padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(palette.surface, in: RoundedRectangle(cornerRadius: 10))
+        .accessibilityIdentifier("composer.voicePending")
+    }
+
+    private func answer(_ intent: VoiceIntent) {
+        voice.host = voiceHost
+        Task { await voice.answer(intent) }
+    }
+
+    /// What voice commands act on: this composer, this chat, and the app's routes.
+    private var voiceHost: VoiceRunner.Host {
+        let chat = chat, store = store, app = app
+        return VoiceRunner.Host(
+            text: $text,
+            send: { canSend ? await send().value : false },
+            toast: { AccessibilityNotification.Announcement($0).post() },
+            tap: { Haptics.tap() },
+            chats: { store.summaries.filter(\.isVisible) },
+            open: { app.openChat = $0 },
+            newChat: { app.newChatRequested = true },
+            openSettings: { app.openSettings = true },
+            status: {
+                let lane = switch store.activity[chat.sessionId] {
+                case .needsYou: "Needs you"
+                case .running: "Working"
+                case nil: chat.running ? "Working" : "Idle"
+                }
+                let watching = chat.watches.contains { $0.kind == .pr && $0.status == .active }
+                return "\(chat.title): \(lane)\(watching ? ", Watching PR" : "")"
+            },
+            ship: { VoiceRunner.ShipFacts(prs: try await chat.pullRequests(refresh: true), running: chat.running, question: chat.turn.question) },
+            merge: { pr in
+                let r = await GitModel(store: store, chatId: chat.sessionId).prAction(pr.url, .merge)
+                if r?.ok == true { return nil }
+                return r.map { $0.message.isEmpty ? "Git refused it." : $0.message } ?? "Couldn’t merge \(VoiceRunner.label(pr))."
+            },
+            answer: { q, note in try await chat.answer(q.questions.map { AskAnswer(questionId: $0.id, labels: [], note: note) }) },
+            complete: { try await store.completeChat(chat.sessionId) },
+            title: { chat.title })
+    }
+
+    /// Sends what is in the box; the task says whether the computer took it (a refusal puts the text back).
+    @discardableResult
+    private func send() -> Task<Bool, Never> {
         var body = text.trimmingCharacters(in: .whitespacesAndNewlines)
         var s = skill
         // "/name rest" typed out in full runs that skill.
@@ -1063,16 +1154,19 @@ struct Composer: View {
         // The prompt is on disk in the outbox from here until the computer lists it.
         store.drafts.clear(chat.sessionId)
         lastSaved = nil
-        Task {
+        return Task {
             do {
                 try await chat.send(sentBody, skill: sentSkill, images: sentImages)
                 Haptics.tap()
+                return true
             } catch {
                 self.error = error.localizedDescription
-                text = saved
+                // Words dictated since stay after the refused message.
+                text = text.isEmpty ? saved : saved + " " + text
                 skill = sentSkill
                 prompt = sentPrompt
                 images = sentImages
+                return false
             }
         }
     }

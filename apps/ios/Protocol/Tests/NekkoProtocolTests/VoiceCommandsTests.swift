@@ -62,4 +62,11 @@ final class VoiceCommandsTests: XCTestCase {
         XCTAssertEqual(splitVoiceSegments("Nekko."), [.unknown("Nekko.")])
         XCTAssertEqual(splitVoiceSegments("  "), [])
     }
+
+    func testSplitWakeTail() {
+        XCTAssertEqual(splitWakeTail("Nekko."), WakeTail(rest: "", wake: "Nekko."))
+        XCTAssertEqual(splitWakeTail("Fix the bug. Neko?"), WakeTail(rest: "Fix the bug.", wake: "Neko?"))
+        XCTAssertEqual(splitWakeTail("Tell Nekko."), WakeTail(rest: "Tell Nekko.", wake: ""))
+        XCTAssertEqual(splitWakeTail("Nekko, send it."), WakeTail(rest: "Nekko, send it.", wake: ""))
+    }
 }
