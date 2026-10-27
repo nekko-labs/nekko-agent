@@ -44,10 +44,31 @@ final class VoiceSegmenterTests: XCTestCase {
         XCTAssertEqual(seg.count, Int(2.6 * rate), accuracy: Int(0.1 * rate))
     }
 
-    func testSeveralSegmentsInOneFeedAreNotLost() throws {
+    func testSeveralSegmentsInOneFeedAreDrainedByFlush() throws {
         var s = segmenter()
-        let both = tone(1) + quiet(1.5) + tone(1) + quiet(1.5)
-        XCTAssertNotNil(s.feed(both))
-        XCTAssertNotNil(s.feed([]))
+        let first = try XCTUnwrap(s.feed(tone(1) + quiet(1.5) + tone(1) + quiet(1.5)))
+        XCTAssertEqual(first.count, Int(2.3 * rate))
+        XCTAssertEqual(Array(first[0..<Int(rate)]), tone(1))
+        XCTAssertEqual(Array(first[Int(rate)...]), quiet(1.3))
+        let second = try XCTUnwrap(s.flush())
+        XCTAssertEqual(second.count, Int(2.5 * rate))
+        XCTAssertEqual(Array(second[0..<Int(0.2 * rate)]), quiet(0.2))
+        XCTAssertEqual(Array(second[Int(0.2 * rate)..<Int(1.2 * rate)]), tone(1))
+        XCTAssertEqual(Array(second[Int(1.2 * rate)...]), quiet(1.3))
+        XCTAssertNil(s.flush())
+    }
+
+    func testFlushReturnsTheUtteranceInProgress() throws {
+        var s = segmenter()
+        XCTAssertNil(s.feed(tone(0.55) + quiet(0.3)))
+        XCTAssertEqual(try XCTUnwrap(s.flush()).count, Int(0.85 * rate))
+        XCTAssertNil(s.flush())
+    }
+
+    func testFlushDropsABlipAndEmptyState() {
+        var s = segmenter()
+        XCTAssertNil(s.flush())
+        XCTAssertNil(s.feed(tone(0.1)))
+        XCTAssertNil(s.flush())
     }
 }

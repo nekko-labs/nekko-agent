@@ -2,7 +2,7 @@ import Foundation
 
 /// Cuts a live mic stream into utterances for transcription. The iOS twin of the desktop
 /// rules in apps/desktop/src/renderer/voiceCapture.ts (shouldCut, keepSegment, trimPreRoll).
-/// Feed it any size of chunk: it works in 0.1 s blocks, so the cut points do not depend on the chunking.
+/// Feed it any size of chunk: it works in 0.1 s blocks (a partial block waits for the next feed), so the cut points do not depend on the chunking.
 public struct VoiceSegmenter {
     public static let preRollSeconds = 0.3
     public static let minSpeechSeconds = 0.25
@@ -27,15 +27,37 @@ public struct VoiceSegmenter {
 
     /// A finished segment's samples after silence follows speech or the segment reaches `maxSeconds`;
     /// nil otherwise. A segment with under 0.25 s of speech is dropped. If one call holds several
-    /// segments the rest is kept and handled by the next call.
+    /// segments the rest waits in the segmenter: call `flush` when capture stops to drain it.
     public mutating func feed(_ samples: [Float]) -> [Float]? {
-        let input = pending + samples
-        pending = []
+        pending += samples
+        return drain(final: false)
+    }
+
+    /// Call when capture stops. Returns the next waiting segment, or the utterance in progress if it
+    /// holds 0.25 s of speech; call again until nil. Returning nil leaves the segmenter reset.
+    public mutating func flush() -> [Float]? {
+        if let segment = drain(final: true) { return segment }
+        let segment = isKeepable ? buffer : nil
+        reset()
+        return segment
+    }
+
+    private var isKeepable: Bool {
+        guard let first = firstVoiced else { return false }
+        return Double(lastVoicedEnd - first) / sampleRate >= Self.minSpeechSeconds
+    }
+
+    private mutating func reset() { buffer = []; firstVoiced = nil; lastVoicedEnd = 0; silent = 0 }
+
+    /// Works in 0.1 s blocks; a partial trailing block waits for more samples unless `final`.
+    private mutating func drain(final: Bool) -> [Float]? {
         let block = max(1, Int(sampleRate / 10))
         var i = 0
-        while i < input.count {
-            let end = min(i + block, input.count)
-            let chunk = input[i..<end]
+        defer { pending.removeFirst(i) }
+        while i < pending.count {
+            let end = min(i + block, pending.count)
+            if end - i < block && !final { break }
+            let chunk = pending[i..<end]
             i = end
             let rms = (chunk.reduce(0) { $0 + $1 * $1 } / Float(chunk.count)).squareRoot()
             buffer += chunk
@@ -53,13 +75,9 @@ public struct VoiceSegmenter {
                 continue
             }
             guard silent > silenceSamples || buffer.count >= maxSamples else { continue }
-            let kept = Double(lastVoicedEnd - (firstVoiced ?? 0)) / sampleRate >= Self.minSpeechSeconds
-            let segment = buffer
-            buffer = []; firstVoiced = nil; lastVoicedEnd = 0; silent = 0
-            if kept {
-                pending = Array(input[i...])
-                return segment
-            }
+            let segment = isKeepable ? buffer : nil
+            reset()
+            if let segment { return segment }
         }
         return nil
     }

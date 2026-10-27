@@ -4,7 +4,7 @@ import XCTest
 /// The shared grammar fixture (packages/shared/fixtures/voice-commands.json), the
 /// same cases the TS grammar (Vitest) runs. Cases marked desktop-only are skipped.
 final class VoiceCommandsTests: XCTestCase {
-    private func intent(_ v: JSONValue) throws -> VoiceIntent {
+    private func intent(_ v: JSONValue) -> VoiceIntent {
         switch v.str("kind") {
         case "dictation": return .dictation(v.str("text") ?? "")
         case "new-session": return .newSession
@@ -20,7 +20,9 @@ final class VoiceCommandsTests: XCTestCase {
         case "yes": return .yes
         case "no": return .no
         case "unknown": return .unknown(v.str("text") ?? "")
-        default: throw XCTSkip("fixture intent this test does not map: \(String(describing: v))")
+        default:
+            XCTFail("fixture intent this test does not map: \(String(describing: v))")
+            return .unknown("")
         }
     }
 
@@ -35,7 +37,7 @@ final class VoiceCommandsTests: XCTestCase {
             let platforms = c["platforms"]?.array?.compactMap(\.string)
             if let platforms, !platforms.contains("ios") { continue }
             let say = c.str("say") ?? ""
-            let want = try intent(try XCTUnwrap(c["intent"]))
+            let want = try intent(XCTUnwrap(c["intent"]))
             XCTAssertEqual(parseVoiceIntent(say), want, say)
             XCTAssertEqual(splitVoiceSegments(say), [want], "split: \(say)")
             ran += 1
