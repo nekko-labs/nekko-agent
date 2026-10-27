@@ -24,10 +24,10 @@ import { ContextMenu, ContextAction } from '../components/ContextMenu.js';
 import { MonitorsDock } from '../components/MonitorsDock.js';
 import { usePanelPresence } from '../usePanelPresence.js';
 import { hasAppChrome } from '../chrome.js';
-import { claimAgent, displaysBridge, isScreenWindow, useDisplays, wallStorageKey, windowKey } from '../displays.js';
+import { claimAgent, displaysBridge, isScreenWindow, openerMode, useDisplays, wallStorageKey, windowKey } from '../displays.js';
 import { ScreensControl } from '../components/ScreensControl.js';
 import { needsProviderSetup } from '../components/providers/providerSetup.js';
-import { reusableEmptyChat, shouldStartFromEmptyWall } from '../emptyWallStart.js';
+import { newScreenLayout, reusableEmptyChat, shouldStartFromEmptyWall } from '../emptyWallStart.js';
 
 import { allPanes, type PaneKind } from '../layout.js';
 import {
@@ -133,9 +133,11 @@ export function CommandCenterView() {
   const storage = useMemo(() => screenStorage(typeof localStorage === 'undefined' ? undefined : localStorage), []);
   const [wall, setWallState] = useState<CommandWallState>(() => {
     const loaded = loadWallState(storage, isScreenWindow ? null : useStore.getState().settings?.commandWall);
-    // A new screen starts empty (it is where new agents go first), not
-    // seeded with the recent chats the main wall already shows.
-    return isScreenWindow && loaded.watermark === 0 ? { ...loaded, root: null, watermark: Date.now() } : loaded;
+    // A new screen starts blank, not seeded with the recent chats the main
+    // wall already shows, in the mode of the window that opened it.
+    return isScreenWindow && loaded.watermark === 0
+      ? { ...loaded, root: null, watermark: Date.now(), layout: newScreenLayout(loaded.layout, openerMode()) }
+      : loaded;
   });
   // Every change goes through snap: while it is on, the wall stays evenly spaced.
   const setWall = useCallback((update: (s: CommandWallState) => CommandWallState) => setWallState((s) => applySnap(s, update(s))), []);
@@ -191,7 +193,9 @@ export function CommandCenterView() {
   }), []);
   // Tell main how full this wall is, for "prioritize empty windows".
   const paneCount = useMemo(() => allPanes(wall.root).length, [wall.root]);
-  useEffect(() => { displaysBridge?.report(paneCount); }, [paneCount]);
+  // An untouched new chat does not count, so a fresh screen still reads as empty for placement.
+  const usedPaneCount = useMemo(() => allPanes(wall.root).filter((p) => p.kind !== 'chat' || sessions.some((s) => s.id === p.refId && s.messageCount > 0)).length, [wall.root, sessions]);
+  useEffect(() => { displaysBridge?.report(usedPaneCount); }, [usedPaneCount]);
 
   useEffect(() => {
     window.nekko.getUsageSummary().then(setUsage);
@@ -441,17 +445,19 @@ export function CommandCenterView() {
     const { activeModelId, models } = useStore.getState();
     const providerReady = !needsProviderSetup(providers, activeModelId ?? models[0]?.id);
     if (startingEmpty.current || emptyStartFailed.current) return;
-    if (!shouldStartFromEmptyWall({ listsReady, hasWindows: paneCount > 0, screenWindow: isScreenWindow, readingCompleted: !!completedId, providerReady })) return;
+    if (!shouldStartFromEmptyWall({ listsReady, hasWindows: paneCount > 0, readingCompleted: !!completedId, providerReady })) return;
     startingEmpty.current = true;
     void (async () => {
-      const reuse = reusableEmptyChat(sessions);
+      // A screen window cannot see which blank chat another window shows, so it makes its own.
+      const reuse = isScreenWindow ? null : reusableEmptyChat(sessions);
       const id = reuse ?? await newChat();
       // Placed on another screen by the placement preference: that window shows it.
       // Do not try again here, or every session refresh would make another chat.
       if (!reuse && !(await keepNewChat(id))) { emptyStartFailed.current = true; return; }
       setWall((w) => {
         const opened = openWallPane(w, 'chat', id);
-        return { ...opened, hero: id, layout: { ...opened.layout, mode: 'focus' } };
+        // A screen window keeps the mode it opened in, Focused or Dynamic.
+        return { ...opened, hero: id, layout: isScreenWindow ? opened.layout : { ...opened.layout, mode: 'focus' } };
       });
       setSelected(id);
     })().catch((e) => { emptyStartFailed.current = true; reportAddFailure(e); }).finally(() => { startingEmpty.current = false; });
@@ -729,9 +735,9 @@ export function WallToolbar({
             </HoverTip>
           </div>
         </div>
-        {/* Multi-monitor: Dynamic mode only, at the end of the toolbar (the
+        {/* Multi-monitor, in either mode, at the end of the toolbar (the
             Monitors toggle now lives in the panel's own header). */}
-        {wall.layout.mode === 'grid' && <ScreensControl />}
+        <ScreensControl mode={wall.layout.mode} />
       </div>
     </div>
   );

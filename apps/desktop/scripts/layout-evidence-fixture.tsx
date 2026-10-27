@@ -6,7 +6,8 @@ const screensState = { placement: 'empty-first', displays: [1, 2].map((n) => ({ 
 const screensFixture: any = { state: screensState, emit: (_: unknown) => {} };
 (window as any).screensFixture = screensFixture;
 const current = async () => screensFixture.state;
-const displays = { displayId: null, list: current, toggle: current, setPlacement: current, toggleDesktop: current, setSpacesMode: current, go: async () => 'ok', report: () => {}, claim: async () => 'main', onChange: (cb: (s: unknown) => void) => { screensFixture.emit = cb; return () => {}; }, onPlaced: () => () => {} };
+const displays = { displayId: localStorage.getItem('fixture.displayId'), list: current, toggle: current, setPlacement: current, toggleDesktop: current, setSpacesMode: current, go: async () => 'ok', report: () => {}, claim: async () => 'main', onChange: (cb: (s: unknown) => void) => { screensFixture.emit = cb; return () => {}; }, onPlaced: () => () => {} };
+// A sandbox can open the App as a second screen's window (localStorage 'fixture.displayId') before a reload.
 // A sandbox can pick Windows chrome (localStorage 'fixture.platform') before a reload.
 (window as any).nekkoChrome = { platform: localStorage.getItem('fixture.platform') ?? 'darwin', titleBarHeight: 38, setTitleBarOverlay: () => {}, serviceControl: async () => ({}), reportNotificationVisibility: () => {}, displays };
 const now = Date.now();
@@ -23,6 +24,7 @@ const bridge: any = {
   getSettings: async () => settings, updateSettings: async (p: any) => ({ ...Object.assign(settings, p) }), listProviders: async () => [provider],
   listSessionSummaries: async () => [],
   getSession: async (id: string) => records.find(s => s.id === id), listModels: async () => [{ id: 'gpt-fixture', providerId: 'fixture', name: 'GPT fixture', contextWindow: 500000 }],
+  createSession: async () => { const s = session('n' + records.length, 'New chat'); records.push(s); return s; },
   listTerminals: async () => [],
   // A sandbox can seed agent states (localStorage 'fixture.pending' / 'fixture.running') before a reload.
   pendingInput: async () => JSON.parse(localStorage.getItem('fixture.pending') ?? '{}'), runningSessions: async () => JSON.parse(localStorage.getItem('fixture.running') ?? '[]'), listTasks: async () => [],
