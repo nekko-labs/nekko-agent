@@ -67,6 +67,7 @@ app.whenReady().then(async () => {
       await click('[data-fold="more"]'); await click('[data-fold="expert"]'); await capture('moe8-more-and-expert');
       await reset({ scenario: 'dense24' }); await capture('dense24-open');
       await reset({ scenario: 'dense24', preset: savedPreset }); await speculativeOff(); await captureFooter('saved-speculative-off');
+      await reset({ scenario: 'dense24', preset: { ...savedPreset, speculative: false }, loaded: savedPreset }); await captureFooter('loaded-before-save');
     } else {
       await reset({ scenario: 'moe8' });
       await capture('moe8-open');
@@ -101,6 +102,14 @@ app.whenReady().then(async () => {
       await check('a change from the saved settings says it applies to this load only', "document.querySelector('[data-unsaved]')?.innerText.includes('this load only')");
       await click('[aria-label="Speculative decoding"]');
       await check('switching it back to the saved value clears the line', "!document.querySelector('[data-unsaved]')");
+      // Saved with Speculative decoding off while the running copy still has it on.
+      await reset({ scenario: 'dense24', preset: { ...savedPreset, speculative: false }, loaded: savedPreset });
+      await captureFooter('loaded-before-save');
+      await check('saved settings the running copy does not use say a reload applies them', "document.querySelector('[data-stale]')?.innerText.includes('Reload to use these now') && !document.querySelector('[data-unsaved]')");
+      await click('[data-fold="more"]'); await click('[data-fold="expert"]'); await click('[aria-label="Speculative decoding"]');
+      await check('back to what is running, unsaved: only the unsaved line', "!document.querySelector('[data-stale]') && !!document.querySelector('[data-unsaved]')");
+      await reset({ scenario: 'dense24', preset: { ...savedPreset, speculative: false }, loaded: { ...savedPreset, speculative: false } });
+      await check('running with the saved settings: no reload line', "!document.querySelector('[data-stale]') && !document.querySelector('[data-unsaved]')");
       await reset({ scenario: 'dense8' });
       await capture('dense8-open');
       await check('a dense model too big for 8 GB moves feed-forward to RAM', "document.querySelector('[data-engine-load-drawer]').innerText.includes('Feed-forward')");

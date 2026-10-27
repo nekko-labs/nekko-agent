@@ -143,6 +143,8 @@ export interface ResidentModel {
    * `gpu+cpu` split. Absent means the runtime cannot say.
    */
   loadedOn?: 'gpu' | 'gpu+cpu' | 'cpu';
+  /** The settings it was loaded with. Nekko's own Model Server only. */
+  params?: LoadParams;
   /** When it last served a request: the field LRU eviction reads. */
   lastUsedAt?: number;
   /** When it was loaded. */

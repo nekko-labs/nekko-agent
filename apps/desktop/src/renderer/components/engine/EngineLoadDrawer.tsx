@@ -9,6 +9,7 @@ import {
   SESSION_STOPS,
   contextPerSession,
   contextStops,
+  differsFromLoaded,
   differsFromSaved,
   expertCacheMiB,
   fromPreset,
@@ -47,6 +48,7 @@ const LIVE_REFRESH_MS = 5000;
 export function EngineLoadDrawer({
   providerId,
   model,
+  loadedParams,
   autoloaded = false,
   onToggleAutoload,
   onFetchCompanions,
@@ -56,6 +58,8 @@ export function EngineLoadDrawer({
 }: {
   providerId: string;
   model: LocalModel & { loaded: boolean; gpuFit?: GpuFit };
+  /** What the running copy was loaded with, when the engine says. */
+  loadedParams?: LoadParams;
   /** In the list loaded when the engine starts. */
   autoloaded?: boolean;
   onToggleAutoload?: (on: boolean) => void;
@@ -138,6 +142,8 @@ export function EngineLoadDrawer({
   const matches = matchesRecommendation(params, rec?.request, layers);
   // A load from chat or at engine start uses the saved settings, not these.
   const unsaved = differsFromSaved(params, saved.params);
+  // Save as default does not touch the running copy; only a reload does.
+  const stale = !unsaved && model.loaded && !!loadedParams && differsFromLoaded(params, loadedParams);
 
   const setRunOn = (r: RunOn) => {
     setSplit('custom');
@@ -458,7 +464,12 @@ export function EngineLoadDrawer({
           These settings apply to this load only. Save as default to keep them.
         </p>
       )}
-      <div className={`${unsaved ? 'mt-2' : 'mt-4'} flex flex-wrap items-center gap-2`}>
+      {stale && (
+        <p className="mt-4 text-[11px] text-ink-faint" data-stale>
+          The loaded model still runs with its earlier settings. Reload to use these now.
+        </p>
+      )}
+      <div className={`${unsaved || stale ? 'mt-2' : 'mt-4'} flex flex-wrap items-center gap-2`}>
         <button className="btn btn-primary py-1.5 text-[12px]" onClick={load} disabled={loading} data-load>
           {loading ? 'Loading…' : model.loaded ? 'Reload with these settings' : 'Load model'}
         </button>

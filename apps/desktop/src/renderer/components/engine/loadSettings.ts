@@ -133,6 +133,42 @@ export function differsFromSaved(params: LoadParams, saved: LoadParams): boolean
   return JSON.stringify(set(params)) !== JSON.stringify(set(saved));
 }
 
+/** The settings a reload restarts the model for: `same_params` in `crates/nekko-engine/src/server.rs`. */
+const RELOAD_KEYS = [
+  'contextTokens',
+  'gpuLayers',
+  'kvCacheDtype',
+  'parallelSlots',
+  'batchSize',
+  'ubatchSize',
+  'threads',
+  'flashAttention',
+  'mmap',
+  'mlock',
+  'ropeFreqBase',
+  'ropeFreqScale',
+  'seed',
+  'speculative',
+  'draftModelId',
+  'cpuMoeLayers',
+  'cpuFfnLayers',
+  'moeCacheMiB',
+  'kvOnGpu',
+  'lazyTables',
+  'threadsBatch',
+] as const;
+
+/**
+ * Whether the running copy of a model was loaded with different settings than
+ * these, so Reload would restart it. Mirrors the engine's own test: an unset
+ * field and a missing one are the same, null is not.
+ */
+export function differsFromLoaded(params: LoadParams, loaded: LoadParams): boolean {
+  const field = (p: LoadParams, k: (typeof RELOAD_KEYS)[number]) => (p as Record<string, unknown>)[k];
+  const diffusion = (p: LoadParams) => JSON.stringify(p.diffusion ?? {});
+  return RELOAD_KEYS.some((k) => field(params, k) !== field(loaded, k)) || diffusion(params) !== diffusion(loaded);
+}
+
 /** Which settings still match the recommendation, for the "Recommended" tags. */
 export function matchesRecommendation(p: LoadParams, rec: Recommendation['request'] | undefined, layers?: number) {
   if (!rec) return { runOn: false, context: false, sessions: false, precision: false };

@@ -1009,6 +1009,9 @@ impl ModelServer {
                 if let Some(on) = c.loaded_on {
                     m.insert("loadedOn".into(), json!(on));
                 }
+                // What it was loaded with, so the load drawer can tell saved
+                // settings the running copy does not use yet.
+                m.insert("params".into(), c.params.clone());
                 m.insert("lastUsedAt".into(), num(c.last_used_at));
                 m.insert("startedAt".into(), num(c.started_at));
                 if ttl > 0.0 {
