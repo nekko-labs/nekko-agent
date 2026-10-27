@@ -10,6 +10,8 @@
   padding: 14px 1px 0;
 }
 .command-wall-stage { position: relative; min-height: 304px; }
+/* Windows stop one gap short of a composer docked below them. */
+.wall-column:has(> .wall-composer-row:last-child) > .command-wall-layout { padding-bottom: var(--wall-gap); }
 /* Keep in step with WALL_PUSH_MS and WALL_PUSH_EASE in wallMotion.ts. */
 .command-wall-layout { --wall-push-ms: 280ms; --wall-push-ease: cubic-bezier(.22, 1, .36, 1); }
 /* A closing window's last picture folds away here, under the live windows. */
@@ -219,7 +221,14 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 
 /* Tab placement remains independent of focus/grid/fixed window layout. */
 .wall-agent-workspace { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
-.wall-agent-workspace[data-tabs='left'] { flex-direction: row; gap: 6px; }
+/* The wall's 1px inset makes up the rest of the gap to the agent panel. */
+.wall-agent-workspace[data-tabs='left'] { flex-direction: row; gap: calc(var(--wall-gap) - 1px); }
+/* The vertical agent panel spans exactly the wall's windows: CommandCenterView
+   measures how far they sit from the column's top and bottom. Only beside the
+   wall: stacked above it (narrow), the measurement includes the panel itself. */
+@media (min-width: 721px) {
+  .wall-agent-workspace[data-tabs='left'] > .wall-agents-presence[data-orientation='vertical'] { margin-top: var(--wall-panes-top, 0px); margin-bottom: var(--wall-panes-bottom, 0px); }
+}
 .wall-agent-workspace[data-tabs='top'] { flex-direction: column; gap: 0; }
 /* The Agents panel's own controls: icon buttons whose meaning shows in a hover
    tooltip (HoverTip), so they never change size under the pointer. A stack in
@@ -364,17 +373,18 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 .command-wall-window[data-zone-drop] > .wall-zone-empty,
 .command-wall-window[data-zone-drop] > .panel { --panel-ring-color: var(--accent) !important; --panel-ring-width: 2px !important; border-color: var(--accent); background: var(--accent-soft); }
 
-/* Room for the add-zone rails along the right and bottom edges. */
-.command-wall-layout[data-zone-rails] { padding-right: 16px; padding-bottom: 16px; }
-.wall-zone-rail { position: absolute; width: 16px; height: 16px; }
-.wall-zone-rail[data-side='right'] { width: 16px; }
-.wall-zone-rail[data-side='down'] { height: 16px; }
+/* The add-zone rails along the right and bottom edges are the wall's gaps to
+   the dock and the composer, so they are --wall-gap wide; their pluses overhang. */
+/* A zoned board always fits its viewport, so it clips instead of scrolling:
+   an overhanging plus must not bring up a scrollbar and its gutter. */
+.command-wall-layout[data-zone-rails] { padding-right: var(--wall-gap); padding-bottom: var(--wall-gap); overflow: clip; overflow-clip-margin: calc(8px - var(--wall-gap) / 2); }
+.wall-zone-rail { position: absolute; width: var(--wall-gap); height: var(--wall-gap); }
 .wall-zone-add {
   position: absolute; display: grid; place-items: center; width: 16px; height: 16px; border-radius: 5px;
   color: var(--ink-faint); opacity: .45; transition: opacity 120ms ease, color 120ms ease, background 120ms ease;
 }
-.wall-zone-rail[data-side='right'] .wall-zone-add { left: 0; transform: translateY(-50%); }
-.wall-zone-rail[data-side='down'] .wall-zone-add { top: 0; transform: translateX(-50%); }
+.wall-zone-rail[data-side='right'] .wall-zone-add { left: calc(var(--wall-gap) / 2 - 8px); transform: translateY(-50%); }
+.wall-zone-rail[data-side='down'] .wall-zone-add { top: calc(var(--wall-gap) / 2 - 8px); transform: translateX(-50%); }
 .wall-zone-rail[data-side='down'] .wall-zone-span svg { transform: rotate(90deg); }
 .wall-zone-rail:hover .wall-zone-add { opacity: .8; }
 .wall-zone-add:hover, .wall-zone-add:focus-visible { opacity: 1 !important; color: var(--accent); background: var(--accent-soft); outline: none; }

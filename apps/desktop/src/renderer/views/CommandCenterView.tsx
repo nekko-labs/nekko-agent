@@ -555,6 +555,32 @@ export function CommandCenterView() {
   // Adding windows lives in the toolbar's icon bar, so the composer row is the composer alone.
   const composerRow = <div className="wall-composer-row" data-dock={`${wall.composer.side}-${wall.composer.align}`}>{composer}</div>;
 
+  // The vertical agent panel spans exactly the wall's windows: from the top of
+  // their panels (below the wall's inset and a zone's name bar) to their
+  // bottom (above a composer docked below and the add-zone rail).
+  const agentWorkspaceRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const workspace = agentWorkspaceRef.current;
+    const column = workspace?.querySelector<HTMLElement>(':scope > .wall-column');
+    if (!workspace || !column) return;
+    const measure = () => {
+      const layout = column.querySelector<HTMLElement>(':scope > .command-wall-layout');
+      if (!layout) { workspace.style.removeProperty('--wall-panes-top'); workspace.style.removeProperty('--wall-panes-bottom'); return; }
+      const style = getComputedStyle(layout);
+      const panel = layout.querySelector<HTMLElement>('.command-wall-window:not([data-wall-parked]) > .panel');
+      const box = workspace.getBoundingClientRect(), wall = layout.getBoundingClientRect();
+      const top = wall.top - box.top + parseFloat(style.paddingTop) + (panel?.offsetTop ?? 0);
+      const bottom = box.bottom - wall.bottom + parseFloat(style.paddingBottom);
+      workspace.style.setProperty('--wall-panes-top', `${Math.max(0, Math.round(top))}px`);
+      workspace.style.setProperty('--wall-panes-bottom', `${Math.max(0, Math.round(bottom))}px`);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(column);
+    for (const child of column.children) observer.observe(child);
+    return () => observer.disconnect();
+  }, [wall.layout.mode, wall.composer.side, completedId, agentsPresent]);
+
   return (
     <div ref={viewRef} className="flex h-full min-h-0 flex-col -mt-px gap-2 pb-0 pl-[3px] pr-px pt-0">
       {showZonesIntro && <Suspense fallback={null}><ZonesIntro onClose={() => setWall((w) => ({ ...w, zonesIntro: true }))} /></Suspense>}
@@ -574,7 +600,7 @@ export function CommandCenterView() {
         }} />
       <div className="wall-workspace" data-dock-side={wall.dock.side}>
         <MonitorsDock state={wall} setState={setWall} tasks={tasks} running={running} now={now} sessions={sessions} providers={providers} usage={usage} vitals={vitals} onOpenChat={openChat} onOpenModels={() => setView('models')} />
-        <div className="wall-agent-workspace" data-tabs={agentsPresent && panel.orientation === 'horizontal' ? 'top' : 'left'}>
+        <div ref={agentWorkspaceRef} className="wall-agent-workspace" data-tabs={agentsPresent && panel.orientation === 'horizontal' ? 'top' : 'left'}>
       {!panel.show && <div className="agent-panel-collapsed" data-orientation={panel.orientation}>
         <AgentPanelControls show={false} orientation={panel.orientation}
           onToggle={() => setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), show: true } }))}

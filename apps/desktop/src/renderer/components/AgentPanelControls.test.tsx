@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import '../tests/browserGlobals.js';
-import { cssRule, hasSelector, stylesheet } from '../tests/css.js';
+import { cssRule, cssValue, hasSelector, stylesheet } from '../tests/css.js';
 import { loadWall, summary, windowBody } from '../tests/renderWall.js';
 import { AgentPanelControls } from './AgentPanelControls.js';
 import { NumberedAgentIcon } from './NumberedChatIcon.js';
@@ -61,11 +61,11 @@ describe('agent window identity and activity', () => {
 });
 
 describe('wall chrome fixes', () => {
-  it('floats the composer resize grips outside its edges', () => {
+  it('floats the composer resize grips outside its edges, the bottom one in the wall gap', () => {
     expect(cssRule(styles, '.wall-composer.panel').overflow).toBe('visible');
     expect(cssRule(styles, '.wall-composer-side[data-edge="left"]').left).toBe('-14px');
     expect(cssRule(styles, '.wall-composer-side[data-edge="right"]').right).toBe('-14px');
-    expect(cssRule(styles, '.wall-composer[data-dock^="bottom"] > .wall-composer-split').top).toBe('-14px');
+    expect(cssRule(styles, '.wall-composer[data-dock^="bottom"] > .wall-composer-split').top).toBe(cssValue('calc(-1 * var(--wall-gap))'));
   });
   it('reserves snap-to-grid space so revealing it never shifts the controls beside it', () => {
     const hidden = cssRule(styles, '.wall-auto-arrange');
