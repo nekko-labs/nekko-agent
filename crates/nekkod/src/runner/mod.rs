@@ -1,12 +1,13 @@
 //! CI runner VMs: the userspace NAT that is a job VM's only network, the
 //! host networks it keeps the guest away from, the physical interface it
 //! sends from, and [`Runners`], which wires the supervisor, the Mac's
-//! readings, the `nekko-vm` helper and GitHub into the daemon (`runner:*`).
+//! readings, the `nekko-vm` helper, GitHub and GitLab into the daemon (`runner:*`).
 
 pub mod audit;
 pub mod awake;
 pub mod egress;
 pub mod github;
+pub mod gitlab;
 pub mod hostnets;
 pub mod keychain;
 pub mod lan;
@@ -15,15 +16,18 @@ pub mod provider;
 pub mod signals;
 pub mod store;
 pub mod supervisor;
+#[cfg(test)]
+pub mod test_http;
 pub mod updates;
 pub mod vm;
 
 use github::{ConnectRequest, GitHub, SecKeySigner};
-use keychain::{key_name, runner_vault};
+use gitlab::{GitLab, GitlabConnectRequest};
+use keychain::{key_name, runner_vault, token_key};
 use nekko_cloud::vault::Vault;
 use nekko_connectors::Net;
 use nekko_runner::{HostNets, RunnerSettings};
-use provider::Provider;
+use provider::{ByLink, Provider};
 use serde_json::{Value, json};
 use signals::HostSense;
 use signals::Sense;
@@ -32,7 +36,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
-use store::{RunnerRecord, Store, same_scope};
+use store::{Link, RunnerRecord, Store, same_scope, same_target};
 use supervisor::{RunnerState, RunnerView, Supervisor, TICK};
 use vm::HelperVm;
 use vm::Vm;
@@ -45,10 +49,27 @@ const NO_RUNNER: &str = "No runner with that id.";
 const WAN_EVERY: Duration = Duration::from_secs(300);
 const GATEWAY_EVERY: Duration = Duration::from_secs(30);
 
-pub struct Runners<S: Sense = HostSense, V: Vm = HelperVm, P: Provider = GitHub<Net>> {
+/// What connects new runners.
+pub struct Connectors {
+    pub github: GitHub<Net>,
+    pub gitlab: GitLab<Net>,
+}
+
+/// The vault item a record's credential lives in: its GitHub App's key, shared
+/// by every record of that app, or its own GitLab token.
+fn secret_key(r: &RunnerRecord) -> String {
+    match &r.link {
+        Link::Github(g) => key_name(g.app_id),
+        Link::Gitlab(_) => token_key(&r.config.id),
+    }
+}
+
+pub struct Runners<S: Sense = HostSense, V: Vm = HelperVm, P: Provider = ByLink<GitHub<Net>, GitLab<Net>>> {
     store: Store,
     /// Connects new runners; `None` in tests.
-    github: Option<GitHub<Net>>,
+    connectors: Option<Connectors>,
+    /// The supervisor's runner name prefix, for the connect probe.
+    prefix: String,
     vault: Arc<dyn Vault>,
     sup: tokio::sync::Mutex<Supervisor<S, V, P>>,
     /// Serializes load-change-save of `runners.json`.
@@ -60,8 +81,12 @@ pub struct Runners<S: Sense = HostSense, V: Vm = HelperVm, P: Provider = GitHub<
     pending: std::sync::Mutex<Option<Pending>>,
     /// The views last published; `runner:list` answers from here.
     views: std::sync::Mutex<Vec<RunnerView>>,
-    /// App ids a connect is storing a key for, with how many connects are in flight.
-    connecting: std::sync::Mutex<HashMap<u64, u32>>,
+    /// Vault items a connect is storing, with how many connects are in flight.
+    connecting: std::sync::Mutex<HashMap<String, u32>>,
+    /// Vault items queued registration removals still sign with, as of the last step.
+    queued_keys: std::sync::Mutex<Vec<String>>,
+    /// Vault items to forget once no queued removal needs them.
+    deferred: std::sync::Mutex<Vec<String>>,
     running_vm_mb: Arc<AtomicU64>,
     /// Why no VM can run here, shown on every enabled runner.
     vm_error: Option<String>,
@@ -163,9 +188,11 @@ impl Runners {
         );
         let host_name = gethostname::gethostname().to_string_lossy().into_owned();
         let vault = github.vault();
-        let sup =
-            Supervisor::new(dir.clone(), sense, vm, github.clone(), Box::new(awake::Caffeinate::default()), host_name);
-        let me = Runners::new(&dir, sup, Some(github), vault, hub, helper.as_ref().err().cloned(), running_vm_mb);
+        let gitlab = || GitLab::new(Net::default(), vault.clone(), now_secs);
+        let provider = ByLink { github: github.clone(), gitlab: gitlab() };
+        let sup = Supervisor::new(dir.clone(), sense, vm, provider, Box::new(awake::Caffeinate::default()), host_name);
+        let connectors = Connectors { github, gitlab: gitlab() };
+        let me = Runners::new(&dir, sup, Some(connectors), vault, hub, helper.as_ref().err().cloned(), running_vm_mb);
         if helper.is_ok() {
             me.spawn_loop();
         }
@@ -184,7 +211,7 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
     pub fn new(
         runners_dir: &Path,
         mut sup: Supervisor<S, V, P>,
-        github: Option<GitHub<Net>>,
+        connectors: Option<Connectors>,
         vault: Arc<dyn Vault>,
         hub: crate::hub::Hub,
         vm_error: Option<String>,
@@ -195,13 +222,16 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
         let views = sup.views();
         Arc::new(Runners {
             store,
-            github,
+            connectors,
+            prefix: sup.prefix(),
             vault,
             sup: tokio::sync::Mutex::new(sup),
             looping: AtomicBool::new(false),
             pending: std::sync::Mutex::new(None),
             views: std::sync::Mutex::new(views),
             connecting: std::sync::Mutex::new(HashMap::new()),
+            queued_keys: std::sync::Mutex::default(),
+            deferred: std::sync::Mutex::default(),
             edit: tokio::sync::Mutex::new(()),
             hub,
             wake: tokio::sync::Notify::new(),
@@ -217,8 +247,8 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
         let r = self.clone();
         tokio::spawn(async move {
             r.sup.lock().await.start().await;
-            // Keys of removed runners waiting for a readable `runners.json`.
-            let mut forget: Vec<u64> = Vec::new();
+            // Vault items of removed runners waiting for a readable `runners.json`.
+            let mut forget: Vec<String> = Vec::new();
             loop {
                 let (views, gone) = {
                     let mut s = r.sup.lock().await;
@@ -226,7 +256,12 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
                     r.running_vm_mb.store(s.running_vm_mb(), Ordering::SeqCst);
                     (s.views(), gone)
                 };
-                forget.extend(gone.iter().map(|g| g.github.app_id));
+                forget.extend(gone.iter().map(secret_key));
+                if let (Ok(mut d), Ok(q)) = (r.deferred.lock(), r.queued_keys.lock()) {
+                    let (ready, wait) = std::mem::take(&mut *d).into_iter().partition(|k| !q.contains(k));
+                    *d = wait;
+                    forget.extend::<Vec<String>>(ready);
+                }
                 if !forget.is_empty() {
                     let _g = r.edit.lock().await;
                     let saved = r.store.load();
@@ -259,24 +294,44 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
         if tick {
             s.tick().await;
         }
-        s.take_gone().await
-    }
-
-    /// Marks a connect for `app` in progress until the guard drops.
-    fn connect_guard(&self, app: u64) -> ConnectGuard<'_> {
-        if let Ok(mut c) = self.connecting.lock() {
-            *c.entry(app).or_default() += 1;
+        let gone = s.take_gone().await;
+        if let Ok(mut q) = self.queued_keys.lock() {
+            *q = s.queued_removals().map(secret_key).collect();
         }
-        ConnectGuard { set: &self.connecting, app }
+        gone
     }
 
-    /// Deletes each app key no saved record uses and no connect is adding. Call under `edit`.
-    fn forget_keys(&self, saved: &[RunnerRecord], apps: impl Iterator<Item = u64>) {
+    /// Marks a connect storing vault item `key` in progress until the guard drops.
+    fn connect_guard(&self, key: String) -> ConnectGuard<'_> {
+        if let Ok(mut c) = self.connecting.lock() {
+            *c.entry(key.clone()).or_default() += 1;
+        }
+        ConnectGuard { set: &self.connecting, key }
+    }
+
+    /// Deletes each vault item no saved record uses and no connect is adding. One a queued
+    /// removal still signs with is deferred until that removal is done. Call under `edit`.
+    fn forget_keys(&self, saved: &[RunnerRecord], keys: impl Iterator<Item = String>) {
         let connecting = self.connecting.lock().map(|c| c.clone()).unwrap_or_default();
-        for app in apps {
-            if !connecting.contains_key(&app) && !saved.iter().any(|r| r.github.app_id == app) {
-                self.vault.delete(&key_name(app));
+        let queued = self.queued_keys.lock().map(|q| q.clone()).unwrap_or_default();
+        for key in keys {
+            if queued.contains(&key) {
+                if let Ok(mut d) = self.deferred.lock() {
+                    d.push(key);
+                }
+                continue;
             }
+            if !connecting.contains_key(&key) && !saved.iter().any(|r| secret_key(r) == key) {
+                self.vault.delete(&key);
+            }
+        }
+    }
+
+    /// Audits what removed runners leave behind; waits a few seconds at most for a running tick.
+    pub async fn shutdown(&self) {
+        match tokio::time::timeout(Duration::from_secs(5), self.sup.lock()).await {
+            Ok(mut s) => s.shutdown(),
+            Err(_) => eprintln!("runner: a tick is still running; removals left behind are not audited"),
         }
     }
 
@@ -344,7 +399,7 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
             // No loop (no VM support): nothing else holds the supervisor.
             let mut s = self.sup.lock().await;
             let gone = self.step(&mut s, false).await;
-            self.forget_keys(&records, gone.iter().map(|g| g.github.app_id));
+            self.forget_keys(&records, gone.iter().map(secret_key));
             s.views()
         };
         let view = id.map_or(Value::Null, |id| json!(views.iter().find(|v| v.config.id == id)));
@@ -359,19 +414,7 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
             return Ok(json!(*self.views.lock().map_err(|_| "The runner views are unavailable.")?));
         }
         if channel == "runner:connect" {
-            // Never echo the request: it may hold a private key.
-            let req: ConnectRequest =
-                serde_json::from_value(arg(0)).map_err(|_| "That is not a valid connect request.".to_string())?;
-            let github = self.github.as_ref().ok_or("Connecting is not available here.")?;
-            let _connecting = self.connect_guard(req.app_id);
-            let network = signals::read_network_id().await;
-            // GitHub's checks hold no lock.
-            let connected = github.connect(req, network.clone()).await;
-            let result = match connected {
-                Ok(rec) => self.save_connected(rec, network).await,
-                Err(e) => Err(e),
-            };
-            return result;
+            return self.connect(arg(0)).await;
         }
         let _g = self.edit.lock().await;
         let mut records = self.store.load();
@@ -402,21 +445,99 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
         }
     }
 
-    /// A record GitHub accepted: a scope already saved keeps its id and settings.
+    /// Checks and saves a new runner. The provider's checks hold no lock.
+    async fn connect(&self, req: Value) -> Result<Value, String> {
+        // Never echo the request: it holds a private key or an access token.
+        const INVALID: &str = "That is not a valid connect request.";
+        let c = self.connectors.as_ref().ok_or("Connecting is not available here.")?;
+        // Held through the save, so a removed record's cleanup never deletes the token being stored.
+        let _connecting;
+        let (rec, network, previous) = match req["provider"].as_str() {
+            Some("github") => {
+                let req: ConnectRequest = serde_json::from_value(req).map_err(|_| INVALID)?;
+                let _connecting = self.connect_guard(key_name(req.app_id));
+                let network = signals::read_network_id().await;
+                let rec = c.github.connect(req, network.clone()).await?;
+                return self.save_connected(rec, network).await;
+            }
+            Some("gitlab") => {
+                let req: GitlabConnectRequest = serde_json::from_value(req).map_err(|_| INVALID)?;
+                let base = nekko_connectors::connectors::gitlab_base(Some(
+                    &json!({ "site": req.base_url.clone().unwrap_or_default() }),
+                ))?;
+                let existing = self.store.load().into_iter().find(|r| {
+                    r.gitlab().is_some_and(|g| g.base_url.eq_ignore_ascii_case(&base))
+                        && same_scope(&r.config.scope, &req.scope)
+                });
+                _connecting = existing.as_ref().map(|e| self.connect_guard(token_key(&e.config.id)));
+                // Put back if the save fails: the connect overwrites it before the record is saved.
+                let previous = existing.as_ref().and_then(|e| self.vault.get(&token_key(&e.config.id)));
+                // Read now, not from the VM's copy: a Mac without VM support never fills that.
+                let nets = hostnets::try_current().map_err(|e| format!("Cannot read this Mac's networks: {e}"))?;
+                let network = signals::read_network_id().await;
+                let resolve = async |h: &str| Ok(tokio::net::lookup_host((h, 443)).await?.map(|a| a.ip()).collect());
+                let rec =
+                    c.gitlab.connect(req, existing.as_ref(), &self.prefix, network.clone(), &nets, resolve).await?;
+                (rec, network, previous)
+            }
+            _ => return Err("Unknown CI provider.".into()),
+        };
+        self.save_gitlab(rec, network, previous).await
+    }
+
+    /// Saves a GitLab record whose token is stored; a failed save leaves the
+    /// vault as before the connect: the `previous` token back, or none.
+    async fn save_gitlab(
+        &self,
+        rec: RunnerRecord,
+        network: Option<String>,
+        previous: Option<String>,
+    ) -> Result<Value, String> {
+        let key = secret_key(&rec);
+        let saved = self.save_connected(rec, network).await;
+        if saved.is_err() {
+            match previous {
+                Some(p) => {
+                    if let Err(e) = self.vault.set(&key, &p) {
+                        eprintln!("runner: could not put the previous GitLab token back: {e}");
+                    }
+                }
+                None if !self.store.load().iter().any(|r| secret_key(r) == key) && !self.store.is_unreadable() => {
+                    self.vault.delete(&key);
+                }
+                None => {}
+            }
+        }
+        saved
+    }
+
+    /// A record the CI service accepted: a target already saved (same service,
+    /// GitLab instance and scope) keeps its id and settings.
     async fn save_connected(&self, rec: RunnerRecord, network: Option<String>) -> Result<Value, String> {
         let _g = self.edit.lock().await;
         let mut records = self.store.load();
-        let mut replaced_app = None;
-        let id = match records.iter_mut().find(|r| same_scope(&r.config.scope, &rec.config.scope)) {
+        let mut replaced = None;
+        // (vault item, what it held) to put back if the save fails.
+        let mut undo = None;
+        let id = match records.iter_mut().find(|r| same_target(r, &rec)) {
             Some(old) => {
-                replaced_app = Some(old.github.app_id).filter(|a| *a != rec.github.app_id);
-                old.github = rec.github;
+                // A connect that did not see this record stored its token under its own new id.
+                if rec.gitlab().is_some() && old.config.id != rec.config.id {
+                    let (new, kept) = (token_key(&rec.config.id), token_key(&old.config.id));
+                    let token = self.vault.get(&new).ok_or("The GitLab access token was not stored.")?;
+                    undo = Some((kept.clone(), self.vault.get(&kept)));
+                    self.vault.set(&kept, &token)?;
+                    self.vault.delete(&new);
+                }
+                let before = secret_key(old);
+                old.link = rec.link;
                 old.config.label = rec.config.label;
                 let nets = &mut old.config.settings.trusted_networks;
                 if let Some(n) = network.filter(|n| !nets.contains(n)) {
                     nets.push(n);
                 }
                 old.config.settings = old.config.settings.clone().sanitized();
+                replaced = Some(before).filter(|k| *k != secret_key(old));
                 old.config.id.clone()
             }
             None => {
@@ -425,9 +546,23 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
                 id
             }
         };
-        let view = self.commit(records.clone(), Some(&id)).await?;
+        let view = match self.commit(records.clone(), Some(&id)).await {
+            Ok(v) => v,
+            Err(e) => {
+                match undo {
+                    Some((key, Some(was))) => {
+                        if let Err(e) = self.vault.set(&key, &was) {
+                            eprintln!("runner: could not put the previous GitLab token back: {e}");
+                        }
+                    }
+                    Some((key, None)) => self.vault.delete(&key),
+                    None => {}
+                }
+                return Err(e);
+            }
+        };
         // The scope moved to another app: the old app's key goes once nothing uses it.
-        self.forget_keys(&records, replaced_app.into_iter());
+        self.forget_keys(&records, replaced.into_iter());
         Ok(view)
     }
 }
@@ -459,18 +594,18 @@ pub fn raise_nofile() {
 }
 
 struct ConnectGuard<'a> {
-    set: &'a std::sync::Mutex<HashMap<u64, u32>>,
-    app: u64,
+    set: &'a std::sync::Mutex<HashMap<String, u32>>,
+    key: String,
 }
 
 impl Drop for ConnectGuard<'_> {
     fn drop(&mut self) {
         if let Ok(mut c) = self.set.lock()
-            && let Some(n) = c.get_mut(&self.app)
+            && let Some(n) = c.get_mut(&self.key)
         {
             *n -= 1;
             if *n == 0 {
-                c.remove(&self.app);
+                c.remove(&self.key);
             }
         }
     }

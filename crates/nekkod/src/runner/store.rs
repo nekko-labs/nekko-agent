@@ -23,15 +23,60 @@ pub struct GithubLink {
     pub allow_public: bool,
 }
 
+/// The GitLab project (repo scope) or group (org scope) a runner registers with.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitlabLink {
+    pub base_url: String,
+    /// The numeric project id (repo scope) or group id (org scope).
+    pub namespace_id: u64,
+    /// Full project paths watched for queued jobs (org scope only).
+    #[serde(default)]
+    pub projects: Vec<String>,
+    #[serde(default)]
+    pub allow_public: bool,
+    #[serde(default = "yes")]
+    pub protected_only: bool,
+}
+
+fn yes() -> bool {
+    true
+}
+
+/// On disk a record has a top-level `"github"` or `"gitlab"` key, never both.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Link {
+    Github(GithubLink),
+    Gitlab(GitlabLink),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RunnerRecord {
     #[serde(flatten)]
     pub config: RunnerConfig,
-    pub github: GithubLink,
+    #[serde(flatten)]
+    pub link: Link,
     /// A golden bundle other than `images/default/`.
     #[serde(default)]
     pub image: Option<PathBuf>,
+}
+
+impl RunnerRecord {
+    pub fn github(&self) -> Option<&GithubLink> {
+        match &self.link {
+            Link::Github(g) => Some(g),
+            Link::Gitlab(_) => None,
+        }
+    }
+
+    pub fn gitlab(&self) -> Option<&GitlabLink> {
+        match &self.link {
+            Link::Gitlab(g) => Some(g),
+            Link::Github(_) => None,
+        }
+    }
 }
 
 /// GitHub owner, org and repo names match in any case.
@@ -43,6 +88,29 @@ pub fn same_scope(a: &Scope, b: &Scope) -> bool {
         }
         _ => false,
     }
+}
+
+fn same_instance(a: &GitlabLink, b: &GitlabLink) -> bool {
+    a.base_url.trim_end_matches('/').eq_ignore_ascii_case(b.base_url.trim_end_matches('/'))
+}
+
+/// One runner target: the same CI service (and GitLab instance) and scope. A
+/// connect over a saved target updates that record; anything else is a new one.
+pub fn same_target(a: &RunnerRecord, b: &RunnerRecord) -> bool {
+    let service = match (&a.link, &b.link) {
+        (Link::Github(_), Link::Github(_)) => true,
+        (Link::Gitlab(x), Link::Gitlab(y)) => same_instance(x, y),
+        _ => false,
+    };
+    service && same_scope(&a.config.scope, &b.config.scope)
+}
+
+/// Whether one record's stale sweep could see the other's runners: the same
+/// target, or two GitLab groups on one instance (one may be the other's
+/// ancestor, which nekkod does not track).
+pub fn overlaps(a: &RunnerRecord, b: &RunnerRecord) -> bool {
+    let groups = matches!((&a.config.scope, &b.config.scope), (Scope::Org { .. }, Scope::Org { .. }));
+    same_target(a, b) || (groups && a.gitlab().zip(b.gitlab()).is_some_and(|(x, y)| same_instance(x, y)))
 }
 
 pub struct Store {
@@ -85,6 +153,12 @@ impl Store {
         let mut out = Vec::new();
         let mut skipped = Vec::new();
         for (i, v) in items.into_iter().enumerate() {
+            // Serde would quietly take the first link of two; which one is meant is unknowable.
+            if v.get("github").is_some() && v.get("gitlab").is_some() {
+                eprintln!("runner store: record {i} has both a GitHub and a GitLab link, skipped");
+                skipped.push(v);
+                continue;
+            }
             match serde_json::from_value::<RunnerRecord>(v.clone()) {
                 Ok(mut r) if seen.insert(r.config.id.clone()) => {
                     r.config.settings = r.config.settings.sanitized();
@@ -171,9 +245,89 @@ mod tests {
                 label: "nekko-mac".into(),
                 settings: RunnerSettings { trusted_networks: vec!["gw:aa".into()], ..Default::default() },
             },
-            github: GithubLink { app_id: 1, installation_id: 2, group_id: None, repos: vec![], allow_public: false },
+            link: Link::Github(GithubLink {
+                app_id: 1,
+                installation_id: 2,
+                group_id: None,
+                repos: vec![],
+                allow_public: false,
+            }),
             image: None,
         }
+    }
+
+    fn gitlab_record(id: &str) -> RunnerRecord {
+        RunnerRecord {
+            link: Link::Gitlab(GitlabLink {
+                base_url: "https://gitlab.example.com".into(),
+                namespace_id: 42,
+                projects: vec!["a/b/c".into()],
+                allow_public: false,
+                protected_only: true,
+            }),
+            ..record(id)
+        }
+    }
+
+    #[test]
+    fn t212_records_still_load() {
+        let dir = tempfile::tempdir().unwrap();
+        let text = r#"[{"id":"a","scope":{"kind":"org","org":"acme"},"label":"nekko-mac","settings":{},
+            "github":{"appId":1,"installationId":2}}]"#;
+        std::fs::write(dir.path().join("runners.json"), text).unwrap();
+        let recs = Store::new(dir.path()).load();
+        assert_eq!(recs[0].github().map(|g| g.app_id), Some(1));
+        assert!(recs[0].gitlab().is_none());
+        Store::new(dir.path()).save(&recs).unwrap();
+        let saved: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(dir.path().join("runners.json")).unwrap()).unwrap();
+        assert!(saved[0].get("github").is_some() && saved[0].get("link").is_none() && saved[0].get("gitlab").is_none());
+        assert_eq!(saved[0]["github"]["appId"], json!(1));
+    }
+
+    #[test]
+    fn gitlab_record_round_trips() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::new(dir.path());
+        let recs = vec![gitlab_record("g")];
+        store.save(&recs).unwrap();
+        assert_eq!(store.load(), recs);
+        let saved: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(dir.path().join("runners.json")).unwrap()).unwrap();
+        let gl = &saved[0]["gitlab"];
+        assert_eq!(
+            (gl["baseUrl"].as_str(), gl["namespaceId"].as_u64()),
+            (Some("https://gitlab.example.com"), Some(42))
+        );
+        assert_eq!(gl["protectedOnly"], json!(true));
+        assert!(saved[0].get("github").is_none() && saved[0].get("link").is_none());
+    }
+
+    #[test]
+    fn protected_only_defaults_true() {
+        let dir = tempfile::tempdir().unwrap();
+        let text = r#"[{"id":"g","scope":{"kind":"org","org":"a/b"},"label":"nekko-mac","settings":{},
+            "gitlab":{"baseUrl":"https://gitlab.com","namespaceId":7}}]"#;
+        std::fs::write(dir.path().join("runners.json"), text).unwrap();
+        let recs = Store::new(dir.path()).load();
+        let gl = recs[0].gitlab().unwrap();
+        assert!(gl.protected_only && gl.projects.is_empty() && !gl.allow_public);
+        assert!(recs[0].github().is_none());
+    }
+
+    #[test]
+    fn record_with_two_links_is_skipped() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut both = serde_json::to_value(record("a")).unwrap();
+        both["gitlab"] = serde_json::to_value(gitlab_record("x")).unwrap()["gitlab"].clone();
+        let mut neither = serde_json::to_value(record("b")).unwrap();
+        neither.as_object_mut().unwrap().remove("github");
+        let good = serde_json::to_value(gitlab_record("c")).unwrap();
+        std::fs::write(dir.path().join("runners.json"), json!([both, neither, good]).to_string()).unwrap();
+        assert_eq!(Store::new(dir.path()).load(), vec![gitlab_record("c")]);
+        let bad: Vec<serde_json::Value> =
+            serde_json::from_slice(&std::fs::read(dir.path().join("runners.json.bad")).unwrap()).unwrap();
+        assert_eq!(bad, vec![both, neither]);
     }
 
     #[test]
@@ -251,5 +405,26 @@ mod tests {
         assert_eq!(std::fs::read(&path).unwrap(), before);
         assert_eq!(store.load().len(), 1);
         store.save(&[record("b")]).unwrap();
+    }
+
+    #[test]
+    fn targets_and_overlaps_know_the_provider_and_instance() {
+        let gh = record("a");
+        let gl = gitlab_record("b");
+        let mut gl_repo = gitlab_record("c");
+        gl_repo.config.scope = Scope::Repo { owner: "acme".into(), repo: "app".into() };
+        let mut gl_other = gitlab_record("d");
+        gl_other.link =
+            Link::Gitlab(GitlabLink { base_url: "https://gitlab.com".into(), ..gl.gitlab().unwrap().clone() });
+        let mut gl_sub = gitlab_record("e");
+        gl_sub.config.scope = Scope::Org { org: "acme/sub".into() };
+        // Same scope string, other provider or other instance: another target, no overlap.
+        assert!(!same_target(&gh, &gl) && !overlaps(&gh, &gl));
+        assert!(!same_target(&gl, &gl_other) && !overlaps(&gl, &gl_other));
+        assert!(same_target(&gl, &gitlab_record("x")) && same_target(&gh, &record("y")));
+        // Two groups on one instance overlap whatever their paths; a project and a group do not.
+        assert!(overlaps(&gl, &gl_sub) && !same_target(&gl, &gl_sub));
+        assert!(!overlaps(&gl, &gl_repo));
+        assert!(overlaps(&gh, &record("z")));
     }
 }

@@ -16,6 +16,7 @@ the runbooks it links. Read a runbook before the work it names.
 | A red check, on your PR or on `main` | [docs/runbooks/failing-checks.md](docs/runbooks/failing-checks.md) |
 | A change to how the app looks or moves | [docs/runbooks/visual-evidence.md](docs/runbooks/visual-evidence.md) |
 | A change that alters a recorded engine behavior | [docs/runbooks/golden-fixtures.md](docs/runbooks/golden-fixtures.md) |
+| Running the CI runner pilot | [docs/runbooks/ci-runner-pilot.md](docs/runbooks/ci-runner-pilot.md) |
 | The code map | [docs/hub/architecture.md](docs/hub/architecture.md) |
 
 ## Landing work

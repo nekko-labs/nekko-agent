@@ -3,6 +3,7 @@ import type { Recommendation } from '@nekko-agent/shared';
 import {
   contextPerSession,
   contextStops,
+  differsFromSaved,
   expertCacheMiB,
   fromPreset,
   fromRecommendation,
@@ -20,6 +21,16 @@ describe('load settings', () => {
     expect(fromPreset({}).params.thinking !== false).toBe(true);
     expect(fromPreset({ thinking: false }).params.thinking).toBe(false);
     expect(fromPreset({ thinking: true }).params.thinking).toBe(true);
+  });
+
+  it('tells settings that a load from chat would not use apart from the saved ones', () => {
+    const saved = fromPreset({ contextTokens: 32768, gpuLayers: 36, budgetFraction: 0.9, splitPreset: 'custom' }).params;
+    expect(differsFromSaved({ gpuLayers: 36, contextTokens: 32768 }, saved)).toBe(false);
+    expect(differsFromSaved({ ...saved, speculative: undefined }, saved)).toBe(false);
+    expect(differsFromSaved({ ...saved, speculative: false }, saved)).toBe(true);
+    expect(differsFromSaved({ ...saved, gpuLayers: undefined }, saved)).toBe(true);
+    expect(differsFromSaved({ ...saved, gpuLayers: null as unknown as number }, saved)).toBe(true);
+    expect(differsFromSaved({ contextTokens: 8192 }, fromPreset().params)).toBe(true);
   });
 
   it('reads where it runs off the launch parameters', () => {

@@ -6,7 +6,8 @@
 
 use super::keychain::key_name;
 use super::provider::{JobRef, Minted, Provider, ProviderError, RunnerStatus};
-use super::store::{GithubLink, RunnerRecord};
+use super::store::{GithubLink, Link, RunnerRecord};
+use super::vm::GITHUB_SEED;
 use base64::Engine as _;
 use nekko_cloud::vault::Vault;
 use nekko_connectors::{Http, Request};
@@ -155,7 +156,7 @@ impl<H: Http> Clone for GitHub<H> {
 }
 
 /// `[A-Za-z0-9._-]{1,max}`: a label, an owner, an org or a repo name.
-fn plain_name(s: &str, max: usize) -> bool {
+pub(super) fn plain_name(s: &str, max: usize) -> bool {
     (1..=max).contains(&s.len())
         && s.bytes().all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b))
         && s != ".."
@@ -172,9 +173,14 @@ fn other(what: &str, status: u16, v: &Value) -> ProviderError {
 }
 
 /// Exactly `<prefix><unix secs>-<n>`, so a longer host name sharing the prefix never matches.
-fn is_ours(name: &str, prefix: &str) -> bool {
+pub(super) fn is_ours(name: &str, prefix: &str) -> bool {
     let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
     name.strip_prefix(prefix).and_then(|rest| rest.split_once('-')).is_some_and(|(a, b)| digits(a) && digits(b))
+}
+
+/// The record's GitHub link; a GitLab record never reaches here through `ByLink`.
+fn link(r: &RunnerRecord) -> Result<&GithubLink, ProviderError> {
+    r.github().ok_or_else(|| ProviderError::Other(format!("runner {} is not a GitHub runner", r.config.id)))
 }
 
 fn ok(status: u16) -> bool {
@@ -308,7 +314,7 @@ impl<H: Http> GitHub<H> {
         path: &str,
         body: Option<Value>,
     ) -> Result<(u16, Value), ProviderError> {
-        let token = self.installation_token(&r.github).await?;
+        let token = self.installation_token(link(r)?).await?;
         self.api(method, path, &token, body).await
     }
 
@@ -411,13 +417,13 @@ impl<H: Http> GitHub<H> {
                 label,
                 settings: settings.sanitized(),
             },
-            github: GithubLink {
+            link: Link::Github(GithubLink {
                 app_id: req.app_id,
                 installation_id: req.installation_id,
                 group_id,
                 repos,
                 allow_public: req.allow_public,
-            },
+            }),
             image: None,
         })
     }
@@ -447,9 +453,19 @@ impl<H: Http> GitHub<H> {
             .into_iter()
             .flatten()
             .find(|g| g["name"].as_str() == Some(name.as_str()))
-            .and_then(|g| g["id"].as_u64());
-        if let Some(id) = existing {
-            let patch = json!({ "visibility": "selected", "allows_public_repositories": allow_public });
+            .and_then(|g| Some((g["id"].as_u64()?, g)));
+        if let Some((id, group)) = existing {
+            // GitHub requires `name` and resets an omitted `restricted_to_workflows` to false, so the
+            // owner's "Selected workflows" restriction is sent back as it was.
+            let mut patch = json!({
+                "name": name,
+                "visibility": "selected",
+                "allows_public_repositories": allow_public,
+                "restricted_to_workflows": group["restricted_to_workflows"].as_bool().unwrap_or(false),
+            });
+            if group["selected_workflows"].is_array() {
+                patch["selected_workflows"] = group["selected_workflows"].clone();
+            }
             check(self.api("PATCH", &format!("{groups}/{id}"), token, Some(patch)).await)?;
             let repos = json!({ "selected_repository_ids": ids });
             check(self.api("PUT", &format!("{groups}/{id}/repositories"), token, Some(repos)).await)?;
@@ -468,7 +484,7 @@ impl<H: Http> GitHub<H> {
     /// Runs of `status` in each of the record's repos, with their latest jobs.
     async fn jobs(&self, r: &RunnerRecord, status: &str) -> Result<Vec<(String, Value, Value)>, ProviderError> {
         let mut out = Vec::new();
-        for repo in &r.github.repos {
+        for repo in &link(r)?.repos {
             let (s, v) =
                 self.call(r, "GET", &format!("/repos/{repo}/actions/runs?status={status}&per_page=10"), None).await?;
             if !ok(s) {
@@ -493,7 +509,7 @@ impl<H: Http> GitHub<H> {
 impl<H: Http + 'static> Provider for GitHub<H> {
     async fn mint(&self, r: &RunnerRecord, name: &str) -> Result<Minted, ProviderError> {
         // A repo can go public after connect: check again before a job of a stranger's PR could land here.
-        if let (Scope::Repo { owner, repo }, false) = (&r.config.scope, r.github.allow_public) {
+        if let (Scope::Repo { owner, repo }, false) = (&r.config.scope, link(r)?.allow_public) {
             let full = format!("{owner}/{repo}");
             let (s, v) = self.call(r, "GET", &format!("/repos/{full}"), None).await?;
             if !ok(s) {
@@ -505,7 +521,7 @@ impl<H: Http + 'static> Provider for GitHub<H> {
                 )));
             }
         }
-        let group = match (&r.config.scope, r.github.group_id) {
+        let group = match (&r.config.scope, link(r)?.group_id) {
             (Scope::Repo { .. }, _) => 1,
             (Scope::Org { .. }, Some(g)) => g,
             (Scope::Org { .. }, None) => {
@@ -516,7 +532,9 @@ impl<H: Http + 'static> Provider for GitHub<H> {
         let path = format!("{}/actions/runners/generate-jitconfig", base(&r.config.scope));
         let (s, v) = self.call(r, "POST", &path, Some(body)).await?;
         match (ok(s), v["runner"]["id"].as_u64(), v["encoded_jit_config"].as_str()) {
-            (true, Some(runner_id), Some(jit)) => Ok(Minted { runner_id, jit_config: jit.to_string() }),
+            (true, Some(runner_id), Some(jit)) => {
+                Ok(Minted { runner_id, seed_file: GITHUB_SEED, jit_config: jit.to_string() })
+            }
             _ => Err(other("a runner registration", s, &v)),
         }
     }
@@ -535,7 +553,7 @@ impl<H: Http + 'static> Provider for GitHub<H> {
     }
 
     /// `None` for a runner that has not taken a job (never, or not yet).
-    async fn job(&self, r: &RunnerRecord, runner_name: &str) -> Result<Option<JobRef>, ProviderError> {
+    async fn job(&self, r: &RunnerRecord, _runner_id: u64, runner_name: &str) -> Result<Option<JobRef>, ProviderError> {
         Ok(self.jobs(r, "in_progress").await?.into_iter().find_map(|(repo, run, job)| {
             (job["runner_name"].as_str() == Some(runner_name)).then(|| JobRef {
                 repo,

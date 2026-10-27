@@ -87,11 +87,18 @@ struct GreetingCat: View {
                 for (x, y, w, h) in r { context.fill(Path(CGRect(x: x, y: y, width: w, height: h)), with: .color(color.opacity(opacity))) }
             }
             let face = polygon([(4,5),(6,5),(6,7),(8,7),(8,9),(11,9),(11,10),(21,10),(21,9),(24,9),(24,7),(26,7),(26,5),(28,5),(28,19),(27,19),(27,22),(25,22),(25,24),(22,24),(22,26),(10,26),(10,24),(7,24),(7,22),(5,22),(5,19),(4,19)])
-            context.fill(face, with: .color(palette.surface))
-            context.stroke(face, with: .color(palette.ink), style: StrokeStyle(lineWidth: 2, lineJoin: .miter))
-            // Eyes glance down at the message box.
-            rects([(11, 16, 2, 3), (20, 16, 2, 3)], palette.ink)
-            rects([(15, 20, 2, 1)], palette.accent)
+            // The composer hides the chin, but the paws hang in front of its edge.
+            var head = context
+            head.clip(to: Path(CGRect(x: 0, y: 0, width: 32, height: 25)))
+            head.fill(face, with: .color(palette.surface))
+            head.stroke(face, with: .color(palette.ink), style: StrokeStyle(lineWidth: 2, lineJoin: .miter))
+            // Eyes glance down at the message box; no colored mouth or nose.
+            for x in [11, 20] {
+                head.fill(Path(CGRect(x: x, y: 16, width: 2, height: 3)), with: .color(palette.ink))
+            }
+            // Flip around the edge (y = 25), putting the small toes at the bottom.
+            context.translateBy(x: 0, y: 50)
+            context.scaleBy(x: 1, y: -1)
             rects([(7, 23, 5, 5), (20, 23, 5, 5)], palette.surface)
             context.fill(polygon([(6,22),(13,22),(13,27),(12,27),(12,23),(7,23),(7,27),(6,27)]), with: .color(palette.ink))
             context.fill(polygon([(19,22),(26,22),(26,27),(25,27),(25,23),(20,23),(20,27),(19,27)]), with: .color(palette.ink))

@@ -9,6 +9,7 @@ import {
   SESSION_STOPS,
   contextPerSession,
   contextStops,
+  differsFromSaved,
   expertCacheMiB,
   fromPreset,
   fromRecommendation,
@@ -135,6 +136,8 @@ export function EngineLoadDrawer({
   const unified = plan?.unified ?? false;
   const noGpu = model.gpuFit === 'cpu' || (plan !== null && plan.deviceName === null);
   const matches = matchesRecommendation(params, rec?.request, layers);
+  // A load from chat or at engine start uses the saved settings, not these.
+  const unsaved = differsFromSaved(params, saved.params);
 
   const setRunOn = (r: RunOn) => {
     setSplit('custom');
@@ -450,7 +453,12 @@ export function EngineLoadDrawer({
         </div>
       )}
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
+      {unsaved && (
+        <p className="mt-4 text-[11px] text-ink-faint" data-unsaved>
+          These settings apply to this load only. Save as default to keep them.
+        </p>
+      )}
+      <div className={`${unsaved ? 'mt-2' : 'mt-4'} flex flex-wrap items-center gap-2`}>
         <button className="btn btn-primary py-1.5 text-[12px]" onClick={load} disabled={loading} data-load>
           {loading ? 'Loading…' : model.loaded ? 'Reload with these settings' : 'Load model'}
         </button>

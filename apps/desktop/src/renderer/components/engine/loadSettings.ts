@@ -120,6 +120,19 @@ export function fromPreset(preset?: EngineLoadPreset): { params: LoadParams; spl
   return { params, split: splitPreset ?? 'custom' };
 }
 
+/**
+ * Whether the drawer's settings differ from the saved ones, which every load
+ * the drawer does not start (from chat, at engine start) uses. An unset field
+ * and a missing one are the same setting.
+ */
+export function differsFromSaved(params: LoadParams, saved: LoadParams): boolean {
+  const set = (p: LoadParams) =>
+    Object.entries(p)
+      .filter(([, v]) => v !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : 1));
+  return JSON.stringify(set(params)) !== JSON.stringify(set(saved));
+}
+
 /** Which settings still match the recommendation, for the "Recommended" tags. */
 export function matchesRecommendation(p: LoadParams, rec: Recommendation['request'] | undefined, layers?: number) {
   if (!rec) return { runOn: false, context: false, sessions: false, precision: false };

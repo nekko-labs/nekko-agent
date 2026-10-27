@@ -31,7 +31,7 @@ describe('ConnectRunnerSheet', () => {
       expect(html).toContain(renderToStaticMarkup(<>{PRIORITY_LABELS[p]}</>));
       expect(html).toContain(renderToStaticMarkup(<>{PRIORITY_DESCRIPTIONS[p]}</>));
     }
-    const callout = 'may be public. Keep &quot;Require approval for all outside collaborators&quot; on';
+    const callout = 'may be public. Keep &quot;Require approval for all external contributors&quot; on';
     expect(body(3, form({ allowPublic: true }))).toContain(`nekko-labs/nekko-agent ${callout}`);
     expect(html).not.toContain(callout);
   });

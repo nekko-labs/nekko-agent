@@ -71,3 +71,61 @@ async fn runner_channels_round_trip() {
     assert_ne!(status, 200);
     assert!(err.to_string().contains("No runner with that id."), "{err}");
 }
+
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread")]
+async fn gitlab_connect_rejects_unknown_provider() {
+    let data = tempfile::tempdir().unwrap();
+    let d = start_with(Some(data.path()));
+    let (status, err) = post(d.port, "runner:connect", json!([{ "provider": "buildkite" }]), Some(TOKEN)).await;
+    assert_ne!(status, 200);
+    assert!(err.to_string().contains("Unknown CI provider."), "{err}");
+    let (status, err) =
+        post(d.port, "runner:connect", json!([{ "provider": "gitlab", "accessToken": "glpat-secret" }]), Some(TOKEN))
+            .await;
+    assert_ne!(status, 200);
+    assert!(
+        err.to_string().contains("not a valid connect request") && !err.to_string().contains("glpat-secret"),
+        "{err}"
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread")]
+async fn gitlab_record_lists_and_removes() {
+    let data = tempfile::tempdir().unwrap();
+    let runners = data.path().join("runners");
+    std::fs::create_dir_all(&runners).unwrap();
+    let record = json!([{
+        "id": "gl-42",
+        "scope": { "kind": "org", "org": "g" },
+        "label": "nekko-mac",
+        "settings": { "enabled": true },
+        "gitlab": { "baseUrl": "https://gitlab.com", "namespaceId": 42, "projects": ["g/a"] },
+    }]);
+    std::fs::write(runners.join("runners.json"), record.to_string()).unwrap();
+    // The runner vault is a file only where there is no OS keystore; tests never write the login keychain.
+    let file_vault = !cfg!(any(target_os = "macos", windows));
+    use nekko_cloud::vault::Vault;
+    let vault = nekko_cloud::vault::FileVault::new(runners.join("secrets.json"));
+    if file_vault {
+        vault.set("gitlab-token-gl-42", "glpat-x").unwrap();
+    }
+    let d = start_with(Some(data.path()));
+    let (status, list) = post(d.port, "runner:list", json!([]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{list}");
+    assert_eq!((list[0]["config"]["id"].as_str(), list[0]["state"].as_str()), (Some("gl-42"), Some("error")), "{list}");
+    let (_, off) = post(d.port, "runner:setEnabled", json!(["gl-42", false]), Some(TOKEN)).await;
+    assert_eq!(off["state"], "off", "{off}");
+    let saved: Value = serde_json::from_str(&std::fs::read_to_string(runners.join("runners.json")).unwrap()).unwrap();
+    assert_eq!(saved[0]["settings"]["enabled"], false);
+    assert_eq!(saved[0]["gitlab"]["namespaceId"], 42, "saved back with its gitlab key: {saved}");
+    assert!(saved[0].get("github").is_none());
+    let (status, gone) = post(d.port, "runner:remove", json!(["gl-42"]), Some(TOKEN)).await;
+    assert_eq!((status, gone), (200, Value::Null));
+    let (_, list) = post(d.port, "runner:list", json!([]), Some(TOKEN)).await;
+    assert_eq!(list, json!([]));
+    if file_vault {
+        assert_eq!(vault.get("gitlab-token-gl-42"), None, "the token goes with the record");
+    }
+}

@@ -4,7 +4,11 @@
 //! only with the `spike` feature (decision 0022: shipped code has no
 //! host-to-guest path).
 //!
-//!   cargo run -p nekkod --features spike --example runner_vm_spike -- [--bundle <dir>]
+//!   cargo run -p nekkod --features spike --example runner_vm_spike -- [--bundle <dir>] [--seed <iso>] [--keep]
+//!
+//! `--seed` attaches a NEKKOSEED image read-only, as nekkod does for a job.
+//! `--keep` leaves the clone on disk after a clean exit (the T214 boot check
+//! provisions one clone and boots a clone of that).
 //!
 //! The bundle defaults to Tart's cached `macos-sequoia-base` (its files only,
 //! no Tart code). The clone lives under `target/runner-spike/` and is deleted
@@ -42,6 +46,8 @@ async fn main() -> Res<()> {
     let bundle = flag("--bundle")
         .map(PathBuf::from)
         .unwrap_or_else(|| home.join(".tart/cache/OCIs/ghcr.io/cirruslabs/macos-sequoia-base/latest"));
+    let seed = flag("--seed").map(PathBuf::from);
+    let keep = args.iter().any(|a| a == "--keep");
     let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize()?;
     let work = repo.join("target/runner-spike");
     std::fs::create_dir_all(&work)?;
@@ -92,6 +98,7 @@ async fn main() -> Res<()> {
         clone: work.join(format!("clone-{}", std::process::id())),
         helper: helper.clone(),
         before,
+        keep,
     };
     let out = Command::new(&helper).arg("clone").arg("--from").arg(&bundle).arg("--to").arg(&vm.clone).output()?;
     println!("clone: {}", String::from_utf8_lossy(&out.stdout).trim());
@@ -102,6 +109,9 @@ async fn main() -> Res<()> {
     let vm_fd = vm_end.as_raw_fd();
     let mut cmd = Command::new(&helper);
     cmd.args(["run", "--cpus", "4", "--memory-mb", "8192", "--net-fd", "3", "--bundle"]).arg(&vm.clone);
+    if let Some(seed) = &seed {
+        cmd.arg("--seed").arg(seed);
+    }
     // SAFETY: only async-signal-safe calls between fork and exec.
     unsafe {
         cmd.pre_exec(move || {
@@ -182,6 +192,7 @@ struct Cleanup {
     clone: PathBuf,
     helper: PathBuf,
     before: String,
+    keep: bool,
 }
 
 impl Drop for Cleanup {
@@ -201,6 +212,9 @@ impl Drop for Cleanup {
         match count_vms(&self.helper) {
             Ok(after) => println!("vms after: {after} (before: {})", self.before),
             Err(e) => println!("vms after: count failed: {e}"),
+        }
+        if self.keep {
+            return println!("clone kept: {}", self.clone.display());
         }
         match std::fs::remove_dir_all(&self.clone) {
             Ok(()) => println!("clone removed: {}", self.clone.display()),

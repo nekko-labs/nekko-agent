@@ -70,10 +70,24 @@ impl RunHandle {
     }
 }
 
+/// The seed file a GitHub runner reads (the encoded JIT config).
+pub const GITHUB_SEED: &str = "jit-config";
+/// The seed file a GitLab runner reads (its `config.toml`).
+pub const GITLAB_SEED: &str = "gitlab-runner.toml";
+
+/// A seed file name is one plain name: nothing that walks out of the seed folder.
+fn seed_name_ok(file: &str) -> bool {
+    (1..=64).contains(&file.len())
+        && file.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'.' || b == b'-')
+        && file != "."
+        && file != ".."
+}
+
 /// The VM backend the supervisor drives; tests swap in a fake.
 pub trait Vm: Send + Sync + 'static {
     fn clone_bundle(&self, from: &Path, to: &Path) -> impl Future<Output = Result<(), String>> + Send;
-    fn write_seed(&self, path: &Path, jit_config: &str) -> impl Future<Output = Result<(), String>> + Send;
+    /// A read-only image at `path` holding only `file` with `contents`.
+    fn write_seed(&self, path: &Path, file: &str, contents: &str) -> impl Future<Output = Result<(), String>> + Send;
     fn start(&self, spec: RunSpec) -> impl Future<Output = Result<RunHandle, String>> + Send;
     fn count_vms(&self) -> impl Future<Output = Result<u8, String>> + Send;
 }
@@ -191,7 +205,10 @@ impl Vm for HelperVm {
         r
     }
 
-    async fn write_seed(&self, path: &Path, jit_config: &str) -> Result<(), String> {
+    async fn write_seed(&self, path: &Path, file: &str, contents: &str) -> Result<(), String> {
+        if !seed_name_ok(file) {
+            return Err(format!("{file:?} is not a seed file name"));
+        }
         let parent = path.parent().ok_or("the seed path has no folder")?;
         let nonce: u64 = rand_u64();
         let dir = parent.join(format!(".seed-{nonce:016x}"));
@@ -202,9 +219,9 @@ impl Vm for HelperVm {
                 .write(true)
                 .create_new(true)
                 .mode(0o600)
-                .open(dir.join("jit-config"))
-                .and_then(|mut f| io::Write::write_all(&mut f, jit_config.as_bytes()))
-                .map_err(|e| format!("cannot write the JIT config: {e}"))?;
+                .open(dir.join(file))
+                .and_then(|mut f| io::Write::write_all(&mut f, contents.as_bytes()))
+                .map_err(|e| format!("cannot write the runner config: {e}"))?;
             let mut cmd = tokio::process::Command::new("hdiutil");
             cmd.args(["makehybrid", "-iso", "-joliet", "-default-volume-name", "NEKKOSEED", "-o"]).arg(path).arg(&dir);
             let out = output_within(cmd, self.seed_timeout, "hdiutil").await?;

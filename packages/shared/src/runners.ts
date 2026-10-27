@@ -69,7 +69,7 @@ export interface HostView {
   networkId: string | null;
   networkTrusted: boolean;
 }
-export type AuditResult = 'finished' | 'stopped' | 'lost' | 'failedToStart';
+export type AuditResult = 'finished' | 'stopped' | 'lost' | 'failedToStart' | 'notRemoved';
 export interface AuditLine {
   ts: number;
   runnerId: string;
@@ -95,7 +95,8 @@ export interface RunnerView {
   /** Newest first. */
   recent: AuditLine[];
 }
-export interface ConnectRequest {
+export type ConnectRequest = GithubConnectRequest | GitlabConnectRequest;
+export interface GithubConnectRequest {
   provider: 'github';
   scope: Scope;
   appId: number;
@@ -104,6 +105,21 @@ export interface ConnectRequest {
   privateKeyPem?: string;
   repos: string[];
   allowPublic: boolean;
+  label?: string;
+}
+/** A GitLab project (repo scope, `owner` may hold subgroups) or group (org scope). */
+export interface GitlabConnectRequest {
+  provider: 'gitlab';
+  scope: Scope;
+  /** The instance origin; omitted for https://gitlab.com. */
+  baseUrl?: string;
+  /** Omitted to reuse the token stored for this instance and scope. */
+  accessToken?: string;
+  /** Org scope: 1 to 20 full project paths inside the group. */
+  projects?: string[];
+  allowPublic?: boolean;
+  /** Only jobs of protected branches and tags; the daemon defaults to true. */
+  protectedOnly?: boolean;
   label?: string;
 }
 
@@ -271,6 +287,8 @@ const auditWhy = (reasons: string[]) => reasons.map((r) => {
 /** One recent-jobs row. `rerun` is the runner's current `rerunLostJobs`; the line does not say whether that job was re-run. */
 export function auditText(l: AuditLine, rerun = true): string {
   if (l.result === 'failedToStart') return 'A VM failed to start';
+  // The reason names the registration and where it lives, for deleting it by hand.
+  if (l.result === 'notRemoved') return l.reason.join(', ') || 'A runner registration could not be removed; delete it by hand';
   const name = [l.workflow, l.job].filter(Boolean).join(' · ') || l.repo || 'A job';
   const why = l.reason.length ? ` (${auditWhy(l.reason)})` : '';
   const took = formatMinutes(l.seconds);
@@ -329,7 +347,7 @@ const LABEL = /^[A-Za-z0-9._-]{1,64}$/;
 const id = (s: string) => (/^\d+$/.test(s.trim()) && Number.isSafeInteger(Number(s.trim())) ? Number(s.trim()) : null);
 
 /** The connect sheet's fields as the daemon's `ConnectRequest`, or the first sentence to fix. */
-export function toConnectRequest(f: ConnectForm, keyStored: boolean): ConnectRequest | { error: string } {
+export function toConnectRequest(f: ConnectForm, keyStored: boolean): GithubConnectRequest | { error: string } {
   const appId = id(f.appId);
   if (appId === null) return { error: 'The App ID is a number.' };
   if (appId === 0) return { error: 'The App ID is a number above 0.' };
