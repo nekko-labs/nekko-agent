@@ -13,11 +13,20 @@ struct MarkdownLab: View {
     @State private var echoes: [String] = []
     @State private var draft = ""
     @State private var focused = false
+    /// `-labDiagrams`: the Mermaid fixtures first, with the renderer's timings and network probe.
+    private let diagramsFirst = ProcessInfo.processInfo.arguments.contains("-labDiagrams")
+    @State private var timings = ""
+    @State private var network = ""
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
+                    if diagramsFirst {
+                        BlockView(block: .assistant(id: "lab-diagrams", text: Self.diagrams, reasoning: nil, streaming: false, interrupted: false))
+                        Text("Renderer network: \(network)").font(.caption2).accessibilityIdentifier("lab.mermaidNetwork")
+                        Text("Render times (ms): \(timings)").font(.caption2).accessibilityIdentifier("lab.mermaidTimes")
+                    }
                     BlockView(block: .assistant(id: "lab-reply", text: Self.reply, reasoning: nil, streaming: false, interrupted: false))
                         .id("lab-reply")
                     ForEach(Array(sent.enumerated()), id: \.offset) { i, text in
@@ -56,7 +65,47 @@ struct MarkdownLab: View {
             .navigationTitle("Markdown")
             .navigationBarTitleDisplayMode(.inline)
         }
+        .task {
+            guard diagramsFirst else { return }
+            network = await MermaidRenderer.shared.networkProbe()
+            while !Task.isCancelled {
+                timings = MermaidRenderer.shared.timings.map { String(format: "%.0f", $0) }.joined(separator: ", ")
+                try? await Task.sleep(nanoseconds: 500_000_000)
+            }
+        }
     }
+
+    static let diagrams = """
+    A flowchart:
+
+    ```mermaid
+    flowchart TD
+      A[Phone] -->|types Markdown| B(Composer)
+      B --> C{Send?}
+      C -->|yes| D[Computer]
+      C -->|no| B
+    ```
+
+    A sequence:
+
+    ```mermaid
+    sequenceDiagram
+      participant P as Phone
+      participant R as Relay
+      participant C as Computer
+      P->>R: encrypted prompt
+      R->>C: forward
+      C-->>P: streamed reply
+    ```
+
+    And a broken one:
+
+    ```mermaid
+    flowchart TD
+      A -->
+      this is not mermaid ((
+    ```
+    """
 
     static let reply = """
     ## Release checklist

@@ -136,6 +136,58 @@ final class MarkdownTests: XCTestCase {
         attach(app, "composer-paste-3-formatted")
     }
 
+    /// MM-3: a flowchart and a sequence diagram draw inline, a broken one falls
+    /// back to its source with Mermaid's error, a diagram opens full screen, and
+    /// the renderer cannot reach the network. Render times go to the log.
+    func testDiagramsDrawAndABrokenOneFallsBack() {
+        for theme in uiTestThemes {
+            let app = launchLab(theme: theme, extra: ["-labDiagrams"])
+            let flowchart = app.buttons["Diagram, flowchart"]
+            // The first diagram starts the renderer (loading the bundled Mermaid).
+            XCTAssertTrue(flowchart.waitForExistence(timeout: 60), "the flowchart is drawn")
+            let sequence = app.buttons["Diagram, sequence diagram"]
+            XCTAssertTrue(sequence.waitForExistence(timeout: 30), "the sequence diagram is drawn")
+            let error = app.staticTexts["mermaid.error"]
+            XCTAssertTrue(error.waitForExistence(timeout: 30), "the broken diagram shows Mermaid's error")
+            attach(app, "mermaid-\(theme)-1-flowchart")
+            scrollTo(error, in: app)
+            attach(app, "mermaid-\(theme)-2-sequence-and-broken")
+
+            // The checks that don't depend on the theme run once (Native iOS has a 50-minute budget).
+            let first = theme == uiTestThemes.first
+            let network = app.staticTexts["lab.mermaidNetwork"]
+            if first {
+                scrollTo(network, in: app, max: 6)
+                let probed = expectation(for: NSPredicate(format: "label != %@", "Renderer network: "), evaluatedWith: network)
+                wait(for: [probed], timeout: 20)
+                XCTAssertEqual(network.label, "Renderer network: blocked", "the renderer can't reach the network")
+            }
+            let times = app.staticTexts["lab.mermaidTimes"].label
+            print("MERMAID-RENDER-TIMES \(theme): \(times)")
+            let note = XCTAttachment(string: "\(theme): \(times)")
+            note.name = "mermaid-\(theme)-render-times"
+            note.lifetime = .keepAlways
+            add(note)
+
+            app.swipeDown(velocity: .fast)
+            app.swipeDown(velocity: .fast)
+            flowchart.tap()
+            let done = app.buttons["mermaid.done"]
+            XCTAssertTrue(done.waitForExistence(timeout: 10), "the diagram opens full screen")
+            RunLoop.current.run(until: Date().addingTimeInterval(1.5))
+            attach(app, "mermaid-\(theme)-3-fullscreen")
+            if first {
+                // A navigation-bar menu: no hit point for XCTest, so tap its centre.
+                app.buttons["mermaid.actions"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+                XCTAssertTrue(app.buttons["Copy source"].waitForExistence(timeout: 5))
+                XCTAssertTrue(app.buttons["Save to Photos"].exists)
+                attach(app, "mermaid-\(theme)-4-actions")
+                app.buttons["Copy source"].tap()
+            }
+            app.terminate()
+        }
+    }
+
     /// The largest accessibility text size: tables scroll rather than truncate.
     func testLargestTextSize() {
         let app = launchLab(theme: "light", extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXL"])

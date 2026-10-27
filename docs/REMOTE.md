@@ -56,6 +56,16 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > **Run on**: which paired computer the chat and its model run on. Choosing another computer
 > connects to it and shows its models and folders; what you typed stays.
 >
+> **Simple and Expert** (iPhone): the switch at the top left of a chat picks the mode, and the
+> iPhone remembers it. Both modes show, under the message box, one control for the chat's **model
+> and effort** (an effort dial beside the model's name; tap it to change either) and the chat's
+> **context window** (a ring that fills as the window does, with the tokens in use; tap it to see
+> what fills it). **Expert** adds a monitor under the chat's title: your computer's CPU, memory,
+> GPU and GPU memory as dials (with temperatures where the computer has sensors) and how many
+> models its Model Server holds. Tap it for the whole monitor: each loaded model with where it
+> runs (GPU, GPU + CPU, CPU), its context size and memory, and **Unload**; models still loading;
+> how much of the memory for models they take; and this chat's context. The monitor is read every
+> few seconds only while Expert mode is on and a chat is open.
 > In a chat on the iPhone, what the agent does reads as it does on the desktop: each tool step is
 > one quiet line (a mark, the command or file, a chevron when there is output), and adjacent steps
 > with one purpose fold into one row that says the goal (*Read the project's guidance*, *Looked
@@ -86,6 +96,14 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > **+ Column**, and Tab moves to the next cell. A normal paste stays plain text; after pasting rich
 > text (from Safari, Notes, Mail or Docs) a chip offers **Use formatting** for a few seconds. Touch
 > and hold for **Paste as Markdown** or **Paste as plain text**. Undo takes back any of it.
+>
+> A Mermaid diagram in a reply (or in your own message) draws inline on the iPhone, in the app's
+> light or dark theme. Tap it for full screen, where you can zoom and pan, **Copy source**, **Share
+> image**, **Save to Photos** or **Show source**. While a reply is still streaming the diagram shows
+> as source and is drawn once its fence closes; one Mermaid can't read shows its source with
+> Mermaid's error. The phone draws with its own bundled copy of Mermaid in a locked page that cannot
+> reach the network, so diagram source never leaves the phone. `.mmd` and `.mermaid` files opened
+> from **Files** draw the same way.
 >
 > Tables in a reply show as a grid (it scrolls sideways when wide). When the agent links a file it
 > made on your computer (an HTML prototype, an image, a PDF, Markdown, text, JSON or CSV) or a
@@ -341,6 +359,8 @@ changes how the computer itself is set up:
   queued, and stop messages; answer approvals and the agent's questions; pick a model from the
   computer's providers and a folder from its list; voice status and transcription; read a chat's
   pull requests, the computer's automations, its usage and plan limits, and run an automation now;
+  the computer's hardware readings, the Model Server's loaded models and a chat's context size,
+  and unload a model;
   git in a chat's folder and its terminals and SSH (below); a chat's or saved folder's files and the computer's logs (below);
   and a few settings (below).
 - **Never allowed from a phone:** wiping data or resetting settings, remote access itself (pairing,
@@ -400,7 +420,16 @@ changes how the computer itself is set up:
   it open. SSH hosts arrive as alias, host name and port (no user name); SSH runs on your computer
   with its own keys and config, and nothing about the keys reaches the phone. Running a command
   without typing it, renaming terminals and listing shells stay off.
-- **One chat's options:** a phone can change a chat's model, title, pin and tags, complete it, and
+- **Hardware, loaded models and context, read only:** CPU and GPU load, memory and temperatures
+  arrive as numbers only (no CPU or GPU model names, processes, paths or device ids). The Model Server arrives as whether
+  it is installed and running and, for each loaded model, its id, where it runs, its context size,
+  memory and timing; never its folders, port, log or settings. A chat's context arrives as totals
+  (tokens in use, the window, tokens per kind of source); never the files, memory or guideline
+  text in it, and a phone can't attach a path to it. Reading these needs *Read*. Unloading a model
+  needs *Change* but no signature, like stopping a run: it frees memory and the next reply that
+  uses the model loads it again. Loading, downloading, deleting models and the Model Server's
+  settings stay on the computer.
+- **One chat's options:** a phone can change a chat's model, effort, title, pin and tags, complete it, and
   switch it between Ask, Guardrails and YOLO, but not its tools, isolation or
   offline/incognito switches. Messages cannot attach files from the computer. Moving a chat (or the
   default for new chats) to a mode with fewer approvals, Ask to Guardrails or anything to YOLO, is
@@ -413,11 +442,12 @@ changes how the computer itself is set up:
 Git, files, logs, terminals and SSH are on the iPhone now (above), and Git on Android; task boards are coming.
 *Remote access → What phones can do* on the computer lists each paired phone with two switches:
 
-- **Read:** see your chats and their messages, settings, models, automations, usage and limits, and
-  look at files, git status and history, logs and boards.
+- **Read:** see your chats and their messages, settings, models, automations, usage and limits,
+  the hardware monitor, loaded models and a chat's context size, and look at files, git status and
+  history, logs and boards.
 - **Change:** send and queue prompts, stop a run, approve tools, answer questions, start, fork,
   delete and change chats, change the phone-settable settings, run an automation, transcribe a voice
-  prompt; edit and save files, commit and push, branch and pull request actions, type in a
+  prompt, unload a model; edit and save files, commit and push, branch and pull request actions, type in a
   terminal, edit boards, SSH.
 
 Both are on for every phone, including phones paired before the switches existed. Turn one off and

@@ -470,6 +470,85 @@ final class LiveRelayTests: XCTestCase {
         attach(app, "beyond-11-log")
     }
 
+    /// Simple and Expert (2026-10-24): the composer's model and effort control
+    /// and context gauge, the effort sheet, Expert's monitor panel and the whole
+    /// monitor with the computer's real hardware.
+    func testSimpleAndExpertModes() throws {
+        guard let raw = ProcessInfo.processInfo.environment["NEKKO_ITEST_LINK"], let link = URL(string: raw) else {
+            throw XCTSkip("set NEKKO_ITEST_LINK (apps/ios/scripts/itest-stack.sh)")
+        }
+        let app = XCUIApplication()
+        app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "YES", "-theme", "light", "-expertMode", "NO", "-uiTestReset", "YES"]
+        app.launch()
+        allowSystemAlerts()
+        let start = app.buttons["Pair with your computer"]
+        XCTAssertTrue(start.waitForExistence(timeout: 10))
+        start.tap()
+        let field = app.input("nekko-agent-pair:?relay=…")
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText(link.absoluteString)
+        app.buttons["Pair"].firstMatch.tap()
+        tapSystemAlertIfShown()
+        XCTAssertTrue(waitOnline(app, 30), "connected to the computer")
+
+        app.navigationBars.buttons["New chat"].tap()
+        let prompt = app.input("What should your computer do?")
+        XCTAssertTrue(prompt.waitForExistence(timeout: 5))
+        prompt.tap()
+        prompt.typeText("Say hello")
+        app.buttons["Start"].tap()
+        XCTAssertTrue(app.staticTexts["Hello from your computer."].waitForExistence(timeout: 30), "the first reply streamed in")
+
+        // Simple: the model and effort control and the context gauge, and no monitor.
+        let modelEffort = app.buttons["chat.modelEffort"]
+        XCTAssertTrue(modelEffort.waitForExistence(timeout: 10), "the composer has the model and effort control")
+        XCTAssertTrue(app.buttons["chat.context"].exists, "the context gauge shows in Simple mode")
+        XCTAssertFalse(app.buttons["chat.monitor"].exists, "Simple mode has no monitor")
+        settle()
+        attach(app, "modes-1-simple")
+        auditAccessibility(app, "modes-simple")
+
+        // The effort sheet: pick High, and the control says so.
+        modelEffort.tap()
+        let high = app.buttons["modelEffort.high"]
+        XCTAssertTrue(high.waitForExistence(timeout: 10), "the sheet offers the model's effort levels")
+        high.tap()
+        XCTAssertTrue(app.staticTexts["High"].waitForExistence(timeout: 10), "the chat's effort is now High")
+        attach(app, "modes-2-model-effort")
+        app.buttons["Done"].firstMatch.tap()
+        XCTAssertTrue(modelEffort.waitForExistence(timeout: 5))
+
+        // Expert: the monitor panel under the title, then the whole monitor.
+        app.buttons["chat.mode"].tap()
+        let expert = app.buttons["Expert"]
+        XCTAssertTrue(expert.waitForExistence(timeout: 5))
+        expert.tap()
+        let panel = app.buttons["chat.monitor"]
+        XCTAssertTrue(panel.waitForExistence(timeout: 15), "Expert shows the monitor panel")
+        XCTAssertTrue(app.buttons["chat.context"].exists, "the context gauge stays in Expert mode")
+        // A reading or two: the panel reads every 3 seconds.
+        RunLoop.current.run(until: Date().addingTimeInterval(4))
+        attach(app, "modes-3-expert")
+        auditAccessibility(app, "modes-expert")
+        panel.tap()
+        XCTAssertTrue(app.navigationBars["Monitor"].waitForExistence(timeout: 10), "the whole monitor opens")
+        // A list section header can read in capitals, so match its identifier or its words in any case.
+        let models = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier == %@ OR label ==[c] %@", "monitor.models", "Loaded models")).firstMatch
+        XCTAssertTrue(models.waitForExistence(timeout: 10), "the monitor lists the loaded models")
+        settle()
+        attach(app, "modes-4-monitor")
+        app.buttons["Done"].firstMatch.tap()
+
+        // Back to Simple: the panel goes.
+        app.buttons["chat.mode"].tap()
+        let simple = app.buttons["Simple"]
+        XCTAssertTrue(simple.waitForExistence(timeout: 5))
+        simple.tap()
+        XCTAssertTrue(waitGone(panel, 10), "Simple mode hides the monitor")
+    }
+
     func testPairFromADeepLink() throws {
         guard let raw = ProcessInfo.processInfo.environment["NEKKO_ITEST_LINK"], let link = URL(string: raw) else {
             throw XCTSkip("set NEKKO_ITEST_LINK (apps/ios/scripts/itest-stack.sh)")
