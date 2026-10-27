@@ -2447,6 +2447,12 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [x] Add local/cloud subnavigation, current-provider chips, a divider, five filled provider shortcuts and the full overflow chooser; retain existing connection and model controls.
 - [x] Verify desktop typechecking, focused provider/navigation tests, hidden Electron interactions and matching 1440/390 px before/after evidence. Live credential sign-in and server lifecycle actions are not exercised by this layout change.
 
+### Your first local model (2026-10-26, #1223) · [spec](spec/models/first-local-model.md)
+
+- [x] Guided first-run screen on Models > Local model server for a machine with no local model and no local server of the user's own: choose Everyday help or Writing code, one press to fetch the engine (when missing) and the recommended model, steps with progress, then Start chatting with that model.
+- [x] Full page unchanged and one link away; falls back to it when there are no chat or coding picks or no downloadable engine build.
+- [x] Unit tests for the gate, the phases and each screen; isolated Electron captures at 1280 and 480 px for every state. Not run end to end against a real engine, download and chat hand-off.
+
 ## Expo retirement
 
 - [x] Remove the retired Expo app and its dedicated Mobile CI; keep native phone workflows, relay/push infrastructure and shared protocol coverage. Update merge-gate accounting and desktop icon/test references. See [native phone decision](spec/phone/native-phone-implementation-decision.md) and [decision 0026](docs/decisions/0026-retire-expo-in-favor-of-native-phone-apps.md). Tracked in #1124.
