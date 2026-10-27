@@ -1,3 +1,5 @@
+import { ModelDownloadButton } from './ModelDownloadButton.js';
+import { useStore } from '../../store.js';
 import { useEffect, useState } from 'react';
 import type { LocalModel, Recommendations, TaskRecommendation } from '@nekko-agent/shared';
 import { CheckIcon, ChevronIcon } from '../../icons.js';
@@ -22,7 +24,7 @@ export function RecommendedModels({ models, onQueued }: { models: LocalModel[]; 
   const [recs, setRecs] = useState<Recommendations | null>(null);
   const [failed, setFailed] = useState(false);
   const [checking, setChecking] = useState(false);
-  const [queued, setQueued] = useState<Record<string, string>>({});
+  const pushToast = useStore(s => s.pushToast);
   // Decided once: a list that arrives later must not fold the block under the reader.
   const [open] = useState(models.length === 0);
 
@@ -36,12 +38,9 @@ export function RecommendedModels({ models, onQueued }: { models: LocalModel[]; 
   };
   useEffect(() => load(false), []);
 
-  const download = async (task: TaskRecommendation) => {
-    const p = task.pick;
-    if (!p) return;
-    setQueued(q => ({ ...q, [task.task]: 'Queuing…' }));
-    const res = await window.nekko.engineDownloadModel(p.repo, p.downloadLabel).catch((e: Error) => ({ ok: false, message: e.message }));
-    setQueued(q => ({ ...q, [task.task]: res.ok ? 'Queued' : res.message || 'Could not queue it' }));
+  const download = (_task: TaskRecommendation, res?: { ok: boolean; message: string }) => {
+    if (!res) return;
+    pushToast(res.ok ? 'info' : 'error', res.message);
     if (res.ok) onQueued();
   };
 
@@ -55,13 +54,12 @@ export function RecommendedModels({ models, onQueued }: { models: LocalModel[]; 
   if (failed || !recs) return null;
   return (
     <>
-      <UpgradeNudges recs={recs} queued={queued} onDownload={download} onDismiss={dismiss} />
+      <UpgradeNudges recs={recs} onDownload={download} onDismiss={dismiss} />
       <RecommendationList
         recs={recs}
         models={models}
         open={open}
         checking={checking}
-        queued={queued}
         onDownload={download}
         onRecheck={() => load(true)}
       />
@@ -78,7 +76,7 @@ export function UpgradeNudges({
 }: {
   recs: Recommendations;
   queued?: Record<string, string>;
-  onDownload: (task: TaskRecommendation) => void;
+  onDownload: (task: TaskRecommendation, result?: { ok: boolean; message: string }) => void;
   onDismiss: () => void;
 }) {
   const rows = (recs.nudges ?? [])
@@ -111,9 +109,7 @@ export function UpgradeNudges({
               {state ? (
                 <span className="text-[12px] text-ink-faint">{state}</span>
               ) : (
-                <button className="btn btn-outline py-0.5 text-[11.5px]" onClick={() => onDownload(t)}>
-                  Download
-                </button>
+                <ModelDownloadButton modelId={p.repo} quant={p.downloadLabel} onResult={res => onDownload(t, res)} />
               )}
             </div>
           );
@@ -139,7 +135,7 @@ export function RecommendationList({
   checking?: boolean;
   /** Per task, what happened to its download request. */
   queued?: Record<string, string>;
-  onDownload: (task: TaskRecommendation) => void;
+  onDownload: (task: TaskRecommendation, result?: { ok: boolean; message: string }) => void;
   onRecheck: () => void;
 }) {
   const picked = recs.tasks.filter(t => t.pick);
@@ -207,9 +203,7 @@ export function RecommendationList({
                 ) : state ? (
                   <span className="text-[12px] text-ink-faint" role="status">{state}</span>
                 ) : (
-                  <button className="btn btn-outline py-1 text-[12px]" onClick={() => onDownload(t)}>
-                    Download
-                  </button>
+                  <ModelDownloadButton modelId={p.repo} quant={p.downloadLabel} onResult={res => onDownload(t, res)} />
                 )}
               </div>
             </div>
