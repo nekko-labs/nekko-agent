@@ -523,9 +523,10 @@ struct NewChatGreeting: View {
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 12) {
-            // The paws reach past the slot onto the message box's top edge.
+            // Face clipping at y=25 meets the slot bottom: -2.5 + 25 × 2.5 = 60.
+            // Only the downward-facing paws extend over the message box.
             Color.clear.frame(width: 64, height: 60)
-                .overlay(alignment: .topLeading) { GreetingCat().frame(width: 80, height: 75).offset(x: -8, y: 15.5) }
+                .overlay(alignment: .topLeading) { GreetingCat().frame(width: 80, height: 75).offset(x: -8, y: -2.5) }
             Text(Self.questions[index])
                 .font(.title3.weight(.semibold)).foregroundStyle(palette.ink)
                 .frame(maxWidth: 260, minHeight: 60, alignment: .leading)
