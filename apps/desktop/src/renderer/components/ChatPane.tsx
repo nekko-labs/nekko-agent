@@ -597,6 +597,13 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // Seed the composer from whatever was parked for this chat, so an unsent
   // message survives a tab switch or a restart.
   const [draft, setDraft] = useState(() => loadDraft(sessionId)?.text ?? '');
+  // Voice edits the draft as the next render will see it, so "Fix it. Nekko,
+  // erase that" or "... Nekko, send it" acts on the text typed a moment before.
+  const voiceDraft = useRef(draft);
+  voiceDraft.current = draft;
+  const lastDictated = useRef('');
+  const [voiceSends, setVoiceSends] = useState(0);
+  const setVoiceDraft = (next: string) => { voiceDraft.current = next; setDraft(next); };
   // What the draft implies (the analyzer, Auto's pick, the gauge's draft
   // count) renders from this, one step behind the keystroke, so
   // a keypress paints the textarea before any of that work runs.
@@ -1638,6 +1645,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       }
     }
   };
+  // A voice send runs after the render that holds the dictated text.
+  useEffect(() => { if (voiceSends) void send(); }, [voiceSends]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Queue the draft to run after the current reply (and any earlier queued
   // items). Useful for lining up follow-ups while an agent is working.
@@ -3243,7 +3252,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                       }}
                     />
                   )}
-                  <DictationButton key={sessionId} sessionId={sessionId} onText={(text) => { setDraft((current) => current + (current && !/\s$/.test(current) ? ' ' : '') + text); composerRef.current?.focus(); }} />
+                  <DictationButton key={sessionId} sessionId={sessionId}
+                    onText={(text) => { const current = voiceDraft.current; lastDictated.current = (current && !/\s$/.test(current) ? ' ' : '') + text; setVoiceDraft(current + lastDictated.current); composerRef.current?.focus(); }}
+                    onErase={() => { const last = lastDictated.current; lastDictated.current = ''; if (last && voiceDraft.current.endsWith(last)) setVoiceDraft(voiceDraft.current.slice(0, -last.length)); }}
+                    onClear={() => { lastDictated.current = ''; setVoiceDraft(''); }}
+                    onSend={() => setVoiceSends((n) => n + 1)} />
                     <button
                       className="send-avatar grid h-9 w-9 shrink-0 place-items-center rounded-xl transition-all duration-150 disabled:opacity-40"
                       onClick={() => void send()}

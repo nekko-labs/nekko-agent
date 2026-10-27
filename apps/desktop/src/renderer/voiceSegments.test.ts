@@ -28,3 +28,27 @@ describe('segment queue', () => {
     expect(applied).toEqual(['X']);
   });
 });
+
+describe('segment queue failures', () => {
+  it('keeps applying later segments when apply throws, and drain still resolves', async () => {
+    const applied: string[] = [];
+    const q = createSegmentQueue(w => Promise.resolve(w[0] === 1 ? 'bad' : 'good'), t => { if (t === 'bad') throw new Error('apply failed'); applied.push(t); });
+    q.push(wav(1)); q.push(wav(2));
+    await q.drain();
+    expect(applied).toEqual(['good']);
+  });
+  it('treats a transcribe that throws synchronously like a rejection', async () => {
+    const applied: string[] = [];
+    const q = createSegmentQueue(w => { if (w[0] === 1) throw new Error('sync'); return Promise.resolve('D'); }, t => applied.push(t));
+    q.push(wav(1)); q.push(wav(2));
+    await q.drain();
+    expect(applied).toEqual(['D']);
+  });
+  it('waits for an async apply before applying the next segment', async () => {
+    const order: string[] = [];
+    const q = createSegmentQueue(w => Promise.resolve(String(w[0])), async t => { if (t === '1') await later('', 20); order.push(t); });
+    q.push(wav(1)); q.push(wav(2));
+    await q.drain();
+    expect(order).toEqual(['1', '2']);
+  });
+});

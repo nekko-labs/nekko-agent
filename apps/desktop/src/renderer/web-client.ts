@@ -782,6 +782,7 @@ function makeWebClient(): NekkoApi {
     // A browser tab has no OS handing it `nekko-agent://` URLs, so this is the
     // honest implementation rather than a missing one.
     onDeepLink: () => () => {},
+    onVoiceStop: () => () => {},
     onUpdateEvent: (cb) => {
       // Poll the server version; emit 'available' once it differs from load.
       let stopped = false;

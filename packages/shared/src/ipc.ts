@@ -469,6 +469,8 @@ export const IpcEvents = {
   /** The skills marketplace catalog refreshed. */
   skillsUpdated: 'skills:updated',
   deepLink: 'app:deepLink',
+  /** The screen locked or the computer is going to sleep: stop listening (desktop only). */
+  voiceStop: 'voice:stop',
   /** SK-4: a phone signed itself out, stopped remote access or quit the app (`RemoteSafetyExit`). */
   remoteSafetyExit: 'remote:safetyExit',
 } as const;
@@ -1263,4 +1265,6 @@ export interface NekkoApi {
    * web transport has no OS to hand it one.
    */
   onDeepLink(cb: (url: string) => void): () => void;
+  /** Fires when the screen locks or the computer sleeps, so dictation stops. Desktop only. */
+  onVoiceStop(cb: () => void): () => void;
 }

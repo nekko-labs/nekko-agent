@@ -1,0 +1,298 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { PendingInput, PrInfo, SessionSummary } from '@nekko-agent/shared';
+
+const store = vi.hoisted(() => ({
+  state: {} as Record<string, any>,
+}));
+const capture = vi.hoisted(() => ({ onSegment: null as null | ((wav: number[]) => void), tail: [] as number[], stop: vi.fn(), abort: vi.fn() }));
+const runs = vi.hoisted(() => ({ running: new Set<string>(), step: '' }));
+vi.mock('./store.js', () => ({ useStore: { getState: () => store.state, setState: vi.fn() } }));
+vi.mock('./liveRuns.js', () => ({ getLiveRun: (id: string) => (runs.running.has(id) ? {} : undefined), describeRun: () => runs.step }));
+vi.mock('./components/PrCard.js', () => ({ runPrAction: vi.fn(async () => {}) }));
+vi.mock('./displays.js', () => ({ displaysBridge: { go: vi.fn(async () => 'ok') } }));
+vi.mock('./voiceCapture.js', () => ({
+  startVoiceCapture: vi.fn(async (o: { onSegment: (wav: number[]) => void }) => {
+    capture.onSegment = o.onSegment;
+    return { stop: capture.stop.mockImplementation(() => capture.tail), abort: capture.abort };
+  }),
+}));
+
+import { pickChat, runVoiceIntent, shipAction, statusLine, voiceListener, type VoiceTarget } from './voiceActions.js';
+import { runPrAction } from './components/PrCard.js';
+
+const pr = (patch: Partial<PrInfo> = {}): PrInfo => ({ url: 'https://github.com/o/r/pull/7', owner: 'o', repo: 'r', number: 7, title: 'T', state: 'open', isDraft: false, additions: 0, deletions: 0, changedFiles: 0, checks: 'passing', source: 'gh', ...patch });
+const question = { sessionId: 's', question: { id: 'q', questions: [], askedAt: 1 } } as unknown as PendingInput;
+const chat = (id: string, title: string, patch: Partial<SessionSummary> = {}) => ({ id, title, updatedAt: Number(id.replace(/\D/g, '')) || 0, ...patch }) as SessionSummary;
+
+describe('shipAction', () => {
+  it('merges an open PR when no question is waiting, running or not', () => {
+    expect(shipAction({ prs: [pr()], running: false })).toBe('merge');
+    expect(shipAction({ prs: [pr({ state: 'merged' }), pr()], running: true })).toBe('merge');
+  });
+  it('asks which when there is an open PR and a question waiting', () => {
+    expect(shipAction({ prs: [pr()], running: false, pending: question })).toBe('ask');
+  });
+  it('tells it to go ahead with no PR when idle or waiting on a question', () => {
+    expect(shipAction({ prs: [], running: false })).toBe('go-ahead');
+    expect(shipAction({ prs: [], running: true, pending: question })).toBe('go-ahead');
+  });
+  it('is still working when running with no PR', () => {
+    expect(shipAction({ prs: [], running: true })).toBe('still-working');
+  });
+  it('has nothing to ship when every PR is already merged or closed', () => {
+    expect(shipAction({ prs: [pr({ state: 'merged' }), pr({ state: 'closed' })], running: false })).toBe('nothing');
+  });
+});
+
+describe('pickChat', () => {
+  const sessions = [chat('c1', 'Fix login bug'), chat('c2', 'Login page redesign'), chat('c3', 'Billing export'), chat('c4', 'Old login', { archivedAt: 5 } as Partial<SessionSummary>)];
+  it('opens the one match', () => {
+    expect(pickChat(sessions, 'billing')).toEqual({ open: 'c3' });
+  });
+  it('offers every match when there are several, never archived chats', () => {
+    const result = pickChat(sessions, 'login');
+    expect('choose' in result && result.choose.map(s => s.id).sort()).toEqual(['c1', 'c2']);
+  });
+  it('offers nothing when nothing matches', () => {
+    expect(pickChat(sessions, 'kubernetes')).toEqual({ choose: [] });
+  });
+});
+
+describe('statusLine', () => {
+  it('names the lane and the current step', () => {
+    expect(statusLine({ title: 'Auth', running: true, step: 'Running tests', watchingPr: false })).toBe('Auth: Working, Running tests');
+  });
+  it('says Watching PR when idle with watches, and nothing more without', () => {
+    expect(statusLine({ title: 'Auth', running: false, step: '', watchingPr: true })).toBe('Auth: Idle, Watching PR');
+    expect(statusLine({ title: 'Auth', running: false, step: '', watchingPr: false })).toBe('Auth: Idle');
+    expect(statusLine({ title: 'Auth', running: true, pending: question, step: '', watchingPr: false })).toBe('Auth: Needs you');
+  });
+});
+
+function target(sessionId = 's1'): VoiceTarget & { text: string[]; calls: string[] } {
+  const t = { sessionId, text: [] as string[], calls: [] as string[] } as VoiceTarget & { text: string[]; calls: string[] };
+  t.onText = (x: string) => { t.text.push(x); t.calls.push('text'); };
+  t.onErase = () => t.calls.push('erase');
+  t.onClear = () => t.calls.push('clear');
+  t.onSend = () => t.calls.push('send');
+  return t;
+}
+
+let nekko: Record<string, any>;
+beforeEach(() => {
+  runs.running.clear(); runs.step = '';
+  store.state = {
+    activeSessionId: 's1',
+    sessions: [chat('s1', 'Auth'), chat('s2', 'Billing')],
+    prsBySession: {} as Record<string, PrInfo[]>,
+    settings: { voice: { enabled: true, commandsEnabled: true } },
+    pushToast: vi.fn(), newChat: vi.fn(async () => {}), archiveChat: vi.fn(async () => {}), setView: vi.fn(), openChatPane: vi.fn(),
+  };
+  let stop: (() => void) | null = null;
+  nekko = {
+    pendingInput: vi.fn(async () => ({})),
+    voiceStatus: vi.fn(async () => ({ installed: true })),
+    voiceTranscribe: vi.fn(async () => ''),
+    openPath: vi.fn(async () => {}),
+    onVoiceStop: vi.fn((cb: () => void) => { stop = cb; return () => { stop = null; }; }),
+    fireVoiceStop: () => stop?.(),
+  };
+  vi.stubGlobal('window', { nekko, setTimeout, clearTimeout });
+});
+afterEach(() => { voiceListener.abort(); vi.unstubAllGlobals(); vi.clearAllMocks(); capture.tail = []; });
+
+describe('runVoiceIntent', () => {
+  it('erases, clears and sends without a confirm, with a toast each', async () => {
+    const t = target();
+    for (const kind of ['erase', 'clear', 'send'] as const) expect(await runVoiceIntent({ kind }, t, null)).toBeNull();
+    expect(t.calls).toEqual(['erase', 'clear', 'send']);
+    expect(store.state.pushToast.mock.calls).toEqual([['success', 'Erased'], ['success', 'Cleared'], ['success', 'Sent']]);
+  });
+  it('types dictation and unknown commands', async () => {
+    const t = target();
+    await runVoiceIntent({ kind: 'dictation', text: 'hello' }, t, null);
+    await runVoiceIntent({ kind: 'unknown', text: 'Nekko, juggle' }, t, null);
+    expect(t.text).toEqual(['hello', 'Nekko, juggle']);
+  });
+  it('starts a new chat and opens pages and chats', async () => {
+    const t = target();
+    await runVoiceIntent({ kind: 'new-session' }, t, null);
+    await runVoiceIntent({ kind: 'navigate', view: 'settings' }, t, null);
+    await runVoiceIntent({ kind: 'open-chat', query: 'billing' }, t, null);
+    expect(store.state.newChat).toHaveBeenCalledOnce();
+    expect(store.state.pushToast).toHaveBeenCalledWith('success', 'New chat');
+    expect(store.state.setView).toHaveBeenCalledWith('settings');
+    expect(store.state.openChatPane).toHaveBeenCalledWith('s2');
+  });
+  it('confirms before completing a chat; yes runs it, no drops it', async () => {
+    const t = target();
+    const pending = await runVoiceIntent({ kind: 'complete-session' }, t, null);
+    expect(pending?.message).toMatch(/Say 'Nekko, yes' or tap Confirm\.$/);
+    expect(store.state.archiveChat).not.toHaveBeenCalled();
+    expect(await runVoiceIntent({ kind: 'no' }, t, pending)).toBeNull();
+    expect(store.state.archiveChat).not.toHaveBeenCalled();
+    expect(await runVoiceIntent({ kind: 'yes' }, t, pending)).toBeNull();
+    expect(store.state.archiveChat).toHaveBeenCalledWith('s1');
+  });
+  it('ship with an open PR confirms naming it, then merges through the PR action', async () => {
+    store.state.prsBySession = { s1: [pr()] };
+    const t = target();
+    const pending = await runVoiceIntent({ kind: 'ship' }, t, null);
+    expect(pending?.message).toBe("Merge o/r#7? Say 'Nekko, yes' or tap Confirm.");
+    expect(runPrAction).not.toHaveBeenCalled();
+    await runVoiceIntent({ kind: 'yes' }, t, pending);
+    expect(store.state.pushToast).toHaveBeenCalledWith('success', 'Merging o/r#7');
+    expect(runPrAction).toHaveBeenCalledWith('s1', pr().url, 'merge');
+  });
+  it('ship with an open PR and a question waiting asks before merging', async () => {
+    store.state.prsBySession = { s1: [pr()] };
+    nekko.pendingInput.mockResolvedValue({ s1: question });
+    const pending = await runVoiceIntent({ kind: 'ship' }, target(), null);
+    expect(pending?.kind).toBe('confirm');
+    expect(pending?.message).toMatch(/question.*Merge o\/r#7.*Say 'Nekko, yes' or tap Confirm\.$/);
+  });
+  it('ship with a stacked PR opens it on GitHub', async () => {
+    store.state.prsBySession = { s1: [pr({ stack: { number: 1, size: 2 } })] };
+    expect(await runVoiceIntent({ kind: 'ship' }, target(), null)).toBeNull();
+    expect(nekko.openPath).toHaveBeenCalledWith(pr().url);
+    expect(runPrAction).not.toHaveBeenCalled();
+  });
+  it('ship with no PR tells an idle agent to go ahead, and says when it is still working', async () => {
+    const t = target();
+    await runVoiceIntent({ kind: 'ship' }, t, null);
+    expect(t.text).toEqual(['Go ahead and build it.']);
+    expect(t.calls).toEqual(['text', 'send']);
+    runs.running.add('s1');
+    await runVoiceIntent({ kind: 'ship' }, t, null);
+    expect(store.state.pushToast).toHaveBeenLastCalledWith('success', "It's still working");
+    store.state.prsBySession = { s1: [pr({ state: 'merged' })] };
+    runs.running.clear();
+    await runVoiceIntent({ kind: 'ship' }, t, null);
+    expect(store.state.pushToast).toHaveBeenLastCalledWith('success', 'Nothing to ship');
+  });
+  it('status toasts the lane and current step', async () => {
+    runs.running.add('s1'); runs.step = 'Editing auth.ts';
+    await runVoiceIntent({ kind: 'status' }, target(), null);
+    expect(store.state.pushToast).toHaveBeenCalledWith('success', 'Auth: Working, Editing auth.ts');
+  });
+  it('open-chat with several matches waits for a pick', async () => {
+    store.state.sessions = [chat('s1', 'Login fix'), chat('s2', 'Login page')];
+    const t = target();
+    const pending = await runVoiceIntent({ kind: 'open-chat', query: 'login' }, t, null);
+    expect(pending?.kind).toBe('choose');
+    expect(await runVoiceIntent({ kind: 'pick', n: 2 }, t, pending)).toBeNull();
+    expect(store.state.openChatPane).toHaveBeenCalledWith(pending?.kind === 'choose' ? pending.options[1].id : '');
+  });
+  it('a pending confirm survives dictation and ignores a pick', async () => {
+    const t = target();
+    const pending = await runVoiceIntent({ kind: 'complete-session' }, t, null);
+    expect(await runVoiceIntent({ kind: 'dictation', text: 'hm' }, t, pending)).toBe(pending);
+    expect(await runVoiceIntent({ kind: 'pick', n: 1 }, t, pending)).toBe(pending);
+  });
+});
+
+describe('voiceListener', () => {
+  const flush = () => new Promise(r => setTimeout(r, 0));
+  it('types dictation and runs a command from one segment, and keeps listening', async () => {
+    const a = target('s1');
+    const off = voiceListener.register('s1', () => a);
+    nekko.voiceTranscribe.mockResolvedValue('Fix the bug. Nekko, send it.');
+    expect(await voiceListener.start('s1')).toBe('started');
+    capture.onSegment!([1]);
+    await voiceListener.drain();
+    expect(a.calls).toEqual(['text', 'send']);
+    expect(a.text).toEqual(['Fix the bug.']);
+    expect(voiceListener.snapshot().listening).toBe(true);
+    expect(voiceListener.snapshot().heard).toBe('Fix the bug. Nekko, send it.');
+    off();
+  });
+  it('sends text to the chat focused when the segment applies', async () => {
+    const a = target('s1'); const b = target('s2');
+    const offA = voiceListener.register('s1', () => a); const offB = voiceListener.register('s2', () => b);
+    nekko.voiceTranscribe.mockResolvedValue('hello');
+    await voiceListener.start('s1');
+    store.state.activeSessionId = 's2';
+    capture.onSegment!([1]);
+    await voiceListener.drain();
+    expect(b.text).toEqual(['hello']);
+    store.state.activeSessionId = 'elsewhere';
+    capture.onSegment!([2]);
+    await voiceListener.drain();
+    expect(a.text).toEqual(['hello']);
+    offA(); offB();
+  });
+  it('types everything when commands are off', async () => {
+    const a = target('s1');
+    const off = voiceListener.register('s1', () => a);
+    store.state.settings.voice.commandsEnabled = false;
+    nekko.voiceTranscribe.mockResolvedValue('Nekko, send it.');
+    await voiceListener.start('s1');
+    capture.onSegment!([1]);
+    await voiceListener.drain();
+    expect(a.calls).toEqual(['text']);
+    off();
+  });
+  it('toggling off transcribes the tail; an abort drops it', async () => {
+    const a = target('s1');
+    const off = voiceListener.register('s1', () => a);
+    nekko.voiceTranscribe.mockResolvedValue('last words');
+    await voiceListener.start('s1');
+    capture.tail = [9];
+    await voiceListener.stop();
+    expect(a.text).toEqual(['last words']);
+    expect(voiceListener.snapshot().listening).toBe(false);
+    await voiceListener.start('s1');
+    voiceListener.abort();
+    await voiceListener.drain();
+    expect(a.text).toEqual(['last words']);
+    expect(nekko.voiceTranscribe).toHaveBeenCalledTimes(1);
+    off();
+  });
+  it('an empty tail is not transcribed', async () => {
+    const off = voiceListener.register('s1', () => target('s1'));
+    await voiceListener.start('s1');
+    capture.tail = [];
+    await voiceListener.stop();
+    expect(nekko.voiceTranscribe).not.toHaveBeenCalled();
+    off();
+  });
+  it('stops on lock or suspend', async () => {
+    const off = voiceListener.register('s1', () => target('s1'));
+    await voiceListener.start('s1');
+    nekko.fireVoiceStop();
+    expect(capture.abort).toHaveBeenCalled();
+    expect(voiceListener.snapshot().listening).toBe(false);
+    off();
+  });
+  it('stops once no dictation button is left, but survives a remount', async () => {
+    const off = voiceListener.register('s1', () => target('s1'));
+    await voiceListener.start('s1');
+    off();
+    const again = voiceListener.register('s2', () => target('s2'));
+    await flush();
+    expect(voiceListener.snapshot().listening).toBe(true);
+    again();
+    await flush();
+    expect(voiceListener.snapshot().listening).toBe(false);
+  });
+  it('asks for setup when voice is off or not installed', async () => {
+    store.state.settings.voice.enabled = false;
+    expect(await voiceListener.start('s1')).toBe('setup');
+    store.state.settings.voice.enabled = true;
+    nekko.voiceStatus.mockResolvedValue({ installed: false });
+    expect(await voiceListener.start('s1')).toBe('setup');
+  });
+  it('answers a pending confirm from a button tap', async () => {
+    const a = target('s1');
+    const off = voiceListener.register('s1', () => a);
+    nekko.voiceTranscribe.mockResolvedValue('Nekko, complete this session.');
+    await voiceListener.start('s1');
+    capture.onSegment!([1]);
+    await voiceListener.drain();
+    expect(voiceListener.snapshot().pending?.kind).toBe('confirm');
+    await voiceListener.answer({ kind: 'yes' });
+    expect(store.state.archiveChat).toHaveBeenCalledWith('s1');
+    expect(voiceListener.snapshot().pending).toBeNull();
+    off();
+  });
+});

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { keepSegment, pcmWav, shouldCut } from './voiceCapture.js';
+import { keepSegment, pcmWav, PRE_ROLL_SECONDS, shouldCut, trimPreRoll } from './voiceCapture.js';
 
 describe('local PCM recording', () => {
   it('encodes mono 16kHz PCM without an external converter', () => {
@@ -35,5 +35,28 @@ describe('segment cut decision', () => {
     expect(keepSegment(true, 0.24)).toBe(false);
     expect(keepSegment(true, 0.25)).toBe(true);
     expect(keepSegment(false, 30)).toBe(false);
+  });
+});
+
+describe('pre-roll before speech', () => {
+  const chunk = (n: number, fill = 0) => new Float32Array(n).fill(fill);
+  it('keeps only the newest chunks that cover the 0.3 s pre-roll', () => {
+    const chunks = Array.from({ length: 50 }, (_, i) => chunk(1000, i));
+    const kept = trimPreRoll(chunks, 10000);
+    expect(PRE_ROLL_SECONDS).toBe(0.3);
+    expect(kept.map(c => c[0])).toEqual([47, 48, 49]);
+    expect(kept.reduce((n, c) => n + c.length, 0)).toBeGreaterThanOrEqual(3000);
+  });
+  it('leaves a buffer already shorter than the pre-roll alone', () => {
+    const chunks = [chunk(1000), chunk(1000)];
+    expect(trimPreRoll(chunks, 10000)).toEqual(chunks);
+    expect(trimPreRoll([], 10000)).toEqual([]);
+  });
+  it('an hour of idle never reaches the 30 s cap', () => {
+    let chunks: Float32Array[] = [];
+    for (let i = 0; i < 3600 * 12; i++) chunks = trimPreRoll([...chunks, chunk(4096)], 48000);
+    const seconds = chunks.reduce((n, c) => n + c.length, 0) / 48000;
+    expect(seconds).toBeLessThan(0.5);
+    expect(shouldCut({ speech: false, silentMs: 3_600_000, seconds, maxSeconds: 30 })).toBe(false);
   });
 });

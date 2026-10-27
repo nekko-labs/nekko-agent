@@ -26,7 +26,7 @@ const bridge: Record<string, any> = {
   pendingInput: async () => ({}), runningSessions: async () => [],
 };
 const unexpectedCalls: string[] = [];
-const subscriptions = ['onModelsUpdated', 'onAgentEvent', 'onLimitsUpdated', 'onSkillsUpdated', 'onTerminalEvent', 'onUpdateEvent', 'onDeepLink', 'onTasksUpdated', 'onChangesUpdated', 'onDownloadsUpdated', 'onWorkflowsUpdated', 'onTrainingUpdated'];
+const subscriptions = ['onModelsUpdated', 'onAgentEvent', 'onLimitsUpdated', 'onSkillsUpdated', 'onTerminalEvent', 'onUpdateEvent', 'onDeepLink', 'onVoiceStop', 'onTasksUpdated', 'onChangesUpdated', 'onDownloadsUpdated', 'onWorkflowsUpdated', 'onTrainingUpdated'];
 for (const name of subscriptions) bridge[name] = () => () => {};
 for (const name of ['listInstalledSkills', 'listExternalSkills', 'listTasks', 'listShells', 'listTools', 'listChatWorktrees']) bridge[name] = async () => [];
 for (const name of ['getRemotePairing', 'getRemoteStatus', 'getSystemStats', 'getGpuStats', 'getLimits', 'getLimitsProblem', 'getUsageSummary']) bridge[name] = async () => null;

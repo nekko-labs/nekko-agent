@@ -64,6 +64,20 @@ export function PrCard({ url, info, event = 'created' }: { url: string; info?: P
   );
 }
 
+/** Runs a PR action for a chat, toasts the result and refreshes the chat's PRs. Shared with "Nekko, ship it". */
+export async function runPrAction(sessionId: string, url: string, action: PrAction): Promise<void> {
+  try {
+    const res = await window.nekko.prAction(url, action);
+    useStore.getState().pushToast(res.ok ? 'success' : 'error', res.message);
+    if (res.pr) {
+      useStore.setState((s) => ({ prsBySession: { ...s.prsBySession, [sessionId]: [...(s.prsBySession[sessionId] ?? []).filter((p) => p.url !== url), res.pr!] } }));
+    }
+    await useStore.getState().refreshSessionPrs(sessionId);
+  } catch (e) {
+    useStore.getState().pushToast('error', (e as Error).message);
+  }
+}
+
 /** Live actions stay above the composer and disappear when the PR is resolved. */
 export function PrActionCard({ url, info, sessionId, onDismiss, checksInPlan = false }: { url: string; info?: PrInfo; sessionId: string; onDismiss: () => void; checksInPlan?: boolean }) {
   const parsed = parsePrUrl(url);
@@ -80,16 +94,7 @@ export function PrActionCard({ url, info, sessionId, onDismiss, checksInPlan = f
     if (confirm !== action) { setConfirm(action); return; }
     setConfirm(null);
     setBusy(action);
-    try {
-      const res = await window.nekko.prAction(url, action);
-      useStore.getState().pushToast(res.ok ? 'success' : 'error', res.message);
-      if (res.pr) {
-        useStore.setState((s) => ({ prsBySession: { ...s.prsBySession, [sessionId]: [...(s.prsBySession[sessionId] ?? []).filter((p) => p.url !== url), res.pr!] } }));
-      }
-      await useStore.getState().refreshSessionPrs(sessionId);
-    } catch (e) {
-      useStore.getState().pushToast('error', (e as Error).message);
-    } finally { setBusy(null); }
+    try { await runPrAction(sessionId, url, action); } finally { setBusy(null); }
   };
   const check = info ? CHECK_META[info.checks] : CHECK_META.none;
   const stackAction = async (action: 'continue' | 'stack') => {
