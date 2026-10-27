@@ -96,8 +96,8 @@ final class LiveRelayTests: XCTestCase {
         // (two-line labels, scrolling after layout, a minimum-height transcript,
         // waiting for the keyboard to settle). Excluded only here; see the PR.
         auditAccessibility(app, "\(theme)-approval", ignoring: ["Run rm -rf ./nekko-itest-dist"])
-        app.buttons["Deny"].tap()
-        XCTAssertTrue(waitGone(card, busyWait), "the card closes after Deny")
+        // Deny and Answer are tapped again if a busy app dropped the tap (run 40447057708).
+        XCTAssertTrue(app.buttons["Deny"].tapUntil { !card.exists }, "the card closes after Deny")
         attach(app, "\(theme)-6-denied")
 
         // The agent asks; the phone answers.
@@ -113,9 +113,10 @@ final class LiveRelayTests: XCTestCase {
         // (two-line labels, scrolling after layout, a minimum-height transcript,
         // waiting for the keyboard to settle). Excluded only here; see the PR.
         auditAccessibility(app, "\(theme)-question", ignoring: ["Run rm -rf ./nekko-itest-dist"])
-        app.buttons["iOS"].firstMatch.tap()
-        app.buttons["Answer"].tap()
-        XCTAssertTrue(waitGone(question, busyWait), "the question closes after Answer")
+        // A busy app can drop the option's tap, and Answer stays disabled until one is picked.
+        let ios = app.buttons["iOS"].firstMatch
+        XCTAssertTrue(ios.tapUntil { ios.isSelected }, "the option is picked")
+        XCTAssertTrue(app.buttons["Answer"].tapUntil { !question.exists }, "the question closes after Answer")
         XCTAssertTrue(app.staticTexts["Hello from your computer."].firstMatch.waitForExistence(timeout: computerWait))
 
         // The agent writes a file; the phone reads the change, read only (the
@@ -399,6 +400,9 @@ final class LiveRelayTests: XCTestCase {
         // The edited prompt runs after the slow reply, as edited.
         let ranEdited = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "You: next one, edited"))
         XCTAssertTrue(ranEdited.firstMatch.waitForExistence(timeout: 2 * computerWait), "the edited prompt ran")
+        // Its reply streams on, and while it does the transcript keeps scrolling to the
+        // end, which cancels a long press (no menu after two presses, run 40447057708).
+        XCTAssertTrue(waitGone(app.buttons["Stop"].firstMatch, computerWait), "the edited prompt's reply finished")
 
         // IO-23: fork from the first prompt; the new chat has it in its message box.
         let first = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "You: Say hello")).firstMatch

@@ -6,6 +6,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.DataUsage
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
@@ -17,13 +18,21 @@ import com.nekko.android.ui.Routes
 import com.nekko.android.ui.components.NCard
 import com.nekko.android.ui.theme.Nekko
 
-/** Settings → On <computer>: its files (AN-33) and logs (AN-34), its automations (Run now) and its providers' usage and limits (AN-29). */
+/** Settings → On <computer>: its providers (AN-36), its files (AN-33) and logs (AN-34), its automations (Run now) and its providers' usage and limits (AN-29). */
 @Composable
 fun AutomationsUsageSection(deps: SettingsDeps) {
     val c by deps.repo.state.collectAsStateWithLifecycle()
     if (c.active == null) return
     Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
         NCard {
+            SettingsRow(
+                title = "Providers",
+                detail = c.providers.takeIf { it.isNotEmpty() }?.let { list -> "${list.count { it.enabled }} of ${list.size} on · add one with a sealed key" }
+                    ?: "Add one with a key sealed to the computer",
+                icon = Icons.Filled.Key,
+                onClick = { deps.open(Routes.PROVIDERS) },
+            )
+            HorizontalDivider(color = Nekko.palette.line)
             SettingsRow(
                 title = "Files",
                 detail = "Saved folders, browse and edit small text files",

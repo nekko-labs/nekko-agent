@@ -28,6 +28,7 @@ import com.nekko.android.haptics.AndroidHaptics
 import com.nekko.android.data.ThemePrefs
 import com.nekko.android.ui.files.FilesScreen
 import com.nekko.android.ui.files.LogsScreen
+import com.nekko.android.ui.screens.ProvidersScreen
 import com.nekko.android.ui.screens.AutomationsScreen
 import com.nekko.android.ui.screens.ChatScreen
 import com.nekko.android.ui.screens.UsageScreen
@@ -85,6 +86,7 @@ object Routes {
     const val USAGE = "settings/usage"
     const val FILES = "settings/files"
     const val LOGS = "settings/logs"
+    const val PROVIDERS = "settings/providers"
 
     fun chat(id: String) = "chat/${Uri.encode(id)}"
     fun pair(link: String? = null) = if (link == null) "pair" else "pair?link=${Uri.encode(link)}"
@@ -238,6 +240,9 @@ fun NekkoNavHost(
         }
         composable(Routes.AUTOMATIONS) {
             AutomationsScreen(repo = repo, onBack = { nav.popBackStack() })
+        }
+        composable(Routes.PROVIDERS) {
+            ProvidersScreen(repo = repo, onBack = { nav.popBackStack() })
         }
         composable(Routes.LOGS) {
             LogsScreen(repo = repo, onBack = { nav.popBackStack() })
