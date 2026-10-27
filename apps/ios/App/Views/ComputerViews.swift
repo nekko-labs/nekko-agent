@@ -28,6 +28,7 @@ struct ComputerDetailView: View {
                 ContentUnavailableView("This computer was forgotten", systemImage: "desktopcomputer")
             }
         }
+        .appBackground()
         .navigationTitle("Computer")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: computerId) {
@@ -118,8 +119,7 @@ struct ComputerDetailView: View {
         }
         .listStyle(.plain)
         .listRowSeparatorTint(palette.line)
-        .scrollContentBackground(.hidden)
-        .background(palette.paper)
+        .appBackground()
         .refreshable { await m.refresh() }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

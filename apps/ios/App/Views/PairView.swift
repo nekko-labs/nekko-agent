@@ -54,7 +54,7 @@ struct WelcomeView: View {
                 }
             }
         }
-        .background(palette.paper)
+        .background { AppBackdrop() }
     }
 }
 

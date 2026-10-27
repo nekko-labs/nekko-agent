@@ -79,6 +79,13 @@ CI have been removed. Remaining native feature gaps below stay tracked separatel
   what needs you (Allow / Deny / answer) and the next automations, from
   `monitor:summary` every 10 s while on screen; a pane when open, the last row
   of the chat list on any phone.
+- **Simple and Expert:** a switch right of Back in every chat (the dial icon alone in a
+  folding phone's pane). Both modes: model and effort (an effort dial and the model's name,
+  opening a sheet with the model list and a large dial) and the context ring (`12.3k / 128k`,
+  tap for the breakdown) under the message box. Expert adds the computer's CPU, memory, GPU
+  and VRAM dials and the loaded-model count under the header, re-read every 3 s while shown,
+  and a Monitor sheet with Unload (`system:stats`, `gpu:stats`, `engine:status`,
+  `context:preview`, `model:unload`).
 - **Send feedback:** *Settings → Feedback* copies a prompt for your own coding
   agent to file a GitHub issue, sends a quick note to Nekko Labs through Nekko
   Cloud (app, version, OS and CPU type only when *Include app info* is on), or
@@ -107,6 +114,7 @@ apps/android/
 | Computers | `app/.../data/ComputersRepository.kt` | Native computer repository tests |
 | Posture and panes | `protocol/.../Posture.kt`, `protocol/.../Panes.kt` | `apps/ios/Protocol/Sources/NekkoKit/Posture.swift` |
 | Monitors | `protocol/.../MonitorSummary.kt` | `phoneMonitorView` in `packages/shared/src/phone-views.ts` |
+| Expert monitor, context, effort | `protocol/.../HardwareMonitor.kt` | `apps/ios/Protocol/Sources/NekkoProtocol/HardwareMonitor.swift` |
 
 ## Security notes
 

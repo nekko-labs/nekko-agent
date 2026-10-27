@@ -61,8 +61,7 @@ struct FoldersView: View {
                 Text("Use an absolute path on the computer, not on this iPhone. Removing a saved folder never deletes files on disk.")
             }
         }
-        .scrollContentBackground(.hidden)
-        .background(palette.paper)
+        .appBackground()
         .navigationTitle("Files")
         .accessibilityIdentifier("files.folders")
         .alert("Add computer folder", isPresented: $adding) {
@@ -143,8 +142,7 @@ private struct FolderList: View {
                 ProgressView().frame(maxWidth: .infinity)
             }
         }
-        .scrollContentBackground(.hidden)
-        .background(palette.paper)
+        .appBackground()
         .navigationTitle(path.isEmpty ? title : (path as NSString).lastPathComponent)
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $query, prompt: "Find a file by name")
@@ -324,7 +322,10 @@ struct FileDetailView: View {
             ScrollView([.vertical]) {
                 VStack(alignment: .leading, spacing: 0) {
                     banners(f)
-                    if rendered, f.markdown, let text = f.text {
+                    if MermaidRules.isMermaidFile(f.name), !rendered, !f.truncated, let text = f.text {
+                        // A .mmd or .mermaid file draws as its diagram, as a fence in a chat does (MM-2).
+                        MermaidBlock(source: text, closed: true, style: .standard(palette)).padding(12)
+                    } else if rendered, f.markdown, let text = f.text {
                         MarkdownText(text: text).padding(12)
                     } else {
                         CodeLines(lines: Array(f.lines.prefix(Self.maxLines)))
@@ -507,8 +508,7 @@ struct LogsView: View {
                 ProgressView().frame(maxWidth: .infinity)
             }
         }
-        .scrollContentBackground(.hidden)
-        .background(palette.paper)
+        .appBackground()
         .navigationTitle("Logs")
         .accessibilityIdentifier("logs.list")
         .refreshable { await model?.load() }
