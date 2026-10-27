@@ -52,6 +52,12 @@
           "description": "Opt in to anonymous usage and crash reports, what they contain, and how to see each send."
         },
         {
+          "slug": "voice",
+          "title": "Voice",
+          "source": "docs/voice.md",
+          "description": "Tap the mic once and talk: dictation that stays on, \"Nekko\" commands, and speech that never leaves your computer."
+        },
+        {
           "slug": "privacy-shield",
           "title": "Privacy Shield",
           "source": "docs/privacy-shield.md",

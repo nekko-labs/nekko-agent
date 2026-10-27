@@ -81,8 +81,16 @@ final class LiveRelayTests: XCTestCase {
         attach(app, "\(theme)-4-reply")
 
         // + sits inside the message box and offers another agent or a terminal, as on the desktop.
+        // A Menu's label has no hit point for XCTest (the tap failed scrolling it into view,
+        // run 40562362238), so tap its centre, as the chats view menu.
         let plus = app.buttons["composer.add"]
-        XCTAssertTrue(plus.tapUntil { app.buttons["New agent"].exists }, "the + menu opens")
+        XCTAssertTrue(waitForFrame(plus, in: app, 10), "the + button never got a frame")
+        let newAgent = app.buttons["New agent"]
+        for _ in 0..<3 where !newAgent.exists {
+            plus.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            _ = newAgent.waitForExistence(timeout: 5)
+        }
+        XCTAssertTrue(newAgent.exists, "the + menu opens")
         XCTAssertTrue(app.buttons["Terminal"].exists, "the + menu offers a terminal")
         attach(app, "\(theme)-4b-plus-menu")
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)).tap()
@@ -414,7 +422,18 @@ final class LiveRelayTests: XCTestCase {
 
         // IO-23: fork from the first prompt; the new chat has it in its message box.
         let first = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "You: Say hello")).firstMatch
-        XCTAssertTrue(first.waitForExistence(timeout: 10))
+        // The transcript only draws what is near the screen, and the message box (taller since
+        // #1250) and keyboard leave it a strip: scroll back up to the first prompt. Drag near
+        // the top, where the transcript is; the middle of the screen is the message box.
+        // XCTest calls the bubble hittable while it is still under the navigation bar, where a
+        // long press opens nothing, so scroll until it is below the bar.
+        let top = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2))
+        let barBottom = app.navigationBars.firstMatch.frame.maxY
+        for _ in 0..<12 where !(first.exists && first.frame.minY > barBottom + 8) {
+            top.press(forDuration: 0.05, thenDragTo: top.withOffset(CGVector(dx: 0, dy: 160)))
+        }
+        settle()
+        XCTAssertTrue(first.waitForExistence(timeout: 10), "the first prompt is on screen")
         // The menu item carries the identifier `chat.fork` (#868); XCTest matches
         // an element's identifier, not its label, once one is set.
         let fork = app.buttons["chat.fork"].firstMatch

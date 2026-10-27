@@ -1,5 +1,8 @@
 import XCTest
+import NekkoKit
 import NekkoProtocol
+import AVFoundation
+import Speech
 import SwiftUI
 @testable import NekkoNative
 
@@ -305,6 +308,73 @@ final class OfflinePrefsTests: XCTestCase {
     }
 }
 
+/// IO-28: the first tap of the mic shows the how-voice-works video and does not listen.
+@MainActor
+final class VoiceIntroTests: XCTestCase {
+    private func prefs() throws -> (Prefs, () -> Void) {
+        let suite = "dev.nekkolabs.nekkoagent.tests.voiceintro.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        return (Prefs(defaults: defaults), { defaults.removePersistentDomain(forName: suite) })
+    }
+
+    func testTheFirstMicTapShowsTheVideoInsteadOfListening() throws {
+        let (prefs, cleanup) = try prefs()
+        defer { cleanup() }
+        let gate = VoiceIntroGate()
+        let dictation = Dictation()
+        XCTAssertFalse(prefs.voiceIntroSeen)
+        XCTAssertTrue(gate.intercept(prefs), "the tap went to the video")
+        XCTAssertTrue(gate.showing)
+        XCTAssertFalse(dictation.recording, "nothing listens yet")
+        XCTAssertFalse(prefs.voiceIntroSeen, "seen only once it is closed")
+    }
+
+    func testNotNowAndSwipingAwayMarkItSeenWithoutListening() throws {
+        let (prefs, cleanup) = try prefs()
+        defer { cleanup() }
+        let gate = VoiceIntroGate()
+        _ = gate.intercept(prefs)
+        var listened = false
+        gate.closed(prefs) { listened = true }
+        XCTAssertTrue(prefs.voiceIntroSeen)
+        XCTAssertFalse(listened)
+        XCTAssertFalse(gate.intercept(prefs), "later taps listen")
+        XCTAssertFalse(gate.showing)
+    }
+
+    func testTurnOnListensOnceAndIsRemembered() throws {
+        let (prefs, cleanup) = try prefs()
+        defer { cleanup() }
+        let gate = VoiceIntroGate()
+        _ = gate.intercept(prefs)
+        gate.turnOn()
+        var listened = 0
+        gate.closed(prefs) { listened += 1 }
+        XCTAssertEqual(listened, 1)
+        XCTAssertTrue(prefs.voiceIntroSeen)
+        gate.replay()
+        gate.closed(prefs) { listened += 1 }
+        XCTAssertEqual(listened, 1, "a replay from Settings never starts listening")
+    }
+
+    func testItStaysSeenAcrossLaunches() throws {
+        let suite = "dev.nekkolabs.nekkoagent.tests.voiceintro.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        Prefs(defaults: defaults).voiceIntroSeen = true
+        XCTAssertTrue(Prefs(defaults: defaults).voiceIntroSeen)
+    }
+
+    func testBothCutsAreBundledAndSmall() throws {
+        for theme in ["light", "dark"] {
+            let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "voice-intro-\(theme)", withExtension: "mp4")
+                                    ?? Bundle.main.url(forResource: "voice-intro-\(theme)", withExtension: "mp4"), "voice-intro-\(theme).mp4 is an app resource")
+            let size = try XCTUnwrap(try url.resourceValues(forKeys: [.fileSizeKey]).fileSize)
+            XCTAssertLessThan(size, 3 * 1024 * 1024)
+        }
+    }
+}
+
 /// TS-4: Open Tailscale. Without `tailscale` in LSApplicationQueriesSchemes,
 /// canOpenURL always answers no and the action would only ever reach the App Store.
 final class OpenTailscaleTests: XCTestCase {
@@ -384,5 +454,397 @@ final class ChatStatusIconTests: XCTestCase {
         XCTAssertEqual(ChatStatusIcon(activity: .running, completed: true, activeWatchCount: 1).label, "Working")
         XCTAssertEqual(ChatStatusIcon(activity: .needsYou, completed: true, activeWatchCount: 1).label, "Needs you")
         XCTAssertEqual(ChatStatusIcon(activity: nil, completed: true, waiting: true, activeWatchCount: 1).label, "Waiting to send")
+    }
+}
+
+/// Always-on dictation (IO-28): the segments' words, and the Nekko commands in them.
+@MainActor
+final class VoiceTests: XCTestCase {
+    /// A composer's draft and what voice did with it.
+    final class Box {
+        var text = ""
+        var sent: [String] = []
+        var toasts: [String] = []
+        var merged: [String] = []
+        var opened: [String] = []
+    }
+
+    private func runner(_ box: Box, prs: String = "[]", chats: String = "[]") -> VoiceRunner {
+        let r = VoiceRunner()
+        let prList = PullRequest.list(try? JSONValue.parse(Data(prs.utf8)))
+        let summaries = ((try? JSONValue.parse(Data(chats.utf8)))?.array ?? []).compactMap(SessionSummary.from)
+        r.host = VoiceRunner.Host(
+            text: Binding(get: { box.text }, set: { box.text = $0 }),
+            send: { box.sent.append(box.text); box.text = ""; return true },
+            toast: { box.toasts.append($0) },
+            tap: {},
+            chats: { summaries },
+            open: { box.opened.append($0) },
+            ship: { VoiceRunner.ShipFacts(prs: prList, running: false, question: nil) },
+            merge: { box.merged.append($0.url); return nil })
+        return r
+    }
+
+    /// Each segment's transcript, in the order the segments were cut.
+    private func hear(_ transcripts: [String]) async -> Dictation {
+        var left = transcripts
+        let d = Dictation()
+        d.transcribe = { _ in left.removeFirst() }
+        for _ in transcripts { d.enqueue([Float](repeating: 0.1, count: 8_000)) }
+        await d.drain()
+        return d
+    }
+
+    func testSendItSendsWhatWasSaidBeforeIt() async {
+        let box = Box()
+        let d = await hear(["Fix it. Nekko, send it."])
+        await runner(box).hear(d.heard)
+        XCTAssertEqual(box.sent, ["Fix it."])
+        XCTAssertEqual(box.text, "")
+        XCTAssertEqual(box.toasts, ["Sent"])
+    }
+
+    func testEraseThatTakesBackOnlyTheLastSegment() async {
+        let box = Box()
+        let r = runner(box)
+        await r.hear(await hear(["Fix the login bug.", "Add a test.", "[BLANK_AUDIO]"]).heard)
+        XCTAssertEqual(box.text, "Fix the login bug. Add a test.")
+        await r.hear([Dictation.Words(text: "Nekko erase that")])
+        XCTAssertEqual(box.text, "Fix the login bug.")
+        XCTAssertEqual(box.toasts, ["Erased"])
+        // Nothing left to take back: no "Erased".
+        await r.hear([Dictation.Words(text: "Nekko erase that")])
+        XCTAssertEqual(box.text, "Fix the login bug.")
+        XCTAssertEqual(box.toasts, ["Erased", "Nothing to erase"])
+    }
+
+    func testCommandsWithNothingToDoSaySo() async {
+        let box = Box()
+        let r = runner(box)
+        await r.hear([Dictation.Words(text: "Nekko, send it."), Dictation.Words(text: "Nekko, yes."), Dictation.Words(text: "Nekko, the second one.")])
+        XCTAssertEqual(box.sent, [])
+        XCTAssertEqual(box.toasts, ["Nothing to send", "Nothing to confirm", "Nothing to confirm"])
+        // A send the composer turns down (a blocked chat, photos still loading) says so too.
+        r.host.send = { false }
+        box.text = "Fix it."
+        await r.hear([Dictation.Words(text: "Nekko, send it.")])
+        XCTAssertEqual(box.toasts.last, "Not sent")
+    }
+
+    func testAHoldsReleaseKeepsAConfirmForTheNextHold() async {
+        let box = Box()
+        let r = runner(box, prs: #"[{"url":"https://github.com/acme/app/pull/12","number":12,"state":"open"}]"#)
+        await r.hear([Dictation.Words(text: "Nekko, ship it.")])
+        // Hold to talk: the confirm is answered in the next hold, so letting go keeps it.
+        await r.stopped(afterHold: true, after: {})
+        XCTAssertNotNil(r.pending)
+        await r.hear([Dictation.Words(text: "Nekko, yes.")])
+        XCTAssertEqual(box.merged, ["https://github.com/acme/app/pull/12"])
+        // Tap mode: stopping clears it, once the words already heard are applied.
+        await r.hear([Dictation.Words(text: "Nekko, ship it.")])
+        XCTAssertNotNil(r.pending)
+        await r.stopped(afterHold: false, after: {})
+        XCTAssertNil(r.pending)
+    }
+
+    func testAnOldStopDoesNotClearANewSessionsConfirm() async {
+        let box = Box()
+        let r = runner(box, prs: #"[{"url":"https://github.com/acme/app/pull/12","number":12,"state":"open"}]"#)
+        await r.hear([Dictation.Words(text: "Nekko, ship it.")])
+        var drained = false
+        // Stopped, and the last words are still being transcribed...
+        let stop = Task { await r.stopped(afterHold: false, after: { while !drained { try? await Task.sleep(for: .milliseconds(10)) } }) }
+        await Task.yield()
+        // ...when listening starts again and a new confirm comes up.
+        r.started()
+        await r.hear([Dictation.Words(text: "Nekko, ship it.")])
+        let fresh = r.pending?.id
+        drained = true
+        await stop.value
+        XCTAssertNotNil(fresh)
+        XCTAssertEqual(r.pending?.id, fresh, "the old stop's clear is skipped")
+    }
+
+    func testAPermissionPromptDoesNotCancelStartingButLeavingDoes() {
+        // The microphone and speech prompts make the scene inactive while listening starts.
+        XCTAssertFalse(Dictation.leavesScreen(.inactive, starting: true))
+        XCTAssertTrue(Dictation.leavesScreen(.inactive, starting: false))
+        XCTAssertTrue(Dictation.leavesScreen(.background, starting: true))
+        XCTAssertFalse(Dictation.leavesScreen(.active, starting: false))
+        let d = Dictation()
+        d.sink = { _ in }
+        d.startingWithoutPrompts()
+        XCTAssertTrue(d.mayOpenMicrophone)
+        d.abort()
+        XCTAssertFalse(d.mayOpenMicrophone, "a lock during the waits opens nothing")
+        d.startingWithoutPrompts()
+        d.sink = nil
+        XCTAssertFalse(d.mayOpenMicrophone, "the chat closed during the waits")
+    }
+
+    func testShipItLeavesDraftPrsAlone() {
+        let prs = PullRequest.list(try? JSONValue.parse(Data(#"[{"url":"https://github.com/acme/app/pull/3","number":3,"state":"open","isDraft":true},{"url":"https://github.com/acme/app/pull/4","number":4,"state":"open"}]"#.utf8)))
+        XCTAssertEqual(VoiceRunner.shipAction(.init(prs: prs, running: false, question: nil)), .merge(prs[1]))
+        XCTAssertEqual(VoiceRunner.shipAction(.init(prs: [prs[0]], running: false, question: nil)), .nothing)
+    }
+
+    func testAWakeWordAloneAddressesTheNextSegment() async {
+        let box = Box()
+        let r = runner(box)
+        box.text = "Fix it."
+        await r.hear([Dictation.Words(text: "Nekko."), Dictation.Words(text: "Send it.")])
+        XCTAssertEqual(box.sent, ["Fix it."])
+    }
+
+    func testShipItMergesTheOpenPrOnlyAfterYes() async {
+        let box = Box()
+        let r = runner(box, prs: #"[{"url":"https://github.com/acme/app/pull/12","number":12,"state":"open"}]"#)
+        await r.hear([Dictation.Words(text: "Nekko, ship it.")])
+        XCTAssertEqual(r.pending?.message, "Merge acme/app#12? Say 'Nekko, yes' or tap Confirm.")
+        XCTAssertEqual(box.merged, [])
+        await r.hear([Dictation.Words(text: "Nekko, yes.")])
+        XCTAssertEqual(box.merged, ["https://github.com/acme/app/pull/12"])
+        XCTAssertNil(r.pending)
+    }
+
+    func testShipItWithNoPrSaysGoAhead() async {
+        let box = Box()
+        await runner(box).hear([Dictation.Words(text: "Nekko ship it")])
+        XCTAssertEqual(box.sent, ["Go ahead and build it."])
+    }
+
+    func testOpenAChatByWhatItIsAbout() async {
+        let box = Box()
+        let chats = #"[{"id":"a","title":"Login bug"},{"id":"b","title":"Dark mode","firstUserText":"make the login page dark"},{"id":"c","title":"Billing"}]"#
+        let r = runner(box, chats: chats)
+        await r.hear([Dictation.Words(text: "Nekko open billing")])
+        XCTAssertEqual(box.opened, ["c"])
+        await r.hear([Dictation.Words(text: "Nekko open the one about login")])
+        XCTAssertEqual(r.pending?.options.map(\.label), ["Login bug", "Dark mode"])
+        await r.hear([Dictation.Words(text: "Nekko, the second one")])
+        XCTAssertEqual(box.opened, ["c", "b"])
+        // No chat by that name: the words are typed, never dropped.
+        await r.hear([Dictation.Words(text: "Nekko open the pod bay doors")])
+        XCTAssertEqual(box.text, "Nekko open the pod bay doors")
+    }
+
+    func testDesktopPlacesWorkOnlyOnTheComputer() async {
+        let box = Box()
+        await runner(box).hear([Dictation.Words(text: "Nekko switch to desktop 2"), Dictation.Words(text: "Nekko open models")])
+        XCTAssertEqual(box.toasts, ["That one works on the computer", "That one works on the computer"])
+        XCTAssertEqual(box.text, "")
+    }
+
+    func testAFailedTranscriptionIsSaidOnce() async {
+        let d = Dictation()
+        d.transcribe = { _ in throw RelayError("Engine busy") }
+        d.enqueue([0.1])
+        d.enqueue([0.1])
+        await d.drain()
+        XCTAssertEqual(d.error, "Couldn’t turn speech into text: Engine busy")
+        XCTAssertEqual(d.heard, [])
+    }
+
+    final class StubRecognizer: SpeechRecognizing {
+        let supportsOnDeviceRecognition: Bool
+        let isAvailable = true
+        let locale = Locale(identifier: "en-US")
+        var requests: [SFSpeechURLRecognitionRequest] = []
+        var failure: Error?
+        init(onDevice: Bool) { supportsOnDeviceRecognition = onDevice }
+        func text(for request: SFSpeechURLRecognitionRequest) async throws -> String? {
+            requests.append(request)
+            if let failure { throw failure }
+            return "hello"
+        }
+    }
+
+    func testPhoneSpeechNeverLeavesThePhone() async throws {
+        let wav = Dictation.wav([Float](repeating: 0, count: 1_600))
+        let off = StubRecognizer(onDevice: false)
+        do {
+            _ = try await Dictation.transcribeOnPhone(wav, with: off)
+            XCTFail("a phone without on-device speech must refuse")
+        } catch let e as DictationError {
+            XCTAssertEqual(e, .noOnDevice(language: "English (United States)"))
+            XCTAssertEqual(e.localizedDescription, "This phone can't turn speech into text on the phone for English (United States), so dictation is off. Turn on Nekko Voice on your computer to dictate.")
+        }
+        XCTAssertTrue(off.requests.isEmpty, "nothing is sent to a server")
+
+        let on = StubRecognizer(onDevice: true)
+        let text = try await Dictation.transcribeOnPhone(wav, with: on)
+        XCTAssertEqual(text, "hello")
+        XCTAssertEqual(on.requests.map(\.requiresOnDeviceRecognition), [true])
+    }
+
+    func testSegmentsAreWrittenAs16kHzMonoPcm() {
+        let wav = Dictation.wav([0, 1, -1])
+        XCTAssertEqual(wav.count, 44 + 6)
+        XCTAssertEqual(String(decoding: wav.prefix(4), as: UTF8.self), "RIFF")
+        XCTAssertEqual(wav.subdata(in: 24..<28).withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) }, 16_000)
+        XCTAssertEqual((0..<3).map { i in wav.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: 44 + 2 * i, as: Int16.self) } }, [0, 32_767, -32_767])
+    }
+
+    func testOnlyNoSpeechReadsAsNoWordsOnThePhone() async throws {
+        XCTAssertTrue(Dictation.isNoSpeech(NSError(domain: "kAFAssistantErrorDomain", code: 1110)))
+        XCTAssertFalse(Dictation.isNoSpeech(NSError(domain: "kAFAssistantErrorDomain", code: 1101)))
+        let broken = StubRecognizer(onDevice: true)
+        broken.failure = NSError(domain: "kAFAssistantErrorDomain", code: 1101, userInfo: [NSLocalizedDescriptionKey: "Recognizer died"])
+        do {
+            _ = try await Dictation.transcribeOnPhone(Dictation.wav([0]), with: broken)
+            XCTFail("a real recognizer failure is said, not read as silence")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, "Recognizer died")
+        }
+    }
+
+    func testThePhoneRefusesBeforeListeningStarts() {
+        let unavailable = "Speech recognition isn’t available. Allow it in Settings → Nekko Agent."
+        XCTAssertEqual(Dictation.phoneRefusal(authorized: false, recognizer: StubRecognizer(onDevice: true)), unavailable)
+        XCTAssertEqual(Dictation.phoneRefusal(authorized: true, recognizer: nil), unavailable)
+        let off = StubRecognizer(onDevice: false)
+        XCTAssertEqual(Dictation.phoneRefusal(authorized: true, recognizer: off), DictationError.noOnDevice(language: "English (United States)").localizedDescription)
+        XCTAssertTrue(off.requests.isEmpty)
+        XCTAssertNil(Dictation.phoneRefusal(authorized: true, recognizer: StubRecognizer(onDevice: true)))
+    }
+
+    func testAComputerHiccupIsRetriedAndNeverFallsToThePhoneWhileOnline() async throws {
+        var calls = 0
+        var phoned = 0
+        let phone: (Data) async throws -> String? = { _ in phoned += 1; return "phone" }
+        let flaky: (Data) async throws -> String = { _ in calls += 1; if calls == 1 { throw RelayError("Timed out") }; return "computer" }
+        let once = try await Dictation.transcribe(Data(), computer: flaky, online: { true }, phone: phone)
+        XCTAssertEqual(once, "computer")
+        let down: (Data) async throws -> String = { _ in throw RelayError("Timed out") }
+        do {
+            _ = try await Dictation.transcribe(Data(), computer: down, online: { true }, phone: phone)
+            XCTFail("the computer's failure is said")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, "Timed out")
+        }
+        XCTAssertEqual(phoned, 0)
+        let offline = try await Dictation.transcribe(Data(), computer: down, online: { false }, phone: phone)
+        XCTAssertEqual(offline, "phone")
+        let noWhisper = try await Dictation.transcribe(Data(), computer: nil, online: { true }, phone: phone)
+        XCTAssertEqual(noWhisper, "phone")
+    }
+
+    func testWordsAfterTheComposerIsGoneGoToTheChatsDraft() async {
+        let d = Dictation()
+        var sunk: [String] = []
+        var parked: [String] = []
+        d.park = { parked.append($0) }
+        d.sink = { sunk.append($0.text) }
+        d.transcribe = { _ in "Fix the login bug." }
+        d.enqueue([0.1])
+        await d.drain()
+        // The chat closed while the next segment was still being transcribed.
+        d.sink = nil
+        d.transcribe = { _ in "Nekko, send it." }
+        d.enqueue([0.1])
+        await d.drain()
+        XCTAssertEqual(sunk, ["Fix the login bug."])
+        XCTAssertEqual(parked, ["Nekko, send it."], "typed as words, the command not run")
+    }
+
+    func testWordsAfterACommandThatLeftTheChatGoToItsDraft() async {
+        let box = Box()
+        let r = runner(box, chats: #"[{"id":"c","title":"Billing"}]"#)
+        var parked: [String] = []
+        r.host.park = { parked.append($0) }
+        await r.hear([Dictation.Words(text: "Nekko, open billing. Fix it.")])
+        XCTAssertEqual(box.opened, ["c"])
+        XCTAssertEqual(parked, ["Fix it."])
+        XCTAssertEqual(box.text, "", "not typed into the composer that is leaving")
+        // The next segment goes to the composer as usual (it is still on screen in a split view).
+        await r.hear([Dictation.Words(text: "Add a test.")])
+        XCTAssertEqual(box.text, "Add a test.")
+    }
+
+    func testParkedWordsFollowTheSavedDraft() {
+        let drafts = DraftStore(files: nil, debounce: 0)
+        Composer.park("Fix it.", in: "c", drafts)
+        XCTAssertEqual(drafts.draft("c").text, "Fix it.")
+        drafts.set("c", Draft(text: "Fix it.", images: ["data:image/jpeg;base64,AA=="]))
+        Composer.park("Add a test.", in: "c", drafts)
+        XCTAssertEqual(drafts.draft("c").text, "Fix it. Add a test.")
+        XCTAssertEqual(drafts.draft("c").images, ["data:image/jpeg;base64,AA=="], "the draft's photos stay")
+    }
+
+    func testAParkedRunnerRunsNoCommand() async {
+        let box = Box()
+        let r = runner(box)
+        var parked: [String] = []
+        r.park = { parked.append($0) }
+        await r.hear([Dictation.Words(text: "Fix it. Nekko, send it.")])
+        XCTAssertEqual(box.sent, [])
+        XCTAssertEqual(box.text, "")
+        XCTAssertEqual(parked, ["Fix it. Nekko, send it."])
+    }
+
+    func testACallOrAMediaResetStopsListeningAndKeepsTheWords() async {
+        let began = Notification(name: AVAudioSession.interruptionNotification, object: nil,
+                                 userInfo: [AVAudioSessionInterruptionTypeKey: AVAudioSession.InterruptionType.began.rawValue])
+        let ended = Notification(name: AVAudioSession.interruptionNotification, object: nil,
+                                 userInfo: [AVAudioSessionInterruptionTypeKey: AVAudioSession.InterruptionType.ended.rawValue])
+        let reset = Notification(name: AVAudioSession.mediaServicesWereResetNotification, object: nil)
+        for stop in [began, reset] {
+            let d = Dictation()
+            d.transcribe = { _ in "kept" }
+            d.listenWithoutMicrophone()
+            d.consume([Float](repeating: 0.5, count: 8_000))
+            NotificationCenter.default.post(ended)
+            await Task.yield()
+            XCTAssertTrue(d.recording, "an interruption ending is not a reason to stop")
+            NotificationCenter.default.post(stop)
+            for _ in 0..<50 where d.recording { try? await Task.sleep(for: .milliseconds(20)) }
+            XCTAssertFalse(d.recording, "\(stop.name.rawValue) stops listening")
+            XCTAssertEqual(d.notice, "Stopped listening", "an unasked-for stop is said")
+            await d.drain()
+            XCTAssertEqual(d.heard.map(\.text), ["kept"])
+        }
+    }
+
+    func testListeningKeepsTheScreenOnAndPutsItBack() {
+        for before in [false, true] {
+            UIApplication.shared.isIdleTimerDisabled = before
+            let d = Dictation()
+            d.listenWithoutMicrophone()
+            XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled, "Auto-Lock would end listening")
+            d.stopListening()
+            XCTAssertEqual(UIApplication.shared.isIdleTimerDisabled, before)
+            XCTAssertNil(d.notice, "a tap on stop is not announced")
+        }
+        UIApplication.shared.isIdleTimerDisabled = false
+    }
+
+    func testListeningInOnePaneStopsTheOther() {
+        let left = Dictation(), right = Dictation()
+        left.listenWithoutMicrophone()
+        right.listenWithoutMicrophone()
+        XCTAssertFalse(left.recording, "one microphone for the app")
+        XCTAssertTrue(right.recording)
+        XCTAssertEqual(left.notice, "Stopped listening")
+        right.stopListening()
+        XCTAssertFalse(UIApplication.shared.isIdleTimerDisabled)
+    }
+
+    func testLeavingTheScreenWithWordsInFlightAsksForTimeToFinishThem() async {
+        let d = Dictation()
+        var release = false
+        d.transcribe = { _ in
+            while !release { try await Task.sleep(for: .milliseconds(10)) }
+            return "kept"
+        }
+        d.listenWithoutMicrophone()
+        // The last segment was cut at a pause and is on its way; nothing is left un-cut.
+        d.enqueue([0.1])
+        d.abort()
+        XCTAssertTrue(d.finishingInBackground, "the in-flight words need background time too")
+        release = true
+        await d.drain()
+        for _ in 0..<50 where d.finishingInBackground { try? await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertFalse(d.finishingInBackground, "ended once the queue drains")
+        XCTAssertEqual(d.heard.map(\.text), ["kept"])
     }
 }

@@ -343,7 +343,7 @@ The microphone in the message box turns speech into draft text on this computer;
 - **Apple speech** on macOS 26 and later: the recognizer built into the Mac. The language pack for your recognition language is often already installed, so the first click on the microphone just asks which engine to use. It is the default on a Mac that has it.
 - **Whisper Tiny English** (Nekko Voice) on Windows and Linux: a 32 MB model plus the whisper.cpp runtime, downloaded once and loaded on demand.
 
-Say "Nekko, open settings" (or "Nekko, new chat") and the app shows the command for confirmation instead of typing it.
+The microphone stays on until you tap it again, and "Nekko, ..." phrases are commands. See [Voice](voice.md).
 
 ## What is not here yet
 
