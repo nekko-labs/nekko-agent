@@ -21,21 +21,22 @@ enum DictationError: Error, Equatable, LocalizedError {
 /// The phone's speech recognizer, as the one thing the phone path needs from it (tests stand in for it).
 protocol SpeechRecognizing: AnyObject {
     var supportsOnDeviceRecognition: Bool { get }
+    var isAvailable: Bool { get }
     var locale: Locale { get }
-    /// The final transcript, or nil when the recognizer heard no words.
-    func text(for request: SFSpeechURLRecognitionRequest) async -> String?
+    /// The final transcript, or nil when the recognizer heard no words; a real failure throws.
+    func text(for request: SFSpeechURLRecognitionRequest) async throws -> String?
 }
 
 extension SFSpeechRecognizer: SpeechRecognizing {
-    func text(for request: SFSpeechURLRecognitionRequest) async -> String? {
-        await withCheckedContinuation { c in
+    func text(for request: SFSpeechURLRecognitionRequest) async throws -> String? {
+        try await withCheckedThrowingContinuation { c in
             let once = Once()
             recognitionTask(with: request) { result, err in
                 if let result, result.isFinal {
                     if once.claim() { c.resume(returning: result.bestTranscription.formattedString) }
-                } else if err != nil {
-                    // shortcut: every recognizer error reads as "no words" (it reports silence as an error), split them if a real failure needs saying.
-                    if once.claim() { c.resume(returning: nil) }
+                } else if let err {
+                    // The recognizer reports silence as an error: that one is no words, any other is a failure.
+                    if once.claim() { Dictation.isNoSpeech(err) ? c.resume(returning: nil) : c.resume(throwing: err) }
                 }
             }
         }
@@ -96,10 +97,16 @@ final class Dictation {
 
     /// Stands in for the computer and the phone in tests.
     var transcribe: ((Data) async throws -> String?)?
+    /// Where each segment's words go while the chat's composer is on screen.
+    var sink: ((Words) -> Void)?
+    /// With no composer on screen (the chat closed while words were still being transcribed),
+    /// they are kept as plain text in that chat's saved draft, and no command runs.
+    var park: ((String) -> Void)?
 
     private weak var store: ComputersStore?
     private var engine: AVAudioEngine?
-    private var configChange: NSObjectProtocol?
+    /// Route change, a call or Siri, a media services reset: each ends listening.
+    private var stops: [NSObjectProtocol] = []
     private var holding = false
     private var segmenter = Dictation.newSegmenter()
     /// Hold mode: everything said while the finger is down.
@@ -165,34 +172,81 @@ final class Dictation {
         guard !recording else { return }
         error = nil
         notice = nil
+        self.store = store
+        // When the phone will transcribe, its permission prompt and the on-device check come
+        // before listening: a prompt mid-listen leaves the screen and stops it.
+        if transcribe == nil, !(await computerHasWhisper(store)) {
+            let auth = await withCheckedContinuation { c in SFSpeechRecognizer.requestAuthorization { c.resume(returning: $0) } }
+            if let refusal = Self.phoneRefusal(authorized: auth == .authorized, recognizer: SFSpeechRecognizer()) {
+                error = refusal
+                return
+            }
+        }
         guard await AVAudioApplication.requestRecordPermission() else {
             error = "Microphone access is off. Allow it in Settings → Nekko Agent."
             return
         }
-        self.store = store
         let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.playAndRecord, mode: .measurement, options: [.duckOthers, .defaultToSpeaker, .allowBluetooth])
+            // Listening for minutes must not hush other audio; a short hold may.
+            let options: AVAudioSession.CategoryOptions = holding ? [.duckOthers, .defaultToSpeaker, .allowBluetooth] : [.mixWithOthers, .defaultToSpeaker, .allowBluetooth]
+            try session.setCategory(.playAndRecord, mode: .measurement, options: options)
             try session.setActive(true)
             let engine = AVAudioEngine()
             try Self.tap(engine.inputNode, into: self)
             engine.prepare()
             try engine.start()
             self.engine = engine
-            // A route change (headphones out, a call) stops the engine: stop listening with it, keeping what was said.
-            configChange = NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.stopListening() }
-            }
-            segmenter = Self.newSegmenter()
-            held = []
-            self.holding = holding
-            failing = false
-            recording = true
+            begin(holding: holding)
             AccessibilityNotification.Announcement("Listening").post()
         } catch {
             self.error = error.localizedDescription
             try? session.setActive(false, options: .notifyOthersOnDeactivation)
         }
+    }
+
+    private func begin(holding: Bool) {
+        segmenter = Self.newSegmenter()
+        held = []
+        self.holding = holding
+        failing = false
+        recording = true
+        // Each of these leaves the microphone dead: stop listening with it, keeping what was said.
+        let center = NotificationCenter.default
+        let stop: @Sendable (Notification) -> Void = { [weak self] n in
+            MainActor.assumeIsolated { if Self.endsListening(n) { self?.stopListening() } }
+        }
+        stops = [center.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main, using: stop),
+                 center.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main, using: stop),
+                 center.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: nil, queue: .main, using: stop)]
+    }
+
+    /// An interruption ending (the call is over) is no reason to stop; everything else watched is.
+    private nonisolated static func endsListening(_ n: Notification) -> Bool {
+        guard n.name == AVAudioSession.interruptionNotification else { return true }
+        return (n.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt) == AVAudioSession.InterruptionType.began.rawValue
+    }
+
+    #if DEBUG
+    /// Tests: listening as if the microphone were open, without one.
+    func listenWithoutMicrophone() { begin(holding: false) }
+    #endif
+
+    /// Why the phone can't transcribe, or nil when it can (on the device only).
+    static func phoneRefusal(authorized: Bool, recognizer: SpeechRecognizing?) -> String? {
+        guard authorized, let recognizer, recognizer.isAvailable else { return "Speech recognition isn’t available. Allow it in Settings → Nekko Agent." }
+        guard recognizer.supportsOnDeviceRecognition else { return noOnDevice(recognizer).localizedDescription }
+        return nil
+    }
+
+    private static func noOnDevice(_ recognizer: SpeechRecognizing) -> DictationError {
+        .noOnDevice(language: Locale(identifier: "en").localizedString(forIdentifier: recognizer.locale.identifier) ?? recognizer.locale.identifier)
+    }
+
+    /// "No speech detected": the recognizer's way of saying it heard no words.
+    nonisolated static func isNoSpeech(_ error: Error) -> Bool {
+        let e = error as NSError
+        return e.domain == "kAFAssistantErrorDomain" && e.code == 1110
     }
 
     /// Stop listening; the words said up to now still count.
@@ -233,8 +287,8 @@ final class Dictation {
         engine?.inputNode.removeTap(onBus: 0)
         engine?.stop()
         engine = nil
-        if let configChange { NotificationCenter.default.removeObserver(configChange) }
-        configChange = nil
+        stops.forEach(NotificationCenter.default.removeObserver)
+        stops = []
         recording = false
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         var tail: [[Float]] = []
@@ -278,7 +332,7 @@ final class Dictation {
         return Array(UnsafeBufferPointer(start: channel[0], count: Int(out.frameLength)))
     }
 
-    private func consume(_ samples: [Float]) {
+    func consume(_ samples: [Float]) {
         guard recording else { return }
         if holding {
             held += samples
@@ -320,7 +374,9 @@ final class Dictation {
             let range = NSRange(words.startIndex..., in: words)
             guard !Self.annotation.stringByReplacingMatches(in: words, range: range, withTemplate: "")
                 .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-            heard.append(Words(text: words))
+            let heardNow = Words(text: words)
+            heard.append(heardNow)
+            if let sink { sink(heardNow) } else { park?(words) }
         } catch let e as DictationError {
             // Dictation is off: nothing more is recorded.
             error = e.localizedDescription
@@ -333,8 +389,24 @@ final class Dictation {
 
     private func onEngines(_ wav: Data) async throws -> String? {
         guard let store else { return nil }
-        if await computerHasWhisper(store), let text = await transcribeOnComputer(wav, store) { return text }
-        return try await onPhone(wav)
+        let computer: ((Data) async throws -> String)? = await computerHasWhisper(store) ? { [weak self] in
+            guard let self else { throw CancellationError() }
+            return try await transcribeOnComputer($0, store)
+        } : nil
+        return try await Self.transcribe(wav, computer: computer, online: { store.conn == .online }, phone: { [weak self] in try await self?.onPhone($0) })
+    }
+
+    /// Whisper on the computer when it has it, tried twice: while the computer is still online its
+    /// failure is said, never handed to the phone (which may not transcribe on the device at all).
+    static func transcribe(_ wav: Data, computer: ((Data) async throws -> String)?, online: () -> Bool,
+                           phone: (Data) async throws -> String?) async throws -> String? {
+        if let computer {
+            do { return try await computer(wav) } catch {
+                if let text = try? await computer(wav) { return text }
+                if online() { throw error }
+            }
+        }
+        return try await phone(wav)
     }
 
     private func computerHasWhisper(_ store: ComputersStore) async -> Bool {
@@ -343,16 +415,17 @@ final class Dictation {
         return VoiceInstall.from(v).installed
     }
 
-    /// The words ("" when none), or nil when the computer couldn't transcribe (the phone tries then).
-    private func transcribeOnComputer(_ wav: Data, _ store: ComputersStore) async -> String? {
-        guard let r = try? store.remote() else { return nil }
+    /// The words ("" when none).
+    private func transcribeOnComputer(_ wav: Data, _ store: ComputersStore) async throws -> String {
+        let r = try store.remote()
         transcribingOn = store.active?.name ?? "your computer"
         defer { transcribingOn = nil }
-        guard let v = try? await r.call(Channels.voiceTranscribe, [wavArg(wav)], timeout: 60) else { return nil }
+        let v = try await r.call(Channels.voiceTranscribe, [wavArg(wav)], timeout: 60)
         return v.string ?? v.str("text") ?? ""
     }
 
     private func onPhone(_ wav: Data) async throws -> String? {
+        // Authorized before listening began (start), so this never prompts mid-listen.
         let auth = await withCheckedContinuation { c in SFSpeechRecognizer.requestAuthorization { c.resume(returning: $0) } }
         guard auth == .authorized, let recognizer = SFSpeechRecognizer(), recognizer.isAvailable else {
             throw RelayError("Speech recognition isn’t available. Allow it in Settings → Nekko Agent.")
@@ -362,17 +435,14 @@ final class Dictation {
 
     /// On this phone or not at all: without an on-device recognizer the audio would go to a server, so it is refused.
     static func transcribeOnPhone(_ wav: Data, with recognizer: SpeechRecognizing) async throws -> String? {
-        guard recognizer.supportsOnDeviceRecognition else {
-            let language = Locale(identifier: "en").localizedString(forIdentifier: recognizer.locale.identifier) ?? recognizer.locale.identifier
-            throw DictationError.noOnDevice(language: language)
-        }
+        guard recognizer.supportsOnDeviceRecognition else { throw noOnDevice(recognizer) }
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("dictation-\(UUID().uuidString).wav")
         try wav.write(to: url)
         defer { try? FileManager.default.removeItem(at: url) }
         let request = SFSpeechURLRecognitionRequest(url: url)
         request.shouldReportPartialResults = false
         request.requiresOnDeviceRecognition = true
-        return await recognizer.text(for: request)
+        return try await recognizer.text(for: request)
     }
 
     /// Samples as a mono 16 kHz 16-bit PCM WAV file.

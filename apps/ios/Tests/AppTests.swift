@@ -1,5 +1,6 @@
 import XCTest
 import NekkoProtocol
+import AVFoundation
 import Speech
 import SwiftUI
 @testable import NekkoNative
@@ -508,11 +509,14 @@ final class VoiceTests: XCTestCase {
 
     final class StubRecognizer: SpeechRecognizing {
         let supportsOnDeviceRecognition: Bool
+        let isAvailable = true
         let locale = Locale(identifier: "en-US")
         var requests: [SFSpeechURLRecognitionRequest] = []
+        var failure: Error?
         init(onDevice: Bool) { supportsOnDeviceRecognition = onDevice }
-        func text(for request: SFSpeechURLRecognitionRequest) async -> String? {
+        func text(for request: SFSpeechURLRecognitionRequest) async throws -> String? {
             requests.append(request)
+            if let failure { throw failure }
             return "hello"
         }
     }
@@ -541,5 +545,100 @@ final class VoiceTests: XCTestCase {
         XCTAssertEqual(String(decoding: wav.prefix(4), as: UTF8.self), "RIFF")
         XCTAssertEqual(wav.subdata(in: 24..<28).withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) }, 16_000)
         XCTAssertEqual((0..<3).map { i in wav.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: 44 + 2 * i, as: Int16.self) } }, [0, 32_767, -32_767])
+    }
+
+    func testOnlyNoSpeechReadsAsNoWordsOnThePhone() async throws {
+        XCTAssertTrue(Dictation.isNoSpeech(NSError(domain: "kAFAssistantErrorDomain", code: 1110)))
+        XCTAssertFalse(Dictation.isNoSpeech(NSError(domain: "kAFAssistantErrorDomain", code: 1101)))
+        let broken = StubRecognizer(onDevice: true)
+        broken.failure = NSError(domain: "kAFAssistantErrorDomain", code: 1101, userInfo: [NSLocalizedDescriptionKey: "Recognizer died"])
+        do {
+            _ = try await Dictation.transcribeOnPhone(Dictation.wav([0]), with: broken)
+            XCTFail("a real recognizer failure is said, not read as silence")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, "Recognizer died")
+        }
+    }
+
+    func testThePhoneRefusesBeforeListeningStarts() {
+        let unavailable = "Speech recognition isn’t available. Allow it in Settings → Nekko Agent."
+        XCTAssertEqual(Dictation.phoneRefusal(authorized: false, recognizer: StubRecognizer(onDevice: true)), unavailable)
+        XCTAssertEqual(Dictation.phoneRefusal(authorized: true, recognizer: nil), unavailable)
+        let off = StubRecognizer(onDevice: false)
+        XCTAssertEqual(Dictation.phoneRefusal(authorized: true, recognizer: off), DictationError.noOnDevice(language: "English (United States)").localizedDescription)
+        XCTAssertTrue(off.requests.isEmpty)
+        XCTAssertNil(Dictation.phoneRefusal(authorized: true, recognizer: StubRecognizer(onDevice: true)))
+    }
+
+    func testAComputerHiccupIsRetriedAndNeverFallsToThePhoneWhileOnline() async throws {
+        var calls = 0
+        var phoned = 0
+        let phone: (Data) async throws -> String? = { _ in phoned += 1; return "phone" }
+        let flaky: (Data) async throws -> String = { _ in calls += 1; if calls == 1 { throw RelayError("Timed out") }; return "computer" }
+        let once = try await Dictation.transcribe(Data(), computer: flaky, online: { true }, phone: phone)
+        XCTAssertEqual(once, "computer")
+        let down: (Data) async throws -> String = { _ in throw RelayError("Timed out") }
+        do {
+            _ = try await Dictation.transcribe(Data(), computer: down, online: { true }, phone: phone)
+            XCTFail("the computer's failure is said")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, "Timed out")
+        }
+        XCTAssertEqual(phoned, 0)
+        let offline = try await Dictation.transcribe(Data(), computer: down, online: { false }, phone: phone)
+        XCTAssertEqual(offline, "phone")
+        let noWhisper = try await Dictation.transcribe(Data(), computer: nil, online: { true }, phone: phone)
+        XCTAssertEqual(noWhisper, "phone")
+    }
+
+    func testWordsAfterTheComposerIsGoneGoToTheChatsDraft() async {
+        let d = Dictation()
+        var sunk: [String] = []
+        var parked: [String] = []
+        d.park = { parked.append($0) }
+        d.sink = { sunk.append($0.text) }
+        d.transcribe = { _ in "Fix the login bug." }
+        d.enqueue([0.1])
+        await d.drain()
+        // The chat closed while the next segment was still being transcribed.
+        d.sink = nil
+        d.transcribe = { _ in "Nekko, send it." }
+        d.enqueue([0.1])
+        await d.drain()
+        XCTAssertEqual(sunk, ["Fix the login bug."])
+        XCTAssertEqual(parked, ["Nekko, send it."], "typed as words, the command not run")
+    }
+
+    func testAParkedRunnerRunsNoCommand() async {
+        let box = Box()
+        let r = runner(box)
+        var parked: [String] = []
+        r.park = { parked.append($0) }
+        await r.hear([Dictation.Words(text: "Fix it. Nekko, send it.")])
+        XCTAssertEqual(box.sent, [])
+        XCTAssertEqual(box.text, "")
+        XCTAssertEqual(parked, ["Fix it. Nekko, send it."])
+    }
+
+    func testACallOrAMediaResetStopsListeningAndKeepsTheWords() async {
+        let began = Notification(name: AVAudioSession.interruptionNotification, object: nil,
+                                 userInfo: [AVAudioSessionInterruptionTypeKey: AVAudioSession.InterruptionType.began.rawValue])
+        let ended = Notification(name: AVAudioSession.interruptionNotification, object: nil,
+                                 userInfo: [AVAudioSessionInterruptionTypeKey: AVAudioSession.InterruptionType.ended.rawValue])
+        let reset = Notification(name: AVAudioSession.mediaServicesWereResetNotification, object: nil)
+        for stop in [began, reset] {
+            let d = Dictation()
+            d.transcribe = { _ in "kept" }
+            d.listenWithoutMicrophone()
+            d.consume([Float](repeating: 0.5, count: 8_000))
+            NotificationCenter.default.post(ended)
+            await Task.yield()
+            XCTAssertTrue(d.recording, "an interruption ending is not a reason to stop")
+            NotificationCenter.default.post(stop)
+            for _ in 0..<50 where d.recording { try? await Task.sleep(for: .milliseconds(20)) }
+            XCTAssertFalse(d.recording, "\(stop.name.rawValue) stops listening")
+            await d.drain()
+            XCTAssertEqual(d.heard.map(\.text), ["kept"])
+        }
     }
 }

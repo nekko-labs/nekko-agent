@@ -61,6 +61,9 @@ final class VoiceRunner {
     private static let goAhead = "Go ahead and build it."
 
     var host = Host()
+    /// Set once the composer is gone: what is still queued is kept as plain text (that chat's
+    /// saved draft) and no command runs, since the composer and its chat are no longer on screen.
+    var park: ((String) -> Void)?
     private(set) var pending: Pending?
     private(set) var notice: Notice?
     /// The last piece typed by voice, so "erase that" removes exactly it.
@@ -94,11 +97,19 @@ final class VoiceRunner {
     }
 
     private func apply(_ text: String) async {
+        if let park { return park(text) }
         let carry = carried.flatMap { Date().timeIntervalSince($0.at) <= Self.wakeCarrySeconds ? $0.wake + " " : nil } ?? ""
         // A wake word left alone at the end waits for the next segment; carried too late it is dropped (it holds no words).
         let tail = splitWakeTail(carry + text)
         carried = tail.wake.isEmpty ? nil : (tail.wake, Date())
-        for intent in splitVoiceSegments(tail.rest) { await act(intent) }
+        for intent in splitVoiceSegments(tail.rest) {
+            // A command earlier in this segment left the chat: its words still count, its commands don't run.
+            if let park {
+                switch intent { case .dictation(let t), .unknown(let t), .openChat(_, let t): park(t); default: break }
+            } else {
+                await act(intent)
+            }
+        }
     }
 
     private func act(_ intent: VoiceIntent) async {

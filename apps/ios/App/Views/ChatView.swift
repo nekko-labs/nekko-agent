@@ -873,9 +873,9 @@ struct Composer: View {
                         .accessibilityIdentifier("composer.stopDictation")
                     } else if dictation.transcribing {
                         ProgressView().frame(width: 44, height: 44).accessibilityLabel("Transcribing")
-                    } else if prefs.dictationHold && dictation.available && (text.isEmpty || dictation.recording) {
+                    } else if prefs.dictationHold && dictation.available {
                         HoldToTalkButton(dictation: dictation)
-                    } else if dictation.available && text.isEmpty {
+                    } else if dictation.available {
                         Button { Task { await dictation.startListening(store: store) } } label: {
                             Image(systemName: "mic.fill").font(.title3).foregroundStyle(palette.inkSoft)
                                 .frame(width: 44, height: 44).contentShape(Rectangle())
@@ -951,16 +951,11 @@ struct Composer: View {
         .onChange(of: refusal) { _, _ in saveDraft() }
         // Edit on a waiting prompt, or a refusal: the prompt comes back into the box.
         .onChange(of: store.drafts.drafts[chat.sessionId]) { _, d in adopt(d) }
-        // Each segment once, in order: words into the message, "Nekko, ..." commands run.
-        .onChange(of: dictation.heard) { old, new in
-            let fresh = Array(new.dropFirst(old.count))
-            voice.host = voiceHost
-            Task { await voice.hear(fresh) }
-        }
+        .onAppear(perform: bindVoice)
         .onChange(of: dictation.recording) { _, on in if on { voice.started() } else { voice.stopped() } }
         // Listening never outlives the screen: lock, app switch, or leaving the chat stops it, and it never restarts by itself.
         .onChange(of: phase) { _, p in if p != .active { dictation.abort() } }
-        .onDisappear { dictation.stopListening() }
+        .onDisappear(perform: unbindVoice)
         .task(id: voice.notice) {
             guard let said = voice.notice else { return }
             try? await Task.sleep(for: .seconds(4))
@@ -1083,6 +1078,30 @@ struct Composer: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(palette.surface, in: RoundedRectangle(cornerRadius: 10))
         .accessibilityIdentifier("composer.voicePending")
+    }
+
+    /// Each segment once, in order, while this composer is on screen: words into the message, "Nekko, ..." commands run.
+    private func bindVoice() {
+        let store = store, id = chat.sessionId
+        voice.park = nil
+        dictation.park = { Self.park($0, in: id, store) }
+        dictation.sink = { words in
+            voice.host = voiceHost
+            Task { await voice.hear([words]) }
+        }
+    }
+
+    /// The chat closed: listening stops, and words still on their way go to its saved draft as plain text.
+    private func unbindVoice() {
+        dictation.sink = nil
+        voice.park = dictation.park
+        dictation.stopListening()
+    }
+
+    private static func park(_ words: String, in chatId: String, _ store: ComputersStore) {
+        var d = store.drafts.draft(chatId)
+        d.text += (d.text.isEmpty || d.text.last?.isWhitespace == true ? "" : " ") + words
+        store.drafts.set(chatId, d)
     }
 
     private func answer(_ intent: VoiceIntent) {
