@@ -224,8 +224,11 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 /* The wall's 1px inset makes up the rest of the gap to the agent panel. */
 .wall-agent-workspace[data-tabs='left'] { flex-direction: row; gap: calc(var(--wall-gap) - 1px); }
 /* The vertical agent panel spans exactly the wall's windows: CommandCenterView
-   measures how far they sit from the column's top and bottom. */
-.wall-agent-workspace[data-tabs='left'] > .wall-agents-presence[data-orientation='vertical'] { margin-top: var(--wall-panes-top, 0px); margin-bottom: var(--wall-panes-bottom, 0px); }
+   measures how far they sit from the column's top and bottom. Only beside the
+   wall: stacked above it (narrow), the measurement includes the panel itself. */
+@media (min-width: 721px) {
+  .wall-agent-workspace[data-tabs='left'] > .wall-agents-presence[data-orientation='vertical'] { margin-top: var(--wall-panes-top, 0px); margin-bottom: var(--wall-panes-bottom, 0px); }
+}
 .wall-agent-workspace[data-tabs='top'] { flex-direction: column; gap: 0; }
 /* The Agents panel's own controls: icon buttons whose meaning shows in a hover
    tooltip (HoverTip), so they never change size under the pointer. A stack in
