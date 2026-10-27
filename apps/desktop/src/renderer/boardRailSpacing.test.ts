@@ -84,7 +84,7 @@ describe('compact board and navigation spacing', () => {
     expect(cssRule(styles, '.rail').background).toBeUndefined();
     expect(cssRule(styles, '.rail-feedback')['pointer-events']).toBe('auto');
     expect(cssRule(styles, '.rail-backdrop')).toMatchObject({ width: 'var(--rail-w-rest)', 'pointer-events': 'none' });
-    expect(cssRule(styles, '.rail-backdrop path').fill).toBe(cssValue('color-mix(in srgb, color-mix(in srgb, var(--paper) 92%, black) 97%, transparent)'));
+    expect(cssRule(styles, '.rail-backdrop path').fill).toBe(cssValue('var(--rail-fill, color-mix(in srgb, color-mix(in srgb, var(--paper) 92%, black) 97%, transparent))'));
     expect(cssRule(styles, `${OPEN} .rail-backdrop`).width).toBe('var(--rail-w-open)');
     for (const selector of ['.rail-backdrop', '.rail-backdrop path', `${OPEN} .rail-backdrop`]) {
       expect(cssRule(styles, selector)['clip-path']).toBeUndefined();

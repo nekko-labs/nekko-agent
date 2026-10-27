@@ -9,8 +9,11 @@ import com.nekko.protocol.AskAnswer
 import com.nekko.protocol.AskRequest
 import com.nekko.protocol.Block
 import com.nekko.protocol.Channels
+import com.nekko.protocol.ContextUsage
 import com.nekko.protocol.DenyReason
+import com.nekko.protocol.Effort
 import com.nekko.protocol.LiveTurn
+import com.nekko.protocol.ModelInfo
 import com.nekko.protocol.PendingInput
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.RemoteDefaults
@@ -30,6 +33,13 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.NonCancellable
+import com.nekko.protocol.RelayException
+import com.nekko.protocol.QueuedPrompt
 
 /** A turn can run for hours (long agent runs); don't time the request out. */
 const val TURN_TIMEOUT_MS: Long = 12L * 60 * 60 * 1000
@@ -41,6 +51,8 @@ data class ChatState(
     val loadError: String? = null,
     /** The computer's runnable skills, re-read with the chat; empty until loaded or on an older computer. */
     val skills: List<SkillSummary> = emptyList(),
+    /** The computer's count of the chat's context window (`context:preview`); null until it answers or on an older computer. */
+    val context: ContextUsage? = null,
 )
 
 /** Connection facts the chat screen reads from the computers store. */
@@ -49,6 +61,8 @@ data class ChatEnv(
     val denied: DenyReason? = null,
     val defaults: RemoteDefaults = RemoteDefaults(),
     val computerName: String = "your computer",
+    /** The computer's model lists by provider, for the model's name. */
+    val models: Map<String, List<ModelInfo>> = emptyMap(),
 )
 
 /** Everything the chat screen renders. Pure projection of [ChatState] + [ChatEnv]. */
@@ -63,10 +77,21 @@ data class ChatUi(
     val error: String?,
     val blocked: String?,
     val queued: List<String>,
+    /** The queue as the computer holds it (what an edit is checked against), same order as [queued]. */
+    val queuedPrompts: List<QueuedPrompt> = emptyList(),
     val rate: Double?,
     val skills: List<SkillSummary> = emptyList(),
     /** Older messages the computer kept back from the phone; they stay on the computer. */
     val omittedMessages: Int = 0,
+    val providerId: String? = null,
+    val modelId: String? = null,
+    /** The model's name from the computer's list, else its id. */
+    val modelName: String? = null,
+    /** The chat's own effort; null follows the computer's setting. */
+    val effort: Effort? = null,
+    val context: ContextUsage? = null,
+    /** [context]'s count plus about one token per four characters streamed this turn; null until the computer answers. */
+    val contextTokens: Long? = null,
 )
 
 /**
@@ -102,6 +127,7 @@ class ChatController(
                 s.await() to p.await()
             }
             scope.launch { loadSkills() }
+            scope.launch { loadContext() }
             val session = Session.from(raw)
             if (session == null) {
                 _state.update { it.copy(loadError = "This chat was deleted on your computer.") }
@@ -144,6 +170,37 @@ class ChatController(
         } catch (_: Exception) {
             // Keep the previous list; the menu just offers what it last knew.
         }
+    }
+
+    /**
+     * The chat's context totals, the same estimate as the desktop's gauge, read with
+     * the chat and after each turn. An older computer refuses it; the ring stays empty.
+     */
+    suspend fun loadContext() {
+        try {
+            val c = ContextUsage.from(caller.call(Channels.CONTEXT_PREVIEW, JsonPrimitive(sessionId))) ?: return
+            _state.update { it.copy(context = c) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // Keep the last count.
+        }
+    }
+
+    /**
+     * Change this chat's model or effort on the computer, then re-read it. The computer
+     * takes only a level, so the phone can't go back to "computer default". Throws so
+     * the sheet can say why.
+     */
+    suspend fun setOptions(providerId: String? = null, modelId: String? = null, effort: Effort? = null) {
+        val patch = buildJsonObject {
+            providerId?.let { put("providerId", it) }
+            modelId?.let { put("modelId", it) }
+            effort?.let { put("effort", it.wire) }
+        }
+        if (patch.isEmpty()) return
+        caller.call(Channels.SESSION_SET_OPTIONS, JsonPrimitive(sessionId), patch)
+        reload()
     }
 
     /** Fold one event; returns true when the caller should [reload]. */
@@ -205,14 +262,88 @@ class ChatController(
         caller.call(Channels.CHAT_ANSWER, JsonPrimitive(sessionId), JsonPrimitive(q.callId), JsonArray(answers.map { it.toJson() }))
     }
 
+    // ---- the queue and forks (AN-29, the iPhone's IO-22 / IO-23) ----
+
+    /**
+     * Change the queued prompt at [index] before it runs, or remove it ([text]
+     * null). The computer refuses when that prompt no longer reads [expect] (it
+     * started, or the queue moved). Never offline: an edit made then could land
+     * after the prompt ran. The queue is read again either way.
+     */
+    suspend fun editQueued(index: Int, expect: String, text: String?) {
+        if (env().conn != RelayState.ONLINE) throw RelayException(RECONNECT_TO_EDIT_QUEUE)
+        try {
+            caller.call(Channels.CHAT_EDIT_QUEUED, JsonPrimitive(sessionId), JsonPrimitive(index), QueuedPrompt.edit(expect, text))
+        } finally {
+            withContext(NonCancellable) { reload() }
+        }
+    }
+
+    /** Where a fork from [block] cuts the chat, and what goes back in the new chat's message box. */
+    data class ForkPoint(val before: String?, val seed: String?)
+
+    /**
+     * A prompt: the new chat ends before it, with that prompt to edit and send
+     * (the desktop's split). A reply or step: the new chat keeps everything up
+     * to the next prompt. Null for a block not saved yet (a reply streaming).
+     */
+    fun forkPoint(block: Block): ForkPoint? {
+        val messages = _state.value.session?.messages ?: return null
+        val at = messages.indexOfFirst { m -> m.id == block.id || m.toolCalls.any { it.id == block.id } }
+        if (at < 0) return null
+        val m = messages[at]
+        if (block is Block.User && m.role == "user") {
+            return ForkPoint(m.id, m.skill?.let { (name, input) -> "/$name $input".trim() } ?: m.content)
+        }
+        return ForkPoint(messages.drop(at + 1).firstOrNull { it.role == "user" }?.id, null)
+    }
+
+    /** The saved messages' and tool calls' ids, kept per session: whether a block can be forked, cheaply. */
+    private var savedIds: Pair<Session?, Set<String>> = null to emptySet()
+
+    /** Whether [block] is saved on the computer (not a reply still streaming), so the chat can be forked from it. */
+    fun isSaved(block: Block): Boolean {
+        val session = _state.value.session ?: return false
+        if (savedIds.first !== session) {
+            savedIds = session to session.messages.flatMapTo(HashSet()) { m -> listOf(m.id) + m.toolCalls.map { it.id } }
+        }
+        return block.id in savedIds.second
+    }
+
+    /** Fork this chat on the computer from [block]: the new chat's id and the prompt for its message box. */
+    suspend fun fork(block: Block): Pair<String, String?> {
+        val point = forkPoint(block) ?: throw RelayException("Wait for this reply to finish, then fork.")
+        val args = listOfNotNull(JsonPrimitive(sessionId), point.before?.let(::JsonPrimitive))
+        val made = caller.call(Channels.SESSION_FORK, *args.toTypedArray()) as? kotlinx.serialization.json.JsonObject
+        val id = made?.get("id")?.let { (it as? JsonPrimitive)?.contentOrNull } ?: throw RelayException("Your computer didn’t fork the chat.")
+        return id to point.seed?.takeIf { it.isNotEmpty() }
+    }
+
     private fun model(): Pair<String?, String?> = resolveModel(_state.value.session, env().defaults)
 
     companion object {
+        /** Editing the computer's queue needs the computer. */
+        const val RECONNECT_TO_EDIT_QUEUE = "Reconnect to change the queue. The computer may start the prompt meanwhile."
+
         /** The session's own model, else the computer's default (never the `__auto__` sentinel). */
         fun resolveModel(session: Session?, defaults: RemoteDefaults): Pair<String?, String?> {
             val providerId = session?.providerId ?: defaults.defaultProviderId
             val modelId = session?.modelId?.takeIf { it != AUTO_MODEL_ID } ?: defaults.defaultModelId
             return providerId to modelId
+        }
+
+        /** Mid-turn the computer's count lags: add about one token per four characters streamed, as the desktop's live gauge does. */
+        fun liveTokens(context: ContextUsage?, turn: LiveTurn): Long? {
+            val used = context?.usedTokens ?: return null
+            if (!turn.running) return used
+            val chars = turn.blocks.sumOf { b ->
+                when (b) {
+                    is Block.User -> b.text.length
+                    is Block.Assistant -> b.text.length + (b.reasoning?.length ?: 0)
+                    is Block.Tool -> b.label.length + (b.output?.length ?: 0)
+                }
+            }
+            return used + (chars + 3) / 4
         }
 
         fun project(state: ChatState, env: ChatEnv): ChatUi {
@@ -237,9 +368,16 @@ class ChatController(
                 error = state.loadError ?: turn.error,
                 blocked = blocked,
                 queued = state.session?.queue ?: emptyList(),
+                queuedPrompts = state.session?.queued ?: emptyList(),
                 rate = turn.rate,
                 skills = state.skills,
                 omittedMessages = state.session?.omittedMessages ?: 0,
+                providerId = providerId,
+                modelId = modelId,
+                modelName = modelId?.let { id -> env.models[providerId]?.firstOrNull { it.id == id }?.name ?: id },
+                effort = Effort.parse(state.session?.effort),
+                context = state.context,
+                contextTokens = liveTokens(state.context, turn),
             )
         }
     }

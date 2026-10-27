@@ -24,6 +24,7 @@ import type { DesignBoard, DesignPage, GenerateDesignInput } from './design.js';
 import type { AutomationTask, NewTask } from './tasks.js';
 import type { TrainingRun, NewTrainingRun } from './training.js';
 import type { NewWorkflow, Workflow, WorkflowEvent, WorkflowRun, WorkflowsSnapshot } from './workflows.js';
+import type { ConnectRequest, RunnerSettings, RunnerView } from './runners.js';
 import type { ConnectorConfig, ConnectorKind, ConnectorResource } from './connectors.js';
 import type {
   AgentToolId,
@@ -322,6 +323,12 @@ export const IpcChannels = {
    * makes it the endpoint a Slack app or a git provider webhook posts to.
    */
   workflowEvent: 'workflow:event',
+  /** CI runners (T213), served by nekkod's runner supervisor; never by a phone. */
+  runnerList: 'runner:list',
+  runnerConnect: 'runner:connect',
+  runnerUpdate: 'runner:update',
+  runnerRemove: 'runner:remove',
+  runnerSetEnabled: 'runner:setEnabled',
 
   connectorsList: 'connectors:list',
   connectorConnect: 'connector:connect',
@@ -451,6 +458,8 @@ export const IpcEvents = {
   backgroundUpdated: 'background:updated',
   trainingUpdated: 'training:updated',
   workflowsUpdated: 'workflows:updated',
+  /** Every runner's `RunnerView`, after any change. */
+  runnerChanged: 'runner:changed',
   limitsUpdated: 'limits:updated',
   /** The look a paired phone mirrors changed: `appearanceOf(settings)`, never anything else. */
   appearanceUpdated: 'appearance:updated',
@@ -1058,6 +1067,14 @@ export interface NekkoApi {
   listWorkflowSkillDefs(): Promise<import('./skills.js').SkillDef[]>;
   /** Offer an event to every listening workflow; returns the runs it started. */
   dispatchWorkflowEvent(event: WorkflowEvent): Promise<WorkflowRun[]>;
+  /** CI runners on this Mac. Rejects where the daemon serves none (not macOS, or an older daemon). */
+  listRunners(): Promise<RunnerView[]>;
+  connectRunner(req: ConnectRequest): Promise<RunnerView>;
+  /** Resolves with the settings the daemon kept, which may be clamped. */
+  /** A patch: only the keys to change. */
+  updateRunner(id: string, settings: Partial<RunnerSettings>): Promise<RunnerView>;
+  removeRunner(id: string): Promise<null>;
+  setRunnerEnabled(id: string, enabled: boolean): Promise<RunnerView>;
 
   listConnectors(): Promise<ConnectorConfig[]>;
   connectConnector(kind: ConnectorKind, token: string, settings?: Record<string, string>): Promise<ConnectorConfig[]>;
@@ -1231,6 +1248,7 @@ export interface NekkoApi {
   onTrainingUpdated(cb: (runs: TrainingRun[]) => void): () => void;
   /** Fires when a workflow is edited or any run advances a step. */
   onWorkflowsUpdated(cb: (snapshot: WorkflowsSnapshot) => void): () => void;
+  onRunnersChanged(cb: (views: RunnerView[]) => void): () => void;
   /** Fires when subscription limits are captured or polled for any token key. */
   onLimitsUpdated(cb: (e: { tokenKey: string; limits: SubscriptionLimits }) => void): () => void;
   /** Fires as engine and model downloads progress, finish, or fail. */

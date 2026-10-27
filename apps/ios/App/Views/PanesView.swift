@@ -199,30 +199,36 @@ struct PanesView: View {
     var body: some View {
         let posture = self.posture
         let display = host.layout.display(posture)
-        GeometryReader { g in
-            let frame = g.frame(in: .global)
-            let hinge = Posture.hingeSource()?.rect
-            let local = hinge?.offsetBy(dx: -frame.minX, dy: -frame.minY)
-            let geo = PaneGeometry(display: display, size: g.size, hinge: local, split: host.layout.split)
-            PanesLayout(frames: host.layout.panes.map { geo.rect($0.id) }) {
-                ForEach(host.layout.panes) { pane in
-                    let shown = display.panes.first { $0.id == pane.id } ?? pane
-                    let visible = geo.visible(pane.id)
-                    PaneColumn(host: host, id: pane.id, content: shown.content, display: display, visible: visible)
-                        .environment(\.paneHinge, display.flex && visible ? hinge : nil)
-                        .opacity(visible ? 1 : 0)
-                        .allowsHitTesting(visible)
-                        .accessibilityHidden(!visible)
-                        .zIndex(visible ? 1 : 0)
+        // The tip and fold note sit under the panes, not over them as a safe-area
+        // inset: a pane's NavigationStack laid its chat out to the window's
+        // bottom anyway, which hid the composer's last row under the note.
+        VStack(spacing: 0) {
+            GeometryReader { g in
+                let frame = g.frame(in: .global)
+                let hinge = Posture.hingeSource()?.rect
+                let local = hinge?.offsetBy(dx: -frame.minX, dy: -frame.minY)
+                let geo = PaneGeometry(display: display, size: g.size, hinge: local, split: host.layout.split)
+                PanesLayout(frames: host.layout.panes.map { geo.rect($0.id) }) {
+                    ForEach(host.layout.panes) { pane in
+                        let shown = display.panes.first { $0.id == pane.id } ?? pane
+                        let visible = geo.visible(pane.id)
+                        PaneColumn(host: host, id: pane.id, content: shown.content, display: display, visible: visible)
+                            .environment(\.paneHinge, display.flex && visible ? hinge : nil)
+                            .opacity(visible ? 1 : 0)
+                            .allowsHitTesting(visible)
+                            .accessibilityHidden(!visible)
+                            .zIndex(visible ? 1 : 0)
+                    }
                 }
+                .overlay { if display.isSplit { divider(geo, display) } }
+                .overlay(alignment: geo.tabEdge) { if !display.isSplit { edgeTab(display, posture) } }
             }
-            .overlay { if display.isSplit { divider(geo, display) } }
-            .overlay(alignment: geo.tabEdge) { if !display.isSplit { edgeTab(display, posture) } }
+            footer(display, posture)
         }
         .environment(\.inPanes, true)
         .animation(reduceMotion ? nil : .snappy(duration: 0.3), value: display)
         .animation(reduceMotion ? nil : .snappy(duration: 0.3), value: host.layout.split)
-        .background(palette.paper.ignoresSafeArea())
+        .background { AppBackdrop() }
         .background {
             GeometryReader { g in
                 Color.clear.onChange(of: g.size, initial: true) { _, s in
@@ -232,7 +238,6 @@ struct PanesView: View {
             }
             .ignoresSafeArea()
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) { footer(display, posture) }
         .onAppear { host.sync(computer: store.activeId, prefs: app.prefs) }
         // Rotating with two chats open: the pane that was focused becomes the primary one.
         .onChange(of: posture) { old, new in

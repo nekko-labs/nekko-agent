@@ -10,7 +10,9 @@
   "chat:pending",
   "chat:queue",
   "chat:send",
+  "context:preview",
   "device:signOut",
+  "engine:status",
   "files:list",
   "files:read",
   "files:search",
@@ -27,10 +29,12 @@
   "git:stage",
   "git:switch",
   "git:unstage",
+  "gpu:stats",
   "limits:get",
   "logs:list",
   "logs:read",
   "machine:summary",
+  "model:unload",
   "models:list",
   "monitor:summary",
   "pr:action",
@@ -57,6 +61,7 @@
   "skills:runnable",
   "ssh:hosts",
   "ssh:open",
+  "system:stats",
   "task:runNow",
   "tasks:list",
   "terminal:close",
@@ -155,6 +160,10 @@
   "voice:status",
   "workflows:list",
   "workspace:list",
+  "context:preview",
+  "engine:status",
+  "gpu:stats",
+  "system:stats",
   "git:branches",
   "git:compare",
   "git:diff",
@@ -204,6 +213,7 @@
   "chat:editQueued",
   "chat:queue",
   "chat:send",
+  "model:unload",
   "session:create",
   "session:delete",
   "session:fork",
@@ -493,6 +503,69 @@
   "expect",
   "text"
  ],
+ "expertMonitor": {
+  "systemView": [
+   "cpuCores",
+   "cpuPct",
+   "memTotalMB",
+   "memUsedMB",
+   "temps"
+  ],
+  "tempsView": [
+   "cpuC",
+   "gpuC",
+   "memoryC"
+  ],
+  "gpuView": [
+   "freeMB",
+   "source",
+   "totalMB",
+   "unified",
+   "usedMB"
+  ],
+  "gpuDeviceView": [
+   "memoryFreeMB",
+   "memoryTotalMB",
+   "memoryUsedMB",
+   "temperatureC",
+   "utilizationPct"
+  ],
+  "engineView": [
+   "running"
+  ],
+  "residentView": [
+   "contextLength",
+   "expiresAt",
+   "gpuLayers",
+   "id",
+   "lastUsedAt",
+   "loadedOn",
+   "sizeBytes",
+   "startedAt",
+   "totalLayers",
+   "vramBytes"
+  ],
+  "loadingView": [
+   "id",
+   "phase",
+   "progress",
+   "startedAt"
+  ],
+  "engineMemoryView": [
+   "budgetBytes",
+   "kind"
+  ],
+  "contextSources": [
+   "attached-file",
+   "connector",
+   "conversation",
+   "guideline",
+   "index-snippet",
+   "memory",
+   "skill",
+   "system"
+  ]
+ },
  "files": {
   "view": {
    "entries": 500,

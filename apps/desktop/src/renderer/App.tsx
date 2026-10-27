@@ -249,7 +249,7 @@ export function App() {
   }, []);
 
   return (
-    <div className="flex h-full w-full flex-col" style={{ background: 'var(--paper)' }}>
+    <div className="flex h-full w-full flex-col" style={{ background: 'var(--field, var(--paper))' }}>
       {/* With the Lilac / Lavender pixel field on, the shell stays see-through so
           the dots (drawn behind it) show in the space around the panels; the
           body still paints --paper beneath them. */}

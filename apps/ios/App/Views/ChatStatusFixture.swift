@@ -19,8 +19,7 @@ struct ChatStatusFixture: View {
                 }
             }
             .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .background(palette.paper)
+            .appBackground()
             .navigationTitle("Chats")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { ChatMascot(working: true) }

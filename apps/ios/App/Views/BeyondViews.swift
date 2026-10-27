@@ -18,8 +18,7 @@ struct AutomationsView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .background(palette.paper)
+        .appBackground()
         .navigationTitle("Automations")
         .navigationBarTitleDisplayMode(.inline)
         .overlay { if model?.loaded != true { ProgressView() } }
@@ -163,8 +162,7 @@ struct UsageView: View {
             if let model { content(model) }
         }
         .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .background(palette.paper)
+        .appBackground()
         .navigationTitle("Usage and limits")
         .navigationBarTitleDisplayMode(.inline)
         .overlay { if model?.loaded != true { ProgressView() } }

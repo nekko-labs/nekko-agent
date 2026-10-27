@@ -95,6 +95,36 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-10
 
+### Nekko Dark: static glow background on the window field (2026-10-27)
+Area: renderer
+Result: no effect
+Conditions: Windows 11, Electron 45, hidden off-screen non-focusable window at 1440×900 (stub bridge, isolated profile, network blocked), Agents view on Nekko Dark via System in dark mode, idle; `app.getAppMetrics()` CPU summed over 6 s after settling; two sequential runs each, without the glow (the branch's earlier commit) and with it
+
+| Metric | Before | After |
+|---|---|---|
+| Idle CPU, all processes, 6 s (run 1) | 0.1569 s | 0.1651 s |
+| Idle CPU, all processes, 6 s (run 2) | 0.1577 s | 0.1528 s |
+| GPU process CPU, 6 s (run 1 / run 2) | 0.0756 / 0.0765 s | 0.0839 / 0.0756 s |
+| Running animations (excluding CSS transitions) | 20 | 20 |
+
+Why: the glow is six static CSS radial gradients on the shell background, with no animation or timer; the difference is within run-to-run noise. Source: the Nekko Dark theme PR.
+
+### Phone Mermaid: bundled renderer size and render time (MM-1, 2026-10-25)
+Area: packaging | renderer
+Result: regression (new cost)
+Conditions: `vendor/mermaid/mermaid.min.js` measured on disk (Mermaid 12.2.0). Render times from the UI test `MarkdownTests.testDiagramsDrawAndABrokenOneFallsBack` in Native iOS run 40198943879: GitHub-hosted macos-14, Xcode 16.2, iPhone simulator on iOS 18.2, Debug build, one launch per theme, timed in the app from queueing a diagram to its cached image (`MermaidRenderer.timings`). The first diagram includes creating the web view and loading the bundled script. Two diagrams per launch (flowchart, sequence); the broken diagram is not timed.
+
+| Metric | Before | After |
+|---|---|---|
+| App bundle: Mermaid script | 0 | 5,494,801 bytes (uncompressed) |
+| First diagram, light launch | none drawn (shown as code) | 1,680 ms |
+| Second diagram, light launch | none drawn | 688 ms |
+| First diagram, dark launch | none drawn | 870 ms |
+| Second diagram, dark launch | none drawn | 439 ms |
+| Earlier run 40194741689, light (before the height cap) | none drawn | 2,162 ms, 765 ms |
+
+Why: diagrams are drawn by the bundled Mermaid in one off-screen web view, loaded only when a chat first shows a diagram; a drawn diagram is cached, so scrolling and reopening do not draw it again. Not measured: the compressed IPA size, memory of the renderer's web view, and times on a device. Source: the MM-1/MM-2 PR.
+
 ### #1204 Dynamic zones and the Remotion intro (2026-10-26)
 Area: packaging
 Result: regression (small, main bundle); the intro's cost is deferred to a lazy chunk

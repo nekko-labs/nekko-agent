@@ -25,6 +25,9 @@ struct ChatView: View {
     /// Whether the end of the transcript is on screen: only then does it follow new output.
     @State private var atBottom = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(Prefs.self) private var prefs
+    /// Expert mode's hardware and loaded models, read while the chat is on screen.
+    @State private var monitor: HardwareMonitorModel?
     /// Tabletop (FD-6): the hinge in window points, from the pane host; nil elsewhere.
     @Environment(\.paneHinge) private var paneHinge
     /// In the pane host: messages can be dragged to the other pane.
@@ -42,7 +45,7 @@ struct ChatView: View {
                 ProgressView()
             }
         }
-        .background(palette.paper)
+        .background { AppBackdrop() }
         .navigationBarTitleDisplayMode(.inline)
         // No keyboard toolbar here: on iOS 26 its Done floats over the
         // composer's send button. Scrolling or tapping the transcript puts
@@ -58,8 +61,8 @@ struct ChatView: View {
             app.notifier.clear(sessionId: sessionId)
             if let first = app.firstMessages.removeValue(forKey: sessionId), let chat {
                 await chat.reload()
-                do { try await chat.send(first) } catch {
-                    chat.handBack(UnsentPrompt(text: first, skill: nil, images: []))
+                do { try await chat.send(first.text, images: first.images) } catch {
+                    chat.handBack(first)
                     actionError = error.localizedDescription
                 }
             }
@@ -195,7 +198,20 @@ struct ChatView: View {
                     .padding(6).allowsHitTesting(false).accessibilityHidden(true)
             }
         }
+        .safeAreaInset(edge: .top) {
+            if prefs.expertMode, let monitor {
+                MonitorPanel(monitor: monitor, chat: chat).background(.bar)
+            }
+        }
+        // Expert mode re-reads the hardware every few seconds, only while it's on and the chat is on screen.
+        .task(id: prefs.expertMode) {
+            guard prefs.expertMode else { return }
+            let m = monitor ?? HardwareMonitorModel(store: store)
+            monitor = m
+            await m.follow()
+        }
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) { ModeToggle() }
             ToolbarItem(placement: .principal) {
                 VStack(spacing: 0) {
                     Text(chat.title).font(.subheadline.weight(.semibold)).lineLimit(1)
@@ -711,6 +727,7 @@ struct Composer: View {
     /// A saved prompt from the computer, run with what's typed after it.
     @State private var prompt: SavedPrompt?
     @State private var photos: [PhotosPickerItem] = []
+    @State private var pickingPhotos = false
     @State private var images: [String] = []
     @State private var loadingPhotos = false
     @State private var error: String?
@@ -813,9 +830,8 @@ struct Composer: View {
                             ForEach(chat.skills) { s in Button("/\(s.name)") { skill = s; prompt = nil } }
                         } label: { Label("Skills on \(store.active?.name ?? "computer")", systemImage: "wand.and.stars") }
                     }
-                    PhotosPicker(selection: $photos, maxSelectionCount: 4, matching: .images) {
-                        Label("Photos", systemImage: "photo.on.rectangle")
-                    }
+                    // A PhotosPicker inside a Menu never opens its sheet: the menu closing dismisses it.
+                    Button { pickingPhotos = true } label: { Label("Photos", systemImage: "photo.on.rectangle") }
                     // Asked for by the user, so iOS shows its paste prompt only then.
                     Button { pasteImages() } label: { Label("Paste image", systemImage: "doc.on.clipboard") }
                         .disabled(!UIPasteboard.general.hasImages)
@@ -874,9 +890,17 @@ struct Composer: View {
                     .accessibilityLabel(chat.running ? "Queue" : "Send")
                 }
             }
+            // The chat's model and effort, and its context window: in Simple and Expert alike.
+            HStack(spacing: 0) {
+                ModelEffortButton(chat: chat)
+                Spacer(minLength: 8)
+                ContextGauge(chat: chat)
+            }
+            .padding(.top, -4)
             if dictation.recording || dictation.transcribing { Text(dictation.status).font(.caption2).foregroundStyle(palette.inkFaint) }
             else if let n = dictation.notice { Text(n).font(.caption2).foregroundStyle(palette.inkSoft) }
         }
+        .photosPicker(isPresented: $pickingPhotos, selection: $photos, maxSelectionCount: 4, matching: .images)
         // Send waits for the photos (it used to send without them, and they came back later).
         .task(id: photos) {
             guard !photos.isEmpty else { return }

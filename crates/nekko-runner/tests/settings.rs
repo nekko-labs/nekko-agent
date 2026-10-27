@@ -108,3 +108,9 @@ fn trusted_networks_round_trip() {
     assert_eq!(serde_json::to_value(&s).unwrap()["trustedNetworks"], json!(["gw:aa:bb:cc:dd:ee:ff"]));
     assert!(serde_json::from_value::<RunnerSettings>(json!({})).unwrap().trusted_networks.is_empty());
 }
+
+#[test]
+fn default_settings_match_the_shared_fixture() {
+    let want: serde_json::Value = serde_json::from_str(include_str!("fixtures/default-settings.json")).unwrap();
+    assert_eq!(serde_json::to_value(RunnerSettings::default()).unwrap(), want);
+}

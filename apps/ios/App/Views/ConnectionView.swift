@@ -104,6 +104,7 @@ struct ConnectionView: View {
                 Text("Pair a computer first.").foregroundStyle(palette.inkSoft)
             }
         }
+        .appBackground()
         .navigationTitle("Connection")
         .onAppear { tailnet = Tailnet.isConnected }
         .onChange(of: phase) { _, p in if p == .active { tailnet = Tailnet.isConnected } }

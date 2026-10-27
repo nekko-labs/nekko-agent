@@ -48,6 +48,9 @@ final class Prefs {
     /// Keep the last chats opened (up to 20, 5 MB per computer, no photos) to read
     /// while the computer is unreachable (OF-5). On unless the user turned it off.
     var keepTranscripts: Bool { didSet { d.set(keepTranscripts, forKey: "keepTranscripts") } }
+    /// Expert mode (2026-10-24): the chat adds the computer's hardware and loaded
+    /// models to Simple mode's model, effort and context. Off by default.
+    var expertMode: Bool { didSet { d.set(expertMode, forKey: "expertMode") } }
     /// Per computer, the last model chosen for a new chat: `providerId::modelId`.
     var lastModel: [String: String] { didSet { d.set(lastModel, forKey: "lastModel") } }
     /// How the chat list is grouped, sorted and what it shows (the desktop Agents panel's view menu).
@@ -79,6 +82,7 @@ final class Prefs {
         dictationOnComputer = flag("dictationOnComputer", true)
         dictationHold = flag("dictationHold", false)
         onboarded = flag("onboarded", false)
+        expertMode = flag("expertMode", false)
         lastModel = d.dictionary(forKey: "lastModel") as? [String: String] ?? [:]
         chatListView = ChatListView.parse(d.data(forKey: "chatListView"))
         groupOrder = d.dictionary(forKey: "groupOrder") as? [String: [String]] ?? [:]
