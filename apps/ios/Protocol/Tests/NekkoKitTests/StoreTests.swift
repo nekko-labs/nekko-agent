@@ -503,6 +503,27 @@ final class ChatModelTests: XCTestCase {
         XCTAssertEqual(c.callsTo(Channels.chatAbort).last, ["s"])
     }
 
+    func testAReReadInFlightKeepsACardThatArrivedMeanwhile() async throws {
+        let (s, c) = try await makeOnline()
+        let chat = ChatModel(sessionId: "s", store: s)
+        chat.start()
+        await settle()
+        // The computer answers "nothing pending" from before the approval, and the
+        // approval's event reaches the phone before that answer does.
+        c.replies[Channels.chatPending] = { _ in
+            c.event(["type": "tool_approval_required", "sessionId": "s", "call": ["id": "t", "name": "bash", "input": ["command": "rm x"]], "reason": "r", "severity": "high"])
+            Thread.sleep(forTimeInterval: 0.3)
+            return [:]
+        }
+        await chat.reload()
+        XCTAssertEqual(chat.turn.approval?.call.id, "t", "the computer still waits on it, so the card stays")
+        // With no events in flight the re-read is the authority: an approval answered elsewhere goes.
+        c.replies[Channels.chatPending] = { _ in [:] }
+        await chat.reload()
+        XCTAssertNil(chat.turn.approval)
+        chat.stop()
+    }
+
     func testAFailedAnswerKeepsTheCardSoItCanBeRetried() async throws {
         let (s, c) = try await makeOnline()
         let chat = ChatModel(sessionId: "s", store: s)

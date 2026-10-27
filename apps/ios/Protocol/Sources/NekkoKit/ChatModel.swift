@@ -63,6 +63,8 @@ public final class ChatModel {
     private let now: () -> Int64
     private var subscription: UUID?
     private var reloadTask: Task<Void, Never>?
+    /// This chat's events so far, so a re-read can tell whether any came in while it waited.
+    private var eventsSeen = 0
     private var agentStateTask: Task<Void, Never>?
     private var lastConn: RelayState = .idle
 
@@ -130,6 +132,7 @@ public final class ChatModel {
     }
 
     public func reload() async {
+        let eventsBefore = eventsSeen
         do {
             let r = try store.remote()
             async let raw = r.call(Channels.sessionGet, [.string(sessionId)])
@@ -155,8 +158,14 @@ public final class ChatModel {
             // re-read session already holds. After the turn the session has it all.
             var t = turn
             if !t.running { t.blocks = [] }
-            t.approval = mine?.approval
-            t.question = mine?.question
+            // The computer's pending inputs are the authority, unless events came in
+            // while the re-read was in flight: then they are newer than its answer, and
+            // a stale "nothing pending" took the approval or question card down while
+            // the computer still waited on it (#1019).
+            if eventsSeen == eventsBefore {
+                t.approval = mine?.approval
+                t.question = mine?.question
+            }
             t.running = t.running || mine != nil
             turn = t
             // Keep the ids of what was on screen when the saved transcript replaces the live one.
@@ -184,6 +193,7 @@ public final class ChatModel {
     /// Fold one event; re-reads the saved transcript when the turn ends.
     public func onEvent(_ e: AgentEvent) {
         guard e.sessionId == sessionId else { return }
+        eventsSeen += 1
         turn = Transcript.apply(turn, e)
         switch e {
         case .done, .error, .sessionMeta: scheduleReload()
