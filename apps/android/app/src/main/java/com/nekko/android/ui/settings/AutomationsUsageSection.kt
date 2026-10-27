@@ -3,6 +3,7 @@ package com.nekko.android.ui.settings
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.DataUsage
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Schedule
@@ -16,7 +17,7 @@ import com.nekko.android.ui.Routes
 import com.nekko.android.ui.components.NCard
 import com.nekko.android.ui.theme.Nekko
 
-/** Settings → On <computer>: its files (AN-33), its automations (Run now) and its providers' usage and limits (AN-29). */
+/** Settings → On <computer>: its files (AN-33) and logs (AN-34), its automations (Run now) and its providers' usage and limits (AN-29). */
 @Composable
 fun AutomationsUsageSection(deps: SettingsDeps) {
     val c by deps.repo.state.collectAsStateWithLifecycle()
@@ -28,6 +29,13 @@ fun AutomationsUsageSection(deps: SettingsDeps) {
                 detail = "Saved folders, browse and edit small text files",
                 icon = Icons.Filled.FolderOpen,
                 onClick = { deps.open(Routes.FILES) },
+            )
+            HorizontalDivider(color = Nekko.palette.line)
+            SettingsRow(
+                title = "Logs",
+                detail = "The app's, the engine's and each chat's, read only",
+                icon = Icons.AutoMirrored.Filled.ReceiptLong,
+                onClick = { deps.open(Routes.LOGS) },
             )
             HorizontalDivider(color = Nekko.palette.line)
             SettingsRow(
