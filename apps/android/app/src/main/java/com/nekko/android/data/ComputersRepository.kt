@@ -26,6 +26,8 @@ import com.nekko.protocol.SavedChatList
 import com.nekko.protocol.SessionSummary
 import com.nekko.protocol.StepUpChallenge
 import com.nekko.protocol.StepUpProof
+import com.nekko.protocol.TerminalChannels
+import com.nekko.protocol.TerminalEvent
 import com.nekko.protocol.WorkspaceFolder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
@@ -135,6 +137,26 @@ class ComputersRepository(
     private val _events = MutableSharedFlow<AgentEvent>(extraBufferCapacity = 512)
     /** Every `agent:event` from the active computer. Chat screens filter by session. */
     val events: SharedFlow<AgentEvent> = _events.asSharedFlow()
+
+    /**
+     * What is open over each chat (Git, the Terminals), by chat id. Kept here,
+     * not in a chat screen, so opening or folding the phone (a new activity,
+     * and a chat pane instead of a full screen) keeps it open and its
+     * terminals attached.
+     */
+    private val _overlays = MutableStateFlow<Map<String, Any>>(emptyMap())
+    val overlays: StateFlow<Map<String, Any>> = _overlays.asStateFlow()
+
+    fun setOverlay(chatId: String, overlay: Any?) {
+        _overlays.update { if (overlay == null) it - chatId else it + (chatId to overlay) }
+    }
+
+    /** Work that outlives a screen (leaving a terminal after its page is gone). */
+    val appScope: CoroutineScope get() = scope
+
+    private val _terminalEvents = MutableSharedFlow<TerminalEvent>(extraBufferCapacity = 512)
+    /** The output of the terminals this phone opened on the active computer (AN-31). */
+    val terminalEvents: SharedFlow<TerminalEvent> = _terminalEvents.asSharedFlow()
 
     private val lock = Mutex()
     @Volatile private var client: Remote? = null
@@ -328,6 +350,10 @@ class ComputersRepository(
                     if (channel == Events.APPEARANCE_UPDATED) {
                         // The desktop's theme changed: follow it live.
                         _state.update { it.copy(appearance = Appearance.from(payload)) }
+                        return@collect
+                    }
+                    if (channel == TerminalChannels.EVENT) {
+                        TerminalEvent.from(payload)?.let { _terminalEvents.emit(it) }
                         return@collect
                     }
                     if (channel != Events.AGENT_EVENT) return@collect

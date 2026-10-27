@@ -15,9 +15,12 @@ describe('guarded wall selection', () => {
   for (const mode of ['focus', 'grid', 'fixed'] as const) {
     it(`keeps the tree and no-ops a reselect in ${mode}`, () => {
       const root = tileTree([wallPane('chat', 'a'), wallPane('chat', 'b')]);
-      const state = { ...DEFAULT_WALL_STATE, root, hero: 'a', layout: { ...DEFAULT_WALL_STATE.layout, mode: mode === 'fixed' ? 'grid' as const : mode, fixedGrid: mode === 'fixed' } };
+      const activeZone = allPanes(root)[0].id;
+      const state = { ...DEFAULT_WALL_STATE, root, activeZone, hero: 'a', layout: { ...DEFAULT_WALL_STATE.layout, mode: mode === 'fixed' ? 'grid' as const : mode, fixedGrid: mode === 'fixed' } };
       const next = openWallPane(state, 'chat', 'b');
-      expect(next.root).toBe(root);
+      // Focus only shows it; the board trades it into the active zone.
+      if (mode === 'focus') expect(next.root).toBe(root);
+      else expect(allPanes(next.root).map((p) => p.refId)).toEqual(['b', 'a']);
       expect(next.hero).toBe('b');
       expect(next.layout).toBe(state.layout);
       expect(openWallPane(next, 'chat', 'b')).toBe(next);
@@ -25,10 +28,10 @@ describe('guarded wall selection', () => {
     });
   }
 
-  it('adds a missing chat once; a terminal takes the hero only in Focus', () => {
+  it('puts a missing chat in the active zone once; a terminal takes the hero only in Focus', () => {
     const state = openWallPane(DEFAULT_WALL_STATE, 'chat', 'a');
     const next = openWallPane(state, 'chat', 'b');
-    expect(allPanes(next.root).map((p) => p.refId)).toEqual(['a', 'b']);
+    expect(allPanes(next.root).map((p) => p.refId)).toEqual(['b']);
     expect(openWallPane(next, 'chat', 'b')).toBe(next);
     const grid = { ...next, layout: { ...next.layout, mode: 'grid' as const } };
     const terminal = openWallPane(grid, 'terminal', 't');

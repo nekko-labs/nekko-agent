@@ -30,3 +30,9 @@ Status: implemented. The animated jump `[2026-10-23]` was checked in the same hi
 Implemented. Skills and Connectors are large, wrapping chips at the very top of Settings, before the section navigation. Both sidebar shortcuts are hidden by default, including for existing settings with no saved preference. General > View settings independently opts each shortcut into the left rail. Hiding a shortcut does not disable its view or change access through Settings, the command palette or chat skill menus. Preferences persist through the existing settings API as `sidebarViews`; no credentials, permissions or remote calls are added.
 
 Acceptance: both chips navigate to their views, each toggle saves independently, and both desktop and narrow layouts keep them legible. Verified with focused navigation tests and hidden, network-blocked Electron fixture interaction checks and matching screenshots. Packaged apps and native phone clients are not verified.
+
+## Panel layout and return navigation (issue #1220)
+
+Implemented, verified in a hidden, network-blocked Electron fixture at 1440×900 and 600×900. Settings uses approximately 80% of the available panel width on desktop, with full-width padded content on narrow screens. The background matches the standard panel surface. Section links use an accent underline, not a filled active box, with a visible keyboard focus outline. Skills and Connectors include a persistent **Back to Settings** button, including when opened through optional rail shortcuts.
+
+Acceptance: both back buttons return to Settings; all section content remains available; narrow layouts do not overflow horizontally. No settings, credentials, permissions, or external connections change. Packaged desktop apps, Local Web UI hosting, and native phone clients have not been exercised.
