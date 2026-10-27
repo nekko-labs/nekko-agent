@@ -31,8 +31,7 @@ struct MonitorsView: View {
             if let model { sections(model) } else { ProgressView().frame(maxWidth: .infinity).listRowBackground(Color.clear) }
         }
         .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .background(palette.paper)
+        .appBackground()
         .navigationTitle("Monitors")
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await model?.refresh() }

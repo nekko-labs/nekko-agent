@@ -228,7 +228,7 @@ struct PanesView: View {
         .environment(\.inPanes, true)
         .animation(reduceMotion ? nil : .snappy(duration: 0.3), value: display)
         .animation(reduceMotion ? nil : .snappy(duration: 0.3), value: host.layout.split)
-        .background(palette.paper.ignoresSafeArea())
+        .background { AppBackdrop() }
         .background {
             GeometryReader { g in
                 Color.clear.onChange(of: g.size, initial: true) { _, s in

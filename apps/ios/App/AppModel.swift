@@ -40,8 +40,8 @@ final class AppModel {
     var pendingLink: PairingLink?
     /// A chat to open (notification tap, Live Activity tap, `nekko-agent://chat/<id>`).
     var openChat: String?
-    /// The first message typed on New chat, sent by that chat's screen once it opens.
-    var firstMessages: [String: String] = [:]
+    /// The first message typed on New chat (and its photos), sent by that chat's screen once it opens.
+    var firstMessages: [String: UnsentPrompt] = [:]
     /// Text shared from another app (the share extension), waiting for New chat to take it.
     var sharedText: String?
     /// `nekko-agent://new` (the Control Center control): open New chat once.

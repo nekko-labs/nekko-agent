@@ -45,7 +45,7 @@ struct ChatView: View {
                 ProgressView()
             }
         }
-        .background(palette.paper)
+        .background { AppBackdrop() }
         .navigationBarTitleDisplayMode(.inline)
         // No keyboard toolbar here: on iOS 26 its Done floats over the
         // composer's send button. Scrolling or tapping the transcript puts
@@ -61,8 +61,8 @@ struct ChatView: View {
             app.notifier.clear(sessionId: sessionId)
             if let first = app.firstMessages.removeValue(forKey: sessionId), let chat {
                 await chat.reload()
-                do { try await chat.send(first) } catch {
-                    chat.handBack(UnsentPrompt(text: first, skill: nil, images: []))
+                do { try await chat.send(first.text, images: first.images) } catch {
+                    chat.handBack(first)
                     actionError = error.localizedDescription
                 }
             }
@@ -727,6 +727,7 @@ struct Composer: View {
     /// A saved prompt from the computer, run with what's typed after it.
     @State private var prompt: SavedPrompt?
     @State private var photos: [PhotosPickerItem] = []
+    @State private var pickingPhotos = false
     @State private var images: [String] = []
     @State private var loadingPhotos = false
     @State private var error: String?
@@ -829,9 +830,8 @@ struct Composer: View {
                             ForEach(chat.skills) { s in Button("/\(s.name)") { skill = s; prompt = nil } }
                         } label: { Label("Skills on \(store.active?.name ?? "computer")", systemImage: "wand.and.stars") }
                     }
-                    PhotosPicker(selection: $photos, maxSelectionCount: 4, matching: .images) {
-                        Label("Photos", systemImage: "photo.on.rectangle")
-                    }
+                    // A PhotosPicker inside a Menu never opens its sheet: the menu closing dismisses it.
+                    Button { pickingPhotos = true } label: { Label("Photos", systemImage: "photo.on.rectangle") }
                     // Asked for by the user, so iOS shows its paste prompt only then.
                     Button { pasteImages() } label: { Label("Paste image", systemImage: "doc.on.clipboard") }
                         .disabled(!UIPasteboard.general.hasImages)
@@ -900,6 +900,7 @@ struct Composer: View {
             if dictation.recording || dictation.transcribing { Text(dictation.status).font(.caption2).foregroundStyle(palette.inkFaint) }
             else if let n = dictation.notice { Text(n).font(.caption2).foregroundStyle(palette.inkSoft) }
         }
+        .photosPicker(isPresented: $pickingPhotos, selection: $photos, maxSelectionCount: 4, matching: .images)
         // Send waits for the photos (it used to send without them, and they came back later).
         .task(id: photos) {
             guard !photos.isEmpty else { return }
