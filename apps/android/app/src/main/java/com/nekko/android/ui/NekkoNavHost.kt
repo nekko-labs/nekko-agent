@@ -26,6 +26,7 @@ import com.nekko.android.voice.Dictation
 import com.nekko.android.data.PhonePrefs
 import com.nekko.android.haptics.AndroidHaptics
 import com.nekko.android.data.ThemePrefs
+import com.nekko.android.ui.files.FilesScreen
 import com.nekko.android.ui.screens.AutomationsScreen
 import com.nekko.android.ui.screens.ChatScreen
 import com.nekko.android.ui.screens.UsageScreen
@@ -81,6 +82,7 @@ object Routes {
     const val MONITORS = "monitors"
     const val AUTOMATIONS = "settings/automations"
     const val USAGE = "settings/usage"
+    const val FILES = "settings/files"
 
     fun chat(id: String) = "chat/${Uri.encode(id)}"
     fun pair(link: String? = null) = if (link == null) "pair" else "pair?link=${Uri.encode(link)}"
@@ -234,6 +236,9 @@ fun NekkoNavHost(
         }
         composable(Routes.AUTOMATIONS) {
             AutomationsScreen(repo = repo, onBack = { nav.popBackStack() })
+        }
+        composable(Routes.FILES) {
+            FilesScreen(repo = repo, onBack = { nav.popBackStack() })
         }
         composable(Routes.USAGE) {
             UsageScreen(repo = repo, onBack = { nav.popBackStack() })

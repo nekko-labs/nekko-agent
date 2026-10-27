@@ -215,6 +215,10 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 >   opened it, the phone says *Changed on the computer* and you choose **Reload** (your edits are
 >   dropped) or **Save over it**; nothing is overwritten without that choice. Files that may hold
 >   secrets are counted under the list, never shown.
+>   On Android, **⋮ → Files** in a chat and **Settings → Files** work the same way: add a saved folder
+>   by its full path on the computer, or touch and hold one to remove it (its files stay on disk);
+>   saving, adding and removing ask for your fingerprint, face or screen lock (once per 5 minutes).
+>   An open file or an unsaved edit stays open when you open or fold a folding phone.
 > - **Logs:** **Computers and settings → Logs** lists the desktop app's log, the engine's log and
 >   each chat's agent run log. A log opens at its newest lines; **Refresh** reads it again, and the
 >   search field shows the matching lines with their line numbers. Read only, with secrets already
