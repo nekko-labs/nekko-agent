@@ -174,7 +174,8 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > - **Search:** finds completed chats too, and shows every match in each group.
 > - **On Android** the queue's Edit and Remove, the fork (touch and hold a message, then **Edit in a
 >   new chat** or **Fork from here**), saved prompts in `/` and under **+**, and **Search chats** at
->   the top of the chat list work the same way.
+>   the top of the chat list work the same way, and **Settings → Automations** and **Settings → Usage
+>   and limits** show the same lists and Run now.
 > - **Automations:** **Computers and settings → Automations** lists the computer's tasks and
 >   workflows with how each last went, and **Run now**. You set them up on the computer.
 > - **Pull requests:** a chip shows the chat's pull request and its checks. **Commit these changes**,
