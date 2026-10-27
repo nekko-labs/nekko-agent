@@ -56,3 +56,7 @@ Verified: 120-second CSS duration, interpolated intermediate stops and matching 
 ## Face hidden behind the composer and downward paws (#1247)
 
 Implemented; 10 focused desktop tests and 19 isolated renderer checks pass, with matching 1280px/460px default-dark before/after screenshots inspected. The new-chat greeting clips the face at the composer edge (25 of the 30 drawing units), hiding its lower face and chin behind the message box while keeping the paws in front. The paws are vertically flipped around that edge so their small toe marks face down. The default face has no mouth or colored nose; other mascot surfaces, layout allocation, caret gaze and question rotation are unchanged. No new settings, permissions, network requests or persisted data. Acceptance: only the paws extend below the composer edge at desktop and narrow widths, toe marks sit at their lower ends, and typing and selection still work. Packaged desktop, other themes and non-macOS platforms are not visually verified.
+
+## Wider, shorter paws (#1260)
+
+Implemented; the focused desktop test and the isolated renderer checks pass, with 1280px default-dark before/after screenshots inspected. Each greeting paw moves one drawing unit outward (the gap between them grows from 6 to 8 units, the paws now line up with the face's outer edge) and is one unit shorter, losing it from the part that hangs over the composer. The toes still point down and the face, eyes and layout are unchanged. The iPhone greeting cat uses the same geometry.
