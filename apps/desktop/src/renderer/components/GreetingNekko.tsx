@@ -52,9 +52,9 @@ export function GreetingNekko() {
         </g>
       </svg>
       <g data-part="peek-paws" transform="translate(0 50) scale(1 -1)">
-        <path d="M7 23H12V28H7Z M20 23H25V28H20Z" fill="var(--surface)" />
-        <path d="M6 22H13V27H12V23H7V27H6Z M19 22H26V27H25V23H20V27H19Z" fill="var(--ink)" />
-        <path d="M8.5 23H9V24.5H8.5Z M10 23H10.5V24.5H10Z M21.5 23H22V24.5H21.5Z M23 23H23.5V24.5H23Z" fill="var(--ink)" opacity="0.55" />
+        <path d="M6 24H11V28H6Z M21 24H26V28H21Z" fill="var(--surface)" />
+        <path d="M5 23H12V27H11V24H6V27H5Z M20 23H27V27H26V24H21V27H20Z" fill="var(--ink)" />
+        <path d="M7.5 24H8V25.5H7.5Z M9 24H9.5V25.5H9Z M22.5 24H23V25.5H22.5Z M24 24H24.5V25.5H24Z" fill="var(--ink)" opacity="0.55" />
       </g>
     </svg></span>
   );
