@@ -50,6 +50,7 @@ struct ComputersView: View {
             }
             Section { NavigationLink(value: Route.pair) { Label("Pair another computer", systemImage: "plus") } }
         }
+        .appBackground()
         .navigationTitle("Computers")
         .alert("Rename computer", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("Name", text: $name)
@@ -236,6 +237,7 @@ struct SettingsView: View {
                 Button("Forget everything on this iPhone", role: .destructive) { confirmWipe = true }
             }
         }
+        .appBackground()
         .navigationTitle("Settings")
         .sheet(isPresented: $sendingFeedback) { FeedbackSheet() }
         .confirmationDialog("Forget all computers and keys?", isPresented: $confirmWipe, titleVisibility: .visible) {
@@ -318,6 +320,7 @@ private struct ThemeList: View {
                 }
             } header: { SectionHeader("Experimental") }
         }
+        .appBackground()
         .navigationTitle("Theme")
         .navigationBarTitleDisplayMode(.inline)
     }

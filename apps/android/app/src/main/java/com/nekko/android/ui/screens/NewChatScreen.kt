@@ -367,7 +367,7 @@ private fun Chip(label: String, selected: Boolean, onClick: () -> Unit) {
  * provider like the desktop picker, the computer's starred models first.
  */
 @Composable
-private fun ModelList(
+internal fun ModelList(
     groups: List<ModelGroup>,
     favorites: List<String>,
     query: String,
