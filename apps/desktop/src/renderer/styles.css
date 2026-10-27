@@ -109,6 +109,10 @@
   --pane-radius: 14px;
   --pane-radius-inner: 10px;
   --pane-gap: 7px;
+  /* One gap between the Agents view's panels: the agent panel, the wall's
+     windows, the composer and the Monitors dock. CommandWall's geometry
+     uses the same 8px between windows. */
+  --wall-gap: 8px;
 
   /* The website's two fonts, bundled (main.tsx). Settings > Style overrides them on :root. */
   --font-sans: 'Inter Tight Variable', 'Inter Tight', system-ui, -apple-system, sans-serif;
@@ -2745,7 +2749,10 @@ a.artifact-card:hover .artifact-card-open { color: var(--accent); }
   font-variant-numeric: tabular-nums; color: var(--accent);
   background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
-.wall-workspace { display: flex; flex: 1; min-width: 0; min-height: 0; gap: 3px; }
+/* The wall's 1px side inset makes up the rest of a gap beside it. */
+.wall-workspace { display: flex; flex: 1; min-width: 0; min-height: 0; row-gap: var(--wall-gap); column-gap: calc(var(--wall-gap) - 1px); }
+/* The right add-zone rail is the gap to a dock on the right; no second gap. */
+.wall-workspace[data-dock-side='right']:has(.command-wall-layout[data-zone-rails]) { column-gap: 0; }
 .wall-workspace[data-dock-side='top'], .wall-workspace[data-dock-side='bottom'] { flex-direction: column; }
 .wall-column { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; gap: 0; overflow: hidden; }
 /* The board viewport yields to the composer; its tall stage scrolls internally. */
@@ -3133,9 +3140,9 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
    them out (the card inside still clips its own content); each grip's hit area
    spans the gap and a sliver of the edge so it stays easy to catch. */
 .wall-composer.panel { overflow: visible; }
-.wall-composer-split { position: absolute; left: 0; right: 0; height: 14px; z-index: 2; cursor: row-resize; touch-action: none; display: grid; place-items: center; }
-.wall-composer[data-dock^="bottom"] > .wall-composer-split { top: -14px; }
-.wall-composer[data-dock^="top"] > .wall-composer-split { bottom: -14px; }
+.wall-composer-split { position: absolute; left: 0; right: 0; height: var(--wall-gap); z-index: 2; cursor: row-resize; touch-action: none; display: grid; place-items: center; }
+.wall-composer[data-dock^="bottom"] > .wall-composer-split { top: calc(-1 * var(--wall-gap)); }
+.wall-composer[data-dock^="top"] > .wall-composer-split { bottom: calc(-1 * var(--wall-gap)); }
 .wall-composer-side { position: absolute; top: 0; bottom: 0; width: 14px; z-index: 2; cursor: col-resize; touch-action: none; display: grid; place-items: center; }
 .wall-composer-side[data-edge="left"] { left: -14px; }
 .wall-composer-side[data-edge="right"] { right: -14px; }

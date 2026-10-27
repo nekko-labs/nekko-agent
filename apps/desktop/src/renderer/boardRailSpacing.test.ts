@@ -114,11 +114,25 @@ describe('compact board and navigation spacing', () => {
     expect(nav).toContain('style="--n:1"');
   });
 
-  it('keeps 1px around the board and 6px beside the agent list without shrinking grips', () => {
+  it('keeps 1px around the board and one wall gap beside the agent list without shrinking grips', () => {
     const board = stylesheet('components/commandWallLayouts.css');
     expect(cssRule(board, '.command-wall-layout').padding).toBe('14px 1px 0');
-    expect(cssRule(board, ".wall-agent-workspace[data-tabs='left']")).toMatchObject({ 'flex-direction': 'row', gap: '6px' });
+    expect(cssRule(board, ".wall-agent-workspace[data-tabs='left']")).toMatchObject({ 'flex-direction': 'row', gap: cssValue('calc(var(--wall-gap) - 1px)') });
     expect(cssRule(styles, '.wall-composer-row')['padding-inline']).toBe(cssValue('15px calc(15px + var(--wall-gutter))'));
     expect(cssRule(styles, '.wall-composer-side')).toMatchObject({ width: '14px', 'z-index': '2', cursor: 'col-resize' });
+  });
+
+  it('spaces the agent panel, windows, composer and dock one --wall-gap apart', () => {
+    const board = stylesheet('components/commandWallLayouts.css');
+    expect(cssRule(styles, '.wall-workspace')).toMatchObject({ 'row-gap': cssValue('var(--wall-gap)'), 'column-gap': cssValue('calc(var(--wall-gap) - 1px)') });
+    expect(cssRule(styles, ".wall-workspace[data-dock-side='right']:has(.command-wall-layout[data-zone-rails])")['column-gap']).toBe('0');
+    // Windows stop a gap short of a composer below them, rails or not.
+    expect(cssRule(board, '.wall-column:has(> .wall-composer-row:last-child) > .command-wall-layout')['padding-bottom']).toBe(cssValue('var(--wall-gap)'));
+    expect(cssRule(board, '.command-wall-layout[data-zone-rails]')).toMatchObject({ 'padding-right': cssValue('var(--wall-gap)'), 'padding-bottom': cssValue('var(--wall-gap)'), overflow: 'clip' });
+    // The resize handle lives in the gap, never over the windows' footers.
+    expect(cssRule(styles, '.wall-composer-split').height).toBe(cssValue('var(--wall-gap)'));
+    expect(cssRule(styles, '.wall-composer[data-dock^="bottom"] > .wall-composer-split').top).toBe(cssValue('calc(-1 * var(--wall-gap))'));
+    // The agent panel spans the windows, from offsets CommandCenterView measures.
+    expect(cssRule(board, ".wall-agent-workspace[data-tabs='left'] > .wall-agents-presence[data-orientation='vertical']")).toMatchObject({ 'margin-top': cssValue('var(--wall-panes-top, 0px)'), 'margin-bottom': cssValue('var(--wall-panes-bottom, 0px)') });
   });
 });
