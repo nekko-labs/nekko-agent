@@ -1,5 +1,6 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { displaysBridge, prefersReducedMotion, useDisplays, type DesktopInfo, type DisplayInfo, type DisplayPlacement, type DisplaysState, type SpacesMode } from '../displays.js';
+import type { WallLayoutMode } from '@nekko-agent/shared';
+import { displaysBridge, prefersReducedMotion, rememberOpenerMode, useDisplays, type DesktopInfo, type DisplayInfo, type DisplayPlacement, type DisplaysState, type SpacesMode } from '../displays.js';
 import { useStore } from '../store.js';
 
 /** Two screens side by side: the toolbar button's glyph. */
@@ -85,9 +86,10 @@ function ScreenTile({ display, scale, busy, onToggle }: { display: DisplayInfo; 
  * dropdown like the grid-size picker, with every connected screen in a row.
  * Turning a screen on opens a full Nekko window there that swipes in from the
  * left; turning it off shrinks it into the right edge. Below a divider, the
- * view options choose where new agent windows open.
+ * view options choose where new agent windows open. A window switched on
+ * opens in `mode`, the opener's Focused or Dynamic.
  */
-export function ScreensControl() {
+export function ScreensControl({ mode = 'grid' }: { mode?: WallLayoutMode }) {
   const [state, setState] = useDisplays();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -111,6 +113,7 @@ export function ScreensControl() {
     onToggleOpen={() => { clearTimeout(closeTimer.current); setOpen(true); }}
     onToggle={async (d) => {
       setBusy(true);
+      if (!d.enabled) rememberOpenerMode(mode);
       try { setState(await displaysBridge!.toggle(d.id, !d.enabled, prefersReducedMotion())); }
       catch (e) { useStore.getState().pushToast('error', `Could not change screens: ${(e as Error).message}`); }
       finally { setBusy(false); }
@@ -119,10 +122,11 @@ export function ScreensControl() {
       try { setState(await displaysBridge!.setPlacement(p)); }
       catch (e) { useStore.getState().pushToast('error', `Could not save the view option: ${(e as Error).message}`); }
     }}
-    onToggleDesktop={async (d, mode) => {
+    onToggleDesktop={async (d, spacesMode) => {
       setBusy(true);
       try {
-        if (mode) setState(await displaysBridge!.setSpacesMode(mode));
+        if (spacesMode) setState(await displaysBridge!.setSpacesMode(spacesMode));
+        if (!d.enabled) rememberOpenerMode(mode);
         setState(await displaysBridge!.toggleDesktop(d.id, !d.enabled));
       } catch (e) { useStore.getState().pushToast('error', `Could not change desktops: ${(e as Error).message}`); }
       finally { setBusy(false); }
