@@ -296,6 +296,25 @@ describe('voiceListener', () => {
     expect(draft).toBe('Then add tests.');
     off();
   });
+  it('a send whose turn is still running does not hold up what is said next', async () => {
+    // nekkod's chat:send resolves only when the turn ends; the voice send counts once the turn is admitted.
+    let draft = '';
+    let cleared = 0;
+    const composer = { sessionId: 's1', ...voiceComposer({ get: () => draft, set: t => { draft = t; }, send: (_t, admitted) => { admitted(); return new Promise(() => {}); }, sent: () => { cleared++; } }) };
+    const off = voiceListener.register('s1', () => composer);
+    await voiceListener.start('s1');
+    nekko.voiceTranscribe.mockResolvedValueOnce('Fix the bug. Nekko, send it.').mockResolvedValueOnce('Then add tests.').mockResolvedValueOnce('And docs.');
+    capture.onSegment!([1]); capture.onSegment!([2]);
+    await voiceListener.drain();
+    expect(draft).toBe('Then add tests.');
+    expect(cleared).toBe(1);
+    expect(store.state.pushToast).toHaveBeenCalledWith('success', 'Sent');
+    capture.tail = [3];
+    await voiceListener.stop();
+    expect(draft).toBe('Then add tests. And docs.');
+    expect(voiceListener.snapshot().busy).toBeNull();
+    off();
+  });
   it('types everything when commands are off', async () => {
     const a = target('s1');
     const off = voiceListener.register('s1', () => a);
@@ -479,6 +498,18 @@ describe('voiceComposer', () => {
     const { box, c } = composer('Fix the bug.', async () => { throw new Error('offline'); });
     expect(await c.onSend()).toBe(false);
     expect(box.draft).toBe('Fix the bug.');
+  });
+  it('a turn that fails after it was admitted does not paste the text back', async () => {
+    let draft = 'Fix the bug.';
+    let cleared = 0;
+    let fail!: (e: Error) => void;
+    const c = voiceComposer({ get: () => draft, set: t => { draft = t; }, send: (_t, admitted) => { admitted(); return new Promise((_r, reject) => { fail = reject; }); }, sent: () => { cleared++; } });
+    expect(await c.onSend()).toBe(true);
+    c.onText('Then add tests.');
+    fail(new Error('model crashed'));
+    await new Promise(r => setTimeout(r, 0));
+    expect(draft).toBe('Then add tests.');
+    expect(cleared).toBe(1);
   });
   it('a sent draft clears the attachments; an empty draft is not sent', async () => {
     const { box, c } = composer('Fix the bug.');

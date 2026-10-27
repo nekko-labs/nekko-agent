@@ -603,9 +603,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const voiceDraft = useRef(draft);
   voiceDraft.current = draft;
   const setVoiceDraft = (next: string) => { voiceDraft.current = next; setDraft(next); };
-  const voiceSend = useRef<(text: string) => Promise<boolean>>(async () => false);
+  const voiceSend = useRef<(text: string, admitted: () => void) => Promise<unknown>>(async () => false);
   // Attachments go with the voice send, so they are cleared once it really sent.
-  const [voice] = useState(() => voiceComposer({ get: () => voiceDraft.current, set: setVoiceDraft, send: (text) => voiceSend.current(text), sent: () => { setPendingImages([]); setPendingVideos([]); setAttachmentNotes({}); } }));
+  const [voice] = useState(() => voiceComposer({ get: () => voiceDraft.current, set: setVoiceDraft, send: (text, admitted) => voiceSend.current(text, admitted), sent: () => { setPendingImages([]); setPendingVideos([]); setAttachmentNotes({}); } }));
   // What the draft implies (the analyzer, Auto's pick, the gauge's draft
   // count) renders from this, one step behind the keystroke, so
   // a keypress paints the textarea before any of that work runs.
@@ -1515,7 +1515,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   };
 
   /** One image-chat turn: the prompt goes to the chat's image model, the picture comes back as the reply. */
-  const sendImage = async (prompt: string, fromDraft: boolean): Promise<boolean> => {
+  const sendImage = async (prompt: string, fromDraft: boolean, admitted?: () => void): Promise<boolean> => {
     if (!session) return false;
     const params = { ...DEFAULT_IMAGE_CHAT_PARAMS, ...session.imageParams };
     if (!params.modelId) {
@@ -1540,12 +1540,16 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     if (fromDraft) { setDraft(''); clearDraft(sessionId); }
     beginTurn();
     setSession((prev) => prev ? { ...prev, messages: [...prev.messages, { id: 'tmp', role: 'user', content: prompt, createdAt: Date.now() }] } : prev);
+    admitted?.();
     await window.nekko.generateImageTurn({ sessionId, prompt, params: { ...params, modelId: params.modelId } });
     return true;
   };
 
-  /** Sends the draft, or `override` instead of it. False when a gate refused it (voice puts the text back then). */
-  const send = async (override?: string): Promise<boolean | undefined> => {
+  /**
+   * Sends the draft, or `override` instead of it. False when a gate refused it (voice puts the text back then).
+   * `admitted` fires once the turn has begun or been queued; the returned promise settles only when the turn ends.
+   */
+  const send = async (override?: string, admitted?: () => void): Promise<boolean | undefined> => {
     if (session?.executionMode === 'sandbox') {
       try {
         const status = await window.nekko.sandboxStatus(session.id);
@@ -1553,7 +1557,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       } catch (e) { useStore.getState().pushToast('error', String((e as Error).message ?? e)); return false; }
     }
     const input = override ?? draft;
-    if (imageMode) return input.trim() ? sendImage(input.trim(), override === undefined) : false;
+    if (imageMode) return input.trim() ? sendImage(input.trim(), override === undefined, admitted) : false;
     const skill = activeSkill;
     const text = [skill ? skill.template.trimEnd() : '', input.trim()].filter(Boolean).join('\n\n');
     const images = pendingImages;
@@ -1621,6 +1625,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         }],
       } : prev,
     );
+    admitted?.();
     await window.nekko.sendChat({
       sessionId,
       providerId: brain.providerId,
@@ -1647,9 +1652,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     }
   };
   // A voice send sends the draft as dictated so far; voiceComposer restores it if a gate refuses.
-  voiceSend.current = async (text) => {
+  voiceSend.current = (text, admitted) => {
     clearDraft(sessionId);
-    return (await send(text)) !== false;
+    return send(text, admitted);
   };
 
   // Queue the draft to run after the current reply (and any earlier queued

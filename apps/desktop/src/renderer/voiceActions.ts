@@ -46,9 +46,11 @@ export interface VoiceTarget { sessionId: string; onText(text: string, sentence?
  * removes exactly it, and sends a snapshot so words dictated after "send it"
  * start the next draft instead of riding along. A refused send (no model, an
  * unconfigured sandbox) puts the text back; `sent` runs only after a real send,
- * so attachments are cleared only then.
+ * so attachments are cleared only then. `send` calls `admitted` once the turn
+ * has begun: the host's send settles only when the turn ends, and voice must not
+ * wait that long. A failure after admission is the chat's own error, not a refusal.
  */
-export function voiceComposer(draft: { get(): string; set(text: string): void; send(text: string): Promise<boolean>; sent(): void }): Omit<VoiceTarget, 'sessionId'> {
+export function voiceComposer(draft: { get(): string; set(text: string): void; send(text: string, admitted: () => void): Promise<unknown>; sent(): void }): Omit<VoiceTarget, 'sessionId'> {
   let last = '';
   return {
     onText(text, sentence) {
@@ -68,7 +70,10 @@ export function voiceComposer(draft: { get(): string; set(text: string): void; s
       const text = draft.get();
       if (!text.trim()) return false;
       last = ''; draft.set('');
-      if (await draft.send(text).catch(() => false)) { draft.sent(); return true; }
+      const ok = await new Promise<boolean>(resolve => {
+        draft.send(text, () => resolve(true)).then(r => resolve(r !== false), () => resolve(false));
+      });
+      if (ok) { draft.sent(); return true; }
       const now = draft.get();
       draft.set(now ? `${text} ${now}` : text);
       return false;
