@@ -37,7 +37,7 @@ import { SessionPrLinks } from './SessionPrLinks.js';
  * Colour is load-bearing rather than decorative. Every fact carries the hue of
  * what it *is* (a branch is always the same colour, a limit is the colour of
  * how close to spent it is), so the eye can find the branch without reading.
- * A chat workspace gets an accent spine and a tinted active state; a terminal
+ * A chat card gets an accent edge and a tinted active state; a terminal
  * workspace deliberately does not, because the chat is the thing this app is
  * about and a sidebar where everything shouts says nothing.
  */
@@ -258,20 +258,21 @@ function WorkspaceCardImpl({
           onOpen();
         }
       }}
-      /* The spine: a chat workspace carries an accent edge that fills in when it
-         is the active one, so the thing this app is about is findable in a
-         column of cards without reading a word of any of them. */
+      /* A chiplet: each card is its own small raised tile, so a column of them
+         reads as separate agents rather than one list. A chat's edge takes the
+         accent when it is the active one, so the thing this app is about is
+         findable without reading a word; a terminal's stays neutral. */
       /* A card waiting on you (a question, or stopped on an error) takes the
          active card's highlight too, so it is findable at a glance. */
-      className={`group w-full cursor-pointer rounded-lg border-l py-1.5 pl-2 pr-2 text-left transition-colors duration-150 ${
-        isActive || status === 'input' || status === 'error' ? 'bg-accent-soft' : 'hover:bg-surface-2'
+      className={`agent-chip group w-full cursor-pointer rounded-xl border px-2.5 py-1.5 text-left shadow-xs transition-colors duration-150 ${
+        isActive || status === 'input' || status === 'error' ? 'bg-accent-soft' : 'bg-surface hover:bg-surface-2'
       }`}
       style={{
-        borderLeftColor: isChat
-          ? isActive
-            ? 'var(--accent)'
-            : 'color-mix(in srgb, var(--accent) 30%, transparent)'
-          : 'transparent',
+        borderColor: isChat && isActive
+          ? 'color-mix(in srgb, var(--accent) 70%, transparent)'
+          : isChat && (status === 'input' || status === 'error')
+            ? 'color-mix(in srgb, var(--accent) 35%, transparent)'
+            : 'var(--line)',
       }}
       data-agent-active={isActive || undefined}
       title={title}

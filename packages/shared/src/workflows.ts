@@ -567,22 +567,25 @@ export interface WorkflowsSnapshot {
   runs: WorkflowRun[];
 }
 
-/** Fields accepted when creating a workflow; the rest is filled in by the host. */
+/**
+ * Fields accepted when creating a workflow; the rest is filled in by the host.
+ * As an update, `null` clears a field (JSON drops an `undefined` key).
+ */
 export interface NewWorkflow {
   name: string;
-  description?: string;
+  description?: string | null;
   category?: string;
   enabled?: boolean;
   steps?: WorkflowStep[];
   triggers?: WorkflowTrigger[];
-  workspaceId?: string;
-  providerId?: string;
-  modelId?: string;
+  workspaceId?: string | null;
+  providerId?: string | null;
+  modelId?: string | null;
   notify?: WorkflowNotify;
   templateId?: string;
-  localModelOnly?: boolean;
-  toolAccess?: import('./workflow-access.js').WorkflowToolAccess;
-  prCheckout?: boolean;
+  localModelOnly?: boolean | null;
+  toolAccess?: import('./workflow-access.js').WorkflowToolAccess | null;
+  prCheckout?: boolean | null;
   runPolicy?: import('./tasks.js').AutomationRunPolicy | null;
 }
 

@@ -1,6 +1,6 @@
 import { FirstProviderSetup } from '../components/providers/FirstProviderSetup.js';
 import { needsProviderSetup } from '../components/providers/providerSetup.js';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { LimitWindow, ModelInfo, OAuthProvider, OAuthStatus, ProviderConfig, ProviderKind, SubscriptionLimits } from '@nekko-agent/shared';
 import { formatUSD, isLocalProvider, isRuntimeKind, formatModelPriceLabel, modelPricing, oauthProviderOffered } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
@@ -59,6 +59,18 @@ export function ModelsView({ localOnly = false }: { localOnly?: boolean }) {
   // Keep this flow mounted through saving so its completion step does not disappear.
   const [firstSetup] = useState(() => needsProviderSetup(providers, useStore.getState().activeModelId ?? useStore.getState().models[0]?.id));
   const [adding, setAdding] = useState(false);
+  const setupRef = useRef<HTMLDivElement>(null);
+  const shortcutsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!adding) return;
+    const outside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !setupRef.current?.contains(event.target) && !shortcutsRef.current?.contains(event.target)) setAdding(false);
+    };
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') setAdding(false); };
+    document.addEventListener('pointerdown', outside);
+    document.addEventListener('keydown', escape);
+    return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape); };
+  }, [adding]);
   // A notice action ("Use my subscription", "Add API key") opens the form on a kind.
   const [addKind, setAddKind] = useState<ProviderKind | undefined>();
   const requestedKind = useStore((s) => s.addProviderKind);
@@ -87,7 +99,7 @@ export function ModelsView({ localOnly = false }: { localOnly?: boolean }) {
   };
 
   const visible = providers.filter((p) => p.kind !== 'llamacpp' && isLocal(p.kind) === localOnly);
-  const openAdd = (kind?: ProviderKind) => { setAddKind(kind); setAdding(true); };
+  const openAdd = (kind?: ProviderKind) => { setAddKind(kind); setAdding((open) => !(open && kind === addKind)); };
 
   if (firstSetup && !localOnly) return <div className="h-full overflow-y-auto"><FirstProviderSetup /></div>;
 
@@ -101,12 +113,12 @@ export function ModelsView({ localOnly = false }: { localOnly?: boolean }) {
           </a>)}
           {!visible.length && <span className="text-[13px] text-ink-faint">{localOnly ? 'Connect a local server' : 'Add your first provider'}</span>}
         </div>
-        <ProviderShortcuts localOnly={localOnly} onAdd={openAdd} />
+        <div ref={shortcutsRef}><ProviderShortcuts localOnly={localOnly} onAdd={openAdd} moreExpanded={adding && !addKind} /></div>
       </div>
       {localOnly && <button className="btn btn-outline mb-4 text-[12px]" onClick={discover} disabled={discovering}>
         {discovering ? 'Scanning…' : 'Discover local servers'}
       </button>}
-      {adding && <div className="mb-5" data-provider-setup={addKind ?? 'any'}>
+      {adding && <div ref={setupRef} className="mb-5" data-provider-setup={addKind ?? 'any'}>
         <button type="button" className="btn btn-ghost float-right" aria-label="Close provider setup" onClick={() => setAdding(false)}>×</button>
         <AddProvider key={addKind ?? 'any'} fixedKind={addKind} onDone={() => { setAdding(false); setAddKind(undefined); refreshProviders(); }} />
       </div>}
@@ -140,14 +152,14 @@ function ProviderMark({ kind }: { kind: ProviderKind }) {
     : <span aria-hidden="true">{kind === 'vertex' ? 'G' : '↗'}</span>;
 }
 
-export function ProviderShortcuts({ localOnly = false, onAdd }: { localOnly?: boolean; onAdd: (kind?: ProviderKind) => void }) {
+export function ProviderShortcuts({ localOnly = false, onAdd, moreExpanded = false }: { localOnly?: boolean; moreExpanded?: boolean; onAdd: (kind?: ProviderKind) => void }) {
   return <div className="models-add-strip" role="group" aria-label="Add provider">
     {(localOnly ? LOCAL_SHORTCUTS : CLOUD_SHORTCUTS).map(({ kind, label, color }) =>
       <button key={kind} type="button" className="models-add-provider" style={{ background: color }} title={`Add ${label}`} aria-label={`Add ${label}`} onClick={() => onAdd(kind)}>
         <ProviderMark kind={kind} />
         <span className="models-add-plus" aria-hidden="true">+</span>
       </button>)}
-    <button type="button" className="models-add-provider models-add-more" title="More providers" aria-label="More providers" onClick={() => onAdd()}>···</button>
+    <button type="button" className="models-add-provider models-add-more" title="More providers" aria-label="More providers" aria-expanded={moreExpanded} onClick={() => onAdd()}>···</button>
   </div>;
 }
 
