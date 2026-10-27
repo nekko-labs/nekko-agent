@@ -319,6 +319,9 @@ relay, tested and kept by the computer, and never written on the phone. The comp
 whether it worked and which models it can now use; it never sends a key back. Each provider's switch
 on the same page turns it on or off on the computer. Both ask for Face ID or the passcode, like every
 change from a phone. Subscriptions (ChatGPT) still sign in on the computer.
+On Android it is **Settings → Providers**: the same list with a switch on each, and **Add a
+provider**; both ask for your fingerprint, face or screen lock. The key field is a password field,
+emptied as soon as the computer answers, and never kept across closing or folding the app.
 
 Manage devices from the same card: **rename** them, **revoke** one instantly (it's kicked live and
 denied from then on), or **Sign out all phones** (formerly *Rotate secret*) to cryptographically reset the room, which unpairs
