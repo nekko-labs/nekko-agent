@@ -95,6 +95,19 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-10
 
+### A full GPU offload puts the output layer on the GPU too (2026-10-28)
+Area: local inference
+Result: improvement
+Conditions: Apple M5 Max, 128 GB, macOS (Darwin 25.6.0), Nekko's llama.cpp b11224 (Metal), Qwen3-8B Q4_K_M (36 blocks). Engine: `llama-bench -p 512 -n 128 -r 3`, `-ngl 36` (what Nekko passed for a full offload) against `-ngl 99`, same run. App: the model loaded from a chat message with its saved preset (`gpuLayers: 36`) through the engine router, streamed chat requests with a fresh prefix each (so no prompt cache hit), prefill as llama-server's own `prompt_per_second`, 5 requests after one warmup; before on 2026-10-27 (~504-token prompt, `--n-gpu-layers 36`), after on 2026-10-28 (~455-token prompt, `--n-gpu-layers 999`), speculative decoding on in both
+
+| Metric | Before | After |
+|---|---|---|
+| llama-bench pp512 | 1531.33 ± 3.09 tok/s | 2761.98 ± 3.71 tok/s |
+| llama-bench tg128 | 89.79 ± 0.02 tok/s | 95.28 ± 0.28 tok/s |
+| App prefill, 5 requests (llama-server's figure) | 1395, 1360, 1336, 1271, 1231 tok/s | 2120, 2109, 2115, 2132, 2140 tok/s |
+
+Why: a download's preset stores a full offload as `gpuLayers` equal to the model's block count, and llama.cpp (and Ollama's `num_gpu`) count the output layer as one more, keeping it on the CPU unless asked for more layers than there are blocks; a full offload now asks for 999. The app rows are sequential runs on different days with different prompts, so they confirm the direction, not the size; the llama-bench rows are the matched measurement. The Ollama path was not measured. Source: this PR.
+
 ### Nekko Dark: static glow background on the window field (2026-10-27)
 Area: renderer
 Result: no effect

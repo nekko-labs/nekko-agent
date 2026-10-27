@@ -386,6 +386,87 @@
         "{port}",
         "--embedding"
       ]
+    },
+    {
+      "model": {
+        "id": "m",
+        "name": "M",
+        "path": "<root>/models/m.gguf",
+        "sizeBytes": 4000000000,
+        "layers": 32,
+        "maxContext": 32768,
+        "addedAt": 1600000000123
+      },
+      "params": {
+        "gpuLayers": 32
+      },
+      "flags": "none",
+      "out": [
+        "--model",
+        "<root>/models/m.gguf",
+        "--alias",
+        "m",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "{port}",
+        "--n-gpu-layers",
+        "999"
+      ]
+    },
+    {
+      "model": {
+        "id": "m",
+        "name": "M",
+        "path": "<root>/models/m.gguf",
+        "sizeBytes": 4000000000,
+        "layers": 32,
+        "maxContext": 32768,
+        "addedAt": 1600000000123
+      },
+      "params": {
+        "gpuLayers": 40
+      },
+      "flags": "none",
+      "out": [
+        "--model",
+        "<root>/models/m.gguf",
+        "--alias",
+        "m",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "{port}",
+        "--n-gpu-layers",
+        "999"
+      ]
+    },
+    {
+      "model": {
+        "id": "m",
+        "name": "M",
+        "path": "<root>/models/m.gguf",
+        "sizeBytes": 4000000000,
+        "layers": 32,
+        "maxContext": 32768,
+        "addedAt": 1600000000123
+      },
+      "params": {
+        "gpuLayers": 31
+      },
+      "flags": "none",
+      "out": [
+        "--model",
+        "<root>/models/m.gguf",
+        "--alias",
+        "m",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "{port}",
+        "--n-gpu-layers",
+        "31"
+      ]
     }
   ],
   "explained": [

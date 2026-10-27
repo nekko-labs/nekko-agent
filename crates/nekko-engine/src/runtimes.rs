@@ -685,7 +685,16 @@ impl Runtimes {
                     options.insert("num_ctx".into(), p("contextTokens").cloned().unwrap_or(Value::Null));
                 }
                 if let Some(g) = p("gpuLayers") {
-                    options.insert("num_gpu".into(), g.clone());
+                    // Ollama, like llama.cpp, counts the output layer as one past the
+                    // model's blocks: `num_gpu` equal to the block count (what a full
+                    // offload's `gpuLayers` holds) leaves it on the CPU, so all of
+                    // them asks for everything (see `--n-gpu-layers` in launch.rs).
+                    let asked = nekko_js::to_number(Some(g));
+                    let full = g.is_number()
+                        && asked > 0.0
+                        && Self::info_number(&self.ollama_show(base, model).await["model_info"], "block_count")
+                            .is_some_and(|blocks| asked >= blocks);
+                    options.insert("num_gpu".into(), if full { json!(999) } else { g.clone() });
                 }
                 let mut body =
                     Obj::default().set("model", model).set("prompt", "").set("options", Value::Object(options));
