@@ -75,6 +75,10 @@ final class Dictation {
 
     /// The microphone is open.
     private(set) var recording = false
+    /// Between the tap and the microphone opening (permissions, asking the computer).
+    private(set) var starting = false
+    /// Hold to talk: listening ended because the finger came up (the answer to a confirm comes in the next hold).
+    private(set) var released = false
     /// A segment is being turned into words (on the computer or the phone).
     var transcribing: Bool { queued > 0 }
     private(set) var error: String?
@@ -119,6 +123,11 @@ final class Dictation {
     private var hold = HoldToTalk()
     /// The background time iOS gives to transcribe the last words after the app leaves the screen.
     private var grace = UIBackgroundTaskIdentifier.invalid
+    var finishingInBackground: Bool { grace != .invalid }
+    /// Auto-Lock as it was before listening kept the screen on.
+    private var idleTimerBefore: Bool?
+    /// The one listening Dictation: two chats on screen (panes) share one microphone.
+    private static weak var current: Dictation?
 
     private static func newSegmenter() -> VoiceSegmenter {
         VoiceSegmenter(sampleRate: sampleRate, silenceSeconds: silenceSeconds, maxSeconds: maxSeconds, threshold: threshold)
@@ -159,6 +168,7 @@ final class Dictation {
     func letGo(store: ComputersStore) async {
         switch hold.release(at: .now) {
         case .finish:
+            released = true
             stopListening()
         case .discard:
             discard()
@@ -169,7 +179,9 @@ final class Dictation {
     }
 
     func start(store: ComputersStore, holding: Bool) async {
-        guard !recording else { return }
+        guard !recording, !starting else { return }
+        starting = true
+        defer { starting = false }
         error = nil
         notice = nil
         self.store = store
@@ -188,14 +200,20 @@ final class Dictation {
             error = "Microphone access is off. Allow it in Settings → Nekko Agent."
             return
         }
+        // The waits above can outlast the screen (a lock) or the chat (closed): then nothing opens.
+        guard UIApplication.shared.applicationState == .active, sink != nil else { return }
+        claimMicrophone()
         let session = AVAudioSession.sharedInstance()
         do {
             // Listening for minutes must not hush other audio; a short hold may.
+            // `.allowBluetooth` (HFP) is what lets AirPods' microphone work, at call quality while listening.
             let options: AVAudioSession.CategoryOptions = holding ? [.duckOthers, .defaultToSpeaker, .allowBluetooth] : [.mixWithOthers, .defaultToSpeaker, .allowBluetooth]
             try session.setCategory(.playAndRecord, mode: .measurement, options: options)
+            // Command haptics, which iOS mutes while recording by default.
+            try session.setAllowHapticsAndSystemSoundsDuringRecording(true)
             try session.setActive(true)
             let engine = AVAudioEngine()
-            try Self.tap(engine.inputNode, into: self)
+            try Self.tap(engine.inputNode, into: self, voiceProcessing: !holding)
             engine.prepare()
             try engine.start()
             self.engine = engine
@@ -211,12 +229,18 @@ final class Dictation {
         segmenter = Self.newSegmenter()
         held = []
         self.holding = holding
+        released = false
         failing = false
         recording = true
+        // Speech doesn't reset the idle timer: without this Auto-Lock ends listening within a minute.
+        if !holding {
+            idleTimerBefore = UIApplication.shared.isIdleTimerDisabled
+            UIApplication.shared.isIdleTimerDisabled = true
+        }
         // Each of these leaves the microphone dead: stop listening with it, keeping what was said.
         let center = NotificationCenter.default
         let stop: @Sendable (Notification) -> Void = { [weak self] n in
-            MainActor.assumeIsolated { if Self.endsListening(n) { self?.stopListening() } }
+            MainActor.assumeIsolated { if Self.endsListening(n) { self?.stoppedUnasked() } }
         }
         stops = [center.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main, using: stop),
                  center.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main, using: stop),
@@ -231,7 +255,10 @@ final class Dictation {
 
     #if DEBUG
     /// Tests: listening as if the microphone were open, without one.
-    func listenWithoutMicrophone() { begin(holding: false) }
+    func listenWithoutMicrophone() {
+        claimMicrophone()
+        begin(holding: false)
+    }
     #endif
 
     /// Speech is allowed and this phone recognizes its language on the device (both answered without waiting).
@@ -262,11 +289,33 @@ final class Dictation {
         close().forEach(enqueue)
     }
 
-    /// The app left the screen: stop, and transcribe the last words only if iOS gives the time to.
-    func abort() {
+    /// Another chat's microphone opens: this one closes first, since the audio session is shared.
+    private func claimMicrophone() {
+        if let other = Self.current, other !== self { other.stoppedUnasked() }
+        Self.current = self
+    }
+
+    /// Listening ended without the person asking (a call, a route change, another pane, the app leaving the screen): say so.
+    private func stoppedUnasked() {
         guard recording else { return }
-        let tail = close()
-        guard !tail.isEmpty else { return }
+        stopListening()
+        sayStopped()
+    }
+
+    private func sayStopped() {
+        notice = "Stopped listening"
+        AccessibilityNotification.Announcement("Stopped listening").post()
+    }
+
+    /// The app left the screen: stop, and transcribe the last words (and finish the ones already on their way)
+    /// only if iOS gives the time to.
+    func abort() {
+        var tail: [[Float]] = []
+        if recording {
+            tail = close()
+            sayStopped()
+        }
+        guard !tail.isEmpty || queued > 0 else { return }
         endGrace()
         grace = UIApplication.shared.beginBackgroundTask { [weak self] in MainActor.assumeIsolated { self?.endGrace() } }
         guard grace != .invalid else { return }
@@ -297,6 +346,11 @@ final class Dictation {
         stops.forEach(NotificationCenter.default.removeObserver)
         stops = []
         recording = false
+        if Self.current === self { Self.current = nil }
+        if let idleTimerBefore { UIApplication.shared.isIdleTimerDisabled = idleTimerBefore }
+        idleTimerBefore = nil
+        // A hold whose release never came (the 30 s cap, a call) must not swallow the next press.
+        if holding { hold = HoldToTalk() }
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         var tail: [[Float]] = []
         if holding {
@@ -309,7 +363,13 @@ final class Dictation {
     }
 
     /// The input tap, 16 kHz mono float. Static, so its block (run on the audio thread) is not main-actor code.
-    private nonisolated static func tap(_ input: AVAudioInputNode, into dictation: Dictation) throws {
+    private nonisolated static func tap(_ input: AVAudioInputNode, into dictation: Dictation, voiceProcessing: Bool) throws {
+        if voiceProcessing {
+            // Echo cancellation: VoiceOver and what the speaker plays are not transcribed. It changes the
+            // input format, so the format is read after. Other audio stays at full volume, as without it.
+            try input.setVoiceProcessingEnabled(true)
+            input.voiceProcessingOtherAudioDuckingConfiguration = .init(enableAdvancedDucking: false, duckingLevel: .min)
+        }
         let from = input.outputFormat(forBus: 0)
         guard from.sampleRate > 0, from.channelCount > 0,
               let to = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sampleRate, channels: 1, interleaved: false),

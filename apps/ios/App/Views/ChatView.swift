@@ -686,7 +686,8 @@ struct HoldToTalkButton: View {
     @Environment(ComputersStore.self) private var store
     @Environment(Prefs.self) private var prefs
     @Environment(\.palette) private var palette
-    @State private var down = false
+    /// Resets when the gesture is cancelled too (the video's sheet coming up mid-press), so no press is swallowed.
+    @GestureState private var down = false
     /// This press showed the video instead of listening, so its release has nothing to stop.
     @State private var introduced = false
 
@@ -698,18 +699,17 @@ struct HoldToTalkButton: View {
             .contentShape(Rectangle())
             .scaleEffect(down ? 1.15 : 1)
             .animation(.easeOut(duration: 0.12), value: down)
-            .gesture(DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    guard !down else { return }
-                    down = true
+            .gesture(DragGesture(minimumDistance: 0).updating($down) { _, pressed, _ in pressed = true })
+            // Down, and up whether released or cancelled.
+            .onChange(of: down) { _, pressed in
+                if pressed {
                     introduced = gate.intercept(prefs)
                     if !introduced { Task { await dictation.press(store: store) } }
-                }
-                .onEnded { _ in
-                    down = false
+                } else {
                     if !introduced { Task { await dictation.letGo(store: store) } }
                     introduced = false
-                })
+                }
+            }
             .accessibilityElement()
             .accessibilityAddTraits(.isButton)
             .accessibilityLabel(dictation.recording ? "Stop dictation" : "Dictate")
@@ -879,6 +879,10 @@ struct Composer: View {
                         }
                         .accessibilityLabel("Stop dictation")
                         .accessibilityIdentifier("composer.stopDictation")
+                    } else if dictation.starting && !prefs.dictationHold {
+                        // Permissions or the computer are being asked; a second tap would open a second microphone.
+                        ProgressView().frame(width: 44, height: 44).accessibilityLabel("Starting dictation")
+                            .accessibilityIdentifier("composer.dictationStarting")
                     } else if dictation.transcribing {
                         ProgressView().frame(width: 44, height: 44).accessibilityLabel("Transcribing")
                     } else if prefs.dictationHold && dictation.available {
@@ -964,7 +968,14 @@ struct Composer: View {
             // Turn on is the one way out that listens: in hold mode there is no hold to start from.
             intro.closed(prefs) { if !prefs.dictationHold { Task { await dictation.startListening(store: store) } } }
         }) { VoiceIntroView(onTurnOn: intro.turnOn) }
-        .onChange(of: dictation.recording) { _, on in if on { voice.started() } else { voice.stopped() } }
+        .onChange(of: dictation.recording) { _, on in
+            if on { return voice.started() }
+            let afterHold = dictation.released
+            Task {
+                await dictation.drain()
+                await voice.stopped(afterHold: afterHold)
+            }
+        }
         // Listening never outlives the screen: lock, app switch, or leaving the chat stops it, and it never restarts by itself.
         .onChange(of: phase) { _, p in if p != .active { dictation.abort() } }
         .onDisappear(perform: unbindVoice)

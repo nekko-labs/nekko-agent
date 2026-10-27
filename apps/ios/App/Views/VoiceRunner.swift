@@ -61,6 +61,7 @@ final class VoiceRunner {
     static let computerOnly = "That one works on the computer"
     private static let sayYes = "Say 'Nekko, yes' or tap Confirm."
     private static let goAhead = "Go ahead and build it."
+    private static let nothingToConfirm = "Nothing to confirm"
 
     var host = Host()
     /// Set once the composer is gone: what is still queued is kept as plain text (that chat's
@@ -85,8 +86,13 @@ final class VoiceRunner {
 
     func started() { carried = nil }
 
-    /// Listening stopped: a confirm left up must not be answered by a later "Nekko, yes".
-    func stopped() { setPending(nil) }
+    /// Listening stopped: a confirm left up must not be answered by a later "Nekko, yes". It is cleared after
+    /// the words already heard (they may hold the "yes"). A hold's release keeps it: with hold to talk the
+    /// answer comes in the next hold, and the confirm's 60 s clock still ends it.
+    func stopped(afterHold: Bool) async {
+        guard !afterHold else { return }
+        await enqueue { self.setPending(nil) }
+    }
 
     func clearNotice(_ id: UUID) { if notice?.id == id { notice = nil } }
 
@@ -180,14 +186,20 @@ final class VoiceRunner {
                                options: hits.map { chat in Option(label: Self.title(chat)) { [weak self] in self?.open(chat) } })
             }
         case .yes:
-            guard let pending, pending.confirm, let run = pending.options.first?.run else { return pending }
+            guard let pending, pending.confirm, let run = pending.options.first?.run else {
+                show(Self.nothingToConfirm)
+                return pending
+            }
             try await run()
             return nil
         case .no:
             if pending != nil { done("Cancelled") }
             return nil
         case .pick(let n):
-            guard let pending, !pending.confirm, pending.options.indices.contains(n - 1) else { return pending }
+            guard let pending, !pending.confirm, pending.options.indices.contains(n - 1) else {
+                show(Self.nothingToConfirm)
+                return pending
+            }
             try await pending.options[n - 1].run()
             return nil
         case .erase:
@@ -195,7 +207,7 @@ final class VoiceRunner {
             let removed = !last.isEmpty && current.hasSuffix(last)
             if removed { host.text.wrappedValue = String(current.dropLast(last.count)) }
             last = ""
-            if removed { done("Erased") }
+            if removed { done("Erased") } else { show("Nothing to erase") }
         case .clear:
             last = ""
             host.text.wrappedValue = ""
@@ -246,7 +258,8 @@ final class VoiceRunner {
 
     /// What "Nekko, ship it" does for this chat (the desktop's shipAction).
     static func shipAction(_ f: ShipFacts) -> ShipAction {
-        if let open = f.prs.first(where: { $0.state == .open }) { return f.question != nil ? .ask(open) : .merge(open) }
+        // A draft PR isn't ready to merge, and the phone has no GitHub stacks to open instead.
+        if let open = f.prs.first(where: { $0.state == .open && !$0.isDraft }) { return f.question != nil ? .ask(open) : .merge(open) }
         if f.question != nil { return .goAhead }
         if f.running { return .stillWorking }
         // A chat whose PRs are all merged or closed already shipped.
@@ -274,10 +287,16 @@ final class VoiceRunner {
         host.text.wrappedValue = current + last
     }
 
+    /// Says why when nothing went: an empty box, or one the composer can't send now (a blocked chat, photos loading, a refusal).
     private func send() async -> Bool {
-        guard !host.text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+        guard !host.text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            show("Nothing to send")
+            return false
+        }
         last = ""
-        return await host.send()
+        if await host.send() { return true }
+        show("Not sent")
+        return false
     }
 
     private static func title(_ chat: SessionSummary) -> String { chat.title.isEmpty ? "Untitled chat" : chat.title }

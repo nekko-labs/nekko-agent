@@ -183,7 +183,7 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(prefs.dictationHold
                          ? "Hold the microphone while you speak and let go to stop. With VoiceOver, double-tap starts and double-tap again stops."
-                         : "Tap the microphone and talk: it keeps listening through pauses until you tap stop, lock the phone, or leave the chat. Start with “Nekko” for a command, like “Nekko, send it”. Without Whisper on the computer, speech is turned into text on this iPhone only, never on a server.")
+                         : "Tap the microphone and talk: it keeps listening through pauses until you tap stop, lock the phone, or leave the chat, and the screen stays on while it listens. Start with “Nekko” for a command, like “Nekko, send it”. Without Whisper on the computer, speech is turned into text on this iPhone only, never on a server.")
                         .foregroundStyle(palette.inkSoft)
                     Button("Watch how voice works") { voiceIntro.replay() }
                         .font(.footnote)

@@ -53,8 +53,11 @@ struct VoiceIntroView: View {
                     VideoPlayer(player: player)
                         .aspectRatio(16.0 / 9.0, contentMode: .fit)
                         .clipShape(RoundedRectangle(cornerRadius: 14))
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(Self.summary)
+                        // The player's own controls stay reachable (VoiceOver, Switch Control, Voice Control):
+                        // with Reduce Motion it waits for Play.
+                        .accessibilityElement(children: .contain)
+                        .accessibilityLabel("How voice works, video")
+                        .accessibilityHint(Self.summary)
                         .accessibilityIdentifier("voiceIntro.video")
                 } else {
                     Text(Self.summary).foregroundStyle(palette.inkSoft)

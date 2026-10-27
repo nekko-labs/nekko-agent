@@ -515,7 +515,42 @@ final class VoiceTests: XCTestCase {
         // Nothing left to take back: no "Erased".
         await r.hear([Dictation.Words(text: "Nekko erase that")])
         XCTAssertEqual(box.text, "Fix the login bug.")
-        XCTAssertEqual(box.toasts, ["Erased"])
+        XCTAssertEqual(box.toasts, ["Erased", "Nothing to erase"])
+    }
+
+    func testCommandsWithNothingToDoSaySo() async {
+        let box = Box()
+        let r = runner(box)
+        await r.hear([Dictation.Words(text: "Nekko, send it."), Dictation.Words(text: "Nekko, yes."), Dictation.Words(text: "Nekko, the second one.")])
+        XCTAssertEqual(box.sent, [])
+        XCTAssertEqual(box.toasts, ["Nothing to send", "Nothing to confirm", "Nothing to confirm"])
+        // A send the composer turns down (a blocked chat, photos still loading) says so too.
+        r.host.send = { false }
+        box.text = "Fix it."
+        await r.hear([Dictation.Words(text: "Nekko, send it.")])
+        XCTAssertEqual(box.toasts.last, "Not sent")
+    }
+
+    func testAHoldsReleaseKeepsAConfirmForTheNextHold() async {
+        let box = Box()
+        let r = runner(box, prs: #"[{"url":"https://github.com/acme/app/pull/12","number":12,"state":"open"}]"#)
+        await r.hear([Dictation.Words(text: "Nekko, ship it.")])
+        // Hold to talk: the confirm is answered in the next hold, so letting go keeps it.
+        await r.stopped(afterHold: true)
+        XCTAssertNotNil(r.pending)
+        await r.hear([Dictation.Words(text: "Nekko, yes.")])
+        XCTAssertEqual(box.merged, ["https://github.com/acme/app/pull/12"])
+        // Tap mode: stopping clears it, once the words already heard are applied.
+        await r.hear([Dictation.Words(text: "Nekko, ship it.")])
+        XCTAssertNotNil(r.pending)
+        await r.stopped(afterHold: false)
+        XCTAssertNil(r.pending)
+    }
+
+    func testShipItLeavesDraftPrsAlone() {
+        let prs = PullRequest.list(try? JSONValue.parse(Data(#"[{"url":"https://github.com/acme/app/pull/3","number":3,"state":"open","isDraft":true},{"url":"https://github.com/acme/app/pull/4","number":4,"state":"open"}]"#.utf8)))
+        XCTAssertEqual(VoiceRunner.shipAction(.init(prs: prs, running: false, question: nil)), .merge(prs[1]))
+        XCTAssertEqual(VoiceRunner.shipAction(.init(prs: [prs[0]], running: false, question: nil)), .nothing)
     }
 
     func testAWakeWordAloneAddressesTheNextSegment() async {
@@ -729,8 +764,52 @@ final class VoiceTests: XCTestCase {
             NotificationCenter.default.post(stop)
             for _ in 0..<50 where d.recording { try? await Task.sleep(for: .milliseconds(20)) }
             XCTAssertFalse(d.recording, "\(stop.name.rawValue) stops listening")
+            XCTAssertEqual(d.notice, "Stopped listening", "an unasked-for stop is said")
             await d.drain()
             XCTAssertEqual(d.heard.map(\.text), ["kept"])
         }
+    }
+
+    func testListeningKeepsTheScreenOnAndPutsItBack() {
+        for before in [false, true] {
+            UIApplication.shared.isIdleTimerDisabled = before
+            let d = Dictation()
+            d.listenWithoutMicrophone()
+            XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled, "Auto-Lock would end listening")
+            d.stopListening()
+            XCTAssertEqual(UIApplication.shared.isIdleTimerDisabled, before)
+            XCTAssertNil(d.notice, "a tap on stop is not announced")
+        }
+        UIApplication.shared.isIdleTimerDisabled = false
+    }
+
+    func testListeningInOnePaneStopsTheOther() {
+        let left = Dictation(), right = Dictation()
+        left.listenWithoutMicrophone()
+        right.listenWithoutMicrophone()
+        XCTAssertFalse(left.recording, "one microphone for the app")
+        XCTAssertTrue(right.recording)
+        XCTAssertEqual(left.notice, "Stopped listening")
+        right.stopListening()
+        XCTAssertFalse(UIApplication.shared.isIdleTimerDisabled)
+    }
+
+    func testLeavingTheScreenWithWordsInFlightAsksForTimeToFinishThem() async {
+        let d = Dictation()
+        var release = false
+        d.transcribe = { _ in
+            while !release { try await Task.sleep(for: .milliseconds(10)) }
+            return "kept"
+        }
+        d.listenWithoutMicrophone()
+        // The last segment was cut at a pause and is on its way; nothing is left un-cut.
+        d.enqueue([0.1])
+        d.abort()
+        XCTAssertTrue(d.finishingInBackground, "the in-flight words need background time too")
+        release = true
+        await d.drain()
+        for _ in 0..<50 where d.finishingInBackground { try? await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertFalse(d.finishingInBackground, "ended once the queue drains")
+        XCTAssertEqual(d.heard.map(\.text), ["kept"])
     }
 }
