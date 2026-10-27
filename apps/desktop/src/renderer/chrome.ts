@@ -41,7 +41,8 @@ export const isMacChrome = windowChrome?.platform === 'darwin';
 export function syncTitleBarOverlay(): void {
   if (!windowChrome) return;
   const css = getComputedStyle(document.documentElement);
-  const color = css.getPropertyValue('--paper').trim();
+  // A theme whose title bar shows the field behind it sets its own overlay colour.
+  const color = (css.getPropertyValue('--titlebar-overlay') || css.getPropertyValue('--paper')).trim();
   const symbolColor = css.getPropertyValue('--ink-soft').trim();
   if (color && symbolColor) windowChrome.setTitleBarOverlay({ color, symbolColor });
 }

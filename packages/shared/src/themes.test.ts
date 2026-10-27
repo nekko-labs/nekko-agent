@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { THEME_PRESETS, appearanceOf, currentPresetAccent, touchesAppearance, type ThemePreset } from './themes.js';
+import { THEME_PRESETS, appearanceOf, currentPresetAccent, resolveThemePreset, themePresetOf, touchesAppearance, type ThemePreset } from './themes.js';
 
 describe('currentPresetAccent', () => {
   it('upgrades accents a retuned preset used to save', () => {
@@ -12,6 +12,31 @@ describe('currentPresetAccent', () => {
     expect(currentPresetAccent('dark', '#a78bfa')).toBe('#a78bfa');
     expect(currentPresetAccent(undefined, '#a78bfa')).toBe('#a78bfa');
     expect(currentPresetAccent('nebula', undefined)).toBeUndefined();
+  });
+});
+
+describe('resolveThemePreset', () => {
+  it('resolves System to Nekko Dark in dark mode and Lilac in light mode', () => {
+    expect(resolveThemePreset('system', true)).toBe('nekko-dark');
+    expect(resolveThemePreset('system', false)).toBe('lilac');
+  });
+  it('leaves every other preset as it is', () => {
+    for (const id of ['light', 'dark', 'nebula', 'lilac', 'nekko-dark']) {
+      expect(resolveThemePreset(id, true)).toBe(id);
+      expect(resolveThemePreset(id, false)).toBe(id);
+    }
+    expect(resolveThemePreset(undefined, true)).toBeUndefined();
+  });
+  it('reads a fresh profile with nothing saved as System', () => {
+    expect(themePresetOf(undefined)).toBe('system');
+    expect(themePresetOf({})).toBe('system');
+    expect(themePresetOf({ theme: 'system' })).toBe('system');
+    expect(themePresetOf({ theme: 'dark' })).toBeUndefined();
+    expect(themePresetOf({ theme: 'dark', themePreset: 'nebula' })).toBe('nebula');
+  });
+  it('places Nekko Dark directly after Lavender', () => {
+    const ids = THEME_PRESETS.map((p) => p.id);
+    expect(ids[ids.indexOf('lavender') + 1]).toBe('nekko-dark');
   });
 });
 
@@ -28,6 +53,7 @@ describe('THEME_PRESETS', () => {
     expect(ids).toContain('terminal');
     expect(ids).toContain('nord');
     expect(ids).toContain('solar');
+    expect(ids).toContain('nekko-dark');
     expect(ids).toContain('ember');
     expect(ids).toContain('autumn');
   });
