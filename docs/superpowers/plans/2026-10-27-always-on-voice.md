@@ -35,6 +35,8 @@
 
 ## Part 1: Desktop (one PR, branch `voice-desktop`)
 
+Issue: #1264 (PR body says `Closes #1264`).
+
 ### Task 1.1: Command grammar and shared fixture
 
 **Files:**
@@ -141,6 +143,8 @@
 ---
 ## Part 2: iPhone voice (one PR, branch `voice-ios`, after Part 1 merges)
 
+Issue: #1265 (PR body says `Closes #1265`).
+
 ### Task 2.1: Segmenter and grammar in NekkoProtocol
 
 **Files:**
@@ -198,7 +202,9 @@
 
 ## Part 3: One Live Activity for all chats, app side (one PR, branch `live-activity-card`)
 
-Until Part 4 lands, the card updates only while the app is running (no push token is registered for it), so nothing content-bearing goes through the relay yet.
+Issue: #1266 (PR body says `Closes #1266`).
+
+Start after #1257 merges: it already moves `PixelCat` to `App/Shared/PixelCat.swift` and puts the cat on the Live Activity, so Task 3.2 reuses that instead of moving it. Until Part 4 lands, the card updates only while the app is running (no push token is registered for it), so nothing content-bearing goes through the relay yet.
 
 ### Task 3.1: Card state model
 
@@ -258,6 +264,8 @@ Until Part 4 lands, the card updates only while the app is running (no push toke
 
 ## Part 4: Card pushes and remote start through the relay (one PR, branch `live-activity-push`, after Part 3)
 
+Issue: #1267 (PR body says `Closes #1267`).
+
 **Files:**
 - Modify: `crates/nekko-remote/src/agent.rs` (`relay_frames` L475-495, `activity_frame` L500-555, `phases` L117)
 - Modify: `crates/nekko-remote/tests/golden.rs` and `crates/nekko-remote/tests/golden/agent.json` (hand-edited in the same PR, per `docs/runbooks/golden-fixtures.md`)
@@ -281,6 +289,8 @@ Until Part 4 lands, the card updates only while the app is running (no push toke
 ---
 
 ## Part 5: Live Activity mic and reply line (one PR, branch `live-activity-mic`, after Part 4)
+
+Issue: #1268 (PR body says `Closes #1268`).
 
 **Files:**
 - Modify: `apps/ios/App/Shared/AgentRunActivity.swift` (add `TalkToChatIntent`)
