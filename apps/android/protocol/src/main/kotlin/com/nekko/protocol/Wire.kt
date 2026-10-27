@@ -43,6 +43,10 @@ object Channels {
     const val CHAT_QUEUE = "chat:queue"
     const val CHAT_PENDING = "chat:pending"
     const val CHAT_ANSWER = "chat:answer"
+    /** Change or remove a queued prompt, only while it still reads what the phone showed ([QueuedPrompt.edit]). */
+    const val CHAT_EDIT_QUEUED = "chat:editQueued"
+    /** A new chat from this one, before a prompt or after a reply: answers its id and title. */
+    const val SESSION_FORK = "session:fork"
     const val TOOL_APPROVE = "tool:approve"
     const val WORKSPACE_LIST = "workspace:list"
     const val APP_INFO = "app:info"
@@ -99,6 +103,7 @@ object Channels {
         SESSION_SET_OPTIONS, CHAT_SEND, CHAT_ABORT, CHAT_QUEUE, CHAT_PENDING, CHAT_ANSWER, TOOL_APPROVE,
         WORKSPACE_LIST, APP_INFO, SKILLS_RUNNABLE, CHANGES_LIST, MONITOR_SUMMARY,
         SECURITY_CHALLENGE, DEVICE_SIGN_OUT, REMOTE_STOP, APP_QUIT,
+        CHAT_EDIT_QUEUED, SESSION_FORK,
         WORKSPACE_GIT_STATUS, GIT_DIFF, GIT_LOG, GIT_SHOW, GIT_BRANCHES, GIT_COMPARE,
         GIT_STAGE, GIT_UNSTAGE, GIT_COMMIT, GIT_COMMIT_MESSAGE, GIT_PUSH, GIT_SWITCH, GIT_MERGE_ABORT,
         PR_SESSION_LIST, PR_CHECKS, PR_DIFF, PR_CREATE, PR_ACTION,
@@ -218,6 +223,8 @@ data class Session(
     val omittedMessages: Int = 0,
     val queue: List<String>,
     val updatedAt: Long,
+    /** The queue as the computer holds it: what `chat:editQueued` checks against. */
+    val queued: List<QueuedPrompt> = emptyList(),
 ) {
     companion object {
         fun from(e: JsonElement?): Session? {
@@ -230,11 +237,10 @@ data class Session(
                 workspaceId = o.str("workspaceId"),
                 messages = o["messages"].arr()?.mapNotNull { ChatMessage.from(it) } ?: emptyList(),
                 omittedMessages = o.long("omittedMessages")?.toInt()?.coerceAtLeast(0) ?: 0,
-                // Queue entries may be plain strings or {text, images, skill}; the phone shows text.
-                queue = o["queue"].arr()?.mapNotNull { q ->
-                    (q as? JsonPrimitive)?.contentOrNull ?: q.obj()?.str("text")
-                } ?: emptyList(),
+                // Queue entries may be plain strings or {text, images, skill}; a skill's shows as `/name input`.
+                queue = QueuedPrompt.list(o["queue"]).map { it.shown },
                 updatedAt = o.long("updatedAt") ?: 0,
+                queued = QueuedPrompt.list(o["queue"]),
             )
         }
     }
@@ -380,6 +386,10 @@ data class PcSettings(
     val voiceEnabled: Boolean = false,
     /** The computer lets phones read a chat's changes (`phoneChanges`). Set on the computer only. */
     val phoneChanges: Boolean = false,
+    /** The prompts the user saved on the computer (`/` and the + menu offer them beside skills). */
+    val prompts: List<SavedPrompt> = emptyList(),
+    /** The computer's automations are paused (Settings → Automations there). */
+    val automationsPaused: Boolean = false,
 ) {
     enum class ChatMode(val wire: String) {
         ASK("ask"), GUARDRAILS("guardrails"), YOLO("yolo");
@@ -412,6 +422,8 @@ data class PcSettings(
                 skipDeleteConfirmation = (o["skipDeleteConfirmation"] as? JsonPrimitive)?.booleanOrNull,
                 voiceEnabled = o["voice"].obj()?.bool("enabled") == true,
                 phoneChanges = o.bool("phoneChanges"),
+                prompts = SavedPrompt.list(o["prompts"]),
+                automationsPaused = o.bool("automationsPaused"),
             )
         }
 

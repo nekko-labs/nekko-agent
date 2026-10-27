@@ -1,6 +1,8 @@
 package com.nekko.android.chat
 
 import com.nekko.android.git.GitController
+import com.nekko.protocol.SavedPrompt
+import com.nekko.protocol.Block
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.CoroutineScope
@@ -67,6 +69,19 @@ class ChatViewModel(
         // A model-written message can take a while; a push or a switch too.
         change = { r -> repo.callChange(r.channel, r.args, timeoutMs = if (r.channel == Channels.GIT_COMMIT_MESSAGE) 90_000 else 150_000) },
     )
+
+    /** Change or remove a queued prompt before it runs (AN-29); the computer checks it still reads [expect]. */
+    suspend fun editQueued(index: Int, expect: String, text: String?) = controller.editQueued(index, expect, text)
+
+    /** Whether [block] is saved, so the chat can be forked from it. */
+    fun canFork(block: Block): Boolean = controller.isSaved(block)
+
+    /** Fork this chat from [block]: the new chat's id and the prompt for its message box. */
+    suspend fun fork(block: Block): Pair<String, String?> = controller.fork(block).also { repo.reloadList() }
+
+    /** The prompts saved on the computer, offered by `/` beside its skills. */
+    val prompts: StateFlow<List<SavedPrompt>> = repo.state.map { it.pcSettings.prompts }.distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, repo.state.value.pcSettings.prompts)
 
     /** Git (AN-30) over this chat, at its status or straight at one pull request (from the chip). */
     data class GitOverlay(val git: GitController, val pr: PullRequest?)

@@ -101,9 +101,20 @@ final class MarkdownTests: XCTestCase {
         let box = app.input("chat.message")
         XCTAssertTrue(box.waitForExistence(timeout: 15))
         box.tap()
-        box.tap()
-        let paste = app.menuItems["Paste"].exists ? app.menuItems["Paste"] : app.buttons["Paste"]
-        XCTAssertTrue(paste.waitForExistence(timeout: 5), "the edit menu offers Paste")
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10), "the box takes focus")
+        // The edit menu item is a menu item or a button depending on the iOS version; whichever shows.
+        let paste = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@ AND (elementType == %d OR elementType == %d)", "Paste",
+                                                                         XCUIElement.ElementType.menuItem.rawValue,
+                                                                         XCUIElement.ElementType.button.rawValue)).firstMatch
+        // The second tap opens the menu once the box is focused; on a loaded simulator it
+        // has landed while the keyboard was still coming up and opened nothing (#1019).
+        // A tap on a focused box with no menu showing only opens it, so tap again if it never came.
+        func openEditMenu() {
+            var taps = 0
+            repeat { box.tap(); taps += 1 } while !paste.waitForExistence(timeout: 10) && taps < 3
+            XCTAssertTrue(paste.exists, "the edit menu offers Paste")
+        }
+        openEditMenu()
         let ours = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Paste as Markdown")).firstMatch
         XCTAssertTrue(ours.exists, "and Paste as Markdown")
         attach(app, "composer-paste-1-menu")
@@ -112,8 +123,16 @@ final class MarkdownTests: XCTestCase {
         let chip = app.buttons["composer.useFormatting"]
         XCTAssertTrue(chip.waitForExistence(timeout: 3), "the chip offers the formatting")
         attach(app, "composer-paste-2-chip")
+        // The chip lasts 4 s (the spec), and on a loaded simulator the checks and the
+        // screenshot above have used that up before the tap landed (#1019). Paste again
+        // into an empty box and use the chip at once.
+        box.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 30))
+        openEditMenu()
+        paste.tap()
+        XCTAssertTrue(chip.waitForExistence(timeout: 3), "the chip offers the formatting again")
         chip.tap()
-        XCTAssertEqual(box.value as? String, "Ship **today**\n\n- one\n  - two")
+        let formatted = expectation(for: NSPredicate(format: "value == %@", "Ship **today**\n\n- one\n  - two"), evaluatedWith: box)
+        wait(for: [formatted], timeout: 10)
         attach(app, "composer-paste-3-formatted")
     }
 

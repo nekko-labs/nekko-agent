@@ -30,6 +30,11 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.NonCancellable
+import com.nekko.protocol.RelayException
+import com.nekko.protocol.QueuedPrompt
 
 /** A turn can run for hours (long agent runs); don't time the request out. */
 const val TURN_TIMEOUT_MS: Long = 12L * 60 * 60 * 1000
@@ -63,6 +68,8 @@ data class ChatUi(
     val error: String?,
     val blocked: String?,
     val queued: List<String>,
+    /** The queue as the computer holds it (what an edit is checked against), same order as [queued]. */
+    val queuedPrompts: List<QueuedPrompt> = emptyList(),
     val rate: Double?,
     val skills: List<SkillSummary> = emptyList(),
     /** Older messages the computer kept back from the phone; they stay on the computer. */
@@ -205,9 +212,69 @@ class ChatController(
         caller.call(Channels.CHAT_ANSWER, JsonPrimitive(sessionId), JsonPrimitive(q.callId), JsonArray(answers.map { it.toJson() }))
     }
 
+    // ---- the queue and forks (AN-29, the iPhone's IO-22 / IO-23) ----
+
+    /**
+     * Change the queued prompt at [index] before it runs, or remove it ([text]
+     * null). The computer refuses when that prompt no longer reads [expect] (it
+     * started, or the queue moved). Never offline: an edit made then could land
+     * after the prompt ran. The queue is read again either way.
+     */
+    suspend fun editQueued(index: Int, expect: String, text: String?) {
+        if (env().conn != RelayState.ONLINE) throw RelayException(RECONNECT_TO_EDIT_QUEUE)
+        try {
+            caller.call(Channels.CHAT_EDIT_QUEUED, JsonPrimitive(sessionId), JsonPrimitive(index), QueuedPrompt.edit(expect, text))
+        } finally {
+            withContext(NonCancellable) { reload() }
+        }
+    }
+
+    /** Where a fork from [block] cuts the chat, and what goes back in the new chat's message box. */
+    data class ForkPoint(val before: String?, val seed: String?)
+
+    /**
+     * A prompt: the new chat ends before it, with that prompt to edit and send
+     * (the desktop's split). A reply or step: the new chat keeps everything up
+     * to the next prompt. Null for a block not saved yet (a reply streaming).
+     */
+    fun forkPoint(block: Block): ForkPoint? {
+        val messages = _state.value.session?.messages ?: return null
+        val at = messages.indexOfFirst { m -> m.id == block.id || m.toolCalls.any { it.id == block.id } }
+        if (at < 0) return null
+        val m = messages[at]
+        if (block is Block.User && m.role == "user") {
+            return ForkPoint(m.id, m.skill?.let { (name, input) -> "/$name $input".trim() } ?: m.content)
+        }
+        return ForkPoint(messages.drop(at + 1).firstOrNull { it.role == "user" }?.id, null)
+    }
+
+    /** The saved messages' and tool calls' ids, kept per session: whether a block can be forked, cheaply. */
+    private var savedIds: Pair<Session?, Set<String>> = null to emptySet()
+
+    /** Whether [block] is saved on the computer (not a reply still streaming), so the chat can be forked from it. */
+    fun isSaved(block: Block): Boolean {
+        val session = _state.value.session ?: return false
+        if (savedIds.first !== session) {
+            savedIds = session to session.messages.flatMapTo(HashSet()) { m -> listOf(m.id) + m.toolCalls.map { it.id } }
+        }
+        return block.id in savedIds.second
+    }
+
+    /** Fork this chat on the computer from [block]: the new chat's id and the prompt for its message box. */
+    suspend fun fork(block: Block): Pair<String, String?> {
+        val point = forkPoint(block) ?: throw RelayException("Wait for this reply to finish, then fork.")
+        val args = listOfNotNull(JsonPrimitive(sessionId), point.before?.let(::JsonPrimitive))
+        val made = caller.call(Channels.SESSION_FORK, *args.toTypedArray()) as? kotlinx.serialization.json.JsonObject
+        val id = made?.get("id")?.let { (it as? JsonPrimitive)?.contentOrNull } ?: throw RelayException("Your computer didn’t fork the chat.")
+        return id to point.seed?.takeIf { it.isNotEmpty() }
+    }
+
     private fun model(): Pair<String?, String?> = resolveModel(_state.value.session, env().defaults)
 
     companion object {
+        /** Editing the computer's queue needs the computer. */
+        const val RECONNECT_TO_EDIT_QUEUE = "Reconnect to change the queue. The computer may start the prompt meanwhile."
+
         /** The session's own model, else the computer's default (never the `__auto__` sentinel). */
         fun resolveModel(session: Session?, defaults: RemoteDefaults): Pair<String?, String?> {
             val providerId = session?.providerId ?: defaults.defaultProviderId
@@ -237,6 +304,7 @@ class ChatController(
                 error = state.loadError ?: turn.error,
                 blocked = blocked,
                 queued = state.session?.queue ?: emptyList(),
+                queuedPrompts = state.session?.queued ?: emptyList(),
                 rate = turn.rate,
                 skills = state.skills,
                 omittedMessages = state.session?.omittedMessages ?: 0,

@@ -53,6 +53,12 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
@@ -68,17 +74,23 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
+/**
+ * What a long press on a message offers besides Copy: fork the chat from it
+ * (AN-29). *Edit in a new chat* on a prompt, *Fork from here* on a reply.
+ */
+data class ForkAction(val label: String, val run: () -> Unit)
+
 @Composable
-fun BlockView(block: Block) {
+fun BlockView(block: Block, fork: ForkAction? = null) {
     when (block) {
-        is Block.User -> UserBubble(block)
-        is Block.Assistant -> Reply(block)
+        is Block.User -> UserBubble(block, fork)
+        is Block.Assistant -> Reply(block, fork)
         is Block.Tool -> ToolRow(block)
     }
 }
 
 @Composable
-private fun UserBubble(b: Block.User) {
+private fun UserBubble(b: Block.User, fork: ForkAction?) {
     val p = Nekko.palette
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
         Column(
@@ -92,19 +104,21 @@ private fun UserBubble(b: Block.User) {
                 PromptPhotos(b.thumbs, tint = p.userInk.copy(alpha = 0.7f), tile = p.userInk.copy(alpha = 0.12f))
             }
             if (b.text.isNotEmpty()) {
-                Text(
-                    b.text,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = p.userInk,
-                    modifier = Modifier.padding(top = if (b.thumbs.isNotEmpty()) 8.dp else 0.dp).copyOnLongPress(b.text),
-                )
+                LongPressMenu(b.text, fork) { press ->
+                    Text(
+                        b.text,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = p.userInk,
+                        modifier = Modifier.padding(top = if (b.thumbs.isNotEmpty()) 8.dp else 0.dp).then(press),
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun Reply(b: Block.Assistant) {
+private fun Reply(b: Block.Assistant, fork: ForkAction?) {
     val p = Nekko.palette
     var open by rememberSaveable(b.id) { mutableStateOf(false) }
     val reasoning = b.reasoning
@@ -147,7 +161,7 @@ private fun Reply(b: Block.Assistant) {
             }
         }
         if (b.text.isNotEmpty()) {
-            MarkdownText(b.text, color = p.ink, modifier = Modifier.fillMaxWidth().copyOnLongPress(b.text))
+            LongPressMenu(b.text, fork) { press -> MarkdownText(b.text, color = p.ink, modifier = Modifier.fillMaxWidth().then(press)) }
         } else if (b.streaming && reasoning.isNullOrEmpty()) {
             CircularProgressIndicator(
                 color = p.accent,
@@ -338,7 +352,33 @@ fun PurposeGroupCard(purpose: ToolPurpose, blocks: List<Block>, calls: List<Purp
 }
 
 /**
- * Long press copies the whole message. Messages are not wrapped in a
+ * A message's long press: Copy at once, or with a [fork] a small menu of
+ * Copy and the fork (accessibility actions for both).
+ */
+@Composable
+private fun LongPressMenu(text: String, fork: ForkAction?, content: @Composable (Modifier) -> Unit) {
+    val clipboard = LocalClipboard.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    if (fork == null) {
+        content(Modifier.onLongPress(text, "Copy message") { copy(scope, clipboard, context, text) })
+        return
+    }
+    var open by remember { mutableStateOf(false) }
+    Box {
+        content(
+            Modifier.onLongPress(text, "Copy or fork") { open = true }
+                .semantics { customActions = listOf(CustomAccessibilityAction(fork.label) { fork.run(); true }) },
+        )
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(text = { Text("Copy") }, onClick = { open = false; copy(scope, clipboard, context, text) })
+            DropdownMenuItem(text = { Text(fork.label) }, onClick = { open = false; fork.run() }, modifier = Modifier.testTag("message.fork"))
+        }
+    }
+}
+
+/**
+ * A long press on the whole message. Messages are not wrapped in a
  * SelectionContainer: its press-and-drag gesture starts a text selection and
  * swallows the drag, so a chat of long messages (one can fill the screen)
  * could not be scrolled by a finger that rests before moving. This gesture
@@ -346,13 +386,10 @@ fun PurposeGroupCard(purpose: ToolPurpose, blocks: List<Block>, calls: List<Purp
  * a drag after the copy still scrolls the list.
  */
 @Composable
-private fun Modifier.copyOnLongPress(text: String): Modifier {
-    val clipboard = LocalClipboard.current
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+private fun Modifier.onLongPress(text: String, label: String, action: () -> Unit): Modifier {
     val haptics = LocalHapticFeedback.current
     return this
-        .semantics { onLongClick(label = "Copy message") { copy(scope, clipboard, context, text); true } }
+        .semantics { onLongClick(label = label) { action(); true } }
         .pointerInput(text) {
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
@@ -368,7 +405,7 @@ private fun Modifier.copyOnLongPress(text: String): Modifier {
                 }
                 if (ended == null) {
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    copy(scope, clipboard, context, text)
+                    action()
                 }
             }
         }

@@ -144,3 +144,24 @@ extension XCUIApplication {
             types[0], types[1], label, label, label)).firstMatch
     }
 }
+
+extension XCUIElement {
+    /// Taps until `done`, again every `timeout` while the element is still there.
+    /// A menu still settling swallows a tap on its item and stays up with nothing
+    /// done (Settings in run 40418883765, "Ask about this change" in 40382380988),
+    /// and so does a back button while the app is coming back to the front.
+    func tapUntil(timeout: TimeInterval = 20, until done: () -> Bool) -> Bool {
+        let deadline = Date().addingTimeInterval(3 * timeout)
+        var taps = 0, lastTap = Date.distantPast
+        while Date() < deadline {
+            if done() { return true }
+            if taps < 3, Date().timeIntervalSince(lastTap) > timeout, exists {
+                tap()
+                taps += 1
+                lastTap = Date()
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        }
+        return done()
+    }
+}
