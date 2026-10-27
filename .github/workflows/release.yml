@@ -218,6 +218,14 @@ jobs:
           fi
           npm run release -w @nekko-agent/desktop -- ${EXTRA[@]+"${EXTRA[@]}"}
 
+      # Only nekko-vm may create VMs (apps/desktop/scripts/sign-mac.cjs): it must
+      # carry the virtualization entitlement and nothing else in the app may.
+      # Signed or not, and a file codesign cannot read fails it. docs/signing.md.
+      - name: Check the virtualization entitlement
+        if: runner.os == 'macOS'
+        shell: bash
+        run: scripts/check-mac-entitlements.sh "$(find apps/desktop/release -maxdepth 2 -name '*.app' -print -quit)"
+
       # Proof the artifact is actually distributable, rather than trusting that
       # the build steps above did what they claim.
       - name: Verify the signed app

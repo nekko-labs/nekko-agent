@@ -191,7 +191,7 @@ export function ConnectBody({
           </div>
           {form.allowPublic && (
             <p className="rounded-xl border px-3 py-2 text-[12.5px]" style={{ borderColor: 'var(--warning)', background: 'color-mix(in srgb, var(--warning) 10%, transparent)' }}>
-              {`${scope} may be public. Keep "Require approval for all outside collaborators" on in the repo's Actions settings so fork pull requests wait for you.`}
+              {`${scope} may be public. Keep "Require approval for all external contributors" on in the repo's Actions settings so fork pull requests wait for you.`}
             </p>
           )}
         </>

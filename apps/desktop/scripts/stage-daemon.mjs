@@ -54,13 +54,12 @@ function stageSpeechHelper(dirs) {
 }
 
 // The CI runner VM helper (crates/nekkod/vm/nekko-vm.swift, decision 0022),
-// staged beside the dev daemon only. It is the only binary with the
-// virtualization entitlement, so it is ad-hoc signed here on its own. Release
-// packaging and signing land with the packaging task (T213/T214) together with a
-// signed release dry-run; until then packaged builds carry no nekko-vm and CI
-// runners report no VM support. Apple silicon only: macOS guests need it.
+// staged for dev and for packaging. It is the only binary with the
+// virtualization entitlement, so it is ad-hoc signed here on its own; a release
+// signs it again with the same file through scripts/sign-mac.cjs. Apple silicon
+// only: macOS guests need it. Returns true when nekko-vm was staged.
 function stageVmHelper(dirs) {
-  if (process.platform !== 'darwin' || process.arch !== 'arm64') return;
+  if (process.platform !== 'darwin' || process.arch !== 'arm64') return false;
   const source = join(repo, 'crates', 'nekkod', 'vm', 'nekko-vm.swift');
   const entitlements = join(repo, 'crates', 'nekkod', 'vm', 'nekko-vm.entitlements');
   const out = join(dirs[0], 'nekko-vm');
@@ -72,11 +71,12 @@ function stageVmHelper(dirs) {
     if (!signed) {
       rmSync(out, { force: true });
       console.warn('swiftc or codesign failed: CI runner VMs will be unavailable in this build');
-      return;
+      return false;
     }
   }
   for (const dir of dirs.slice(1)) copyFileSync(out, join(dir, 'nekko-vm'));
   console.log(`staged nekko-vm -> ${dirs.join(', ')}`);
+  return true;
 }
 
 if (dev) {
@@ -98,6 +98,10 @@ mkdirSync(dest, { recursive: true });
 copyFileSync(built, join(dest, exe));
 console.log(`staged ${exe} -> ${join(dest, exe)}`);
 stageSpeechHelper([dirname(built), dest]);
+if (!stageVmHelper([dirname(built), dest]) && process.platform === 'darwin' && process.arch === 'arm64' && !local) {
+  console.error('nekko-vm could not be built: packaged builds need it for CI runners');
+  process.exit(1);
+}
 
 // The decision-model runtime (ONNX Runtime, statically linked into nekkod) loads the CUDA
 // provider libraries from next to the executable on a Linux build with `--features cuda`. The

@@ -1,3 +1,5 @@
+import { useDownloadAction } from './useDownloadAction.js';
+import { DownloadProgress } from './DownloadProgress.js';
 import { useCallback, useEffect, useState } from 'react';
 import type { DownloadJob, EngineStatus, LocalModel } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
@@ -54,7 +56,8 @@ export function EngineSection({
   const [tab, setTab] = useState<Tab>('models');
   const [busy, setBusy] = useState<'starting' | 'stopping' | null>(null);
   const [showLog, setShowLog] = useState(false);
-  const [repairing, setRepairing] = useState(false);
+  const runtimeDownload = useDownloadAction({ runtime: 'llama' });
+  const repairing = runtimeDownload.active;
 
   const refresh = useCallback(async () => {
     const [s, m, d] = await Promise.allSettled([
@@ -117,11 +120,8 @@ export function EngineSection({
   // its own folder, swapped in when it lands.
   const reinstall = async (buildId: string | undefined, started: string) => {
     if (!buildId) return;
-    setRepairing(true);
-    const res = await window.nekko
-      .engineInstall(buildId)
-      .catch((e: Error) => ({ ok: false, message: e.message }));
-    setRepairing(false);
+    const res = await runtimeDownload.run(() => window.nekko.engineInstall(buildId));
+    if (!res) return;
     pushToast(res.ok ? 'info' : 'error', res.ok ? started : res.message);
     if (res.ok) setTab('downloads');
     await refresh();
@@ -228,7 +228,7 @@ export function EngineSection({
                   onClick={() => void reinstall(install.problem?.repairBuildId, 'Repairing the engine. Models will use your graphics card once it finishes.')}
                   disabled={repairing || active.some((g) => g.jobs.some((j) => j.kind === 'engine'))}
                 >
-                  {repairing ? 'Starting…' : 'Repair engine'}
+                  {repairing ? 'Downloading…' : 'Repair engine'}
                 </button>
               </div>
             )}
@@ -241,10 +241,12 @@ export function EngineSection({
                   onClick={() => void reinstall(install.upgrade?.buildId, 'Downloading the CUDA engine. Nekko switches to it once it finishes.')}
                   disabled={repairing || active.some((g) => g.jobs.some((j) => j.kind === 'engine'))}
                 >
-                  {repairing ? 'Starting…' : 'Switch to CUDA'}
+                  {repairing ? 'Downloading…' : 'Switch to CUDA'}
                 </button>
               </div>
             )}
+
+            {repairing && <DownloadProgress group={runtimeDownload.group} />}
 
             {status.settings.bind === 'lan' && running && (
               <p className="mt-2 text-[11.5px]" style={{ color: 'var(--warning, #d1a054)' }}>

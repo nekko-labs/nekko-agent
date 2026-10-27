@@ -148,6 +148,12 @@
           "description": "Run your GitHub Actions jobs on this Mac, each in a throwaway VM, without getting in your way."
         },
         {
+          "slug": "ci-runners-image",
+          "title": "Build the CI runner image",
+          "source": "docs/ci-runners-image.md",
+          "description": "Build the macOS image your CI runner jobs boot from, and check it in a VM."
+        },
+        {
           "slug": "decision-models",
           "title": "Decision models",
           "source": "docs/decision-models.md",

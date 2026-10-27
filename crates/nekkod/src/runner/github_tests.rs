@@ -220,7 +220,15 @@ async fn org_with_our_group_updates_it_instead() {
             (200, json!({ "account": { "login": "acme" } })),
             (200, json!({ "id": 11, "private": true })),
             (200, json!({ "id": 12, "private": true })),
-            (200, json!({ "runner_groups": [{ "id": 8, "name": "nekko-nekko-mac" }] })),
+            (
+                200,
+                json!({ "runner_groups": [{
+                    "id": 8,
+                    "name": "nekko-nekko-mac",
+                    "restricted_to_workflows": true,
+                    "selected_workflows": ["acme/app/.github/workflows/ios.yml@refs/heads/main"],
+                }] }),
+            ),
             (200, json!({ "id": 8 })),
             (204, json!(null)),
         ],
@@ -229,6 +237,17 @@ async fn org_with_our_group_updates_it_instead() {
     let rec = t.gh.connect(org_request(), None).await.unwrap();
     let urls = t.http.urls();
     assert_eq!(urls[5], "PATCH https://api.github.com/orgs/acme/actions/runner-groups/8");
+    // The owner's "Selected workflows" restriction survives a reconnect.
+    assert_eq!(
+        t.http.body(5),
+        json!({
+            "name": "nekko-nekko-mac",
+            "visibility": "selected",
+            "allows_public_repositories": false,
+            "restricted_to_workflows": true,
+            "selected_workflows": ["acme/app/.github/workflows/ios.yml@refs/heads/main"],
+        })
+    );
     assert_eq!(urls[6], "PUT https://api.github.com/orgs/acme/actions/runner-groups/8/repositories");
     assert_eq!(t.http.body(6), json!({ "selected_repository_ids": [11, 12] }));
     assert_eq!(rec.github().unwrap().group_id, Some(8));

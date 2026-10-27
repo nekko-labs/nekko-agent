@@ -453,9 +453,19 @@ impl<H: Http> GitHub<H> {
             .into_iter()
             .flatten()
             .find(|g| g["name"].as_str() == Some(name.as_str()))
-            .and_then(|g| g["id"].as_u64());
-        if let Some(id) = existing {
-            let patch = json!({ "visibility": "selected", "allows_public_repositories": allow_public });
+            .and_then(|g| Some((g["id"].as_u64()?, g)));
+        if let Some((id, group)) = existing {
+            // GitHub requires `name` and resets an omitted `restricted_to_workflows` to false, so the
+            // owner's "Selected workflows" restriction is sent back as it was.
+            let mut patch = json!({
+                "name": name,
+                "visibility": "selected",
+                "allows_public_repositories": allow_public,
+                "restricted_to_workflows": group["restricted_to_workflows"].as_bool().unwrap_or(false),
+            });
+            if group["selected_workflows"].is_array() {
+                patch["selected_workflows"] = group["selected_workflows"].clone();
+            }
             check(self.api("PATCH", &format!("{groups}/{id}"), token, Some(patch)).await)?;
             let repos = json!({ "selected_repository_ids": ids });
             check(self.api("PUT", &format!("{groups}/{id}/repositories"), token, Some(repos)).await)?;
