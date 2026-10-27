@@ -200,6 +200,7 @@ export function ResidentModels({
                 <EngineLoadDrawer
                   providerId={providerId}
                   model={{ ...model, loaded: true }}
+                  loadedParams={r.params}
                   onDone={() => { onChanged(); }}
                   onClose={() => setOpen(null)}
                   initialSurface={jumped === r.id ? 'advanced' : 'simple'}

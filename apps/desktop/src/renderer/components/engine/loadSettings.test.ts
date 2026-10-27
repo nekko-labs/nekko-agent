@@ -3,6 +3,7 @@ import type { Recommendation } from '@nekko-agent/shared';
 import {
   contextPerSession,
   contextStops,
+  differsFromLoaded,
   differsFromSaved,
   expertCacheMiB,
   fromPreset,
@@ -31,6 +32,17 @@ describe('load settings', () => {
     expect(differsFromSaved({ ...saved, gpuLayers: undefined }, saved)).toBe(true);
     expect(differsFromSaved({ ...saved, gpuLayers: null as unknown as number }, saved)).toBe(true);
     expect(differsFromSaved({ contextTokens: 8192 }, fromPreset().params)).toBe(true);
+  });
+
+  it('tells saved settings the running copy was not loaded with', () => {
+    // A load from chat passes the saved preset as is; the drawer passes what it shows.
+    const preset = { contextTokens: 32768, kvCacheDtype: 'f16' as const, parallelSlots: 1, budgetFraction: 0.9 };
+    const saved = fromPreset({ ...preset, speculative: false }).params;
+    expect(differsFromLoaded(saved, preset)).toBe(true);
+    expect(differsFromLoaded(saved, { ...preset, speculative: false })).toBe(false);
+    expect(differsFromLoaded({ ...saved, thinking: false, ttlSeconds: 60 }, { ...preset, speculative: false })).toBe(false);
+    expect(differsFromLoaded({ ...saved, speculative: false, seed: undefined }, { ...preset, speculative: false })).toBe(false);
+    expect(differsFromLoaded({ contextTokens: 8192, diffusion: { vae: 'vae.gguf' } }, { contextTokens: 8192 })).toBe(true);
   });
 
   it('reads where it runs off the launch parameters', () => {
