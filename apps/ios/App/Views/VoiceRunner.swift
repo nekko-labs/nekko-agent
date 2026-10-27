@@ -25,6 +25,8 @@ final class VoiceRunner {
         var tap: () -> Void = {}
         var chats: () -> [SessionSummary] = { [] }
         var open: (String) -> Void = { _ in }
+        /// Keeps words as plain text in this chat's saved draft (the composer is about to leave the screen).
+        var park: (String) -> Void = { _ in }
         var newChat: () -> Void = {}
         var openSettings: () -> Void = {}
         var status: () -> String = { "" }
@@ -70,6 +72,8 @@ final class VoiceRunner {
     private var last = ""
     private var carried: (wake: String, at: Date)?
     private var chain: Task<Void, Never>?
+    /// A command in the segment being applied left this chat (open, new chat, Settings).
+    private var left = false
 
     /// Applies each segment's words after every earlier one.
     func hear(_ words: [Dictation.Words]) async {
@@ -98,13 +102,14 @@ final class VoiceRunner {
 
     private func apply(_ text: String) async {
         if let park { return park(text) }
+        left = false
         let carry = carried.flatMap { Date().timeIntervalSince($0.at) <= Self.wakeCarrySeconds ? $0.wake + " " : nil } ?? ""
         // A wake word left alone at the end waits for the next segment; carried too late it is dropped (it holds no words).
         let tail = splitWakeTail(carry + text)
         carried = tail.wake.isEmpty ? nil : (tail.wake, Date())
         for intent in splitVoiceSegments(tail.rest) {
             // A command earlier in this segment left the chat: its words still count, its commands don't run.
-            if let park {
+            if let park = park ?? (left ? host.park : nil) {
                 switch intent { case .dictation(let t), .unknown(let t), .openChat(_, let t): park(t); default: break }
             } else {
                 await act(intent)
@@ -152,10 +157,12 @@ final class VoiceRunner {
             type(text)
         case .newSession:
             host.newChat()
+            left = true
             done("New chat")
         case .navigate(let view):
             if view == "settings" {
                 host.openSettings()
+                left = true
                 done("Opened Settings")
             } else {
                 done(Self.computerOnly)
@@ -253,6 +260,7 @@ final class VoiceRunner {
 
     private func open(_ chat: SessionSummary) {
         host.open(chat.id)
+        left = true
         done("Opened \(Self.title(chat))")
     }
 

@@ -175,7 +175,9 @@ final class Dictation {
         self.store = store
         // When the phone will transcribe, its permission prompt and the on-device check come
         // before listening: a prompt mid-listen leaves the screen and stops it.
-        if transcribe == nil, !(await computerHasWhisper(store)) {
+        // Only first use, or a phone that can't recognize on the device, pays the relay round trip to ask
+        // the computer: otherwise there is nothing to prompt for or refuse, and the mic opens at once.
+        if transcribe == nil, !Self.phoneReady, !(await computerHasWhisper(store)) {
             let auth = await withCheckedContinuation { c in SFSpeechRecognizer.requestAuthorization { c.resume(returning: $0) } }
             if let refusal = Self.phoneRefusal(authorized: auth == .authorized, recognizer: SFSpeechRecognizer()) {
                 error = refusal
@@ -231,6 +233,11 @@ final class Dictation {
     /// Tests: listening as if the microphone were open, without one.
     func listenWithoutMicrophone() { begin(holding: false) }
     #endif
+
+    /// Speech is allowed and this phone recognizes its language on the device (both answered without waiting).
+    private static var phoneReady: Bool {
+        SFSpeechRecognizer.authorizationStatus() == .authorized && SFSpeechRecognizer()?.supportsOnDeviceRecognition == true
+    }
 
     /// Why the phone can't transcribe, or nil when it can (on the device only).
     static func phoneRefusal(authorized: Bool, recognizer: SpeechRecognizing?) -> String? {

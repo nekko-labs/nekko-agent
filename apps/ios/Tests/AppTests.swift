@@ -1,4 +1,5 @@
 import XCTest
+import NekkoKit
 import NekkoProtocol
 import AVFoundation
 import Speech
@@ -607,6 +608,30 @@ final class VoiceTests: XCTestCase {
         await d.drain()
         XCTAssertEqual(sunk, ["Fix the login bug."])
         XCTAssertEqual(parked, ["Nekko, send it."], "typed as words, the command not run")
+    }
+
+    func testWordsAfterACommandThatLeftTheChatGoToItsDraft() async {
+        let box = Box()
+        let r = runner(box, chats: #"[{"id":"c","title":"Billing"}]"#)
+        var parked: [String] = []
+        r.host.park = { parked.append($0) }
+        await r.hear([Dictation.Words(text: "Nekko, open billing. Fix it.")])
+        XCTAssertEqual(box.opened, ["c"])
+        XCTAssertEqual(parked, ["Fix it."])
+        XCTAssertEqual(box.text, "", "not typed into the composer that is leaving")
+        // The next segment goes to the composer as usual (it is still on screen in a split view).
+        await r.hear([Dictation.Words(text: "Add a test.")])
+        XCTAssertEqual(box.text, "Add a test.")
+    }
+
+    func testParkedWordsFollowTheSavedDraft() {
+        let drafts = DraftStore(files: nil, debounce: 0)
+        Composer.park("Fix it.", in: "c", drafts)
+        XCTAssertEqual(drafts.draft("c").text, "Fix it.")
+        drafts.set("c", Draft(text: "Fix it.", images: ["data:image/jpeg;base64,AA=="]))
+        Composer.park("Add a test.", in: "c", drafts)
+        XCTAssertEqual(drafts.draft("c").text, "Fix it. Add a test.")
+        XCTAssertEqual(drafts.draft("c").images, ["data:image/jpeg;base64,AA=="], "the draft's photos stay")
     }
 
     func testAParkedRunnerRunsNoCommand() async {

@@ -1084,7 +1084,7 @@ struct Composer: View {
     private func bindVoice() {
         let store = store, id = chat.sessionId
         voice.park = nil
-        dictation.park = { Self.park($0, in: id, store) }
+        dictation.park = { Self.park($0, in: id, store.drafts) }
         dictation.sink = { words in
             voice.host = voiceHost
             Task { await voice.hear([words]) }
@@ -1098,10 +1098,11 @@ struct Composer: View {
         dictation.stopListening()
     }
 
-    private static func park(_ words: String, in chatId: String, _ store: ComputersStore) {
-        var d = store.drafts.draft(chatId)
+    /// Words for a chat whose composer is not on screen: after its saved draft, which the composer shows when it opens.
+    static func park(_ words: String, in chatId: String, _ drafts: DraftStore) {
+        var d = drafts.draft(chatId)
         d.text += (d.text.isEmpty || d.text.last?.isWhitespace == true ? "" : " ") + words
-        store.drafts.set(chatId, d)
+        drafts.set(chatId, d)
     }
 
     private func answer(_ intent: VoiceIntent) {
@@ -1119,6 +1120,7 @@ struct Composer: View {
             tap: { Haptics.tap() },
             chats: { store.summaries.filter(\.isVisible) },
             open: { app.openChat = $0 },
+            park: { Self.park($0, in: chat.sessionId, store.drafts) },
             newChat: { app.newChatRequested = true },
             openSettings: { app.openSettings = true },
             status: {
