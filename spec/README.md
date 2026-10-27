@@ -66,7 +66,7 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 
 The desktop shell: wall, windows, navigation rail, layouts, settings.
 
-- [Agent board header spacing](desktop/command-center-header-spacing.md) (12 KB)
+- [Agent board header spacing](desktop/command-center-header-spacing.md) (13 KB)
 - [Agent board panel design parity (2026-10-06)](desktop/command-center-panel-design-parity.md) (7 KB)
 - [Agent board: pick up and drop windows](desktop/agent-board-pick-up-and-drop.md) (3 KB)
 - [Agent window controls refresh (2026-10-15)](desktop/agent-window-controls-refresh.md) (6 KB)
