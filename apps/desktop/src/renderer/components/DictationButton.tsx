@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { VoiceSettings } from './VoiceSettings.js';
 import { useStore } from '../store.js';
 import { voiceListener, type VoiceTarget } from '../voiceActions.js';
+
+const VoiceIntro = lazy(() => import('./VoiceIntro.js'));
 
 /**
  * The always-on microphone. One capture serves the whole app (voiceActions.ts);
@@ -16,15 +18,19 @@ export function DictationButton(props: VoiceTarget) {
   useStore(s => s.activeSessionId);
   const snap = useSyncExternalStore(voiceListener.subscribe, voiceListener.snapshot, voiceListener.snapshot);
   const [setup, setSetup] = useState(false);
+  const [intro, setIntro] = useState(false);
   useEffect(() => voiceListener.register(sessionId, () => target.current), [sessionId]);
   useEffect(() => {
     if (!voice?.enabled) voiceListener.abort();
     // Choosing an engine in the setup popover is the whole setup: close it.
     if (voice?.enabled && setup) setSetup(false);
   }, [voice?.enabled, setup]);
+  const listen = async () => { if (await voiceListener.start(sessionId) === 'setup') setSetup(true); };
   const toggle = async () => {
     if (snap.listening) { void voiceListener.stop(); return; }
-    if (await voiceListener.start(sessionId) === 'setup') setSetup(true);
+    // The first tap shows the video; its Turn on starts listening, Not now does not.
+    if (!voice?.introSeen) { setIntro(true); return; }
+    await listen();
   };
   // Only one composer shows the strip and any confirm: the one text would land in.
   const shown = voiceListener.displaySessionId() === sessionId;
@@ -39,6 +45,7 @@ export function DictationButton(props: VoiceTarget) {
           <rect x="9" y="2" width="6" height="12" rx="3" /><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8" />
         </svg>
       </button>
+      {intro && <Suspense fallback={null}><VoiceIntro onClose={() => setIntro(false)} onTurnOn={() => void listen()} /></Suspense>}
       {setup && <div className="absolute bottom-full right-0 z-40 mb-2 w-80 rounded-xl border border-line bg-surface p-3 shadow-lg"><VoiceSettings compact /><button className="mt-2 text-[12px]" onClick={() => setSetup(false)}>Close setup</button></div>}
       {shown && (snap.listening || busy || pending || snap.error) && <div className="absolute bottom-full right-0 z-40 mb-2 w-72 rounded-xl border border-line bg-surface p-3 shadow-lg" data-voice-strip>
         {(snap.listening || busy) && <div role="status" className="flex items-center gap-2 text-[12px] text-ink-soft">

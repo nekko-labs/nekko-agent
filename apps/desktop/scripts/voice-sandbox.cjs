@@ -7,6 +7,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const out = process.env.NEKKO_INTEGRATION_OUT;
 if (!out) throw Error('Launch through layout-evidence-integration.cjs');
+// A fresh profile each run: a draft left in the last run's storage would ride along into the send.
+fs.rmSync(path.join(out, 'profile'), { recursive: true, force: true });
 app.setPath('userData', path.join(out, 'profile'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const report = { captures: [], checks: {}, errors: [] };
@@ -39,8 +41,18 @@ app.whenReady().then(async () => {
       };
     })()`);
     await sleep(300);
+    // The first tap shows the video instead of listening; Turn on closes it, remembers it, and starts.
     await run(`document.querySelector('[aria-label="Start listening"]').click()`);
+    for (let i = 0; i < 30 && !(await run(`!!document.querySelector('[data-voice-intro]')`)); i++) await sleep(200);
+    report.checks.introShownFirst = await run(`!!document.querySelector('[data-voice-intro]') && !document.querySelector('[aria-label="Stop listening"]')`);
+    await sleep(2500);
+    await shot('intro-dark');
+    await run(`document.documentElement.dataset.theme = 'light'`); await sleep(300);
+    await shot('intro-light');
+    await run(`document.documentElement.dataset.theme = 'dark'`);
+    await run(`Array.from(document.querySelectorAll('[role=dialog] button')).find(b => b.textContent === 'Turn on').click()`);
     await sleep(700);
+    report.checks.introSeen = await run('layoutFixture.store.getState().settings.voice.introSeen === true && !document.querySelector("[data-voice-intro]")');
     report.checks.listening = await run(`document.querySelector('[aria-label="Stop listening"]')?.getAttribute('aria-pressed')`);
     await shot('listening-dark');
     await run(`document.documentElement.dataset.theme = 'light'`); await sleep(300);
