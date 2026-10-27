@@ -15,13 +15,13 @@ While it listens, the microphone is red and a strip above it shows the sound lev
 ## How listening works
 
 - **One microphone for the whole app.** It keeps listening when you switch chats or click into another window.
-- **Your words go to the chat you're looking at.** If no chat is focused, they go to the chat where you turned listening on. Nothing is sent until you send it.
-- **It works in pieces.** Each pause ends a piece (how long a pause counts is **End utterance after silence** in Settings > Dictation), and a piece never runs past 30 seconds. Pieces are typed in the order you said them.
+- **Your words go to the chat you're looking at.** If no chat is focused, they go to the chat where you turned listening on. On a page with no chat (Settings, Models), it keeps listening: what you say is added to that chat's draft ("Added to Billing draft"), and commands like "Nekko, open settings" still work. Nothing is sent until you send it.
+- **It works in pieces.** Each pause ends a piece (how long a pause counts is **End utterance after silence** in Settings > Dictation), and a piece never runs past 30 seconds. Pieces are turned into text one at a time and typed in the order you said them. Noise the engine marks as non-speech ("[BLANK_AUDIO]", "(keyboard clicking)") is never typed. If speech can't be turned into text, you'll see it once.
 - **It stops** when you tap the microphone again (what you just said is still typed), when the computer locks or goes to sleep, or when you turn voice off in settings. It never turns itself back on.
 
 ## Commands
 
-Start with "Nekko" at the beginning of a sentence: "Fix the login bug. Nekko, send it" types the first sentence and then sends it. "Nekko" in the middle of a sentence ("tell Nekko to check it") is just text, and a "Nekko, ..." that isn't a command is typed as you said it.
+Start with "Nekko" at the beginning of a sentence: "Fix the login bug. Nekko, send it" types the first sentence and then sends it. A pause after "Nekko" is fine ("Nekko. Send it."), as long as the command follows within 5 seconds. "Nekko" in the middle of a sentence ("tell Nekko to check it") is just text, and a "Nekko, ..." that isn't a command is typed as you said it.
 
 | Say | What happens |
 |---|---|
@@ -30,17 +30,17 @@ Start with "Nekko" at the beginning of a sentence: "Fix the login bug. Nekko, se
 | "Nekko, send it" | Sends the message. |
 | "Nekko, new chat" | Starts a new chat. |
 | "Nekko, how's it going" | Shows what the chat is doing: working, waiting for you, or watching a PR. |
-| "Nekko, open the one about billing" | Opens the chat that matches. If several match, pick one by tapping it or saying "Nekko, the first one". |
+| "Nekko, open the one about billing" | Opens the chat that matches. If several match, pick one by tapping it or saying "Nekko, the first one". If none match, the words are typed. |
 | "Nekko, ship it" | See below. |
 | "Nekko, complete this session" | Completes the chat, after you confirm. |
 | "Nekko, open settings", "Nekko, switch to desktop 2" | Opens a page, or switches desktops or screens. |
 
-Each command shows a short message ("Erased", "Sent", "New chat") so you know it ran. Commands about a chat (erase, clear, send, ship, how's it going, complete) work on the chat you're looking at; with none open you'll see "Open a chat first".
+Each command shows a short message ("Erased", "Sent", "New chat") so you know it ran. If a message can't be sent (no model picked, for example), the reason shows and your words stay in the message box. Commands about a chat (erase, clear, send, ship, how's it going, complete) work on the chat you're looking at; with none open you'll see "Open a chat first".
 
 **"Ship it"** depends on the chat:
 
 - It has an open pull request: Nekko asks to merge it, naming the PR ("Merge owner/repo#123?"), and merges when you confirm. A stacked PR opens on GitHub instead.
-- No PR, and the agent is done or waiting on a question: sends "Go ahead and build it."
+- No PR, and the agent is done: sends "Go ahead and build it." If it's waiting on a question, that's the answer.
 - An open PR **and** a question waiting: you choose **Merge owner/repo#123** (the PR's name) or **Go ahead**.
 - Still working: "It's still working".
 

@@ -21,23 +21,23 @@ area: models
 **Listening** `[implemented 2026-10-27; unit-tested; hidden-window verified with a stubbed transcriber; not verified with a real microphone]`
 
 - One tap turns the mic on and it stays on. There is **one microphone for the whole app**: it keeps listening when you switch chats or the window loses focus. While on, the button is red and a strip above it shows the level meter and the last phrase heard.
-- It stops when you tap it again (the words spoken just before still count), when the computer locks or sleeps, or when voice is turned off in settings. It never starts by itself.
-- Speech is cut into segments at each pause (the setting **End utterance after silence**), and at 30 s at the latest. Each segment is turned into text on this computer by the engine in use (Whisper, or Apple's on-device SpeechAnalyzer through the helper, [decision 0012](../../docs/decisions/0012-apple-speech-through-a-helper-command.md)); segments apply in the order spoken, even when a later one finishes first.
-- **Where text goes:** into the draft of the chat that is focused when the segment finishes; if no chat is focused, into the chat that turned listening on. Nothing is sent until you send it.
+- It stops when you tap it again (the words spoken just before still count), when the computer locks or sleeps (watched from before the microphone opens, so a lock during start counts), or when voice is turned off in settings. Leaving the chats for another page does not stop it. It never starts by itself.
+- Speech is cut into segments at each pause (the setting **End utterance after silence**), and at 30 s at the latest. Each segment is turned into text on this computer by the engine in use (Whisper, or Apple's on-device SpeechAnalyzer through the helper, [decision 0012](../../docs/decisions/0012-apple-speech-through-a-helper-command.md)); segments are transcribed one at a time (the daemon runs one transcription at a time and refuses a second) and apply in the order spoken. A failed transcription shows one error toast until a segment succeeds again, instead of vanishing. A transcript that is only non-speech tags ("[BLANK_AUDIO]", "[Music]", "(keyboard clicking)", the Android app's rule) is dropped.
+- **Where text goes:** into the draft of the chat that is focused when the segment finishes; if no chat is focused, into the chat that turned listening on. On a page with no chat mounted (Settings, Models), it is appended to that chat's saved draft (the same per-chat draft the composer restores) with the toast "Added to <chat title> draft". Nothing is sent until you send it. [decision 0029](../../docs/decisions/0029-one-always-on-microphone-text-follows-the-focused-chat.md)
 
 **Commands** `[implemented 2026-10-27; grammar and actions unit-tested; hidden-window verified for "send it" with a stubbed transcriber; not verified with a real microphone]`
 
-A command starts with "Nekko" at the start of a segment or of a sentence inside one, so "Fix the login bug. Nekko, send it" types the first sentence and sends it. "Nekko" in the middle of a sentence stays dictation, and a "Nekko, ..." phrase that matches no command is typed as text, never dropped. Turning off **Enable "Nekko..." commands** makes everything dictation.
+A command starts with "Nekko" at the start of a segment or of a sentence inside one, so "Fix the login bug. Nekko, send it" types the first sentence and sends it. A wake word punctuated on its own ("Nekko. Send it.", "Nekko? Erase that.") addresses the next sentence, and a wake word cut into its own segment by a pause carries to the next segment if it arrives within 5 seconds; later, it is dropped (it holds no words). "Nekko" in the middle of a sentence stays dictation, and a "Nekko, ..." phrase that matches no command is typed as text, never dropped. Turning off **Enable "Nekko..." commands** makes everything dictation.
 
 | Say "Nekko, ..." | Does | Toast |
 |---|---|---|
-| erase that / scratch that / cancel that / undo that | removes the last dictated piece from the draft | Erased |
+| erase that / scratch that / cancel that / undo that | removes the last dictated piece from the draft | Erased, only when something was removed |
 | clear it / clear everything | empties the draft | Cleared |
-| send it / send | sends the draft | Sent |
+| send it / send | sends the draft; an empty draft is not sent, and a send the chat refuses (no model, Sandbox not configured) puts the words back | Sent, only once it sent |
 | new chat / new session / let's make a new change | starts a new chat | New chat |
 | how's it going / status | the focused chat's status (lane, then the current step or "Watching PR") | the status line |
-| open the one about X / switch to X | one clear match opens it; otherwise up to three to pick by tap or "Nekko, the first one" | "Opened" and the chat title |
-| ship it | open PR: merge after a confirm naming it (a stacked PR opens on GitHub); no PR and idle or waiting on a question: sends "Go ahead and build it."; open PR and a waiting question: offers **Merge owner/repo#123** or **Go ahead**; still running: "It's still working" | "Merging owner/repo#123" / Sent |
+| open the one about X / switch to X | one clear match opens it; several give up to three to pick by tap or "Nekko, the first one"; none types the phrase as dictation | "Opened" and the chat title |
+| ship it | open PR: merge after a confirm naming it (a stacked PR opens on GitHub); no PR and idle: sends "Go ahead and build it." as its own sentence after any draft; a waiting question (with or without a PR): answers it with the free-text answer "Go ahead and build it." rather than sending, which would queue behind the blocked turn; open PR and a waiting question: offers **Merge owner/repo#123** or **Go ahead** (that answer); still running: "It's still working" | "Merging owner/repo#123" / Sent |
 | complete / finish / archive this session | completes the chat, after a confirm | "Completed" and the chat title |
 | go to / open a page, switch to desktop or screen n | as before (see above) | "Opened" and the page / Switched to ... |
 | yes / confirm, no / cancel, the first / second / third one | answers a waiting confirm or list | Cancelled (for no) |
