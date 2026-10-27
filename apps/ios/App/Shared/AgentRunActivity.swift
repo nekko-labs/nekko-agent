@@ -1,6 +1,7 @@
 import ActivityKit
 import AppIntents
 import Foundation
+import NekkoProtocol
 
 /// A chat running on the computer, on the Lock Screen and in the Dynamic
 /// Island. Shared by the app (which starts and updates it from the relay's
@@ -64,6 +65,17 @@ struct AgentRunAttributes: ActivityAttributes {
     var sessionId: String
     var computerId: String
     var chatTitle: String
+    var computerName: String
+}
+
+/// The one Live Activity for all of the computer's chats (replaces
+/// `AgentRunAttributes`, one per chat, in Task 3.3). The state and its rules,
+/// including the tolerant decoder for relay pushes, are `LiveCardState` in
+/// NekkoProtocol.
+struct NekkoCardAttributes: ActivityAttributes {
+    typealias ContentState = LiveCardState
+
+    var computerId: String
     var computerName: String
 }
 

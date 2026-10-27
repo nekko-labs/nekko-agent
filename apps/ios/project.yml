@@ -107,6 +107,9 @@ targets:
         INFOPLIST_FILE: Widgets/Info.plist
         APPLICATION_EXTENSION_API_ONLY: YES
         CODE_SIGN_ENTITLEMENTS: Widgets/NekkoWidgets.entitlements
+    dependencies:
+      - package: NekkoProtocol
+        product: NekkoProtocol
   NekkoShare:
     type: app-extension
     platform: iOS
