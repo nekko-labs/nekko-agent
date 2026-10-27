@@ -140,6 +140,7 @@ Providers, local models, the Model Server, training.
 - [Signing in with a subscription (planned)](models/signing-in-with-a-subscription.md) (2 KB)
 - [System models: dictation on Apple's recognizer or Whisper](models/system-speech-models.md) (4 KB)
 - [Training a model while you watch (Training tab)](models/training-a-model-while-you-watch-training-tab.md) (2 KB)
+- [Your first local model](models/first-local-model.md) (3 KB)
 
 ### code
 
