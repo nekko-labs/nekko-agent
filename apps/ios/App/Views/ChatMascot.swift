@@ -99,10 +99,10 @@ struct GreetingCat: View {
             // Flip around the edge (y = 25), putting the small toes at the bottom.
             context.translateBy(x: 0, y: 50)
             context.scaleBy(x: 1, y: -1)
-            rects([(7, 23, 5, 5), (20, 23, 5, 5)], palette.surface)
-            context.fill(polygon([(6,22),(13,22),(13,27),(12,27),(12,23),(7,23),(7,27),(6,27)]), with: .color(palette.ink))
-            context.fill(polygon([(19,22),(26,22),(26,27),(25,27),(25,23),(20,23),(20,27),(19,27)]), with: .color(palette.ink))
-            rects([(8.5, 23, 0.5, 1.5), (10, 23, 0.5, 1.5), (21.5, 23, 0.5, 1.5), (23, 23, 0.5, 1.5)], palette.ink, opacity: 0.55)
+            rects([(6, 24, 5, 4), (21, 24, 5, 4)], palette.surface)
+            context.fill(polygon([(5,23),(12,23),(12,27),(11,27),(11,24),(6,24),(6,27),(5,27)]), with: .color(palette.ink))
+            context.fill(polygon([(20,23),(27,23),(27,27),(26,27),(26,24),(21,24),(21,27),(20,27)]), with: .color(palette.ink))
+            rects([(7.5, 24, 0.5, 1.5), (9, 24, 0.5, 1.5), (22.5, 24, 0.5, 1.5), (24, 24, 0.5, 1.5)], palette.ink, opacity: 0.55)
         }
         .accessibilityHidden(true)
     }
