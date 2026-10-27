@@ -39,14 +39,20 @@ Each command shows a short message ("Erased", "Sent", "New chat") so you know it
 
 **"Ship it"** depends on the chat:
 
-- It has an open pull request: Nekko asks to merge it, naming the PR ("Merge owner/repo#123?"), and merges when you confirm. A stacked PR opens on GitHub instead.
+- It has an open pull request: Nekko asks to merge it, naming the PR ("Merge owner/repo#123?"), and merges when you confirm. On the computer a stacked PR opens on GitHub instead; on iPhone draft PRs are left alone and nothing opens on GitHub.
 - No PR, and the agent is done: sends "Go ahead and build it." If it's waiting on a question, that's the answer.
 - An open PR **and** a question waiting: you choose **Merge owner/repo#123** (the PR's name) or **Go ahead**.
 - Still working: "It's still working".
 
 **Confirming.** Only merging and completing a chat ask first. Say "Nekko, yes" or tap **Confirm**; "Nekko, no" or **Cancel** to back out. A question waits one minute, then goes away, so a "yes" much later does nothing.
 
-To use the microphone for dictation only, turn off **Enable "Nekko..." commands** in Settings > Dictation.
+To use the microphone for dictation only, turn off **Enable "Nekko..." commands** in Settings > Dictation. This switch is on the computer only: the iPhone always listens for "Nekko" commands.
+
+## On iPhone
+
+Tap the microphone in a chat's message box and it keeps listening through pauses until you tap stop, lock the phone, or leave the chat. The screen stays on while it listens. If listening stops on its own (a call, unplugging headphones, locking), you'll see "Stopped listening". With two chats side by side, only one listens at a time. AirPods work as the microphone, at call quality while listening. A command with nothing to do says so ("Nothing to send", "Nothing to erase", "Nothing to confirm"). With **Hold to talk**, answer a "Nekko, yes" question in your next hold. The first time you tap it (or the first time you hold it, with **Hold to talk**), a short video shows how voice works instead of listening. **Turn on** starts listening; **Not now** closes it without listening. Either way, or if you swipe it away, it won't show again. Watch it any time from **Settings > Dictation > Watch how voice works**. The video has captions, and VoiceOver reads a summary of it; with Reduce Motion on, it waits for the play button.
+
+Without Whisper on your computer, speech is turned into text on the iPhone only, never on a server.
 
 ## Privacy
 

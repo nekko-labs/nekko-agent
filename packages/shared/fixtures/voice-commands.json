@@ -43,6 +43,18 @@
     { "say": "Nekko the second one", "intent": { "kind": "pick", "n": 2 } },
     { "say": "Nekko third", "intent": { "kind": "pick", "n": 3 } },
     { "say": "Nekko, yes.", "intent": { "kind": "yes" } },
-    { "say": "Nekko cancel", "intent": { "kind": "no" } }
+    { "say": "Nekko cancel", "intent": { "kind": "no" } },
+    { "say": "Nekko yeah", "intent": { "kind": "yes" } },
+    { "say": "Nekko do it", "intent": { "kind": "yes" } },
+    { "say": "Nekko nope", "intent": { "kind": "no" } },
+    { "say": "Nekko never mind", "intent": { "kind": "no" } },
+    { "say": "Nekko what's the status", "intent": { "kind": "status" } },
+    { "say": "Nekko undo that", "intent": { "kind": "erase" } },
+    { "say": "Nekko clear it", "intent": { "kind": "clear" } },
+    { "say": "Nekko send that", "intent": { "kind": "send" } },
+    { "say": "Nekko ship that", "intent": { "kind": "ship" } },
+    { "say": "Nekko how’s it going", "intent": { "kind": "status" } },
+    { "say": "Nekko 3", "intent": { "kind": "pick", "n": 3 } },
+    { "say": "Nekko the first one", "intent": { "kind": "pick", "n": 1 } }
   ]
 }
