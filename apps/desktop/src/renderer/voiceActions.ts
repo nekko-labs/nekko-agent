@@ -163,9 +163,11 @@ let expiry: ReturnType<typeof setTimeout> | undefined;
 export const PENDING_TTL_MS = 60_000;
 
 function setPending(pending: VoicePending | null): void {
+  // An unchanged pending keeps its clock: talking on must not keep a confirm alive.
+  if (pending === snap.pending) return;
   clearTimeout(expiry);
   if (pending) expiry = setTimeout(() => { if (snap.pending === pending) set({ pending: null }); }, PENDING_TTL_MS);
-  if (pending !== snap.pending) set({ pending });
+  set({ pending });
 }
 
 const targetFor = (id: string | null | undefined) => (id ? targets.get(id)?.at(-1) : undefined);

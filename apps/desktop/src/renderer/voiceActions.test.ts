@@ -377,6 +377,21 @@ describe('pending confirms', () => {
     expect(store.state.archiveChat).not.toHaveBeenCalled();
     off();
   });
+  it('keep their clock while the user keeps talking', async () => {
+    vi.useFakeTimers();
+    const off = await confirmPending();
+    vi.advanceTimersByTime(PENDING_TTL_MS / 2);
+    nekko.voiceTranscribe.mockResolvedValue('Some more words. Nekko, how is it going?');
+    capture.onSegment!([2]);
+    await voiceListener.drain();
+    await voiceListener.answer({ kind: 'pick', n: 1 });
+    expect(voiceListener.snapshot().pending).not.toBeNull();
+    vi.advanceTimersByTime(PENDING_TTL_MS / 2);
+    expect(voiceListener.snapshot().pending).toBeNull();
+    await voiceListener.answer({ kind: 'yes' });
+    expect(store.state.archiveChat).not.toHaveBeenCalled();
+    off();
+  });
   it('are cleared when listening is toggled off or aborted', async () => {
     let off = await confirmPending();
     await voiceListener.stop();
