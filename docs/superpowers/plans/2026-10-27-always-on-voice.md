@@ -266,6 +266,8 @@ Start after #1257 merges: it already moves `PixelCat` to `App/Shared/PixelCat.sw
 
 Issue: #1267 (PR body says `Closes #1267`).
 
+### Task 4.1: Card frames, per-level blanking and push-to-start
+
 **Files:**
 - Modify: `crates/nekko-remote/src/agent.rs` (`relay_frames` L475-495, `activity_frame` L500-555, `phases` L117)
 - Modify: `crates/nekko-remote/tests/golden.rs` and `crates/nekko-remote/tests/golden/agent.json` (hand-edited in the same PR, per `docs/runbooks/golden-fixtures.md`)
@@ -291,6 +293,8 @@ Issue: #1267 (PR body says `Closes #1267`).
 ## Part 5: Live Activity mic and reply line (one PR, branch `live-activity-mic`, after Part 4)
 
 Issue: #1268 (PR body says `Closes #1268`).
+
+### Task 5.1: Talk-to-chat intent and reply line
 
 **Files:**
 - Modify: `apps/ios/App/Shared/AgentRunActivity.swift` (add `TalkToChatIntent`)
