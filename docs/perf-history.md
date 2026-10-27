@@ -95,6 +95,20 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-10
 
+### Nekko Dark: static glow background on the window field (2026-10-27)
+Area: renderer
+Result: no effect
+Conditions: Windows 11, Electron 45, hidden off-screen non-focusable window at 1440×900 (stub bridge, isolated profile, network blocked), Agents view on Nekko Dark via System in dark mode, idle; `app.getAppMetrics()` CPU summed over 6 s after settling; two sequential runs each, without the glow (the branch's earlier commit) and with it
+
+| Metric | Before | After |
+|---|---|---|
+| Idle CPU, all processes, 6 s (run 1) | 0.1569 s | 0.1651 s |
+| Idle CPU, all processes, 6 s (run 2) | 0.1577 s | 0.1528 s |
+| GPU process CPU, 6 s (run 1 / run 2) | 0.0756 / 0.0765 s | 0.0839 / 0.0756 s |
+| Running animations (excluding CSS transitions) | 20 | 20 |
+
+Why: the glow is six static CSS radial gradients on the shell background, with no animation or timer; the difference is within run-to-run noise. Source: the Nekko Dark theme PR.
+
 ### Phone Mermaid: bundled renderer size and render time (MM-1, 2026-10-25)
 Area: packaging | renderer
 Result: regression (new cost)
