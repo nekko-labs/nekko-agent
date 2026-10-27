@@ -25,7 +25,7 @@ sealed interface FileRoot {
         }
 }
 
-/** One call into the computer's files, ready to send. */
+/** One call into the computer's files or logs, ready to send. */
 data class FilesRequest(val channel: String, val args: List<JsonElement>) {
     /** Saving is the only Change (`PHONE_CHANGE_CHANNELS`); the rest are reads. */
     val isChange: Boolean get() = channel == Channels.FILES_WRITE
@@ -42,6 +42,21 @@ data class FilesRequest(val channel: String, val args: List<JsonElement>) {
         fun write(root: FileRoot, path: String, content: String, expectHash: String) = FilesRequest(
             Channels.FILES_WRITE,
             listOf(root.json, JsonPrimitive(path), JsonPrimitive(content), buildJsonObject { put("expectHash", expectHash) }),
+        )
+
+        /** The computer's logs (AN-34). */
+        fun logs() = FilesRequest(Channels.LOGS_LIST, emptyList())
+
+        /** A log's tail, or with [query] its matching lines. */
+        fun log(id: String, query: String? = null, tailBytes: Int? = null) = FilesRequest(
+            Channels.LOGS_READ,
+            listOf(
+                JsonPrimitive(id),
+                buildJsonObject {
+                    if (!query.isNullOrEmpty()) put("query", query)
+                    if (tailBytes != null) put("tailBytes", tailBytes)
+                },
+            ),
         )
     }
 }

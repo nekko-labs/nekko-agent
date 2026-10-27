@@ -55,6 +55,8 @@ object Channels {
     /** Save or forget a folder on the computer (signed Changes); forgetting never deletes files. */
     const val WORKSPACE_ADD_BY_PATH = "workspace:addByPath"
     const val WORKSPACE_REMOVE = "workspace:remove"
+    const val LOGS_LIST = "logs:list"
+    const val LOGS_READ = "logs:read"
 
     /** The computer's automations ([AutomationTask], [AutomationWorkflow]): read, and Run now only. */
     const val TASKS_LIST = "tasks:list"
@@ -120,7 +122,7 @@ object Channels {
         SESSION_SET_OPTIONS, CHAT_SEND, CHAT_ABORT, CHAT_QUEUE, CHAT_PENDING, CHAT_ANSWER, TOOL_APPROVE,
         WORKSPACE_LIST, APP_INFO, SKILLS_RUNNABLE, CHANGES_LIST, MONITOR_SUMMARY,
         SECURITY_CHALLENGE, DEVICE_SIGN_OUT, REMOTE_STOP, APP_QUIT,
-        FILES_LIST, FILES_SEARCH, FILES_READ, FILES_WRITE, WORKSPACE_ADD_BY_PATH, WORKSPACE_REMOVE,
+        FILES_LIST, FILES_SEARCH, FILES_READ, FILES_WRITE, WORKSPACE_ADD_BY_PATH, WORKSPACE_REMOVE, LOGS_LIST, LOGS_READ,
         CHAT_EDIT_QUEUED, SESSION_FORK, TASKS_LIST, TASK_RUN_NOW, WORKFLOWS_LIST, WORKFLOW_RUN, USAGE_SUMMARY, LIMITS_GET,
         WORKSPACE_GIT_STATUS, GIT_DIFF, GIT_LOG, GIT_SHOW, GIT_BRANCHES, GIT_COMPARE,
         GIT_STAGE, GIT_UNSTAGE, GIT_COMMIT, GIT_COMMIT_MESSAGE, GIT_PUSH, GIT_SWITCH, GIT_MERGE_ABORT,

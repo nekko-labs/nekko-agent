@@ -1,6 +1,8 @@
 package com.nekko.android.ui.files
 
+import android.content.Intent
 import android.graphics.BitmapFactory
+import android.text.format.DateUtils
 import android.text.format.Formatter
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -23,17 +25,22 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DesktopWindows
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RemoveCircleOutline
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -59,13 +66,14 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
@@ -83,6 +91,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nekko.android.data.ComputersRepository
 import com.nekko.android.files.FileEditController
 import com.nekko.android.files.FilesController
+import com.nekko.android.files.LogsController
+import com.nekko.android.files.LogsState
 import com.nekko.android.ui.chat.MarkdownText
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.FileContent
@@ -90,6 +100,9 @@ import com.nekko.protocol.FileEntry
 import com.nekko.protocol.FileListing
 import com.nekko.protocol.FileRoot
 import com.nekko.protocol.FileSearch
+import com.nekko.protocol.LogInfo
+import com.nekko.protocol.LogShare
+import com.nekko.protocol.LogText
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.WorkspaceFolder
 import kotlinx.coroutines.CancellationException
@@ -607,6 +620,168 @@ private fun EditPage(edit: FileEditController, onBack: () -> Unit) {
                 }
             },
         )
+    }
+}
+
+// ---- logs (AN-34) ----
+
+/** The computer's logs, read only (Settings → Logs, the iPhone's computer menu → Logs). */
+@Composable
+fun LogsScreen(repo: ComputersRepository, onBack: () -> Unit) {
+    val logs = remember { LogsController { r -> repo.caller.call(r.channel, *r.args.toTypedArray()) } }
+    // The open log survives folding the phone (a new activity); its lines are read again.
+    var openId by rememberSaveable { mutableStateOf<String?>(null) }
+    val s by logs.state.collectAsStateWithLifecycle()
+    LaunchedEffect(logs) { logs.load() }
+    val open = openId?.let { id -> s.logs.firstOrNull { it.id == id } }
+    BackHandler { if (openId != null) openId = null else onBack() }
+    Box(Modifier.fillMaxSize().background(Nekko.palette.paper), contentAlignment = Alignment.TopCenter) {
+        Box(Modifier.widthIn(max = 720.dp).fillMaxSize()) {
+            if (open != null) key(open.id) { LogPage(logs, open) { openId = null } }
+            else LogsList(logs, s, onBack) { openId = it.id }
+        }
+    }
+}
+
+@Composable
+private fun LogsList(logs: LogsController, s: LogsState, onBack: () -> Unit, open: (LogInfo) -> Unit) {
+    val p = Nekko.palette
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    Page("Logs", onBack, actions = {
+        IconButton(onClick = { scope.launch { logs.load() } }) { Icon(Icons.Filled.Refresh, contentDescription = "Refresh") }
+    }) { padding ->
+        Box(Modifier.fillMaxSize().padding(padding)) {
+            when {
+                !s.loaded -> CircularProgressIndicator(color = p.accent, modifier = Modifier.align(Alignment.Center))
+                s.error != null && s.logs.isEmpty() -> Failure(s.error, readOff = false) { scope.launch { logs.load() } }
+                else -> LazyColumn(Modifier.fillMaxSize().testTag("logs.list")) {
+                    if (s.logs.isEmpty()) item { Note("No logs yet.", Modifier.padding(16.dp)) }
+                    itemsIndexed(s.logs, key = { _, l -> l.id }) { _, l ->
+                        Row(
+                            Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable { open(l) }.padding(horizontal = 16.dp, vertical = 8.dp).testTag("logs.row"),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Icon(
+                                when (l.kind) {
+                                    LogInfo.Kind.APP -> Icons.Filled.DesktopWindows
+                                    LogInfo.Kind.DAEMON -> Icons.Filled.Settings
+                                    LogInfo.Kind.AGENT -> Icons.AutoMirrored.Filled.Chat
+                                },
+                                contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(22.dp),
+                            )
+                            Column(Modifier.weight(1f)) {
+                                Text(l.title, style = MaterialTheme.typography.bodyLarge, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                val at = l.updatedAt
+                                Text(
+                                    if (at == null) "Empty"
+                                    else "${Formatter.formatShortFileSize(context, l.size)} · ${DateUtils.getRelativeTimeSpanString(at, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS)}",
+                                    style = MaterialTheme.typography.bodySmall, color = p.inkSoft,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** A log's tail, newest at the bottom, or its lines matching a search; Share sends what is shown, redacted again. */
+@Composable
+private fun LogPage(logs: LogsController, log: LogInfo, onBack: () -> Unit) {
+    val p = Nekko.palette
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var tail by remember { mutableStateOf<LogText?>(null) }
+    var found by remember { mutableStateOf<LogText?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var query by rememberSaveable { mutableStateOf("") }
+    var loading by remember { mutableStateOf(false) }
+    val list = rememberLazyListState()
+    suspend fun load() {
+        loading = true
+        try {
+            tail = logs.tail(log.id)
+            error = null
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            error = FilesController.message(e)
+        } finally {
+            loading = false
+        }
+    }
+    LaunchedEffect(log.id) { load() }
+    LaunchedEffect(query) {
+        val q = query.trim()
+        if (q.isEmpty()) { found = null; return@LaunchedEffect }
+        delay(300)
+        loading = true
+        try {
+            found = logs.search(log.id, q)
+            error = null
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            found = null
+            error = FilesController.message(e)
+        } finally {
+            loading = false
+        }
+    }
+    val searching = query.isNotBlank()
+    val shown = if (searching) found else tail
+    // Newest at the bottom: open there, and again after Refresh.
+    LaunchedEffect(tail) { tail?.let { if (it.lines.isNotEmpty()) list.scrollToItem(it.lines.size) } }
+    Page(log.title, onBack, actions = {
+        IconButton(onClick = { scope.launch { load() } }, enabled = !loading, modifier = Modifier.testTag("log.refresh")) {
+            Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
+        }
+        if (shown != null) {
+            IconButton(
+                onClick = {
+                    val send = Intent(Intent.ACTION_SEND).setType("text/plain")
+                        .putExtra(Intent.EXTRA_SUBJECT, "Nekko Agent log: ${log.title}")
+                        .putExtra(Intent.EXTRA_TEXT, LogShare.text(log.title, shown))
+                    context.startActivity(Intent.createChooser(send, null))
+                },
+                modifier = Modifier.testTag("log.share"),
+            ) { Icon(Icons.Filled.Share, contentDescription = "Share, with secrets removed") }
+        }
+    }) { padding ->
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            OutlinedTextField(
+                query, { query = it }, singleLine = true, placeholder = { Text("Find in this log") },
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).testTag("log.search"),
+            )
+            Box(Modifier.fillMaxSize()) {
+                val t = tail
+                val f = found
+                when {
+                    searching && f != null -> LazyColumn(Modifier.fillMaxSize()) {
+                        if (f.matches.isEmpty() && !loading) item { Note("No lines match.", Modifier.padding(16.dp)) }
+                        itemsIndexed(f.matches, key = { _, m -> m.line }) { _, m -> CodeLine(m.line, m.text) }
+                        if (f.moreMatches) item { Note("More lines match. Narrow the search.", Modifier.padding(16.dp)) }
+                    }
+                    searching && error != null -> Failure(error!!, readOff = false) { query = query.trim() }
+                    searching -> CircularProgressIndicator(color = p.accent, modifier = Modifier.align(Alignment.Center))
+                    t != null -> LazyColumn(Modifier.fillMaxSize().background(p.code).testTag("log.view"), state = list) {
+                        item {
+                            if (t.truncated) Note("Older lines are on the computer.", Modifier.padding(12.dp))
+                        }
+                        itemsIndexed(t.lines) { _, line ->
+                            Text(line, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, color = p.ink,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp))
+                        }
+                    }
+                    error != null -> Failure(error!!, readOff = false) { scope.launch { load() } }
+                    else -> CircularProgressIndicator(color = p.accent, modifier = Modifier.align(Alignment.Center))
+                }
+            }
+        }
     }
 }
 
