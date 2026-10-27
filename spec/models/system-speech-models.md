@@ -36,10 +36,10 @@ A command starts with "Nekko" at the start of a segment or of a sentence inside 
 | send it / send | sends the draft | Sent |
 | new chat / new session / let's make a new change | starts a new chat | New chat |
 | how's it going / status | the focused chat's status (lane, then the current step or "Watching PR") | the status line |
-| open the one about X / switch to X | one clear match opens it; otherwise up to three to pick by tap or "Nekko, the first one" | Opened <title> |
-| ship it | open PR: merge after a confirm naming it (a stacked PR opens on GitHub); no PR and idle or waiting on a question: sends "Go ahead and build it."; open PR and a waiting question: offers **Merge <pr>** or **Go ahead**; still running: "It's still working" | Merging <pr> / Sent |
-| complete / finish / archive this session | completes the chat, after a confirm | Completed <title> |
-| go to / open <page>, switch to desktop or screen n | as before (see above) | Opened <page> / Switched to ... |
+| open the one about X / switch to X | one clear match opens it; otherwise up to three to pick by tap or "Nekko, the first one" | "Opened" and the chat title |
+| ship it | open PR: merge after a confirm naming it (a stacked PR opens on GitHub); no PR and idle or waiting on a question: sends "Go ahead and build it."; open PR and a waiting question: offers **Merge owner/repo#123** or **Go ahead**; still running: "It's still working" | "Merging owner/repo#123" / Sent |
+| complete / finish / archive this session | completes the chat, after a confirm | "Completed" and the chat title |
+| go to / open a page, switch to desktop or screen n | as before (see above) | "Opened" and the page / Switched to ... |
 | yes / confirm, no / cancel, the first / second / third one | answers a waiting confirm or list | Cancelled (for no) |
 
 - Commands about a chat (erase, clear, send, ship, status, complete) act only on the focused chat; with none focused they toast **Open a chat first**.

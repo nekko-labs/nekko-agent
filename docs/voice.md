@@ -39,9 +39,9 @@ Each command shows a short message ("Erased", "Sent", "New chat") so you know it
 
 **"Ship it"** depends on the chat:
 
-- It has an open pull request: Nekko asks "Merge <the PR>?" and merges when you confirm. A stacked PR opens on GitHub instead.
+- It has an open pull request: Nekko asks to merge it, naming the PR ("Merge owner/repo#123?"), and merges when you confirm. A stacked PR opens on GitHub instead.
 - No PR, and the agent is done or waiting on a question: sends "Go ahead and build it."
-- An open PR **and** a question waiting: you choose **Merge <the PR>** or **Go ahead**.
+- An open PR **and** a question waiting: you choose **Merge owner/repo#123** (the PR's name) or **Go ahead**.
 - Still working: "It's still working".
 
 **Confirming.** Only merging and completing a chat ask first. Say "Nekko, yes" or tap **Confirm**; "Nekko, no" or **Cancel** to back out. A question waits one minute, then goes away, so a "yes" much later does nothing.
