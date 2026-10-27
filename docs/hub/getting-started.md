@@ -225,3 +225,13 @@ Hover the edge between the agent list and chat wall, or the edge beside Monitors
 ### Skills and Connectors shortcuts
 
 Open **Settings** to find large **Skills** and **Connectors** chips at the top. They are no longer shown in the left sidebar by default. To bring either shortcut back, use **Settings > General > View settings** and turn on its sidebar toggle. Hiding these shortcuts does not disable their features or command-palette access.
+
+### Download progress in Model Server
+
+When you download a model or install a managed runtime, its button immediately
+changes to **Downloading…** and cannot be clicked again while the transfer is
+queued, downloading or verifying. A progress bar appears beside the action;
+it shows a percentage once all file sizes are known, and stays indeterminate
+until then. **Verifying…** means the files are still being checked or installed.
+Use **Downloads** to cancel a transfer. A failure or cancellation lets you retry;
+other models and runtimes remain available while one downloads.

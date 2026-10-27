@@ -6,6 +6,10 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Model Server inline download progress (#1221)
+
+- [x] **DLP-1, Show progress and block duplicate download clicks.** Model builds/recommendations, decisions and managed llama.cpp/image/MLX runtimes share immediate acquisition locks and existing grouped-job progress. Queued/downloading/verifying stay disabled, terminal states and rejected requests permit retry; runtime build and decision precision stay fixed in flight. Focused state tests and isolated 1100px/390px rapid-click/progress/retry assertions pass. Model/runtime before/after PNGs inspected. Spec: [Models and providers](spec/models/models-providers.md). Live downloads and packaged application not exercised; baseline macOS shortcut test failure tracked in #900.
+
 ## Dynamic view zones (#1204)
 
 [Specification](spec/desktop/dynamic-zones.md). Prefix **DZ**.
@@ -129,7 +133,7 @@ Philip asked for the app's text to use the website's two fonts everywhere, and f
 Philip asked for the phone to match the desktop's languages and themes (with a limited fall icon for Spooky) and for New chat to pick the effort and, for a local model, the computer. Spec: [iPhone languages, themes and New chat choices](spec/phone/iphone-languages-themes-and-new-chat-choices.md); issue #941.
 
 - [x] **T201, iPhone languages, desktop themes, Spooky icon, New chat effort and Run on (2026-10-23).** String Catalogs in seven languages; `ThemePresets.swift` written from `THEME_PRESETS` by a golden test; `AppIcon-Spooky` alternate icon in October; `Effort.levels` mirrors `modelEffortLevels`; `effort` added to the phone's chat options (TS policy, `phone-access.json`, Rust gate). Unit and simulator UI tests (`ThemeLanguageTests`).
-- [ ] **T201a, Android parity.** The same languages, presets, effort and Run on in `apps/android`.
+- [ ] **T201a, Android parity.** The same languages, presets, effort and Run on in `apps/android`. **Effort and Run on done 2026-10-27:** `ModelEffort.kt` (`Effort.levels`, the desktop's `modelEffortLevels`; `LocalProviders`) in `ModelEffortTest` (the TS and iPhone cases, and every level checked against `phone-access.json` `effortLevels`); New chat's **Effort** row (*Computer default* and the model's ladder, cleared when the next model doesn't take it, sent with the model on `session:setOptions`) and **Run on** row for a local model (switching connects to the other computer, clears model, folder and effort, and stays while it loads). Verified on an API 37 emulator against two nekkods (a chat started with `effort: low`, read back on the computer). Still to do: the languages and the desktop's theme presets.
 - [ ] **T201b, native-speaker review** of the six translations, and translating the widgets, Share extension and Watch app.
 
 ## Calmer Experimental Dark themes (added 2026-10-23)
