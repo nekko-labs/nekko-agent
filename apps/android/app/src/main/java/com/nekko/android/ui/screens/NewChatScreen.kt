@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.Computer
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.QrCode2
@@ -52,6 +53,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
@@ -68,6 +70,8 @@ import com.nekko.android.ui.components.SectionHeader
 import com.nekko.android.ui.components.Tone
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.Channels
+import com.nekko.protocol.Effort
+import com.nekko.protocol.LocalProviders
 import com.nekko.protocol.ModelInfo
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.Session
@@ -105,6 +109,10 @@ fun NewChatScreen(
     var touched by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
     var workspaceId by rememberSaveable { mutableStateOf<String?>(null) }
+    /** How hard the model works (T201a); null follows the computer's own effort setting. */
+    var effort by rememberSaveable { mutableStateOf<String?>(null) }
+    /** Run on was used here, so the row stays while the other computer connects and lists its models. */
+    var switched by rememberSaveable { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -128,6 +136,33 @@ fun NewChatScreen(
         if (!touched) pick = ModelChoice.initial(c.defaults, c.summaries, groups, phonePick) ?: pick
     }
     val phonePickMissing = ModelChoice.phonePickMissing(phonePick, groups)
+    // A level the chosen model doesn't take is cleared.
+    LaunchedEffect(pick) {
+        if (effort != null && Effort.levels(pick?.modelId).none { it.wire == effort }) effort = null
+    }
+    val pickedKind = c.providers.firstOrNull { it.id == pick?.providerId }?.kind
+    // A local model runs on its computer's hardware: offer the other paired computers.
+    val showRunOn = c.computers.size > 1 && (switched || LocalProviders.isLocal(pickedKind))
+    val runOn: (String) -> Unit = { id ->
+        if (id != c.activeId) {
+            switched = true
+            // The model, folder and effort are the old computer's; the new one's defaults are picked when its models arrive.
+            pick = null
+            touched = false
+            workspaceId = null
+            effort = null
+            error = null
+            scope.launch {
+                try {
+                    repo.connect(id)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    error = e.message ?: "Couldn’t connect to that computer."
+                }
+            }
+        }
+    }
 
     val start: () -> Unit = start@{
         val chosen = pick
@@ -144,9 +179,11 @@ fun NewChatScreen(
                 val r = repo.remote()
                 val created = r.call(Channels.SESSION_CREATE, *listOfNotNull(workspaceId?.let { JsonPrimitive(it) }).toTypedArray())
                 val session = Session.from(created) ?: throw IllegalStateException("Your computer didn’t create the chat.")
+                val level = effort
                 r.call(Channels.SESSION_SET_OPTIONS, JsonPrimitive(session.id), buildJsonObject {
                     put("providerId", pid)
                     put("modelId", mid)
+                    if (level != null) put("effort", level)
                 })
                 onCreated(session.id)
             } catch (e: CancellationException) {
@@ -229,6 +266,14 @@ fun NewChatScreen(
                                 }
                             },
                         )
+                        val chosen = pick
+                        if (chosen != null) {
+                            Label(Icons.Filled.Speed, "Effort")
+                            Row(Modifier.horizontalScroll(rememberScrollState()).testTag("newChat.effort"), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Chip("Computer default", effort == null) { effort = null }
+                                Effort.levels(chosen.modelId).forEach { e -> Chip(e.label, effort == e.wire) { effort = e.wire } }
+                            }
+                        }
                         if (c.workspaces.isNotEmpty()) {
                             Label(Icons.Filled.Folder, "Folder")
                             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -250,6 +295,20 @@ fun NewChatScreen(
                             Spacer(Modifier.size(8.dp))
                             Text("Start on ${active.name}", maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
+                    }
+                }
+                if (showRunOn) {
+                    Spacer(Modifier.size(12.dp))
+                    NCard {
+                        Label(Icons.Filled.Computer, "Run on")
+                        Row(Modifier.horizontalScroll(rememberScrollState()).testTag("newChat.runOn"), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            c.computers.forEach { pc -> Chip(pc.name, pc.id == c.activeId) { runOn(pc.id) } }
+                        }
+                        Text(
+                            "A local model runs on the computer’s own hardware. Choosing another computer shows its models and folders.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = p.inkSoft,
+                        )
                     }
                 }
             }
