@@ -16,7 +16,9 @@ describe('Greeting Nekko', () => {
     const markup = renderToStaticMarkup(<GreetingNekko />);
     expect(markup).toContain('viewBox="0 0 32 30"');
     expect(markup).toContain('shape-rendering="crispEdges"');
-    expect(markup).toContain('data-part="peek-paws"');
+    expect(markup).toContain('data-part="peek-paws" transform="translate(0 50) scale(1 -1)"');
+    expect(markup).toContain('data-part="peek-face" width="32" height="25" viewBox="0 0 32 25" overflow="hidden"');
+    expect(markup.indexOf('</svg>')).toBeLessThan(markup.indexOf('data-part="peek-paws"'));
     expect(markup).toContain('data-nekko-look="true" transform="translate(0 1)"');
     expect(markup).not.toContain('d="M0 25H32');
     expect(markup).not.toContain('M15 20H17V21H15Z');

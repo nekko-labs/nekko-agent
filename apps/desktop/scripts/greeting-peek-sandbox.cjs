@@ -32,6 +32,8 @@ app.whenReady().then(async () => {
         await check(`(() => { const a=document.querySelector('.greeting-nekko-slot').getBoundingClientRect(), b=document.querySelector('[data-clean-start-greeting] h2').getBoundingClientRect(); const g=document.querySelector('[data-clean-start-greeting]').getBoundingClientRect(); return a.right<=b.left && Math.abs((a.left+b.right)/2-(g.left+g.width/2))<3; })()`, 'Cat does not overlap heading at ' + width);
         await check(`(() => { const a=document.querySelector('.greeting-nekko').getBoundingClientRect(), b=document.querySelector('.composer').getBoundingClientRect(); return a.width===80 && Math.abs(a.top+a.height*25/30-b.top)<2; })()`, 'Larger paws straddle composer border at ' + width);
         await check(`!document.querySelector('.greeting-nekko path[d="M0 25H32"]')`, 'No artificial ledge at ' + width);
+        await check(`(() => { const face=document.querySelector('[data-part="peek-face"]'), composer=document.querySelector('.composer'); return face?.getAttribute('overflow')==='hidden' && Math.abs(face.getBoundingClientRect().bottom-composer.getBoundingClientRect().top)<2; })()`, 'Face clips at composer edge at ' + width);
+        await check(`document.querySelector('[data-part="peek-paws"]')?.getAttribute('transform') === 'translate(0 50) scale(1 -1)'`, 'Toes point down at ' + width);
       }
       const file = path.join(out, 'greeting-' + width + '.png');
       fs.writeFileSync(file, (await win.capturePage(undefined, { stayHidden: true })).toPNG()); report.captures.push(file);
