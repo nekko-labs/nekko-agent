@@ -78,7 +78,7 @@ export function activeGroup(scroller: HTMLElement): SettingsGroupId {
 }
 
 export function SettingsView() {
-  const { applyTheme, onboardingOpen, settings, settingsError, refreshSettings } = useStore(useShallow((s) => ({ applyTheme: s.applyTheme, onboardingOpen: s.onboardingOpen, settings: s.settings, settingsError: s.settingsError, refreshSettings: s.refreshSettings })));
+  const { applyTheme, onboardingOpen, wavePreset, settings, settingsError, refreshSettings } = useStore(useShallow((s) => ({ applyTheme: s.applyTheme, onboardingOpen: s.onboardingOpen, wavePreset: s.resolvedPreset, settings: s.settings, settingsError: s.settingsError, refreshSettings: s.refreshSettings })));
   const tr = useT();
   const prevOnboardingOpen = useRef(onboardingOpen);
   const pageRef = useRef<HTMLDivElement>(null);
@@ -186,7 +186,7 @@ export function SettingsView() {
                   <div className="min-w-0">
                     <span className="text-[13px]">Background animation</span>
                     <p id="background-animation-hint" className="text-[11px] text-ink-faint">
-                      {pixelWaveFor(settings.themePreset)
+                      {pixelWaveFor(wavePreset)
                         ? 'Moving pixel dots only in empty new-agent windows. Turn off for lower power use.'
                         : 'Pixel dots in empty new-agent windows with Lilac, Lavender and Experimental themes. This theme has none.'}
                     </p>

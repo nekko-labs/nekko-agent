@@ -1,6 +1,7 @@
-import { Menu, Tray, nativeImage, type MenuItemConstructorOptions } from 'electron';
-import { IpcChannels, type EngineStatus } from '@nekko-agent/shared';
+import { Menu, Tray, nativeImage, type MenuItemConstructorOptions, type NativeImage } from 'electron';
+import { IpcChannels, runnerActivity, type EngineStatus, type RunnerView } from '@nekko-agent/shared';
 import type { EngineProcess } from './engine-process.js';
+import { RUNNER_DOT_BGRA, paintDot } from './trayDot.js';
 
 export function createDesktopTray(options: {
   iconPath: string;
@@ -14,8 +15,12 @@ export function createDesktopTray(options: {
   onError: (message: string) => void;
 }) {
   const { engine } = options;
-  const tray = new Tray(nativeImage.createFromPath(options.iconPath).resize({ width: 20, height: 20 }));
+  const plain = nativeImage.createFromPath(options.iconPath).resize({ width: 20, height: 20 });
+  let dotted: NativeImage | null = null;
+  const tray = new Tray(plain);
   tray.setToolTip('Nekko Agent');
+  let runners = { vms: 0, awake: false };
+  let showsDot = false;
   let busy = false;
   let disposed = false;
   let modelStatus: EngineStatus | null = null;
@@ -41,6 +46,8 @@ export function createDesktopTray(options: {
       { type: 'separator' },
       { label: engine.running ? 'Stop Nekko service' : 'Start Nekko service', enabled: !busy, click: () => run(async () => { if (engine.running) { await engine.stop(); modelStatus = null; } else await startService(); }) },
       { label: 'Restart Nekko service', enabled: !busy, click: () => run(async () => { await engine.stop(); modelStatus = null; await startService(); }) },
+      ...(runners.vms > 0 ? [{ label: `CI runners: ${runners.vms} ${runners.vms === 1 ? 'VM' : 'VMs'} running`, enabled: false }] : []),
+      ...(runners.awake ? [{ label: 'Keeping this Mac awake for CI', enabled: false }] : []),
       { type: 'separator' },
       { label: modelStatus?.running ? 'Stop model server' : 'Start model server', enabled: !busy && engine.running && Boolean(modelStatus?.install.binPath || modelStatus?.diffusionInstall?.binPath || modelStatus?.mlxInstall?.binPath), click: () => run(async () => {
         const status = await engine.call<EngineStatus>(IpcChannels.engineStatus);
@@ -57,6 +64,13 @@ export function createDesktopTray(options: {
       { label: 'Quit Nekko Agent', enabled: !busy, click: options.quit },
     ];
     tray.setContextMenu(Menu.buildFromTemplate(entries));
+    const dot = runners.vms > 0 || runners.awake;
+    if (dot !== showsDot) {
+      showsDot = dot;
+      dotted ??= nativeImage.createFromBitmap(paintDot(plain.toBitmap(), 20, 20, RUNNER_DOT_BGRA), { width: 20, height: 20 });
+      tray.setImage(dot ? dotted : plain);
+      tray.setToolTip(dot ? 'Nekko Agent · CI runner active' : 'Nekko Agent');
+    }
   };
   let refreshing = false;
   const refresh = async () => {
@@ -64,6 +78,10 @@ export function createDesktopTray(options: {
     refreshing = true;
     try { modelStatus = engine.running ? await engine.call<EngineStatus>(IpcChannels.engineStatus) : null; }
     catch { modelStatus = null; }
+    try {
+      // The daemon serves no runners off macOS or when older: a rejection means none.
+      runners = runnerActivity(engine.running ? await engine.call<RunnerView[]>(IpcChannels.runnerList) : []);
+    } catch { runners = { vms: 0, awake: false }; }
     finally { refreshing = false; render(); }
   };
   tray.on('click', options.showUi);
