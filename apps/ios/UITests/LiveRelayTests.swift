@@ -80,6 +80,14 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Hello from your computer."].waitForExistence(timeout: computerWait), "the reply streamed in")
         attach(app, "\(theme)-4-reply")
 
+        // + sits inside the message box and offers another agent or a terminal, as on the desktop.
+        let plus = app.buttons["composer.add"]
+        XCTAssertTrue(plus.tapUntil { app.buttons["New agent"].exists }, "the + menu opens")
+        XCTAssertTrue(app.buttons["Terminal"].exists, "the + menu offers a terminal")
+        attach(app, "\(theme)-4b-plus-menu")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)).tap()
+        XCTAssertTrue(waitGone(app.buttons["New agent"], busyWait), "the + menu closes")
+
         let message = app.input("chat.message")
         XCTAssertTrue(message.waitForExistence(timeout: 10))
         message.tap()

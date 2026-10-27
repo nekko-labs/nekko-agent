@@ -192,6 +192,7 @@ fun NekkoNavHost(
                     text?.let { shareInbox.putDraft(newId, it) }
                     nav.navigate(Routes.chat(newId))
                 },
+                onNewChat = { nav.navigate(Routes.NEW) },
             )
         }
         composable(Routes.NEW) {
@@ -343,6 +344,7 @@ private fun Panes(
                             text?.let { shareInbox.putDraft(newId, it) }
                             slot.open(newId)
                         },
+                        onNewChat = { nav.navigate(Routes.NEW) },
                     )
                 }
             }
