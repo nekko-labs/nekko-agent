@@ -100,6 +100,7 @@ import androidx.compose.ui.draganddrop.toAndroidDragEvent
 import androidx.compose.ui.draw.alpha
 import com.nekko.android.ui.components.Dot
 import com.nekko.android.ui.chat.ForkAction
+import com.nekko.android.ui.files.FilesDialog
 import com.nekko.android.ui.git.GitDialog
 import com.nekko.android.ui.terminal.TerminalsDialog
 import androidx.compose.material.icons.filled.Terminal
@@ -107,6 +108,7 @@ import com.nekko.android.ui.git.PrChip
 import com.nekko.android.ui.git.PrSheet
 import com.nekko.protocol.PullRequest
 import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.ui.platform.testTag
 import androidx.compose.material3.DropdownMenuItem
@@ -233,6 +235,8 @@ fun ChatScreen(
         val online by vm.online.collectAsStateWithLifecycle()
         TerminalsDialog(t, online, vm.computerName, onDismiss = vm::closeTerminals)
     }
+    val files by vm.filesOpen.collectAsStateWithLifecycle()
+    files?.let { f -> FilesDialog(f, vm.repo, onDismiss = vm::closeFiles) }
     val git by vm.gitOpen.collectAsStateWithLifecycle()
     git?.let { o -> GitDialog(o.git, onDismiss = { vm.closeGit(); prReads++ }, pr = o.pr) }
     if (showPrs) {
@@ -264,6 +268,12 @@ fun ChatScreen(
                                 leadingIcon = { Icon(Icons.Filled.AccountTree, contentDescription = null) },
                                 onClick = { showMenu = false; vm.openGit() },
                                 modifier = Modifier.testTag("chat.git"),
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Files") },
+                                leadingIcon = { Icon(Icons.Filled.FolderOpen, contentDescription = null) },
+                                onClick = { showMenu = false; vm.openFiles() },
+                                modifier = Modifier.testTag("chat.files"),
                             )
                             DropdownMenuItem(
                                 text = { Text("Terminals") },
