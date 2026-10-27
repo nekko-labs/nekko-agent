@@ -52,3 +52,37 @@ describe('segment queue failures', () => {
     expect(order).toEqual(['1', '2']);
   });
 });
+
+describe('segment queue against a single-flight engine', () => {
+  // nekkod refuses a second transcription while one runs ("Voice transcription is already running.").
+  const singleFlight = () => {
+    let busy = false;
+    return async (w: number[]) => {
+      if (busy) throw new Error('Voice transcription is already running.');
+      busy = true;
+      try { await later('', 20); return `T${w[0]}`; } finally { busy = false; }
+    };
+  };
+  it('transcribes one segment at a time, so overlapping segments are all kept', async () => {
+    const applied: string[] = [];
+    const q = createSegmentQueue(singleFlight(), t => applied.push(t));
+    q.push(wav(1)); q.push(wav(2)); q.push(wav(3));
+    await q.drain();
+    expect(applied).toEqual(['T1', 'T2', 'T3']);
+  });
+  it('reports a failed transcription instead of skipping it silently', async () => {
+    const errors: string[] = [];
+    const q = createSegmentQueue(w => (w[0] === 1 ? Promise.reject(new Error('boom')) : Promise.resolve('ok')), () => {}, e => errors.push((e as Error).message));
+    q.push(wav(1)); q.push(wav(2));
+    await q.drain();
+    expect(errors).toEqual(['boom']);
+  });
+  it('drops transcripts that are only non-speech tags', async () => {
+    const applied: string[] = [];
+    const said = ['[BLANK_AUDIO]', '(keyboard clicking)', '[Music] [ Silence ]', 'Fix it (the login bug).'];
+    const q = createSegmentQueue(w => Promise.resolve(said[w[0]]), t => applied.push(t));
+    said.forEach((_, i) => q.push(wav(i)));
+    await q.drain();
+    expect(applied).toEqual(['Fix it (the login bug).']);
+  });
+});
