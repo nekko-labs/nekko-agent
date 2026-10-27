@@ -48,6 +48,12 @@ Each command shows a short message ("Erased", "Sent", "New chat") so you know it
 
 To use the microphone for dictation only, turn off **Enable "Nekko..." commands** in Settings > Dictation.
 
+## On iPhone
+
+Tap the microphone in a chat's message box and it keeps listening through pauses until you tap stop, lock the phone, or leave the chat. The first time you tap it (or the first time you hold it, with **Hold to talk**), a short video shows how voice works instead of listening. **Turn on** starts listening; **Not now** closes it without listening. Either way, or if you swipe it away, it won't show again. Watch it any time from **Settings > Dictation > Watch how voice works**. The video has captions, and VoiceOver reads a summary of it; with Reduce Motion on, it waits for the play button.
+
+Without Whisper on your computer, speech is turned into text on the iPhone only, never on a server.
+
 ## Privacy
 
 Speech is turned into text on this computer, by Apple's on-device recognizer or by Whisper running locally. Audio is never sent anywhere and is not kept once it has been turned into text.

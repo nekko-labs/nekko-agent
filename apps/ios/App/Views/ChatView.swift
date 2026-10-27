@@ -682,9 +682,13 @@ struct FlowOptions: View {
 /// on release. VoiceOver can't hold, so its double-tap starts and the next one stops.
 struct HoldToTalkButton: View {
     let dictation: Dictation
+    let gate: VoiceIntroGate
     @Environment(ComputersStore.self) private var store
+    @Environment(Prefs.self) private var prefs
     @Environment(\.palette) private var palette
     @State private var down = false
+    /// This press showed the video instead of listening, so its release has nothing to stop.
+    @State private var introduced = false
 
     var body: some View {
         Image(systemName: dictation.recording ? "waveform.circle.fill" : "mic.fill")
@@ -698,11 +702,13 @@ struct HoldToTalkButton: View {
                 .onChanged { _ in
                     guard !down else { return }
                     down = true
-                    Task { await dictation.press(store: store) }
+                    introduced = gate.intercept(prefs)
+                    if !introduced { Task { await dictation.press(store: store) } }
                 }
                 .onEnded { _ in
                     down = false
-                    Task { await dictation.letGo(store: store) }
+                    if !introduced { Task { await dictation.letGo(store: store) } }
+                    introduced = false
                 })
             .accessibilityElement()
             .accessibilityAddTraits(.isButton)
@@ -711,7 +717,7 @@ struct HoldToTalkButton: View {
             .accessibilityIdentifier("composer.holdToTalk")
             .accessibilityAction {
                 Task {
-                    if dictation.recording { dictation.stopListening() } else { await dictation.start(store: store, holding: true) }
+                    if dictation.recording { dictation.stopListening() } else if !gate.intercept(prefs) { await dictation.start(store: store, holding: true) }
                 }
             }
     }
@@ -737,6 +743,8 @@ struct Composer: View {
     @State private var dictation = Dictation()
     /// "Nekko, ..." commands in what is dictated, and the words for the message box.
     @State private var voice = VoiceRunner()
+    /// The first tap of the mic shows the how-voice-works video instead of listening.
+    @State private var intro = VoiceIntroGate()
     @Environment(\.scenePhase) private var phase
     @Environment(Prefs.self) private var prefs
     /// The message box has the keyboard (its formatting toolbar shows then).
@@ -874,9 +882,9 @@ struct Composer: View {
                     } else if dictation.transcribing {
                         ProgressView().frame(width: 44, height: 44).accessibilityLabel("Transcribing")
                     } else if prefs.dictationHold && dictation.available {
-                        HoldToTalkButton(dictation: dictation)
+                        HoldToTalkButton(dictation: dictation, gate: intro)
                     } else if dictation.available {
-                        Button { Task { await dictation.startListening(store: store) } } label: {
+                        Button { if !intro.intercept(prefs) { Task { await dictation.startListening(store: store) } } } label: {
                             Image(systemName: "mic.fill").font(.title3).foregroundStyle(palette.inkSoft)
                                 .frame(width: 44, height: 44).contentShape(Rectangle())
                         }
@@ -952,6 +960,10 @@ struct Composer: View {
         // Edit on a waiting prompt, or a refusal: the prompt comes back into the box.
         .onChange(of: store.drafts.drafts[chat.sessionId]) { _, d in adopt(d) }
         .onAppear(perform: bindVoice)
+        .sheet(isPresented: $intro.showing, onDismiss: {
+            // Turn on is the one way out that listens: in hold mode there is no hold to start from.
+            intro.closed(prefs) { if !prefs.dictationHold { Task { await dictation.startListening(store: store) } } }
+        }) { VoiceIntroView(onTurnOn: intro.turnOn) }
         .onChange(of: dictation.recording) { _, on in if on { voice.started() } else { voice.stopped() } }
         // Listening never outlives the screen: lock, app switch, or leaving the chat stops it, and it never restarts by itself.
         .onChange(of: phase) { _, p in if p != .active { dictation.abort() } }

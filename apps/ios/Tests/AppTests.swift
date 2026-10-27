@@ -308,6 +308,73 @@ final class OfflinePrefsTests: XCTestCase {
     }
 }
 
+/// IO-28: the first tap of the mic shows the how-voice-works video and does not listen.
+@MainActor
+final class VoiceIntroTests: XCTestCase {
+    private func prefs() throws -> (Prefs, () -> Void) {
+        let suite = "dev.nekkolabs.nekkoagent.tests.voiceintro.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        return (Prefs(defaults: defaults), { defaults.removePersistentDomain(forName: suite) })
+    }
+
+    func testTheFirstMicTapShowsTheVideoInsteadOfListening() throws {
+        let (prefs, cleanup) = try prefs()
+        defer { cleanup() }
+        let gate = VoiceIntroGate()
+        let dictation = Dictation()
+        XCTAssertFalse(prefs.voiceIntroSeen)
+        XCTAssertTrue(gate.intercept(prefs), "the tap went to the video")
+        XCTAssertTrue(gate.showing)
+        XCTAssertFalse(dictation.recording, "nothing listens yet")
+        XCTAssertFalse(prefs.voiceIntroSeen, "seen only once it is closed")
+    }
+
+    func testNotNowAndSwipingAwayMarkItSeenWithoutListening() throws {
+        let (prefs, cleanup) = try prefs()
+        defer { cleanup() }
+        let gate = VoiceIntroGate()
+        _ = gate.intercept(prefs)
+        var listened = false
+        gate.closed(prefs) { listened = true }
+        XCTAssertTrue(prefs.voiceIntroSeen)
+        XCTAssertFalse(listened)
+        XCTAssertFalse(gate.intercept(prefs), "later taps listen")
+        XCTAssertFalse(gate.showing)
+    }
+
+    func testTurnOnListensOnceAndIsRemembered() throws {
+        let (prefs, cleanup) = try prefs()
+        defer { cleanup() }
+        let gate = VoiceIntroGate()
+        _ = gate.intercept(prefs)
+        gate.turnOn()
+        var listened = 0
+        gate.closed(prefs) { listened += 1 }
+        XCTAssertEqual(listened, 1)
+        XCTAssertTrue(prefs.voiceIntroSeen)
+        gate.replay()
+        gate.closed(prefs) { listened += 1 }
+        XCTAssertEqual(listened, 1, "a replay from Settings never starts listening")
+    }
+
+    func testItStaysSeenAcrossLaunches() throws {
+        let suite = "dev.nekkolabs.nekkoagent.tests.voiceintro.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        Prefs(defaults: defaults).voiceIntroSeen = true
+        XCTAssertTrue(Prefs(defaults: defaults).voiceIntroSeen)
+    }
+
+    func testBothCutsAreBundledAndSmall() throws {
+        for theme in ["light", "dark"] {
+            let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "voice-intro-\(theme)", withExtension: "mp4")
+                                    ?? Bundle.main.url(forResource: "voice-intro-\(theme)", withExtension: "mp4"), "voice-intro-\(theme).mp4 is an app resource")
+            let size = try XCTUnwrap(try url.resourceValues(forKeys: [.fileSizeKey]).fileSize)
+            XCTAssertLessThan(size, 3 * 1024 * 1024)
+        }
+    }
+}
+
 /// TS-4: Open Tailscale. Without `tailscale` in LSApplicationQueriesSchemes,
 /// canOpenURL always answers no and the action would only ever reach the App Store.
 final class OpenTailscaleTests: XCTestCase {
