@@ -632,6 +632,9 @@ class ComputersRepository(
         cache.save(id, SavedChatList(now(), s.summaries, s.workspaces))
     }
 
+    /** Read the chat list again soon (a chat was forked or created from here). */
+    fun reloadList() = scheduleSummaries()
+
     private fun scheduleSummaries() {
         val c = client ?: return
         summariesDirty = true

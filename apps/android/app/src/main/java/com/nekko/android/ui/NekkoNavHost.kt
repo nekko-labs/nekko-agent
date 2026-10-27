@@ -176,7 +176,13 @@ fun NekkoNavHost(
             // Text shared into a chat that was just created; taken once, never sent by itself.
             val draft = remember(id) { shareInbox.takeDraft(id) }
             val dictationOn by phonePrefs.flow(Dictation.ENABLED).collectAsStateWithLifecycle()
-            ChatScreen(vm = vm, initialDraft = draft, dictationOn = dictationOn, onBack = { nav.popBackStack() })
+            ChatScreen(
+                vm = vm, initialDraft = draft, dictationOn = dictationOn, onBack = { nav.popBackStack() },
+                onOpenChat = { newId, text ->
+                    text?.let { shareInbox.putDraft(newId, it) }
+                    nav.navigate(Routes.chat(newId))
+                },
+            )
         }
         composable(Routes.NEW) {
             // The phone's default model for the active computer (Settings → New chats).
@@ -306,7 +312,13 @@ private fun Panes(
                     }
                     // Text shared into a chat that was just created; taken once, never sent by itself.
                     val draft = remember(id) { shareInbox.takeDraft(id) }
-                    ChatScreen(vm = vm, initialDraft = draft, dictationOn = dictationOn, onBack = slot.back, pane = slot)
+                    ChatScreen(
+                        vm = vm, initialDraft = draft, dictationOn = dictationOn, onBack = slot.back, pane = slot,
+                        onOpenChat = { newId, text ->
+                            text?.let { shareInbox.putDraft(newId, it) }
+                            slot.open(newId)
+                        },
+                    )
                 }
             }
         }

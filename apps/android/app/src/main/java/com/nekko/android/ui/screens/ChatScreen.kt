@@ -99,6 +99,7 @@ import androidx.compose.ui.draganddrop.mimeTypes
 import androidx.compose.ui.draganddrop.toAndroidDragEvent
 import androidx.compose.ui.draw.alpha
 import com.nekko.android.ui.components.Dot
+import com.nekko.android.ui.chat.ForkAction
 import com.nekko.android.ui.git.GitDialog
 import com.nekko.android.ui.terminal.TerminalsDialog
 import androidx.compose.material.icons.filled.Terminal
@@ -119,6 +120,8 @@ fun ChatScreen(
     initialDraft: String? = null,
     dictationOn: Boolean = false,
     onBack: () -> Unit,
+    /** Open another chat: one forked from here, with [draft] waiting in its message box (AN-29). */
+    onOpenChat: (id: String, draft: String?) -> Unit = { _, _ -> },
     /** Set when the chat is one of an open folding phone's two panes (header actions, drag and drop, tabletop). */
     pane: PaneSlot? = null,
 ) {
@@ -143,6 +146,28 @@ fun ChatScreen(
     val mic = rememberMic(vm.dictation.takeIf { dictationOn })
     val attach = rememberAttach(vm)
     val list = rememberLazyListState()
+    val prompts by vm.prompts.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    // Fork the chat from a saved message: a prompt goes back into the new chat's box, a reply keeps
+    // everything up to the next prompt. Streaming blocks aren't saved yet, so they offer Copy only.
+    val forkAction: (Block) -> ForkAction? = { block ->
+        if ((block is Block.User || (block is Block.Assistant && !block.streaming)) && vm.canFork(block)) {
+            ForkAction(if (block is Block.User) "Edit in a new chat" else "Fork from here") {
+                scope.launch {
+                    try {
+                        val (id, draft) = vm.fork(block)
+                        onOpenChat(id, draft)
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        android.widget.Toast.makeText(context, e.message ?: "Couldn’t fork the chat.", android.widget.Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        } else {
+            null
+        }
+    }
 
     // Stable keys: a provider that reuses a call id across turns gets a suffix.
     val keyed = remember(chat.blocks) {
@@ -312,8 +337,10 @@ fun ChatScreen(
                             when (run) {
                                 is PurposeRun.Single -> {
                                     val block = run.item.second
+                                    // Long press: Copy, and fork the chat from a saved message.
+                                    val fork = forkAction(block)
                                     // In a pane a message can be dragged into the other pane's message box.
-                                    if (pane == null) BlockView(block) else Box(Modifier.messageDragSource(block, vm.sessionId)) { BlockView(block) }
+                                    if (pane == null) BlockView(block, fork) else Box(Modifier.messageDragSource(block, vm.sessionId)) { BlockView(block, fork) }
                                 }
                                 is PurposeRun.Group -> PurposeGroupCard(run.purpose, run.items.map { it.second }, run.calls)
                             }
@@ -373,6 +400,9 @@ fun ChatScreen(
                 insert = insert,
                 onInserted = vm::inserted,
                 attach = attach,
+                prompts = prompts,
+                queuedPrompts = chat.queuedPrompts,
+                onEditQueued = vm::editQueued,
             )
         }
         ChatColumns(top = padding.calculateTopPadding(), tabletop = pane?.tabletop, transcript = transcript, controls = controls)
