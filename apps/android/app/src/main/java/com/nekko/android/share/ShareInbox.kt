@@ -43,6 +43,11 @@ class ShareInbox {
         synchronized(drafts) { drafts[sessionId] = text }
     }
 
+    /** [sessionId]'s composer opens with [text] (a prompt forked into a new chat). */
+    fun putDraft(sessionId: String, text: String) {
+        synchronized(drafts) { drafts[sessionId] = text }
+    }
+
     /** The composer text for [sessionId], once; null when nothing was shared into it. */
     fun takeDraft(sessionId: String): String? = synchronized(drafts) { drafts.remove(sessionId) }
 }

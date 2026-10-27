@@ -626,7 +626,9 @@
   pointer-events: none;
   transition: width var(--rail-close-ms) var(--rail-ease) var(--rail-close-delay);
   & path {
-    fill: color-mix(in srgb, color-mix(in srgb, var(--paper) 92%, black) 97%, transparent);
+    fill: var(--rail-fill, color-mix(in srgb, color-mix(in srgb, var(--paper) 92%, black) 97%, transparent));
+    stroke: var(--rail-stroke, none);
+    vector-effect: non-scaling-stroke;
     pointer-events: visiblePainted;
   }
 }
@@ -738,7 +740,7 @@
   display: flex;
   align-items: center;
   padding-left: 14px;
-  background: var(--paper);
+  background: var(--titlebar-bg, var(--paper));
   /* Drag the strip to move the window, double-click it to maximise. Anything
      interactive placed here has to opt out again with `no-drag`, or it stops
      receiving clicks. */
@@ -1325,6 +1327,40 @@
     --merged-wash: rgba(255, 255, 255, 0.3);
     --merged-wash-soft: rgba(255, 255, 255, 0.12);
     --merged-chip: rgba(255, 255, 255, 0.55);
+  }
+
+  /* Nekko Dark: the marketing site's Dark look (its default), an indigo-black
+     ground with lavender and aqua glows. System uses it in dark mode. The
+     lavender accent is too light for white button text, so buttons take the
+     ground's indigo-black instead. */
+  [data-theme='dark'][data-preset='nekko-dark'] {
+    --paper: #0d0b18;
+    --win: #141127;
+    --surface: #181430;
+    --surface-2: #1d1a36;
+    --ink: #ffffff;
+    --ink-soft: #c0bad9;
+    --ink-faint: #8f89ab;
+    --line: #2f2d38;
+    --on-accent: #0d0b18;
+    /* Darkening the near-black ground hides the sidebar rail in it, so the rail
+       takes the raised surface the text boxes use, with a faint lavender edge. */
+    --rail-fill: var(--surface-2);
+    --rail-stroke: color-mix(in srgb, var(--accent) 22%, transparent);
+    /* The website's Dark body background (apps/website/styles.css), static.
+       The shell paints it; panels stay solid --paper, so it shows only around
+       and between them and text contrast is unchanged. The title bar (and the
+       native window buttons over it) let it through too. */
+    --titlebar-bg: transparent;
+    --titlebar-overlay: #00000000;
+    --field:
+      radial-gradient(60% 900px at 12% 0%, rgba(157, 140, 230, 0.26), transparent 70%),
+      radial-gradient(50% 800px at 92% 6%, rgba(138, 228, 242, 0.12), transparent 70%),
+      radial-gradient(50% 900px at 88% 40%, rgba(138, 228, 242, 0.1), transparent 70%),
+      radial-gradient(55% 900px at 8% 58%, rgba(157, 140, 230, 0.16), transparent 70%),
+      radial-gradient(60% 900px at 90% 80%, rgba(165, 249, 223, 0.08), transparent 70%),
+      radial-gradient(60% 800px at 20% 100%, rgba(157, 140, 230, 0.22), transparent 70%),
+      var(--paper);
   }
 
   /* Experimental: candidate brand colour pairings (Settings → Theme → Experimental).

@@ -29,6 +29,7 @@ import com.nekko.protocol.StepUpProof
 import com.nekko.protocol.TerminalChannels
 import com.nekko.protocol.TerminalEvent
 import com.nekko.protocol.WorkspaceFolder
+import com.nekko.protocol.WorkspacePath
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.TimeoutCancellationException
@@ -631,6 +632,29 @@ class ComputersRepository(
         if (!liveList || s.savedListAt != null) return
         cache.save(id, SavedChatList(now(), s.summaries, s.workspaces))
     }
+
+    /** Save a folder on the computer by its absolute path there (a signed Change). */
+    suspend fun addWorkspace(path: String) {
+        val p = path.trim()
+        if (!WorkspacePath.isAbsolute(p)) throw RelayException("Enter an absolute folder path on the computer.")
+        changeWorkspace(Channels.WORKSPACE_ADD_BY_PATH, p)
+    }
+
+    /** Forget a saved folder (a signed Change). The computer never deletes the folder on disk. */
+    suspend fun removeWorkspace(id: String) {
+        changeWorkspace(Channels.WORKSPACE_REMOVE, id)
+        reloadList()
+    }
+
+    private suspend fun changeWorkspace(channel: String, value: String) {
+        if (_state.value.conn != RelayState.ONLINE) throw RelayException("Connect to the computer to manage folders.")
+        val c = remote()
+        val list = WorkspaceFolder.list(callChange(channel, listOf(JsonPrimitive(value))))
+        if (client === c) _state.update { it.copy(workspaces = list) }
+    }
+
+    /** Read the chat list again soon (a chat was forked or created from here). */
+    fun reloadList() = scheduleSummaries()
 
     private fun scheduleSummaries() {
         val c = client ?: return

@@ -1,5 +1,6 @@
 package com.nekko.android.chat
 
+import com.nekko.protocol.SavedPrompt
 import com.nekko.protocol.SkillSummary
 
 /**
@@ -54,6 +55,30 @@ object SkillMenu {
         val name = text.substring(1).takeWhile { !it.isWhitespace() }
         val skill = skills.firstOrNull { it.name == name } ?: return null
         return skill to text.substring(1 + name.length).trim()
+    }
+
+    /** `/fi` → the computer's saved prompts whose name starts with "fi" (AN-29), at most six. */
+    fun matchPrompts(prompts: List<SavedPrompt>, query: String): List<SavedPrompt> {
+        val q = query.lowercase()
+        return prompts.filter { q.isEmpty() || it.name.lowercase().startsWith(q) }.take(6)
+    }
+
+    /**
+     * The box once a saved prompt is picked after existing text: the `/query`
+     * becomes the prompt's text. (A box that is only the `/query` arms the
+     * prompt as a chip instead, and empties.)
+     */
+    fun textAfterPrompt(text: String, promptText: String): String {
+        val t = trigger(text) ?: return text
+        return if (t.start == 0) "" else text.substring(0, t.start) + promptText
+    }
+
+    /** `/name rest` typed out in full for a saved prompt: what it sends, its text then the rest. */
+    fun typedPrompt(text: String, prompts: List<SavedPrompt>): String? {
+        if (!text.startsWith("/")) return null
+        val name = text.substring(1).takeWhile { !it.isWhitespace() }
+        val saved = prompts.firstOrNull { it.name == name } ?: return null
+        return saved.text(text.substring(1 + name.length))
     }
 
     /** A short label for where the skill comes from, shown beside its name. */
