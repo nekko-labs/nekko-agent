@@ -240,7 +240,7 @@ class RelayClient(
      * when the whole turn is over, so it gets hours rather than two minutes.
      */
     suspend fun callWithTimeout(timeoutMs: Long, channel: String, vararg args: JsonElement): JsonElement =
-        send(timeoutMs, channel, JsonArray(args.toList()), stepUp = null)
+        send(timeoutMs, channel, JsonArray(args.toList()), proof = null, stepUp = null)
 
     /**
      * A guarded call again with a step-up (SK-7): `stepUp` rides beside the
@@ -248,9 +248,22 @@ class RelayClient(
      * read nor strip it. The computer checks it after the Change proof.
      */
     suspend fun callWithStepUp(stepUp: StepUpProof, channel: String, vararg args: JsonElement): JsonElement =
-        send(config.requestTimeoutMs, channel, JsonArray(args.toList()), stepUp)
+        send(config.requestTimeoutMs, channel, JsonArray(args.toList()), proof = null, stepUp)
 
-    private suspend fun send(timeoutMs: Long, channel: String, args: JsonArray, stepUp: StepUpProof?): JsonElement {
+    /**
+     * A Change action (AN-32): the signed `proof` ([ChangeProof]) beside the
+     * args, and a step-up beside it when the computer asked for one. Both ride
+     * inside the sealed frame. [args] must be exactly what was signed.
+     */
+    suspend fun callSigned(
+        channel: String,
+        args: JsonArray,
+        proof: JsonObject,
+        stepUp: StepUpProof? = null,
+        timeoutMs: Long = config.requestTimeoutMs,
+    ): JsonElement = send(timeoutMs, channel, args, proof, stepUp)
+
+    private suspend fun send(timeoutMs: Long, channel: String, args: JsonArray, proof: JsonObject?, stepUp: StepUpProof?): JsonElement {
         val id = nextId.getAndIncrement()
         val deferred = CompletableDeferred<JsonElement>()
         // The computer may re-challenge between the welcome and the send: wait for it again.
@@ -259,7 +272,7 @@ class RelayClient(
         while (true) {
             awaitReady()
             pending[id] = deferred
-            sent = sendRequest(id, channel, args, stepUp)
+            sent = sendRequest(id, channel, args, proof, stepUp)
             if (sent == SendResult.SENT) break
             pending.remove(id)
             if (sent == SendResult.FAILED || ++tries >= SEND_ATTEMPTS) break
@@ -303,7 +316,7 @@ class RelayClient(
     private enum class SendResult { SENT, NOT_READY, FAILED }
 
     /** Seal and send one request with the next seq; NOT_READY when the handshake is not done. */
-    private fun sendRequest(id: Long, channel: String, args: JsonArray, stepUp: StepUpProof?): SendResult = synchronized(sendLock) {
+    private fun sendRequest(id: Long, channel: String, args: JsonArray, proof: JsonObject?, stepUp: StepUpProof?): SendResult = synchronized(sendLock) {
         val c: WsConnection
         val n: Long
         val challenge: String?
@@ -317,6 +330,7 @@ class RelayClient(
             put("type", "req"); put("id", id); put("seq", n)
             challenge?.let { put("challenge", it) }
             put("channel", channel); put("args", args)
+            proof?.let { put("proof", it) }
             stepUp?.let { put("stepUp", it.toJson()) }
         }
         val env = buildJsonObject { put("enc", E2E.seal(config.keyBytes, frame)) }

@@ -14,7 +14,7 @@ export interface Rect { x: number; y: number; width: number; height: number }
 /** Where a held window would go: back where it was, beside a window, along a board edge, or into a window's slot. */
 export type WallDropTarget =
   | { kind: 'home' }
-  | { kind: 'beside'; paneId: string; side: Direction }
+  | { kind: 'beside'; paneId: string; side: Direction; atEdge?: boolean }
   | { kind: 'edge'; side: Direction }
   | { kind: 'swap'; paneId: string };
 
@@ -26,7 +26,11 @@ export const HOME: WallDropTarget = { kind: 'home' };
  * without it the first wobble upward already counted as a move.
  */
 export const HOME_MARGIN = 24;
-/** The band along each side of the board (inside and just outside it) that docks a window to that whole side. */
+/**
+ * The band along each side of the board (inside and just outside it). A zone
+ * dropped there joins the row (or column) under the pointer at that end;
+ * with `span` (Shift held) it docks along the whole side instead.
+ */
 export const EDGE_BAND = 16;
 /** The held card is at most this size; the landing zone shows the real one. */
 export const HELD_MAX = { width: 300, height: 200 };
@@ -50,13 +54,23 @@ export function wallDropTargetAt(
   stage: { width: number; height: number },
   grid: boolean,
   gap = 8,
+  span = false,
 ): WallDropTarget {
   const home = rects.get(held);
   if (home && inside(home, x, y, HOME_MARGIN)) return HOME;
   if (grid && rects.size > 1) {
     const toEdge: Array<[Direction, number]> = [['left', x], ['right', stage.width - x], ['up', y], ['down', stage.height - y]];
     const [side, distance] = toEdge.reduce((a, b) => (b[1] < a[1] ? b : a));
-    if (Math.abs(distance) <= EDGE_BAND) return { kind: 'edge', side };
+    if (Math.abs(distance) <= EDGE_BAND) {
+      if (span) return { kind: 'edge', side };
+      const across = side === 'left' || side === 'right';
+      for (const [id, r] of rects) {
+        const touches = side === 'left' ? r.x <= gap : side === 'right' ? r.x + r.width >= stage.width - gap : side === 'up' ? r.y <= gap : r.y + r.height >= stage.height - gap;
+        const within = across ? y >= r.y - gap / 2 && y <= r.y + r.height + gap / 2 : x >= r.x - gap / 2 && x <= r.x + r.width + gap / 2;
+        if (touches && within) return id === held ? HOME : { kind: 'beside', paneId: id, side, atEdge: true };
+      }
+      return HOME;
+    }
   }
   for (const [id, r] of rects) {
     // Each window owns half the gutter on every side, so a seam is never dead space.
@@ -80,7 +94,8 @@ export function applyWallDrop(root: WbNode | null, held: string, target: WallDro
 }
 
 export const sameTarget = (a: WallDropTarget, b: WallDropTarget) =>
-  a.kind === b.kind && ('paneId' in a ? a.paneId : '') === ('paneId' in b ? b.paneId : '') && ('side' in a ? a.side : '') === ('side' in b ? b.side : '');
+  a.kind === b.kind && ('paneId' in a ? a.paneId : '') === ('paneId' in b ? b.paneId : '') && ('side' in a ? a.side : '') === ('side' in b ? b.side : '')
+  && ('atEdge' in a && !!a.atEdge) === ('atEdge' in b && !!b.atEdge);
 
 /** The held card keeps the window's shape at no more than `HELD_MAX`. */
 export function heldSize(width: number, height: number): { width: number; height: number } {

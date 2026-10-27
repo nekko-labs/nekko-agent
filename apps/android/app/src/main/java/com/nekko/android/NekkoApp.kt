@@ -18,6 +18,8 @@ import com.nekko.android.data.ThemePrefs
 import com.nekko.android.haptics.AndroidHaptics
 import com.nekko.android.haptics.EventHaptics
 import com.nekko.android.lock.AppLock
+import com.nekko.android.security.ActivityOwnerCheck
+import com.nekko.android.security.KeystoreChangeSigner
 import com.nekko.android.share.ShareInbox
 import com.nekko.android.widget.StatusSnapshot
 import com.nekko.android.widget.StatusStore
@@ -52,6 +54,8 @@ class NekkoApp : Application() {
     lateinit var haptics: AndroidHaptics
         private set
     private lateinit var chatLists: ChatListFiles
+    /** The fingerprint or screen lock for Change actions, through whichever activity is on screen. */
+    val ownerCheck = ActivityOwnerCheck()
 
     /** Settings → Connection → Keep the chat list when offline. Off deletes every saved list. */
     fun setKeepChatList(on: Boolean) {
@@ -71,6 +75,7 @@ class NekkoApp : Application() {
             remotes = RelayRemoteFactory(),
             scope = appScope,
             deviceName = ::deviceName,
+            changeSigner = KeystoreChangeSigner(ownerCheck),
             onForget = { id ->
                 newChatDefaults.forget(id)
                 paneLayouts.forget(id)
