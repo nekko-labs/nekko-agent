@@ -190,6 +190,18 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 >   **Merge**, **Close** or **Reopen**. **Abort merge** shows while a merge stopped on a conflict.
 >   Every one of these changes asks for Face ID or your passcode (once per 5 minutes) and shows in
 >   the phone's *Activity* on the computer.
+>   On Android, **⋮ → Git** in a chat has the same status, files and diffs, **Stage** / **Stage all**,
+>   **Write message**, **Commit**, **Push**, **Abort merge**, **History**, **Branches** and
+>   **Compare**, and **Open a pull request**; each change asks for your fingerprint, face or screen
+>   lock (once per 5 minutes). A chat's pull request shows as a chip above the message box, with the
+>   same sheet as on the iPhone: its checks, files, **Approve**, **Merge**, **Close** or **Reopen**,
+>   and the prompts that ask the agent to commit, open a PR or fix failing checks.
+>   **⋮ → Terminals** lists the chat's terminals and the agent's command log, starts a **New
+>   terminal** in the chat's folder, and opens **SSH** to the hosts in your computer's
+>   `~/.ssh/config`. A terminal shows its output in colour with a row of keys (esc, tab, ctrl, ^C,
+>   the arrows, backspace, return, paste) and a line to type or dictate a command; it follows the
+>   phone's size, also when you open or fold a folding phone. Opening asks for your fingerprint,
+>   face or screen lock (once per 5 minutes); typing doesn't.
 > - **Files:** **More → Files** in a chat opens that chat's folder (its worktree when the chat is
 >   isolated); **Computers and settings → Files** lists the computer's saved folders. Tap through
 >   folders, or search by file name. A file opens in monospace with line numbers (Markdown can be
@@ -375,12 +387,13 @@ changes how the computer itself is set up:
   switch it between Ask, Guardrails and YOLO, but not its tools, isolation or
   offline/incognito switches. Messages cannot attach files from the computer. Moving a chat (or the
   default for new chats) to a mode with fewer approvals, Ask to Guardrails or anything to YOLO, is
-  confirmed on the phone like any other change: Face ID or the passcode on the iPhone. Android can't
-  confirm changes yet, so there you change the mode on the computer.
+  confirmed on the phone like any other change: Face ID or the passcode on the iPhone, the
+  fingerprint, face or screen lock on Android (the default for new chats, in **Settings → On
+  <computer>**).
 
 ### What phones can do: Read and Change, per phone
 
-Git, files, logs, terminals and SSH are on the iPhone now (above); task boards are coming.
+Git, files, logs, terminals and SSH are on the iPhone now (above), and Git on Android; task boards are coming.
 *Remote access → What phones can do* on the computer lists each paired phone with two switches:
 
 - **Read:** see your chats and their messages, settings, models, automations, usage and limits, and
@@ -399,14 +412,16 @@ request a phone can make is in one of the two; anything else is refused.
 the phone and checked by your computer.** (Sending a prompt or approving a tool needs only the Change
 switch, so it doesn't ask for Face ID each time.) The first time a phone
 makes a change, it creates a key in its Secure Enclave (on iPhone) that only Face ID, Touch ID or
-the passcode can use, and gives your computer the public half. Each change after that is signed
+the passcode can use, or in the Android Keystore (StrongBox where the phone has one) that only the
+fingerprint, face or screen lock can use, and gives your computer the public half. Each change after that is signed
 with the key, and your computer checks the signature before doing anything: a change with no
 signature, a wrong one, one more than 5 minutes old, or one it has already seen is refused. One
-Face ID covers 5 minutes, as for *Allow* from the Lock Screen.
+Face ID (or fingerprint) covers 5 minutes, as for *Allow* from the Lock Screen; unlocking the phone
+on its own doesn't count.
 
 Your computer trusts the first key a phone gives it. A phone that later shows up with a different
 key is refused until you remove it and pair it again. *Forget all computers* on the iPhone deletes
-its key too.
+its key too; on Android, forgetting the last paired computer does.
 
 **Activity.** *Activity* under each phone lists every change it made or tried, prompts and approvals
 included, newest first, with why one was refused (Change off, no fresh Face ID or passcode, a changed

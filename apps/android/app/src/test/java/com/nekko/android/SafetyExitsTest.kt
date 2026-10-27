@@ -49,6 +49,7 @@ class SafetyExitsTest {
             deriveKey = { _, _ -> derived },
             newId = { "id-${++n}" },
             now = { clock },
+            changeSigner = com.nekko.protocol.SoftwareChangeSigner.generate(),
         )
     }
 
@@ -206,6 +207,7 @@ class SafetyExitsTest {
             when (c.channel) {
                 Channels.SECURITY_CHALLENGE -> Json.parseToJsonElement("""{"challenge":"BwcHBwcHBwcHBwcHBwcHBwcH","expiresAt":2000,"required":true,"methods":["security-key","totp"]}""")
                 Channels.SETTINGS_UPDATE -> buildJsonObject { put("defaultChatMode", "yolo") }
+                com.nekko.protocol.ChangeProof.KEY_CHANNEL -> buildJsonObject { put("registered", true) }
                 else -> FakeRemotes.defaultAnswer(c)
             }
         }
@@ -219,6 +221,7 @@ class SafetyExitsTest {
         val call = remotes.last.calls.last()
         assertEquals(Channels.SETTINGS_UPDATE, call.channel)
         assertEquals(StepUpProof.Totp("123456"), call.stepUp)
+        assertTrue("signed: the computer checks the proof before the step-up", call.proof != null)
         assertEquals(listOf(patch), call.args)
         assertEquals(com.nekko.protocol.PcSettings.ChatMode.YOLO, repo.state.value.pcSettings.defaultChatMode)
         repo.updatePcSettings(patch)
