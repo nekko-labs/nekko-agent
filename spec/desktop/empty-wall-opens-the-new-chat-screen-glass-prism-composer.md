@@ -43,7 +43,7 @@ Integration with #1150 preserves its vertical teal-to-gold colour direction and 
 
 [Implemented; 15 isolated hidden-renderer interaction/geometry checks passed at 1280px and 460px; matched desktop/narrow before/after screenshots inspected. Packaged builds, native phone layouts and other OSes unverified.]
 
-The greeting's pixel mascot is 80×75px (25% larger), centered over its unchanged 64×60px layout slot so its horizontal center and question text allocation remain unchanged. Its paws straddle the composer top edge rather than floating above it. The greeting aligns at its bottom edge so wrapped questions do not lift the paws off the composer. Existing caret gaze, idle question rotation, draft pause and reduced-motion behavior are retained.
+The greeting's pixel mascot is 80×75px (25% larger), positioned 10px left and 1px above its previously centered placement over the unchanged 64×60px layout slot. The heading and question text allocation remain unchanged. The default greeting face has no mouth; other mascot surfaces are unaffected (#1218). Its paws straddle the composer top edge rather than floating above it. The greeting aligns at its bottom edge so wrapped questions do not lift the paws off the composer. Existing caret gaze, idle question rotation, draft pause and reduced-motion behavior are retained.
 
 ## Slow color cycle and readable controls (issue #1178)
 
