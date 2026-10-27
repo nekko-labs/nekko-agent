@@ -11,6 +11,9 @@ import com.nekko.android.ui.files.FilesOverlay
 import com.nekko.android.ui.files.FilesPage
 import com.nekko.android.ui.files.filesOn
 import com.nekko.protocol.FileRoot
+import com.nekko.protocol.ChatPreviewLink
+import com.nekko.android.previews.ChatPreviews
+import com.nekko.android.previews.PreviewOverlay
 import com.nekko.android.terminal.RepoTerminalBackend
 
 import androidx.lifecycle.ViewModel
@@ -118,6 +121,17 @@ class ChatViewModel(
     fun openFiles() = repo.setOverlay(sessionId, FilesOverlay(FilesPage.Folder(filesOn(repo, FileRoot.Chat(sessionId)), "", "Files")))
 
     fun closeFiles() = repo.setOverlay(sessionId, null)
+
+    /** A file or loopback page the agent linked, open over this chat (AN-35). */
+    val previewOpen: StateFlow<PreviewOverlay?> = repo.overlays.map { it[sessionId] as? PreviewOverlay }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, repo.overlays.value[sessionId] as? PreviewOverlay)
+
+    fun openPreview(link: ChatPreviewLink) = repo.setOverlay(sessionId, PreviewOverlay(link))
+
+    fun closePreview() = repo.setOverlay(sessionId, null)
+
+    /** What the replies in this chat open their links and cards with. */
+    val previews = ChatPreviews(sessionId, repo.previews, ::openPreview)
 
     /** Whether the active computer is connected (the terminal screens open and reopen on it). */
     val online: StateFlow<Boolean> = repo.state.map { it.conn == RelayState.ONLINE }.distinctUntilChanged()

@@ -96,6 +96,10 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > sends what the agent linked in that chat (and, for a linked web page, the files in its folder),
 > and the page can't reach the internet or anything else on your phone. Ordinary web links open in
 > Safari.
+> On Android it works the same way: the cards under the reply, the link in the text, the window
+> with **Reload** and **⋮ → Copy path** (or **Copy address**) and **Share**; a PDF shows its pages,
+> and ordinary web links open in the browser. An open preview stays open when you open or fold a
+> folding phone.
 >
 > Each group opens with up to eight chats from the last two weeks (a chat that is working, needs
 > you or is pinned always shows), then **Show N more**. Tap a group's name to fold it. The
@@ -315,6 +319,9 @@ relay, tested and kept by the computer, and never written on the phone. The comp
 whether it worked and which models it can now use; it never sends a key back. Each provider's switch
 on the same page turns it on or off on the computer. Both ask for Face ID or the passcode, like every
 change from a phone. Subscriptions (ChatGPT) still sign in on the computer.
+On Android it is **Settings → Providers**: the same list with a switch on each, and **Add a
+provider**; both ask for your fingerprint, face or screen lock. The key field is a password field,
+emptied as soon as the computer answers, and never kept across closing or folding the app.
 
 Manage devices from the same card: **rename** them, **revoke** one instantly (it's kicked live and
 denied from then on), or **Sign out all phones** (formerly *Rotate secret*) to cryptographically reset the room, which unpairs
