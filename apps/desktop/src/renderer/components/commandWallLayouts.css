@@ -331,3 +331,82 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 /* Five stacked controls must not set the row's height below its cards. */
 [data-agent-panel][data-orientation='horizontal'] [data-agent-panel-header] > div { display: grid; grid-template-columns: repeat(2, 28px); gap: 4px; }
 [data-agent-panel][data-orientation='horizontal'] [data-agent-panel-header] .agent-panel-controls { display: contents; }
+
+/* ---------- Zones ---------- */
+/* A zone is a slim name bar over its window. The bar is the zone's handle:
+   drag it to move the zone, right-click it to close the zone. */
+.command-wall-window[data-zone] { flex-direction: column; gap: 3px; }
+.command-wall-window[data-zone] > .panel { flex: 1 1 0; }
+.wall-zone-header {
+  flex: 0 0 16px; display: flex; align-items: center; gap: 6px; padding: 0 6px;
+  border-radius: 6px; cursor: grab; user-select: none;
+  color: var(--ink-faint); font-size: 10.5px; font-weight: 500; letter-spacing: .02em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.wall-zone-header:hover { background: var(--surface-2); color: var(--ink-soft); }
+.command-wall-window[data-zone-active] > .wall-zone-header { color: var(--accent); }
+/* The active zone: the selection colour plus a slightly heavier ring. */
+.command-wall-window[data-zone-active] > .panel {
+  --panel-ring-color: color-mix(in srgb, var(--accent) 70%, var(--line)) !important;
+  --panel-ring-width: 2px !important;
+}
+/* An empty zone keeps its place, drawn dotted. */
+.wall-zone-empty {
+  flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  padding: 16px; text-align: center; color: var(--ink-faint); font-size: 12px; line-height: 1.5;
+  border: 1.5px dotted color-mix(in srgb, var(--ink) 28%, transparent); border-radius: var(--pane-radius);
+  transition: border-color 140ms ease, background 140ms ease;
+}
+.wall-zone-empty-title { color: var(--ink-soft); font-size: 13px; font-weight: 600; }
+.wall-zone-empty .btn { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; }
+.command-wall-window[data-zone-active] > .wall-zone-empty { border-width: 2px; border-color: color-mix(in srgb, var(--accent) 70%, var(--line)); }
+/* An agent dragged from the panel is over this zone. */
+.command-wall-window[data-zone-drop] > .wall-zone-empty,
+.command-wall-window[data-zone-drop] > .panel { --panel-ring-color: var(--accent) !important; --panel-ring-width: 2px !important; border-color: var(--accent); background: var(--accent-soft); }
+
+/* Room for the add-zone rails along the right and bottom edges. */
+.command-wall-layout[data-zone-rails] { padding-right: 16px; padding-bottom: 16px; }
+.wall-zone-rail { position: absolute; width: 16px; height: 16px; }
+.wall-zone-rail[data-side='right'] { width: 16px; }
+.wall-zone-rail[data-side='down'] { height: 16px; }
+.wall-zone-add {
+  position: absolute; display: grid; place-items: center; width: 16px; height: 16px; border-radius: 5px;
+  color: var(--ink-faint); opacity: .45; transition: opacity 120ms ease, color 120ms ease, background 120ms ease;
+}
+.wall-zone-rail[data-side='right'] .wall-zone-add { left: 0; transform: translateY(-50%); }
+.wall-zone-rail[data-side='down'] .wall-zone-add { top: 0; transform: translateX(-50%); }
+.wall-zone-rail[data-side='down'] .wall-zone-span svg { transform: rotate(90deg); }
+.wall-zone-rail:hover .wall-zone-add { opacity: .8; }
+.wall-zone-add:hover, .wall-zone-add:focus-visible { opacity: 1 !important; color: var(--accent); background: var(--accent-soft); outline: none; }
+.wall-zone-add svg { stroke-width: 1.5; }
+/* Where a hovered plus would put the new zone. */
+.wall-zone-ghost {
+  position: absolute; z-index: 3; pointer-events: none; display: grid; place-items: center;
+  border: 2px dotted var(--accent); border-radius: var(--pane-radius);
+  background: color-mix(in srgb, var(--accent-soft) 70%, transparent);
+  color: var(--accent); font-size: 12px; font-weight: 600;
+}
+.wall-span-hint {
+  position: absolute; z-index: 4; transform: translate(-50%, -50%); pointer-events: none;
+  padding: 4px 10px; border-radius: 999px; background: var(--win); color: var(--ink-soft);
+  font-size: 11.5px; white-space: nowrap; box-shadow: 0 4px 14px rgba(0, 0, 0, .12);
+}
+
+/* The agent row in the hand, dragged in from the panel. On a drop it flies
+   into the zone and grows to the window, then fades as the window shows. */
+.wall-agent-chip {
+  position: fixed; z-index: 9999; pointer-events: none; overflow: hidden;
+  border-radius: 10px; background: var(--win); border: 1px solid var(--accent);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .2), 0 2px 6px rgba(0, 0, 0, .1);
+  transform: rotate(-1.5deg) scale(.96);
+}
+.wall-agent-chip > * { width: 100%; }
+.wall-agent-chip[data-landing] {
+  transform: none; border-radius: var(--pane-radius); border-width: 2px;
+  transition: left 320ms cubic-bezier(.22, 1, .36, 1), top 320ms cubic-bezier(.22, 1, .36, 1), width 320ms cubic-bezier(.22, 1, .36, 1), height 320ms cubic-bezier(.22, 1, .36, 1), transform 320ms ease, opacity 180ms ease;
+}
+.wall-agent-chip[data-landing] > * { opacity: 0; transition: opacity 160ms ease; }
+.wall-agent-chip[data-landed] { opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .wall-agent-chip { transform: none; }
+}
