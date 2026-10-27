@@ -49,6 +49,9 @@ on:
       - '!apps/ios/scripts/**'
       - '!apps/ios/evidence/**'
       - '!apps/ios/**/*.md'
+      # The bundled Mermaid ships in the app (apps/ios/project.yml).
+      - 'vendor/mermaid/**'
+      - '!vendor/mermaid/**/*.md'
   workflow_dispatch:
     inputs:
       notes:
@@ -98,7 +101,7 @@ jobs:
             echo ship=true >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          files=$(git diff --name-only "$last" HEAD -- apps/ios \
+          files=$(git diff --name-only "$last" HEAD -- apps/ios vendor/mermaid \
             | grep -vE '^apps/ios/(UITests|Tests|Protocol/Tests|scripts|evidence)/|\.md$' || true)
           if [ -n "$files" ]; then
             echo "Changed since ${last::7}:"; echo "$files"

@@ -1,3 +1,4 @@
+import { rememberedConnectivityNotices } from './components/ConnectivityNotices.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentEvent } from '@nekko-agent/shared';
 import { LIVE_STREAM_MAX, __resetLiveRuns, applyEvent, beginResumedRun, applyReplay, clampLive, clearLiveRun, getLiveRun, runningSessionIds, takeFinishedRun } from './liveRuns.js';
@@ -49,6 +50,15 @@ describe('liveRuns', () => {
     applyEvent({ type: 'tool_result', sessionId: 'a', result: { toolCallId: 'c_bash', output: 'ok' } }, 3_500);
     const block = getLiveRun('a')!.blocks[0];
     expect(block.kind === 'activity' && block.items[0]).toMatchObject({ kind: 'tool', startedAt: 1_000, endedAt: 3_500 });
+  });
+
+  it('retains live connectivity notices without starting or resurrecting a run', () => {
+    const notice = { id: 'outage1', kind: 'restored' as const, createdAt: 1000, content: 'Reachability restored; select Continue.' };
+    applyEvent({ type: 'session_meta', sessionId: 'incognito', connectivityNotice: notice });
+    applyEvent({ type: 'session_meta', sessionId: 'incognito', connectivityNotice: notice });
+    expect(rememberedConnectivityNotices('incognito')).toEqual([notice]);
+    expect(getLiveRun('incognito')).toBeUndefined();
+    expect(runningSessionIds()).toEqual([]);
   });
 
   it('does not reopen a finished turn for a late session_meta', () => {

@@ -186,6 +186,16 @@ In the horizontal Agents row, the controls sit in a compact two-column strip bes
 Completing or closing an agent stops its active work and cancels pending durable
 watches, including watches owned by delegated descendants. The chat is retained
 when completed. Minimize only hides a window and deliberately lets work continue.
+In Dynamic View the board is laid out in zones: places that each hold one agent.
+It starts with two side by side. New agents wait in the Agents list instead of
+opening on the board. Click a zone to make it the active one (it gets a heavier
+outline), then click an agent in the Agents list to show it there, or drag the
+agent from the list straight into a zone. The thin plus buttons along the
+board's right and bottom edges add a zone that fits that row or column; the
+plus at the end of an edge, or Shift-click, spans the full height or width.
+Drag a zone by its name bar to move it (hold Shift at a board edge to span the
+whole side) and right-click the name bar to close it. Minimizing or completing
+an agent leaves its zone in place, dotted, until you fill it.
 In Dynamic View (including Fixed grid), a window also minimizes automatically
 when its agent finishes a successful reply. Errors and requests for input stay
 visible, and Focused View keeps finished replies open. Select the chat in the

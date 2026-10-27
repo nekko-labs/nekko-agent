@@ -43,6 +43,34 @@ object Channels {
     const val CHAT_QUEUE = "chat:queue"
     const val CHAT_PENDING = "chat:pending"
     const val CHAT_ANSWER = "chat:answer"
+    /** Change or remove a queued prompt, only while it still reads what the phone showed ([QueuedPrompt.edit]). */
+    const val CHAT_EDIT_QUEUED = "chat:editQueued"
+    /** A new chat from this one, before a prompt or after a reply: answers its id and title. */
+    const val SESSION_FORK = "session:fork"
+    /** A chat's or saved folder's files ([FilesRequest]): list, search and read; a save is a signed Change. */
+    const val FILES_LIST = "files:list"
+    const val FILES_SEARCH = "files:search"
+    const val FILES_READ = "files:read"
+    const val FILES_WRITE = "files:write"
+    /** Save or forget a folder on the computer (signed Changes); forgetting never deletes files. */
+    const val WORKSPACE_ADD_BY_PATH = "workspace:addByPath"
+    const val WORKSPACE_REMOVE = "workspace:remove"
+    const val LOGS_LIST = "logs:list"
+    const val LOGS_READ = "logs:read"
+    const val ARTIFACT_READ = "artifact:read"
+    const val PREVIEW_FETCH = "preview:fetch"
+    const val PROVIDERS_SEAL_KEY = "providers:sealKey"
+    const val PROVIDERS_SAVE_SEALED = "providers:saveSealed"
+    const val PROVIDERS_SET_ENABLED = "providers:setEnabled"
+
+    /** The computer's automations ([AutomationTask], [AutomationWorkflow]): read, and Run now only. */
+    const val TASKS_LIST = "tasks:list"
+    const val TASK_RUN_NOW = "task:runNow"
+    const val WORKFLOWS_LIST = "workflows:list"
+    const val WORKFLOW_RUN = "workflow:run"
+    /** Provider usage ([UsageSummary]) and one provider's plan limits by id ([ProviderLimits]); read only. */
+    const val USAGE_SUMMARY = "usage:summary"
+    const val LIMITS_GET = "limits:get"
     const val TOOL_APPROVE = "tool:approve"
     const val WORKSPACE_LIST = "workspace:list"
     const val APP_INFO = "app:info"
@@ -52,6 +80,13 @@ object Channels {
     const val CHANGES_LIST = "changes:list"
     /** The Monitors pane: hardware, running chats, what needs the owner, next automations ([MonitorSummary]); read class. */
     const val MONITOR_SUMMARY = "monitor:summary"
+    /** The Expert monitor ([SystemStats], [GpuStats], [EngineStatus]) and a chat's context totals ([ContextUsage]); read class. */
+    const val SYSTEM_STATS = "system:stats"
+    const val GPU_STATS = "gpu:stats"
+    const val ENGINE_STATUS = "engine:status"
+    const val CONTEXT_PREVIEW = "context:preview"
+    /** Agent class without a proof: unloading frees memory, and the next reply loads the model again. */
+    const val MODEL_UNLOAD = "model:unload"
     /** SK-7: a single-use step-up challenge and the kinds of method registered ([StepUpChallenge]). Read class. */
     const val SECURITY_CHALLENGE = StepUp.CHALLENGE_CHANNEL
     /**
@@ -64,12 +99,49 @@ object Channels {
     const val REMOTE_STOP = "remote:stop"
     const val APP_QUIT = "app:quit"
 
+    /** AN-30 git on a chat's folder ([GitRequest]): reads, then Change actions (signed). */
+    const val WORKSPACE_GIT_STATUS = "workspace:gitStatus"
+    const val GIT_DIFF = "git:diff"
+    const val GIT_LOG = "git:log"
+    const val GIT_SHOW = "git:show"
+    const val GIT_BRANCHES = "git:branches"
+    const val GIT_COMPARE = "git:compare"
+    const val GIT_STAGE = "git:stage"
+    const val GIT_UNSTAGE = "git:unstage"
+    const val GIT_COMMIT = "git:commit"
+    /** A message for what is staged, written by the computer's model: a Change, it spends its tokens. */
+    const val GIT_COMMIT_MESSAGE = "git:commitMessage"
+    const val GIT_PUSH = "git:push"
+    const val GIT_SWITCH = "git:switch"
+    const val GIT_MERGE_ABORT = "git:mergeAbort"
+    /** A chat's pull requests with their state and checks ([PullRequest]); read class. */
+    const val PR_SESSION_LIST = "pr:sessionList"
+    const val PR_CHECKS = "pr:checks"
+    const val PR_DIFF = "pr:diff"
+    /** Open a pull request from the chat's branch (pushed first when it has no upstream). */
+    const val PR_CREATE = "pr:create"
+    /** Approve, merge, close or reopen a pull request ([PrAction]). */
+    const val PR_ACTION = "pr:action"
+
+    /** The git channels the computer treats as Change (`PHONE_CHANGE_CHANNELS`): each one is signed. */
+    val GIT_CHANGE = setOf(GIT_STAGE, GIT_UNSTAGE, GIT_COMMIT, GIT_COMMIT_MESSAGE, GIT_PUSH, GIT_SWITCH, GIT_MERGE_ABORT, PR_CREATE, PR_ACTION)
+
+    /** Every Change channel this phone calls ([ChangeProof]). */
+    val CHANGE = GIT_CHANGE + TerminalChannels.CHANGE + setOf(FILES_WRITE, WORKSPACE_ADD_BY_PATH, WORKSPACE_REMOVE, PROVIDERS_SAVE_SEALED, PROVIDERS_SET_ENABLED)
+
     val ALL = listOf(
         SETTINGS_GET, SETTINGS_UPDATE, SESSION_DELETE, VOICE_STATUS, VOICE_TRANSCRIBE, PROVIDERS_LIST, MODELS_LIST, SESSIONS_SUMMARIES, SESSION_CREATE, SESSION_GET,
         SESSION_SET_OPTIONS, CHAT_SEND, CHAT_ABORT, CHAT_QUEUE, CHAT_PENDING, CHAT_ANSWER, TOOL_APPROVE,
         WORKSPACE_LIST, APP_INFO, SKILLS_RUNNABLE, CHANGES_LIST, MONITOR_SUMMARY,
+        SYSTEM_STATS, GPU_STATS, ENGINE_STATUS, CONTEXT_PREVIEW, MODEL_UNLOAD,
         SECURITY_CHALLENGE, DEVICE_SIGN_OUT, REMOTE_STOP, APP_QUIT,
-    )
+        FILES_LIST, FILES_SEARCH, FILES_READ, FILES_WRITE, WORKSPACE_ADD_BY_PATH, WORKSPACE_REMOVE, LOGS_LIST, LOGS_READ, ARTIFACT_READ, PREVIEW_FETCH,
+        PROVIDERS_SEAL_KEY, PROVIDERS_SAVE_SEALED, PROVIDERS_SET_ENABLED,
+        CHAT_EDIT_QUEUED, SESSION_FORK, TASKS_LIST, TASK_RUN_NOW, WORKFLOWS_LIST, WORKFLOW_RUN, USAGE_SUMMARY, LIMITS_GET,
+        WORKSPACE_GIT_STATUS, GIT_DIFF, GIT_LOG, GIT_SHOW, GIT_BRANCHES, GIT_COMPARE,
+        GIT_STAGE, GIT_UNSTAGE, GIT_COMMIT, GIT_COMMIT_MESSAGE, GIT_PUSH, GIT_SWITCH, GIT_MERGE_ABORT,
+        PR_SESSION_LIST, PR_CHECKS, PR_DIFF, PR_CREATE, PR_ACTION,
+    ) + TerminalChannels.ALL
 }
 
 object Events {
@@ -185,6 +257,10 @@ data class Session(
     val omittedMessages: Int = 0,
     val queue: List<String>,
     val updatedAt: Long,
+    /** The chat's effort (`EffortLevel`); null follows the computer's setting. */
+    val effort: String? = null,
+    /** The queue as the computer holds it: what `chat:editQueued` checks against. */
+    val queued: List<QueuedPrompt> = emptyList(),
 ) {
     companion object {
         fun from(e: JsonElement?): Session? {
@@ -197,11 +273,11 @@ data class Session(
                 workspaceId = o.str("workspaceId"),
                 messages = o["messages"].arr()?.mapNotNull { ChatMessage.from(it) } ?: emptyList(),
                 omittedMessages = o.long("omittedMessages")?.toInt()?.coerceAtLeast(0) ?: 0,
-                // Queue entries may be plain strings or {text, images, skill}; the phone shows text.
-                queue = o["queue"].arr()?.mapNotNull { q ->
-                    (q as? JsonPrimitive)?.contentOrNull ?: q.obj()?.str("text")
-                } ?: emptyList(),
+                // Queue entries may be plain strings or {text, images, skill}; a skill's shows as `/name input`.
+                queue = QueuedPrompt.list(o["queue"]).map { it.shown },
                 updatedAt = o.long("updatedAt") ?: 0,
+                effort = o.str("effort"),
+                queued = QueuedPrompt.list(o["queue"]),
             )
         }
     }
@@ -347,6 +423,10 @@ data class PcSettings(
     val voiceEnabled: Boolean = false,
     /** The computer lets phones read a chat's changes (`phoneChanges`). Set on the computer only. */
     val phoneChanges: Boolean = false,
+    /** The prompts the user saved on the computer (`/` and the + menu offer them beside skills). */
+    val prompts: List<SavedPrompt> = emptyList(),
+    /** The computer's automations are paused (Settings → Automations there). */
+    val automationsPaused: Boolean = false,
 ) {
     enum class ChatMode(val wire: String) {
         ASK("ask"), GUARDRAILS("guardrails"), YOLO("yolo");
@@ -379,6 +459,8 @@ data class PcSettings(
                 skipDeleteConfirmation = (o["skipDeleteConfirmation"] as? JsonPrimitive)?.booleanOrNull,
                 voiceEnabled = o["voice"].obj()?.bool("enabled") == true,
                 phoneChanges = o.bool("phoneChanges"),
+                prompts = SavedPrompt.list(o["prompts"]),
+                automationsPaused = o.bool("automationsPaused"),
             )
         }
 
@@ -549,11 +631,16 @@ data class ModelInfo(val id: String, val providerId: String, val name: String, v
     }
 }
 
-data class WorkspaceFolder(val id: String, val name: String) {
+data class WorkspaceFolder(
+    val id: String,
+    val name: String,
+    /** Where it is on the computer, shown under Files; never sent back by the phone. */
+    val path: String? = null,
+) {
     companion object {
         fun list(e: JsonElement?): List<WorkspaceFolder> = e.arr()?.mapNotNull { w ->
             val o = w.obj() ?: return@mapNotNull null
-            WorkspaceFolder(o.str("id") ?: return@mapNotNull null, o.str("name") ?: "Folder")
+            WorkspaceFolder(o.str("id") ?: return@mapNotNull null, o.str("name") ?: "Folder", o.str("path"))
         } ?: emptyList()
     }
 }

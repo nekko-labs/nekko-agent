@@ -16,6 +16,16 @@ Local models, and runtimes such as Ollama or LM Studio on this computer, keep wo
 
 Each row has its own switch. Turning a row off blocks that connection everywhere, even to this computer. A feature still needs its own setup: turning on **App updates** here does not turn on update checks; it only lets them reach the network when Updates has them on.
 
+## Internet reachability and automatic recovery
+
+For native online model replies, the daemon checks reachability on the **computer running the agent**, not on a paired phone or browser. Timestamped loss/restoration notices appear in the chat's **Internet connectivity** history and, outside Incognito, its command log. Saved tool results are retained; notices are never sent to the model.
+
+**Settings > Agent loop > Automatically resume after internet restoration** is **off by default**. With it off, confirmed loss interrupts the reply; select **Continue** after reconnecting. With it on, the same model request may continue after stable restoration for up to 30 minutes. **Additional provider usage may incur charges.** Completed tools are not replayed, and Stop ends the wait immediately. Turning it on after a reply already ended does not restart that reply. Existing retries for provider-specific failures are unchanged.
+
+While native public-model work is active, or an interrupted reply awaits a restoration notice (at most 30 minutes), Nekko requests two public HTTPS 204 endpoints: `www.gstatic.com/generate_204` and `cp.cloudflare.com/generate_204`. No prompt, account token, cookie or session identifier is sent, but these services see your source IP. Requests are bounded, debounced, recorded under **Model providers**, and stop when that connection or **All connections off** is disabled. Local/LAN inference does not trigger these probes. Blocking both destinations or a captive portal can look unreachable, even if other sites work.
+
+Recovery does not start a new agent, change providers, restart an entire workflow or survive a daemon restart. Claude Code's separate child-harness transport, images/voice and internet calls made by tools are outside this native model-call recovery. Physical network and packaged-device verification remain tracked in [NR-3](https://github.com/nekko-labs/nekko-agent/issues/1179).
+
 ## The activity log
 
 Each row says when the connection was last used, how many times in the last 24 hours, and how many of those failed or were blocked. **Show log** lists the recent events: the time, method, host and path, the status, how long it took and how much came back.

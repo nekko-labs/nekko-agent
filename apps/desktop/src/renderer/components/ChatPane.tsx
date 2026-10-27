@@ -1,4 +1,5 @@
 import { ActiveWatchChips } from './ActiveWatchChips.js';
+import { ConnectivityNotices, mergeConnectivityNotices, rememberedConnectivityNotices } from './ConnectivityNotices.js';
 import { CleanStartGreeting } from './CleanStartGreeting.js';
 import { PrWatchContinuation } from './PrWatchContinuation.js';
 import { canOfferPrWatch } from '../prWatchContinuation.js';
@@ -63,9 +64,9 @@ import { cutPrompt, messageCuts, type MessageCuts } from './agent-console/messag
 
 import { estimateRowHeight, toTranscriptRows, transcriptBeforeLiveTurn, transcriptRowStamp, type TranscriptRow } from './agent-console/transcript.js';
 import { ContextGauge, EffortSlider } from './ChatMetrics.js';
+import { ExpertMonitor, ModeToggle, useExpertMode } from './ModeViews.js';
 import { PlanRail } from './PlanRail.js';
 import { PlanSheet } from './PlanSheet.js';
-import { VerificationChecklist } from './WorkProgress.js';
 import { PlanChangePrompt, planChangeMessage } from './PlanChangePrompt.js';
 import { TurnStatsLine } from './agent-console/TurnStatsLine.js';
 import { QuestionCard } from './QuestionCard.js';
@@ -338,12 +339,15 @@ function initialBrain(s: Session | null | undefined): { providerId: string | nul
 function ChatHeader({
   title,
   subAgent,
+  lead,
   metadata,
   children,
   inWall = false,
 }: {
   title: string;
   subAgent: boolean;
+  /** At the top left, before the title: the Simple / Expert switch. */
+  lead?: React.ReactNode;
   metadata?: React.ReactNode;
   children: React.ReactNode;
   /**
@@ -357,7 +361,7 @@ function ChatHeader({
   if (framed || inWall) {
     return (
       <>
-        <PaneMetadata>{metadata}</PaneMetadata>
+        <PaneMetadata>{lead}{metadata}</PaneMetadata>
         <PaneActions>
           {subAgent && <span className="chip shrink-0 text-[10px]">sub-agent</span>}
           {children}
@@ -368,6 +372,7 @@ function ChatHeader({
   return (
     <header className="flex items-center justify-between gap-2 border-b border-line px-3 py-2">
       <div className="flex min-w-0 flex-1 items-center gap-2">
+        {lead}
         <span className="truncate text-[13px] font-medium">{title}</span>
         {/* The "/" names the boundary between what this is (the title) and
             where it lives (the project and git context), so it leads that
@@ -587,6 +592,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // Painted straight from the session cache when this chat was open recently;
   // the host copy is fetched regardless and replaces it (stale-while-revalidate).
   const [session, setSession] = useState<Session | null>(() => getCachedSession(sessionId) ?? null);
+  const [liveConnectivity, setLiveConnectivity] = useState<import('@nekko-agent/shared').ConnectivityNotice[]>(() => rememberedConnectivityNotices(sessionId));
+  useEffect(() => { setLiveConnectivity(rememberedConnectivityNotices(sessionId)); }, [sessionId]);
   // Seed the composer from whatever was parked for this chat, so an unsent
   // message survives a tab switch or a restart.
   const [draft, setDraft] = useState(() => loadDraft(sessionId)?.text ?? '');
@@ -762,6 +769,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // "Jump to latest" pill: shown when new content streams in while the reader
   // has scrolled up.
   const [showJump, setShowJump] = useState(false);
+  const [expertMode] = useExpertMode();
   // Find in this chat. The bar sits over the transcript; each open mounts it
   // fresh (focused, empty), and closing it clears the highlights.
   const [searchOpen, setSearchOpen] = useState(false);
@@ -1105,6 +1113,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           void requestSuggestions();
           break;
         case 'session_meta':
+          if (e.connectivityNotice) setLiveConnectivity((notices) => mergeConnectivityNotices(notices, [e.connectivityNotice!]));
           // The session record changed mid-turn — a new agent plan, or a fresh
           // title — so re-read it and refresh the sidebar/boards alongside.
           loadSession(sessionId).then((s) => { if (s) setSession(s); }).catch(() => {});
@@ -2371,7 +2380,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const estimate = useCallback((row: TranscriptRow) => estimateRowHeight(row, columnWidth), [columnWidth]);
   const hasLive = !!(held || getLiveRun(sessionId));
   const welcomeState = chatWelcomeState({ messages: session?.messages.length ?? 0, streaming, hasLive, hasProvider, modelId, imageMode });
-  const emptyWave = showEmptyAgentWave({ loaded: !!session, messages: session?.messages.length ?? 0, running: streaming || hasLive, readOnly: readOnly || !!session?.archivedAt, composer: surface === 'composer', enabled: settings?.backgroundAnimation !== false }) ? pixelWaveFor(settings?.themePreset) : null;
+  const wavePreset = useStore((s) => s.resolvedPreset);
+  const emptyWave = showEmptyAgentWave({ loaded: !!session, messages: session?.messages.length ?? 0, running: streaming || hasLive, readOnly: readOnly || !!session?.archivedAt, composer: surface === 'composer', enabled: settings?.backgroundAnimation !== false }) ? pixelWaveFor(wavePreset) : null;
   const cleanStart = cleanStartWanted && surface === 'full' && !readOnly && welcomeState.welcome && hasProvider && !welcomeState.modelChoice && !imageMode && !!session && !question && !approval;
   // Leaving the clean start because the user sent (the welcome is gone, it is
   // still the same focused chat) plays the composer-into-chat expansion once.
@@ -2454,7 +2464,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             title strip, which already shows the chat's name; standalone, the
             chat still needs a header of its own. */}
         {surface !== 'composer' && !cleanStart && (
-        <ChatHeader title={session?.title || 'New chat'} subAgent={Boolean(session?.parentSessionId)} inWall={commandCenter} metadata={
+        <ChatHeader title={session?.title || 'New chat'} subAgent={Boolean(session?.parentSessionId)} inWall={commandCenter} lead={<ModeToggle />} metadata={
             git && (
               <span className="flex min-w-0 shrink items-center gap-1 text-[11px]">
                 {session && <WorktreeChip session={session} git={git} disabled={hasLive} onChange={setSession} />}
@@ -2498,6 +2508,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
 
         </ChatHeader>
         )}
+        {surface !== 'composer' && !cleanStart && expertMode && <ExpertMonitor />}
 
         {/* Preserve the wall plan-change pin. An open question takes precedence. */}
         {surface === 'transcript' && planChangeOpen && !question && (
@@ -2568,6 +2579,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   persisted={!streaming && !![...(session?.messages ?? [])].reverse().find((m) => m.role === 'assistant')?.turnStats}
                   blocked={errorNotice ? 'Needs attention' : approval ? 'Waiting for approval' : question ? 'Waiting for your answer' : null}
                 />
+                <ConnectivityNotices notices={mergeConnectivityNotices(session?.connectivityNotices, liveConnectivity)} />
                 {question && <div className="conversation-question" data-agent-question>
                   <QuestionCard key={question.callId} request={question} onAnswer={(answers) => { void answerQuestion(answers); }} onSkip={() => { void answerQuestion([]); }} tone="attention" />
                 </div>}
@@ -2698,10 +2710,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           </div>}
           {cleanStart && <CleanStartGreeting key={sessionId} paused={!!draft || pendingImages.length > 0 || pendingVideos.length > 0} />}
           <div className={`composer-column mx-auto ${commandCenter ? 'w-[98%]' : 'w-[90%]'}`} style={cleanStart ? undefined : commandCenter ? { width: '98%' } : undefined}>
-            {surface !== 'composer' && !cleanStart && !planChangeOpen && !question && (
+            {/* In the wall the shared composer carries the selected agent's plan. */}
+            {!cleanStart && !planChangeOpen && !question && (
               <PlanSheet key={sessionId + '-plan'} sessionId={sessionId} session={session} streaming={streaming} prs={prs} basePath={artifactBasePath} onChangePlan={() => setPlanChangeOpen(true)} />
             )}
-            {surface !== 'composer' && planChangeOpen && !question && (
+            {planChangeOpen && !question && (
               <div className="composer-question is-open" data-plan-change-pop><div className="composer-question-body"><PlanChangePrompt running={streaming} onSend={(change) => { void sendPlanChange(change); }} onCancel={() => { setPlanChangeOpen(false); composerRef.current?.focus(); }} /></div></div>
             )}
 
@@ -3255,10 +3268,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             folder and usage controls live in the agent window), so it draws no
             chrome of its own: empty, it used to show as a bare band under the
             composer. */}
-        {/* The PR deck sits above the strip and rises from its top divider. */}
-        {!cleanStart && <VerificationChecklist key={sessionId + '-verification'} steps={session?.agentPlan} />}
-        {!cleanStart && <PrActionDock key={sessionId} sessionId={sessionId} prs={prs} urls={sessionPrUrls} floating={surface === 'composer'} />}
-        {!cleanStart && <div className={surface === 'composer' ? 'shrink-0' : 'shrink-0 border-t border-line bg-surface px-3 py-1.5'} aria-label="Chat actions and information">
+        {/* The PR deck sits between the composer and the footer controls, on the window surface. */}
+        {!cleanStart && <PrActionDock key={sessionId} sessionId={sessionId} prs={prs} urls={sessionPrUrls} floating={surface === 'composer'} checksInPlan={!!session?.agentPlan?.length} />}
+        {!cleanStart && <div className={surface === 'composer' ? 'shrink-0' : 'shrink-0 px-3 py-1.5'} aria-label="Chat actions and information">
           {/* Said once, next to the control that fixes it, in the window being driven. */}
           {modelHint && !imageMode && surface !== 'composer' && <p role="status" data-model-note className="mb-1.5 flex items-center gap-1.5 text-[11.5px]" style={{ color: unavailableModel ? 'var(--warning)' : 'var(--accent)' }}><span aria-hidden>●</span>{modelHint}</p>}
           {!imageMode && surface !== 'composer' && <div className="flex flex-wrap items-center gap-2">

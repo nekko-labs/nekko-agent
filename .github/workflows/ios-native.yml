@@ -13,6 +13,7 @@ on:
     types: [labeled]
     paths:
       - 'apps/ios/**'
+      - 'vendor/mermaid/**'
       - 'apps/relay-server/src/**'
       - 'crates/nekko-remote/**'
       - 'crates/nekkod/src/remote.rs'
@@ -74,6 +75,8 @@ jobs:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
         run: |
           npm ci --no-audit --no-fund --ignore-scripts
+          # The app's bundled Mermaid is the lockfile's version, byte for byte (vendor/mermaid).
+          node scripts/vendor-mermaid.mjs --check
           npm run build:core
           npm run build --workspace=apps/cli
           npm run build -w @nekko-agent/local-web-ui
@@ -181,6 +184,14 @@ jobs:
           TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" \
             xcodebuild "${COMMON[@]}" -resultBundlePath evidence/beyond.xcresult test-without-building \
             -only-testing:NekkoNativeUITests/LiveRelayTests/testQueueForkAutomationsAndUsageFromThePhone || failed=1
+          kill $NEKKO_ITEST_PIDS 2>/dev/null || true
+          xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
+          # Simple and Expert: the model and effort control, the context gauge, the monitor panel and the whole monitor.
+          ../../apps/ios/scripts/itest-stack.sh /tmp/stack-modes.env
+          . /tmp/stack-modes.env
+          TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" \
+            xcodebuild "${COMMON[@]}" -resultBundlePath evidence/modes.xcresult test-without-building \
+            -only-testing:NekkoNativeUITests/LiveRelayTests/testSimpleAndExpertModes || { failed=1; stack_logs modes; }
           kill $NEKKO_ITEST_PIDS 2>/dev/null || true
           xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
           # The deep link from the computer's QR (Camera → nekko-agent-pair:) pairs through the confirmation sheet.

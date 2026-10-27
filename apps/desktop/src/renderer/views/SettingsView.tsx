@@ -78,7 +78,7 @@ export function activeGroup(scroller: HTMLElement): SettingsGroupId {
 }
 
 export function SettingsView() {
-  const { applyTheme, onboardingOpen, settings, settingsError, refreshSettings } = useStore(useShallow((s) => ({ applyTheme: s.applyTheme, onboardingOpen: s.onboardingOpen, settings: s.settings, settingsError: s.settingsError, refreshSettings: s.refreshSettings })));
+  const { applyTheme, onboardingOpen, wavePreset, settings, settingsError, refreshSettings } = useStore(useShallow((s) => ({ applyTheme: s.applyTheme, onboardingOpen: s.onboardingOpen, wavePreset: s.resolvedPreset, settings: s.settings, settingsError: s.settingsError, refreshSettings: s.refreshSettings })));
   const tr = useT();
   const prevOnboardingOpen = useRef(onboardingOpen);
   const pageRef = useRef<HTMLDivElement>(null);
@@ -140,8 +140,8 @@ export function SettingsView() {
   if (!settings) return <ServiceLoadState label="settings" error={settingsError} retry={reload} />;
 
   return (
-    <div ref={scrollRef} className="h-full overflow-y-auto" onScroll={onScroll}>
-      <div ref={pageRef} className="mx-auto max-w-5xl px-8 py-8">
+    <div ref={scrollRef} className="settings-panel h-full overflow-y-auto" onScroll={onScroll}>
+      <div ref={pageRef} className="settings-page">
         {settingsError && <ServiceLoadState label="settings" error={settingsError} retry={reload} />}
         {!hasAppChrome && <h1 className="view-title">{tr('settings.title')}</h1>}
         <div aria-label="Skills and connectors" className="mb-7 flex flex-wrap gap-3">
@@ -165,7 +165,7 @@ export function SettingsView() {
               </button>
             ))}
           </nav>
-          <div className="min-w-0 max-w-3xl flex-1">
+          <div className="min-w-0 flex-1">
             <SettingsGroup id="general">
               <section className="card mt-6 p-5">
                 <h2 className="font-semibold">View settings</h2>
@@ -186,7 +186,7 @@ export function SettingsView() {
                   <div className="min-w-0">
                     <span className="text-[13px]">Background animation</span>
                     <p id="background-animation-hint" className="text-[11px] text-ink-faint">
-                      {pixelWaveFor(settings.themePreset)
+                      {pixelWaveFor(wavePreset)
                         ? 'Moving pixel dots only in empty new-agent windows. Turn off for lower power use.'
                         : 'Pixel dots in empty new-agent windows with Lilac, Lavender and Experimental themes. This theme has none.'}
                     </p>
@@ -505,6 +505,7 @@ function AgentLoopSection({ settings, update }: { settings: AppSettings; update:
         Nekko Agent keeps working until the task is finished or you press Stop. Loop detection catches repeated tool
         calls and error streaks; output safeguards remain active.
       </p>
+      <InternetRecoverySetting settings={settings} update={update} />
       <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
         <div className="min-w-0">
           <span className="text-[13px]">Prompt caching</span>
@@ -1475,4 +1476,19 @@ export function NotificationsSection({ settings, update }: { settings: AppSettin
       </div>
     </section>
   );
+}
+
+/** Explicit opt-in: unlike ordinary provider retries this can restart a call after an outage. */
+export function InternetRecoverySetting({ settings, update }: { settings: AppSettings; update: (patch: Partial<AppSettings>) => void }) {
+  return <div id="internet-recovery" className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
+    <div className="min-w-0">
+      <span className="text-[13px]">Automatically resume after internet restoration</span>
+      <p id="internet-recovery-hint" className="text-[11px] text-ink-faint">
+        Off by default. Continue the same interrupted online model request when this computer reconnects (up to 30 minutes).
+        Additional provider usage may incur charges. Completed tools are not replayed. Ordinary provider retries are unchanged.
+      </p>
+    </div>
+    <Toggle on={settings.autoResumeOnInternetRestore === true} onChange={(v) => update({ autoResumeOnInternetRestore: v })}
+      aria-label="Automatically resume after internet restoration" aria-describedby="internet-recovery-hint" />
+  </div>;
 }

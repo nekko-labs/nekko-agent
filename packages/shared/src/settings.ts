@@ -137,6 +137,12 @@ export interface CommandWallSetting {
   composer?: { side: 'top' | 'bottom'; align: 'left' | 'center' | 'right'; width?: number; height?: number };
   /** Snap to grid: the wall keeps its windows evenly spaced. Absent means off. */
   snap?: boolean;
+  /** The board is laid out in zones. Absent on a wall saved before zones, which is migrated once. */
+  zones?: boolean;
+  /** The pane id of the active zone. */
+  activeZone?: string | null;
+  /** The zones intro has been seen. */
+  zonesIntro?: boolean;
 }
 
 /**

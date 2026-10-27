@@ -12,7 +12,9 @@ import com.nekko.protocol.WsTransport
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 
 /** Request side of a computer connection: what chat screens need. */
 interface Caller {
@@ -37,6 +39,13 @@ interface Remote : Caller {
      */
     suspend fun callWithStepUp(stepUp: StepUpProof, channel: String, vararg args: JsonElement): JsonElement =
         throw RelayException("This connection can’t send a confirmation.")
+
+    /**
+     * A Change action with its signed proof beside the args (AN-32), and a
+     * step-up beside that when the computer asked for one. Use [ChangeCalls].
+     */
+    suspend fun callSigned(channel: String, args: JsonArray, proof: JsonObject, stepUp: StepUpProof? = null, timeoutMs: Long? = null): JsonElement =
+        throw RelayException("This connection can’t send a confirmation.")
 }
 
 fun interface RemoteFactory {
@@ -56,6 +65,8 @@ class RelayRemote(private val client: RelayClient) : Remote {
         client.callWithTimeout(timeoutMs, channel, *args)
     override suspend fun callWithStepUp(stepUp: StepUpProof, channel: String, vararg args: JsonElement) =
         client.callWithStepUp(stepUp, channel, *args)
+    override suspend fun callSigned(channel: String, args: JsonArray, proof: JsonObject, stepUp: StepUpProof?, timeoutMs: Long?) =
+        if (timeoutMs == null) client.callSigned(channel, args, proof, stepUp) else client.callSigned(channel, args, proof, stepUp, timeoutMs)
 }
 
 /** Production factory: one OkHttp transport shared by every connection. */
@@ -79,6 +90,9 @@ class PlainRefusals(private val inner: Remote, private val computer: () -> Strin
 
     override suspend fun callWithStepUp(stepUp: StepUpProof, channel: String, vararg args: JsonElement): JsonElement =
         plain { inner.callWithStepUp(stepUp, channel, *args) }
+
+    override suspend fun callSigned(channel: String, args: JsonArray, proof: JsonObject, stepUp: StepUpProof?, timeoutMs: Long?): JsonElement =
+        plain { inner.callSigned(channel, args, proof, stepUp, timeoutMs) }
 
     private inline fun plain(block: () -> JsonElement): JsonElement = try {
         block()

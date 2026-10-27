@@ -36,11 +36,11 @@ struct ChatsView: View {
                 List { rows }
             }
         }
-        // Flat rows on the paper, hairline separated, as the desktop's Agents panel (2026-10-24).
-        .listStyle(.plain)
+        // Hairline-separated rows on panels over the coloured ground, as the desktop's
+        // Agents panel and chat windows sit on its paper (2026-10-26).
+        .listStyle(.insetGrouped)
         .listRowSeparatorTint(palette.line)
-        .scrollContentBackground(.hidden)
-        .background(palette.paper)
+        .appBackground()
         .searchable(text: $query, prompt: "Search chats")
         .refreshable { await store.refresh() }
         .navigationTitle("Chats")
@@ -120,7 +120,7 @@ struct ChatsView: View {
             }
             if !store.outbox.pendingNewChats.isEmpty && query.isEmpty {
                 Section {
-                    ForEach(store.outbox.pendingNewChats) { item in PendingChatRow(item: item, path: $path) }
+                    ForEach(store.outbox.pendingNewChats) { item in PendingChatRow(item: item, path: $path).listRowBackground(palette.surface) }
                 } header: {
                     Text("Waiting to send")
                 }
@@ -142,7 +142,7 @@ struct ChatsView: View {
                     NavigationLink(value: Route.monitors) {
                         Label("Monitors", systemImage: "gauge.with.dots.needle.50percent").foregroundStyle(palette.ink)
                     }
-                    .listRowBackground(Color.clear)
+                    .listRowBackground(palette.surface)
                     .accessibilityIdentifier("chats.monitors")
                 }
             }
@@ -153,7 +153,7 @@ struct ChatsView: View {
         let split = ChatSections.split(g, activity: store.activity, now: nowMs)
         let all = !query.isEmpty || expanded.contains(g.key)
         if g.chats.isEmpty {
-            Text("No active agents").font(.footnote).foregroundStyle(palette.inkFaint).listRowBackground(Color.clear)
+            Text("No active agents").font(.footnote).foregroundStyle(palette.inkFaint).listRowBackground(palette.surface)
         }
         ForEach(all ? g.chats : split.shown) { row($0) }
         if query.isEmpty && split.hidden > 0 {
@@ -165,7 +165,7 @@ struct ChatsView: View {
                     .font(.footnote.weight(.medium)).foregroundStyle(palette.inkSoft)
             }
             .buttonStyle(.plain)
-            .listRowBackground(Color.clear)
+            .listRowBackground(palette.surface)
             .accessibilityIdentifier("chats.showMore")
         }
     }
@@ -309,7 +309,7 @@ struct ChatsView: View {
         NavigationLink(value: Route.chat(s.id)) {
             ChatRow(summary: s, activity: store.activity[s.id], waiting: store.outbox.count(for: s.id), showPreview: view.showPreviews)
         }
-        // On the paper like the rest of the list, with the attention bar on a chat that needs you.
+        // On the panel like the rest of the list, with the attention bar on a chat that needs you.
         .listRowBackground(RowBackground(needsYou: store.activity[s.id] == .needsYou,
                                          selected: selection.map { $0.wrappedValue == .chat(s.id) } ?? (highlighted == s.id)))
         .accessibilityIdentifier("chats.row")
@@ -420,7 +420,8 @@ struct RowBackground: View {
 
     var body: some View {
         ZStack(alignment: .leading) {
-            if selected { palette.accent.opacity(0.12) } else if needsYou { palette.warning.opacity(0.07) } else { Color.clear }
+            palette.surface
+            if selected { palette.accent.opacity(0.12) } else if needsYou { palette.warning.opacity(0.07) }
             if needsYou { Rectangle().fill(palette.warning).frame(width: 3).accessibilityHidden(true) }
         }
     }

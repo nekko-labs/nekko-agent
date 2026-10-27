@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { AppSettings, ThemePreset } from '@nekko-agent/shared';
-import { THEME_PRESETS, currentPresetAccent, experimentalFamilies, findThemePreset } from '@nekko-agent/shared';
+import { THEME_PRESETS, currentPresetAccent, experimentalFamilies, findThemePreset, themePresetOf } from '@nekko-agent/shared';
 import { useT } from '../i18n.js';
 import { ColorWheel } from './ColorWheel.js';
 
@@ -47,10 +47,10 @@ export function ThemePresetPicker({
   const tr = useT();
   // Only highlight a preset when it was explicitly selected. Falling back to
   // `settings.theme` would falsely highlight a preset when the user only has a
-  // base mode and a custom accent.
-  const activeId = settings.themePreset;
+  // base mode and a custom accent. Nothing saved yet is System.
+  const activeId = themePresetOf(settings);
   const activePreset = findThemePreset(activeId);
-  const accent = currentPresetAccent(activeId, settings.accent);
+  const accent = currentPresetAccent(activeId, settings.accent) ?? activePreset?.accent;
   // With no preset and no saved secondary, fall back to the base brand cyan the
   // stylesheet ships, so the gradient preview reads as a gradient and not a slab.
   const accent2 = currentPresetAccent(activeId, settings.accent2) ?? activePreset?.accent2 ?? findThemePreset('system')?.accent2 ?? accent;

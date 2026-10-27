@@ -63,9 +63,21 @@ final class PaletteTests: XCTestCase {
     /// WCAG AA (4.5:1) for the text colours on the surfaces they sit on, in both themes.
     func testTextColoursMeetAA() {
         // Light: paper, surface, surface2. Dark: paper, surface, surface2.
-        let light = [0xFBFBFD, 0xFFFFFF, 0xF2F2F7], dark = [0x0C0C11, 0x16161C, 0x20202A]
+        // Each also on the coloured ground's top, where the accent wash is strongest (AppBackdrop).
+        func wash(_ paper: Int, _ accent: Int, _ share: Double) -> Int {
+            // Split into typed steps: as one expression it timed out the CI type checker.
+            func ch(_ shift: Int) -> Int {
+                let p: Double = Double((paper >> shift) & 0xff)
+                let a: Double = Double((accent >> shift) & 0xff)
+                let mixed: Double = p * (1 - share) + a * share
+                return Int(mixed.rounded()) << shift
+            }
+            return ch(16) | ch(8) | ch(0)
+        }
+        let light = [0xFBFBFD, 0xFFFFFF, 0xF2F2F7, wash(0xFBFBFD, 0x5A4AE8, AppBackdrop.lightWash)]
+        let dark = [0x0C0C11, 0x16161C, 0x20202A, wash(0x0C0C11, 0x8B7DFF, AppBackdrop.darkWash)]
         for bg in light {
-            for ink in [0x17171D, 0x52525E, 0x6A6A76, 0x5A4AE8, 0xB42318, 0x8F5C0A, 0x1D4ED8, 0x1E7A4A] {
+            for ink in [0x17171D, 0x52525E, 0x5E5E6A, 0x5A4AE8, 0xB42318, 0x875709, 0x1D4ED8, 0x1A7043] {
                 XCTAssertGreaterThanOrEqual(Palette.contrast(ink, bg), 4.5, String(format: "%06X on %06X", ink, bg))
             }
         }

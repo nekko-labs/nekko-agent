@@ -12,12 +12,13 @@ describe('effort slider', () => {
     expect(effortRungs('max', 'claude-opus-5-5')).toMatchObject({ index: 4, shown: 'Max' });
     // The default-first slider rendered with no settings loaded.
     const html = renderToStaticMarkup(<EffortSlider modelId="claude-opus-5-5" />);
-    expect(html).toContain('max="4"');
-    expect(html).toContain('value="1"');
+    expect(html).toContain('data-effort-count="5"');
+    expect(html).toContain('data-effort-index="1"');
+    expect(html).toContain('aria-label="Reasoning effort: Default · Medium"');
   });
   it('shows the chat effort when given a chat', () => {
     const html = renderToStaticMarkup(<EffortSlider modelId="claude-opus-5-5" session={{ id: 'c', effort: 'max' }} />);
-    expect(html).toContain('value="4"');
+    expect(html).toContain('data-effort-index="4"');
     expect(html).toContain('Reasoning effort for this chat');
   });
   it('treats picking the default rung explicitly as the default', () => {
@@ -52,10 +53,25 @@ describe('context token formatting', () => {
     ('retains the filled gauge at %i tokens with %s tone', (tokens, tone) => {
       const html = renderToStaticMarkup(<ContextGauge bundle={null} draftTokens={Number(tokens)} contextWindow={1000000} />);
       expect(html).toContain(` / ~1m`);
-      expect(html).toContain(`color-mix(in srgb, var(--${tone}) 28%, transparent)`);
-      expect(html).toContain(`color-mix(in srgb, var(--${tone}) 12%, var(--surface-2))`);
-      expect(html).toContain('absolute inset-0 origin-left transition-transform duration-300');
-      expect(html).toContain(`transform:scaleX(${Number(tokens) / 1000000})`);
+      // The ring, filled by its dash so the stroke repaints and nothing re-lays out.
+      expect(html).toContain(`stroke="var(--${tone})"`);
+      expect(html).toContain(`stroke-dasharray="${Number(tokens) / 10000} 100"`);
       expect(html).not.toContain('transition-[width]');
     });
+});
+
+describe('dials', () => {
+  it('sweeps 240° open at the bottom, with the large arc past halfway', async () => {
+    const { arcPath } = await import('./ModeViews.js');
+    // Start at 150° (lower left), so an empty arc starts and ends there.
+    expect(arcPath(20, 2, 0)).toBe('M 2.21 14.50 A 9 9 0 0 1 2.21 14.50');
+    // Half the sweep is straight up; the full sweep ends lower right.
+    expect(arcPath(20, 2, 0.5)).toBe('M 2.21 14.50 A 9 9 0 0 1 10.00 1.00');
+    expect(arcPath(20, 2, 1)).toBe('M 2.21 14.50 A 9 9 0 1 1 17.79 14.50');
+  });
+  it('draws the context window as a ring with the count', () => {
+    const html = renderToStaticMarkup(<ContextGauge bundle={null} draftTokens={90000} contextWindow={100000} windowReported />);
+    expect(html).toContain('stroke-dasharray="90 100"');
+    expect(html).toContain('90k / 100k');
+  });
 });
