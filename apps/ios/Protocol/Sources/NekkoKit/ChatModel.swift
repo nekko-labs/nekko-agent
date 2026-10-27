@@ -63,8 +63,8 @@ public final class ChatModel {
     private let now: () -> Int64
     private var subscription: UUID?
     private var reloadTask: Task<Void, Never>?
-    /// This chat's events so far, so a re-read can tell whether any came in while it waited.
-    private var eventsSeen = 0
+    /// Events and answers so far, so a re-read can tell whether the cards changed while it waited.
+    private var cardChanges = 0
     private var agentStateTask: Task<Void, Never>?
     private var lastConn: RelayState = .idle
 
@@ -132,7 +132,7 @@ public final class ChatModel {
     }
 
     public func reload() async {
-        let eventsBefore = eventsSeen
+        let cardChangesBefore = cardChanges
         do {
             let r = try store.remote()
             async let raw = r.call(Channels.sessionGet, [.string(sessionId)])
@@ -158,11 +158,11 @@ public final class ChatModel {
             // re-read session already holds. After the turn the session has it all.
             var t = turn
             if !t.running { t.blocks = [] }
-            // The computer's pending inputs are the authority, unless events came in
-            // while the re-read was in flight: then they are newer than its answer, and
-            // a stale "nothing pending" took the approval or question card down while
-            // the computer still waited on it (#1019).
-            if eventsSeen == eventsBefore {
+            // The computer's pending inputs are the authority, unless an event or an
+            // answer came in while the re-read was in flight: then that is newer than its
+            // answer. A stale "nothing pending" took a card down while the computer still
+            // waited on it, and a stale "waiting" would bring an answered one back (#1228).
+            if cardChanges == cardChangesBefore {
                 t.approval = mine?.approval
                 t.question = mine?.question
             }
@@ -193,7 +193,7 @@ public final class ChatModel {
     /// Fold one event; re-reads the saved transcript when the turn ends.
     public func onEvent(_ e: AgentEvent) {
         guard e.sessionId == sessionId else { return }
-        eventsSeen += 1
+        cardChanges += 1
         turn = Transcript.apply(turn, e)
         switch e {
         case .done, .error, .sessionMeta: scheduleReload()
@@ -330,6 +330,7 @@ public final class ChatModel {
         guard let a = turn.approval else { return }
         guard store.conn == .online else { throw RelayError(Self.reconnectToAnswer) }
         turn.approval = nil
+        cardChanges += 1
         do {
             _ = try await store.remote().call(Channels.toolApprove, [.string(sessionId), .string(a.call.id), .bool(ok)])
         } catch {
@@ -343,6 +344,7 @@ public final class ChatModel {
         guard let q = turn.question else { return }
         guard store.conn == .online else { throw RelayError(Self.reconnectToAnswer) }
         turn.question = nil
+        cardChanges += 1
         do {
             _ = try await store.remote().call(Channels.chatAnswer, [.string(sessionId), .string(q.callId), .array(answers.map(\.json))])
         } catch {

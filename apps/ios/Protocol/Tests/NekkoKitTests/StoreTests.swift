@@ -521,6 +521,19 @@ final class ChatModelTests: XCTestCase {
         c.replies[Channels.chatPending] = { _ in [:] }
         await chat.reload()
         XCTAssertNil(chat.turn.approval)
+
+        // The other way round: a re-read from before an answer doesn't bring the answered card back.
+        c.event(["type": "question", "sessionId": "s", "request": ["callId": "q", "questions": [["id": "x", "question": "Which?", "options": [["label": "A"]]]]]])
+        await settle()
+        c.replies[Channels.chatPending] = { _ in
+            Thread.sleep(forTimeInterval: 0.3)
+            return ["s": ["question": ["callId": "q", "questions": [["id": "x", "question": "Which?", "options": [["label": "A"]]]]]]]
+        }
+        async let stale: Void = chat.reload()
+        try await Task.sleep(nanoseconds: 100_000_000)
+        try await chat.answer([AskAnswer(questionId: "x", labels: ["A"])])
+        await stale
+        XCTAssertNil(chat.turn.question, "answered, so the card stays down")
         chat.stop()
     }
 

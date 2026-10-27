@@ -113,7 +113,9 @@ final class LiveRelayTests: XCTestCase {
         // (two-line labels, scrolling after layout, a minimum-height transcript,
         // waiting for the keyboard to settle). Excluded only here; see the PR.
         auditAccessibility(app, "\(theme)-question", ignoring: ["Run rm -rf ./nekko-itest-dist"])
-        app.buttons["iOS"].firstMatch.tap()
+        // A busy app can drop the option's tap, and Answer stays disabled until one is picked.
+        let ios = app.buttons["iOS"].firstMatch
+        XCTAssertTrue(ios.tapUntil { ios.isSelected }, "the option is picked")
         app.buttons["Answer"].tap()
         XCTAssertTrue(waitGone(question, busyWait), "the question closes after Answer")
         XCTAssertTrue(app.staticTexts["Hello from your computer."].firstMatch.waitForExistence(timeout: computerWait))
