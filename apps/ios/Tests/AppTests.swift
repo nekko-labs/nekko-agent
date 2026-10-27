@@ -148,6 +148,11 @@ final class DeepLinkTests: XCTestCase {
         XCTAssertTrue(app.newChatRequested)
         XCTAssertNil(app.pendingLink)
         app.newChatRequested = false
+        // The Live Activity's "+N" only opens the app.
+        app.handle(url: LiveCardView.chatsURL)
+        XCTAssertNil(app.openChat)
+        XCTAssertNil(app.pendingLink)
+        XCTAssertFalse(app.newChatRequested)
         // The Home Screen quick action opens the same link; an unknown type does nothing.
         XCTAssertEqual(QuickAction.url(for: QuickAction.newChat)?.absoluteString, "nekko-agent://new")
         XCTAssertNil(QuickAction.url(for: "dev.nekkolabs.nekkoagent.other"))
@@ -390,8 +395,8 @@ final class ChatStatusIconTests: XCTestCase {
 @MainActor
 final class LiveCardViewTests: XCTestCase {
     static let chats = [
-        LiveChat(id: "a", short: "Billing", state: .needsYou, step: "Needs your approval: Run npm test", reply: "Want me to run the tests?", closeWord: "Nice", finishedAt: nil, callId: "c1", severity: "low"),
-        LiveChat(id: "b", short: "Login", state: .working, step: "Fixing merge conflicts", reply: "Got it. Working on it now.", closeWord: "Cool", finishedAt: nil, callId: nil, severity: nil),
+        LiveChat(id: "a", short: "Billing", state: .needsYou, step: "Needs your approval: Run npm test", reply: "Want me to run the tests?", closeWord: "Nice", finishedAt: nil, callId: "c1", severity: "low", startedAt: .now.addingTimeInterval(-75)),
+        LiveChat(id: "b", short: "Login", state: .working, step: "Fixing merge conflicts", reply: "Got it. Working on it now.", closeWord: "Cool", finishedAt: nil, callId: nil, severity: nil, startedAt: .now.addingTimeInterval(-754)),
         LiveChat(id: "c", short: "iOS LA", state: .watching, step: "Watching PR #1211…", reply: "PR is up. Watching CI.", closeWord: "Perfect", finishedAt: nil, callId: nil, severity: nil),
         LiveChat(id: "d", short: "Docs", state: .done, step: "Done 12 min ago", reply: "Docs page added.", closeWord: "Looks good", finishedAt: .now, callId: nil, severity: nil),
         LiveChat(id: "e", short: "Relay", state: .failed, step: "Stopped with an error", reply: "The build broke.", closeWord: "Got it", finishedAt: .now, callId: nil, severity: nil),
@@ -403,10 +408,13 @@ final class LiveCardViewTests: XCTestCase {
         return card
     }
 
+    /// The default focus is "a", which waits on a tool approval.
     static let cases: [(String, LiveLevel, LiveCardState)] = [
         ("minimal", .minimal, card(.minimal)),
         ("standard", .standard, card(.standard)),
         ("detailed", .detailed, card(.detailed)),
+        ("working-minimal", .minimal, card(.minimal, focus: "b")),
+        ("working", .detailed, card(.detailed, focus: "b")),
         ("listening", .detailed, card(.detailed, listening: true)),
         ("done-focused", .detailed, card(.detailed, focus: "d")),
     ]
@@ -435,7 +443,9 @@ final class LiveCardViewTests: XCTestCase {
     /// whatever the chats say, while Standard does not. The state still carries
     /// the text, so it is the view that hides it, not `buildCard`.
     func testMinimalShowsNoChatText() throws {
-        let real = Self.card(.detailed)
+        var real = Self.card(.detailed)
+        // A ticking elapsed time could differ between the two renders.
+        for i in real.chats.indices { real.chats[i].startedAt = nil }
         var other = real
         for i in other.chats.indices {
             other.chats[i].short = "Zebra"
@@ -447,17 +457,21 @@ final class LiveCardViewTests: XCTestCase {
     }
 
     func testTheStripShowsThePageWithTheFocusedChat() {
-        func ids(_ focus: String) -> ([String], String?) {
-            let page = LiveCardView.page(Self.chats, focus: focus, size: 3)
-            return (page.shown.map(\.id), page.next?.id)
-        }
-        XCTAssertTrue(ids("b") == (["a", "b", "c"], "d"))
-        XCTAssertTrue(ids("d") == (["d", "e"], "a"))
-        XCTAssertTrue(LiveCardView.page([], focus: nil, size: 3).next == nil)
+        let first = LiveCardView.page(Self.chats, focus: "b", size: 3)
+        XCTAssertEqual(first.shown.map(\.id), ["a", "b", "c"])
+        XCTAssertEqual(first.next?.id, "d")
+        let last = LiveCardView.page(Self.chats, focus: "d", size: 3)
+        XCTAssertEqual(last.shown.map(\.id), ["d", "e"])
+        XCTAssertEqual(last.next?.id, "a", "the last page steps back to the first")
+        // Every chat fits: "+N" (chats past the eight) opens the app instead.
+        XCTAssertNil(LiveCardView.page(Self.chats, focus: "d", size: 5).next)
+        XCTAssertNil(LiveCardView.page([], focus: nil, size: 3).next)
     }
 
-    /// Evidence for review: apps/ios/.shots/live-card/ (git-ignored).
+    /// Evidence for review: apps/ios/.shots/live-card/ (git-ignored). Runs only
+    /// with `TEST_RUNNER_LIVE_CARD_SHOTS=1 xcodebuild test ...`.
     func testRendersEvidence() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["LIVE_CARD_SHOTS"] != nil, "set TEST_RUNNER_LIVE_CARD_SHOTS=1 to write the PNGs")
         let dir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent(".shots/live-card")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         for (name, level, state) in Self.cases {

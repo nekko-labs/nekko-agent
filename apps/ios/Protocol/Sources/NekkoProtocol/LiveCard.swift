@@ -38,13 +38,15 @@ public struct LiveChat: Codable, Hashable {
     /// The label of the close button once the chat is finished (see `closeWord`).
     public var closeWord: String
     public var finishedAt: Date?
+    /// When the current run started, for the elapsed time (working or needs you).
+    public var startedAt: Date?
     /// The tool call waiting for approval, so the buttons can answer it.
     public var callId: String?
     /// low / medium / high (the computer's guardrail rating).
     public var severity: String?
 
     public init(id: String, short: String, state: LiveChatState, step: String, reply: String, closeWord: String,
-                finishedAt: Date?, callId: String?, severity: String?) {
+                finishedAt: Date?, callId: String?, severity: String?, startedAt: Date? = nil) {
         self.id = id
         self.short = short
         self.state = state
@@ -54,6 +56,7 @@ public struct LiveChat: Codable, Hashable {
         self.finishedAt = finishedAt
         self.callId = callId
         self.severity = severity
+        self.startedAt = startedAt
     }
 
     /// Pushes may omit anything but the id and state.
@@ -68,6 +71,7 @@ public struct LiveChat: Codable, Hashable {
         finishedAt = try c.decodeIfPresent(Date.self, forKey: .finishedAt)
         callId = try c.decodeIfPresent(String.self, forKey: .callId)
         severity = try c.decodeIfPresent(String.self, forKey: .severity)
+        startedAt = try c.decodeIfPresent(Date.self, forKey: .startedAt)
     }
 }
 

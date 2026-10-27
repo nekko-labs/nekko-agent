@@ -101,7 +101,11 @@ final class LiveCardTests: XCTestCase {
         XCTAssertEqual(decoded.id, "a")
         XCTAssertEqual(decoded.step, "")
         XCTAssertNil(decoded.finishedAt)
-        let state = build([chat("a", .done, finished: 10)])!
+        XCTAssertNil(decoded.startedAt)
+        var running = chat("b", .working)
+        running.startedAt = now.addingTimeInterval(-90)
+        let state = build([chat("a", .done, finished: 10), running])!
+        XCTAssertEqual(state.chats.first { $0.id == "b" }?.startedAt, running.startedAt)
         let data = try JSONEncoder().encode(state)
         XCTAssertEqual(try JSONDecoder().decode(LiveCardState.self, from: data), state)
     }

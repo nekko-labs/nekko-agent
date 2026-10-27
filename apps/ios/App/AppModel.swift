@@ -279,7 +279,7 @@ final class AppModel {
     // MARK: Pairing, links, push
 
     /// `nekko-agent-pair:?relay=…` (QR / camera), `https://…/?relay=…` (web
-    /// edition link), `nekko-agent://chat/<id>` or `nekko-agent://new`.
+    /// edition link), `nekko-agent://chat/<id>`, `nekko-agent://new` or `nekko-agent://chats`.
     func handle(url: URL) {
         if url.scheme == "nekko-agent", url.host == "chat" {
             openChat = url.pathComponents.dropFirst().first
@@ -289,6 +289,8 @@ final class AppModel {
             newChatRequested = true
             return
         }
+        // The card's "+N" when it holds more chats than it shows: opening the app is the point.
+        if url.scheme == "nekko-agent", url.host == "chats" { return }
         if let link = Pairing.parse(url.absoluteString) { pendingLink = link }
     }
 

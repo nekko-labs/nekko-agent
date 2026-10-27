@@ -17,21 +17,25 @@ struct LiveCardView: View {
     fileprivate static let raised = Color(white: 0.28)
     fileprivate static let grey = Color(white: 0.68)
     fileprivate static let orange = Color(red: 1, green: 0.62, blue: 0.04)
+    fileprivate static let greenInk = Color(red: 0.02, green: 0.13, blue: 0.05)
+    /// Where "+N" goes when every chat on the card is already a chip: the app.
+    static let chatsURL = URL(string: "nekko-agent://chats")!
 
     private var focus: LiveChat? { state.chats.first { $0.id == state.focusId } ?? state.chats.first }
     private var showsText: Bool { level == .standard || level == .detailed }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
                 LiveMascot(state: focus?.state ?? .working)
                 top
+                if let focus, focus.state == .working || focus.state == .needsYou, let start = focus.startedAt { elapsed(since: start) }
             }
             if state.listening {
                 dictation
             } else {
                 strip
-                if let focus, focus.state == .done || focus.state == .failed { close(focus) }
+                if let focus { actions(focus) }
             }
         }
         .foregroundStyle(.white)
@@ -85,10 +89,12 @@ struct LiveCardView: View {
     }
 
     /// The page of `size` chips that holds the focused chat, so it is always
-    /// shown, and the chat "+N" focuses: the next page's first (or the first again).
+    /// shown, and the chat "+N" focuses: the next page's first (or the first
+    /// again). Nil when every chat is shown, so "+N" only counts chats past the eight.
     static func page(_ chats: [LiveChat], focus: String?, size: Int) -> (shown: ArraySlice<LiveChat>, next: LiveChat?) {
         let start = ((chats.firstIndex { $0.id == focus } ?? 0) / size) * size
         let shown = chats[start..<min(start + size, chats.count)]
+        if shown.count == chats.count { return (shown, nil) }
         return (shown, shown.endIndex < chats.count ? chats[shown.endIndex] : chats.first)
     }
 
@@ -97,9 +103,15 @@ struct LiveCardView: View {
         let hidden = state.chats.count - shown.count + state.more
         return HStack(spacing: 6) {
             ForEach(shown, id: \.id) { chip($0) }
-            if hidden > 0, let next {
-                button(NextPageIntent(sessionId: next.id)) {
-                    chipLabel(on: false) { Text("+\(hidden)") }
+            if hidden > 0 {
+                Group {
+                    if let next {
+                        button(NextPageIntent(sessionId: next.id)) { chipLabel(on: false) { Text("+\(hidden)") } }
+                    } else if interactive {
+                        Link(destination: Self.chatsURL) { chipLabel(on: false) { Text("+\(hidden)") } }
+                    } else {
+                        chipLabel(on: false) { Text("+\(hidden)") }
+                    }
                 }
                 .accessibilityLabel(Text("\(hidden) more chats"))
             }
@@ -148,10 +160,58 @@ struct LiveCardView: View {
         }
     }
 
+    private func elapsed(since start: Date) -> some View {
+        HStack(spacing: 3) {
+            ClockGlyph().stroke(Self.grey, style: StrokeStyle(lineWidth: 1.3, lineCap: .round)).frame(width: 11, height: 11)
+            Text(timerInterval: start...Date.distantFuture, countsDown: false)
+                .monospacedDigit()
+                .frame(maxWidth: 56, alignment: .leading)
+        }
+        .font(.system(size: 12))
+        .foregroundStyle(Self.grey)
+        .fixedSize()
+    }
+
+    /// Under the strip, for the focused chat: Deny (and Allow from Standard up)
+    /// while a tool waits, Stop while it works, the close button once finished.
+    /// Allow asks for Face ID or the passcode (`AllowToolIntent`).
+    @ViewBuilder
+    private func actions(_ chat: LiveChat) -> some View {
+        switch chat.state {
+        case .needsYou:
+            if let callId = chat.callId {
+                HStack(spacing: 8) {
+                    button(AnswerApprovalIntent(sessionId: chat.id, callId: callId, allow: false)) {
+                        pill(Text("Deny"), fill: Self.raised, ink: LiveChatState.failed.tint)
+                    }
+                    if showsText {
+                        button(AllowToolIntent(sessionId: chat.id, callId: callId)) {
+                            pill(Text("Allow"), fill: LiveChatState.done.tint, ink: Self.greenInk)
+                        }
+                    }
+                }
+            }
+        case .working:
+            button(StopRunIntent(sessionId: chat.id)) {
+                HStack(spacing: 6) {
+                    RoundedRectangle(cornerRadius: 1.5).fill(Color.white).frame(width: 9, height: 9)
+                    Text("Stop")
+                }
+                .font(.system(size: 12, weight: .medium))
+                .frame(maxWidth: .infinity).frame(height: 28)
+                .background(Self.surface, in: RoundedRectangle(cornerRadius: 10))
+            }
+        case .done, .failed:
+            close(chat)
+        case .watching:
+            EmptyView()
+        }
+    }
+
     private func close(_ chat: LiveChat) -> some View {
         let failed = chat.state == .failed
         let word = chat.closeWord.isEmpty ? closeWord(for: chat.id, failed: failed) : chat.closeWord
-        let ink = failed ? Color.white : Color(red: 0.02, green: 0.13, blue: 0.05)
+        let ink = failed ? Color.white : Self.greenInk
         return button(DismissChatIntent(sessionId: chat.id)) {
             HStack(spacing: 6) {
                 CheckGlyph().stroke(ink, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)).frame(width: 12, height: 12)
@@ -165,8 +225,9 @@ struct LiveCardView: View {
         }
     }
 
-    private func pill(_ label: Text, fill: Color) -> some View {
+    private func pill(_ label: Text, fill: Color, ink: Color = .white) -> some View {
         label.font(.system(size: 12, weight: .medium)).lineLimit(1)
+            .foregroundStyle(ink)
             .frame(maxWidth: .infinity).frame(height: 28)
             .background(fill, in: RoundedRectangle(cornerRadius: 10))
     }

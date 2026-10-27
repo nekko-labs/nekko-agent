@@ -91,7 +91,7 @@ struct QuestionGlyph: Shape {
         path.addQuadCurve(to: CGPoint(x: 12.5, y: 6), control: CGPoint(x: 12.5, y: 2.5))
         path.addQuadCurve(to: CGPoint(x: 9, y: 10), control: CGPoint(x: 12.5, y: 8.5))
         path.addLine(to: CGPoint(x: 9, y: 11.5))
-        path.addEllipse(in: CGRect(x: 8.5, y: 14.5, width: 1, height: 1))
+        path.addEllipse(in: CGRect(x: 8.1, y: 14.1, width: 1.8, height: 1.8))
         return scaled(path, rect)
     }
 }
@@ -109,6 +109,16 @@ struct CrossGlyph: Shape {
         var path = Path()
         path.move(to: CGPoint(x: 4.5, y: 4.5)); path.addLine(to: CGPoint(x: 13.5, y: 13.5))
         path.move(to: CGPoint(x: 13.5, y: 4.5)); path.addLine(to: CGPoint(x: 4.5, y: 13.5))
+        return scaled(path, rect)
+    }
+}
+
+/// A clock face (the app's "waiting to send"); on the card it marks the elapsed time.
+struct ClockGlyph: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.addEllipse(in: CGRect(x: 2, y: 2, width: 14, height: 14))
+        path.addLines([CGPoint(x: 9, y: 5), CGPoint(x: 9, y: 9), CGPoint(x: 12, y: 10.5)])
         return scaled(path, rect)
     }
 }
