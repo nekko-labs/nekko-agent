@@ -87,6 +87,14 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > text (from Safari, Notes, Mail or Docs) a chip offers **Use formatting** for a few seconds. Touch
 > and hold for **Paste as Markdown** or **Paste as plain text**. Undo takes back any of it.
 >
+> A Mermaid diagram in a reply (or in your own message) draws inline on the iPhone, in the app's
+> light or dark theme. Tap it for full screen, where you can zoom and pan, **Copy source**, **Share
+> image**, **Save to Photos** or **Show source**. While a reply is still streaming the diagram shows
+> as source and is drawn once its fence closes; one Mermaid can't read shows its source with
+> Mermaid's error. The phone draws with its own bundled copy of Mermaid in a locked page that cannot
+> reach the network, so diagram source never leaves the phone. `.mmd` and `.mermaid` files opened
+> from **Files** draw the same way.
+>
 > Tables in a reply show as a grid (it scrolls sideways when wide). When the agent links a file it
 > made on your computer (an HTML prototype, an image, a PDF, Markdown, text, JSON or CSV) or a
 > preview server it started there (`http://localhost:5173`), the reply gets a card for it, with a
