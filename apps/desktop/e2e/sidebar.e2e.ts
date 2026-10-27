@@ -49,20 +49,19 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1200, 400])
       await page.getByRole('button', { name: 'Back to active agents', exact: true }).click();
     });
 
-    await test.step('the emptied wall opens the Focused new-chat screen', async () => {
-      // The wall's only chat became the completed one, leaving no windows: the
-      // wall shows the new-chat prompt instead of "The wall is empty".
-      await expect(page.locator('[data-wall-layout]')).toHaveAttribute('data-wall-layout', 'focus');
-      await expect(page.locator('[data-clean-start-greeting]')).toBeVisible();
-      await expect(page.locator('[data-wall-empty]')).toHaveCount(0);
-      await shot(`empty-wall-new-chat-${theme}-${width}`);
-      // Back to Dynamic (Ctrl+Shift+2) for the steps below.
-      await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: '@', code: 'Digit2', ctrlKey: true, shiftKey: true, bubbles: true })));
+    await test.step('the emptied board keeps its zones', async () => {
+      // The board's only chat became the completed one. With zones (Dynamic view:
+      // zones) its zone stays, dotted with a New agent button, so the wall is never
+      // empty: no switch to the Focused new-chat screen, no "The wall is empty".
       await expect(page.locator('[data-wall-layout]')).toHaveAttribute('data-wall-layout', 'grid');
+      await expect(page.locator('[data-command-wall]').getByText('Empty zone').first()).toBeVisible();
+      await expect(page.locator('[data-command-wall]').getByRole('button', { name: 'New agent' }).first()).toBeVisible();
+      await expect(page.locator('[data-wall-empty]')).toHaveCount(0);
+      await expect(page.locator('[data-clean-start-greeting]')).toHaveCount(0);
+      await shot(`empty-zones-${theme}-${width}`);
     });
 
     await test.step('an active card selects its window outside Focus', async () => {
-      // The step above already switched the emptied wall back to Dynamic.
       await expect(page.locator('[data-wall-layout]')).toHaveAttribute('data-wall-layout', 'grid');
       await openList();
       await card('Active conversation').click();
@@ -77,7 +76,6 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1200, 400])
     });
 
     await test.step('create an agent, a media agent and a terminal', async () => {
-      // The empty-wall new chat was a create call too; count only these.
       await page.evaluate('integration.calls.length = 0');
       await openList();
       const create = async (label: string) => {
@@ -85,7 +83,6 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1200, 400])
         await page.locator('.create-row', { hasText: label }).first().click();
         expect(await state<string>('(i) => i.state().view'), `${label} stays in Agents`).toBe('command');
       };
-      // The empty wall may already have created one chat; this must add another.
       const creates = () => state<number>(`(i) => i.calls.filter((c) => c.method === 'create').length`);
       const before = await creates();
       await create('Agent');
