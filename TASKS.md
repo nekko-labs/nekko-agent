@@ -6,6 +6,10 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Model Server inline download progress (#1221)
+
+- [x] **DLP-1, Show progress and block duplicate download clicks.** Model builds/recommendations, decisions and managed llama.cpp/image/MLX runtimes share immediate acquisition locks and existing grouped-job progress. Queued/downloading/verifying stay disabled, terminal states and rejected requests permit retry; runtime build and decision precision stay fixed in flight. Focused state tests and isolated 1100px/390px rapid-click/progress/retry assertions pass. Model/runtime before/after PNGs inspected. Spec: [Models and providers](spec/models/models-providers.md). Live downloads and packaged application not exercised; baseline macOS shortcut test failure tracked in #900.
+
 ## Dynamic view zones (#1204)
 
 [Specification](spec/desktop/dynamic-zones.md). Prefix **DZ**.

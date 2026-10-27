@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { ModelDownloadButton } from './ModelDownloadButton.js';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CatalogModelDetail, CatalogQuant, EngineMemory, LocalModel } from '@nekko-agent/shared';
 import { downloadFitVerdict, modelModality } from '@nekko-agent/shared';
 import { DiffusionInstallCard } from './DiffusionInstallCard.js';
 import { useStore } from '../../store.js';
 import { Badge } from '../primitives/index.js';
-import { CheckIcon, ChevronIcon, DownloadIcon, ExternalIcon } from '../../icons.js';
+import { CheckIcon, ChevronIcon, ExternalIcon } from '../../icons.js';
 import { formatBytes } from '../runtimes/verdict.js';
 import { gpuGuidance } from './modelFamilies.js';
 
@@ -45,7 +46,7 @@ export function ModelDetail({
   const pushToast = useStore((s) => s.pushToast);
   const [model, setModel] = useState<CatalogModelDetail | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'missing'>('loading');
-  const [downloading, setDownloading] = useState<string | null>(null);
+  const preparing = useRef(false);
   const [imageInstall, setImageInstall] = useState<import('@nekko-agent/shared').EngineInstall>();
   const [recommendRuntime, setRecommendRuntime] = useState(false);
   const refreshImageRuntime = () => window.nekko.engineStatus().then(s => { setImageInstall(s.diffusionInstall); return s.diffusionInstall; }).catch(() => undefined);
@@ -84,19 +85,16 @@ export function ModelDetail({
     );
   }, [model, memory]);
 
-  const download = async (quant: CatalogQuant) => {
-    if (!recommendRuntime && modelModality({ name: `${model?.name} ${modelId} ${model?.pipelineTag ?? ''} ${quant.file}` }) === 'image') {
-      const current = await refreshImageRuntime();
-      if (!current?.binPath) {
-        setRecommendRuntime(true);
-        return;
+  const prepareDownload = async (quant: CatalogQuant) => {
+    if (preparing.current) return false;
+    preparing.current = true;
+    try {
+      if (!recommendRuntime && modelModality({ name: `${model?.name} ${modelId} ${model?.pipelineTag ?? ''} ${quant.file}` }) === 'image') {
+        const current = await refreshImageRuntime();
+        if (!current?.binPath) { setRecommendRuntime(true); return false; }
       }
-    }
-    setDownloading(quant.label);
-    const res = await window.nekko.engineDownloadModel(modelId, quant.label).catch((e: Error) => ({ ok: false, message: e.message }));
-    setDownloading(null);
-    pushToast(res.ok ? 'info' : 'error', res.message);
-    if (res.ok) onQueued();
+      return true;
+    } finally { preparing.current = false; }
   };
 
   return (
@@ -207,15 +205,10 @@ export function ModelDetail({
                         <CheckIcon className="h-3 w-3" /> in your library
                       </Badge>
                     ) : (
-                      <button
-                        className="shrink-0 rounded-full px-2.5 py-1 text-[11px] text-white disabled:opacity-60"
-                        style={{ background: 'var(--accent)' }}
-                        disabled={downloading !== null}
-                        onClick={() => void download(q)}
-                      >
-                        <DownloadIcon className="mr-1 inline h-3 w-3" />
-                        {downloading === q.label ? 'Queuing…' : 'Download'}
-                      </button>
+                      <ModelDownloadButton modelId={modelId} quant={q.label} prepare={() => prepareDownload(q)} onResult={(res) => {
+                        pushToast(res.ok ? 'info' : 'error', res.message);
+                        if (res.ok) onQueued();
+                      }} />
                     )}
                   </div>
                 );
