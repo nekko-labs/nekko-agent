@@ -42,6 +42,10 @@ android {
     testOptions {
         unitTests.isReturnDefaultValues = true
     }
+
+    // The computer's log redaction cases, checked on a device too: Android's
+    // regex (ICU) is not the JVM's the unit tests run on (LogShareDeviceTest).
+    sourceSets["androidTest"].assets.directories += "../../../crates/nekkod/tests/golden"
 }
 
 kotlin {

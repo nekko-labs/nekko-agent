@@ -223,6 +223,8 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 >   each chat's agent run log. A log opens at its newest lines; **Refresh** reads it again, and the
 >   search field shows the matching lines with their line numbers. Read only, with secrets already
 >   replaced by `[redacted]` on the computer.
+>   On Android it is **Settings → Logs**, with the same list, newest lines, **Refresh** and search;
+>   **Share** sends what the screen shows as text, with secrets removed again on the phone.
 > - **Usage and limits:** what each provider plan has used and when it resets, and recent usage. Read only.
 >
 > **All your chats, grouped like the desktop** (Android): the chat list shows every chat on the
