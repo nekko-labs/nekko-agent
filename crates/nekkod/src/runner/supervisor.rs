@@ -10,7 +10,7 @@ use super::audit::{self, AuditLine, AuditResult, Today};
 use super::awake::Awake;
 use super::provider::{JobRef, Provider, ProviderError, RunnerStatus};
 use super::signals::{MacState, Sense, signals_for};
-use super::store::{RunnerRecord, same_scope};
+use super::store::{RunnerRecord, overlaps};
 use super::updates::write_atomic;
 use super::vm::{RunHandle, RunSpec, Stopped, Vm, reap};
 use nekko_runner::{
@@ -35,6 +35,10 @@ pub const IDLE_READY_SECS: u64 = 180;
 pub const BOOT_TIMEOUT: Duration = Duration::from_secs(600);
 pub const RERUN_EVERY: Duration = Duration::from_secs(60);
 pub const RERUN_FOR: Duration = Duration::from_secs(30 * 60);
+/// A failed registration removal backs off from `RERUN_EVERY`, doubling up to this.
+pub const REMOVE_BACKOFF_MAX: Duration = Duration::from_secs(10 * 60);
+/// How long a removed record waits for its failed removals before it is handed back anyway.
+pub const REMOVE_FOR: Duration = Duration::from_secs(60 * 60);
 pub const MAX_START_FAILURES: u32 = 3;
 /// Bounds every provider call, so a slow CI service never holds up the next
 /// tick's hard limits for long.
@@ -270,6 +274,18 @@ struct Rerun {
     next_at: f64,
 }
 
+/// A registration whose removal failed; a live one still accepts jobs, so it is retried.
+struct Removal {
+    record: RunnerRecord,
+    runner_id: u64,
+    name: String,
+    next_at: f64,
+    /// Seconds to the next try after this one fails.
+    backoff: f64,
+    /// The credentials were refused: wait for a reconnect (`reset`).
+    held: bool,
+}
+
 pub struct Supervisor<S: Sense, V: Vm, P: Provider> {
     runners_dir: PathBuf,
     sense: S,
@@ -281,6 +297,9 @@ pub struct Supervisor<S: Sense, V: Vm, P: Provider> {
     runners: Vec<Runner>,
     // shortcut: queued re-runs live in memory, lost on daemon restart; persist if pilots show it matters.
     reruns: Vec<Rerun>,
+    // shortcut: like `reruns`, lost on a crash. A live record's are swept by `start()`; a removed
+    // record is not swept after a restart (its credentials may be gone), so `shutdown` audits them.
+    removals: Vec<Removal>,
     /// (repo, job id) of every job ever queued, so each is re-run at most once.
     rerun_seen: HashSet<(String, u64)>,
     /// The wall clock and the monotonic clock at the last tick: the wall
@@ -289,7 +308,8 @@ pub struct Supervisor<S: Sense, V: Vm, P: Provider> {
     /// Records whose stale registrations were swept (once per id).
     swept: HashSet<String>,
     /// Removed records whose VMs are all cleaned, for [`Supervisor::take_gone`].
-    gone: Vec<RunnerRecord>,
+    /// With the wall clock at removal; held while its failed removals are retried.
+    gone: Vec<(RunnerRecord, f64)>,
     serial: u64,
     day_start: u64,
     today: HashMap<String, Today>,
@@ -328,22 +348,36 @@ fn local_midnight(ts: u64) -> u64 {
 
 /// This install's id (8 lowercase hex, `<runners>/install-id`), made once, so
 /// our runner names never match another Mac's, even one with the same name.
-fn install_id(runners_dir: &Path) -> String {
+/// No randomness, no id: a fixed one would collide with every other such Mac.
+fn install_id(runners_dir: &Path) -> Result<String, String> {
     let path = runners_dir.join("install-id");
     if let Ok(id) = std::fs::read_to_string(&path) {
         let id = id.trim();
         if id.len() == 8 && id.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')) {
-            return id.to_owned();
+            return Ok(id.to_owned());
         }
     }
     let mut b = [0u8; 4];
-    let _ = getrandom::fill(&mut b);
+    getrandom::fill(&mut b)
+        .map_err(|e| format!("CI runners are unavailable: this Mac could not make its runner id ({e})."))?;
     let id: String = b.iter().map(|x| format!("{x:02x}")).collect();
     let saved = std::fs::create_dir_all(runners_dir).and_then(|()| write_atomic(&path, id.as_bytes()));
     if let Err(e) = saved {
         eprintln!("runner: cannot save {}: {e}", path.display());
     }
-    id
+    Ok(id)
+}
+
+/// Where a record's registrations live, for a person deleting them by hand.
+fn place(r: &RunnerRecord) -> String {
+    match (&r.config.scope, r.gitlab()) {
+        (nekko_runner::Scope::Repo { owner, repo }, None) => format!("repo {owner}/{repo}"),
+        (nekko_runner::Scope::Org { org }, None) => format!("org {org}"),
+        (nekko_runner::Scope::Repo { owner, repo }, Some(g)) => {
+            format!("project {owner}/{repo} (id {}) at {}", g.namespace_id, g.base_url)
+        }
+        (nekko_runner::Scope::Org { org }, Some(g)) => format!("group {org} (id {}) at {}", g.namespace_id, g.base_url),
+    }
 }
 
 /// `<host>` in runner names: lowercase `[a-z0-9-]`.
@@ -360,8 +394,14 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
         awake: Box<dyn Awake>,
         host_name: String,
     ) -> Self {
+        let install = install_id(&runners_dir);
+        // Without an id nothing may start: every runner shows why.
+        let vm = match &install {
+            Ok(_) => vm,
+            Err(e) => Err(e.clone()),
+        };
         Supervisor {
-            install: install_id(&runners_dir),
+            install: install.unwrap_or_default(),
             runners_dir,
             sense,
             vm,
@@ -370,6 +410,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             host: name_host(&host_name),
             runners: Vec::new(),
             reruns: Vec::new(),
+            removals: Vec::new(),
             rerun_seen: HashSet::new(),
             last_wall: None,
             swept: HashSet::new(),
@@ -382,7 +423,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
     }
 
     /// `nekko-<host>-<install>-`: our runner names are this plus `<unix secs>-<n>`.
-    fn prefix(&self) -> String {
+    pub(super) fn prefix(&self) -> String {
         format!("nekko-{}-{}-", self.host, self.install)
     }
 
@@ -401,18 +442,19 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
         self.roll_day(now);
     }
 
+    /// Whether a runner whose sweep could reach `r`'s registrations has a VM out.
+    fn overlaps_live(&self, r: &RunnerRecord) -> bool {
+        self.runners.iter().any(|o| overlaps(&o.record, r) && !o.slots.is_empty())
+    }
+
     /// Removes stale registrations of each record not yet swept. The prefix
-    /// matches every VM of ours, so a record waits while one of ours with the
-    /// same scope is live.
+    /// matches every VM of ours, so a record waits while one of ours it
+    /// overlaps is live.
     async fn sweep(&mut self) {
         let prefix = self.prefix();
         for i in 0..self.runners.len() {
             let r = &self.runners[i];
-            let scope = &r.record.config.scope;
-            if r.dropped
-                || self.swept.contains(&r.record.config.id)
-                || self.runners.iter().any(|o| same_scope(&o.record.config.scope, scope) && !o.slots.is_empty())
-            {
+            if r.dropped || self.swept.contains(&r.record.config.id) || self.overlaps_live(&r.record) {
                 continue;
             }
             self.swept.insert(r.record.config.id.clone());
@@ -453,20 +495,84 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
         let (gone, keep): (Vec<Runner>, Vec<Runner>) =
             std::mem::take(&mut self.runners).into_iter().partition(|r| r.dropped && r.slots.is_empty());
         self.runners = keep;
-        self.gone.extend(gone.into_iter().map(|r| r.record));
+        let now = self.wall_now();
+        self.gone.extend(gone.into_iter().map(|r| (r.record, now)));
     }
 
     /// Removed runners whose VMs are all cleaned, each handed back once after
     /// its offline registrations are swept; the caller may then forget its key.
     pub async fn take_gone(&mut self) -> Vec<RunnerRecord> {
-        let gone = std::mem::take(&mut self.gone);
+        let now = self.wall_now();
         let prefix = self.prefix();
-        for r in &gone {
-            if let Err(e) = call(self.provider.remove_stale(r, &prefix)).await {
-                eprintln!("runner {}: cannot remove stale runners: {e}", r.config.id);
+        let mut out = Vec::new();
+        for (r, since) in std::mem::take(&mut self.gone) {
+            let id = &r.config.id;
+            let mine = || self.removals.iter().filter(|q| &q.record.config.id == id);
+            let pending = mine().next().is_some();
+            // Held ones wait for a reconnect, which a removed record never gets.
+            let all_held = mine().all(|q| q.held);
+            let early = now < since + REMOVE_FOR.as_secs_f64();
+            // GitLab's sweep deletes whatever its status; GitHub's only offline runners, so it never waits.
+            let live = r.gitlab().is_some() && self.overlaps_live(&r);
+            // Its credentials are forgotten once handed back: until then the retries keep going.
+            if early && ((pending && !all_held) || live) {
+                self.gone.push((r, since));
+                continue;
             }
+            if pending {
+                self.abandon_removals(&r, now);
+            }
+            if live {
+                let what = format!(
+                    "stale runners named {prefix}* in {} were not swept while an overlapping runner was busy; delete them by hand",
+                    place(&r)
+                );
+                self.not_removed(&r, now, what);
+            } else if let Err(e) = call(self.provider.remove_stale(&r, &prefix)).await {
+                eprintln!("runner {id}: cannot remove stale runners: {e}");
+            }
+            out.push(r);
         }
-        gone
+        out
+    }
+
+    /// Never silent: each registration left behind is logged and audited for deletion by hand.
+    fn abandon_removals(&mut self, r: &RunnerRecord, now: f64) {
+        let (mine, keep) = std::mem::take(&mut self.removals)
+            .into_iter()
+            .partition::<Vec<_>, _>(|q| q.record.config.id == r.config.id);
+        self.removals = keep;
+        let place = place(r);
+        for q in mine {
+            let what =
+                format!("runner {} ({}) in {place} could not be removed; delete it by hand", q.runner_id, q.name);
+            self.not_removed(r, now, what);
+        }
+    }
+
+    /// Logs and audits something of `r` left registered for deletion by hand.
+    fn not_removed(&mut self, r: &RunnerRecord, now: f64, what: String) {
+        eprintln!("runner {}: {what}", r.config.id);
+        let line = AuditLine {
+            ts: now as u64,
+            runner_id: r.config.id.clone(),
+            repo: None,
+            workflow: None,
+            job: None,
+            result: AuditResult::NotRemoved,
+            seconds: 0,
+            reason: vec![what],
+        };
+        self.audit(&line);
+    }
+
+    /// The daemon is stopping: the failed removals of removed records are audited, since
+    /// nothing retries or sweeps them after a restart.
+    pub fn shutdown(&mut self) {
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f64());
+        for (r, _) in std::mem::take(&mut self.gone) {
+            self.abandon_removals(&r, now);
+        }
     }
 
     /// The owner reconnected: a sticky error is cleared even if the record did not change.
@@ -475,6 +581,21 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             r.error = None;
             r.start_failures = 0;
         }
+        for q in self.removals.iter_mut().filter(|q| q.record.config.id == id) {
+            q.held = false;
+            q.next_at = 0.0;
+            q.backoff = RERUN_EVERY.as_secs_f64();
+        }
+    }
+
+    /// The records of registrations still waiting for removal: their credentials stay.
+    pub fn queued_removals(&self) -> impl Iterator<Item = &RunnerRecord> {
+        self.removals.iter().map(|q| &q.record)
+    }
+
+    /// The wall clock of the last tick (0 before the first).
+    fn wall_now(&self) -> f64 {
+        self.last_wall.map_or(0.0, |(w, _)| w)
     }
 
     pub fn views(&self) -> Vec<RunnerView> {
@@ -555,6 +676,8 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
         } else if !self.runners.is_empty() {
             self.run(&m, now).await;
         }
+        // Also with no runner left: a removed record's registrations still need removing.
+        self.retry_removals(now).await;
         // 7. Keep awake.
         let mut hold = false;
         for r in self.runners.iter_mut().filter(|r| !r.dropped) {
@@ -723,7 +846,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                             slot.busy_since = Some(now);
                             slot.idle_since = None;
                             slot.set_state(SlotState::Running, now);
-                            match call(self.provider.job(&r.record, &slot.name)).await {
+                            match call(self.provider.job(&r.record, slot.runner_id, &slot.name)).await {
                                 Ok(job) => slot.job = job,
                                 Err(ProviderError::Auth(e)) => r.error = Some(e),
                                 Err(e) => eprintln!("runner {}: {e}", r.record.config.id),
@@ -775,6 +898,39 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
         self.retry_reruns(now).await;
     }
 
+    /// Removes a registration; a failure is retried every `RERUN_EVERY` (a gone one is `Ok`).
+    async fn remove(&mut self, record: RunnerRecord, runner_id: u64, name: String, now: f64) {
+        let q = Removal { record, runner_id, name, next_at: 0.0, backoff: RERUN_EVERY.as_secs_f64(), held: false };
+        self.try_removal(q, now).await;
+    }
+
+    /// One try; a failure is queued again: held on `Auth` (shown as the runner's
+    /// error) until `reset`, else after `backoff`, which doubles up to `REMOVE_BACKOFF_MAX`.
+    async fn try_removal(&mut self, mut q: Removal, now: f64) {
+        let Err(e) = call(self.provider.remove(&q.record, q.runner_id)).await else { return };
+        eprintln!("runner {}: cannot remove runner {} ({}): {e}", q.record.config.id, q.runner_id, q.name);
+        if let ProviderError::Auth(_) = &e {
+            q.held = true;
+            if let Some(r) = self.runners.iter_mut().find(|r| r.record.config.id == q.record.config.id) {
+                r.note(e);
+            }
+        } else {
+            q.next_at = now + q.backoff;
+            q.backoff = (q.backoff * 2.0).min(REMOVE_BACKOFF_MAX.as_secs_f64());
+        }
+        self.removals.push(q);
+    }
+
+    async fn retry_removals(&mut self, now: f64) {
+        for q in std::mem::take(&mut self.removals) {
+            if q.held || now < q.next_at {
+                self.removals.push(q);
+            } else {
+                self.try_removal(q, now).await;
+            }
+        }
+    }
+
     /// Mint, seed, clone, start. A failure removes whatever it made, the
     /// registration included, and counts toward `MAX_START_FAILURES`.
     async fn start_vm(&mut self, ri: usize, image: &Path, (cpus, memory_mb): (u8, u32), now: f64) {
@@ -804,7 +960,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                 .mode(0o700)
                 .create(&dir)
                 .map_err(|e| format!("cannot make {}: {e}", dir.display()))?;
-            vm.write_seed(&seed, &minted.jit_config).await?;
+            vm.write_seed(&seed, minted.seed_file, &minted.jit_config).await?;
             vm.clone_bundle(image, &bundle).await?;
             vm.start(RunSpec { bundle: bundle.clone(), cpus, memory_mb, seed: seed.clone() }).await
         }
@@ -836,9 +992,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                 {
                     eprintln!("runner: cannot remove {}: {err}", dir.display());
                 }
-                if let Err(err) = call(self.provider.remove(&record, minted.runner_id)).await {
-                    eprintln!("runner {}: cannot remove runner {}: {err}", record.config.id, minted.runner_id);
-                }
+                self.remove(record, minted.runner_id, name, now).await;
                 self.start_failed(ri, e, now);
             }
         }
@@ -883,7 +1037,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
         let record = self.runners[ri].record.clone();
         // An online VM we stopped may have taken a job since its last status poll.
         if slot.stop.is_some() && slot.busy_since.is_none() {
-            match call(self.provider.job(&record, &slot.name)).await {
+            match call(self.provider.job(&record, slot.runner_id, &slot.name)).await {
                 Ok(Some(job)) => {
                     slot.job = Some(job);
                     slot.busy_since = Some(slot.polled_at);
@@ -898,9 +1052,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
         {
             eprintln!("runner: cannot remove {}: {e}", dir.display());
         }
-        if let Err(e) = call(self.provider.remove(&record, slot.runner_id)).await {
-            eprintln!("runner {}: cannot remove runner {}: {e}", record.config.id, slot.runner_id);
-        }
+        self.remove(record.clone(), slot.runner_id, slot.name.clone(), now).await;
         // A guest that shut down on its own ran its one job, even if no poll saw it busy.
         let ran = slot.busy_since.is_some() || (stopped == Stopped::Guest && slot.stop.is_none());
         if !ran {

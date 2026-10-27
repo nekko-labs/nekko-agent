@@ -1559,6 +1559,13 @@ A Mac running Nekko Agent becomes a sandboxed GitHub Actions self-hosted runner,
   - Done 2026-10-25: review follow-ups. The lockdown disables every account `dsmemberutil` puts in `admin` (listed, primary group, nested) and root, failing closed on any other answer; FileVault on is refused; automatic downloads and installs (macOS, critical, config data) are off; tests pin each fix and ban `dscl -passwd`, `sysadminctl -autologin` and `softwareupdate --schedule`. Rechecked in a fresh VM: root and both admins refused, `sudo` still works, a seeded clone powered off in 51 s with the update settings intact.
   - Noted: a well-formed JIT config GitHub does not know makes the runner retry every 30 s inside the guest; nekkod still stops that VM after 10 min because the runner never comes online (`BOOT_TIMEOUT`, `bootTimeout` in the audit).
   - Pending: the pilot (docs/runbooks/ci-runner-pilot.md), the Developer ID check and the first signed release.
+- [ ] **T215** GitLab runners: a GitLab project or group connects with an access token; one runner per VM, paused when busy, deleted afterward. Added: 2026-10-25. Issue #1038.
+  - Done 2026-10-25: runner records hold a GitHub or a GitLab link and old `runners.json` files load unchanged; the seed file name comes from the provider; `ByLink` routes by record. Tests in `store.rs`, `provider.rs`, `vm_tests.rs`.
+  - Done 2026-10-25: the GitLab provider (`runner/gitlab.rs`): per-VM runner, busy pause, delete, stale sweep by exact name, queue counting with protected branch and tag lookups, removal retries with backoff and a 1 h audited deadline. Tests in `gitlab_tests.rs`, `supervisor_tests.rs`, `store.rs`.
+  - Done 2026-10-25: GitLab connect (https only, public addresses only, no redirects, scope probe, token in the vault as `gitlab-token-<id>`), provider-aware matching, `runner:connect` with `provider: "github" | "gitlab"`, typed in `packages/shared/src/runners.ts`. Tests in `gitlab_tests.rs` and `tests/daemon/runner.rs`.
+  - Done 2026-10-25: spec, decision 0022 notes and the guest image requirements.
+  - Pending: one real GitLab job end to end, with the guest image (T214 or Layer E).
+  - Pending: a GitLab connect sheet in the desktop UI.
 
 ### Chat completion X icons ([#533](https://github.com/nekko-labs/nekko-agent/issues/533))
 

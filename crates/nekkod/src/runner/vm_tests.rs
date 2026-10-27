@@ -207,7 +207,7 @@ async fn seed_image_holds_only_the_config() {
     let dir = tempfile::tempdir().unwrap();
     let iso = dir.path().join("seed.iso");
     let h = helper(dir.path(), "exit 1");
-    vm(h, true).write_seed(&iso, "{\"jit\":\"abc\"}").await.unwrap();
+    vm(h, true).write_seed(&iso, GITLAB_SEED, "concurrent = 1\n").await.unwrap();
     let mount = dir.path().join("m");
     std::fs::create_dir(&mount).unwrap();
     let ok = std::process::Command::new("hdiutil")
@@ -222,14 +222,28 @@ async fn seed_image_holds_only_the_config() {
         .map(|e| e.unwrap().file_name().to_string_lossy().to_lowercase())
         .filter(|n| !n.starts_with('.'))
         .collect();
-    let content = std::fs::read_to_string(mount.join("jit-config"));
+    let content = std::fs::read_to_string(mount.join("gitlab-runner.toml"));
     let _ = std::process::Command::new("hdiutil").arg("detach").arg(&mount).output();
-    assert_eq!(names, ["jit-config"]);
-    assert_eq!(content.unwrap(), "{\"jit\":\"abc\"}");
+    assert_eq!(names, ["gitlab-runner.toml"]);
+    assert_eq!(content.unwrap(), "concurrent = 1\n");
     assert_eq!(std::fs::metadata(&iso).unwrap().permissions().mode() & 0o777, 0o600, "the image holds a credential");
     let left: Vec<_> = std::fs::read_dir(dir.path()).unwrap().map(|e| e.unwrap().file_name()).collect();
     left.iter()
         .for_each(|n| assert!(["seed.iso", "m", "nekko-vm"].contains(&n.to_str().unwrap()), "{n:?} left behind"));
+}
+
+#[tokio::test]
+async fn seed_file_name_is_checked() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path().join("seed.iso");
+    let h = helper(dir.path(), "exit 1");
+    let vm = vm(h, true);
+    for bad in ["../x", "", ".", "..", "a/b", "Jit-Config", &"a".repeat(65)] {
+        assert!(vm.write_seed(&p, bad, "y").await.is_err(), "{bad:?}");
+    }
+    assert!(!p.exists());
+    let left: Vec<_> = std::fs::read_dir(dir.path()).unwrap().map(|e| e.unwrap().file_name()).collect();
+    assert_eq!(left, ["nekko-vm"], "nothing written");
 }
 
 #[test]

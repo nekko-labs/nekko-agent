@@ -114,6 +114,7 @@ describe('runner helpers', () => {
     expect(auditText(line({ result: 'lost', reason: ['slept'] }), false)).toBe('ci · darwin daemon · lost (this Mac slept)');
     expect(auditText(line({ result: 'stopped', reason: ['maxJobTime'] }))).toBe('ci · darwin daemon · stopped at the max job time · VM deleted');
     expect(auditText(line({ result: 'failedToStart', workflow: null, job: null }))).toBe('A VM failed to start');
+    expect(auditText(line({ result: 'notRemoved', workflow: null, job: null, reason: ['runner 77 (nekko-mac1-1-0) in group g (id 9) at https://gitlab.com could not be removed; delete it by hand'] }))).toBe('runner 77 (nekko-mac1-1-0) in group g (id 9) at https://gitlab.com could not be removed; delete it by hand');
     expect(auditText(line({ result: 'stopped', reason: ['bootTimeout'] }))).toBe('ci · darwin daemon · stopped after 2 min (the VM never started) · VM deleted');
     expect(auditText(line({ result: 'stopped', reason: ['idle'] }))).toBe('ci · darwin daemon · stopped after 2 min (idle too long) · VM deleted');
     expect(auditText(line({ result: 'lost', reason: ['signal'] }))).toBe('ci · darwin daemon · lost (the daemon stopped it) · re-run if allowed');

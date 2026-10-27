@@ -78,3 +78,12 @@ Added 2026-10-25. The decision itself is unchanged.
 - The guest runs one root LaunchDaemon (`dev.nekkolabs.runner-boot`) that owns the seed, the unmount and the shutdown, and starts the runner with `launchctl asuser` in the auto-login session of the standard user `runner`. There is no LaunchAgent: the root-only steps stay out of the job user's hands, and the job still gets a GUI session for simulators and the keychain.
 - Tart is used only to build images (`tart clone`, `run`, `exec` with `provision.sh`), never at job time; `provision.sh` removes the Tart guest agent from the image.
 - `nekko-vm` is signed with its own entitlements by the electron-builder `mac.sign` hook (`apps/desktop/scripts/sign-mac.cjs`) for Developer ID builds, and by `after-pack.cjs` for unsigned ones; `scripts/check-mac-entitlements.sh` fails a release if any other binary carries the virtualization entitlement.
+
+## Implementation notes (T215)
+
+Added 2026-10-25. The decision itself is unchanged.
+
+- GitLab has no single-use runner, so each VM gets its own runner and its own `glrt-` token. The job can read that token, so the runner is locked, protected-only by default, paused once nekkod sees it busy and deleted when the VM ends. Failed deletes are retried with backoff and a removed record is held up to 1 hour, after which a `notRemoved` audit line names the runner for manual deletion. Start-up deletes every `nekko-<host>-` runner in the scope; a group sweep never deletes a runner its own group does not own, and group records on one instance never sweep each other.
+- The access token is kept in the runner vault as `gitlab-token-<record id>`, written only after every connect check passes, and never sent to a guest. No request carrying it follows a redirect.
+- The instance must resolve only to public addresses, so a LAN, Tailscale or loopback GitLab is refused at connect. That check is about guest reachability; TLS and no redirects protect the token.
+- Known limits: never run against a live GitLab; no desktop connect sheet yet; the guest side (`gitlab-runner` in the image, seed file `gitlab-runner.toml`) is in the Layer E scripts and unverified in a real guest.

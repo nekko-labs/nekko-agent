@@ -11,3 +11,8 @@ pub fn runner_vault(data_dir: &Path) -> Box<dyn Vault> {
 pub fn key_name(app_id: u64) -> String {
     format!("github-app-{app_id}")
 }
+
+/// The GitLab access token of one runner record.
+pub fn token_key(record_id: &str) -> String {
+    format!("gitlab-token-{record_id}")
+}

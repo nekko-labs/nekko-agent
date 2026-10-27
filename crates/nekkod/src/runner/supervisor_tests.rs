@@ -2,7 +2,8 @@ use super::*;
 use crate::runner::egress::Egress;
 use crate::runner::provider::Minted;
 use crate::runner::signals::HostState;
-use crate::runner::store::GithubLink;
+use crate::runner::store::{GithubLink, GitlabLink, Link};
+use crate::runner::vm::GITHUB_SEED;
 use crate::runner::vm::Halt;
 use nekko_cloud::vault::Vault;
 use nekko_machine::activity::Power;
@@ -54,7 +55,13 @@ fn record(id: &str, priority: Priority, slots: u8) -> RunnerRecord {
                 ..Default::default()
             },
         },
-        github: GithubLink { app_id: 1, installation_id: 2, group_id: None, repos: vec![], allow_public: false },
+        link: Link::Github(GithubLink {
+            app_id: 1,
+            installation_id: 2,
+            group_id: None,
+            repos: vec![],
+            allow_public: false,
+        }),
         image: None,
     }
 }
@@ -115,8 +122,8 @@ impl Vm for FakeVm {
         std::fs::write(to.join("disk.img"), b"clone").map_err(|e| e.to_string())
     }
 
-    async fn write_seed(&self, path: &Path, jit: &str) -> Result<(), String> {
-        self.1.lock().unwrap().push(format!("write_seed {}", self.rel(path)));
+    async fn write_seed(&self, path: &Path, file: &str, jit: &str) -> Result<(), String> {
+        self.1.lock().unwrap().push(format!("write_seed {} {file}", self.rel(path)));
         std::fs::write(path, jit).map_err(|e| e.to_string())
     }
 
@@ -166,6 +173,8 @@ struct ProvState {
     queued: u32,
     mint: VecDeque<Result<Minted, ProviderError>>,
     rerun: VecDeque<Result<(), ProviderError>>,
+    /// Scripted answers per runner id; any other remove works.
+    remove: std::collections::HashMap<u64, VecDeque<Result<(), ProviderError>>>,
     /// `None`: the runner's job while `status` is `Busy`, else none (as GitHub answers).
     job: Option<Result<Option<JobRef>, ProviderError>>,
     next_id: u64,
@@ -184,14 +193,14 @@ impl Provider for FakeProvider {
         let mut st = self.0.lock().unwrap();
         st.next_id += 1;
         let id = st.next_id;
-        st.mint.pop_front().unwrap_or(Ok(Minted { runner_id: id, jit_config: "jit".into() }))
+        st.mint.pop_front().unwrap_or(Ok(Minted { runner_id: id, seed_file: GITHUB_SEED, jit_config: "jit".into() }))
     }
 
     async fn status(&self, _: &RunnerRecord, _: u64) -> Result<RunnerStatus, ProviderError> {
         Ok(self.0.lock().unwrap().status)
     }
 
-    async fn job(&self, _: &RunnerRecord, _: &str) -> Result<Option<JobRef>, ProviderError> {
+    async fn job(&self, _: &RunnerRecord, _: u64, _: &str) -> Result<Option<JobRef>, ProviderError> {
         self.1.lock().unwrap().push("job".into());
         let st = self.0.lock().unwrap();
         st.job.clone().unwrap_or(Ok((st.status == RunnerStatus::Busy).then(job_ref)))
@@ -203,7 +212,7 @@ impl Provider for FakeProvider {
 
     async fn remove(&self, _: &RunnerRecord, runner_id: u64) -> Result<(), ProviderError> {
         self.1.lock().unwrap().push(format!("remove {runner_id}"));
-        Ok(())
+        self.0.lock().unwrap().remove.get_mut(&runner_id).and_then(|q| q.pop_front()).unwrap_or(Ok(()))
     }
 
     async fn remove_stale(&self, _: &RunnerRecord, prefix: &str) -> Result<u32, ProviderError> {
@@ -249,6 +258,7 @@ fn harness_with(records: Vec<RunnerRecord>, no_vm: Option<&str>) -> H {
             queued: 0,
             mint: VecDeque::new(),
             rerun: VecDeque::new(),
+            remove: Default::default(),
             job: None,
             next_id: 99,
         })),
@@ -353,7 +363,7 @@ async fn takes_a_job_when_gates_pass_and_deletes_vm_after() {
         log[1..],
         [
             format!("mint {name}"),
-            format!("write_seed vms/{name}/seed.iso"),
+            format!("write_seed vms/{name}/seed.iso jit-config"),
             format!("clone_bundle images/default vms/{name}/bundle"),
             "start 10 8192".into(),
         ]
@@ -583,6 +593,95 @@ async fn lost_job_is_rerun_once() {
     assert_eq!(h.count("rerun"), 3);
     h.tick_for(600).await;
     assert_eq!(h.count("rerun"), 3);
+}
+
+fn fail_removes(h: &H, id: u64, errs: Vec<ProviderError>) {
+    h.prov.0.lock().unwrap().remove.insert(id, errs.into_iter().map(Err).collect());
+}
+
+fn down() -> ProviderError {
+    ProviderError::Other("GitLab answered 502".into())
+}
+
+/// Ticks of 5 s for `secs`, returning the seconds (from the start) at which `remove <id>` was called.
+async fn remove_times(h: &mut H, id: u64, secs: u64) -> Vec<u64> {
+    let tag = format!("remove {id}");
+    let mut at = Vec::new();
+    for t in (5..=secs).step_by(5) {
+        let before = h.count(&tag);
+        h.tick_for(5).await;
+        if h.count(&tag) > before {
+            at.push(t);
+        }
+    }
+    at
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_failed_remove_backs_off_doubling_to_ten_minutes() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    fail_removes(&h, 100, (0..7).map(|_| down()).collect());
+    sleep_through_a_job(&mut h).await;
+    assert_eq!(h.count("remove 100"), 1);
+    let at = remove_times(&mut h, 100, 4000).await;
+    // 60, 120, 240, 480, then capped at 600; the 8th call works and nothing follows.
+    assert_eq!(at, vec![60, 180, 420, 900, 1500, 2100, 2700]);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_removed_record_is_kept_until_its_removals_work() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    fail_removes(&h, 100, vec![down(), down()]);
+    sleep_through_a_job(&mut h).await;
+    let swept = h.count("remove_stale");
+    h.sup.set_records(vec![]);
+    h.tick_for(5).await;
+    assert!(h.sup.take_gone().await.is_empty(), "its runner is still registered");
+    assert_eq!(h.count("remove_stale"), swept);
+    h.tick_for(55).await;
+    assert_eq!(h.count("remove 100"), 2);
+    assert!(h.sup.take_gone().await.is_empty(), "the retry failed too");
+    h.tick_for(120).await;
+    assert_eq!(h.count("remove 100"), 3);
+    let gone = h.sup.take_gone().await;
+    assert_eq!(gone.iter().map(|r| r.config.id.as_str()).collect::<Vec<_>>(), ["r1"]);
+    assert_eq!(h.count("remove_stale"), swept + 1, "swept once its queue is empty");
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_removal_failing_for_an_hour_is_handed_back_with_an_audit_line() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    fail_removes(&h, 100, (0..50).map(|_| down()).collect());
+    sleep_through_a_job(&mut h).await;
+    h.sup.set_records(vec![]);
+    h.tick_for(3590).await;
+    assert!(h.sup.take_gone().await.is_empty());
+    h.tick_for(10).await;
+    let gone = h.sup.take_gone().await;
+    assert_eq!(gone.len(), 1);
+    let line = h.audit().into_iter().find(|l| l.result == AuditResult::NotRemoved).expect("an audit line");
+    assert_eq!(line.runner_id, "r1");
+    let why = line.reason.join(" ");
+    assert!(why.contains("runner 100") && why.contains("nekko-mac1-") && why.contains("acme"), "{why}");
+    h.tick_for(1200).await;
+    let calls = h.count("remove 100");
+    h.tick_for(1200).await;
+    assert_eq!(h.count("remove 100"), calls, "dropped after the hand-back");
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_auth_failure_holds_removals_until_reset() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    fail_removes(&h, 100, vec![ProviderError::Auth("GitLab refused this access token.".into())]);
+    sleep_through_a_job(&mut h).await;
+    assert_eq!(h.view().error.as_deref(), Some("GitLab refused this access token."));
+    h.tick_for(1800).await;
+    assert_eq!(h.count("remove 100"), 1, "held, not retried");
+    h.sup.reset("r1");
+    h.tick_for(5).await;
+    assert_eq!(h.count("remove 100"), 2, "re-armed by reconnect");
+    h.tick_for(1200).await;
+    assert_eq!(h.count("remove 100"), 2);
 }
 
 #[tokio::test(start_paused = true)]
@@ -1007,15 +1106,35 @@ async fn removing_keeps_the_key_until_the_runner_is_cleaned() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn a_failed_removal_keeps_the_key_until_a_retry_works() {
+    let h = harness(vec![]);
+    h.vm.0.lock().unwrap().hold_done = true;
+    fail_removes(&h, 100, vec![down()]);
+    let sense = h.sense.clone();
+    let Rig { runners, vm, log, vault, dir: _dir } = runners_rig(h);
+    wait_for("a VM start", || log.lock().unwrap().iter().any(|l| l.starts_with("start"))).await;
+    assert_eq!(runners.route("runner:remove", &[json!("r1")]).await, Ok(Value::Null));
+    wait_for("the VM killed", || log.lock().unwrap().iter().any(|l| l.starts_with("kill"))).await;
+    vm.finish(0, Stopped::Error("killed".into()));
+    wait_for("the failed remove", || log.lock().unwrap().iter().any(|l| l == "remove 100")).await;
+    tokio::time::sleep(Duration::from_secs(30)).await;
+    assert_eq!(vault.get("github-app-1").as_deref(), Some("pem"), "kept while its registration remains");
+    // The rig's wall clock stands still; the retry is due a minute later on it.
+    sense.0.lock().unwrap().wall_secs += 60.0;
+    wait_for("the key forgotten", || vault.get("github-app-1").is_none()).await;
+    assert_eq!(log.lock().unwrap().iter().filter(|l| *l == "remove 100").count(), 2);
+}
+
+#[tokio::test(start_paused = true)]
 async fn reconnecting_a_scope_to_another_app_forgets_the_old_key() {
     let Rig { runners, dir, vault, .. } = runners_rig(harness(vec![]));
     let mut moved = record("new-id", Priority::RunnerFirst, 1);
-    moved.github.app_id = 2;
+    moved.link = Link::Github(GithubLink { app_id: 2, ..moved.github().unwrap().clone() });
     moved.config.scope = Scope::Org { org: "ACME".into() };
     let view = runners.save_connected(moved, None).await.unwrap();
     assert_eq!(view["config"]["id"], "r1", "the scope keeps its id");
     let saved = crate::runner::store::Store::new(dir.path()).load();
-    assert_eq!(saved[0].github.app_id, 2);
+    assert_eq!(saved[0].github().unwrap().app_id, 2);
     assert_eq!(vault.get("github-app-1"), None);
 }
 
@@ -1109,12 +1228,256 @@ async fn keys_are_kept_while_runners_json_is_unreadable() {
 #[tokio::test(start_paused = true)]
 async fn overlapping_connects_for_one_app_keep_its_key() {
     let Rig { runners, vault, dir: _dir, .. } = runners_rig(harness(vec![]));
-    let first = runners.connect_guard(1);
-    let second = runners.connect_guard(1);
+    let first = runners.connect_guard("github-app-1".into());
+    let second = runners.connect_guard("github-app-1".into());
     drop(first);
-    runners.forget_keys(&[], [1].into_iter());
+    runners.forget_keys(&[], ["github-app-1".to_string()].into_iter());
     assert_eq!(vault.get("github-app-1").as_deref(), Some("pem"), "the second connect still needs it");
     drop(second);
-    runners.forget_keys(&[], [1].into_iter());
+    runners.forget_keys(&[], ["github-app-1".to_string()].into_iter());
     assert_eq!(vault.get("github-app-1"), None);
+}
+
+fn gitlab(id: &str, org: &str) -> RunnerRecord {
+    let mut r = record(id, Priority::RunnerFirst, 1);
+    r.config.scope = Scope::Org { org: org.into() };
+    r.link = Link::Gitlab(GitlabLink {
+        base_url: "https://gitlab.com".into(),
+        namespace_id: 9,
+        projects: vec![format!("{org}/app")],
+        allow_public: false,
+        protected_only: true,
+    });
+    r
+}
+
+#[tokio::test(start_paused = true)]
+async fn gitlab_groups_on_one_instance_never_sweep_each_others_live_runners() {
+    let mut h = harness(vec![gitlab("a", "g")]);
+    h.sup.start().await;
+    h.running().await;
+    let mut dnd = gitlab("b", "g/sub");
+    dnd.config.settings.priority = Priority::DoNotDisturb;
+    // A GitHub org of the same name is another service: swept at once.
+    let mut gh = record("c", Priority::DoNotDisturb, 1);
+    gh.config.scope = Scope::Org { org: "g".into() };
+    h.sup.set_records(vec![gitlab("a", "g"), dnd.clone(), gh.clone()]);
+    h.tick_for(30).await;
+    assert_eq!(h.count("remove_stale"), 2, "a, then c; b waits");
+    h.vm.finish(0, Stopped::Guest);
+    h.mac(|m| m.paused_all = true);
+    h.tick_for(10).await;
+    assert_eq!(h.count("remove_stale"), 3);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_removed_record_waits_to_sweep_while_an_overlapping_runner_is_live() {
+    let mut h = harness(vec![gitlab("a", "g"), gitlab("b", "h")]);
+    h.sup.start().await;
+    h.mac(|m| m.paused_all = true);
+    h.tick_for(5).await;
+    h.mac(|m| m.paused_all = false);
+    h.sup.set_records(vec![gitlab("a", "g")]);
+    h.running().await;
+    let swept = h.count("remove_stale");
+    h.tick_for(5).await;
+    assert!(h.sup.take_gone().await.is_empty(), "a's live runner would be swept by b's");
+    assert_eq!(h.count("remove_stale"), swept);
+    h.vm.finish(0, Stopped::Guest);
+    h.mac(|m| m.paused_all = true);
+    h.tick_for(10).await;
+    assert_eq!(h.sup.take_gone().await.len(), 1);
+    assert_eq!(h.count("remove_stale"), swept + 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn removals_all_held_on_auth_are_abandoned_at_once() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    fail_removes(&h, 100, vec![ProviderError::Auth("GitLab refused this access token.".into())]);
+    sleep_through_a_job(&mut h).await;
+    h.sup.set_records(vec![]);
+    h.tick_for(5).await;
+    let gone = h.sup.take_gone().await;
+    assert_eq!(gone.len(), 1, "nothing will retry it before a reconnect, and the record is gone");
+    assert!(h.audit().iter().any(|l| l.result == AuditResult::NotRemoved && l.runner_id == "r1"));
+}
+
+#[tokio::test(start_paused = true)]
+async fn shutdown_audits_the_removals_left_behind() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1), record("r2", Priority::RunnerFirst, 1)]);
+    fail_removes(&h, 100, (0..5).map(|_| down()).collect());
+    sleep_through_a_job(&mut h).await;
+    h.sup.set_records(vec![record("r2", Priority::RunnerFirst, 1)]);
+    h.tick_for(5).await;
+    assert!(h.sup.take_gone().await.is_empty());
+    h.sup.shutdown();
+    let lines: Vec<_> = h.audit().into_iter().filter(|l| l.result == AuditResult::NotRemoved).collect();
+    assert_eq!(lines.len(), 1);
+    assert!(lines[0].ts > 0, "stamped with the clock, not 0");
+}
+
+/// `Runners` over the fakes with one GitHub (`r1`, app 1) and one GitLab (`gl-1`, group `acme`) record.
+fn mixed_rig(h: H) -> Rig {
+    let rig = runners_rig(h);
+    let store = crate::runner::store::Store::new(rig.dir.path());
+    let mut gl = gitlab("gl-1", "acme");
+    gl.config.settings.enabled = false;
+    store.save(&[record("r1", Priority::RunnerFirst, 1), gl]).unwrap();
+    rig.vault.set("gitlab-token-gl-1", "glpat-x").unwrap();
+    rig
+}
+
+#[tokio::test(start_paused = true)]
+async fn another_provider_over_the_same_scope_is_a_new_record() {
+    let Rig { runners, dir, vault, .. } = mixed_rig(harness(vec![]));
+    let mut gh = record("gh-new", Priority::RunnerFirst, 1);
+    gh.link = Link::Github(GithubLink { app_id: 2, ..gh.github().unwrap().clone() });
+    gh.config.scope = Scope::Org { org: "ACME".into() };
+    // A GitHub connect over acme reuses the GitHub record, never the GitLab one.
+    let view = runners.save_connected(gh, None).await.unwrap();
+    assert_eq!(view["config"]["id"], "r1");
+    // A GitLab connect over acme on another instance is a new record.
+    let mut other = gitlab("gl-2", "acme");
+    other.link =
+        Link::Gitlab(GitlabLink { base_url: "https://gitlab.example.com".into(), ..other.gitlab().unwrap().clone() });
+    vault.set("gitlab-token-gl-2", "glpat-y").unwrap();
+    let view = runners.save_connected(other, None).await.unwrap();
+    assert_eq!(view["config"]["id"], "gl-2");
+    let saved = crate::runner::store::Store::new(dir.path()).load();
+    let ids: Vec<&str> = saved.iter().map(|r| r.config.id.as_str()).collect();
+    assert_eq!(ids, ["r1", "gl-1", "gl-2"]);
+    assert_eq!(
+        saved[1],
+        {
+            let mut g = gitlab("gl-1", "acme");
+            g.config.settings.enabled = false;
+            g
+        },
+        "untouched"
+    );
+    assert_eq!(vault.get("gitlab-token-gl-1").as_deref(), Some("glpat-x"));
+    // A GitLab reconnect of the same instance and group keeps gl-1 and moves the new token to it.
+    vault.set("gitlab-token-gl-3", "glpat-z").unwrap();
+    let view = runners.save_connected(gitlab("gl-3", "acme"), None).await.unwrap();
+    assert_eq!(view["config"]["id"], "gl-1");
+    assert_eq!((vault.get("gitlab-token-gl-1").as_deref(), vault.get("gitlab-token-gl-3")), (Some("glpat-z"), None));
+    let saved = crate::runner::store::Store::new(dir.path()).load();
+    assert_eq!(saved[0].github().unwrap().app_id, 2, "the GitHub record is untouched by GitLab connects");
+}
+
+#[tokio::test(start_paused = true)]
+async fn removing_a_gitlab_runner_forgets_its_token_once_handed_back() {
+    let h = harness(vec![]);
+    fail_removes(&h, 100, vec![down()]);
+    h.vm.0.lock().unwrap().hold_done = true;
+    let sense = h.sense.clone();
+    let Rig { runners, vault, vm, log, dir } = runners_rig(h);
+    let store = crate::runner::store::Store::new(dir.path());
+    store.save(&[gitlab("gl-1", "acme")]).unwrap();
+    vault.set("gitlab-token-gl-1", "glpat-x").unwrap();
+    runners.route("runner:update", &[json!("gl-1"), json!({})]).await.unwrap();
+    wait_for("a VM start", || log.lock().unwrap().iter().any(|l| l.starts_with("start"))).await;
+    assert_eq!(runners.route("runner:remove", &[json!("gl-1")]).await, Ok(Value::Null));
+    wait_for("the VM killed", || log.lock().unwrap().iter().any(|l| l.starts_with("kill"))).await;
+    vm.finish(0, Stopped::Error("killed".into()));
+    wait_for("the failed remove", || log.lock().unwrap().iter().any(|l| l == "remove 100")).await;
+    tokio::time::sleep(Duration::from_secs(30)).await;
+    assert_eq!(vault.get("gitlab-token-gl-1").as_deref(), Some("glpat-x"), "kept while its registration remains");
+    sense.0.lock().unwrap().wall_secs += 60.0;
+    wait_for("the token forgotten", || vault.get("gitlab-token-gl-1").is_none()).await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_removed_group_left_unswept_behind_a_busy_overlap_is_audited() {
+    let mut h = harness(vec![gitlab("a", "g"), gitlab("b", "h")]);
+    h.sup.start().await;
+    h.mac(|m| m.paused_all = true);
+    h.tick_for(5).await;
+    h.mac(|m| m.paused_all = false);
+    h.sup.set_records(vec![gitlab("a", "g")]);
+    h.running().await;
+    h.status(RunnerStatus::Busy);
+    let swept = h.count("remove_stale");
+    h.tick_for(3600).await;
+    let gone = h.sup.take_gone().await;
+    assert_eq!(gone.iter().map(|r| r.config.id.as_str()).collect::<Vec<_>>(), ["b"]);
+    assert_eq!(h.count("remove_stale"), swept, "never swept over a live runner");
+    let line = h.audit().into_iter().find(|l| l.result == AuditResult::NotRemoved).expect("an audit line");
+    assert_eq!(line.runner_id, "b");
+    let why = line.reason.join(" ");
+    assert!(why.contains("group h") && why.contains("nekko-mac1-"), "{why}");
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_failed_gitlab_save_puts_the_previous_token_back() {
+    let Rig { runners, dir, vault, .. } = mixed_rig(harness(vec![]));
+    // The connect already wrote its token; then saving `runners.json` fails.
+    std::fs::create_dir(dir.path().join("runners.json.tmp")).unwrap();
+    vault.set("gitlab-token-gl-1", "glpat-new").unwrap();
+    assert!(runners.save_gitlab(gitlab("gl-1", "acme"), None, Some("glpat-x".into())).await.is_err());
+    assert_eq!(vault.get("gitlab-token-gl-1").as_deref(), Some("glpat-x"), "the reconnect's token is undone");
+    // A new record's token goes.
+    vault.set("gitlab-token-gl-9", "glpat-y").unwrap();
+    assert!(runners.save_gitlab(gitlab("gl-9", "other"), None, None).await.is_err());
+    assert_eq!(vault.get("gitlab-token-gl-9"), None);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_removed_github_record_is_swept_at_once_beside_a_live_runner() {
+    // GitHub's sweep removes offline runners only, so a busy one of the same scope is safe.
+    let mut h = harness(vec![record("a", Priority::RunnerFirst, 1), record("b", Priority::RunnerFirst, 1)]);
+    h.sup.start().await;
+    h.mac(|m| m.paused_all = true);
+    h.tick_for(5).await;
+    h.mac(|m| m.paused_all = false);
+    h.sup.set_records(vec![record("a", Priority::RunnerFirst, 1)]);
+    h.running().await;
+    let swept = h.count("remove_stale");
+    let gone = h.sup.take_gone().await;
+    assert_eq!(gone.iter().map(|r| r.config.id.as_str()).collect::<Vec<_>>(), ["b"]);
+    assert_eq!(h.count("remove_stale"), swept + 1);
+    assert!(h.audit().iter().all(|l| l.result != AuditResult::NotRemoved));
+}
+
+#[test]
+fn install_id_is_made_once_and_a_damaged_one_replaced() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("install-id");
+    std::fs::write(&path, "zz").unwrap();
+    let id = install_id(dir.path()).unwrap();
+    assert!(id.len() == 8 && id != "00000000" && id.bytes().all(|b| b.is_ascii_hexdigit()), "{id}");
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), id);
+    assert_eq!(install_id(dir.path()).unwrap(), id);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_failed_save_after_a_racing_reconnect_keeps_the_old_token() {
+    let Rig { runners, dir, vault, .. } = mixed_rig(harness(vec![]));
+    std::fs::create_dir(dir.path().join("runners.json.tmp")).unwrap();
+    vault.set("gitlab-token-gl-3", "glpat-z").unwrap();
+    assert!(runners.save_connected(gitlab("gl-3", "acme"), None).await.is_err());
+    assert_eq!(vault.get("gitlab-token-gl-1").as_deref(), Some("glpat-x"), "gl-1 keeps the token it had");
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_app_key_stays_while_a_queued_removal_needs_it() {
+    let h = harness(vec![]);
+    h.vm.0.lock().unwrap().hold_done = true;
+    // The reconnect re-arms the removal at once (`reset`); that retry fails too.
+    fail_removes(&h, 100, vec![down(), down()]);
+    let sense = h.sense.clone();
+    let Rig { runners, vm, log, vault, dir: _dir } = runners_rig(h);
+    wait_for("a VM start", || log.lock().unwrap().iter().any(|l| l.starts_with("start"))).await;
+    vm.finish(0, Stopped::Guest);
+    wait_for("the failed remove", || log.lock().unwrap().iter().any(|l| l == "remove 100")).await;
+    // The scope moves to app 2 while app 1's registration still waits for removal.
+    let mut moved = record("new-id", Priority::RunnerFirst, 1);
+    moved.link = Link::Github(GithubLink { app_id: 2, ..moved.github().unwrap().clone() });
+    vault.set("github-app-2", "pem2").unwrap();
+    runners.save_connected(moved, None).await.unwrap();
+    tokio::time::sleep(Duration::from_secs(30)).await;
+    assert_eq!(vault.get("github-app-1").as_deref(), Some("pem"), "the queued removal still signs with it");
+    sense.0.lock().unwrap().wall_secs += 60.0;
+    wait_for("the key forgotten", || vault.get("github-app-1").is_none()).await;
+    assert_eq!(log.lock().unwrap().iter().filter(|l| *l == "remove 100").count(), 3);
 }
