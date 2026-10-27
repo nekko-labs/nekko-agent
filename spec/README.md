@@ -71,6 +71,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Agent board: pick up and drop windows](desktop/agent-board-pick-up-and-drop.md) (3 KB)
 - [Agent window controls refresh (2026-10-15)](desktop/agent-window-controls-refresh.md) (6 KB)
 - [Composer and desktop rail regression fixes (2026-10-07)](desktop/composer-and-desktop-rail-regression-fixes.md) (3 KB)
+- [Dynamic view: zones](desktop/dynamic-zones.md) (5 KB)
 - [Empty wall opens the new-chat screen; glass prism composer (2026-10-18)](desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md) (10 KB)
 - [Focused mode transitions, calmer focus ring and layout controls (2026-10-17)](desktop/focused-mode-transitions-calmer-focus-ring-and-layout-controls.md) (7 KB)
 - [Grid model selection and chat-mode menus (2026-10-07)](desktop/grid-model-selection-and-chat-mode-menus.md) (1 KB)
@@ -82,7 +83,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Nekko Dark and the branded System theme (desktop)](desktop/nekko-dark-and-branded-system-theme.md) (3 KB)
 - [New agent window defaults](desktop/new-agent-window-defaults.md) (5 KB)
 - [Search within Settings (desktop)](desktop/search-within-settings-desktop.md) (2 KB)
-- [Settings section nav and phone pairing placement (desktop)](desktop/settings-section-nav.md) (4 KB)
+- [Settings section nav and phone pairing placement (desktop)](desktop/settings-section-nav.md) (5 KB)
 - [Slim wave rail, tighter Agents spacing, composer snap points](desktop/slim-wave-rail-tighter-agents-spacing-composer-snap-points.md) (5 KB)
 - [Style: universal fonts, text size and your own fonts (desktop)](desktop/style-fonts-and-text-size.md) (3 KB)
 - [Subtle rail and compact board gutters](desktop/subtle-rail-and-compact-board-gutters.md) (3 KB)
@@ -132,7 +133,7 @@ Providers, local models, the Model Server, training.
 - [First-agent provider setup](models/first-agent-provider-setup.md) (2 KB)
 - [Hardware-aware model recommendations](models/hardware-aware-model-recommendations.md) (11 KB)
 - [Model training & goals (the data-scientist agent)](models/model-training-goals-the-data-scientist-agent.md) (4 KB)
-- [Models & providers](models/models-providers.md) (42 KB)
+- [Models & providers](models/models-providers.md) (43 KB)
 - [Prompt caching across providers (2026-10-07)](models/prompt-caching-across-providers.md) (7 KB)
 - [Running a model with nothing else installed](models/running-a-model-with-nothing-else-installed.md) (28 KB)
 - [Server, model browser and desktop tray](models/server-model-browser-and-desktop-tray.md) (5 KB)
@@ -140,6 +141,7 @@ Providers, local models, the Model Server, training.
 - [Signing in with a subscription (planned)](models/signing-in-with-a-subscription.md) (2 KB)
 - [System models: dictation on Apple's recognizer or Whisper](models/system-speech-models.md) (4 KB)
 - [Training a model while you watch (Training tab)](models/training-a-model-while-you-watch-training-tab.md) (2 KB)
+- [Your first local model](models/first-local-model.md) (3 KB)
 
 ### code
 

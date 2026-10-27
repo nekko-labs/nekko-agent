@@ -140,8 +140,8 @@ export function SettingsView() {
   if (!settings) return <ServiceLoadState label="settings" error={settingsError} retry={reload} />;
 
   return (
-    <div ref={scrollRef} className="h-full overflow-y-auto" onScroll={onScroll}>
-      <div ref={pageRef} className="mx-auto max-w-5xl px-8 py-8">
+    <div ref={scrollRef} className="settings-panel h-full overflow-y-auto" onScroll={onScroll}>
+      <div ref={pageRef} className="settings-page">
         {settingsError && <ServiceLoadState label="settings" error={settingsError} retry={reload} />}
         {!hasAppChrome && <h1 className="view-title">{tr('settings.title')}</h1>}
         <div aria-label="Skills and connectors" className="mb-7 flex flex-wrap gap-3">
@@ -165,7 +165,7 @@ export function SettingsView() {
               </button>
             ))}
           </nav>
-          <div className="min-w-0 max-w-3xl flex-1">
+          <div className="min-w-0 flex-1">
             <SettingsGroup id="general">
               <section className="card mt-6 p-5">
                 <h2 className="font-semibold">View settings</h2>

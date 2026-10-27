@@ -6,6 +6,15 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Dynamic view zones (#1204)
+
+[Specification](spec/desktop/dynamic-zones.md). Prefix **DZ**.
+
+- [x] **DZ-1, Zones model.** Every leaf of the Dynamic tree is a named zone; an empty one is kind `zone`. Close, minimize, completion and auto-minimize empty a zone instead of removing it. `openWallPane` fills the active zone (an agent already on the board trades places). No auto-add; a pre-zones wall migrates once to its two newest agents. Pure tests in `commandWall.test.ts`, `wallDrag.test.ts`, `chatSwitchPerf.test.ts`. (2026-10-26)
+- [x] **DZ-2, Board UI.** Zone name bars (drag handle, right-click Close zone), active-zone outline, dotted empty zones with New agent, add-zone rails with a live preview, Shift to span at board edges, agent rows dragged in from the panel with a chip that flies into the zone. Hidden Electron evidence: `apps/desktop/scripts/zones-sandbox.cjs`, 20 assertions. (2026-10-26)
+- [x] **DZ-3, Intro.** First-visit dialog with three looping Remotion player demos (`components/ZonesIntro.tsx`, loaded lazily), remembered in the wall setting. (2026-10-26)
+- [ ] **DZ-4, Narrow window strips.** At about 380px wide, a window's title-strip actions (Zen, Minimize, Complete) are clipped; three zones reach that width on a 1440px screen. Pre-existing, more visible with zones.
+
 ## Agents panel by activity (#1202)
 
 - [x] **APA-1, Activity default, Done group, chiplet cards, arced moves.** The panel defaults to Activity grouping (Needs input, Working, Error, Done; Idle renamed Done), cards are bordered chip tiles, and a card that changes group flies there on a fixed-layer copy along a right-bowing curve (`agentCardMotion.ts`), skipped for grouping switches, folded groups and reduced motion. Unit tests for the default, the Done mapping and the arc path; hidden-fixture before/after stills and motion frames (`agent-activity-motion-sandbox.cjs`). Spec: [Agent panel view options](spec/agents/agent-panel-view-options.md). Saved views keep their old grouping; packaged app unverified. Done: 2026-10-26
@@ -1590,6 +1599,8 @@ Observation: the fixed per-reply step budget (`DEFAULT_MAX_STEPS`, was 80) was h
 
 ## Shipped
 
+- [x] **SN1220: Settings and Models navigation polish** (implemented 2026-10-26). [Settings spec](spec/desktop/settings-section-nav.md), [Models spec](spec/models/models-providers.md). Added catalog return buttons, responsive 80% Settings panel, matching panel surfaces and underlined subnavs, and toggle/outside/Escape provider-setup dismissal. Hidden network-blocked Electron assertions and matching desktop/narrow screenshots cover navigation, width, alignment, overflow, and dismissal. Packaged apps and live authentication remain unverified.
+
 - [x] **Agent board: pick windows up and drop them into landing zones** (2026-10-24, [SPEC.md](spec/desktop/agent-board-pick-up-and-drop.md)): pure `wallDrag.ts` (`wallDropTargetAt` against the pick-up layout with a 24 px home margin and 16 px board-edge band, `applyWallDrop` reusing `movePane`/`movePaneToEdge`/`swapPanes`, `heldSize`); `CommandWall` lays out a preview state from the drop target so the held window's own box is the dotted zone and keyed windows slide without remounting, a portalled held card moved by ref, a pointer shield over webviews and terminals, Escape/blur cancel; `PaneFrame.onPickUp` replaces the native drag on the board only. The board-edge strips, `boardEdgePreview` and in-window bands are gone from the board. Evidence: `apps/desktop/scripts/wall-pickup-integration.cjs`.
 
 - [x] **Empty wall opens the new-chat screen; glass prism composer** (2026-10-18, [SPEC.md](spec/desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md)): pure `emptyWallStart.ts` (`reusableEmptyChat`, `shouldStartFromEmptyWall`); `CommandCenterView` effect on `listsReady`/`paneCount`/`completedId`/`providers`/`sessions` with an in-flight ref and a failure latch reset when a window exists, `keepNewChat` for placement, then `openWallPane` + `hero` + `layout.mode = 'focus'`. `styles.css` clean-start: radial background replaced by a `::before` of corner-anchored gradients; `.composer` gets translucent `--win`, `backdrop-filter`, inset highlight, `::after` masked prism hairline (focus raises opacity), light-theme and `prefers-reduced-transparency` variants. Tests: `emptyWallStart.test.ts`. Evidence: `apps/desktop/scripts/empty-wall-sandbox.cjs` via `agent-window-controls-integration.cjs` (`NEKKO_BEFORE=1` records an unchanged checkout). Open: narrow widths, multi-screen, packaged app.
@@ -2435,6 +2446,12 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [x] Combine provider setup and Model Server under one Models rail entry, retaining existing destinations and title-bar highlighting.
 - [x] Add local/cloud subnavigation, current-provider chips, a divider, five filled provider shortcuts and the full overflow chooser; retain existing connection and model controls.
 - [x] Verify desktop typechecking, focused provider/navigation tests, hidden Electron interactions and matching 1440/390 px before/after evidence. Live credential sign-in and server lifecycle actions are not exercised by this layout change.
+
+### Your first local model (2026-10-26, #1223) · [spec](spec/models/first-local-model.md)
+
+- [x] Guided first-run screen on Models > Local model server for a machine with no local model and no local server of the user's own: choose Everyday help or Writing code, one press to fetch the engine (when missing) and the recommended model, steps with progress, then Start chatting with that model.
+- [x] Full page unchanged and one link away; falls back to it when there are no chat or coding picks or no downloadable engine build.
+- [x] Unit tests for the gate, the phases and each screen; isolated Electron captures at 1280 and 480 px for every state. Not run end to end against a real engine, download and chat hand-off.
 
 ## Expo retirement
 

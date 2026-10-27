@@ -71,7 +71,7 @@ final class ThemeLanguageTests: XCTestCase {
             RunLoop.current.run(until: Date().addingTimeInterval(0.25))
         }
         m.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        app.buttons[settings].firstMatch.tap()
+        XCTAssertTrue(app.buttons[settings].firstMatch.tapUntil { app.buttons["settings.theme"].exists }, "the menu opens Settings")
     }
 
     private func attach(_ app: XCUIApplication, _ name: String) {
