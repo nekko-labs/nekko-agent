@@ -31,7 +31,7 @@ final class RunMascotTests: XCTestCase {
             }
             assertTint(pixel(10 + 50, 10 + 40), "cat forehead")
             // Inside the badge disc, clear of its ring and every glyph.
-            assertTint(pixel(73, 76), "badge")
+            assertTint(pixel(80, 83), "badge")
         }
     }
 }

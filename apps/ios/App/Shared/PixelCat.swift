@@ -59,7 +59,7 @@ struct RunMascot: View {
                 .id("\(phase.rawValue)-\(beat)")
                 .transition(.scale(scale: 0.6, anchor: .bottom).combined(with: .opacity))
             StatusBadge(phase: phase)
-                .frame(width: size * 0.48, height: size * 0.48)
+                .frame(width: size * 0.38, height: size * 0.38)
         }
         .frame(width: size, height: size)
         .accessibilityElement()
