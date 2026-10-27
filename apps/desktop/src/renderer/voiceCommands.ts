@@ -1,13 +1,13 @@
 import type { View } from './store.js';
 import type { GoTarget } from './displays.js';
 
-export type VoiceIntent = { kind: 'dictation'; text: string } | { kind: 'new-session' } | { kind: 'complete-session' } | { kind: 'navigate'; view: View } | { kind: 'go'; target: GoTarget } | { kind: 'erase' } | { kind: 'clear' } | { kind: 'send' } | { kind: 'status' } | { kind: 'ship' } | { kind: 'open-chat'; query: string } | { kind: 'pick'; n: 1 | 2 | 3 } | { kind: 'yes' } | { kind: 'no' } | { kind: 'unknown'; text: string };
+export type VoiceIntent = { kind: 'dictation'; text: string } | { kind: 'new-session' } | { kind: 'complete-session' } | { kind: 'navigate'; view: View } | { kind: 'go'; target: GoTarget } | { kind: 'erase' } | { kind: 'clear' } | { kind: 'send' } | { kind: 'status' } | { kind: 'ship' } | { kind: 'open-chat'; query: string; text: string } | { kind: 'pick'; n: 1 | 2 | 3 } | { kind: 'yes' } | { kind: 'no' } | { kind: 'unknown'; text: string };
 
 /** Only an explicit leading address can turn dictation into an app action. */
 export function parseVoiceIntent(text: string): VoiceIntent {
   const trimmed = text.trim();
   // Recognizers spell the wake word as they hear it: Nekko, Neko, Neco, Necko.
-  const address = /^ne[ck]k?o\b[\s,:.!-]*/i.exec(trimmed);
+  const address = /^ne[ck]k?o\b[\s,:.!?-]*/i.exec(trimmed);
   if (!address) return { kind: 'dictation', text: trimmed };
   const command = trimmed.slice(address[0].length).toLowerCase().replace(/\u2019/g, "'").replace(/[.!?]+$/, '').trim();
   if (/^(?:(?:create|start|open)(?: a)? new (?:session|chat|agent)|new (?:agent )?(?:session|chat|agent)|let's (?:make|start|create) a new (?:change|session|chat|task))$/.test(command)) return { kind: 'new-session' };
@@ -28,7 +28,7 @@ export function parseVoiceIntent(text: string): VoiceIntent {
   // Views and desktop/screen words keep winning; whatever else follows "open" or "switch to" names a chat.
   const chat = /^open the (?:other )?one (?:about|related to|on) (.+)$/.exec(command) ?? /^(?:switch to|open) (.+)$/.exec(command);
   const query = chat?.[1].replace(/^(?:the|a) /, '');
-  if (query && !VIEWS[query.replace(/ (?:tab|page)$/, '')] && !/^(?:desktop|space|screen|monitor|display)/.test(query)) return { kind: 'open-chat', query };
+  if (query && !VIEWS[query.replace(/ (?:tab|page)$/, '')] && !/^(?:desktop|space|screen|monitor|display)/.test(query)) return { kind: 'open-chat', query, text: trimmed };
   return { kind: 'unknown', text: trimmed };
 }
 
@@ -52,15 +52,28 @@ function parseGo(command: string): GoTarget | null {
   return /desktop|space/.test(to[1]) ? { kind: 'desktop', n } : { kind: 'screen', n };
 }
 
+const WAKE_ONLY = /^ne[ck]k?o\b[\s,:.!?-]*$/i;
+
 /** Splits a transcript at sentence ends and parses each piece; adjacent dictation pieces rejoin. */
 export function splitVoiceSegments(text: string): VoiceIntent[] {
   const out: VoiceIntent[] = [];
-  for (const piece of text.split(/(?<=[.!?])\s+/)) {
-    if (!piece.trim()) continue;
+  const pieces = text.split(/(?<=[.!?])\s+/).filter(p => p.trim());
+  for (let i = 0; i < pieces.length; i++) {
+    // Recognizers punctuate a pause after the wake word ("Nekko. Send it."): it still addresses the next sentence.
+    const piece = WAKE_ONLY.test(pieces[i].trim()) && i + 1 < pieces.length ? `${pieces[i]} ${pieces[++i]}` : pieces[i];
     const intent = parseVoiceIntent(piece);
     const last = out[out.length - 1];
     if (intent.kind === 'dictation' && last?.kind === 'dictation') last.text += ` ${intent.text}`;
     else out.push(intent);
   }
   return out;
+}
+
+/**
+ * A wake word said alone at the end of a segment ("Nekko." then a pause cuts it):
+ * `wake` is carried to the next segment, `rest` is applied now.
+ */
+export function splitWakeTail(text: string): { rest: string; wake: string } {
+  const tail = /(?:^|(?<=[.!?])\s+)(ne[ck]k?o\b[\s,:.!?-]*)$/i.exec(text.trim());
+  return tail ? { rest: text.trim().slice(0, tail.index).trim(), wake: tail[1].trim() } : { rest: text.trim(), wake: '' };
 }

@@ -534,6 +534,11 @@ const api: NekkoApi = {
     bus.on(IpcEvents.deepLink, listener);
     return () => bus.removeListener(IpcEvents.deepLink, listener);
   },
+  onVoiceLockStop: (cb: () => void) => {
+    const listener = () => cb();
+    bus.on(IpcEvents.voiceLockStop, listener);
+    return () => bus.removeListener(IpcEvents.voiceLockStop, listener);
+  },
 };
 
 contextBridge.exposeInMainWorld('nekko', api);

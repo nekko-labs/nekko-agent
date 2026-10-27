@@ -18,6 +18,15 @@ export function shouldCut(o: { speech: boolean; silentMs: number; silenceMs?: nu
 // A segment with no speech (a capped silent stretch) or under 0.25 s is not worth transcribing.
 export const keepSegment = (speech: boolean, seconds: number): boolean => speech && seconds >= MIN_SEGMENT_SECONDS;
 
+export const PRE_ROLL_SECONDS = 0.3;
+
+// Before speech, keep just enough recent audio to catch the first syllable; idle never fills a segment.
+export function trimPreRoll(chunks: Float32Array[], sampleRate: number, seconds = PRE_ROLL_SECONDS): Float32Array[] {
+  let total = chunks.reduce((n, c) => n + c.length, 0); let start = 0;
+  while (start < chunks.length && total - chunks[start].length >= seconds * sampleRate) total -= chunks[start++].length;
+  return start ? chunks.slice(start) : chunks;
+}
+
 const concat = (chunks: Float32Array[], count: number) => {
   const all = new Float32Array(count); let offset = 0; for (const chunk of chunks) { all.set(chunk, offset); offset += chunk.length; }
   return all;
@@ -36,6 +45,7 @@ export async function startVoiceCapture(options: { deviceId?: string; sensitivit
     const data = new Float32Array(event.inputBuffer.getChannelData(0)); chunks.push(data); count += data.length;
     const rms = Math.sqrt(data.reduce((n, x) => n + x * x, 0) / data.length); options.onLevel(Math.min(1, rms * 8));
     if (rms > threshold) { speech = true; lastSpeech = performance.now(); }
+    if (options.onSegment && !speech) { chunks = trimPreRoll(chunks, context.sampleRate); count = chunks.reduce((n, c) => n + c.length, 0); }
     const seconds = count / context.sampleRate;
     if (!shouldCut({ speech, silentMs: performance.now() - lastSpeech, silenceMs: options.silenceMs, seconds, maxSeconds: options.onSegment ? SEGMENT_MAX_SECONDS : CAPTURE_MAX_SECONDS })) return;
     if (!options.onSegment) { options.onSilence(); return; }
@@ -48,6 +58,8 @@ export async function startVoiceCapture(options: { deviceId?: string; sensitivit
   const stop = () => {
     if (ended) return [];
     ended = true; processor.onaudioprocess = null; source.disconnect(); processor.disconnect(); stream.getTracks().forEach(t => t.stop()); void context.close();
+    // In segment mode the tail obeys the same keep rule as every other segment.
+    if (options.onSegment && !keepSegment(speech, count / context.sampleRate)) return [];
     return pcmWav(concat(chunks, count), context.sampleRate);
   };
   return { stop, abort: () => { stop(); } };
