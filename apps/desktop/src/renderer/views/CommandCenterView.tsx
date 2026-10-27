@@ -38,6 +38,7 @@ import {
   loadWallState,
   nextAgent,
   reconcileWall,
+  zoneOf,
   readAgentPanel,
   wallAgents,
   saveWallState,
@@ -168,40 +169,22 @@ export function CommandCenterView() {
   // pointed at a side for: beside the biggest window, along its longer side.
   const aspectRef = useRef(DEFAULT_ASPECT);
   const onAspect = useCallback((a: number) => { aspectRef.current = a; }, []);
-  // Not before both lists have loaded once: reconciling against the empty
-  // lists the view mounts with would seed an empty wall and watermark every
-  // chat that already exists out of it.
+  // Not before both lists have loaded once: seeding against the empty lists
+  // the view mounts with would start two empty zones on a wall with chats.
   const [listsReady, setListsReady] = useState(false);
-  // Multi-monitor: which window owns each chat that appeared since the wall
-  // last looked, resolved before reconciling so a new chat lands on exactly
-  // one screen's wall. With one screen every chat is this window's at once.
+  // Multi-monitor: which window owns each chat this window made, so a new
+  // chat lands on exactly one screen's wall.
   const owners = useRef(new Map<string, string>());
-  const [ownersVersion, setOwnersVersion] = useState(0);
   const [displays] = useDisplays();
   const multiScreen = (displays?.displays.filter((d) => d.enabled).length ?? 1) > 1;
   useEffect(() => {
-    if (!listsReady || !multiScreen || wall.watermark === 0) return;
-    const fresh = sessions.filter((s) => s.createdAt > wall.watermark && !s.parentSessionId && !owners.current.has(s.id));
-    if (!fresh.length) return;
-    let live = true;
-    void Promise.all(fresh.map(async (s) => { owners.current.set(s.id, await claimAgent(s.id, 'auto')); }))
-      .then(() => { if (live) setOwnersVersion((v) => v + 1); });
-    return () => { live = false; };
-  }, [listsReady, multiScreen, sessions, wall.watermark]);
-  useEffect(() => {
     if (!listsReady) return;
-    if (!multiScreen) { setWallState((w) => applySnap(w, reconcileWall(w, sessions, terminals, Date.now(), aspectRef.current))); return; }
-    // A chat whose owner is not known yet is left out (it would move the
-    // watermark past it); it is looked at again once its claim answers.
-    setWallState((w) => {
-      const known = sessions.filter((s) => w.watermark === 0 || s.createdAt <= w.watermark || s.parentSessionId || owners.current.has(s.id));
-      return applySnap(w, reconcileWall(w, known, terminals, Date.now(), aspectRef.current, (id) => owners.current.get(id) === windowKey));
-    });
-  }, [listsReady, sessions, terminals, ownersVersion, multiScreen]);
+    setWallState((w) => applySnap(w, reconcileWall(w, sessions, terminals, Date.now())));
+  }, [listsReady, sessions, terminals]);
   // Main placed a chat made in another window here: open it on this wall.
   useEffect(() => displaysBridge?.onPlaced((id) => {
     owners.current.set(id, windowKey);
-    setWallState((w) => applySnap(w, openWallPane(w, 'chat', id, aspectRef.current)));
+    setWallState((w) => applySnap(w, openWallPane(w, 'chat', id)));
   }), []);
   // Tell main how full this wall is, for "prioritize empty windows".
   const paneCount = useMemo(() => allPanes(wall.root).length, [wall.root]);
@@ -390,7 +373,7 @@ export function CommandCenterView() {
     const ref = refId ?? (kind === 'chat' ? await newChat() : kind === 'terminal' ? await newTerminal() : kind);
     // Placed on another screen: that window opens it; nothing to add here.
     if (fresh && !(await keepNewChat(ref))) return;
-    setWall((w) => openWallPane(w, kind, ref, aspectRef.current));
+    setWall((w) => openWallPane(w, kind, ref));
     if (kind === 'chat') setSelected(ref);
   };
   /** A one-click add that failed says so, instead of silently opening nothing. */
@@ -413,7 +396,11 @@ export function CommandCenterView() {
   const selectAgent = useCallback((id: string | null) => {
     setCompletedId(null);
     setSelected(id);
-    setWall((w) => w.hero === id ? w : { ...w, hero: id });
+    // The agent's zone becomes the active one too.
+    setWall((w) => {
+      const activeZone = id ? zoneOf(w.root, 'chat', id) ?? w.activeZone : w.activeZone;
+      return w.hero === id && w.activeZone === activeZone ? w : { ...w, hero: id, activeZone };
+    });
   }, [setWall]);
   // Another tab (Artifacts) asked to show a chat here, Focused. Waits for the
   // lists so the chat is known; a completed chat opens read-only, as the
@@ -428,7 +415,7 @@ export function CommandCenterView() {
     if (chat.archivedAt) { setCompletedId(chat.id); return; }
     setCompletedId(null);
     setWall((w) => {
-      const opened = openWallPane(w, 'chat', chat.id, aspectRef.current);
+      const opened = openWallPane(w, 'chat', chat.id);
       return keepLayout || opened.layout.mode === 'focus' ? opened : { ...opened, layout: { ...opened.layout, mode: 'focus' } };
     });
     setSelected(chat.id);
@@ -460,7 +447,7 @@ export function CommandCenterView() {
       // Do not try again here, or every session refresh would make another chat.
       if (!reuse && !(await keepNewChat(id))) { emptyStartFailed.current = true; return; }
       setWall((w) => {
-        const opened = openWallPane(w, 'chat', id, aspectRef.current);
+        const opened = openWallPane(w, 'chat', id);
         return { ...opened, hero: id, layout: { ...opened.layout, mode: 'focus' } };
       });
       setSelected(id);

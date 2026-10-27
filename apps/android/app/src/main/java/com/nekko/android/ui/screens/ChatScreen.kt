@@ -16,6 +16,7 @@ import androidx.core.content.ContextCompat
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.DisposableEffect
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -98,6 +99,17 @@ import androidx.compose.ui.draganddrop.mimeTypes
 import androidx.compose.ui.draganddrop.toAndroidDragEvent
 import androidx.compose.ui.draw.alpha
 import com.nekko.android.ui.components.Dot
+import com.nekko.android.ui.git.GitDialog
+import com.nekko.android.ui.terminal.TerminalsDialog
+import androidx.compose.material.icons.filled.Terminal
+import com.nekko.android.ui.git.PrChip
+import com.nekko.android.ui.git.PrSheet
+import com.nekko.protocol.PullRequest
+import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.ui.platform.testTag
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
 import com.nekko.android.ui.panes.PaneSlot
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -115,6 +127,15 @@ fun ChatScreen(
     val changesAllowed by vm.changesAllowed.collectAsStateWithLifecycle()
     val insert by vm.insert.collectAsStateWithLifecycle()
     var showChanges by remember { mutableStateOf(false) }
+    var showMenu by remember { mutableStateOf(false) }
+    var prs by remember(vm.sessionId) { mutableStateOf<List<PullRequest>>(emptyList()) }
+    var showPrs by remember { mutableStateOf(false) }
+    // The chat's pull request chip: read when the chat opens, after each turn, and when Git or the
+    // pull request sheet closes (a merge or close from the phone changes it).
+    var prReads by remember { mutableIntStateOf(0) }
+    LaunchedEffect(vm.sessionId, chat.running, prReads) {
+        if (!chat.running) try { prs = vm.pullRequests(refresh = prReads > 0) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) {}
+    }
     var restoring by remember { mutableStateOf(false) }
     var restoreError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -182,6 +203,21 @@ fun ChatScreen(
         )
     }
 
+    val terminals by vm.terminalsOpen.collectAsStateWithLifecycle()
+    terminals?.let { t ->
+        val online by vm.online.collectAsStateWithLifecycle()
+        TerminalsDialog(t, online, vm.computerName, onDismiss = vm::closeTerminals)
+    }
+    val git by vm.gitOpen.collectAsStateWithLifecycle()
+    git?.let { o -> GitDialog(o.git, onDismiss = { vm.closeGit(); prReads++ }, pr = o.pr) }
+    if (showPrs) {
+        PrSheet(
+            prs, onDismiss = { showPrs = false; prReads++ },
+            onGit = { pr -> showPrs = false; vm.openGit(pr) },
+            onAsk = { text -> vm.send(text) },
+        )
+    }
+
     Scaffold(
         containerColor = p.paper,
         topBar = {
@@ -191,6 +227,25 @@ fun ChatScreen(
                     if (changesAllowed) {
                         IconButton(onClick = { vm.loadChanges(); showChanges = true }) {
                             Icon(Icons.Filled.Difference, contentDescription = "Changes")
+                        }
+                    }
+                    Box {
+                        IconButton(onClick = { showMenu = true }, modifier = Modifier.testTag("chat.more")) {
+                            Icon(Icons.Filled.MoreVert, contentDescription = "More")
+                        }
+                        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                            DropdownMenuItem(
+                                text = { Text("Git") },
+                                leadingIcon = { Icon(Icons.Filled.AccountTree, contentDescription = null) },
+                                onClick = { showMenu = false; vm.openGit() },
+                                modifier = Modifier.testTag("chat.git"),
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Terminals") },
+                                leadingIcon = { Icon(Icons.Filled.Terminal, contentDescription = null) },
+                                onClick = { showMenu = false; vm.openTerminals() },
+                                modifier = Modifier.testTag("chat.terminals"),
+                            )
                         }
                     }
                     pane?.actions?.invoke(this)
@@ -283,6 +338,7 @@ fun ChatScreen(
         val controls: @Composable () -> Unit = {
             chat.approval?.let { ApprovalCard(it, onDecide = vm::approve) }
             chat.question?.let { QuestionCard(it, onAnswer = vm::answer) }
+            prs.firstOrNull()?.let { pr -> PrChip(pr) { showPrs = true } }
             // A completed chat reads like the desktop's: no message box until it is restored.
             if (completedAt != null && !chat.running) CompletedBar(
                 restoring = restoring,
