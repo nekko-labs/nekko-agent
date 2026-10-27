@@ -25,9 +25,9 @@ final class GreetingCatTests: XCTestCase {
         XCTAssertGreaterThan(pixel(155, 245)[3], 0)
         XCTAssertEqual(pixel(155, 255)[3], 0, "Chin must be hidden below y=25")
         // The paw outline and toes are below the edge, not at the paw's top.
-        for x in [87, 217] {
-            XCTAssertGreaterThan(pixel(x, 262)[0], pixel(x, 242)[0], "Toe marks face down")
-            XCTAssertGreaterThan(pixel(x, 275)[0], 200, "The bottom of each paw is ink")
+        for x in [77, 227] {
+            XCTAssertGreaterThan(pixel(x, 252)[0], pixel(x, 232)[0], "Toe marks face down")
+            XCTAssertGreaterThan(pixel(x, 265)[0], 200, "The bottom of each paw is ink")
         }
     }
 }

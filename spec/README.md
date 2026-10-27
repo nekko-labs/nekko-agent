@@ -100,7 +100,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 Agents panel, monitors, subagents and delegation.
 
 - [Agent activity and panel polish](agents/agent-activity-and-panel-polish.md) (39 KB)
-- [Agent Monitor Project group, hardware temperatures and multi-monitor Dynamic mode (2026-10-18)](agents/agent-monitor-project-group-hardware-temperatures-and-multi-moni.md) (10 KB)
+- [Agent Monitor Project group, hardware temperatures and multi-monitor Dynamic mode (2026-10-18)](agents/agent-monitor-project-group-hardware-temperatures-and-multi-moni.md) (11 KB)
 - [Agent panel view options (2026-10-17)](agents/agent-panel-view-options.md) (7 KB)
 - [Agents dashboard simplification (2026-10-06)](agents/agents-dashboard-simplification.md) (3 KB)
 - [Approval retention and delegation navigation](agents/approval-retention-and-delegation-navigation.md) (1 KB)
@@ -140,7 +140,7 @@ Providers, local models, the Model Server, training.
 - [Server, model browser and desktop tray](models/server-model-browser-and-desktop-tray.md) (5 KB)
 - [Setting up a local model](models/setting-up-a-local-model.md) (12 KB)
 - [Signing in with a subscription (planned)](models/signing-in-with-a-subscription.md) (2 KB)
-- [System models: dictation on Apple's recognizer or Whisper](models/system-speech-models.md) (4 KB)
+- [System models: dictation on Apple's recognizer or Whisper](models/system-speech-models.md) (11 KB)
 - [Training a model while you watch (Training tab)](models/training-a-model-while-you-watch-training-tab.md) (2 KB)
 - [Your first local model](models/first-local-model.md) (3 KB)
 

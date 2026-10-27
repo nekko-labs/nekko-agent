@@ -1,7 +1,7 @@
 // First, so every module below sees the real packaging state in dev.
 import './devRuntime.js';
 import { NOTIFICATION_VISIBILITY_CHANNEL, visibleNotificationSession, visibleNotificationView, notificationWindowContext, trustedNotificationReporter } from '../notificationVisibility.js';
-import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, screen, shell, systemPreferences } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, powerMonitor, screen, shell, systemPreferences } from 'electron';
 import { fileURLToPath } from 'url';
 import { join, resolve, sep } from 'path';
 import { existsSync, readFileSync } from 'fs';
@@ -645,6 +645,10 @@ app.whenReady().then(async () => {
   pendingLink = linkFromArgv(process.argv);
   createWindow();
   registerDisplayWindows(dataDir);
+  // Always-on dictation never keeps listening behind a locked screen or through sleep.
+  const stopVoice = () => { for (const win of BrowserWindow.getAllWindows()) win.webContents.send(IpcEvents.voiceLockStop); };
+  powerMonitor.on('lock-screen', stopVoice);
+  powerMonitor.on('suspend', stopVoice);
   const iconPath = resolveWindowIcon();
   if (iconPath) {
     desktopTray = createDesktopTray({

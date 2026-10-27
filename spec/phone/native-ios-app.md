@@ -257,3 +257,7 @@ hardware authentication, iPad and VoiceOver remain unverified.
 ### New-chat mascot grips the edge (#1247)
 
 Implemented; the native app builds and the native pixel regression test passes on an isolated iPhone 17 Pro simulator (iOS 26.5). Matched default-dark SwiftUI greeting fixture screenshots were inspected. The new-chat greeting has no colored mouth/nose, its chin is clipped behind the composer edge, and its vertically flipped paws hang in front with toe marks at the bottom. The 80×75-point artwork is raised 18 points within its unchanged 64×60-point slot: the face cutoff at drawing y=25 meets the slot bottom, so the cat holds the message box rather than sinking inside it. The question and composer layout, draft behavior, Reduce Motion and other mascot surfaces are unchanged. This decorative local drawing adds no permissions, network access, settings or persistence. Acceptance: the face stops at the box top, only the paws extend into it, and the question remains readable. The fixture uses the real greeting, palette and backdrop with a representative composer at the production spacing; physical-device rendering and the full connected New chat flow remain unverified.
+
+### Wider, shorter paws (#1260)
+
+Implemented; matches the desktop greeting: each paw moves one drawing unit outward and is one unit shorter, still hanging in front of the box edge with toes down. The native pixel regression test samples the new toe and paw-bottom positions. Physical-device rendering remains unverified.
