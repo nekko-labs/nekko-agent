@@ -76,17 +76,25 @@ Content, about 30 to 45 s, captions on screen, no voiceover: tap the mic once an
 
 ## Live Activity
 
-### Look (all levels except None)
+### One card for all chats (decided 2026-10-27)
 
-The left side shows the Nekko mascot and, on it or beside it, the same status icon the chat list uses (`ChatStatusIcon`: working, needs you, idle/watching, done, failed). The mascot art comes from the desktop's existing mascot assets, added to the widget extension's asset catalog.
+There is **one** Live Activity for all of the computer's chats, not one per chat (Philip's call). Apple allows no scrolling or swiping inside a Live Activity, only buttons, and the card cannot change on its own without an update, so the "stock ticker" is built from buttons:
+
+- **Left:** the Nekko mascot (from the desktop's mascot assets, added to the widget extension's catalog), with the focused chat's status icon as a badge (the same states as `ChatStatusIcon`: needs you, working, watching, done, failed).
+- **Top:** the focused chat: abbreviated title, status line ("Fixing merge conflicts", "Watching PR #1211…"), and at Detailed the agent's latest reply line.
+- **Bottom strip** (Philip's pick over up/down chevrons): every chat as a tappable chip, its status icon plus a short title (about 8 characters), the focused one highlighted. Tapping a chip is a `LiveActivityIntent` that updates the card in the app's process and brings that chat up top with a vertical slide (`.contentTransition` / `.transition(.push(from:))`). When the chips don't fit, the last chip reads "+N" and steps the strip to the next page.
+- **Mic** at the end of the strip (Detailed only). While dictating, the dictation space (level meter, what was heard, Cancel and "Send to <chat>") takes the strip's place, so the card stays within Apple's height cap (about 160 pt).
+- **Focus rule:** the card opens on the chat that most needs you (needs approval or a question, then working, then watching, then done) and moves to a chat when it newly needs you. A chip tap overrides that until the next "needs you".
+- **Dynamic Island:** compact shows the mascot leading and the most urgent status icon with the chat count trailing; expanded shows the same top section and strip as the Lock Screen.
+- Up to 8 chats in the content state; chats beyond that are counted in "+N" only (push payloads are capped at 4 KB).
 
 ### Lifecycle (decided 2026-10-27)
 
-- A chat's card stays up while the chat is running or watching a PR ("Watching PR…").
-- When the chat finishes, the card **stays for two more hours** (Philip's call), then ends. While it is up, it still answers the mic, and "Watching PR…" or a new run updates it in place.
-- A finished card has a **close button with a checkmark** that ends it at once. The label is a random pick from a short friendly list ("Looks good", "Cool", "Excellent", "Nice", "Perfect"), chosen once per card so it doesn't change on each update. My call: a failed card uses "Got it" instead, since "Excellent" reads wrong on a failure.
-- It also ends when the chat is completed or deleted, or at iOS's own limit.
-- **Remote start, now** (Philip's call): the computer can start a card while the app is suspended, through ActivityKit push-to-start (iOS 17.2+). The phone registers its push-to-start token with the relay. The computer asks the relay to start one, in both editions (TS relay agent and Rust `nekko-remote`), with the same content rules as updates. My call on which runs start one remotely, so a busy desktop doesn't flood the Lock Screen: a run woken by a PR watch, and a run in a chat this phone sent a message to in the last two hours. iOS 17.0 and 17.1 keep app-started cards only.
+- The card stays up while any chat is running or watching a PR ("Watching PR…").
+- A finished chat stays on the card for **two more hours**, and the card ends two hours after the last chat finished (Philip's call), then ends. While it is up, it still answers the mic, and "Watching PR…" or a new run updates it in place.
+- When the focused chat is finished, a **close button with a checkmark** appears; it removes that chat from the card, and the last one ends the card. The label is a random pick from a short friendly list ("Looks good", "Cool", "Excellent", "Nice", "Perfect"), chosen once per chat so it doesn't change on each update. My call: a failed chat uses "Got it" instead, since "Excellent" reads wrong on a failure.
+- A chat leaves the card when it is completed or deleted; the card ends at iOS's own limit (8 hours active), and a new one starts if work continues.
+- **Remote start, now** (Philip's call): the computer can start the card while the app is suspended, if none is up, through ActivityKit push-to-start (iOS 17.2+). The phone registers its push-to-start token with the relay. The computer asks the relay to start one, in both editions (TS relay agent and Rust `nekko-remote`), with the same content rules as updates. My call on which runs start one remotely, so a busy desktop doesn't flood the Lock Screen: a run woken by a PR watch, and a run in a chat this phone sent a message to in the last two hours. iOS 17.0 and 17.1 keep app-started cards only.
 - Builder's call: whether the two-hour tail is an active card ended later, or an ended card with a two-hour dismissal date, as long as the mic and close button keep working.
 
 ### Levels (iOS Settings → Live Activities)
