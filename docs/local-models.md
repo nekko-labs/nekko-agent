@@ -5,6 +5,20 @@ installed, or by driving a server you already run (Ollama, LM Studio, vLLM). Eit
 it loads a model with the settings you choose and tells you honestly whether it will fit
 before you wait through the load. This is what the Models page shows you and why.
 
+## Your first local model
+
+If you have never run a model here, Models > Local model server starts with one question:
+what will you mostly use it for, **Everyday help** or **Writing code**. Each card names the
+model picked for your computer and its download size. Press **Download and set up** and
+Nekko fetches the model, plus the engine that runs it if you do not have it yet. You see
+the download as steps with time left, and when it is done, **Start chatting** opens a chat
+with that model. Nothing downloads until you press the button.
+
+Want a different model, or already use Ollama or LM Studio? **Show all models and
+settings** opens the full page described below. If Nekko finds models from another app on
+this computer, or you have connected your own local server, the full page opens straight
+away.
+
 ## The Nekko engine
 
 The engine is llama.cpp, managed by Nekko Agent. You press one button, a build comes down

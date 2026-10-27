@@ -35,6 +35,9 @@ import kotlinx.coroutines.launch
  * A FragmentActivity because the system authentication prompt (app lock) is a fragment.
  */
 class MainActivity : FragmentActivity() {
+    /** The system prompt for the app lock and for confirming Changes (AN-32). */
+    private lateinit var authenticator: Authenticator
+
     /** The latest link opened from outside the app; the nav host consumes it. */
     private val incomingLink = MutableStateFlow<DeepLink?>(null)
 
@@ -45,7 +48,8 @@ class MainActivity : FragmentActivity() {
         if (savedInstanceState == null) handle(intent)
         val app = application as NekkoApp
         val repo = app.computers
-        val authenticator = Authenticator(this)
+        authenticator = Authenticator(this)
+        app.ownerCheck.attach(authenticator)
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.CREATED) { app.appLock.enabled.collect(::privateRecents) }
         }
@@ -178,6 +182,11 @@ class MainActivity : FragmentActivity() {
                 incomingLink.value = DeepLink.Share
             }
         }
+    }
+
+    override fun onDestroy() {
+        (application as NekkoApp).ownerCheck.detach(authenticator)
+        super.onDestroy()
     }
 }
 

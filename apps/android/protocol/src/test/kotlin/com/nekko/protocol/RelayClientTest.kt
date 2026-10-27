@@ -266,6 +266,29 @@ class RelayClientTest {
         assertEquals(plain["seq"]!!.jsonPrimitive.content.toLong() + 1, stepped["seq"]!!.jsonPrimitive.content.toLong())
         assertEquals(JsonArray(listOf(patch)), stepped["args"])
         assertEquals(Channels.SETTINGS_UPDATE, stepped["channel"]!!.jsonPrimitive.content)
+        assertNull("no proof unless signed", stepped["proof"])
+        c.close()
+    }
+
+    @Test fun `a Change proof rides inside the sealed request, with a step-up beside it when asked`() = runBlocking {
+        val t = Recorder(E2E.fromHex(fx("key")))
+        val c = fixtureClient(t)
+        c.connect()
+        until("the socket") { t.sockets.isNotEmpty() }
+        t.last.listener.onMessage(buildJsonObject { put("enc", fxObj("challenge")["blob"]!!) }.toString())
+        until("the HELLO") { t.last.of("hello").isNotEmpty() }
+        t.last.welcome()
+        c.await(RelayState.ONLINE)
+        val args = JsonArray(listOf(buildJsonObject { put("defaultChatMode", "yolo") }))
+        val proof = buildJsonObject { put("ts", 1_760_000_000_000); put("sig", "c2ln") }
+        c.callSigned(Channels.SETTINGS_UPDATE, args, proof)
+        c.callSigned(Channels.SETTINGS_UPDATE, args, proof, StepUpProof.Totp("123456"))
+        val (signed, both) = t.last.of("req")
+        assertEquals(proof, signed["proof"])
+        assertNull(signed["stepUp"])
+        assertEquals(args, signed["args"])
+        assertEquals(proof, both["proof"])
+        assertEquals(buildJsonObject { put("totp", "123456") }, both["stepUp"])
         c.close()
     }
 

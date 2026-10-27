@@ -76,7 +76,7 @@ describe('phone channel allowlist', () => {
       'terminal:run', 'terminal:update', 'terminals:list:native', 'terminal:attach', 'file:write',
       'voice:install', 'voice:uninstall', 'connector:connect', 'connector:disconnect',
       'mcp:status', 'mcp:hypergate:connect', 'providers:save', 'oauth:begin', 'file:read', 'task:create',
-      'turn:pending', 'no:such',
+      'turn:pending', 'runner:list', 'runner:connect', 'no:such',
     ]) {
       expect(phoneChannelAllowed(c), c).toBe(false);
       expect(code(() => screenPhoneCall(c, [])), c).toBe('channel-denied');

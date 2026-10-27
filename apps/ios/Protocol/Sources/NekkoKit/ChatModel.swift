@@ -39,7 +39,10 @@ public final class ChatModel {
     /// Saved block id → the live id the view already shows it under (see `Transcript.carriedIds`).
     private var shownIds: [String: String] = [:]
     public private(set) var turn = LiveTurn() {
-        didSet { if running != turn.running { running = turn.running } }
+        didSet {
+            if running != turn.running { running = turn.running }
+            countContext()
+        }
     }
     /// `turn.running`, changing only when it does: views that need just this
     /// (the composer's Send / Stop) don't redraw on every streamed token.
@@ -57,7 +60,9 @@ public final class ChatModel {
     /// The chat's context window as the computer counts it (`context:preview`,
     /// totals only): read with the chat and after each turn. Kept when a read
     /// fails; nil from a computer too old to answer.
-    public private(set) var context: ContextUsage?
+    public private(set) var context: ContextUsage? {
+        didSet { countContext() }
+    }
     /// The chat's durable watches (`session:watches`), for the watch rows' live chips.
     public private(set) var watches: [AgentWatch] = []
     /// This chat's subagent chats (the list hides them), for the delegation rows' status and model.
@@ -67,6 +72,8 @@ public final class ChatModel {
     private let now: () -> Int64
     private var subscription: UUID?
     private var reloadTask: Task<Void, Never>?
+    /// Events and answers so far, so a re-read can tell whether the cards changed while it waited.
+    private var cardChanges = 0
     private var agentStateTask: Task<Void, Never>?
     private var lastConn: RelayState = .idle
 
@@ -134,13 +141,16 @@ public final class ChatModel {
     }
 
     public func reload() async {
+        let cardChangesBefore = cardChanges
         do {
             let r = try store.remote()
             async let raw = r.call(Channels.sessionGet, [.string(sessionId)])
             async let pendingRaw = orNil { try await r.call(Channels.chatPending) }
             let (s, p) = (try await raw, await pendingRaw)
             Task { await loadSkills() }
-            Task { await loadContext() }
+            // Between turns only: while one runs the live estimate covers it, and the
+            // computer is busy with the reply (done, send and session_meta all re-read).
+            if !turn.running { Task { await loadContext() } }
             guard let session = Session.from(s) else {
                 loadError = "This chat was deleted on your computer."
                 store.transcripts.remove(sessionId)
@@ -160,8 +170,14 @@ public final class ChatModel {
             // re-read session already holds. After the turn the session has it all.
             var t = turn
             if !t.running { t.blocks = [] }
-            t.approval = mine?.approval
-            t.question = mine?.question
+            // The computer's pending inputs are the authority, unless an event or an
+            // answer came in while the re-read was in flight: then that is newer than its
+            // answer. A stale "nothing pending" took a card down while the computer still
+            // waited on it, and a stale "waiting" would bring an answered one back (#1228).
+            if cardChanges == cardChangesBefore {
+                t.approval = mine?.approval
+                t.question = mine?.question
+            }
             t.running = t.running || mine != nil
             turn = t
             // Keep the ids of what was on screen when the saved transcript replaces the live one.
@@ -181,26 +197,43 @@ public final class ChatModel {
         PhoneChanges.from(try await store.remote().call(Channels.changesList, [.string(sessionId)]))
     }
 
+    /// One `context:preview` at a time; a re-read asked for meanwhile is dropped.
     public func loadContext() async {
+        guard !readingContext else { return }
+        readingContext = true
+        defer { readingContext = false }
         guard let r = try? store.remote(), let raw = try? await r.call(MonitorChannels.contextPreview, [.string(sessionId)]),
               let c = ContextUsage.from(raw) else { return }
         context = c
     }
+    private var readingContext = false
 
     /// Tokens in the window now: the computer's count, plus what the running
     /// reply has streamed since (about four characters a token, as the
     /// desktop's live gauge counts), since it is replayed in the next request.
-    public var contextTokens: Int64? {
-        guard let context else { return nil }
-        guard turn.running else { return context.usedTokens }
-        let chars = turn.blocks.reduce(0) { n, b in
-            switch b {
-            case .assistant(_, let text, let reasoning, _, _): return n + text.utf16.count + (reasoning?.utf16.count ?? 0)
-            case .tool(_, _, let label, _, let output, _): return n + label.utf16.count + (output?.utf16.count ?? 0)
-            case .user(_, let text, _, _): return n + text.utf16.count
+    /// While a reply streams it moves in steps of `contextStep`, so the gauge
+    /// redraws a few times a reply rather than on every streamed token (which
+    /// also kept the app from ever going idle under UI tests).
+    public private(set) var contextTokens: Int64?
+    public nonisolated static let contextStep: Int64 = 256
+
+    private func countContext() {
+        var next: Int64? = nil
+        if let context {
+            next = context.usedTokens
+            if turn.running {
+                let chars = turn.blocks.reduce(0) { n, b in
+                    switch b {
+                    case .assistant(_, let text, let reasoning, _, _): return n + text.utf16.count + (reasoning?.utf16.count ?? 0)
+                    case .tool(_, _, let label, _, let output, _): return n + label.utf16.count + (output?.utf16.count ?? 0)
+                    case .user(_, let text, _, _): return n + text.utf16.count
+                    }
+                }
+                let streamed = Int64((chars + 3) / 4)
+                next = context.usedTokens + streamed / Self.contextStep * Self.contextStep
             }
         }
-        return context.usedTokens + Int64((chars + 3) / 4)
+        if next != contextTokens { contextTokens = next }
     }
 
     /// The chat's own effort; nil follows the computer's setting.
@@ -214,6 +247,7 @@ public final class ChatModel {
     /// Fold one event; re-reads the saved transcript when the turn ends.
     public func onEvent(_ e: AgentEvent) {
         guard e.sessionId == sessionId else { return }
+        cardChanges += 1
         turn = Transcript.apply(turn, e)
         switch e {
         case .done, .error, .sessionMeta: scheduleReload()
@@ -350,6 +384,7 @@ public final class ChatModel {
         guard let a = turn.approval else { return }
         guard store.conn == .online else { throw RelayError(Self.reconnectToAnswer) }
         turn.approval = nil
+        cardChanges += 1
         do {
             _ = try await store.remote().call(Channels.toolApprove, [.string(sessionId), .string(a.call.id), .bool(ok)])
         } catch {
@@ -363,6 +398,7 @@ public final class ChatModel {
         guard let q = turn.question else { return }
         guard store.conn == .online else { throw RelayError(Self.reconnectToAnswer) }
         turn.question = nil
+        cardChanges += 1
         do {
             _ = try await store.remote().call(Channels.chatAnswer, [.string(sessionId), .string(q.callId), .array(answers.map(\.json))])
         } catch {

@@ -72,8 +72,12 @@ struct MarkdownBlockView: View {
 
     var body: some View {
         switch block {
-        case .code(let lang, let code, _):
-            CodeBlock(language: lang, code: code, style: style)
+        case .code(let lang, let code, let closed):
+            if MermaidRules.isMermaid(language: lang) {
+                MermaidBlock(source: code, closed: closed, style: style)
+            } else {
+                CodeBlock(language: lang, code: code, style: style)
+            }
         case .heading(let level, let s):
             InlineText(s).font(level <= 1 ? .title3.weight(.semibold) : level == 2 ? .headline : .subheadline.weight(.semibold))
                 .accessibilityAddTraits(.isHeader)

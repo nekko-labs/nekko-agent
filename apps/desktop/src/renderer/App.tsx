@@ -249,7 +249,7 @@ export function App() {
   }, []);
 
   return (
-    <div className="flex h-full w-full flex-col" style={{ background: 'var(--paper)' }}>
+    <div className="flex h-full w-full flex-col" style={{ background: 'var(--field, var(--paper))' }}>
       {/* With the Lilac / Lavender pixel field on, the shell stays see-through so
           the dots (drawn behind it) show in the space around the panels; the
           body still paints --paper beneath them. */}
@@ -338,12 +338,12 @@ export function App() {
           <ErrorBoundary key={view} label={t(`nav.${view}`)}>
           {view === 'command' && <CommandCenterView />}
           {view === 'artifacts' && <ArtifactsView />}
-          {view === 'skills' && <SkillsView />}
+          {view === 'skills' && <SettingsDestination><SkillsView /></SettingsDestination>}
           {view === 'training' && <TrainingView />}
           {view === 'workflows' && <WorkflowsView />}
           {view === 'design' && <DesignBoardView />}
           {(view === 'models' || view === 'modelserver') && <ModelsWorkspace />}
-          {view === 'connectors' && <ConnectorsView />}
+          {view === 'connectors' && <SettingsDestination><ConnectorsView /></SettingsDestination>}
           {view === 'memory' && <MemoryView />}
           {view === 'settings' && <SettingsView />}
           </ErrorBoundary>
@@ -395,4 +395,12 @@ export function App() {
       <ErrorBoundary label="Step-up"><StepUpSheet /></ErrorBoundary>
     </div>
   );
+}
+
+/** Catalog pages remain reachable from the rail, with a clear route back to Settings. */
+function SettingsDestination({ children }: { children: React.ReactNode }) {
+  return <div className="settings-destination">
+    <div className="settings-back-bar"><button type="button" className="btn btn-ghost" onClick={() => useStore.getState().setView('settings')}><span aria-hidden="true">←</span> Back to Settings</button></div>
+    <div className="settings-destination-content">{children}</div>
+  </div>;
 }

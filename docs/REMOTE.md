@@ -97,6 +97,14 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > text (from Safari, Notes, Mail or Docs) a chip offers **Use formatting** for a few seconds. Touch
 > and hold for **Paste as Markdown** or **Paste as plain text**. Undo takes back any of it.
 >
+> A Mermaid diagram in a reply (or in your own message) draws inline on the iPhone, in the app's
+> light or dark theme. Tap it for full screen, where you can zoom and pan, **Copy source**, **Share
+> image**, **Save to Photos** or **Show source**. While a reply is still streaming the diagram shows
+> as source and is drawn once its fence closes; one Mermaid can't read shows its source with
+> Mermaid's error. The phone draws with its own bundled copy of Mermaid in a locked page that cannot
+> reach the network, so diagram source never leaves the phone. `.mmd` and `.mermaid` files opened
+> from **Files** draw the same way.
+>
 > Tables in a reply show as a grid (it scrolls sideways when wide). When the agent links a file it
 > made on your computer (an HTML prototype, an image, a PDF, Markdown, text, JSON or CSV) or a
 > preview server it started there (`http://localhost:5173`), the reply gets a card for it, with a
@@ -106,6 +114,10 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > sends what the agent linked in that chat (and, for a linked web page, the files in its folder),
 > and the page can't reach the internet or anything else on your phone. Ordinary web links open in
 > Safari.
+> On Android it works the same way: the cards under the reply, the link in the text, the window
+> with **Reload** and **⋮ → Copy path** (or **Copy address**) and **Share**; a PDF shows its pages,
+> and ordinary web links open in the browser. An open preview stays open when you open or fold a
+> folding phone.
 >
 > Each group opens with up to eight chats from the last two weeks (a chat that is working, needs
 > you or is pinned always shows), then **Show N more**. Tap a group's name to fold it. The
@@ -182,6 +194,10 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 >   opens the same menu. Picking a skill keeps your words and adds the skill; picking a saved prompt
 >   puts its text in place of the `/`.
 > - **Search:** finds completed chats too, and shows every match in each group.
+> - **On Android** the queue's Edit and Remove, the fork (touch and hold a message, then **Edit in a
+>   new chat** or **Fork from here**), saved prompts in `/` and under **+**, and **Search chats** at
+>   the top of the chat list work the same way, and **Settings → Automations** and **Settings → Usage
+>   and limits** show the same lists and Run now.
 > - **Automations:** **Computers and settings → Automations** lists the computer's tasks and
 >   workflows with how each last went, and **Run now**. You set them up on the computer.
 > - **Pull requests:** a chip shows the chat's pull request and its checks. **Commit these changes**,
@@ -200,6 +216,18 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 >   **Merge**, **Close** or **Reopen**. **Abort merge** shows while a merge stopped on a conflict.
 >   Every one of these changes asks for Face ID or your passcode (once per 5 minutes) and shows in
 >   the phone's *Activity* on the computer.
+>   On Android, **⋮ → Git** in a chat has the same status, files and diffs, **Stage** / **Stage all**,
+>   **Write message**, **Commit**, **Push**, **Abort merge**, **History**, **Branches** and
+>   **Compare**, and **Open a pull request**; each change asks for your fingerprint, face or screen
+>   lock (once per 5 minutes). A chat's pull request shows as a chip above the message box, with the
+>   same sheet as on the iPhone: its checks, files, **Approve**, **Merge**, **Close** or **Reopen**,
+>   and the prompts that ask the agent to commit, open a PR or fix failing checks.
+>   **⋮ → Terminals** lists the chat's terminals and the agent's command log, starts a **New
+>   terminal** in the chat's folder, and opens **SSH** to the hosts in your computer's
+>   `~/.ssh/config`. A terminal shows its output in colour with a row of keys (esc, tab, ctrl, ^C,
+>   the arrows, backspace, return, paste) and a line to type or dictate a command; it follows the
+>   phone's size, also when you open or fold a folding phone. Opening asks for your fingerprint,
+>   face or screen lock (once per 5 minutes); typing doesn't.
 > - **Files:** **More → Files** in a chat opens that chat's folder (its worktree when the chat is
 >   isolated); **Computers and settings → Files** lists the computer's saved folders. Tap through
 >   folders, or search by file name. A file opens in monospace with line numbers (Markdown can be
@@ -209,10 +237,16 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 >   opened it, the phone says *Changed on the computer* and you choose **Reload** (your edits are
 >   dropped) or **Save over it**; nothing is overwritten without that choice. Files that may hold
 >   secrets are counted under the list, never shown.
+>   On Android, **⋮ → Files** in a chat and **Settings → Files** work the same way: add a saved folder
+>   by its full path on the computer, or touch and hold one to remove it (its files stay on disk);
+>   saving, adding and removing ask for your fingerprint, face or screen lock (once per 5 minutes).
+>   An open file or an unsaved edit stays open when you open or fold a folding phone.
 > - **Logs:** **Computers and settings → Logs** lists the desktop app's log, the engine's log and
 >   each chat's agent run log. A log opens at its newest lines; **Refresh** reads it again, and the
 >   search field shows the matching lines with their line numbers. Read only, with secrets already
 >   replaced by `[redacted]` on the computer.
+>   On Android it is **Settings → Logs**, with the same list, newest lines, **Refresh** and search;
+>   **Share** sends what the screen shows as text, with secrets removed again on the phone.
 > - **Usage and limits:** what each provider plan has used and when it resets, and recent usage. Read only.
 >
 > **All your chats, grouped like the desktop** (Android): the chat list shows every chat on the
@@ -303,6 +337,9 @@ relay, tested and kept by the computer, and never written on the phone. The comp
 whether it worked and which models it can now use; it never sends a key back. Each provider's switch
 on the same page turns it on or off on the computer. Both ask for Face ID or the passcode, like every
 change from a phone. Subscriptions (ChatGPT) still sign in on the computer.
+On Android it is **Settings → Providers**: the same list with a switch on each, and **Add a
+provider**; both ask for your fingerprint, face or screen lock. The key field is a password field,
+emptied as soon as the computer answers, and never kept across closing or folding the app.
 
 Manage devices from the same card: **rename** them, **revoke** one instantly (it's kicked live and
 denied from then on), or **Sign out all phones** (formerly *Rotate secret*) to cryptographically reset the room, which unpairs
@@ -396,12 +433,13 @@ changes how the computer itself is set up:
   switch it between Ask, Guardrails and YOLO, but not its tools, isolation or
   offline/incognito switches. Messages cannot attach files from the computer. Moving a chat (or the
   default for new chats) to a mode with fewer approvals, Ask to Guardrails or anything to YOLO, is
-  confirmed on the phone like any other change: Face ID or the passcode on the iPhone. Android can't
-  confirm changes yet, so there you change the mode on the computer.
+  confirmed on the phone like any other change: Face ID or the passcode on the iPhone, the
+  fingerprint, face or screen lock on Android (the default for new chats, in **Settings → On
+  <computer>**).
 
 ### What phones can do: Read and Change, per phone
 
-Git, files, logs, terminals and SSH are on the iPhone now (above); task boards are coming.
+Git, files, logs, terminals and SSH are on the iPhone now (above), and Git on Android; task boards are coming.
 *Remote access → What phones can do* on the computer lists each paired phone with two switches:
 
 - **Read:** see your chats and their messages, settings, models, automations, usage and limits,
@@ -421,14 +459,16 @@ request a phone can make is in one of the two; anything else is refused.
 the phone and checked by your computer.** (Sending a prompt or approving a tool needs only the Change
 switch, so it doesn't ask for Face ID each time.) The first time a phone
 makes a change, it creates a key in its Secure Enclave (on iPhone) that only Face ID, Touch ID or
-the passcode can use, and gives your computer the public half. Each change after that is signed
+the passcode can use, or in the Android Keystore (StrongBox where the phone has one) that only the
+fingerprint, face or screen lock can use, and gives your computer the public half. Each change after that is signed
 with the key, and your computer checks the signature before doing anything: a change with no
 signature, a wrong one, one more than 5 minutes old, or one it has already seen is refused. One
-Face ID covers 5 minutes, as for *Allow* from the Lock Screen.
+Face ID (or fingerprint) covers 5 minutes, as for *Allow* from the Lock Screen; unlocking the phone
+on its own doesn't count.
 
 Your computer trusts the first key a phone gives it. A phone that later shows up with a different
 key is refused until you remove it and pair it again. *Forget all computers* on the iPhone deletes
-its key too.
+its key too; on Android, forgetting the last paired computer does.
 
 **Activity.** *Activity* under each phone lists every change it made or tried, prompts and approvals
 included, newest first, with why one was refused (Change off, no fresh Face ID or passcode, a changed

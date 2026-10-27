@@ -5,7 +5,7 @@ area: phone
 
 # Agent-linked files and local previews on the phone
 
-`[computer side implemented 2026-10-26 (issue #1095): TS and Rust screens and projections with shared golden cases, nekkod handlers with unit tests (temp folders, a local HTTP server) and a seeded-chat daemon HTTP integration test; not yet run from a phone, on a device or over the managed relay; the separate iPhone UI is now on main but not verified here; Android not started]` Decision record: [docs/decisions/0025-the-computer-serves-what-the-agent-linked-to-the-phone.md](../../docs/decisions/0025-the-computer-serves-what-the-agent-linked-to-the-phone.md). The decision remains proposed, not owner-accepted; the status above describes code and verification, not a new product policy. Builds on [phone access classes](phone-access-classes-and-relay-replay-protection.md) and *Files and logs on the iPhone* in [native-ios-app.md](native-ios-app.md).
+`[computer side implemented 2026-10-26 (issue #1095): TS and Rust screens and projections with shared golden cases, nekkod handlers with unit tests (temp folders, a local HTTP server) and a seeded-chat daemon HTTP integration test; not yet run from a phone, on a device or over the managed relay; the separate iPhone UI is now on main but not verified here; Android UI implemented 2026-10-27 (AN-35), verified on an API 37 emulator against nekkod]` Decision record: [docs/decisions/0025-the-computer-serves-what-the-agent-linked-to-the-phone.md](../../docs/decisions/0025-the-computer-serves-what-the-agent-linked-to-the-phone.md). The decision remains proposed, not owner-accepted; the status above describes code and verification, not a new product policy. Builds on [phone access classes](phone-access-classes-and-relay-replay-protection.md) and *Files and logs on the iPhone* in [native-ios-app.md](native-ios-app.md).
 
 ## User intent
 
@@ -58,5 +58,5 @@ Two read-class phone channels (the device's **Read** switch applies; refused `re
 
 ## Not yet
 
-- The phone UI (tapping a link, rendering a page and its assets, a preview) landed separately on main; this backend PR does not verify it. Android not started.
+- The phone UI (tapping a link, rendering a page and its assets, a preview) landed separately on main; this backend PR does not verify it. Android's (AN-35) is in [native-android-app.md](native-android-app.md): it intercepts every web view request on `https` hosts under `.invalid` instead of the iPhone's custom schemes, and sends a Content-Security-Policy that keeps a page's connections on them; WebRTC is not covered by either.
 - Not run from a device or over the managed relay. A daemon HTTP integration test seeds a chat with assistant messages on disk and exercises both channels, missing chats, user-only links and page assets. It does not exercise pairing or the encrypted relay; the phone gate is tested separately and held to the TS by golden cases.

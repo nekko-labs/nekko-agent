@@ -314,7 +314,7 @@ struct ContextGauge: View {
                         Circle().trim(from: 0, to: fraction)
                             .stroke(palette.tone(tone), style: StrokeStyle(lineWidth: 3, lineCap: .round))
                             .rotationEffect(.degrees(-90))
-                            .animation(.easeOut(duration: 0.3), value: fraction)
+                            .animation(chat.running ? nil : .easeOut(duration: 0.3), value: fraction)
                     }
                 }
                 .frame(width: 16, height: 16)

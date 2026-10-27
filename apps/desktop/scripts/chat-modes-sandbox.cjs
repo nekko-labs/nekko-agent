@@ -11,6 +11,7 @@ fs.rmSync(dir, { recursive: true, force: true });
 fs.mkdirSync(dir, { recursive: true });
 app.setPath('userData', path.join(dir, 'profile'));
 app.setPath('sessionData', path.join(dir, 'profile'));
+const js = (v) => JSON.stringify(v).replace(/[<>/\u2028\u2029]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 app.whenReady().then(async () => {
@@ -29,14 +30,14 @@ app.whenReady().then(async () => {
   const check = (name, ok) => report.checks.push({ name, passed: !!ok });
   const capture = async name => { await sleep(500); fs.writeFileSync(path.join(dir, name + '.png'), (await win.capturePage(undefined, { stayHidden: true, stayAwake: false })).toPNG()); };
   const click = async selector => {
-    const p = await run(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});if(!e)return null;const r=e.getBoundingClientRect();return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)}})()`);
+    const p = await run(`(()=>{const e=document.querySelector(${js(selector)});if(!e)return null;const r=e.getBoundingClientRect();return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)}})()`);
     if (!p) return false;
     for (const type of ['mouseDown', 'mouseUp']) win.webContents.sendInputEvent({ type, x: p.x, y: p.y, button: 'left', clickCount: 1 });
     await sleep(250);
     return true;
   };
   const clickAt = async (x, y) => { for (const type of ['mouseDown', 'mouseUp']) win.webContents.sendInputEvent({ type, x, y, button: 'left', clickCount: 1 }); await sleep(250); };
-  const has = selector => run(`!!document.querySelector(${JSON.stringify(selector)})`);
+  const has = selector => run(`!!document.querySelector(${js(selector)})`);
   try {
     await win.loadFile(path.join(out, 'index.html'));
     for (let i = 0; i < 50 && !(await has('[data-session-id="alpha"] textarea')); i++) await sleep(200);

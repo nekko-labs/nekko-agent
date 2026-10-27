@@ -48,7 +48,6 @@ export function GreetingNekko() {
       <g data-nekko-look transform={`translate(${look.x} ${look.y})`} fill="var(--ink)">
         <path d="M11 15H13V18H11Z M20 15H22V18H20Z" />
       </g>
-      <path d="M15 20H17V21H15Z" fill="var(--accent)" />
       <g data-part="peek-paws">
         <path d="M7 23H12V28H7Z M20 23H25V28H20Z" fill="var(--surface)" />
         <path d="M6 22H13V27H12V23H7V27H6Z M19 22H26V27H25V23H20V27H19Z" fill="var(--ink)" />
