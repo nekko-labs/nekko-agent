@@ -105,4 +105,15 @@ final class LiveCardTests: XCTestCase {
         let data = try JSONEncoder().encode(state)
         XCTAssertEqual(try JSONDecoder().decode(LiveCardState.self, from: data), state)
     }
+
+    func testDuplicateIdsInPreviousDoNotTrap() {
+        let previous = LiveCardState(chats: [chat("a", .working), chat("a", .needsYou)], focusId: "a", more: 0, listening: false, heard: "")
+        let card = build([chat("a", .needsYou)], previous: previous)
+        XCTAssertEqual(card?.chats.map(\.id), ["a"])
+    }
+
+    func testUnknownStateDecodesAsWorking() throws {
+        let decoded = try JSONDecoder().decode(LiveCardState.self, from: Data(#"{"chats":[{"id":"a","state":"sleeping"},{"id":"b","state":"done"}]}"#.utf8))
+        XCTAssertEqual(decoded.chats.map(\.state), [.working, .done])
+    }
 }

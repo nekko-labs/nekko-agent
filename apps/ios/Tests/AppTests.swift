@@ -386,3 +386,92 @@ final class ChatStatusIconTests: XCTestCase {
         XCTAssertEqual(ChatStatusIcon(activity: nil, completed: true, waiting: true, activeWatchCount: 1).label, "Waiting to send")
     }
 }
+
+@MainActor
+final class LiveCardViewTests: XCTestCase {
+    static let chats = [
+        LiveChat(id: "a", short: "Billing", state: .needsYou, step: "Needs your approval: Run npm test", reply: "Want me to run the tests?", closeWord: "Nice", finishedAt: nil, callId: "c1", severity: "low"),
+        LiveChat(id: "b", short: "Login", state: .working, step: "Fixing merge conflicts", reply: "Got it. Working on it now.", closeWord: "Cool", finishedAt: nil, callId: nil, severity: nil),
+        LiveChat(id: "c", short: "iOS LA", state: .watching, step: "Watching PR #1211…", reply: "PR is up. Watching CI.", closeWord: "Perfect", finishedAt: nil, callId: nil, severity: nil),
+        LiveChat(id: "d", short: "Docs", state: .done, step: "Done 12 min ago", reply: "Docs page added.", closeWord: "Looks good", finishedAt: .now, callId: nil, severity: nil),
+        LiveChat(id: "e", short: "Relay", state: .failed, step: "Stopped with an error", reply: "The build broke.", closeWord: "Got it", finishedAt: .now, callId: nil, severity: nil),
+    ]
+
+    static func card(_ level: LiveLevel, focus: String? = nil, listening: Bool = false) -> LiveCardState {
+        var card = buildCard(chats: chats, previous: nil, pinnedFocus: focus, level: level, now: .now)!
+        if listening { card.listening = true; card.heard = "Go ahead and auto merge the PR" }
+        return card
+    }
+
+    static let cases: [(String, LiveLevel, LiveCardState)] = [
+        ("minimal", .minimal, card(.minimal)),
+        ("standard", .standard, card(.standard)),
+        ("detailed", .detailed, card(.detailed)),
+        ("listening", .detailed, card(.detailed, listening: true)),
+        ("done-focused", .detailed, card(.detailed, focus: "d")),
+    ]
+
+    func framed(_ state: LiveCardState, _ level: LiveLevel) -> some View {
+        LiveCardView(state: state, level: level, interactive: false)
+            .padding(14)
+            .frame(width: 360)
+            .background(LiveCardView.background)
+    }
+
+    func png(_ state: LiveCardState, _ level: LiveLevel) throws -> Data {
+        try XCTUnwrap(ImageRenderer(content: framed(state, level)).uiImage?.pngData())
+    }
+
+    func testFitsTheLockScreenAtEveryLevel() throws {
+        for (name, level, state) in Self.cases {
+            let renderer = ImageRenderer(content: framed(state, level))
+            let size = try XCTUnwrap(renderer.uiImage).size
+            XCTAssertLessThanOrEqual(size.height, 160, "\(name) is \(size.height) pt tall")
+        }
+    }
+
+    /// A unit test can't read SwiftUI's accessibility tree (it is only built
+    /// for VoiceOver), so this checks the pixels: Minimal draws the same card
+    /// whatever the chats say, while Standard does not. The state still carries
+    /// the text, so it is the view that hides it, not `buildCard`.
+    func testMinimalShowsNoChatText() throws {
+        let real = Self.card(.detailed)
+        var other = real
+        for i in other.chats.indices {
+            other.chats[i].short = "Zebra"
+            other.chats[i].step = "Something else entirely"
+            other.chats[i].reply = "A different reply"
+        }
+        XCTAssertEqual(try png(real, .minimal), try png(other, .minimal))
+        XCTAssertNotEqual(try png(real, .standard), try png(other, .standard))
+    }
+
+    func testTheStripShowsThePageWithTheFocusedChat() {
+        func ids(_ focus: String) -> ([String], String?) {
+            let page = LiveCardView.page(Self.chats, focus: focus, size: 3)
+            return (page.shown.map(\.id), page.next?.id)
+        }
+        XCTAssertTrue(ids("b") == (["a", "b", "c"], "d"))
+        XCTAssertTrue(ids("d") == (["d", "e"], "a"))
+        XCTAssertTrue(LiveCardView.page([], focus: nil, size: 3).next == nil)
+    }
+
+    /// Evidence for review: apps/ios/.shots/live-card/ (git-ignored).
+    func testRendersEvidence() throws {
+        let dir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent(".shots/live-card")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        for (name, level, state) in Self.cases {
+            for scheme in [ColorScheme.light, .dark] {
+                let view = framed(state, level)
+                    .clipShape(RoundedRectangle(cornerRadius: 22))
+                    .padding(16)
+                    .background(scheme == .dark ? Color.black : Color(white: 0.95))
+                    .environment(\.colorScheme, scheme)
+                let renderer = ImageRenderer(content: view)
+                renderer.scale = 3
+                let png = try XCTUnwrap(renderer.uiImage?.pngData())
+                try png.write(to: dir.appendingPathComponent("\(name)-\(scheme == .dark ? "dark" : "light").png"))
+            }
+        }
+    }
+}

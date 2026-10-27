@@ -10,6 +10,11 @@ public enum LiveLevel: String, Codable, CaseIterable {
 public enum LiveChatState: String, Codable {
     case needsYou, working, watching, done, failed
 
+    /// A state from a newer computer reads as working, rather than failing the whole card.
+    public init(from decoder: Decoder) throws {
+        self = LiveChatState(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .working
+    }
+
     /// Sort order on the card: what needs you first.
     var rank: Int {
         switch self {
@@ -120,7 +125,7 @@ public func buildCard(chats: [LiveChat], previous: LiveCardState?, pinnedFocus: 
     var kept = Array(sorted.prefix(LiveCardRules.maxChats))
     let more = sorted.count - kept.count
 
-    let before = Dictionary(uniqueKeysWithValues: (previous?.chats ?? []).map { ($0.id, $0.state) })
+    let before = Dictionary((previous?.chats ?? []).map { ($0.id, $0.state) }, uniquingKeysWith: { first, _ in first })
     let focus = previous != nil ? kept.first { $0.state == .needsYou && before[$0.id] != .needsYou }?.id : nil
     let pinned = pinnedFocus.flatMap { id in kept.contains { $0.id == id } ? id : nil }
 

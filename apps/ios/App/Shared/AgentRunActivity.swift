@@ -77,6 +77,9 @@ struct NekkoCardAttributes: ActivityAttributes {
 
     var computerId: String
     var computerName: String
+    /// What the card draws (icon-only chips at Minimal, the mic at Detailed).
+    /// Fixed for the card's life: a level change ends the card and starts a new one.
+    var level: LiveLevel
 }
 
 /// Where the intents below hand their work in the app's process. Nil in the
@@ -85,6 +88,12 @@ struct NekkoCardAttributes: ActivityAttributes {
 enum IntentRouter {
     static var approve: ((_ sessionId: String, _ callId: String, _ allow: Bool) async -> Void)?
     static var stop: ((_ sessionId: String) async -> Void)?
+    // The card's buttons; set in the app by Task 3.3 (focus, nextPage, dismiss) and 5.1 (talk).
+    static var focus: ((_ sessionId: String) async -> Void)?
+    static var nextPage: ((_ sessionId: String) async -> Void)?
+    static var dismiss: ((_ sessionId: String) async -> Void)?
+    static var talk: ((_ sessionId: String) async -> Void)?
+    static var cancelTalk: (() async -> Void)?
 }
 
 /// Allow or deny the waiting tool call from the Lock Screen or the Dynamic
@@ -151,6 +160,93 @@ struct StopRunIntent: LiveActivityIntent {
 
     func perform() async throws -> some IntentResult {
         await IntentRouter.stop?(sessionId)
+        return .result()
+    }
+}
+
+/// A chip on the card: bring that chat up top.
+struct FocusChatIntent: LiveActivityIntent {
+    static var title: LocalizedStringResource = "Show a chat on the card"
+    static var isDiscoverable = false
+
+    @Parameter(title: "Chat") var sessionId: String
+
+    init() {}
+
+    init(sessionId: String) { self.sessionId = sessionId }
+
+    func perform() async throws -> some IntentResult {
+        await IntentRouter.focus?(sessionId)
+        return .result()
+    }
+}
+
+/// The "+N" chip: step the strip to the next chats. The strip shows the page
+/// that holds the focused chat and only the view knows how many chips fit, so
+/// the chip names the chat that starts the next page (the first one again after
+/// the last page) and the app focuses it.
+struct NextPageIntent: LiveActivityIntent {
+    static var title: LocalizedStringResource = "Show more chats on the card"
+    static var isDiscoverable = false
+
+    @Parameter(title: "Chat") var sessionId: String
+
+    init() {}
+
+    init(sessionId: String) { self.sessionId = sessionId }
+
+    func perform() async throws -> some IntentResult {
+        await IntentRouter.nextPage?(sessionId)
+        return .result()
+    }
+}
+
+/// The close button under a finished chat: take it off the card.
+struct DismissChatIntent: LiveActivityIntent {
+    static var title: LocalizedStringResource = "Remove a finished chat from the card"
+    static var isDiscoverable = false
+
+    @Parameter(title: "Chat") var sessionId: String
+
+    init() {}
+
+    init(sessionId: String) { self.sessionId = sessionId }
+
+    func perform() async throws -> some IntentResult {
+        await IntentRouter.dismiss?(sessionId)
+        return .result()
+    }
+}
+
+/// The mic, and "Send to" while listening (a second tap sends). A placeholder
+/// that Task 5.1 fills in with the recording; it needs Face ID or the passcode,
+/// since what is said is sent to the computer.
+struct TalkToChatIntent: LiveActivityIntent {
+    static var title: LocalizedStringResource = "Talk to a chat"
+    static var isDiscoverable = false
+    static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
+
+    @Parameter(title: "Chat") var sessionId: String
+
+    init() {}
+
+    init(sessionId: String) { self.sessionId = sessionId }
+
+    func perform() async throws -> some IntentResult {
+        await IntentRouter.talk?(sessionId)
+        return .result()
+    }
+}
+
+/// Cancel while listening: nothing is sent.
+struct CancelTalkIntent: LiveActivityIntent {
+    static var title: LocalizedStringResource = "Stop listening"
+    static var isDiscoverable = false
+
+    init() {}
+
+    func perform() async throws -> some IntentResult {
+        await IntentRouter.cancelTalk?()
         return .result()
     }
 }

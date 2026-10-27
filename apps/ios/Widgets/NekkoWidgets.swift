@@ -1,5 +1,6 @@
 import ActivityKit
 import AppIntents
+import NekkoProtocol
 import SwiftUI
 import WidgetKit
 
@@ -7,6 +8,7 @@ import WidgetKit
 struct NekkoWidgets: WidgetBundle {
     var body: some Widget {
         AgentRunLiveActivity()
+        NekkoCardLiveActivity()
         StatusWidget()
         if #available(iOS 18.0, *) { NewChatControl() }
     }
@@ -62,6 +64,43 @@ struct StatusProvider: TimelineProvider {
     func getTimeline(in context: Context, completion: @escaping (Timeline<StatusEntry>) -> Void) {
         // The app reloads this timeline when the counts change; nothing to poll.
         completion(Timeline(entries: [StatusEntry(date: .now, snapshot: .load(), family: context.family)], policy: .never))
+    }
+}
+
+/// The one card for all of the computer's chats (Task 3.3 starts it in place
+/// of `AgentRunLiveActivity`). The Lock Screen and the expanded Dynamic Island
+/// are both `LiveCardView`.
+struct NekkoCardLiveActivity: Widget {
+    var body: some WidgetConfiguration {
+        ActivityConfiguration(for: NekkoCardAttributes.self) { context in
+            LiveCardView(state: context.state, level: context.attributes.level, interactive: true)
+                .padding(14)
+                .activityBackgroundTint(LiveCardView.background.opacity(0.92))
+                .activitySystemActionForegroundColor(.white)
+                .widgetURL(chatURL(context.state.focusId))
+        } dynamicIsland: { context in
+            let urgent = context.state.chats.first?.state ?? .working
+            return DynamicIsland {
+                DynamicIslandExpandedRegion(.bottom) {
+                    LiveCardView(state: context.state, level: context.attributes.level, interactive: true)
+                }
+            } compactLeading: {
+                PixelCat().frame(width: 22, height: 22)
+            } compactTrailing: {
+                HStack(spacing: 3) {
+                    LiveStatusGlyph(state: urgent, size: 14)
+                    Text("\(context.state.chats.count + context.state.more)").font(.caption2.weight(.semibold)).monospacedDigit()
+                }
+            } minimal: {
+                LiveStatusGlyph(state: urgent, size: 14)
+            }
+            .widgetURL(chatURL(context.state.focusId))
+            .keylineTint(urgent.tint)
+        }
+    }
+
+    private func chatURL(_ id: String?) -> URL? {
+        id.flatMap { URL(string: "nekko-agent://chat/\($0)") }
     }
 }
 
