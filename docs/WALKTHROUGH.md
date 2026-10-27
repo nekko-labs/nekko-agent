@@ -306,7 +306,11 @@ to someone else's server.
 
 The plan icon in an agent window opens or closes only that chat's plan, sub-agents and queue panel. Each chat remembers its own choice locally. Narrow windows fold the panel automatically without changing that choice.
 
-The context-window gauge has a subtle green background below 60% full, yellow from 60% to below 85%, and red at 85% or higher. Counts remain estimated; an unknown window limit stays neutral.
+The context-window gauge is a ring beside the count (`125k / 200k`): green below 60% full, yellow from 60% to below 85%, and red at 85% or higher. Hover or focus it for what fills the window. Counts remain estimated; an unknown window limit stays neutral.
+
+The chat's **effort** sits beside the model as a small dial, one notch per level the model takes. Click it for a larger dial and a button per level, or step it with the arrow keys.
+
+**Simple and Expert.** The switch at the top left of a chat, beside its title, picks between them, as on the phone. Simple shows the model, effort and context. Expert adds a strip of dials under the title for CPU, memory, each GPU and VRAM (with temperatures where the machine reports them, and only the monitors switched on in Settings) and how many models the Model Server holds. Click the strip for larger dials and the loaded models, each with where it runs, its context and memory, and a jump to its settings. The choice is kept on this computer for every chat.
 
 In Agents, the Hardware panel names each detected GPU and shows its own utilization. Missing readings say Unavailable rather than zero; switching monitoring off says Monitor off. VRAM remains the aggregate memory reading across devices. Where your machine reports them, CPU, Memory and each GPU row also show a temperature at the right of the label, orange from 80°C and red from 90°C. NVIDIA cards report theirs through their driver; Linux reads its hardware sensors; on Windows the CPU reading comes from the ACPI thermal zone, which many desktops do not publish, so it can be missing there.
 

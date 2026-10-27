@@ -23,6 +23,16 @@ owner:
 
 - [x] **DWM-1, Minimize successful replies.** Dynamic (including Fixed grid) removes the finished chat pane without completing the chat. Focused, errors, abnormal stops, pending input, unavailable input state and newer events remain visible. Pure wall tests, hidden 1440px/390px completion/restore/race checks, and inspected matched PNG/GIF evidence. Spec: [Minimize agent windows](spec/desktop/minimize-agent-windows.md). Packaged app/live-provider verification remains untested; baseline macOS shortcut assertion is tracked in #900.
 
+## iPhone Simple and Expert modes (added 2026-10-24)
+
+Philip asked for a Simple / Expert switch at the top left of the phone's chat: Simple picks the model and effort from one control with an effort gauge, Expert adds the computer's hardware gauges and a loaded-models monitor with Unload, and the context usage shows in both. Spec: [iPhone Simple and Expert modes](spec/phone/iphone-simple-and-expert-modes.md); why the gate opens: [decision 0028](docs/decisions/0028-phones-read-the-monitors-and-unload-models.md); issue #984.
+
+- [x] **T216, phone gate for the monitors (2026-10-24).** `system:stats`, `gpu:stats`, `engine:status`, `context:preview` (Read, `PHONE_MONITOR_READ_CHANNELS`) and `model:unload` (agent class) with projections in `phone-views.ts` and `phone_views.rs`; `phone-access.json` regenerated; TS (`phone-monitor.test.ts`) and Rust (`phone::tests::monitor`) tests.
+- [x] **T217, iPhone modes, model and effort control, context gauge, monitor (2026-10-24).** `Prefs.expertMode`; `ModeViews.swift` (mode menu, `EffortGauge`, `ModelEffortButton` / sheet, `ContextGauge`, `MonitorPanel`, `MonitorSheet`); `Monitor.swift` parsing and `MonitorModel` polling; chat `effort` and `context`. Swift package tests pass on Linux; views built only by macOS CI.
+- [x] **T217a, simulator UI test and screenshots** of the mode switch, the composer row and the monitor against a live computer: `LiveRelayTests/testSimpleAndExpertModes`, in the iOS Native workflow (2026-10-25).
+- [ ] **T217b, Android parity.**
+- [x] **T217g, the same design on the desktop (2026-10-25).** `ModeViews.tsx` (Simple / Expert switch before the chat title, `EffortDial`, `RingDial`, the Expert hardware strip and monitor popover over `hardwareRows` and `LocalModels`); the effort slider becomes a dial with a popover of levels (arrow keys still step it); the context bar becomes a ring. Spec: [Desktop Simple and Expert modes](spec/desktop/desktop-simple-and-expert-modes.md). Evidence harness: `chat-modes-fixture.tsx` / `chat-modes-sandbox.cjs` through `chat-search-integration.cjs` (`NEKKO_FIXTURE`).
+
 ## Internet reachability recovery
 
 [Specification](spec/chat/internet-recovery.md). Prefix **NR** (network recovery).
