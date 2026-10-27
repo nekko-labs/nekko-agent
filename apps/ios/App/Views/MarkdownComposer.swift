@@ -13,6 +13,8 @@ struct MarkdownComposerField: View {
     var identifier = "chat.message"
     /// Paste with only an image on the clipboard: it goes to the attachments, as before.
     var onPasteImages: () -> Void = {}
+    /// Draws its own card; false when it sits in a box that holds its buttons too (the chat's composer).
+    var boxed = true
     @State private var editor = MarkdownEditorState()
     /// The *Aa* toggle, remembered.
     @AppStorage("composerToolbar") private var toolbarShown = true
@@ -47,9 +49,9 @@ struct MarkdownComposerField: View {
                                identifier: identifier, onPasteImages: onPasteImages)
             }
         }
-        .padding(.horizontal, 12).padding(.vertical, 8)
-        .background(palette.surface, in: RoundedRectangle(cornerRadius: 20))
-        .overlay(RoundedRectangle(cornerRadius: 20).stroke(palette.line))
+        .padding(.horizontal, boxed ? 12 : 0).padding(.vertical, boxed ? 8 : 0)
+        .background(boxed ? palette.surface : .clear, in: RoundedRectangle(cornerRadius: 20))
+        .overlay(RoundedRectangle(cornerRadius: 20).stroke(boxed ? palette.line : .clear))
     }
 }
 

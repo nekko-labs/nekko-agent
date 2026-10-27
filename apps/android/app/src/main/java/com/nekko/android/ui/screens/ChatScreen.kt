@@ -139,6 +139,8 @@ fun ChatScreen(
     onOpenChat: (id: String, draft: String?) -> Unit = { _, _ -> },
     /** Set when the chat is one of an open folding phone's two panes (header actions, drag and drop, tabletop). */
     pane: PaneSlot? = null,
+    /** The composer's **+** → New agent. */
+    onNewChat: (() -> Unit)? = null,
 ) {
     val chat by vm.ui.collectAsStateWithLifecycle()
     val completedAt by vm.completedAt.collectAsStateWithLifecycle()
@@ -460,6 +462,8 @@ fun ChatScreen(
                     prompts = prompts,
                     queuedPrompts = chat.queuedPrompts,
                     onEditQueued = vm::editQueued,
+                    onNewAgent = onNewChat,
+                    onTerminal = vm::openTerminals,
                 )
                 ChatOptionsRow(chat, enabled = online, onOpenModelEffort = { showModelEffort = true })
             }

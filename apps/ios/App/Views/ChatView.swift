@@ -291,7 +291,7 @@ struct ChatView: View {
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4)
                     .accessibilityIdentifier("chat.savedCopy")
             }
-            Composer(chat: chat)
+            Composer(chat: chat, openTerminals: { showTerminals = true })
         }
         .padding(.horizontal, 12).padding(.bottom, 8).padding(.top, 6)
         .background(.bar)
@@ -717,9 +717,12 @@ struct HoldToTalkButton: View {
     }
 }
 
-/// Text, the computer's skills (`/`), photos, dictation, Send / Stop.
+/// Text, the computer's skills (`/`), photos, dictation, Send / Stop, with + and Send inside the box.
 struct Composer: View {
     let chat: ChatModel
+    /// + → Terminal: the chat's terminals sheet.
+    var openTerminals: () -> Void = {}
+    @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
     @Environment(\.palette) private var palette
     @State private var text = ""
@@ -818,78 +821,95 @@ struct Composer: View {
                     }
                 }
             }
-            HStack(alignment: .bottom, spacing: 8) {
-                Menu {
-                    if !store.pcSettings.prompts.isEmpty {
-                        Menu {
-                            ForEach(store.pcSettings.prompts) { p in Button("/\(p.name)") { prompt = p; skill = nil } }
-                        } label: { Label("Saved prompts", systemImage: "text.badge.star") }
-                    }
-                    if !chat.skills.isEmpty {
-                        Menu {
-                            ForEach(chat.skills) { s in Button("/\(s.name)") { skill = s; prompt = nil } }
-                        } label: { Label("Skills on \(store.active?.name ?? "computer")", systemImage: "wand.and.stars") }
-                    }
-                    // A PhotosPicker inside a Menu never opens its sheet: the menu closing dismisses it.
-                    Button { pickingPhotos = true } label: { Label("Photos", systemImage: "photo.on.rectangle") }
-                    // Asked for by the user, so iOS shows its paste prompt only then.
-                    Button { pasteImages() } label: { Label("Paste image", systemImage: "doc.on.clipboard") }
-                        .disabled(!UIPasteboard.general.hasImages)
-                } label: {
-                    Image(systemName: "plus.circle.fill").font(.title2).foregroundStyle(palette.inkSoft)
-                        .frame(width: 44, height: 44).contentShape(Rectangle())
-                }
-                .accessibilityLabel("Add")
+            // One box the width of the screen: the message on top, + and Send inside it below.
+            VStack(alignment: .leading, spacing: 0) {
                 // Markdown source with a formatting toolbar in the card (MD-3); VoiceOver's
                 // "Hide keyboard" action is on the text view itself.
                 MarkdownComposerField(text: $text, focused: $focused,
                                       placeholder: chat.running ? "Queue a follow-up" : "Message",
-                                      onPasteImages: pasteImages)
-                if dictation.transcribing {
-                    ProgressView().frame(width: 44, height: 44).accessibilityLabel("Transcribing")
-                } else if prefs.dictationHold && dictation.available && (text.isEmpty || dictation.recording) {
-                    HoldToTalkButton(dictation: dictation)
-                } else if dictation.available && text.isEmpty && !dictation.recording {
-                    Button { Task { await dictation.start(store: store) } } label: {
-                        Image(systemName: "mic.fill").font(.title3).foregroundStyle(palette.inkSoft)
-                            .frame(width: 44, height: 44).contentShape(Rectangle())
-                    }.accessibilityLabel("Dictate")
-                } else if dictation.recording {
-                    Button { Task { await dictation.finish(store: store) } } label: {
-                        Image(systemName: "stop.circle.fill").font(.title2).foregroundStyle(palette.danger)
-                            .frame(width: 44, height: 44).contentShape(Rectangle())
-                    }.accessibilityLabel("Stop dictation")
-                }
-                // Stop while running with nothing to queue; a photo or skill alone can be queued.
-                if chat.running && !hasContent {
-                    Button { chat.abort() } label: {
-                        Image(systemName: "stop.fill").font(.body.weight(.bold)).frame(width: 36, height: 36)
-                            .background(palette.danger, in: Circle()).foregroundStyle(.white)
-                            .frame(width: 44, height: 44).contentShape(Rectangle())
-                    }.accessibilityLabel("Stop")
-                } else if chat.sendsLater {
-                    // Offline: the prompt waits on this iPhone (the outbox) and goes when the computer is back.
-                    Button(action: send) {
-                        Text("Send when online").font(.footnote.weight(.semibold)).lineLimit(1)
-                            .padding(.horizontal, 12).frame(minHeight: 36)
-                            .background(canSend ? palette.accent : palette.surface2, in: Capsule())
-                            .foregroundStyle(canSend ? palette.onAccent : palette.inkFaint)
-                            .frame(minHeight: 44).contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!canSend)
-                    .accessibilityIdentifier("chat.sendLater")
-                } else {
-                    Button(action: send) {
-                        Image(systemName: "arrow.up").font(.body.weight(.bold)).frame(width: 36, height: 36)
-                            .background(canSend ? palette.accent : palette.surface2, in: Circle())
-                            .foregroundStyle(canSend ? palette.onAccent : palette.inkFaint)
+                                      onPasteImages: pasteImages, boxed: false)
+                    .padding(.horizontal, 12).padding(.top, 10)
+                HStack(alignment: .center, spacing: 4) {
+                    Menu {
+                        // As on the desktop: another agent or a terminal beside this one, or a photo for this message.
+                        Button { app.newChatRequested = true } label: { Label("New agent", systemImage: "plus.bubble") }
+                            .accessibilityIdentifier("composer.newAgent")
+                        Button(action: openTerminals) { Label("Terminal", systemImage: "terminal") }
+                            .disabled(chat.savedAt != nil)
+                            .accessibilityIdentifier("composer.terminal")
+                        Divider()
+                        if !store.pcSettings.prompts.isEmpty {
+                            Menu {
+                                ForEach(store.pcSettings.prompts) { p in Button("/\(p.name)") { prompt = p; skill = nil } }
+                            } label: { Label("Saved prompts", systemImage: "text.badge.star") }
+                        }
+                        if !chat.skills.isEmpty {
+                            Menu {
+                                ForEach(chat.skills) { s in Button("/\(s.name)") { skill = s; prompt = nil } }
+                            } label: { Label("Skills on \(store.active?.name ?? "computer")", systemImage: "wand.and.stars") }
+                        }
+                        // A PhotosPicker inside a Menu never opens its sheet: the menu closing dismisses it.
+                        Button { pickingPhotos = true } label: { Label("Photos", systemImage: "photo.on.rectangle") }
+                        // Asked for by the user, so iOS shows its paste prompt only then.
+                        Button { pasteImages() } label: { Label("Paste image", systemImage: "doc.on.clipboard") }
+                            .disabled(!UIPasteboard.general.hasImages)
+                    } label: {
+                        Image(systemName: "plus.circle.fill").font(.title2).foregroundStyle(palette.inkSoft)
                             .frame(width: 44, height: 44).contentShape(Rectangle())
                     }
-                    .disabled(!canSend)
-                    .accessibilityLabel(chat.running ? "Queue" : "Send")
+                    .accessibilityLabel("Add")
+                    .accessibilityIdentifier("composer.add")
+                    Spacer(minLength: 0)
+                    if dictation.transcribing {
+                        ProgressView().frame(width: 44, height: 44).accessibilityLabel("Transcribing")
+                    } else if prefs.dictationHold && dictation.available && (text.isEmpty || dictation.recording) {
+                        HoldToTalkButton(dictation: dictation)
+                    } else if dictation.available && text.isEmpty && !dictation.recording {
+                        Button { Task { await dictation.start(store: store) } } label: {
+                            Image(systemName: "mic.fill").font(.title3).foregroundStyle(palette.inkSoft)
+                                .frame(width: 44, height: 44).contentShape(Rectangle())
+                        }.accessibilityLabel("Dictate")
+                    } else if dictation.recording {
+                        Button { Task { await dictation.finish(store: store) } } label: {
+                            Image(systemName: "stop.circle.fill").font(.title2).foregroundStyle(palette.danger)
+                                .frame(width: 44, height: 44).contentShape(Rectangle())
+                        }.accessibilityLabel("Stop dictation")
+                    }
+                    // Stop while running with nothing to queue; a photo or skill alone can be queued.
+                    if chat.running && !hasContent {
+                        Button { chat.abort() } label: {
+                            Image(systemName: "stop.fill").font(.body.weight(.bold)).frame(width: 36, height: 36)
+                                .background(palette.danger, in: Circle()).foregroundStyle(.white)
+                                .frame(width: 44, height: 44).contentShape(Rectangle())
+                        }.accessibilityLabel("Stop")
+                    } else if chat.sendsLater {
+                        // Offline: the prompt waits on this iPhone (the outbox) and goes when the computer is back.
+                        Button(action: send) {
+                            Text("Send when online").font(.footnote.weight(.semibold)).lineLimit(1)
+                                .padding(.horizontal, 12).frame(minHeight: 36)
+                                .background(canSend ? palette.accent : palette.surface2, in: Capsule())
+                                .foregroundStyle(canSend ? palette.onAccent : palette.inkFaint)
+                                .frame(minHeight: 44).contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!canSend)
+                        .accessibilityIdentifier("chat.sendLater")
+                    } else {
+                        Button(action: send) {
+                            Image(systemName: "arrow.up").font(.body.weight(.bold)).frame(width: 36, height: 36)
+                                .background(canSend ? palette.accent : palette.surface2, in: Circle())
+                                .foregroundStyle(canSend ? palette.onAccent : palette.inkFaint)
+                                .frame(width: 44, height: 44).contentShape(Rectangle())
+                        }
+                        .disabled(!canSend)
+                        .accessibilityLabel(chat.running ? "Queue" : "Send")
+                    }
                 }
+                .padding(.horizontal, 4).padding(.bottom, 2)
             }
+            .frame(maxWidth: .infinity)
+            .background(palette.surface, in: RoundedRectangle(cornerRadius: 20))
+            .overlay(RoundedRectangle(cornerRadius: 20).stroke(palette.line))
             // The chat's model and effort, and its context window: in Simple and Expert alike.
             HStack(spacing: 0) {
                 ModelEffortButton(chat: chat)

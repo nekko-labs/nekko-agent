@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -65,6 +66,8 @@ import com.nekko.protocol.QueuedPrompt
 import com.nekko.protocol.SavedPrompt
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.material.icons.filled.AddComment
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.PhotoCamera
@@ -77,8 +80,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /**
- * Prompt box: **+** on the left (dictation, an image from files, a photo from
- * the camera), the text, and Send on the right. While a run is going, sending
+ * Prompt box: the text across the full width, and inside the box below it **+**
+ * on the left (a new agent, a terminal, dictation, an image from files, a photo
+ * from the camera) and Send on the right. While a run is going, sending
  * queues the prompt on the computer and an empty box turns Send into Stop.
  * Typing `/` offers the computer's skills; a picked skill shows as a chip and
  * the box becomes its input. Photos show as thumbnails above the box.
@@ -108,6 +112,10 @@ fun Composer(
     queuedPrompts: List<QueuedPrompt> = emptyList(),
     /** Change ([text]) or remove (null) the queued prompt at an index, checked against what was shown. */
     onEditQueued: (suspend (index: Int, expect: String, text: String?) -> Unit)? = null,
+    /** **+** → New agent, as on the desktop; null leaves it out. */
+    onNewAgent: (() -> Unit)? = null,
+    /** **+** → Terminal: the chat's terminals; null leaves it out. */
+    onTerminal: (() -> Unit)? = null,
 ) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
@@ -218,41 +226,15 @@ fun Composer(
                     modifier = Modifier.padding(horizontal = 4.dp),
                 )
             }
-            Row(
+            // One box the width of the screen: the message on top, + and Send inside it below.
+            Column(
                 Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
                     .background(p.surface)
                     .border(1.dp, p.line, RoundedCornerShape(16.dp))
-                    .padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    .padding(6.dp),
             ) {
-                val recording = mic?.state is MicState.Recording
-                val transcribing = mic?.state is MicState.Transcribing
-                if (mic != null && (recording || transcribing)) {
-                    // Dictating: + becomes the way to finish (■), as the mic button was.
-                    MicButton(mic, onText = dictated)
-                } else if (mic != null || attach != null || prompts.isNotEmpty()) {
-                    Box {
-                        PlusButton(open = plusOpen) { plusOpen = true }
-                        PlusMenu(
-                            open = plusOpen,
-                            onDismiss = { plusOpen = false },
-                            onDictate = mic?.let { m -> { plusOpen = false; m.onTap(dictated) } },
-                            attach = attach,
-                            onPicked = { plusOpen = false; attach?.clearError?.invoke() },
-                            prompts = prompts,
-                            onPrompt = { picked ->
-                                plusOpen = false
-                                // Armed like a skill: it sends its text, then what is typed.
-                                promptId = picked.id
-                                skillName = null
-                                error = null
-                            },
-                        )
-                    }
-                }
                 BasicTextField(
                     value = text,
                     onValueChange = {
@@ -263,9 +245,9 @@ fun Composer(
                     cursorBrush = SolidColor(p.accent),
                     maxLines = 6,
                     modifier = Modifier
-                        .weight(1f)
+                        .fillMaxWidth()
                         .heightIn(min = 48.dp)
-                        .padding(start = if (mic != null || attach != null) 0.dp else 8.dp, top = 12.dp, bottom = 12.dp)
+                        .padding(horizontal = 8.dp, vertical = 12.dp)
                         .semantics { contentDescription = "Message" },
                     decorationBox = { inner ->
                         if (text.isEmpty()) {
@@ -286,22 +268,52 @@ fun Composer(
                         inner()
                     },
                 )
-                FilledIconButton(
-                    onClick = { if (showStop) onStop() else send() },
-                    enabled = showStop || canSend,
-                    shape = CircleShape,
-                    colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = if (showStop) p.danger else p.accent,
-                        contentColor = p.accentInk,
-                        disabledContainerColor = p.surface2,
-                        disabledContentColor = p.inkFaint,
-                    ),
-                    modifier = Modifier.size(48.dp),
-                ) {
-                    if (showStop) {
-                        Icon(Icons.Filled.Stop, contentDescription = "Stop")
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    val recording = mic?.state is MicState.Recording
+                    val transcribing = mic?.state is MicState.Transcribing
+                    if (mic != null && (recording || transcribing)) {
+                        // Dictating: + becomes the way to finish (■), as the mic button was.
+                        MicButton(mic, onText = dictated)
                     } else {
-                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = if (running) "Queue" else "Send")
+                        Box {
+                            PlusButton(open = plusOpen) { plusOpen = true }
+                            PlusMenu(
+                                open = plusOpen,
+                                onDismiss = { plusOpen = false },
+                                onNewAgent = onNewAgent?.let { go -> { plusOpen = false; go() } },
+                                onTerminal = onTerminal?.let { go -> { plusOpen = false; go() } },
+                                onDictate = mic?.let { m -> { plusOpen = false; m.onTap(dictated) } },
+                                attach = attach,
+                                onPicked = { plusOpen = false; attach?.clearError?.invoke() },
+                                prompts = prompts,
+                                onPrompt = { picked ->
+                                    plusOpen = false
+                                    // Armed like a skill: it sends its text, then what is typed.
+                                    promptId = picked.id
+                                    skillName = null
+                                    error = null
+                                },
+                            )
+                        }
+                    }
+                    Spacer(Modifier.weight(1f))
+                    FilledIconButton(
+                        onClick = { if (showStop) onStop() else send() },
+                        enabled = showStop || canSend,
+                        shape = CircleShape,
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = if (showStop) p.danger else p.accent,
+                            contentColor = p.accentInk,
+                            disabledContainerColor = p.surface2,
+                            disabledContentColor = p.inkFaint,
+                        ),
+                        modifier = Modifier.size(48.dp),
+                    ) {
+                        if (showStop) {
+                            Icon(Icons.Filled.Stop, contentDescription = "Stop")
+                        } else {
+                            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = if (running) "Queue" else "Send")
+                        }
                     }
                 }
             }
@@ -466,11 +478,13 @@ private fun PlusButton(open: Boolean, onClick: () -> Unit) {
     }
 }
 
-/** The **+** menu: dictation, an image from the phone's files, a photo from the camera, the saved prompts. */
+/** The **+** menu: a new agent or a terminal (as on the desktop), dictation, an image from the phone's files, a photo from the camera, the saved prompts. */
 @Composable
 private fun PlusMenu(
     open: Boolean,
     onDismiss: () -> Unit,
+    onNewAgent: (() -> Unit)?,
+    onTerminal: (() -> Unit)?,
     onDictate: (() -> Unit)?,
     attach: AttachUi?,
     onPicked: () -> Unit,
@@ -485,6 +499,23 @@ private fun PlusMenu(
         containerColor = p.surface,
         shape = RoundedCornerShape(14.dp),
     ) {
+        if (onNewAgent != null) {
+            DropdownMenuItem(
+                text = { Text("New agent", color = p.ink) },
+                leadingIcon = { Icon(Icons.Filled.AddComment, contentDescription = null, tint = p.inkSoft) },
+                onClick = onNewAgent,
+                modifier = Modifier.testTag("composer.newAgent"),
+            )
+        }
+        if (onTerminal != null) {
+            DropdownMenuItem(
+                text = { Text("Terminal", color = p.ink) },
+                leadingIcon = { Icon(Icons.Filled.Terminal, contentDescription = null, tint = p.inkSoft) },
+                onClick = onTerminal,
+                modifier = Modifier.testTag("composer.terminal"),
+            )
+        }
+        if ((onNewAgent != null || onTerminal != null) && (onDictate != null || attach != null)) HorizontalDivider(color = p.line)
         if (onDictate != null) {
             DropdownMenuItem(
                 text = { Text("Dictate", color = p.ink) },
@@ -513,7 +544,7 @@ private fun PlusMenu(
             }
         }
         if (prompts.isNotEmpty()) {
-            if (onDictate != null || attach != null) HorizontalDivider(color = p.line)
+            if (onNewAgent != null || onTerminal != null || onDictate != null || attach != null) HorizontalDivider(color = p.line)
             prompts.forEach { pr ->
                 DropdownMenuItem(
                     text = { Text("/${pr.name}", color = p.ink) },
