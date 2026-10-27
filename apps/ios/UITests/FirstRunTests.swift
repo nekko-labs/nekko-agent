@@ -17,7 +17,11 @@ final class FirstRunTests: XCTestCase {
         let window = app.windows.firstMatch.frame
         let barTop = pair.frame.minY - 12
         let bar = CGRect(x: window.minX, y: barTop, width: window.width, height: window.maxY - barTop)
-        auditAccessibility(app, "welcome", covered: bar)
+        // Known false positive: the audit reports the intro paragraph as low contrast on the
+        // coloured ground (AppBackdrop's gradient) even in full ink, measured at 14.5:1 in the
+        // capture; its soft ink measures 5:1 there. PaletteTests checks that ink on the wash.
+        let intro = "Drive Nekko Agent on your computer from this iPhone: follow chats as they stream, approve tools, answer questions and start new work. Everything is end-to-end encrypted between this phone and your computer."
+        auditAccessibility(app, "welcome", ignoring: [intro], covered: bar)
         pair.tap()
         let field = app.input("nekko-agent-pair:?relay=…")
         XCTAssertTrue(field.waitForExistence(timeout: 5))
