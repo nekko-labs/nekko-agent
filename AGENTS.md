@@ -26,6 +26,7 @@ Full procedure: [docs/runbooks/landing-a-pr.md](docs/runbooks/landing-a-pr.md).
 - The primary checkout stays on `main`; work in a worktree and branch per task (`git worktree add -b <branch> .worktrees/<task> main`).
 - Every change has a GitHub issue: find the one for the feature or change, or file one (plain-language title, the what and why), before opening the PR, and link the PR to it (`Closes #123`). Put the requester's prompt or screenshots in the issue only with their say-so.
 - Every change lands as a PR: commit, push, open it **ready** (not draft) once your own checks pass, and queue it with `gh pr merge --auto` (never with `--squash` or `--admin`). `main` requires the merge queue and one check, `gate`.
+- In the Claude desktop app, turn on Auto-fix for every PR you open (`mcp__ccd_pr__set_monitor` with `auto_fix: true`), without asking: red checks, conflicts and review comments get fixed and pushed as they arrive.
 - Split a feature of several hundred lines into a stack (`gh stack`), 2-4 layers.
 - Every PR description has an **Unfinished work / release blockers** section, kept current and read back after publishing. Only a named release blocker keeps a PR in draft.
 - Implementation, verification, evidence and landing are one workflow: do not stop at passing tests and ask to be told to continue.
