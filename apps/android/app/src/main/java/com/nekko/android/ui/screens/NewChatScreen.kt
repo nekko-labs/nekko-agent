@@ -64,6 +64,7 @@ import com.nekko.android.data.ModelChoice
 import com.nekko.android.data.ModelGroup
 import com.nekko.android.data.ModelPick
 import com.nekko.android.data.modelGroups
+import com.nekko.android.ui.chat.effortLabel
 import com.nekko.android.ui.components.NCard
 import com.nekko.android.ui.components.Pill
 import com.nekko.android.ui.components.SectionHeader
@@ -271,7 +272,7 @@ fun NewChatScreen(
                             Label(Icons.Filled.Speed, "Effort")
                             Row(Modifier.horizontalScroll(rememberScrollState()).testTag("newChat.effort"), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Chip("Computer default", effort == null) { effort = null }
-                                Effort.levels(chosen.modelId).forEach { e -> Chip(e.label, effort == e.wire) { effort = e.wire } }
+                                Effort.levels(chosen.modelId).forEach { e -> Chip(effortLabel(e), effort == e.wire) { effort = e.wire } }
                             }
                         }
                         if (c.workspaces.isNotEmpty()) {

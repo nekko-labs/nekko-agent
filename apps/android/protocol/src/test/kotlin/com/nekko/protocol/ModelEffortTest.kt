@@ -34,7 +34,7 @@ class ModelEffortTest {
         assumeTrue("running outside the monorepo", f.exists())
         val levels = Json.parseToJsonElement(f.readText()).jsonObject["effortLevels"]!!.jsonArray.map { it.jsonPrimitive.content }
         assertEquals(levels, Effort.entries.map { it.wire })
-        assertEquals(Effort.XHIGH, Effort.of("xhigh"))
+        assertEquals(Effort.XHIGH, Effort.parse("xhigh"))
     }
 
     @Test fun `local providers are the on-device servers`() {
