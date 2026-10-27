@@ -1,5 +1,11 @@
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { describe, expect, it } from 'vitest';
-import { parseVoiceIntent } from './voiceCommands.js';
+import { parseVoiceIntent, splitVoiceSegments, type VoiceIntent } from './voiceCommands.js';
+
+interface Fixture { cases: Array<{ say: string; intent: VoiceIntent; platforms?: string[] }> }
+// The fixture the Swift grammar on iOS runs too.
+const fixture = JSON.parse(readFileSync(join(__dirname, '..', '..', '..', '..', 'packages', 'shared', 'fixtures', 'voice-commands.json'), 'utf8')) as Fixture;
 
 describe('voice intent', () => {
   it('never treats ordinary dictation as a command', () => {
@@ -31,5 +37,27 @@ describe('voice intent', () => {
     expect(parseVoiceIntent('Nekko show screen three')).toEqual({ kind: 'go', target: { kind: 'screen', n: 3 } });
     expect(parseVoiceIntent('switch to desktop 2')).toEqual({ kind: 'dictation', text: 'switch to desktop 2' });
     expect(parseVoiceIntent('Nekko switch to desktop purple').kind).toBe('unknown');
+  });
+});
+
+describe('shared fixture', () => {
+  const desktop = fixture.cases.filter((c) => !c.platforms || c.platforms.includes('desktop'));
+  it.each(desktop.map((c) => [c.say, c] as const))('parses: %s', (_say, c) => {
+    expect(parseVoiceIntent(c.say)).toEqual(c.intent);
+  });
+});
+
+describe('splitVoiceSegments', () => {
+  it('splits dictation from a command at the sentence end', () => {
+    expect(splitVoiceSegments('Fix the login bug. Nekko, send it.')).toEqual([{ kind: 'dictation', text: 'Fix the login bug.' }, { kind: 'send' }]);
+  });
+  it('only honors the wake word at the start of a piece', () => {
+    expect(splitVoiceSegments('Tell Nekko to send it.')).toEqual([{ kind: 'dictation', text: 'Tell Nekko to send it.' }]);
+  });
+  it('joins consecutive dictation pieces', () => {
+    expect(splitVoiceSegments('Fix the bug. Then add a test! Nekko ship it')).toEqual([{ kind: 'dictation', text: 'Fix the bug. Then add a test!' }, { kind: 'ship' }]);
+  });
+  it('returns nothing for silence', () => {
+    expect(splitVoiceSegments('  ')).toEqual([]);
   });
 });
