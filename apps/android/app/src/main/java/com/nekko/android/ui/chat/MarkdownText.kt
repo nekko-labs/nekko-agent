@@ -54,6 +54,10 @@ import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.nekko.android.ui.theme.Nekko
+import com.nekko.android.previews.ChatPreviews
+import com.nekko.android.previews.LocalChatPreviews
+import com.nekko.protocol.ChatLinks
+import com.nekko.protocol.ChatPreviewLink
 import com.nekko.protocol.Markdown
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -67,14 +71,17 @@ import kotlinx.coroutines.launch
 @Composable
 fun MarkdownText(text: String, color: Color, modifier: Modifier = Modifier) {
     val p = Nekko.palette
-    val pieces = remember(text) { Markdown.parse(text) }
+    // In a chat, links to files and loopback pages open previews (AN-35); paths Markdown can't read as links are made into file: URLs first.
+    val previews = LocalChatPreviews.current
+    val pieces = remember(text, previews != null) { Markdown.parse(if (previews != null) ChatLinks.linkable(text) else text) }
+    val cards = remember(text, previews != null) { if (previews != null) ChatLinks.previews(text) else emptyList() }
     val body = MaterialTheme.typography.bodyLarge.copy(color = color)
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         for (piece in pieces) {
             when (piece) {
                 is Markdown.Piece.Code -> CodeBlock(piece.language, piece.code)
                 is Markdown.Piece.Heading -> Text(
-                    inline(piece.text),
+                    inline(piece.text, previews, cards),
                     style = when {
                         piece.level <= 1 -> MaterialTheme.typography.titleLarge
                         piece.level == 2 -> MaterialTheme.typography.titleMedium
@@ -87,24 +94,24 @@ fun MarkdownText(text: String, color: Color, modifier: Modifier = Modifier) {
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     Text(piece.marker, style = body.copy(color = p.inkSoft))
-                    Text(inline(piece.text), style = body)
+                    Text(inline(piece.text, previews, cards), style = body)
                 }
                 is Markdown.Piece.Quote -> Row(Modifier.height(IntrinsicSize.Min)) {
                     Box(Modifier.width(3.dp).fillMaxHeight().background(p.line))
-                    Text(inline(piece.text), style = body.copy(color = p.inkSoft), modifier = Modifier.padding(start = 10.dp))
+                    Text(inline(piece.text, previews, cards), style = body.copy(color = p.inkSoft), modifier = Modifier.padding(start = 10.dp))
                 }
                 Markdown.Piece.Rule -> HorizontalDivider(color = p.line)
-                is Markdown.Piece.Paragraph -> Text(inline(piece.text), style = body)
+                is Markdown.Piece.Paragraph -> Text(inline(piece.text, previews, cards), style = body)
             }
         }
     }
 }
 
 @Composable
-private fun inline(s: String): AnnotatedString {
+private fun inline(s: String, previews: ChatPreviews? = null, cards: List<ChatPreviewLink> = emptyList()): AnnotatedString {
     val p = Nekko.palette
     val links = TextLinkStyles(SpanStyle(color = p.accent, textDecoration = TextDecoration.Underline))
-    return remember(s, p) {
+    return remember(s, p, previews, cards) {
         buildAnnotatedString {
             for (span in Markdown.inline(s)) {
                 val style = SpanStyle(
@@ -114,7 +121,11 @@ private fun inline(s: String): AnnotatedString {
                     background = if (Markdown.Style.CODE in span.styles) p.code else Color.Unspecified,
                 )
                 val url = span.url
-                if (url != null && safeLink(url)) {
+                val preview = if (url != null && previews != null) ChatLinks.preview(url, cards) else null
+                if (preview != null) {
+                    // A file or a loopback page: the preview window, never the phone's browser.
+                    withLink(LinkAnnotation.Clickable("preview", links) { previews!!.open(preview) }) { withStyle(style) { append(span.text) } }
+                } else if (url != null && safeLink(url)) {
                     withLink(LinkAnnotation.Url(url, links)) { withStyle(style) { append(span.text) } }
                 } else {
                     withStyle(style) { append(span.text) }

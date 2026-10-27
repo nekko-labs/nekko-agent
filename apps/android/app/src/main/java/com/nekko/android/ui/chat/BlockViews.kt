@@ -63,6 +63,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.nekko.android.ui.previews.PreviewCards
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.Block
 import com.nekko.protocol.Purpose
@@ -162,6 +163,8 @@ private fun Reply(b: Block.Assistant, fork: ForkAction?) {
         }
         if (b.text.isNotEmpty()) {
             LongPressMenu(b.text, fork) { press -> MarkdownText(b.text, color = p.ink, modifier = Modifier.fillMaxWidth().then(press)) }
+            // Cards come once the reply is finished; a tapped link works meanwhile.
+            if (!b.streaming) PreviewCards(b.text)
         } else if (b.streaming && reasoning.isNullOrEmpty()) {
             CircularProgressIndicator(
                 color = p.accent,

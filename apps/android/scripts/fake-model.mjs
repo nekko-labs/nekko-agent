@@ -11,6 +11,10 @@
 // Prompts containing "ask me" call `ask_user` with one two-option question.
 // Prompts containing "write a note" call `write_file` for `nekko-itest-note.txt`,
 // so the phone's read-only Changes view has a real edit to show.
+// Prompts containing "show previews" stream the text of the file named by
+// NEKKO_FAKE_PREVIEWS (a reply linking files and a dev server, for the
+// phone's preview cards and window).
+import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 
 const port = Number(process.argv[2] || 4700);
@@ -50,6 +54,10 @@ createServer((req, res) => {
       res.write(chunk({ role: 'assistant', tool_calls: [{ index: 0, id: 'call_write', type: 'function', function: { name: 'write_file', arguments: '' } }] }));
       res.write(chunk({ tool_calls: [{ index: 0, function: { arguments: JSON.stringify(args) } }] }));
       res.write(chunk({}, 'tool_calls'));
+    } else if (last?.role === 'user' && /show previews/i.test(userText) && process.env.NEKKO_FAKE_PREVIEWS) {
+      const text = readFileSync(process.env.NEKKO_FAKE_PREVIEWS, 'utf8');
+      for (const piece of text.match(/[\s\S]{1,24}/g) ?? []) res.write(chunk({ content: piece }));
+      res.write(chunk({}, 'stop'));
     } else if (last?.role === 'user' && /markdown/i.test(userText)) {
       const md = '## Build steps\n\n1. Install with **npm ci**\n2. Run `npm test`\n- [x] lint\n\n```sh\nnpm ci && npm test -- --reporter=dot --run-in-band\n```\n\nSee [the docs](https://nekkoagent.com/docs).';
       for (const piece of md.match(/[\s\S]{1,12}/g)) res.write(chunk({ content: piece }));

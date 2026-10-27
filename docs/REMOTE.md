@@ -104,6 +104,10 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > sends what the agent linked in that chat (and, for a linked web page, the files in its folder),
 > and the page can't reach the internet or anything else on your phone. Ordinary web links open in
 > Safari.
+> On Android it works the same way: the cards under the reply, the link in the text, the window
+> with **Reload** and **⋮ → Copy path** (or **Copy address**) and **Share**; a PDF shows its pages,
+> and ordinary web links open in the browser. An open preview stays open when you open or fold a
+> folding phone.
 >
 > Each group opens with up to eight chats from the last two weeks (a chat that is working, needs
 > you or is pinned always shows), then **Show N more**. Tap a group's name to fold it. The
