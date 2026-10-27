@@ -95,6 +95,18 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-10
 
+### #1204 Dynamic zones and the Remotion intro (2026-10-26)
+Area: packaging
+Result: regression (small, main bundle); the intro's cost is deferred to a lazy chunk
+Conditions: macOS (Apple silicon), `electron-vite build` of apps/desktop, base `6927b1db` versus the zones branch, one build each, sizes as printed by Vite (uncompressed)
+
+| Metric | Before | After |
+|---|---|---|
+| `out/renderer/assets/index-*.js` | 4,222.62 kB | 4,236.83 kB |
+| Zones intro chunk (`ZonesIntro-*.js`, loaded only with the intro) | none | 692.60 kB |
+
+Why: zones add board code to the main bundle; Remotion (`remotion`, `@remotion/player`) loads only when the one-time intro opens, through `React.lazy`. Load time and memory were not measured. Source: #1204.
+
 ### T211 Runner VM NAT: guest-facing TCP send buffer 16 to 64 KiB (2026-10-25)
 Area: engine daemon
 Result: improvement
