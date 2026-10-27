@@ -1526,6 +1526,11 @@ A Mac running Nekko Agent becomes a sandboxed GitHub Actions self-hosted runner,
   - Pending: one real job end to end (T214 pilot).
   - Pending: the VPN binding checked against a real tunnel (Tailscale exit node and subnet route, and a packet-tunnel VPN that enforces routes).
 - [ ] **T213** CI section UI in the Workflows tab: connect sheet, runner card, settings, menu bar indicator. Added: 2026-10-24. Issue #1038.
+  - Done 2026-10-25: shared types, copy and channels. `packages/shared/src/runners.ts` (the `RunnerView` mirror, exact mode, keep awake and VPN labels, every reason sentence, slot lines, `toConnectRequest`, `runnerActivity`), the `runner:*` methods on the desktop bridge and `web-client.ts`, the daemon gains host facts and recent jobs on the view. Tests in `packages/shared/src/runners.test.ts` and `tests/daemon/runner.rs`.
+  - Done 2026-10-25: the CI runners segment and runner card. `CiRunnersView.tsx` (Workflows | CI runners, first-visit card, unavailable sentence, push over late list), `RunnerCard.tsx` (slots, reasons, power, network, today, recent, on switch). Tests in `CiRunnersView.test.tsx` and `RunnerCard.test.tsx`.
+  - Done 2026-10-25: the connect and settings sheets. `ConnectRunnerSheet.tsx` (three steps, inline GitHub refusal, the key only in the sheet), `RunnerSettingsSheet.tsx` (every setting, shows what the daemon kept, waits for the first sample). Tests in `ConnectRunnerSheet.test.tsx` and `RunnerSettingsSheet.test.tsx`.
+  - Done 2026-10-25: the menu bar dot and docs. `apps/desktop/src/main/trayDot.ts` and the tray's CI lines (a failed `runner:list` means none), [docs/ci-runners.md](docs/ci-runners.md) on the docs hub, renderer evidence from `apps/desktop/scripts/ci-runners-integration.cjs` (light and dark). Tests in `trayDot.test.ts`, `tray.test.ts` and the docs check in `runners.golden.test.ts`.
+  - Pending: seen against a live runner in the T214 pilot.
 - [ ] **T214** Images, picker and pilot: golden image builder, picker job, the P0 pilot on our own CI. Added: 2026-10-24. Issue #1038.
 
 ### Chat completion X icons ([#533](https://github.com/nekko-labs/nekko-agent/issues/533))

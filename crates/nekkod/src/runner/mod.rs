@@ -305,6 +305,8 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
                     awake: false,
                     error: None,
                     today: Default::default(),
+                    host: Default::default(),
+                    recent: Vec::new(),
                 });
                 v.config = r.config.clone();
                 if reset.contains(&r.config.id) {

@@ -394,3 +394,44 @@ fn an_idle_vm_still_stops_for_hard_limits_and_the_mode() {
     typing.available_memory_mb = 1000.0;
     assert_eq!(keep_idle(&with(DoNotDisturb), &typing), Decision::Hold { why: vec![Reason::UserActive] });
 }
+
+/// Every `Reason`; the `match` has no `_` arm, so a new variant fails to compile here first.
+fn all_reasons() -> Vec<Reason> {
+    use Reason::*;
+    let all = vec![
+        Off,
+        PausedAll,
+        Schedule,
+        OnBattery,
+        LowPowerMode,
+        Network,
+        Hotspot,
+        VpnCarriesAllTraffic,
+        MemoryWarning,
+        MemoryCritical,
+        ThermalSerious,
+        ThermalCritical,
+        DiskFloor,
+        SecurityUpdate,
+        MemoryHeadroom,
+        HostStateUnknown,
+        UserActive,
+        UserBusy,
+    ];
+    for r in &all {
+        match r {
+            Off | PausedAll | Schedule | OnBattery | LowPowerMode | Network | Hotspot | VpnCarriesAllTraffic
+            | MemoryWarning | MemoryCritical | ThermalSerious | ThermalCritical | DiskFloor | SecurityUpdate
+            | MemoryHeadroom | HostStateUnknown | UserActive | UserBusy => {}
+        }
+    }
+    all
+}
+
+#[test]
+fn reason_names_match_the_shared_fixture() {
+    let names: Vec<String> =
+        all_reasons().iter().map(|r| serde_json::to_value(r).unwrap().as_str().unwrap().to_string()).collect();
+    let want: Vec<String> = serde_json::from_str(include_str!("fixtures/reasons.json")).unwrap();
+    assert_eq!(names, want);
+}
