@@ -7,6 +7,8 @@ const path = require('node:path');
 const out = process.env.NEKKO_INTEGRATION_OUT;
 if (!out) throw Error('Launch through layout-evidence-integration.cjs');
 app.setPath('userData', path.join(out, 'profile'));
+// JSON.stringify plus escapes for <, >, / and line separators, so values stay inert inside the injected script.
+const js = v => JSON.stringify(v).replace(/[<>/\u2028\u2029]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const report = { captures: [], metrics: {}, errors: [] };
 const SIZES = [[1280, 800], [1600, 900], [2000, 1100]];
@@ -26,13 +28,13 @@ app.whenReady().then(async () => {
     await ready();
     // Two chats on the wall, from the agent panel's cards.
     for (const title of ['Persist quota history', 'Diagnose failed build']) {
-      await run(`(() => { const el = [...document.querySelectorAll('[data-agent-panel] *')].find(e => e.textContent.trim() === ${JSON.stringify(title)}); el && el.click(); })()`);
+      await run(`(() => { const el = [...document.querySelectorAll('[data-agent-panel] *')].find(e => e.textContent.trim() === ${js(title)}); el && el.click(); })()`);
       await sleep(600);
     }
     // Close the one-time zones intro.
     await run("(() => { const b = [...document.querySelectorAll('[role=dialog] button')].find(e => /close/i.test(e.getAttribute('aria-label') || '')); b && b.click(); })()"); await sleep(500);
     for (const mode of ['Dynamic', 'Focused']) {
-      await run(`(() => { const b = [...document.querySelectorAll('button')].find(e => e.textContent.trim() === ${JSON.stringify(mode)}); b && b.click(); })()`);
+      await run(`(() => { const b = [...document.querySelectorAll('button')].find(e => e.textContent.trim() === ${js(mode)}); b && b.click(); })()`);
       await sleep(700);
       for (const [w, h] of SIZES) {
         win.setContentSize(w, h); await sleep(1800);
