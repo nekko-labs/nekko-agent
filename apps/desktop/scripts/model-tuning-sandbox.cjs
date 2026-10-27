@@ -46,6 +46,19 @@ app.whenReady().then(async () => {
     win.setContentSize(820, 1200);
   };
   const reset = async opts => { await run(`integration.reset(${js(opts)})`); await sleep(1500); };
+  // The buttons row and what sits just above it, where the unsaved-settings line goes.
+  const captureFooter = async name => {
+    const y = await run(`Math.max(0, Math.floor(document.querySelector('[data-load]').getBoundingClientRect().top + scrollY) - 110)`);
+    const height = Math.min(4000, Math.ceil(await run('document.documentElement.scrollHeight')));
+    win.setContentSize(820, height); await sleep(500);
+    const image = await win.capturePage({ x: 0, y, width: 820, height: 170 }, { stayHidden: true });
+    if (image.isEmpty()) throw Error('Empty capture: ' + name);
+    const file = path.join(dir, name + '.png');
+    fs.writeFileSync(file, image.toPNG()); report.captures.push({ file, size: image.getSize() });
+    win.setContentSize(820, 1200);
+  };
+  const savedPreset = { contextTokens: 32768, kvCacheDtype: 'f16', parallelSlots: 1, budgetFraction: 0.9 };
+  const speculativeOff = async () => { await click('[data-fold="more"]'); await click('[data-fold="expert"]'); await click('[aria-label="Speculative decoding"]'); };
   try {
     await win.loadFile(path.join(out, 'index.html')); await sleep(1000);
     if (base) {
@@ -53,6 +66,7 @@ app.whenReady().then(async () => {
       await click('[data-run-on="gpu"]'); await click('[data-run-on="hybrid"]'); await click('[data-preset="coding"]');
       await click('[data-fold="more"]'); await click('[data-fold="expert"]'); await capture('moe8-more-and-expert');
       await reset({ scenario: 'dense24' }); await capture('dense24-open');
+      await reset({ scenario: 'dense24', preset: savedPreset }); await speculativeOff(); await captureFooter('saved-speculative-off');
     } else {
       await reset({ scenario: 'moe8' });
       await capture('moe8-open');
@@ -79,6 +93,14 @@ app.whenReady().then(async () => {
       await capture('dense24-open');
       await check('a dense model that fits runs on the GPU', "document.querySelector('[data-run-on=\"gpu\"]')?.getAttribute('aria-pressed')==='true'");
       await check('MoE presets are not offered for a dense model', "!document.querySelector('[data-preset]')");
+      await reset({ scenario: 'dense24', preset: savedPreset });
+      await captureFooter('saved-unchanged');
+      await check('saved settings, untouched: no unsaved-settings line', "!document.querySelector('[data-unsaved]')");
+      await speculativeOff();
+      await captureFooter('saved-speculative-off');
+      await check('a change from the saved settings says it applies to this load only', "document.querySelector('[data-unsaved]')?.innerText.includes('this load only')");
+      await click('[aria-label="Speculative decoding"]');
+      await check('switching it back to the saved value clears the line', "!document.querySelector('[data-unsaved]')");
       await reset({ scenario: 'dense8' });
       await capture('dense8-open');
       await check('a dense model too big for 8 GB moves feed-forward to RAM', "document.querySelector('[data-engine-load-drawer]').innerText.includes('Feed-forward')");
