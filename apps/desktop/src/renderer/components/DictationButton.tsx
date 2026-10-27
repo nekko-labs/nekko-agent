@@ -20,11 +20,8 @@ export function DictationButton(props: VoiceTarget) {
   const [setup, setSetup] = useState(false);
   const [intro, setIntro] = useState(false);
   useEffect(() => voiceListener.register(sessionId, () => target.current), [sessionId]);
-  useEffect(() => {
-    if (!voice?.enabled) voiceListener.abort();
-    // Choosing an engine in the setup popover is the whole setup: close it.
-    if (voice?.enabled && setup) setSetup(false);
-  }, [voice?.enabled, setup]);
+  // Choosing an engine in the setup popover is the whole setup: close it. (Voice-off stops listening in voiceActions.)
+  useEffect(() => { if (voice?.enabled && setup) setSetup(false); }, [voice?.enabled, setup]);
   const listen = async () => { if (await voiceListener.start(sessionId) === 'setup') setSetup(true); };
   const toggle = async () => {
     if (snap.listening) { void voiceListener.stop(); return; }

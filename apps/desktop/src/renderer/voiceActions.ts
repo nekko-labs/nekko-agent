@@ -5,9 +5,10 @@ import { useStore } from './store.js';
 import { describeRun, getLiveRun } from './liveRuns.js';
 import { displaysBridge } from './displays.js';
 import { runPrAction } from './components/PrCard.js';
-import { splitVoiceSegments, type VoiceIntent } from './voiceCommands.js';
+import { splitVoiceSegments, splitWakeTail, type VoiceIntent } from './voiceCommands.js';
 import { startVoiceCapture } from './voiceCapture.js';
 import { createSegmentQueue } from './voiceSegments.js';
+import { loadDraft, saveDraft } from './composerDrafts.js';
 import { translate } from './i18n.js';
 
 /** What "Nekko, ship it" does for a chat. */
@@ -34,21 +35,44 @@ export function statusLine(input: { title: string; running: boolean; pending?: P
   return `${input.title}: ${LANE_META[lane].title}${detail ? ', ' + detail : ''}`;
 }
 
-/** The composer a voice segment lands in. */
-export interface VoiceTarget { sessionId: string; onText(text: string): void; onErase(): void; onClear(): void; onSend(): void }
+/**
+ * The composer a voice segment lands in. `sentence` starts the text as its own
+ * sentence; `onErase` says whether anything was removed and `onSend` whether it sent.
+ */
+export interface VoiceTarget { sessionId: string; onText(text: string, sentence?: boolean): void; onErase(): boolean; onClear(): void; onSend(): Promise<boolean> }
 
 /**
  * The composer side of voice: tracks the last dictated piece so "erase that"
  * removes exactly it, and sends a snapshot so words dictated after "send it"
- * start the next draft instead of riding along.
+ * start the next draft instead of riding along. A refused send (no model, an
+ * unconfigured sandbox) puts the text back; `sent` runs only after a real send,
+ * so attachments are cleared only then.
  */
-export function voiceComposer(draft: { get(): string; set(text: string): void; send(text: string): void }): Omit<VoiceTarget, 'sessionId'> {
+export function voiceComposer(draft: { get(): string; set(text: string): void; send(text: string): Promise<boolean>; sent(): void }): Omit<VoiceTarget, 'sessionId'> {
   let last = '';
   return {
-    onText(text) { const current = draft.get(); last = (current && !/\s$/.test(current) ? ' ' : '') + text; draft.set(current + last); },
-    onErase() { const current = draft.get(); if (last && current.endsWith(last)) draft.set(current.slice(0, -last.length)); last = ''; },
+    onText(text, sentence) {
+      const current = sentence ? draft.get().trimEnd() : draft.get();
+      last = (sentence && current && !/[.!?]$/.test(current) ? '.' : '') + (current && !/\s$/.test(current) ? ' ' : '') + text;
+      draft.set(current + last);
+    },
+    onErase() {
+      const current = draft.get();
+      const removed = !!last && current.endsWith(last);
+      if (removed) draft.set(current.slice(0, -last.length));
+      last = '';
+      return removed;
+    },
     onClear() { last = ''; draft.set(''); },
-    onSend() { const text = draft.get(); last = ''; draft.set(''); draft.send(text); },
+    async onSend() {
+      const text = draft.get();
+      if (!text.trim()) return false;
+      last = ''; draft.set('');
+      if (await draft.send(text).catch(() => false)) { draft.sent(); return true; }
+      const now = draft.get();
+      draft.set(now ? `${text} ${now}` : text);
+      return false;
+    },
   };
 }
 
@@ -56,20 +80,24 @@ export function voiceComposer(draft: { get(): string; set(text: string): void; s
 export type VoicePending = { kind: 'confirm'; message: string; run: () => Promise<void> } | { kind: 'choose'; message: string; options: Array<{ label: string; run: () => Promise<void> | void }> };
 
 const SAY_YES = "Say 'Nekko, yes' or tap Confirm.";
+const GO_AHEAD = 'Go ahead and build it.';
 const prLabel = (pr: PrInfo) => `${pr.owner}/${pr.repo}#${pr.number}`;
 /** Commands about one chat: they act only on the focused chat, never on a fallback. */
 const CHAT_COMMANDS = new Set<VoiceIntent['kind']>(['erase', 'clear', 'send', 'ship', 'status', 'complete-session']);
 const goLabel = (t: Extract<VoiceIntent, { kind: 'go' }>['target']) => 'n' in t ? `${t.kind} ${t.n}` : `the ${t.step > 0 ? 'next' : 'previous'} ${t.kind}`;
 
-/** Runs one intent and returns what is pending afterwards. `target` is null when no chat is focused. */
-export async function runVoiceIntent(intent: VoiceIntent, target: VoiceTarget | null, pending: VoicePending | null): Promise<VoicePending | null> {
+/**
+ * Runs one intent and returns what is pending afterwards. `target` is null when
+ * no chat is focused; `type` is where words go that are not a command.
+ */
+export async function runVoiceIntent(intent: VoiceIntent, target: VoiceTarget | null, pending: VoicePending | null, type: (text: string) => void = text => target?.onText(text)): Promise<VoicePending | null> {
   const store = useStore.getState();
   const toast = (message: string) => store.pushToast('success', message);
   const titleOf = (sessionId: string) => store.sessions.find((s: SessionSummary) => s.id === sessionId)?.title || 'Untitled chat';
   const openChat = (sessionId: string) => { store.openChatPane(sessionId); toast(`Opened ${titleOf(sessionId)}`); };
   if (CHAT_COMMANDS.has(intent.kind) && !target) { store.pushToast('error', 'Open a chat first'); return pending; }
   switch (intent.kind) {
-    case 'dictation': case 'unknown': target?.onText(intent.text); return pending;
+    case 'dictation': case 'unknown': type(intent.text); return pending;
     case 'new-session': await store.newChat(); toast('New chat'); return pending;
     case 'navigate': store.setView(intent.view); toast(`Opened ${translate('en', 'nav.' + intent.view)}`); return pending;
     case 'go': {
@@ -82,7 +110,8 @@ export async function runVoiceIntent(intent: VoiceIntent, target: VoiceTarget | 
     case 'open-chat': {
       const result = pickChat(store.sessions, intent.query);
       if ('open' in result) { openChat(result.open); return pending; }
-      if (!result.choose.length) { store.pushToast('error', `No chat matches "${intent.query}"`); return pending; }
+      // A "Nekko, open ..." that names no chat is words, never dropped.
+      if (!result.choose.length) { type(intent.text); return pending; }
       return { kind: 'choose', message: "Which chat? Say 'Nekko, the first one' or tap it.", options: result.choose.map(s => ({ label: s.title || 'Untitled chat', run: () => openChat(s.id) })) };
     }
     case 'yes':
@@ -105,9 +134,9 @@ export async function runVoiceIntent(intent: VoiceIntent, target: VoiceTarget | 
   const session = store.sessions.find((s: SessionSummary) => s.id === id);
   const title = titleOf(id);
   switch (intent.kind) {
-    case 'erase': t.onErase(); toast('Erased'); return pending;
+    case 'erase': if (t.onErase()) toast('Erased'); return pending;
     case 'clear': t.onClear(); toast('Cleared'); return pending;
-    case 'send': t.onSend(); toast('Sent'); return pending;
+    case 'send': if (await t.onSend()) toast('Sent'); return pending;
     case 'status': {
       const waiting = (await window.nekko.pendingInput().catch(() => ({} as Record<string, PendingInput>)))[id];
       toast(statusLine({ title, running: !!getLiveRun(id), pending: waiting, stalled: session?.stalled, step: describeRun(id), watchingPr: (session?.activeWatchCount ?? 0) > 0 }));
@@ -119,8 +148,18 @@ export async function runVoiceIntent(intent: VoiceIntent, target: VoiceTarget | 
       const prs: PrInfo[] = store.prsBySession[id] ?? [];
       const waiting = (await window.nekko.pendingInput().catch(() => ({} as Record<string, PendingInput>)))[id];
       const action = shipAction({ prs, running: !!getLiveRun(id), pending: waiting });
-      const goAhead = () => { t.onText('Go ahead and build it.'); t.onSend(); toast('Sent'); };
-      if (action === 'go-ahead') { goAhead(); return pending; }
+      // A turn waiting on a question is answered with free text: a send would queue behind that same turn.
+      const goAhead = async () => {
+        const asked = waiting?.question;
+        if (asked) {
+          await window.nekko.answerQuestion(id, asked.callId, asked.questions.map(q => ({ questionId: q.id, labels: [], note: GO_AHEAD })));
+          toast('Sent');
+          return;
+        }
+        t.onText(GO_AHEAD, true);
+        if (await t.onSend()) toast('Sent');
+      };
+      if (action === 'go-ahead') { await goAhead(); return pending; }
       if (action === 'still-working') { toast("It's still working"); return pending; }
       if (action === 'nothing') { toast('Nothing to ship'); return pending; }
       const pr = prs.find(p => p.state === 'open')!;
@@ -161,6 +200,10 @@ let offStop: (() => void) | null = null;
 let expiry: ReturnType<typeof setTimeout> | undefined;
 /** How long a confirm or choice waits for an answer: a stray "Nekko, yes" much later must not merge. */
 export const PENDING_TTL_MS = 60_000;
+/** A pause right after "Nekko" cuts it into its own segment; it still addresses a segment this soon after. */
+export const WAKE_CARRY_MS = 5_000;
+let carried: { wake: string; at: number } | null = null;
+let transcribeFailing = false;
 
 function setPending(pending: VoicePending | null): void {
   // An unchanged pending keeps its clock: talking on must not keep a confirm alive.
@@ -177,11 +220,27 @@ function textTarget(): (() => VoiceTarget) | undefined {
   return focusedTarget() ?? targetFor(snap.owner) ?? [...targets.values()].at(-1)?.at(-1);
 }
 
+function typeText(text: string): void {
+  const target = textTarget();
+  if (target) { target().onText(text); return; }
+  // No composer on screen (Settings, Models, ...): the words wait in the owning chat's saved draft,
+  // which its composer restores when the chat opens.
+  const id = snap.owner;
+  if (!id) return;
+  const parked = loadDraft(id);
+  const current = parked?.text ?? '';
+  saveDraft(id, { text: current + (current && !/\s$/.test(current) ? ' ' : '') + text, images: parked?.images ?? [], videos: parked?.videos ?? [] });
+  const store = useStore.getState();
+  store.pushToast('success', `Added to ${store.sessions.find((s: SessionSummary) => s.id === id)?.title || 'Untitled chat'} draft`);
+}
+
 async function act(intent: VoiceIntent): Promise<void> {
-  const typed = intent.kind === 'dictation' || intent.kind === 'unknown';
-  const target = typed ? textTarget() : focusedTarget();
-  if (typed && !target) return;
-  try { setPending(await runVoiceIntent(intent, target?.() ?? null, snap.pending)); }
+  try {
+    const before = snap.pending;
+    setPending(await runVoiceIntent(intent, focusedTarget()?.() ?? null, before, typeText));
+    // With no composer on screen there is no strip to show a list on.
+    if (snap.pending && snap.pending !== before && !targets.size) useStore.getState().pushToast('info', snap.pending.message);
+  }
   catch (e) {
     useStore.getState().pushToast('error', (e as Error).message);
     // A confirm whose action failed is answered; leaving it up invites a second try by accident.
@@ -193,10 +252,19 @@ async function applyText(text: string): Promise<void> {
   const voice = useStore.getState().settings?.voice;
   if (!voice?.enabled) return;
   set({ heard: text });
-  for (const intent of voice.commandsEnabled === false ? [{ kind: 'dictation' as const, text }] : splitVoiceSegments(text)) await act(intent);
+  if (voice.commandsEnabled === false) { await act({ kind: 'dictation', text }); return; }
+  const carry = carried && Date.now() - carried.at <= WAKE_CARRY_MS ? `${carried.wake} ` : '';
+  // A wake word left alone at the end waits for the next segment; carried too late, it is dropped (it holds no words).
+  const { rest, wake } = splitWakeTail(carry + text);
+  carried = wake ? { wake, at: Date.now() } : null;
+  for (const intent of splitVoiceSegments(rest)) await act(intent);
 }
 
-const queue = createSegmentQueue(wav => window.nekko.voiceTranscribe(wav), applyText);
+const queue = createSegmentQueue(wav => window.nekko.voiceTranscribe(wav), text => { transcribeFailing = false; return applyText(text); }, e => {
+  // Said once per failing run, not on every pause, while the engine keeps refusing.
+  if (!transcribeFailing) useStore.getState().pushToast('error', `Could not turn speech into text: ${(e as Error)?.message ?? e}`);
+  transcribeFailing = true;
+});
 
 function end(): void {
   capture = null;
@@ -208,7 +276,7 @@ function end(): void {
 export const voiceListener = {
   subscribe(fn: () => void) { listeners.add(fn); return () => { listeners.delete(fn); }; },
   snapshot: () => snap,
-  /** A mounted composer. Listening stops once none is left (a chat switch remounts one at once). */
+  /** A mounted composer. Listening carries on with none (a page with no chat): words then go to the owner's saved draft. */
   register(sessionId: string, target: () => VoiceTarget): () => void {
     targets.set(sessionId, [...(targets.get(sessionId) ?? []), target]);
     set({ version: snap.version + 1 });
@@ -216,7 +284,6 @@ export const voiceListener = {
       const rest = (targets.get(sessionId) ?? []).filter(t => t !== target);
       if (rest.length) targets.set(sessionId, rest); else targets.delete(sessionId);
       set({ version: snap.version + 1 });
-      window.setTimeout(() => { if (!targets.size) voiceListener.abort(); }, 0);
     };
   },
   /** The chat whose button shows the strip and any confirm. */
@@ -224,17 +291,25 @@ export const voiceListener = {
   async start(owner: string): Promise<'started' | 'setup' | 'failed'> {
     if (capture || snap.busy === 'starting') return 'started';
     set({ busy: 'starting', error: '' });
+    // The toggle-off tail still applies after listening ends, so a carried wake word is reset here, not there.
+    transcribeFailing = false; carried = null;
+    // Subscribed before the microphone opens, so a lock or voice-off while it opens is not missed.
+    // Voice-off is watched here, not in a composer, because listening outlives every composer.
+    let stopped = false;
+    const stop = () => { stopped = true; voiceListener.abort(); };
+    const offs = [window.nekko.onVoiceLockStop?.(stop), useStore.subscribe(s => { if (!s.settings?.voice?.enabled) stop(); })];
+    const off = () => offs.forEach(fn => fn?.());
     try {
       const voice = useStore.getState().settings?.voice;
       const status = await window.nekko.voiceStatus();
-      if (!voice?.enabled || !status.installed) { set({ busy: null }); return 'setup'; }
+      if (!voice?.enabled || !status.installed) { off(); set({ busy: null }); return 'setup'; }
       const local = await startVoiceCapture({ ...voice, onLevel: level => set({ level }), onSilence: () => {}, onSegment: wav => queue.push(wav) });
-      if (!useStore.getState().settings?.voice?.enabled || !targets.size) { local.abort(); set({ busy: null }); return 'failed'; }
+      if (stopped || !useStore.getState().settings?.voice?.enabled) { off(); local.abort(); set({ busy: null }); return 'failed'; }
       capture = local;
-      offStop = window.nekko.onVoiceStop?.(() => voiceListener.abort()) ?? null;
+      offStop = off;
       set({ listening: true, busy: null, owner, heard: '', level: 0 });
       return 'started';
-    } catch (e) { set({ busy: null, error: (e as Error).message }); return 'failed'; }
+    } catch (e) { off(); set({ busy: null, error: (e as Error).message }); return 'failed'; }
   },
   /** Toggle off: the words spoken just before still count. */
   async stop(): Promise<void> {
@@ -248,7 +323,7 @@ export const voiceListener = {
     await queue.drain();
     if (snap.busy === 'transcribing') set({ busy: null });
   },
-  /** Voice switched off, the screen locked or the last composer went: drop the unfinished tail. */
+  /** Voice switched off or the screen locked: drop the unfinished tail. */
   abort(): void {
     const current = capture;
     if (!current) return;

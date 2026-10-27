@@ -3,10 +3,13 @@ import type { PendingInput, PrInfo, SessionSummary } from '@nekko-agent/shared';
 
 const store = vi.hoisted(() => ({
   state: {} as Record<string, any>,
+  listeners: new Set<(s: Record<string, any>) => void>(),
 }));
+const drafts = vi.hoisted(() => new Map<string, { text: string; images: string[]; videos: string[] }>());
 const capture = vi.hoisted(() => ({ onSegment: null as null | ((wav: number[]) => void), tail: [] as number[], stop: vi.fn(), abort: vi.fn() }));
 const runs = vi.hoisted(() => ({ running: new Set<string>(), step: '' }));
-vi.mock('./store.js', () => ({ useStore: { getState: () => store.state, setState: vi.fn() } }));
+vi.mock('./store.js', () => ({ useStore: { getState: () => store.state, setState: vi.fn(), subscribe: (fn: (s: Record<string, any>) => void) => { store.listeners.add(fn); return () => { store.listeners.delete(fn); }; } } }));
+vi.mock('./composerDrafts.js', () => ({ loadDraft: (id: string) => drafts.get(id) ?? null, saveDraft: (id: string, d: { text: string; images: string[]; videos?: string[] }) => { drafts.set(id, { text: d.text, images: d.images, videos: d.videos ?? [] }); } }));
 vi.mock('./liveRuns.js', () => ({ getLiveRun: (id: string) => (runs.running.has(id) ? {} : undefined), describeRun: () => runs.step }));
 vi.mock('./components/PrCard.js', () => ({ runPrAction: vi.fn(async () => {}) }));
 vi.mock('./displays.js', () => ({ displaysBridge: { go: vi.fn(async () => 'ok') } }));
@@ -17,11 +20,13 @@ vi.mock('./voiceCapture.js', () => ({
   }),
 }));
 
-import { PENDING_TTL_MS, pickChat, runVoiceIntent, shipAction, statusLine, voiceComposer, voiceListener, type VoiceTarget } from './voiceActions.js';
+import { PENDING_TTL_MS, WAKE_CARRY_MS, pickChat, runVoiceIntent, shipAction, statusLine, voiceComposer, voiceListener, type VoiceTarget } from './voiceActions.js';
 import { runPrAction } from './components/PrCard.js';
+import { startVoiceCapture } from './voiceCapture.js';
 
 const pr = (patch: Partial<PrInfo> = {}): PrInfo => ({ url: 'https://github.com/o/r/pull/7', owner: 'o', repo: 'r', number: 7, title: 'T', state: 'open', isDraft: false, additions: 0, deletions: 0, changedFiles: 0, checks: 'passing', source: 'gh', ...patch });
-const question = { sessionId: 's', question: { id: 'q', questions: [], askedAt: 1 } } as unknown as PendingInput;
+const question = { sessionId: 's1', question: { callId: 'call1', questions: [{ id: 'q1', header: 'Scope', question: 'Which way?', options: [] }], askedAt: 1 } } as unknown as PendingInput;
+const goAheadAnswer = [{ questionId: 'q1', labels: [], note: 'Go ahead and build it.' }];
 const chat = (id: string, title: string, patch: Partial<SessionSummary> = {}) => ({ id, title, updatedAt: Number(id.replace(/\D/g, '')) || 0, ...patch }) as SessionSummary;
 
 describe('shipAction', () => {
@@ -69,18 +74,18 @@ describe('statusLine', () => {
   });
 });
 
-function target(sessionId = 's1'): VoiceTarget & { text: string[]; calls: string[] } {
+function target(sessionId = 's1', result = { erased: true, sent: true }): VoiceTarget & { text: string[]; calls: string[] } {
   const t = { sessionId, text: [] as string[], calls: [] as string[] } as VoiceTarget & { text: string[]; calls: string[] };
-  t.onText = (x: string) => { t.text.push(x); t.calls.push('text'); };
-  t.onErase = () => t.calls.push('erase');
-  t.onClear = () => t.calls.push('clear');
-  t.onSend = () => t.calls.push('send');
+  t.onText = (x: string, sentence?: boolean) => { t.text.push(x); t.calls.push(sentence ? 'sentence' : 'text'); };
+  t.onErase = () => { t.calls.push('erase'); return result.erased; };
+  t.onClear = () => { t.calls.push('clear'); };
+  t.onSend = async () => { t.calls.push('send'); return result.sent; };
   return t;
 }
 
 let nekko: Record<string, any>;
 beforeEach(() => {
-  runs.running.clear(); runs.step = '';
+  runs.running.clear(); runs.step = ''; drafts.clear();
   store.state = {
     activeSessionId: 's1',
     sessions: [chat('s1', 'Auth'), chat('s2', 'Billing')],
@@ -94,7 +99,8 @@ beforeEach(() => {
     voiceStatus: vi.fn(async () => ({ installed: true })),
     voiceTranscribe: vi.fn(async () => ''),
     openPath: vi.fn(async () => {}),
-    onVoiceStop: vi.fn((cb: () => void) => { stop = cb; return () => { stop = null; }; }),
+    answerQuestion: vi.fn(async () => {}),
+    onVoiceLockStop: vi.fn((cb: () => void) => { stop = cb; return () => { stop = null; }; }),
     fireVoiceStop: () => stop?.(),
   };
   vi.stubGlobal('window', { nekko, setTimeout, clearTimeout });
@@ -118,7 +124,7 @@ describe('runVoiceIntent', () => {
     const t = target();
     await runVoiceIntent({ kind: 'new-session' }, t, null);
     await runVoiceIntent({ kind: 'navigate', view: 'settings' }, t, null);
-    await runVoiceIntent({ kind: 'open-chat', query: 'billing' }, t, null);
+    await runVoiceIntent({ kind: 'open-chat', query: 'billing', text: 'Nekko, open billing' }, t, null);
     expect(store.state.newChat).toHaveBeenCalledOnce();
     expect(store.state.pushToast).toHaveBeenCalledWith('success', 'New chat');
     expect(store.state.setView).toHaveBeenCalledWith('settings');
@@ -168,8 +174,9 @@ describe('runVoiceIntent', () => {
     expect(pending?.kind === 'choose' && pending.options.map(o => o.label)).toEqual(['Merge o/r#7', 'Go ahead']);
     expect(await runVoiceIntent({ kind: 'yes' }, t, pending)).toBe(pending);
     expect(await runVoiceIntent({ kind: 'pick', n: 2 }, t, pending)).toBeNull();
-    expect(t.text).toEqual(['Go ahead and build it.']);
-    expect(t.calls).toEqual(['text', 'send']);
+    // A turn blocked on a question is answered, not queued behind itself.
+    expect(nekko.answerQuestion).toHaveBeenCalledWith('s1', 'call1', goAheadAnswer);
+    expect(t.calls).toEqual([]);
     expect(runPrAction).not.toHaveBeenCalled();
     await runVoiceIntent({ kind: 'pick', n: 1 }, t, pending);
     expect(runPrAction).toHaveBeenCalledWith('s1', pr().url, 'merge');
@@ -184,7 +191,8 @@ describe('runVoiceIntent', () => {
     const t = target();
     await runVoiceIntent({ kind: 'ship' }, t, null);
     expect(t.text).toEqual(['Go ahead and build it.']);
-    expect(t.calls).toEqual(['text', 'send']);
+    expect(t.calls).toEqual(['sentence', 'send']);
+    expect(store.state.pushToast).toHaveBeenLastCalledWith('success', 'Sent');
     runs.running.add('s1');
     await runVoiceIntent({ kind: 'ship' }, t, null);
     expect(store.state.pushToast).toHaveBeenLastCalledWith('success', "It's still working");
@@ -192,6 +200,29 @@ describe('runVoiceIntent', () => {
     runs.running.clear();
     await runVoiceIntent({ kind: 'ship' }, t, null);
     expect(store.state.pushToast).toHaveBeenLastCalledWith('success', 'Nothing to ship');
+  });
+  it('ship with no PR and a question waiting answers it with "Go ahead"', async () => {
+    nekko.pendingInput.mockResolvedValue({ s1: question });
+    runs.running.add('s1');
+    const t = target();
+    await runVoiceIntent({ kind: 'ship' }, t, null);
+    expect(nekko.answerQuestion).toHaveBeenCalledWith('s1', 'call1', goAheadAnswer);
+    expect(t.calls).toEqual([]);
+    expect(store.state.pushToast).toHaveBeenLastCalledWith('success', 'Sent');
+  });
+  it('toasts Erased and Sent only when something was erased or sent', async () => {
+    const t = target('s1', { erased: false, sent: false });
+    await runVoiceIntent({ kind: 'erase' }, t, null);
+    await runVoiceIntent({ kind: 'send' }, t, null);
+    await runVoiceIntent({ kind: 'ship' }, t, null);
+    expect(t.calls).toEqual(['erase', 'send', 'sentence', 'send']);
+    expect(store.state.pushToast).not.toHaveBeenCalled();
+  });
+  it('types an "open X" that matches no chat instead of dropping it', async () => {
+    const t = target();
+    expect(await runVoiceIntent({ kind: 'open-chat', query: 'kubernetes', text: 'Nekko, open kubernetes' }, t, null)).toBeNull();
+    expect(t.text).toEqual(['Nekko, open kubernetes']);
+    expect(store.state.openChatPane).not.toHaveBeenCalled();
   });
   it('status toasts the lane and current step', async () => {
     runs.running.add('s1'); runs.step = 'Editing auth.ts';
@@ -201,7 +232,7 @@ describe('runVoiceIntent', () => {
   it('open-chat with several matches waits for a pick', async () => {
     store.state.sessions = [chat('s1', 'Login fix'), chat('s2', 'Login page')];
     const t = target();
-    const pending = await runVoiceIntent({ kind: 'open-chat', query: 'login' }, t, null);
+    const pending = await runVoiceIntent({ kind: 'open-chat', query: 'login', text: 'Nekko, open login' }, t, null);
     expect(pending?.kind).toBe('choose');
     const label = pending?.kind === 'choose' ? pending.options[1].label : '';
     expect(await runVoiceIntent({ kind: 'pick', n: 2 }, t, pending)).toBeNull();
@@ -255,7 +286,7 @@ describe('voiceListener', () => {
   it('words after "send it" start the next draft instead of riding along', async () => {
     let draft = '';
     const sent: string[] = [];
-    const composer = { sessionId: 's1', ...voiceComposer({ get: () => draft, set: t => { draft = t; }, send: t => sent.push(t) }) };
+    const composer = { sessionId: 's1', ...voiceComposer({ get: () => draft, set: t => { draft = t; }, send: async t => { sent.push(t); return true; }, sent: () => {} }) };
     const off = voiceListener.register('s1', () => composer);
     nekko.voiceTranscribe.mockResolvedValue('Fix the bug. Nekko, send it. Then add tests.');
     await voiceListener.start('s1');
@@ -308,16 +339,85 @@ describe('voiceListener', () => {
     expect(voiceListener.snapshot().listening).toBe(false);
     off();
   });
-  it('stops once no dictation button is left, but survives a remount', async () => {
+  it('keeps listening on a page with no chat: words wait in the owning chat\'s draft, chat commands need a chat', async () => {
+    drafts.set('s1', { text: 'Started typing', images: ['img'], videos: [] });
     const off = voiceListener.register('s1', () => target('s1'));
     await voiceListener.start('s1');
     off();
-    const again = voiceListener.register('s2', () => target('s2'));
+    store.state.activeSessionId = null;
     await flush();
     expect(voiceListener.snapshot().listening).toBe(true);
-    again();
-    await flush();
+    nekko.voiceTranscribe.mockResolvedValue('Then add tests. Nekko, send it. Nekko, open settings.');
+    capture.onSegment!([1]);
+    await voiceListener.drain();
+    expect(drafts.get('s1')).toEqual({ text: 'Started typing Then add tests.', images: ['img'], videos: [] });
+    expect(store.state.pushToast.mock.calls).toEqual([['success', 'Added to Auth draft'], ['error', 'Open a chat first'], ['success', 'Opened Settings']]);
+    expect(store.state.setView).toHaveBeenCalledWith('settings');
+    expect(voiceListener.snapshot().listening).toBe(true);
+  });
+  it('stops when voice is turned off, even with no chat on screen', async () => {
+    const off = voiceListener.register('s1', () => target('s1'));
+    await voiceListener.start('s1');
+    off();
+    store.state.settings = { voice: { enabled: false } };
+    store.listeners.forEach(fn => fn(store.state));
+    expect(capture.abort).toHaveBeenCalled();
     expect(voiceListener.snapshot().listening).toBe(false);
+  });
+  it('catches a lock that happens while the microphone is opening', async () => {
+    vi.mocked(startVoiceCapture).mockImplementationOnce(async () => { nekko.fireVoiceStop(); return { stop: capture.stop, abort: capture.abort }; });
+    const off = voiceListener.register('s1', () => target('s1'));
+    expect(await voiceListener.start('s1')).toBe('failed');
+    expect(capture.abort).toHaveBeenCalled();
+    expect(voiceListener.snapshot().listening).toBe(false);
+    off();
+  });
+  it('keeps a segment spoken while the last one is still transcribing', async () => {
+    let busy = false;
+    nekko.voiceTranscribe.mockImplementation(async (w: number[]) => {
+      if (busy) throw new Error('Voice transcription is already running.');
+      busy = true;
+      try { await new Promise(r => setTimeout(r, 10)); return w[0] === 1 ? 'First.' : 'Second.'; } finally { busy = false; }
+    });
+    const a = target('s1');
+    const off = voiceListener.register('s1', () => a);
+    await voiceListener.start('s1');
+    capture.onSegment!([1]); capture.onSegment!([2]);
+    await voiceListener.drain();
+    expect(a.text).toEqual(['First.', 'Second.']);
+    off();
+  });
+  it('says once when speech could not be turned into text', async () => {
+    nekko.voiceTranscribe.mockRejectedValue(new Error('engine down'));
+    const off = voiceListener.register('s1', () => target('s1'));
+    await voiceListener.start('s1');
+    capture.onSegment!([1]); capture.onSegment!([2]);
+    await voiceListener.drain();
+    expect(store.state.pushToast.mock.calls).toEqual([['error', 'Could not turn speech into text: engine down']]);
+    off();
+  });
+  it('carries a wake word said alone into the next segment within 5 seconds', async () => {
+    vi.useFakeTimers();
+    const a = target('s1');
+    const off = voiceListener.register('s1', () => a);
+    await voiceListener.start('s1');
+    for (const said of ['Fix it. Nekko.', 'Send it.']) {
+      nekko.voiceTranscribe.mockResolvedValueOnce(said);
+      capture.onSegment!([1]);
+      await voiceListener.drain();
+    }
+    expect(a.text).toEqual(['Fix it.']);
+    expect(a.calls).toEqual(['text', 'send']);
+    nekko.voiceTranscribe.mockResolvedValueOnce('Nekko?');
+    capture.onSegment!([1]);
+    await voiceListener.drain();
+    vi.advanceTimersByTime(WAKE_CARRY_MS + 1);
+    nekko.voiceTranscribe.mockResolvedValueOnce('Send it.');
+    capture.onSegment!([1]);
+    await voiceListener.drain();
+    expect(a.text).toEqual(['Fix it.', 'Send it.']);
+    expect(a.calls).toEqual(['text', 'send', 'text']);
+    off();
   });
   it('asks for setup when voice is off or not installed', async () => {
     store.state.settings.voice.enabled = false;
@@ -342,16 +442,50 @@ describe('voiceListener', () => {
 });
 
 describe('voiceComposer', () => {
+  function composer(draft: string, send: (text: string) => Promise<boolean> = async () => true) {
+    const box = { draft, sent: [] as string[], cleared: 0 };
+    const c = voiceComposer({ get: () => box.draft, set: t => { box.draft = t; }, send: async t => { box.sent.push(t); return send(t); }, sent: () => { box.cleared++; } });
+    return { box, c };
+  }
   it('erases exactly the last dictated piece, once', () => {
-    let draft = 'typed';
-    const c = voiceComposer({ get: () => draft, set: t => { draft = t; }, send: () => {} });
+    const { box, c } = composer('typed');
     c.onText('one.'); c.onText('two.');
-    c.onErase();
-    expect(draft).toBe('typed one.');
-    c.onErase();
-    expect(draft).toBe('typed one.');
+    expect(c.onErase()).toBe(true);
+    expect(box.draft).toBe('typed one.');
+    expect(c.onErase()).toBe(false);
+    expect(box.draft).toBe('typed one.');
     c.onClear();
-    expect(draft).toBe('');
+    expect(box.draft).toBe('');
+  });
+  it('starts "Go ahead and build it." as its own sentence', () => {
+    const { box, c } = composer('fix the header ');
+    c.onText('Go ahead and build it.', true);
+    expect(box.draft).toBe('fix the header. Go ahead and build it.');
+    const done = composer('Fix the header.');
+    done.c.onText('Go ahead and build it.', true);
+    expect(done.box.draft).toBe('Fix the header. Go ahead and build it.');
+  });
+  it('a refused send puts the text back, ahead of words dictated meanwhile, and keeps the attachments', async () => {
+    let refuse!: (ok: boolean) => void;
+    const { box, c } = composer('Fix the bug.', () => new Promise(r => { refuse = r; }));
+    const sending = c.onSend();
+    c.onText('Then add tests.');
+    refuse(false);
+    expect(await sending).toBe(false);
+    expect(box.draft).toBe('Fix the bug. Then add tests.');
+    expect(box.cleared).toBe(0);
+  });
+  it('a send that throws is a refused send', async () => {
+    const { box, c } = composer('Fix the bug.', async () => { throw new Error('offline'); });
+    expect(await c.onSend()).toBe(false);
+    expect(box.draft).toBe('Fix the bug.');
+  });
+  it('a sent draft clears the attachments; an empty draft is not sent', async () => {
+    const { box, c } = composer('Fix the bug.');
+    expect(await c.onSend()).toBe(true);
+    expect(box).toEqual({ draft: '', sent: ['Fix the bug.'], cleared: 1 });
+    expect(await c.onSend()).toBe(false);
+    expect(box.sent).toEqual(['Fix the bug.']);
   });
 });
 

@@ -646,7 +646,7 @@ app.whenReady().then(async () => {
   createWindow();
   registerDisplayWindows(dataDir);
   // Always-on dictation never keeps listening behind a locked screen or through sleep.
-  const stopVoice = () => { for (const win of BrowserWindow.getAllWindows()) win.webContents.send(IpcEvents.voiceStop); };
+  const stopVoice = () => { for (const win of BrowserWindow.getAllWindows()) win.webContents.send(IpcEvents.voiceLockStop); };
   powerMonitor.on('lock-screen', stopVoice);
   powerMonitor.on('suspend', stopVoice);
   const iconPath = resolveWindowIcon();

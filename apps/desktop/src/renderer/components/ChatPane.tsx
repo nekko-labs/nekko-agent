@@ -603,8 +603,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const voiceDraft = useRef(draft);
   voiceDraft.current = draft;
   const setVoiceDraft = (next: string) => { voiceDraft.current = next; setDraft(next); };
-  const voiceSend = useRef<(text: string) => void>(() => {});
-  const [voice] = useState(() => voiceComposer({ get: () => voiceDraft.current, set: setVoiceDraft, send: (text) => voiceSend.current(text) }));
+  const voiceSend = useRef<(text: string) => Promise<boolean>>(async () => false);
+  // Attachments go with the voice send, so they are cleared once it really sent.
+  const [voice] = useState(() => voiceComposer({ get: () => voiceDraft.current, set: setVoiceDraft, send: (text) => voiceSend.current(text), sent: () => { setPendingImages([]); setPendingVideos([]); setAttachmentNotes({}); } }));
   // What the draft implies (the analyzer, Auto's pick, the gauge's draft
   // count) renders from this, one step behind the keystroke, so
   // a keypress paints the textarea before any of that work runs.
@@ -1514,12 +1515,12 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   };
 
   /** One image-chat turn: the prompt goes to the chat's image model, the picture comes back as the reply. */
-  const sendImage = async (prompt: string, fromDraft: boolean) => {
-    if (!session) return;
+  const sendImage = async (prompt: string, fromDraft: boolean): Promise<boolean> => {
+    if (!session) return false;
     const params = { ...DEFAULT_IMAGE_CHAT_PARAMS, ...session.imageParams };
     if (!params.modelId) {
       useStore.getState().pushToast('error', 'Pick an image model below the chat first.');
-      return;
+      return false;
     }
     try {
       const [runtime, setup] = await Promise.all([
@@ -1530,19 +1531,21 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         useStore.getState().pushToast('info', !runtime.diffusionInstall?.binPath
           ? 'Install the image generator using the setup button below. Your prompt is kept here.'
           : 'This model needs supporting files before it can create images. Click Finish image setup below. Your prompt is kept here.');
-        return;
+        return false;
       }
     } catch {
       useStore.getState().pushToast('error', 'Could not check image setup. Try again or open Model Server.');
-      return;
+      return false;
     }
     if (fromDraft) { setDraft(''); clearDraft(sessionId); }
     beginTurn();
     setSession((prev) => prev ? { ...prev, messages: [...prev.messages, { id: 'tmp', role: 'user', content: prompt, createdAt: Date.now() }] } : prev);
     await window.nekko.generateImageTurn({ sessionId, prompt, params: { ...params, modelId: params.modelId } });
+    return true;
   };
 
-  const send = async (override?: string) => {
+  /** Sends the draft, or `override` instead of it. False when a gate refused it (voice puts the text back then). */
+  const send = async (override?: string): Promise<boolean | undefined> => {
     if (session?.executionMode === 'sandbox') {
       try {
         const status = await window.nekko.sandboxStatus(session.id);
@@ -1550,15 +1553,12 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       } catch (e) { useStore.getState().pushToast('error', String((e as Error).message ?? e)); return false; }
     }
     const input = override ?? draft;
-    if (imageMode) {
-      if (input.trim()) await sendImage(input.trim(), override === undefined);
-      return;
-    }
+    if (imageMode) return input.trim() ? sendImage(input.trim(), override === undefined) : false;
     const skill = activeSkill;
     const text = [skill ? skill.template.trimEnd() : '', input.trim()].filter(Boolean).join('\n\n');
     const images = pendingImages;
     const videos = pendingVideos;
-    if (!text.trim() && images.length === 0 && videos.length === 0 && !skill) return;
+    if (!text.trim() && images.length === 0 && videos.length === 0 && !skill) return false;
     // A follow-up never interrupts work by accident. Queue the same payload the
     // turn would have sent so attachments and skills run when their turn arrives.
     if (streamingRef.current && !imageMode) {
@@ -1576,7 +1576,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     if (goalMatch) {
       const goal = goalMatch[1].trim();
       const brain = requireBrain(goal);
-      if (!brain) return;
+      if (!brain) return false;
       await window.nekko.createTask({
         title: `Goal: ${goal.slice(0, 40)}`,
         kind: 'background',
@@ -1598,7 +1598,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     const cross = modelId === AUTO_MODEL_ID ? await ensureCrossModels() : crossModels;
     const pick = modelId === AUTO_MODEL_ID ? autoPickFor(text, cross) : null;
     const brain = requireBrain(text, pick ?? undefined);
-    if (!brain) return;
+    if (!brain) return false;
     if (pick?.switched) {
       // A switch that never explains itself is a silent downgrade in waiting:
       // the reason is shown once per turn that actually moves providers.
@@ -1646,13 +1646,10 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       }
     }
   };
-  // A voice send sends the draft as dictated so far; words after "send it" start the next draft.
-  voiceSend.current = (text) => {
+  // A voice send sends the draft as dictated so far; voiceComposer restores it if a gate refuses.
+  voiceSend.current = async (text) => {
     clearDraft(sessionId);
-    void send(text).then((sent) => {
-      if (sent === false) { setVoiceDraft(voiceDraft.current ? `${text} ${voiceDraft.current}` : text); return; }
-      setPendingImages([]); setPendingVideos([]); setAttachmentNotes({});
-    });
+    return (await send(text)) !== false;
   };
 
   // Queue the draft to run after the current reply (and any earlier queued
@@ -3260,7 +3257,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     />
                   )}
                   <DictationButton key={sessionId} sessionId={sessionId}
-                    onText={(text) => { voice.onText(text); composerRef.current?.focus(); }} onErase={voice.onErase} onClear={voice.onClear} onSend={voice.onSend} />
+                    onText={(text, sentence) => { voice.onText(text, sentence); composerRef.current?.focus(); }} onErase={voice.onErase} onClear={voice.onClear} onSend={voice.onSend} />
                     <button
                       className="send-avatar grid h-9 w-9 shrink-0 place-items-center rounded-xl transition-all duration-150 disabled:opacity-40"
                       onClick={() => void send()}

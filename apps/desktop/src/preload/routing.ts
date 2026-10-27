@@ -7,4 +7,4 @@ import { IpcEvents } from '@nekko-agent/shared';
  */
 
 /** Events only main sends. */
-export const MAIN_EVENTS = new Set<string>([IpcEvents.deepLink, IpcEvents.voiceStop]);
+export const MAIN_EVENTS = new Set<string>([IpcEvents.deepLink, IpcEvents.voiceLockStop]);

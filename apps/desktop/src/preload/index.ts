@@ -534,10 +534,10 @@ const api: NekkoApi = {
     bus.on(IpcEvents.deepLink, listener);
     return () => bus.removeListener(IpcEvents.deepLink, listener);
   },
-  onVoiceStop: (cb: () => void) => {
+  onVoiceLockStop: (cb: () => void) => {
     const listener = () => cb();
-    bus.on(IpcEvents.voiceStop, listener);
-    return () => bus.removeListener(IpcEvents.voiceStop, listener);
+    bus.on(IpcEvents.voiceLockStop, listener);
+    return () => bus.removeListener(IpcEvents.voiceLockStop, listener);
   },
 };
 
