@@ -8,6 +8,21 @@ if (!out) throw Error('Launch through layout-evidence-integration.cjs');
 app.setPath('userData', path.join(out, 'profile'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const report = { assertions: [], errors: [], captures: [] };
+const unsafeJsCharMap = {
+  '<': '\\u003C',
+  '>': '\\u003E',
+  '/': '\\u002F',
+  '\\': '\\\\',
+  '\b': '\\b',
+  '\f': '\\f',
+  '\n': '\\n',
+  '\r': '\\r',
+  '\t': '\\t',
+  '\0': '\\0',
+  '\u2028': '\\u2028',
+  '\u2029': '\\u2029'
+};
+const escapeUnsafeJsString = str => str.replace(/[<>\/\\\b\f\n\r\t\0\u2028\u2029]/g, ch => unsafeJsCharMap[ch]);
 app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeRequest((d, done) => done({ cancel: !/^(file:|data:|blob:|devtools:)/.test(d.url) }));
   session.defaultSession.setPermissionRequestHandler((_w, _p, done) => done(false));
@@ -17,7 +32,7 @@ app.whenReady().then(async () => {
   const shot = async name => { const file = path.join(out, name + '.png'); await png(file); report.captures.push(file); };
   const frames = async (dir, count, every) => { fs.mkdirSync(path.join(out, dir), { recursive: true }); for (let i = 0; i < count; i++) { await png(path.join(out, dir, String(i).padStart(3, '0') + '.png')); await sleep(every); } };
   const check = async (name, expr) => { const passed = !!await run(expr); report.assertions.push({ name, passed }); if (!passed) throw Error(name); };
-  const center = async sel => run(`(() => { const r = document.querySelector(${JSON.stringify(sel)}).getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
+  const center = async sel => run(`(() => { const r = document.querySelector(${escapeUnsafeJsString(JSON.stringify(sel))}).getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
   const zones = `Array.from(document.querySelectorAll('[data-zone]')).map(e => (e.dataset.zone || '') + ':' + e.dataset.gridCell)`;
   win.on('focus', () => report.errors.push('took focus'));
   try {
