@@ -123,6 +123,7 @@ fun ChatsScreen(
         monitor, s.conn == RelayState.ONLINE && s.active != null, full = showHardware,
         light = !simple.expert && (simple.visibility("hardware") == SimpleVisibility.EXPERT || simple.visibility("ph-monitors") == SimpleVisibility.EXPERT),
     )
+    LaunchedEffect(showHardware) { if (!showHardware) showPanel = false }
     // The panel names loaded models from the Model Server's own list.
     LaunchedEffect(showPanel) { if (showPanel) runCatching { repo.loadModels(ENGINE_PROVIDER_ID) } }
     val scope = rememberCoroutineScope()

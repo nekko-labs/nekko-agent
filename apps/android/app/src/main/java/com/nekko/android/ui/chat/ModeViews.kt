@@ -527,9 +527,9 @@ fun MiniMonitor(state: HardwareState, onOpen: () -> Unit, modifier: Modifier = M
     val value = gauges.joinToString(", ") { "${it.label} ${it.value}" } + ", " + stringResource(R.string.monitor_models_loaded, loaded)
     Row(
         modifier
+            .heightIn(min = 48.dp)
             .clip(RoundedCornerShape(999.dp))
             .clickable(role = Role.Button, onClick = onOpen)
-            .heightIn(min = 30.dp)
             .padding(horizontal = 8.dp)
             .testTag(ModeTags.MONITOR)
             .semantics(mergeDescendants = true) {

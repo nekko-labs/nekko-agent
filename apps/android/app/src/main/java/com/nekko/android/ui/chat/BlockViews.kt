@@ -64,7 +64,8 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nekko.android.ui.previews.PreviewCards
-import com.nekko.android.ui.simple.LocalSimple
+import com.nekko.android.chat.TurnSteps
+import androidx.compose.material3.TextButton
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.Block
 import com.nekko.protocol.Purpose
@@ -82,11 +83,12 @@ import kotlinx.coroutines.withTimeoutOrNull
  */
 data class ForkAction(val label: String, val run: () -> Unit)
 
+/** [reasoning] false keeps a reply's reasoning folded away (Simple, until its turn's steps are shown). */
 @Composable
-fun BlockView(block: Block, fork: ForkAction? = null) {
+fun BlockView(block: Block, fork: ForkAction? = null, reasoning: Boolean = true) {
     when (block) {
         is Block.User -> UserBubble(block, fork)
-        is Block.Assistant -> Reply(block, fork)
+        is Block.Assistant -> Reply(block, fork, reasoning)
         is Block.Tool -> ToolRow(block)
     }
 }
@@ -120,11 +122,11 @@ private fun UserBubble(b: Block.User, fork: ForkAction?) {
 }
 
 @Composable
-private fun Reply(b: Block.Assistant, fork: ForkAction?) {
+private fun Reply(b: Block.Assistant, fork: ForkAction?, showReasoning: Boolean) {
     val p = Nekko.palette
     var open by rememberSaveable(b.id) { mutableStateOf(false) }
-    // Simple hides the reasoning; a reply still thinking shows the spinner instead.
-    val reasoning = b.reasoning.takeIf { LocalSimple.current.shown("thinking") }
+    // Folded away, a reply still thinking shows the spinner instead.
+    val reasoning = b.reasoning.takeIf { showReasoning }
     val thinkingOnly = b.streaming && b.text.isEmpty() && !reasoning.isNullOrEmpty()
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (!reasoning.isNullOrEmpty()) {
@@ -177,6 +179,25 @@ private fun Reply(b: Block.Assistant, fork: ForkAction?) {
         if (b.interrupted) {
             Text("Stopped before finishing.", style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
         }
+    }
+}
+
+/**
+ * Simple's one line for a turn's reasoning and tool steps ("Took 4 steps · 12s"), with Show steps
+ * to open them in place and Hide steps to fold them back.
+ */
+@Composable
+fun StepsLine(steps: Int, running: Boolean, durationMs: Long?, open: Boolean, onToggle: () -> Unit) {
+    val p = Nekko.palette
+    Row(
+        Modifier.fillMaxWidth().testTag("chat.steps"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (running) CircularProgressIndicator(color = p.accent, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
+        else Icon(Icons.Filled.Check, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(16.dp))
+        Text(TurnSteps.label(steps, running, durationMs), style = MaterialTheme.typography.bodySmall, color = p.inkSoft, modifier = Modifier.weight(1f))
+        TextButton(onClick = onToggle) { Text(if (open) "Hide steps" else "Show steps", style = MaterialTheme.typography.labelLarge, color = p.accent) }
     }
 }
 

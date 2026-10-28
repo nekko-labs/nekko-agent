@@ -53,6 +53,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -106,7 +111,10 @@ fun rememberSimpleView(prefs: PhonePrefs): SimpleView {
     return remember(expert, raw, prefs) { SimpleView(expert, SimpleMode.parse(raw)) { prefs.set(EXPERT_MODE, it) } }
 }
 
-/** A pill of segments, the selected one tinted with the accent. */
+/**
+ * A pill of segments, the selected one tinted with the accent. The pill is drawn [height] tall,
+ * but each segment takes touches over at least 48 dp, so a slim pill still meets the touch guideline.
+ */
 @Composable
 fun <T> Segments(
     options: List<T>,
@@ -118,9 +126,17 @@ fun <T> Segments(
     content: @Composable RowScope.(option: T, on: Boolean) -> Unit,
 ) {
     val p = Nekko.palette
-    val shape = RoundedCornerShape(999.dp)
     Row(
-        modifier.clip(shape).background(p.surface2).border(1.dp, p.line, shape).padding(2.dp).selectableGroup(),
+        modifier
+            .selectableGroup()
+            .drawBehind {
+                val h = (height + 4.dp).toPx()
+                val top = (size.height - h) / 2
+                val line = 1.dp.toPx()
+                drawRoundRect(p.surface2, Offset(0f, top), Size(size.width, h), CornerRadius(h / 2))
+                drawRoundRect(p.line, Offset(line / 2, top + line / 2), Size(size.width - line, h - line), CornerRadius(h / 2), style = Stroke(line))
+            }
+            .padding(horizontal = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         options.forEach { o ->
@@ -128,11 +144,16 @@ fun <T> Segments(
             Row(
                 Modifier
                     .weight(1f, fill = false)
-                    .heightIn(min = height)
+                    .heightIn(min = maxOf(height, 48.dp))
                     .widthIn(min = 48.dp)
-                    .clip(shape)
-                    .background(if (on) p.accent else p.surface2)
-                    .selectable(on, role = Role.RadioButton) { if (!on) onSelect(o) }
+                    .drawBehind {
+                        if (on) {
+                            val h = height.toPx()
+                            drawRoundRect(p.accent, Offset(0f, (size.height - h) / 2), Size(size.width, h), CornerRadius(h / 2))
+                        }
+                    }
+                    // The touch area is taller than the pill, so no ripple: the accent moving is the feedback.
+                    .selectable(on, interactionSource = null, indication = null, role = Role.RadioButton) { if (!on) onSelect(o) }
                     .semantics { contentDescription = describe(o) }
                     .padding(horizontal = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -185,9 +206,10 @@ fun ModeSwitch(expert: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier 
 fun SlimBar(expert: Boolean, onExpert: (Boolean) -> Unit, modifier: Modifier = Modifier, end: @Composable () -> Unit = {}) {
     Column(modifier.fillMaxWidth().background(Nekko.palette.paper)) {
         Row(Modifier.fillMaxWidth().height(34.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            ModeSwitch(expert, onExpert)
+            // Both keep 48 dp touch areas that reach past the 34 dp row.
+            ModeSwitch(expert, onExpert, Modifier.wrapContentHeight(unbounded = true))
             Spacer(Modifier.weight(1f))
-            end()
+            Box(Modifier.wrapContentHeight(unbounded = true)) { end() }
         }
         HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
     }

@@ -79,6 +79,8 @@ import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.Block
 import com.nekko.protocol.Purpose
 import com.nekko.protocol.PurposeRun
+import com.nekko.android.chat.TurnSteps
+import com.nekko.android.ui.chat.StepsLine
 import java.util.Locale
 import android.content.ClipData
 import android.content.ClipDescription
@@ -194,6 +196,8 @@ private fun ChatScreenContent(
     // The minimal monitor re-reads every 3 s while it shows; Simple otherwise asks the Model Server every 10 s
     // whether a local model is loaded (which brings the monitor in).
     PollHardware(vm.hardware, online, full = showHardware, light = !simple.expert && simple.visibility("hardware") == SimpleVisibility.EXPERT)
+    // A monitor that goes away (the local model unloaded in Simple) closes its panel for good, not just while hidden.
+    LaunchedEffect(showHardware) { if (!showHardware) showMonitor = false }
     // Simple's "chat getting long" line, until dismissed for this chat.
     var longChatDismissed by rememberSaveable(vm.sessionId) { mutableStateOf(false) }
     val savings = chat.context?.let { c -> SimpleMode.freshSavings(chat.contextTokens ?: c.usedTokens, c.contextWindow, c.sources) }
@@ -237,11 +241,9 @@ private fun ChatScreenContent(
     }
 
     // Stable keys: a provider that reuses a call id across turns gets a suffix.
-    // Simple without tool steps leaves them out, and the thoughts between them that have no reply text
-    // (the approval card still asks).
-    val keyed = remember(chat.blocks, showSteps) {
+    val keyed = remember(chat.blocks) {
         val seen = HashMap<String, Int>()
-        chat.blocks.filter { showSteps || !(it is Block.Tool || it is Block.Assistant && it.text.isBlank() && !it.streaming && !it.interrupted) }.map { b ->
+        chat.blocks.map { b ->
             val kind = when (b) {
                 is Block.User -> "user"
                 is Block.Assistant -> "assistant"
@@ -257,7 +259,9 @@ private fun ChatScreenContent(
     val headerCount = if (chat.omittedMessages > 0) 1 else 0
     val footerCount = 1
     // Adjacent calls with one purpose fold into one card (spec/chat/tool-calls-grouped-by-purpose.md).
-    val rows = remember(keyed) { Purpose.group(keyed) { Purpose.role(it.second) } }
+    // Simple folds each turn's reasoning and tool steps into one line that opens in place (the approval card still asks).
+    var openTurns by remember(vm.sessionId) { mutableStateOf(setOf<String>()) }
+    val rows = remember(keyed, showSteps, chat.running, openTurns) { transcriptRows(keyed, showSteps, chat.running, openTurns) }
     val lastIndex = headerCount + rows.size + footerCount - 1
 
     // Open at the newest message, then follow the reply while it streams, unless the user scrolled up to read.
@@ -420,19 +424,24 @@ private fun ChatScreenContent(
                                 )
                             }
                         }
-                        itemsIndexed(rows, key = { _, run -> rowKey(run) }) { _, run ->
-                            when (run) {
-                                is PurposeRun.Single -> {
+                        itemsIndexed(rows, key = { _, row -> rowKey(row) }) { _, row ->
+                            val run = (row as? TranscriptRow.Run)?.run
+                            when {
+                                row is TranscriptRow.Steps -> StepsLine(row.steps.steps, row.steps.running, row.steps.durationMs, row.steps.open) {
+                                    openTurns = if (row.steps.open) openTurns - row.steps.turn else openTurns + row.steps.turn
+                                }
+                                run is PurposeRun.Single -> {
                                     val block = run.item.second
                                     // Long press: Copy, and fork the chat from a saved message.
                                     val fork = forkAction(block)
                                     // In a pane a message can be dragged into the other pane's message box.
                                     // A reply's links to files and loopback pages open previews from the computer (AN-35).
                                     CompositionLocalProvider(LocalChatPreviews provides vm.previews) {
-                                        if (pane == null) BlockView(block, fork) else Box(Modifier.messageDragSource(block, vm.sessionId)) { BlockView(block, fork) }
+                                        val reasoning = (row as TranscriptRow.Run).stepsOpen
+                                        if (pane == null) BlockView(block, fork, reasoning) else Box(Modifier.messageDragSource(block, vm.sessionId)) { BlockView(block, fork, reasoning) }
                                     }
                                 }
-                                is PurposeRun.Group -> PurposeGroupCard(run.purpose, run.items.map { it.second }, run.calls)
+                                run is PurposeRun.Group -> PurposeGroupCard(run.purpose, run.items.map { it.second }, run.calls)
                             }
                         }
                         item(key = "footer") {
@@ -689,8 +698,41 @@ private fun rememberAttach(vm: ChatViewModel): AttachUi {
 private fun cameraUri(context: Context, file: File): Uri =
     FileProvider.getUriForFile(context, "${context.packageName}.photos", file)
 
-/** A list key for a transcript row: the block's own key, or its first block's for a purpose group. */
-private fun rowKey(run: PurposeRun<Pair<String, Block>>): String = when (run) {
-    is PurposeRun.Single -> run.item.first
-    is PurposeRun.Group -> "purpose:" + run.items.first().first
+/** A transcript row: a message or a purpose group, or (Simple) one turn's folded steps. */
+private sealed interface TranscriptRow {
+    /** [stepsOpen] when its turn's steps show, so a reply's reasoning shows too. */
+    data class Run(val run: PurposeRun<Pair<String, Block>>, val stepsOpen: Boolean) : TranscriptRow
+    data class Steps(val steps: TurnSteps.Row.Summary<Pair<String, Block>>) : TranscriptRow
+}
+
+private fun transcriptRows(keyed: List<Pair<String, Block>>, showSteps: Boolean, running: Boolean, open: Set<String>): List<TranscriptRow> {
+    if (showSteps) return Purpose.group(keyed) { Purpose.role(it.second) }.map { TranscriptRow.Run(it, stepsOpen = true) }
+    val out = mutableListOf<TranscriptRow>()
+    val pending = mutableListOf<Pair<String, Block>>()
+    var pendingOpen = false
+    fun flush() {
+        Purpose.group(pending.toList()) { Purpose.role(it.second) }.forEach { out += TranscriptRow.Run(it, pendingOpen) }
+        pending.clear()
+    }
+    TurnSteps.fold(keyed, { it.second }, { it.first }, running, open).forEach { r ->
+        when (r) {
+            is TurnSteps.Row.Summary -> { flush(); out += TranscriptRow.Steps(r) }
+            is TurnSteps.Row.Item -> {
+                if (r.stepsOpen != pendingOpen) flush()
+                pendingOpen = r.stepsOpen
+                pending += r.item
+            }
+        }
+    }
+    flush()
+    return out
+}
+
+/** A list key for a transcript row: the block's own key, its first block's for a purpose group, or its turn's for folded steps. */
+private fun rowKey(row: TranscriptRow): String = when (row) {
+    is TranscriptRow.Steps -> "steps:" + row.steps.turn
+    is TranscriptRow.Run -> when (val run = row.run) {
+        is PurposeRun.Single -> run.item.first
+        is PurposeRun.Group -> "purpose:" + run.items.first().first
+    }
 }

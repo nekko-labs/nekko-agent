@@ -27,6 +27,8 @@ sealed interface Block {
         val reasoning: String? = null,
         val streaming: Boolean = false,
         val interrupted: Boolean = false,
+        /** When the computer saved it (ms); null while live. Simple's folded steps time the turn from it. */
+        val at: Long? = null,
     ) : Block
     data class Tool(
         override val id: String,
@@ -65,7 +67,7 @@ object Transcript {
                 )
                 "assistant" -> {
                     if (m.content.isNotBlank() || !m.reasoning.isNullOrBlank()) {
-                        out += Block.Assistant(m.id, m.content, m.reasoning?.ifEmpty { null }, interrupted = m.interrupted)
+                        out += Block.Assistant(m.id, m.content, m.reasoning?.ifEmpty { null }, interrupted = m.interrupted, at = m.createdAt)
                     }
                     for (call in m.toolCalls) {
                         toolIndex[call.id] = out.size
