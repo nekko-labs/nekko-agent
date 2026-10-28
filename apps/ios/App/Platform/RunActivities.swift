@@ -11,6 +11,10 @@ protocol CardActivity: AnyObject {
     var state: LiveCardState { get }
     /// False once the user swiped it away or iOS ended it (8 hours).
     var isLive: Bool { get }
+    /// ActivityKit's id for it.
+    var id: String { get }
+    /// Its ActivityKit push token, hex, each time iOS issues one.
+    var onPushToken: ((String) -> Void)? { get set }
     func update(_ state: LiveCardState)
     func end()
 }
@@ -21,10 +25,11 @@ protocol CardActivity: AnyObject {
 /// except for what the user must see at once: a chat changing state, joining
 /// or leaving, and a tap on the card.
 ///
-/// Until the relay pushes the card (Part 4), it changes only while the app
-/// runs. iOS suspends the app shortly after it leaves the screen; the card then
-/// keeps its last state, finished chats included, until the app runs again or
-/// iOS ends it (8 hours).
+/// While iOS has the app suspended the computer builds the same card
+/// (crates/nekko-remote card.rs) and the relay pushes it to the card's push
+/// token (`onCardToken`), or starts one with the push-to-start token for a run
+/// this phone asked for (`adopt`). Without the relay's APNs key the card keeps
+/// its last state until the app runs again or iOS ends it (8 hours).
 @MainActor
 final class RunActivities {
     /// The active computer's chats and who is running.
@@ -65,6 +70,8 @@ final class RunActivities {
     private let request: (NekkoCardAttributes, LiveCardState) -> CardActivity?
 
     var level: () -> LiveLevel = { .none }
+    /// The card's push token for the relay, nil once the card is gone.
+    var onCardToken: (String?) -> Void = { _ in }
     /// Nil until the computer's chat list has loaded: the card keeps its own chats meanwhile.
     var source: () -> Source? = { nil }
 
@@ -129,6 +136,7 @@ final class RunActivities {
         runs = runs.filter { _, run in run.finishedAt.map { now.timeIntervalSince($0) <= LiveCardRules.finishedTail } ?? true }
         if let gone = card, !gone.isLive {
             card = nil
+            onCardToken(nil)
             swiped = gone.state
             lastUpdate = nil
             trailing?.cancel()
@@ -165,6 +173,7 @@ final class RunActivities {
             }
             swiped = nil
             card = request(attributes, state)
+            if let card { attach(card) }
             lastUpdate = now
             return
         }
@@ -197,6 +206,26 @@ final class RunActivities {
     }
     #endif
 
+    /// A card that appeared without this app asking: the relay started it
+    /// (push-to-start). It is the card unless one is already up.
+    func adopt(_ new: CardActivity) {
+        if let card {
+            if card.id != new.id { new.end() }
+            return
+        }
+        swiped = nil
+        card = new
+        attach(new)
+        lastUpdate = Date()
+    }
+
+    private func attach(_ c: CardActivity) {
+        c.onPushToken = { [weak self, weak c] token in
+            guard let self, let c, self.card === c else { return }
+            self.onCardToken(token)
+        }
+    }
+
     /// The phone disconnected from the computer or it was forgotten: nothing here is live any more.
     func endAll() {
         end()
@@ -206,7 +235,10 @@ final class RunActivities {
     }
 
     private func end() {
-        card?.end()
+        if let card {
+            card.end()
+            onCardToken(nil)
+        }
         card = nil
         swiped = nil
         lastUpdate = nil
@@ -258,6 +290,17 @@ final class SystemCard: CardActivity {
     private(set) var state: LiveCardState
     var attributes: NekkoCardAttributes { activity.attributes }
     var isLive: Bool { activity.activityState == .active || activity.activityState == .stale }
+    var id: String { activity.id }
+    var onPushToken: ((String) -> Void)? {
+        didSet {
+            tokens?.cancel()
+            let a = activity
+            tokens = Task { [weak self] in
+                for await token in a.pushTokenUpdates { self?.onPushToken?(hex(token)) }
+            }
+        }
+    }
+    private var tokens: Task<Void, Never>?
     /// The last call to ActivityKit; each one waits for it so they arrive in order.
     private var last: Task<Void, Never>?
 
@@ -284,14 +327,31 @@ final class SystemCard: CardActivity {
         }
     }
 
-    /// Nothing updates the card while the app is suspended (no pushes yet), so it reads as stale after a while.
+    /// A card nothing has updated for a while (the app suspended, no push) reads as stale.
     private static var staleDate: Date { Date().addingTimeInterval(15 * 60) }
 
     static func request(_ attributes: NekkoCardAttributes, _ state: LiveCardState) -> CardActivity? {
-        guard ActivityAuthorizationInfo().areActivitiesEnabled,
-              let a = try? ActivityKit.Activity.request(attributes: attributes, content: ActivityContent(state: state, staleDate: staleDate))
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return nil }
+        let content = ActivityContent(state: state, staleDate: staleDate)
+        // With a push token, so the relay can update it; without one if iOS refuses that.
+        guard let a = (try? ActivityKit.Activity.request(attributes: attributes, content: content, pushType: .token))
+            ?? (try? ActivityKit.Activity.request(attributes: attributes, content: content))
         else { return nil }
         return SystemCard(a, state: state)
+    }
+
+    /// Cards the relay starts (`adopt`), and the push-to-start token for the relay (iOS 17.2 and later).
+    static func watch(adopt: @escaping @MainActor (CardActivity) -> Void, startToken: @escaping @MainActor (String) -> Void) {
+        Task { @MainActor in
+            for await a in ActivityKit.Activity<NekkoCardAttributes>.activityUpdates where a.activityState == .active {
+                adopt(SystemCard(a, state: a.content.state))
+            }
+        }
+        if #available(iOS 17.2, *) {
+            Task { @MainActor in
+                for await token in ActivityKit.Activity<NekkoCardAttributes>.pushToStartTokenUpdates { startToken(hex(token)) }
+            }
+        }
     }
 
     /// The card an earlier launch left up, if any. Extra cards, and the
@@ -304,6 +364,8 @@ final class SystemCard: CardActivity {
         return cards.first.map { SystemCard($0, state: $0.content.state) }
     }
 }
+
+private func hex(_ data: Data) -> String { data.map { String(format: "%02x", $0) }.joined() }
 
 /// The one-per-chat activity of earlier versions, only so launch can end any
 /// still up. shortcut: matched by its type name; delete once no install has one (8 hours after updating).

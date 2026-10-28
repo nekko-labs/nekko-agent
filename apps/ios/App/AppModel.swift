@@ -113,9 +113,16 @@ final class AppModel {
             guard let self, self.store.summariesLoaded, let c = self.store.active else { return nil }
             return .init(summaries: self.store.summaries, activity: self.store.activity, computerId: c.id, computerName: c.name)
         }
-        IntentRouter.focus = { [weak self] sid in self?.activities.focus(sid) }
-        IntentRouter.nextPage = { [weak self] sid in self?.activities.focus(sid) }
-        IntentRouter.dismiss = { [weak self] sid in self?.activities.dismiss(sid) }
+        // The computer builds the same card for the relay to push: it hears these too.
+        IntentRouter.focus = { [weak self] sid in self?.focusCard(sid) }
+        IntentRouter.nextPage = { [weak self] sid in self?.focusCard(sid) }
+        IntentRouter.dismiss = { [weak self] sid in
+            self?.activities.dismiss(sid)
+            self?.store.cardAction(dismiss: sid)
+        }
+        activities.onCardToken = { [weak self] token in self?.store.cardToken = token }
+        SystemCard.watch(adopt: { [weak self] card in self?.activities.adopt(card) },
+                         startToken: { [weak self] token in self?.store.cardStartToken = token })
         #if DEBUG
         // Once on screen: ActivityKit starts a card only from the foreground.
         if ProcessInfo.processInfo.arguments.contains("-uiTestLiveCard") {
@@ -126,6 +133,7 @@ final class AppModel {
         }
         #endif
         watchCard()
+        watchCardLevel()
     }
 
     /// The relay connection opens only after the first unlock (when the lock is
@@ -246,6 +254,18 @@ final class AppModel {
     // MARK: Live Activity card
 
     /// Rebuilds the card whenever the chat list, who is running, the computer or the level changes.
+    private func focusCard(_ sid: String) {
+        activities.focus(sid)
+        store.cardAction(focus: sid)
+    }
+
+    /// The level goes to the relay and the computer (`ComputersStore.cardLevel`).
+    private func watchCardLevel() {
+        store.cardLevel = withObservationTracking { prefs.liveActivityLevel } onChange: { [weak self] in
+            Task { @MainActor in self?.watchCardLevel() }
+        }
+    }
+
     private func watchCard() {
         withObservationTracking {
             activities.refresh()

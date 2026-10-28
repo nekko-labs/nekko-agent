@@ -57,8 +57,13 @@ final class FakeConnection: RemoteConnection, @unchecked Sendable {
     func control(_ c: RelayControl) { onControl?(c) }
     /// The computer's protocol version in its welcome.
     var welcomeProtocol = 1
-    var activities: [(String, String)] = []
-    func registerActivity(tag: String, token: String) async throws { lock.lock(); activities.append((tag, token)); lock.unlock() }
+    var cards: [JSONValue] = []
+    func registerCard(token: String?, startToken: String?, level: LiveLevel, computerId: String, computerName: String) async throws {
+        lock.lock()
+        cards.append(["token": token.map(JSONValue.string) ?? .null, "startToken": startToken.map(JSONValue.string) ?? .null,
+                      "level": .string(level.rawValue), "computerId": .string(computerId), "computerName": .string(computerName)])
+        lock.unlock()
+    }
 
     func call(_ channel: String, _ args: [JSONValue], timeout: TimeInterval?) async throws -> JSONValue {
         lock.lock()
@@ -404,9 +409,28 @@ final class StoreTests: XCTestCase {
         s.setPushToken("apns-token")
         await settle()
         XCTAssertEqual(c.pushTokens.last, "apns-token")
-        await s.registerActivity(sessionId: "s1", token: "abcd")
-        XCTAssertEqual(c.activities.last?.0, E2E.activityTag("s1"))
-        XCTAssertEqual(c.activities.last?.1, "abcd")
+        // The Live Activity card: its tokens and level go to the relay, the level to the computer.
+        s.cardLevel = .standard
+        s.cardStartToken = "cd34"
+        s.cardToken = "ab12"
+        await settle()
+        let name = try XCTUnwrap(s.active?.name)
+        XCTAssertEqual(c.cards.last, ["token": "ab12", "startToken": "cd34", "level": "standard", "computerId": .string(s.activeId ?? ""),
+                                      "computerName": .string(name)])
+        XCTAssertEqual(c.callsTo(Channels.cardSet).last, [["level": "standard"]])
+        s.cardAction(focus: "s1")
+        s.cardAction(dismiss: "s2")
+        await settle()
+        XCTAssertEqual(c.callsTo(Channels.cardSet).suffix(2), [[["focus": "s1"]], [["dismiss": "s2"]]])
+        let before = (c.cards.count, c.callsTo(Channels.cardSet).count)
+        s.cardToken = "ab12"
+        await settle()
+        XCTAssertEqual(c.cards.count, before.0, "nothing changed: not sent again")
+        // Every connect registers again (a relay restart forgets).
+        c.online()
+        await settle()
+        XCTAssertEqual(c.cards.count, before.0 + 1)
+        XCTAssertEqual(c.callsTo(Channels.cardSet).count, before.1 + 1)
     }
 }
 

@@ -596,6 +596,8 @@ final class RunActivitiesTests: XCTestCase {
         var updates = 0
         var ended = false
         var isLive = true
+        let id = UUID().uuidString
+        var onPushToken: ((String) -> Void)?
         init(_ attributes: NekkoCardAttributes, _ state: LiveCardState) { self.attributes = attributes; self.state = state }
         func update(_ state: LiveCardState) { self.state = state; updates += 1 }
         func end() { ended = true }
@@ -648,6 +650,45 @@ final class RunActivitiesTests: XCTestCase {
         activity = [:]
         r.refresh()
         XCTAssertTrue(try XCTUnwrap(started.last).ended, "nothing running or finished: the card ends")
+    }
+
+    /// The card's ActivityKit push token goes to the relay (Part 4) until the card is gone.
+    func testTheCardsPushTokenGoesToTheRelayUntilItEnds() throws {
+        summaries = [chat("a", "Billing fix")]
+        activity = ["a": .running]
+        let r = make()
+        var tokens: [String?] = []
+        r.onCardToken = { tokens.append($0) }
+        r.refresh()
+        let card = try XCTUnwrap(started.first)
+        card.onPushToken?("ab12")
+        XCTAssertEqual(tokens, ["ab12"])
+        card.isLive = false
+        r.refresh(urgent: true)
+        XCTAssertEqual(tokens, ["ab12", nil], "a swiped card's token is dead")
+        r.refresh(urgent: true)
+        XCTAssertEqual(tokens, ["ab12", nil], "said once")
+    }
+
+    /// A card the relay started (push-to-start) becomes the one card; a second is ended.
+    func testACardTheRelayStartedIsAdopted() throws {
+        let r = make()
+        var tokens: [String?] = []
+        r.onCardToken = { tokens.append($0) }
+        let state = LiveCardState(chats: [LiveChat(id: "a", short: "Fix", state: .working, step: "Run tests", reply: "", closeWord: "Cool",
+                                                    finishedAt: nil, callId: nil, severity: nil)], focusId: "a", more: 0, listening: false, heard: "")
+        let attributes = NekkoCardAttributes(computerId: "pc", computerName: "Mac", level: .standard)
+        let pushed = FakeCard(attributes, state)
+        r.adopt(pushed)
+        XCTAssertTrue(r.card === pushed)
+        pushed.onPushToken?("cd34")
+        XCTAssertEqual(tokens, ["cd34"])
+        r.adopt(pushed)
+        XCTAssertFalse(pushed.ended, "the same card again is no second card")
+        let extra = FakeCard(attributes, state)
+        r.adopt(extra)
+        XCTAssertTrue(extra.ended, "one card: a second is ended")
+        XCTAssertTrue(r.card === pushed)
     }
 
     func testDismissingTheOnlyFinishedChatEndsTheCard() throws {
