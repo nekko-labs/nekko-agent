@@ -47,7 +47,12 @@ fn rig(replies: Vec<(u16, Value)>) -> T {
 
 fn rec(scope: Scope, link: GitlabLink) -> RunnerRecord {
     RunnerRecord {
-        config: RunnerConfig { id: "r1".into(), scope, label: "nekko-cloud-mac".into(), settings: RunnerSettings::default() },
+        config: RunnerConfig {
+            id: "r1".into(),
+            scope,
+            label: "nekko-cloud-mac".into(),
+            settings: RunnerSettings::default(),
+        },
         link: Link::Gitlab(link),
         image: None,
     }
@@ -342,8 +347,10 @@ async fn protected_answers_expire_after_ten_minutes() {
 
 #[tokio::test]
 async fn group_queue_polls_each_listed_project() {
-    let t =
-        rig(vec![(200, json!([job_tags(&["nekko-cloud-mac"])])), (200, json!([job_tags(&["arm64"]), job_tags(&["macos"])]))]);
+    let t = rig(vec![
+        (200, json!([job_tags(&["nekko-cloud-mac"])])),
+        (200, json!([job_tags(&["arm64"]), job_tags(&["macos"])])),
+    ]);
     let mut r = group_rec(&["g/a", "g/b"]);
     if let Link::Gitlab(l) = &mut r.link {
         l.protected_only = false;
