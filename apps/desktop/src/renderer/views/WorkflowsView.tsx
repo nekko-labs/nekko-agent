@@ -36,6 +36,7 @@ import { PlusIcon } from '../icons.js';
 import { STATUS } from '../tokens.js';
 import { hasAppChrome } from '../chrome.js';
 import { CiRunnersView } from './CiRunnersView.js';
+import { useShown } from '../simpleMode.js';
 
 /**
  * The Workflows tab: automation modelled on GitHub Actions, where a step can be
@@ -194,9 +195,10 @@ export function WorkflowsView() {
     await window.nekko.updateWorkflow(wf.id, { enabled: !wf.enabled });
   };
 
+  const ciShown = useShown('ci');
   return (
     <div className="flex h-full min-h-0">
-      {section === 'ciRunners' ? <CiRunnersView segment={<SectionSegment value={section} onChange={setSection} />} /> : <>
+      {section === 'ciRunners' && ciShown ? <CiRunnersView segment={<SectionSegment value={section} onChange={setSection} />} /> : <>
       {/* Filters */}
       {workflows.length > 0 && <aside className="flex w-60 shrink-0 flex-col overflow-y-auto border-r border-(--line) px-3 py-3">
         <input
@@ -451,6 +453,8 @@ export function WorkflowsView() {
 
 /** Switches the tab between workflows and this Mac's CI runners. */
 export function SectionSegment({ value, onChange }: { value: 'workflows' | 'ciRunners'; onChange(v: 'workflows' | 'ciRunners'): void }) {
+  // Workflows alone needs no switch: CI runners is kept for Expert by default.
+  if (!useShown('ci')) return null;
   return (
     <div role="group" aria-label="Section" className="flex gap-1">
       {(['workflows', 'ciRunners'] as const).map((v) => (

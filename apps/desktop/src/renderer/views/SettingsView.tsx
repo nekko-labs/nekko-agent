@@ -8,7 +8,7 @@ import { UpdateProgress, useUpdater } from '../components/UpdateBanner.js';
 import { ThemePresetPicker } from '../components/ThemePresetPicker.js';
 import { pixelWaveFor } from '../components/PixelWaveBackground.js';
 import { DEFAULT_SPEC_METHODOLOGY, SPEC_METHODOLOGIES, ORCHESTRATION_STRATEGIES, DEFAULT_ORCHESTRATION, MAX_OUTPUT_TOKENS_DEFAULT, MAX_OUTPUT_TOKENS_RANGE, clampMaxOutputTokens, ONBOARDING_VERSION, updateChecks, DEFAULT_TURN_WRAPPER } from '@nekko-agent/shared';
-import { GearIcon, GlobeIcon, PhoneIcon, ShieldIcon, SlidersIcon, SunIcon, TrashIcon, RobotIcon, WandIcon, WrenchIcon } from '../icons.js';
+import { ChatIcon, GearIcon, GlobeIcon, PhoneIcon, ShieldIcon, SlidersIcon, SunIcon, TrashIcon, RobotIcon, WandIcon, WrenchIcon } from '../icons.js';
 import { VoiceSettings } from '../components/VoiceSettings.js';
 import { RemoteAccess } from '../components/RemoteAccess.js';
 import { SecuritySettings } from '../components/security/SecuritySettings.js';
@@ -28,6 +28,8 @@ import { DesktopBehaviorSection, FunSection } from './DesktopBehaviorSections.js
 import { SkillsColorIcon, ConnectorsColorIcon } from '../navIcons.js';
 import { HistorySettings } from '../components/HistorySettings.js';
 import { StyleSection } from './StyleSection.js';
+import { SimpleModeSettings } from '../components/SimpleModeSettings.js';
+import { useShown } from '../simpleMode.js';
 
 const SANDBOX_OPTS: Array<{ value: SandboxMode; label: string; desc: string }> = [
   { value: 'workspace-jail', label: 'Workspace jail', desc: 'File access is confined to your added folders.' },
@@ -49,6 +51,7 @@ export const SETTINGS_GROUPS = [
   { id: 'general', label: 'General', icon: SunIcon },
   { id: 'phone', label: 'Phone pairing', icon: PhoneIcon },
   { id: 'style', label: 'Style', icon: SlidersIcon },
+  { id: 'simple', label: 'Simple mode', icon: ChatIcon },
   { id: 'agents', label: 'Agents', icon: RobotIcon },
   { id: 'safety', label: 'Safety', icon: ShieldIcon },
   { id: 'connections', label: 'Connections', icon: GlobeIcon },
@@ -64,6 +67,22 @@ function SettingsGroup({ id, children }: { id: SettingsGroupId; children: React.
       <h2 id={`settings-${id}-title`} className="settings-group-title">{label}</h2>
       {children}
     </div>
+  );
+}
+
+/**
+ * Developer settings in Simple mode: folded behind one row rather than gone,
+ * so they stay one click away (Settings > Simple mode, Advanced settings).
+ */
+function AdvancedFold({ children }: { children: React.ReactNode }) {
+  const shown = useShown('set-tools');
+  const [open, setOpen] = useState(false);
+  if (shown || open) return <>{children}</>;
+  return (
+    <section className="card mt-6 flex flex-wrap items-center gap-3 p-5" data-advanced-fold>
+      <p className="min-w-0 flex-1 text-[12.5px] text-ink-soft">Git, pull requests, the terminal and MCP servers are kept for Expert.</p>
+      <button type="button" className="btn btn-outline px-3 py-1 text-[12px]" onClick={() => setOpen(true)}>Show advanced settings</button>
+    </section>
   );
 }
 
@@ -292,6 +311,9 @@ export function SettingsView() {
             <SettingsGroup id="style">
               <ErrorBoundary label="Style"><StyleSection settings={settings} update={update} /></ErrorBoundary>
             </SettingsGroup>
+            <SettingsGroup id="simple">
+              <ErrorBoundary label="Simple mode"><SimpleModeSettings /></ErrorBoundary>
+            </SettingsGroup>
             <SettingsGroup id="agents">
               {/* Chat modes */}
               <section className="card mt-5 p-5">
@@ -409,6 +431,7 @@ export function SettingsView() {
               <ErrorBoundary label="Connections"><ConnectionsSettings settings={settings} update={update} /></ErrorBoundary>
             </SettingsGroup>
             <SettingsGroup id="tools">
+              <AdvancedFold>
               <ErrorBoundary label="Git management"><GitManagementSection settings={settings} update={update} /></ErrorBoundary>
               <ErrorBoundary label="Project management"><ProjectManagementSection settings={settings} update={update} /></ErrorBoundary>
               <ErrorBoundary label="Pull requests"><PullRequestsSection settings={settings} update={update} /></ErrorBoundary>
@@ -416,6 +439,7 @@ export function SettingsView() {
               <ErrorBoundary label="Terminal"><TerminalSection settings={settings} update={update} /></ErrorBoundary>
               {/* MCP servers */}
               <ErrorBoundary label="MCP servers"><McpSection settings={settings} update={update} reload={reload} /></ErrorBoundary>
+              </AdvancedFold>
             </SettingsGroup>
             <SettingsGroup id="system">
               {/* Updates */}

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import type { Direction, PaneKind } from '../layout.js';
 import { MAX_ACROSS } from '../layout.js';
 import { BoltIcon, ChatIcon, CloseIcon, ExternalIcon, FileIcon, FolderIcon, LayoutIcon, PlusIcon, TerminalIcon } from '../icons.js';
+import { useShown } from '../simpleMode.js';
 
 /**
  * Where a new window goes, asked as a picture.
@@ -92,7 +93,8 @@ export function SplitCompass({
   addable?: PaneKind[];
   className?: string;
 }) {
-  const offered = addable.map((k) => ADDABLE.find((a) => a.kind === k)).filter((a): a is (typeof ADDABLE)[number] => !!a);
+  const terminalShown = useShown('terminal');
+  const offered = addable.filter((k) => k !== 'terminal' || terminalShown).map((k) => ADDABLE.find((a) => a.kind === k)).filter((a): a is (typeof ADDABLE)[number] => !!a);
   const [open, setOpen] = useState(false);
   /**
    * Whether a click put it there. Hovering is a preview that goes away when the

@@ -46,7 +46,7 @@ describe('focus mode clean start', () => {
   it('hides the header, transcript, footer and monitor while on', () => {
     const clean = renderChatPane(empty(), { cleanStart: true });
     const normal = renderChatPane(empty(), { cleanStart: false });
-    for (const [what, marker] of [['header', '<header'], ['transcript', 'data-transcript-scroll'], ['footer', 'aria-label="Chat actions and information"'], ['monitor', 'aria-label="Plan and sub-agents"']]) {
+    for (const [what, marker] of [['header', '<header'], ['transcript', 'data-transcript-scroll'], ['details', 'data-composer-details'], ['monitor', 'aria-label="Plan and sub-agents"']]) {
       expect(normal, what).toContain(marker);
       expect(clean, what).not.toContain(marker);
     }

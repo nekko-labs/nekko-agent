@@ -9,7 +9,7 @@ import { MarkdownSession } from './Markdown.js';
 import { ContextMenu, ContextAction } from './ContextMenu.js';
 import { measuredUsageCost } from './ChatPane.cost.js';
 import { chatPaneSettings, initialChatBrain } from './ChatPane.settings.js';
-import { CopyIcon, ControlPanelIcon, PhotoIcon, FileIcon, FolderIcon, WandIcon } from '../icons.js';
+import { ChevronDownIcon, ChevronUpIcon, CopyIcon, ControlPanelIcon, PhotoIcon, FileIcon, FolderIcon, WandIcon } from '../icons.js';
 import { attachmentName, pastedFileName, planAttachment, unreadableNote } from '../composerAttachments.js';
 import { needsProviderSetup } from './providers/providerSetup.js';
 import { SetupIllustration } from './providers/ProviderChoices.js';
@@ -65,7 +65,8 @@ import { cutPrompt, messageCuts, type MessageCuts } from './agent-console/messag
 
 import { estimateRowHeight, toTranscriptRows, transcriptBeforeLiveTurn, transcriptRowStamp, type TranscriptRow } from './agent-console/transcript.js';
 import { ContextGauge, EffortSlider } from './ChatMetrics.js';
-import { ExpertMonitor, ModeToggle, useExpertMode } from './ModeViews.js';
+import { ExpertMonitor, ModeSwitch, useShown } from './ModeViews.js';
+import { hasAppChrome } from '../chrome.js';
 import { PlanRail } from './PlanRail.js';
 import { PlanSheet } from './PlanSheet.js';
 import { PlanChangePrompt, planChangeMessage } from './PlanChangePrompt.js';
@@ -142,6 +143,8 @@ const PLAN_RAIL_MIN_PANE = PLAN_RAIL_WIDTH * 2;
  * Unset means "grow with what's typed", which is where every composer starts.
  */
 const COMPOSER_H_KEY = 'nekko.composer.height';
+/** Whether the composer's details panel is shrunk, remembered across chats. */
+const DETAILS_KEY = 'nekko.composer.details';
 const COMPOSER_MIN_H = 64;
 /** Drag distance (px) within which the composer snaps to its default or full size. */
 const COMPOSER_SNAP = 24;
@@ -778,7 +781,25 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // "Jump to latest" pill: shown when new content streams in while the reader
   // has scrolled up.
   const [showJump, setShowJump] = useState(false);
-  const [expertMode] = useExpertMode();
+  const showHardware = useShown('hardware');
+  const showModel = useShown('model');
+  const showEffort = useShown('effort');
+  const showContext = useShown('context');
+  const showCost = useShown('cost');
+  const showTools = useShown('tools');
+  const showSuggest = useShown('suggest');
+  const showThinking = useShown('thinking');
+  const showWorktree = useShown('worktree');
+  const showLogs = useShown('logs');
+  const showMode = useShown('mode');
+  const showPrivacy = useShown('privacy');
+  const showGit = useShown('ph-git');
+  // The chat details under the message box: open, or shrunk to the model alone.
+  const [detailsOpen, setDetailsOpen] = useState(() => { try { return window.localStorage.getItem(DETAILS_KEY) !== 'closed'; } catch { return true; } });
+  const toggleDetails = () => setDetailsOpen((o) => {
+    try { window.localStorage.setItem(DETAILS_KEY, o ? 'closed' : 'open'); } catch { /* best effort */ }
+    return !o;
+  });
   // Find in this chat. The bar sits over the transcript; each open mounts it
   // fresh (focused, empty), and closing it clears the highlights.
   const [searchOpen, setSearchOpen] = useState(false);
@@ -2423,7 +2444,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // and the context gauge, where the eye already is when sending.
   const modelControls = (
     <div className="flex min-w-0 shrink items-center gap-2 rounded-lg">
-    <ModelPicker
+    {(showModel || needsModel) && <ModelPicker
       providers={providers}
       filterProviders={cloudOnlyFilter}
       providerId={providerId}
@@ -2456,8 +2477,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           .then((s) => { if (s) { useStore.getState().rememberModel(pid ?? providerId ?? '', v); window.dispatchEvent(new CustomEvent('nekko-session-brain', { detail: { id: sessionId, session: s } })); } })
           .catch((e) => useStore.getState().pushToast('error', String(e)));
       }}
-    />
-    <EffortSlider session={session} onSessionChange={setSession} onChanged={() => { if (session?.messages.length) { contextNoticeTrigger.current = document.activeElement as HTMLElement; setContextChangeNotice(true); } }} modelId={autoPick?.modelId ?? (modelId === AUTO_MODEL_ID ? undefined : modelId ?? undefined)} />
+    />}
+    {showEffort && (detailsOpen || cleanStart) && <EffortSlider session={session} onSessionChange={setSession} onChanged={() => { if (session?.messages.length) { contextNoticeTrigger.current = document.activeElement as HTMLElement; setContextChangeNotice(true); } }} modelId={autoPick?.modelId ?? (modelId === AUTO_MODEL_ID ? undefined : modelId ?? undefined)} />}
     </div>
   );
 
@@ -2482,8 +2503,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             title strip, which already shows the chat's name; standalone, the
             chat still needs a header of its own. */}
         {surface !== 'composer' && !cleanStart && (
-        <ChatHeader title={session?.title || 'New chat'} subAgent={Boolean(session?.parentSessionId)} inWall={commandCenter} lead={<ModeToggle />} metadata={
-            git && (
+        <ChatHeader title={session?.title || 'New chat'} subAgent={Boolean(session?.parentSessionId)} inWall={commandCenter} lead={hasAppChrome ? undefined : <ModeSwitch />} metadata={
+            git && showWorktree && (
               <span className="flex min-w-0 shrink items-center gap-1 text-[11px]">
                 {session && <WorktreeChip session={session} git={git} disabled={hasLive} onChange={setSession} />}
               </span>
@@ -2506,7 +2527,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
               <SearchIcon className="h-3.5 w-3.5" />
             </button>
             <AgentCompanionButtons sessionId={sessionId} changeCount={changeSummary.files} added={changeSummary.added} removed={changeSummary.removed} commandCenter={commandCenter} compact={compact} />
-            <button
+            {showLogs && <button
               className="btn btn-ghost shrink-0 px-2 py-1 text-[11px]"
               aria-label="Open agent logs"
               aria-expanded={commandCenter ? logsOpen : undefined}
@@ -2522,11 +2543,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
               title="Open the agent's command log"
             >
               {compact ? <TerminalIcon className="h-4 w-4" /> : 'Logs'}
-            </button>
+            </button>}
 
         </ChatHeader>
         )}
-        {surface !== 'composer' && !cleanStart && expertMode && <ExpertMonitor />}
+        {surface !== 'composer' && !cleanStart && showHardware && <ExpertMonitor />}
 
         {/* Preserve the wall plan-change pin. An open question takes precedence. */}
         {surface === 'transcript' && planChangeOpen && !question && (
@@ -2536,7 +2557,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         )}
         {surface !== 'composer' && !cleanStart && (
         <div className="relative flex min-h-0 w-full flex-1">
-          <FoldThoughtsContext.Provider value={!isCloudModel}><SubagentParentContext.Provider value={subagentChildren}><SubagentInheritedModelContext.Provider value={delegationDefaultModel ?? (modelId && modelId !== AUTO_MODEL_ID ? modelId : undefined)}><WatchSessionContext.Provider value={sessionId}><VirtualTranscript
+          <FoldThoughtsContext.Provider value={!isCloudModel || !showThinking}><SubagentParentContext.Provider value={subagentChildren}><SubagentInheritedModelContext.Provider value={delegationDefaultModel ?? (modelId && modelId !== AUTO_MODEL_ID ? modelId : undefined)}><WatchSessionContext.Provider value={sessionId}><VirtualTranscript
             ref={transcriptRef}
             rows={rows}
             renderRow={renderRow}
@@ -2786,6 +2807,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             <div className="flex flex-wrap items-center gap-1 border-b border-line px-2 py-1.5">
               <div className="min-w-0 shrink">
               <ChatControls
+                hideMode={!showMode}
+                hidePrivacy={!showPrivacy}
                 session={session}
                 isCloudModel={isCloudModel}
                 modelId={modelId ?? undefined}
@@ -3236,15 +3259,15 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   </>)}
                   {header && (
                     <div className="composer-foot-controls flex min-w-0 items-center gap-1" data-composer-foot>
-                      <ChatControls session={session} isCloudModel={isCloudModel} modelId={modelId ?? undefined} onChange={setSession} toolsInWindow only="mode" />
-                      <ChatControls session={session} isCloudModel={isCloudModel} onChange={setSession} draft={draft} toolsInWindow only="privacy" />
+                      <ChatControls session={session} isCloudModel={isCloudModel} modelId={modelId ?? undefined} onChange={setSession} toolsInWindow only="mode" hideMode={!showMode} />
+                      <ChatControls session={session} isCloudModel={isCloudModel} onChange={setSession} draft={draft} toolsInWindow only="privacy" hidePrivacy={!showPrivacy} />
                     </div>
                   )}
                   <div className="flex-1" />
                   {streaming && <button className="btn btn-outline h-8 px-3 py-0 text-[12px]" onClick={() => window.nekko.abortChat(sessionId)}>Stop</button>}
                   {/* Prompt suggestions: one chip beside the microphone; its
                       details open above it rather than pushing the editor. */}
-                  {!imageMode && (
+                  {!imageMode && showSuggest && (
                     <PromptAnalyzer
                       variant="chip"
                       text={deferredDraft}
@@ -3274,6 +3297,62 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     </button>
                 </div>
               </div>
+                {/* The chat's details: a panel of the composer itself, open or
+                    shrunk to the model alone. Simple mode leaves out the
+                    controls Settings > Simple mode keeps for Expert. */}
+                {!cleanStart && !imageMode && surface !== 'composer' && (
+                  <div className={`composer-details ${detailsOpen ? 'is-open' : ''}`} data-composer-details aria-label="Chat details">
+                    {modelHint && <p role="status" data-model-note className="mb-1 flex items-center gap-1.5 text-[11.5px]" style={{ color: unavailableModel ? 'var(--warning)' : 'var(--accent)' }}><span aria-hidden>●</span>{modelHint}</p>}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {detailsOpen && <FolderPicker sessionId={sessionId} session={session} disabled={hasLive} onChange={setSession} />}
+                      {modelControls}
+                      {detailsOpen && showContext && (
+                        <LiveContextGauge
+                          sessionId={sessionId}
+                          marks={marks}
+                          bundle={ctx}
+                          skill={skillTokens}
+                          draftTokens={deferredDraft.trim() ? estimateTokens(deferredDraft) : 0}
+                          contextWindow={selectedModelInfo?.contextLength}
+                          windowReported={!!selectedModelInfo?.contextLength}
+                          reported={reportedCtx}
+                        />
+                      )}
+                      {detailsOpen && showCost && (
+                        <LiveUsageChip
+                          sessionId={sessionId}
+                          marks={marks}
+                          measured={turnCostMeasured}
+                          pendingIn={pendingIn}
+                          model={modelForCostRef.current}
+                          provider={activeProvider}
+                          session={session ?? undefined}
+                          cost={cost}
+                          avoidedCosts={avoidedCosts}
+                          running={streaming}
+                          unpriced={!!avoidedCosts?.unpricedTokens || (streaming && !getModelPrice(modelForCostRef.current ?? undefined))}
+                        />
+                      )}
+                      <div className="agent-footer-reach ml-auto flex shrink-0 items-center gap-1" data-agent-footer-controls>
+                        {detailsOpen && session && showTools && <>
+                          <ToolsMenu session={session} onChange={setSession} />
+                          {session?.executionMode === 'sandbox' ? <span className="text-[11px] text-ink-faint">MCP unavailable in Sandbox</span> : <McpMenu />}
+                        </>}
+                        {detailsOpen && <InternetToggle session={session} cloudModel={isCloudModel} onToggle={() => { void window.nekko.setSessionOptions(sessionId, { offline: !session?.offline }).then(setSession).catch(e => useStore.getState().pushToast('error', String(e))); }} />}
+                        <button
+                          type="button"
+                          className="composer-details-toggle"
+                          onClick={toggleDetails}
+                          aria-expanded={detailsOpen}
+                          aria-label={detailsOpen ? 'Shrink the chat details' : 'Show the chat details'}
+                          title={detailsOpen ? 'Shrink the chat details' : 'Show the chat details'}
+                        >
+                          {detailsOpen ? <ChevronDownIcon className="h-3.5 w-3.5" /> : <ChevronUpIcon className="h-3.5 w-3.5" />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
             </div>
             {/* The footer is hidden while the chat starts clean, but the model
                 is still the user's to pick before the first send. */}
@@ -3283,55 +3362,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           </div>
         </div>
         )}
-        {/* In the wall composer this strip only carries the PR dock (the model,
-            folder and usage controls live in the agent window), so it draws no
-            chrome of its own: empty, it used to show as a bare band under the
-            composer. */}
-        {/* The PR deck sits between the composer and the footer controls, on the window surface. */}
-        {!cleanStart && <PrActionDock key={sessionId} sessionId={sessionId} prs={prs} urls={sessionPrUrls} floating={surface === 'composer'} checksInPlan={!!session?.agentPlan?.length} />}
-        {!cleanStart && <div className={surface === 'composer' ? 'shrink-0' : 'shrink-0 px-3 py-1.5'} aria-label="Chat actions and information">
-          {/* Said once, next to the control that fixes it, in the window being driven. */}
-          {modelHint && !imageMode && surface !== 'composer' && <p role="status" data-model-note className="mb-1.5 flex items-center gap-1.5 text-[11.5px]" style={{ color: unavailableModel ? 'var(--warning)' : 'var(--accent)' }}><span aria-hidden>●</span>{modelHint}</p>}
-          {!imageMode && surface !== 'composer' && <div className="flex flex-wrap items-center gap-2">
-                  <FolderPicker sessionId={sessionId} session={session} disabled={hasLive} onChange={setSession} />
-                  {modelControls}
-                  <>
-                  <LiveContextGauge
-                    sessionId={sessionId}
-                    marks={marks}
-                    bundle={ctx}
-                    skill={skillTokens}
-                    draftTokens={deferredDraft.trim() ? estimateTokens(deferredDraft) : 0}
-                    contextWindow={selectedModelInfo?.contextLength}
-                    windowReported={!!selectedModelInfo?.contextLength}
-                    reported={reportedCtx}
-                  />
-                  <LiveUsageChip
-                    sessionId={sessionId}
-                    marks={marks}
-                    measured={turnCostMeasured}
-                    pendingIn={pendingIn}
-                    model={modelForCostRef.current}
-                    provider={activeProvider}
-                    session={session ?? undefined}
-                    cost={cost}
-                    avoidedCosts={avoidedCosts}
-                    running={streaming}
-                    unpriced={!!avoidedCosts?.unpricedTokens || (streaming && !getModelPrice(modelForCostRef.current ?? undefined))}
-                  />
-                  </>
-            {/* What this agent may reach and use, then its status in the far
-                bottom-right corner of the window. */}
-            <div className="agent-footer-reach ml-auto flex shrink-0 items-center gap-1" data-agent-footer-controls>
-              {session && <>
-                <ToolsMenu session={session} onChange={setSession} />
-                {session?.executionMode === 'sandbox' ? <span className="text-[11px] text-ink-faint">MCP unavailable in Sandbox</span> : <McpMenu />}
-              </>}
-              <InternetToggle session={session} cloudModel={isCloudModel} onToggle={() => { void window.nekko.setSessionOptions(sessionId, { offline: !session?.offline }).then(setSession).catch(e => useStore.getState().pushToast('error', String(e))); }} />
-                          </div>
-          </div>}
-          {/* An image chat runs no agent, so no tools or internet switch: just its status. */}
-                  </div>}
+        {/* The PR deck sits under the composer, on the window surface. */}
+        {!cleanStart && showGit && <PrActionDock key={sessionId} sessionId={sessionId} prs={prs} urls={sessionPrUrls} floating={surface === 'composer'} checksInPlan={!!session?.agentPlan?.length} />}
       </section>
 
       {/* The work rail, in the quarter the transcript gives back. Kept inside

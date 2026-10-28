@@ -3566,3 +3566,44 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 .greeting-nekko.is-laughing { animation: greeting-laugh 180ms ease-in-out 6; }
 @keyframes greeting-laugh { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
 @media (prefers-reduced-motion: reduce) { .greeting-nekko.is-laughing { animation: none; } }
+
+/* Simple and Expert: two icon segments, a chat bubble and angle brackets. */
+.mode-seg { display: inline-flex; flex: none; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-2); }
+.mode-seg button { display: grid; place-items: center; width: 26px; height: 22px; border-radius: 7px; color: var(--ink-faint); transition: background 120ms ease-out, color 120ms ease-out; }
+.mode-seg button:hover { color: var(--ink); }
+.mode-seg button.on { background: var(--win, var(--paper)); color: var(--accent); box-shadow: 0 1px 2px rgb(0 0 0 / 0.12); }
+.mode-seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.titlebar .mode-seg { margin-left: 10px; }
+
+/* The chat's details: a panel inside the composer card, under the toolbar. */
+.composer-details { border-top: 1px solid var(--line); padding: 6px 8px 6px 10px; font-size: 12px; }
+.composer-details-toggle { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 7px; color: var(--ink-faint); }
+.composer-details-toggle:hover { background: var(--surface-2); color: var(--ink); }
+.composer-details-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Settings > Simple mode: each area drawn beside its switches. */
+.sm-area { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); }
+@media (max-width: 900px) { .sm-area { grid-template-columns: minmax(0, 1fr); } }
+.sm-area-title { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 8px; }
+.sm-frame { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
+.sm-composer { background: var(--surface); }
+.sm-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.sm-details { border-top: 1px solid var(--line); padding-top: 8px; }
+.sm-title { font-size: 12px; font-weight: 600; margin-right: 4px; }
+.sm-placeholder { font-size: 12px; color: var(--ink-faint); padding: 2px 2px 6px; }
+.sm-bubble { font-size: 11.5px; padding: 5px 10px; border-radius: 12px; background: var(--accent-soft); color: var(--ink); }
+.sm-lines { display: grid; gap: 5px; }
+.sm-lines i { display: block; height: 6px; width: 92%; border-radius: 3px; background: var(--line); }
+.sm-window { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); font-size: 11.5px; }
+.sm-mock { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-size: 11px; color: var(--ink-soft); white-space: nowrap; transition: opacity 150ms ease-out, outline-color 150ms ease-out; }
+.sm-mock-wide { white-space: normal; }
+.sm-mock-fixed { color: var(--ink-faint); }
+.sm-mock[data-shown='false'] { border: 1.5px dashed var(--ink-faint); background: transparent; color: var(--ink-faint); opacity: 0.55; }
+.sm-mock[data-hot] { outline: 2px solid var(--accent); outline-offset: 2px; opacity: 1; }
+.sm-item { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 8px 6px; border-radius: 8px; }
+.sm-item:hover { background: var(--surface-2); }
+.sm-choice { display: inline-flex; flex: none; padding: 2px; gap: 2px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
+.sm-choice button { padding: 3px 8px; border-radius: 6px; font-size: 11.5px; color: var(--ink-faint); white-space: nowrap; }
+.sm-choice button:hover { color: var(--ink); }
+.sm-choice button.on { background: var(--win, var(--paper)); color: var(--accent); font-weight: 500; box-shadow: 0 1px 2px rgb(0 0 0 / 0.12); }
+.sm-choice button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }

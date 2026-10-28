@@ -6,6 +6,18 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Simple and Expert, reframed (#1311, added 2026-10-28)
+
+Simple becomes the everyday app with developer controls out of sight, chosen per control in Settings > Simple mode (Show, Expert only, Hide), per device, Simple for new installs, controls not pages. Spec: [Desktop Simple and Expert modes](spec/desktop/desktop-simple-and-expert-modes.md), [iPhone and Android](spec/phone/iphone-simple-and-expert-modes.md); [decision 0030](docs/decisions/0030-simple-hides-developer-controls-per-device.md); docs page `docs/simple-and-expert.md`. Prefix **SEM**. Built on branch `simple-expert-modes` for Philip to test before merging.
+
+- [x] **SEM-1, catalogue.** `packages/shared/src/simple-mode.ts` (ids, areas, platforms, defaults, `simpleShown`, `parseSimpleChoices`, `simpleAreas`) with unit tests. (2026-10-28)
+- [x] **SEM-2, desktop switch and gates.** `simpleMode.ts` store (`useShown`, `shownNow`), the chat and code icon switch in the title bar, and each catalogue control gated where it renders. (2026-10-28)
+- [x] **SEM-3, composer details panel.** The strip under the composer moved into the card as a panel that shrinks to the model. (2026-10-28)
+- [x] **SEM-4, Settings > Simple mode.** Drawn previews per area with dashed out-of-sight controls, a three-way switch per control, preview mode and reset. Evidence: `chat-modes-fixture.tsx` / `chat-modes-sandbox.cjs`, 13 assertions. (2026-10-28)
+- [ ] **SEM-5, iPhone.** The same switch, gates and Settings screen.
+- [ ] **SEM-6, Android.** The same switch, gates and Settings screen.
+- [ ] **SEM-7, search and nudge.** List out-of-sight controls in Settings search and the command palette; the *This chat is getting long* nudge in Simple; one summary line per turn for tool steps.
+
 ## Model Server inline download progress (#1221)
 
 - [x] **DLP-1, Show progress and block duplicate download clicks.** Model builds/recommendations, decisions and managed llama.cpp/image/MLX runtimes share immediate acquisition locks and existing grouped-job progress. Queued/downloading/verifying stay disabled, terminal states and rejected requests permit retry; runtime build and decision precision stay fixed in flight. Focused state tests and isolated 1100px/390px rapid-click/progress/retry assertions pass. Model/runtime before/after PNGs inspected. Spec: [Models and providers](spec/models/models-providers.md). Live downloads and packaged application not exercised; baseline macOS shortcut test failure tracked in #900.

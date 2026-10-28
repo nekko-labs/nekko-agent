@@ -62,6 +62,7 @@ export * from './integrations.js';
 export * from './ipc.js';
 export * from './settings.js';
 export * from './limits.js';
+export * from './simple-mode.js';
 export * from './e2e.js';
 export * from './remote.js';
 export * from './relay-route.js';

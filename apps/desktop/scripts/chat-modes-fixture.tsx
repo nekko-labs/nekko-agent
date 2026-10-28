@@ -5,6 +5,8 @@ import { useStore } from '../src/renderer/store';
 import { putCachedSession } from '../src/renderer/sessionCache';
 import { clearLiveRun } from '../src/renderer/liveRuns';
 import { ChatPane } from '../src/renderer/components/ChatPane';
+import { SimpleModeSettings } from '../src/renderer/components/SimpleModeSettings';
+import { ModeSwitch } from '../src/renderer/components/ModeViews';
 import '../src/renderer/styles.css';
 
 // Synthetic records only. This fixture never connects to a host or daemon.
@@ -61,7 +63,11 @@ function Fixture() {
   Object.assign(window, { integration: { reset } });
   React.useEffect(() => reset(), []);
   return <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }} className="bg-paper" key={epoch}>
-    <main style={{ flex: 1, minHeight: 0 }}><ChatPane sessionId="alpha" /></main>
+    {/* The title bar's switch, without the updater the real title bar needs. */}
+    <div className="titlebar"><h1 className="titlebar-heading text-gradient">Agents</h1><ModeSwitch /></div>
+    {location.hash === '#settings'
+      ? <main style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0 24px 24px' }}><SimpleModeSettings /></main>
+      : <main style={{ flex: 1, minHeight: 0 }}><ChatPane sessionId="alpha" /></main>}
   </div>;
 }
 createRoot(document.getElementById('root')!).render(<Fixture />);

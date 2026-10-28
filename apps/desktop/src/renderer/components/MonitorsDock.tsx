@@ -21,6 +21,7 @@ import { SubscriptionSignIn } from './SubscriptionSignIn.js';
 import { SUBSCRIPTION_KINDS, reconnectProviderConfig } from './providers/AddProvider.js';
 import { usePanelPresence } from '../usePanelPresence.js';
 import { dockMinimizeTransition } from './dockMinimize.js';
+import { useShown } from '../simpleMode.js';
 
 const MONITOR_ICONS = { automations: GearIcon, utilization: ListIcon, budget: MoneyIcon, insights: BrainIcon, hardware: ServerIcon, localModels: CubeIcon };
 
@@ -57,7 +58,13 @@ export function MonitorsToggle({ show, side, onToggle }: { show: boolean; side: 
 }
 
 /** A flow-layout sibling of the wall stage. The parent places it using data-dock-side. */
+/** Monitors that Settings > Simple mode can keep for Expert. */
+const HW_MONITORS = new Set<string>(['hardware', 'localModels']);
+const BUDGET_MONITORS = new Set<string>(['budget', 'utilization', 'cost', 'tokens']);
+
 export function MonitorsDock(props: MonitorsDockProps) {
+  const hwShown = useShown('mon-hw');
+  const budgetShown = useShown('mon-budget');
   const { state, setState } = props;
   const { dock } = state;
   const background = useBackgroundState();
@@ -195,7 +202,7 @@ export function MonitorsDock(props: MonitorsDockProps) {
     </div>
   );
   if (!present) return collapsed;
-  const selectedMonitors = normalizeMonitorOrder(dock.monitorOrder).map(key => MONITORS.find(p => p.key === key)!).filter((p) => dock.monitors[p.key]);
+  const selectedMonitors = normalizeMonitorOrder(dock.monitorOrder).map(key => MONITORS.find(p => p.key === key)!).filter((p) => dock.monitors[p.key] && (hwShown || !HW_MONITORS.has(p.key)) && (budgetShown || !BUDGET_MONITORS.has(p.key)));
   const expandedMonitors = selectedMonitors.filter((p) => !dock.minimized[p.key]);
   return (
     <>

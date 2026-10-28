@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { NekkoAvatar } from './Mascot.js';
 import { PhotoIcon, PlusIcon, TerminalIcon } from '../icons.js';
 import { SHORTCUTS } from '../shortcuts.js';
+import { useShown } from '../simpleMode.js';
 
 export type CreateKind = 'chat' | 'image' | 'terminal';
 /** The three things the plus creates; the plus menu and an empty zone both offer them. */
@@ -11,8 +12,8 @@ export const CREATE_OPTIONS = [
   ['image', 'Create or Edit Photos and Videos', <PhotoIcon className="h-4 w-4" />, SHORTCUTS.newMedia],
   ['terminal', 'Terminal', <TerminalIcon className="h-4 w-4" />, SHORTCUTS.newTerminal],
 ] as const;
-export function CreateMenuRows({ onCreate }: { onCreate: (kind: CreateKind) => void }) {
-  return <>{CREATE_OPTIONS.map(([kind, label, icon, shortcut]) => <button key={kind} type="button" className="create-row flex w-full items-center gap-2 rounded-md px-2 py-1 text-left" onClick={() => onCreate(kind)}>
+export function CreateMenuRows({ onCreate, terminal = true }: { onCreate: (kind: CreateKind) => void; terminal?: boolean }) {
+  return <>{CREATE_OPTIONS.filter(([kind]) => kind !== 'terminal' || terminal).map(([kind, label, icon, shortcut]) => <button key={kind} type="button" className="create-row flex w-full items-center gap-2 rounded-md px-2 py-1 text-left" onClick={() => onCreate(kind)}>
     <span className="create-tile">{icon}</span>
     <span className="min-w-0 flex-1 text-[13px] font-medium leading-snug">{label}</span>
     <kbd className="kbd shrink-0">{shortcut.label}</kbd>
@@ -22,6 +23,7 @@ export function CreateMenuRows({ onCreate }: { onCreate: (kind: CreateKind) => v
 /** Hover menu with a grace period to cross the portal gap, also operable by keyboard. */
 export function CreateMenu({ onCreate, anchorRef }: { onCreate: (kind: CreateKind) => void; anchorRef?: React.RefObject<HTMLButtonElement | null> }) {
   const [open, setOpen] = useState(false);
+  const terminalShown = useShown('terminal');
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const ownAnchor = useRef<HTMLButtonElement>(null);
   const anchor = anchorRef ?? ownAnchor;
@@ -54,6 +56,6 @@ export function CreateMenu({ onCreate, anchorRef }: { onCreate: (kind: CreateKin
   }, [open]);
   return <>
     <button ref={anchor} type="button" className="btn btn-ghost agent-panel-plus px-1.5 py-1" aria-label="Create new" aria-haspopup="dialog" aria-expanded={open} data-wall-create-toggle onMouseEnter={show} onMouseLeave={leave} onClick={show} onKeyDown={e => { if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') { e.preventDefault(); show(); requestAnimationFrame(() => pop.current?.querySelector('button')?.focus()); } }}><PlusIcon className="h-[22px] w-[22px]" /></button>
-    {open && createPortal(<div ref={pop} role="dialog" aria-label="Create new" data-wall-create-menu className="create-menu card fixed z-[1000] w-max p-1 shadow-lg" style={pos} onMouseEnter={cancel} onMouseLeave={leave} onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget)) close(); }}><CreateMenuRows onCreate={kind => { close(); onCreate(kind); }} /></div>, document.body)}
+    {open && createPortal(<div ref={pop} role="dialog" aria-label="Create new" data-wall-create-menu className="create-menu card fixed z-[1000] w-max p-1 shadow-lg" style={pos} onMouseEnter={cancel} onMouseLeave={leave} onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget)) close(); }}><CreateMenuRows terminal={terminalShown} onCreate={kind => { close(); onCreate(kind); }} /></div>, document.body)}
   </>;
 }
