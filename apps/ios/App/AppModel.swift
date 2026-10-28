@@ -292,8 +292,9 @@ final class AppModel {
         talker.discard = { [weak self] in self?.cardDictation.discard() }
         talker.send = { [weak self] sid, text in
             guard let self else { return }
-            _ = await self.waitOnline(seconds: 10)
-            _ = try await self.store.outbox.sendWaiting(chatId: sid, text: text, wait: 10)
+            // Offline after 10 s: leave it in the outbox rather than spend another 10 s of the intent.
+            let online = await self.waitOnline(seconds: 10)
+            _ = try await self.store.outbox.sendWaiting(chatId: sid, text: text, wait: online ? 10 : 0)
         }
         talker.show = { [weak self] listening, heard, to in self?.activities.talk(listening: listening, heard: heard, sentTo: to) }
         IntentRouter.talk = { [weak self] sid in await self?.talker.talk(sid) }
