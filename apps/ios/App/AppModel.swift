@@ -533,6 +533,8 @@ final class AppModel {
     private func forgotten(_ id: String) {
         if prefs.defaultComputer == id { prefs.defaultComputer = store.activeId }
         prefs.lastModel[id] = nil
+        prefs.lastEffort[id] = nil
+        prefs.lastTools[id] = nil
         prefs.lastFolder[id] = nil
         if store.computers.isEmpty { activities.endAll() }
     }
@@ -565,6 +567,8 @@ final class AppModel {
         activities.endAll()
         prefs.defaultComputer = nil
         prefs.lastModel = [:]
+        prefs.lastEffort = [:]
+        prefs.lastTools = [:]
         prefs.lastFolder = [:]
     }
 

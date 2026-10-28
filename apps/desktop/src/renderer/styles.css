@@ -3558,3 +3558,11 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
   .settings-page { width: 100%; padding: 24px 16px; }
   .settings-nav { column-gap: 18px; }
 }
+
+/* The button covers only the cat, not the editor or greeting text. */
+.greeting-nekko-button { position: absolute; z-index: 4; left: -18px; top: 14.5px; width: 80px; height: 75px; padding: 0; border: 0; background: none; cursor: pointer; pointer-events: auto; }
+.greeting-nekko-button .greeting-nekko { left: 0; top: 0; }
+.greeting-nekko-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+.greeting-nekko.is-laughing { animation: greeting-laugh 180ms ease-in-out 6; }
+@keyframes greeting-laugh { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@media (prefers-reduced-motion: reduce) { .greeting-nekko.is-laughing { animation: none; } }

@@ -510,6 +510,7 @@ public struct PcSettings: Equatable, Sendable {
     public enum ChatMode: String, CaseIterable, Sendable { case ask, guardrails, yolo }
     public enum ChatAction: String, CaseIterable, Sendable { case complete, delete }
 
+    public var effort: Effort?
     public var defaultChatMode: ChatMode?
     public var chatPaneAction: ChatAction?
     public var skipDeleteConfirmation: Bool?
@@ -523,9 +524,10 @@ public struct PcSettings: Equatable, Sendable {
     /// The computer's automations are paused (set on the computer only).
     public var automationsPaused: Bool
 
-    public init(defaultChatMode: ChatMode? = nil, chatPaneAction: ChatAction? = nil, skipDeleteConfirmation: Bool? = nil,
+    public init(effort: Effort? = nil, defaultChatMode: ChatMode? = nil, chatPaneAction: ChatAction? = nil, skipDeleteConfirmation: Bool? = nil,
                 known: Bool = false, voiceEnabled: Bool = false, phoneChanges: Bool = false, prompts: [SavedPrompt] = [],
                 automationsPaused: Bool = false) {
+        self.effort = effort
         self.defaultChatMode = defaultChatMode
         self.chatPaneAction = chatPaneAction
         self.skipDeleteConfirmation = skipDeleteConfirmation
@@ -543,7 +545,8 @@ public struct PcSettings: Equatable, Sendable {
 
     public static func from(_ v: JSONValue?) -> PcSettings {
         guard let v, v.object != nil else { return PcSettings() }
-        return PcSettings(defaultChatMode: v.str("defaultChatMode").flatMap(ChatMode.init(rawValue:)),
+        return PcSettings(effort: v.str("effort").flatMap(Effort.init(rawValue:)),
+                          defaultChatMode: v.str("defaultChatMode").flatMap(ChatMode.init(rawValue:)),
                           chatPaneAction: v.str("chatPaneAction").flatMap(ChatAction.init(rawValue:)),
                           skipDeleteConfirmation: v["skipDeleteConfirmation"]?.bool, known: true,
                           voiceEnabled: v["voice"]?.flag("enabled") == true, phoneChanges: v.flag("phoneChanges"),

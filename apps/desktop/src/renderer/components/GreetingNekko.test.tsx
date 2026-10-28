@@ -30,10 +30,12 @@ describe('Greeting Nekko', () => {
     expect(cssRule(css, '.greeting-nekko-slot')).toMatchObject({ width: '64px', height: '60px' });
   });
 
-  it('is decorative, non-focusable, and inherits theme colors without network resources', () => {
+  it('offers a keyboard-accessible local laugh and inherits theme colors without network resources', () => {
     const markup = renderToStaticMarkup(<GreetingNekko />);
     expect(markup).toContain('aria-hidden="true"');
     expect(markup).toContain('focusable="false"');
+    expect(markup).toContain('aria-label="Make Nekko laugh"');
+    expect(markup).toContain('aria-pressed="false"');
     for (const token of ['--surface', '--ink']) expect(markup).toContain(`var(${token})`);
     expect(markup).not.toMatch(/href=|tabindex=|<image|<animate/);
   });
