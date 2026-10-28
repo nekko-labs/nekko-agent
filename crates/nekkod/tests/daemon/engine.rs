@@ -414,8 +414,17 @@ async fn installs_and_removes_the_engine_itself() {
     );
     let (_, installed) = post(d.port, "engine:installedBin", json!([]), Some(TOKEN)).await;
     assert_eq!(installed, detected["binPath"]);
+    let (_, installed) = post(d.port, "engine:installedBin", json!(["llama"]), Some(TOKEN)).await;
+    assert_eq!(installed, detected["binPath"]);
     let (_, sd) = post(d.port, "engine:detect", json!(["diffusion"]), Some(TOKEN)).await;
     assert!(sd["available"].is_array(), "{sd}");
+    // The tray's question, per runtime: the same answer `detect` gives.
+    let (_, sd_bin) = post(d.port, "engine:installedBin", json!(["diffusion"]), Some(TOKEN)).await;
+    assert_eq!(sd_bin, sd.get("binPath").cloned().unwrap_or(Value::Null), "{sd}");
+    if !cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+        let (_, mlx_bin) = post(d.port, "engine:installedBin", json!(["mlx"]), Some(TOKEN)).await;
+        assert_eq!(mlx_bin, Value::Null);
+    }
     let (_, mlx) = post(d.port, "engine:detect", json!(["mlx"]), Some(TOKEN)).await;
     if !cfg!(all(target_os = "macos", target_arch = "aarch64")) {
         assert_eq!(mlx["reason"], "MLX runs on Apple Silicon Macs only.");

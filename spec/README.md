@@ -86,6 +86,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Search within Settings (desktop)](desktop/search-within-settings-desktop.md) (2 KB)
 - [Settings section nav and phone pairing placement (desktop)](desktop/settings-section-nav.md) (5 KB)
 - [Slim wave rail, tighter Agents spacing, composer snap points](desktop/slim-wave-rail-tighter-agents-spacing-composer-snap-points.md) (5 KB)
+- [Stay out of the way of full-screen apps (games)](desktop/stay-out-of-the-way-of-full-screen-apps.md) (3 KB)
 - [Style: universal fonts, text size and your own fonts (desktop)](desktop/style-fonts-and-text-size.md) (3 KB)
 - [Subtle rail and compact board gutters](desktop/subtle-rail-and-compact-board-gutters.md) (3 KB)
 - [Swoop navigation rail (2026-10-17)](desktop/swoop-navigation-rail.md) (4 KB)
