@@ -23,7 +23,8 @@ export function createDesktopTray(options: {
   let showsDot = false;
   let busy = false;
   let disposed = false;
-  let modelStatus: EngineStatus | null = null;
+  /** What the menu shows of the model server: whether it runs, and whether any runtime is installed. */
+  let modelStatus: { running: boolean; installed: boolean } | null = null;
   const run = (action: () => Promise<void>) => {
     if (busy || disposed) return;
     busy = true;
@@ -49,7 +50,7 @@ export function createDesktopTray(options: {
       ...(runners.vms > 0 ? [{ label: `CI runners: ${runners.vms} ${runners.vms === 1 ? 'VM' : 'VMs'} running`, enabled: false }] : []),
       ...(runners.awake ? [{ label: 'Keeping this Mac awake for CI', enabled: false }] : []),
       { type: 'separator' },
-      { label: modelStatus?.running ? 'Stop model server' : 'Start model server', enabled: !busy && engine.running && Boolean(modelStatus?.install.binPath || modelStatus?.diffusionInstall?.binPath || modelStatus?.mlxInstall?.binPath), click: () => run(async () => {
+      { label: modelStatus?.running ? 'Stop model server' : 'Start model server', enabled: !busy && engine.running && Boolean(modelStatus?.installed), click: () => run(async () => {
         const status = await engine.call<EngineStatus>(IpcChannels.engineStatus);
         if (status.running) {
           const res = await engine.call<{ ok: boolean; message?: string }>(IpcChannels.runtimeStop, 'nekko-engine', true);
@@ -72,11 +73,22 @@ export function createDesktopTray(options: {
       tray.setToolTip(dot ? 'Nekko Agent · CI runner active' : 'Nekko Agent');
     }
   };
+  const readModelStatus = async () => {
+    const runtimes = process.platform === 'darwin' && process.arch === 'arm64' ? ['llama', 'diffusion', 'mlx'] : ['llama', 'diffusion'];
+    const [running, ...bins] = await Promise.all([
+      engine.call<boolean>('engine:running'),
+      ...runtimes.map(r => engine.call<string | null>('engine:installedBin', r)),
+    ]);
+    return { running: running === true, installed: bins.some(Boolean) };
+  };
   let refreshing = false;
   const refresh = async () => {
     if (refreshing || disposed) return;
     refreshing = true;
-    try { modelStatus = engine.running ? await engine.call<EngineStatus>(IpcChannels.engineStatus) : null; }
+    // Not `engine:status`: that probes the GPU (an `nvidia-smi` run) and
+    // searches for runtimes each time, which this poll did every 6 s with no
+    // window open. These two are cheap and answer the menu's questions.
+    try { modelStatus = engine.running ? await readModelStatus() : null; }
     catch { modelStatus = null; }
     try {
       // The daemon serves no runners off macOS or when older: a rejection means none.

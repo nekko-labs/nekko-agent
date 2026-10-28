@@ -24,6 +24,7 @@ import type {
 import { AGENT_REPLAY, IpcChannels, IpcEvents } from '@nekko-agent/shared';
 import { ENGINE_ENDPOINT_CHANNEL, PICK_FOLDER_CHANNEL, SERVICE_CONTROL_CHANNEL } from '../engineChannels.js';
 import { createEngineSocket, type Listener } from './engine-socket.js';
+import { heldWhileHidden, pageHidden } from './hiddenReads.js';
 import { MAIN_EVENTS } from './routing.js';
 import { withStepUpRetry, type StepUpHandler } from '../stepUpRetry.js';
 import { WEBAUTHN_CEREMONY_CHANNEL } from '../webauthnCeremony.js';
@@ -119,7 +120,7 @@ const api: NekkoApi = {
   voiceUninstall: (engine) => inv(IpcChannels.voiceUninstall, engine),
   voiceTranscribe: (wav) => inv(IpcChannels.voiceTranscribe, wav),
   voicePermission: (action) => inv(IpcChannels.voicePermission, action),
-  engineStatus: () => inv(IpcChannels.engineStatus),
+  engineStatus: heldWhileHidden(() => inv(IpcChannels.engineStatus), pageHidden),
   engineInstall: (buildId, runtime) => inv(IpcChannels.engineInstall, buildId, runtime),
   engineUninstall: (runtime) => inv(IpcChannels.engineUninstall, runtime),
   engineInstallPreview: (runtime, buildId) => inv(IpcChannels.engineInstallPreview, runtime, buildId),
@@ -163,7 +164,7 @@ const api: NekkoApi = {
   machineRecommendations: (opts) => inv(IpcChannels.machineRecommendations, opts),
   backgroundState: () => inv(IpcChannels.backgroundState),
   machineDismissNudge: (task) => inv(IpcChannels.machineDismissNudge, task ?? null),
-  getGpuStats: () => inv(IpcChannels.gpuStats),
+  getGpuStats: heldWhileHidden(() => inv(IpcChannels.gpuStats), pageHidden),
   getSystemStats: () => inv(IpcChannels.systemStats),
 
   listSessions: () => inv(IpcChannels.sessionsList),
