@@ -2,8 +2,8 @@ import SwiftUI
 import UIKit
 
 extension View {
-    /// Pull to refresh with Nekko in place of the system spinner: the cat looks shocked,
-    /// reaches out, pulls the spinner home and smiles.
+    /// Pull to refresh with Nekko in place of the system spinner: a "!" over a shocked
+    /// cat, a quick grab and pull of the spinner, and a smile once the reload is done.
     func pawRefreshable(action: @escaping @Sendable () async -> Void) -> some View {
         modifier(OwnedPawRefresh(action: action))
     }
@@ -34,13 +34,11 @@ private struct PawRefreshModifier: ViewModifier {
                 await MainActor.run { pull.smiling = false }
                 let start = ContinuousClock.now
                 await action()
-                // Long enough for the reach, however fast the reload is.
-                try? await Task.sleep(until: start + .milliseconds(Int(PawPose.reachEnd * 1000)), clock: .continuous)
-                // The pull home plays before the refresh ends: once it ends the page
-                // closes over the control at once.
-                await MainActor.run { pull.endStart = Date() }
-                try? await Task.sleep(for: .milliseconds(Int(PawPose.pullDuration * 1000)))
-                await MainActor.run { pull.smiling = true }
+                // Long enough for the grab and pull, however fast the reload is.
+                try? await Task.sleep(until: start + .milliseconds(Int(PawPose.pullEnd * 1000)), clock: .continuous)
+                // The smile plays before the refresh ends: once it ends the page closes
+                // over the control at once.
+                await MainActor.run { pull.endStart = Date(); pull.smiling = true }
                 try? await Task.sleep(for: .milliseconds(Int(PawPose.smileBeat * 1000)))
                 // The toolbar mascot keeps smiling a moment after the page closes.
                 Task { @MainActor in
@@ -58,27 +56,33 @@ struct PawPose: Equatable {
     var reach: CGFloat = 0
     /// 1 at its own spot, 0 tucked against the cat.
     var spinner: CGFloat = 1
-    /// The spinner fades once it is home.
+    /// The spinner fades once the reload is done.
     var spinnerOpacity: Double = 1
+    /// The "!" over the cat's head, until the paw moves.
+    var alarm = false
 
-    /// The shocked beat before the paw moves.
-    static let reachDelay = 0.15
-    static let reachDuration = 0.25
-    static var reachEnd: Double { reachDelay + reachDuration }
-    static let pullDuration = 0.35
+    /// The "!" beat before the paw moves.
+    static let reachDelay = 0.3
+    static let reachDuration = 0.18
+    static let pullDuration = 0.28
+    /// The grab and pull are done: the spinner sits by the cat until the reload ends.
+    static var pullEnd: Double { reachDelay + reachDuration + pullDuration }
     static let smileBeat = 0.3
 
-    /// Seconds since the refresh began.
+    /// Seconds since the refresh began: the "!", a quick reach, and straight into the pull.
     static func refreshing(_ t: Double, reduceMotion: Bool) -> PawPose {
-        guard !reduceMotion else { return PawPose() }
-        return PawPose(reach: easeOut((t - reachDelay) / reachDuration))
+        let alarm = t < reachDelay
+        guard !reduceMotion else { return PawPose(alarm: alarm) }
+        let reached = reachDelay + reachDuration
+        guard t >= reached else { return PawPose(reach: easeOut((t - reachDelay) / reachDuration), alarm: alarm) }
+        return PawPose(reach: 1, spinner: 1 - easeOut((t - reached) / pullDuration))
     }
 
-    /// Seconds since the reload finished and the pull home began.
+    /// Seconds since the reload finished: the spinner fades and the paw goes back.
     static func ending(_ t: Double, reduceMotion: Bool) -> PawPose {
         guard !reduceMotion else { return PawPose() }
-        return PawPose(reach: 1, spinner: 1 - easeOut(t / pullDuration),
-                       spinnerOpacity: 1 - Double(easeOut((t - pullDuration) / smileBeat)))
+        let k = easeOut(t / smileBeat)
+        return PawPose(reach: 1 - k, spinner: 0, spinnerOpacity: 1 - Double(k))
     }
 
     private static func easeOut(_ x: Double) -> CGFloat { CGFloat(1 - pow(1 - min(1, max(0, x)), 2)) }
@@ -107,8 +111,6 @@ final class PawPull: ObservableObject {
     @Published var refreshStart: Date?
     @Published var endStart: Date?
     @Published var smiling = false
-    /// The spinner's centre in window coordinates, for a toolbar mascot to reach.
-    @Published var spinnerPoint: CGPoint?
     /// A toolbar mascot is on screen and does the grabbing.
     @Published var mascot = false
     var reduceMotion = false
@@ -165,10 +167,21 @@ enum PawArt {
             pad.fill(Path(CGRect(x: 1, y: dy, width: 2, height: 1)), with: .color(line))
         }
     }
+
+    /// A tiny "!" whose top is at `top`, `height` tall.
+    static func alarm(x: CGFloat, top: CGFloat, height: CGFloat, in context: GraphicsContext) {
+        let w = height * 0.28
+        for rect in [CGRect(x: x - w / 2, y: top, width: w, height: height * 0.62),
+                     CGRect(x: x - w / 2, y: top + height - w, width: w, height: w)] {
+            context.fill(Path(rect), with: .color(fill))
+            context.stroke(Path(rect), with: .color(line), lineWidth: 1)
+        }
+    }
 }
 
-/// What the refresh control shows: the spinner, and on a screen without a toolbar
-/// mascot, a cat of its own and its paw, in a 120 x 44 box at 1.4x.
+/// What the refresh control shows on a screen without a toolbar mascot: a cat of its
+/// own, its paw and the spinner, in a 120 x 44 box at 1.4x. With a toolbar mascot,
+/// nothing: the mascot draws the spinner beside itself.
 struct PawRefreshArt: View {
     @ObservedObject var pull: PawPull
 
@@ -177,15 +190,7 @@ struct PawRefreshArt: View {
             let pose = pull.pose(at: timeline.date)
             let turn = pull.turn(at: timeline.date)
             ZStack(alignment: .leading) {
-                if pull.mascot {
-                    // The toolbar mascot draws the spinner once it has it.
-                    Canvas { context, size in
-                        guard !pull.animating else { return }
-                        var spinner = context
-                        spinner.translateBy(x: size.width / 2, y: size.height / 2)
-                        PawArt.spinner(turn: turn, ink: pull.ink, in: spinner)
-                    }
-                } else {
+                if !pull.mascot {
                     Canvas { context, _ in draw(pose, turn: turn, in: &context) }
                     PixelCat(happy: pull.smiling, shocked: pull.shocked,
                              blink: !pull.animating && !pull.smiling && pull.progress < 1)
@@ -203,8 +208,9 @@ struct PawRefreshArt: View {
     private func draw(_ pose: PawPose, turn: Double, in context: inout GraphicsContext) {
         // The arm comes out from behind the cat's cheek and arcs up and over the spinner.
         let shoulder = CGPoint(x: 30, y: 28)
-        let at = pose.scoop(shoulder: shoulder, far: CGPoint(x: 104, y: 27), home: CGPoint(x: 56, y: 27),
+        let at = pose.scoop(shoulder: shoulder, far: CGPoint(x: 70, y: 27), home: CGPoint(x: 50, y: 27),
                             side: CGVector(dx: 0, dy: -1), radius: 10)
+        if pose.alarm { PawArt.alarm(x: 38, top: 0, height: 8, in: context) }
         var spinner = context
         spinner.translateBy(x: at.center.x, y: at.center.y)
         PawArt.spinner(turn: turn, ink: pull.ink, opacity: pose.spinnerOpacity, in: spinner)
@@ -212,36 +218,37 @@ struct PawRefreshArt: View {
     }
 }
 
-/// The toolbar mascot's paw and the spinner it scoops in, drawn behind the cat (so the
-/// arm comes out from under its cheek) in window coordinates taken from the refresh control.
+/// The toolbar mascot's spinner, paw and "!", drawn behind the cat (so the arm comes
+/// out from under its cheek) in a canvas hanging from just above its top centre.
 struct MascotPawLayer: View {
     @ObservedObject var pull: PawPull
-    /// The mascot's frame in window coordinates.
-    let mascot: CGRect
-    static let size = CGSize(width: 160, height: 200)
+    static let size = CGSize(width: 160, height: 120)
+    /// Room above the mascot for the "!".
+    static let lift: CGFloat = 14
 
     var body: some View {
         TimelineView(.animation(paused: !pull.animating || pull.reduceMotion)) { timeline in
             Canvas { context, size in
-                guard pull.animating, let target = pull.spinnerPoint, mascot != .zero else { return }
+                guard pull.animating || pull.progress > 0 else { return }
                 let pose = pull.pose(at: timeline.date)
-                // Window coordinates into this canvas, which hangs from the mascot's top centre.
-                let origin = CGPoint(x: mascot.midX - size.width / 2, y: mascot.minY)
-                let cat = size.width / 2
-                // The right cheek, under the face's edge; home is tucked behind that cheek.
-                let shoulder = CGPoint(x: cat + 9, y: mascot.height * 0.7)
-                let home = CGPoint(x: cat + 26, y: mascot.height * 0.8)
-                let far = CGPoint(x: target.x - origin.x, y: target.y - origin.y)
-                // The spinner is drawn 1.4x in the control; the paw hooks its outer side.
-                let at = pose.scoop(shoulder: shoulder, far: far, home: home, side: CGVector(dx: 1, dy: 0), radius: 14)
+                let (cat, top) = (size.width / 2, Self.lift)
+                // The mascot is 44 x 44: its right cheek, under the face's edge, and home
+                // tucked behind that cheek. The spinner starts just below and to the right.
+                let shoulder = CGPoint(x: cat + 9, y: top + 31)
+                let at = pose.scoop(shoulder: shoulder, far: CGPoint(x: cat + 14, y: top + 58), home: CGPoint(x: cat + 26, y: top + 35),
+                                    side: CGVector(dx: 1, dy: 0), radius: 14)
                 var spinner = context
                 spinner.translateBy(x: at.center.x, y: at.center.y)
                 spinner.scaleBy(x: 1.4, y: 1.4)
-                PawArt.spinner(turn: pull.turn(at: timeline.date), ink: pull.ink, opacity: pose.spinnerOpacity, in: spinner)
+                let fade = pull.animating ? pose.spinnerOpacity : min(1, Double(pull.progress) * 1.5)
+                PawArt.spinner(turn: pull.turn(at: timeline.date), ink: pull.ink, opacity: fade, in: spinner)
                 PawArt.paw(shoulder: shoulder, elbow: at.elbow, tip: at.tip, in: context)
+                // Over the right ear.
+                if pose.alarm { PawArt.alarm(x: cat + 17, top: top - 6, height: 12, in: context) }
             }
         }
         .frame(width: Self.size.width, height: Self.size.height)
+        .offset(y: -Self.lift)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
@@ -311,12 +318,10 @@ final class PawProbeView: UIView {
     private func update(_ scroll: UIScrollView) {
         guard let control else { return }
         control.tintColor = .clear
-        let pulled = -(scroll.contentOffset.y + scroll.adjustedContentInset.top)
+        // Only a finger's pull counts: the page springing back after a refresh must not
+        // bring the spinner back.
+        let pulled = scroll.isTracking ? -(scroll.contentOffset.y + scroll.adjustedContentInset.top) : 0
         if pull.progress != min(1, max(0, pulled / 80)) { pull.progress = min(1, max(0, pulled / 80)) }
-        if pull.mascot {
-            let point = control.convert(CGPoint(x: control.bounds.midX, y: control.bounds.midY), to: nil)
-            if pull.spinnerPoint != point { pull.spinnerPoint = point }
-        }
         if control.isRefreshing, pull.refreshStart == nil {
             pull.refreshStart = Date()
             pull.endStart = nil

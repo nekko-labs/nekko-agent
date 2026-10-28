@@ -26,7 +26,6 @@ struct ChatMascot: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var greeting = false
     @State private var greetingID = 0
-    @State private var mascotFrame = CGRect.zero
 
     init(working: Bool = false, pull: PawPull? = nil) {
         self.working = working
@@ -62,9 +61,8 @@ struct ChatMascot: View {
         // After the accessibility modifiers, so the paw never widens the button's frame;
         // behind the cat, so the arm comes out from under its cheek.
         .background(alignment: .top) {
-            if grabs { MascotPawLayer(pull: pull, mascot: mascotFrame) }
+            if grabs { MascotPawLayer(pull: pull) }
         }
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { mascotFrame = $0 }
         .onAppear { if grabs { pull.mascot = true } }
         .onDisappear { if grabs { pull.mascot = false } }
     }
