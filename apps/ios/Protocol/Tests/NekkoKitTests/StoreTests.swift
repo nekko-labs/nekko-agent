@@ -362,6 +362,24 @@ final class StoreTests: XCTestCase {
         XCTAssertTrue(s.computers.isEmpty)
     }
 
+    /// The computer left behind must not start a second card on this phone.
+    func testSwitchingComputersTellsTheOldOneToStopTheCard() async throws {
+        let s = makeStore()
+        s.load()
+        _ = await s.pair(PairingLink(relayUrl: "wss://a", room: room, key: key))
+        let first = try XCTUnwrap(connections.last)
+        first.online()
+        s.cardLevel = .standard
+        await settle()
+        XCTAssertEqual(first.cards.last?.str("level"), "standard")
+        _ = await s.pair(PairingLink(relayUrl: "wss://b", room: "ffffffff", key: key))
+        XCTAssertFalse(connections.last === first, "the switch did not wait")
+        await settle()
+        XCTAssertEqual(first.cards.last?.str("level"), "none")
+        XCTAssertEqual(first.callsTo(Channels.cardSet).last, [["level": "none"]])
+        XCTAssertTrue(first.closed, "closed once it has said so")
+    }
+
     func testTheConnectionLogFollowsTheActiveComputer() async throws {
         let s = makeStore()
         s.load()
@@ -418,9 +436,8 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(c.cards.last, ["token": "ab12", "startToken": "cd34", "level": "standard", "computerId": .string(s.activeId ?? ""),
                                       "computerName": .string(name)])
         XCTAssertEqual(c.callsTo(Channels.cardSet).last, [["level": "standard"]])
-        s.cardAction(focus: "s1")
-        s.cardAction(dismiss: "s2")
-        await settle()
+        await s.cardAction(focus: "s1")
+        await s.cardAction(dismiss: "s2")
         XCTAssertEqual(c.callsTo(Channels.cardSet).suffix(2), [[["focus": "s1"]], [["dismiss": "s2"]]])
         let before = (c.cards.count, c.callsTo(Channels.cardSet).count)
         s.cardToken = "ab12"

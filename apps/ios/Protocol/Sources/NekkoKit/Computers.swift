@@ -661,6 +661,16 @@ public final class ComputersStore {
 
     /// Make `id` the active computer and (re)connect to it.
     public func connect(_ id: String) {
+        // The computer left behind must not push (or start) a card on this phone any more:
+        // tell it and its relay, best effort, then close that connection. The switch never waits.
+        if id != activeId, conn == .online, let old = client, let computer = active {
+            client = nil
+            Task {
+                try? await old.registerCard(token: nil, startToken: nil, level: .none, computerId: computer.id, computerName: computer.name)
+                _ = try? await old.call(Channels.cardSet, [["level": "none"]], timeout: 3)
+                old.close()
+            }
+        }
         disconnect()
         guard let computer = computers.first(where: { $0.id == id }), let secret = secret(id),
               let keyBytes = E2E.fromHex(secret.keyHex) else { return }
@@ -962,12 +972,12 @@ public final class ComputersStore {
     /// A chip tap (`focus`) or the close button under a finished chat (`dismiss`) on
     /// the card, so the card the computer pushes shows the same. A computer from
     /// before `card:set` refuses it; the card on this phone has it either way.
-    public func cardAction(focus: String? = nil, dismiss: String? = nil) {
+    public func cardAction(focus: String? = nil, dismiss: String? = nil) async {
         guard let c = client else { return }
         var args: [String: JSONValue] = [:]
         if let focus { args["focus"] = .string(focus) }
         if let dismiss { args["dismiss"] = .string(dismiss) }
-        Task { _ = try? await c.call(Channels.cardSet, [.object(args)], timeout: 15) }
+        _ = try? await c.call(Channels.cardSet, [.object(args)], timeout: 15)
     }
 
     // MARK: Reading the computer
