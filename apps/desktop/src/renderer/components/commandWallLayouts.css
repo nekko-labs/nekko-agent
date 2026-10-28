@@ -367,7 +367,11 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
   transition: border-color 140ms ease, background 140ms ease;
 }
 .wall-zone-empty-title { color: var(--ink-soft); font-size: 13px; font-weight: 600; }
-.wall-zone-empty .btn { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; }
+.wall-zone-create { display: flex; flex-direction: column; align-items: stretch; max-width: 100%; margin-top: 4px; }
+.wall-zone-empty .btn { display: inline-flex; align-items: center; justify-content: flex-start; gap: 6px; }
+.wall-zone-art { position: relative; width: 88px; height: 52px; margin-bottom: 4px; opacity: .55; }
+.wall-zone-art > svg { display: block; }
+.wall-zone-art-cat { position: absolute; left: 26px; bottom: 4px; line-height: 0; }
 .command-wall-window[data-zone-active] > .wall-zone-empty { border-width: 2px; border-color: color-mix(in srgb, var(--accent) 70%, var(--line)); }
 /* An agent dragged from the panel is over this zone. */
 .command-wall-window[data-zone-drop] > .wall-zone-empty,

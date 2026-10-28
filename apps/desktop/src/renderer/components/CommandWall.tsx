@@ -136,7 +136,9 @@ import { COMPACT_HEIGHT, COMPACT_WIDTH, PaneDensityHint } from './agent-console/
 import { TerminalPane } from './TerminalPane.js';
 import { PANE_DRAG_TYPE, PaneActions, PaneFrame } from './PaneFrame.js';
 import { Divider } from './Divider.js';
-import { WallEmptyIllustration } from './WallEmptyIllustration.js';
+import { WallEmptyIllustration, ZoneEmptyIllustration } from './WallEmptyIllustration.js';
+import { CREATE_OPTIONS } from './CreateMenu.js';
+import type { AgentWindowSelection } from './AgentWindowPicker.js';
 import { AgentLogsDrawer } from './AgentLogsDrawer.js';
 import { layoutWithLogsDrawer, overlayLogsDrawer, useWallLogs } from '../wallLogs.js';
 import { BoltIcon, ChatIcon, CloseIcon, ExternalIcon, LayoutIcon, PlusIcon, TerminalIcon } from '../icons.js';
@@ -302,8 +304,8 @@ export function CommandWall({
   onAspect: (aspect: number) => void;
   onOpenChat: (id: string) => void;
   onOpenTerminal: (id: string) => void;
-  /** Start a chat; resolves to its id once the session list knows it. */
-  onNewChat: () => Promise<string>;
+  /** Start a chat (an image chat when asked); resolves to its id once the session list knows it. */
+  onNewChat: (selection?: AgentWindowSelection) => Promise<string>;
   onNewTerminal: () => Promise<string>;
   onAddWindow: () => void;
   addContent?: React.ReactNode;
@@ -529,9 +531,9 @@ export function CommandWall({
    * comes back; the panels point at themselves and exist once at most, so
    * asking for one that is already up moves it rather than doubling it.
    */
-  const addWindow = async (kind: PaneKind, at?: { paneId: string; dir: Direction }, zoneId?: string) => {
+  const addWindow = async (kind: PaneKind, at?: { paneId: string; dir: Direction }, zoneId?: string, image = false) => {
     let refId: string = kind;
-    if (kind === 'chat') refId = await onNewChat();
+    if (kind === 'chat') refId = await onNewChat(image ? { kind: 'chat', chatType: 'image' } : undefined);
     else if (kind === 'terminal') refId = await onNewTerminal();
     // A side pointed at makes a new zone there; otherwise the window fills a zone.
     setState((s) => at && allPanes(s.root).some((p) => p.id === at.paneId) && canSplit(s.root, at.paneId, at.dir)
@@ -811,9 +813,13 @@ export function CommandWall({
           <span>{pane.zone ?? 'Zone'}</span>
         </div>}
         {pane.kind === 'zone' ? <div className="wall-zone-empty" data-zone-empty>
+          <ZoneEmptyIllustration />
           <p className="wall-zone-empty-title">Empty zone</p>
           <p>Click an agent in the panel to show it here, or drag one in.</p>
-          <button type="button" className="btn btn-ghost" onClick={() => { void live.current.addWindow('chat', undefined, pane.id); }}><PlusIcon className="h-3.5 w-3.5" />New agent</button>
+          <div className="wall-zone-create">
+            {CREATE_OPTIONS.map(([kind, label, icon]) => <button key={kind} type="button" className={`btn btn-ghost${kind === 'chat' ? ' text-accent' : ''}`} data-zone-create={kind}
+              onClick={() => { void live.current.addWindow(kind === 'terminal' ? 'terminal' : 'chat', undefined, pane.id, kind === 'image'); }}>{icon}{label}</button>)}
+          </div>
         </div> : <>
         {/* The composer's beam, quieter: a working agent window says so at a glance. */}
         <PaneFrame
