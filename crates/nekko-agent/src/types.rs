@@ -355,6 +355,10 @@ pub enum ProviderChunk {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         output_ms: Option<u64>,
     },
+    /// The response stopped because it reached the output cap (`max_tokens`),
+    /// not because the model was done. Thinking counts against the cap, so a
+    /// reply can hit it before writing a word.
+    OutputLimit,
     Done,
 }
 
