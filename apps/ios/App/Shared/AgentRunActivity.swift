@@ -13,7 +13,7 @@ struct NekkoCardAttributes: ActivityAttributes, Equatable {
 
     var computerId: String
     var computerName: String
-    /// What the card draws (icon-only chips at Minimal, the mic at Detailed).
+    /// What the card draws (icon-only chips at Minimal, the reply line at Detailed).
     /// Fixed for the card's life: a level change ends the card and starts a new one.
     var level: LiveLevel
 }

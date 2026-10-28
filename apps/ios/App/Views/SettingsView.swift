@@ -164,7 +164,7 @@ struct SettingsView: View {
             }
             Section {
                 NavigationLink(value: Route.liveActivities) {
-                    LabeledContent("Live Activities", value: prefs.liveActivityLevel.rawValue.capitalized)
+                    LabeledContent("Live Activities", value: prefs.liveActivityLevel.label)
                 }
                 .accessibilityIdentifier("settings.liveActivities")
                 Toggle("Vibrate for approvals and questions", isOn: $prefs.hapticNeedsYou)

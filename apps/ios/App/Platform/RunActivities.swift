@@ -9,6 +9,8 @@ protocol CardActivity: AnyObject {
     var attributes: NekkoCardAttributes { get }
     /// What the card shows now.
     var state: LiveCardState { get }
+    /// False once the user swiped it away or iOS ended it (8 hours).
+    var isLive: Bool { get }
     func update(_ state: LiveCardState)
     func end()
 }
@@ -45,6 +47,9 @@ final class RunActivities {
     }
 
     private(set) var card: CardActivity?
+    /// What a card the user swiped away last showed (kept current while there is
+    /// no card): a new one starts only for a chat that newly needs you or is new.
+    private var swiped: LiveCardState?
     private var runs: [String: Run] = [:]
     /// Closed with the card's button; off the card until the chat runs again.
     private var dismissed: Set<String> = []
@@ -91,15 +96,15 @@ final class RunActivities {
             runs[sid] = run
         }
         switch e {
-        case .text, .reasoning: running("Writing…")
+        case .text, .reasoning: running(String(localized: "Writing…"))
         case .toolCall(_, let call): running(Transcript.toolLabel(call))
         case .approvalRequired(_, let a): running(Transcript.toolLabel(a.call), callId: a.call.id, severity: a.severity.rawValue)
-        case .question(_, let q): running(q.questions.first?.question ?? "A question for you")
-        case .toolResult, .questionResolved: running("Working…")
-        case .done: finish(.done, "Finished")
+        case .question(_, let q): running(q.questions.first?.question ?? String(localized: "A question for you"))
+        case .toolResult, .questionResolved: running(String(localized: "Working…"))
+        case .done: finish(.done, String(localized: "Finished"))
         case .error(_, let message):
             let stopped = ["stopped", "aborted"].contains(message.lowercased())
-            finish(stopped ? .done : .failed, stopped ? "Stopped" : "Stopped with an error")
+            finish(stopped ? .done : .failed, stopped ? String(localized: "Stopped") : String(localized: "Stopped with an error"))
         default: return
         }
         // Listeners hear an event before the store applies it to `activity`.
@@ -122,6 +127,13 @@ final class RunActivities {
     /// Starts, updates or ends the card to match the chats now.
     func refresh(now: Date = Date(), urgent: Bool = false) {
         runs = runs.filter { _, run in run.finishedAt.map { now.timeIntervalSince($0) <= LiveCardRules.finishedTail } ?? true }
+        if let gone = card, !gone.isLive {
+            card = nil
+            swiped = gone.state
+            lastUpdate = nil
+            trailing?.cancel()
+            trailing = nil
+        }
         let level = level()
         let chats: [LiveChat], computerId: String, computerName: String
         if let src = source() {
@@ -137,7 +149,7 @@ final class RunActivities {
         let attributes = NekkoCardAttributes(computerId: computerId, computerName: computerName, level: level)
         // A card's level (and computer) is fixed for its life: a change starts a new one.
         if let card, card.attributes != attributes { end() }
-        let previous = card?.state
+        let previous = card?.state ?? swiped
         guard let state = buildCard(chats: chats, previous: previous, pinnedFocus: pinnedFocus, level: level, now: now) else {
             end()
             return
@@ -145,6 +157,13 @@ final class RunActivities {
         if state.focusId != pinnedFocus { pinnedFocus = nil }
         scheduleExpiry(state)
         guard let card else {
+            if let gone = swiped {
+                swiped = state
+                let before = Dictionary(gone.chats.map { ($0.id, $0.state) }, uniquingKeysWith: { first, _ in first })
+                let news = state.chats.contains { before[$0.id] == nil || ($0.state == .needsYou && before[$0.id] != .needsYou) }
+                guard news else { return }
+            }
+            swiped = nil
             card = request(attributes, state)
             lastUpdate = now
             return
@@ -189,6 +208,7 @@ final class RunActivities {
     private func end() {
         card?.end()
         card = nil
+        swiped = nil
         lastUpdate = nil
         expiry?.cancel()
         trailing?.cancel()
@@ -206,7 +226,7 @@ final class RunActivities {
             case .running?: (state, step) = (.working, live?.step ?? "")
             case nil:
                 if let live, now.timeIntervalSince(live.lastEventAt) < Self.quietRun { (state, step) = (.working, live.step) }
-                else if s.activeWatchCount > 0 { (state, step) = (.watching, "Watching PR…") }
+                else if s.activeWatchCount > 0 { (state, step) = (.watching, String(localized: "Watching PR…")) }
                 else if let run, let finished = run.finished { (state, step) = (finished, run.step) }
                 else { return nil }
             }
@@ -237,6 +257,9 @@ final class SystemCard: CardActivity {
     private let activity: ActivityKit.Activity<NekkoCardAttributes>
     private(set) var state: LiveCardState
     var attributes: NekkoCardAttributes { activity.attributes }
+    var isLive: Bool { activity.activityState == .active || activity.activityState == .stale }
+    /// The last call to ActivityKit; each one waits for it so they arrive in order.
+    private var last: Task<Void, Never>?
 
     private init(_ activity: ActivityKit.Activity<NekkoCardAttributes>, state: LiveCardState) {
         self.activity = activity
@@ -245,13 +268,20 @@ final class SystemCard: CardActivity {
 
     func update(_ state: LiveCardState) {
         self.state = state
-        let a = activity
-        Task { await a.update(ActivityContent(state: state, staleDate: Self.staleDate)) }
+        let content = ActivityContent(state: state, staleDate: Self.staleDate)
+        send { await $0.update(content) }
     }
 
     func end() {
-        let a = activity
-        Task { await a.end(nil, dismissalPolicy: .immediate) }
+        send { await $0.end(nil, dismissalPolicy: .immediate) }
+    }
+
+    private func send(_ call: @escaping (ActivityKit.Activity<NekkoCardAttributes>) async -> Void) {
+        let previous = last, a = activity
+        last = Task {
+            await previous?.value
+            await call(a)
+        }
     }
 
     /// Nothing updates the card while the app is suspended (no pushes yet), so it reads as stale after a while.

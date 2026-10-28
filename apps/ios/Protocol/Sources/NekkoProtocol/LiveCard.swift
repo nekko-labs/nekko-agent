@@ -108,6 +108,8 @@ public enum LiveCardRules {
     public static let maxChats = 8
     /// A finished chat stays on the card this long.
     public static let finishedTail: TimeInterval = 2 * 3600
+    /// The encoded state's budget, under ActivityKit's 4 KB.
+    public static let maxBytes = 3500
 }
 
 /// Builds the card from every chat, or nil when there is nothing to show
@@ -134,11 +136,21 @@ public func buildCard(chats: [LiveChat], previous: LiveCardState?, pinnedFocus: 
     let pinned = pinnedFocus.flatMap { id in kept.contains { $0.id == id } ? id : nil }
 
     for i in kept.indices {
+        kept[i].step = Transcript.oneLine(kept[i].step, 60)
         if level == .minimal { kept[i].short = ""; kept[i].step = "" }
         if level != .detailed { kept[i].reply = "" }
     }
-    return LiveCardState(chats: kept, focusId: focus ?? pinned ?? kept[0].id, more: more,
-                         listening: previous?.listening ?? false, heard: previous?.heard ?? "")
+    var card = LiveCardState(chats: kept, focusId: focus ?? pinned ?? kept[0].id, more: more,
+                             listening: previous?.listening ?? false, heard: previous?.heard ?? "")
+    // ActivityKit refuses a state over 4 KB (a request returns no card, an update is
+    // dropped): replies go first, then the last chats move into "+N", never the focused one.
+    func tooBig() -> Bool { ((try? JSONEncoder().encode(card))?.count ?? 0) > LiveCardRules.maxBytes }
+    if tooBig() { for i in card.chats.indices { card.chats[i].reply = "" } }
+    while tooBig(), let last = card.chats.lastIndex(where: { $0.id != card.focusId }) {
+        card.chats.remove(at: last)
+        card.more += 1
+    }
+    return card
 }
 
 /// The first word, plus the second when both fit in 8 characters; a longer

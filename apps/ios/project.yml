@@ -100,6 +100,8 @@ targets:
       - path: Widgets
         excludes: ["Info.plist", "*.entitlements"]
       - path: App/Shared
+      # The card's words (App/Shared) are translated in the app's catalog.
+      - path: App/Localizable.xcstrings
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.nekkolabs.nekkoagent.widgets

@@ -43,7 +43,7 @@ extension LiveChatState {
     /// The status line at Minimal, and whenever a push left the step out.
     var phaseLine: String {
         switch self {
-        case .needsYou: return String(localized: "Needs your approval")
+        case .needsYou: return String(localized: "Needs you")
         case .working: return String(localized: "Working…")
         case .watching: return String(localized: "Watching a pull request")
         case .done: return String(localized: "Finished")

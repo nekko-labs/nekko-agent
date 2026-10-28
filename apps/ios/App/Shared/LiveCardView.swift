@@ -20,6 +20,9 @@ struct LiveCardView: View {
     fileprivate static let greenInk = Color(red: 0.02, green: 0.13, blue: 0.05)
     /// Where "+N" goes when every chat on the card is already a chip: the app.
     static let chatsURL = URL(string: "nekko-agent://chats")!
+    /// The Detailed mic, on the card and in the Settings preview. Off until
+    /// talking to a chat records (Part 5): until then it would ask for Face ID and do nothing.
+    static let showsMic = false
 
     private var focus: LiveChat? { state.chats.first { $0.id == state.focusId } ?? state.chats.first }
     private var showsText: Bool { level == .standard || level == .detailed }
@@ -76,7 +79,7 @@ struct LiveCardView: View {
                 ForEach(Array((1...max(state.chats.count, 1)).reversed()), id: \.self) { chips($0) }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            if level == .detailed, let focus {
+            if Self.showsMic, level == .detailed, let focus {
                 button(TalkToChatIntent(sessionId: focus.id)) {
                     MicGlyph().stroke(Self.orange, style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
                         .frame(width: 16, height: 16)
@@ -120,12 +123,18 @@ struct LiveCardView: View {
     }
 
     private func chip(_ chat: LiveChat) -> some View {
-        button(FocusChatIntent(sessionId: chat.id)) {
-            chipLabel(on: chat.id == focus?.id) {
+        let on = chat.id == focus?.id
+        let position = (state.chats.firstIndex { $0.id == chat.id } ?? 0) + 1
+        return button(FocusChatIntent(sessionId: chat.id)) {
+            chipLabel(on: on) {
                 LiveStatusGlyph(state: chat.state, size: 12)
                 if showsText, !chat.short.isEmpty { Text(chat.short).privacySensitive() }
             }
         }
+        .accessibilityAddTraits(on ? .isSelected : [])
+        // Minimal chips have no title: VoiceOver tells them apart by place.
+        .modifier(PositionLabel(on: !showsText || chat.short.isEmpty, text: Text("Chat \(position) of \(state.chats.count + state.more)"),
+                                value: Text(chat.state.label)))
     }
 
     private func chipLabel(on: Bool, @ViewBuilder _ content: () -> some View) -> some View {
@@ -215,7 +224,8 @@ struct LiveCardView: View {
         return button(DismissChatIntent(sessionId: chat.id)) {
             HStack(spacing: 6) {
                 CheckGlyph().stroke(ink, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)).frame(width: 12, height: 12)
-                Text(word)
+                // The words in the state are English; the catalog has them (a push may send others).
+                Text(LocalizedStringKey(word))
             }
             .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(ink)
@@ -223,6 +233,7 @@ struct LiveCardView: View {
             .frame(height: 28)
             .background(failed ? Self.raised : LiveChatState.done.tint, in: RoundedRectangle(cornerRadius: 10))
         }
+        .accessibilityHint(Text("Removes this chat from the card"))
     }
 
     private func pill(_ label: Text, fill: Color, ink: Color = .white) -> some View {
@@ -239,6 +250,20 @@ struct LiveCardView: View {
             Button(intent: intent, label: label).buttonStyle(.plain)
         } else {
             Button(action: {}, label: label).buttonStyle(.plain)
+        }
+    }
+}
+
+private struct PositionLabel: ViewModifier {
+    let on: Bool
+    let text: Text
+    let value: Text
+
+    func body(content: Content) -> some View {
+        if on {
+            content.accessibilityElement(children: .ignore).accessibilityLabel(text).accessibilityValue(value)
+        } else {
+            content
         }
     }
 }

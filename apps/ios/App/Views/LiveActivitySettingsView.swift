@@ -17,7 +17,7 @@ struct LiveActivitySettingsView: View {
             }
             Section {
                 Picker("Live Activities", selection: $prefs.liveActivityLevel) {
-                    ForEach(LiveLevel.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
+                    ForEach(LiveLevel.allCases, id: \.self) { Text($0.label).tag($0) }
                 }
                 .pickerStyle(.inline)
                 .labelsHidden()
@@ -33,12 +33,23 @@ struct LiveActivitySettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    private var footer: String? {
+    private var footer: LocalizedStringKey? {
         switch prefs.liveActivityLevel {
         case .none: return nil
         case .minimal: return "No chat text leaves your computer for the Lock Screen."
         case .standard, .detailed:
             return "Chat titles and status are shown when your phone is unlocked. While the app is closed they reach your phone through the relay and Apple’s push service."
+        }
+    }
+}
+
+extension LiveLevel {
+    var label: String {
+        switch self {
+        case .none: return String(localized: "None")
+        case .minimal: return String(localized: "Minimal")
+        case .standard: return String(localized: "Standard")
+        case .detailed: return String(localized: "Detailed")
         }
     }
 }

@@ -23,6 +23,27 @@ final class LiveCardTests: XCTestCase {
         XCTAssertEqual(card.focusId, "n")
     }
 
+    /// ActivityKit drops a content state over 4 KB, even for a local request or update.
+    func testStaysUnderTheSizeLimitAndKeepsTheFocusedChat() throws {
+        let long = String(repeating: "日本語のとても長いチャットのタイトル", count: 20)
+        let chats = (0..<8).map { i in
+            chat("chat-\(i)-" + UUID().uuidString, .working, short: long, step: long, reply: long)
+        }
+        let focused = chats[7].id
+        let card = try XCTUnwrap(build(chats, pinned: focused))
+        XCTAssertLessThanOrEqual(try JSONEncoder().encode(card).count, 3500)
+        XCTAssertEqual(card.focusId, focused)
+        XCTAssertTrue(card.chats.contains { $0.id == focused }, "the focused chat is never dropped")
+        XCTAssertEqual(card.chats.count + card.more, 8)
+        XCTAssertTrue(card.chats.allSatisfy { $0.step.count <= 60 })
+    }
+
+    func testClipsTheStepAndKeepsRepliesWhenSmall() throws {
+        let card = try XCTUnwrap(build([chat("a", .working, step: String(repeating: "x", count: 200), reply: "Done.")]))
+        XCTAssertEqual(card.chats[0].step.count, 60)
+        XCTAssertEqual(card.chats[0].reply, "Done.", "a small card keeps its reply line")
+    }
+
     func testKeepsEightAndCountsTheRest() {
         let card = build((0..<10).map { chat("c\($0)", .working) })!
         XCTAssertEqual(card.chats.count, 8)

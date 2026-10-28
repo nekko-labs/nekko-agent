@@ -456,6 +456,11 @@ final class LiveCardViewTests: XCTestCase {
         XCTAssertNotEqual(try png(real, .standard), try png(other, .standard))
     }
 
+    /// Minimal's line covers questions too, not only approvals.
+    func testMinimalNeedsYouLineIsGeneric() {
+        XCTAssertEqual(LiveChatState.needsYou.phaseLine, "Needs you")
+    }
+
     func testTheStripShowsThePageWithTheFocusedChat() {
         let first = LiveCardView.page(Self.chats, focus: "b", size: 3)
         XCTAssertEqual(first.shown.map(\.id), ["a", "b", "c"])
@@ -520,6 +525,7 @@ final class RunActivitiesTests: XCTestCase {
         var state: LiveCardState
         var updates = 0
         var ended = false
+        var isLive = true
         init(_ attributes: NekkoCardAttributes, _ state: LiveCardState) { self.attributes = attributes; self.state = state }
         func update(_ state: LiveCardState) { self.state = state; updates += 1 }
         func end() { ended = true }
@@ -664,6 +670,43 @@ final class RunActivitiesTests: XCTestCase {
         r.refresh()
         XCTAssertEqual(started.count, 2)
         XCTAssertEqual(started.last?.state.chats.map(\.state), [.working])
+    }
+
+    /// The user swiped the card away (or iOS ended it at 8 hours): a step tick
+    /// leaves it gone, an approval brings a new one.
+    func testASwipedCardComesBackOnlyForAnApproval() throws {
+        summaries = [chat("a", "Billing fix"), chat("b", "Login page")]
+        activity = ["a": .running, "b": .running]
+        let r = make()
+        r.onEvent(.toolCall(sessionId: "a", call: ToolCall(id: "1", name: "bash")))
+        r.refresh(urgent: true)
+        let card = try XCTUnwrap(started.first)
+        card.isLive = false
+        r.onEvent(.toolCall(sessionId: "a", call: ToolCall(id: "2", name: "read")))
+        r.refresh(urgent: true)
+        XCTAssertNil(r.card, "a card that is no longer live is dropped")
+        XCTAssertEqual(started.count, 1, "a step tick does not undo a swipe")
+        XCTAssertEqual(card.updates, 0)
+        r.onEvent(.approvalRequired(sessionId: "b", approval: Approval(call: ToolCall(id: "3", name: "bash"), reason: "", severity: .low)))
+        activity["b"] = .needsYou
+        r.refresh()
+        XCTAssertEqual(started.count, 2, "an approval starts a new card")
+        XCTAssertEqual(started.last?.state.focusId, "b")
+    }
+
+    func testASwipedCardComesBackForANewChat() throws {
+        summaries = [chat("a", "Billing fix")]
+        activity = ["a": .running]
+        let r = make()
+        r.refresh()
+        try XCTUnwrap(started.first).isLive = false
+        r.refresh(urgent: true)
+        XCTAssertEqual(started.count, 1)
+        summaries.append(chat("b", "Login page"))
+        activity["b"] = .running
+        r.refresh()
+        XCTAssertEqual(started.count, 2, "a chat that was not on the swiped card starts a new one")
+        XCTAssertEqual(started.last?.state.chats.map(\.id), ["a", "b"])
     }
 
     /// A throttled update is sent once the 2 s are up, not dropped.
