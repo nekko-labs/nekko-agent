@@ -419,7 +419,7 @@
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !box.hidden) shut(); });
 })();
 
-// ---- look switch: Dark by default, then White, then Colourful. The choice is
+// ---- look switch: Colourful by default, then Dark, then White. The choice is
 //      remembered once made; the icon shows where the next click goes. ----
 (() => {
   const btn = document.querySelector('.theme-toggle');
@@ -428,7 +428,7 @@
   const LOOKS = ['dark', 'white', 'colour'];
   const NAME = { dark: 'Dark', white: 'White', colour: 'Colourful' };
   const THEME_COLOR = { dark: '#0d0b18', white: '#f3effe', colour: '#9d8ce6' };
-  const current = () => (LOOKS.includes(root.dataset.theme) ? root.dataset.theme : 'dark');
+  const current = () => (LOOKS.includes(root.dataset.theme) ? root.dataset.theme : 'colour');
   const sync = () => {
     const now = current();
     const next = LOOKS[(LOOKS.indexOf(now) + 1) % LOOKS.length];
