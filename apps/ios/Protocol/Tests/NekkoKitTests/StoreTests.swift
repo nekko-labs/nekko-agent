@@ -522,18 +522,23 @@ final class ChatModelTests: XCTestCase {
         chat.stop()
     }
 
-    /// The Live Activity mic sends from a chat model that saw no events: the
-    /// computer's re-read says a turn runs, so the prompt waits in its queue.
-    func testAPromptToAChatTheComputerSaysIsRunningQueues() async throws {
+    /// A Send tapped just as a reply finishes goes as a new turn: the re-read that
+    /// still says "running" is stale until the debounced reload after `done`.
+    func testASendRightAfterDoneStartsATurnNotAQueue() async throws {
         let (s, c) = try await makeOnline()
-        c.replies[Channels.sessionGet] = { _ in ["id": "s", "title": "T", "messages": [], "queue": [], "activeRun": ["id": "r1"]] }
-        c.replies[Channels.chatQueue] = { _ in ["id": "s", "title": "T", "messages": [], "queue": ["Fix it."]] }
+        c.replies[Channels.sessionGet] = { _ in ["id": "s", "title": "T", "messages": [], "queue": [], "activeRun": ["startedAt": 1]] }
         let chat = ChatModel(sessionId: "s", store: s)
-        await chat.reload()
-        try await chat.send("Fix it.")
+        chat.start()
         await settle()
-        XCTAssertEqual(c.callsTo(Channels.chatQueue).count, 1)
-        XCTAssertTrue(c.callsTo(Channels.chatSend).isEmpty, "a second turn is never started mid-run")
+        c.event(["type": "text", "sessionId": "s", "delta": "Hi"])
+        c.event(["type": "done", "sessionId": "s"])
+        for _ in 0..<20 { await Task.yield() }
+        c.replies[Channels.sessionGet] = { _ in ["id": "s", "title": "T", "messages": [], "queue": []] }
+        try await chat.send("next")
+        await settle()
+        XCTAssertEqual(c.callsTo(Channels.chatSend).first?.first?.str("text"), "next", "a new turn")
+        XCTAssertTrue(c.callsTo(Channels.chatQueue).isEmpty, "an idle chat's queue never runs")
+        chat.stop()
     }
 
     func testApprovalsQuestionsAndStop() async throws {

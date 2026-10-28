@@ -275,8 +275,10 @@ final class AppModel {
     }
 
     /// The card's mic (`TalkToChatIntent`, after Face ID): the connection starts while it
-    /// listens, so the computer can transcribe; the words go to the chat when it is online,
-    /// else to the outbox, which sends them once it is.
+    /// listens, so the computer can transcribe. The words go through the outbox (one
+    /// `session:get`, then `chat:queue` mid-run or `chat:send`), waited on for up to 10 s:
+    /// a refusal throws ("Not sent: ...", the words back in the chat's draft); no answer
+    /// yet still reads "Sent", since the outbox delivers it later.
     private func wireTalk() {
         talker.capture = { [weak self] in
             guard let self else { return "" }
@@ -289,9 +291,7 @@ final class AppModel {
         talker.send = { [weak self] sid, text in
             guard let self else { return }
             _ = await self.waitOnline(seconds: 10)
-            let chat = ChatModel(sessionId: sid, store: self.store)
-            await chat.reload()
-            try await chat.send(text)
+            _ = try await self.store.outbox.sendWaiting(chatId: sid, text: text, wait: 10)
         }
         talker.show = { [weak self] listening, heard, to in self?.activities.talk(listening: listening, heard: heard, sentTo: to) }
         IntentRouter.talk = { [weak self] sid in await self?.talker.talk(sid) }
