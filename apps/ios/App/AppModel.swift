@@ -113,9 +113,16 @@ final class AppModel {
             guard let self, self.store.summariesLoaded, let c = self.store.active else { return nil }
             return .init(summaries: self.store.summaries, activity: self.store.activity, computerId: c.id, computerName: c.name)
         }
-        IntentRouter.focus = { [weak self] sid in self?.activities.focus(sid) }
-        IntentRouter.nextPage = { [weak self] sid in self?.activities.focus(sid) }
-        IntentRouter.dismiss = { [weak self] sid in self?.activities.dismiss(sid) }
+        // The computer builds the same card for the relay to push: it hears these too.
+        IntentRouter.focus = { [weak self] sid in await self?.focusCard(sid) }
+        IntentRouter.nextPage = { [weak self] sid in await self?.focusCard(sid) }
+        IntentRouter.dismiss = { [weak self] sid in
+            self?.activities.dismiss(sid)
+            await self?.tellCard(dismiss: sid)
+        }
+        activities.onCardToken = { [weak self] token in self?.cardTokenArrived(token) }
+        SystemCard.watch(adopt: { [weak self] card in self?.activities.adopt(card) },
+                         startToken: { [weak self] token in self?.store.cardStartToken = token })
         #if DEBUG
         // Once on screen: ActivityKit starts a card only from the foreground.
         if ProcessInfo.processInfo.arguments.contains("-uiTestLiveCard") {
@@ -126,6 +133,7 @@ final class AppModel {
         }
         #endif
         watchCard()
+        watchCardLevel()
     }
 
     /// The relay connection opens only after the first unlock (when the lock is
@@ -246,6 +254,41 @@ final class AppModel {
     // MARK: Live Activity card
 
     /// Rebuilds the card whenever the chat list, who is running, the computer or the level changes.
+    private func focusCard(_ sid: String) async {
+        activities.focus(sid)
+        await tellCard(focus: sid)
+    }
+
+    /// A tap on the card, from a phone that may be suspended or locked: wait for
+    /// the connection (as `stopChat` does), so the next push does not undo it.
+    private func tellCard(focus: String? = nil, dismiss: String? = nil) async {
+        start(force: true)
+        store.resume()
+        guard await waitOnline(seconds: 10) else { return }
+        await store.cardAction(focus: focus, dismiss: dismiss)
+    }
+
+    /// The card's push token. A card the relay started can wake the app in the
+    /// background (locked, so `start` never ran): connect just to register the
+    /// token, as `deliverInBackground` does, and let the connection close as that does.
+    private func cardTokenArrived(_ token: String?) {
+        store.cardToken = token
+        guard token != nil, store.conn != .online else { return }
+        Task {
+            // Registering a token is not reading chats: the app lock doesn't hold it.
+            start(force: true)
+            if store.conn != .online { store.reconnect() }
+            _ = await waitOnline(seconds: 20)
+        }
+    }
+
+    /// The level goes to the relay and the computer (`ComputersStore.cardLevel`).
+    private func watchCardLevel() {
+        store.cardLevel = withObservationTracking { prefs.liveActivityLevel } onChange: { [weak self] in
+            Task { @MainActor in self?.watchCardLevel() }
+        }
+    }
+
     private func watchCard() {
         withObservationTracking {
             activities.refresh()

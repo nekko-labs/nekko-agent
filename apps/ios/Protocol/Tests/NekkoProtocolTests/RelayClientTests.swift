@@ -93,7 +93,7 @@ final class RelayClientTests: XCTestCase {
 
             func send(_ text: String) -> Bool {
                 guard isOpen, let env = try? JSONValue.parse(text) else { return false }
-                if env.str("type") == "register-push" || env.str("type") == "register-activity" {
+                if env.str("type") == "register-push" || env.str("type") == "register-card" {
                     relay.sync { relay.registrations.append(env) }
                     return true
                 }
@@ -531,18 +531,20 @@ final class RelayClientTests: XCTestCase {
         var all: [RelayControl] { lock.sync { items } }
     }
 
-    func testRegistersALiveActivityUnderItsTag() async throws {
+    func testRegistersTheLiveActivityCard() async throws {
         let relay = FakeRelay(key: key, known: ["dev-1"])
         var cfg = RelayConfig(relayUrl: "wss://relay.test", room: "abcd1234", key: "k", keyBytes: key, deviceId: "dev-1", deviceName: "iPhone")
         cfg.app = "dev.nekkolabs.nekkoagent"
         let c = RelayClient(config: cfg, transport: relay)
         c.connect()
-        try await c.registerActivity(tag: E2E.activityTag("s1"), token: "ab12")
+        try await c.registerCard(token: "ab12", startToken: "cd34", level: .standard, computerId: "pc-1", computerName: "Studio")
+        try await c.registerCard(token: nil, startToken: nil, level: .none, computerId: "pc-1", computerName: "Studio")
         try await c.registerPush(token: "abcdef0123456789abcdef")
         let regs = relay.sync { relay.registrations }
-        XCTAssertEqual(regs.first?.str("type"), "register-activity")
-        XCTAssertEqual(regs.first?.str("tag"), "7536af24f84b356f893a72f0def58cce")
-        XCTAssertEqual(regs.first?.str("app"), "dev.nekkolabs.nekkoagent")
+        XCTAssertEqual(regs.first, ["type": "register-card", "deviceId": "dev-1", "token": "ab12", "startToken": "cd34", "level": "standard",
+                                    "computerId": "pc-1", "computerName": "Studio", "app": "dev.nekkolabs.nekkoagent"])
+        XCTAssertEqual(regs[1], ["type": "register-card", "deviceId": "dev-1", "level": "none", "computerId": "pc-1", "computerName": "Studio",
+                                 "app": "dev.nekkolabs.nekkoagent"], "no token: none sent")
         XCTAssertEqual(regs.last?.str("app"), "dev.nekkolabs.nekkoagent")
         c.close()
     }
