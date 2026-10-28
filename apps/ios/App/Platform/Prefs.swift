@@ -50,9 +50,12 @@ final class Prefs {
     /// Keep the last chats opened (up to 20, 5 MB per computer, no photos) to read
     /// while the computer is unreachable (OF-5). On unless the user turned it off.
     var keepTranscripts: Bool { didSet { d.set(keepTranscripts, forKey: "keepTranscripts") } }
-    /// Expert mode (2026-10-24): the chat adds the computer's hardware and loaded
-    /// models to Simple mode's model, effort and context. Off by default.
+    /// Expert mode (2026-10-24): every control; Simple (the default) hides the
+    /// ones `simpleChoices` and `SimpleMode` keep to Expert. Saved on this device only.
     var expertMode: Bool { didSet { d.set(expertMode, forKey: "expertMode") } }
+    /// Settings > Simple mode: per control, Show, Expert only or Hide, where it
+    /// differs from the default. Saved as JSON on this device only.
+    var simpleChoices: [String: SimpleVisibility] { didSet { d.set(SimpleMode.encode(simpleChoices), forKey: "simpleChoices") } }
     /// Per computer, the last model chosen for a new chat: `providerId::modelId`.
     var lastModel: [String: String] { didSet { d.set(lastModel, forKey: "lastModel") } }
     /// Per computer, concrete last-used choices, never a recommendation marker.
@@ -99,6 +102,7 @@ final class Prefs {
         voiceIntroSeen = flag("voiceIntroSeen", false)
         onboarded = flag("onboarded", false)
         expertMode = flag("expertMode", false)
+        simpleChoices = SimpleMode.parse(d.string(forKey: "simpleChoices"))
         lastModel = d.dictionary(forKey: "lastModel") as? [String: String] ?? [:]
         lastEffort = d.dictionary(forKey: "lastEffort") as? [String: String] ?? [:]
         lastTools = d.dictionary(forKey: "lastTools") as? [String: String] ?? [:]
@@ -113,6 +117,9 @@ final class Prefs {
         keepChatList = OfflineSetting.isOn(stored: choice("keepChatList"))
         keepTranscripts = OfflineSetting.isOn(stored: choice("keepTranscripts"))
     }
+
+    /// Whether a Simple mode control is on screen in the current mode.
+    func shows(_ id: String) -> Bool { SimpleMode.shown(id, expert: expertMode, simpleChoices) }
 
     func newChatEffort(computer: String?, model: String, settings: PcSettings) -> Effort {
         Effort.effective(computer.flatMap { lastEffort[$0] }.flatMap(Effort.init(rawValue:)) ?? settings.effort, for: model)

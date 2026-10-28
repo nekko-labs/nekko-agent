@@ -51,7 +51,7 @@ final class NewChatChoicesTests: XCTestCase {
     private func launch(_ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "YES", "-uiTestReset", "YES",
-                               "-theme", "computer", "-AppleLanguages", "(en)", "-uiTestNewChat"] + extra
+                               "-theme", "computer", "-AppleLanguages", "(en)", "-uiTestNewChat", "-expertMode", "YES"] + extra
         app.launch()
         return app
     }

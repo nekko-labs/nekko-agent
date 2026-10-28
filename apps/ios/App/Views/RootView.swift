@@ -24,6 +24,8 @@ enum Route: Hashable {
     case security
     /// Settings → Live Activities: the card's level, with a preview.
     case liveActivities
+    /// Settings → Simple mode: what Simple and Expert show, with a preview.
+    case simpleMode
 }
 
 struct RootView: View {
@@ -181,6 +183,7 @@ struct RouteView: View {
         case .monitors: MonitorsView(open: { id in path.append(.chat(id)) })
         case .security: SecuritySettingsView()
         case .liveActivities: LiveActivitySettingsView()
+        case .simpleMode: SimpleModeSettingsView()
         }
     }
 }

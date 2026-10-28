@@ -4,35 +4,43 @@ import SwiftUI
 
 // MARK: - Simple and Expert
 
-/// Simple or Expert, at the top left of a chat (2026-10-24), like the layout
-/// toggle at the top left of the desktop's Agent board. Simple keeps the
-/// chat's model, effort and context; Expert adds the computer's hardware and
-/// the models its Model Server holds.
+/// Simple or Expert, at the top left of a chat and of the chats list: a chat
+/// bubble for Simple and code brackets for Expert, like the desktop's switch.
+/// Simple hides the controls Settings > Simple mode keeps to Expert.
 struct ModeToggle: View {
     @Environment(Prefs.self) private var prefs
     @Environment(\.palette) private var palette
 
     var body: some View {
-        @Bindable var prefs = prefs
-        Menu {
-            Picker("Mode", selection: $prefs.expertMode) {
-                Label("Simple", systemImage: Self.icon(expert: false)).tag(false)
-                Label("Expert", systemImage: Self.icon(expert: true)).tag(true)
-            }
-        } label: {
-            Label(prefs.expertMode ? "Expert" : "Simple", systemImage: Self.icon(expert: prefs.expertMode))
-                .labelStyle(.titleAndIcon)
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(prefs.expertMode ? palette.accent : palette.ink)
+        HStack(spacing: 0) {
+            segment(expert: false)
+            segment(expert: true)
         }
+        .background(palette.surface2, in: Capsule())
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("Mode")
         .accessibilityValue(prefs.expertMode ? "Expert" : "Simple")
-        .accessibilityHint("Expert adds your computer’s hardware and loaded models")
         .accessibilityIdentifier("chat.mode")
     }
 
+    private func segment(expert: Bool) -> some View {
+        let on = prefs.expertMode == expert
+        return Button { prefs.expertMode = expert } label: {
+            Image(systemName: Self.icon(expert: expert))
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(on ? palette.onAccent : palette.inkSoft)
+                .frame(width: 36, height: 28)
+                .background(on ? palette.accent : .clear, in: Capsule())
+                .frame(minWidth: 40, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(expert ? "Expert: every control" : "Simple: everyday controls")
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
     static func icon(expert: Bool) -> String {
-        expert ? "gauge.with.dots.needle.100percent" : "gauge.with.dots.needle.33percent"
+        expert ? "chevron.left.forwardslash.chevron.right" : "bubble.left"
     }
 }
 
@@ -172,16 +180,23 @@ func effortLabel(_ e: Effort) -> String {
 struct ModelEffortButton: View {
     let chat: ChatModel
     @Environment(\.palette) private var palette
+    @Environment(Prefs.self) private var prefs
     @State private var open = false
+
+    /// Simple mode may hide either half; a chat with no model yet still offers the picker.
+    static func parts(_ prefs: Prefs, _ chat: ChatModel) -> (model: Bool, effort: Bool) {
+        (prefs.shows("model") || chat.modelId == nil, prefs.shows("effort"))
+    }
 
     var body: some View {
         let levels = Effort.levels(for: chat.modelId ?? "")
         let level = chat.effort.flatMap { levels.firstIndex(of: $0) }
         let name = chat.modelName ?? String(localized: "Choose a model")
+        let parts = Self.parts(prefs, chat)
         Button { open = true } label: {
             HStack(spacing: 6) {
-                EffortGauge(level: level, count: levels.count, size: 22)
-                Text(name).font(.footnote.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1).truncationMode(.middle)
+                if parts.effort { EffortGauge(level: level, count: levels.count, size: 22) }
+                if parts.model { Text(name).font(.footnote.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1).truncationMode(.middle) }
                 Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(palette.inkFaint)
             }
             .padding(.leading, 4).padding(.trailing, 8)
@@ -201,6 +216,7 @@ struct ModelEffortButton: View {
 struct ModelEffortSheet: View {
     let chat: ChatModel
     @Environment(ComputersStore.self) private var store
+    @Environment(Prefs.self) private var prefs
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
     @Environment(\.horizontalSizeClass) private var hClass
@@ -212,59 +228,64 @@ struct ModelEffortSheet: View {
         let levels = Effort.levels(for: chat.modelId ?? "")
         let level = chat.effort.flatMap { levels.firstIndex(of: $0) }
         let computer = store.active?.name ?? String(localized: "your computer")
+        let parts = ModelEffortButton.parts(prefs, chat)
         NavigationStack {
             List {
-                Section("Model") {
-                    Button { picking = true } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(chat.modelName ?? String(localized: "Choose a model")).foregroundStyle(palette.ink)
-                                if let id = chat.modelId, id != chat.modelName { Text(id).font(.caption2).foregroundStyle(palette.inkFaint) }
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(palette.inkFaint)
-                        }
-                        .frame(minHeight: 44).contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("modelEffort.model")
-                }
-                Section {
-                    VStack(spacing: 12) {
-                        EffortGauge(level: level, count: levels.count, size: 112)
-                        Text(chat.effort.map(effortLabel) ?? String(localized: "Computer default")).font(.headline).foregroundStyle(palette.ink)
-                        HStack(spacing: 6) {
-                            ForEach(Array(levels.enumerated()), id: \.element) { i, e in
-                                Button { set(e) } label: {
-                                    Group {
-                                        if busy == e { ProgressView().controlSize(.small) } else { Text(effortLabel(e)) }
-                                    }
-                                    .font(.footnote.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.7)
-                                    .frame(maxWidth: .infinity, minHeight: 44)
-                                    .background(i == level ? palette.accent : palette.surface2, in: Capsule())
-                                    .foregroundStyle(i == level ? palette.onAccent : palette.ink)
-                                    .contentShape(Capsule())
+                if parts.model {
+                    Section("Model") {
+                        Button { picking = true } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(chat.modelName ?? String(localized: "Choose a model")).foregroundStyle(palette.ink)
+                                    if let id = chat.modelId, id != chat.modelName { Text(id).font(.caption2).foregroundStyle(palette.inkFaint) }
                                 }
-                                .buttonStyle(.plain)
-                                .disabled(busy != nil)
-                                .accessibilityAddTraits(i == level ? .isSelected : [])
-                                .accessibilityIdentifier("modelEffort.\(e.rawValue)")
+                                Spacer()
+                                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(palette.inkFaint)
+                            }
+                            .frame(minHeight: 44).contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("modelEffort.model")
+                    }
+                }
+                if parts.effort {
+                    Section {
+                        VStack(spacing: 12) {
+                            EffortGauge(level: level, count: levels.count, size: 112)
+                            Text(chat.effort.map(effortLabel) ?? String(localized: "Computer default")).font(.headline).foregroundStyle(palette.ink)
+                            HStack(spacing: 6) {
+                                ForEach(Array(levels.enumerated()), id: \.element) { i, e in
+                                    Button { set(e) } label: {
+                                        Group {
+                                            if busy == e { ProgressView().controlSize(.small) } else { Text(effortLabel(e)) }
+                                        }
+                                        .font(.footnote.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.7)
+                                        .frame(maxWidth: .infinity, minHeight: 44)
+                                        .background(i == level ? palette.accent : palette.surface2, in: Capsule())
+                                        .foregroundStyle(i == level ? palette.onAccent : palette.ink)
+                                        .contentShape(Capsule())
+                                    }
+                                    .buttonStyle(.plain)
+                                    .disabled(busy != nil)
+                                    .accessibilityAddTraits(i == level ? .isSelected : [])
+                                    .accessibilityIdentifier("modelEffort.\(e.rawValue)")
+                                }
                             }
                         }
+                        .frame(maxWidth: .infinity).padding(.vertical, 8)
+                    } header: {
+                        Text("Effort")
+                    } footer: {
+                        Text(chat.effort == nil
+                             ? "Following \(computer)’s effort setting. Higher effort thinks longer and spends more tokens."
+                             : "Higher effort thinks longer and spends more tokens.")
                     }
-                    .frame(maxWidth: .infinity).padding(.vertical, 8)
-                } header: {
-                    Text("Effort")
-                } footer: {
-                    Text(chat.effort == nil
-                         ? "Following \(computer)’s effort setting. Higher effort thinks longer and spends more tokens."
-                         : "Higher effort thinks longer and spends more tokens.")
                 }
                 if let error {
                     Section { Label(error, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(palette.danger) }
                 }
             }
-            .navigationTitle("Model and effort")
+            .navigationTitle(parts.effort ? (parts.model ? LocalizedStringKey("Model and effort") : "Effort") : "Model")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
             .sheet(isPresented: $picking) {

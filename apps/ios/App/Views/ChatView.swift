@@ -88,10 +88,12 @@ struct ChatView: View {
                             .font(.footnote).foregroundStyle(palette.inkFaint).frame(maxWidth: .infinity)
                     }
                     if !chat.ready { ProgressView().frame(maxWidth: .infinity).padding(.top, 40) }
-                    ForEach(TranscriptRow.of(chat.blocks)) { row in
+                    // Simple mode keeps reasoning and tool steps out of sight unless chosen in Settings.
+                    let steps = prefs.shows("thinking")
+                    ForEach(TranscriptRow.of(chat.blocks).filter { steps || !$0.isStep }) { row in
                         switch row {
                         case .block(let b):
-                            BlockView(block: b, chat: chat, photos: b.isPrompt ? chat.photos(b.id) : []) { i in
+                            BlockView(block: b, chat: chat, photos: b.isPrompt ? chat.photos(b.id) : [], reasoning: steps) { i in
                                 viewing = PhotoSet(photos: chat.photos(b.id), index: i)
                             }
                             .id(b.id)
@@ -199,13 +201,13 @@ struct ChatView: View {
             }
         }
         .safeAreaInset(edge: .top) {
-            if prefs.expertMode, let monitor {
+            if prefs.shows("hardware"), let monitor {
                 MonitorPanel(monitor: monitor, chat: chat).background(.bar)
             }
         }
-        // Expert mode re-reads the hardware every few seconds, only while it's on and the chat is on screen.
-        .task(id: prefs.expertMode) {
-            guard prefs.expertMode else { return }
+        // The hardware strip re-reads every few seconds, only while it shows and the chat is on screen.
+        .task(id: prefs.shows("hardware")) {
+            guard prefs.shows("hardware") else { return }
             let m = monitor ?? HardwareMonitorModel(store: store)
             monitor = m
             await m.follow()
@@ -215,34 +217,46 @@ struct ChatView: View {
             ToolbarItem(placement: .principal) {
                 VStack(spacing: 0) {
                     Text(chat.title).font(.subheadline.weight(.semibold)).lineLimit(1)
-                    Text([chat.modelId, store.active?.name].compactMap { $0 }.joined(separator: " · "))
-                        .font(.caption2).foregroundStyle(palette.inkFaint).lineLimit(1)
+                    if prefs.shows("ph-subtitle") {
+                        Text([chat.modelId, store.active?.name].compactMap { $0 }.joined(separator: " · "))
+                            .font(.caption2).foregroundStyle(palette.inkFaint).lineLimit(1)
+                    }
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     // A saved copy is read-only: changing the chat needs the computer.
                     Group {
-                        Button { showModels = true } label: { Label("Model", systemImage: "cpu") }
-                        Menu {
-                            ForEach(PcSettings.ChatMode.allCases, id: \.self) { m in
-                                Button {
-                                    act { try await chat.setOptions(mode: m) }
-                                } label: {
-                                    if chat.session?.mode == m.rawValue { Label(modeName(m), systemImage: "checkmark") } else { Text(modeName(m)) }
+                        if ModelEffortButton.parts(prefs, chat).model {
+                            Button { showModels = true } label: { Label("Model", systemImage: "cpu") }
+                        }
+                        if prefs.shows("ph-policy") {
+                            Menu {
+                                ForEach(PcSettings.ChatMode.allCases, id: \.self) { m in
+                                    Button {
+                                        act { try await chat.setOptions(mode: m) }
+                                    } label: {
+                                        if chat.session?.mode == m.rawValue { Label(modeName(m), systemImage: "checkmark") } else { Text(modeName(m)) }
+                                    }
                                 }
-                            }
-                        } label: { Label("Tool policy", systemImage: "shield.lefthalf.filled") }
-                        if store.pcSettings.phoneChanges {
+                            } label: { Label("Tool policy", systemImage: "shield.lefthalf.filled") }
+                        }
+                        if store.pcSettings.phoneChanges && prefs.shows("changes") {
                             Button { showChanges = true } label: { Label("Changes", systemImage: "plusminus") }
                         }
-                        Button { showGitScreen = true } label: { Label("Git", systemImage: "arrow.triangle.branch") }
-                            .accessibilityIdentifier("chat.git")
+                        if prefs.shows("ph-git") {
+                            Button { showGitScreen = true } label: { Label("Git", systemImage: "arrow.triangle.branch") }
+                                .accessibilityIdentifier("chat.git")
+                        }
                         Button { showFiles = true } label: { Label("Files", systemImage: "folder") }
                             .accessibilityIdentifier("chat.files")
-                        Button { showGit = true } label: { Label("Commit or open a PR", systemImage: "arrow.triangle.pull") }
-                        Button { showTerminals = true } label: { Label("Terminals", systemImage: "terminal") }
-                            .accessibilityIdentifier("chat.terminals")
+                        if prefs.shows("ph-git") {
+                            Button { showGit = true } label: { Label("Commit or open a PR", systemImage: "arrow.triangle.pull") }
+                        }
+                        if prefs.shows("terminal") {
+                            Button { showTerminals = true } label: { Label("Terminals", systemImage: "terminal") }
+                                .accessibilityIdentifier("chat.terminals")
+                        }
                         Button { renameText = chat.title; renaming = true } label: { Label("Rename", systemImage: "pencil") }
                         Button { act { try await store.completeChat(sessionId) } } label: { Label("Complete", systemImage: "checkmark.circle") }
                     }
@@ -283,7 +297,7 @@ struct ChatView: View {
                 QuestionCard(request: q) { answers in try await chat.answer(answers) }.id(q.callId)
             }
             if !chat.queuedPrompts.isEmpty { QueueList(chat: chat) }
-            PrChip(chat: chat).frame(maxWidth: .infinity, alignment: .leading)
+            if prefs.shows("ph-git") { PrChip(chat: chat).frame(maxWidth: .infinity, alignment: .leading) }
             // The phone's saved copy (OF-5): read-only until the computer answers.
             if let at = chat.savedAt {
                 Label(SavedListNote.copy(savedAt: at, computer: store.active?.name ?? "your computer"), systemImage: "clock.arrow.circlepath")
@@ -433,6 +447,15 @@ enum TranscriptRow: Identifiable {
         }
     }
 
+    /// A tool step or a group of them, which Simple mode keeps out of sight (`thinking`).
+    var isStep: Bool {
+        switch self {
+        case .block(.tool): return true
+        case .block: return false
+        case .agents, .purpose: return true
+        }
+    }
+
     static func of(_ blocks: [Block]) -> [TranscriptRow] {
         Purpose.group(blocks, role: Purpose.role(of:)).map { run in
             switch run {
@@ -455,6 +478,8 @@ struct BlockView: View {
     var chat: ChatModel? = nil
     /// A prompt's photos as the computer sent them (small copies; `""` for one it kept back).
     var photos: [String] = []
+    /// Simple mode hides what the model thought (`thinking`).
+    var reasoning = true
     var openPhoto: (Int) -> Void = { _ in }
     @Environment(\.palette) private var palette
     @State private var showReasoning = false
@@ -486,7 +511,7 @@ struct BlockView: View {
             }
         case .assistant(_, let text, let reasoning, let streaming, let interrupted):
             VStack(alignment: .leading, spacing: 6) {
-                if let reasoning, !reasoning.isEmpty {
+                if self.reasoning, let reasoning, !reasoning.isEmpty {
                     DisclosureGroup(isExpanded: $showReasoning) {
                         Text(reasoning).font(.footnote).foregroundStyle(palette.inkSoft).textSelection(.enabled)
                     } label: {
@@ -845,9 +870,11 @@ struct Composer: View {
                         // As on the desktop: another agent or a terminal beside this one, or a photo for this message.
                         Button { app.newChatRequested = true } label: { Label("New agent", systemImage: "plus.bubble") }
                             .accessibilityIdentifier("composer.newAgent")
-                        Button(action: openTerminals) { Label("Terminal", systemImage: "terminal") }
-                            .disabled(chat.savedAt != nil)
-                            .accessibilityIdentifier("composer.terminal")
+                        if prefs.shows("terminal") {
+                            Button(action: openTerminals) { Label("Terminal", systemImage: "terminal") }
+                                .disabled(chat.savedAt != nil)
+                                .accessibilityIdentifier("composer.terminal")
+                        }
                         Divider()
                         if !store.pcSettings.prompts.isEmpty {
                             Menu {
@@ -931,13 +958,16 @@ struct Composer: View {
             .frame(maxWidth: .infinity)
             .background(palette.surface, in: RoundedRectangle(cornerRadius: 20))
             .overlay(RoundedRectangle(cornerRadius: 20).stroke(palette.line))
-            // The chat's model and effort, and its context window: in Simple and Expert alike.
-            HStack(spacing: 0) {
-                ModelEffortButton(chat: chat)
-                Spacer(minLength: 8)
-                ContextGauge(chat: chat)
+            // The chat's model and effort, and its context window, as Settings > Simple mode says.
+            let parts = ModelEffortButton.parts(prefs, chat)
+            if parts.model || parts.effort || prefs.shows("context") {
+                HStack(spacing: 0) {
+                    if parts.model || parts.effort { ModelEffortButton(chat: chat) }
+                    Spacer(minLength: 8)
+                    if prefs.shows("context") { ContextGauge(chat: chat) }
+                }
+                .padding(.top, -4)
             }
-            .padding(.top, -4)
             if let pending = voice.pending { voicePending(pending) }
             if let said = voice.notice {
                 Text(said.text).font(.caption2).foregroundStyle(palette.inkSoft).accessibilityIdentifier("composer.voiceNotice")

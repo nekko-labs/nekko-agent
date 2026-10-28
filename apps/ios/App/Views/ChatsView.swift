@@ -46,6 +46,7 @@ struct ChatsView: View {
         .navigationTitle("Chats")
         .toolbar {
             RootMascot(working: store.activity.values.contains(.running))
+            ToolbarItem(placement: .topBarLeading) { ModeToggle() }
             ToolbarItem(placement: .topBarLeading) { ComputerMenu(path: $path, feedback: $sendingFeedback) }
             ToolbarItem(placement: .topBarTrailing) { viewMenu }
             ToolbarItem(placement: .topBarTrailing) {
@@ -135,7 +136,7 @@ struct ChatsView: View {
                 }
             }
             // The computer's Monitors (FD-5): hardware, running chats, what needs you, the next automations.
-            if query.isEmpty && !store.computers.isEmpty {
+            if query.isEmpty && !store.computers.isEmpty && app.prefs.shows("ph-monitors") {
                 Section {
                     NavigationLink(value: Route.monitors) {
                         Label("Monitors", systemImage: "gauge.with.dots.needle.50percent").foregroundStyle(palette.ink)

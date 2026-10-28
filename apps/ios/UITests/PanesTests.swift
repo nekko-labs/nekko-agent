@@ -142,7 +142,7 @@ final class PanesTests: XCTestCase {
         let app = XCUIApplication()
         let theme = ProcessInfo.processInfo.environment["NEKKO_ITEST_THEME"] ?? "light"
         app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "YES", "-theme", theme, "-uiTestReset", "YES",
-                               "-paneTipShown", "NO", "-foldNoteDismissed", "NO"] + extra
+                               "-paneTipShown", "NO", "-foldNoteDismissed", "NO", "-expertMode", "YES"] + extra
         app.launch()
         addUIInterruptionMonitor(withDescription: "system alerts") { alert in
             for label in ["Allow", "OK", "Allow While Using App"] where alert.buttons[label].exists {

@@ -92,6 +92,10 @@ struct SettingsView: View {
         Form {
             Section {
                 ThemePicker(selection: $prefs.theme)
+                NavigationLink(value: Route.simpleMode) {
+                    LabeledContent("Simple mode", value: prefs.expertMode ? String(localized: "Expert") : String(localized: "Simple"))
+                }
+                .accessibilityIdentifier("settings.simpleMode")
                 Button {
                     if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
                 } label: {

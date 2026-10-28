@@ -214,12 +214,15 @@ struct NewChatView: View {
     private var options: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Button { showModels = true } label: {
-                    chip(model.map { modelName($0) } ?? String(localized: "Choose a model"), icon: "cpu", faint: model == nil)
+                // Simple mode may hide the model; with none chosen yet the picker stays.
+                if app.prefs.shows("model") || model == nil {
+                    Button { showModels = true } label: {
+                        chip(model.map { modelName($0) } ?? String(localized: "Choose a model"), icon: "cpu", faint: model == nil)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("newChat.model")
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("newChat.model")
-                if let model {
+                if let model, app.prefs.shows("effort") {
                     Menu {
                         Picker("Effort", selection: effortChoice) {
                             ForEach(Effort.levels(for: model.1), id: \.self) { e in
@@ -260,17 +263,19 @@ struct NewChatView: View {
                     chip(folder.flatMap { id in store.workspaces.first { $0.id == id }?.name } ?? String(localized: "No folder"), icon: "folder")
                 }
                 .accessibilityIdentifier("newChat.folder")
-                Menu {
-                    Picker("Tools", selection: toolsChoice) {
-                        ForEach(PcSettings.ChatMode.allCases, id: \.self) { m in
-                            Text(m == .guardrails ? String(localized: "\(modeName(m)) (Recommended)") : modeName(m)).tag(m)
+                if app.prefs.shows("ph-policy") {
+                    Menu {
+                        Picker("Tools", selection: toolsChoice) {
+                            ForEach(PcSettings.ChatMode.allCases, id: \.self) { m in
+                                Text(m == .guardrails ? String(localized: "\(modeName(m)) (Recommended)") : modeName(m)).tag(m)
+                            }
                         }
+                    } label: {
+                        chip(modeName(selectedTools), icon: "checkmark.shield")
                     }
-                } label: {
-                    chip(modeName(selectedTools), icon: "checkmark.shield")
+                    .accessibilityHint("How the agent asks before it runs tools on \(store.active?.name ?? "your computer"). Guardrails is recommended for general use.")
+                    .accessibilityIdentifier("newChat.tools")
                 }
-                .accessibilityHint("How the agent asks before it runs tools on \(store.active?.name ?? "your computer"). Guardrails is recommended for general use.")
-                .accessibilityIdentifier("newChat.tools")
             }
             if cloud.account?.canSync == true {
                 // A chat can run on a Nekko Cloud machine instead of a paired computer (decision 0017).
