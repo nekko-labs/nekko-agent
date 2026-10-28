@@ -1,7 +1,7 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import Fastify, { type FastifyInstance } from 'fastify';
 import websocket from '@fastify/websocket';
-import { createPushSender, type ActivityPush, type PushSender } from './push.js';
+import { CARD_LEVELS, cardForLevel, createPushSender, type ActivityPush, type CardLevel, type PushSender } from './push.js';
 
 /**
  * Nekko Agent relay v2, the piece that lets a paired phone reach a local agent
@@ -29,7 +29,16 @@ import { createPushSender, type ActivityPush, type PushSender } from './push.js'
  *     under an opaque tag (a hash of the session id; { type:'register-activity' }),
  *     and the agent's content-free { type:'activity', tag, phase } updates or
  *     ends it, whether or not the phone looks connected (a suspended app's
- *     socket can linger).
+ *     socket can linger). Older phones only; newer ones register the card.
+ *   - The Live Activity card (one per iPhone, all chats): the phone registers
+ *     { type:'register-card', deviceId, token?, startToken?, level,
+ *     computerId, computerName, app? } (its card's update token and its
+ *     push-to-start token; level 'none' drops it). The agent's { type:'card',
+ *     state } updates every registered card, blanked for each phone's level
+ *     (Minimal: no title, step or reply; Standard: no reply), and ends it when
+ *     the state has no chats; { type:'card-start', state } also starts a card,
+ *     once, on a phone with none up. The card's text passes through the relay
+ *     in the clear, as ActivityKit requires.
  *
  * Hardening: pairing-key hashes compared in constant time, frame-size cap, a
  * per-connection token-bucket rate limit, client + room caps, and an optional
@@ -80,10 +89,28 @@ interface Room {
   pushOwners: Map<string, string>;
   /** Live Activity push tokens: tag → deviceId → token. */
   activities: Map<string, Map<string, { token: string; app?: string; at: number }>>;
+  /** The Live Activity card per device (`register-card`). */
+  cards: Map<string, CardRegistration>;
+}
+
+interface CardRegistration {
+  /** The card that is up; gone once it ended. */
+  token?: string;
+  startToken?: string;
+  level: CardLevel;
+  computerId: string;
+  computerName: string;
+  app?: string;
+  /** A start was pushed: no other until the phone registers again (with the new card's token). */
+  started?: boolean;
 }
 
 /** At most this many Live Activities per room, and how long one is kept without an end. */
 const MAX_ACTIVITIES = 64;
+/** At most this many phones with a card per room. */
+const MAX_CARDS = 64;
+const DEVICE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const ACTIVITY_TOKEN = /^[0-9a-fA-F]{20,512}$/;
 const ACTIVITY_TTL_MS = 12 * 60 * 60 * 1000;
 const PHASES = new Set(['approval', 'question', 'running', 'done', 'failed']);
 const APP_ID = /^[A-Za-z0-9.-]{3,155}$/;
@@ -129,7 +156,7 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
     let r = rooms.get(code);
     if (!r) {
       if (rooms.size >= limits.maxRooms) return null;
-      r = { agent: null, clients: new Map(), keyHash: null, pushTokens: new Map(), pushOwners: new Map(), activities: new Map() };
+      r = { agent: null, clients: new Map(), keyHash: null, pushTokens: new Map(), pushOwners: new Map(), activities: new Map(), cards: new Map() };
       rooms.set(code, r);
     }
     return r;
@@ -262,6 +289,7 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
               if (typeof ctrl.deviceId === 'string') {
                 r.pushTokens.delete(ctrl.deviceId);
                 for (const devices of r.activities.values()) devices.delete(ctrl.deviceId);
+                r.cards.delete(ctrl.deviceId);
               }
               return;
             }
@@ -277,6 +305,27 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
               }
               for (const { token, app } of devices.values()) void pushSender.sendActivity?.(token, push, app);
               if (end) r.activities.delete(tag);
+              return;
+            }
+            case 'card':
+            case 'card-start': {
+              const start = ctrl.type === 'card-start';
+              for (const [deviceId, reg] of r.cards) {
+                const state = cardForLevel(ctrl.state, reg.level);
+                if (!state) return;
+                const ended = state.chats.length === 0;
+                if (reg.token) {
+                  void pushSender.sendCard?.(reg.token, { event: ended ? 'end' : 'update', state }, reg.app);
+                  if (ended) {
+                    delete reg.token;
+                    if (!reg.startToken) r.cards.delete(deviceId);
+                  }
+                } else if (start && !ended && reg.startToken && !reg.started) {
+                  reg.started = true;
+                  const attributes = { computerId: reg.computerId, computerName: reg.computerName, level: reg.level };
+                  void pushSender.sendCard?.(reg.startToken, { event: 'start', state, attributes }, reg.app);
+                }
+              }
               return;
             }
             default:
@@ -336,6 +385,31 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
               // So the phone's *Send a test notification* can say which path it took.
               safeSend(socket, { type: 'push-registered', delivers: pushSender.delivers ? pushSender.delivers(platform) : pushSender.enabled });
             }
+            return;
+          }
+          if (ctrl?.type === 'register-card') {
+            const deviceId = typeof ctrl.deviceId === 'string' && DEVICE_ID.test(ctrl.deviceId) ? ctrl.deviceId : '';
+            const level = ctrl.level === 'none' || CARD_LEVELS.has(ctrl.level) ? (ctrl.level as CardLevel | 'none') : '';
+            const token = (v: unknown) => (typeof v === 'string' && ACTIVITY_TOKEN.test(v) ? v : undefined);
+            const owner = r.pushOwners.get(deviceId);
+            if (!deviceId || !level || (owner && owner !== cid)) return;
+            if ((ctrl.token !== undefined && !token(ctrl.token)) || (ctrl.startToken !== undefined && !token(ctrl.startToken))) return;
+            r.pushOwners.set(deviceId, cid);
+            if (level === 'none' || (!ctrl.token && !ctrl.startToken)) {
+              r.cards.delete(deviceId);
+              return;
+            }
+            if (!r.cards.has(deviceId) && r.cards.size >= MAX_CARDS) return;
+            const name = (v: unknown) => (typeof v === 'string' ? v.slice(0, 100) : '');
+            const app = typeof ctrl.app === 'string' && APP_ID.test(ctrl.app) ? ctrl.app : undefined;
+            r.cards.set(deviceId, {
+              ...(token(ctrl.token) ? { token: ctrl.token } : {}),
+              ...(token(ctrl.startToken) ? { startToken: ctrl.startToken } : {}),
+              level,
+              computerId: name(ctrl.computerId),
+              computerName: name(ctrl.computerName),
+              ...(app ? { app } : {}),
+            });
             return;
           }
           if (ctrl?.type === 'register-activity') {

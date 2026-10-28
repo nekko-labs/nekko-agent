@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { buildRelay } from './server.js';
-import type { ActivityPush, PushSender } from './push.js';
+import type { ActivityPush, CardPush, PushSender } from './push.js';
 
 /** Live-socket protocol tests: real Fastify WS server + Node's global WebSocket. */
 
@@ -168,6 +168,78 @@ describe('relay v2 routing', () => {
     expect(pushes.length).toBe(2);
     // A client never relays an `activity` frame of its own to anyone but the agent.
     c.send({ type: 'activity', tag, phase: 'done' });
+    expect((await agent.next()).type).toBe('c');
+  });
+
+  it('pushes the card to each phone at its level, and starts one only where none is up', async () => {
+    const pushes: { token: string; push: CardPush; app?: string }[] = [];
+    const pushSender: PushSender = { enabled: true, send: async () => {}, sendCard: async (token, push, app) => void pushes.push({ token, push, app }) };
+    const { url, rooms } = await startRelay({ pushSender });
+    const agent = await connect(url, { room: 'r8', role: 'agent', key: 'k' });
+    const c = await connect(url, { room: 'r8', role: 'client', key: 'k' });
+    await c.next();
+    await agent.next();
+    const [minimal, detailed, starter] = ['1', '2', '3'].map((n) => `00000000-0000-4000-8000-00000000000${n}`);
+    const tok = (ch: string) => ch.repeat(64);
+    const names = { computerId: 'mac-1', computerName: 'Studio' };
+    c.send({ type: 'register-card', deviceId: minimal, token: tok('a'), level: 'minimal', ...names });
+    c.send({ type: 'register-card', deviceId: detailed, token: tok('b'), startToken: tok('c'), level: 'detailed', app: 'dev.nekkolabs.nekkoagent', ...names });
+    c.send({ type: 'register-card', deviceId: starter, startToken: tok('d'), level: 'standard', ...names });
+    // Malformed registrations are ignored.
+    c.send({ type: 'register-card', deviceId: 'nope', token: tok('e'), level: 'standard' });
+    c.send({ type: 'register-card', deviceId: minimal.replace('1', '9'), token: tok('e'), level: 'loud' });
+    c.send({ type: 'register-card', deviceId: minimal.replace('1', '8'), token: 'not hex!', level: 'standard' });
+    c.send({ type: 'register-card', deviceId: minimal.replace('1', '7'), level: 'standard' });
+    await new Promise((r) => setTimeout(r, 50));
+    expect([...rooms.get('r8')!.cards.keys()]).toEqual([minimal, detailed, starter]);
+
+    const chat = { id: 's1', short: 'Fix', state: 'working', step: 'Run npm test', reply: 'On it.', closeWord: 'Cool' };
+    agent.send({ type: 'card', state: { chats: [chat], focusId: 's1' } });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(pushes.map((p) => [p.token, p.push.event, p.push.state.chats[0].step, p.push.state.chats[0].reply])).toEqual([
+      [tok('a'), 'update', '', ''],
+      [tok('b'), 'update', 'Run npm test', 'On it.'],
+    ]);
+    expect(pushes[1].app).toBe('dev.nekkolabs.nekkoagent');
+
+    // A run a phone asked for: an update where a card is up, a start where none is (once).
+    pushes.length = 0;
+    agent.send({ type: 'card-start', state: { chats: [chat], focusId: 's1' } });
+    agent.send({ type: 'card-start', state: { chats: [chat], focusId: 's1' } });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(pushes.map((p) => [p.token, p.push.event])).toEqual([
+      [tok('a'), 'update'],
+      [tok('b'), 'update'],
+      [tok('d'), 'start'],
+      [tok('a'), 'update'],
+      [tok('b'), 'update'],
+    ]);
+    const start = pushes[2].push;
+    expect(start.attributes).toEqual({ ...names, level: 'standard' });
+    expect(start.state.chats[0]).toMatchObject({ step: 'Run npm test', reply: '' });
+
+    // An empty card ends it and forgets the update token; the start token stays.
+    pushes.length = 0;
+    agent.send({ type: 'card', state: { chats: [] } });
+    agent.send({ type: 'card', state: 'junk' });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(pushes.map((p) => [p.token, p.push.event])).toEqual([
+      [tok('a'), 'end'],
+      [tok('b'), 'end'],
+    ]);
+    expect(rooms.get('r8')!.cards.get(detailed)).toMatchObject({ startToken: tok('c') });
+    expect(rooms.get('r8')!.cards.get(detailed)!.token).toBeUndefined();
+    expect(rooms.get('r8')!.cards.has(minimal)).toBe(false);
+
+    // Level none, and a revoked phone, drop the registration.
+    c.send({ type: 'register-card', deviceId: starter, level: 'none' });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(rooms.get('r8')!.cards.has(starter)).toBe(false);
+    agent.send({ type: 'push-remove', deviceId: detailed });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(rooms.get('r8')!.cards.size).toBe(0);
+    // A client's own `card` frame only ever reaches the agent.
+    c.send({ type: 'card', state: { chats: [chat] } });
     expect((await agent.next()).type).toBe('c');
   });
 
