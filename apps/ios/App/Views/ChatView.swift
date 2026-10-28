@@ -964,12 +964,11 @@ struct Composer: View {
         // Edit on a waiting prompt, or a refusal: the prompt comes back into the box.
         .onChange(of: store.drafts.drafts[chat.sessionId]) { _, d in adopt(d) }
         .onAppear(perform: bindVoice)
-        // The Live Activity's mic on iOS 17 opens this chat listening (tap mode only: a hold needs a finger).
-        .onChange(of: app.listenIn, initial: true) { _, id in
-            guard let id, id == chat.sessionId else { return }
-            app.listenIn = nil
-            if !prefs.dictationHold, dictation.available, !intro.intercept(prefs) { Task { await dictation.startListening(store: store) } }
-        }
+        // The Live Activity's mic on iOS 17 opens this chat listening (tap mode only: a hold needs
+        // a finger), once the app is unlocked and the chat list has this chat.
+        .onChange(of: app.listenIn, initial: true) { _, _ in takeListen() }
+        .onChange(of: app.lock.locked) { _, _ in takeListen() }
+        .onChange(of: store.summariesLoaded) { _, _ in takeListen() }
         .sheet(isPresented: $intro.showing, onDismiss: {
             // Turn on is the one way out that listens: in hold mode there is no hold to start from.
             intro.closed(prefs) { if !prefs.dictationHold { Task { await dictation.startListening(store: store) } } }
@@ -1115,6 +1114,11 @@ struct Composer: View {
             voice.host = voiceHost
             Task { await voice.hear([words]) }
         }
+    }
+
+    private func takeListen() {
+        guard app.takeListen(chat.sessionId) else { return }
+        if !prefs.dictationHold, dictation.available, !intro.intercept(prefs) { Task { await dictation.startListening(store: store) } }
     }
 
     /// The chat closed: listening stops, and words still on their way go to its saved draft as plain text.

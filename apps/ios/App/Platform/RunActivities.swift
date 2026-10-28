@@ -62,6 +62,9 @@ final class RunActivities {
     var pinnedFocus: String?
     /// The chat the card's mic last sent to, and its reply line then: "Sent: ..." stays until that changes.
     private var sentTo: (id: String, reply: String)?
+    /// When the mic said something with no reply to wait for ("Not sent: ..."): it leaves after `noteSeconds`.
+    private var noteAt: Date?
+    static let noteSeconds: TimeInterval = 60
     private var lastUpdate: Date?
     private var expiry: Task<Void, Never>?
     /// The update a throttled refresh put off, sent once the 2 s are up.
@@ -137,13 +140,15 @@ final class RunActivities {
     }
 
     /// The card's mic (`TalkRunner`): listening, then what was sent ("Sent: ...") until
-    /// `sentTo`'s reply line changes or another chat takes the card. Shown at once.
-    func talk(listening: Bool, heard: String, sentTo: String? = nil) {
+    /// `sentTo`'s reply line changes or another chat takes the card, or why nothing was
+    /// (no `sentTo`) for a minute, cleared by the first refresh after that. Shown at once.
+    func talk(listening: Bool, heard: String, sentTo: String? = nil, now: Date = Date()) {
         guard let card else { return }
         var state = card.state
         state.listening = listening
         state.heard = heard
         self.sentTo = sentTo.map { id in (id, state.chats.first { $0.id == id }?.reply ?? "") }
+        noteAt = sentTo == nil && !heard.isEmpty && !listening ? now : nil
         card.update(state)
         lastUpdate = Date()
     }
@@ -182,6 +187,10 @@ final class RunActivities {
         if let sent = sentTo, state.focusId != sent.id || state.chats.first(where: { $0.id == sent.id })?.reply != sent.reply {
             state.heard = ""
             sentTo = nil
+        }
+        if let at = noteAt, now.timeIntervalSince(at) >= Self.noteSeconds {
+            state.heard = ""
+            noteAt = nil
         }
         if state.focusId != pinnedFocus { pinnedFocus = nil }
         scheduleExpiry(state)
@@ -435,18 +444,20 @@ final class TalkRunner {
         cancelled = false
         show(true, "", nil)
         var heard = ""
+        var sent = false
         do {
             let text = try await capture().trimmingCharacters(in: .whitespacesAndNewlines)
             listening = false
             if !text.isEmpty, !cancelled {
                 try await send(sessionId, text)
                 heard = String(localized: "Sent: \(text)")
+                sent = true
             }
         } catch {
             listening = false
             heard = String(localized: "Not sent: \(error.localizedDescription)")
         }
-        show(false, heard, heard.isEmpty ? nil : sessionId)
+        show(false, heard, sent ? sessionId : nil)
     }
 
     func cancel() {

@@ -196,6 +196,8 @@ final class AppModel {
 
     func didEnterBackground() {
         foreground = false
+        // A `?listen=1` not taken by now is stale: listening never starts later by itself.
+        listenIn = nil
         lock.didEnterBackground(enabled: prefs.appLock)
         // What is typed is on disk before iOS may end the app.
         store.drafts.flush()
@@ -298,6 +300,18 @@ final class AppModel {
         IntentRouter.cancelTalk = { [weak self] in self?.talker.cancel() }
     }
 
+    /// The composer of `chatId` takes a waiting `?listen=1` once: only for a chat the
+    /// phone's list has, and never behind the app lock.
+    func takeListen(_ chatId: String) -> Bool {
+        guard let id = listenIn, id == chatId, !(prefs.appLock && lock.locked) else { return false }
+        guard store.summaries.contains(where: { $0.id == id }) else {
+            if store.summariesLoaded { listenIn = nil }
+            return false
+        }
+        listenIn = nil
+        return true
+    }
+
     /// The card's push token. A card the relay started can wake the app in the
     /// background (locked, so `start` never ran): connect just to register the
     /// token, as `deliverInBackground` does, and let the connection close as that does.
@@ -383,9 +397,8 @@ final class AppModel {
     func handle(url: URL) {
         if url.scheme == "nekko-agent", url.host == "chat" {
             openChat = url.pathComponents.dropFirst().first
-            if URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.contains(where: { $0.name == "listen" && $0.value == "1" }) == true {
-                listenIn = openChat
-            }
+            let listen = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.contains { $0.name == "listen" && $0.value == "1" } == true
+            listenIn = listen ? openChat : nil
             return
         }
         if url.scheme == "nekko-agent", url.host == "new" {

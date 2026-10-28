@@ -150,9 +150,16 @@ final class DeepLinkTests: XCTestCase {
         XCTAssertEqual(app.listenIn, "s_123")
         app.openChat = nil
         app.listenIn = nil
+        app.handle(url: LiveCardView.listenURL("s_123"))
         app.handle(url: URL(string: "nekko-agent://chat/s_123")!)
-        XCTAssertNil(app.listenIn, "a plain chat link opens no microphone")
+        XCTAssertNil(app.listenIn, "a plain chat link opens no microphone, and clears one still waiting")
         app.openChat = nil
+        // Taken only by that chat's composer, and only for a chat the phone's list has.
+        app.handle(url: LiveCardView.listenURL("s_unknown"))
+        XCTAssertFalse(app.takeListen("s_other"))
+        XCTAssertFalse(app.takeListen("s_unknown"), "not a chat this computer has")
+        app.openChat = nil
+        app.listenIn = nil
         app.handle(url: URL(string: "nekko-agent-pair:?nothing=here")!)
         XCTAssertNil(app.pendingLink)
         // The Control Center control's link asks for New chat, and is not a pairing.
@@ -867,6 +874,22 @@ final class RunActivitiesTests: XCTestCase {
         XCTAssertEqual(card.state.heard, "", "it said what went to a, not b")
     }
 
+    /// "Not sent: ..." has no reply to wait for: it leaves a minute after it was said.
+    func testNotSentLeavesAfterAMinute() throws {
+        summaries = [chat("a", "Billing fix")]
+        activity = ["a": .running]
+        level = .detailed
+        let r = make()
+        let start = Date()
+        r.refresh(now: start)
+        let card = try XCTUnwrap(started.first)
+        r.talk(listening: false, heard: "Not sent: Model gone.", now: start)
+        r.refresh(now: start.addingTimeInterval(30), urgent: true)
+        XCTAssertEqual(card.state.heard, "Not sent: Model gone.")
+        r.refresh(now: start.addingTimeInterval(61), urgent: true)
+        XCTAssertEqual(card.state.heard, "")
+    }
+
     /// Pushed cards carry listening false and heard "": while the mic listens the app puts its own back.
     func testAPushWhileListeningKeepsTheMic() {
         var local = LiveCardState(chats: [], focusId: nil, more: 0, listening: true, heard: "")
@@ -1157,6 +1180,31 @@ final class VoiceTests: XCTestCase {
         XCTAssertTrue(off.requests.isEmpty, "nothing is sent to a server")
     }
 
+    func testCaptureOnceSaysAFailedTranscription() async {
+        let d = Dictation()
+        d.transcribe = { _ in throw RelayError("Engine busy") }
+        do {
+            _ = try await d.captureOnce {
+                d.listenWithoutMicrophone()
+                d.consume(self.speech(1) + self.quiet(1.5))
+            }
+            XCTFail("the card says why nothing was sent")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, "Couldn’t turn speech into text: Engine busy")
+        }
+    }
+
+    /// Cancel or Send to on the card while the microphone is still starting: it never opens.
+    func testCancelOrSendWhileStartingKeepsTheMicrophoneShut() {
+        for stop in [{ (d: Dictation) in d.discard() }, { (d: Dictation) in d.stopListening() }] {
+            let d = Dictation()
+            d.sink = { _ in }
+            d.startingWithoutPrompts()
+            stop(d)
+            XCTAssertFalse(d.mayOpenMicrophone)
+        }
+    }
+
     func testCaptureOnceStopsAfter30SecondsOfSilence() async throws {
         let d = Dictation()
         d.transcribe = { _ in XCTFail("silence is not transcribed"); return nil }
@@ -1223,6 +1271,10 @@ final class VoiceTests: XCTestCase {
         await t.talk("b")
         XCTAssertEqual(sent, 0)
         XCTAssertEqual(heard, ["", "", "", "Not sent: " + DictationError.noOnDevice(language: "English").localizedDescription])
+        var to: [String?] = []
+        t.show = { _, _, chat in to.append(chat) }
+        await t.talk("b")
+        XCTAssertEqual(to, [nil, nil], "a refusal waits for no reply: it leaves on its own")
     }
 
     func testSegmentsAreWrittenAs16kHzMonoPcm() {

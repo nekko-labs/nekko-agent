@@ -130,7 +130,7 @@ final class Dictation {
     private var idleTimerBefore: Bool?
     /// The one listening Dictation: two chats on screen (panes) share one microphone.
     private static weak var current: Dictation?
-    /// `captureOnce`: the first pause, or 30 s with nothing said, ends listening; samples heard so far.
+    /// `captureOnce`: the first cut segment, or 30 s of audio without one, ends listening; the samples since it began.
     private var once: Int?
     /// `captureOnce`: why the words can't be turned into text on this phone.
     private var refusal: DictationError?
@@ -310,10 +310,11 @@ final class Dictation {
         return e.domain == "kAFAssistantErrorDomain" && e.code == 1110
     }
 
-    /// The Live Activity's mic: listens like tap mode until the first pause (or 30 s with
-    /// nothing said) and returns that one segment's words, transcribed as any segment is
-    /// (the computer's Whisper, else this phone on the device only). "" when nothing was said
-    /// or `discard` ended it; throws when the phone refuses (`DictationError.noOnDevice`).
+    /// The Live Activity's mic: listens like tap mode until the first cut segment (or 30 s of
+    /// audio without one) and returns its words, transcribed as any segment is (the computer's
+    /// Whisper, else this phone on the device only). "" when nothing was said or `discard`
+    /// ended it; throws when the phone refuses (`DictationError.noOnDevice`) or the words
+    /// could not be turned into text.
     func captureOnce(store: ComputersStore) async throws -> String {
         try await captureOnce { await self.start(store: store, holding: false) }
     }
@@ -324,6 +325,7 @@ final class Dictation {
         sink = { words.append($0.text) }
         once = 0
         refusal = nil
+        error = nil
         defer {
             sink = nil
             once = nil
@@ -333,11 +335,14 @@ final class Dictation {
         while recording { try? await Task.sleep(nanoseconds: 50_000_000) }
         await drain()
         if let refusal { throw refusal }
+        if words.isEmpty, let error { throw RelayError(error) }
         return words.joined(separator: " ")
     }
 
     /// Stop listening; the words said up to now still count.
     func stopListening() {
+        // Still starting (the card's Send to): the microphone must not open once the waits end.
+        if starting { startCancelled = true }
         guard recording else { return }
         close().forEach(enqueue)
     }
@@ -388,6 +393,7 @@ final class Dictation {
 
     /// Stop without transcribing.
     func discard() {
+        if starting { startCancelled = true }
         guard recording else { return }
         _ = close()
     }
