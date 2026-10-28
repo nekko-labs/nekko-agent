@@ -17,7 +17,7 @@ Simple becomes the everyday app with developer controls out of sight, chosen per
 - [x] **SEM-5, iPhone.** `SimpleMode.swift`, `Prefs.simpleChoices`, the two-segment switch, gates, `SimpleModeSettingsView`; `SimpleModeTests`, live `testSimpleAndExpertModes` passes. Strings not yet translated. (2026-10-28)
 - [x] **SEM-6, Android.** `SimpleMode.kt`, `SimpleUi.kt`, `SimpleModeSettings.kt`, gates; `SimpleModeTest`, lint and builds pass. `ChatModesTest` rewritten but not run: the build Mac's adb is x86 only. (2026-10-28)
 - [x] **SEM-8, Philip's first updates (2026-10-28).** Context shows in Simple; monitors show in Simple while a local model is loaded; the desktop *getting long* note with what starting fresh saves.
-- [ ] **SEM-9, phone header and monitors.** Nekko title kept top middle, the switch on a slim second row with a hairline, minimal gauges with percentages, a pull-down agent sheet from the top, and the getting-long note on the phones.
+- [x] **SEM-9, phone header and monitors.** Title kept top middle, the switch on a slim second row with a hairline, minimal gauges with percentages, a pull-down agent panel from the top replacing the strip and Monitor sheet, and the getting-long note on both phones. iPhone tests and live UI test pass; Android unit tests and builds pass, not run on a device. (2026-10-28)
 - [ ] **SEM-7, search and steps.** List out-of-sight controls in Settings search and the command palette; one summary line per turn for tool steps.
 
 ## Model Server inline download progress (#1221)

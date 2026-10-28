@@ -57,6 +57,28 @@ The same change as the desktop ([Desktop Simple and Expert modes](../desktop/des
   - `ph-monitors`
 - **Settings > Simple mode** is a screen reached from Settings. It has an intro, a Simple | Expert **Preview**, and one card per area. Each card draws its area from chips named after the real controls, dashed and faded where the previewed mode leaves a control out. Each control has a row with a Show / Expert only / Hide choice. **Reset to defaults** is at the bottom.
 
+- **Philip's updates (2026-10-28):** "simple shows context", monitors shown "whenever a local model is running, even in simple mode", "minimal guages and percentages that when tapped, show more detail", "a minimal pull down sheet panel at the top", the getting-long note saying "it will save n tokens to start fresh", and "keep the nekko in the top middle. move the the toggle to a slim second row. use a subtle divider line." On both phones:
+  - **Context** is Show by default.
+  - **The monitors** (`hardware`, `ph-monitors`) at Expert only also show in Simple while the Model Server holds a local model. Simple reads only `engine:status` every 10 s to know; the full hardware read (3 s) runs only while the gauges or the panel are on screen.
+  - **Header:**
+    - The top row keeps Back, the title centred, and More.
+    - The switch moves to a slim second row (32 pt / 34 dp) with a hairline under it.
+    - The right of that row holds the **minimal monitor** when shown: thin rings with percentages for CPU, Memory and GPU, plus the loaded-model count.
+  - **The agent panel:** tapping the gauges pulls a panel down from under the title. It is dismissed by a swipe up, a tap outside, Done or Back. It holds:
+    - larger gauges with temperatures;
+    - loaded models with Unload;
+    - in a chat, its model, effort and context breakdown.
+
+    It replaces the strip of dials and the bottom Monitor sheet.
+  - **Getting long (Simple only):** at 85% of the window, a line above the message box says *This chat is getting long. Starting fresh saves about N tokens.* N is the conversation's tokens.
+    - **Start fresh** opens New chat on the same computer with the same model.
+    - The line can be dismissed per chat. On the iPhone that is kept on the phone for the last 200 chats; on Android, while the chat stays open in the back stack.
+  - **iPhone:** the chats list's large *Chats* title no longer draws, because the slim row sits under the bar. The cat is centred. Debug builds take `-uiTestLocalModel` and `-uiTestLongChat` for screenshots.
+  - **Android:** the chats list centres *Chats* (it has no Nekko mark). In the slim row the segments are 30 dp tall, under the 48 dp touch guideline.
+  - **Verified:**
+    - iPhone: NekkoNativeTests (100 run, 1 skipped), Protocol `swift test` (190), and live `testSimpleAndExpertModes` with its accessibility audits; screenshots use the debug stubs for the loaded model and the long chat.
+    - Android: 276 unit tests, lint and builds; `ChatModesTest` updated but not run.
+
 ### iPhone `[implemented 2026-10-28 on branch simple-expert-modes; SimpleModeTests and the NekkoNativeTests suite pass (98 run, 1 skipped); LiveRelayTests/testSimpleAndExpertModes passes against a live relay stack with its accessibility audits in both modes; screenshots on a fresh simulator; NewChatChoicesTests and PanesTests now launch in Expert but were not run]`
 
 - **Gates.** Each goes through `Prefs.shows(id)`:
