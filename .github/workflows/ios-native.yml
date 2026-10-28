@@ -134,8 +134,10 @@ jobs:
       # and saved about 17 s overall (runs 40132995453, 40136579251, 40138086476).
       - name: Create the simulator
         run: |
-          # The newest iPhone Pro the newest iOS runtime supports: iOS 27.1 refuses the iPhone 15 Pro.
-          read -r RUNTIME TYPE < <(xcrun simctl list runtimes -j | ruby -rjson -e 'r = JSON.parse(STDIN.read)["runtimes"].select { |r| r["isAvailable"] && r["identifier"].include?("iOS") }.last; t = r.fetch("supportedDeviceTypes").map { |d| d["identifier"] }; pro = t.grep(/iPhone-\d+-Pro$/).max_by { |i| i[/\d+/].to_i }; puts "#{r.fetch("identifier")} #{pro || t.grep(/iPhone/).last}"')
+          # The newest iPhone Pro on the newest iOS runtime that has one: the xcode-27 image's
+          # iOS 27.1 runtime only carries the iPhone Duo, a foldable the UI tests aren't laid out for.
+          read -r RUNTIME TYPE < <(xcrun simctl list runtimes -j | ruby -rjson -e 'JSON.parse(STDIN.read)["runtimes"].select { |r| r["isAvailable"] && r["identifier"].include?("iOS") }.reverse_each { |r| pro = r.fetch("supportedDeviceTypes").map { |d| d["identifier"] }.grep(/iPhone-\d+-Pro$/).max_by { |i| i[/\d+/].to_i }; next unless pro; puts "#{r.fetch("identifier")} #{pro}"; break }')
+          echo "Simulator: $TYPE on $RUNTIME"
           # An assignment, not an echo, so a failed create fails this step.
           DEVICE=$(xcrun simctl create Nekko-CI "$TYPE" "$RUNTIME")
           echo "DEVICE=$DEVICE" >> "$GITHUB_ENV"
