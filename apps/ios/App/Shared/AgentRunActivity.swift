@@ -24,7 +24,7 @@ struct NekkoCardAttributes: ActivityAttributes, Equatable {
 enum IntentRouter {
     static var approve: ((_ sessionId: String, _ callId: String, _ allow: Bool) async -> Void)?
     static var stop: ((_ sessionId: String) async -> Void)?
-    // The card's buttons (talk and cancelTalk arrive with the mic).
+    // The card's buttons.
     static var focus: ((_ sessionId: String) async -> Void)?
     static var nextPage: ((_ sessionId: String) async -> Void)?
     static var dismiss: ((_ sessionId: String) async -> Void)?
@@ -154,9 +154,11 @@ struct DismissChatIntent: LiveActivityIntent {
     }
 }
 
-/// The mic, and "Send to" while listening (a second tap sends). A placeholder
-/// that Task 5.1 fills in with the recording; it needs Face ID or the passcode,
-/// since what is said is sent to the computer.
+/// The mic (Detailed), and "Send to" while listening (a second tap sends now):
+/// listens until the first pause and sends the words to the chat (`TalkRunner`).
+/// Face ID or the passcode first, since what is said is sent to the computer.
+/// On iOS 17, without `AudioRecordingIntent`, the card's mic is a link that opens
+/// the chat listening instead (`LiveCardView.listenURL`).
 struct TalkToChatIntent: LiveActivityIntent {
     static var title: LocalizedStringResource = "Talk to a chat"
     static var isDiscoverable = false
@@ -173,6 +175,11 @@ struct TalkToChatIntent: LiveActivityIntent {
         return .result()
     }
 }
+
+/// iOS 18 lets this intent start recording while the app is in the background; iOS
+/// stops the recording unless a Live Activity is up, and the card it was tapped on is.
+@available(iOS 18, *)
+extension TalkToChatIntent: AudioRecordingIntent {}
 
 /// Cancel while listening: nothing is sent.
 struct CancelTalkIntent: LiveActivityIntent {

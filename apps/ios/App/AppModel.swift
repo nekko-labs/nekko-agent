@@ -31,6 +31,9 @@ final class AppModel {
     /// Drafts and the outbox, per computer.
     let offlineFiles: OfflineFileStore
     private let activities = RunActivities()
+    /// The card's mic: its own microphone use, apart from any composer's (they share one microphone).
+    private let cardDictation = Dictation()
+    private let talker = TalkRunner()
     private let network = NetworkWatcher()
     private var started = false
     private var foreground = true
@@ -40,6 +43,8 @@ final class AppModel {
     var pendingLink: PairingLink?
     /// A chat to open (notification tap, Live Activity tap, `nekko-agent://chat/<id>`).
     var openChat: String?
+    /// `nekko-agent://chat/<id>?listen=1` (the card's mic on iOS 17): that chat's composer starts listening once.
+    var listenIn: String?
     /// The first message typed on New chat (and its photos), sent by that chat's screen once it opens.
     var firstMessages: [String: UnsentPrompt] = [:]
     /// Text shared from another app (the share extension), waiting for New chat to take it.
@@ -120,6 +125,7 @@ final class AppModel {
             self?.activities.dismiss(sid)
             await self?.tellCard(dismiss: sid)
         }
+        wireTalk()
         activities.onCardToken = { [weak self] token in self?.cardTokenArrived(token) }
         SystemCard.watch(adopt: { [weak self] card in self?.activities.adopt(card) },
                          startToken: { [weak self] token in self?.store.cardStartToken = token })
@@ -190,6 +196,8 @@ final class AppModel {
 
     func didEnterBackground() {
         foreground = false
+        // A `?listen=1` not taken by now is stale: listening never starts later by itself.
+        listenIn = nil
         lock.didEnterBackground(enabled: prefs.appLock)
         // What is typed is on disk before iOS may end the app.
         store.drafts.flush()
@@ -266,6 +274,43 @@ final class AppModel {
         store.resume()
         guard await waitOnline(seconds: 10) else { return }
         await store.cardAction(focus: focus, dismiss: dismiss)
+    }
+
+    /// The card's mic (`TalkToChatIntent`, after Face ID): the connection starts while it
+    /// listens, so the computer can transcribe. The words go through the outbox (one
+    /// `session:get`, then `chat:queue` mid-run or `chat:send`), waited on for up to 10 s:
+    /// a refusal throws ("Not sent: ...", the words back in the chat's draft); no answer
+    /// yet still reads "Sent", since the outbox delivers it later.
+    private func wireTalk() {
+        talker.capture = { [weak self] in
+            guard let self else { return "" }
+            self.start(force: true)
+            self.store.resume()
+            return try await self.cardDictation.captureOnce(store: self.store)
+        }
+        talker.finish = { [weak self] in self?.cardDictation.stopListening() }
+        talker.discard = { [weak self] in self?.cardDictation.discard() }
+        talker.send = { [weak self] sid, text in
+            guard let self else { return }
+            // Offline after 10 s: leave it in the outbox rather than spend another 10 s of the intent.
+            let online = await self.waitOnline(seconds: 10)
+            _ = try await self.store.outbox.sendWaiting(chatId: sid, text: text, wait: online ? 10 : 0)
+        }
+        talker.show = { [weak self] listening, heard, to in self?.activities.talk(listening: listening, heard: heard, sentTo: to) }
+        IntentRouter.talk = { [weak self] sid in await self?.talker.talk(sid) }
+        IntentRouter.cancelTalk = { [weak self] in self?.talker.cancel() }
+    }
+
+    /// The composer of `chatId` takes a waiting `?listen=1` once: only for a chat the
+    /// phone's list has, and never behind the app lock.
+    func takeListen(_ chatId: String) -> Bool {
+        guard let id = listenIn, id == chatId, !(prefs.appLock && lock.locked) else { return false }
+        guard store.summaries.contains(where: { $0.id == id }) else {
+            if store.summariesLoaded { listenIn = nil }
+            return false
+        }
+        listenIn = nil
+        return true
     }
 
     /// The card's push token. A card the relay started can wake the app in the
@@ -349,10 +394,12 @@ final class AppModel {
     // MARK: Pairing, links, push
 
     /// `nekko-agent-pair:?relay=…` (QR / camera), `https://…/?relay=…` (web
-    /// edition link), `nekko-agent://chat/<id>`, `nekko-agent://new` or `nekko-agent://chats`.
+    /// edition link), `nekko-agent://chat/<id>` (`?listen=1` starts listening), `nekko-agent://new` or `nekko-agent://chats`.
     func handle(url: URL) {
         if url.scheme == "nekko-agent", url.host == "chat" {
             openChat = url.pathComponents.dropFirst().first
+            let listen = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.contains { $0.name == "listen" && $0.value == "1" } == true
+            listenIn = listen ? openChat : nil
             return
         }
         if url.scheme == "nekko-agent", url.host == "new" {

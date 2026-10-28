@@ -321,7 +321,7 @@ inference or close the native apps' remaining feature and release gaps; see the
 adds what only iOS can: one **Live Activity** card for all your chats on the Lock Screen and in
 the Dynamic Island, with a chip per chat, **Allow / Deny** for a waiting tool and **Stop**, and a
 level in **Settings → Live Activities** (None, Minimal, Standard, Detailed) that decides how much
-of the chat it shows; until the relay can push it, the card changes only while the app is running; notifications with Allow /
+of the chat it shows (at Detailed, a mic sends one spoken message to the chat it shows, after Face ID; see [Voice](voice.md#from-the-lock-screen)); until the relay can push it, the card changes only while the app is running; notifications with Allow /
 Deny actions while the app is in the background (Allow asks you to unlock first); photo attachments;
 and dictation (Whisper on your computer when Nekko Voice is installed, else the iPhone's own
 speech recognition). Its pairing screen leads with Tailscale and shows whether Tailscale is on on
