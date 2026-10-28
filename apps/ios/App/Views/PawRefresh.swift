@@ -2,29 +2,51 @@ import SwiftUI
 import UIKit
 
 extension View {
-    /// Pull to refresh with Nekko in place of the system spinner: the cat slaps the
-    /// spinner twice, holds it while the reload runs, then drags it home and the page
-    /// follows it back.
+    /// Pull to refresh with Nekko in place of the system spinner: the cat looks shocked,
+    /// reaches out, pulls the spinner home and smiles.
     func pawRefreshable(action: @escaping @Sendable () async -> Void) -> some View {
-        modifier(PawRefreshModifier(action: action))
+        modifier(OwnedPawRefresh(action: action))
+    }
+
+    /// The same, played by the screen's toolbar mascot (`RootMascot(pull:)`) rather than
+    /// a cat of its own inside the refresh control.
+    func pawRefreshable(_ pull: PawPull, action: @escaping @Sendable () async -> Void) -> some View {
+        modifier(PawRefreshModifier(pull: pull, action: action))
     }
 }
 
-private struct PawRefreshModifier: ViewModifier {
+private struct OwnedPawRefresh: ViewModifier {
     let action: @Sendable () async -> Void
     @StateObject private var pull = PawPull()
 
     func body(content: Content) -> some View {
+        content.pawRefreshable(pull, action: action)
+    }
+}
+
+private struct PawRefreshModifier: ViewModifier {
+    let pull: PawPull
+    let action: @Sendable () async -> Void
+
+    func body(content: Content) -> some View {
         content
             .refreshable { [pull] in
+                await MainActor.run { pull.smiling = false }
                 let start = ContinuousClock.now
                 await action()
-                // Long enough for both slaps, however fast the reload is.
-                try? await Task.sleep(until: start + .milliseconds(Int(PawPose.slapsEnd * 1000)), clock: .continuous)
-                // The drag home plays before the refresh ends: once it ends the page
+                // Long enough for the reach, however fast the reload is.
+                try? await Task.sleep(until: start + .milliseconds(Int(PawPose.reachEnd * 1000)), clock: .continuous)
+                // The pull home plays before the refresh ends: once it ends the page
                 // closes over the control at once.
                 await MainActor.run { pull.endStart = Date() }
                 try? await Task.sleep(for: .milliseconds(Int(PawPose.pullDuration * 1000)))
+                await MainActor.run { pull.smiling = true }
+                try? await Task.sleep(for: .milliseconds(Int(PawPose.smileBeat * 1000)))
+                // The toolbar mascot keeps smiling a moment after the page closes.
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(1200))
+                    if pull.refreshStart == nil { pull.smiling = false }
+                }
             }
             .background(PawRefreshProbe(pull: pull))
     }
@@ -35,31 +57,31 @@ struct PawPose: Equatable {
     /// 0 resting against the cat, 1 on the spinner.
     var reach: CGFloat = 0
     /// 1 at its own spot, 0 tucked against the cat.
-    var spinnerX: CGFloat = 1
-    /// 0 round, 1 flattened by a slap.
-    var squash: CGFloat = 0
+    var spinner: CGFloat = 1
+    /// The spinner fades once it is home.
+    var spinnerOpacity: Double = 1
 
-    static let slapTimes = [0.15, 0.4]
-    static let swing = 0.12
-    static let slapsEnd = 0.6
+    /// The shocked beat before the paw moves.
+    static let reachDelay = 0.15
+    static let reachDuration = 0.25
+    static var reachEnd: Double { reachDelay + reachDuration }
     static let pullDuration = 0.35
+    static let smileBeat = 0.3
 
     /// Seconds since the refresh began.
     static func refreshing(_ t: Double, reduceMotion: Bool) -> PawPose {
         guard !reduceMotion else { return PawPose() }
-        let (first, second) = (slapTimes[0], slapTimes[1])
-        // Out and back for the first slap; the second one stays on the spinner.
-        let reach = t >= second ? 1 : max(0, 1 - abs(t - first) / swing, 1 - (second - t) / swing)
-        let squash = slapTimes.map { t >= $0 ? max(0, 1 - (t - $0) / 0.15) : 0 }.max() ?? 0
-        return PawPose(reach: reach, spinnerX: 1, squash: squash)
+        return PawPose(reach: easeOut((t - reachDelay) / reachDuration))
     }
 
-    /// Seconds since the reload finished and the drag home began.
+    /// Seconds since the reload finished and the pull home began.
     static func ending(_ t: Double, reduceMotion: Bool) -> PawPose {
         guard !reduceMotion else { return PawPose() }
-        let k = 1 - pow(1 - min(1, max(0, t) / pullDuration), 2)
-        return PawPose(reach: 1, spinnerX: 1 - k, squash: 0)
+        return PawPose(reach: 1, spinner: 1 - easeOut(t / pullDuration),
+                       spinnerOpacity: 1 - Double(easeOut((t - pullDuration) / smileBeat)))
     }
+
+    private static func easeOut(_ x: Double) -> CGFloat { CGFloat(1 - pow(1 - min(1, max(0, x)), 2)) }
 }
 
 /// The scroll view's pull and refresh state, fed by the probe.
@@ -67,34 +89,88 @@ final class PawPull: ObservableObject {
     @Published var progress: CGFloat = 0
     @Published var refreshStart: Date?
     @Published var endStart: Date?
+    @Published var smiling = false
+    /// The spinner's centre in window coordinates, for a toolbar mascot to reach.
+    @Published var spinnerPoint: CGPoint?
+    /// A toolbar mascot is on screen and does the grabbing.
+    @Published var mascot = false
     var reduceMotion = false
     var ink = Color.secondary
 
     var animating: Bool { refreshStart != nil || endStart != nil }
+    var shocked: Bool { refreshStart != nil && !smiling }
 
     func pose(at date: Date) -> PawPose {
         if let endStart { return .ending(date.timeIntervalSince(endStart), reduceMotion: reduceMotion) }
         if let refreshStart { return .refreshing(date.timeIntervalSince(refreshStart), reduceMotion: reduceMotion) }
         return PawPose()
     }
+
+    /// The spinner's turn: wound by the pull, then spinning.
+    func turn(at date: Date) -> Double {
+        animating && !reduceMotion ? date.timeIntervalSinceReferenceDate * .pi * 2 : Double(progress) * .pi * 1.5
+    }
 }
 
-/// Nekko, its paw and the spinner it plays with, drawn in a 120 x 44 box at 1.4x.
+enum PawArt {
+    static let fill = Color(red: 16/255, green: 23/255, blue: 20/255)
+    static let line = Color(red: 242/255, green: 241/255, blue: 233/255)
+
+    /// An eight-spoke spinner of radius 10, centred on the origin.
+    static func spinner(turn: Double, ink: Color, opacity: Double = 1, in context: GraphicsContext) {
+        for i in 0..<8 {
+            let angle = turn + Double(i) * .pi / 4
+            var spoke = Path()
+            spoke.move(to: CGPoint(x: cos(angle) * 5, y: sin(angle) * 5))
+            spoke.addLine(to: CGPoint(x: cos(angle) * 10, y: sin(angle) * 10))
+            context.stroke(spoke, with: .color(ink.opacity((0.25 + 0.75 * Double(i) / 7) * opacity)),
+                           style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+        }
+    }
+
+    /// An arm from `from` to `to`, ending in a pad with two toes.
+    static func paw(from: CGPoint, to: CGPoint, in context: GraphicsContext) {
+        var arm = Path()
+        arm.move(to: from)
+        arm.addLine(to: to)
+        context.stroke(arm, with: .color(line), style: StrokeStyle(lineWidth: 7.5, lineCap: .butt))
+        context.stroke(arm, with: .color(fill), style: StrokeStyle(lineWidth: 4.5, lineCap: .butt))
+        var pad = context
+        pad.translateBy(x: to.x, y: to.y)
+        pad.rotate(by: .radians(atan2(to.y - from.y, to.x - from.x)))
+        let rect = Path(roundedRect: CGRect(x: -4, y: -5, width: 8, height: 10), cornerRadius: 2)
+        pad.fill(rect, with: .color(fill))
+        pad.stroke(rect, with: .color(line), lineWidth: 1.5)
+        for dy: CGFloat in [-2.5, 1.5] {
+            pad.fill(Path(CGRect(x: 1, y: dy, width: 2, height: 1)), with: .color(line))
+        }
+    }
+}
+
+/// What the refresh control shows: the spinner, and on a screen without a toolbar
+/// mascot, a cat of its own and its paw, in a 120 x 44 box at 1.4x.
 struct PawRefreshArt: View {
     @ObservedObject var pull: PawPull
-    private let fill = Color(red: 16/255, green: 23/255, blue: 20/255)
-    private let line = Color(red: 242/255, green: 241/255, blue: 233/255)
 
     var body: some View {
         TimelineView(.animation(paused: !pull.animating || pull.reduceMotion)) { timeline in
             let pose = pull.pose(at: timeline.date)
-            let turn = pull.animating && !pull.reduceMotion
-                ? timeline.date.timeIntervalSinceReferenceDate * .pi * 2
-                : Double(pull.progress) * .pi * 1.5
+            let turn = pull.turn(at: timeline.date)
             ZStack(alignment: .leading) {
-                Canvas { context, _ in draw(pose, turn: turn, in: &context) }
-                PixelCat(happy: pull.endStart != nil, blink: pull.refreshStart == nil && pull.endStart == nil && pull.progress < 1)
-                    .frame(width: 40, height: 40)
+                if pull.mascot {
+                    // The toolbar mascot draws the spinner once it has it.
+                    Canvas { context, size in
+                        guard !pull.animating else { return }
+                        var spinner = context
+                        spinner.translateBy(x: size.width / 2, y: size.height / 2)
+                        PawArt.spinner(turn: turn, ink: pull.ink, in: spinner)
+                    }
+                } else {
+                    Canvas { context, _ in draw(pose, turn: turn, in: &context) }
+                    PixelCat(happy: pull.smiling, shocked: pull.shocked,
+                             blink: !pull.animating && !pull.smiling && pull.progress < 1)
+                        .frame(width: 40, height: 40)
+                }
             }
             .frame(width: 120, height: 44)
             .scaleEffect(1.4)
@@ -106,30 +182,48 @@ struct PawRefreshArt: View {
 
     private func draw(_ pose: PawPose, turn: Double, in context: inout GraphicsContext) {
         let y: CGFloat = 27
-        let cx = 58 + pose.spinnerX * 46
+        let cx = 58 + pose.spinner * 46
         let tip = 37 + pose.reach * (cx - 12 - 37)
-        // The arm comes out from behind the cat's cheek; the pad has two toes.
-        let arm = Path(CGRect(x: 30, y: y - 3, width: max(0, tip - 36), height: 6))
-        context.fill(arm, with: .color(fill))
-        context.stroke(arm, with: .color(line), lineWidth: 1.5)
-        let pad = Path(roundedRect: CGRect(x: tip - 8, y: y - 5, width: 8, height: 10), cornerRadius: 2)
-        context.fill(pad, with: .color(fill))
-        context.stroke(pad, with: .color(line), lineWidth: 1.5)
-        for dy: CGFloat in [-2.5, 1.5] {
-            context.fill(Path(CGRect(x: tip - 3, y: y + dy, width: 2, height: 1)), with: .color(line))
-        }
-        // The spinner, flattened and shoved by each slap.
+        // The arm comes out from behind the cat's cheek.
+        if tip > 37 { PawArt.paw(from: CGPoint(x: 33, y: y), to: CGPoint(x: tip - 4, y: y), in: context) }
         var spinner = context
-        spinner.translateBy(x: cx + 4 * pose.squash, y: y)
-        spinner.scaleBy(x: 1 - 0.35 * pose.squash, y: 1 + 0.15 * pose.squash)
-        for i in 0..<8 {
-            let angle = turn + Double(i) * .pi / 4
-            var spoke = Path()
-            spoke.move(to: CGPoint(x: cos(angle) * 5, y: sin(angle) * 5))
-            spoke.addLine(to: CGPoint(x: cos(angle) * 10, y: sin(angle) * 10))
-            spinner.stroke(spoke, with: .color(pull.ink.opacity(0.25 + 0.75 * Double(i) / 7)),
-                           style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+        spinner.translateBy(x: cx, y: y)
+        PawArt.spinner(turn: turn, ink: pull.ink, opacity: pose.spinnerOpacity, in: spinner)
+    }
+}
+
+/// The toolbar mascot's paw and the spinner it holds, drawn below its chin in window
+/// coordinates taken from the refresh control.
+struct MascotPawLayer: View {
+    @ObservedObject var pull: PawPull
+    /// The mascot's frame in window coordinates.
+    let mascot: CGRect
+    static let size = CGSize(width: 160, height: 200)
+
+    var body: some View {
+        TimelineView(.animation(paused: !pull.animating || pull.reduceMotion)) { timeline in
+            Canvas { context, size in
+                guard pull.animating, let target = pull.spinnerPoint, mascot != .zero else { return }
+                let pose = pull.pose(at: timeline.date)
+                // Window coordinates into this canvas, which hangs from the mascot's top centre.
+                let origin = CGPoint(x: mascot.midX - size.width / 2, y: mascot.minY)
+                let chin = CGPoint(x: size.width / 2, y: mascot.height * 0.78)
+                let home = CGPoint(x: chin.x, y: chin.y + 16)
+                let far = CGPoint(x: target.x - origin.x, y: target.y - origin.y)
+                let center = CGPoint(x: home.x + (far.x - home.x) * pose.spinner, y: home.y + (far.y - home.y) * pose.spinner)
+                // The pad lands on the spinner's top, 1.4x as drawn in the control.
+                let grab = CGPoint(x: center.x, y: center.y - 14)
+                let tip = CGPoint(x: chin.x + (grab.x - chin.x) * pose.reach, y: chin.y + (grab.y - chin.y) * pose.reach)
+                var spinner = context
+                spinner.translateBy(x: center.x, y: center.y)
+                spinner.scaleBy(x: 1.4, y: 1.4)
+                PawArt.spinner(turn: pull.turn(at: timeline.date), ink: pull.ink, opacity: pose.spinnerOpacity, in: spinner)
+                if tip.y - chin.y > 4 { PawArt.paw(from: chin, to: tip, in: context) }
+            }
         }
+        .frame(width: Self.size.width, height: Self.size.height)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 
@@ -199,6 +293,10 @@ final class PawProbeView: UIView {
         control.tintColor = .clear
         let pulled = -(scroll.contentOffset.y + scroll.adjustedContentInset.top)
         if pull.progress != min(1, max(0, pulled / 80)) { pull.progress = min(1, max(0, pulled / 80)) }
+        if pull.mascot {
+            let point = control.convert(CGPoint(x: control.bounds.midX, y: control.bounds.midY), to: nil)
+            if pull.spinnerPoint != point { pull.spinnerPoint = point }
+        }
         if control.isRefreshing, pull.refreshStart == nil {
             pull.refreshStart = Date()
             pull.endStart = nil

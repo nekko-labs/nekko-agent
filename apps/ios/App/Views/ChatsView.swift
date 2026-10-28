@@ -27,6 +27,8 @@ struct ChatsView: View {
     @State private var renameText = ""
     @State private var confirmDelete: SessionSummary?
     @State private var actionError: String?
+    /// Pull to refresh, played by the toolbar mascot.
+    @StateObject private var pull = PawPull()
 
     var body: some View {
         Group {
@@ -42,10 +44,10 @@ struct ChatsView: View {
         .listRowSeparatorTint(palette.line)
         .appBackground()
         .searchable(text: $query, prompt: "Search chats")
-        .pawRefreshable { await store.refresh() }
+        .pawRefreshable(pull) { await store.refresh() }
         .navigationTitle("Chats")
         .toolbar {
-            RootMascot(working: store.activity.values.contains(.running))
+            RootMascot(working: store.activity.values.contains(.running), pull: pull)
             ToolbarItem(placement: .topBarLeading) { ComputerMenu(path: $path, feedback: $sendingFeedback) }
             ToolbarItem(placement: .topBarTrailing) { viewMenu }
             ToolbarItem(placement: .topBarTrailing) {

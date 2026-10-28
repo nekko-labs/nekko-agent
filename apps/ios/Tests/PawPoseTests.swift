@@ -2,25 +2,32 @@ import XCTest
 @testable import NekkoNative
 
 final class PawPoseTests: XCTestCase {
-    func testTwoSlapsThenHold() {
-        let reach = stride(from: 0.0, through: 0.6, by: 0.01).map { PawPose.refreshing($0, reduceMotion: false).reach }
-        // Out, back to the cat, out again: two separate slaps.
-        let rises = zip(reach, reach.dropFirst()).filter { $0 == 0 && $1 > 0 }.count
-        XCTAssertEqual(rises, 2)
-        XCTAssertEqual(PawPose.refreshing(0.15, reduceMotion: false).reach, 1)
-        XCTAssertGreaterThan(PawPose.refreshing(0.16, reduceMotion: false).squash, 0.5)
-        XCTAssertGreaterThan(PawPose.refreshing(0.41, reduceMotion: false).squash, 0.5)
-        XCTAssertEqual(PawPose.refreshing(2, reduceMotion: false), PawPose(reach: 1, spinnerX: 1, squash: 0))
+    func testShockedBeatThenReachAndHold() {
+        // Still while shocked, then out to the spinner, and it stays there.
+        XCTAssertEqual(PawPose.refreshing(PawPose.reachDelay, reduceMotion: false).reach, 0)
+        XCTAssertGreaterThan(PawPose.refreshing(PawPose.reachDelay + 0.1, reduceMotion: false).reach, 0.3)
+        XCTAssertEqual(PawPose.refreshing(PawPose.reachEnd, reduceMotion: false), PawPose(reach: 1))
+        XCTAssertEqual(PawPose.refreshing(5, reduceMotion: false), PawPose(reach: 1))
     }
 
-    func testPullsTheSpinnerHomeAsThePageCloses() {
-        XCTAssertEqual(PawPose.ending(0, reduceMotion: false).spinnerX, 1)
-        XCTAssertEqual(PawPose.ending(PawPose.pullDuration, reduceMotion: false).spinnerX, 0)
-        XCTAssertEqual(PawPose.ending(0.2, reduceMotion: false).reach, 1)
+    func testPullsTheSpinnerHomeThenLetsItGo() {
+        XCTAssertEqual(PawPose.ending(0, reduceMotion: false), PawPose(reach: 1))
+        XCTAssertEqual(PawPose.ending(PawPose.pullDuration, reduceMotion: false).spinner, 0)
+        XCTAssertEqual(PawPose.ending(PawPose.pullDuration, reduceMotion: false).spinnerOpacity, 1)
+        XCTAssertEqual(PawPose.ending(PawPose.pullDuration + PawPose.smileBeat, reduceMotion: false).spinnerOpacity, 0)
+    }
+
+    func testFacesFollowTheRefresh() {
+        let pull = PawPull()
+        XCTAssertFalse(pull.shocked)
+        pull.refreshStart = Date()
+        XCTAssertTrue(pull.shocked)
+        pull.smiling = true
+        XCTAssertFalse(pull.shocked)
     }
 
     func testReduceMotionStaysStill() {
-        XCTAssertEqual(PawPose.refreshing(0.15, reduceMotion: true), PawPose())
+        XCTAssertEqual(PawPose.refreshing(0.3, reduceMotion: true), PawPose())
         XCTAssertEqual(PawPose.ending(0.2, reduceMotion: true), PawPose())
     }
 }
