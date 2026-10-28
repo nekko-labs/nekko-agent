@@ -151,8 +151,8 @@ jobs:
       - name: Verify bundle (launch screen, widget and share extensions, URL schemes, icon, privacy manifest)
         run: |
           APP=apps/ios/DerivedData/Build/Products/Debug-iphonesimulator/NekkoNative.app
-          test "$(/usr/libexec/PlistBuddy -c 'Print :UILaunchStoryboardName' $APP/Info.plist)" = LaunchScreen
-          test -d $APP/LaunchScreen.storyboardc
+          test "$(/usr/libexec/PlistBuddy -c 'Print :UILaunchStoryboardName' $APP/Info.plist)" = Launch
+          test -d $APP/Launch.storyboardc
           test -d $APP/PlugIns/NekkoWidgets.appex
           # The Apple Watch glance ships inside the iPhone app, built for the watch simulator.
           test -d $APP/Watch/NekkoWatch.app
