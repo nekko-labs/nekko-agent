@@ -16,7 +16,9 @@ Each computer and phone remembers its own mode. A new install starts in Simple.
 By default, Simple shows the model name and picker, how full the chat is (the context ring) and prompt suggestions, and keeps these for Expert:
 
 - **In a chat:** effort, cost and limits, the Mode panel, Privacy Shield, the Tools and MCP menus, the git checkout chip, Changes, Logs and the hardware strip.
-- **In replies:** the reasoning text (folded to one line), reply stats, and pull request cards.
+- **In replies:** each reply's thinking and steps fold into one line, such as *Took 4 steps*, with **Show steps** to open them; reply stats and pull request cards are kept for Expert.
+
+To reach a control Simple keeps out of sight, switch to Expert, or search for it in the command palette (Ctrl+K, or Cmd+K on a Mac).
 - **Elsewhere:**
   - the Terminal entries on the agents wall, the model and token line on window cards, and the hardware and budget monitors
   - CI runners in Workflows

@@ -9,7 +9,7 @@ area: desktop
 
 **Reframed 2026-10-28 (#1311):** Philip asked (2026-10-27) for Simple to become the experience for people who are not developers: the same capabilities, with developer controls such as effort, the context gauge and reasoning out of sight, and Settings choosing, per control, what Simple shows. He reviewed the [design](../../docs/decisions/0030-simple-hides-developer-controls-per-device.md) (per device, Simple for new installs, controls not pages), then asked for three states per control (Show, Expert only, Hide), a drawn preview beside each area's switches, and the row under the composer to become an expandable panel of the composer.
 
-**Status `[implemented 2026-10-28 in apps/desktop on branch simple-expert-modes, not merged; catalogue unit-tested in packages/shared; renderer tests pass; captured in the hidden chat-modes harness (15 assertions: Simple and Expert controls, the shrinking panel, the Settings previews and a choice reaching the chat); not tried in the packaged app or on a real machine]`**
+**Status `[implemented 2026-10-28 in apps/desktop on branch simple-expert-modes, not merged; catalogue unit-tested in packages/shared; renderer tests pass; captured in the hidden chat-modes harness (18 assertions: Simple and Expert controls, the shrinking panel, the Settings previews and a choice reaching the chat); not tried in the packaged app or on a real machine]`**
 
 ## Behaviour
 
@@ -18,12 +18,13 @@ area: desktop
 - **Desktop controls in the catalogue.**
   - **Chat header:** git checkout chip (`worktree`), Changes (`changes`), Logs (`logs`), the hardware strip (`hardware`).
   - **Message box:** model picker (`model`; shown regardless while the chat has no usable model), effort (`effort`), context ring (`context`), cost and limits (`cost`), the Mode button and panel (`mode`), Privacy Shield (`privacy`), Tools and MCP menus (`tools`), prompt suggestions (`suggest`).
-  - **Conversation:** reasoning (`thinking`), which folds every finished thought to one *Thought for Ns* row when out of sight (tool step groups already fold after a reply); reply stats (`stats`); the pull request dock (`ph-git`).
+  - **Conversation:** reasoning and tool steps (`thinking`). Out of sight, each turn's thoughts and tool steps fold behind one line, *Took 4 steps* (*Working · 2 steps so far* while it runs, *Thought it through* with no tools), with **Show steps** / **Hide steps** for that turn, remembered while the row is in the transcript; reply stats (`stats`); the pull request dock (`ph-git`).
   - **Agents wall:** Terminal in New, the window picker and the split compass (`terminal`); the model and token line on deck cards (`cardmeta`); the Hardware and Local models monitors (`mon-hw`); Budget, Utilization, Cost and Tokens monitors (`mon-budget`).
   - **Workflows:** the CI runners section and its switch (`ci`).
   - **Models:** the Model server settings fold and a model's Expert load flags (`engine`).
   - **Settings:** the Tools group (git, pull requests, terminal, MCP), folded behind one *Show advanced settings* row (`set-tools`).
   - Keyboard shortcuts (a new terminal, for one) still work in Simple.
+- **Finding controls that are out of sight.** The command palette (Ctrl/Cmd+K) offers *Switch to Expert* / *Switch to Simple*, *Choose what Simple shows*, and every desktop control out of sight in the current mode. An Expert-only one is marked *Shown in Expert* and switches to Expert; a hidden one is marked *Hidden in Settings* and opens Settings > Simple mode. Settings search finds every control on the Simple mode page, and the folded Tools group by its section names.
 - **Settings > Simple mode.** A Settings group after Style. An intro, how many controls are out of sight in Simple, a **Preview** switch (Simple or Expert) and **Reset to defaults**. Then one block per area: a drawing of the area on the left, built from its controls, and a row per control on the right with its hint and a Show / Expert only / Hide switch (marked *changed* when it differs from the default). In the drawing, a control the previewed mode leaves out keeps a dashed, faded outline; hovering a row rings its control.
 - **The composer details panel.** The row that sat under the composer card (folder, model and effort, context ring, cost, Tools, MCP, internet) is now a panel inside the card, under the toolbar, with an arrow at its right end. Shrunk, it keeps only the model picker; open, it shows everything the mode allows. The choice is remembered across chats (`nekko.composer.details`). The wall's shared composer has no panel, as before.
 - **Expert: the hardware strip and monitor** are unchanged from 2026-10-25, now under the `hardware` control:
@@ -39,7 +40,5 @@ area: desktop
 
 ## Not yet
 
-- Settings search and the command palette do not list controls that are out of sight (the design asked for them marked *Shown in Expert*).
-- Tool steps folded into one summary line per turn with *Show steps*; today they fold after each reply in both modes.
 - Unload from the desktop's Expert monitor.
 - A real-hardware check (NVIDIA, Apple Silicon unified memory) of the strip's labels and temperatures.

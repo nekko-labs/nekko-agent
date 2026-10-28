@@ -20,6 +20,9 @@ const at = Date.now() - 3_600_000;
 function makeSession() {
   const messages = [
     { id: 'u0', role: 'user', content: 'Why does the build cache miss on every CI run?', createdAt: at },
+    { id: 'a0x', role: 'assistant', content: 'Checking the workflow.', createdAt: at + 1000, toolCalls: [{ id: 'c1', name: 'read_file', input: { path: '.github/workflows/ci.yml' } }, { id: 'c2', name: 'grep', input: { pattern: 'cache-key' } }] },
+    { id: 't1', role: 'tool', content: '', createdAt: at + 2000, toolResult: { toolCallId: 'c1', output: 'key: deps-${{ hashFiles(lock) }}-${{ runner.image }}' } },
+    { id: 't2', role: 'tool', content: '', createdAt: at + 2500, toolResult: { toolCallId: 'c2', output: 'ci.yml:14 cache-key' } },
     { id: 'a0', role: 'assistant', content: 'The cache key includes the lockfile hash **and** the runner image date, so a new image each night misses it. Key it on the lockfile alone and restore with a prefix fallback.', createdAt: at + 5000 },
   ];
   return { id: 'alpha', title: 'CI cache misses', createdAt: at, updatedAt: at, providerId: 'fixture', modelId: 'claude-opus-5-5', effort: 'high', mode: 'agent', chatType: 'multimodal', messages, attachments: [], queuedPrompts: [] };

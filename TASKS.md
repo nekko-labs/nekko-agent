@@ -18,7 +18,7 @@ Simple becomes the everyday app with developer controls out of sight, chosen per
 - [x] **SEM-6, Android.** `SimpleMode.kt`, `SimpleUi.kt`, `SimpleModeSettings.kt`, gates; `SimpleModeTest`, lint and builds pass. `ChatModesTest` rewritten but not run: the build Mac's adb is x86 only. (2026-10-28)
 - [x] **SEM-8, Philip's first updates (2026-10-28).** Context shows in Simple; monitors show in Simple while a local model is loaded; the desktop *getting long* note with what starting fresh saves.
 - [x] **SEM-9, phone header and monitors.** Title kept top middle, the switch on a slim second row with a hairline, minimal gauges with percentages, a pull-down agent panel from the top replacing the strip and Monitor sheet, and the getting-long note on both phones. iPhone tests and live UI test pass; Android unit tests and builds pass, not run on a device. (2026-10-28)
-- [ ] **SEM-7, search and steps.** List out-of-sight controls in Settings search and the command palette; one summary line per turn for tool steps.
+- [x] **SEM-7, search and steps (desktop).** The command palette lists out-of-sight controls (*Shown in Expert* / *Hidden in Settings*), the mode switch and the Simple mode settings; Settings search reaches every control through the Simple mode page. Each turn's steps fold to one line with *Show steps* in Simple (`simpleStepsSummary`, unit-tested; 18 harness assertions). (2026-10-28)
 
 ## Model Server inline download progress (#1221)
 

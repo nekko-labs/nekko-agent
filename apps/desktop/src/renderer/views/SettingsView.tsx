@@ -80,7 +80,7 @@ function AdvancedFold({ children }: { children: React.ReactNode }) {
   if (shown || open) return <>{children}</>;
   return (
     <section className="card mt-6 flex flex-wrap items-center gap-3 p-5" data-advanced-fold>
-      <p className="min-w-0 flex-1 text-[12.5px] text-ink-soft">Git, pull requests, the terminal and MCP servers are kept for Expert.</p>
+      <p className="min-w-0 flex-1 text-[12.5px] text-ink-soft">Git management, project management, pull requests, the terminal and MCP servers are kept for Expert.</p>
       <button type="button" className="btn btn-outline px-3 py-1 text-[12px]" onClick={() => setOpen(true)}>Show advanced settings</button>
     </section>
   );

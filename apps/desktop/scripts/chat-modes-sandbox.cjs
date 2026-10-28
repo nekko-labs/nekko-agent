@@ -51,7 +51,12 @@ app.whenReady().then(async () => {
     check('Simple: model and context shown; effort, tools and Mode out of sight', (await has('[data-composer-details] button[aria-haspopup="listbox"]')) && (await has('.context-bar')) && !(await has('[data-effort-index]')) && !(await has('[data-chat-mode-button]')) && !(await has('[data-agent-footer-controls] .ctl-menu')));
     check('Simple: the hardware strip shows while a local model is loaded', await has('[data-expert-monitor]'));
     check('Simple: a nearly full chat says what starting fresh saves', /Starting fresh saves about 162k tokens/.test(await text('[data-chat-long]')));
+    check('Simple: the turn\'s steps fold to one line', /Took 2 steps/.test(await text('[data-simple-steps]')));
     await capture('1-simple');
+    await run(`[...document.querySelectorAll('[data-simple-steps] button')].find(b => b.textContent === 'Show steps')?.click()`); await sleep(300);
+    check('Show steps opens that turn\'s steps', (await run(`document.querySelector('[data-simple-steps] button').getAttribute('aria-expanded')`)) === 'true');
+    await capture('1b-simple-steps-shown');
+    await run(`document.querySelector('[data-simple-steps] button').click()`); await sleep(200);
     await click('.composer-details-toggle');
     check('details shrink to the model alone', (await run(`document.querySelector('.composer-details-toggle').getAttribute('aria-expanded')`)) === 'false');
     await capture('2-simple-shrunk');
@@ -59,6 +64,7 @@ app.whenReady().then(async () => {
     await click('[data-chat-mode] button[aria-label^="Expert"]');
     for (let i = 0; i < 20 && !(await has('[data-dial="GPU"]')); i++) await sleep(200);
     check('Expert: no getting-long note', !(await has('[data-chat-long]')));
+    check('Expert: steps are not folded to one line', !(await has('[data-simple-steps]')));
     check('Expert: effort, context, Mode, tools and the strip are shown', (await has('[data-effort-index]')) && (await has('.context-bar')) && (await has('[data-chat-mode-button]')) && (await has('[data-expert-monitor]')) && (await has('[data-agent-footer-controls] .ctl-menu')));
     await sleep(800);
     await capture('3-expert');
