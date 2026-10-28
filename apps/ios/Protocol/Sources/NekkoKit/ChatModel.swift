@@ -288,7 +288,8 @@ public final class ChatModel {
             return id
         }
         outbox.add(chatId: sessionId, text: text, skill: skill, images: images, id: id, direct: true)
-        if turn.running {
+        // A model that saw no events (the Live Activity mic) knows a run from the computer's re-read.
+        if turn.running || session?.running == true {
             // Same as the desktop: a prompt sent mid-run waits its turn.
             do {
                 let raw = try await callWithId(r, Channels.chatQueue, id) { cid in

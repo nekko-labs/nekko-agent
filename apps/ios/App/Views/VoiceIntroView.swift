@@ -38,7 +38,7 @@ final class VoiceIntroGate {
 /// (the first tap on the mic) it ends in Turn on / Not now; replayed from Settings it ends in Done.
 struct VoiceIntroView: View {
     /// What the video says, for VoiceOver: its captions are its text alternative.
-    static let summary = "How voice works. Tap the mic once and it stays on. Talk and your words appear in the chat you are looking at; nothing is sent until you say so. Say Nekko to give a command, like erase that, send it or new chat. On iPhone, listening stops when you lock the phone. Speech is turned into text on your own computer or phone. We never store, hear, or train on your voice, and your chats stay yours."
+    static let summary = "How voice works. Tap the mic once and it stays on. Talk and your words appear in the chat you are looking at; nothing is sent until you say so. Say Nekko to give a command, like erase that, send it or new chat. On iPhone, listening stops when you lock the phone; on the Lock Screen, the card's mic asks for Face ID, then sends what you say to its chat. Speech is turned into text on your own computer or phone. We never store, hear, or train on your voice, and your chats stay yours."
 
     var onTurnOn: (() -> Void)?
     @Environment(\.dismiss) private var dismiss

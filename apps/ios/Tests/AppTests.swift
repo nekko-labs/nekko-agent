@@ -143,6 +143,16 @@ final class DeepLinkTests: XCTestCase {
         XCTAssertEqual(app.openChat, "s_123")
         XCTAssertNil(app.pendingLink)
         app.openChat = nil
+        // The Live Activity mic on iOS 17 (no AudioRecordingIntent): the chat opens listening.
+        XCTAssertNil(app.listenIn)
+        app.handle(url: LiveCardView.listenURL("s_123"))
+        XCTAssertEqual(app.openChat, "s_123")
+        XCTAssertEqual(app.listenIn, "s_123")
+        app.openChat = nil
+        app.listenIn = nil
+        app.handle(url: URL(string: "nekko-agent://chat/s_123")!)
+        XCTAssertNil(app.listenIn, "a plain chat link opens no microphone")
+        app.openChat = nil
         app.handle(url: URL(string: "nekko-agent-pair:?nothing=here")!)
         XCTAssertNil(app.pendingLink)
         // The Control Center control's link asks for New chat, and is not a pairing.
@@ -472,9 +482,10 @@ final class LiveCardViewTests: XCTestCase {
         LiveChat(id: "e", short: "Relay", state: .failed, step: "Stopped with an error", reply: "The build broke.", closeWord: "Got it", finishedAt: .now, callId: nil, severity: nil),
     ]
 
-    static func card(_ level: LiveLevel, focus: String? = nil, listening: Bool = false) -> LiveCardState {
+    static func card(_ level: LiveLevel, focus: String? = nil, listening: Bool = false, sent: String? = nil) -> LiveCardState {
         var card = buildCard(chats: chats, previous: nil, pinnedFocus: focus, level: level, now: .now)!
         if listening { card.listening = true; card.heard = "Go ahead and auto merge the PR" }
+        if let sent { card.heard = "Sent: \(sent)" }
         return card
     }
 
@@ -486,6 +497,7 @@ final class LiveCardViewTests: XCTestCase {
         ("working-minimal", .minimal, card(.minimal, focus: "b")),
         ("working", .detailed, card(.detailed, focus: "b")),
         ("listening", .detailed, card(.detailed, listening: true)),
+        ("sent", .detailed, card(.detailed, focus: "b", sent: "Go ahead and auto merge the PR")),
         ("done-focused", .detailed, card(.detailed, focus: "d")),
     ]
 
@@ -820,6 +832,56 @@ final class RunActivitiesTests: XCTestCase {
         XCTAssertEqual(started.last?.state.chats.map(\.id), ["a", "b"])
     }
 
+    /// The card's mic: listening shows at once, then "Sent: ..." until that chat's reply line changes.
+    func testTheMicShowsListeningThenWhatWasSentUntilTheReply() throws {
+        summaries = [chat("a", "Billing fix", reply: "First.")]
+        activity = ["a": .running]
+        level = .detailed
+        let r = make()
+        r.refresh()
+        let card = try XCTUnwrap(started.first)
+        r.talk(listening: true, heard: "")
+        XCTAssertTrue(card.state.listening)
+        XCTAssertEqual(card.updates, 1, "not throttled: the tap must show")
+        r.talk(listening: false, heard: "Sent: Fix it.", sentTo: "a")
+        XCTAssertFalse(card.state.listening)
+        XCTAssertEqual(card.state.heard, "Sent: Fix it.")
+        r.refresh(now: Date().addingTimeInterval(3))
+        XCTAssertEqual(card.state.heard, "Sent: Fix it.", "a rebuild keeps it")
+        summaries = [chat("a", "Billing fix", reply: "On it.")]
+        r.refresh(now: Date().addingTimeInterval(6))
+        XCTAssertEqual(card.state.heard, "", "the reply line takes its place")
+        XCTAssertEqual(card.state.chats.first?.reply, "On it.")
+    }
+
+    func testWhatWasSentLeavesWhenAnotherChatTakesTheCard() throws {
+        summaries = [chat("a", "Billing fix"), chat("b", "Login page")]
+        activity = ["a": .running, "b": .running]
+        level = .detailed
+        let r = make()
+        r.refresh()
+        let card = try XCTUnwrap(started.first)
+        r.talk(listening: false, heard: "Sent: Fix it.", sentTo: "a")
+        r.focus("b")
+        XCTAssertEqual(card.state.focusId, "b")
+        XCTAssertEqual(card.state.heard, "", "it said what went to a, not b")
+    }
+
+    /// Pushed cards carry listening false and heard "": while the mic listens the app puts its own back.
+    func testAPushWhileListeningKeepsTheMic() {
+        var local = LiveCardState(chats: [], focusId: nil, more: 0, listening: true, heard: "")
+        var pushed = local
+        pushed.listening = false
+        pushed.more = 3
+        let kept = SystemCard.keepingVoice(pushed: pushed, local: local)
+        XCTAssertEqual(kept?.listening, true)
+        XCTAssertEqual(kept?.more, 3, "the rest is the push")
+        XCTAssertNil(SystemCard.keepingVoice(pushed: local, local: local), "nothing to put back")
+        local.listening = false
+        local.heard = "Sent: Fix it."
+        XCTAssertNil(SystemCard.keepingVoice(pushed: pushed, local: local), "after the send a push may replace it")
+    }
+
     /// A throttled update is sent once the 2 s are up, not dropped.
     func testAThrottledUpdateArrivesLater() async throws {
         summaries = [chat("a", "Billing fix", reply: "First.")]
@@ -1056,6 +1118,111 @@ final class VoiceTests: XCTestCase {
         let text = try await Dictation.transcribeOnPhone(wav, with: on)
         XCTAssertEqual(text, "hello")
         XCTAssertEqual(on.requests.map(\.requiresOnDeviceRecognition), [true])
+    }
+
+    // MARK: The Live Activity mic (Part 5)
+
+    private func speech(_ seconds: Double) -> [Float] { [Float](repeating: 0.5, count: Int(seconds * Dictation.sampleRate)) }
+    private func quiet(_ seconds: Double) -> [Float] { [Float](repeating: 0, count: Int(seconds * Dictation.sampleRate)) }
+
+    func testCaptureOnceReturnsTheFirstSegmentsWords() async throws {
+        let d = Dictation()
+        var segments = 0
+        d.transcribe = { _ in segments += 1; return "Fix the login bug." }
+        let text = try await d.captureOnce {
+            d.listenWithoutMicrophone()
+            d.consume(self.speech(1) + self.quiet(1.5))
+        }
+        XCTAssertEqual(text, "Fix the login bug.")
+        XCTAssertFalse(d.recording, "the first pause ends it")
+        XCTAssertEqual(segments, 1)
+        XCTAssertNil(d.sink, "the card's capture leaves nothing bound")
+    }
+
+    func testCaptureOnceRefusesWithoutOnDeviceSpeech() async {
+        let d = Dictation()
+        let off = StubRecognizer(onDevice: false)
+        d.transcribe = { try await Dictation.transcribeOnPhone($0, with: off) }
+        do {
+            _ = try await d.captureOnce {
+                d.listenWithoutMicrophone()
+                d.consume(self.speech(1) + self.quiet(1.5))
+            }
+            XCTFail("a phone without on-device speech must refuse")
+        } catch let e as DictationError {
+            XCTAssertEqual(e, .noOnDevice(language: "English (United States)"))
+        } catch {
+            XCTFail("\(error)")
+        }
+        XCTAssertTrue(off.requests.isEmpty, "nothing is sent to a server")
+    }
+
+    func testCaptureOnceStopsAfter30SecondsOfSilence() async throws {
+        let d = Dictation()
+        d.transcribe = { _ in XCTFail("silence is not transcribed"); return nil }
+        let text = try await d.captureOnce {
+            d.listenWithoutMicrophone()
+            d.consume(self.quiet(Dictation.maxSeconds + 1))
+        }
+        XCTAssertEqual(text, "")
+        XCTAssertFalse(d.recording)
+    }
+
+    func testTheCardsMicSendsOneMessageToThatChat() async {
+        var sent: [String] = []
+        var shown: [String] = []
+        let t = TalkRunner()
+        t.capture = { "  Fix the login bug. " }
+        t.send = { sent.append("\($0): \($1)") }
+        t.show = { listening, heard, to in shown.append("\(listening) \(heard) \(to ?? "-")") }
+        await t.talk("b")
+        XCTAssertEqual(sent, ["b: Fix the login bug."])
+        XCTAssertEqual(shown, ["true  -", "false Sent: Fix the login bug. b"])
+    }
+
+    func testTheSecondTapSendsNowAndCancelSendsNothing() async {
+        var sent: [String] = []
+        var finished = 0
+        var discarded = 0
+        let t = TalkRunner()
+        var release: CheckedContinuation<Void, Never>?
+        t.capture = {
+            await withCheckedContinuation { release = $0 }
+            return "Fix it."
+        }
+        t.finish = { finished += 1; release?.resume() }
+        t.discard = { discarded += 1; release?.resume() }
+        t.send = { sent.append($1) }
+        t.show = { _, _, _ in }
+        let first = Task { await t.talk("b") }
+        while release == nil { await Task.yield() }
+        // "Send to": the same intent again, while listening.
+        await t.talk("b")
+        await first.value
+        XCTAssertEqual(finished, 1)
+        XCTAssertEqual(sent, ["Fix it."], "one message, not two")
+
+        release = nil
+        let again = Task { await t.talk("b") }
+        while release == nil { await Task.yield() }
+        t.cancel()
+        await again.value
+        XCTAssertEqual(discarded, 1)
+        XCTAssertEqual(sent, ["Fix it."], "Cancel sends nothing, even words already heard")
+    }
+
+    func testTheCardsMicSaysWhyNothingWasSent() async {
+        var sent = 0
+        var heard: [String] = []
+        let t = TalkRunner()
+        t.send = { _, _ in sent += 1 }
+        t.show = { _, h, _ in heard.append(h) }
+        t.capture = { "" }
+        await t.talk("b")
+        t.capture = { throw DictationError.noOnDevice(language: "English") }
+        await t.talk("b")
+        XCTAssertEqual(sent, 0)
+        XCTAssertEqual(heard, ["", "", "", "Not sent: " + DictationError.noOnDevice(language: "English").localizedDescription])
     }
 
     func testSegmentsAreWrittenAs16kHzMonoPcm() {

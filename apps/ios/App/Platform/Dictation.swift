@@ -130,6 +130,10 @@ final class Dictation {
     private var idleTimerBefore: Bool?
     /// The one listening Dictation: two chats on screen (panes) share one microphone.
     private static weak var current: Dictation?
+    /// `captureOnce`: the first pause, or 30 s with nothing said, ends listening; samples heard so far.
+    private var once: Int?
+    /// `captureOnce`: why the words can't be turned into text on this phone.
+    private var refusal: DictationError?
 
     private static func newSegmenter() -> VoiceSegmenter {
         VoiceSegmenter(sampleRate: sampleRate, silenceSeconds: silenceSeconds, maxSeconds: maxSeconds, threshold: threshold)
@@ -306,6 +310,32 @@ final class Dictation {
         return e.domain == "kAFAssistantErrorDomain" && e.code == 1110
     }
 
+    /// The Live Activity's mic: listens like tap mode until the first pause (or 30 s with
+    /// nothing said) and returns that one segment's words, transcribed as any segment is
+    /// (the computer's Whisper, else this phone on the device only). "" when nothing was said
+    /// or `discard` ended it; throws when the phone refuses (`DictationError.noOnDevice`).
+    func captureOnce(store: ComputersStore) async throws -> String {
+        try await captureOnce { await self.start(store: store, holding: false) }
+    }
+
+    /// `open` opens the microphone (tests feed samples instead).
+    func captureOnce(open: () async -> Void) async throws -> String {
+        var words: [String] = []
+        sink = { words.append($0.text) }
+        once = 0
+        refusal = nil
+        defer {
+            sink = nil
+            once = nil
+        }
+        await open()
+        if !recording, let error { throw RelayError(error) }
+        while recording { try? await Task.sleep(nanoseconds: 50_000_000) }
+        await drain()
+        if let refusal { throw refusal }
+        return words.joined(separator: " ")
+    }
+
     /// Stop listening; the words said up to now still count.
     func stopListening() {
         guard recording else { return }
@@ -430,6 +460,10 @@ final class Dictation {
             if Double(held.count) >= Self.maxSeconds * Self.sampleRate { stopListening() }
         } else if let segment = segmenter.feed(samples) {
             enqueue(segment)
+            if once != nil { stopListening() }
+        } else if let heard = once {
+            once = heard + samples.count
+            if Double(heard + samples.count) >= Self.maxSeconds * Self.sampleRate { stopListening() }
         }
     }
 
@@ -471,6 +505,7 @@ final class Dictation {
         } catch let e as DictationError {
             // Dictation is off: nothing more is recorded.
             error = e.localizedDescription
+            refusal = e
             if recording { _ = close() }
         } catch {
             if !failing { self.error = "Couldn’t turn speech into text: \(error.localizedDescription)" }

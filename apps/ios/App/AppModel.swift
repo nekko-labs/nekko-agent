@@ -31,6 +31,9 @@ final class AppModel {
     /// Drafts and the outbox, per computer.
     let offlineFiles: OfflineFileStore
     private let activities = RunActivities()
+    /// The card's mic: its own microphone use, apart from any composer's (they share one microphone).
+    private let cardDictation = Dictation()
+    private let talker = TalkRunner()
     private let network = NetworkWatcher()
     private var started = false
     private var foreground = true
@@ -40,6 +43,8 @@ final class AppModel {
     var pendingLink: PairingLink?
     /// A chat to open (notification tap, Live Activity tap, `nekko-agent://chat/<id>`).
     var openChat: String?
+    /// `nekko-agent://chat/<id>?listen=1` (the card's mic on iOS 17): that chat's composer starts listening once.
+    var listenIn: String?
     /// The first message typed on New chat (and its photos), sent by that chat's screen once it opens.
     var firstMessages: [String: UnsentPrompt] = [:]
     /// Text shared from another app (the share extension), waiting for New chat to take it.
@@ -120,6 +125,7 @@ final class AppModel {
             self?.activities.dismiss(sid)
             await self?.tellCard(dismiss: sid)
         }
+        wireTalk()
         activities.onCardToken = { [weak self] token in self?.cardTokenArrived(token) }
         SystemCard.watch(adopt: { [weak self] card in self?.activities.adopt(card) },
                          startToken: { [weak self] token in self?.store.cardStartToken = token })
@@ -268,6 +274,30 @@ final class AppModel {
         await store.cardAction(focus: focus, dismiss: dismiss)
     }
 
+    /// The card's mic (`TalkToChatIntent`, after Face ID): the connection starts while it
+    /// listens, so the computer can transcribe; the words go to the chat when it is online,
+    /// else to the outbox, which sends them once it is.
+    private func wireTalk() {
+        talker.capture = { [weak self] in
+            guard let self else { return "" }
+            self.start(force: true)
+            self.store.resume()
+            return try await self.cardDictation.captureOnce(store: self.store)
+        }
+        talker.finish = { [weak self] in self?.cardDictation.stopListening() }
+        talker.discard = { [weak self] in self?.cardDictation.discard() }
+        talker.send = { [weak self] sid, text in
+            guard let self else { return }
+            _ = await self.waitOnline(seconds: 10)
+            let chat = ChatModel(sessionId: sid, store: self.store)
+            await chat.reload()
+            try await chat.send(text)
+        }
+        talker.show = { [weak self] listening, heard, to in self?.activities.talk(listening: listening, heard: heard, sentTo: to) }
+        IntentRouter.talk = { [weak self] sid in await self?.talker.talk(sid) }
+        IntentRouter.cancelTalk = { [weak self] in self?.talker.cancel() }
+    }
+
     /// The card's push token. A card the relay started can wake the app in the
     /// background (locked, so `start` never ran): connect just to register the
     /// token, as `deliverInBackground` does, and let the connection close as that does.
@@ -349,10 +379,13 @@ final class AppModel {
     // MARK: Pairing, links, push
 
     /// `nekko-agent-pair:?relay=…` (QR / camera), `https://…/?relay=…` (web
-    /// edition link), `nekko-agent://chat/<id>`, `nekko-agent://new` or `nekko-agent://chats`.
+    /// edition link), `nekko-agent://chat/<id>` (`?listen=1` starts listening), `nekko-agent://new` or `nekko-agent://chats`.
     func handle(url: URL) {
         if url.scheme == "nekko-agent", url.host == "chat" {
             openChat = url.pathComponents.dropFirst().first
+            if URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.contains(where: { $0.name == "listen" && $0.value == "1" }) == true {
+                listenIn = openChat
+            }
             return
         }
         if url.scheme == "nekko-agent", url.host == "new" {

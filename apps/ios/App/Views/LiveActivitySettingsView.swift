@@ -37,8 +37,10 @@ struct LiveActivitySettingsView: View {
         switch prefs.liveActivityLevel {
         case .none: return nil
         case .minimal: return "No chat text leaves your computer for the Lock Screen."
-        case .standard, .detailed:
+        case .standard:
             return "Chat titles and status are shown when your phone is unlocked. While the app is closed they reach your phone through the relay and Apple’s push service."
+        case .detailed:
+            return "Chat titles, status and each chat’s latest reply line are shown when your phone is unlocked. While the app is closed they reach your phone through the relay and Apple’s push service. The mic on the card asks for Face ID, then sends what you say to the chat it shows."
         }
     }
 }

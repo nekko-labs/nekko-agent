@@ -522,6 +522,20 @@ final class ChatModelTests: XCTestCase {
         chat.stop()
     }
 
+    /// The Live Activity mic sends from a chat model that saw no events: the
+    /// computer's re-read says a turn runs, so the prompt waits in its queue.
+    func testAPromptToAChatTheComputerSaysIsRunningQueues() async throws {
+        let (s, c) = try await makeOnline()
+        c.replies[Channels.sessionGet] = { _ in ["id": "s", "title": "T", "messages": [], "queue": [], "activeRun": ["id": "r1"]] }
+        c.replies[Channels.chatQueue] = { _ in ["id": "s", "title": "T", "messages": [], "queue": ["Fix it."]] }
+        let chat = ChatModel(sessionId: "s", store: s)
+        await chat.reload()
+        try await chat.send("Fix it.")
+        await settle()
+        XCTAssertEqual(c.callsTo(Channels.chatQueue).count, 1)
+        XCTAssertTrue(c.callsTo(Channels.chatSend).isEmpty, "a second turn is never started mid-run")
+    }
+
     func testApprovalsQuestionsAndStop() async throws {
         let (s, c) = try await makeOnline()
         let chat = ChatModel(sessionId: "s", store: s)

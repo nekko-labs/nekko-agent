@@ -11,13 +11,14 @@ import { useStore } from '../store.js';
  * colour variables so it matches the light or dark theme (the fallbacks are
  * the dark theme, for a render outside the app).
  *
- * Storyboard, about 36 s at 30 fps, captions on screen, no voiceover:
+ * Storyboard, about 38 s at 30 fps, captions on screen, no voiceover:
  *   1. Tap the mic once (6 s): the pointer taps the composer's mic; it turns
  *      red and the listening strip rises with its level meter.
  *   2. Talk (7 s): words type into the draft as they are heard.
  *   3. Commands (10 s): "Nekko, erase that", "send it", "new chat", each with
  *      the toast the app shows.
- *   4. iPhone (6 s): a phone listening, then locked; the mic goes off.
+ *   4. iPhone (8 s): a phone listening, then locked; the mic goes off. The
+ *      caption adds the Lock Screen card's mic (Face ID, then one message).
  *   5. Privacy (7 s): the promise, word for word, and a hold to the end.
  */
 
@@ -346,7 +347,7 @@ export const VOICE_INTRO_SCENES: VoiceIntroScene[] = [
   { caption: 'Tap the mic once. It stays on.', sub: 'One mic for the whole app. It keeps listening as you switch chats.', seconds: 6, Scene: TapScene },
   { caption: 'Talk, and your words appear.', sub: 'They go into the chat you’re looking at. Nothing is sent until you say so.', seconds: 7, Scene: TalkScene },
   { caption: 'Say “Nekko” to give a command.', sub: 'Erase that, send it, new chat, ship it, how’s it going. Without “Nekko”, it’s just text.', seconds: 10, Scene: CommandScene },
-  { caption: 'On iPhone, it stops when you lock.', sub: 'Tap the mic again when you’re back.', seconds: 6, Scene: PhoneScene },
+  { caption: 'On iPhone, it stops when you lock.', sub: 'Tap the mic again when you’re back. On the Lock Screen, the card’s mic asks for Face ID, then sends what you say to its chat.', seconds: 8, Scene: PhoneScene },
   { caption: PRIVACY_PROMISE, seconds: 7, Scene: PrivacyScene },
 ];
 

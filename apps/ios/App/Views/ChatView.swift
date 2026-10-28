@@ -964,6 +964,12 @@ struct Composer: View {
         // Edit on a waiting prompt, or a refusal: the prompt comes back into the box.
         .onChange(of: store.drafts.drafts[chat.sessionId]) { _, d in adopt(d) }
         .onAppear(perform: bindVoice)
+        // The Live Activity's mic on iOS 17 opens this chat listening (tap mode only: a hold needs a finger).
+        .onChange(of: app.listenIn, initial: true) { _, id in
+            guard let id, id == chat.sessionId else { return }
+            app.listenIn = nil
+            if !prefs.dictationHold, dictation.available, !intro.intercept(prefs) { Task { await dictation.startListening(store: store) } }
+        }
         .sheet(isPresented: $intro.showing, onDismiss: {
             // Turn on is the one way out that listens: in hold mode there is no hold to start from.
             intro.closed(prefs) { if !prefs.dictationHold { Task { await dictation.startListening(store: store) } } }
