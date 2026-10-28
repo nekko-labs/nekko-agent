@@ -81,8 +81,10 @@ final class RunActivities {
     var source: () -> Source? = { nil }
 
     /// `adoptLeftover`: carry on with a card an earlier launch left up.
-    init(request: @escaping (NekkoCardAttributes, LiveCardState) -> CardActivity? = SystemCard.request, adoptLeftover: Bool = true) {
-        self.request = request
+    init(request: ((NekkoCardAttributes, LiveCardState) -> CardActivity?)? = nil, adoptLeftover: Bool = true) {
+        // Not a default argument: Xcode 16's compiler treats that as a nonisolated
+        // call of the main-actor SystemCard.request and fails the build.
+        self.request = request ?? { SystemCard.request($0, $1) }
         if adoptLeftover, let leftover = SystemCard.leftover() {
             card = leftover
             attach(leftover)
