@@ -126,7 +126,9 @@ final class MarkdownTests: XCTestCase {
         // The chip lasts 4 s (the spec), and on a loaded simulator the checks and the
         // screenshot above have used that up before the tap landed (#1019). Paste again
         // into an empty box and use the chip at once.
-        box.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 30))
+        // One delete at a time: iOS 27 drops most of a burst of them, and the paste then
+        // landed after the leftover text, so the box never read as just the Markdown.
+        for _ in 0..<30 where !((box.value as? String) ?? "").isEmpty { box.typeText(XCUIKeyboardKey.delete.rawValue) }
         openEditMenu()
         paste.tap()
         XCTAssertTrue(chip.waitForExistence(timeout: 3), "the chip offers the formatting again")
