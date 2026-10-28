@@ -10,6 +10,7 @@
 //! the agent's exact output for a scripted session.
 
 pub mod agent;
+pub mod card;
 pub mod chat_links;
 pub mod e2e;
 pub mod hello;

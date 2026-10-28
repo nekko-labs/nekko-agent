@@ -152,4 +152,42 @@ final class LiveCardTests: XCTestCase {
         XCTAssertEqual(long.count, 60)
         XCTAssertTrue(long.hasSuffix("…"))
     }
+    /// The shared rules (packages/shared/fixtures/live-card.json), which the
+    /// computer's Rust port (crates/nekko-remote card.rs) runs too. Everything
+    /// decodes with a plain JSONDecoder, as ActivityKit decodes a pushed state.
+    func testSharedFixture() throws {
+        let file = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("packages/shared/fixtures/live-card.json")
+        let root = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
+        func decode<T: Decodable>(_ type: T.Type, _ v: Any) throws -> T {
+            try JSONDecoder().decode(T.self, from: JSONSerialization.data(withJSONObject: v, options: .fragmentsAllowed))
+        }
+        let now = Date(timeIntervalSinceReferenceDate: try XCTUnwrap(root["now"] as? Double))
+        let builds = try XCTUnwrap(root["build"] as? [[String: Any]])
+        XCTAssertGreaterThanOrEqual(builds.count, 20)
+        for c in builds {
+            let name = c["name"] as? String ?? ""
+            let chats = try decode([LiveChat].self, c["chats"] ?? [])
+            let previous = try c["previous"].map { try decode(LiveCardState.self, $0) }
+            let level = try XCTUnwrap(LiveLevel(rawValue: c["level"] as? String ?? ""), name)
+            let card = buildCard(chats: chats, previous: previous, pinnedFocus: c["pinnedFocus"] as? String, level: level, now: now)
+            let want = try (c["card"].flatMap { $0 is NSNull ? nil : $0 }).map { try decode(LiveCardState.self, $0) }
+            XCTAssertEqual(card, want, name)
+            if let card { XCTAssertEqual(try JSONEncoder().encode(card).count, c["bytes"] as? Int, "bytes: \(name)") }
+        }
+        for c in try XCTUnwrap(root["decode"] as? [[String: Any]]) {
+            let name = c["name"] as? String ?? ""
+            let state = try decode(LiveCardState.self, c["json"] ?? [:])
+            XCTAssertEqual(state.chats.map(\.state.rawValue), c["states"] as? [String], name)
+            if let at = c["finishedAt"] as? Double { XCTAssertEqual(state.chats[0].finishedAt, Date(timeIntervalSinceReferenceDate: at), name) }
+            if let at = c["startedAt"] as? Double { XCTAssertEqual(state.chats[0].startedAt, Date(timeIntervalSinceReferenceDate: at), name) }
+        }
+        for c in try XCTUnwrap(root["shortTitle"] as? [[String]]) { XCTAssertEqual(shortTitle(c[0]), c[1], c[0]) }
+        for c in try XCTUnwrap(root["closeWord"] as? [[Any]]) {
+            XCTAssertEqual(closeWord(for: c[0] as? String ?? "?", failed: c[1] as? Bool ?? false), c[2] as? String, "\(c[0])")
+        }
+        for c in try XCTUnwrap(root["replyLine"] as? [[String]]) { XCTAssertEqual(replyLine(c[0]), c[1], c[0]) }
+    }
 }
