@@ -48,6 +48,9 @@ struct SimpleModeSettingsView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.label).foregroundStyle(palette.ink)
                 Text(item.hint).font(.footnote).foregroundStyle(palette.inkSoft)
+                if SimpleMode.withLocalModel.contains(item.id) {
+                    Text("Also shown in Simple while a local model is loaded").font(.footnote).foregroundStyle(palette.inkFaint)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
@@ -101,28 +104,47 @@ private struct SimpleAreaPreview: View {
     // MARK: Areas
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 Image(systemName: "chevron.left").foregroundStyle(palette.accent)
-                Capsule().fill(palette.surface).frame(width: 44, height: 22)
                 Spacer(minLength: 4)
                 VStack(spacing: 4) {
                     Text("Fix the login page").font(.caption.weight(.semibold)).foregroundStyle(palette.ink)
                     part("ph-subtitle") { Text("Opus 5.5 · Studio Mac").font(.caption2).lineLimit(1).fixedSize() }
                 }
                 Spacer(minLength: 4)
-                part("changes") { tag("Changes", "plusminus") }
+                Image(systemName: "ellipsis.circle").foregroundStyle(palette.accent)
             }
-            part("hardware", wide: true) {
-                HStack(spacing: 14) {
-                    ForEach(["CPU", "Memory", "GPU"], id: \.self) { name in
-                        VStack(spacing: 2) {
-                            Circle().trim(from: 0, to: 0.6).stroke(palette.accent, lineWidth: 3).rotationEffect(.degrees(-90)).frame(width: 18, height: 18)
-                            Text(LocalizedStringKey(name)).font(.caption2)
+            .padding(.bottom, 8)
+            // The slim second row: the switch, and the minimal monitor.
+            HStack(spacing: 8) {
+                HStack(spacing: 0) {
+                    Image(systemName: "bubble.left").font(.caption2).foregroundStyle(palette.onAccent)
+                        .frame(width: 26, height: 18).background(palette.accent, in: Capsule())
+                    Image(systemName: "chevron.left.forwardslash.chevron.right").font(.caption2).foregroundStyle(palette.inkSoft)
+                        .frame(width: 26, height: 18)
+                }
+                .background(palette.surface, in: Capsule())
+                Spacer(minLength: 4)
+                part("hardware") {
+                    HStack(spacing: 8) {
+                        ForEach(Array(zip(["CPU", "Memory", "GPU"], [0.43, 0.79, 0.23])), id: \.0) { name, f in
+                            HStack(spacing: 3) {
+                                Circle().trim(from: 0, to: f).stroke(palette.accent, lineWidth: 1.5).rotationEffect(.degrees(-90)).frame(width: 10, height: 10)
+                                Text("\(Int(f * 100))%").font(.caption2.monospacedDigit())
+                            }
                         }
+                        HStack(spacing: 2) { Image(systemName: "cube"); Text("1") }.font(.caption2)
                     }
                 }
             }
+            .padding(.bottom, 6)
+            Rectangle().fill(palette.line).frame(height: 1)
+            HStack(spacing: 6) {
+                Text("More menu").font(.caption2).foregroundStyle(palette.inkFaint)
+                part("changes") { tag("Changes", "plusminus") }
+            }
+            .padding(.top, 8)
         }
     }
 

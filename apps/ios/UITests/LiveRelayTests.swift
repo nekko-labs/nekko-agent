@@ -528,21 +528,21 @@ final class LiveRelayTests: XCTestCase {
         app.buttons["Start"].tap()
         XCTAssertTrue(app.staticTexts["Hello from your computer."].waitForExistence(timeout: 30), "the first reply streamed in")
 
-        // Simple: the model name, and no effort dial, context gauge or monitor.
+        // Simple: the model name and the context gauge, and no monitor (no local model is loaded).
         let modelEffort = app.buttons["chat.modelEffort"]
         XCTAssertTrue(modelEffort.waitForExistence(timeout: 10), "the composer has the model control")
-        XCTAssertFalse(app.buttons["chat.context"].exists, "Simple mode hides the context gauge")
-        XCTAssertFalse(app.buttons["chat.monitor"].exists, "Simple mode has no monitor")
+        XCTAssertTrue(app.buttons["chat.context"].exists, "Simple mode shows the context gauge")
+        XCTAssertFalse(app.buttons["chat.monitor"].exists, "Simple mode has no monitor without a local model")
         settle()
         attach(app, "modes-1-simple")
         auditAccessibility(app, "modes-simple")
 
-        // Expert: the monitor panel under the title and the context gauge.
+        // Expert: the minimal monitor in the row under the title, and the context gauge.
         let expert = app.buttons["Expert: every control"]
         XCTAssertTrue(expert.waitForExistence(timeout: 5))
         expert.tap()
         let panel = app.buttons["chat.monitor"]
-        XCTAssertTrue(panel.waitForExistence(timeout: 15), "Expert shows the monitor panel")
+        XCTAssertTrue(panel.waitForExistence(timeout: 15), "Expert shows the minimal monitor")
         XCTAssertTrue(app.buttons["chat.context"].exists, "Expert shows the context gauge")
 
         // The effort sheet: pick High, and the control says so.
@@ -560,11 +560,11 @@ final class LiveRelayTests: XCTestCase {
         attach(app, "modes-3-expert")
         auditAccessibility(app, "modes-expert")
         panel.tap()
-        XCTAssertTrue(app.navigationBars["Monitor"].waitForExistence(timeout: 10), "the whole monitor opens")
+        // The agent's panel slides down from under the title.
         // A list section header can read in capitals, so match its identifier or its words in any case.
         let models = app.descendants(matching: .any)
             .matching(NSPredicate(format: "identifier == %@ OR label ==[c] %@", "monitor.models", "Loaded models")).firstMatch
-        XCTAssertTrue(models.waitForExistence(timeout: 10), "the monitor lists the loaded models")
+        XCTAssertTrue(models.waitForExistence(timeout: 10), "the agent's panel lists the loaded models")
         settle()
         attach(app, "modes-4-monitor")
         app.buttons["Done"].firstMatch.tap()

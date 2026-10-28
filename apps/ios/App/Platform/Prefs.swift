@@ -56,6 +56,8 @@ final class Prefs {
     /// Settings > Simple mode: per control, Show, Expert only or Hide, where it
     /// differs from the default. Saved as JSON on this device only.
     var simpleChoices: [String: SimpleVisibility] { didSet { d.set(SimpleMode.encode(simpleChoices), forKey: "simpleChoices") } }
+    /// Chats whose "getting long" note was closed in Simple, newest last (at most 200).
+    var longChatDismissed: [String] { didSet { d.set(longChatDismissed, forKey: "longChatDismissed") } }
     /// Per computer, the last model chosen for a new chat: `providerId::modelId`.
     var lastModel: [String: String] { didSet { d.set(lastModel, forKey: "lastModel") } }
     /// Per computer, concrete last-used choices, never a recommendation marker.
@@ -103,6 +105,7 @@ final class Prefs {
         onboarded = flag("onboarded", false)
         expertMode = flag("expertMode", false)
         simpleChoices = SimpleMode.parse(d.string(forKey: "simpleChoices"))
+        longChatDismissed = d.stringArray(forKey: "longChatDismissed") ?? []
         lastModel = d.dictionary(forKey: "lastModel") as? [String: String] ?? [:]
         lastEffort = d.dictionary(forKey: "lastEffort") as? [String: String] ?? [:]
         lastTools = d.dictionary(forKey: "lastTools") as? [String: String] ?? [:]
@@ -119,7 +122,14 @@ final class Prefs {
     }
 
     /// Whether a Simple mode control is on screen in the current mode.
-    func shows(_ id: String) -> Bool { SimpleMode.shown(id, expert: expertMode, simpleChoices) }
+    func shows(_ id: String, localModelLoaded: Bool = false) -> Bool {
+        SimpleMode.shown(id, expert: expertMode, simpleChoices, localModelLoaded: localModelLoaded)
+    }
+
+    func dismissLongChat(_ chatId: String) {
+        guard !longChatDismissed.contains(chatId) else { return }
+        longChatDismissed = Array((longChatDismissed + [chatId]).suffix(200))
+    }
 
     func newChatEffort(computer: String?, model: String, settings: PcSettings) -> Effort {
         Effort.effective(computer.flatMap { lastEffort[$0] }.flatMap(Effort.init(rawValue:)) ?? settings.effort, for: model)

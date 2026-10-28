@@ -1,4 +1,5 @@
 import Foundation
+import NekkoProtocol
 
 /// Simple and Expert (spec desktop/desktop-simple-and-expert-modes): the
 /// controls each mode shows on the phone. The phone's part of the desktop's
@@ -42,7 +43,7 @@ enum SimpleMode {
         SimpleItem(id: "effort", area: String(localized: "Chat · message box"), label: String(localized: "Effort"),
                    hint: String(localized: "How hard the model thinks before it answers"), fallback: .expert),
         SimpleItem(id: "context", area: String(localized: "Chat · message box"), label: String(localized: "Context ring and token count"),
-                   hint: String(localized: "How full this chat is, in tokens"), fallback: .expert),
+                   hint: String(localized: "How full this chat is, in tokens"), fallback: .show),
         SimpleItem(id: "ph-policy", area: String(localized: "Chat · message box"), label: String(localized: "Tool policy"),
                    hint: String(localized: "Ask, Guardrails or YOLO, in the More menu and New chat"), fallback: .expert),
         SimpleItem(id: "thinking", area: String(localized: "Chat · conversation"), label: String(localized: "Reasoning and tool steps"),
@@ -54,6 +55,9 @@ enum SimpleMode {
         SimpleItem(id: "ph-monitors", area: String(localized: "Phone · chats list"), label: String(localized: "Monitors row"),
                    hint: String(localized: "Hardware and loaded models at the top of Chats"), fallback: .expert),
     ]
+
+    /// Kept to Expert, but also shown in Simple while a local model is loaded on the computer.
+    static let withLocalModel: Set<String> = ["hardware", "ph-monitors"]
 
     private static let byId = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
 
@@ -72,10 +76,21 @@ enum SimpleMode {
         return choices[id] ?? item.fallback
     }
 
-    /// Whether an item is on screen in the given mode.
-    static func shown(_ id: String, expert: Bool, _ choices: [String: SimpleVisibility]) -> Bool {
+    /// Whether an item is on screen in the given mode. An Expert-only monitor
+    /// also shows in Simple while the Model Server holds a local model.
+    static func shown(_ id: String, expert: Bool, _ choices: [String: SimpleVisibility], localModelLoaded: Bool = false) -> Bool {
         let v = visibility(id, choices)
-        return v == .show || (v == .expert && expert)
+        return v == .show || (v == .expert && (expert || (localModelLoaded && withLocalModel.contains(id))))
+    }
+
+    /// Simple's "this chat is getting long" note: from 85% of the window, the
+    /// conversation's tokens that starting fresh would save; nil below that.
+    static func longChatSaving(_ context: ContextUsage?, used: Int64?) -> Int64? {
+        guard let context, let window = context.contextWindow, window > 0 else { return nil }
+        let inUse = max(used ?? 0, context.usedTokens)
+        guard Double(inUse) >= Double(window) * 0.85 else { return nil }
+        let conversation = context.sources.first { $0.source == "conversation" }?.tokens ?? 0
+        return conversation > 0 ? conversation : nil
     }
 
     /// Saved choices, keeping only known ids with valid values that differ from the default. Never throws.

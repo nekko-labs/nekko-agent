@@ -4,8 +4,8 @@ import SwiftUI
 
 // MARK: - Simple and Expert
 
-/// Simple or Expert, at the top left of a chat and of the chats list: a chat
-/// bubble for Simple and code brackets for Expert, like the desktop's switch.
+/// Simple or Expert, at the left of the slim row under the title of a chat and
+/// of the chats list: a chat bubble for Simple and code brackets for Expert.
 /// Simple hides the controls Settings > Simple mode keeps to Expert.
 struct ModeToggle: View {
     @Environment(Prefs.self) private var prefs
@@ -29,9 +29,9 @@ struct ModeToggle: View {
             Image(systemName: Self.icon(expert: expert))
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(on ? palette.onAccent : palette.inkSoft)
-                .frame(width: 36, height: 28)
+                .frame(width: 34, height: 24)
                 .background(on ? palette.accent : .clear, in: Capsule())
-                .frame(minWidth: 40, minHeight: 44)
+                .frame(minWidth: 40, minHeight: 32)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -425,7 +425,7 @@ struct ContextBreakdown: View {
     }
 }
 
-// MARK: - Expert monitor
+// MARK: - Monitor
 
 /// Hardware readings as dials, in the desktop Hardware monitor's order: CPU,
 /// memory, each GPU, then GPU memory.
@@ -468,77 +468,201 @@ struct HardwareDials: View {
     }
 }
 
-/// Expert mode's panel under the chat's title: the computer's hardware as
-/// small dials and how many models it holds. Tap for the whole monitor.
-struct MonitorPanel: View {
-    let monitor: HardwareMonitorModel
-    let chat: ChatModel
-    @Environment(ComputersStore.self) private var store
+/// The slim row under the title, in a chat and in the chats list: the Simple
+/// and Expert switch on the left, the minimal monitor on the right while the
+/// hardware item shows, and a hairline under it.
+struct ModeRow: View {
+    /// The minimal monitor, when it shows.
+    var monitor: HardwareMonitorModel?
+    var openMonitor: () -> Void = {}
     @Environment(\.palette) private var palette
-    @State private var open = false
+    @Environment(\.displayScale) private var scale
 
     var body: some View {
-        Button { open = true } label: {
-            HStack(alignment: .top, spacing: 10) {
-                hardware
-                VStack(spacing: 2) {
-                    Image(systemName: "cube.fill").font(.body).foregroundStyle(palette.accent)
-                    Text("\(monitor.engine?.resident.count ?? 0)").font(.caption.weight(.semibold).monospacedDigit()).foregroundStyle(palette.ink)
-                    Text("Loaded").font(.caption2).foregroundStyle(palette.inkSoft)
-                }
-                .frame(minWidth: 44)
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                ModeToggle()
+                Spacer(minLength: 8)
+                if let monitor { MiniMonitor(monitor: monitor, open: openMonitor) }
             }
-            .padding(.horizontal, 12).padding(.vertical, 8)
-            .background(palette.surface, in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(palette.line))
-            .contentShape(RoundedRectangle(cornerRadius: 16))
+            .padding(.horizontal, 16)
+            .frame(height: 32)
+            .padding(.bottom, 4)
+            Rectangle().fill(palette.line).frame(height: 1 / scale).accessibilityHidden(true)
+        }
+        .background(.bar)
+    }
+}
+
+/// The computer's hardware at a glance: thin rings with their percentages,
+/// and how many models the Model Server holds. Tap for the agent's panel.
+struct MiniMonitor: View {
+    let monitor: HardwareMonitorModel
+    var open: () -> Void
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let rows = Array(HardwareDials.rows(monitor).prefix(3))
+        let count = monitor.engine?.resident.count ?? 0
+        Button(action: open) {
+            HStack(spacing: 10) {
+                if monitor.system == nil && monitor.gpu == nil {
+                    Text(monitor.error == nil ? "Reading…" : "No readings").font(.caption2).foregroundStyle(palette.inkFaint)
+                } else {
+                    ForEach(rows, id: \.label) { gauge($0) }
+                }
+                HStack(spacing: 3) {
+                    Image(systemName: "cube").font(.caption2)
+                    Text("\(count)").font(.caption2.monospacedDigit())
+                }
+                .foregroundStyle(count > 0 ? palette.accent : palette.inkFaint)
+            }
+            .frame(minHeight: 32)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, 12).padding(.vertical, 6)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Monitor")
-        .accessibilityValue(HardwareDials.rows(monitor).map { "\($0.label) \($0.value)" }.joined(separator: ", ")
-            + ", " + String(localized: "\(monitor.engine?.resident.count ?? 0) models loaded"))
-        .accessibilityHint("Shows the hardware and loaded models")
+        .accessibilityValue(Self.spoken(rows, count: count))
+        .accessibilityHint("Shows the hardware, loaded models and this chat’s details")
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("chat.monitor")
-        .sheet(isPresented: $open) { MonitorSheet(monitor: monitor, chat: chat) }
     }
 
-    @ViewBuilder private var hardware: some View {
-        if monitor.system == nil && monitor.gpu == nil {
-            let reading = String(localized: "Reading \(store.active?.name ?? "your computer")…")
-            Label(monitor.error ?? reading, systemImage: "gauge.with.dots.needle.33percent")
-                .font(.footnote).foregroundStyle(palette.inkSoft)
-                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-        } else {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 12) { HardwareDials(monitor: monitor, size: 40) }
+    private func gauge(_ row: HardwareDials.Row) -> some View {
+        let tone: Color = palette.tone(MonitorTone.of(row.fraction))
+        return HStack(spacing: 4) {
+            ZStack {
+                Circle().stroke(palette.surface2, lineWidth: 2)
+                Circle().trim(from: 0, to: row.fraction ?? 0)
+                    .stroke(tone, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
             }
-            .allowsHitTesting(false)
+            .frame(width: 14, height: 14)
+            Text(row.value).font(.caption2.monospacedDigit()).foregroundStyle(palette.inkSoft)
+        }
+    }
+
+    private static func spoken(_ rows: [HardwareDials.Row], count: Int) -> String {
+        let parts: [String] = rows.map { "\($0.label) \($0.value)" } + [String(localized: "\(count) models loaded")]
+        return parts.joined(separator: ", ")
+    }
+}
+
+/// Keeps `monitor` reading while the view is on screen: everything every few
+/// seconds while the hardware shows (or the agent's panel is open), only the
+/// Model Server every 10 s while Simple waits for a local model, and nothing
+/// when every item in `ids` is hidden.
+struct MonitorFollow: ViewModifier {
+    @Binding var monitor: HardwareMonitorModel?
+    /// The items that read the monitor; `hardware` decides the full reading.
+    var ids: [String] = ["hardware"]
+    var panelOpen = false
+    @Environment(Prefs.self) private var prefs
+    @Environment(ComputersStore.self) private var store
+
+    func body(content: Content) -> some View {
+        let wanted = panelOpen || ids.contains { SimpleMode.visibility($0, prefs.simpleChoices) != .hide }
+        let full = panelOpen || prefs.shows("hardware", localModelLoaded: monitor?.localModelLoaded ?? false)
+        let mode = !wanted ? 0 : full ? 2 : 1
+        content.task(id: "\(mode) \(store.activeId ?? "")") {
+            guard mode > 0 else { return }
+            let m = monitor ?? HardwareMonitorModel(store: store)
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("-uiTestLocalModel") {
+                let json = #"{"installed":true,"running":true,"resident":[{"id":"qwen3-8b","contextLength":32768,"vramBytes":5100000000,"loadedOn":"gpu"}],"memory":{"budgetBytes":24000000000,"kind":"unified"}}"#
+                m.stubEngine = EngineStatus.from(try? JSONDecoder().decode(JSONValue.self, from: Data(json.utf8)))
+            }
+            #endif
+            monitor = m
+            await m.follow(every: mode == 2 ? HardwareMonitorModel.interval : HardwareMonitorModel.engineInterval, engineOnly: mode == 1)
         }
     }
 }
 
-/// The whole monitor: hardware dials, the models the Model Server holds (with
-/// Unload, where they run, their context and memory), and this chat's context.
-struct MonitorSheet: View {
+/// A panel that slides down from under the title: swipe it up, or tap
+/// outside it, to put it away.
+struct TopPanel<Panel: View>: ViewModifier {
+    @Binding var isPresented: Bool
+    @ViewBuilder var panel: () -> Panel
+    @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var drag: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content.overlay(alignment: .top) {
+            ZStack(alignment: .top) {
+                if isPresented {
+                    Color.black.opacity(0.25)
+                        .onTapGesture { close() }
+                        .accessibilityLabel("Close")
+                        .accessibilityAddTraits(.isButton)
+                        .transition(.opacity)
+                    VStack(spacing: 0) {
+                        panel()
+                        Capsule().fill(palette.inkFaint.opacity(0.5)).frame(width: 36, height: 5)
+                            .frame(maxWidth: .infinity, minHeight: 24)
+                            .contentShape(Rectangle())
+                            .accessibilityHidden(true)
+                    }
+                    .background(palette.paper, in: UnevenRoundedRectangle(bottomLeadingRadius: 22, bottomTrailingRadius: 22))
+                    .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
+                    .offset(y: min(0, drag))
+                    .simultaneousGesture(DragGesture(minimumDistance: 12)
+                        .onChanged { v in if v.translation.height < 0 { drag = v.translation.height } }
+                        .onEnded { v in
+                            if v.translation.height < -60 || v.predictedEndTranslation.height < -160 { close() }
+                            withAnimation(.snappy) { drag = 0 }
+                        })
+                    .accessibilityAction(.escape) { close() }
+                    .transition(.move(edge: .top))
+                }
+            }
+            .clipped()
+            .animation(reduceMotion ? nil : .snappy(duration: 0.3), value: isPresented)
+        }
+    }
+
+    private func close() { isPresented = false }
+}
+
+extension View {
+    func topPanel<Panel: View>(isPresented: Binding<Bool>, @ViewBuilder panel: @escaping () -> Panel) -> some View {
+        modifier(TopPanel(isPresented: isPresented, panel: panel))
+    }
+}
+
+/// The agent's details, in the panel that slides down from the title: the
+/// hardware with temperatures, the models the Model Server holds (with
+/// Unload), and this chat's model, effort and context.
+struct AgentPanel: View {
     let monitor: HardwareMonitorModel
     let chat: ChatModel?
+    var close: () -> Void
     @Environment(ComputersStore.self) private var store
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
     @State private var notice: (text: String, ok: Bool)?
 
     var body: some View {
         let computer = store.active?.name ?? String(localized: "your computer")
-        NavigationStack {
+        VStack(spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(chat?.title ?? computer).font(.headline).foregroundStyle(palette.ink).lineLimit(1)
+                    Text("Agent on \(computer)").font(.caption).foregroundStyle(palette.inkSoft)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isHeader)
+                Spacer()
+                Button("Done", action: close).font(.body.weight(.semibold)).frame(minHeight: 44)
+            }
+            .padding(.horizontal, 20).padding(.top, 8)
             List {
                 Section {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 84), spacing: 12)], spacing: 16) {
-                        HardwareDials(monitor: monitor, size: 72)
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 76), spacing: 12)], spacing: 14) {
+                        HardwareDials(monitor: monitor, size: 60)
                     }
-                    .padding(.vertical, 8)
+                    .padding(.vertical, 6)
                 } header: {
                     Text("Hardware")
                 } footer: {
@@ -554,24 +678,25 @@ struct MonitorSheet: View {
                 } footer: {
                     Text("Unloading frees the model’s memory on \(computer). The next reply that uses it loads it again.")
                 }
-                if let chat, chat.context != nil {
-                    Section("This chat") { ContextBreakdown(chat: chat).listRowInsets(EdgeInsets()) }
+                if let chat {
+                    Section("This chat") {
+                        LabeledContent("Model", value: chat.modelName ?? String(localized: "Not chosen yet"))
+                        LabeledContent("Effort", value: chat.effort.map(effortLabel) ?? String(localized: "Computer default"))
+                        if chat.context != nil { ContextBreakdown(chat: chat).listRowInsets(EdgeInsets()) }
+                    }
                 }
                 if let error = monitor.error {
                     Section { Label(error, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(palette.warning) }
                 }
             }
-            .navigationTitle("Monitor")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .containerRelativeFrame(.vertical) { h, _ in h * 0.62 }
             .refreshable { await monitor.refresh() }
-            .safeAreaInset(edge: .bottom) {
-                if let notice {
-                    Label(notice.text, systemImage: notice.ok ? "checkmark.circle" : "exclamationmark.triangle")
-                        .font(.footnote).foregroundStyle(notice.ok ? palette.ink : palette.danger)
-                        .padding(12).frame(maxWidth: .infinity)
-                        .background(.bar)
-                }
+            if let notice {
+                Label(notice.text, systemImage: notice.ok ? "checkmark.circle" : "exclamationmark.triangle")
+                    .font(.footnote).foregroundStyle(notice.ok ? palette.ink : palette.danger)
+                    .padding(.horizontal, 16).padding(.vertical, 6)
             }
         }
         .accessibilityIdentifier("monitor.sheet")

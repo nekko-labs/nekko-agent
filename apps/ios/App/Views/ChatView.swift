@@ -28,6 +28,8 @@ struct ChatView: View {
     @Environment(Prefs.self) private var prefs
     /// Expert mode's hardware and loaded models, read while the chat is on screen.
     @State private var monitor: HardwareMonitorModel?
+    /// The agent's panel, slid down from under the title.
+    @State private var showPanel = false
     /// Tabletop (FD-6): the hinge in window points, from the pane host; nil elsewhere.
     @Environment(\.paneHinge) private var paneHinge
     /// In the pane host: messages can be dragged to the other pane.
@@ -200,20 +202,16 @@ struct ChatView: View {
                     .padding(6).allowsHitTesting(false).accessibilityHidden(true)
             }
         }
-        .safeAreaInset(edge: .top) {
-            if prefs.shows("hardware"), let monitor {
-                MonitorPanel(monitor: monitor, chat: chat).background(.bar)
-            }
+        // The slim row under the title: Simple or Expert, and the minimal monitor while the hardware shows.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            ModeRow(monitor: prefs.shows("hardware", localModelLoaded: monitor?.localModelLoaded ?? false) ? monitor : nil,
+                    openMonitor: { showPanel = true })
         }
-        // The hardware strip re-reads every few seconds, only while it shows and the chat is on screen.
-        .task(id: prefs.shows("hardware")) {
-            guard prefs.shows("hardware") else { return }
-            let m = monitor ?? HardwareMonitorModel(store: store)
-            monitor = m
-            await m.follow()
+        .topPanel(isPresented: $showPanel) {
+            if let monitor { AgentPanel(monitor: monitor, chat: chat) { showPanel = false } }
         }
+        .modifier(MonitorFollow(monitor: $monitor, panelOpen: showPanel))
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) { ModeToggle() }
             ToolbarItem(placement: .principal) {
                 VStack(spacing: 0) {
                     Text(chat.title).font(.subheadline.weight(.semibold)).lineLimit(1)
@@ -857,6 +855,11 @@ struct Composer: View {
                     }
                 }
             }
+            // Simple: a long chat suggests starting fresh, with what that saves.
+            if !prefs.expertMode, !prefs.longChatDismissed.contains(chat.sessionId),
+               let saving = SimpleMode.longChatSaving(longChatContext, used: chat.contextTokens) {
+                LongChatNote(tokens: saving, startFresh: startFresh, dismiss: { prefs.dismissLongChat(chat.sessionId) })
+            }
             // One box the width of the screen: the message on top, + and Send inside it below.
             VStack(alignment: .leading, spacing: 0) {
                 // Markdown source with a formatting toolbar in the card (MD-3); VoiceOver's
@@ -1203,6 +1206,23 @@ struct Composer: View {
             title: { chat.title })
     }
 
+    /// The chat's context window, or (screenshot captures, `-uiTestLongChat`) a nearly full one.
+    private var longChatContext: ContextUsage? {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-uiTestLongChat") {
+            let json = #"{"usedTokens":176000,"contextWindow":200000,"sources":{"system":6000,"conversation":112000,"attached-file":58000}}"#
+            return ContextUsage.from(try? JSONDecoder().decode(JSONValue.self, from: Data(json.utf8)))
+        }
+        #endif
+        return chat.context
+    }
+
+    /// A new chat on the same computer with this chat's model (the long-chat note's Start fresh).
+    private func startFresh() {
+        if let id = store.activeId, let p = chat.providerId, let m = chat.modelId { prefs.lastModel[id] = "\(p)::\(m)" }
+        app.newChatRequested = true
+    }
+
     /// Sends what is in the box; the task says whether the computer took it (a refusal puts the text back).
     @discardableResult
     private func send() -> Task<Bool, Never> {
@@ -1277,5 +1297,36 @@ enum ImageAttachments {
         let resized = UIGraphicsImageRenderer(size: size, format: format).image { _ in image.draw(in: CGRect(origin: .zero, size: size)) }
         guard let jpeg = resized.jpegData(compressionQuality: 0.8) else { return nil }
         return "data:image/jpeg;base64," + jpeg.base64EncodedString()
+    }
+}
+
+/// Simple mode's note above the message box once a chat fills 85% of its
+/// window: starting fresh saves about the conversation's tokens.
+struct LongChatNote: View {
+    let tokens: Int64
+    var startFresh: () -> Void
+    var dismiss: () -> Void
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text("This chat is getting long. Starting fresh saves about \(MonitorFormat.tokens(tokens)) tokens.")
+                .font(.caption).foregroundStyle(palette.inkSoft)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button("Start fresh", action: startFresh)
+                .font(.caption.weight(.semibold)).foregroundStyle(palette.accent)
+                .frame(minHeight: 44).contentShape(Rectangle())
+                .accessibilityIdentifier("chat.startFresh")
+            Button(action: dismiss) {
+                Image(systemName: "xmark").font(.caption2.weight(.semibold)).foregroundStyle(palette.inkFaint)
+                    .frame(width: 32, height: 44).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Dismiss")
+        }
+        .padding(.leading, 12).padding(.trailing, 4)
+        .background(palette.surface, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(palette.line))
+        .accessibilityIdentifier("chat.longChat")
     }
 }

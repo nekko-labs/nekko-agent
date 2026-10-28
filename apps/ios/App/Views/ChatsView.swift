@@ -27,6 +27,10 @@ struct ChatsView: View {
     @State private var renameText = ""
     @State private var confirmDelete: SessionSummary?
     @State private var actionError: String?
+    /// The computer's monitors: the slim row's gauges, the Monitors row and the agent's panel.
+    @State private var monitor: HardwareMonitorModel?
+    @State private var showPanel = false
+    @Environment(Prefs.self) private var prefs
 
     var body: some View {
         Group {
@@ -46,7 +50,6 @@ struct ChatsView: View {
         .navigationTitle("Chats")
         .toolbar {
             RootMascot(working: store.activity.values.contains(.running))
-            ToolbarItem(placement: .topBarLeading) { ModeToggle() }
             ToolbarItem(placement: .topBarLeading) { ComputerMenu(path: $path, feedback: $sendingFeedback) }
             ToolbarItem(placement: .topBarTrailing) { viewMenu }
             ToolbarItem(placement: .topBarTrailing) {
@@ -55,6 +58,15 @@ struct ChatsView: View {
                     .accessibilityLabel("New chat")
             }
         }
+        // The slim row under the title: Simple or Expert, and the minimal monitor while the hardware shows.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            ModeRow(monitor: prefs.shows("hardware", localModelLoaded: monitor?.localModelLoaded ?? false) ? monitor : nil,
+                    openMonitor: { showPanel = true })
+        }
+        .topPanel(isPresented: $showPanel) {
+            if let monitor { AgentPanel(monitor: monitor, chat: nil) { showPanel = false } }
+        }
+        .modifier(MonitorFollow(monitor: $monitor, ids: ["hardware", "ph-monitors"], panelOpen: showPanel))
         .overlay(alignment: .top) { if store.summariesLoading && store.summaries.isEmpty { ProgressView().padding(.top, 80) } }
         .modifier(dialogs)
         .sheet(isPresented: $reorderingGroups) {
@@ -136,7 +148,7 @@ struct ChatsView: View {
                 }
             }
             // The computer's Monitors (FD-5): hardware, running chats, what needs you, the next automations.
-            if query.isEmpty && !store.computers.isEmpty && app.prefs.shows("ph-monitors") {
+            if query.isEmpty && !store.computers.isEmpty && prefs.shows("ph-monitors", localModelLoaded: monitor?.localModelLoaded ?? false) {
                 Section {
                     NavigationLink(value: Route.monitors) {
                         Label("Monitors", systemImage: "gauge.with.dots.needle.50percent").foregroundStyle(palette.ink)
