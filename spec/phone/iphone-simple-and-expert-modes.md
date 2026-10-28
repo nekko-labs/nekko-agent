@@ -93,7 +93,8 @@ The same change as the desktop ([Desktop Simple and Expert modes](../desktop/des
   - `terminal`: More > Terminals and + > Terminal.
   - `ph-monitors`: the Monitors row at the bottom of Chats. The Monitors pane on a folding phone or iPad stays.
 - **Settings > Simple mode** is a row under Appearance that shows the current mode. Touching a control's row outlines its element in the accent colour for a moment.
-- The new English strings are not in `Localizable.xcstrings` yet, so they have no translations.
+- **Steps in Simple:** each turn's reasoning and tool steps fold to one line (*Took 4 steps*, *Working · 2 steps so far*, *Thought it through*) with **Show steps** / **Hide steps** per turn. The phone gets no turn times from the computer, so no duration shows.
+- **Strings:** the new strings are in `Localizable.xcstrings` in de, es, fr, ja, pt and zh-Hans (2026-10-28).
 
 ### Android `[implemented 2026-10-28 on branch simple-expert-modes; JVM unit tests (SimpleModeTest, 273 in all), lint and debug and androidTest builds pass; ChatModesTest rewritten for the new switch but not run (no working adb on the build Mac); no screenshots yet]`
 
@@ -106,6 +107,9 @@ The same change as the desktop ([Desktop Simple and Expert modes](../desktop/des
   - `ph-git`: the PR chip and its sheet. More > Git stays, since it is the only way to the Git screen.
   - `terminal`: Terminal in the + menu and Terminals in More.
   - `ph-monitors`: the Monitors row at the bottom of the chats list. The foldable Monitors pane and screen stay.
+- **Steps in Simple (2026-10-28):** each turn folds to one line with its time when known (*Took 3 steps · 14s*), and **Show steps** opens it.
+- **Touch targets:** the slim row's switch and gauges keep a 34 dp look with 48 dp touch areas.
+- **Verified:** `ChatModesTest` (5 tests) passes on a headless arm64 emulator after platform-tools moved to r37 (2026-10-28).
 - **Left out of the Settings screen:** `ph-policy`. Android has no per-chat tool policy, so the choice would do nothing.
 - **The preview** starts on Simple. A row just changed is ringed in the accent colour for a moment.
 
