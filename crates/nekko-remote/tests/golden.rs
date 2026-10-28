@@ -137,8 +137,10 @@ fn the_relay_agent_sends_the_same_frames() {
     let ivs: Arc<Mutex<VecDeque<[u8; 12]>>> = Arc::default();
     let feed = ivs.clone();
     // A challenge (which the TS agent never sent) is sealed with a fresh IV.
+    // The Live Activity card's dates come from a fixed clock (seconds since 2001).
     let mut core =
-        AgentCore::new(key.clone(), Box::new(move || feed.lock().unwrap().pop_front().unwrap_or_else(e2e::random_iv)));
+        AgentCore::new(key.clone(), Box::new(move || feed.lock().unwrap().pop_front().unwrap_or_else(e2e::random_iv)))
+            .with_clock(Box::new(|| 800_000_000.0));
     let verify = |hello: &Value| -> Value {
         let id = hello.get("deviceId").and_then(Value::as_str).unwrap_or("");
         if id == "phone-1" || id == "phone-2" {

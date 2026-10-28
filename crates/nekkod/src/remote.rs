@@ -25,6 +25,8 @@ pub use nekko_remote::CHANNELS;
 pub struct Remote {
     svc: Option<Arc<RemoteService>>,
     dispatch: Arc<OnceLock<PhoneDispatcher>>,
+    /// The router itself, for the chat list the phone's Live Activity card shows.
+    router: Arc<OnceLock<Dispatcher>>,
     /// Phones attached to terminals (FA-3), shared by the gate and the relay agent.
     terminals: Arc<PhoneTerminals>,
     /// `security.json` beside `remote.json`: step-up on guarded phone calls
@@ -42,6 +44,7 @@ pub const SAFETY_EXIT_EVENT: &str = "remote:safetyExit";
 impl Remote {
     pub fn new(dir: Option<PathBuf>, hub: Hub) -> Self {
         let dispatch: Arc<OnceLock<PhoneDispatcher>> = Arc::default();
+        let router: Arc<OnceLock<Dispatcher>> = Arc::default();
         let terminals = PhoneTerminals::new();
         let security = dir.as_deref().map(|d| {
             Arc::new(nekko_remote::step_up::SecurityFile::in_dir(d)) as Arc<dyn nekko_remote::step_up::SecurityStore>
@@ -52,11 +55,12 @@ impl Remote {
                 rt: tokio::runtime::Handle::current(),
                 hub,
                 dispatch: dispatch.clone(),
+                router: router.clone(),
                 terminals: terminals.clone(),
             };
             RemoteService::new(&d, nekko_remote::hello::os_random(), nekko_remote::system_clock(), Box::new(link))
         });
-        Self { svc, dispatch, terminals, security, hub: events }
+        Self { svc, dispatch, router, terminals, security, hub: events }
     }
 
     /// `security.json`'s store, shared with Settings → Security (security.rs).
@@ -76,6 +80,7 @@ impl Remote {
     pub fn set_dispatcher(&self, run: Dispatcher) {
         // Without a data directory there is no registry and no relay agent to dispatch for.
         if let Some(svc) = &self.svc {
+            let _ = self.router.set(run.clone());
             let classes = nekko_remote::phone::Classes::from_policy();
             let gate = nekko_remote::phone::gate_secured(
                 run,
@@ -114,6 +119,7 @@ struct HubLink {
     rt: tokio::runtime::Handle,
     hub: Hub,
     dispatch: Arc<OnceLock<PhoneDispatcher>>,
+    router: Arc<OnceLock<Dispatcher>>,
     terminals: Arc<PhoneTerminals>,
 }
 
@@ -145,6 +151,11 @@ impl Link for HubLink {
             Some(run) => run(who, channel, args),
             None => Box::pin(std::future::ready(Err("the daemon is still starting".to_string()))),
         });
+        let router = self.router.clone();
+        let summaries: nekko_remote::Summaries = Arc::new(move || match router.get() {
+            Some(run) => run("sessions:summaries".into(), Value::Array(Vec::new())),
+            None => Box::pin(std::future::ready(Err("the daemon is still starting".to_string()))),
+        });
         Arc::new(RelayAgent::spawn(
             &self.rt,
             Spawn {
@@ -156,6 +167,7 @@ impl Link for HubLink {
                 dispatch,
                 events,
                 terminals: self.terminals.clone(),
+                summaries: Some(summaries),
             },
         ))
     }

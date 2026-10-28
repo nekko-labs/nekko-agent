@@ -328,6 +328,387 @@ pub fn reply_line(text: &str) -> String {
     }
 }
 
+/// The phone channel the relay agent answers itself: `card:set { level?, focus?, dismiss? }`.
+pub const CARD_CHANNEL: &str = "card:set";
+/// A new step waits this long after the last push (seconds); a chat changing
+/// state, joining or leaving, or the focus moving goes at once.
+pub const CARD_PUSH_GAP: f64 = 10.0;
+/// A phone that sent to a chat this recently wants a card when its run starts.
+pub const REMOTE_START_WINDOW: f64 = 2.0 * 3600.0;
+/// A run with no event for this long no longer counts as working (as on the phone).
+const QUIET_RUN: f64 = 30.0 * 60.0;
+/// How often the card is rebuilt with nothing new, so finished chats leave on time.
+const RECHECK: f64 = 60.0;
+
+/// What the events say about a chat's latest run.
+#[derive(Debug, Clone)]
+struct Run {
+    started_at: f64,
+    last_event_at: f64,
+    step: String,
+    needs_you: bool,
+    call_id: Option<String>,
+    severity: Option<String>,
+    finished: Option<LiveChatState>,
+    finished_at: Option<f64>,
+}
+
+/// A chat as the phone's list has it (`sessions:summaries`).
+#[derive(Debug, Clone)]
+struct Summary {
+    id: String,
+    title: String,
+    reply: String,
+    watching: bool,
+    /// The phone lists only top-level chats (no sub-agents, tasks or training runs).
+    visible: bool,
+}
+
+/// The card for the relay agent: `card` / `card-start` frames for the relay,
+/// which pushes them to each phone's Live Activity (packages/shared remote.ts).
+#[derive(Default)]
+pub struct Cards {
+    /// The level each phone asked for (`card:set`); kept while it is away, as
+    /// pushes are for a phone iOS has suspended.
+    levels: std::collections::HashMap<String, LiveLevel>,
+    runs: std::collections::HashMap<String, Run>,
+    /// Nil until the chat list was read.
+    summaries: Option<Vec<Summary>>,
+    wants: bool,
+    dismissed: std::collections::HashSet<String>,
+    pinned: Option<String>,
+    /// When a phone last sent to each chat (`chat:send`, `chat:queue`).
+    phone_sent: std::collections::HashMap<String, f64>,
+    /// The last card sent, `None` once none is up.
+    sent: Option<LiveCardState>,
+    sent_at: f64,
+    pending: bool,
+    checked_at: f64,
+}
+
+impl Cards {
+    /// The highest level any phone asked for.
+    pub fn level(&self) -> LiveLevel {
+        self.levels.values().copied().max().unwrap_or(LiveLevel::None)
+    }
+
+    /// `card:set` from `device`: its level, the chat a chip tap brought up,
+    /// or a finished chat closed with the card's button.
+    pub fn set(&mut self, device: &str, args: &Value, now: f64) -> Vec<Value> {
+        let a = args.get(0).unwrap_or(&Value::Null);
+        match a.get("level").and_then(Value::as_str).and_then(LiveLevel::parse) {
+            Some(LiveLevel::None) => {
+                self.levels.remove(device);
+            }
+            Some(level) => {
+                self.levels.insert(device.to_string(), level);
+                self.wants |= self.summaries.is_none();
+            }
+            None => {}
+        }
+        if let Some(id) = a.get("focus").and_then(Value::as_str) {
+            self.pinned = Some(id.to_string());
+        }
+        if let Some(id) = a.get("dismiss").and_then(Value::as_str) {
+            if self.pinned.as_deref() == Some(id) {
+                self.pinned = None;
+            }
+            self.dismissed.insert(id.to_string());
+        }
+        self.update(now, true, false)
+    }
+
+    /// A revoked phone.
+    pub fn forget(&mut self, device: &str) {
+        self.levels.remove(device);
+    }
+
+    /// A phone's request: a prompt to a chat makes that chat's next run start a card.
+    pub fn phone_call(&mut self, channel: &str, args: &Value, now: f64) {
+        if channel != "chat:send" && channel != "chat:queue" {
+            return;
+        }
+        let first = args.get(0);
+        let id =
+            first.and_then(Value::as_str).or_else(|| first.and_then(|a| a.get("sessionId")).and_then(Value::as_str));
+        if let Some(id) = id {
+            self.phone_sent.retain(|_, at| now - *at <= REMOTE_START_WINDOW);
+            self.phone_sent.insert(id.to_string(), now);
+        }
+    }
+
+    /// An `agent:event` (`onEvent` in RunActivities.swift).
+    pub fn on_event(&mut self, e: &Value, now: f64) -> Vec<Value> {
+        let (Some(sid), Some(ty)) = (e.get("sessionId").and_then(Value::as_str), e.get("type").and_then(Value::as_str))
+        else {
+            return Vec::new();
+        };
+        let sid = sid.to_string();
+        let started = self.runs.get(&sid).is_none_or(|r| r.finished.is_some());
+        match ty {
+            "text" | "reasoning" => self.running(&sid, now, "Writing…".into(), None),
+            "tool_call" => self.running(&sid, now, tool_label(&e["call"]), None),
+            "tool_approval_required" => {
+                let sev = e.get("severity").and_then(Value::as_str).filter(|s| matches!(*s, "high" | "medium"));
+                let sev = sev.unwrap_or("low");
+                let call = e["call"]["id"].as_str().map(|id| (id.to_string(), sev.to_string()));
+                self.running(&sid, now, tool_label(&e["call"]), Some(call))
+            }
+            "question" => {
+                let q =
+                    e.pointer("/request/questions/0/question").and_then(Value::as_str).unwrap_or("A question for you");
+                self.running(&sid, now, q.to_string(), Some(None))
+            }
+            "tool_result" | "question_resolved" => self.running(&sid, now, "Working…".into(), None),
+            "done" => self.finish(&sid, now, LiveChatState::Done, "Finished"),
+            "error" => {
+                let msg = e.get("message").and_then(Value::as_str).unwrap_or("").to_lowercase();
+                let stopped = msg == "stopped" || msg == "aborted";
+                let (state, step) = if stopped {
+                    (LiveChatState::Done, "Stopped")
+                } else {
+                    (LiveChatState::Failed, "Stopped with an error")
+                };
+                self.finish(&sid, now, state, step)
+            }
+            "session_meta" => self.wants = true,
+            _ => return Vec::new(),
+        }
+        if self.summaries.as_ref().is_none_or(|list| !list.iter().any(|s| s.id == sid)) {
+            self.wants = true;
+        }
+        let running = self.runs.get(&sid).is_some_and(|r| r.finished.is_none());
+        let start = started && running && self.wants_card(&sid, now);
+        self.update(now, false, start)
+    }
+
+    /// `needs`: `Some(call)` when it waits on the phone (an approval's call id and severity, or a question).
+    fn running(&mut self, sid: &str, now: f64, step: String, needs: Option<Option<(String, String)>>) {
+        let fresh = Run {
+            started_at: now,
+            last_event_at: now,
+            step: String::new(),
+            needs_you: false,
+            call_id: None,
+            severity: None,
+            finished: None,
+            finished_at: None,
+        };
+        let run = self.runs.entry(sid.to_string()).or_insert_with(|| fresh.clone());
+        if run.finished.is_some() {
+            *run = fresh;
+        }
+        run.last_event_at = now;
+        run.step = step;
+        run.needs_you = needs.is_some();
+        (run.call_id, run.severity) = needs.flatten().map_or((None, None), |(c, s)| (Some(c), Some(s)));
+        self.dismissed.remove(sid);
+    }
+
+    fn finish(&mut self, sid: &str, now: f64, state: LiveChatState, step: &str) {
+        let run = self.runs.entry(sid.to_string()).or_insert_with(|| Run {
+            started_at: now,
+            last_event_at: now,
+            step: String::new(),
+            needs_you: false,
+            call_id: None,
+            severity: None,
+            finished: None,
+            finished_at: None,
+        });
+        run.last_event_at = now;
+        run.finished = Some(state);
+        run.finished_at = Some(now);
+        run.step = step.to_string();
+        run.needs_you = false;
+        run.call_id = None;
+        // Its reply line changed.
+        self.wants = true;
+    }
+
+    /// The remote-start rule: a phone sent to this chat in the last two hours,
+    /// or a watch woke it (the chat list had it watching).
+    fn wants_card(&self, sid: &str, now: f64) -> bool {
+        self.phone_sent.get(sid).is_some_and(|at| now - at <= REMOTE_START_WINDOW)
+            || self.summaries.iter().flatten().any(|s| s.id == sid && s.watching)
+    }
+
+    /// Whether to read the chat list now (once until `set_summaries`), and only
+    /// while a phone wants a card.
+    pub fn wants_summaries(&mut self) -> bool {
+        let ask = self.wants && self.level() != LiveLevel::None;
+        if ask {
+            self.wants = false;
+        }
+        ask
+    }
+
+    /// The chat list (`sessions:summaries`) arrived.
+    pub fn set_summaries(&mut self, list: &Value, now: f64) -> Vec<Value> {
+        let mut rows: Vec<(f64, Summary)> = list
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|v| {
+                let id = v.get("id")?.as_str()?.to_string();
+                let has = |k: &str| v.get(k).is_some_and(|x| !x.is_null());
+                let summary = Summary {
+                    title: text(v, "title"),
+                    reply: reply_line(v.get("lastReplyText").and_then(Value::as_str).unwrap_or("")),
+                    watching: v.get("activeWatchCount").and_then(Value::as_f64).unwrap_or(0.0) > 0.0,
+                    visible: !has("parentSessionId") && !has("taskId") && !has("trainingRunId"),
+                    // Archived chats are off the card, as on the phone.
+                    id,
+                };
+                let archived = v.get("archivedAt").and_then(Value::as_f64).is_some_and(|a| a != 0.0);
+                Some((
+                    v.get("updatedAt").and_then(Value::as_f64).unwrap_or(0.0),
+                    Summary { visible: summary.visible && !archived, ..summary },
+                ))
+            })
+            .collect();
+        rows.sort_by(|a, b| b.0.total_cmp(&a.0));
+        let list: Vec<Summary> = rows.into_iter().map(|(_, s)| s).collect();
+        self.dismissed.retain(|id| list.iter().any(|s| s.id == *id));
+        self.summaries = Some(list);
+        self.update(now, true, false)
+    }
+
+    /// A throttled update whose wait is over, or finished chats whose two hours are up.
+    pub fn tick(&mut self, now: f64) -> Vec<Value> {
+        if self.levels.is_empty() {
+            return Vec::new();
+        }
+        let due = (self.pending && now - self.sent_at >= CARD_PUSH_GAP) || now - self.checked_at >= RECHECK;
+        if due { self.update(now, false, false) } else { Vec::new() }
+    }
+
+    /// The chats as the phone lists them (`liveChats` in RunActivities.swift);
+    /// a chat the list does not have yet shows as "Chat" until it is read.
+    fn chats(&self, now: f64) -> Vec<LiveChat> {
+        let known = self.summaries.as_deref().unwrap_or_default();
+        let mut runs: Vec<(&String, &Run)> =
+            self.runs.iter().filter(|(id, _)| !known.iter().any(|s| s.id == **id)).collect();
+        runs.sort_by(|a, b| b.1.started_at.total_cmp(&a.1.started_at).then(a.0.cmp(b.0)));
+        let unknown = runs.into_iter().map(|(id, _)| (id.as_str(), None));
+        let listed = known.iter().filter(|s| s.visible).map(|s| (s.id.as_str(), Some(s)));
+        unknown
+            .chain(listed)
+            .filter(|(id, _)| !self.dismissed.contains(*id))
+            .filter_map(|(id, s)| {
+                let run = self.runs.get(id);
+                let live = run.filter(|r| r.finished.is_none() && now - r.last_event_at < QUIET_RUN);
+                let (state, step) = if let Some(live) = live {
+                    (if live.needs_you { LiveChatState::NeedsYou } else { LiveChatState::Working }, live.step.clone())
+                } else if s.is_some_and(|s| s.watching) {
+                    (LiveChatState::Watching, "Watching PR…".to_string())
+                } else if let Some(r) = run.filter(|r| r.finished.is_some()) {
+                    (r.finished?, r.step.clone())
+                } else {
+                    return None;
+                };
+                let title = s.map(|s| s.title.as_str()).filter(|t| !t.is_empty()).unwrap_or("Chat");
+                let needs = state == LiveChatState::NeedsYou;
+                Some(LiveChat {
+                    id: id.to_string(),
+                    short: short_title(title),
+                    state,
+                    step,
+                    reply: s.map(|s| s.reply.clone()).unwrap_or_default(),
+                    close_word: close_word(id, state == LiveChatState::Failed).to_string(),
+                    finished_at: if state.finished() { run.and_then(|r| r.finished_at) } else { None },
+                    started_at: live.map(|r| r.started_at),
+                    call_id: if needs { live.and_then(|r| r.call_id.clone()) } else { None },
+                    severity: if needs { live.and_then(|r| r.severity.clone()) } else { None },
+                })
+            })
+            .collect()
+    }
+
+    /// Rebuilds the card and says what to send: nothing when it did not change
+    /// or a new step must wait; `card` (an empty one ends it); `card-start`
+    /// when `start` (the relay starts one only on a phone with none up).
+    fn update(&mut self, now: f64, urgent: bool, start: bool) -> Vec<Value> {
+        self.runs.retain(|_, r| r.finished_at.is_none_or(|at| now - at <= FINISHED_TAIL));
+        self.checked_at = now;
+        let level = self.level();
+        if level == LiveLevel::None {
+            self.sent = None;
+            self.pending = false;
+            return Vec::new();
+        }
+        let state = build_card(&self.chats(now), self.sent.as_ref(), self.pinned.as_deref(), level, now);
+        if let Some(s) = &state
+            && s.focus_id != self.pinned
+        {
+            self.pinned = None;
+        }
+        let Some(state) = state else {
+            self.pending = false;
+            return match self.sent.take() {
+                Some(_) => vec![json!({ "type": "card", "state": LiveCardState::empty().to_value() })],
+                None => Vec::new(),
+            };
+        };
+        let prev = self.sent.as_ref();
+        if prev == Some(&state) && !start {
+            self.pending = false;
+            return Vec::new();
+        }
+        let shape = |s: &LiveCardState| -> Vec<(String, LiveChatState, Option<String>)> {
+            s.chats.iter().map(|c| (c.id.clone(), c.state, c.call_id.clone())).collect()
+        };
+        let at_once = urgent || start || prev.is_none_or(|p| shape(p) != shape(&state) || p.focus_id != state.focus_id);
+        if !at_once && now - self.sent_at < CARD_PUSH_GAP {
+            self.pending = true;
+            return Vec::new();
+        }
+        let frame = json!({ "type": if start { "card-start" } else { "card" }, "state": state.to_value() });
+        self.sent = Some(state);
+        self.sent_at = now;
+        self.pending = false;
+        vec![frame]
+    }
+}
+
+impl LiveCardState {
+    pub fn empty() -> Self {
+        Self { chats: Vec::new(), focus_id: None, more: 0, listening: false, heard: String::new() }
+    }
+}
+
+const TOOL_KEYS: [&str; 9] = ["command", "path", "file_path", "pattern", "query", "url", "name", "prompt", "task"];
+
+/// `Transcript.toolLabel`: a short label for a tool call, the file, command or query it acts on.
+pub fn tool_label(call: &Value) -> String {
+    let name = call.get("name").and_then(Value::as_str).unwrap_or("");
+    let verb = match name {
+        "read_file" => "Read",
+        "write_file" => "Write",
+        "edit_file" => "Edit",
+        "list_dir" => "List",
+        "glob" => "Find",
+        "grep" => "Search",
+        "bash" => "Run",
+        "web_fetch" => "Fetch",
+        "web_search" => "Search the web for",
+        "spawn_agent" => "Delegate",
+        "ask_user" => "Ask",
+        "agent_watch" => "Watch",
+        other => return label(&other.replace('_', " "), call),
+    };
+    label(verb, call)
+}
+
+fn label(verb: &str, call: &Value) -> String {
+    let detail =
+        TOOL_KEYS.iter().filter_map(|k| call.get("input")?.get(*k)?.as_str().map(str::trim)).find(|d| !d.is_empty());
+    match detail {
+        Some(d) => format!("{verb} {}", one_line(d, 80)),
+        None => verb.to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -379,5 +760,196 @@ mod tests {
         for c in f["replyLine"].as_array().unwrap() {
             assert_eq!(reply_line(c[0].as_str().unwrap()), c[1].as_str().unwrap(), "{c}");
         }
+    }
+
+    const T0: f64 = 800_000_000.0;
+
+    fn ev(ty: &str, sid: &str, extra: Value) -> Value {
+        let mut e = json!({ "type": ty, "sessionId": sid });
+        e.as_object_mut().unwrap().extend(extra.as_object().cloned().unwrap_or_default());
+        e
+    }
+
+    fn tool(sid: &str, cmd: &str) -> Value {
+        ev("tool_call", sid, json!({ "call": { "id": "c1", "name": "bash", "input": { "command": cmd } } }))
+    }
+
+    fn standard() -> Cards {
+        let mut c = Cards::default();
+        assert!(c.set("phone-1", &json!([{ "level": "standard" }]), T0).is_empty(), "no chats yet");
+        c
+    }
+
+    /// The one frame and its state.
+    fn only(frames: &[Value]) -> (String, LiveCardState) {
+        assert_eq!(frames.len(), 1, "{frames:?}");
+        (frames[0]["type"].as_str().unwrap().to_string(), LiveCardState::from_value(&frames[0]["state"]))
+    }
+
+    #[test]
+    fn nothing_goes_out_until_a_phone_asks_for_a_card() {
+        let mut c = Cards::default();
+        assert!(c.on_event(&tool("s1", "npm test"), T0).is_empty());
+        assert!(!c.wants_summaries(), "nobody wants a card: the chat list is not read either");
+        let out = c.set("phone-1", &json!([{ "level": "detailed" }]), T0 + 1.0);
+        let (ty, card) = only(&out);
+        assert_eq!(ty, "card");
+        let chat = &card.chats[0];
+        assert_eq!((chat.id.as_str(), chat.state, chat.step.as_str()), ("s1", LiveChatState::Working, "Run npm test"));
+        assert_eq!(chat.short, "Chat", "no chat list yet");
+        assert_eq!(chat.started_at, Some(T0));
+        assert!(c.wants_summaries());
+        assert!(!c.wants_summaries(), "asked once until the list arrives");
+        let list = json!([
+            { "id": "s1", "title": "Fix login bug", "lastReplyText": "On it. Running the tests.", "updatedAt": 2 },
+            { "id": "sub", "title": "Sub", "parentSessionId": "s1", "updatedAt": 3 },
+        ]);
+        let (_, card) = only(&c.set_summaries(&list, T0 + 2.0));
+        assert_eq!((card.chats[0].short.as_str(), card.chats[0].reply.as_str()), ("Fix", "On it."));
+        // A sub-agent's chat is not on the phone's list, so not on the card.
+        assert!(c.on_event(&tool("sub", "ls"), T0 + 20.0).is_empty());
+    }
+
+    #[test]
+    fn text_goes_out_only_at_the_highest_level_a_phone_asked_for() {
+        let mut c = Cards::default();
+        c.set("phone-1", &json!([{ "level": "minimal" }]), T0);
+        let (_, card) = only(&c.on_event(&tool("s1", "npm test"), T0));
+        assert_eq!((card.chats[0].short.as_str(), card.chats[0].step.as_str()), ("", ""));
+        // Another phone at Standard: text goes out, the relay blanks it for the first.
+        let (_, card) = only(&c.set("phone-2", &json!([{ "level": "standard" }]), T0 + 1.0));
+        assert_eq!(card.chats[0].step, "Run npm test");
+        // It turns its card off: back to no text.
+        let (_, card) = only(&c.set("phone-2", &json!([{ "level": "none" }]), T0 + 30.0));
+        assert_eq!(card.chats[0].step, "");
+        c.forget("phone-1");
+        assert!(c.on_event(&tool("s1", "ls"), T0 + 60.0).is_empty(), "no phone wants a card");
+    }
+
+    #[test]
+    fn a_new_step_waits_ten_seconds_but_a_new_state_goes_at_once() {
+        let mut c = standard();
+        only(&c.on_event(&tool("s1", "npm test"), T0));
+        assert!(c.on_event(&tool("s1", "npm run lint"), T0 + 1.0).is_empty());
+        assert!(c.tick(T0 + 5.0).is_empty());
+        let (_, card) = only(&c.tick(T0 + 10.0));
+        assert_eq!(card.chats[0].step, "Run npm run lint");
+        assert!(c.tick(T0 + 11.0).is_empty(), "sent once");
+        let approval = ev(
+            "tool_approval_required",
+            "s1",
+            json!({ "call": { "id": "call_9", "name": "bash", "input": { "command": "rm -rf build" } }, "severity": "high" }),
+        );
+        let (_, card) = only(&c.on_event(&approval, T0 + 12.0));
+        let chat = &card.chats[0];
+        assert_eq!(chat.state, LiveChatState::NeedsYou);
+        assert_eq!((chat.call_id.as_deref(), chat.severity.as_deref()), (Some("call_9"), Some("high")));
+        let (_, card) = only(&c.on_event(&ev("tool_result", "s1", json!({})), T0 + 13.0));
+        assert_eq!((card.chats[0].state, card.chats[0].call_id.as_deref()), (LiveChatState::Working, None));
+    }
+
+    #[test]
+    fn a_finished_chat_stays_two_hours_then_the_card_ends() {
+        let mut c = standard();
+        only(&c.on_event(&tool("s1", "npm test"), T0));
+        let (_, card) = only(&c.on_event(&ev("done", "s1", json!({})), T0 + 5.0));
+        let chat = &card.chats[0];
+        assert_eq!(
+            (chat.state, chat.step.as_str(), chat.finished_at),
+            (LiveChatState::Done, "Finished", Some(T0 + 5.0))
+        );
+        assert_eq!(chat.close_word, close_word("s1", false));
+        assert!(c.wants_summaries(), "a finished run has a new reply line");
+        let (_, card) = only(&c.on_event(&ev("error", "s2", json!({ "message": "boom" })), T0 + 6.0));
+        assert_eq!(card.chats.iter().find(|c| c.id == "s2").unwrap().state, LiveChatState::Failed);
+        assert!(c.tick(T0 + 5.0 + FINISHED_TAIL).is_empty());
+        let (ty, card) = only(&c.tick(T0 + 7.0 + FINISHED_TAIL + 60.0));
+        assert_eq!((ty.as_str(), card.chats.len()), ("card", 0), "an empty card: the relay ends it");
+        assert!(c.tick(T0 + 9.0 * 3600.0).is_empty());
+    }
+
+    #[test]
+    fn a_stopped_run_is_done_not_failed() {
+        let mut c = standard();
+        let (_, card) = only(&c.on_event(&ev("error", "s1", json!({ "message": "Stopped" })), T0));
+        assert_eq!((card.chats[0].state, card.chats[0].step.as_str()), (LiveChatState::Done, "Stopped"));
+    }
+
+    #[test]
+    fn a_card_starts_remotely_for_a_chat_the_phone_sent_to_or_a_pr_watch_woke() {
+        let mut c = standard();
+        c.phone_call("chat:send", &json!([{ "sessionId": "s1", "text": "go" }]), T0);
+        c.phone_call("chat:queue", &json!(["s3", { "text": "later" }]), T0 - 3.0 * 3600.0);
+        c.phone_call("chat:queue", &json!(["s4", { "text": "next" }]), T0 - 1.0);
+        c.phone_call("sessions:list", &json!([{ "sessionId": "s9" }]), T0);
+        // A run in a chat this phone never sent to: an update for a card already up, no start.
+        let (ty, _) = only(&c.on_event(&tool("s2", "ls"), T0 + 1.0));
+        assert_eq!(ty, "card");
+        let (ty, _) = only(&c.on_event(&ev("done", "s2", json!({})), T0 + 2.0));
+        assert_eq!(ty, "card");
+        // The relay knows which phones have a card up: it starts one only where none is.
+        assert_eq!(only(&c.on_event(&tool("s1", "ls"), T0 + 3.0)).0, "card-start");
+        // The same run carrying on is an update.
+        assert!(c.on_event(&tool("s1", "pwd"), T0 + 4.0).is_empty());
+        assert_eq!(only(&c.tick(T0 + 14.0)).0, "card");
+        let mut c = standard();
+        c.phone_call("chat:send", &json!([{ "sessionId": "s1", "text": "go" }]), T0);
+        assert_eq!(only(&c.on_event(&tool("s1", "ls"), T0 + 2.0 * 3600.0 - 1.0)).0, "card-start");
+        let mut c = standard();
+        c.phone_call("chat:send", &json!([{ "sessionId": "s1", "text": "go" }]), T0);
+        assert_eq!(only(&c.on_event(&tool("s1", "ls"), T0 + 2.0 * 3600.0 + 1.0)).0, "card", "two hours on");
+        let mut c = standard();
+        c.phone_call("chat:queue", &json!(["s4", { "text": "next" }]), T0);
+        assert_eq!(only(&c.on_event(&ev("text", "s4", json!({ "delta": "Hi" })), T0 + 1.0)).0, "card-start");
+        // A PR watch: the chat list says the chat is watching when its run starts.
+        let mut c = standard();
+        c.set_summaries(&json!([{ "id": "w", "title": "Ship it", "activeWatchCount": 1 }]), T0);
+        let (ty, card) = only(&c.on_event(&tool("w", "gh pr checks"), T0 + 1.0));
+        assert_eq!((ty.as_str(), card.chats[0].state), ("card-start", LiveChatState::Working));
+    }
+
+    #[test]
+    fn a_watching_chat_is_on_the_card() {
+        let mut c = standard();
+        let (_, card) = only(&c.set_summaries(&json!([{ "id": "w", "title": "Ship it", "activeWatchCount": 1 }]), T0));
+        assert_eq!((card.chats[0].state, card.chats[0].step.as_str()), (LiveChatState::Watching, "Watching PR…"));
+    }
+
+    #[test]
+    fn focus_and_dismiss_from_the_phone() {
+        let mut c = standard();
+        only(&c.on_event(&tool("a", "ls"), T0));
+        // A chat the list has not caught up with yet: newest first.
+        let (_, card) = only(&c.on_event(&tool("b", "ls"), T0 + 1.0));
+        assert_eq!(card.focus_id.as_deref(), Some("b"));
+        let (_, card) = only(&c.set("phone-1", &json!([{ "focus": "a" }]), T0 + 2.0));
+        assert_eq!(card.focus_id.as_deref(), Some("a"));
+        only(&c.on_event(&ev("done", "b", json!({})), T0 + 3.0));
+        let (_, card) = only(&c.set("phone-1", &json!([{ "dismiss": "b" }]), T0 + 4.0));
+        assert_eq!(card.chats.iter().map(|c| c.id.as_str()).collect::<Vec<_>>(), ["a"]);
+        assert_eq!(card.focus_id.as_deref(), Some("a"));
+        // Off the card until it runs again.
+        let (_, card) = only(&c.on_event(&tool("b", "ls"), T0 + 5.0));
+        assert_eq!(card.chats.len(), 2);
+    }
+
+    #[test]
+    fn a_question_needs_you_with_its_text() {
+        let mut c = standard();
+        let q = ev(
+            "question",
+            "s1",
+            json!({ "request": { "callId": "q1", "questions": [{ "question": "Which branch?" }] } }),
+        );
+        let (_, card) = only(&c.on_event(&q, T0));
+        assert_eq!((card.chats[0].state, card.chats[0].step.as_str()), (LiveChatState::NeedsYou, "Which branch?"));
+    }
+
+    #[test]
+    fn tool_label() {
+        let call = |name: &str, input: Value| json!({ "id": "1", "name": name, "input": input });
+        assert_eq!(super::tool_label(&call("read_file", json!({ "path": " src/a.rs " }))), "Read src/a.rs");
+        assert_eq!(super::tool_label(&call("my_tool", json!({}))), "my tool");
+        assert_eq!(super::tool_label(&call("web_search", json!({ "query": "a\n  b" }))), "Search the web for a b");
     }
 }
