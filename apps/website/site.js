@@ -568,9 +568,8 @@
         if (a < 0.025) continue;
         const s = a > 0.18 ? 3 : 2;
         const k = x / W;
-        if (theme === 'colour') ctx.fillStyle = `rgba(255,255,255,${(a * 1.6).toFixed(3)})`;
-        else if (theme === 'dark') {
-          // 0 = lavender #9D8CE6, 1 = aqua #8AE4F2: glowing dots on the dark ground
+        if (theme === 'dark' || theme === 'colour') {
+          // 0 = lavender #9D8CE6, 1 = aqua #8AE4F2: glowing on the dark ground, tinted on the lilac one
           ctx.fillStyle = `rgba(${Math.round(157 - 19 * k)},${Math.round(140 + 88 * k)},${Math.round(230 + 12 * k)},${(a * 1.1).toFixed(3)})`;
         } else {
           // 0 = indigo #453A92, 1 = lavender #9D8CE6
