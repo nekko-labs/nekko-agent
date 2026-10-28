@@ -193,6 +193,8 @@ jobs:
           TEST_RUNNER_NEKKO_UI_THEMES="$THEMES" \
             xcodebuild "${COMMON[@]}" -resultBundlePath evidence/first-run.xcresult test-without-building -skip-testing:NekkoNativeUITests/LiveRelayTests || failed=1
           # The live journey, once per appearance, each against a fresh stack (pairing codes are single-use).
+          # The first-run suite already asked for notifications; a fresh install gets the prompt again.
+          xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
           for THEME in $THEMES; do
             xcrun simctl ui "$DEVICE" appearance "$THEME"
             ../../apps/ios/scripts/itest-stack.sh "/tmp/stack-$THEME.env"
