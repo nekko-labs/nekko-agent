@@ -47,8 +47,10 @@ app.whenReady().then(async () => {
     const text = sel => run(`[...document.querySelectorAll(${js(sel)})].map(e => e.textContent.trim()).join(' | ')`);
     check('starts in Simple', await run(`document.querySelector('[data-chat-mode]')?.dataset.chatMode === 'simple'`));
     check('Simple: details panel sits inside the composer card', await has('.composer [data-composer-details]'));
-    check('Simple: model shown, effort, context, tools and Mode out of sight', (await has('[data-composer-details] button[aria-haspopup="listbox"]')) && !(await has('[data-effort-index]')) && !(await has('.context-bar')) && !(await has('[data-chat-mode-button]')) && !(await has('[data-agent-footer-controls] .ctl-menu')));
-    check('Simple: no hardware strip', !(await has('[data-expert-monitor]')));
+    for (let i = 0; i < 30 && !(await has('[data-expert-monitor]')); i++) await sleep(200);
+    check('Simple: model and context shown; effort, tools and Mode out of sight', (await has('[data-composer-details] button[aria-haspopup="listbox"]')) && (await has('.context-bar')) && !(await has('[data-effort-index]')) && !(await has('[data-chat-mode-button]')) && !(await has('[data-agent-footer-controls] .ctl-menu')));
+    check('Simple: the hardware strip shows while a local model is loaded', await has('[data-expert-monitor]'));
+    check('Simple: a nearly full chat says what starting fresh saves', /Starting fresh saves about 162k tokens/.test(await text('[data-chat-long]')));
     await capture('1-simple');
     await click('.composer-details-toggle');
     check('details shrink to the model alone', (await run(`document.querySelector('.composer-details-toggle').getAttribute('aria-expanded')`)) === 'false');
@@ -56,6 +58,7 @@ app.whenReady().then(async () => {
     await click('.composer-details-toggle');
     await click('[data-chat-mode] button[aria-label^="Expert"]');
     for (let i = 0; i < 20 && !(await has('[data-dial="GPU"]')); i++) await sleep(200);
+    check('Expert: no getting-long note', !(await has('[data-chat-long]')));
     check('Expert: effort, context, Mode, tools and the strip are shown', (await has('[data-effort-index]')) && (await has('.context-bar')) && (await has('[data-chat-mode-button]')) && (await has('[data-expert-monitor]')) && (await has('[data-agent-footer-controls] .ctl-menu')));
     await sleep(800);
     await capture('3-expert');

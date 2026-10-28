@@ -33,7 +33,7 @@ const bridge: any = {
   previewContext: async () => ({ contextWindow: 200000, items: [
     { id: 's', source: 'system', label: 'System prompt', tokens: 9200, included: true },
     { id: 'g', source: 'guideline', label: 'AGENTS.md', tokens: 3100, included: true },
-    { id: 'c', source: 'conversation', label: 'Conversation', tokens: 112400, included: true },
+    { id: 'c', source: 'conversation', label: 'Conversation', tokens: 162400, included: true },
   ] }),
   getSystemStats: async () => ({ cpuPct: 38, cpuCores: 16, memUsedMB: 41000, memTotalMB: 65536, temps: { cpuC: 64 } }),
   getGpuStats: async () => ({ source: 'nvidia-smi', totalMB: 24576, usedMB: 19800, freeMB: 4776, devices: [{ name: 'RTX 4090', memoryTotalMB: 24576, memoryUsedMB: 19800, memoryFreeMB: 4776, utilizationPct: 91, temperatureC: 83 }] }),

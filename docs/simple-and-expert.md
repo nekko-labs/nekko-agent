@@ -13,15 +13,19 @@ Each computer and phone remembers its own mode. A new install starts in Simple.
 
 ## What Simple leaves out
 
-By default, Simple shows the model name and picker and prompt suggestions, and keeps these for Expert:
+By default, Simple shows the model name and picker, how full the chat is (the context ring) and prompt suggestions, and keeps these for Expert:
 
-- **In a chat:** effort, the context ring, cost and limits, the Mode panel, Privacy Shield, the Tools and MCP menus, the git checkout chip, Changes, Logs and the hardware strip.
+- **In a chat:** effort, cost and limits, the Mode panel, Privacy Shield, the Tools and MCP menus, the git checkout chip, Changes, Logs and the hardware strip.
 - **In replies:** the reasoning text (folded to one line), reply stats, and pull request cards.
 - **Elsewhere:**
   - the Terminal entries on the agents wall, the model and token line on window cards, and the hardware and budget monitors
   - CI runners in Workflows
   - the Model Server's settings and expert load flags
   - Settings' Tools group, folded behind **Show advanced settings**
+
+While a local model is loaded on your computer, the hardware gauges and the local models monitor show in Simple too, so you can see what the model is using.
+
+When a chat gets close to the most the model can read at once, Simple says how many tokens starting a fresh chat would save, with a **Start fresh** button.
 
 ## Choosing what Simple shows
 

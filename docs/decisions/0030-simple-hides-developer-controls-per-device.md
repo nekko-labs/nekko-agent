@@ -13,7 +13,7 @@ Simple and Expert shipped on the phones (2026-10-24) and the desktop (2026-10-25
 
 1. **Two fixed modes.** Simple hides a list chosen by us. Simple, but anyone who wants one control back (the effort dial, say) has to live in Expert.
 2. **A switch per control, on or off in Simple.** What the first design drew. It cannot express "never show this", which Philip asked for once he saw it.
-3. **Three states per control: Show (both modes), Expert only, Hide (neither).** Defaults put every developer control at Expert only, and only the model picker and prompt suggestions at Show.
+3. **Three states per control: Show (both modes), Expert only, Hide (neither).** Defaults put every developer control at Expert only, and the model picker, the context ring and prompt suggestions at Show. Monitors at Expert only also show in Simple while a local model is loaded.
 
 On scope: hide whole pages in Simple (Training, CI runners, the Model Server's engine view), or only controls inside pages. On storage: per device, or synced through the account.
 

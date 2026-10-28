@@ -6,9 +6,9 @@ describe('simple mode catalogue', () => {
     expect(new Set(SIMPLE_ITEMS.map((i) => i.id)).size).toBe(SIMPLE_ITEMS.length);
   });
 
-  it('shows only the model and suggestions in Simple by default', () => {
+  it('shows only the model, context and suggestions in Simple by default', () => {
     const shown = SIMPLE_ITEMS.filter((i) => simpleShown(i.id, false)).map((i) => i.id);
-    expect(shown).toEqual(['model', 'suggest']);
+    expect(shown).toEqual(['model', 'context', 'suggest']);
     expect(SIMPLE_ITEMS.every((i) => simpleShown(i.id, true))).toBe(true);
   });
 
@@ -17,6 +17,14 @@ describe('simple mode catalogue', () => {
     expect(simpleShown('model', false, { model: 'expert' })).toBe(false);
     expect(simpleShown('model', true, { model: 'expert' })).toBe(true);
     expect(simpleShown('effort', true, { effort: 'hide' })).toBe(false);
+  });
+
+  it('shows monitors in Simple while a local model is loaded, unless hidden', () => {
+    expect(simpleShown('hardware', false, {}, true)).toBe(true);
+    expect(simpleShown('mon-hw', false, {}, true)).toBe(true);
+    expect(simpleShown('hardware', false, {}, false)).toBe(false);
+    expect(simpleShown('hardware', false, { hardware: 'hide' }, true)).toBe(false);
+    expect(simpleShown('effort', false, {}, true)).toBe(false);
   });
 
   it('shows ids it does not know', () => {

@@ -9,12 +9,12 @@ area: desktop
 
 **Reframed 2026-10-28 (#1311):** Philip asked (2026-10-27) for Simple to become the experience for people who are not developers: the same capabilities, with developer controls such as effort, the context gauge and reasoning out of sight, and Settings choosing, per control, what Simple shows. He reviewed the [design](../../docs/decisions/0030-simple-hides-developer-controls-per-device.md) (per device, Simple for new installs, controls not pages), then asked for three states per control (Show, Expert only, Hide), a drawn preview beside each area's switches, and the row under the composer to become an expandable panel of the composer.
 
-**Status `[implemented 2026-10-28 in apps/desktop on branch simple-expert-modes, not merged; catalogue unit-tested in packages/shared; renderer tests pass; captured in the hidden chat-modes harness (13 assertions: Simple and Expert controls, the shrinking panel, the Settings previews and a choice reaching the chat); not tried in the packaged app or on a real machine]`**
+**Status `[implemented 2026-10-28 in apps/desktop on branch simple-expert-modes, not merged; catalogue unit-tested in packages/shared; renderer tests pass; captured in the hidden chat-modes harness (15 assertions: Simple and Expert controls, the shrinking panel, the Settings previews and a choice reaching the chat); not tried in the packaged app or on a real machine]`**
 
 ## Behaviour
 
 - **The switch.** Two icon segments in the title bar, beside the page name: a chat bubble (*Simple: everyday controls*) and angle brackets (*Expert: every control*). Where there is no title bar (the browser builds) it sits at the top left of every chat. Kept on this computer (`localStorage`, `nekko.chatMode`), shared by every window, Simple for a new install. No keyboard shortcut: Ctrl+Shift+E already completes a chat.
-- **The catalogue.** `packages/shared/src/simple-mode.ts` lists each control Simple can hide, with its area, platforms and default. Each is **Show** (both modes), **Expert only** or **Hide** (neither); the person's choices that differ from the defaults are kept on this computer (`nekko.simpleChoices`). Unknown or malformed saved values are ignored. Defaults: Show for the model picker and prompt suggestions, Expert only for everything else. Simple never hides a page.
+- **The catalogue.** `packages/shared/src/simple-mode.ts` lists each control Simple can hide, with its area, platforms and default. Each is **Show** (both modes), **Expert only** or **Hide** (neither); the person's choices that differ from the defaults are kept on this computer (`nekko.simpleChoices`). Unknown or malformed saved values are ignored. Defaults: Show for the model picker, the context ring and prompt suggestions (Philip, 2026-10-28: "simple shows context"), Expert only for everything else. The monitors (`hardware`, `mon-hw`, and the phone's `ph-monitors`) at Expert only also show in Simple **while a local model is loaded** on the Model Server (Philip, 2026-10-28); the desktop reads `engine:status` every 10 s while any gated control is on screen. Show always shows them, Hide never does. Simple never hides a page.
 - **Desktop controls in the catalogue.**
   - **Chat header:** git checkout chip (`worktree`), Changes (`changes`), Logs (`logs`), the hardware strip (`hardware`).
   - **Message box:** model picker (`model`; shown regardless while the chat has no usable model), effort (`effort`), context ring (`context`), cost and limits (`cost`), the Mode button and panel (`mode`), Privacy Shield (`privacy`), Tools and MCP menus (`tools`), prompt suggestions (`suggest`).
@@ -29,6 +29,7 @@ area: desktop
 - **Expert: the hardware strip and monitor** are unchanged from 2026-10-25, now under the `hardware` control:
   - **The strip:** dials for CPU, memory, GPU and VRAM, and the number of loaded models.
   - **Clicking the strip** opens the **Local models** monitor.
+- **A chat getting long (Simple only).** When the chat's context reaches 85% of the model's window, a line above the composer says *This chat is getting long. Starting fresh saves about N tokens.*, where N is the conversation's tokens in the context breakdown, with **Start fresh** (a new chat in the same folder) and **Not now** (until the app restarts, for that chat).
 - **Effort and context** keep their 2026-10-25 forms, the dial with a popover and the ring with a count, whenever they are shown.
 
 ## Wide phones
@@ -39,7 +40,6 @@ area: desktop
 ## Not yet
 
 - Settings search and the command palette do not list controls that are out of sight (the design asked for them marked *Shown in Expert*).
-- A Simple nudge when a chat's context is nearly full (the design's *This chat is getting long*).
 - Tool steps folded into one summary line per turn with *Show steps*; today they fold after each reply in both modes.
 - Unload from the desktop's Expert monitor.
 - A real-hardware check (NVIDIA, Apple Silicon unified memory) of the strip's labels and temperatures.

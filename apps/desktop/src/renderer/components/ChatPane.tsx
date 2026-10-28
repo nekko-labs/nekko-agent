@@ -64,8 +64,8 @@ import { PERSISTED_INTERRUPTION, shouldShowPersistedInterruption, reconcileInter
 import { cutPrompt, messageCuts, type MessageCuts } from './agent-console/messageCut.js';
 
 import { estimateRowHeight, toTranscriptRows, transcriptBeforeLiveTurn, transcriptRowStamp, type TranscriptRow } from './agent-console/transcript.js';
-import { ContextGauge, EffortSlider } from './ChatMetrics.js';
-import { ExpertMonitor, ModeSwitch, useShown } from './ModeViews.js';
+import { ContextGauge, EffortSlider, formatContextTokens } from './ChatMetrics.js';
+import { ExpertMonitor, ModeSwitch, useExpertMode, useShown } from './ModeViews.js';
 import { hasAppChrome } from '../chrome.js';
 import { PlanRail } from './PlanRail.js';
 import { PlanSheet } from './PlanSheet.js';
@@ -145,6 +145,10 @@ const PLAN_RAIL_MIN_PANE = PLAN_RAIL_WIDTH * 2;
 const COMPOSER_H_KEY = 'nekko.composer.height';
 /** Whether the composer's details panel is shrunk, remembered across chats. */
 const DETAILS_KEY = 'nekko.composer.details';
+/** Simple says a chat is getting long from this share of its window. */
+const LONG_CHAT_FRACTION = 0.85;
+/** Chats whose "getting long" note was dismissed, until the app restarts. */
+const LONG_DISMISSED = new Set<string>();
 const COMPOSER_MIN_H = 64;
 /** Drag distance (px) within which the composer snaps to its default or full size. */
 const COMPOSER_SNAP = 24;
@@ -794,6 +798,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const showMode = useShown('mode');
   const showPrivacy = useShown('privacy');
   const showGit = useShown('ph-git');
+  const [expertMode] = useExpertMode();
+  const [, setLongDismissed] = useState(0);
   // The chat details under the message box: open, or shrunk to the model alone.
   const [detailsOpen, setDetailsOpen] = useState(() => { try { return window.localStorage.getItem(DETAILS_KEY) !== 'closed'; } catch { return true; } });
   const toggleDetails = () => setDetailsOpen((o) => {
@@ -2440,6 +2446,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   );
   const ctxUsed = useMemo(() => (ctx ? ctx.items.filter((i) => i.included).reduce((s, i) => s + i.tokens, 0) : 0), [ctx]);
 
+  // Simple's nudge when a chat nears its window: what starting fresh would save.
+  const conversationTokens = ctx ? ctx.items.filter((i) => i.included && i.source === 'conversation').reduce((s, i) => s + i.tokens, 0) : 0;
+  const contextWindow = selectedModelInfo?.contextLength ?? 0;
+  const chatLong = !expertMode && !readOnly && !imageMode && contextWindow > 0 && ctxUsed / contextWindow >= LONG_CHAT_FRACTION && conversationTokens > 0 && !LONG_DISMISSED.has(sessionId);
+
   // The model and its effort sit in the bottom bar, between the attach button
   // and the context gauge, where the eye already is when sending.
   const modelControls = (
@@ -2757,6 +2768,13 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
               <div className="composer-question is-open" data-plan-change-pop><div className="composer-question-body"><PlanChangePrompt running={streaming} onSend={(change) => { void sendPlanChange(change); }} onCancel={() => { setPlanChangeOpen(false); composerRef.current?.focus(); }} /></div></div>
             )}
 
+            {chatLong && (
+              <div className="chat-long-note" role="status" data-chat-long>
+                <span className="min-w-0 flex-1">This chat is getting long. Starting fresh saves about {formatContextTokens(conversationTokens)} tokens.</span>
+                <button type="button" className="btn btn-outline h-7 px-2.5 py-0 text-[12px]" onClick={() => { void useStore.getState().newChat(session?.workspaceId); }}>Start fresh</button>
+                <button type="button" className="btn btn-ghost h-7 px-2 py-0 text-[12px]" aria-label="Dismiss" title="Dismiss" onClick={() => { LONG_DISMISSED.add(sessionId); setLongDismissed((n) => n + 1); }}>Not now</button>
+              </div>
+            )}
             <div className="composer relative">
             {compact && (
               <div className="composer-summary">

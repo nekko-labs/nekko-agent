@@ -16,7 +16,9 @@ Simple becomes the everyday app with developer controls out of sight, chosen per
 - [x] **SEM-4, Settings > Simple mode.** Drawn previews per area with dashed out-of-sight controls, a three-way switch per control, preview mode and reset. Evidence: `chat-modes-fixture.tsx` / `chat-modes-sandbox.cjs`, 13 assertions. (2026-10-28)
 - [x] **SEM-5, iPhone.** `SimpleMode.swift`, `Prefs.simpleChoices`, the two-segment switch, gates, `SimpleModeSettingsView`; `SimpleModeTests`, live `testSimpleAndExpertModes` passes. Strings not yet translated. (2026-10-28)
 - [x] **SEM-6, Android.** `SimpleMode.kt`, `SimpleUi.kt`, `SimpleModeSettings.kt`, gates; `SimpleModeTest`, lint and builds pass. `ChatModesTest` rewritten but not run: the build Mac's adb is x86 only. (2026-10-28)
-- [ ] **SEM-7, search and nudge.** List out-of-sight controls in Settings search and the command palette; the *This chat is getting long* nudge in Simple; one summary line per turn for tool steps.
+- [x] **SEM-8, Philip's first updates (2026-10-28).** Context shows in Simple; monitors show in Simple while a local model is loaded; the desktop *getting long* note with what starting fresh saves.
+- [ ] **SEM-9, phone header and monitors.** Nekko title kept top middle, the switch on a slim second row with a hairline, minimal gauges with percentages, a pull-down agent sheet from the top, and the getting-long note on the phones.
+- [ ] **SEM-7, search and steps.** List out-of-sight controls in Settings search and the command palette; one summary line per turn for tool steps.
 
 ## Model Server inline download progress (#1221)
 

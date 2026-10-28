@@ -53,12 +53,40 @@ export function useSimpleChoices(): [SimpleChoices, (id: string, v: SimpleVisibi
 
 /** Whether a listed control is on screen now, read once (for menus that mount when opened). */
 export function shownNow(id: string): boolean {
-  return typeof window === 'undefined' || simpleShown(id, readExpert(), readChoices());
+  return typeof window === 'undefined' || simpleShown(id, readExpert(), readChoices(), localLoaded);
+}
+
+// Whether the Model Server holds a local model: monitors then show in Simple
+// too. Read every 10 s, only while something on screen is listening.
+const localListeners = new Set<() => void>();
+let localLoaded = false;
+let localTimer: ReturnType<typeof setInterval> | undefined;
+const readLocal = () => {
+  window.nekko?.engineStatus?.()
+    .then((s) => {
+      const next = !!s?.running && (s.resident?.length ?? 0) > 0;
+      if (next !== localLoaded) { localLoaded = next; for (const l of localListeners) l(); }
+    })
+    .catch(() => {});
+};
+const subscribeLocal = (fn: () => void) => {
+  localListeners.add(fn);
+  if (!localTimer) { readLocal(); localTimer = setInterval(readLocal, 10_000); }
+  return () => {
+    localListeners.delete(fn);
+    if (localListeners.size === 0 && localTimer) { clearInterval(localTimer); localTimer = undefined; }
+  };
+};
+
+/** Whether a local model is loaded on the Model Server. */
+export function useLocalModelLoaded(): boolean {
+  return useSyncExternalStore(subscribeLocal, () => localLoaded, () => false);
 }
 
 /** Whether a listed control is on screen now, in the current mode. */
 export function useShown(id: string): boolean {
   const [expert] = useExpertMode();
   const [choices] = useSimpleChoices();
-  return simpleShown(id, expert, choices);
+  const local = useLocalModelLoaded();
+  return simpleShown(id, expert, choices, local);
 }

@@ -3607,3 +3607,6 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 .sm-choice button:hover { color: var(--ink); }
 .sm-choice button.on { background: var(--win, var(--paper)); color: var(--accent); font-weight: 500; box-shadow: 0 1px 2px rgb(0 0 0 / 0.12); }
 .sm-choice button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Simple: a chat near its window says what starting fresh would save. */
+.chat-long-note { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 6px; padding: 6px 8px 6px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); font-size: 12.5px; color: var(--ink-soft); }

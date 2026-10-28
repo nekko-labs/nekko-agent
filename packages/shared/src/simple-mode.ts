@@ -19,6 +19,8 @@ export interface SimpleItem {
   hint: string;
   platforms: readonly SimplePlatform[];
   default: SimpleVisibility;
+  /** At Expert only, also shown in Simple while a local model is loaded. */
+  whenLocal?: boolean;
 }
 
 const D = ['desktop'] as const;
@@ -29,11 +31,11 @@ export const SIMPLE_ITEMS: readonly SimpleItem[] = [
   { id: 'worktree', area: 'Chat · header', label: 'Git checkout chip', hint: 'Which branch or worktree the chat works in', platforms: D, default: 'expert' },
   { id: 'changes', area: 'Chat · header', label: 'Changes', hint: 'Review the files the agent changed', platforms: DP, default: 'expert' },
   { id: 'logs', area: 'Chat · header', label: 'Agent logs', hint: 'The raw command log', platforms: D, default: 'expert' },
-  { id: 'hardware', area: 'Chat · header', label: 'Hardware strip', hint: 'CPU, memory and GPU dials under the title', platforms: DP, default: 'expert' },
+  { id: 'hardware', area: 'Chat · header', label: 'Hardware strip', hint: 'CPU, memory and GPU dials under the title. Also shown in Simple while a local model is loaded', platforms: DP, default: 'expert', whenLocal: true },
   { id: 'ph-subtitle', area: 'Chat · header', label: 'Model and computer under the title', hint: 'Like "Opus 5.5 · Studio Mac"', platforms: P, default: 'expert' },
   { id: 'model', area: 'Chat · message box', label: 'Model name and picker', hint: 'Switch between Claude, ChatGPT or a local model', platforms: DP, default: 'show' },
   { id: 'effort', area: 'Chat · message box', label: 'Effort', hint: 'How hard the model thinks before it answers', platforms: DP, default: 'expert' },
-  { id: 'context', area: 'Chat · message box', label: 'Context ring and token count', hint: 'How full this chat is, in tokens', platforms: DP, default: 'expert' },
+  { id: 'context', area: 'Chat · message box', label: 'Context ring and token count', hint: 'How full this chat is, in tokens', platforms: DP, default: 'show' },
   { id: 'cost', area: 'Chat · message box', label: 'Cost and limits', hint: 'What this chat has cost, and plan limits', platforms: D, default: 'expert' },
   { id: 'mode', area: 'Chat · message box', label: 'Mode panel', hint: 'Environment, approvals, tools and rules in one panel', platforms: D, default: 'expert' },
   { id: 'privacy', area: 'Chat · message box', label: 'Privacy Shield', hint: 'What is masked before a message leaves this computer', platforms: D, default: 'expert' },
@@ -45,12 +47,12 @@ export const SIMPLE_ITEMS: readonly SimpleItem[] = [
   { id: 'ph-git', area: 'Chat · conversation', label: 'Git and pull requests', hint: 'Commits, PR cards and the PR dock', platforms: DP, default: 'expert' },
   { id: 'terminal', area: 'Agents wall', label: 'Terminal', hint: 'Open a terminal from New or the More menu', platforms: DP, default: 'expert' },
   { id: 'cardmeta', area: 'Agents wall', label: 'Model and tokens on window cards', hint: 'Like "Opus 5.5 · 48k context"', platforms: D, default: 'expert' },
-  { id: 'mon-hw', area: 'Agents wall', label: 'Hardware and local models monitors', hint: 'Dials and resident models in the dock', platforms: D, default: 'expert' },
+  { id: 'mon-hw', area: 'Agents wall', label: 'Hardware and local models monitors', hint: 'Dials and resident models in the dock. Also shown in Simple while a local model is loaded', platforms: D, default: 'expert', whenLocal: true },
   { id: 'mon-budget', area: 'Agents wall', label: 'Budget, cost and utilization', hint: 'Spending and token use in the dock', platforms: D, default: 'expert' },
   { id: 'ci', area: 'Workflows', label: 'CI runners', hint: 'Use this computer as a CI runner', platforms: D, default: 'expert' },
   { id: 'engine', area: 'Models', label: 'Model server details', hint: 'Engine, load settings and advanced flags', platforms: D, default: 'expert' },
   { id: 'set-tools', area: 'Settings', label: 'Advanced settings', hint: 'Tools, agent loop, hooks, sandbox and developer pages', platforms: D, default: 'expert' },
-  { id: 'ph-monitors', area: 'Phone · chats list', label: 'Monitors row', hint: 'Hardware and loaded models at the top of Chats', platforms: P, default: 'expert' },
+  { id: 'ph-monitors', area: 'Phone · chats list', label: 'Monitors row', hint: 'Hardware and loaded models in Chats. Also shown in Simple while a local model is loaded', platforms: P, default: 'expert', whenLocal: true },
 ];
 
 /** Choices that differ from the defaults, by item id. */
@@ -66,10 +68,13 @@ export function simpleVisibility(id: string, choices: SimpleChoices = {}): Simpl
   return choices[id] ?? item.default;
 }
 
-/** Whether an item is on screen in the given mode. */
-export function simpleShown(id: string, expert: boolean, choices: SimpleChoices = {}): boolean {
+/**
+ * Whether an item is on screen in the given mode. Monitors at Expert only
+ * (`whenLocal`) also show in Simple while a local model is loaded.
+ */
+export function simpleShown(id: string, expert: boolean, choices: SimpleChoices = {}, localModelLoaded = false): boolean {
   const v = simpleVisibility(id, choices);
-  return v === 'show' || (v === 'expert' && expert);
+  return v === 'show' || (v === 'expert' && (expert || (localModelLoaded && !!BY_ID.get(id)?.whenLocal)));
 }
 
 /** Saved choices, keeping only known ids with valid values. Never throws. */
