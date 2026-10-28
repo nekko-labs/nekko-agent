@@ -297,6 +297,8 @@ async fn serve(
                 if let Some(core) = lock(&shared.core).as_mut() {
                     let frames = core.tick();
                     shared.send_all(frames);
+                    // A card that is up re-reads the chat list once a minute.
+                    read_summaries(shared, core, summaries);
                 }
             }
             _ = stopped.changed() => break (u16::from(CloseCode::Normal), String::new()),

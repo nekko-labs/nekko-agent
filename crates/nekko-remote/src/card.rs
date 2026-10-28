@@ -377,6 +377,9 @@ pub struct Cards {
     /// Nil until the chat list was read.
     summaries: Option<Vec<Summary>>,
     wants: bool,
+    /// When a card that is up last asked for the list again (a watch may end, a chat be renamed or archived).
+    listed_at: f64,
+    /// Focus and dismissals are shared by every phone: they are one user's.
     dismissed: std::collections::HashSet<String>,
     pinned: Option<String>,
     /// When a phone last sent to each chat (`chat:send`, `chat:queue`).
@@ -386,6 +389,8 @@ pub struct Cards {
     sent_at: f64,
     pending: bool,
     checked_at: f64,
+    /// A new relay connection: send the card again even if it did not change.
+    resend: bool,
 }
 
 impl Cards {
@@ -403,8 +408,8 @@ impl Cards {
                 self.levels.remove(device);
             }
             Some(level) => {
-                self.levels.insert(device.to_string(), level);
-                self.wants |= self.summaries.is_none();
+                // A new level shows other text: read the list again.
+                self.wants |= self.levels.insert(device.to_string(), level) != Some(level);
             }
             None => {}
         }
@@ -423,6 +428,12 @@ impl Cards {
     /// A revoked phone.
     pub fn forget(&mut self, device: &str) {
         self.levels.remove(device);
+    }
+
+    /// The relay connection dropped: the next one gets the card again (at the next tick).
+    pub fn reconnected(&mut self) {
+        self.resend = true;
+        self.checked_at = f64::MIN;
     }
 
     /// A phone's request: a prompt to a chat makes that chat's next run start a card.
@@ -573,6 +584,7 @@ impl Cards {
         let list: Vec<Summary> = rows.into_iter().map(|(_, s)| s).collect();
         self.dismissed.retain(|id| list.iter().any(|s| s.id == *id));
         self.summaries = Some(list);
+        self.listed_at = now;
         self.update(now, true, false)
     }
 
@@ -580,6 +592,10 @@ impl Cards {
     pub fn tick(&mut self, now: f64) -> Vec<Value> {
         if self.levels.is_empty() {
             return Vec::new();
+        }
+        if self.sent.is_some() && now - self.listed_at >= RECHECK {
+            self.listed_at = now;
+            self.wants = true;
         }
         let due = (self.pending && now - self.sent_at >= CARD_PUSH_GAP) || now - self.checked_at >= RECHECK;
         if due { self.update(now, false, false) } else { Vec::new() }
@@ -599,7 +615,8 @@ impl Cards {
             .filter(|(id, _)| !self.dismissed.contains(*id))
             .filter_map(|(id, s)| {
                 let run = self.runs.get(id);
-                let live = run.filter(|r| r.finished.is_none() && now - r.last_event_at < QUIET_RUN);
+                // A run waiting on the phone stays however long it waits (only FORGET_RUN ends it).
+                let live = run.filter(|r| r.finished.is_none() && (r.needs_you || now - r.last_event_at < QUIET_RUN));
                 let (state, step) = if let Some(live) = live {
                     (if live.needs_you { LiveChatState::NeedsYou } else { LiveChatState::Working }, live.step.clone())
                 } else if s.is_some_and(|s| s.watching) {
@@ -647,6 +664,7 @@ impl Cards {
         {
             self.pinned = None;
         }
+        let resend = std::mem::take(&mut self.resend);
         let Some(state) = state else {
             self.pending = false;
             return match self.sent.take() {
@@ -655,14 +673,15 @@ impl Cards {
             };
         };
         let prev = self.sent.as_ref();
-        if prev == Some(&state) && !start {
+        if prev == Some(&state) && !start && !resend {
             self.pending = false;
             return Vec::new();
         }
         let shape = |s: &LiveCardState| -> Vec<(String, LiveChatState, Option<String>)> {
             s.chats.iter().map(|c| (c.id.clone(), c.state, c.call_id.clone())).collect()
         };
-        let at_once = urgent || start || prev.is_none_or(|p| shape(p) != shape(&state) || p.focus_id != state.focus_id);
+        let at_once =
+            urgent || start || resend || prev.is_none_or(|p| shape(p) != shape(&state) || p.focus_id != state.focus_id);
         if !at_once && now - self.sent_at < CARD_PUSH_GAP {
             self.pending = true;
             return Vec::new();
@@ -880,6 +899,54 @@ mod tests {
         assert!(card.chats.is_empty(), "quiet: no longer shown as working");
         c.tick(T0 + FORGET_RUN + 120.0);
         assert!(c.runs.is_empty(), "a run whose end was never heard does not stay forever");
+    }
+
+    #[test]
+    fn a_chat_waiting_on_the_phone_stays_however_long_it_waits() {
+        let mut c = standard();
+        let approval =
+            ev("tool_approval_required", "s1", json!({ "call": { "id": "c9", "name": "bash", "input": {} } }));
+        only(&c.on_event(&approval, T0));
+        let q = ev("question", "s2", json!({ "request": { "questions": [{ "question": "Which?" }] } }));
+        only(&c.on_event(&q, T0 + 1.0));
+        assert!(c.tick(T0 + QUIET_RUN + 60.0).is_empty(), "31 minutes waiting: still on the card, unchanged");
+        // A quiet working run does leave.
+        let mut c = standard();
+        only(&c.on_event(&tool("s1", "sleep"), T0));
+        assert!(only(&c.tick(T0 + QUIET_RUN + 60.0)).1.chats.is_empty());
+    }
+
+    #[test]
+    fn the_chat_list_is_read_again_while_a_card_is_up_and_on_a_level_change() {
+        let mut c = standard();
+        c.wants_summaries();
+        only(&c.set_summaries(&json!([{ "id": "w", "title": "Ship it", "activeWatchCount": 1 }]), T0));
+        assert!(!c.wants_summaries());
+        c.tick(T0 + 30.0);
+        assert!(!c.wants_summaries());
+        c.tick(T0 + RECHECK);
+        assert!(c.wants_summaries(), "a watch may have ended or a chat been renamed");
+        c.tick(T0 + RECHECK + 1.0);
+        assert!(!c.wants_summaries(), "once a minute");
+        // The watch was cancelled: the card ends.
+        let (_, card) = only(&c.set_summaries(&json!([{ "id": "w", "title": "Ship it" }]), T0 + RECHECK + 2.0));
+        assert!(card.chats.is_empty());
+        c.tick(T0 + 10.0 * RECHECK);
+        assert!(!c.wants_summaries(), "no card up: nothing to refresh");
+        c.set("phone-1", &json!([{ "level": "detailed" }]), T0 + 10.0 * RECHECK);
+        assert!(c.wants_summaries(), "a new level reads the list again");
+        c.set("phone-1", &json!([{ "focus": "w" }]), T0 + 10.0 * RECHECK);
+        assert!(!c.wants_summaries(), "a focus is no level change");
+    }
+
+    #[test]
+    fn a_new_relay_connection_gets_the_card_again() {
+        let mut c = standard();
+        only(&c.on_event(&tool("s1", "ls"), T0));
+        c.reconnected();
+        let (ty, card) = only(&c.tick(T0 + 1.0));
+        assert_eq!((ty.as_str(), card.chats.len()), ("card", 1));
+        assert!(c.tick(T0 + 2.0).is_empty(), "once");
     }
 
     #[test]

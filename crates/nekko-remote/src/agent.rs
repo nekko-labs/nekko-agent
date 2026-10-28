@@ -271,6 +271,7 @@ impl AgentCore {
     pub fn reset(&mut self) {
         let before = self.connected_devices();
         self.conns.clear();
+        self.cards.reconnected();
         self.forget_gone(before);
     }
 
