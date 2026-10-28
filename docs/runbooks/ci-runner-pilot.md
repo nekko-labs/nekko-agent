@@ -10,7 +10,7 @@ repo's Native iOS jobs, each in a throwaway VM, with the hosted Mac as the fallb
 ## Goal
 
 One docked Mac runs `ios-native.yml` jobs for at least 7 days or 20 jobs, whichever is later,
-with the hosted `macos-14` runner as the fallback. Done when the results are posted on #1038
+with the hosted `xcode-27` runner as the fallback. Done when the results are posted on #1038
 (see [Record the results](#record-the-results)).
 
 ## What is still owed before the pilot can start
@@ -112,7 +112,7 @@ layer, and every one must be checked before `NEKKO_MAC_RUNNERS` is turned on:
 With the restriction on, a run of `ios-native.yml` from any other ref (a labeled pull request
 runs from `refs/pull/<n>/merge`, a branch dispatch from that branch) cannot use the Mac. So the
 `pick` job runs only for the schedule and for dispatches on `main` or `ci/ios-batch`; a labeled
-pull request never asks the picker and always runs on `macos-14`.
+pull request never asks the picker and always runs on `xcode-27`.
 
 Allowing `ci/ios-batch` means the Mac trusts everyone with write access to the repo, not only
 `main`: the batch branch carries the unreviewed code of open same-repo PRs (`ios-batch.yml` drops
@@ -145,7 +145,7 @@ the org's runners.
    `gh variable set NEKKO_MAC_RUNNERS --body on -R nekko-labs/nekko-agent`.
 
 Off again at any time: `gh variable set NEKKO_MAC_RUNNERS --body off -R nekko-labs/nekko-agent`.
-With it off, the `pick` job is skipped and every run uses `macos-14` as before. A token that
+With it off, the `pick` job is skipped and every run uses the hosted `xcode-27` runner. A token that
 lacks the permission gets a 403, and the picker falls back to hosted with `api 403` in its log.
 
 ## First job
@@ -159,7 +159,7 @@ gh workflow run ios-native.yml --ref main -R nekko-labs/nekko-agent
 - The card's recent jobs show it `finished`, and `<data>/runners/vms` is empty afterward.
 
 Then switch the runner **Off** on its card and run it again: the `pick` log says
-`no idle runner` and the job runs on `macos-14`. Switch it back on.
+`no idle runner` and the job runs on `xcode-27`. Switch it back on.
 
 ## What to measure
 
