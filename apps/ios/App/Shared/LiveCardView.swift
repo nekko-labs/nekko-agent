@@ -261,7 +261,8 @@ private struct PositionLabel: ViewModifier {
 
     func body(content: Content) -> some View {
         if on {
-            content.accessibilityElement(children: .ignore).accessibilityLabel(text).accessibilityValue(value)
+            // .ignore makes a new element, which drops the Button's trait; add it back.
+            content.accessibilityElement(children: .ignore).accessibilityLabel(text).accessibilityValue(value).accessibilityAddTraits(.isButton)
         } else {
             content
         }
