@@ -408,8 +408,8 @@ impl Cards {
                 self.levels.remove(device);
             }
             Some(level) => {
-                // A new level shows other text: read the list again.
-                self.wants |= self.levels.insert(device.to_string(), level) != Some(level);
+                // A new level shows other text: read the list again; so does a list never read.
+                self.wants |= self.levels.insert(device.to_string(), level) != Some(level) || self.summaries.is_none();
             }
             None => {}
         }
