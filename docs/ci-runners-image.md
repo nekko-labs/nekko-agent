@@ -24,8 +24,9 @@ the image itself never runs a job, and nothing a job does survives it.
 From the root of this repo:
 
 ```bash
-tart clone ghcr.io/cirruslabs/macos-sequoia-xcode:<tag> nekko-golden
+tart clone ghcr.io/cirruslabs/macos-tahoe-xcode:<tag> nekko-golden
 tart run --no-graphics --dir runner-image:scripts/runner-image:ro nekko-golden &
+tart exec nekko-golden sudo mv /Applications/Xcode_<tag>.app /Applications/Xcode.app
 tart exec nekko-golden sudo bash "/Volumes/My Shared Files/runner-image/provision.sh"
 tart stop nekko-golden
 mkdir -p ~/.nekko-agent/runners/images/default
@@ -34,8 +35,10 @@ cp -c ~/.tart/vms/nekko-golden/{config.json,disk.img,nvram.bin} ~/.nekko-agent/r
 
 Pick `<tag>` from the [Cirrus image list](https://github.com/cirruslabs/macos-image-templates)
 for the Xcode your jobs need. `--dir` shares `scripts/runner-image` into the guest read-only, so
-`provision.sh` finds the boot script and LaunchDaemon beside it. `tart exec` works only once:
-`provision.sh` removes the Tart guest agent it runs through.
+`provision.sh` finds the boot script and LaunchDaemon beside it. Cirrus installs Xcode as
+`Xcode_<version>.app`, and `provision.sh` refuses that name (the job user cannot `sudo
+xcode-select`), so rename it first. `tart exec` stops working once `provision.sh` has run: it
+removes the Tart guest agent it runs through, and disables the admin `tart exec` runs as.
 
 `~/.nekko-agent` is Nekko's data folder (or `$NEKKO_DATA_DIR` when you set it). `cp -c` clones
 the files on APFS, so the copy is instant and takes no extra space until one side changes.
@@ -88,8 +91,9 @@ Terminal. Stop the VM and copy the three files as above.
    `/etc/sudoers.d` goes (and it fails if `/etc/sudoers` still allows passwordless sudo), SSH,
    Screen Sharing and Apple Remote Desktop are turned off, and Cirrus Labs' LaunchDaemons,
    LaunchAgents and the Tart guest agent are removed. Then it checks the result: it fails unless
-   `sudo -l -U runner` says `runner` may not use sudo, `runner` is not in the `admin` group, every
-   admin and root are refused authentication, and every local user got a plain answer from
+   `sudo -l -U runner` says `runner` may not use sudo, `runner` is not in the `admin` group,
+   `launchctl` lists SSH and Screen Sharing as disabled, every admin and root are refused
+   authentication, and every local user got a plain answer from
    `dsmemberutil` (anything else stops it). Root keeps working for the system and for `sudo`; it
    just cannot be logged in as.
 10. Writes `/usr/local/share/nekko-runner-image.json` with the build date and the macOS, Xcode,
@@ -153,6 +157,17 @@ error: The resource cannot be found.. Retrying until reconnected."), so that VM 
 the max job time.
 
 ## Verified on
+
+2026-10-28, on an M1 Max running macOS 27.0.1, guest Cirrus `macos-tahoe-xcode:27.1` (macOS
+26.6.2, Xcode 27.1), built with Tart 2.41.1 exactly as in [Build it](#build-it).
+
+- The first build stopped at the lockdown: `systemsetup -setremotelogin off` needs Full Disk
+  Access on macOS 26. By then the admin was disabled and sudoers emptied, so that VM was thrown
+  away and rebuilt from a fresh clone. The `launchctl disable` before it is what keeps sshd off,
+  and the script now checks `launchctl print-disabled` for sshd and Screen Sharing instead.
+- Build: `provision.sh` ran in about 2 min. Boot with the `not-a-config` seed: `started` to
+  `stopped`, reason `guest`, in 76 s with nobody touching the VM. The clone's boot log shows the
+  runner starting, rejecting the config, `runner exited with 0`, `shutting down`.
 
 2026-10-25, on a Mac with Apple silicon running macOS 27.0.1, guest Cirrus
 `macos-sequoia-base` (macOS 15.7.7, no Xcode). Tart was not installed, so the image was built

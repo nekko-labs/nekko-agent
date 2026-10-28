@@ -231,6 +231,8 @@ function lockdownProblems(text) {
   flag('dscl -passwd cannot reset a secure-token admin', (l) => /\bdscl\b.*-passwd\b/.test(l));
   flag('sysadminctl -autologin writes nothing', (l) => /\bsysadminctl\b.*-autologin\b/.test(l));
   flag('softwareupdate --schedule off changes nothing', (l) => /\bsoftwareupdate\b.*--schedule\b/.test(l));
+  // Found building the macOS 26 image: it needs Full Disk Access, fails and stops the build.
+  flag('systemsetup -setremotelogin needs Full Disk Access', (l) => /\bsystemsetup\b.*-setremotelogin\b/.test(l));
   return bad;
 }
 
@@ -238,6 +240,9 @@ test('provision_locks_the_guest_down', () => {
   const p = provision();
   for (const s of [
     'launchctl disable system/com.openssh.sshd',
+    'disabled_services="$(launchctl print-disabled system)"',
+    'for s in com.openssh.sshd com.apple.screensharing; do',
+    '[[ "$disabled_services" == *"\\"$s\\" => disabled"* ]] || die ',
     'launchctl disable system/com.apple.screensharing',
     'ARDAgent.app/Contents/Resources/kickstart',
     '"$kickstart" -deactivate -stop',
@@ -287,6 +292,7 @@ test('lockdown_bans_trip_on_planted_lines', () => {
     'dscl . -passwd "/Users/$u" "$pw"',
     'sysadminctl -autologin set -userName runner -password "$runner_pw"',
     'softwareupdate --schedule off',
+    'systemsetup -f -setremotelogin off',
     'echo "$runner_pw"',
   ])
     assert.notDeepEqual(lockdownProblems(`${p}\n${line}\n`), [], line);

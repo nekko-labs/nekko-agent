@@ -166,7 +166,9 @@ if grep -v '^[[:space:]]*#' /etc/sudoers | grep NOPASSWD >/dev/null; then
   die "/etc/sudoers grants passwordless sudo: remove it from the base image"
 fi
 launchctl disable system/com.openssh.sshd
-systemsetup -f -setremotelogin off
+# Not systemsetup -setremotelogin off: on macOS 26 it needs Full Disk Access and fails. The disable
+# above is what lasts across boots; bootout stops an sshd that is running now.
+launchctl bootout system/com.openssh.sshd 2>/dev/null || true
 launchctl disable system/com.apple.screensharing
 kickstart=/System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart
 if [ -x "$kickstart" ]; then
@@ -182,6 +184,10 @@ sudo_l="$(sudo -l -U runner 2>&1 || true)"
 [[ "$sudo_l" == *"is not allowed to run sudo"* ]] || die "runner can use sudo"
 membership="$(dsmemberutil checkmembership -U runner -G admin 2>&1 || true)"
 [[ "$membership" == *"is not a member"* ]] || die "runner is an admin"
+disabled_services="$(launchctl print-disabled system)"
+for s in com.openssh.sshd com.apple.screensharing; do
+  [[ "$disabled_services" == *"\"$s\" => disabled"* ]] || die "$s is not disabled"
+done
 
 # 10. What this image holds, for the app and for whoever debugs it.
 xcode=null
