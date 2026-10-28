@@ -2,7 +2,7 @@ import NekkoProtocol
 import SwiftUI
 
 /// A chat's status on the Live Activity card: the shapes of `ChatStatusIcon`
-/// (rocket, question mark, check, Zz) plus a cross for a failure. Colors are
+/// (a green rocket like desktop's, question mark, check, Zz) plus a cross for a failure. Colors are
 /// fixed because the card is always dark.
 struct LiveStatusGlyph: View {
     let state: LiveChatState
@@ -23,7 +23,7 @@ extension LiveChatState {
     var tint: Color {
         switch self {
         case .needsYou: return Color(red: 1, green: 0.62, blue: 0.04)
-        case .working: return Color(red: 0.55, green: 0.49, blue: 1)
+        case .working: return Color(red: 0.30, green: 0.76, blue: 0.54)
         case .watching: return Color(red: 0.04, green: 0.52, blue: 1)
         case .done: return Color(red: 0.19, green: 0.82, blue: 0.35)
         case .failed: return Color(red: 1, green: 0.27, blue: 0.23)
@@ -69,17 +69,18 @@ private func scaled(_ path: Path, _ rect: CGRect) -> Path {
 
 struct RocketGlyph: Shape {
     func path(in rect: CGRect) -> Path {
+        // Desktop's RocketIcon (icons.tsx), nose up, on its 24 x 24 grid; the speed streaks are left out at this size.
         var path = Path()
-        // A diagonal rocket, with fins, window and exhaust, like desktop.
-        path.move(to: CGPoint(x: 7, y: 11))
-        path.addQuadCurve(to: CGPoint(x: 16, y: 2), control: CGPoint(x: 8, y: 2))
-        path.addQuadCurve(to: CGPoint(x: 7, y: 11), control: CGPoint(x: 16, y: 10))
-        path.move(to: CGPoint(x: 7, y: 7))
-        path.addLines([CGPoint(x: 3, y: 7), CGPoint(x: 2, y: 11), CGPoint(x: 7, y: 11), CGPoint(x: 7, y: 16), CGPoint(x: 11, y: 15), CGPoint(x: 11, y: 11)])
-        path.addEllipse(in: CGRect(x: 10, y: 5, width: 3, height: 3))
-        path.move(to: CGPoint(x: 4, y: 13))
-        path.addLine(to: CGPoint(x: 2, y: 16))
-        return scaled(path, rect)
+        path.move(to: CGPoint(x: 12, y: 2.5))
+        path.addCurve(to: CGPoint(x: 15.8, y: 11.1), control1: CGPoint(x: 14.6, y: 4.5), control2: CGPoint(x: 15.8, y: 7.5))
+        path.addLines([CGPoint(x: 15.8, y: 11.1), CGPoint(x: 15.8, y: 16), CGPoint(x: 8.2, y: 16), CGPoint(x: 8.2, y: 11.1)])
+        path.addCurve(to: CGPoint(x: 12, y: 2.5), control1: CGPoint(x: 8.2, y: 7.5), control2: CGPoint(x: 9.4, y: 4.5))
+        path.closeSubpath()
+        path.addEllipse(in: CGRect(x: 10.4, y: 7.9, width: 3.2, height: 3.2))
+        path.addLines([CGPoint(x: 8.2, y: 12.5), CGPoint(x: 5.8, y: 15), CGPoint(x: 5.8, y: 17.2), CGPoint(x: 8.2, y: 16)])
+        path.addLines([CGPoint(x: 15.8, y: 12.5), CGPoint(x: 18.2, y: 15), CGPoint(x: 18.2, y: 17.2), CGPoint(x: 15.8, y: 16)])
+        path.addLines([CGPoint(x: 10.6, y: 18.2), CGPoint(x: 12, y: 21.5), CGPoint(x: 13.4, y: 18.2)])
+        return path.applying(CGAffineTransform(translationX: rect.minX, y: rect.minY).scaledBy(x: rect.width / 24, y: rect.height / 24))
     }
 }
 
