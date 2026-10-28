@@ -41,7 +41,7 @@ struct CloudView: View {
                         Text("Signing out keeps the synced chats on this iPhone until you forget everything in Settings.").foregroundStyle(palette.inkSoft)
                     }
                 }
-                .refreshable { await run { try await cloud.sync() } }
+                .pawRefreshable { await run { try await cloud.sync() } }
             }
         }
         .appBackground()

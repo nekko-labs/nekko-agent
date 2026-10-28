@@ -20,6 +20,7 @@ struct ChatStatusFixture: View {
             }
             .listStyle(.plain)
             .appBackground()
+            .pawRefreshable { try? await Task.sleep(for: .seconds(1.2)) }
             .navigationTitle("Chats")
             .toolbar {
                 RootMascot(working: true)

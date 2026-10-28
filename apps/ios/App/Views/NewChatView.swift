@@ -510,7 +510,7 @@ struct ModelPicker: View {
                 }
             }
             .searchable(text: $query)
-            .refreshable { await store.loadAllModels(force: true) }
+            .pawRefreshable { await store.loadAllModels(force: true) }
             .navigationTitle("Model")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } } }

@@ -42,7 +42,7 @@ struct ChatsView: View {
         .listRowSeparatorTint(palette.line)
         .appBackground()
         .searchable(text: $query, prompt: "Search chats")
-        .refreshable { await store.refresh() }
+        .pawRefreshable { await store.refresh() }
         .navigationTitle("Chats")
         .toolbar {
             RootMascot(working: store.activity.values.contains(.running))
