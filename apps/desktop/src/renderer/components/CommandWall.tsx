@@ -815,10 +815,10 @@ export function CommandWall({
         {pane.kind === 'zone' ? <div className="wall-zone-empty" data-zone-empty>
           <ZoneEmptyIllustration />
           <p className="wall-zone-empty-title">Empty zone</p>
-          <p>Click an agent in the panel to show it here, or drag one in.</p>
+          <p>Drag in an agent chat or start a new one below.</p>
           <div className="wall-zone-create">
-            {CREATE_OPTIONS.map(([kind, label, icon]) => <button key={kind} type="button" className={`btn btn-ghost${kind === 'chat' ? ' text-accent' : ''}`} data-zone-create={kind}
-              onClick={() => { void live.current.addWindow(kind === 'terminal' ? 'terminal' : 'chat', undefined, pane.id, kind === 'image'); }}>{icon}{label}</button>)}
+            {CREATE_OPTIONS.map(([kind, label, icon]) => <button key={kind} type="button" className={`btn btn-ghost wall-zone-option${kind === 'chat' ? ' text-accent' : ''}`} data-zone-create={kind}
+              onClick={() => { void live.current.addWindow(kind === 'terminal' ? 'terminal' : 'chat', undefined, pane.id, kind === 'image'); }}><PlusIcon className="wall-zone-plus h-3.5 w-3.5" />{icon}{label}</button>)}
           </div>
         </div> : <>
         {/* The composer's beam, quieter: a working agent window says so at a glance. */}
