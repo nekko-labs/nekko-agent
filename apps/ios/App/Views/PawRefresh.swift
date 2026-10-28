@@ -82,6 +82,23 @@ struct PawPose: Equatable {
     }
 
     private static func easeOut(_ x: Double) -> CGFloat { CGFloat(1 - pow(1 - min(1, max(0, x)), 2)) }
+
+    /// Where the spinner, the paw's tip and its elbow are. The reach and the pull home
+    /// both curve out towards `side` (a unit vector) and the elbow bends that way, as a
+    /// cat hooks a paw round something to scoop it in. The paw lands on the spinner's
+    /// `side` edge, `radius` out from its centre.
+    func scoop(shoulder: CGPoint, far: CGPoint, home: CGPoint, side: CGVector, radius: CGFloat) -> (center: CGPoint, tip: CGPoint, elbow: CGPoint) {
+        func out(_ p: CGPoint, _ by: CGFloat) -> CGPoint { CGPoint(x: p.x + side.dx * by, y: p.y + side.dy * by) }
+        func mid(_ a: CGPoint, _ b: CGPoint) -> CGPoint { CGPoint(x: (a.x + b.x) / 2, y: (a.y + b.y) / 2) }
+        func curve(_ a: CGPoint, _ b: CGPoint, bulge: CGFloat, _ t: CGFloat) -> CGPoint {
+            let c = out(mid(a, b), bulge * hypot(b.x - a.x, b.y - a.y)), u = 1 - t
+            return CGPoint(x: u * u * a.x + 2 * u * t * c.x + t * t * b.x, y: u * u * a.y + 2 * u * t * c.y + t * t * b.y)
+        }
+        let center = curve(far, home, bulge: 0.4, 1 - spinner)
+        let tip = curve(shoulder, out(center, radius * 0.85), bulge: 0.35, reach)
+        let elbow = out(mid(shoulder, tip), min(10, 0.3 * hypot(tip.x - shoulder.x, tip.y - shoulder.y)))
+        return (center, tip, elbow)
+    }
 }
 
 /// The scroll view's pull and refresh state, fed by the probe.
@@ -128,16 +145,19 @@ enum PawArt {
         }
     }
 
-    /// An arm from `from` to `to`, ending in a pad with two toes.
-    static func paw(from: CGPoint, to: CGPoint, in context: GraphicsContext) {
+    /// An arm from the shoulder, bent at the elbow, ending in a pad with two toes at
+    /// `tip`. Nothing while the paw is still tucked in.
+    static func paw(shoulder: CGPoint, elbow: CGPoint, tip: CGPoint, in context: GraphicsContext) {
+        guard hypot(tip.x - shoulder.x, tip.y - shoulder.y) > 4 else { return }
         var arm = Path()
-        arm.move(to: from)
-        arm.addLine(to: to)
-        context.stroke(arm, with: .color(line), style: StrokeStyle(lineWidth: 7.5, lineCap: .butt))
-        context.stroke(arm, with: .color(fill), style: StrokeStyle(lineWidth: 4.5, lineCap: .butt))
+        arm.move(to: shoulder)
+        arm.addLine(to: elbow)
+        arm.addLine(to: tip)
+        context.stroke(arm, with: .color(line), style: StrokeStyle(lineWidth: 7.5, lineCap: .butt, lineJoin: .round))
+        context.stroke(arm, with: .color(fill), style: StrokeStyle(lineWidth: 4.5, lineCap: .butt, lineJoin: .round))
         var pad = context
-        pad.translateBy(x: to.x, y: to.y)
-        pad.rotate(by: .radians(atan2(to.y - from.y, to.x - from.x)))
+        pad.translateBy(x: tip.x, y: tip.y)
+        pad.rotate(by: .radians(atan2(tip.y - elbow.y, tip.x - elbow.x)))
         let rect = Path(roundedRect: CGRect(x: -4, y: -5, width: 8, height: 10), cornerRadius: 2)
         pad.fill(rect, with: .color(fill))
         pad.stroke(rect, with: .color(line), lineWidth: 1.5)
@@ -181,19 +201,19 @@ struct PawRefreshArt: View {
     }
 
     private func draw(_ pose: PawPose, turn: Double, in context: inout GraphicsContext) {
-        let y: CGFloat = 27
-        let cx = 58 + pose.spinner * 46
-        let tip = 37 + pose.reach * (cx - 12 - 37)
-        // The arm comes out from behind the cat's cheek.
-        if tip > 37 { PawArt.paw(from: CGPoint(x: 33, y: y), to: CGPoint(x: tip - 4, y: y), in: context) }
+        // The arm comes out from behind the cat's cheek and arcs up and over the spinner.
+        let shoulder = CGPoint(x: 30, y: 28)
+        let at = pose.scoop(shoulder: shoulder, far: CGPoint(x: 104, y: 27), home: CGPoint(x: 56, y: 27),
+                            side: CGVector(dx: 0, dy: -1), radius: 10)
         var spinner = context
-        spinner.translateBy(x: cx, y: y)
+        spinner.translateBy(x: at.center.x, y: at.center.y)
         PawArt.spinner(turn: turn, ink: pull.ink, opacity: pose.spinnerOpacity, in: spinner)
+        PawArt.paw(shoulder: shoulder, elbow: at.elbow, tip: at.tip, in: context)
     }
 }
 
-/// The toolbar mascot's paw and the spinner it holds, drawn below its chin in window
-/// coordinates taken from the refresh control.
+/// The toolbar mascot's paw and the spinner it scoops in, drawn behind the cat (so the
+/// arm comes out from under its cheek) in window coordinates taken from the refresh control.
 struct MascotPawLayer: View {
     @ObservedObject var pull: PawPull
     /// The mascot's frame in window coordinates.
@@ -207,18 +227,18 @@ struct MascotPawLayer: View {
                 let pose = pull.pose(at: timeline.date)
                 // Window coordinates into this canvas, which hangs from the mascot's top centre.
                 let origin = CGPoint(x: mascot.midX - size.width / 2, y: mascot.minY)
-                let chin = CGPoint(x: size.width / 2, y: mascot.height * 0.78)
-                let home = CGPoint(x: chin.x, y: chin.y + 16)
+                let cat = size.width / 2
+                // The right cheek, under the face's edge; home is tucked behind that cheek.
+                let shoulder = CGPoint(x: cat + 9, y: mascot.height * 0.7)
+                let home = CGPoint(x: cat + 26, y: mascot.height * 0.8)
                 let far = CGPoint(x: target.x - origin.x, y: target.y - origin.y)
-                let center = CGPoint(x: home.x + (far.x - home.x) * pose.spinner, y: home.y + (far.y - home.y) * pose.spinner)
-                // The pad lands on the spinner's top, 1.4x as drawn in the control.
-                let grab = CGPoint(x: center.x, y: center.y - 14)
-                let tip = CGPoint(x: chin.x + (grab.x - chin.x) * pose.reach, y: chin.y + (grab.y - chin.y) * pose.reach)
+                // The spinner is drawn 1.4x in the control; the paw hooks its outer side.
+                let at = pose.scoop(shoulder: shoulder, far: far, home: home, side: CGVector(dx: 1, dy: 0), radius: 14)
                 var spinner = context
-                spinner.translateBy(x: center.x, y: center.y)
+                spinner.translateBy(x: at.center.x, y: at.center.y)
                 spinner.scaleBy(x: 1.4, y: 1.4)
                 PawArt.spinner(turn: pull.turn(at: timeline.date), ink: pull.ink, opacity: pose.spinnerOpacity, in: spinner)
-                if tip.y - chin.y > 4 { PawArt.paw(from: chin, to: tip, in: context) }
+                PawArt.paw(shoulder: shoulder, elbow: at.elbow, tip: at.tip, in: context)
             }
         }
         .frame(width: Self.size.width, height: Self.size.height)

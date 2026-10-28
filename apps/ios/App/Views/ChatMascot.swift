@@ -59,8 +59,9 @@ struct ChatMascot: View {
                 greeting = false
             } catch { /* A newer tap or leaving the screen cancels the greeting. */ }
         }
-        // After the accessibility modifiers, so the paw never widens the button's frame.
-        .overlay(alignment: .top) {
+        // After the accessibility modifiers, so the paw never widens the button's frame;
+        // behind the cat, so the arm comes out from under its cheek.
+        .background(alignment: .top) {
             if grabs { MascotPawLayer(pull: pull, mascot: mascotFrame) }
         }
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { mascotFrame = $0 }
