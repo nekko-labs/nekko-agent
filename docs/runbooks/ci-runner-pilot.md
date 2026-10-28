@@ -24,7 +24,7 @@ with the hosted `xcode-27` runner as the fallback. Done when the results are pos
   enough for the pilot itself.
 - **[Philip]** The GitHub App, its key, and connecting the Mac (below).
 - **[Philip]** The Xcode image download (tens of GB) and the image build.
-- **[Philip]** The `NEKKO_PICKER_TOKEN` secret and the `NEKKO_MAC_RUNNERS` variable, only after
+- **[Philip]** The `MAC_RUNNER_STATUS_TOKEN` secret and the `NEKKO_MAC_RUNNERS` variable, only after
   every check in [Security](#security-before-the-switch-goes-on) passes.
 
 The pilot itself then owns: one real job end to end, the real-tunnel VPN check (Tailscale exit
@@ -123,7 +123,7 @@ the public internet through Nekko's NAT (no LAN, no host, no VPN routes), with n
 and no admin access inside. See [decision 0022](../decisions/0022-ci-runners-vm-and-network.md)
 and the [Probe job](#probe-job) below.
 
-## Picker token and switch [Philip]
+## Runner status token and switch [Philip]
 
 The runner is an org runner, which the repo's runner list does not show, so the picker lists
 the org's runners.
@@ -133,8 +133,11 @@ the org's runners.
    **Self-hosted runners: Read-only**, nothing else, 90-day expiry. See GitHub's
    [permissions required for fine-grained personal access tokens](https://docs.github.com/en/rest/authentication/permissions-required-for-fine-grained-personal-access-tokens)
    ("Organization permissions for Self-hosted runners", read, for
-   `GET /orgs/{org}/actions/runners`).
-2. `gh secret set NEKKO_PICKER_TOKEN -R nekko-labs/nekko-agent` (paste the token at the prompt).
+   `GET /orgs/{org}/actions/runners`). If the permissions show **Repositories** and **Account**
+   tabs, the resource owner is still your own account: switch it to `nekko-labs` and an
+   **Organizations** tab appears. If `nekko-labs` is not offered, the org does not allow
+   fine-grained tokens yet (org **Settings > Personal access tokens**).
+2. `gh secret set MAC_RUNNER_STATUS_TOKEN -R nekko-labs/nekko-agent` (paste the token at the prompt).
 3. `gh variable set NEKKO_MAC_RUNNER_ORG --body nekko-labs -R nekko-labs/nekko-agent`. Without
    it the picker reads the repo's own runners (a repo runner, with a token holding repository
    **Administration: Read-only**).
