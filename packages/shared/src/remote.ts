@@ -303,8 +303,10 @@ function hex(bytes: Uint8Array): string {
  * Standard, with step and reply cut to 60 characters and the payload under
  * 4 KB. `card-start` (a run in a chat a phone sent `chat:send`/`chat:queue`
  * to in the last two hours, or one a watch woke) also pushes `event: 'start'`
- * with `attributes-type: 'NekkoCardAttributes'` to each phone with no card up,
- * once until it registers again. Unlike every other push the card carries
+ * with `attributes-type: 'NekkoCardAttributes'` to each phone with no card up
+ * and no open socket in the room, once until it registers again. A push that
+ * only changes a step, a reply or a time goes at APNs priority 5, anything
+ * else at 10; `computerId` and `computerName` are kept to 64 UTF-8 bytes. Unlike every other push the card carries
  * chat text in the clear (ActivityKit draws only what the push holds), so it
  * passes through the relay and Apple's push service at Standard and Detailed.
  * APNs delivery and push-to-start are unverified until the relay has the
