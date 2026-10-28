@@ -55,6 +55,9 @@ final class Prefs {
     var expertMode: Bool { didSet { d.set(expertMode, forKey: "expertMode") } }
     /// Per computer, the last model chosen for a new chat: `providerId::modelId`.
     var lastModel: [String: String] { didSet { d.set(lastModel, forKey: "lastModel") } }
+    /// Per computer, concrete last-used choices, never a recommendation marker.
+    var lastEffort: [String: String] { didSet { d.set(lastEffort, forKey: "lastEffort") } }
+    var lastTools: [String: String] { didSet { d.set(lastTools, forKey: "lastTools") } }
     /// How the chat list is grouped, sorted and what it shows (the desktop Agents panel's view menu).
     var chatListView: ChatListView { didSet { d.set(chatListView.encoded, forKey: "chatListView") } }
     /// Per computer, the project groups' order as dragged on this iPhone (folder ids and `ChatGroup.general`).
@@ -95,6 +98,8 @@ final class Prefs {
         onboarded = flag("onboarded", false)
         expertMode = flag("expertMode", false)
         lastModel = d.dictionary(forKey: "lastModel") as? [String: String] ?? [:]
+        lastEffort = d.dictionary(forKey: "lastEffort") as? [String: String] ?? [:]
+        lastTools = d.dictionary(forKey: "lastTools") as? [String: String] ?? [:]
         chatListView = ChatListView.parse(d.data(forKey: "chatListView"))
         groupOrder = d.dictionary(forKey: "groupOrder") as? [String: [String]] ?? [:]
         paneLayouts = d.dictionary(forKey: "paneLayouts") as? [String: Data] ?? [:]
@@ -104,6 +109,14 @@ final class Prefs {
         func choice(_ k: String) -> Bool? { defaults.object(forKey: k) == nil ? nil : defaults.bool(forKey: k) }
         keepChatList = OfflineSetting.isOn(stored: choice("keepChatList"))
         keepTranscripts = OfflineSetting.isOn(stored: choice("keepTranscripts"))
+    }
+
+    func newChatEffort(computer: String?, model: String, settings: PcSettings) -> Effort {
+        Effort.effective(computer.flatMap { lastEffort[$0] }.flatMap(Effort.init(rawValue:)) ?? settings.effort, for: model)
+    }
+
+    func newChatTools(computer: String?, settings: PcSettings) -> PcSettings.ChatMode {
+        computer.flatMap { lastTools[$0] }.flatMap(PcSettings.ChatMode.init(rawValue:)) ?? settings.effectiveMode
     }
 
     func wants(_ kind: PushKind) -> Bool {

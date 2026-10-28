@@ -6,24 +6,24 @@ import type { ContextBundle } from '@nekko-agent/shared';
 import { ContextGauge, EffortSlider, effortRungs, formatContextTokens } from './ChatMetrics.js';
 
 describe('effort slider', () => {
-  it('puts Low at the left end for Opus 5.5 and marks its default on the Medium rung', () => {
-    expect(effortRungs('normal', 'claude-opus-5-5')).toEqual({ options: ['low', 'normal', 'high', 'xhigh', 'max'], index: 1, shown: 'Default · Medium' });
+  it('puts Low at the left end for Opus 5.5 and shows its concrete Medium rung', () => {
+    expect(effortRungs('normal', 'claude-opus-5-5')).toEqual({ options: ['low', 'medium', 'high', 'xhigh', 'max'], index: 1, shown: 'Medium' });
     expect(effortRungs('low', 'claude-opus-5-5')).toMatchObject({ index: 0, shown: 'Low' });
     expect(effortRungs('max', 'claude-opus-5-5')).toMatchObject({ index: 4, shown: 'Max' });
-    // The default-first slider rendered with no settings loaded.
+    // First render resolves the model-compatible concrete value.
     const html = renderToStaticMarkup(<EffortSlider modelId="claude-opus-5-5" />);
     expect(html).toContain('data-effort-count="5"');
     expect(html).toContain('data-effort-index="1"');
-    expect(html).toContain('aria-label="Reasoning effort: Default · Medium"');
+    expect(html).toContain('aria-label="Reasoning effort: Medium"');
   });
   it('shows the chat effort when given a chat', () => {
     const html = renderToStaticMarkup(<EffortSlider modelId="claude-opus-5-5" session={{ id: 'c', effort: 'max' }} />);
     expect(html).toContain('data-effort-index="4"');
     expect(html).toContain('Reasoning effort for this chat');
   });
-  it('treats picking the default rung explicitly as the default', () => {
-    expect(effortRungs('medium', 'claude-opus-5-5').shown).toBe('Default · Medium');
-    expect(effortRungs('high', 'claude-opus-5')).toMatchObject({ options: ['low', 'medium', 'normal', 'xhigh', 'max'], index: 2, shown: 'Default · High' });
+  it('normalizes legacy aliases to concrete supported rungs', () => {
+    expect(effortRungs('medium', 'claude-opus-5-5').shown).toBe('Medium');
+    expect(effortRungs('high', 'claude-opus-5')).toMatchObject({ options: ['low', 'medium', 'high', 'xhigh', 'max'], index: 2, shown: 'High' });
     expect(effortRungs('medium', 'claude-opus-5')).toMatchObject({ index: 1, shown: 'Medium' });
   });
   it('leaves non-native scales unchanged', () => {
