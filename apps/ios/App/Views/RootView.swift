@@ -108,10 +108,12 @@ struct RootView: View {
     private var covered: Bool { app.prefs.appLock && (app.lock.locked || phase != .active) }
 
     private func syncCover() {
-        guard covered else { return cover.hide() }
-        cover.show(LockView(phase: phase)
+        // Before the first unlock the cover is the launch screen's plain lavender, so
+        // the full opening animation underneath starts on it; after that it is the cat.
+        let lock = LockView(phase: phase, cat: app.lock.everUnlocked, opening: !covered) { cover.opened() }
             .environment(app)
-            .modifier(Themed(choice: app.prefs.theme, appearance: store.appearance)))
+            .modifier(Themed(choice: app.prefs.theme, appearance: store.appearance))
+        if covered { cover.show(lock) } else { cover.open(lock) }
     }
 
     @ViewBuilder private var content: some View {
@@ -190,18 +192,23 @@ struct LinkBox: Identifiable {
 
 /// Hosts the lock cover in a window of its own over the app's, so it hides
 /// sheets, alerts and menus as well as the screen under them. Shown at once
-/// (the app switcher snapshot is taken as the app leaves), faded out.
+/// (the app switcher snapshot is taken as the app leaves); unlocked, its view
+/// plays the opening animation's dissolve and then the window goes.
 @MainActor
 final class CoverWindow {
     /// The scene RootView is in (iPad can have several).
     weak var scene: UIWindowScene?
     private var window: UIWindow?
+    /// The view is dissolving away.
+    private var opening = false
+    /// Each showing, so a half-run dissolve never leaves the next cover see-through.
+    private var run = 0
 
     func show(_ view: some View) {
-        if let window, let host = window.rootViewController as? UIHostingController<AnyView> {
-            host.rootView = AnyView(view)
-            window.layer.removeAllAnimations()
-            window.alpha = 1
+        if window?.isHidden != false || opening { run += 1 }
+        opening = false
+        if let window {
+            put(view, in: window)
             window.isHidden = false
             return
         }
@@ -209,20 +216,33 @@ final class CoverWindow {
         else { return }
         let w = UIWindow(windowScene: scene)
         w.windowLevel = .alert + 1
-        let host = UIHostingController(rootView: AnyView(view))
+        let host = UIHostingController(rootView: AnyView(view.id(run)))
         host.view.backgroundColor = .clear
         w.rootViewController = host
         w.isHidden = false
         window = w
     }
 
-    func hide() {
-        guard let window, !window.isHidden else { return }
-        UIView.animate(withDuration: 0.15, delay: 0, options: [.curveEaseOut, .beginFromCurrentState]) {
-            window.alpha = 0
-        } completion: { done in
-            if done { window.isHidden = true }
-        }
+    /// Unlocked: `view` dissolves and calls `opened` when it's gone.
+    func open(_ view: some View) {
+        guard let window, !window.isHidden, !opening else { return }
+        opening = true
+        put(view, in: window)
+    }
+
+    private func put(_ view: some View, in window: UIWindow) {
+        guard let host = window.rootViewController as? UIHostingController<AnyView> else { return }
+        host.rootView = AnyView(view.id(run))
+        // Coming back from the background, a new root view here is not drawn until
+        // something else lays the window out, so Face ID and the dissolve never started.
+        host.view.setNeedsLayout()
+        host.view.layoutIfNeeded()
+    }
+
+    func opened() {
+        guard opening else { return }
+        opening = false
+        window?.isHidden = true
     }
 }
 
@@ -248,33 +268,53 @@ struct SceneReader: UIViewRepresentable {
     }
 }
 
-/// Shown over everything while the app lock is on, on the app's own background.
+/// Shown over everything while the app lock is on: the opening animation's
+/// lavender and cat, so the return is one dissolve with Face ID in the middle.
+/// Unlock appears only if Face ID was cancelled or failed.
 struct LockView: View {
     /// RootView's: the cover's window is not part of the SwiftUI scene, so it
     /// would not see the phase change.
     let phase: ScenePhase
+    /// Unlocked: dissolve, then `opened`.
+    var opening = false
+    var opened: () -> Void = {}
     @Environment(AppModel.self) private var app
-    @Environment(\.palette) private var palette
     @State private var prompted = false
+    /// Fixed for this showing: the first unlock flips `everUnlocked` before the cover goes.
+    @State private var cat: Bool
+
+    init(phase: ScenePhase, cat: Bool, opening: Bool = false, opened: @escaping () -> Void = {}) {
+        self.phase = phase
+        self.opening = opening
+        self.opened = opened
+        _cat = State(initialValue: cat)
+    }
 
     var body: some View {
-        VStack(spacing: 20) {
-            Spacer()
-            BrandMark().frame(width: 88, height: 88)
-            Text("Nekko Agent").font(.title2.weight(.semibold)).foregroundStyle(palette.ink)
-            if app.lock.locked && phase == .active {
-                Button {
-                    Task { await app.lock.unlock() }
-                } label: {
-                    Label("Unlock", systemImage: "faceid").frame(maxWidth: 220).padding(.vertical, 6).foregroundStyle(palette.onAccent)
-                }
-                .buttonStyle(.borderedProminent)
-                if let e = app.lock.error { Text(e).font(.footnote).foregroundStyle(palette.danger) }
+        ZStack {
+            if cat {
+                SplashView(kind: .resume, ready: opening, onDone: opened)
+            } else {
+                SplashView.ground.ignoresSafeArea()
             }
-            Spacer()
+            if app.lock.locked && phase == .active && prompted && !app.lock.authenticating {
+                VStack(spacing: 12) {
+                    Spacer()
+                    Button {
+                        Task { await app.lock.unlock() }
+                    } label: {
+                        Label("Unlock", systemImage: "faceid").frame(maxWidth: 220).padding(.vertical, 6).foregroundStyle(SplashView.ground)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.white)
+                    if let e = app.lock.error { Text(e).font(.footnote).foregroundStyle(.white).multilineTextAlignment(.center) }
+                }
+                .padding(.horizontal, 32)
+                .padding(.bottom, 96)
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background { AppBackdrop() }
+        // Without the cat there is nothing to dissolve: the opening animation underneath takes over.
+        .onChange(of: opening) { _, on in if on && !cat { opened() } }
         // Ask once per return to the app: the Face ID sheet itself makes the
         // scene inactive and active again, which used to ask again after Cancel.
         .task(id: phase) {
