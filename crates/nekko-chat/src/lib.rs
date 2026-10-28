@@ -58,6 +58,7 @@ impl ChunkStream for ProviderStream {
                     output_ms: output_ms.map(|ms| ms as f64),
                 }
             }
+            ProviderChunk::OutputLimit => Chunk::OutputLimit,
             ProviderChunk::Done => Chunk::Done,
         }))
     }
