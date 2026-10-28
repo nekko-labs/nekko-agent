@@ -14,8 +14,8 @@ Simple becomes the everyday app with developer controls out of sight, chosen per
 - [x] **SEM-2, desktop switch and gates.** `simpleMode.ts` store (`useShown`, `shownNow`), the chat and code icon switch in the title bar, and each catalogue control gated where it renders. (2026-10-28)
 - [x] **SEM-3, composer details panel.** The strip under the composer moved into the card as a panel that shrinks to the model. (2026-10-28)
 - [x] **SEM-4, Settings > Simple mode.** Drawn previews per area with dashed out-of-sight controls, a three-way switch per control, preview mode and reset. Evidence: `chat-modes-fixture.tsx` / `chat-modes-sandbox.cjs`, 13 assertions. (2026-10-28)
-- [ ] **SEM-5, iPhone.** The same switch, gates and Settings screen.
-- [ ] **SEM-6, Android.** The same switch, gates and Settings screen.
+- [x] **SEM-5, iPhone.** `SimpleMode.swift`, `Prefs.simpleChoices`, the two-segment switch, gates, `SimpleModeSettingsView`; `SimpleModeTests`, live `testSimpleAndExpertModes` passes. Strings not yet translated. (2026-10-28)
+- [x] **SEM-6, Android.** `SimpleMode.kt`, `SimpleUi.kt`, `SimpleModeSettings.kt`, gates; `SimpleModeTest`, lint and builds pass. `ChatModesTest` rewritten but not run: the build Mac's adb is x86 only. (2026-10-28)
 - [ ] **SEM-7, search and nudge.** List out-of-sight controls in Settings search and the command palette; the *This chat is getting long* nudge in Simple; one summary line per turn for tool steps.
 
 ## Model Server inline download progress (#1221)
