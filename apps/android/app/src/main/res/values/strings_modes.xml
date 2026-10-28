@@ -2,7 +2,6 @@
 <!-- Simple and Expert modes in the chat (spec/phone/iphone-simple-and-expert-modes.md). Wording matches the iPhone's String Catalog. -->
 <resources>
     <string name="your_computer">your computer</string>
-    <string name="mode_label">Mode</string>
     <string name="mode_simple">Simple</string>
     <string name="mode_expert">Expert</string>
     <string name="effort_low">Low</string>

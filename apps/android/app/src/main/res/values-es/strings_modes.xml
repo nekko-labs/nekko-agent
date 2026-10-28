@@ -2,7 +2,6 @@
 <!-- From the iPhone's String Catalog (apps/ios/App/Localizable.xcstrings), machine-drafted there. -->
 <resources>
     <string name="your_computer">tu ordenador</string>
-    <string name="mode_label">Modo</string>
     <string name="mode_simple">Simple</string>
     <string name="mode_expert">Experto</string>
     <string name="effort_low">Bajo</string>

@@ -118,7 +118,10 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenu
 import com.nekko.android.ui.panes.PaneSlot
 import com.nekko.android.ui.chat.ChatOptionsRow
-import com.nekko.android.ui.chat.ModeToggle
+import com.nekko.android.ui.simple.ModeSwitch
+import com.nekko.android.ui.simple.LocalSimple
+import com.nekko.android.ui.simple.SimpleView
+import com.nekko.android.data.SimpleMode
 import com.nekko.android.ui.chat.ModelEffortSheet
 import com.nekko.android.ui.chat.MonitorSheet
 import com.nekko.android.ui.chat.MonitorStrip
@@ -128,7 +131,6 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.ENGINE_PROVIDER_ID
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
     vm: ChatViewModel,
@@ -142,25 +144,49 @@ fun ChatScreen(
     /** The composer's **+** → New agent. */
     onNewChat: (() -> Unit)? = null,
 ) {
+    // Simple or Expert and the per-control choices, read from the chat's own prefs so the screen works outside the app's provider.
+    val expert by vm.expert.collectAsStateWithLifecycle()
+    val raw by vm.simpleChoices.collectAsStateWithLifecycle()
+    val simple = remember(expert, raw) { SimpleView(expert, SimpleMode.parse(raw), vm::setExpert) }
+    CompositionLocalProvider(LocalSimple provides simple) {
+        ChatScreenContent(vm, initialDraft, dictationOn, onBack, onOpenChat, pane, onNewChat)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChatScreenContent(
+    vm: ChatViewModel,
+    initialDraft: String?,
+    dictationOn: Boolean,
+    onBack: () -> Unit,
+    onOpenChat: (id: String, draft: String?) -> Unit,
+    pane: PaneSlot?,
+    onNewChat: (() -> Unit)?,
+) {
+    val simple = LocalSimple.current
+    val showHardware = simple.shown("hardware")
+    val showSteps = simple.shown("thinking")
+    val showGit = simple.shown("ph-git")
+    val showTerminal = simple.shown("terminal")
     val chat by vm.ui.collectAsStateWithLifecycle()
     val completedAt by vm.completedAt.collectAsStateWithLifecycle()
     val changesAllowed by vm.changesAllowed.collectAsStateWithLifecycle()
     val insert by vm.insert.collectAsStateWithLifecycle()
     var showChanges by remember { mutableStateOf(false) }
-    val expert by vm.expert.collectAsStateWithLifecycle()
     val hardware by vm.hardware.state.collectAsStateWithLifecycle()
     val computers by vm.computers.collectAsStateWithLifecycle()
     val computerName = computers.active?.name ?: "your computer"
     var showModelEffort by remember { mutableStateOf(false) }
     var showMonitor by remember { mutableStateOf(false) }
-    // Expert re-reads the hardware every 3 s, only while it is on, this chat is on screen and the computer is reachable.
+    // The hardware strip re-reads every 3 s, only while it shows, this chat is on screen and the computer is reachable.
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val online = computers.conn == RelayState.ONLINE
     // The model's name for the row under the message box (the computer's list, cached for the connection).
     LaunchedEffect(chat.providerId, online) { if (online) chat.providerId?.let { vm.loadModels(it) } }
     // The Monitor names loaded models from the Model Server's own list.
     LaunchedEffect(showMonitor, online) { if (showMonitor && online) vm.loadModels(ENGINE_PROVIDER_ID) }
-    if (expert && online) {
+    if (showHardware && online) {
         LaunchedEffect(vm, lifecycle) { lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { vm.hardware.poll() } }
     }
     var showMenu by remember { mutableStateOf(false) }
@@ -203,9 +229,11 @@ fun ChatScreen(
     }
 
     // Stable keys: a provider that reuses a call id across turns gets a suffix.
-    val keyed = remember(chat.blocks) {
+    // Simple without tool steps leaves them out, and the thoughts between them that have no reply text
+    // (the approval card still asks).
+    val keyed = remember(chat.blocks, showSteps) {
         val seen = HashMap<String, Int>()
-        chat.blocks.map { b ->
+        chat.blocks.filter { showSteps || !(it is Block.Tool || it is Block.Assistant && it.text.isBlank() && !it.streaming && !it.interrupted) }.map { b ->
             val kind = when (b) {
                 is Block.User -> "user"
                 is Block.Assistant -> "assistant"
@@ -264,7 +292,7 @@ fun ChatScreen(
     if (showModelEffort) {
         ModelEffortSheet(chat, computers, onSet = vm::setOptions, onLoadModels = { vm.loadModels() }, onDismiss = { showModelEffort = false })
     }
-    if (showMonitor && expert) {
+    if (showMonitor && showHardware) {
         MonitorSheet(hardware, chat, computerName, vm::modelName, onUnload = vm.hardware::unload, onDismiss = { showMonitor = false })
     }
     val terminals by vm.terminalsOpen.collectAsStateWithLifecycle()
@@ -278,7 +306,7 @@ fun ChatScreen(
     files?.let { f -> FilesDialog(f, vm.repo, onDismiss = vm::closeFiles) }
     val git by vm.gitOpen.collectAsStateWithLifecycle()
     git?.let { o -> GitDialog(o.git, onDismiss = { vm.closeGit(); prReads++ }, pr = o.pr) }
-    if (showPrs) {
+    if (showPrs && showGit) {
         PrSheet(
             prs, onDismiss = { showPrs = false; prReads++ },
             onGit = { pr -> showPrs = false; vm.openGit(pr) },
@@ -293,7 +321,7 @@ fun ChatScreen(
                 TopAppBar(
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
                     actions = {
-                        if (changesAllowed) {
+                        if (changesAllowed && simple.shown("changes")) {
                             IconButton(onClick = { vm.loadChanges(); showChanges = true }) {
                                 Icon(Icons.Filled.Difference, contentDescription = "Changes")
                             }
@@ -315,7 +343,7 @@ fun ChatScreen(
                                     onClick = { showMenu = false; vm.openFiles() },
                                     modifier = Modifier.testTag("chat.files"),
                                 )
-                                DropdownMenuItem(
+                                if (showTerminal) DropdownMenuItem(
                                     text = { Text("Terminals") },
                                     leadingIcon = { Icon(Icons.Filled.Terminal, contentDescription = null) },
                                     onClick = { showMenu = false; vm.openTerminals() },
@@ -330,7 +358,7 @@ fun ChatScreen(
                             IconButton(onClick = onBack) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                             }
-                            ModeToggle(expert, vm::setExpert, compact = pane != null)
+                            ModeSwitch(simple.expert, simple.setExpert)
                         }
                     },
                     title = {
@@ -342,7 +370,7 @@ fun ChatScreen(
                                 }
                                 Text(chat.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            if (simple.shown("ph-subtitle")) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Icon(Icons.Filled.Computer, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(12.dp))
                                 Text(
                                     chat.subtitle,
@@ -355,7 +383,7 @@ fun ChatScreen(
                         }
                     },
                 )
-                if (expert) MonitorStrip(hardware, computerName, onOpen = { showMonitor = true }, modifier = Modifier.background(p.paper))
+                if (showHardware) MonitorStrip(hardware, computerName, onOpen = { showMonitor = true }, modifier = Modifier.background(p.paper))
             }
         },
     ) { padding ->
@@ -423,7 +451,7 @@ fun ChatScreen(
         val controls: @Composable () -> Unit = {
             chat.approval?.let { ApprovalCard(it, onDecide = vm::approve) }
             chat.question?.let { QuestionCard(it, onAnswer = vm::answer) }
-            prs.firstOrNull()?.let { pr -> PrChip(pr) { showPrs = true } }
+            if (showGit) prs.firstOrNull()?.let { pr -> PrChip(pr) { showPrs = true } }
             // A completed chat reads like the desktop's: no message box until it is restored.
             if (completedAt != null && !chat.running) CompletedBar(
                 restoring = restoring,
@@ -463,7 +491,7 @@ fun ChatScreen(
                     queuedPrompts = chat.queuedPrompts,
                     onEditQueued = vm::editQueued,
                     onNewAgent = onNewChat,
-                    onTerminal = vm::openTerminals,
+                    onTerminal = if (showTerminal) vm::openTerminals else null,
                 )
                 ChatOptionsRow(chat, enabled = online, onOpenModelEffort = { showModelEffort = true })
             }

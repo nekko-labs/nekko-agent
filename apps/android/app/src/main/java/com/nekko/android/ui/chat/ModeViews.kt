@@ -25,13 +25,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material.icons.filled.ViewInAr
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -75,6 +73,7 @@ import com.nekko.android.data.ModelPick
 import com.nekko.android.data.modelGroups
 import com.nekko.android.monitors.HardwareState
 import com.nekko.android.ui.screens.ModelList
+import com.nekko.android.ui.simple.LocalSimple
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.ContextUsage
 import com.nekko.protocol.Effort
@@ -89,56 +88,11 @@ import kotlinx.coroutines.launch
 
 /** Test tags the instrumented tests find the controls by. */
 object ModeTags {
-    const val MODE = "chat.mode"
     const val MODEL_EFFORT = "chat.modelEffort"
     const val CONTEXT = "chat.context"
     const val MONITOR = "chat.monitor"
     const val MONITOR_SHEET = "monitor.sheet"
     fun effort(e: Effort) = "modelEffort.${e.wire}"
-}
-
-// ---------------------------------------------------------------------------
-// Simple and Expert
-// ---------------------------------------------------------------------------
-
-/**
- * Simple or Expert, at the top left of a chat beside Back, like the iPhone's and
- * the desktop's. Simple keeps the model, effort and context; Expert adds the
- * computer's hardware and the models its Model Server holds.
- */
-@Composable
-fun ModeToggle(expert: Boolean, onChange: (Boolean) -> Unit, compact: Boolean = false) {
-    val p = Nekko.palette
-    var open by remember { mutableStateOf(false) }
-    val simple = stringResource(R.string.mode_simple)
-    val expertLabel = stringResource(R.string.mode_expert)
-    val mode = stringResource(R.string.mode_label)
-    Box {
-        TextButton(
-            onClick = { open = true },
-            modifier = Modifier.testTag(ModeTags.MODE).semantics {
-                contentDescription = mode
-                stateDescription = if (expert) expertLabel else simple
-            },
-        ) {
-            Icon(Icons.Filled.Speed, contentDescription = null, tint = if (expert) p.accent else p.ink, modifier = Modifier.size(if (compact) 20.dp else 16.dp))
-            // A pane's header is narrow: the dial alone, coloured in Expert, keeps the title readable.
-            if (!compact) {
-                Spacer(Modifier.width(4.dp))
-                Text(if (expert) expertLabel else simple, style = MaterialTheme.typography.labelLarge, color = if (expert) p.accent else p.ink)
-            }
-        }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            listOf(false to simple, true to expertLabel).forEach { (on, label) ->
-                DropdownMenuItem(
-                    text = { Text(label) },
-                    leadingIcon = { if (on == expert) Icon(Icons.Filled.Check, contentDescription = null) },
-                    onClick = { open = false; onChange(on) },
-                    modifier = Modifier.semantics { selected = on == expert },
-                )
-            }
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -231,27 +185,37 @@ fun effortLabel(e: Effort): String = stringResource(
 // Model, effort and context: the row under the message box
 // ---------------------------------------------------------------------------
 
-/** Under the message box in both modes: the model and effort control on the left, the context ring on the right. */
+/** Which halves of the model and effort control show: a chat with no model yet still offers the picker, whatever Simple hides. */
+@Composable
+private fun modelEffortShown(chat: ChatUi): Pair<Boolean, Boolean> {
+    val simple = LocalSimple.current
+    return (simple.shown("model") || chat.modelId == null) to simple.shown("effort")
+}
+
+/** Under the message box: the model and effort control on the left, the context ring on the right, each as Simple allows. */
 @Composable
 fun ChatOptionsRow(chat: ChatUi, enabled: Boolean, onOpenModelEffort: () -> Unit, modifier: Modifier = Modifier) {
+    val (model, effort) = modelEffortShown(chat)
+    val context = LocalSimple.current.shown("context")
+    if (!model && !effort && !context) return
     Row(
         modifier.fillMaxWidth().background(Nekko.palette.paper).padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ModelEffortButton(chat, enabled, onOpenModelEffort)
+        if (model || effort) ModelEffortButton(chat, enabled, onOpenModelEffort, model, effort)
         Spacer(Modifier.weight(1f))
-        ContextRing(chat)
+        if (context) ContextRing(chat)
     }
 }
 
-/** An effort dial and the model's name; opens the model and effort sheet. */
+/** An effort dial and the model's name (either can be hidden by Simple); opens the model and effort sheet. */
 @Composable
-private fun ModelEffortButton(chat: ChatUi, enabled: Boolean, onClick: () -> Unit) {
+private fun ModelEffortButton(chat: ChatUi, enabled: Boolean, onClick: () -> Unit, showModel: Boolean, showEffort: Boolean) {
     val p = Nekko.palette
     val levels = Effort.levels(chat.modelId)
     val level = chat.effort?.let { levels.indexOf(it) }?.takeIf { it >= 0 }
     val name = chat.modelName ?: stringResource(R.string.model_choose)
-    val label = stringResource(R.string.model_effort)
+    val label = stringResource(if (!showEffort) R.string.model_section else if (!showModel) R.string.effort_section else R.string.model_effort)
     val effort = chat.effort?.let { effortLabel(it) } ?: stringResource(R.string.effort_computer_default)
     Row(
         Modifier
@@ -261,13 +225,13 @@ private fun ModelEffortButton(chat: ChatUi, enabled: Boolean, onClick: () -> Uni
             .testTag(ModeTags.MODEL_EFFORT)
             .semantics(mergeDescendants = true) {
                 contentDescription = label
-                stateDescription = "$name, $effort"
+                stateDescription = listOfNotNull(name.takeIf { showModel }, effort.takeIf { showEffort }).joinToString(", ")
             },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        EffortDial(level, levels.size, 22.dp)
-        Text(name, style = MaterialTheme.typography.labelLarge, color = if (enabled) p.ink else p.inkFaint, maxLines = 1, overflow = TextOverflow.MiddleEllipsis, modifier = Modifier.widthIn(max = 220.dp))
+        if (showEffort) EffortDial(level, levels.size, 22.dp)
+        if (showModel) Text(name, style = MaterialTheme.typography.labelLarge, color = if (enabled) p.ink else p.inkFaint, maxLines = 1, overflow = TextOverflow.MiddleEllipsis, modifier = Modifier.widthIn(max = 220.dp))
         Icon(Icons.Filled.UnfoldMore, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(14.dp))
     }
 }
@@ -291,6 +255,7 @@ fun ModelEffortSheet(
     val levels = Effort.levels(chat.modelId)
     val level = chat.effort?.let { levels.indexOf(it) }?.takeIf { it >= 0 }
     val computer = computers.active?.name ?: stringResource(R.string.your_computer)
+    val (showModel, showEffort) = modelEffortShown(chat)
     fun run(effort: Effort?, pick: ModelPick?) {
         error = null
         busy = effort
@@ -310,59 +275,63 @@ fun ModelEffortSheet(
     LaunchedEffect(picking) { if (picking) runCatching { onLoadModels() } }
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = p.paper) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(stringResource(R.string.model_effort), style = MaterialTheme.typography.titleMedium, color = p.ink)
-            SectionTitle(stringResource(R.string.model_section))
-            Row(
-                Modifier.fillMaxWidth().clip16().background(p.surface).clickable(role = Role.Button) { picking = !picking }.heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(chat.modelName ?: stringResource(R.string.model_choose), style = MaterialTheme.typography.bodyLarge, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    chat.modelId?.takeIf { it != chat.modelName }?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.inkFaint, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            Text(stringResource(if (!showEffort) R.string.model_section else if (!showModel) R.string.effort_section else R.string.model_effort), style = MaterialTheme.typography.titleMedium, color = p.ink)
+            if (showModel) {
+                SectionTitle(stringResource(R.string.model_section))
+                Row(
+                    Modifier.fillMaxWidth().clip16().background(p.surface).clickable(role = Role.Button) { picking = !picking }.heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(chat.modelName ?: stringResource(R.string.model_choose), style = MaterialTheme.typography.bodyLarge, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        chat.modelId?.takeIf { it != chat.modelName }?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.inkFaint, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    }
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = p.inkFaint)
                 }
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = p.inkFaint)
+                if (picking) {
+                    ModelList(
+                        groups = modelGroups(computers),
+                        favorites = computers.defaults.favoriteModels,
+                        query = query,
+                        onQuery = { query = it },
+                        selected = chat.providerId?.let { pr -> chat.modelId?.let { ModelPick(pr, it) } },
+                        onPick = { run(null, it) },
+                        onRetry = { scope.launch { runCatching { onLoadModels() } } },
+                    )
+                }
             }
-            if (picking) {
-                ModelList(
-                    groups = modelGroups(computers),
-                    favorites = computers.defaults.favoriteModels,
-                    query = query,
-                    onQuery = { query = it },
-                    selected = chat.providerId?.let { pr -> chat.modelId?.let { ModelPick(pr, it) } },
-                    onPick = { run(null, it) },
-                    onRetry = { scope.launch { runCatching { onLoadModels() } } },
-                )
-            }
-            SectionTitle(stringResource(R.string.effort_section))
-            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                EffortDial(level, levels.size, 112.dp)
-                Text(chat.effort?.let { effortLabel(it) } ?: stringResource(R.string.effort_computer_default), style = MaterialTheme.typography.titleSmall, color = p.ink)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    levels.forEachIndexed { i, e ->
-                        val on = i == level
-                        Box(
-                            Modifier
-                                .heightIn(min = 48.dp)
-                                .widthIn(min = 64.dp)
-                                .clip16()
-                                .background(if (on) p.accent else p.surface2)
-                                .clickable(enabled = busy == null, role = Role.RadioButton) { if (!on) run(e, null) }
-                                .padding(horizontal = 12.dp)
-                                .testTag(ModeTags.effort(e))
-                                .semantics { selected = on },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            if (busy == e) CircularProgressIndicator(strokeWidth = 2.dp, color = p.accent, modifier = Modifier.size(16.dp))
-                            else Text(effortLabel(e), style = MaterialTheme.typography.labelLarge, color = if (on) p.accentInk else p.ink, maxLines = 1)
+            if (showEffort) {
+                SectionTitle(stringResource(R.string.effort_section))
+                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    EffortDial(level, levels.size, 112.dp)
+                    Text(chat.effort?.let { effortLabel(it) } ?: stringResource(R.string.effort_computer_default), style = MaterialTheme.typography.titleSmall, color = p.ink)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        levels.forEachIndexed { i, e ->
+                            val on = i == level
+                            Box(
+                                Modifier
+                                    .heightIn(min = 48.dp)
+                                    .widthIn(min = 64.dp)
+                                    .clip16()
+                                    .background(if (on) p.accent else p.surface2)
+                                    .clickable(enabled = busy == null, role = Role.RadioButton) { if (!on) run(e, null) }
+                                    .padding(horizontal = 12.dp)
+                                    .testTag(ModeTags.effort(e))
+                                    .semantics { selected = on },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                if (busy == e) CircularProgressIndicator(strokeWidth = 2.dp, color = p.accent, modifier = Modifier.size(16.dp))
+                                else Text(effortLabel(e), style = MaterialTheme.typography.labelLarge, color = if (on) p.accentInk else p.ink, maxLines = 1)
+                            }
                         }
                     }
                 }
+                Text(
+                    if (chat.effort == null) stringResource(R.string.effort_following, computer) else stringResource(R.string.effort_footer),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = p.inkSoft,
+                )
             }
-            Text(
-                if (chat.effort == null) stringResource(R.string.effort_following, computer) else stringResource(R.string.effort_footer),
-                style = MaterialTheme.typography.bodySmall,
-                color = p.inkSoft,
-            )
             error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.danger) }
         }
     }

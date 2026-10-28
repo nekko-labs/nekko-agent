@@ -86,6 +86,8 @@ import com.nekko.protocol.RelayState
 import com.nekko.protocol.PcSettings
 import com.nekko.protocol.SessionSummary
 import kotlinx.coroutines.launch
+import com.nekko.android.ui.simple.LocalSimple
+import com.nekko.android.ui.simple.ModeSwitch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -103,6 +105,7 @@ fun ChatsScreen(
 ) {
     val s by repo.state.collectAsStateWithLifecycle()
     val p = Nekko.palette
+    val simple = LocalSimple.current
     val scope = rememberCoroutineScope()
     // The banner's ⋮: sign out this phone, stop remote access, quit (SK-8).
     val exits = rememberSafetyExits(repo)
@@ -194,6 +197,7 @@ fun ChatsScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Chats", style = MaterialTheme.typography.headlineMedium) },
+                navigationIcon = { ModeSwitch(simple.expert, simple.setExpert) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
                 actions = {
                     IconButton(onClick = onComputers) {
@@ -327,7 +331,7 @@ fun ChatsScreen(
                         }
                     }
                     // Monitors, as on an open folding phone's pane: so the feature is not foldable-only.
-                    if (onMonitors != null) item(key = "monitors") { MonitorsRow(onMonitors) }
+                    if (onMonitors != null && simple.shown("ph-monitors")) item(key = "monitors") { MonitorsRow(onMonitors) }
                 }
             }
         }

@@ -64,6 +64,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nekko.android.ui.previews.PreviewCards
+import com.nekko.android.ui.simple.LocalSimple
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.Block
 import com.nekko.protocol.Purpose
@@ -122,7 +123,8 @@ private fun UserBubble(b: Block.User, fork: ForkAction?) {
 private fun Reply(b: Block.Assistant, fork: ForkAction?) {
     val p = Nekko.palette
     var open by rememberSaveable(b.id) { mutableStateOf(false) }
-    val reasoning = b.reasoning
+    // Simple hides the reasoning; a reply still thinking shows the spinner instead.
+    val reasoning = b.reasoning.takeIf { LocalSimple.current.shown("thinking") }
     val thinkingOnly = b.streaming && b.text.isEmpty() && !reasoning.isNullOrEmpty()
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (!reasoning.isNullOrEmpty()) {

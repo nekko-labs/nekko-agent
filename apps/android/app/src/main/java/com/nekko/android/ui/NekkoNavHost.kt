@@ -24,6 +24,7 @@ import com.nekko.android.data.NewChatDefaults
 import com.nekko.android.voice.AndroidMic
 import com.nekko.android.voice.Dictation
 import com.nekko.android.data.PhonePrefs
+import com.nekko.android.ui.settings.SimpleModeScreen
 import com.nekko.android.haptics.AndroidHaptics
 import com.nekko.android.data.ThemePrefs
 import com.nekko.android.ui.files.FilesScreen
@@ -87,6 +88,7 @@ object Routes {
     const val FILES = "settings/files"
     const val LOGS = "settings/logs"
     const val PROVIDERS = "settings/providers"
+    const val SIMPLE_MODE = "settings/simple"
 
     fun chat(id: String) = "chat/${Uri.encode(id)}"
     fun pair(link: String? = null) = if (link == null) "pair" else "pair?link=${Uri.encode(link)}"
@@ -235,6 +237,9 @@ fun NekkoNavHost(
                 SettingsDeps(repo, themePrefs, phonePrefs, haptics, open = { route -> nav.navigate(route) { launchSingleTop = true } })
             }
             SettingsScreen(deps = deps, onBack = { nav.popBackStack() })
+        }
+        composable(Routes.SIMPLE_MODE) {
+            SimpleModeScreen(prefs = phonePrefs, onBack = { nav.popBackStack() })
         }
         composable(Routes.LICENSES) {
             LicensesScreen(onBack = { nav.popBackStack() })
