@@ -63,7 +63,7 @@ jobs:
       - id: pick
         uses: ./.github/actions/pick-runner
         with:
-          token: ${{ secrets.NEKKO_PICKER_TOKEN }}
+          token: ${{ secrets.MAC_RUNNER_STATUS_TOKEN }}
           org: ${{ vars.NEKKO_MAC_RUNNER_ORG }}
           fallback: macos-14
   protocol-and-build:

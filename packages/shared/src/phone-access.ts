@@ -556,6 +556,8 @@ export const PHONE_SETTINGS_VIEW = [
   'defaultModelId',
   'defaultProviderId',
   'favoriteModels',
+  // Read-only: show the computer's effort before the phone has a saved choice.
+  'effort',
   // Whether this computer shows phones the agent's changes (set on the computer only).
   'phoneChanges',
   // The saved prompts, as names and text (`PHONE_PROMPT_VIEW`).

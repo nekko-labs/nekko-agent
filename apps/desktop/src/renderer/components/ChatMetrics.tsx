@@ -1,7 +1,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import type { ContextBundle, ContextItem, EffortLevel, Session } from '@nekko-agent/shared';
-import { chatEffort, effectiveEffort, modelDefaultEffort, modelEffortLevels, usesNativeEffort } from '@nekko-agent/shared';
+import { chatEffort, effectiveEffort, modelDefaultEffort, modelEffortLevels } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
 import { sourceMeta } from '../contextSources.js';
 import { fillTone } from './contextTone.js';
@@ -166,25 +166,11 @@ export const EFFORT_LABEL: Record<EffortLevel, string> = {
   max: 'Max',
 };
 
-/**
- * The slider's stops for a model, lowest first, and which one the saved
- * setting sits on.
- *
- * The model's default takes its own rung's place rather than a stop of its
- * own at the far left: "Default · Medium" sitting left of Low read as the
- * bottom of the scale, so Opus 5.5 looked like it had no Low at all.
- */
+/** Concrete, model-compatible stops. Recommendations never replace a saved choice. */
 export function effortRungs(saved: EffortLevel, modelId: string | undefined): { options: EffortLevel[]; index: number; shown: string } {
-  const levels = modelEffortLevels(modelId);
-  const native = usesNativeEffort(modelId);
-  const fallback = modelDefaultEffort(modelId);
-  // What this model will actually be sent, which is what the slider shows: a
-  // saved `xhigh` on a temperature model runs as `high`, and says so.
+  const options = modelEffortLevels(modelId);
   const effective = effectiveEffort(saved, modelId);
-  const atDefault = native && effective === fallback;
-  const options: EffortLevel[] = native ? levels.map((l) => (l === fallback ? 'normal' : l)) : levels;
-  const index = Math.max(0, options.indexOf(atDefault ? 'normal' : effective));
-  return { options, index, shown: atDefault ? `Default · ${EFFORT_LABEL[fallback]}` : EFFORT_LABEL[effective] };
+  return { options, index: Math.max(0, options.indexOf(effective)), shown: EFFORT_LABEL[effective] };
 }
 
 /**
@@ -205,7 +191,12 @@ export function EffortSlider({ modelId, onChanged, session, onSessionChange }: {
     onChanged?.();
     if (session) {
       void window.nekko.setSessionOptions(session.id, { effort: level })
-        .then((s) => { if (s) onSessionChange?.(s); })
+        .then(async (s) => {
+          if (!s) return;
+          onSessionChange?.(s);
+          await window.nekko.updateSettings({ effort: level });
+          await useStore.getState().refreshSettings();
+        })
         .catch((e) => useStore.getState().pushToast('error', String(e)));
     } else {
       void window.nekko.updateSettings({ effort: level }).then(() => useStore.getState().refreshSettings());
@@ -221,7 +212,7 @@ export function EffortSlider({ modelId, onChanged, session, onSessionChange }: {
   // A dial with one notch per level the model takes, as on the phone; the
   // levels themselves are stops in the popover, and the arrow keys step them.
   return (
-    <div className="effort-slider flex shrink-0 items-center rounded-lg border border-line text-[11px]" title={session ? 'Reasoning effort for this chat' : 'Reasoning effort (the app default; a chat can set its own)'}>
+    <div className="effort-slider flex shrink-0 items-center rounded-lg border border-line text-[11px]" title={session ? 'Reasoning effort for this chat' : 'Reasoning effort, remembered for new chats on this computer'}>
       <button
         ref={pop.anchor}
         type="button"
@@ -256,7 +247,8 @@ export function EffortSlider({ modelId, onChanged, session, onSessionChange }: {
                   className={`min-w-0 flex-1 whitespace-nowrap rounded-full px-2 py-1 text-[11px] font-semibold ${i === index ? 'bg-accent text-on-accent' : 'bg-(--surface-2) text-ink'}`}
                   onClick={() => pick(o)}
                   data-effort={o}
-                >{EFFORT_LABEL[o]}</button>
+                  title={o === modelDefaultEffort(modelId) ? 'Recommended' : undefined}
+                >{EFFORT_LABEL[o]}{o === modelDefaultEffort(modelId) && <span className="block text-[9px]">Recommended</span>}</button>
               ))}
             </div>
             <p className="text-center text-[11px] text-ink-faint">Higher effort thinks longer and spends more tokens.</p>

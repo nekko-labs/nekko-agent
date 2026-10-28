@@ -24,7 +24,7 @@ async fn runner_channels_round_trip() {
     let record = json!([{
         "id": "r1",
         "scope": { "kind": "repo", "owner": "o", "repo": "r" },
-        "label": "nekko-mac",
+        "label": "nekko-cloud-mac",
         "settings": { "enabled": true, "macosSlots": 7, "memoryPerVmMb": 0 },
         "github": { "appId": 424242, "installationId": 9, "repos": ["o/r"] },
     }]);
@@ -99,7 +99,7 @@ async fn gitlab_record_lists_and_removes() {
     let record = json!([{
         "id": "gl-42",
         "scope": { "kind": "org", "org": "g" },
-        "label": "nekko-mac",
+        "label": "nekko-cloud-mac",
         "settings": { "enabled": true },
         "gitlab": { "baseUrl": "https://gitlab.com", "namespaceId": 42, "projects": ["g/a"] },
     }]);

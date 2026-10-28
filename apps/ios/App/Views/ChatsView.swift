@@ -45,9 +45,7 @@ struct ChatsView: View {
         .refreshable { await store.refresh() }
         .navigationTitle("Chats")
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                ChatMascot(working: store.activity.values.contains(.running))
-            }
+            RootMascot(working: store.activity.values.contains(.running))
             ToolbarItem(placement: .topBarLeading) { ComputerMenu(path: $path, feedback: $sendingFeedback) }
             ToolbarItem(placement: .topBarTrailing) { viewMenu }
             ToolbarItem(placement: .topBarTrailing) {

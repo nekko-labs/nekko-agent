@@ -190,7 +190,7 @@ mod tests {
             config: RunnerConfig {
                 id: "r".into(),
                 scope: Scope::Org { org: "acme".into() },
-                label: "nekko-mac".into(),
+                label: "nekko-cloud-mac".into(),
                 settings: RunnerSettings::default(),
             },
             link,

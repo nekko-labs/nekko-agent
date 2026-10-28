@@ -413,10 +413,10 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(s.summaries.first?.archived, false)
         try await s.renameChat("s1", to: " New name ")
         XCTAssertEqual(s.summaries.first?.title, "New name")
-        let id = try await s.createChat(providerId: "p", modelId: "m", workspaceId: "w", mode: .guardrails)
+        let id = try await s.createChat(providerId: "p", modelId: "m", workspaceId: "w", mode: .guardrails, effort: .high)
         XCTAssertEqual(id, "new")
         XCTAssertEqual(c.callsTo(Channels.sessionCreate).last, ["w"])
-        XCTAssertEqual(c.callsTo(Channels.sessionSetOptions).last, ["new", ["providerId": "p", "modelId": "m", "mode": "guardrails"]])
+        XCTAssertEqual(c.callsTo(Channels.sessionSetOptions).last, ["new", ["providerId": "p", "modelId": "m", "mode": "guardrails", "effort": "high"]])
         try await s.updatePcSettings(PcSettings.patch(mode: .yolo))
         XCTAssertEqual(s.pcSettings.effectiveMode, .yolo)
         try await s.deleteChat("s1")
@@ -519,6 +519,25 @@ final class ChatModelTests: XCTestCase {
         // The saved prompt and reply keep the ids they were shown under, so their rows aren't rebuilt.
         XCTAssertEqual(chat.blocks.map(\.id), ["u", "pending-42", "live-42-1"])
         XCTAssertEqual(chat.blocks.map { if case .assistant(_, let t, _, _, _) = $0 { return t } else { return nil } }.compactMap { $0 }, ["Hi"])
+        chat.stop()
+    }
+
+    /// A Send tapped just as a reply finishes goes as a new turn: the re-read that
+    /// still says "running" is stale until the debounced reload after `done`.
+    func testASendRightAfterDoneStartsATurnNotAQueue() async throws {
+        let (s, c) = try await makeOnline()
+        c.replies[Channels.sessionGet] = { _ in ["id": "s", "title": "T", "messages": [], "queue": [], "activeRun": ["startedAt": 1]] }
+        let chat = ChatModel(sessionId: "s", store: s)
+        chat.start()
+        await settle()
+        c.event(["type": "text", "sessionId": "s", "delta": "Hi"])
+        c.event(["type": "done", "sessionId": "s"])
+        for _ in 0..<20 { await Task.yield() }
+        c.replies[Channels.sessionGet] = { _ in ["id": "s", "title": "T", "messages": [], "queue": []] }
+        try await chat.send("next")
+        await settle()
+        XCTAssertEqual(c.callsTo(Channels.chatSend).first?.first?.str("text"), "next", "a new turn")
+        XCTAssertTrue(c.callsTo(Channels.chatQueue).isEmpty, "an idle chat's queue never runs")
         chat.stop()
     }
 

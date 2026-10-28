@@ -60,6 +60,11 @@ final class RunActivities {
     private var dismissed: Set<String> = []
     /// The chat a chip tap brought up, until another chat newly needs you.
     var pinnedFocus: String?
+    /// The chat the card's mic last sent to, and its reply line then: "Sent: ..." stays until that changes.
+    private var sentTo: (id: String, reply: String)?
+    /// When the mic said something with no reply to wait for ("Not sent: ..."): it leaves after `noteSeconds`.
+    private var noteAt: Date?
+    static let noteSeconds: TimeInterval = 60
     private var lastUpdate: Date?
     private var expiry: Task<Void, Never>?
     /// The update a throttled refresh put off, sent once the 2 s are up.
@@ -134,6 +139,20 @@ final class RunActivities {
         refresh(urgent: true)
     }
 
+    /// The card's mic (`TalkRunner`): listening, then what was sent ("Sent: ...") until
+    /// `sentTo`'s reply line changes or another chat takes the card, or why nothing was
+    /// (no `sentTo`) for a minute, cleared by the first refresh after that. Shown at once.
+    func talk(listening: Bool, heard: String, sentTo: String? = nil, now: Date = Date()) {
+        guard let card else { return }
+        var state = card.state
+        state.listening = listening
+        state.heard = heard
+        self.sentTo = sentTo.map { id in (id, state.chats.first { $0.id == id }?.reply ?? "") }
+        noteAt = sentTo == nil && !heard.isEmpty && !listening ? now : nil
+        card.update(state)
+        lastUpdate = Date()
+    }
+
     /// Starts, updates or ends the card to match the chats now.
     func refresh(now: Date = Date(), urgent: Bool = false) {
         runs = runs.filter { _, run in run.finishedAt.map { now.timeIntervalSince($0) <= LiveCardRules.finishedTail } ?? true }
@@ -161,9 +180,17 @@ final class RunActivities {
         // A card's level (and computer) is fixed for its life: a change starts a new one.
         if let card, card.attributes != attributes { end() }
         let previous = card?.state ?? swiped
-        guard let state = buildCard(chats: chats, previous: previous, pinnedFocus: pinnedFocus, level: level, now: now) else {
+        guard var state = buildCard(chats: chats, previous: previous, pinnedFocus: pinnedFocus, level: level, now: now) else {
             end()
             return
+        }
+        if let sent = sentTo, state.focusId != sent.id || state.chats.first(where: { $0.id == sent.id })?.reply != sent.reply {
+            state.heard = ""
+            sentTo = nil
+        }
+        if let at = noteAt, now.timeIntervalSince(at) >= Self.noteSeconds {
+            state.heard = ""
+            noteAt = nil
         }
         if state.focusId != pinnedFocus { pinnedFocus = nil }
         scheduleExpiry(state)
@@ -304,12 +331,30 @@ final class SystemCard: CardActivity {
         }
     }
     private var tokens: Task<Void, Never>?
+    private var pushes: Task<Void, Never>?
     /// The last call to ActivityKit; each one waits for it so they arrive in order.
     private var last: Task<Void, Never>?
 
     private init(_ activity: ActivityKit.Activity<NekkoCardAttributes>, state: LiveCardState) {
         self.activity = activity
         self.state = state
+        let a = activity
+        pushes = Task { [weak self] in
+            for await content in a.contentUpdates {
+                guard let self, let kept = Self.keepingVoice(pushed: content.state, local: self.state) else { continue }
+                self.update(kept)
+            }
+        }
+    }
+
+    /// A pushed card says listening false and heard "" (the computer can't know): while the
+    /// mic listens, the push's chats with this phone's listening and heard. Nil when nothing to put back.
+    static func keepingVoice(pushed: LiveCardState, local: LiveCardState) -> LiveCardState? {
+        guard local.listening, pushed.listening != local.listening || pushed.heard != local.heard else { return nil }
+        var kept = pushed
+        kept.listening = local.listening
+        kept.heard = local.heard
+        return kept
     }
 
     func update(_ state: LiveCardState) {
@@ -319,6 +364,7 @@ final class SystemCard: CardActivity {
     }
 
     func end() {
+        pushes?.cancel()
         send { await $0.end(nil, dismissalPolicy: .immediate) }
     }
 
@@ -374,4 +420,49 @@ private func hex(_ data: Data) -> String { data.map { String(format: "%02x", $0)
 /// still up. shortcut: matched by its type name; delete once no install has one (8 hours after updating).
 struct AgentRunAttributes: ActivityAttributes {
     struct ContentState: Codable, Hashable {}
+}
+
+/// The card's mic (Part 5), from the tap to the message: listening on the card, one
+/// segment (`Dictation.captureOnce`), sent to that chat, then "Sent: ..." on the card.
+/// The same intent again while listening ("Send to") ends listening now; Cancel sends nothing.
+@MainActor
+final class TalkRunner {
+    var capture: () async throws -> String = { "" }
+    /// Ends listening now, keeping what was said.
+    var finish: () -> Void = {}
+    /// Ends listening, keeping nothing.
+    var discard: () -> Void = {}
+    var send: (_ sessionId: String, _ text: String) async throws -> Void = { _, _ in }
+    /// `RunActivities.talk`.
+    var show: (_ listening: Bool, _ heard: String, _ sentTo: String?) -> Void = { _, _, _ in }
+    private var listening = false
+    private var cancelled = false
+
+    func talk(_ sessionId: String) async {
+        if listening { return finish() }
+        listening = true
+        cancelled = false
+        show(true, "", nil)
+        var heard = ""
+        var sent = false
+        do {
+            let text = try await capture().trimmingCharacters(in: .whitespacesAndNewlines)
+            listening = false
+            if !text.isEmpty, !cancelled {
+                try await send(sessionId, text)
+                heard = String(localized: "Sent: \(text)")
+                sent = true
+            }
+        } catch {
+            listening = false
+            heard = String(localized: "Not sent: \(error.localizedDescription)")
+        }
+        show(false, heard, sent ? sessionId : nil)
+    }
+
+    func cancel() {
+        guard listening else { return }
+        cancelled = true
+        discard()
+    }
 }

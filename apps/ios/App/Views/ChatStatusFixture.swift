@@ -22,7 +22,7 @@ struct ChatStatusFixture: View {
             .appBackground()
             .navigationTitle("Chats")
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { ChatMascot(working: true) }
+                RootMascot(working: true)
                 ToolbarItem(placement: .topBarLeading) { ComputerMenu(path: $path, feedback: $feedback) }
                 ToolbarItem(placement: .topBarTrailing) { Image(systemName: "line.3.horizontal.decrease") }
                 ToolbarItem(placement: .topBarTrailing) { Image(systemName: "square.and.pencil") }

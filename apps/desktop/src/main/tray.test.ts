@@ -16,7 +16,8 @@ afterEach(() => { vi.useRealTimers(); mocks.menus.length = 0; mocks.on.mockClear
 describe('desktop tray', () => {
   it('puts new chat first and distinguishes service and model power', async () => {
     vi.useFakeTimers();
-    const engine = { running: true, start: vi.fn(), endpoint: vi.fn().mockResolvedValue({}), stop: vi.fn(async () => { engine.running = false; }), call: vi.fn().mockResolvedValue({ running: true, install: { binPath: '/llama' }, ok: true }) };
+    const answers: Record<string, unknown> = { 'engine:running': true, 'engine:installedBin': '/llama' };
+    const engine = { running: true, start: vi.fn(), endpoint: vi.fn().mockResolvedValue({}), stop: vi.fn(async () => { engine.running = false; }), call: vi.fn(async (channel: string) => channel in answers ? answers[channel] : { running: true, install: { binPath: '/llama' }, ok: true }) };
     const newChat = vi.fn(); const feedback = vi.fn(); const showUi = vi.fn(); const serviceStarted = vi.fn();
     const result = createDesktopTray({ iconPath: '/icon', engine: engine as unknown as EngineProcess, newChat, feedback, showUi, serviceStarted, quit: vi.fn(), onError: vi.fn() });
     await settle();
@@ -76,6 +77,26 @@ describe('desktop tray', () => {
     await vi.advanceTimersByTimeAsync(6000); await settle();
     expect(mocks.setImage).toHaveBeenLastCalledWith(mocks.plain);
     expect(mocks.menus.at(-1)!.some((i) => String(i.label).startsWith('CI runners'))).toBe(false);
+    result.dispose();
+  });
+
+  it('polls the model server without engine:status (no GPU probe, no runtime search)', async () => {
+    vi.useFakeTimers();
+    const bins: Record<string, string | null> = { llama: null, diffusion: '/sd-server', mlx: null };
+    const engine = {
+      running: true, start: vi.fn(), endpoint: vi.fn(), stop: vi.fn(),
+      call: vi.fn(async (channel: string, runtime?: string) => channel === 'engine:running' ? false : channel === 'engine:installedBin' ? bins[runtime!] : []),
+    };
+    const result = open(engine);
+    await settle();
+    await vi.advanceTimersByTimeAsync(12_000); await settle();
+    expect(engine.call.mock.calls.map(([c]) => c)).not.toContain('engine:status');
+    expect(engine.call).toHaveBeenCalledWith('engine:installedBin', 'diffusion');
+    // Any installed runtime lets the model server start.
+    expect(mocks.menus.at(-1)!.find((i) => i.label === 'Start model server').enabled).toBe(true);
+    bins.diffusion = null;
+    await vi.advanceTimersByTimeAsync(6000); await settle();
+    expect(mocks.menus.at(-1)!.find((i) => i.label === 'Start model server').enabled).toBe(false);
     result.dispose();
   });
 

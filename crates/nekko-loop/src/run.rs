@@ -44,6 +44,8 @@ pub enum Chunk {
         output_tokens: f64,
         output_ms: Option<f64>,
     },
+    /// The response stopped at the output cap (`ProviderChunk::OutputLimit`).
+    OutputLimit,
     Done,
 }
 
@@ -168,6 +170,11 @@ const RUNAWAY_KEEP_CHARS: usize = 4_000;
 const EMPTY_NUDGE: &str = "Please continue and give your answer.";
 const STALLED: &str =
     "_The model returned an empty response and stopped. It may have run out of steam: try again, or rephrase._";
+/// An empty reply that hit the output cap: the model spent it all thinking.
+/// Asking again does the same, so this replaces the nudge rather than following it.
+const OUTPUT_LIMIT_EMPTY: &str = "_The model used its whole output budget thinking and stopped before answering. Try a lower effort level, or ask for something smaller._";
+/// Appended to a reply cut off at the output cap.
+const OUTPUT_LIMIT_NOTE: &str = "_Cut off: the reply reached the model's output limit._";
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -351,6 +358,8 @@ struct Turn {
     calls: Vec<Value>,
     carry: Vec<Value>,
     runaway: bool,
+    /// The response stopped at the output cap rather than finishing.
+    output_limit: bool,
 }
 
 impl Turn {
@@ -498,6 +507,7 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
                     }
                     self.event("usage", f);
                 }
+                Chunk::OutputLimit => turn.output_limit = true,
                 Chunk::Done => {}
             }
             // Cut a degenerate stream off rather than waiting out the output cap;
@@ -528,6 +538,7 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
                 calls: turn.calls.clone(),
                 carry: turn.carry.clone(),
                 runaway: turn.runaway,
+                output_limit: turn.output_limit,
             };
             match self.stream(turn, extra.clone(), send_tools).await {
                 Ok(()) => return Ok(()),
@@ -695,8 +706,9 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
             let first = if first_call { std::mem::take(&mut resume_extra) } else { std::mem::take(&mut loop_extra) };
             let mut result = self.stream_with_retry(&mut turn, first, true).await;
             // An empty response gets one retry with a nudge, so the turn does not
-            // silently stall (common with some local models mid-loop).
-            if result.is_ok() && turn.is_empty() && !self.opts.cancel.is_cancelled() {
+            // silently stall (common with some local models mid-loop). Not one
+            // that hit the output cap: asked again, it spends the cap again.
+            if result.is_ok() && turn.is_empty() && !turn.output_limit && !self.opts.cancel.is_cancelled() {
                 result = self.stream_with_retry(&mut turn, vec![nudge.clone()], true).await;
             }
             if let Err(e) = result {
@@ -723,7 +735,15 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
                     put_reasoning(&mut m, trim_runaway(&turn.reasoning), turn.reasoning_seconds);
                 }
             } else {
-                m.insert("content".into(), json!(if stalled { STALLED.to_string() } else { turn.text.clone() }));
+                let content = match (stalled, turn.output_limit) {
+                    (true, true) => OUTPUT_LIMIT_EMPTY.to_string(),
+                    (true, false) => STALLED.to_string(),
+                    (false, true) if turn.calls.is_empty() && !js::trim(&turn.text).is_empty() => {
+                        format!("{}\n\n{OUTPUT_LIMIT_NOTE}", js::trim(&turn.text))
+                    }
+                    (false, _) => turn.text.clone(),
+                };
+                m.insert("content".into(), json!(content));
                 if !turn.reasoning.is_empty() {
                     put_reasoning(&mut m, turn.reasoning.clone(), turn.reasoning_seconds);
                 }

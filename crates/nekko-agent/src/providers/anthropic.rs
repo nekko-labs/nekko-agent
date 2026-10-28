@@ -589,6 +589,9 @@ impl EventParser {
                         output_ms: self.decode.elapsed(),
                     });
                 }
+                if ev.pointer("/delta/stop_reason").and_then(Value::as_str) == Some("max_tokens") {
+                    out.push(ProviderChunk::OutputLimit);
+                }
             }
             Some("message_stop") => return (out, Some(End::Stop)),
             _ => {}
@@ -611,6 +614,20 @@ mod platform_tests {
 
     fn request(model: &str) -> ChatRequest {
         ChatRequest { model: model.into(), ..Default::default() }
+    }
+
+    #[test]
+    fn a_reply_stopped_at_max_tokens_says_so() {
+        let mut parser = EventParser::new(DecodeClock::new(Arc::new(|| 0)));
+        let delta = |reason: &str| {
+            format!(
+                r#"{{"type":"message_delta","delta":{{"stop_reason":"{reason}"}},"usage":{{"output_tokens":128000}}}}"#
+            )
+        };
+        let (chunks, _) = parser.event(&delta("max_tokens"));
+        assert_eq!(chunks.last(), Some(&ProviderChunk::OutputLimit));
+        let (chunks, _) = parser.event(&delta("end_turn"));
+        assert!(!chunks.contains(&ProviderChunk::OutputLimit));
     }
 
     #[test]
