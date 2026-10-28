@@ -486,6 +486,7 @@ final class AppModel {
     private func forgotten(_ id: String) {
         if prefs.defaultComputer == id { prefs.defaultComputer = store.activeId }
         prefs.lastModel[id] = nil
+        prefs.lastFolder[id] = nil
         if store.computers.isEmpty { activities.endAll() }
     }
 
@@ -517,6 +518,7 @@ final class AppModel {
         activities.endAll()
         prefs.defaultComputer = nil
         prefs.lastModel = [:]
+        prefs.lastFolder = [:]
     }
 
     /// Nekko Cloud: `NekkoCloudURL` in Info.plist, or `-cloudAPI <url>` (debug builds, for the local dev stack).

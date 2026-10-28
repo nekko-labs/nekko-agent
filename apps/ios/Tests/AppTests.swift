@@ -1229,3 +1229,28 @@ final class VoiceTests: XCTestCase {
         XCTAssertEqual(d.heard.map(\.text), ["kept"])
     }
 }
+
+@MainActor
+final class LastFolderPrefsTests: XCTestCase {
+    func testFolderSurvivesRelaunchAndStaysSeparatePerComputer() throws {
+        let suite = "dev.nekkolabs.nekkoagent.tests.folders.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let prefs = Prefs(defaults: defaults)
+        XCTAssertTrue(prefs.lastFolder.isEmpty)
+        prefs.lastFolder["mac"] = "work"
+        prefs.lastFolder["studio"] = "personal"
+        XCTAssertEqual(prefs.newChatFolder(computer: "mac", draft: Draft()), "work")
+        XCTAssertEqual(prefs.newChatFolder(computer: "studio", draft: Draft()), "personal")
+        XCTAssertNil(prefs.newChatFolder(computer: nil, draft: Draft()))
+        XCTAssertEqual(prefs.newChatFolder(computer: "mac", draft: Draft(workspaceId: "draft-folder")), "draft-folder")
+        XCTAssertNil(prefs.newChatFolder(computer: "mac", draft: Draft(text: "No folder draft")))
+        let relaunched = Prefs(defaults: defaults)
+        XCTAssertEqual(relaunched.lastFolder["mac"], "work")
+        XCTAssertEqual(relaunched.lastFolder["studio"], "personal")
+        relaunched.lastFolder["mac"] = nil
+        let again = Prefs(defaults: defaults)
+        XCTAssertNil(again.lastFolder["mac"], "No folder is remembered too")
+        XCTAssertEqual(again.lastFolder["studio"], "personal")
+    }
+}

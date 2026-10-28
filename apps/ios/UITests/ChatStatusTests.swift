@@ -10,6 +10,7 @@ final class ChatStatusTests: XCTestCase {
         XCTAssertEqual(mascot.value as? String, "Working")
         XCTAssertGreaterThanOrEqual(mascot.frame.width, 44)
         XCTAssertGreaterThanOrEqual(mascot.frame.height, 44)
+        XCTAssertEqual(mascot.frame.midX, app.frame.midX, accuracy: 2, "Nekko is centered on the screen")
         let before = XCTAttachment(screenshot: app.screenshot())
         before.name = "chat-status-after"
         before.lifetime = .keepAlways

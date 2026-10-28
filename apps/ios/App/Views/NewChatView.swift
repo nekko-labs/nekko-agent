@@ -214,7 +214,10 @@ struct NewChatView: View {
                     .accessibilityIdentifier("newChat.computer")
                 }
                 Menu {
-                    Picker("Folder", selection: $folder) {
+                    Picker("Folder", selection: Binding(get: { folder }, set: { value in
+                        folder = value
+                        if let id = store.activeId { app.prefs.lastFolder[id] = value }
+                    })) {
                         Text("No folder").tag(String?.none)
                         ForEach(store.workspaces) { w in
                             VStack(alignment: .leading) {
@@ -336,7 +339,7 @@ struct NewChatView: View {
         store.connect(id)
         model = nil
         effort = nil
-        folder = nil
+        folder = app.prefs.lastFolder[id]
         refusal = nil
         text = words
         store.drafts.set(DraftStore.newChat, current)
@@ -370,7 +373,9 @@ struct NewChatView: View {
     private func restoreDraft() {
         guard !restored else { return }
         restored = true
-        apply(store.drafts.draft(DraftStore.newChat))
+        let draft = store.drafts.draft(DraftStore.newChat)
+        folder = app.prefs.newChatFolder(computer: store.activeId, draft: draft)
+        apply(draft)
     }
 
     private func apply(_ d: Draft) {
