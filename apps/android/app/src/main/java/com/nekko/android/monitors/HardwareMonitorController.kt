@@ -36,7 +36,10 @@ data class HardwareState(
     val error: String? = null,
     /** The model being unloaded. */
     val unloading: String? = null,
-)
+) {
+    /** The Model Server holds at least one model: Simple then shows the monitors too. */
+    val localModelLoaded: Boolean get() = engine?.resident?.isNotEmpty() == true
+}
 
 /**
  * The Expert monitor (spec/phone/iphone-simple-and-expert-modes.md): the
@@ -80,6 +83,29 @@ class HardwareMonitorController(
         _state.update { it.copy(system = s, gpu = g, engine = e, loaded = true, error = error) }
     }
 
+    /**
+     * Only the Model Server, for Simple to know whether a local model is loaded. A failed read
+     * clears it, so the monitors hide again rather than show stale models.
+     */
+    suspend fun refreshEngine() {
+        val e = try {
+            EngineStatus.from(caller.call(Channels.ENGINE_STATUS))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
+        _state.update { it.copy(engine = e) }
+    }
+
+    /** [refreshEngine] now and every [ENGINE_POLL_MS] until cancelled. */
+    suspend fun pollEngine() {
+        while (true) {
+            refreshEngine()
+            delay(ENGINE_POLL_MS)
+        }
+    }
+
     /** Reads now and every [POLL_MS] until cancelled (Expert turned off, the chat closed, the app went to the background). */
     suspend fun poll() {
         while (true) {
@@ -110,5 +136,8 @@ class HardwareMonitorController(
     companion object {
         /** The desktop samples hardware every few seconds. */
         const val POLL_MS: Long = 3_000
+
+        /** Simple's light check for a loaded local model. */
+        const val ENGINE_POLL_MS: Long = 10_000
     }
 }

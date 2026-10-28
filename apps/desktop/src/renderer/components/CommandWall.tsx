@@ -145,6 +145,7 @@ import { BoltIcon, ChatIcon, CloseIcon, ExternalIcon, LayoutIcon, PlusIcon, Term
 import { readCompanionWidth, saveCompanionWidth, shareFromPointer } from './companionWidth.js';
 import './commandWallLayouts.css';
 import { PaneVisibleContext } from '../paneVisibility.js';
+import { Shown } from './ModeViews.js';
 
 /** The kinds the wall's compass offers, in order. */
 const WALL_ADDABLE: PaneKind[] = [...WALL_KINDS];
@@ -852,7 +853,7 @@ export function CommandWall({
           {/* What it is waiting on is said inside the window (ChatPane pins the
               question or approval at the top). A banner here sat under the
               absolutely positioned content and could not be seen. */}
-          {deckCard && <button className="command-wall-card" onClick={() => live.current.focusWindow(pane)} aria-label={`Focus ${title}`}>{terminal ? <TerminalExcerpt terminalId={terminal.id} /> : <span>{session?.lastReplyText || 'No reply yet'}</span>}<small>{session ? `${session.modelId || 'Default model'} · ${session.transcriptTokens.toLocaleString()} context tokens` : status?.label}</small></button>}
+          {deckCard && <button className="command-wall-card" onClick={() => live.current.focusWindow(pane)} aria-label={`Focus ${title}`}>{terminal ? <TerminalExcerpt terminalId={terminal.id} /> : <span>{session?.lastReplyText || 'No reply yet'}</span>}{session ? <Shown id="cardmeta"><small>{`${session.modelId || 'Default model'} · ${session.transcriptTokens.toLocaleString()} context tokens`}</small></Shown> : <small>{status?.label}</small>}</button>}
           <div className="command-wall-content" inert={!box || deckCard} aria-hidden={!box || deckCard || undefined} data-companions-visible={showCompanions && companions.length > 0 || undefined} data-focus-chat={(focusedChat || parked) || undefined}>
 
             <div className="command-wall-primary">

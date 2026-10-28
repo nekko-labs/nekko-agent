@@ -55,7 +55,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -80,6 +79,8 @@ import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.Block
 import com.nekko.protocol.Purpose
 import com.nekko.protocol.PurposeRun
+import com.nekko.android.chat.TurnSteps
+import com.nekko.android.ui.chat.StepsLine
 import java.util.Locale
 import android.content.ClipData
 import android.content.ClipDescription
@@ -118,17 +119,21 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenu
 import com.nekko.android.ui.panes.PaneSlot
 import com.nekko.android.ui.chat.ChatOptionsRow
-import com.nekko.android.ui.chat.ModeToggle
+import com.nekko.android.ui.simple.LocalSimple
+import com.nekko.android.ui.simple.SimpleView
+import com.nekko.android.data.SimpleMode
 import com.nekko.android.ui.chat.ModelEffortSheet
-import com.nekko.android.ui.chat.MonitorSheet
-import com.nekko.android.ui.chat.MonitorStrip
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.repeatOnLifecycle
+import com.nekko.android.ui.chat.AgentPanel
+import com.nekko.android.ui.chat.LongChatNudge
+import com.nekko.android.ui.chat.MiniMonitor
+import com.nekko.android.ui.simple.PollHardware
+import com.nekko.android.ui.simple.SlimBar
+import com.nekko.android.data.ModelPick
+import com.nekko.android.data.SimpleVisibility
+import androidx.compose.material3.CenterAlignedTopAppBar
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.ENGINE_PROVIDER_ID
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
     vm: ChatViewModel,
@@ -141,28 +146,61 @@ fun ChatScreen(
     pane: PaneSlot? = null,
     /** The composer's **+** → New agent. */
     onNewChat: (() -> Unit)? = null,
+    /** Simple's "chat getting long" line → New chat on this computer with [ModelPick] (the chat's model) chosen. */
+    onStartFresh: ((ModelPick?) -> Unit)? = null,
 ) {
+    // Simple or Expert and the per-control choices, read from the chat's own prefs so the screen works outside the app's provider;
+    // a model loaded on the computer's Model Server brings the monitors into Simple too.
+    val expert by vm.expert.collectAsStateWithLifecycle()
+    val raw by vm.simpleChoices.collectAsStateWithLifecycle()
+    val hardware by vm.hardware.state.collectAsStateWithLifecycle()
+    val loaded = hardware.localModelLoaded
+    val simple = remember(expert, raw, loaded) { SimpleView(expert, SimpleMode.parse(raw), loaded, vm::setExpert) }
+    CompositionLocalProvider(LocalSimple provides simple) {
+        ChatScreenContent(vm, initialDraft, dictationOn, onBack, onOpenChat, pane, onNewChat, onStartFresh)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChatScreenContent(
+    vm: ChatViewModel,
+    initialDraft: String?,
+    dictationOn: Boolean,
+    onBack: () -> Unit,
+    onOpenChat: (id: String, draft: String?) -> Unit,
+    pane: PaneSlot?,
+    onNewChat: (() -> Unit)?,
+    onStartFresh: ((ModelPick?) -> Unit)?,
+) {
+    val simple = LocalSimple.current
+    val showHardware = simple.shown("hardware")
+    val showSteps = simple.shown("thinking")
+    val showGit = simple.shown("ph-git")
+    val showTerminal = simple.shown("terminal")
     val chat by vm.ui.collectAsStateWithLifecycle()
     val completedAt by vm.completedAt.collectAsStateWithLifecycle()
     val changesAllowed by vm.changesAllowed.collectAsStateWithLifecycle()
     val insert by vm.insert.collectAsStateWithLifecycle()
     var showChanges by remember { mutableStateOf(false) }
-    val expert by vm.expert.collectAsStateWithLifecycle()
     val hardware by vm.hardware.state.collectAsStateWithLifecycle()
     val computers by vm.computers.collectAsStateWithLifecycle()
     val computerName = computers.active?.name ?: "your computer"
     var showModelEffort by remember { mutableStateOf(false) }
     var showMonitor by remember { mutableStateOf(false) }
-    // Expert re-reads the hardware every 3 s, only while it is on, this chat is on screen and the computer is reachable.
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
     val online = computers.conn == RelayState.ONLINE
     // The model's name for the row under the message box (the computer's list, cached for the connection).
     LaunchedEffect(chat.providerId, online) { if (online) chat.providerId?.let { vm.loadModels(it) } }
     // The Monitor names loaded models from the Model Server's own list.
     LaunchedEffect(showMonitor, online) { if (showMonitor && online) vm.loadModels(ENGINE_PROVIDER_ID) }
-    if (expert && online) {
-        LaunchedEffect(vm, lifecycle) { lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { vm.hardware.poll() } }
-    }
+    // The minimal monitor re-reads every 3 s while it shows; Simple otherwise asks the Model Server every 10 s
+    // whether a local model is loaded (which brings the monitor in).
+    PollHardware(vm.hardware, online, full = showHardware, light = !simple.expert && simple.visibility("hardware") == SimpleVisibility.EXPERT)
+    // A monitor that goes away (the local model unloaded in Simple) closes its panel for good, not just while hidden.
+    LaunchedEffect(showHardware) { if (!showHardware) showMonitor = false }
+    // Simple's "chat getting long" line, until dismissed for this chat.
+    var longChatDismissed by rememberSaveable(vm.sessionId) { mutableStateOf(false) }
+    val savings = chat.context?.let { c -> SimpleMode.freshSavings(chat.contextTokens ?: c.usedTokens, c.contextWindow, c.sources) }
     var showMenu by remember { mutableStateOf(false) }
     var prs by remember(vm.sessionId) { mutableStateOf<List<PullRequest>>(emptyList()) }
     var showPrs by remember { mutableStateOf(false) }
@@ -221,7 +259,9 @@ fun ChatScreen(
     val headerCount = if (chat.omittedMessages > 0) 1 else 0
     val footerCount = 1
     // Adjacent calls with one purpose fold into one card (spec/chat/tool-calls-grouped-by-purpose.md).
-    val rows = remember(keyed) { Purpose.group(keyed) { Purpose.role(it.second) } }
+    // Simple folds each turn's reasoning and tool steps into one line that opens in place (the approval card still asks).
+    var openTurns by remember(vm.sessionId) { mutableStateOf(setOf<String>()) }
+    val rows = remember(keyed, showSteps, chat.running, openTurns) { transcriptRows(keyed, showSteps, chat.running, openTurns) }
     val lastIndex = headerCount + rows.size + footerCount - 1
 
     // Open at the newest message, then follow the reply while it streams, unless the user scrolled up to read.
@@ -264,9 +304,6 @@ fun ChatScreen(
     if (showModelEffort) {
         ModelEffortSheet(chat, computers, onSet = vm::setOptions, onLoadModels = { vm.loadModels() }, onDismiss = { showModelEffort = false })
     }
-    if (showMonitor && expert) {
-        MonitorSheet(hardware, chat, computerName, vm::modelName, onUnload = vm.hardware::unload, onDismiss = { showMonitor = false })
-    }
     val terminals by vm.terminalsOpen.collectAsStateWithLifecycle()
     terminals?.let { t ->
         val online by vm.online.collectAsStateWithLifecycle()
@@ -278,7 +315,7 @@ fun ChatScreen(
     files?.let { f -> FilesDialog(f, vm.repo, onDismiss = vm::closeFiles) }
     val git by vm.gitOpen.collectAsStateWithLifecycle()
     git?.let { o -> GitDialog(o.git, onDismiss = { vm.closeGit(); prReads++ }, pr = o.pr) }
-    if (showPrs) {
+    if (showPrs && showGit) {
         PrSheet(
             prs, onDismiss = { showPrs = false; prReads++ },
             onGit = { pr -> showPrs = false; vm.openGit(pr) },
@@ -290,10 +327,10 @@ fun ChatScreen(
         containerColor = p.paper,
         topBar = {
             Column {
-                TopAppBar(
+                CenterAlignedTopAppBar(
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
                     actions = {
-                        if (changesAllowed) {
+                        if (changesAllowed && simple.shown("changes")) {
                             IconButton(onClick = { vm.loadChanges(); showChanges = true }) {
                                 Icon(Icons.Filled.Difference, contentDescription = "Changes")
                             }
@@ -315,7 +352,7 @@ fun ChatScreen(
                                     onClick = { showMenu = false; vm.openFiles() },
                                     modifier = Modifier.testTag("chat.files"),
                                 )
-                                DropdownMenuItem(
+                                if (showTerminal) DropdownMenuItem(
                                     text = { Text("Terminals") },
                                     leadingIcon = { Icon(Icons.Filled.Terminal, contentDescription = null) },
                                     onClick = { showMenu = false; vm.openTerminals() },
@@ -326,15 +363,12 @@ fun ChatScreen(
                         pane?.actions?.invoke(this)
                     },
                     navigationIcon = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(onClick = onBack) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                            }
-                            ModeToggle(expert, vm::setExpert, compact = pane != null)
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     },
                     title = {
-                        Column {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 // In a pane: the status dot, pulsing for a pending approval or question while the other pane has the keyboard.
                                 if (pane != null) {
@@ -342,7 +376,7 @@ fun ChatScreen(
                                 }
                                 Text(chat.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            if (simple.shown("ph-subtitle")) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Icon(Icons.Filled.Computer, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(12.dp))
                                 Text(
                                     chat.subtitle,
@@ -355,7 +389,9 @@ fun ChatScreen(
                         }
                     },
                 )
-                if (expert) MonitorStrip(hardware, computerName, onOpen = { showMonitor = true }, modifier = Modifier.background(p.paper))
+                SlimBar(simple.expert, simple.setExpert) {
+                    if (showHardware) MiniMonitor(hardware, onOpen = { showMonitor = !showMonitor }, compact = pane != null)
+                }
             }
         },
     ) { padding ->
@@ -388,19 +424,24 @@ fun ChatScreen(
                                 )
                             }
                         }
-                        itemsIndexed(rows, key = { _, run -> rowKey(run) }) { _, run ->
-                            when (run) {
-                                is PurposeRun.Single -> {
+                        itemsIndexed(rows, key = { _, row -> rowKey(row) }) { _, row ->
+                            val run = (row as? TranscriptRow.Run)?.run
+                            when {
+                                row is TranscriptRow.Steps -> StepsLine(row.steps.steps, row.steps.running, row.steps.durationMs, row.steps.open) {
+                                    openTurns = if (row.steps.open) openTurns - row.steps.turn else openTurns + row.steps.turn
+                                }
+                                run is PurposeRun.Single -> {
                                     val block = run.item.second
                                     // Long press: Copy, and fork the chat from a saved message.
                                     val fork = forkAction(block)
                                     // In a pane a message can be dragged into the other pane's message box.
                                     // A reply's links to files and loopback pages open previews from the computer (AN-35).
                                     CompositionLocalProvider(LocalChatPreviews provides vm.previews) {
-                                        if (pane == null) BlockView(block, fork) else Box(Modifier.messageDragSource(block, vm.sessionId)) { BlockView(block, fork) }
+                                        val reasoning = (row as TranscriptRow.Run).stepsOpen
+                                        if (pane == null) BlockView(block, fork, reasoning) else Box(Modifier.messageDragSource(block, vm.sessionId)) { BlockView(block, fork, reasoning) }
                                     }
                                 }
-                                is PurposeRun.Group -> PurposeGroupCard(run.purpose, run.items.map { it.second }, run.calls)
+                                run is PurposeRun.Group -> PurposeGroupCard(run.purpose, run.items.map { it.second }, run.calls)
                             }
                         }
                         item(key = "footer") {
@@ -423,7 +464,7 @@ fun ChatScreen(
         val controls: @Composable () -> Unit = {
             chat.approval?.let { ApprovalCard(it, onDecide = vm::approve) }
             chat.question?.let { QuestionCard(it, onAnswer = vm::answer) }
-            prs.firstOrNull()?.let { pr -> PrChip(pr) { showPrs = true } }
+            if (showGit) prs.firstOrNull()?.let { pr -> PrChip(pr) { showPrs = true } }
             // A completed chat reads like the desktop's: no message box until it is restored.
             if (completedAt != null && !chat.running) CompletedBar(
                 restoring = restoring,
@@ -445,6 +486,13 @@ fun ChatScreen(
                 },
                 modifier = Modifier.navigationBarsPadding(),
             ) else Column(Modifier.navigationBarsPadding()) {
+                if (!simple.expert && savings != null && !longChatDismissed) {
+                    LongChatNudge(
+                        savings,
+                        onStartFresh = onStartFresh?.let { go -> { go(chat.providerId?.let { pr -> chat.modelId?.let { ModelPick(pr, it) } }) } },
+                        onDismiss = { longChatDismissed = true },
+                    )
+                }
                 Composer(
                     initialText = initialDraft,
                     running = chat.running,
@@ -463,12 +511,20 @@ fun ChatScreen(
                     queuedPrompts = chat.queuedPrompts,
                     onEditQueued = vm::editQueued,
                     onNewAgent = onNewChat,
-                    onTerminal = vm::openTerminals,
+                    onTerminal = if (showTerminal) vm::openTerminals else null,
                 )
                 ChatOptionsRow(chat, enabled = online, onOpenModelEffort = { showModelEffort = true })
             }
         }
-        ChatColumns(top = padding.calculateTopPadding(), tabletop = pane?.tabletop, transcript = transcript, controls = controls)
+        Box {
+            ChatColumns(top = padding.calculateTopPadding(), tabletop = pane?.tabletop, transcript = transcript, controls = controls)
+            // The agent's details slide down from under the header.
+            AgentPanel(
+                open = showMonitor && showHardware, state = hardware, chat = chat, computer = computerName, modelName = vm::modelName,
+                onUnload = vm.hardware::unload, onDismiss = { showMonitor = false },
+                modifier = Modifier.padding(top = padding.calculateTopPadding()),
+            )
+        }
     }
 }
 
@@ -642,8 +698,41 @@ private fun rememberAttach(vm: ChatViewModel): AttachUi {
 private fun cameraUri(context: Context, file: File): Uri =
     FileProvider.getUriForFile(context, "${context.packageName}.photos", file)
 
-/** A list key for a transcript row: the block's own key, or its first block's for a purpose group. */
-private fun rowKey(run: PurposeRun<Pair<String, Block>>): String = when (run) {
-    is PurposeRun.Single -> run.item.first
-    is PurposeRun.Group -> "purpose:" + run.items.first().first
+/** A transcript row: a message or a purpose group, or (Simple) one turn's folded steps. */
+private sealed interface TranscriptRow {
+    /** [stepsOpen] when its turn's steps show, so a reply's reasoning shows too. */
+    data class Run(val run: PurposeRun<Pair<String, Block>>, val stepsOpen: Boolean) : TranscriptRow
+    data class Steps(val steps: TurnSteps.Row.Summary<Pair<String, Block>>) : TranscriptRow
+}
+
+private fun transcriptRows(keyed: List<Pair<String, Block>>, showSteps: Boolean, running: Boolean, open: Set<String>): List<TranscriptRow> {
+    if (showSteps) return Purpose.group(keyed) { Purpose.role(it.second) }.map { TranscriptRow.Run(it, stepsOpen = true) }
+    val out = mutableListOf<TranscriptRow>()
+    val pending = mutableListOf<Pair<String, Block>>()
+    var pendingOpen = false
+    fun flush() {
+        Purpose.group(pending.toList()) { Purpose.role(it.second) }.forEach { out += TranscriptRow.Run(it, pendingOpen) }
+        pending.clear()
+    }
+    TurnSteps.fold(keyed, { it.second }, { it.first }, running, open).forEach { r ->
+        when (r) {
+            is TurnSteps.Row.Summary -> { flush(); out += TranscriptRow.Steps(r) }
+            is TurnSteps.Row.Item -> {
+                if (r.stepsOpen != pendingOpen) flush()
+                pendingOpen = r.stepsOpen
+                pending += r.item
+            }
+        }
+    }
+    flush()
+    return out
+}
+
+/** A list key for a transcript row: the block's own key, its first block's for a purpose group, or its turn's for folded steps. */
+private fun rowKey(row: TranscriptRow): String = when (row) {
+    is TranscriptRow.Steps -> "steps:" + row.steps.turn
+    is TranscriptRow.Run -> when (val run = row.run) {
+        is PurposeRun.Single -> run.item.first
+        is PurposeRun.Group -> "purpose:" + run.items.first().first
+    }
 }

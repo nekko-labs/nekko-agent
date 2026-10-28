@@ -2,7 +2,6 @@
 <!-- Simple and Expert modes in the chat (spec/phone/iphone-simple-and-expert-modes.md). Wording matches the iPhone's String Catalog. -->
 <resources>
     <string name="your_computer">your computer</string>
-    <string name="mode_label">Mode</string>
     <string name="mode_simple">Simple</string>
     <string name="mode_expert">Expert</string>
     <string name="effort_low">Low</string>
@@ -39,7 +38,6 @@
     <string name="hw_gpu_memory">GPU memory</string>
     <string name="hw_vram">VRAM</string>
     <string name="monitor">Monitor</string>
-    <string name="monitor_loaded">Loaded</string>
     <string name="monitor_models_loaded">%1$d models loaded</string>
     <string name="monitor_reading">Reading %1$s…</string>
     <string name="monitor_hardware">Hardware</string>

@@ -382,6 +382,8 @@ export function ChatControls({
   only,
   modelId,
   draft,
+  hideMode = false,
+  hidePrivacy = false,
 }: {
   session: Session | null;
   /** The message being written, for Privacy Shield's preview. */
@@ -394,6 +396,9 @@ export function ChatControls({
   toolsInWindow?: boolean;
   /** Drawn first on the row (the chat-type toggle). */
   leading?: ReactNode;
+  /** Simple mode keeps the Mode button and Privacy Shield for Expert (Settings > Simple mode). */
+  hideMode?: boolean;
+  hidePrivacy?: boolean;
   /** Render just one control, for a host that lays them out itself (the wall composer's bottom bar). */
   only?: 'mode' | 'privacy';
 }) {
@@ -448,7 +453,7 @@ export function ChatControls({
 
   const patch = async (p: Partial<Session>) => onChange(await window.nekko.setSessionOptions(session.id, p as any));
 
-  const showMode = only !== 'privacy';
+  const showMode = only !== 'privacy' && !hideMode;
   const showPrivacy = only !== 'mode';
   return (
     <div ref={ref} className={only ? 'flex min-w-0 items-center gap-1 text-[12px]' : 'flex w-full min-w-0 flex-wrap items-center gap-1.5 text-[12px]'}>
@@ -507,7 +512,7 @@ export function ChatControls({
         </button>}
 
         {/* Privacy Shield: what a cloud model may read. */}
-        {session.chatType !== 'image' && <PrivacyShieldMenu session={session} draft={draft} onChange={onChange} />}
+        {session.chatType !== 'image' && !hidePrivacy && <PrivacyShieldMenu session={session} draft={draft} onChange={onChange} />}
 
         {/* Incognito */}
         <button

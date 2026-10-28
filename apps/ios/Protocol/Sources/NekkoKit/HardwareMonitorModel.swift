@@ -17,9 +17,18 @@ public final class HardwareMonitorModel {
     public private(set) var error: String?
     /// The model being unloaded.
     public private(set) var unloading: String?
+    #if DEBUG
+    /// Screenshot captures only (`-uiTestLocalModel`): a Model Server reading used in place of the computer's.
+    public var stubEngine: EngineStatus?
+    #endif
 
     /// How often the panel re-reads the computer: the desktop samples hardware every few seconds.
     public static let interval: TimeInterval = 3
+    /// How often Simple mode checks for a loaded local model, with no monitor on screen.
+    public static let engineInterval: TimeInterval = 10
+
+    /// The Model Server holds at least one model: Simple then shows the monitors too.
+    public var localModelLoaded: Bool { !(engine?.resident.isEmpty ?? true) }
 
     private let store: ComputersStore
 
@@ -44,6 +53,9 @@ public final class HardwareMonitorModel {
             system = SystemStats.from(s)
             gpu = GpuStats.from(g)
             engine = EngineStatus.from(e)
+            #if DEBUG
+            if let stubEngine { engine = stubEngine }
+            #endif
             if s == nil && g == nil && e == nil {
                 error = "\(store.active?.name ?? "This computer") didn’t send its monitors. Update Nekko Agent there to see them."
             } else {
@@ -58,11 +70,22 @@ public final class HardwareMonitorModel {
         loaded = true
     }
 
+    /// Read only the Model Server's status (light: no hardware sampling).
+    public func refreshEngine() async {
+        // A failed read keeps the last one, so a hiccup doesn't hide the monitors.
+        guard let r = try? store.remote(), let raw = try? await r.call(MonitorChannels.engineStatus) else { return }
+        engine = raw.isNull ? nil : EngineStatus.from(raw)
+        #if DEBUG
+        if let stubEngine { engine = stubEngine }
+        #endif
+    }
+
     /// Re-read every `interval` seconds until the task is cancelled (the panel left the screen).
-    public func follow() async {
+    /// `engineOnly` reads just the Model Server, for Simple's loaded-model check.
+    public func follow(every interval: TimeInterval = HardwareMonitorModel.interval, engineOnly: Bool = false) async {
         while !Task.isCancelled {
-            await refresh()
-            try? await Task.sleep(nanoseconds: UInt64(Self.interval * 1_000_000_000))
+            if engineOnly { await refreshEngine() } else { await refresh() }
+            try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
         }
     }
 

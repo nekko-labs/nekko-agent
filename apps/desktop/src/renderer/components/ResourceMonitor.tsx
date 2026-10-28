@@ -118,7 +118,7 @@ export function useResourceSample(): ResourceSample {
   useEffect(() => {
     setSources({ system: wantSystem, gpu: wantGpu });
   }, [wantSystem, wantGpu]);
-  return useSyncExternalStore(subscribe, () => sample);
+  return useSyncExternalStore(subscribe, () => sample, () => sample);
 }
 
 /* ── Formatting ──────────────────────────────────────────────────────────── */

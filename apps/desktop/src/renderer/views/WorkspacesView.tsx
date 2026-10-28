@@ -23,6 +23,7 @@ import { leftGroup, moveGroupBefore } from './groupDrag.js';
 import { AgentPanelViewMenu } from '../components/AgentPanelViewMenu.js';
 import { endAgentDrag, startAgentDrag } from '../agentDrag.js';
 import { CARD_ATTR, flyMovedCards, measureCards, type CardSpot } from './agentCardMotion.js';
+import { useShown } from '../simpleMode.js';
 import {
   DATE_GROUPS, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, readAgentPanelView, saveAgentPanelView, statusGroupOf,
   type AgentPanelView, type SortableCard,
@@ -314,6 +315,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   // The panel clips its overflow and the wall's windows stack above it, so a
   // menu drawn inside the panel was cut off or hidden behind them.
   const [newMenuPos, setNewMenuPos] = useState<{ top: number; left: number } | null>(null);
+  const terminalShown = useShown('terminal');
   useLayoutEffect(() => {
     if (!newMenuOpen) return;
     const place = () => {
@@ -658,7 +660,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
               onMouseEnter={openNewMenu}
               onMouseLeave={closeNewMenuSoon}
             >
-              <CreateMenuRows onCreate={(kind) => {
+              <CreateMenuRows terminal={terminalShown} onCreate={(kind) => {
                 closeNewMenu();
                 const action = kind === 'chat' ? newChat() : kind === 'image' ? newImageChat() : newTerminalWorkspace();
                 void Promise.resolve(action).catch((e: Error) => useStore.getState().pushToast('error', e.message));

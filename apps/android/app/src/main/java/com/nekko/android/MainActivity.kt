@@ -12,6 +12,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.CompositionLocalProvider
+import com.nekko.android.ui.simple.LocalSimple
+import com.nekko.android.ui.simple.rememberSimpleView
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.fragment.app.FragmentActivity
@@ -63,7 +65,7 @@ class MainActivity : FragmentActivity() {
                 enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
             }
             NekkoTheme(dark = look.dark, accent = look.accent) {
-                CompositionLocalProvider(LocalAuthenticator provides authenticator, LocalAppLock provides app.appLock) {
+                CompositionLocalProvider(LocalAuthenticator provides authenticator, LocalAppLock provides app.appLock, LocalSimple provides rememberSimpleView(app.phonePrefs)) {
                     LockGate(app.appLock, authenticator) {
                         NekkoNavHost(
                             repo = repo,

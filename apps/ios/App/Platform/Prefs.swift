@@ -50,9 +50,14 @@ final class Prefs {
     /// Keep the last chats opened (up to 20, 5 MB per computer, no photos) to read
     /// while the computer is unreachable (OF-5). On unless the user turned it off.
     var keepTranscripts: Bool { didSet { d.set(keepTranscripts, forKey: "keepTranscripts") } }
-    /// Expert mode (2026-10-24): the chat adds the computer's hardware and loaded
-    /// models to Simple mode's model, effort and context. Off by default.
+    /// Expert mode (2026-10-24): every control; Simple (the default) hides the
+    /// ones `simpleChoices` and `SimpleMode` keep to Expert. Saved on this device only.
     var expertMode: Bool { didSet { d.set(expertMode, forKey: "expertMode") } }
+    /// Settings > Simple mode: per control, Show, Expert only or Hide, where it
+    /// differs from the default. Saved as JSON on this device only.
+    var simpleChoices: [String: SimpleVisibility] { didSet { d.set(SimpleMode.encode(simpleChoices), forKey: "simpleChoices") } }
+    /// Chats whose "getting long" note was closed in Simple, newest last (at most 200).
+    var longChatDismissed: [String] { didSet { d.set(longChatDismissed, forKey: "longChatDismissed") } }
     /// Per computer, the last model chosen for a new chat: `providerId::modelId`.
     var lastModel: [String: String] { didSet { d.set(lastModel, forKey: "lastModel") } }
     /// Per computer, concrete last-used choices, never a recommendation marker.
@@ -99,6 +104,8 @@ final class Prefs {
         voiceIntroSeen = flag("voiceIntroSeen", false)
         onboarded = flag("onboarded", false)
         expertMode = flag("expertMode", false)
+        simpleChoices = SimpleMode.parse(d.string(forKey: "simpleChoices"))
+        longChatDismissed = d.stringArray(forKey: "longChatDismissed") ?? []
         lastModel = d.dictionary(forKey: "lastModel") as? [String: String] ?? [:]
         lastEffort = d.dictionary(forKey: "lastEffort") as? [String: String] ?? [:]
         lastTools = d.dictionary(forKey: "lastTools") as? [String: String] ?? [:]
@@ -112,6 +119,16 @@ final class Prefs {
         func choice(_ k: String) -> Bool? { defaults.object(forKey: k) == nil ? nil : defaults.bool(forKey: k) }
         keepChatList = OfflineSetting.isOn(stored: choice("keepChatList"))
         keepTranscripts = OfflineSetting.isOn(stored: choice("keepTranscripts"))
+    }
+
+    /// Whether a Simple mode control is on screen in the current mode.
+    func shows(_ id: String, localModelLoaded: Bool = false) -> Bool {
+        SimpleMode.shown(id, expert: expertMode, simpleChoices, localModelLoaded: localModelLoaded)
+    }
+
+    func dismissLongChat(_ chatId: String) {
+        guard !longChatDismissed.contains(chatId) else { return }
+        longChatDismissed = Array((longChatDismissed + [chatId]).suffix(200))
     }
 
     func newChatEffort(computer: String?, model: String, settings: PcSettings) -> Effort {

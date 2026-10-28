@@ -4,12 +4,20 @@ import { useStore, viewEnabled, type View } from '../store.js';
 import { SHORTCUTS } from '../shortcuts.js';
 import { Modal } from './primitives/index.js';
 import { openFeedback } from './FeedbackSheet.js';
+import { SIMPLE_ITEMS, simpleShown, simpleVisibility } from '@nekko-agent/shared';
+import { useExpertMode, useLocalModelLoaded, useSimpleChoices } from '../simpleMode.js';
 
 interface Command {
   id: string;
   label: string;
   hint?: string;
   run: () => void;
+}
+
+/** Settings, scrolled to the Simple mode group. */
+function openSimpleSettings() {
+  useStore.getState().setView('settings');
+  requestAnimationFrame(() => document.getElementById('settings-simple')?.scrollIntoView({ block: 'start' }));
 }
 
 /** Ctrl/Cmd+K command palette for fast navigation and actions. */
@@ -31,6 +39,9 @@ export function CommandPalette() {
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listId = useId();
+  const [expert, setExpert] = useExpertMode();
+  const [choices] = useSimpleChoices();
+  const localLoaded = useLocalModelLoaded();
 
   const commands = useMemo<Command[]>(() => {
     const go = (v: View, label: string): Command => ({ id: `go-${v}`, label, hint: 'Navigate', run: () => setView(v) });
@@ -47,6 +58,14 @@ export function CommandPalette() {
       go('settings', 'Go to Settings'),
       { id: 'toggle-context', label: 'Toggle context panel', run: () => toggleContextPanel() },
       { id: 'feedback', label: 'Send feedback', hint: 'Help', run: openFeedback },
+      { id: 'mode', label: expert ? 'Switch to Simple' : 'Switch to Expert', hint: expert ? 'Everyday controls' : 'Every control', run: () => setExpert(!expert) },
+      { id: 'simple-settings', label: 'Choose what Simple shows', hint: 'Settings', run: openSimpleSettings },
+      // Controls out of sight in this mode stay findable: Expert-only ones
+      // switch to Expert, hidden ones open the setting that hides them.
+      ...SIMPLE_ITEMS.filter((i) => i.platforms.includes('desktop') && !simpleShown(i.id, expert, choices, localLoaded)).map((i): Command => (
+        simpleVisibility(i.id, choices) === 'hide'
+          ? { id: `simple-${i.id}`, label: i.label, hint: 'Hidden in Settings', run: openSimpleSettings }
+          : { id: `simple-${i.id}`, label: i.label, hint: 'Shown in Expert', run: () => setExpert(true) })),
       // Only when there is a daemon to reach: an entry that can only fail is
       // worse than no entry. Connected, it is the way back to the tab.
       ...(hypergate
@@ -62,7 +81,7 @@ export function CommandPalette() {
           }]
         : []),
     ];
-  }, [setView, newChat, newTerminal, toggleContextPanel, hypergate, hypergateConnected, settings]);
+  }, [setView, newChat, newTerminal, toggleContextPanel, hypergate, hypergateConnected, settings, expert, choices, localLoaded]);
 
   const filtered = commands.filter((c) => c.label.toLowerCase().includes(query.toLowerCase()));
 

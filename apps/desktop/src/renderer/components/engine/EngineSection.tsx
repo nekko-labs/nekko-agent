@@ -19,6 +19,7 @@ import { LocalServerSection } from '../server/LocalServerSection.js';
 import { ServerPowerPill } from '../server/ServerPowerPill.js';
 import { ServiceLoadState } from '../ServiceLoadState.js';
 import { ErrorBoundary } from '../ErrorBoundary.js';
+import { Shown } from '../ModeViews.js';
 
 /**
  * The engine Nekko Agent runs itself, and the models it serves.
@@ -257,10 +258,10 @@ export function EngineSection({
           </>
         )}
 
-        <details className="mt-4 border-t border-line pt-4">
+        <Shown id="engine"><details className="mt-4 border-t border-line pt-4">
           <summary className="cursor-pointer text-[12px] font-medium">Model server settings</summary>
           <div className="mt-3"><EngineServerSettings settings={status.settings} install={install} running={running} onChanged={() => { void refresh(); onProvidersChanged(); }} /></div>
-        </details>
+        </details></Shown>
         <ErrorBoundary label="Image runtime"><DiffusionInstallCard install={status.diffusionInstall} onChanged={refresh} /></ErrorBoundary>
         <ErrorBoundary label="MLX runtime"><MlxInstallCard install={status.mlxInstall} onChanged={refresh} /></ErrorBoundary>
 

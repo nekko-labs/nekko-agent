@@ -2,6 +2,7 @@ import React from 'react';
 import { useStore } from '../store.js';
 import { useWallLogs } from '../wallLogs.js';
 import { DiffIcon, FolderIcon, GlobeIcon } from '../icons.js';
+import { useShown } from '../simpleMode.js';
 
 export type CompanionKind = 'diff' | 'browser' | 'files';
 
@@ -36,10 +37,11 @@ export function AgentCompanionButtons({ sessionId, changeCount, added = 0, remov
   commandCenter: boolean;
   compact: boolean;
 }) {
+  const showChanges = useShown('changes');
   const open = useWallLogs((s) => commandCenter && s.sessionId === sessionId && !s.closing ? s.kind : null);
   return (
     <span className="contents" role="group" aria-label="Agent companions">
-      {KINDS.map(({ kind, label, title, Icon }) => {
+      {KINDS.filter((k) => k.kind !== 'diff' || showChanges).map(({ kind, label, title, Icon }) => {
         const count = kind === 'diff' && changeCount > 0 ? changeCount : 0;
         return (
           <button

@@ -2,7 +2,6 @@
 <!-- From the iPhone's String Catalog (apps/ios/App/Localizable.xcstrings), machine-drafted there. -->
 <resources>
     <string name="your_computer">你的电脑</string>
-    <string name="mode_label">模式</string>
     <string name="mode_simple">简单</string>
     <string name="mode_expert">专家</string>
     <string name="effort_low">低</string>
@@ -39,7 +38,6 @@
     <string name="hw_gpu_memory">GPU 内存</string>
     <string name="hw_vram">显存</string>
     <string name="monitor">监视器</string>
-    <string name="monitor_loaded">已载入</string>
     <string name="monitor_models_loaded">已加载 %1$d 个模型</string>
     <string name="monitor_reading">正在读取 %1$s…</string>
     <string name="monitor_hardware">硬件</string>

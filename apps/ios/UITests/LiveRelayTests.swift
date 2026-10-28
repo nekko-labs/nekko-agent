@@ -27,7 +27,7 @@ final class LiveRelayTests: XCTestCase {
         let app = XCUIApplication()
         // Settings persist across runs on one simulator: start each from the defaults it checks.
         // Live Activities stay off until the step that checks one (see there).
-        let defaults = ["-splash", "NO", "-appLock", "NO", "-notifyFinished", "YES", "-dictationHold", "NO", "-theme", theme == "dark" ? "dark" : "light"]
+        let defaults = ["-splash", "NO", "-appLock", "NO", "-expertMode", "YES", "-notifyFinished", "YES", "-dictationHold", "NO", "-theme", theme == "dark" ? "dark" : "light"]
         app.launchArguments = defaults + ["-onboarded", "NO", "-liveActivityLevel", "none", "-uiTestReset", "YES"]
         app.launch()
         allowSystemAlerts()
@@ -498,9 +498,9 @@ final class LiveRelayTests: XCTestCase {
         attach(app, "beyond-11-log")
     }
 
-    /// Simple and Expert (2026-10-24): the composer's model and effort control
-    /// and context gauge, the effort sheet, Expert's monitor panel and the whole
-    /// monitor with the computer's real hardware.
+    /// Simple and Expert: Simple's model control alone, then Expert's effort
+    /// sheet, context gauge, monitor panel and the whole monitor with the
+    /// computer's real hardware.
     func testSimpleAndExpertModes() throws {
         guard let raw = ProcessInfo.processInfo.environment["NEKKO_ITEST_LINK"], let link = URL(string: raw) else {
             throw XCTSkip("set NEKKO_ITEST_LINK (apps/ios/scripts/itest-stack.sh)")
@@ -528,14 +528,22 @@ final class LiveRelayTests: XCTestCase {
         app.buttons["Start"].tap()
         XCTAssertTrue(app.staticTexts["Hello from your computer."].waitForExistence(timeout: 30), "the first reply streamed in")
 
-        // Simple: the model and effort control and the context gauge, and no monitor.
+        // Simple: the model name and the context gauge, and no monitor (no local model is loaded).
         let modelEffort = app.buttons["chat.modelEffort"]
-        XCTAssertTrue(modelEffort.waitForExistence(timeout: 10), "the composer has the model and effort control")
-        XCTAssertTrue(app.buttons["chat.context"].exists, "the context gauge shows in Simple mode")
-        XCTAssertFalse(app.buttons["chat.monitor"].exists, "Simple mode has no monitor")
+        XCTAssertTrue(modelEffort.waitForExistence(timeout: 10), "the composer has the model control")
+        XCTAssertTrue(app.buttons["chat.context"].exists, "Simple mode shows the context gauge")
+        XCTAssertFalse(app.buttons["chat.monitor"].exists, "Simple mode has no monitor without a local model")
         settle()
         attach(app, "modes-1-simple")
         auditAccessibility(app, "modes-simple")
+
+        // Expert: the minimal monitor in the row under the title, and the context gauge.
+        let expert = app.buttons["Expert: every control"]
+        XCTAssertTrue(expert.waitForExistence(timeout: 5))
+        expert.tap()
+        let panel = app.buttons["chat.monitor"]
+        XCTAssertTrue(panel.waitForExistence(timeout: 15), "Expert shows the minimal monitor")
+        XCTAssertTrue(app.buttons["chat.context"].exists, "Expert shows the context gauge")
 
         // The effort sheet: pick High, and the control says so.
         modelEffort.tap()
@@ -547,31 +555,22 @@ final class LiveRelayTests: XCTestCase {
         app.buttons["Done"].firstMatch.tap()
         XCTAssertTrue(modelEffort.waitForExistence(timeout: 5))
 
-        // Expert: the monitor panel under the title, then the whole monitor.
-        app.buttons["chat.mode"].tap()
-        let expert = app.buttons["Expert"]
-        XCTAssertTrue(expert.waitForExistence(timeout: 5))
-        expert.tap()
-        let panel = app.buttons["chat.monitor"]
-        XCTAssertTrue(panel.waitForExistence(timeout: 15), "Expert shows the monitor panel")
-        XCTAssertTrue(app.buttons["chat.context"].exists, "the context gauge stays in Expert mode")
         // A reading or two: the panel reads every 3 seconds.
         RunLoop.current.run(until: Date().addingTimeInterval(4))
         attach(app, "modes-3-expert")
         auditAccessibility(app, "modes-expert")
         panel.tap()
-        XCTAssertTrue(app.navigationBars["Monitor"].waitForExistence(timeout: 10), "the whole monitor opens")
+        // The agent's panel slides down from under the title.
         // A list section header can read in capitals, so match its identifier or its words in any case.
         let models = app.descendants(matching: .any)
             .matching(NSPredicate(format: "identifier == %@ OR label ==[c] %@", "monitor.models", "Loaded models")).firstMatch
-        XCTAssertTrue(models.waitForExistence(timeout: 10), "the monitor lists the loaded models")
+        XCTAssertTrue(models.waitForExistence(timeout: 10), "the agent's panel lists the loaded models")
         settle()
         attach(app, "modes-4-monitor")
         app.buttons["Done"].firstMatch.tap()
 
         // Back to Simple: the panel goes.
-        app.buttons["chat.mode"].tap()
-        let simple = app.buttons["Simple"]
+        let simple = app.buttons["Simple: everyday controls"]
         XCTAssertTrue(simple.waitForExistence(timeout: 5))
         simple.tap()
         XCTAssertTrue(waitGone(panel, 10), "Simple mode hides the monitor")

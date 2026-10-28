@@ -2,7 +2,6 @@
 <!-- From the iPhone's String Catalog (apps/ios/App/Localizable.xcstrings), machine-drafted there. -->
 <resources>
     <string name="your_computer">seu computador</string>
-    <string name="mode_label">Modo</string>
     <string name="mode_simple">Simples</string>
     <string name="mode_expert">Especialista</string>
     <string name="effort_low">Baixo</string>
@@ -39,7 +38,6 @@
     <string name="hw_gpu_memory">Memória da GPU</string>
     <string name="hw_vram">VRAM</string>
     <string name="monitor">Monitor</string>
-    <string name="monitor_loaded">Carregado</string>
     <string name="monitor_models_loaded">%1$d modelos carregados</string>
     <string name="monitor_reading">Lendo %1$s…</string>
     <string name="monitor_hardware">Hardware</string>

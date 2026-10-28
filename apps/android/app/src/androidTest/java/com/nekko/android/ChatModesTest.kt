@@ -10,9 +10,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.click
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.CompositionLocalProvider
+import com.nekko.android.ui.simple.LocalSimple
+import com.nekko.android.ui.simple.rememberSimpleView
+import com.nekko.android.ui.screens.ChatsScreen
+import com.nekko.android.ui.settings.SimpleModeScreen
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -25,6 +35,8 @@ import com.nekko.android.data.Remote
 import com.nekko.android.data.SecureStore
 import com.nekko.android.monitors.EXPERT_MODE
 import com.nekko.android.ui.chat.ModeTags
+import com.nekko.android.ui.simple.EXPERT_DESCRIPTION
+import com.nekko.android.ui.simple.SIMPLE_DESCRIPTION
 import com.nekko.android.ui.panes.PaneLabels
 import com.nekko.android.ui.panes.PanesHost
 import com.nekko.android.ui.panes.rememberWindowPosture
@@ -78,6 +90,9 @@ class ChatModesTest {
 
     private val computer = FakeComputer()
 
+    /** What Start fresh asked New chat to open on. */
+    @Volatile private var fresh: com.nekko.android.data.ModelPick? = null
+
     /** Names the screenshots: `-e nekkoDevice fold`, else the model (every emulator calls itself the same). */
     private val device = InstrumentationRegistry.getArguments().getString("nekkoDevice") ?: Build.MODEL.replace(' ', '_')
     private val prefs = PhonePrefs(object : PrefStore {
@@ -88,48 +103,57 @@ class ChatModesTest {
 
     @Test fun simpleAndExpert() {
         show()
-        shot("1-simple")
+        // Simple with a local model loaded: the context ring, and the minimal monitor in the slim row.
+        compose.waitUntil(15_000) { computer.calls.contains(Channels.SYSTEM_STATS) }
+        settle()
+        assertTrue(compose.onAllNodesWithTag(ModeTags.MODEL_EFFORT).fetchSemanticsNodes().isNotEmpty())
+        assertTrue(compose.onAllNodesWithTag(ModeTags.CONTEXT).fetchSemanticsNodes().isNotEmpty())
+        assertTrue(compose.onAllNodesWithTag(ModeTags.MONITOR).fetchSemanticsNodes().isNotEmpty())
+        shot("1-simple-local-model")
+
+        // The minimal monitor opens the agent's details from the top; Unload frees the model.
+        compose.onAllNodesWithTag(ModeTags.MONITOR).onFirst().performClick()
+        settle()
+        assertTrue(compose.onAllNodesWithTag(ModeTags.MONITOR_SHEET).fetchSemanticsNodes().isNotEmpty())
+        shot("2-panel")
+        compose.onAllNodes(hasText("Unload")).onFirst().performClick()
+        compose.waitUntil(5_000) { computer.calls.contains(Channels.MODEL_UNLOAD) }
+        settle()
+        // No local model now: Simple drops the monitor and stops the hardware reads.
+        assertEquals(0, compose.onAllNodesWithTag(ModeTags.MONITOR).fetchSemanticsNodes().size)
+        shot("3-simple-unloaded")
+        val idle = computer.calls.count { it == Channels.SYSTEM_STATS }
+        Thread.sleep(4_000)
+        assertEquals("Simple without a local model reads no hardware", idle, computer.calls.count { it == Channels.SYSTEM_STATS })
+
+        // Expert (the code icon): the monitor is back and the hardware is read again.
+        compose.onAllNodesWithContentDescription(EXPERT_DESCRIPTION).onFirst().performClick()
+        compose.waitUntil(5_000) { computer.calls.count { it == Channels.SYSTEM_STATS } > idle }
+        settle()
+        assertTrue(prefs.get(EXPERT_MODE))
+        assertTrue(compose.onAllNodesWithTag(ModeTags.MONITOR).fetchSemanticsNodes().isNotEmpty())
+        shot("4-expert")
 
         // Model and effort: the sheet, then High.
         compose.onAllNodesWithTag(ModeTags.MODEL_EFFORT).onFirst().performClick()
         settle()
-        shot("2-model-effort")
+        shot("5-model-effort")
         compose.onAllNodesWithTag(ModeTags.effort(com.nekko.protocol.Effort.HIGH)).onFirst().performClick()
         compose.waitUntil(5_000) { computer.effort == "high" }
         settle()
-        shot("3-effort-high")
+        shot("6-effort-high")
         Espresso.pressBack()
         settle()
 
         // The context ring's breakdown.
         compose.onAllNodesWithTag(ModeTags.CONTEXT).onFirst().performClick()
         settle()
-        shot("4-context")
+        shot("7-context")
         Espresso.pressBack()
         settle()
 
-        // Expert: the hardware strip under the title, then the whole Monitor and Unload.
-        compose.onAllNodesWithTag(ModeTags.MODE).onFirst().performClick()
-        settle()
-        compose.onAllNodes(hasText("Expert")).onFirst().performClick()
-        compose.waitUntil(5_000) { computer.calls.any { it == Channels.ENGINE_STATUS } }
-        settle()
-        assertTrue(prefs.get(EXPERT_MODE))
-        shot("5-expert")
-        compose.onAllNodesWithTag(ModeTags.MONITOR).onFirst().performClick()
-        settle()
-        shot("6-monitor")
-        compose.onAllNodes(hasText("Unload")).onFirst().performClick()
-        compose.waitUntil(5_000) { computer.calls.contains(Channels.MODEL_UNLOAD) }
-        settle()
-        shot("7-unloaded")
-        Espresso.pressBack()
-        settle()
-
-        // Back to Simple: no strip, and no more hardware reads.
-        compose.onAllNodesWithTag(ModeTags.MODE).onFirst().performClick()
-        settle()
-        compose.onAllNodes(hasText("Simple")).onFirst().performClick()
+        // Back to Simple (the chat bubble): no monitor, and no more hardware reads.
+        compose.onAllNodesWithContentDescription(SIMPLE_DESCRIPTION).onFirst().performClick()
         settle()
         val reads = computer.calls.count { it == Channels.SYSTEM_STATS }
         Thread.sleep(4_000)
@@ -137,8 +161,101 @@ class ChatModesTest {
         assertEquals(0, compose.onAllNodesWithTag(ModeTags.MONITOR).fetchSemanticsNodes().size)
     }
 
-    /** One chat on a phone; two side by side (Chat + Chat) on an open folding phone. */
-    private fun show() {
+    /** The chats list in Simple with no local model: the slim row holds only the switch. */
+    @Test fun chatsListInSimple() {
+        computer.resident = false
+        val repo = repo()
+        // What the app does at start: read the paired computers, which marks the list ready.
+        runBlocking { repo.load() }
+        compose.setContent {
+            NekkoTheme(dark = false) {
+                CompositionLocalProvider(LocalSimple provides rememberSimpleView(prefs)) {
+                    ChatsScreen(repo, onOpenChat = {}, onNewChat = {}, onPair = {}, onComputers = {}, onSettings = {}, onMonitors = {})
+                }
+            }
+        }
+        compose.waitUntil(10_000) { compose.onAllNodes(hasText("Tidy the release notes")).fetchSemanticsNodes().isNotEmpty() }
+        settle()
+        shot("chats-simple")
+        assertTrue(compose.onAllNodesWithContentDescription(SIMPLE_DESCRIPTION).fetchSemanticsNodes().isNotEmpty())
+        assertEquals(0, compose.onAllNodesWithTag(ModeTags.MONITOR).fetchSemanticsNodes().size)
+        assertEquals(0, compose.onAllNodes(hasText("Monitors")).fetchSemanticsNodes().size)
+    }
+
+    /**
+     * A chat in Simple: the turn's steps on one line that opens in place, then a local model
+     * loading brings the minimal monitor in, and it opens the panel. The switch and the monitor
+     * take touches over 48 dp although the row is 34 dp.
+     */
+    @Test fun simpleChatStepsAndLocalModel() {
+        computer.resident = false
+        show()
+        assertEquals(0, compose.onAllNodesWithTag(ModeTags.MONITOR).fetchSemanticsNodes().size)
+        assertTrue(compose.onAllNodes(hasText("Took 3 steps · 14s")).fetchSemanticsNodes().isNotEmpty())
+        assertEquals(0, compose.onAllNodes(hasText("Show reasoning")).fetchSemanticsNodes().size)
+        shot("chat-simple-steps-folded")
+
+        compose.onAllNodes(hasText("Show steps")).onFirst().performClick()
+        settle()
+        shot("chat-simple-steps-shown")
+        assertTrue(compose.onAllNodes(hasText("Show reasoning")).fetchSemanticsNodes().isNotEmpty())
+        assertTrue(compose.onAllNodes(hasText("Hide steps")).fetchSemanticsNodes().isNotEmpty())
+        compose.onAllNodes(hasText("Hide steps")).onFirst().performClick()
+        settle()
+
+        // A model loads on the computer: Simple's 10 s check brings the monitor in.
+        computer.resident = true
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag(ModeTags.MONITOR).fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(10_000) { computer.calls.contains(Channels.SYSTEM_STATS) }
+        settle()
+        shot("chat-simple-local-model")
+
+        val min = with(compose.density) { 48.dp.toPx() } - 1
+        assertTrue(compose.onAllNodesWithTag(ModeTags.MONITOR).onFirst().fetchSemanticsNode().boundsInRoot.height >= min)
+        compose.onAllNodesWithTag(ModeTags.MONITOR).onFirst().performClick()
+        settle()
+        assertTrue(compose.onAllNodesWithTag(ModeTags.MONITOR_SHEET).fetchSemanticsNodes().isNotEmpty())
+        shot("chat-panel")
+        Espresso.pressBack()
+        settle()
+        assertEquals(0, compose.onAllNodesWithTag(ModeTags.MONITOR_SHEET).fetchSemanticsNodes().size)
+
+        // A tap 2 px from the top of the Expert segment, above the 34 dp row, still switches.
+        val expertSegment = compose.onAllNodesWithContentDescription(EXPERT_DESCRIPTION).onFirst()
+        assertTrue(expertSegment.fetchSemanticsNode().boundsInRoot.height >= min)
+        expertSegment.performTouchInput { click(Offset(centerX, 2f)) }
+        settle()
+        assertTrue(prefs.get(EXPERT_MODE))
+    }
+
+    /** Simple's "getting long" line once the context passes 85% of the window. */
+    @Test fun longChatLine() {
+        computer.resident = false
+        computer.longChat = true
+        show()
+        compose.waitUntil(5_000) { compose.onAllNodesWithTag(ModeTags.LONG_CHAT).fetchSemanticsNodes().isNotEmpty() }
+        assertTrue(compose.onAllNodes(hasText("This chat is getting long. Starting fresh saves about 112k tokens.")).fetchSemanticsNodes().isNotEmpty())
+        settle()
+        shot("chat-long")
+        // Start fresh hands New chat the same model.
+        compose.onAllNodes(hasText("Start fresh")).onFirst().performClick()
+        compose.waitForIdle()
+        assertEquals(com.nekko.android.data.ModelPick("anthropic", "claude-opus-4-7"), fresh)
+        compose.onAllNodesWithContentDescription("Dismiss").onFirst().performClick()
+        settle()
+        assertEquals(0, compose.onAllNodesWithTag(ModeTags.LONG_CHAT).fetchSemanticsNodes().size)
+    }
+
+    /** Settings > Simple mode, previewing Simple. */
+    @Test fun simpleModeSettings() {
+        compose.setContent { NekkoTheme(dark = false) { SimpleModeScreen(prefs, onBack = {}) } }
+        settle()
+        assertTrue(compose.onAllNodes(hasText("Simple keeps Nekko calm for everyday use. Everything still works; these controls just stay out of sight.")).fetchSemanticsNodes().isNotEmpty())
+        shot("settings-simple-mode")
+    }
+
+    /** A repository paired with the fake computer, named Studio Mac. */
+    private fun repo(): ComputersRepository {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
         val repo = ComputersRepository(
             store = MemoryStore(),
@@ -151,12 +268,18 @@ class ChatModesTest {
             val id = repo.pair(PairingLink("wss://relay.example.dev", "a1b2c3d4e5f60718", "00112233445566778899aabbccddeeff"))
             repo.rename(id, "Studio Mac")
         }
+        return repo
+    }
+
+    /** One chat on a phone; two side by side (Chat + Chat) on an open folding phone. */
+    private fun show() {
+        val repo = repo()
         val vms = mapOf("s1" to ChatViewModel("s1", repo, null, prefs), "s2" to ChatViewModel("s2", repo, null, prefs))
         compose.setContent {
             NekkoTheme(dark = false) {
                 val window = rememberWindowPosture()
                 if (window.mode == PaneMode.ONE) {
-                    ChatScreen(vms.getValue("s1"), onBack = {})
+                    ChatScreen(vms.getValue("s1"), onBack = {}, onStartFresh = { fresh = it })
                     return@NekkoTheme
                 }
                 var layout by remember { mutableStateOf(PaneLayout(PaneContent.Chat("s1"), PaneContent.Chat("s2"), focused = PaneSide.FIRST)) }
@@ -211,11 +334,17 @@ class ChatModesTest {
 
     /** The computer as the phone gate answers it: a Claude chat, the hardware, one loaded local model. */
     class FakeComputer {
+        private companion object {
+            const val T0 = 1_760_000_000_000L
+        }
+
         val calls = CopyOnWriteArrayList<String>()
         /** Each chat's effort, as `session:setOptions` left it. */
         val efforts = java.util.concurrent.ConcurrentHashMap<String, String>()
         val effort: String? get() = efforts["s1"]
         @Volatile var resident = true
+        /** The chat has filled most of its window: Simple's "getting long" line. */
+        @Volatile var longChat = false
 
         private fun json(s: String): JsonElement = WireJson.parseToJsonElement(s)
 
@@ -230,8 +359,24 @@ class ChatModesTest {
             put(
                 "messages",
                 buildJsonArray {
-                    add(buildJsonObject { put("id", "$id-u"); put("role", "user"); put("content", "Group the release notes by area and drop the duplicates.") })
-                    add(buildJsonObject { put("id", "$id-a"); put("role", "assistant"); put("content", "Done: 14 notes in 4 areas (Chat, Phone, Models, Settings). I removed 3 duplicates and kept the clearer wording of each.") })
+                    add(buildJsonObject { put("id", "$id-u"); put("role", "user"); put("createdAt", T0); put("content", "Group the release notes by area and drop the duplicates.") })
+                    // The turn's steps: a thought and two tool calls, which Simple folds into one line.
+                    add(
+                        buildJsonObject {
+                            put("id", "$id-a0"); put("role", "assistant"); put("createdAt", T0 + 2_000); put("content", "")
+                            put("reasoning", "The notes repeat a few fixes. Read them first, then count the bullets.")
+                            put(
+                                "toolCalls",
+                                buildJsonArray {
+                                    add(buildJsonObject { put("id", "$id-c1"); put("name", "read_file"); put("input", buildJsonObject { put("path", "RELEASE_NOTES.md") }) })
+                                    add(buildJsonObject { put("id", "$id-c2"); put("name", "bash"); put("input", buildJsonObject { put("command", "grep -c '^- ' RELEASE_NOTES.md") }) })
+                                },
+                            )
+                        },
+                    )
+                    add(buildJsonObject { put("id", "$id-r1"); put("role", "tool"); put("toolResult", buildJsonObject { put("toolCallId", "$id-c1"); put("output", "# Release notes\n- Faster chat list\n- Faster chat list"); put("isError", false) }) })
+                    add(buildJsonObject { put("id", "$id-r2"); put("role", "tool"); put("toolResult", buildJsonObject { put("toolCallId", "$id-c2"); put("output", "17"); put("isError", false) }) })
+                    add(buildJsonObject { put("id", "$id-a"); put("role", "assistant"); put("createdAt", T0 + 14_000); put("content", "Done: 14 notes in 4 areas (Chat, Phone, Models, Settings). I removed 3 duplicates and kept the clearer wording of each.") })
                 },
             )
         }
@@ -251,7 +396,9 @@ class ChatModesTest {
                     args.getOrNull(1)?.jsonObject?.get("effort")?.let { efforts[args.first().jsonPrimitive.content] = it.jsonPrimitive.content }
                     session(args.first().jsonPrimitive.content)
                 }
-                Channels.CONTEXT_PREVIEW -> json("""{"usedTokens":86400,"contextWindow":200000,"sources":{"system":6200,"conversation":61800,"attached-file":12400,"guideline":3800,"memory":2200}}""")
+                Channels.CONTEXT_PREVIEW -> if (longChat) {
+                    json("""{"usedTokens":176000,"contextWindow":200000,"sources":{"system":6200,"conversation":112000,"attached-file":48000,"guideline":5800,"memory":4000}}""")
+                } else json("""{"usedTokens":86400,"contextWindow":200000,"sources":{"system":6200,"conversation":61800,"attached-file":12400,"guideline":3800,"memory":2200}}""")
                 Channels.SYSTEM_STATS -> json("""{"cpuPct":38,"cpuCores":16,"memUsedMB":21800,"memTotalMB":32768,"temps":{"cpuC":64,"gpuC":71}}""")
                 Channels.GPU_STATS -> json("""{"totalMB":24576,"usedMB":9400,"unified":false,"devices":[{"utilizationPct":72}]}""")
                 Channels.ENGINE_STATUS -> json(

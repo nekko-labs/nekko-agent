@@ -22,6 +22,7 @@ import com.nekko.android.data.ComputersRepository
 import com.nekko.android.data.ComputersState
 import com.nekko.android.data.PhonePrefs
 import com.nekko.android.monitors.EXPERT_MODE
+import com.nekko.android.data.SimpleMode
 import com.nekko.android.monitors.HardwareMonitorController
 import com.nekko.android.voice.Dictation
 import com.nekko.android.voice.DictationController
@@ -75,6 +76,9 @@ class ChatViewModel(
     /** Simple or Expert (the phone's choice, every chat); always Simple without prefs (tests, previews). */
     val expert: StateFlow<Boolean> = phonePrefs?.flow(EXPERT_MODE) ?: MutableStateFlow(false)
     fun setExpert(on: Boolean) { phonePrefs?.set(EXPERT_MODE, on) }
+
+    /** Which controls each mode shows (Settings > Simple mode), as saved JSON. */
+    val simpleChoices: StateFlow<String> = phonePrefs?.flow(SimpleMode.CHOICES) ?: MutableStateFlow("")
 
     /** Expert mode's hardware and loaded models; the screen polls it only while Expert is on and the chat is visible. */
     val hardware = HardwareMonitorController(repo.caller) { repo.state.value.active?.name ?: "your computer" }

@@ -5,6 +5,8 @@ import { useStore } from '../src/renderer/store';
 import { putCachedSession } from '../src/renderer/sessionCache';
 import { clearLiveRun } from '../src/renderer/liveRuns';
 import { ChatPane } from '../src/renderer/components/ChatPane';
+import { SimpleModeSettings } from '../src/renderer/components/SimpleModeSettings';
+import { ModeSwitch } from '../src/renderer/components/ModeViews';
 import '../src/renderer/styles.css';
 
 // Synthetic records only. This fixture never connects to a host or daemon.
@@ -18,6 +20,9 @@ const at = Date.now() - 3_600_000;
 function makeSession() {
   const messages = [
     { id: 'u0', role: 'user', content: 'Why does the build cache miss on every CI run?', createdAt: at },
+    { id: 'a0x', role: 'assistant', content: 'Checking the workflow.', createdAt: at + 1000, toolCalls: [{ id: 'c1', name: 'read_file', input: { path: '.github/workflows/ci.yml' } }, { id: 'c2', name: 'grep', input: { pattern: 'cache-key' } }] },
+    { id: 't1', role: 'tool', content: '', createdAt: at + 2000, toolResult: { toolCallId: 'c1', output: 'key: deps-${{ hashFiles(lock) }}-${{ runner.image }}' } },
+    { id: 't2', role: 'tool', content: '', createdAt: at + 2500, toolResult: { toolCallId: 'c2', output: 'ci.yml:14 cache-key' } },
     { id: 'a0', role: 'assistant', content: 'The cache key includes the lockfile hash **and** the runner image date, so a new image each night misses it. Key it on the lockfile alone and restore with a prefix fallback.', createdAt: at + 5000 },
   ];
   return { id: 'alpha', title: 'CI cache misses', createdAt: at, updatedAt: at, providerId: 'fixture', modelId: 'claude-opus-5-5', effort: 'high', mode: 'agent', chatType: 'multimodal', messages, attachments: [], queuedPrompts: [] };
@@ -31,7 +36,7 @@ const bridge: any = {
   previewContext: async () => ({ contextWindow: 200000, items: [
     { id: 's', source: 'system', label: 'System prompt', tokens: 9200, included: true },
     { id: 'g', source: 'guideline', label: 'AGENTS.md', tokens: 3100, included: true },
-    { id: 'c', source: 'conversation', label: 'Conversation', tokens: 112400, included: true },
+    { id: 'c', source: 'conversation', label: 'Conversation', tokens: 162400, included: true },
   ] }),
   getSystemStats: async () => ({ cpuPct: 38, cpuCores: 16, memUsedMB: 41000, memTotalMB: 65536, temps: { cpuC: 64 } }),
   getGpuStats: async () => ({ source: 'nvidia-smi', totalMB: 24576, usedMB: 19800, freeMB: 4776, devices: [{ name: 'RTX 4090', memoryTotalMB: 24576, memoryUsedMB: 19800, memoryFreeMB: 4776, utilizationPct: 91, temperatureC: 83 }] }),
@@ -61,7 +66,11 @@ function Fixture() {
   Object.assign(window, { integration: { reset } });
   React.useEffect(() => reset(), []);
   return <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }} className="bg-paper" key={epoch}>
-    <main style={{ flex: 1, minHeight: 0 }}><ChatPane sessionId="alpha" /></main>
+    {/* The title bar's switch, without the updater the real title bar needs. */}
+    <div className="titlebar"><h1 className="titlebar-heading text-gradient">Agents</h1><ModeSwitch /></div>
+    {location.hash === '#settings'
+      ? <main style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0 24px 24px' }}><SimpleModeSettings /></main>
+      : <main style={{ flex: 1, minHeight: 0 }}><ChatPane sessionId="alpha" /></main>}
   </div>;
 }
 createRoot(document.getElementById('root')!).render(<Fixture />);

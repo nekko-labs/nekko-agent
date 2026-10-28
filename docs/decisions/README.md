@@ -38,3 +38,4 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | [0026](0026-retire-expo-in-favor-of-native-phone-apps.md) | Retire Expo in favor of native phone apps | accepted |
 | [0028](0028-phones-read-the-monitors-and-unload-models.md) | Let phones read the hardware, the Model Server and a chat's context, and unload a model | accepted |
 | [0029](0029-one-always-on-microphone-text-follows-the-focused-chat.md) | One always-on microphone for the whole app; single-shot dictation removed; text follows the focused chat | accepted |
+| [0030](0030-simple-hides-developer-controls-per-device.md) | Simple hides developer controls, chosen per control (Show, Expert only, Hide) and kept per device | accepted |

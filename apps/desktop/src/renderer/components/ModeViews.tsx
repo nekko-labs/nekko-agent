@@ -1,32 +1,52 @@
-import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { formatTemperature, temperatureTone } from '@nekko-agent/shared';
-import { GaugeIcon, CubeIcon } from '../icons.js';
+import { useExpertMode, useShown } from '../simpleMode.js';
+import { ChatIcon, CodeIcon, CubeIcon } from '../icons.js';
 import { useFloatingMenu } from './floatingMenu.js';
 import { hardwareRows, LocalModels } from './MonitorsDock.js';
 import { useMonitors, useResourceSample } from './ResourceMonitor.js';
 
 /*
- * Simple and Expert, the phone's chat modes (decision 0024, spec
- * phone/iphone-simple-and-expert-modes), on the desktop chat. Simple keeps the
- * chat's model, effort and context; Expert adds a strip of the machine's
- * hardware as dials and the models the Model Server holds.
+ * Simple and Expert (decision 0030, spec desktop/desktop-simple-and-expert-modes).
+ * Simple is the everyday app: developer controls stay out of sight. Expert
+ * shows every control. Settings > Simple mode chooses, per control, whether it
+ * shows in both modes, in Expert only, or nowhere. Both are kept on this
+ * computer and shared by every window; a new install starts in Simple.
  */
 
-const MODE_KEY = 'nekko.chatMode';
-const modeListeners = new Set<() => void>();
-const readExpert = () => {
-  try { return window.localStorage.getItem(MODE_KEY) === 'expert'; } catch { return false; }
-};
+export { useExpertMode, useShown, useSimpleChoices } from '../simpleMode.js';
 
-/** Expert mode, saved on this machine and shared by every open chat. */
-export function useExpertMode(): [boolean, (on: boolean) => void] {
-  const expert = useSyncExternalStore((fn) => { modeListeners.add(fn); return () => { modeListeners.delete(fn); }; }, readExpert, () => false);
-  const set = (on: boolean) => {
-    try { window.localStorage.setItem(MODE_KEY, on ? 'expert' : 'simple'); } catch { /* best effort */ }
-    for (const l of modeListeners) l();
-  };
-  return [expert, set];
+/** Renders its children only while the listed control is on screen. */
+export function Shown({ id, children }: { id: string; children: React.ReactNode }) {
+  return useShown(id) ? <>{children}</> : null;
+}
+
+/**
+ * The switch: a chat bubble for Simple and angle brackets for Expert. It
+ * changes the whole app, so it sits in the title bar (in a chat's header where
+ * there is no title bar, as in the browser builds).
+ */
+export function ModeSwitch() {
+  const [expert, setExpert] = useExpertMode();
+  return (
+    <div className="mode-seg" role="radiogroup" aria-label="Mode" data-chat-mode={expert ? 'expert' : 'simple'}>
+      {([false, true] as const).map((on) => (
+        <button
+          key={String(on)}
+          type="button"
+          role="radio"
+          aria-checked={expert === on}
+          aria-label={on ? 'Expert: every control' : 'Simple: everyday controls'}
+          title={on ? 'Expert: every control' : 'Simple: everyday controls'}
+          className={expert === on ? 'on' : ''}
+          onClick={() => setExpert(on)}
+        >
+          {on ? <CodeIcon className="h-3.5 w-3.5" /> : <ChatIcon className="h-3.5 w-3.5" />}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 /** A popover in a portal that closes on an outside click or Escape. */
@@ -44,24 +64,6 @@ export function usePopover(width: number, tallest?: number) {
     return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onKey); };
   }, [open]);
   return { open, setOpen, anchor, pop, style };
-}
-
-/** Simple or Expert, at the top left of the chat. */
-export function ModeToggle() {
-  const [expert, setExpert] = useExpertMode();
-  return (
-    <button
-      type="button"
-      className={`btn btn-ghost shrink-0 gap-1 px-1.5 py-1 text-[11px] font-medium ${expert ? 'text-accent' : ''}`}
-      onClick={() => setExpert(!expert)}
-      aria-pressed={expert}
-      title={expert ? 'Expert: the hardware and loaded models are shown. Click for Simple.' : 'Simple. Click for Expert, which adds the hardware and loaded models.'}
-      data-chat-mode={expert ? 'expert' : 'simple'}
-    >
-      <GaugeIcon className="h-3.5 w-3.5" />
-      <span>{expert ? 'Expert' : 'Simple'}</span>
-    </button>
-  );
 }
 
 /* ── Gauges ─────────────────────────────────────────────────────────────── */

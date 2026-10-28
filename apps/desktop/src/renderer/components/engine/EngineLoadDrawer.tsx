@@ -3,6 +3,7 @@ import type { GpuFit, LoadParams, LocalModel, PlacementPlan, Recommendation, Spl
 import { Toggle } from '../primitives/index.js';
 import { formatBytes, formatTokens } from '../runtimes/verdict.js';
 import { useStore } from '../../store.js';
+import { Shown } from '../ModeViews.js';
 import {
   KEEP_LABELS,
   PRECISIONS,
@@ -415,7 +416,7 @@ export function EngineLoadDrawer({
               } This uses system memory, but it does not move the work off your graphics card: the GPU still does the thinking.`}
             />
 
-            <div className="rounded-lg border" style={{ borderColor: 'var(--line)' }}>
+            <Shown id="engine"><div className="rounded-lg border" style={{ borderColor: 'var(--line)' }}>
               <Fold label="Expert" open={expert} onToggle={() => setExpert((v) => !v)} id="expert" />
               {expert && (
                 <ExpertControls
@@ -427,7 +428,7 @@ export function EngineLoadDrawer({
                   onChangePlacement={patchCustom}
                 />
               )}
-            </div>
+            </div></Shown>
           </div>
         )}
       </div>

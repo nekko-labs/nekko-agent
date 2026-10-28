@@ -142,7 +142,7 @@ final class PanesTests: XCTestCase {
         let app = XCUIApplication()
         let theme = ProcessInfo.processInfo.environment["NEKKO_ITEST_THEME"] ?? "light"
         app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "YES", "-theme", theme, "-uiTestReset", "YES",
-                               "-paneTipShown", "NO", "-foldNoteDismissed", "NO"] + extra
+                               "-paneTipShown", "NO", "-foldNoteDismissed", "NO", "-expertMode", "YES"] + extra
         app.launch()
         addUIInterruptionMonitor(withDescription: "system alerts") { alert in
             for label in ["Allow", "OK", "Allow While Using App"] where alert.buttons[label].exists {
@@ -166,7 +166,7 @@ final class PanesTests: XCTestCase {
         app.buttons["Pair"].firstMatch.tap()
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         if springboard.buttons["Allow"].waitForExistence(timeout: 4) { springboard.buttons["Allow"].tap() }
-        let online = app.buttons.matching(NSPredicate(format: "label == %@", "Computers and settings, online")).firstMatch
+        let online = app.buttons.matching(NSPredicate(format: "label ==[c] %@", "Computers and settings, online")).firstMatch
         XCTAssertTrue(online.waitForExistence(timeout: 30), "connected to the computer")
     }
 

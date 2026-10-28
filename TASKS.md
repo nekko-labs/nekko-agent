@@ -6,6 +6,21 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Simple and Expert, reframed (#1311, added 2026-10-28)
+
+Simple becomes the everyday app with developer controls out of sight, chosen per control in Settings > Simple mode (Show, Expert only, Hide), per device, Simple for new installs, controls not pages. Spec: [Desktop Simple and Expert modes](spec/desktop/desktop-simple-and-expert-modes.md), [iPhone and Android](spec/phone/iphone-simple-and-expert-modes.md); [decision 0030](docs/decisions/0030-simple-hides-developer-controls-per-device.md); docs page `docs/simple-and-expert.md`. Prefix **SEM**. Built on branch `simple-expert-modes` for Philip to test before merging.
+
+- [x] **SEM-1, catalogue.** `packages/shared/src/simple-mode.ts` (ids, areas, platforms, defaults, `simpleShown`, `parseSimpleChoices`, `simpleAreas`) with unit tests. (2026-10-28)
+- [x] **SEM-2, desktop switch and gates.** `simpleMode.ts` store (`useShown`, `shownNow`), the chat and code icon switch in the title bar, and each catalogue control gated where it renders. (2026-10-28)
+- [x] **SEM-3, composer details panel.** The strip under the composer moved into the card as a panel that shrinks to the model. (2026-10-28)
+- [x] **SEM-4, Settings > Simple mode.** Drawn previews per area with dashed out-of-sight controls, a three-way switch per control, preview mode and reset. Evidence: `chat-modes-fixture.tsx` / `chat-modes-sandbox.cjs`, 13 assertions. (2026-10-28)
+- [x] **SEM-5, iPhone.** `SimpleMode.swift`, `Prefs.simpleChoices`, the two-segment switch, gates, `SimpleModeSettingsView`; `SimpleModeTests`, live `testSimpleAndExpertModes` passes. Strings not yet translated. (2026-10-28)
+- [x] **SEM-6, Android.** `SimpleMode.kt`, `SimpleUi.kt`, `SimpleModeSettings.kt`, gates; `SimpleModeTest`, lint and builds pass. `ChatModesTest` rewritten but not run: the build Mac's adb is x86 only. (2026-10-28)
+- [x] **SEM-8, Philip's first updates (2026-10-28).** Context shows in Simple; monitors show in Simple while a local model is loaded; the desktop *getting long* note with what starting fresh saves.
+- [x] **SEM-10, phones: steps, translations, touch targets (2026-10-28).** One line per turn with Show steps on both phones; iPhone strings in six languages; Android 48 dp touch areas; Android ChatModesTest passes on the emulator; iPhone NewChatChoicesTests and live testSimpleAndExpertModes pass.
+- [x] **SEM-9, phone header and monitors.** Title kept top middle, the switch on a slim second row with a hairline, minimal gauges with percentages, a pull-down agent panel from the top replacing the strip and Monitor sheet, and the getting-long note on both phones. iPhone tests and live UI test pass; Android unit tests and builds pass, not run on a device. (2026-10-28)
+- [x] **SEM-7, search and steps (desktop).** The command palette lists out-of-sight controls (*Shown in Expert* / *Hidden in Settings*), the mode switch and the Simple mode settings; Settings search reaches every control through the Simple mode page. Each turn's steps fold to one line with *Show steps* in Simple (`simpleStepsSummary`, unit-tested; 18 harness assertions). (2026-10-28)
+
 ## Model Server inline download progress (#1221)
 
 - [x] **DLP-1, Show progress and block duplicate download clicks.** Model builds/recommendations, decisions and managed llama.cpp/image/MLX runtimes share immediate acquisition locks and existing grouped-job progress. Queued/downloading/verifying stay disabled, terminal states and rejected requests permit retry; runtime build and decision precision stay fixed in flight. Focused state tests and isolated 1100px/390px rapid-click/progress/retry assertions pass. Model/runtime before/after PNGs inspected. Spec: [Models and providers](spec/models/models-providers.md). Live downloads and packaged application not exercised; baseline macOS shortcut test failure tracked in #900.

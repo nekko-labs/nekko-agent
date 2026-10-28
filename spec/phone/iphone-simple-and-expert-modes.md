@@ -38,6 +38,81 @@ The same design as the iPhone, in the native app (`apps/android`), wide foldable
 - **Expert** adds the strip of dials under the chat's header and the **Monitor** bottom sheet (larger dials, Loaded models with Unload, models loading, the memory for models, this chat's context). The hardware is re-read every 3 s only while Expert is on, the chat is on screen (lifecycle STARTED) and the computer is online. On a folding phone each chat pane reads it on its own.
 - Strings are Android resources in English and the iPhone's six other languages, drafted from its String Catalog; the rest of the Android app is still English only, so those six languages see these controls translated in an otherwise English app.
 
+## Simple hides developer controls (reframed 2026-10-28, #1311)
+
+The same change as the desktop ([Desktop Simple and Expert modes](../desktop/desktop-simple-and-expert-modes.md), [decision 0030](../../docs/decisions/0030-simple-hides-developer-controls-per-device.md)). Simple becomes the everyday app: developer controls out of sight, every capability still there, no screen hidden. The mode and the choices are kept on the phone (`expertMode`, and `simpleChoices` as JSON holding only values that differ from the defaults). A new install starts in Simple. The 2026-10-24 rule that effort and context show in both modes is superseded: both default to Expert only.
+
+- **The switch** is two icon segments, a chat bubble (*Simple: everyday controls*) and angle brackets (*Expert: every control*), at the top left of a chat and of the chats list.
+- **The phone's catalogue** has the same ids as `packages/shared/src/simple-mode.ts`. The model picker is Show by default; every other control is Expert only:
+  - `changes`
+  - `hardware`
+  - `ph-subtitle`
+  - `model`
+  - `effort`
+  - `context`
+  - `ph-policy`
+  - `thinking`
+  - `ph-git`
+  - `terminal`
+  - `ph-monitors`
+- **Settings > Simple mode** is a screen reached from Settings. It has an intro, a Simple | Expert **Preview**, and one card per area. Each card draws its area from chips named after the real controls, dashed and faded where the previewed mode leaves a control out. Each control has a row with a Show / Expert only / Hide choice. **Reset to defaults** is at the bottom.
+
+- **Philip's updates (2026-10-28):** "simple shows context", monitors shown "whenever a local model is running, even in simple mode", "minimal guages and percentages that when tapped, show more detail", "a minimal pull down sheet panel at the top", the getting-long note saying "it will save n tokens to start fresh", and "keep the nekko in the top middle. move the the toggle to a slim second row. use a subtle divider line." On both phones:
+  - **Context** is Show by default.
+  - **The monitors** (`hardware`, `ph-monitors`) at Expert only also show in Simple while the Model Server holds a local model. Simple reads only `engine:status` every 10 s to know; the full hardware read (3 s) runs only while the gauges or the panel are on screen.
+  - **Header:**
+    - The top row keeps Back, the title centred, and More.
+    - The switch moves to a slim second row (32 pt / 34 dp) with a hairline under it.
+    - The right of that row holds the **minimal monitor** when shown: thin rings with percentages for CPU, Memory and GPU, plus the loaded-model count.
+  - **The agent panel:** tapping the gauges pulls a panel down from under the title. It is dismissed by a swipe up, a tap outside, Done or Back. It holds:
+    - larger gauges with temperatures;
+    - loaded models with Unload;
+    - in a chat, its model, effort and context breakdown.
+
+    It replaces the strip of dials and the bottom Monitor sheet.
+  - **Getting long (Simple only):** at 85% of the window, a line above the message box says *This chat is getting long. Starting fresh saves about N tokens.* N is the conversation's tokens.
+    - **Start fresh** opens New chat on the same computer with the same model.
+    - The line can be dismissed per chat. On the iPhone that is kept on the phone for the last 200 chats; on Android, while the chat stays open in the back stack.
+  - **iPhone:** the chats list's large *Chats* title no longer draws, because the slim row sits under the bar. The cat is centred. Debug builds take `-uiTestLocalModel` and `-uiTestLongChat` for screenshots.
+  - **Android:** the chats list centres *Chats* (it has no Nekko mark). In the slim row the segments are 30 dp tall, under the 48 dp touch guideline.
+  - **Verified:**
+    - iPhone: NekkoNativeTests (100 run, 1 skipped), Protocol `swift test` (190), and live `testSimpleAndExpertModes` with its accessibility audits; screenshots use the debug stubs for the loaded model and the long chat.
+    - Android: 276 unit tests, lint and builds; `ChatModesTest` updated but not run.
+
+### iPhone `[implemented 2026-10-28 on branch simple-expert-modes; SimpleModeTests and the NekkoNativeTests suite pass (98 run, 1 skipped); LiveRelayTests/testSimpleAndExpertModes passes against a live relay stack with its accessibility audits in both modes; screenshots on a fresh simulator; NewChatChoicesTests and PanesTests now launch in Expert but were not run]`
+
+- **Gates.** Each goes through `Prefs.shows(id)`:
+  - `ph-subtitle`: the model and computer line under the title.
+  - `changes`: More > Changes.
+  - `hardware`: the monitor panel; polling stops while hidden.
+  - `model` and `effort`: their halves of the composer's control and of its sheet, More > Model, and the New chat chips. The control goes when both are hidden. A chat with no model still shows the picker.
+  - `context`: the ring and count.
+  - `ph-policy`: More > Tool policy and the New chat Tools chip. A hidden choice keeps its saved or default value.
+  - `thinking`: the reasoning fold, tool step rows, sub-agent and purpose groups. They are hidden outright; there is no per-turn fold yet. *Working…* still shows while a reply runs.
+  - `ph-git`: More > Git, More > Commit or open a PR, and the PR chip above the composer.
+  - `terminal`: More > Terminals and + > Terminal.
+  - `ph-monitors`: the Monitors row at the bottom of Chats. The Monitors pane on a folding phone or iPad stays.
+- **Settings > Simple mode** is a row under Appearance that shows the current mode. Touching a control's row outlines its element in the accent colour for a moment.
+- **Steps in Simple:** each turn's reasoning and tool steps fold to one line (*Took 4 steps*, *Working · 2 steps so far*, *Thought it through*) with **Show steps** / **Hide steps** per turn. The phone gets no turn times from the computer, so no duration shows.
+- **Strings:** the new strings are in `Localizable.xcstrings` in de, es, fr, ja, pt and zh-Hans (2026-10-28).
+
+### Android `[implemented 2026-10-28 on branch simple-expert-modes; JVM unit tests (SimpleModeTest, 273 in all), lint and debug and androidTest builds pass; ChatModesTest rewritten for the new switch but not run (no working adb on the build Mac); no screenshots yet]`
+
+- **Gates.**
+  - `ph-subtitle`: the model and computer line under the title.
+  - `changes`: the header icon.
+  - `hardware`: the strip and Monitor sheet; polling stops while hidden.
+  - `model`, `effort` and `context`: each is its own part of the row under the message box, and the row goes when all three do. A chat with no model still shows the picker. Effort also leaves New chat, which then uses the computer's default.
+  - `thinking`: the Show reasoning toggle, and the tool step rows and step cards, which are left out (Android has no per-turn fold). Allow and Deny cards still show.
+  - `ph-git`: the PR chip and its sheet. More > Git stays, since it is the only way to the Git screen.
+  - `terminal`: Terminal in the + menu and Terminals in More.
+  - `ph-monitors`: the Monitors row at the bottom of the chats list. The foldable Monitors pane and screen stay.
+- **Steps in Simple (2026-10-28):** each turn folds to one line with its time when known (*Took 3 steps · 14s*), and **Show steps** opens it.
+- **Touch targets:** the slim row's switch and gauges keep a 34 dp look with 48 dp touch areas.
+- **Verified:** `ChatModesTest` (5 tests) passes on a headless arm64 emulator after platform-tools moved to r37 (2026-10-28).
+- **Left out of the Settings screen:** `ph-policy`. Android has no per-chat tool policy, so the choice would do nothing.
+- **The preview** starts on Simple. A row just changed is ringed in the accent colour for a moment.
+
 ## Not yet
 
 - Android on a real foldable and against a live computer; one shared hardware read for two chat panes instead of one each.

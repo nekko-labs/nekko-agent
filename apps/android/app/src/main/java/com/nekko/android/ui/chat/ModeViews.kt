@@ -3,9 +3,7 @@ package com.nekko.android.ui.chat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,13 +23,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material.icons.filled.ViewInAr
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -40,6 +36,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -75,6 +73,8 @@ import com.nekko.android.data.ModelPick
 import com.nekko.android.data.modelGroups
 import com.nekko.android.monitors.HardwareState
 import com.nekko.android.ui.screens.ModelList
+import com.nekko.android.ui.simple.LocalSimple
+import com.nekko.android.ui.simple.PullDownPanel
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.ContextUsage
 import com.nekko.protocol.Effort
@@ -89,56 +89,12 @@ import kotlinx.coroutines.launch
 
 /** Test tags the instrumented tests find the controls by. */
 object ModeTags {
-    const val MODE = "chat.mode"
     const val MODEL_EFFORT = "chat.modelEffort"
     const val CONTEXT = "chat.context"
+    const val LONG_CHAT = "chat.longChat"
     const val MONITOR = "chat.monitor"
     const val MONITOR_SHEET = "monitor.sheet"
     fun effort(e: Effort) = "modelEffort.${e.wire}"
-}
-
-// ---------------------------------------------------------------------------
-// Simple and Expert
-// ---------------------------------------------------------------------------
-
-/**
- * Simple or Expert, at the top left of a chat beside Back, like the iPhone's and
- * the desktop's. Simple keeps the model, effort and context; Expert adds the
- * computer's hardware and the models its Model Server holds.
- */
-@Composable
-fun ModeToggle(expert: Boolean, onChange: (Boolean) -> Unit, compact: Boolean = false) {
-    val p = Nekko.palette
-    var open by remember { mutableStateOf(false) }
-    val simple = stringResource(R.string.mode_simple)
-    val expertLabel = stringResource(R.string.mode_expert)
-    val mode = stringResource(R.string.mode_label)
-    Box {
-        TextButton(
-            onClick = { open = true },
-            modifier = Modifier.testTag(ModeTags.MODE).semantics {
-                contentDescription = mode
-                stateDescription = if (expert) expertLabel else simple
-            },
-        ) {
-            Icon(Icons.Filled.Speed, contentDescription = null, tint = if (expert) p.accent else p.ink, modifier = Modifier.size(if (compact) 20.dp else 16.dp))
-            // A pane's header is narrow: the dial alone, coloured in Expert, keeps the title readable.
-            if (!compact) {
-                Spacer(Modifier.width(4.dp))
-                Text(if (expert) expertLabel else simple, style = MaterialTheme.typography.labelLarge, color = if (expert) p.accent else p.ink)
-            }
-        }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            listOf(false to simple, true to expertLabel).forEach { (on, label) ->
-                DropdownMenuItem(
-                    text = { Text(label) },
-                    leadingIcon = { if (on == expert) Icon(Icons.Filled.Check, contentDescription = null) },
-                    onClick = { open = false; onChange(on) },
-                    modifier = Modifier.semantics { selected = on == expert },
-                )
-            }
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -231,27 +187,57 @@ fun effortLabel(e: Effort): String = stringResource(
 // Model, effort and context: the row under the message box
 // ---------------------------------------------------------------------------
 
-/** Under the message box in both modes: the model and effort control on the left, the context ring on the right. */
+/** Which halves of the model and effort control show: a chat with no model yet still offers the picker, whatever Simple hides. */
+@Composable
+private fun modelEffortShown(chat: ChatUi): Pair<Boolean, Boolean> {
+    val simple = LocalSimple.current
+    return (simple.shown("model") || chat.modelId == null) to simple.shown("effort")
+}
+
+/** Under the message box: the model and effort control on the left, the context ring on the right, each as Simple allows. */
 @Composable
 fun ChatOptionsRow(chat: ChatUi, enabled: Boolean, onOpenModelEffort: () -> Unit, modifier: Modifier = Modifier) {
+    val (model, effort) = modelEffortShown(chat)
+    val context = LocalSimple.current.shown("context")
+    if (!model && !effort && !context) return
     Row(
         modifier.fillMaxWidth().background(Nekko.palette.paper).padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ModelEffortButton(chat, enabled, onOpenModelEffort)
+        if (model || effort) ModelEffortButton(chat, enabled, onOpenModelEffort, model, effort)
         Spacer(Modifier.weight(1f))
-        ContextRing(chat)
+        if (context) ContextRing(chat)
     }
 }
 
-/** An effort dial and the model's name; opens the model and effort sheet. */
+/**
+ * Simple's slim line above the message box once the chat fills most of its window: how many
+ * tokens starting fresh saves, Start fresh (a new chat on the same model), and dismiss.
+ */
 @Composable
-private fun ModelEffortButton(chat: ChatUi, enabled: Boolean, onClick: () -> Unit) {
+fun LongChatNudge(tokens: Long, onStartFresh: (() -> Unit)?, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+    val p = Nekko.palette
+    Row(
+        modifier.fillMaxWidth().background(p.surface).padding(start = 16.dp, end = 4.dp).heightIn(min = 40.dp).testTag(ModeTags.LONG_CHAT),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "This chat is getting long. Starting fresh saves about ${MonitorFormat.tokens(tokens)} tokens.",
+            style = MaterialTheme.typography.bodySmall, color = p.inkSoft, modifier = Modifier.weight(1f).padding(vertical = 6.dp),
+        )
+        if (onStartFresh != null) TextButton(onClick = onStartFresh) { Text("Start fresh", color = p.accent) }
+        IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Dismiss", tint = p.inkFaint, modifier = Modifier.size(16.dp)) }
+    }
+}
+
+/** An effort dial and the model's name (either can be hidden by Simple); opens the model and effort sheet. */
+@Composable
+private fun ModelEffortButton(chat: ChatUi, enabled: Boolean, onClick: () -> Unit, showModel: Boolean, showEffort: Boolean) {
     val p = Nekko.palette
     val levels = Effort.levels(chat.modelId)
     val level = chat.effort?.let { levels.indexOf(it) }?.takeIf { it >= 0 }
     val name = chat.modelName ?: stringResource(R.string.model_choose)
-    val label = stringResource(R.string.model_effort)
+    val label = stringResource(if (!showEffort) R.string.model_section else if (!showModel) R.string.effort_section else R.string.model_effort)
     val effort = chat.effort?.let { effortLabel(it) } ?: stringResource(R.string.effort_computer_default)
     Row(
         Modifier
@@ -261,13 +247,13 @@ private fun ModelEffortButton(chat: ChatUi, enabled: Boolean, onClick: () -> Uni
             .testTag(ModeTags.MODEL_EFFORT)
             .semantics(mergeDescendants = true) {
                 contentDescription = label
-                stateDescription = "$name, $effort"
+                stateDescription = listOfNotNull(name.takeIf { showModel }, effort.takeIf { showEffort }).joinToString(", ")
             },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        EffortDial(level, levels.size, 22.dp)
-        Text(name, style = MaterialTheme.typography.labelLarge, color = if (enabled) p.ink else p.inkFaint, maxLines = 1, overflow = TextOverflow.MiddleEllipsis, modifier = Modifier.widthIn(max = 220.dp))
+        if (showEffort) EffortDial(level, levels.size, 22.dp)
+        if (showModel) Text(name, style = MaterialTheme.typography.labelLarge, color = if (enabled) p.ink else p.inkFaint, maxLines = 1, overflow = TextOverflow.MiddleEllipsis, modifier = Modifier.widthIn(max = 220.dp))
         Icon(Icons.Filled.UnfoldMore, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(14.dp))
     }
 }
@@ -291,6 +277,7 @@ fun ModelEffortSheet(
     val levels = Effort.levels(chat.modelId)
     val level = chat.effort?.let { levels.indexOf(it) }?.takeIf { it >= 0 }
     val computer = computers.active?.name ?: stringResource(R.string.your_computer)
+    val (showModel, showEffort) = modelEffortShown(chat)
     fun run(effort: Effort?, pick: ModelPick?) {
         error = null
         busy = effort
@@ -310,59 +297,63 @@ fun ModelEffortSheet(
     LaunchedEffect(picking) { if (picking) runCatching { onLoadModels() } }
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = p.paper) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(stringResource(R.string.model_effort), style = MaterialTheme.typography.titleMedium, color = p.ink)
-            SectionTitle(stringResource(R.string.model_section))
-            Row(
-                Modifier.fillMaxWidth().clip16().background(p.surface).clickable(role = Role.Button) { picking = !picking }.heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(chat.modelName ?: stringResource(R.string.model_choose), style = MaterialTheme.typography.bodyLarge, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    chat.modelId?.takeIf { it != chat.modelName }?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.inkFaint, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            Text(stringResource(if (!showEffort) R.string.model_section else if (!showModel) R.string.effort_section else R.string.model_effort), style = MaterialTheme.typography.titleMedium, color = p.ink)
+            if (showModel) {
+                SectionTitle(stringResource(R.string.model_section))
+                Row(
+                    Modifier.fillMaxWidth().clip16().background(p.surface).clickable(role = Role.Button) { picking = !picking }.heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(chat.modelName ?: stringResource(R.string.model_choose), style = MaterialTheme.typography.bodyLarge, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        chat.modelId?.takeIf { it != chat.modelName }?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.inkFaint, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    }
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = p.inkFaint)
                 }
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = p.inkFaint)
+                if (picking) {
+                    ModelList(
+                        groups = modelGroups(computers),
+                        favorites = computers.defaults.favoriteModels,
+                        query = query,
+                        onQuery = { query = it },
+                        selected = chat.providerId?.let { pr -> chat.modelId?.let { ModelPick(pr, it) } },
+                        onPick = { run(null, it) },
+                        onRetry = { scope.launch { runCatching { onLoadModels() } } },
+                    )
+                }
             }
-            if (picking) {
-                ModelList(
-                    groups = modelGroups(computers),
-                    favorites = computers.defaults.favoriteModels,
-                    query = query,
-                    onQuery = { query = it },
-                    selected = chat.providerId?.let { pr -> chat.modelId?.let { ModelPick(pr, it) } },
-                    onPick = { run(null, it) },
-                    onRetry = { scope.launch { runCatching { onLoadModels() } } },
-                )
-            }
-            SectionTitle(stringResource(R.string.effort_section))
-            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                EffortDial(level, levels.size, 112.dp)
-                Text(chat.effort?.let { effortLabel(it) } ?: stringResource(R.string.effort_computer_default), style = MaterialTheme.typography.titleSmall, color = p.ink)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    levels.forEachIndexed { i, e ->
-                        val on = i == level
-                        Box(
-                            Modifier
-                                .heightIn(min = 48.dp)
-                                .widthIn(min = 64.dp)
-                                .clip16()
-                                .background(if (on) p.accent else p.surface2)
-                                .clickable(enabled = busy == null, role = Role.RadioButton) { if (!on) run(e, null) }
-                                .padding(horizontal = 12.dp)
-                                .testTag(ModeTags.effort(e))
-                                .semantics { selected = on },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            if (busy == e) CircularProgressIndicator(strokeWidth = 2.dp, color = p.accent, modifier = Modifier.size(16.dp))
-                            else Text(effortLabel(e), style = MaterialTheme.typography.labelLarge, color = if (on) p.accentInk else p.ink, maxLines = 1)
+            if (showEffort) {
+                SectionTitle(stringResource(R.string.effort_section))
+                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    EffortDial(level, levels.size, 112.dp)
+                    Text(chat.effort?.let { effortLabel(it) } ?: stringResource(R.string.effort_computer_default), style = MaterialTheme.typography.titleSmall, color = p.ink)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        levels.forEachIndexed { i, e ->
+                            val on = i == level
+                            Box(
+                                Modifier
+                                    .heightIn(min = 48.dp)
+                                    .widthIn(min = 64.dp)
+                                    .clip16()
+                                    .background(if (on) p.accent else p.surface2)
+                                    .clickable(enabled = busy == null, role = Role.RadioButton) { if (!on) run(e, null) }
+                                    .padding(horizontal = 12.dp)
+                                    .testTag(ModeTags.effort(e))
+                                    .semantics { selected = on },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                if (busy == e) CircularProgressIndicator(strokeWidth = 2.dp, color = p.accent, modifier = Modifier.size(16.dp))
+                                else Text(effortLabel(e), style = MaterialTheme.typography.labelLarge, color = if (on) p.accentInk else p.ink, maxLines = 1)
+                            }
                         }
                     }
                 }
+                Text(
+                    if (chat.effort == null) stringResource(R.string.effort_following, computer) else stringResource(R.string.effort_footer),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = p.inkSoft,
+                )
             }
-            Text(
-                if (chat.effort == null) stringResource(R.string.effort_following, computer) else stringResource(R.string.effort_footer),
-                style = MaterialTheme.typography.bodySmall,
-                color = p.inkSoft,
-            )
             error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.danger) }
         }
     }
@@ -506,69 +497,90 @@ private fun HardwareDials(rows: List<HardwareRow>, size: Dp) {
     }
 }
 
-/** Expert mode's strip under the chat's title: the hardware as small dials and how many models are loaded. Tap for the Monitor. */
+/** A thin ring, about the size of a letter: the minimal monitor's gauge. */
 @Composable
-fun MonitorStrip(state: HardwareState, computer: String, onOpen: () -> Unit, modifier: Modifier = Modifier) {
+private fun ThinRing(fraction: Double?, size: Dp = 18.dp) {
+    val p = Nekko.palette
+    val fill by animateFloatAsState((fraction ?: 0.0).toFloat(), label = "mini-ring")
+    val tone = toneColor(MonitorTone.of(fraction))
+    Canvas(Modifier.size(size)) {
+        val w = 2.dp.toPx()
+        val inset = w / 2
+        val arc = Size(this.size.width - w, this.size.height - w)
+        drawArc(p.surface2, 0f, 360f, false, Offset(inset, inset), arc, style = Stroke(w))
+        if (fraction != null) drawArc(tone, -90f, 360f * fill, false, Offset(inset, inset), arc, style = Stroke(w, cap = StrokeCap.Round))
+    }
+}
+
+/**
+ * The minimal monitor in the slim row under the header: a thin ring and its percentage for
+ * the CPU, memory and the first GPU, and how many models the Model Server holds. Tap for the
+ * agent's details. [compact] (a folding phone's pane) drops the percentages.
+ */
+@Composable
+fun MiniMonitor(state: HardwareState, onOpen: () -> Unit, modifier: Modifier = Modifier, compact: Boolean = false) {
     val p = Nekko.palette
     val rows = hardwareRows(state)
+    val gauges = rows.take(2) + rows.drop(2).take(1)
     val loaded = state.engine?.resident?.size ?: 0
     val label = stringResource(R.string.monitor)
-    val value = rows.joinToString(", ") { "${it.label} ${it.value}" } + ", " + stringResource(R.string.monitor_models_loaded, loaded)
+    val value = gauges.joinToString(", ") { "${it.label} ${it.value}" } + ", " + stringResource(R.string.monitor_models_loaded, loaded)
     Row(
         modifier
-            .padding(horizontal = 12.dp, vertical = 6.dp)
-            .fillMaxWidth()
-            .clip16()
-            .background(p.surface)
-            .border(1.dp, p.line, RoundedCornerShape(16.dp))
+            .heightIn(min = 48.dp)
+            .clip(RoundedCornerShape(999.dp))
             .clickable(role = Role.Button, onClick = onOpen)
-            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .padding(horizontal = 8.dp)
             .testTag(ModeTags.MONITOR)
             .semantics(mergeDescendants = true) {
                 contentDescription = label
                 stateDescription = value
             },
-        verticalAlignment = Alignment.Top,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 10.dp),
     ) {
-        if (state.system == null && state.gpu == null) {
-            Row(Modifier.weight(1f).heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Icon(Icons.Filled.Speed, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(16.dp))
-                Text(state.error ?: stringResource(R.string.monitor_reading, computer), style = MaterialTheme.typography.bodySmall, color = p.inkSoft)
-            }
-        } else {
-            Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                HardwareDials(rows, 40.dp)
+        gauges.forEach { g ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                ThinRing(g.fraction)
+                if (!compact) Text(g.value, style = MaterialTheme.typography.labelSmall, color = if (g.fraction == null) p.inkFaint else p.inkSoft, maxLines = 1)
             }
         }
-        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.widthIn(min = 44.dp)) {
-            Icon(Icons.Filled.ViewInAr, contentDescription = null, tint = p.accent, modifier = Modifier.size(20.dp))
-            Text("$loaded", style = MaterialTheme.typography.labelMedium, color = p.ink)
-            Text(stringResource(R.string.monitor_loaded), style = MaterialTheme.typography.labelSmall, color = p.inkSoft)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            Icon(Icons.Filled.ViewInAr, contentDescription = null, tint = if (loaded > 0) p.accent else p.inkFaint, modifier = Modifier.size(15.dp))
+            Text("$loaded", style = MaterialTheme.typography.labelSmall, color = p.inkSoft)
         }
     }
 }
 
-/** The whole monitor: larger dials, the models the Model Server holds (with Unload), and this chat's context. */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+/**
+ * The agent's details, in the panel that slides down from under the header: the hardware on
+ * larger dials with temperatures, the models the Model Server holds (with Unload), and, in a
+ * chat, its model and effort and where its context goes.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun MonitorSheet(
+fun AgentPanel(
+    open: Boolean,
     state: HardwareState,
     chat: ChatUi?,
     computer: String,
     modelName: (String) -> String,
     onUnload: suspend (String) -> String,
     onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
     var notice by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = p.paper, modifier = Modifier.testTag(ModeTags.MONITOR_SHEET)) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(stringResource(R.string.monitor), style = MaterialTheme.typography.titleMedium, color = p.ink)
+    PullDownPanel(open, onDismiss, modifier) {
+        Column(Modifier.testTag(ModeTags.MONITOR_SHEET), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             SectionTitle(stringResource(R.string.monitor_hardware))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                HardwareDials(hardwareRows(state), 72.dp)
+            if (state.system == null && state.gpu == null) {
+                Footnote(state.error ?: stringResource(R.string.monitor_reading, computer))
+            } else {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    HardwareDials(hardwareRows(state), 56.dp)
+                }
             }
             state.system?.takeIf { it.memTotalMB > 0 }?.let { s ->
                 val mem = MonitorFormat.memory(s.memUsedMB, s.memTotalMB)
@@ -587,13 +599,14 @@ fun MonitorSheet(
                     }
                 }
             }
-            Footnote(stringResource(R.string.monitor_unload_footer, computer))
-            if (chat?.context != null) {
-                SectionTitle(stringResource(R.string.monitor_this_chat))
-                ContextBreakdown(chat, Modifier.clip16().background(p.surface).padding(12.dp))
-            }
-            state.error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.warning) }
+            if (state.engine?.resident?.isNotEmpty() == true) Footnote(stringResource(R.string.monitor_unload_footer, computer))
             notice?.let { (text, ok) -> Text(text, style = MaterialTheme.typography.bodySmall, color = if (ok) p.ink else p.danger) }
+            if (chat != null) {
+                SectionTitle(stringResource(R.string.monitor_this_chat))
+                BreakdownRow(stringResource(R.string.model_section), chat.modelName ?: chat.modelId ?: stringResource(R.string.model_choose), null)
+                BreakdownRow(stringResource(R.string.effort_section), chat.effort?.let { effortLabel(it) } ?: stringResource(R.string.effort_computer_default), null)
+                if (chat.context != null) ContextBreakdown(chat, Modifier.clip16().background(p.surface).padding(12.dp))
+            }
         }
     }
 }

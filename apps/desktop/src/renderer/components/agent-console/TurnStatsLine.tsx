@@ -1,6 +1,7 @@
 import type { TurnStats } from '@nekko-agent/shared';
 import { formatRate, turnTokensPerSecond } from '@nekko-agent/shared';
 import { fmtTok } from './transcript.js';
+import { useShown } from '../../simpleMode.js';
 import { CheckIcon } from '../../icons.js';
 
 const EFFORT_LABEL: Record<NonNullable<TurnStats['effort']>, string> = {
@@ -83,6 +84,7 @@ export function DoneRow({ done, stats, names }: { done: boolean; stats?: TurnSta
  * long chat show where the tokens went, and which stretch ran on which model.
  */
 export function TurnStatsLine({ stats, names, inline = false }: { stats: TurnStats; names?: TurnStatsNames; inline?: boolean }) {
+  if (!useShown('stats')) return null;
   return (
     // `inline`: sits right-aligned in the reply's Done row (see DoneRow).
     <div className={`${inline ? 'ml-auto justify-end' : 'mt-1'} flex min-w-0 flex-wrap items-center gap-x-1.5 text-[11px] text-ink-faint`} data-turn-stats title={turnStatsTitle(stats)}>

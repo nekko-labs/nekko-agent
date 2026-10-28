@@ -65,6 +65,7 @@ import com.nekko.android.data.ModelGroup
 import com.nekko.android.data.ModelPick
 import com.nekko.android.data.modelGroups
 import com.nekko.android.ui.chat.effortLabel
+import com.nekko.android.ui.simple.LocalSimple
 import com.nekko.android.ui.components.NCard
 import com.nekko.android.ui.components.Pill
 import com.nekko.android.ui.components.SectionHeader
@@ -94,6 +95,8 @@ fun NewChatScreen(
     onBack: () -> Unit,
     /** The phone's default model for the active computer (Settings → New chats), if set. */
     phonePick: ModelPick? = null,
+    /** The model to open on instead (Start fresh from a long chat). */
+    startPick: ModelPick? = null,
     shared: String? = null,
     onEditShared: (String) -> Unit = {},
     onPair: () -> Unit,
@@ -131,12 +134,12 @@ fun NewChatScreen(
     }
     // Open on the computer's default, else the model of its latest chat, until the user picks.
     // Open on the phone's default for this computer, else the computer's, else its latest chat's.
-    LaunchedEffect(groups, c.defaults, c.summaries, phonePick) {
+    LaunchedEffect(groups, c.defaults, c.summaries, phonePick, startPick) {
         // Until the user picks, keep following the best candidate: the lists arrive one provider
         // at a time, so the phone's model may show up after the computer's default was chosen.
-        if (!touched) pick = ModelChoice.initial(c.defaults, c.summaries, groups, phonePick) ?: pick
+        if (!touched) pick = ModelChoice.initial(c.defaults, c.summaries, groups, startPick ?: phonePick) ?: pick
     }
-    val phonePickMissing = ModelChoice.phonePickMissing(phonePick, groups)
+    val phonePickMissing = startPick == null && ModelChoice.phonePickMissing(phonePick, groups)
     // A level the chosen model doesn't take is cleared.
     LaunchedEffect(pick) {
         if (effort != null && Effort.levels(pick?.modelId).none { it.wire == effort }) effort = null
@@ -268,7 +271,7 @@ fun NewChatScreen(
                             },
                         )
                         val chosen = pick
-                        if (chosen != null) {
+                        if (chosen != null && LocalSimple.current.shown("effort")) {
                             Label(Icons.Filled.Speed, "Effort")
                             Row(Modifier.horizontalScroll(rememberScrollState()).testTag("newChat.effort"), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Chip("Computer default", effort == null) { effort = null }

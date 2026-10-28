@@ -2,7 +2,6 @@
 <!-- From the iPhone's String Catalog (apps/ios/App/Localizable.xcstrings), machine-drafted there. -->
 <resources>
     <string name="your_computer">お使いのコンピュータ</string>
-    <string name="mode_label">モード</string>
     <string name="mode_simple">シンプル</string>
     <string name="mode_expert">エキスパート</string>
     <string name="effort_low">低</string>
@@ -39,7 +38,6 @@
     <string name="hw_gpu_memory">GPU メモリ</string>
     <string name="hw_vram">VRAM</string>
     <string name="monitor">モニター</string>
-    <string name="monitor_loaded">読み込み済み</string>
     <string name="monitor_models_loaded">%1$d 個のモデルを読み込み済み</string>
     <string name="monitor_reading">%1$s を読み取り中…</string>
     <string name="monitor_hardware">ハードウェア</string>
