@@ -51,11 +51,11 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1200, 400])
 
     await test.step('the emptied board keeps its zones', async () => {
       // The board's only chat became the completed one. With zones (Dynamic view:
-      // zones) its zone stays, dotted with a New agent button, so the wall is never
+      // zones) its zone stays, dotted with the Agent, media and Terminal buttons, so the wall is never
       // empty: no switch to the Focused new-chat screen, no "The wall is empty".
       await expect(page.locator('[data-wall-layout]')).toHaveAttribute('data-wall-layout', 'grid');
       await expect(page.locator('[data-command-wall]').getByText('Empty zone').first()).toBeVisible();
-      await expect(page.locator('[data-command-wall]').getByRole('button', { name: 'New agent' }).first()).toBeVisible();
+      await expect(page.locator('[data-command-wall]').getByRole('button', { name: 'Agent', exact: true }).first()).toBeVisible();
       await expect(page.locator('[data-wall-empty]')).toHaveCount(0);
       await expect(page.locator('[data-clean-start-greeting]')).toHaveCount(0);
       await shot(`empty-zones-${theme}-${width}`);
