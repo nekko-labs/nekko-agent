@@ -70,7 +70,7 @@ struct NekkoApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @Environment(\.scenePhase) private var phase
     @State private var app = AppModel.shared
-    /// The opening animation: in full at launch, its dissolve on every return to the app.
+    /// The opening animation: in full at launch (once past the app lock), its dissolve on every return to the app.
     @State private var splash: SplashView.Kind? = Self.splashOn ? .launch : nil
     /// Each showing of the animation, so a finished one never clears a newer one.
     @State private var splashRun = 0
@@ -132,7 +132,8 @@ struct NekkoApp: App {
             case .background:
                 app.didEnterBackground()
                 // Put the cat up while away, so the return opens on it rather than flashing the list first.
-                if Self.splashOn {
+                // With the app lock on, the lock cover is this same cat and plays the dissolve itself.
+                if Self.splashOn && !app.prefs.appLock {
                     splashRun += 1
                     splash = .resume
                 }
