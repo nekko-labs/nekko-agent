@@ -20,9 +20,18 @@ struct LiveCardView: View {
     fileprivate static let greenInk = Color(red: 0.02, green: 0.13, blue: 0.05)
     /// Where "+N" goes when every chat on the card is already a chip: the app.
     static let chatsURL = URL(string: "nekko-agent://chats")!
-    /// The Detailed mic, on the card and in the Settings preview. Off until
-    /// talking to a chat records (Part 5): until then it would ask for Face ID and do nothing.
-    static let showsMic = false
+    /// The Detailed mic, on the card and in the Settings preview.
+    static let showsMic = true
+
+    /// The mic on iOS 17, which has no `AudioRecordingIntent`: open the chat listening.
+    static func listenURL(_ sessionId: String) -> URL {
+        var c = URLComponents()
+        c.scheme = "nekko-agent"
+        c.host = "chat"
+        c.path = "/" + sessionId
+        c.queryItems = [URLQueryItem(name: "listen", value: "1")]
+        return c.url!
+    }
 
     private var focus: LiveChat? { state.chats.first { $0.id == state.focusId } ?? state.chats.first }
     private var showsText: Bool { level == .standard || level == .detailed }
@@ -58,8 +67,10 @@ struct LiveCardView: View {
                     .font(title.isEmpty ? .system(size: 14, weight: .semibold) : .system(size: 13))
                     .foregroundStyle(title.isEmpty ? Color.white : Self.grey)
                     .privacySensitive(showsText)
-                if level == .detailed, !focus.reply.isEmpty {
-                    Text(focus.reply).font(.system(size: 12)).foregroundStyle(Color(white: 0.82)).privacySensitive()
+                // What the mic sent ("Sent: ..."), until the reply line takes its place.
+                let line = state.heard.isEmpty || state.listening ? focus.reply : state.heard
+                if level == .detailed, !line.isEmpty {
+                    Text(line).font(.system(size: 12)).foregroundStyle(Color(white: 0.82)).privacySensitive()
                 }
             }
         }
@@ -80,15 +91,25 @@ struct LiveCardView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             if Self.showsMic, level == .detailed, let focus {
-                button(TalkToChatIntent(sessionId: focus.id)) {
-                    MicGlyph().stroke(Self.orange, style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
-                        .frame(width: 16, height: 16)
-                        .frame(width: 30, height: 30)
-                        .background(Self.surface, in: Circle())
+                Group {
+                    if #available(iOS 18, *) {
+                        button(TalkToChatIntent(sessionId: focus.id)) { mic }
+                    } else if interactive {
+                        Link(destination: Self.listenURL(focus.id)) { mic }
+                    } else {
+                        mic
+                    }
                 }
                 .accessibilityLabel(Text("Talk to this chat"))
             }
         }
+    }
+
+    private var mic: some View {
+        MicGlyph().stroke(Self.orange, style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
+            .frame(width: 16, height: 16)
+            .frame(width: 30, height: 30)
+            .background(Self.surface, in: Circle())
     }
 
     /// The page of `size` chips that holds the focused chat, so it is always

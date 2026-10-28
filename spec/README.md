@@ -185,7 +185,7 @@ Phone remote control and the native iOS and Android apps.
 - [iPhone: the desktop's languages and themes, and New chat's effort and computer (2026-10-23)](phone/iphone-languages-themes-and-new-chat-choices.md) (5 KB)
 - [Mermaid diagrams on the phone (iPhone implemented 2026-10-25; Android planned)](phone/mermaid-diagrams-on-the-phone.md) (6 KB)
 - [Native Android app (2026-10-11)](phone/native-android-app.md) (59 KB)
-- [Native iOS app (2026-10-16)](phone/native-ios-app.md) (115 KB)
+- [Native iOS app (2026-10-16)](phone/native-ios-app.md) (120 KB)
 - [Native phone implementation decision (2026-10-07)](phone/native-phone-implementation-decision.md) (2 KB)
 - [Nekko Cloud machines: a sandboxed computer the phone pairs with (2026-10-24)](phone/nekko-cloud-machines.md) (7 KB)
 - [Phone access classes and relay replay protection](phone/phone-access-classes-and-relay-replay-protection.md) (12 KB)

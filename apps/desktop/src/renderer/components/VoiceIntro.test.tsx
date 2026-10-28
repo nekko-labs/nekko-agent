@@ -88,9 +88,10 @@ describe('voice intro video', () => {
     expect(seconds).toBeLessThanOrEqual(45);
   });
 
-  it('makes no Live Activity claim yet and uses no em dash', () => {
+  it('says the Lock Screen mic asks for Face ID first, in the iPhone scene, and uses no em dash', () => {
     const text = VOICE_INTRO_SCENES.map(s => `${s.caption} ${s.sub ?? ''}`).join(' ');
-    expect(text).not.toMatch(/live activity|lock screen|face id/i);
+    const phone = VOICE_INTRO_SCENES.find(s => s.caption.startsWith('On iPhone'))!;
+    expect(phone.sub).toMatch(/lock screen.*face id.*chat/i);
     expect(text).not.toContain('\u2014');
   });
 });
