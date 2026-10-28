@@ -166,7 +166,7 @@ final class PanesTests: XCTestCase {
         app.buttons["Pair"].firstMatch.tap()
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         if springboard.buttons["Allow"].waitForExistence(timeout: 4) { springboard.buttons["Allow"].tap() }
-        let online = app.buttons.matching(NSPredicate(format: "label == %@", "Computers and settings, online")).firstMatch
+        let online = app.buttons.matching(NSPredicate(format: "label ==[c] %@", "Computers and settings, online")).firstMatch
         XCTAssertTrue(online.waitForExistence(timeout: 30), "connected to the computer")
     }
 

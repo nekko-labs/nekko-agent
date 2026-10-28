@@ -45,6 +45,39 @@ final class SimpleModeTests: XCTestCase {
         XCTAssertNil(SimpleMode.longChatSaving(nil, used: 190_000))
     }
 
+    func testStepsSummaryText() {
+        XCTAssertEqual(StepFold.summary(steps: 4, thought: true, running: false), "Took 4 steps")
+        XCTAssertEqual(StepFold.summary(steps: 1, thought: false, running: false), "Took 1 step")
+        XCTAssertEqual(StepFold.summary(steps: 4, thought: false, running: false, seconds: 12), "Took 4 steps · 12s")
+        XCTAssertEqual(StepFold.summary(steps: 0, thought: true, running: false), "Thought it through")
+        XCTAssertEqual(StepFold.summary(steps: 2, thought: false, running: true), "Working · 2 steps so far")
+        XCTAssertEqual(StepFold.summary(steps: 1, thought: false, running: true, seconds: 5), "Working · 1 step so far")
+        XCTAssertEqual(StepFold.summary(steps: 0, thought: true, running: true), "Working")
+    }
+
+    func testFoldingPutsOneSummaryPerTurnAndOpensInPlace() {
+        func tool(_ id: String) -> TranscriptRow { .block(.tool(id: id, name: "read", label: "Read \(id)", status: .ok, output: nil, input: [:])) }
+        let rows: [TranscriptRow] = [
+            .block(.user(id: "u1", text: "Fix it", at: nil, images: 0)),
+            .block(.assistant(id: "a1", text: "", reasoning: "Thinking", streaming: false, interrupted: false)),
+            tool("t1"), tool("t2"),
+            .block(.assistant(id: "a2", text: "Done.", reasoning: nil, streaming: false, interrupted: false)),
+            .block(.user(id: "u2", text: "Thanks", at: nil, images: 0)),
+            .block(.assistant(id: "a3", text: "You're welcome.", reasoning: nil, streaming: false, interrupted: false)),
+        ]
+        let folded = TranscriptRow.folded(rows, open: [])
+        XCTAssertEqual(folded.map(\.id), ["u1", "steps-u1", "a1", "a2", "u2", "a3"])
+        if case .summary(_, let steps, let thought, let running) = folded[1] {
+            XCTAssertEqual(steps, 2); XCTAssertTrue(thought); XCTAssertFalse(running)
+        } else { XCTFail("the summary sits where the first step was") }
+        if case .row(_, let reasoning) = folded[2] { XCTAssertFalse(reasoning, "folded turns keep reasoning out of sight") }
+        let open = TranscriptRow.folded(rows, open: ["u1"])
+        XCTAssertEqual(open.map(\.id), ["u1", "steps-u1", "a1", "t1", "t2", "a2", "u2", "a3"])
+        if case .row(_, let reasoning) = open[2] { XCTAssertTrue(reasoning) }
+        let live = TranscriptRow.folded(Array(rows.prefix(4)), open: [], running: true)
+        if case .summary(_, _, _, let running) = live[1] { XCTAssertTrue(running) } else { XCTFail() }
+    }
+
     func testUnknownIdsAlwaysShow() {
         XCTAssertTrue(SimpleMode.shown("not-a-control", expert: false, ["not-a-control": .hide]))
         XCTAssertEqual(SimpleMode.visibility("not-a-control", [:]), .show)

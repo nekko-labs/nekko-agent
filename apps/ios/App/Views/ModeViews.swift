@@ -19,7 +19,7 @@ struct ModeToggle: View {
         .background(palette.surface2, in: Capsule())
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Mode")
-        .accessibilityValue(prefs.expertMode ? "Expert" : "Simple")
+        .accessibilityValue(prefs.expertMode ? String(localized: "Expert") : String(localized: "Simple"))
         .accessibilityIdentifier("chat.mode")
     }
 
@@ -35,7 +35,7 @@ struct ModeToggle: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(expert ? "Expert: every control" : "Simple: everyday controls")
+        .accessibilityLabel(expert ? String(localized: "Expert: every control") : String(localized: "Simple: everyday controls"))
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 
@@ -507,7 +507,7 @@ struct MiniMonitor: View {
         Button(action: open) {
             HStack(spacing: 10) {
                 if monitor.system == nil && monitor.gpu == nil {
-                    Text(monitor.error == nil ? "Reading…" : "No readings").font(.caption2).foregroundStyle(palette.inkFaint)
+                    Text(monitor.error == nil ? LocalizedStringKey("Reading…") : "No readings").font(.caption2).foregroundStyle(palette.inkFaint)
                 } else {
                     ForEach(rows, id: \.label) { gauge($0) }
                 }
@@ -521,11 +521,9 @@ struct MiniMonitor: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
         .accessibilityLabel("Monitor")
         .accessibilityValue(Self.spoken(rows, count: count))
         .accessibilityHint("Shows the hardware, loaded models and this chat’s details")
-        .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("chat.monitor")
     }
 

@@ -30,6 +30,8 @@ struct ChatView: View {
     @State private var monitor: HardwareMonitorModel?
     /// The agent's panel, slid down from under the title.
     @State private var showPanel = false
+    /// Simple: the turns whose folded steps were opened here (not saved).
+    @State private var openSteps: Set<String> = []
     /// Tabletop (FD-6): the hinge in window points, from the pane host; nil elsewhere.
     @Environment(\.paneHinge) private var paneHinge
     /// In the pane host: messages can be dragged to the other pane.
@@ -91,11 +93,22 @@ struct ChatView: View {
                     }
                     if !chat.ready { ProgressView().frame(maxWidth: .infinity).padding(.top, 40) }
                     // Simple mode keeps reasoning and tool steps out of sight unless chosen in Settings.
-                    let steps = prefs.shows("thinking")
-                    ForEach(TranscriptRow.of(chat.blocks).filter { steps || !$0.isStep }) { row in
+                    // Simple folds each turn's reasoning and tool steps to one line, unless chosen in Settings.
+                    let rows = TranscriptRow.of(chat.blocks)
+                    let items = prefs.shows("thinking") ? rows.map { FoldItem.row($0, reasoning: true) }
+                        : TranscriptRow.folded(rows, open: openSteps, running: chat.turn.running)
+                    ForEach(items) { item in
+                        switch item {
+                        case .summary(let turn, let steps, let thought, let running):
+                            StepsSummaryRow(text: StepFold.summary(steps: steps, thought: thought, running: running),
+                                            open: openSteps.contains(turn)) {
+                                if openSteps.contains(turn) { openSteps.remove(turn) } else { openSteps.insert(turn) }
+                            }
+                            .id("steps-\(turn)")
+                        case .row(let row, let reasoning):
                         switch row {
                         case .block(let b):
-                            BlockView(block: b, chat: chat, photos: b.isPrompt ? chat.photos(b.id) : [], reasoning: steps) { i in
+                            BlockView(block: b, chat: chat, photos: b.isPrompt ? chat.photos(b.id) : [], reasoning: reasoning) { i in
                                 viewing = PhotoSet(photos: chat.photos(b.id), index: i)
                             }
                             .id(b.id)
@@ -115,6 +128,7 @@ struct ChatView: View {
                                     .contextMenu { blockMenu(chat, b) }
                             }
                             .id(row.id)
+                        }
                         }
                     }
                     // Prompts written here that the computer doesn't have yet.
@@ -442,6 +456,52 @@ enum TranscriptRow: Identifiable {
         case .block(let b): return b.id
         case .agents(let blocks): return "agents-" + (blocks.first?.id ?? "")
         case .purpose(_, let blocks, _): return "purpose-" + (blocks.first?.id ?? "")
+        }
+    }
+
+    /// Simple's transcript: each turn's tool steps and reasoning folded behind one
+    /// summary line at the first of them, unless the turn is in `open`. The
+    /// last turn is the running one while `running`.
+    static func folded(_ rows: [TranscriptRow], open: Set<String>, running: Bool = false) -> [FoldItem] {
+        // Turns start at each prompt; rows before the first one are turn "start".
+        var turnOf: [Int] = []
+        var turnIds: [String] = ["start"]
+        for row in rows {
+            if case .block(let b) = row, b.isPrompt { turnIds.append(b.id) }
+            turnOf.append(turnIds.count - 1)
+        }
+        var steps = Array(repeating: 0, count: turnIds.count)
+        var thought = Array(repeating: false, count: turnIds.count)
+        var first = Array(repeating: Int?.none, count: turnIds.count)
+        for (i, row) in rows.enumerated() {
+            let t = turnOf[i]
+            if row.isStep {
+                steps[t] += row.stepCount
+                if first[t] == nil { first[t] = i }
+            } else if case .block(.assistant(_, _, let r, _, _)) = row, let r, !r.isEmpty {
+                thought[t] = true
+                if first[t] == nil { first[t] = i }
+            }
+        }
+        var out: [FoldItem] = []
+        for (i, row) in rows.enumerated() {
+            let t = turnOf[i]
+            let isOpen = open.contains(turnIds[t])
+            if first[t] == i {
+                out.append(.summary(turn: turnIds[t], steps: steps[t], thought: thought[t], running: running && t == turnIds.count - 1))
+            }
+            if row.isStep && !isOpen { continue }
+            out.append(.row(row, reasoning: isOpen))
+        }
+        return out
+    }
+
+    /// How many tool calls a step row holds.
+    var stepCount: Int {
+        switch self {
+        case .block(.tool): return 1
+        case .block: return 0
+        case .agents(let blocks), .purpose(_, let blocks, _): return blocks.count
         }
     }
 
@@ -1328,5 +1388,66 @@ struct LongChatNote: View {
         .background(palette.surface, in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(palette.line))
         .accessibilityIdentifier("chat.longChat")
+    }
+}
+
+/// A transcript row as the chat draws it: a row (with or without its reasoning),
+/// or Simple's one-line summary of a turn's steps.
+enum FoldItem: Identifiable {
+    case row(TranscriptRow, reasoning: Bool)
+    case summary(turn: String, steps: Int, thought: Bool, running: Bool)
+
+    var id: String {
+        switch self {
+        case .row(let row, _): return row.id
+        case .summary(let turn, _, _, _): return "steps-" + turn
+        }
+    }
+}
+
+/// The words on Simple's folded steps line.
+enum StepFold {
+    static func summary(steps: Int, thought: Bool, running: Bool, seconds: Int? = nil) -> String {
+        var text: String
+        if running {
+            switch steps {
+            case 0: text = String(localized: "Working")
+            case 1: text = String(localized: "Working · 1 step so far")
+            default: text = String(localized: "Working · \(steps) steps so far")
+            }
+            return text
+        }
+        switch steps {
+        case 0: text = thought ? String(localized: "Thought it through") : String(localized: "No steps")
+        case 1: text = String(localized: "Took 1 step")
+        default: text = String(localized: "Took \(steps) steps")
+        }
+        if let seconds, seconds > 0 {
+            text += " · " + Duration.seconds(seconds).formatted(.units(allowed: [.minutes, .seconds], width: .narrow))
+        }
+        return text
+    }
+}
+
+/// Simple's one line for a turn's reasoning and tool steps, with Show steps.
+struct StepsSummaryRow: View {
+    let text: String
+    let open: Bool
+    var toggle: () -> Void
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "list.bullet").font(.caption).foregroundStyle(palette.inkFaint).accessibilityHidden(true)
+            Text(text).font(.footnote).foregroundStyle(palette.inkSoft).lineLimit(1)
+            Spacer(minLength: 8)
+            Button(action: toggle) {
+                Text(open ? LocalizedStringKey("Hide steps") : "Show steps").font(.footnote.weight(.semibold)).foregroundStyle(palette.accent)
+                    .padding(.horizontal, 4).frame(minHeight: 44).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("chat.steps")
+        }
+        .accessibilityElement(children: .contain)
     }
 }
