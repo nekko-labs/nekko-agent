@@ -28,7 +28,7 @@ final class LiveRelayTests: XCTestCase {
         // Settings persist across runs on one simulator: start each from the defaults it checks.
         // Live Activities stay off until the step that checks one (see there).
         let defaults = ["-splash", "NO", "-appLock", "NO", "-notifyFinished", "YES", "-dictationHold", "NO", "-theme", theme == "dark" ? "dark" : "light"]
-        app.launchArguments = defaults + ["-onboarded", "NO", "-liveActivities", "NO", "-uiTestReset", "YES"]
+        app.launchArguments = defaults + ["-onboarded", "NO", "-liveActivityLevel", "none", "-uiTestReset", "YES"]
         app.launch()
         allowSystemAlerts()
 
@@ -167,7 +167,7 @@ final class LiveRelayTests: XCTestCase {
         // XCTest's queries for 30 s or more right after Send (the approval card, the
         // question, the slow reply; #1019). The request itself took under 0.7 s.
         app.terminate()
-        app.launchArguments = defaults + ["-onboarded", "YES", "-liveActivities", "YES"]
+        app.launchArguments = defaults + ["-onboarded", "YES", "-liveActivityLevel", "standard"]
         app.launch()
         XCTAssertTrue(waitOnline(app, busyWait), "back online after the relaunch")
         let chatRow = app.descendants(matching: .any).matching(identifier: "chats.row").firstMatch

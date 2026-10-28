@@ -22,6 +22,8 @@ enum Route: Hashable {
     case monitors
     /// Settings → Security: the active computer's step-up (SK-6).
     case security
+    /// Settings → Live Activities: the card's level, with a preview.
+    case liveActivities
 }
 
 struct RootView: View {
@@ -176,6 +178,7 @@ struct RouteView: View {
         // Back from the chat returns to Monitors.
         case .monitors: MonitorsView(open: { id in path.append(.chat(id)) })
         case .security: SecuritySettingsView()
+        case .liveActivities: LiveActivitySettingsView()
         }
     }
 }

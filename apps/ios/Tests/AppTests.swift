@@ -151,6 +151,11 @@ final class DeepLinkTests: XCTestCase {
         XCTAssertTrue(app.newChatRequested)
         XCTAssertNil(app.pendingLink)
         app.newChatRequested = false
+        // The Live Activity's "+N" only opens the app.
+        app.handle(url: LiveCardView.chatsURL)
+        XCTAssertNil(app.openChat)
+        XCTAssertNil(app.pendingLink)
+        XCTAssertFalse(app.newChatRequested)
         // The Home Screen quick action opens the same link; an unknown type does nothing.
         XCTAssertEqual(QuickAction.url(for: QuickAction.newChat)?.absoluteString, "nekko-agent://new")
         XCTAssertNil(QuickAction.url(for: "dev.nekkolabs.nekkoagent.other"))
@@ -454,6 +459,341 @@ final class ChatStatusIconTests: XCTestCase {
         XCTAssertEqual(ChatStatusIcon(activity: .running, completed: true, activeWatchCount: 1).label, "Working")
         XCTAssertEqual(ChatStatusIcon(activity: .needsYou, completed: true, activeWatchCount: 1).label, "Needs you")
         XCTAssertEqual(ChatStatusIcon(activity: nil, completed: true, waiting: true, activeWatchCount: 1).label, "Waiting to send")
+    }
+}
+
+@MainActor
+final class LiveCardViewTests: XCTestCase {
+    static let chats = [
+        LiveChat(id: "a", short: "Billing", state: .needsYou, step: "Needs your approval: Run npm test", reply: "Want me to run the tests?", closeWord: "Nice", finishedAt: nil, callId: "c1", severity: "low", startedAt: .now.addingTimeInterval(-75)),
+        LiveChat(id: "b", short: "Login", state: .working, step: "Fixing merge conflicts", reply: "Got it. Working on it now.", closeWord: "Cool", finishedAt: nil, callId: nil, severity: nil, startedAt: .now.addingTimeInterval(-754)),
+        LiveChat(id: "c", short: "iOS LA", state: .watching, step: "Watching PR #1211…", reply: "PR is up. Watching CI.", closeWord: "Perfect", finishedAt: nil, callId: nil, severity: nil),
+        LiveChat(id: "d", short: "Docs", state: .done, step: "Done 12 min ago", reply: "Docs page added.", closeWord: "Looks good", finishedAt: .now, callId: nil, severity: nil),
+        LiveChat(id: "e", short: "Relay", state: .failed, step: "Stopped with an error", reply: "The build broke.", closeWord: "Got it", finishedAt: .now, callId: nil, severity: nil),
+    ]
+
+    static func card(_ level: LiveLevel, focus: String? = nil, listening: Bool = false) -> LiveCardState {
+        var card = buildCard(chats: chats, previous: nil, pinnedFocus: focus, level: level, now: .now)!
+        if listening { card.listening = true; card.heard = "Go ahead and auto merge the PR" }
+        return card
+    }
+
+    /// The default focus is "a", which waits on a tool approval.
+    static let cases: [(String, LiveLevel, LiveCardState)] = [
+        ("minimal", .minimal, card(.minimal)),
+        ("standard", .standard, card(.standard)),
+        ("detailed", .detailed, card(.detailed)),
+        ("working-minimal", .minimal, card(.minimal, focus: "b")),
+        ("working", .detailed, card(.detailed, focus: "b")),
+        ("listening", .detailed, card(.detailed, listening: true)),
+        ("done-focused", .detailed, card(.detailed, focus: "d")),
+    ]
+
+    func framed(_ state: LiveCardState, _ level: LiveLevel) -> some View {
+        LiveCardView(state: state, level: level, interactive: false)
+            .padding(14)
+            .frame(width: 360)
+            .background(LiveCardView.background)
+    }
+
+    func png(_ state: LiveCardState, _ level: LiveLevel) throws -> Data {
+        try XCTUnwrap(ImageRenderer(content: framed(state, level)).uiImage?.pngData())
+    }
+
+    func testFitsTheLockScreenAtEveryLevel() throws {
+        for (name, level, state) in Self.cases {
+            let renderer = ImageRenderer(content: framed(state, level))
+            let size = try XCTUnwrap(renderer.uiImage).size
+            XCTAssertLessThanOrEqual(size.height, 160, "\(name) is \(size.height) pt tall")
+        }
+    }
+
+    /// A unit test can't read SwiftUI's accessibility tree (it is only built
+    /// for VoiceOver), so this checks the pixels: Minimal draws the same card
+    /// whatever the chats say, while Standard does not. The state still carries
+    /// the text, so it is the view that hides it, not `buildCard`.
+    func testMinimalShowsNoChatText() throws {
+        var real = Self.card(.detailed)
+        // A ticking elapsed time could differ between the two renders.
+        for i in real.chats.indices { real.chats[i].startedAt = nil }
+        var other = real
+        for i in other.chats.indices {
+            other.chats[i].short = "Zebra"
+            other.chats[i].step = "Something else entirely"
+            other.chats[i].reply = "A different reply"
+        }
+        XCTAssertEqual(try png(real, .minimal), try png(other, .minimal))
+        XCTAssertNotEqual(try png(real, .standard), try png(other, .standard))
+    }
+
+    /// Minimal's line covers questions too, not only approvals.
+    func testMinimalNeedsYouLineIsGeneric() {
+        XCTAssertEqual(LiveChatState.needsYou.phaseLine, "Needs you")
+    }
+
+    func testTheStripShowsThePageWithTheFocusedChat() {
+        let first = LiveCardView.page(Self.chats, focus: "b", size: 3)
+        XCTAssertEqual(first.shown.map(\.id), ["a", "b", "c"])
+        XCTAssertEqual(first.next?.id, "d")
+        let last = LiveCardView.page(Self.chats, focus: "d", size: 3)
+        XCTAssertEqual(last.shown.map(\.id), ["d", "e"])
+        XCTAssertEqual(last.next?.id, "a", "the last page steps back to the first")
+        // Every chat fits: "+N" (chats past the eight) opens the app instead.
+        XCTAssertNil(LiveCardView.page(Self.chats, focus: "d", size: 5).next)
+        XCTAssertNil(LiveCardView.page([], focus: nil, size: 3).next)
+    }
+
+    /// Evidence for review: apps/ios/.shots/live-card/ (git-ignored). Runs only
+    /// with `TEST_RUNNER_LIVE_CARD_SHOTS=1 xcodebuild test ...`.
+    func testRendersEvidence() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["LIVE_CARD_SHOTS"] != nil, "set TEST_RUNNER_LIVE_CARD_SHOTS=1 to write the PNGs")
+        let dir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent(".shots/live-card")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        for (name, level, state) in Self.cases {
+            for scheme in [ColorScheme.light, .dark] {
+                let view = framed(state, level)
+                    .clipShape(RoundedRectangle(cornerRadius: 22))
+                    .padding(16)
+                    .background(scheme == .dark ? Color.black : Color(white: 0.95))
+                    .environment(\.colorScheme, scheme)
+                let renderer = ImageRenderer(content: view)
+                renderer.scale = 3
+                let png = try XCTUnwrap(renderer.uiImage?.pngData())
+                try png.write(to: dir.appendingPathComponent("\(name)-\(scheme == .dark ? "dark" : "light").png"))
+            }
+        }
+    }
+}
+
+@MainActor
+final class LiveActivityLevelPrefsTests: XCTestCase {
+    private func defaults(_ set: [String: Any]) -> UserDefaults {
+        let name = "nekko.tests.\(UUID().uuidString)"
+        let d = UserDefaults(suiteName: name)!
+        d.removePersistentDomain(forName: name)
+        for (k, v) in set { d.set(v, forKey: k) }
+        return d
+    }
+
+    /// Before levels there was one switch, and app lock kept chat text off the Lock Screen.
+    func testTheOldSwitchAndAppLockPickTheFirstLevel() {
+        XCTAssertEqual(Prefs(defaults: defaults(["liveActivities": false])).liveActivityLevel, LiveLevel.none)
+        XCTAssertEqual(Prefs(defaults: defaults(["liveActivities": true])).liveActivityLevel, .minimal, "app lock is on by default")
+        XCTAssertEqual(Prefs(defaults: defaults(["appLock": false])).liveActivityLevel, .standard)
+        let d = defaults(["appLock": false])
+        let p = Prefs(defaults: d)
+        p.liveActivityLevel = .detailed
+        p.appLock = true
+        XCTAssertEqual(Prefs(defaults: d).liveActivityLevel, .detailed, "a chosen level stays")
+    }
+}
+
+@MainActor
+final class RunActivitiesTests: XCTestCase {
+    final class FakeCard: CardActivity {
+        let attributes: NekkoCardAttributes
+        var state: LiveCardState
+        var updates = 0
+        var ended = false
+        var isLive = true
+        init(_ attributes: NekkoCardAttributes, _ state: LiveCardState) { self.attributes = attributes; self.state = state }
+        func update(_ state: LiveCardState) { self.state = state; updates += 1 }
+        func end() { ended = true }
+    }
+
+    var started: [FakeCard] = []
+    var level = LiveLevel.standard
+    var summaries: [SessionSummary] = []
+    var activity: [String: NekkoProtocol.Activity] = [:]
+    /// False: the computer's list hasn't loaded (`source()` is nil).
+    var loaded = true
+
+    func make() -> RunActivities {
+        let r = RunActivities(request: { [unowned self] attributes, state in
+            let card = FakeCard(attributes, state)
+            started.append(card)
+            return card
+        }, adoptLeftover: false)
+        r.level = { [unowned self] in level }
+        r.source = { [unowned self] in loaded ? .init(summaries: summaries, activity: activity, computerId: "pc", computerName: "Mac") : nil }
+        return r
+    }
+
+    func chat(_ id: String, _ title: String, reply: String = "Got it. Working on it now.") -> SessionSummary {
+        SessionSummary.from(["id": .string(id), "title": .string(title), "lastReplyText": .string(reply)])!
+    }
+
+    func testTwoRunningChatsShareOneCard() throws {
+        summaries = [chat("a", "Billing fix"), chat("b", "Login page")]
+        activity = ["a": .running, "b": .running]
+        let r = make()
+        r.refresh()
+        r.refresh()
+        XCTAssertEqual(started.count, 1, "one card for every chat")
+        let card = try XCTUnwrap(started.first)
+        XCTAssertEqual(card.state.chats.map(\.id), ["a", "b"])
+        XCTAssertEqual(card.state.chats.first?.short, "Billing")
+        XCTAssertEqual(card.attributes.level, .standard)
+
+        r.focus("b")
+        XCTAssertEqual(card.state.focusId, "b", "a chip tap brings that chat up")
+
+        level = .detailed
+        r.refresh()
+        XCTAssertTrue(card.ended, "the level is fixed for a card's life")
+        XCTAssertEqual(started.count, 2)
+        XCTAssertEqual(started.last?.attributes.level, .detailed)
+        XCTAssertEqual(started.last?.state.chats.first?.reply, "Got it.")
+
+        activity = [:]
+        r.refresh()
+        XCTAssertTrue(try XCTUnwrap(started.last).ended, "nothing running or finished: the card ends")
+    }
+
+    func testDismissingTheOnlyFinishedChatEndsTheCard() throws {
+        summaries = [chat("a", "Billing fix")]
+        let r = make()
+        r.onEvent(.done(sessionId: "a", messageId: nil))
+        r.refresh()
+        let card = try XCTUnwrap(started.first)
+        XCTAssertEqual(card.state.chats.first?.state, .done)
+        XCTAssertEqual(card.state.chats.first?.step, "Finished")
+        XCTAssertNotNil(card.state.chats.first?.finishedAt)
+        XCTAssertFalse(card.state.chats.first?.closeWord.isEmpty ?? true)
+        r.dismiss("a")
+        XCTAssertTrue(card.ended)
+        r.refresh()
+        XCTAssertEqual(started.count, 1, "a dismissed chat stays off until it runs again")
+    }
+
+    func testAFinishedChatLeavesAfterTwoHours() throws {
+        summaries = [chat("a", "Billing fix")]
+        let r = make()
+        r.onEvent(.done(sessionId: "a", messageId: nil))
+        r.refresh()
+        let card = try XCTUnwrap(started.first)
+        r.refresh(now: Date().addingTimeInterval(LiveCardRules.finishedTail + 5))
+        XCTAssertTrue(card.ended)
+    }
+
+    /// Reconnecting empties `activity` and the list load restores only needs-you:
+    /// a run the events saw keeps its chat as working for a while.
+    func testAReconnectKeepsARecentRunningChat() throws {
+        summaries = [chat("a", "Billing fix")]
+        activity = ["a": .running]
+        let r = make()
+        r.onEvent(.text(sessionId: "a", delta: "Hi"))
+        r.refresh()
+        let card = try XCTUnwrap(started.first)
+        activity = [:]
+        r.refresh(urgent: true)
+        XCTAssertFalse(card.ended, "the run is still going as far as the phone knows")
+        XCTAssertEqual(card.state.chats.map(\.state), [.working])
+        XCTAssertEqual(card.state.chats.first?.step, "Writing…")
+        r.refresh(now: Date().addingTimeInterval(31 * 60))
+        XCTAssertTrue(card.ended, "no event for 30 minutes: the chat drops")
+    }
+
+    func testNoneStartsNoCardAndEndsARunningOne() throws {
+        summaries = [chat("a", "Billing fix")]
+        activity = ["a": .running]
+        level = .none
+        let r = make()
+        r.refresh()
+        XCTAssertTrue(started.isEmpty)
+        level = .standard
+        r.refresh()
+        let card = try XCTUnwrap(started.first)
+        level = .none
+        r.refresh()
+        XCTAssertTrue(card.ended)
+        XCTAssertEqual(started.count, 1)
+    }
+
+    /// A tap on the card can launch the app before the list loads.
+    func testBeforeTheListLoadsTheCardKeepsItsOwnChats() throws {
+        summaries = [chat("a", "Billing fix"), chat("b", "Login page")]
+        activity = ["a": .running, "b": .running]
+        let r = make()
+        r.refresh()
+        let card = try XCTUnwrap(started.first)
+        loaded = false
+        summaries = []
+        activity = [:]
+        r.refresh(urgent: true)
+        r.focus("b")
+        XCTAssertFalse(card.ended)
+        XCTAssertEqual(card.state.chats.map(\.id), ["a", "b"])
+        XCTAssertEqual(card.state.focusId, "b")
+        XCTAssertEqual(started.count, 1)
+    }
+
+    func testADismissedChatComesBackWhenItRunsAgain() throws {
+        summaries = [chat("a", "Billing fix")]
+        let r = make()
+        r.onEvent(.done(sessionId: "a", messageId: nil))
+        r.refresh()
+        r.dismiss("a")
+        XCTAssertTrue(try XCTUnwrap(started.first).ended)
+        r.onEvent(.text(sessionId: "a", delta: "Again"))
+        activity = ["a": .running]
+        r.refresh()
+        XCTAssertEqual(started.count, 2)
+        XCTAssertEqual(started.last?.state.chats.map(\.state), [.working])
+    }
+
+    /// The user swiped the card away (or iOS ended it at 8 hours): a step tick
+    /// leaves it gone, an approval brings a new one.
+    func testASwipedCardComesBackOnlyForAnApproval() throws {
+        summaries = [chat("a", "Billing fix"), chat("b", "Login page")]
+        activity = ["a": .running, "b": .running]
+        let r = make()
+        r.onEvent(.toolCall(sessionId: "a", call: ToolCall(id: "1", name: "bash")))
+        r.refresh(urgent: true)
+        let card = try XCTUnwrap(started.first)
+        card.isLive = false
+        r.onEvent(.toolCall(sessionId: "a", call: ToolCall(id: "2", name: "read")))
+        r.refresh(urgent: true)
+        XCTAssertNil(r.card, "a card that is no longer live is dropped")
+        XCTAssertEqual(started.count, 1, "a step tick does not undo a swipe")
+        XCTAssertEqual(card.updates, 0)
+        r.onEvent(.approvalRequired(sessionId: "b", approval: Approval(call: ToolCall(id: "3", name: "bash"), reason: "", severity: .low)))
+        activity["b"] = .needsYou
+        r.refresh()
+        XCTAssertEqual(started.count, 2, "an approval starts a new card")
+        XCTAssertEqual(started.last?.state.focusId, "b")
+    }
+
+    func testASwipedCardComesBackForANewChat() throws {
+        summaries = [chat("a", "Billing fix")]
+        activity = ["a": .running]
+        let r = make()
+        r.refresh()
+        try XCTUnwrap(started.first).isLive = false
+        r.refresh(urgent: true)
+        XCTAssertEqual(started.count, 1)
+        summaries.append(chat("b", "Login page"))
+        activity["b"] = .running
+        r.refresh()
+        XCTAssertEqual(started.count, 2, "a chat that was not on the swiped card starts a new one")
+        XCTAssertEqual(started.last?.state.chats.map(\.id), ["a", "b"])
+    }
+
+    /// A throttled update is sent once the 2 s are up, not dropped.
+    func testAThrottledUpdateArrivesLater() async throws {
+        summaries = [chat("a", "Billing fix", reply: "First.")]
+        activity = ["a": .running]
+        level = .detailed
+        let r = make()
+        r.refresh()
+        let card = try XCTUnwrap(started.first)
+        summaries = [chat("a", "Billing fix", reply: "Second.")]
+        r.refresh()
+        r.refresh()
+        XCTAssertEqual(card.updates, 0, "throttled")
+        try await Task.sleep(nanoseconds: 2_600_000_000)
+        XCTAssertEqual(card.updates, 1, "one trailing update")
+        XCTAssertEqual(card.state.chats.first?.reply, "Second.")
     }
 }
 
