@@ -76,6 +76,34 @@ export interface CardPush {
   state: CardState;
   /** For `start`. */
   attributes?: CardAttributes;
+  /** APNs priority (`cardPriority`); 10 when absent. */
+  priority?: 5 | 10;
+}
+
+/** At most `max` UTF-8 bytes of a string, cut on a character boundary ('' for anything else). */
+export function capBytes(v: unknown, max: number): string {
+  if (typeof v !== 'string') return '';
+  let out = '';
+  let bytes = 0;
+  for (const ch of v) {
+    bytes += Buffer.byteLength(ch);
+    if (bytes > max) break;
+    out += ch;
+  }
+  return out;
+}
+
+/**
+ * The APNs priority of a card push (exported for tests): 5 when only a step,
+ * a reply or a time changed since the last push to that card (iOS budgets
+ * priority 10), 10 for anything the user should see at once: a chat changing
+ * state or call, joining or leaving, the focus moving, a start or an end.
+ */
+export function cardPriority(previous: CardState | undefined, push: CardPush): 5 | 10 {
+  if (push.event !== 'update' || !previous) return 10;
+  const shape = (s: CardState) =>
+    JSON.stringify([s.focusId ?? null, s.more ?? 0, s.chats.map((c) => [c.id, c.state, c.callId ?? null])]);
+  return shape(previous) === shape(push.state) ? 5 : 10;
 }
 
 /** APNs refuses a Live Activity payload over 4 KB: the state gets 3500 bytes, as `buildCard` allows it. */
@@ -203,6 +231,7 @@ async function sendApns(
   token: string,
   body: unknown,
   pushType: 'alert' | 'liveactivity' | 'background' = 'alert',
+  priority: 5 | 10 = 10,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const client = http2.connect(`https://${host}`);
@@ -214,7 +243,7 @@ async function sendApns(
       'apns-topic': topic,
       'apns-push-type': pushType,
       // Apple requires priority 5 for a background (silent) push.
-      'apns-priority': pushType === 'background' ? '5' : '10',
+      'apns-priority': pushType === 'background' ? '5' : String(priority),
       'content-type': 'application/json',
     });
     let status = 0;
@@ -338,7 +367,8 @@ export function createPushSender(env: NodeJS.ProcessEnv = process.env): PushSend
     async sendCard(token, push, app) {
       try {
         if (!apnsJwt) return void console.log('[push] APNs not configured (set APNS_KEY_P8/APNS_KEY_ID/APNS_TEAM_ID)');
-        await sendApns(apnsHost, apnsJwt(), `${topicFor(app)}.push-type.liveactivity`, token, cardPayload(push), 'liveactivity');
+        const topic = `${topicFor(app)}.push-type.liveactivity`;
+        await sendApns(apnsHost, apnsJwt(), topic, token, cardPayload(push), 'liveactivity', push.priority ?? 10);
         console.log(`[push] card ${push.event} sent`);
       } catch (e) {
         console.warn(`[push] card send failed: ${(e as Error).message}`);

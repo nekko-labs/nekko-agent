@@ -184,14 +184,23 @@ describe('relay v2 routing', () => {
     const names = { computerId: 'mac-1', computerName: 'Studio' };
     c.send({ type: 'register-card', deviceId: minimal, token: tok('a'), level: 'minimal', ...names });
     c.send({ type: 'register-card', deviceId: detailed, token: tok('b'), startToken: tok('c'), level: 'detailed', app: 'dev.nekkolabs.nekkoagent', ...names });
-    c.send({ type: 'register-card', deviceId: starter, startToken: tok('d'), level: 'standard', ...names });
+    // The third phone registers on its own socket, which then goes quiet (suspended).
+    const s3 = await connect(url, { room: 'r8', role: 'client', key: 'k' });
+    await s3.next();
+    await agent.next();
+    s3.send({ type: 'register-card', deviceId: starter, startToken: tok('d'), level: 'standard', ...names });
+    // Names are kept to 64 bytes, cut on a character boundary.
+    const long = minimal.replace('1', '6');
+    c.send({ type: 'register-card', deviceId: long, startToken: tok('f'), level: 'standard', computerId: 'i'.repeat(300), computerName: 'é'.repeat(40) });
     // Malformed registrations are ignored.
     c.send({ type: 'register-card', deviceId: 'nope', token: tok('e'), level: 'standard' });
     c.send({ type: 'register-card', deviceId: minimal.replace('1', '9'), token: tok('e'), level: 'loud' });
     c.send({ type: 'register-card', deviceId: minimal.replace('1', '8'), token: 'not hex!', level: 'standard' });
     c.send({ type: 'register-card', deviceId: minimal.replace('1', '7'), level: 'standard' });
     await new Promise((r) => setTimeout(r, 50));
-    expect([...rooms.get('r8')!.cards.keys()]).toEqual([minimal, detailed, starter]);
+    expect([...rooms.get('r8')!.cards.keys()]).toEqual([minimal, detailed, starter, long]);
+    expect(rooms.get('r8')!.cards.get(long)).toMatchObject({ computerId: 'i'.repeat(64), computerName: 'é'.repeat(32) });
+    rooms.get('r8')!.cards.delete(long);
 
     const chat = { id: 's1', short: 'Fix', state: 'working', step: 'Run npm test', reply: 'On it.', closeWord: 'Cool' };
     agent.send({ type: 'card', state: { chats: [chat], focusId: 's1' } });
@@ -201,6 +210,22 @@ describe('relay v2 routing', () => {
       [tok('b'), 'update', 'Run npm test', 'On it.'],
     ]);
     expect(pushes[1].app).toBe('dev.nekkolabs.nekkoagent');
+    // Only a new step: priority 5. A new state: 10.
+    expect(pushes.map((p) => p.push.priority)).toEqual([10, 10]);
+    agent.send({ type: 'card', state: { chats: [{ ...chat, step: 'Run npm run lint' }], focusId: 's1' } });
+    agent.send({ type: 'card', state: { chats: [{ ...chat, state: 'needsYou', callId: 'tc1' }], focusId: 's1' } });
+    agent.send({ type: 'card', state: { chats: [chat], focusId: 's1' } });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(pushes.slice(2).map((p) => p.push.priority)).toEqual([5, 5, 10, 10, 10, 10]);
+
+    // A phone with a live socket starts its own card: no start pushed to it.
+    pushes.length = 0;
+    agent.send({ type: 'card-start', state: { chats: [chat], focusId: 's1' } });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(pushes.map((p) => p.token)).toEqual([tok('a'), tok('b')]);
+    s3.ws.close();
+    await s3.closed;
+    expect((await agent.next()).type).toBe('client-close');
 
     // A run a phone asked for: an update where a card is up, a start where none is (once).
     pushes.length = 0;
@@ -216,6 +241,7 @@ describe('relay v2 routing', () => {
     ]);
     const start = pushes[2].push;
     expect(start.attributes).toEqual({ ...names, level: 'standard' });
+    expect(start.priority).toBe(10);
     expect(start.state.chats[0]).toMatchObject({ step: 'Run npm test', reply: '' });
 
     // An empty card ends it and forgets the update token; the start token stays.
@@ -227,6 +253,7 @@ describe('relay v2 routing', () => {
       [tok('a'), 'end'],
       [tok('b'), 'end'],
     ]);
+    expect(pushes.map((p) => p.push.priority)).toEqual([10, 10]);
     expect(rooms.get('r8')!.cards.get(detailed)).toMatchObject({ startToken: tok('c') });
     expect(rooms.get('r8')!.cards.get(detailed)!.token).toBeUndefined();
     expect(rooms.get('r8')!.cards.has(minimal)).toBe(false);

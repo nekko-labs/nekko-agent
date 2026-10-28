@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { generateKeyPairSync, verify as cryptoVerify, createVerify } from 'node:crypto';
-import { activityPayload, alertPayload, cardForLevel, cardPayload, dismissPayload, makeApnsJwt, makeFcmAssertion } from './push.js';
+import { activityPayload, alertPayload, capBytes, cardForLevel, cardPayload, cardPriority, dismissPayload, makeApnsJwt, makeFcmAssertion } from './push.js';
 
 describe('alert and dismissal payloads', () => {
   it('carry the kind and the opaque chat tag, never content', () => {
@@ -124,7 +124,7 @@ describe('the Live Activity card', () => {
       focusId: `chat-7-${'i'.repeat(150)}`,
     };
     const card = cardForLevel(huge, 'detailed')!;
-    const attributes = { computerId: 'm'.repeat(100), computerName: 'n'.repeat(100), level: 'detailed' as const };
+    const attributes = { computerId: capBytes('m'.repeat(300), 64), computerName: capBytes('ñ'.repeat(300), 64), level: 'detailed' as const };
     expect(Buffer.byteLength(JSON.stringify(cardPayload({ event: 'start', state: card, attributes }, 1e10)))).toBeLessThan(4096);
     expect(card.chats.length + (card.more as number)).toBe(12);
     expect(card.chats.some((c) => c.id === huge.focusId)).toBe(true);
@@ -150,5 +150,30 @@ describe('the Live Activity card', () => {
         alert: { title: 'Nekko Agent', body: 'Your computer is working on a chat.' },
       },
     });
+  });
+});
+
+describe('card names and priority', () => {
+  it('caps a name at 64 UTF-8 bytes on a character boundary', () => {
+    expect(capBytes('a'.repeat(70), 64)).toBe('a'.repeat(64));
+    expect(capBytes('é'.repeat(40), 64)).toBe('é'.repeat(32));
+    expect(capBytes('x' + '😀'.repeat(20), 64)).toBe('x' + '😀'.repeat(15));
+    expect(capBytes('Studio', 64)).toBe('Studio');
+    expect(capBytes(7, 64)).toBe('');
+  });
+
+  it('sends a step-only update at priority 5 and anything else at 10', () => {
+    const chat = (state: string, step: string, extra: Record<string, unknown> = {}) => ({ id: 'a', state, step, ...extra });
+    const card = (chats: Record<string, unknown>[], focusId = 'a', more = 0) => ({ chats, focusId, more });
+    const was = card([chat('working', 'Run ls')]);
+    const update = (state: ReturnType<typeof card>) => ({ event: 'update' as const, state });
+    expect(cardPriority(was, update(card([chat('working', 'Run pwd', { reply: 'Hm.', startedAt: 9 })])))).toBe(5);
+    expect(cardPriority(was, update(card([chat('needsYou', 'Run ls', { callId: 'c' })])))).toBe(10);
+    expect(cardPriority(was, update(card([chat('working', 'Run ls'), { id: 'b', state: 'working' }])))).toBe(10);
+    expect(cardPriority(was, update(card([chat('working', 'Run ls')], 'b')))).toBe(10);
+    expect(cardPriority(was, update(card([chat('working', 'Run ls')], 'a', 1)))).toBe(10);
+    expect(cardPriority(undefined, update(was))).toBe(10);
+    expect(cardPriority(was, { event: 'start', state: was })).toBe(10);
+    expect(cardPriority(was, { event: 'end', state: card([]) })).toBe(10);
   });
 });

@@ -1,7 +1,18 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import Fastify, { type FastifyInstance } from 'fastify';
 import websocket from '@fastify/websocket';
-import { CARD_LEVELS, cardForLevel, createPushSender, type ActivityPush, type CardLevel, type PushSender } from './push.js';
+import {
+  CARD_LEVELS,
+  capBytes,
+  cardForLevel,
+  cardPriority,
+  createPushSender,
+  type ActivityPush,
+  type CardLevel,
+  type CardPush,
+  type CardState,
+  type PushSender,
+} from './push.js';
 
 /**
  * Nekko Agent relay v2, the piece that lets a paired phone reach a local agent
@@ -37,7 +48,8 @@ import { CARD_LEVELS, cardForLevel, createPushSender, type ActivityPush, type Ca
  *     state } updates every registered card, blanked for each phone's level
  *     (Minimal: no title, step or reply; Standard: no reply), and ends it when
  *     the state has no chats; { type:'card-start', state } also starts a card,
- *     once, on a phone with none up. The card's text passes through the relay
+ *     once, on a phone with none up and no live socket (one that is open
+ *     starts its own). A push that only changes a step goes at priority 5. The card's text passes through the relay
  *     in the clear, as ActivityKit requires.
  *
  * Hardening: pairing-key hashes compared in constant time, frame-size cap, a
@@ -103,6 +115,8 @@ interface CardRegistration {
   app?: string;
   /** A start was pushed: no other until the phone registers again (with the new card's token). */
   started?: boolean;
+  /** What the card last got, for the next push's priority. */
+  last?: CardState;
 }
 
 /** At most this many Live Activities per room, and how long one is kept without an end. */
@@ -314,16 +328,23 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
                 const state = cardForLevel(ctrl.state, reg.level);
                 if (!state) return;
                 const ended = state.chats.length === 0;
+                // A phone with a live socket starts its own card (its token may not have arrived yet).
+                const owner = r.pushOwners.get(deviceId);
+                const live = owner !== undefined && r.clients.has(owner);
                 if (reg.token) {
-                  void pushSender.sendCard?.(reg.token, { event: ended ? 'end' : 'update', state }, reg.app);
+                  const push: CardPush = { event: ended ? 'end' : 'update', state };
+                  push.priority = cardPriority(reg.last, push);
+                  void pushSender.sendCard?.(reg.token, push, reg.app);
+                  reg.last = state;
                   if (ended) {
                     delete reg.token;
+                    delete reg.last;
                     if (!reg.startToken) r.cards.delete(deviceId);
                   }
-                } else if (start && !ended && reg.startToken && !reg.started) {
+                } else if (start && !ended && !live && reg.startToken && !reg.started) {
                   reg.started = true;
                   const attributes = { computerId: reg.computerId, computerName: reg.computerName, level: reg.level };
-                  void pushSender.sendCard?.(reg.startToken, { event: 'start', state, attributes }, reg.app);
+                  void pushSender.sendCard?.(reg.startToken, { event: 'start', state, attributes, priority: 10 }, reg.app);
                 }
               }
               return;
@@ -400,7 +421,8 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
               return;
             }
             if (!r.cards.has(deviceId) && r.cards.size >= MAX_CARDS) return;
-            const name = (v: unknown) => (typeof v === 'string' ? v.slice(0, 100) : '');
+            // Capped so a start's attributes keep the payload under 4 KB.
+            const name = (v: unknown) => capBytes(v, 64);
             const app = typeof ctrl.app === 'string' && APP_ID.test(ctrl.app) ? ctrl.app : undefined;
             r.cards.set(deviceId, {
               ...(token(ctrl.token) ? { token: ctrl.token } : {}),
