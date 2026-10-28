@@ -369,6 +369,15 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 .wall-zone-empty-title { color: var(--ink-soft); font-size: 13px; font-weight: 600; }
 .wall-zone-create { display: flex; flex-direction: column; align-items: stretch; max-width: 100%; margin-top: 4px; }
 .wall-zone-empty .btn { display: inline-flex; align-items: center; justify-content: flex-start; gap: 6px; }
+/* Each option leans in on hover and its plus turns a quarter; a press squeezes it and turns the plus on. */
+.wall-zone-empty .wall-zone-option { transition: transform 180ms cubic-bezier(.2, .8, .2, 1), background var(--dur-fast) ease, color var(--dur-fast) ease; }
+.wall-zone-plus { opacity: .6; transition: transform 260ms cubic-bezier(.34, 1.56, .64, 1), opacity 140ms ease, color 140ms ease; }
+.wall-zone-empty .wall-zone-option:is(:hover, :focus-visible) { transform: translateX(3px); }
+.wall-zone-empty .wall-zone-option.text-accent:is(:hover, :focus-visible, :active) { color: var(--accent); }
+.wall-zone-option:is(:hover, :focus-visible) .wall-zone-plus { opacity: 1; color: var(--accent); transform: rotate(90deg) scale(1.15); }
+.wall-zone-empty .wall-zone-option:active { transform: translateX(3px) scale(.95); transition-duration: 70ms; }
+.wall-zone-option:active .wall-zone-plus { transform: rotate(180deg) scale(.9); transition-duration: 120ms; }
+@media (prefers-reduced-motion: reduce) { .wall-zone-empty .wall-zone-option, .wall-zone-plus { transition: none; transform: none !important; } }
 .wall-zone-art { position: relative; width: 88px; height: 52px; margin-bottom: 4px; opacity: .55; }
 .wall-zone-art > svg { display: block; }
 .wall-zone-art-cat { position: absolute; left: 26px; bottom: 4px; line-height: 0; }

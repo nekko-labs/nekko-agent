@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="colour">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -10,9 +10,9 @@
     />
     <link rel="canonical" href="https://nekkoagent.com/" />
     <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1" />
-    <meta name="theme-color" content="#0d0b18" />
+    <meta name="theme-color" content="#9d8ce6" />
     <!-- Dark is the default (the attribute on <html>). A saved White or Colourful choice replaces it before first paint, so the page never flashes the wrong look -->
-    <script>try{var t=localStorage.getItem('nekko-theme');if(t==='white'||t==='colour'){document.documentElement.dataset.theme=t;document.querySelector('meta[name=theme-color]').content=t==='white'?'#f3effe':'#9d8ce6';}}catch(e){}</script>
+    <script>try{var t=localStorage.getItem('nekko-theme');if(t==='white'||t==='dark'){document.documentElement.dataset.theme=t;document.querySelector('meta[name=theme-color]').content=t==='white'?'#f3effe':'#0d0b18';}}catch(e){}</script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=nekko-agent-6" />
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
@@ -131,7 +131,7 @@
         <a href="/docs">Docs</a>
         <a class="with-gh" href="https://github.com/nekko-labs/nekko-agent" target="_blank" rel="noopener"><svg class="gh-ico" width="16" height="16" aria-hidden="true"><use href="#i-github"/></svg>GitHub</a>
       </nav>
-      <button class="theme-toggle" type="button" aria-label="Dark look. Switch to the White look" title="Switch to the White look">
+      <button class="theme-toggle" type="button" aria-label="Colourful look. Switch to the Dark look" title="Switch to the Dark look">
         <svg class="ic-sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         <svg class="ic-drop" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3c3.6 4 6 7 6 10.2a6 6 0 0 1-12 0C6 10 8.4 7 12 3Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
         <svg class="ic-moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>

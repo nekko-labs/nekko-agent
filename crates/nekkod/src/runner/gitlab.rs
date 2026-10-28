@@ -214,7 +214,7 @@ impl<H: Http> GitLab<H> {
         }
         let base = gitlab_base(Some(&json!({ "site": req.base_url.clone().unwrap_or_default() })))?;
         let label = req.label.clone().or_else(|| existing.map(|e| e.config.label.clone()));
-        let label = label.unwrap_or_else(|| "nekko-mac".into());
+        let label = label.unwrap_or_else(|| "nekko-cloud-mac".into());
         if !plain_name(&label, 64) {
             return Err("The label may use letters, digits, '.', '_' and '-' only (at most 64).".into());
         }

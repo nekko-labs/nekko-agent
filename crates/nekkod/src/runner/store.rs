@@ -242,7 +242,7 @@ mod tests {
             config: RunnerConfig {
                 id: id.into(),
                 scope: Scope::Org { org: "acme".into() },
-                label: "nekko-mac".into(),
+                label: "nekko-cloud-mac".into(),
                 settings: RunnerSettings { trusted_networks: vec!["gw:aa".into()], ..Default::default() },
             },
             link: Link::Github(GithubLink {
@@ -272,7 +272,7 @@ mod tests {
     #[test]
     fn t212_records_still_load() {
         let dir = tempfile::tempdir().unwrap();
-        let text = r#"[{"id":"a","scope":{"kind":"org","org":"acme"},"label":"nekko-mac","settings":{},
+        let text = r#"[{"id":"a","scope":{"kind":"org","org":"acme"},"label":"nekko-cloud-mac","settings":{},
             "github":{"appId":1,"installationId":2}}]"#;
         std::fs::write(dir.path().join("runners.json"), text).unwrap();
         let recs = Store::new(dir.path()).load();
@@ -306,7 +306,7 @@ mod tests {
     #[test]
     fn protected_only_defaults_true() {
         let dir = tempfile::tempdir().unwrap();
-        let text = r#"[{"id":"g","scope":{"kind":"org","org":"a/b"},"label":"nekko-mac","settings":{},
+        let text = r#"[{"id":"g","scope":{"kind":"org","org":"a/b"},"label":"nekko-cloud-mac","settings":{},
             "gitlab":{"baseUrl":"https://gitlab.com","namespaceId":7}}]"#;
         std::fs::write(dir.path().join("runners.json"), text).unwrap();
         let recs = Store::new(dir.path()).load();

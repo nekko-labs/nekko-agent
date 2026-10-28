@@ -17,7 +17,7 @@ const view = (over: Partial<RunnerView> = {}): RunnerView => ({
   config: {
     id: 'r1',
     scope: { kind: 'repo', owner: 'nekko-labs', repo: 'nekko-agent' },
-    label: 'nekko-mac',
+    label: 'nekko-cloud-mac',
     settings: { ...DEFAULT_RUNNER_SETTINGS, enabled: true, macosSlots: 2 },
   },
   state: 'running',

@@ -9,7 +9,7 @@ inputs:
     default: ''
   label:
     description: Label of the owner's runner.
-    default: nekko-mac
+    default: nekko-cloud-mac
   fallback:
     description: GitHub-hosted runner to use instead.
     default: macos-latest

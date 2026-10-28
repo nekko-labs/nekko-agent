@@ -36,11 +36,11 @@ node and subnet route), sleep and the lid (Testing R3), and the menu bar dot on 
   trusted Wi-Fi network.
 - [ ] A build of the stack with `nekko-vm`: a dev build (`node apps/desktop/scripts/stage-daemon.mjs --dev`
   stages and ad-hoc signs it), or the signed dist from [docs/signing.md](../signing.md#the-vm-helpers-entitlement).
-- [ ] The GitHub App, created and installed on the `nekko-labs` org with access to
-  `nekko-labs/nekko-agent` only, per [Create the GitHub App](../ci-runners.md#create-the-github-app)
+- [x] The GitHub App **Nekko Cloud Mac** (App ID 5510353), created 2026-10-28 and installed on the
+  `nekko-labs` org (all repos, so other nekko-labs repos can use the Mac later), per [Create the GitHub App](../ci-runners.md#create-the-github-app)
   (the org runner's permissions: Organization **Self-hosted runners: Read and write**, Repository
   **Actions: Read and write**).
-- [ ] The image, built from the Cirrus `macos-sequoia-xcode` base with
+- [ ] The image, built from the Cirrus `macos-tahoe-xcode:27.1` base (Xcode 27.1, the Xcode CI moves to in #1302) with
   [the image guide](../ci-runners-image.md), and its VM boot check passed.
 
 ## Connect the Mac
@@ -48,16 +48,16 @@ node and subnet route), sleep and the lid (Testing R3), and the menu bar dot on 
 1. Workflows tab, **CI runners**, **Connect GitHub**.
 2. Step 1: the App ID, installation ID and private key.
 3. Step 2: **An org**, `nekko-labs`, repos `nekko-agent`, tick **Allow public repos**
-   (nekko-agent is public), label `nekko-mac`. An org runner is needed for the workflow
+   (nekko-agent is public), label `nekko-cloud-mac`. An org runner is needed for the workflow
    restriction under [Security](#security-before-the-switch-goes-on): a repo runner has no runner
-   group. Nekko creates the runner group `nekko-nekko-mac` limited to nekko-agent.
+   group. Nekko creates the runner group `nekko-nekko-cloud-mac` limited to nekko-agent.
 4. Step 3: **Balanced: in the background**. Then in the runner's settings set keep awake to
    **While a runner is active**. Balanced keeps one VM ready, so the picker can see an idle
    runner; in **Do not disturb: Only run when I'm idle** no VM is up until a job is queued, and
    the picker would always pick hosted.
 
 Check: the card shows a ready slot, and GitHub lists one online runner with labels `self-hosted`,
-`macOS`, `ARM64`, `nekko-mac`:
+`macOS`, `ARM64`, `nekko-cloud-mac`:
 
 ```bash
 gh api orgs/nekko-labs/actions/runners --jq '.runners[] | [.name, .status, .busy, ([.labels[].name] | join(","))] | @tsv'
@@ -66,7 +66,7 @@ gh api orgs/nekko-labs/actions/runners --jq '.runners[] | [.name, .status, .busy
 ## Security: before the switch goes on
 
 nekko-agent is a public repo, and a `pull_request` run uses the PR's own copy of the workflow
-file. A fork PR can therefore drop the picker and ask for `runs-on: [self-hosted, nekko-mac]`
+file. A fork PR can therefore drop the picker and ask for `runs-on: [self-hosted, nekko-cloud-mac]`
 directly: **the picker is not a boundary against fork code**. Two GitHub settings are the first
 layer, and every one must be checked before `NEKKO_MAC_RUNNERS` is turned on:
 
@@ -83,7 +83,7 @@ layer, and every one must be checked before `NEKKO_MAC_RUNNERS` is turned on:
    ```
 
 2. **The runner group serves this repo's iOS workflow only.** Org **Settings > Actions > Runner
-   groups > nekko-nekko-mac**:
+   groups > nekko-nekko-cloud-mac**:
    - **Repository access**: **Selected repositories**, only `nekko-agent`, with public
      repositories allowed (Nekko set both at connect).
    - **Workflow access**: **Selected workflows**, exactly
@@ -99,10 +99,10 @@ layer, and every one must be checked before `NEKKO_MAC_RUNNERS` is turned on:
    Verify:
 
    ```bash
-   gh api orgs/nekko-labs/actions/runner-groups --jq '.runner_groups[] | select(.name=="nekko-nekko-mac") | {visibility, allows_public_repositories, restricted_to_workflows, selected_workflows}'
+   gh api orgs/nekko-labs/actions/runner-groups --jq '.runner_groups[] | select(.name=="nekko-nekko-cloud-mac") | {visibility, allows_public_repositories, restricted_to_workflows, selected_workflows}'
    # expect: visibility "selected", allows_public_repositories true, restricted_to_workflows true,
    # selected_workflows the two entries above
-   gh api "orgs/nekko-labs/actions/runner-groups/$(gh api orgs/nekko-labs/actions/runner-groups --jq '.runner_groups[] | select(.name=="nekko-nekko-mac") | .id')/repositories" --jq '[.repositories[].full_name]'
+   gh api "orgs/nekko-labs/actions/runner-groups/$(gh api orgs/nekko-labs/actions/runner-groups --jq '.runner_groups[] | select(.name=="nekko-nekko-cloud-mac") | .id')/repositories" --jq '[.repositories[].full_name]'
    # expect: ["nekko-labs/nekko-agent"]
    ```
 
@@ -154,7 +154,7 @@ lacks the permission gets a 403, and the picker falls back to hosted with `api 4
 gh workflow run ios-native.yml --ref main -R nekko-labs/nekko-agent
 ```
 
-- The `pick` job's log says `runs-on ["self-hosted","nekko-mac"]: idle runner`.
+- The `pick` job's log says `runs-on ["self-hosted","nekko-cloud-mac"]: idle runner`.
 - `protocol-and-build`'s runner name starts with the runner's prefix (the card shows it).
 - The card's recent jobs show it `finished`, and `<data>/runners/vms` is empty afterward.
 
@@ -210,7 +210,7 @@ on:
     branches: [runner-probe]
 jobs:
   probe:
-    runs-on: [self-hosted, nekko-mac]
+    runs-on: [self-hosted, nekko-cloud-mac]
     steps:
       - run: id
       - run: "! sudo -n true"

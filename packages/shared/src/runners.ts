@@ -144,7 +144,7 @@ export const DEFAULT_RUNNER_SETTINGS: RunnerSettings = {
   trustedCache: true,
   trustedNetworks: [],
 };
-export const DEFAULT_RUNNER_LABEL = 'nekko-mac';
+export const DEFAULT_RUNNER_LABEL = 'nekko-cloud-mac';
 export const MAX_MACOS_SLOTS = 2;
 export const MAX_JOB_CHOICES = [30, 60, 120, 360];
 
