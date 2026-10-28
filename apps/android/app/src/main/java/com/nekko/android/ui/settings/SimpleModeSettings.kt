@@ -1,6 +1,11 @@
 package com.nekko.android.ui.settings
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -83,34 +88,46 @@ fun SimpleModeSection(deps: SettingsDeps) {
  */
 private val NOT_ON_ANDROID = setOf("ph-policy")
 
-/** One drawn piece of an area's preview: a catalogue control when [id] is set, else a fixed part of the screen. */
-private data class Part(val text: String, val id: String? = null)
+/**
+ * One drawn piece of an area's preview: a catalogue control when [id] is set, else a fixed part
+ * of the screen. [gauges] draws the minimal monitor: thin rings with their percentages.
+ */
+private data class Part(val text: String, val id: String? = null, val gauges: Boolean = false)
 
-/** A rough drawing of each area, labelled with the real control names; one list per line. */
-private val PREVIEWS: Map<String, List<List<Part>>> = mapOf(
+/** One line of a preview; [spread] pushes its parts to the edges, [divider] draws the hairline under it. */
+private data class Line(val parts: List<Part>, val spread: Boolean = false, val divider: Boolean = false)
+
+private fun line(vararg parts: Part, spread: Boolean = false, divider: Boolean = false) = Line(parts.toList(), spread, divider)
+
+/** The minimal monitor as the slim row draws it. */
+private val MINI_MONITOR = Part("CPU 12%  Memory 41%  GPU 30%  1 model", "hardware", gauges = true)
+
+/** A rough drawing of each area, labelled with the real control names. */
+private val PREVIEWS: Map<String, List<Line>> = mapOf(
     "Chat · header" to listOf(
-        listOf(Part("Back"), Part("Mode switch"), Part("Fix the login bug"), Part("Changes", "changes")),
-        listOf(Part("Opus 5.5 · Studio Mac", "ph-subtitle")),
-        listOf(Part("CPU 12%   Memory 9 GB   GPU 30%", "hardware")),
+        line(Part("Back"), Part("Fix the login bug"), Part("Changes", "changes"), Part("More"), spread = true),
+        line(Part("Opus 5.5 · Studio Mac", "ph-subtitle"), spread = true),
+        line(Part("Mode switch"), MINI_MONITOR, spread = true, divider = true),
     ),
     "Chat · message box" to listOf(
-        listOf(Part("Add"), Part("Message your computer"), Part("Send")),
-        listOf(Part("Effort dial", "effort"), Part("Opus 5.5", "model"), Part("48k / 200k tokens", "context")),
+        line(Part("Add"), Part("Message your computer"), Part("Send")),
+        line(Part("Effort dial", "effort"), Part("Opus 5.5", "model"), Part("48k / 200k tokens", "context")),
     ),
     "Chat · conversation" to listOf(
-        listOf(Part("Make the tests pass")),
-        listOf(Part("Show reasoning", "thinking"), Part("Ran npm test", "thinking")),
-        listOf(Part("All 42 tests pass now.")),
-        listOf(Part("PR #42 · Open", "ph-git")),
+        line(Part("Make the tests pass")),
+        line(Part("Show reasoning", "thinking"), Part("Ran npm test", "thinking")),
+        line(Part("All 42 tests pass now.")),
+        line(Part("PR #42 · Open", "ph-git")),
     ),
     "Agents wall" to listOf(
-        listOf(Part("New agent"), Part("Terminal", "terminal"), Part("Dictate"), Part("Image from files")),
+        line(Part("New agent"), Part("Terminal", "terminal"), Part("Dictate"), Part("Image from files")),
     ),
     "Phone · chats list" to listOf(
-        listOf(Part("Mode switch"), Part("Chats")),
-        listOf(Part("Fix the login bug")),
-        listOf(Part("Plan the trip")),
-        listOf(Part("Monitors · hardware and loaded models", "ph-monitors")),
+        line(Part("Chats"), Part("Computers"), Part("Settings"), spread = true),
+        line(Part("Mode switch"), MINI_MONITOR, spread = true, divider = true),
+        line(Part("Fix the login bug")),
+        line(Part("Plan the trip")),
+        line(Part("Monitors · hardware and loaded models", "ph-monitors")),
     ),
 )
 
@@ -190,6 +207,9 @@ private fun ChoiceRow(item: SimpleItem, value: SimpleVisibility, onChange: (Simp
         Column {
             Text(item.label, style = MaterialTheme.typography.bodyLarge, color = p.ink)
             Text(item.hint, style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
+            if (item.id in SimpleMode.LOCAL_MODEL_IDS && value == SimpleVisibility.EXPERT) {
+                Text(SimpleMode.LOCAL_MODEL_NOTE + ".", style = MaterialTheme.typography.bodySmall, color = p.inkSoft)
+            }
         }
         TextSegments(
             SimpleVisibility.entries, value, onChange, label = ::label,
@@ -204,39 +224,63 @@ private fun ChoiceRow(item: SimpleItem, value: SimpleVisibility, onChange: (Simp
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AreaPreview(lines: List<List<Part>>, expert: Boolean, choices: Map<String, SimpleVisibility>, flash: String?) {
+private fun AreaPreview(lines: List<Line>, expert: Boolean, choices: Map<String, SimpleVisibility>, flash: String?) {
     val p = Nekko.palette
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(p.paper).border(1.dp, p.line, RoundedCornerShape(12.dp)).padding(10.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         lines.forEach { line ->
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                line.forEach { part ->
-                    val shown = part.id == null || SimpleMode.shown(part.id, expert, choices)
-                    val lit = part.id != null && part.id == flash
-                    val edge by animateColorAsState(if (lit) p.accent else if (shown) p.line else p.inkFaint, label = "preview-edge")
-                    val shape = RoundedCornerShape(8.dp)
-                    Text(
-                        part.text,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (part.id == null) p.inkFaint else p.ink,
-                        modifier = Modifier
-                            .semantics { if (part.id != null) contentDescription = "${part.text}, ${if (shown) "shown" else "hidden"}" }
-                            .alpha(if (shown) 1f else 0.4f)
-                            .then(
-                                if (shown) Modifier.clip(shape).background(if (part.id == null) p.surface else p.surface2).border(if (lit) 2.dp else 1.dp, edge, shape)
-                                else Modifier.drawBehind {
-                                    drawRoundRect(
-                                        edge, cornerRadius = CornerRadius(8.dp.toPx()),
-                                        style = Stroke(if (lit) 2.dp.toPx() else 1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx()))),
-                                    )
-                                },
-                            )
-                            .padding(horizontal = 8.dp, vertical = 5.dp),
-                    )
-                }
+            FlowRow(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = if (line.spread) Arrangement.SpaceBetween else Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                line.parts.forEach { part -> PreviewPart(part, expert, choices, flash) }
             }
+            if (line.divider) HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        }
+    }
+}
+
+@Composable
+private fun PreviewPart(part: Part, expert: Boolean, choices: Map<String, SimpleVisibility>, flash: String?) {
+    val p = Nekko.palette
+    // A preview assumes no local model is loaded; the rows say what one changes.
+    val shown = part.id == null || SimpleMode.shown(part.id, expert, choices)
+    val lit = part.id != null && part.id == flash
+    val edge by animateColorAsState(if (lit) p.accent else if (shown) p.line else p.inkFaint, label = "preview-edge")
+    val shape = RoundedCornerShape(8.dp)
+    Row(
+        Modifier
+            .semantics(mergeDescendants = true) { if (part.id != null) contentDescription = "${part.text}, ${if (shown) "shown" else "hidden"}" }
+            .alpha(if (shown) 1f else 0.4f)
+            .then(
+                if (shown) Modifier.clip(shape).background(if (part.id == null) p.surface else p.surface2).border(if (lit) 2.dp else 1.dp, edge, shape)
+                else Modifier.drawBehind {
+                    drawRoundRect(
+                        edge, cornerRadius = CornerRadius(8.dp.toPx()),
+                        style = Stroke(if (lit) 2.dp.toPx() else 1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx()))),
+                    )
+                },
+            )
+            .padding(horizontal = 8.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        if (part.gauges) {
+            listOf(0.12f to "12%", 0.41f to "41%", 0.3f to "30%").forEach { (f, t) ->
+                Canvas(Modifier.size(10.dp)) {
+                    val w = 1.5.dp.toPx()
+                    val arc = Size(size.width - w, size.height - w)
+                    drawArc(p.line, 0f, 360f, false, Offset(w / 2, w / 2), arc, style = Stroke(w))
+                    drawArc(p.accent, -90f, 360f * f, false, Offset(w / 2, w / 2), arc, style = Stroke(w))
+                }
+                Text(t, style = MaterialTheme.typography.labelSmall, color = p.inkSoft)
+            }
+            Text("1 model", style = MaterialTheme.typography.labelSmall, color = p.inkSoft)
+        } else {
+            Text(part.text, style = MaterialTheme.typography.labelMedium, color = if (part.id == null) p.inkFaint else p.ink)
         }
     }
 }

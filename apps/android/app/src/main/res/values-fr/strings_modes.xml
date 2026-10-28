@@ -38,7 +38,6 @@
     <string name="hw_gpu_memory">Mémoire GPU</string>
     <string name="hw_vram">VRAM</string>
     <string name="monitor">Moniteur</string>
-    <string name="monitor_loaded">Chargé</string>
     <string name="monitor_models_loaded">%1$d modèles chargés</string>
     <string name="monitor_reading">Lecture de %1$s…</string>
     <string name="monitor_hardware">Matériel</string>

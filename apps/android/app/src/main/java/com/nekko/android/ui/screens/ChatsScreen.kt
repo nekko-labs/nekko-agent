@@ -34,7 +34,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.foundation.combinedClickable
@@ -87,7 +86,15 @@ import com.nekko.protocol.PcSettings
 import com.nekko.protocol.SessionSummary
 import kotlinx.coroutines.launch
 import com.nekko.android.ui.simple.LocalSimple
-import com.nekko.android.ui.simple.ModeSwitch
+import com.nekko.android.ui.simple.PollHardware
+import com.nekko.android.ui.simple.SlimBar
+import com.nekko.android.ui.chat.AgentPanel
+import com.nekko.android.ui.chat.MiniMonitor
+import com.nekko.android.monitors.HardwareMonitorController
+import com.nekko.android.data.SimpleVisibility
+import com.nekko.protocol.ENGINE_PROVIDER_ID
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.runtime.LaunchedEffect
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -105,7 +112,19 @@ fun ChatsScreen(
 ) {
     val s by repo.state.collectAsStateWithLifecycle()
     val p = Nekko.palette
-    val simple = LocalSimple.current
+    // The computer's monitors: a loaded local model brings them into Simple, the slim row shows them,
+    // and the panel under the header has the details.
+    val monitor = remember(repo) { HardwareMonitorController(repo.caller) { repo.state.value.active?.name ?: "your computer" } }
+    val hardware by monitor.state.collectAsStateWithLifecycle()
+    val simple = LocalSimple.current.withLocalModel(hardware.localModelLoaded)
+    val showHardware = simple.shown("hardware") && s.active != null
+    var showPanel by remember { mutableStateOf(false) }
+    PollHardware(
+        monitor, s.conn == RelayState.ONLINE && s.active != null, full = showHardware,
+        light = !simple.expert && (simple.visibility("hardware") == SimpleVisibility.EXPERT || simple.visibility("ph-monitors") == SimpleVisibility.EXPERT),
+    )
+    // The panel names loaded models from the Model Server's own list.
+    LaunchedEffect(showPanel) { if (showPanel) runCatching { repo.loadModels(ENGINE_PROVIDER_ID) } }
     val scope = rememberCoroutineScope()
     // The banner's ⋮: sign out this phone, stop remote access, quit (SK-8).
     val exits = rememberSafetyExits(repo)
@@ -195,20 +214,24 @@ fun ChatsScreen(
     Scaffold(
         containerColor = p.paper,
         topBar = {
-            TopAppBar(
-                title = { Text("Chats", style = MaterialTheme.typography.headlineMedium) },
-                navigationIcon = { ModeSwitch(simple.expert, simple.setExpert) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
-                actions = {
-                    IconButton(onClick = onComputers) {
-                        Icon(Icons.Filled.Computer, contentDescription = "Computers", tint = p.inkSoft)
-                    }
-                    IconButton(onClick = onSettings) {
-                        Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = p.inkSoft)
-                    }
-                    pane?.actions?.invoke(this)
-                },
-            )
+            Column {
+                CenterAlignedTopAppBar(
+                    title = { Text("Chats", style = MaterialTheme.typography.titleLarge) },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
+                    actions = {
+                        IconButton(onClick = onComputers) {
+                            Icon(Icons.Filled.Computer, contentDescription = "Computers", tint = p.inkSoft)
+                        }
+                        IconButton(onClick = onSettings) {
+                            Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = p.inkSoft)
+                        }
+                        pane?.actions?.invoke(this)
+                    },
+                )
+                SlimBar(simple.expert, simple.setExpert) {
+                    if (showHardware) MiniMonitor(hardware, onOpen = { showPanel = !showPanel }, compact = pane != null)
+                }
+            }
         },
         floatingActionButton = {
             if (active != null) {
@@ -222,118 +245,126 @@ fun ChatsScreen(
             }
         },
     ) { padding ->
-        if (!s.ready) {
-            Box(Modifier.fillMaxSize().padding(padding))
-        } else if (active == null) {
-            Welcome(onPair, Modifier.padding(padding))
-        } else {
-            PullToRefreshBox(
-                isRefreshing = pulling,
-                onRefresh = {
-                    scope.launch {
-                        pulling = true
-                        repo.refresh()
-                        pulling = false
-                    }
-                },
-                modifier = Modifier.fillMaxSize().padding(padding),
-            ) {
-                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
-                    item(key = "banner") { ConnectionBanner(s, onPair = onPair, onComputers = onComputers, exits = exits) }
-                    s.savedListAt?.let { at ->
-                        item(key = "saved-list") {
-                            Text(
-                                savedListNote(at, active.name),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = p.inkSoft,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                            )
+        Box(Modifier.fillMaxSize()) {
+            if (!s.ready) {
+                Box(Modifier.fillMaxSize().padding(padding))
+            } else if (active == null) {
+                Welcome(onPair, Modifier.padding(padding))
+            } else {
+                PullToRefreshBox(
+                    isRefreshing = pulling,
+                    onRefresh = {
+                        scope.launch {
+                            pulling = true
+                            repo.refresh()
+                            pulling = false
                         }
-                    }
-                    item(key = "header") { SectionHeader("On ${active.name}") }
-                    actionError?.let { msg -> item(key = "action-error") { Notice(msg, Tone.DANGER, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) } }
-                    if (s.summaries.isNotEmpty()) {
-                        item(key = "search") {
-                            OutlinedTextField(
-                                value = query,
-                                onValueChange = { query = it },
-                                placeholder = { Text("Search chats") },
-                                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                                trailingIcon = {
-                                    if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Filled.Close, contentDescription = "Clear search") }
-                                },
-                                singleLine = true,
-                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).testTag("chats.search"),
-                            )
-                        }
-                    }
-                    if (query.isNotBlank()) {
-                        if (found.isEmpty()) {
-                            item(key = "no-match") {
-                                Text("No chats match “${query.trim()}”.", style = MaterialTheme.typography.bodyMedium, color = p.inkSoft,
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
-                            }
-                        }
-                        items(found, key = { "found:${it.id}" }) { summary ->
-                            if (summary.archived) CompletedRow(summary, onLongClick = { pressedDone = summary }) { onOpenChat(summary.id) }
-                            else ChatRow(summary, s.activity[summary.id], onLongClick = { pressed = summary }) { onOpenChat(summary.id) }
-                        }
-                    } else if (s.summaries.isEmpty()) {
-                        item(key = "empty") {
-                            Text(
-                                when {
-                                    s.conn != RelayState.ONLINE -> "Chats appear here once your computer is online."
-                                    s.summariesLoading -> "Loading chats…"
-                                    else -> "No chats yet. Start one with New chat."
-                                },
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = p.inkFaint,
-                                modifier = Modifier.padding(horizontal = 16.dp),
-                            )
-                        }
-                    }
-                    // The desktop's agent sidebar: General, then each folder; active
-                    // chats first, completed ones folded away under Show completed.
-                    if (query.isBlank()) groups.forEach { g ->
-                        val open = g.key !in collapsed
-                        val showDone = g.key in showCompleted
-                        item(key = "group:${g.key}") {
-                            GroupHeader(g.name, open, g.active.size) {
-                                collapsed = if (open) collapsed + g.key else collapsed - g.key
-                            }
-                        }
-                        if (!open) return@forEach
-                        if (g.active.isEmpty()) {
-                            item(key = "none:${g.key}") {
+                    },
+                    modifier = Modifier.fillMaxSize().padding(padding),
+                ) {
+                    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
+                        item(key = "banner") { ConnectionBanner(s, onPair = onPair, onComputers = onComputers, exits = exits) }
+                        s.savedListAt?.let { at ->
+                            item(key = "saved-list") {
                                 Text(
-                                    "No active agents",
+                                    savedListNote(at, active.name),
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = p.inkFaint,
-                                    modifier = Modifier.padding(start = 40.dp, end = 16.dp, top = 2.dp, bottom = 6.dp),
+                                    color = p.inkSoft,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                                 )
                             }
                         }
-                        items(g.active, key = { it.id }) { summary ->
-                            ChatRow(summary, s.activity[summary.id], onLongClick = { pressed = summary }) { onOpenChat(summary.id) }
+                        item(key = "header") { SectionHeader("On ${active.name}") }
+                        actionError?.let { msg -> item(key = "action-error") { Notice(msg, Tone.DANGER, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) } }
+                        if (s.summaries.isNotEmpty()) {
+                            item(key = "search") {
+                                OutlinedTextField(
+                                    value = query,
+                                    onValueChange = { query = it },
+                                    placeholder = { Text("Search chats") },
+                                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                                    trailingIcon = {
+                                        if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Filled.Close, contentDescription = "Clear search") }
+                                    },
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).testTag("chats.search"),
+                                )
+                            }
                         }
-                        if (g.completed.isNotEmpty()) {
-                            item(key = "done-toggle:${g.key}") {
-                                CompletedToggle(showDone, g.completed.size) {
-                                    showCompleted = if (showDone) showCompleted - g.key else showCompleted + g.key
+                        if (query.isNotBlank()) {
+                            if (found.isEmpty()) {
+                                item(key = "no-match") {
+                                    Text("No chats match “${query.trim()}”.", style = MaterialTheme.typography.bodyMedium, color = p.inkSoft,
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
                                 }
                             }
-                            if (showDone) {
-                                items(g.completed, key = { it.id }) { summary ->
-                                    CompletedRow(summary, onLongClick = { pressedDone = summary }) { onOpenChat(summary.id) }
+                            items(found, key = { "found:${it.id}" }) { summary ->
+                                if (summary.archived) CompletedRow(summary, onLongClick = { pressedDone = summary }) { onOpenChat(summary.id) }
+                                else ChatRow(summary, s.activity[summary.id], onLongClick = { pressed = summary }) { onOpenChat(summary.id) }
+                            }
+                        } else if (s.summaries.isEmpty()) {
+                            item(key = "empty") {
+                                Text(
+                                    when {
+                                        s.conn != RelayState.ONLINE -> "Chats appear here once your computer is online."
+                                        s.summariesLoading -> "Loading chats…"
+                                        else -> "No chats yet. Start one with New chat."
+                                    },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = p.inkFaint,
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                )
+                            }
+                        }
+                        // The desktop's agent sidebar: General, then each folder; active
+                        // chats first, completed ones folded away under Show completed.
+                        if (query.isBlank()) groups.forEach { g ->
+                            val open = g.key !in collapsed
+                            val showDone = g.key in showCompleted
+                            item(key = "group:${g.key}") {
+                                GroupHeader(g.name, open, g.active.size) {
+                                    collapsed = if (open) collapsed + g.key else collapsed - g.key
+                                }
+                            }
+                            if (!open) return@forEach
+                            if (g.active.isEmpty()) {
+                                item(key = "none:${g.key}") {
+                                    Text(
+                                        "No active agents",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = p.inkFaint,
+                                        modifier = Modifier.padding(start = 40.dp, end = 16.dp, top = 2.dp, bottom = 6.dp),
+                                    )
+                                }
+                            }
+                            items(g.active, key = { it.id }) { summary ->
+                                ChatRow(summary, s.activity[summary.id], onLongClick = { pressed = summary }) { onOpenChat(summary.id) }
+                            }
+                            if (g.completed.isNotEmpty()) {
+                                item(key = "done-toggle:${g.key}") {
+                                    CompletedToggle(showDone, g.completed.size) {
+                                        showCompleted = if (showDone) showCompleted - g.key else showCompleted + g.key
+                                    }
+                                }
+                                if (showDone) {
+                                    items(g.completed, key = { it.id }) { summary ->
+                                        CompletedRow(summary, onLongClick = { pressedDone = summary }) { onOpenChat(summary.id) }
+                                    }
                                 }
                             }
                         }
+                        // Monitors, as on an open folding phone's pane: so the feature is not foldable-only.
+                        if (onMonitors != null && simple.shown("ph-monitors")) item(key = "monitors") { MonitorsRow(onMonitors) }
                     }
-                    // Monitors, as on an open folding phone's pane: so the feature is not foldable-only.
-                    if (onMonitors != null && simple.shown("ph-monitors")) item(key = "monitors") { MonitorsRow(onMonitors) }
                 }
             }
+            AgentPanel(
+                open = showPanel && showHardware, state = hardware, chat = null, computer = active?.name ?: "your computer",
+                modelName = { id -> s.models.values.firstNotNullOfOrNull { l -> l.firstOrNull { it.id == id }?.name } ?: id },
+                onUnload = monitor::unload, onDismiss = { showPanel = false },
+                modifier = Modifier.padding(top = padding.calculateTopPadding()),
+            )
         }
     }
 }

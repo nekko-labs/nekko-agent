@@ -3,9 +3,7 @@ package com.nekko.android.ui.chat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,6 +36,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -74,6 +74,7 @@ import com.nekko.android.data.modelGroups
 import com.nekko.android.monitors.HardwareState
 import com.nekko.android.ui.screens.ModelList
 import com.nekko.android.ui.simple.LocalSimple
+import com.nekko.android.ui.simple.PullDownPanel
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.ContextUsage
 import com.nekko.protocol.Effort
@@ -90,6 +91,7 @@ import kotlinx.coroutines.launch
 object ModeTags {
     const val MODEL_EFFORT = "chat.modelEffort"
     const val CONTEXT = "chat.context"
+    const val LONG_CHAT = "chat.longChat"
     const val MONITOR = "chat.monitor"
     const val MONITOR_SHEET = "monitor.sheet"
     fun effort(e: Effort) = "modelEffort.${e.wire}"
@@ -205,6 +207,26 @@ fun ChatOptionsRow(chat: ChatUi, enabled: Boolean, onOpenModelEffort: () -> Unit
         if (model || effort) ModelEffortButton(chat, enabled, onOpenModelEffort, model, effort)
         Spacer(Modifier.weight(1f))
         if (context) ContextRing(chat)
+    }
+}
+
+/**
+ * Simple's slim line above the message box once the chat fills most of its window: how many
+ * tokens starting fresh saves, Start fresh (a new chat on the same model), and dismiss.
+ */
+@Composable
+fun LongChatNudge(tokens: Long, onStartFresh: (() -> Unit)?, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+    val p = Nekko.palette
+    Row(
+        modifier.fillMaxWidth().background(p.surface).padding(start = 16.dp, end = 4.dp).heightIn(min = 40.dp).testTag(ModeTags.LONG_CHAT),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "This chat is getting long. Starting fresh saves about ${MonitorFormat.tokens(tokens)} tokens.",
+            style = MaterialTheme.typography.bodySmall, color = p.inkSoft, modifier = Modifier.weight(1f).padding(vertical = 6.dp),
+        )
+        if (onStartFresh != null) TextButton(onClick = onStartFresh) { Text("Start fresh", color = p.accent) }
+        IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Dismiss", tint = p.inkFaint, modifier = Modifier.size(16.dp)) }
     }
 }
 
@@ -475,69 +497,90 @@ private fun HardwareDials(rows: List<HardwareRow>, size: Dp) {
     }
 }
 
-/** Expert mode's strip under the chat's title: the hardware as small dials and how many models are loaded. Tap for the Monitor. */
+/** A thin ring, about the size of a letter: the minimal monitor's gauge. */
 @Composable
-fun MonitorStrip(state: HardwareState, computer: String, onOpen: () -> Unit, modifier: Modifier = Modifier) {
+private fun ThinRing(fraction: Double?, size: Dp = 18.dp) {
+    val p = Nekko.palette
+    val fill by animateFloatAsState((fraction ?: 0.0).toFloat(), label = "mini-ring")
+    val tone = toneColor(MonitorTone.of(fraction))
+    Canvas(Modifier.size(size)) {
+        val w = 2.dp.toPx()
+        val inset = w / 2
+        val arc = Size(this.size.width - w, this.size.height - w)
+        drawArc(p.surface2, 0f, 360f, false, Offset(inset, inset), arc, style = Stroke(w))
+        if (fraction != null) drawArc(tone, -90f, 360f * fill, false, Offset(inset, inset), arc, style = Stroke(w, cap = StrokeCap.Round))
+    }
+}
+
+/**
+ * The minimal monitor in the slim row under the header: a thin ring and its percentage for
+ * the CPU, memory and the first GPU, and how many models the Model Server holds. Tap for the
+ * agent's details. [compact] (a folding phone's pane) drops the percentages.
+ */
+@Composable
+fun MiniMonitor(state: HardwareState, onOpen: () -> Unit, modifier: Modifier = Modifier, compact: Boolean = false) {
     val p = Nekko.palette
     val rows = hardwareRows(state)
+    val gauges = rows.take(2) + rows.drop(2).take(1)
     val loaded = state.engine?.resident?.size ?: 0
     val label = stringResource(R.string.monitor)
-    val value = rows.joinToString(", ") { "${it.label} ${it.value}" } + ", " + stringResource(R.string.monitor_models_loaded, loaded)
+    val value = gauges.joinToString(", ") { "${it.label} ${it.value}" } + ", " + stringResource(R.string.monitor_models_loaded, loaded)
     Row(
         modifier
-            .padding(horizontal = 12.dp, vertical = 6.dp)
-            .fillMaxWidth()
-            .clip16()
-            .background(p.surface)
-            .border(1.dp, p.line, RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(999.dp))
             .clickable(role = Role.Button, onClick = onOpen)
-            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .heightIn(min = 30.dp)
+            .padding(horizontal = 8.dp)
             .testTag(ModeTags.MONITOR)
             .semantics(mergeDescendants = true) {
                 contentDescription = label
                 stateDescription = value
             },
-        verticalAlignment = Alignment.Top,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 10.dp),
     ) {
-        if (state.system == null && state.gpu == null) {
-            Row(Modifier.weight(1f).heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Icon(Icons.Filled.Speed, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(16.dp))
-                Text(state.error ?: stringResource(R.string.monitor_reading, computer), style = MaterialTheme.typography.bodySmall, color = p.inkSoft)
-            }
-        } else {
-            Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                HardwareDials(rows, 40.dp)
+        gauges.forEach { g ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                ThinRing(g.fraction)
+                if (!compact) Text(g.value, style = MaterialTheme.typography.labelSmall, color = if (g.fraction == null) p.inkFaint else p.inkSoft, maxLines = 1)
             }
         }
-        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.widthIn(min = 44.dp)) {
-            Icon(Icons.Filled.ViewInAr, contentDescription = null, tint = p.accent, modifier = Modifier.size(20.dp))
-            Text("$loaded", style = MaterialTheme.typography.labelMedium, color = p.ink)
-            Text(stringResource(R.string.monitor_loaded), style = MaterialTheme.typography.labelSmall, color = p.inkSoft)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            Icon(Icons.Filled.ViewInAr, contentDescription = null, tint = if (loaded > 0) p.accent else p.inkFaint, modifier = Modifier.size(15.dp))
+            Text("$loaded", style = MaterialTheme.typography.labelSmall, color = p.inkSoft)
         }
     }
 }
 
-/** The whole monitor: larger dials, the models the Model Server holds (with Unload), and this chat's context. */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+/**
+ * The agent's details, in the panel that slides down from under the header: the hardware on
+ * larger dials with temperatures, the models the Model Server holds (with Unload), and, in a
+ * chat, its model and effort and where its context goes.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun MonitorSheet(
+fun AgentPanel(
+    open: Boolean,
     state: HardwareState,
     chat: ChatUi?,
     computer: String,
     modelName: (String) -> String,
     onUnload: suspend (String) -> String,
     onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
     var notice by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = p.paper, modifier = Modifier.testTag(ModeTags.MONITOR_SHEET)) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(stringResource(R.string.monitor), style = MaterialTheme.typography.titleMedium, color = p.ink)
+    PullDownPanel(open, onDismiss, modifier) {
+        Column(Modifier.testTag(ModeTags.MONITOR_SHEET), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             SectionTitle(stringResource(R.string.monitor_hardware))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                HardwareDials(hardwareRows(state), 72.dp)
+            if (state.system == null && state.gpu == null) {
+                Footnote(state.error ?: stringResource(R.string.monitor_reading, computer))
+            } else {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    HardwareDials(hardwareRows(state), 56.dp)
+                }
             }
             state.system?.takeIf { it.memTotalMB > 0 }?.let { s ->
                 val mem = MonitorFormat.memory(s.memUsedMB, s.memTotalMB)
@@ -556,13 +599,14 @@ fun MonitorSheet(
                     }
                 }
             }
-            Footnote(stringResource(R.string.monitor_unload_footer, computer))
-            if (chat?.context != null) {
-                SectionTitle(stringResource(R.string.monitor_this_chat))
-                ContextBreakdown(chat, Modifier.clip16().background(p.surface).padding(12.dp))
-            }
-            state.error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.warning) }
+            if (state.engine?.resident?.isNotEmpty() == true) Footnote(stringResource(R.string.monitor_unload_footer, computer))
             notice?.let { (text, ok) -> Text(text, style = MaterialTheme.typography.bodySmall, color = if (ok) p.ink else p.danger) }
+            if (chat != null) {
+                SectionTitle(stringResource(R.string.monitor_this_chat))
+                BreakdownRow(stringResource(R.string.model_section), chat.modelName ?: chat.modelId ?: stringResource(R.string.model_choose), null)
+                BreakdownRow(stringResource(R.string.effort_section), chat.effort?.let { effortLabel(it) } ?: stringResource(R.string.effort_computer_default), null)
+                if (chat.context != null) ContextBreakdown(chat, Modifier.clip16().background(p.surface).padding(12.dp))
+            }
         }
     }
 }

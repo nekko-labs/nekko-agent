@@ -55,7 +55,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -118,16 +117,18 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenu
 import com.nekko.android.ui.panes.PaneSlot
 import com.nekko.android.ui.chat.ChatOptionsRow
-import com.nekko.android.ui.simple.ModeSwitch
 import com.nekko.android.ui.simple.LocalSimple
 import com.nekko.android.ui.simple.SimpleView
 import com.nekko.android.data.SimpleMode
 import com.nekko.android.ui.chat.ModelEffortSheet
-import com.nekko.android.ui.chat.MonitorSheet
-import com.nekko.android.ui.chat.MonitorStrip
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.repeatOnLifecycle
+import com.nekko.android.ui.chat.AgentPanel
+import com.nekko.android.ui.chat.LongChatNudge
+import com.nekko.android.ui.chat.MiniMonitor
+import com.nekko.android.ui.simple.PollHardware
+import com.nekko.android.ui.simple.SlimBar
+import com.nekko.android.data.ModelPick
+import com.nekko.android.data.SimpleVisibility
+import androidx.compose.material3.CenterAlignedTopAppBar
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.ENGINE_PROVIDER_ID
 
@@ -143,13 +144,18 @@ fun ChatScreen(
     pane: PaneSlot? = null,
     /** The composer's **+** → New agent. */
     onNewChat: (() -> Unit)? = null,
+    /** Simple's "chat getting long" line → New chat on this computer with [ModelPick] (the chat's model) chosen. */
+    onStartFresh: ((ModelPick?) -> Unit)? = null,
 ) {
-    // Simple or Expert and the per-control choices, read from the chat's own prefs so the screen works outside the app's provider.
+    // Simple or Expert and the per-control choices, read from the chat's own prefs so the screen works outside the app's provider;
+    // a model loaded on the computer's Model Server brings the monitors into Simple too.
     val expert by vm.expert.collectAsStateWithLifecycle()
     val raw by vm.simpleChoices.collectAsStateWithLifecycle()
-    val simple = remember(expert, raw) { SimpleView(expert, SimpleMode.parse(raw), vm::setExpert) }
+    val hardware by vm.hardware.state.collectAsStateWithLifecycle()
+    val loaded = hardware.localModelLoaded
+    val simple = remember(expert, raw, loaded) { SimpleView(expert, SimpleMode.parse(raw), loaded, vm::setExpert) }
     CompositionLocalProvider(LocalSimple provides simple) {
-        ChatScreenContent(vm, initialDraft, dictationOn, onBack, onOpenChat, pane, onNewChat)
+        ChatScreenContent(vm, initialDraft, dictationOn, onBack, onOpenChat, pane, onNewChat, onStartFresh)
     }
 }
 
@@ -163,6 +169,7 @@ private fun ChatScreenContent(
     onOpenChat: (id: String, draft: String?) -> Unit,
     pane: PaneSlot?,
     onNewChat: (() -> Unit)?,
+    onStartFresh: ((ModelPick?) -> Unit)?,
 ) {
     val simple = LocalSimple.current
     val showHardware = simple.shown("hardware")
@@ -179,16 +186,17 @@ private fun ChatScreenContent(
     val computerName = computers.active?.name ?: "your computer"
     var showModelEffort by remember { mutableStateOf(false) }
     var showMonitor by remember { mutableStateOf(false) }
-    // The hardware strip re-reads every 3 s, only while it shows, this chat is on screen and the computer is reachable.
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
     val online = computers.conn == RelayState.ONLINE
     // The model's name for the row under the message box (the computer's list, cached for the connection).
     LaunchedEffect(chat.providerId, online) { if (online) chat.providerId?.let { vm.loadModels(it) } }
     // The Monitor names loaded models from the Model Server's own list.
     LaunchedEffect(showMonitor, online) { if (showMonitor && online) vm.loadModels(ENGINE_PROVIDER_ID) }
-    if (showHardware && online) {
-        LaunchedEffect(vm, lifecycle) { lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { vm.hardware.poll() } }
-    }
+    // The minimal monitor re-reads every 3 s while it shows; Simple otherwise asks the Model Server every 10 s
+    // whether a local model is loaded (which brings the monitor in).
+    PollHardware(vm.hardware, online, full = showHardware, light = !simple.expert && simple.visibility("hardware") == SimpleVisibility.EXPERT)
+    // Simple's "chat getting long" line, until dismissed for this chat.
+    var longChatDismissed by rememberSaveable(vm.sessionId) { mutableStateOf(false) }
+    val savings = chat.context?.let { c -> SimpleMode.freshSavings(chat.contextTokens ?: c.usedTokens, c.contextWindow, c.sources) }
     var showMenu by remember { mutableStateOf(false) }
     var prs by remember(vm.sessionId) { mutableStateOf<List<PullRequest>>(emptyList()) }
     var showPrs by remember { mutableStateOf(false) }
@@ -292,9 +300,6 @@ private fun ChatScreenContent(
     if (showModelEffort) {
         ModelEffortSheet(chat, computers, onSet = vm::setOptions, onLoadModels = { vm.loadModels() }, onDismiss = { showModelEffort = false })
     }
-    if (showMonitor && showHardware) {
-        MonitorSheet(hardware, chat, computerName, vm::modelName, onUnload = vm.hardware::unload, onDismiss = { showMonitor = false })
-    }
     val terminals by vm.terminalsOpen.collectAsStateWithLifecycle()
     terminals?.let { t ->
         val online by vm.online.collectAsStateWithLifecycle()
@@ -318,7 +323,7 @@ private fun ChatScreenContent(
         containerColor = p.paper,
         topBar = {
             Column {
-                TopAppBar(
+                CenterAlignedTopAppBar(
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
                     actions = {
                         if (changesAllowed && simple.shown("changes")) {
@@ -354,15 +359,12 @@ private fun ChatScreenContent(
                         pane?.actions?.invoke(this)
                     },
                     navigationIcon = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(onClick = onBack) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                            }
-                            ModeSwitch(simple.expert, simple.setExpert)
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     },
                     title = {
-                        Column {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 // In a pane: the status dot, pulsing for a pending approval or question while the other pane has the keyboard.
                                 if (pane != null) {
@@ -383,7 +385,9 @@ private fun ChatScreenContent(
                         }
                     },
                 )
-                if (showHardware) MonitorStrip(hardware, computerName, onOpen = { showMonitor = true }, modifier = Modifier.background(p.paper))
+                SlimBar(simple.expert, simple.setExpert) {
+                    if (showHardware) MiniMonitor(hardware, onOpen = { showMonitor = !showMonitor }, compact = pane != null)
+                }
             }
         },
     ) { padding ->
@@ -473,6 +477,13 @@ private fun ChatScreenContent(
                 },
                 modifier = Modifier.navigationBarsPadding(),
             ) else Column(Modifier.navigationBarsPadding()) {
+                if (!simple.expert && savings != null && !longChatDismissed) {
+                    LongChatNudge(
+                        savings,
+                        onStartFresh = onStartFresh?.let { go -> { go(chat.providerId?.let { pr -> chat.modelId?.let { ModelPick(pr, it) } }) } },
+                        onDismiss = { longChatDismissed = true },
+                    )
+                }
                 Composer(
                     initialText = initialDraft,
                     running = chat.running,
@@ -496,7 +507,15 @@ private fun ChatScreenContent(
                 ChatOptionsRow(chat, enabled = online, onOpenModelEffort = { showModelEffort = true })
             }
         }
-        ChatColumns(top = padding.calculateTopPadding(), tabletop = pane?.tabletop, transcript = transcript, controls = controls)
+        Box {
+            ChatColumns(top = padding.calculateTopPadding(), tabletop = pane?.tabletop, transcript = transcript, controls = controls)
+            // The agent's details slide down from under the header.
+            AgentPanel(
+                open = showMonitor && showHardware, state = hardware, chat = chat, computer = computerName, modelName = vm::modelName,
+                onUnload = vm.hardware::unload, onDismiss = { showMonitor = false },
+                modifier = Modifier.padding(top = padding.calculateTopPadding()),
+            )
+        }
     }
 }
 

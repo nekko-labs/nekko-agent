@@ -91,56 +91,62 @@ class ChatModesTest {
 
     @Test fun simpleAndExpert() {
         show()
-        // Simple by default: the model only, no effort dial text, context ring or hardware strip.
+        // Simple with a local model loaded: the context ring, and the minimal monitor in the slim row.
+        compose.waitUntil(15_000) { computer.calls.contains(Channels.SYSTEM_STATS) }
+        settle()
         assertTrue(compose.onAllNodesWithTag(ModeTags.MODEL_EFFORT).fetchSemanticsNodes().isNotEmpty())
-        assertEquals(0, compose.onAllNodesWithTag(ModeTags.CONTEXT).fetchSemanticsNodes().size)
-        assertEquals(0, compose.onAllNodesWithTag(ModeTags.MONITOR).fetchSemanticsNodes().size)
-        shot("1-simple")
+        assertTrue(compose.onAllNodesWithTag(ModeTags.CONTEXT).fetchSemanticsNodes().isNotEmpty())
+        assertTrue(compose.onAllNodesWithTag(ModeTags.MONITOR).fetchSemanticsNodes().isNotEmpty())
+        shot("1-simple-local-model")
 
-        // Expert (the code icon): the hardware strip under the title, effort and the context ring.
+        // The minimal monitor opens the agent's details from the top; Unload frees the model.
+        compose.onAllNodesWithTag(ModeTags.MONITOR).onFirst().performClick()
+        settle()
+        assertTrue(compose.onAllNodesWithTag(ModeTags.MONITOR_SHEET).fetchSemanticsNodes().isNotEmpty())
+        shot("2-panel")
+        compose.onAllNodes(hasText("Unload")).onFirst().performClick()
+        compose.waitUntil(5_000) { computer.calls.contains(Channels.MODEL_UNLOAD) }
+        settle()
+        // No local model now: Simple drops the monitor and stops the hardware reads.
+        assertEquals(0, compose.onAllNodesWithTag(ModeTags.MONITOR).fetchSemanticsNodes().size)
+        shot("3-simple-unloaded")
+        val idle = computer.calls.count { it == Channels.SYSTEM_STATS }
+        Thread.sleep(4_000)
+        assertEquals("Simple without a local model reads no hardware", idle, computer.calls.count { it == Channels.SYSTEM_STATS })
+
+        // Expert (the code icon): the monitor is back and the hardware is read again.
         compose.onAllNodesWithContentDescription(EXPERT_DESCRIPTION).onFirst().performClick()
-        compose.waitUntil(5_000) { computer.calls.any { it == Channels.ENGINE_STATUS } }
+        compose.waitUntil(5_000) { computer.calls.count { it == Channels.SYSTEM_STATS } > idle }
         settle()
         assertTrue(prefs.get(EXPERT_MODE))
-        shot("2-expert")
+        assertTrue(compose.onAllNodesWithTag(ModeTags.MONITOR).fetchSemanticsNodes().isNotEmpty())
+        shot("4-expert")
 
         // Model and effort: the sheet, then High.
         compose.onAllNodesWithTag(ModeTags.MODEL_EFFORT).onFirst().performClick()
         settle()
-        shot("3-model-effort")
+        shot("5-model-effort")
         compose.onAllNodesWithTag(ModeTags.effort(com.nekko.protocol.Effort.HIGH)).onFirst().performClick()
         compose.waitUntil(5_000) { computer.effort == "high" }
         settle()
-        shot("4-effort-high")
+        shot("6-effort-high")
         Espresso.pressBack()
         settle()
 
         // The context ring's breakdown.
         compose.onAllNodesWithTag(ModeTags.CONTEXT).onFirst().performClick()
         settle()
-        shot("5-context")
+        shot("7-context")
         Espresso.pressBack()
         settle()
 
-        // The whole Monitor and Unload.
-        compose.onAllNodesWithTag(ModeTags.MONITOR).onFirst().performClick()
-        settle()
-        shot("6-monitor")
-        compose.onAllNodes(hasText("Unload")).onFirst().performClick()
-        compose.waitUntil(5_000) { computer.calls.contains(Channels.MODEL_UNLOAD) }
-        settle()
-        shot("7-unloaded")
-        Espresso.pressBack()
-        settle()
-
-        // Back to Simple (the chat bubble): no strip, no context ring, and no more hardware reads.
+        // Back to Simple (the chat bubble): no monitor, and no more hardware reads.
         compose.onAllNodesWithContentDescription(SIMPLE_DESCRIPTION).onFirst().performClick()
         settle()
         val reads = computer.calls.count { it == Channels.SYSTEM_STATS }
         Thread.sleep(4_000)
         assertEquals("Simple stops the hardware reads", reads, computer.calls.count { it == Channels.SYSTEM_STATS })
         assertEquals(0, compose.onAllNodesWithTag(ModeTags.MONITOR).fetchSemanticsNodes().size)
-        assertEquals(0, compose.onAllNodesWithTag(ModeTags.CONTEXT).fetchSemanticsNodes().size)
     }
 
     /** One chat on a phone; two side by side (Chat + Chat) on an open folding phone. */

@@ -7,6 +7,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.nekko.android.data.ModelPick
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -141,10 +144,14 @@ fun NekkoNavHost(
         onLinkHandled()
     }
 
+    // Start fresh from Simple's "chat getting long" line: New chat opens on that chat's model.
+    var freshPick by remember { mutableStateOf<ModelPick?>(null) }
+    val startFresh: (ModelPick?) -> Unit = { freshPick = it; nav.navigate(Routes.NEW) }
+
     NavHost(navController = nav, startDestination = Routes.CHATS) {
         composable(Routes.CHATS) {
             if (mode != PaneMode.ONE) {
-                Panes(window, panes, repo, phonePrefs, shareInbox, nav)
+                Panes(window, panes, repo, phonePrefs, shareInbox, nav, startFresh)
                 return@composable
             }
             ChatsScreen(
@@ -195,6 +202,7 @@ fun NekkoNavHost(
                     nav.navigate(Routes.chat(newId))
                 },
                 onNewChat = { nav.navigate(Routes.NEW) },
+                onStartFresh = startFresh,
             )
         }
         composable(Routes.NEW) {
@@ -205,9 +213,12 @@ fun NekkoNavHost(
             val phonePick = remember(models, c.activeId) { c.activeId?.let(defaults::model) }
             // Text shared from another app (Share to Nekko), editable here, never sent by itself.
             val shared by shareInbox.shared.collectAsStateWithLifecycle()
+            // Taken once, so a later New chat opens on the usual default.
+            val startPick = remember { freshPick.also { freshPick = null } }
             NewChatScreen(
                 repo = repo,
                 phonePick = phonePick,
+                startPick = startPick,
                 shared = shared,
                 onEditShared = shareInbox::edit,
                 onBack = {
@@ -283,6 +294,7 @@ private fun Panes(
     phonePrefs: PhonePrefs,
     shareInbox: ShareInbox,
     nav: NavHostController,
+    startFresh: (ModelPick?) -> Unit,
 ) {
     val layout by panes.layout.collectAsStateWithLifecycle()
     val tip by panes.tip.collectAsStateWithLifecycle()
@@ -350,6 +362,7 @@ private fun Panes(
                             slot.open(newId)
                         },
                         onNewChat = { nav.navigate(Routes.NEW) },
+                        onStartFresh = startFresh,
                     )
                 }
             }
